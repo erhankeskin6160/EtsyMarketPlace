@@ -1,0 +1,27 @@
+# Visual Studio / .NET build output
+.vs/
+bin/
+obj/
+artifacts/
+publish/
+publish-*/
+*.user
+*.suo
+ms-persist.xml
+
+# Local settings, credentials and tokens
+appsettings.Local.json
+EtsyApiSettings.json
+etsy-api-settings.json
+*.secrets.json
+*.pfx
+*.snk
+
+# Runtime data and logs
+*.log
+*.tmp
+*.bak
+
+# OS files
+Thumbs.db
+.DS_Store

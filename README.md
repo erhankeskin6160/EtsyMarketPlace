@@ -1,0 +1,67 @@
+# Etsy Market Place
+
+C# ve Windows Forms ile geliştirilen Etsy pazar araştırma, rakip mağaza analizi ve SEO aracıdır.
+
+## Mevcut özellikler
+
+- Etsy Open API v3 ile anahtar kelime bazlı aktif ürün arama
+- Ürün resmi ve bütün listeleme görselleri için slayt alanı
+- Ürün başlığı, fiyat, favori, görüntülenme, stok ve etiket bilgileri
+- Gerçek Etsy mağaza adı, mağaza bağlantısı ve toplam mağaza satışı
+- Ürün SEO puanı ve pazar sinyali puanı
+- Ayrı Rakip Mağaza Analizi formu
+- Rakip mağazanın ilk 50 aktif ürününü inceleme
+- Mağaza satış, yorum, fiyat, SEO ve rakip gücü KPI değerleri
+- En güçlü ürünler, sık kullanılan etiketler ve başlık kelimeleri
+- Taksonomi dağılımı, ürün filtreleme ve sıralama
+- CSV dışa aktarma
+- Etsy OAuth PKCE altyapısı ve API ayar ekranı
+
+## Veri doğruluğu
+
+Etsy Open API rakip ürünlerin kesin satış adetlerini paylaşmaz. Uygulama rakip mağazanın toplam satışını gösterir. Ürün başarı değerlendirmeleri favori, görüntülenme, mağaza satışı, yorum ve SEO gibi sinyallerden hesaplanır ve Etsy'nin resmi verisi olarak sunulmaz.
+
+## Gereksinimler
+
+- Windows 10 veya Windows 11
+- .NET 8 SDK veya daha yeni uyumlu SDK
+- Visual Studio 2022 ya da `dotnet` CLI
+- Etsy geliştirici hesabı ve onaylı API keystring/shared secret
+
+## Çalıştırma
+
+```powershell
+dotnet restore
+dotnet run --project .\SimilarProductsWinForms.csproj
+```
+
+Release derlemesi:
+
+```powershell
+dotnet build .\SimilarProductsWinForms.csproj -c Release
+```
+
+## Etsy API ayarları
+
+Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared secret girilir. API anahtarları, tokenlar ve kullanıcı ayarları Git deposunda tutulmaz; yerel kullanıcı profilinde saklanır.
+
+## Proje yapısı
+
+- `MarketResearchForm.cs`: ana pazar araştırma ekranı
+- `CompetitorShopAnalysisForm.cs`: rakip mağaza analiz ekranı
+- `Services/EtsyApiClient.cs`: Etsy API ve OAuth işlemleri
+- `Services/CompetitorShopAnalyzer.cs`: rakip mağaza istatistikleri
+- `Models/`: API, analiz ve ekran modelleri
+- `docs/`: geliştirme planı ve teknik notlar
+
+## Yol haritası
+
+1. Pazar araştırma temeli - tamamlandı
+2. Rakip mağaza analizi - ilk sürüm tamamlandı
+3. Anahtar kelime ve fırsat analizi - sıradaki
+4. Takip listeleri ve geçmiş veriler
+5. Kontrol paneli ve grafikler
+6. Kendi mağaza satış analizi
+7. Otomasyon, raporlama ve yapay zeka destekli optimizasyon
+
+Ayrıntılar için [geliştirme yol haritasına](docs/gelistirme-yol-haritasi.md) bakın.
