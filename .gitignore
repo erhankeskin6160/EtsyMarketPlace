@@ -21,6 +21,9 @@ etsy-api-settings.json
 *.log
 *.tmp
 *.bak
+*.db
+*.db-wal
+*.db-shm
 
 # OS files
 Thumbs.db

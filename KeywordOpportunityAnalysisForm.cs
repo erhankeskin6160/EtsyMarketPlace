@@ -3,11 +3,14 @@ namespace SimilarProductsWinForms;
 using System.Diagnostics;
 using System.Text;
 using EtsyMarketPlace.Application.KeywordResearch;
+using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Domain.KeywordResearch;
+using EtsyMarketPlace.Domain.Tracking;
 
 internal sealed class KeywordOpportunityAnalysisForm : Form
 {
     private readonly AnalyzeKeywordUseCase _useCase;
+    private readonly TrackingService _trackingService;
     private readonly HttpClient _imageClient = new();
     private readonly TextBox _keywordTextBox = new();
     private readonly NumericUpDown _limitInput = new();
@@ -24,9 +27,10 @@ internal sealed class KeywordOpportunityAnalysisForm : Form
     private List<KeywordProductRow> _productRows = [];
     private KeywordAnalysisResult? _result;
 
-    public KeywordOpportunityAnalysisForm(AnalyzeKeywordUseCase useCase, string initialKeyword)
+    public KeywordOpportunityAnalysisForm(AnalyzeKeywordUseCase useCase, TrackingService trackingService, string initialKeyword)
     {
         _useCase = useCase;
+        _trackingService = trackingService;
         BuildLayout();
         _keywordTextBox.Text = initialKeyword;
         Shown += async (_, _) =>
@@ -80,11 +84,12 @@ internal sealed class KeywordOpportunityAnalysisForm : Form
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var search = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, Padding = new Padding(0, 3, 0, 7) };
+        var search = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, Padding = new Padding(0, 3, 0, 7) };
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+        search.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
         search.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
@@ -113,10 +118,13 @@ internal sealed class KeywordOpportunityAnalysisForm : Form
         var csvButton = CreateButton("CSV Aktar");
         csvButton.Click += (_, _) => ExportCsv();
         search.Controls.Add(csvButton, 5, 0);
+        var trackButton = CreateButton("Takibe Ekle");
+        trackButton.Click += async (_, _) => await TrackKeywordAsync();
+        search.Controls.Add(trackButton, 6, 0);
         var closeButton = CreateButton("Geri Don");
         closeButton.BackColor = Color.FromArgb(82, 93, 110);
         closeButton.Click += (_, _) => Close();
-        search.Controls.Add(closeButton, 6, 0);
+        search.Controls.Add(closeButton, 7, 0);
         root.Controls.Add(search, 0, 1);
 
         var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 2, Padding = new Padding(0, 0, 0, 8) };
@@ -370,6 +378,40 @@ internal sealed class KeywordOpportunityAnalysisForm : Form
         }
         File.WriteAllText(dialog.FileName, builder.ToString(), Encoding.UTF8);
         _statusLabel.Text = "Anahtar kelime CSV dosyasi kaydedildi";
+    }
+
+    private async Task TrackKeywordAsync()
+    {
+        if (_result is null)
+        {
+            MessageBox.Show(this, "Once anahtar kelime analizi yapin.", "Takibe Ekle", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        await _trackingService.TrackAsync(new TrackingCapture(
+            TrackingEntityType.Keyword,
+            _result.Keyword.Trim().ToLowerInvariant(),
+            _result.Keyword,
+            $"https://www.etsy.com/search?q={Uri.EscapeDataString(_result.Keyword)}",
+            new TrackingSnapshot(
+                0,
+                0,
+                DateTimeOffset.Now,
+                null,
+                _result.PriceCurrency,
+                null,
+                null,
+                null,
+                null,
+                null,
+                _result.AverageSeoScore,
+                null,
+                _result.DemandSignalScore,
+                _result.CompetitionScore,
+                _result.OpportunityScore,
+                _result.TotalResults,
+                _result.SampleSize)));
+        _statusLabel.Text = "Anahtar kelime takibe eklendi ve snapshot kaydedildi";
     }
 
     private void AddKpi(TableLayoutPanel parent, int column, int row, string title, string key)

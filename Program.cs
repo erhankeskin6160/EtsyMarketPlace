@@ -1,6 +1,8 @@
 namespace SimilarProductsWinForms;
 
 using EtsyMarketPlace.Application.KeywordResearch;
+using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Infrastructure.Tracking;
 using SimilarProductsWinForms.Infrastructure.KeywordResearch;
 using SimilarProductsWinForms.Services;
 
@@ -17,6 +19,12 @@ static class Program
         ApplicationConfiguration.Initialize();
         var keywordGateway = new EtsyKeywordMarketGateway(new EtsyApiClient(), EtsyApiSettingsStore.Load);
         var analyzeKeywordUseCase = new AnalyzeKeywordUseCase(keywordGateway);
-        Application.Run(new MarketResearchForm(analyzeKeywordUseCase));
+        var databasePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EtsyMarketPlace",
+            "market-tracking.db");
+        var trackingService = new TrackingService(new SqliteTrackingRepository(databasePath));
+        trackingService.InitializeAsync().GetAwaiter().GetResult();
+        Application.Run(new MarketResearchForm(analyzeKeywordUseCase, trackingService));
     }    
 }
