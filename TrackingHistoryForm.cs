@@ -79,7 +79,14 @@ internal sealed class TrackingHistoryForm : Form
         commands.Controls.Add(close, 5, 0);
         root.Controls.Add(commands, 0, 1);
 
-        var split = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 545, Panel1MinSize = 420, Panel2MinSize = 520 };
+        var split = new SplitContainer { Dock = DockStyle.Fill };
+        split.Resize += (_, _) =>
+        {
+            if (split.Width > 900)
+            {
+                split.SplitterDistance = Math.Clamp((int)(split.Width * 0.38), 340, split.Width - 440);
+            }
+        };
         ConfigureItemsGrid();
         split.Panel1.Controls.Add(_itemsGrid);
 
