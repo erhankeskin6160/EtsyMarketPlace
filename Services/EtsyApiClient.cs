@@ -138,6 +138,37 @@ internal sealed class EtsyApiClient
         return listings.OrderByDescending(listing => listing.MarketScore).ToList();
     }
 
+    public async Task<KeywordMarketApiSample> GetKeywordMarketSampleAsync(
+        EtsyApiSettings settings,
+        string keywords,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+
+        var query = ToQueryString(new Dictionary<string, string>
+        {
+            ["keywords"] = keywords.Trim(),
+            ["limit"] = Math.Clamp(limit, 1, 100).ToString(CultureInfo.InvariantCulture),
+            ["sort_on"] = "score",
+            ["sort_order"] = "desc",
+            ["includes"] = "Shop,Images",
+        });
+
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/listings/active?{query}", useAccessToken: false);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Anahtar kelime orneklemi alinamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        using var document = JsonDocument.Parse(body);
+        var totalResults = GetInt(document.RootElement, "count");
+        var listings = ParseMarketListings(body, keywords);
+        return new KeywordMarketApiSample(Math.Max(totalResults, listings.Count), listings);
+    }
+
     public async Task<List<string>> GetListingImagesAsync(
         EtsyApiSettings settings,
         long listingId,

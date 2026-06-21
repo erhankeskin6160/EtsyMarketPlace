@@ -1,5 +1,9 @@
 namespace SimilarProductsWinForms;
 
+using EtsyMarketPlace.Application.KeywordResearch;
+using SimilarProductsWinForms.Infrastructure.KeywordResearch;
+using SimilarProductsWinForms.Services;
+
 static class Program
 {
     /// <summary>
@@ -11,6 +15,8 @@ static class Program
         // To customize application configuration such as set high DPI settings or default font,
         // see https://aka.ms/applicationconfiguration.
         ApplicationConfiguration.Initialize();
-        Application.Run(new MarketResearchForm());
+        var keywordGateway = new EtsyKeywordMarketGateway(new EtsyApiClient(), EtsyApiSettingsStore.Load);
+        var analyzeKeywordUseCase = new AnalyzeKeywordUseCase(keywordGateway);
+        Application.Run(new MarketResearchForm(analyzeKeywordUseCase));
     }    
 }
