@@ -27,7 +27,7 @@ Durum: İlk sürüm tamamlandı, canlı API kabul testi yapılıyor
 
 ## Aşama 2 - Anahtar kelime ve fırsat analizi
 
-Durum: Sıradaki geliştirme
+Durum: İlk sürüm feature dalında geliştirildi, canlı API ve arayüz kabul testi bekleniyor
 
 - Arama sonuç yoğunluğu
 - Minimum, maksimum, ortalama ve medyan fiyat
@@ -37,6 +37,8 @@ Durum: Sıradaki geliştirme
 - Rekabet, talep sinyali ve fırsat puanı
 - Anahtar kelimeleri yan yana karşılaştırma
 - Araştırma sonuçlarını CSV ve HTML olarak dışa aktarma
+
+İlk sürümde CSV aktarımı tamamlandı. HTML raporu, feature kabul testinden sonra ayrı bir geliştirme olarak ele alınacak.
 
 ## Aşama 3 - Takip ve geçmiş veriler
 

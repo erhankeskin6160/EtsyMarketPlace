@@ -3,12 +3,14 @@ namespace SimilarProductsWinForms;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using EtsyMarketPlace.Application.KeywordResearch;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
 internal sealed class MarketResearchForm : Form
 {
     private readonly EtsyApiClient _apiClient = new();
+    private readonly AnalyzeKeywordUseCase _analyzeKeywordUseCase;
     private readonly HttpClient _imageHttpClient = new();
     private readonly BindingSource _bindingSource = new();
     private List<MarketListingResult> _results = [];
@@ -23,9 +25,11 @@ internal sealed class MarketResearchForm : Form
     private readonly TextBox _detailTextBox = new();
     private readonly Label _statusLabel = new();
     private int _currentImageIndex;
+    private bool _favoriteSortDescending;
 
-    public MarketResearchForm()
+    public MarketResearchForm(AnalyzeKeywordUseCase analyzeKeywordUseCase)
     {
+        _analyzeKeywordUseCase = analyzeKeywordUseCase;
         BuildLayout();
     }
 
@@ -188,17 +192,18 @@ internal sealed class MarketResearchForm : Form
         _detailTextBox.BackColor = Color.White;
         detailPanel.Controls.Add(_detailTextBox, 1, 0);
 
-        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6 };
-        for (var row = 0; row < 6; row++)
+        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 7 };
+        for (var row = 0; row < 7; row++)
         {
-            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 6));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 7));
         }
         actions.Controls.Add(ActionButton("Listing Ac", OpenListing), 0, 0);
-        actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 0, 1);
-        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 0, 2);
-        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 3);
-        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 0, 4);
-        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 0, 5);
+        actions.Controls.Add(ActionButton("Kelime Analizi", OpenKeywordAnalysis), 0, 1);
+        actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 0, 2);
+        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 0, 3);
+        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 4);
+        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 0, 5);
+        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 0, 6);
         detailPanel.Controls.Add(actions, 2, 0);
         root.Controls.Add(detailPanel, 0, 3);
     }
@@ -222,6 +227,13 @@ internal sealed class MarketResearchForm : Form
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => UpdateDetail();
         _grid.CellDoubleClick += (_, _) => OpenListing();
+        _grid.ColumnHeaderMouseClick += (_, e) =>
+        {
+            if (_grid.Columns[e.ColumnIndex].DataPropertyName == nameof(MarketListingResult.Favorites))
+            {
+                ApplyFavoriteSort();
+            }
+        };
         _grid.CellContentClick += (_, e) =>
         {
             if (e.RowIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == "ShopUrlColumn")
@@ -240,6 +252,7 @@ internal sealed class MarketResearchForm : Form
             DefaultCellStyle = new DataGridViewCellStyle { NullValue = null },
         };
         _grid.Columns.Add(imageColumn);
+        AddColumn("Sira", nameof(MarketListingResult.ListingRank), 54);
         AddColumn("Urun basligi", nameof(MarketListingResult.Title), 290, fill: true);
         AddColumn("Fiyat", nameof(MarketListingResult.PriceDisplay), 105);
         AddColumn("Magaza", nameof(MarketListingResult.ShopName), 150);
@@ -253,6 +266,7 @@ internal sealed class MarketResearchForm : Form
         });
         AddColumn("Magaza satisi", nameof(MarketListingResult.ShopSalesDisplay), 105);
         AddColumn("Favori", nameof(MarketListingResult.Favorites), 75);
+        _grid.Columns[_grid.Columns.Count - 1].SortMode = DataGridViewColumnSortMode.Programmatic;
         AddColumn("Goruntulenme", nameof(MarketListingResult.ViewsDisplay), 105);
         AddColumn("SEO", nameof(MarketListingResult.SeoScore), 65);
         AddColumn("Pazar puani", nameof(MarketListingResult.MarketScore), 95);
@@ -300,6 +314,7 @@ internal sealed class MarketResearchForm : Form
 
     private void ApplySort()
     {
+        _favoriteSortDescending = false;
         IEnumerable<MarketListingResult> sorted = _sortComboBox.SelectedItem?.ToString() switch
         {
             "SEO puani" => _results.OrderByDescending(item => item.SeoScore),
@@ -310,10 +325,48 @@ internal sealed class MarketResearchForm : Form
             _ => _results.OrderByDescending(item => item.MarketScore),
         };
 
-        var list = sorted.ToList();
+        BindResults(sorted.ToList());
+        ClearSortGlyphs();
+    }
+
+    private void ApplyFavoriteSort()
+    {
+        _favoriteSortDescending = !_favoriteSortDescending;
+        var sorted = _favoriteSortDescending
+            ? _results.OrderByDescending(item => item.Favorites).ThenByDescending(item => item.Views)
+            : _results.OrderBy(item => item.Favorites).ThenBy(item => item.Views);
+        BindResults(sorted.ToList());
+        ClearSortGlyphs();
+
+        var favoriteColumn = _grid.Columns
+            .Cast<DataGridViewColumn>()
+            .First(column => column.DataPropertyName == nameof(MarketListingResult.Favorites));
+        favoriteColumn.HeaderCell.SortGlyphDirection = _favoriteSortDescending
+            ? SortOrder.Descending
+            : SortOrder.Ascending;
+        _statusLabel.Text = _favoriteSortDescending
+            ? $"{_results.Count} urun | Favori: coktan aza"
+            : $"{_results.Count} urun | Favori: azdan coga";
+    }
+
+    private void BindResults(List<MarketListingResult> list)
+    {
+        for (var index = 0; index < list.Count; index++)
+        {
+            list[index].ListingRank = index + 1;
+        }
+
         _bindingSource.DataSource = list;
         _bindingSource.Position = list.Count > 0 ? 0 : -1;
         UpdateDetail();
+    }
+
+    private void ClearSortGlyphs()
+    {
+        foreach (DataGridViewColumn column in _grid.Columns)
+        {
+            column.HeaderCell.SortGlyphDirection = SortOrder.None;
+        }
     }
 
     private void UpdateDetail()
@@ -341,6 +394,19 @@ internal sealed class MarketResearchForm : Form
 
     private void OpenListing() => OpenUrl(SelectedListing?.ListingUrl);
     private void OpenShop() => OpenUrl(SelectedListing?.ShopUrl);
+
+    private void OpenKeywordAnalysis()
+    {
+        var keyword = _keywordTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            MessageBox.Show(this, "Analiz edilecek anahtar kelimeyi girin.", "Kelime Analizi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new KeywordOpportunityAnalysisForm(_analyzeKeywordUseCase, keyword);
+        form.ShowDialog(this);
+    }
 
     private void OpenCompetitorAnalysis()
     {

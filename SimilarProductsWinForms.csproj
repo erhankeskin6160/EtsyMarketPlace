@@ -8,4 +8,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
 
+  <ItemGroup>
+    <Compile Remove="src\**\*.cs" />
+    <Compile Remove="tests\**\*.cs" />
+    <EmbeddedResource Remove="src\**\*" />
+    <EmbeddedResource Remove="tests\**\*" />
+    <None Remove="src\**\*" />
+    <None Remove="tests\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="src\EtsyMarketPlace.Application\EtsyMarketPlace.Application.csproj" />
+    <ProjectReference Include="src\EtsyMarketPlace.Domain\EtsyMarketPlace.Domain.csproj" />
+  </ItemGroup>
+
 </Project>
