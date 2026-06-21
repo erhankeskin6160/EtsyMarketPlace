@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms.Models;
 
 internal sealed class MarketListingResult
 {
+    public int ListingRank { get; set; }
     public long ListingId { get; init; }
     public long ShopId { get; init; }
     public long TaxonomyId { get; init; }
