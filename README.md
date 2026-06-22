@@ -32,6 +32,8 @@ C# ve Windows Forms ile geliştirilen Etsy pazar araştırma, rakip mağaza anal
 - Tarih aralığı ve ürün bazlı mağaza performansı tablosu
 - Seçilen dönem ile önceki eşit dönemin KPI ve ürün bazlı karşılaştırması
 - Mağaza dönem raporları ve ürün performansları için günlük SQLite geçmişi
+- Uygulama açıkken saat aralığına göre otomatik mağaza yenileme
+- Mağaza performansı için HTML/CSV raporu ve düşüş uyarıları
 
 ## Veri doğruluğu
 
@@ -83,7 +85,8 @@ Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared sec
 4. Takip listeleri ve geçmiş veriler - feature testi yapılıyor
 5. Kontrol paneli ve grafikler - feature testi yapılıyor
 6. Kendi mağaza satış analizi - kalıcı geçmiş feature testi yapılıyor
-7. Otomasyon, raporlama ve yapay zeka destekli optimizasyon
+7. Otomasyon ve raporlama - uygulama içi zamanlayıcı feature testi yapılıyor
+8. Yapay zeka destekli optimizasyon
 
 Ayrıntılar için [geliştirme yol haritasına](docs/gelistirme-yol-haritasi.md) bakın.
 

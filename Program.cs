@@ -4,10 +4,12 @@ using EtsyMarketPlace.Application.KeywordResearch;
 using EtsyMarketPlace.Application.Dashboard;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Application.ShopPerformance;
+using EtsyMarketPlace.Application.Automation;
 using EtsyMarketPlace.Infrastructure.Tracking;
 using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using SimilarProductsWinForms.Infrastructure.KeywordResearch;
 using SimilarProductsWinForms.Infrastructure.ShopPerformance;
+using SimilarProductsWinForms.Infrastructure.Automation;
 using SimilarProductsWinForms.Services;
 
 static class Program
@@ -35,11 +37,21 @@ static class Program
         var shopPerformanceHistoryService = new ShopPerformanceHistoryService(
             new SqliteShopPerformanceHistoryRepository(databasePath));
         shopPerformanceHistoryService.InitializeAsync().GetAwaiter().GetResult();
+        var automationSettingsStore = new AutomationSettingsStore();
+        var automationRunService = new AutomationRunService(
+            shopPerformanceService,
+            shopPerformanceHistoryService,
+            new FileAutomationReportExporter(),
+            automationSettingsStore);
+        using var automationScheduler = new AutomationScheduler(automationRunService, automationSettingsStore);
+        automationScheduler.Start();
         Application.Run(new DashboardForm(
             analyzeKeywordUseCase,
             trackingService,
             dashboardService,
             shopPerformanceService,
-            shopPerformanceHistoryService));
+            shopPerformanceHistoryService,
+            automationSettingsStore,
+            automationScheduler));
     }    
 }
