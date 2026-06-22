@@ -67,14 +67,14 @@ Durum: İlk sürüm feature dalında geliştirildi, kullanıcı kabul testi bekl
 
 ## Aşama 5 - Kendi mağaza performansı
 
-Durum: Temel mağaza performansı ve canlı OAuth kabul testi tamamlandı; dönem karşılaştırması feature testinde
+Durum: Temel mağaza performansı ve dönem karşılaştırması tamamlandı; kalıcı performans geçmişi feature testinde
 
 - Etsy OAuth ile mağaza bağlantısı
 - `shops_r`, `listings_r` ve `transactions_r` kapsamları
 - Kendi ürünlerinde kesin sipariş adedi ve ciro
 - Dönem ve ürün performansı karşılaştırması
 
-İlk sürüm; OAuth kullanıcısına ait mağazayı bulur, seçilen tarih aralığındaki ödenmiş ve iptal edilmemiş siparişleri getirir. Sipariş, satılan adet, brüt ciro, ortalama sipariş ve ürün bazlı satış/ciro tablosu gösterilir. Dönem karşılaştırması seçilen aralığı hemen önceki eşit uzunluktaki dönemle karşılaştırır; KPI ve ürün bazında önceki değer, fark ve yüzde değişimi sunar. Kalıcı performans geçmişi sonraki feature parçasında geliştirilecektir.
+İlk sürüm; OAuth kullanıcısına ait mağazayı bulur, seçilen tarih aralığındaki ödenmiş ve iptal edilmemiş siparişleri getirir. Sipariş, satılan adet, brüt ciro, ortalama sipariş ve ürün bazlı satış/ciro tablosu gösterilir. Dönem karşılaştırması seçilen aralığı hemen önceki eşit uzunluktaki dönemle karşılaştırır; KPI ve ürün bazında önceki değer, fark ve yüzde değişimi sunar. Seçilen dönem raporları ve ürün kırılımları SQLite üzerinde günlük snapshot olarak saklanır; aynı mağaza, dönem ve gün tekrar alındığında kayıt güncellenir.
 
 ## Aşama 6 - Otomasyon ve raporlama
 

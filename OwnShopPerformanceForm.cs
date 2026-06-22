@@ -3,7 +3,9 @@ namespace SimilarProductsWinForms;
 using System.Diagnostics;
 using EtsyMarketPlace.Application.ShopPerformance;
 
-internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceService) : Form
+internal sealed class OwnShopPerformanceForm(
+    ShopPerformanceService performanceService,
+    ShopPerformanceHistoryService historyService) : Form
 {
     private readonly DateTimePicker _startPicker = new();
     private readonly DateTimePicker _endPicker = new();
@@ -12,6 +14,7 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
     private readonly Dictionary<string, Label> _kpiValues = [];
     private readonly Dictionary<string, Label> _kpiChanges = [];
     private readonly DataGridView _productsGrid = new();
+    private readonly DataGridView _historyGrid = new();
     private ShopPerformanceComparison? _comparison;
 
     protected override void OnLoad(EventArgs e)
@@ -91,7 +94,8 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         root.Controls.Add(kpis, 0, 2);
 
         ConfigureProductsGrid();
-        root.Controls.Add(_productsGrid, 0, 3);
+        ConfigureHistoryGrid();
+        root.Controls.Add(BuildContentTabs(), 0, 3);
     }
 
     private async Task LoadReportAsync()
@@ -105,6 +109,7 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
             var end = new DateTimeOffset(endDate, TimeZoneInfo.Local.GetUtcOffset(endDate));
             _comparison = await performanceService.GetComparisonAsync(start, end);
             BindComparison(_comparison);
+            await SaveAndLoadHistoryAsync(_comparison.Current);
         }
         catch (Exception ex)
         {
@@ -114,6 +119,70 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         finally
         {
             UseWaitCursor = false;
+        }
+    }
+
+    private Control BuildContentTabs()
+    {
+        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var comparisonTab = new TabPage("Donem Karsilastirmasi") { BackColor = Color.White, Padding = new Padding(4) };
+        comparisonTab.Controls.Add(_productsGrid);
+        tabs.TabPages.Add(comparisonTab);
+
+        var historyTab = new TabPage("Kayit Gecmisi") { BackColor = Color.White, Padding = new Padding(4) };
+        var historyLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+        toolbar.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Ayni gun ve ayni donem yeniden alindiginda mevcut kayit guncellenir.",
+            ForeColor = Color.FromArgb(82, 93, 110),
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 0);
+        var refresh = CreateButton("Gecmisi Yenile");
+        refresh.Click += async (_, _) => await LoadHistoryAsync();
+        toolbar.Controls.Add(refresh, 1, 0);
+        historyLayout.Controls.Add(toolbar, 0, 0);
+        historyLayout.Controls.Add(_historyGrid, 0, 1);
+        historyTab.Controls.Add(historyLayout);
+        tabs.TabPages.Add(historyTab);
+        return tabs;
+    }
+
+    private async Task SaveAndLoadHistoryAsync(ShopPerformanceReport report)
+    {
+        try
+        {
+            await historyService.SaveAsync(report);
+            await LoadHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            _statusLabel.Text += $" | Yerel gecmis kaydedilemedi: {ex.Message}";
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        try
+        {
+            var shopId = _comparison?.Current.Shop.ShopId;
+            if (!shopId.HasValue || shopId.Value <= 0)
+            {
+                _historyGrid.DataSource = null;
+                return;
+            }
+
+            var history = await historyService.GetHistoryAsync(shopId.Value);
+            _historyGrid.DataSource = history.Select(item => new HistoryRow(item)).ToList();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Magaza Gecmisi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -174,6 +243,27 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         AddColumn("Ciro fark", nameof(ProductComparisonRow.RevenueDifference), 125);
     }
 
+    private void ConfigureHistoryGrid()
+    {
+        _historyGrid.Dock = DockStyle.Fill;
+        _historyGrid.ReadOnly = true;
+        _historyGrid.AutoGenerateColumns = false;
+        _historyGrid.AllowUserToAddRows = false;
+        _historyGrid.AllowUserToDeleteRows = false;
+        _historyGrid.RowHeadersVisible = false;
+        _historyGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _historyGrid.BackgroundColor = Color.White;
+        _historyGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
+        AddHistoryColumn("Kayit zamani", nameof(HistoryRow.CapturedAt), 150);
+        AddHistoryColumn("Donem baslangici", nameof(HistoryRow.PeriodStart), 135);
+        AddHistoryColumn("Donem bitisi", nameof(HistoryRow.PeriodEnd), 135);
+        AddHistoryColumn("Siparis", nameof(HistoryRow.OrderCount), 90);
+        AddHistoryColumn("Satilan adet", nameof(HistoryRow.UnitsSold), 105);
+        AddHistoryColumn("Brut ciro", nameof(HistoryRow.GrossRevenue), 150);
+        AddHistoryColumn("Ort. siparis", nameof(HistoryRow.AverageOrder), 150);
+        AddHistoryColumn("Urun", nameof(HistoryRow.ProductCount), 80);
+    }
+
     private void AddColumn(string header, string property, int width, bool fill = false) =>
         _productsGrid.Columns.Add(new DataGridViewTextBoxColumn
         {
@@ -181,6 +271,17 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
             DataPropertyName = property,
             Width = width,
             AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None,
+        });
+
+    private void AddHistoryColumn(string header, string property, int width) =>
+        _historyGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = header,
+            DataPropertyName = property,
+            Width = width,
+            AutoSizeMode = header == "Kayit zamani"
+                ? DataGridViewAutoSizeColumnMode.Fill
+                : DataGridViewAutoSizeColumnMode.None,
         });
 
     private void AddKpi(TableLayoutPanel parent, int column, string title, string key)
@@ -247,5 +348,17 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         public string CurrentRevenue => $"{item.CurrencyCode} {item.CurrentRevenue:N2}";
         public string PreviousRevenue => $"{item.CurrencyCode} {item.PreviousRevenue:N2}";
         public string RevenueDifference => $"{item.CurrencyCode} {item.RevenueDifference:+0.00;-0.00;0.00}";
+    }
+
+    private sealed class HistoryRow(ShopPerformanceHistoryRecord item)
+    {
+        public string CapturedAt => item.CapturedAt.LocalDateTime.ToString("dd.MM.yyyy HH:mm");
+        public string PeriodStart => item.PeriodStart.LocalDateTime.ToString("dd.MM.yyyy");
+        public string PeriodEnd => item.PeriodEnd.LocalDateTime.ToString("dd.MM.yyyy");
+        public int OrderCount => item.OrderCount;
+        public int UnitsSold => item.UnitsSold;
+        public string GrossRevenue => $"{item.CurrencyCode} {item.GrossRevenue:N2}";
+        public string AverageOrder => $"{item.CurrencyCode} {item.AverageOrderValue:N2}";
+        public int ProductCount => item.Products.Count;
     }
 }

@@ -51,6 +51,8 @@ Dashboard da değişim veya fırsat hesabı yapmaz. `DashboardService`, takip ge
 
 Kendi mağaza performansında `IOwnShopGateway` Etsy erişimini soyutlar. `ShopPerformanceService` ödenmiş/iptal edilmemiş siparişleri filtreler, KPI ile ürün toplamlarını hesaplar ve eşit uzunluktaki iki dönemi karşılaştırır. `EtsyOwnShopGateway` OAuth destekli Etsy adaptörüdür; `OwnShopPerformanceForm` yalnızca tarih seçimi ve sonuç sunumundan sorumludur.
 
+Kalıcı mağaza geçmişinde `IShopPerformanceHistoryRepository` Application portudur. `SqliteShopPerformanceHistoryRepository` günlük snapshot ve ürün kırılımlarını aynı transaction içinde saklayan Infrastructure adaptörüdür. Form doğrudan SQL kullanmaz; kayıt ve sorgulama işlemlerini `ShopPerformanceHistoryService` üzerinden yürütür.
+
 ## Bağımlılık yönü
 
 ```text

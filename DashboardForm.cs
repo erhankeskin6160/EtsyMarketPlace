@@ -13,6 +13,7 @@ internal sealed class DashboardForm : Form
     private readonly TrackingService _trackingService;
     private readonly DashboardService _dashboardService;
     private readonly ShopPerformanceService _shopPerformanceService;
+    private readonly ShopPerformanceHistoryService _shopPerformanceHistoryService;
     private readonly Label _statusLabel = new();
     private readonly Dictionary<string, Label> _kpis = [];
     private readonly DataGridView _opportunitiesGrid = new();
@@ -21,12 +22,18 @@ internal sealed class DashboardForm : Form
     private readonly TrendChartControl _trendChart = new();
     private DashboardOverview? _overview;
 
-    public DashboardForm(AnalyzeKeywordUseCase keywordUseCase, TrackingService trackingService, DashboardService dashboardService, ShopPerformanceService shopPerformanceService)
+    public DashboardForm(
+        AnalyzeKeywordUseCase keywordUseCase,
+        TrackingService trackingService,
+        DashboardService dashboardService,
+        ShopPerformanceService shopPerformanceService,
+        ShopPerformanceHistoryService shopPerformanceHistoryService)
     {
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
         _dashboardService = dashboardService;
         _shopPerformanceService = shopPerformanceService;
+        _shopPerformanceHistoryService = shopPerformanceHistoryService;
         BuildLayout();
         Shown += async (_, _) => await LoadDashboardAsync();
     }
@@ -80,7 +87,11 @@ internal sealed class DashboardForm : Form
         research.Click += async (_, _) => await OpenResearchAsync();
         nav.Controls.Add(research, 1, 0);
         var ownShop = CreateButton("Kendi Magazam");
-        ownShop.Click += (_, _) => { using var form = new OwnShopPerformanceForm(_shopPerformanceService); form.ShowDialog(this); };
+        ownShop.Click += (_, _) =>
+        {
+            using var form = new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService);
+            form.ShowDialog(this);
+        };
         nav.Controls.Add(ownShop, 2, 0);
         var tracking = CreateButton("Takip Merkezi");
         tracking.Click += async (_, _) => await OpenTrackingAsync();

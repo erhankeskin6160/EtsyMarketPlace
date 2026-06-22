@@ -5,6 +5,7 @@ using EtsyMarketPlace.Application.Dashboard;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
+using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using SimilarProductsWinForms.Infrastructure.KeywordResearch;
 using SimilarProductsWinForms.Infrastructure.ShopPerformance;
 using SimilarProductsWinForms.Services;
@@ -31,6 +32,14 @@ static class Program
         var dashboardService = new DashboardService(trackingService);
         var shopPerformanceService = new ShopPerformanceService(
             new EtsyOwnShopGateway(new EtsyApiClient(), EtsyApiSettingsStore.Load));
-        Application.Run(new DashboardForm(analyzeKeywordUseCase, trackingService, dashboardService, shopPerformanceService));
+        var shopPerformanceHistoryService = new ShopPerformanceHistoryService(
+            new SqliteShopPerformanceHistoryRepository(databasePath));
+        shopPerformanceHistoryService.InitializeAsync().GetAwaiter().GetResult();
+        Application.Run(new DashboardForm(
+            analyzeKeywordUseCase,
+            trackingService,
+            dashboardService,
+            shopPerformanceService,
+            shopPerformanceHistoryService));
     }    
 }
