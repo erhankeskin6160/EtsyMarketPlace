@@ -24,6 +24,10 @@ C# ve Windows Forms ile geliştirilen Etsy pazar araştırma, rakip mağaza anal
 - SQLite üzerinde tarihli fiyat, etkileşim ve analiz snapshot'ları
 - Son iki snapshot arasındaki değişim karşılaştırması
 - Takip geçmişini CSV olarak dışa aktarma
+- Açılışta pazar kontrol paneli
+- Takip türleri ve snapshot toplamı KPI değerleri
+- En iyi anahtar kelime fırsatları ve en büyük değişimler
+- Ürün favori, mağaza satışı ve keyword fırsat trend grafiği
 
 ## Veri doğruluğu
 
@@ -73,7 +77,7 @@ Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared sec
 2. Rakip mağaza analizi - ilk sürüm tamamlandı
 3. Anahtar kelime ve fırsat analizi - feature testi yapılıyor
 4. Takip listeleri ve geçmiş veriler - feature testi yapılıyor
-5. Kontrol paneli ve grafikler
+5. Kontrol paneli ve grafikler - feature testi yapılıyor
 6. Kendi mağaza satış analizi
 7. Otomasyon, raporlama ve yapay zeka destekli optimizasyon
 
