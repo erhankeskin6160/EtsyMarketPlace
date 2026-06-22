@@ -3,8 +3,10 @@ namespace SimilarProductsWinForms;
 using EtsyMarketPlace.Application.KeywordResearch;
 using EtsyMarketPlace.Application.Dashboard;
 using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
 using SimilarProductsWinForms.Infrastructure.KeywordResearch;
+using SimilarProductsWinForms.Infrastructure.ShopPerformance;
 using SimilarProductsWinForms.Services;
 
 static class Program
@@ -27,6 +29,8 @@ static class Program
         var trackingService = new TrackingService(new SqliteTrackingRepository(databasePath));
         trackingService.InitializeAsync().GetAwaiter().GetResult();
         var dashboardService = new DashboardService(trackingService);
-        Application.Run(new DashboardForm(analyzeKeywordUseCase, trackingService, dashboardService));
+        var shopPerformanceService = new ShopPerformanceService(
+            new EtsyOwnShopGateway(new EtsyApiClient(), EtsyApiSettingsStore.Load));
+        Application.Run(new DashboardForm(analyzeKeywordUseCase, trackingService, dashboardService, shopPerformanceService));
     }    
 }

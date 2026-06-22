@@ -3,6 +3,7 @@ namespace SimilarProductsWinForms.Services;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using EtsyMarketPlace.Application.ShopPerformance;
 using SimilarProductsWinForms.Models;
 
 internal sealed class EtsyApiClient
@@ -268,6 +269,130 @@ internal sealed class EtsyApiClient
         };
     }
 
+    public async Task<OwnShopPerformanceSource> GetOwnShopPerformanceSourceAsync(
+        EtsyApiSettings settings,
+        DateTimeOffset periodStart,
+        DateTimeOffset periodEnd,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var userId = ReadUserIdFromAccessToken(settings.AccessToken);
+        using var shopRequest = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/users/{userId}/shops", useAccessToken: true);
+        using var shopResponse = await _httpClient.SendAsync(shopRequest, cancellationToken);
+        var shopBody = await shopResponse.Content.ReadAsStringAsync(cancellationToken);
+        if (!shopResponse.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Bagli magaza bilgisi alinamadi. HTTP {(int)shopResponse.StatusCode}: {shopBody}");
+        }
+
+        using var shopDocument = JsonDocument.Parse(shopBody);
+        var shop = FirstResultOrRoot(shopDocument.RootElement);
+        var shopId = GetLong(shop, "shop_id");
+        var shopName = GetString(shop, "shop_name");
+        if (shopId <= 0)
+        {
+            throw new InvalidOperationException("OAuth kullanicisina ait Etsy magazasi bulunamadi.");
+        }
+
+        var receipts = await GetOwnShopReceiptsAsync(settings, shopId, periodStart, periodEnd, cancellationToken);
+        return new OwnShopPerformanceSource(
+            new OwnShopProfile(shopId, shopName, BuildShopUrl(shopName)),
+            receipts);
+    }
+
+    private async Task<List<OwnShopReceipt>> GetOwnShopReceiptsAsync(
+        EtsyApiSettings settings,
+        long shopId,
+        DateTimeOffset periodStart,
+        DateTimeOffset periodEnd,
+        CancellationToken cancellationToken)
+    {
+        const int pageSize = 100;
+        var offset = 0;
+        var receipts = new List<OwnShopReceipt>();
+
+        while (true)
+        {
+            var query = ToQueryString(new Dictionary<string, string>
+            {
+                ["min_created"] = periodStart.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                ["max_created"] = periodEnd.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                ["limit"] = pageSize.ToString(CultureInfo.InvariantCulture),
+                ["offset"] = offset.ToString(CultureInfo.InvariantCulture),
+            });
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/receipts?{query}", useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Magaza siparisleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+            }
+
+            using var document = JsonDocument.Parse(body);
+            var results = GetArray(document.RootElement, "results");
+            if (!results.HasValue || results.Value.GetArrayLength() == 0)
+            {
+                break;
+            }
+
+            receipts.AddRange(results.Value.EnumerateArray().Select(ParseOwnShopReceipt));
+            offset += results.Value.GetArrayLength();
+            var count = GetInt(document.RootElement, "count");
+            if (results.Value.GetArrayLength() < pageSize || (count > 0 && offset >= count))
+            {
+                break;
+            }
+        }
+
+        return receipts;
+    }
+
+    private static OwnShopReceipt ParseOwnShopReceipt(JsonElement receipt)
+    {
+        var (grandTotal, currency) = ReadMoney(receipt, "grandtotal");
+        var transactions = GetArray(receipt, "transactions", "Transactions")?
+            .EnumerateArray()
+            .Select(transaction =>
+            {
+                var (amount, transactionCurrency) = ReadMoney(transaction, "price");
+                return new OwnShopTransaction(
+                    GetLong(transaction, "listing_id"),
+                    GetString(transaction, "title"),
+                    Math.Max(1, GetInt(transaction, "quantity")),
+                    amount,
+                    string.IsNullOrWhiteSpace(transactionCurrency) ? currency : transactionCurrency);
+            })
+            .ToList() ?? [];
+        var created = GetLong(receipt, "create_timestamp");
+
+        return new OwnShopReceipt(
+            GetLong(receipt, "receipt_id"),
+            created > 0 ? DateTimeOffset.FromUnixTimeSeconds(created) : DateTimeOffset.MinValue,
+            GetBool(receipt, "is_paid"),
+            GetBool(receipt, "is_canceled"),
+            grandTotal,
+            currency,
+            transactions);
+    }
+
+    private async Task EnsureAccessTokenAsync(EtsyApiSettings settings, CancellationToken cancellationToken)
+    {
+        if (settings.HasAccessToken)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.RefreshToken))
+        {
+            await RefreshAccessTokenAsync(settings, cancellationToken);
+            return;
+        }
+
+        throw new InvalidOperationException("Kendi magaza verileri icin OAuth baglantisi gerekli. API Ayarlari ekranindan shops_r, listings_r ve transactions_r izinleriyle baglanin.");
+    }
+
     public async Task<string> TestConnectionAsync(EtsyApiSettings settings, CancellationToken cancellationToken = default)
     {
         EnsureApiCredentials(settings);
@@ -531,6 +656,36 @@ internal sealed class EtsyApiClient
             : (0m, "USD");
     }
 
+    private static (decimal Amount, string Currency) ReadMoney(JsonElement item, string propertyName)
+    {
+        if (!item.TryGetProperty(propertyName, out var money) || money.ValueKind != JsonValueKind.Object)
+        {
+            return (0m, "USD");
+        }
+
+        var amount = GetLong(money, "amount");
+        var divisor = GetInt(money, "divisor");
+        return (divisor > 0 ? amount / (decimal)divisor : 0m, GetString(money, "currency_code"));
+    }
+
+    private static JsonElement FirstResultOrRoot(JsonElement root)
+    {
+        var results = GetArray(root, "results");
+        return results.HasValue && results.Value.GetArrayLength() > 0 ? results.Value[0] : root;
+    }
+
+    private static long ReadUserIdFromAccessToken(string accessToken)
+    {
+        var separator = accessToken.IndexOf('.');
+        var value = separator > 0 ? accessToken[..separator] : "";
+        if (!long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var userId) || userId <= 0)
+        {
+            throw new InvalidOperationException("OAuth access token icinden Etsy kullanici kimligi okunamadi. API Ayarlari ekranindan yeniden baglanin.");
+        }
+
+        return userId;
+    }
+
     private static List<string> GetStringArray(JsonElement item, string propertyName)
     {
         if (!item.TryGetProperty(propertyName, out var value) || value.ValueKind != JsonValueKind.Array)
@@ -636,6 +791,11 @@ internal sealed class EtsyApiClient
         item.TryGetProperty(propertyName, out var value) && value.TryGetDecimal(out var result)
             ? result
             : 0m;
+
+    private static bool GetBool(JsonElement item, string propertyName) =>
+        item.TryGetProperty(propertyName, out var value) &&
+        (value.ValueKind == JsonValueKind.True ||
+         (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) && number != 0));
 
     private static long GetLong(JsonElement item, string propertyName) =>
         item.TryGetProperty(propertyName, out var value) && value.TryGetInt64(out var result)

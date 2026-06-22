@@ -3,6 +3,7 @@ namespace SimilarProductsWinForms;
 using EtsyMarketPlace.Application.Dashboard;
 using EtsyMarketPlace.Application.KeywordResearch;
 using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Domain.Tracking;
 using SimilarProductsWinForms.Controls;
 
@@ -11,6 +12,7 @@ internal sealed class DashboardForm : Form
     private readonly AnalyzeKeywordUseCase _keywordUseCase;
     private readonly TrackingService _trackingService;
     private readonly DashboardService _dashboardService;
+    private readonly ShopPerformanceService _shopPerformanceService;
     private readonly Label _statusLabel = new();
     private readonly Dictionary<string, Label> _kpis = [];
     private readonly DataGridView _opportunitiesGrid = new();
@@ -19,11 +21,12 @@ internal sealed class DashboardForm : Form
     private readonly TrendChartControl _trendChart = new();
     private DashboardOverview? _overview;
 
-    public DashboardForm(AnalyzeKeywordUseCase keywordUseCase, TrackingService trackingService, DashboardService dashboardService)
+    public DashboardForm(AnalyzeKeywordUseCase keywordUseCase, TrackingService trackingService, DashboardService dashboardService, ShopPerformanceService shopPerformanceService)
     {
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
         _dashboardService = dashboardService;
+        _shopPerformanceService = shopPerformanceService;
         BuildLayout();
         Shown += async (_, _) => await LoadDashboardAsync();
     }
@@ -65,30 +68,33 @@ internal sealed class DashboardForm : Form
         var nav = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 6,
+            ColumnCount = 7,
             RowCount = 1,
             Padding = new Padding(0, 4, 0, 8),
         };
         nav.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         nav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 1; index < 6; index++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
+        for (var index = 1; index < 7; index++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
         nav.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
         var research = CreateButton("Pazar Arastirma");
         research.Click += async (_, _) => await OpenResearchAsync();
         nav.Controls.Add(research, 1, 0);
+        var ownShop = CreateButton("Kendi Magazam");
+        ownShop.Click += (_, _) => { using var form = new OwnShopPerformanceForm(_shopPerformanceService); form.ShowDialog(this); };
+        nav.Controls.Add(ownShop, 2, 0);
         var tracking = CreateButton("Takip Merkezi");
         tracking.Click += async (_, _) => await OpenTrackingAsync();
-        nav.Controls.Add(tracking, 2, 0);
+        nav.Controls.Add(tracking, 3, 0);
         var api = CreateButton("API Ayarlari");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        nav.Controls.Add(api, 3, 0);
+        nav.Controls.Add(api, 4, 0);
         var refresh = CreateButton("Yenile");
         refresh.Click += async (_, _) => await LoadDashboardAsync();
-        nav.Controls.Add(refresh, 4, 0);
+        nav.Controls.Add(refresh, 5, 0);
         var exit = CreateButton("Cikis");
         exit.BackColor = Color.FromArgb(82, 93, 110);
         exit.Click += (_, _) => Close();
-        nav.Controls.Add(exit, 5, 0);
+        nav.Controls.Add(exit, 6, 0);
         root.Controls.Add(nav, 0, 1);
 
         var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 0, 0, 8) };
