@@ -67,10 +67,14 @@ Durum: İlk sürüm feature dalında geliştirildi, kullanıcı kabul testi bekl
 
 ## Aşama 5 - Kendi mağaza performansı
 
+Durum: İlk sürüm feature dalında geliştirildi, canlı OAuth kabul testi bekleniyor
+
 - Etsy OAuth ile mağaza bağlantısı
 - `shops_r`, `listings_r` ve `transactions_r` kapsamları
 - Kendi ürünlerinde kesin sipariş adedi ve ciro
 - Dönem ve ürün performansı karşılaştırması
+
+İlk sürüm; OAuth kullanıcısına ait mağazayı bulur, seçilen tarih aralığındaki ödenmiş ve iptal edilmemiş siparişleri getirir. Sipariş, satılan adet, brüt ciro, ortalama sipariş ve ürün bazlı satış/ciro tablosu gösterilir. Farklı dönemleri yan yana karşılaştırma ve kalıcı performans geçmişi sonraki feature parçasında geliştirilecektir.
 
 ## Aşama 6 - Otomasyon ve raporlama
 

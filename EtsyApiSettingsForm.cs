@@ -6,7 +6,7 @@ using SimilarProductsWinForms.Services;
 
 internal sealed class EtsyApiSettingsForm : Form
 {
-    private const string DefaultScopes = "shops_r listings_r";
+    private const string DefaultScopes = "shops_r listings_r transactions_r";
     private readonly EtsyApiClient _apiClient = new();
     private readonly EtsyApiSettings _settings;
 
@@ -106,7 +106,7 @@ internal sealed class EtsyApiSettingsForm : Form
         var infoLabel = new Label
         {
             Dock = DockStyle.Fill,
-            Text = "Not: Kendi magazaniz icin personal access yeterlidir. Redirect URI Etsy app ayarlarindaki URI ile birebir ayni olmalidir. OAuth onayindan sonra tarayicida acilan URL'deki code parametresini buraya yapistirin.",
+            Text = "Not: Kendi magazaniz icin personal access yeterlidir. Siparis ve ciro raporu shops_r, listings_r ve transactions_r izinlerini ister. Eski token bu izinleri icermiyorsa OAuth baglantisini yeniden kurun.",
             ForeColor = Color.FromArgb(75, 85, 99),
         };
         root.Controls.Add(new Label(), 0, 7);

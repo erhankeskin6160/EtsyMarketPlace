@@ -28,6 +28,8 @@ C# ve Windows Forms ile geliştirilen Etsy pazar araştırma, rakip mağaza anal
 - Takip türleri ve snapshot toplamı KPI değerleri
 - En iyi anahtar kelime fırsatları ve en büyük değişimler
 - Ürün favori, mağaza satışı ve keyword fırsat trend grafiği
+- OAuth ile bağlı kendi mağazasında gerçek sipariş, satılan adet ve brüt ciro raporu
+- Tarih aralığı ve ürün bazlı mağaza performansı tablosu
 
 ## Veri doğruluğu
 
@@ -78,7 +80,7 @@ Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared sec
 3. Anahtar kelime ve fırsat analizi - feature testi yapılıyor
 4. Takip listeleri ve geçmiş veriler - feature testi yapılıyor
 5. Kontrol paneli ve grafikler - feature testi yapılıyor
-6. Kendi mağaza satış analizi
+6. Kendi mağaza satış analizi - ilk sürüm feature testi yapılıyor
 7. Otomasyon, raporlama ve yapay zeka destekli optimizasyon
 
 Ayrıntılar için [geliştirme yol haritasına](docs/gelistirme-yol-haritasi.md) bakın.
