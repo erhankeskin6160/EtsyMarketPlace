@@ -49,7 +49,7 @@ Form puan hesaplamaz ve doğrudan HTTP isteği oluşturmaz. `AnalyzeKeywordUseCa
 
 Dashboard da değişim veya fırsat hesabı yapmaz. `DashboardService`, takip geçmişini KPI ve karşılaştırma modellerine dönüştürür; Presentation yalnızca tablo ve grafiği çizer.
 
-Kendi mağaza performansında `IOwnShopGateway` Etsy erişimini soyutlar. `ShopPerformanceService` ödenmiş/iptal edilmemiş siparişleri filtreler ve KPI ile ürün toplamlarını hesaplar. `EtsyOwnShopGateway` OAuth destekli Etsy adaptörüdür; `OwnShopPerformanceForm` yalnızca tarih seçimi ve sonuç sunumundan sorumludur.
+Kendi mağaza performansında `IOwnShopGateway` Etsy erişimini soyutlar. `ShopPerformanceService` ödenmiş/iptal edilmemiş siparişleri filtreler, KPI ile ürün toplamlarını hesaplar ve eşit uzunluktaki iki dönemi karşılaştırır. `EtsyOwnShopGateway` OAuth destekli Etsy adaptörüdür; `OwnShopPerformanceForm` yalnızca tarih seçimi ve sonuç sunumundan sorumludur.
 
 ## Bağımlılık yönü
 

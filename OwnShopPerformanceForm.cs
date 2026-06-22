@@ -9,9 +9,10 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
     private readonly DateTimePicker _endPicker = new();
     private readonly Label _titleLabel = new();
     private readonly Label _statusLabel = new();
-    private readonly Dictionary<string, Label> _kpis = [];
+    private readonly Dictionary<string, Label> _kpiValues = [];
+    private readonly Dictionary<string, Label> _kpiChanges = [];
     private readonly DataGridView _productsGrid = new();
-    private ShopPerformanceReport? _report;
+    private ShopPerformanceComparison? _comparison;
 
     protected override void OnLoad(EventArgs e)
     {
@@ -34,7 +35,7 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(20) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
@@ -102,8 +103,8 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
             var start = new DateTimeOffset(_startPicker.Value.Date, TimeZoneInfo.Local.GetUtcOffset(_startPicker.Value.Date));
             var endDate = _endPicker.Value.Date.AddDays(1).AddTicks(-1);
             var end = new DateTimeOffset(endDate, TimeZoneInfo.Local.GetUtcOffset(endDate));
-            _report = await performanceService.GetReportAsync(start, end);
-            BindReport(_report);
+            _comparison = await performanceService.GetComparisonAsync(start, end);
+            BindComparison(_comparison);
         }
         catch (Exception ex)
         {
@@ -116,16 +117,37 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         }
     }
 
-    private void BindReport(ShopPerformanceReport report)
+    private void BindComparison(ShopPerformanceComparison comparison)
     {
-        _titleLabel.Text = $"Magaza Performansi: {report.Shop.ShopName}";
-        _kpis["orders"].Text = report.OrderCount.ToString("N0");
-        _kpis["units"].Text = report.UnitsSold.ToString("N0");
-        _kpis["revenue"].Text = $"{report.CurrencyCode} {report.GrossRevenue:N2}";
-        _kpis["average"].Text = $"{report.CurrencyCode} {report.AverageOrderValue:N2}";
-        _kpis["products"].Text = report.Products.Count.ToString("N0");
-        _productsGrid.DataSource = report.Products.Select((item, index) => new ProductRow(index + 1, item)).ToList();
-        _statusLabel.Text = $"{report.PeriodStart:dd.MM.yyyy} - {report.PeriodEnd:dd.MM.yyyy} | {report.OrderCount:N0} siparis";
+        var current = comparison.Current;
+        var previous = comparison.Previous;
+        _titleLabel.Text = $"Magaza Performansi: {current.Shop.ShopName}";
+        SetKpi("orders", current.OrderCount.ToString("N0"), comparison.Orders, "N0");
+        SetKpi("units", current.UnitsSold.ToString("N0"), comparison.Units, "N0");
+        SetKpi("revenue", $"{current.CurrencyCode} {current.GrossRevenue:N2}", comparison.Revenue, "N2");
+        SetKpi("average", $"{current.CurrencyCode} {current.AverageOrderValue:N2}", comparison.AverageOrder, "N2");
+        SetKpi(
+            "products",
+            current.Products.Count.ToString("N0"),
+            new PerformanceMetric(current.Products.Count, previous.Products.Count),
+            "N0");
+        _productsGrid.DataSource = comparison.Products
+            .Select((item, index) => new ProductComparisonRow(index + 1, item))
+            .ToList();
+        _statusLabel.Text = $"Secilen: {current.PeriodStart:dd.MM.yyyy}-{current.PeriodEnd:dd.MM.yyyy} | Onceki: {previous.PeriodStart:dd.MM.yyyy}-{previous.PeriodEnd:dd.MM.yyyy}";
+    }
+
+    private void SetKpi(string key, string currentText, PerformanceMetric metric, string format)
+    {
+        _kpiValues[key].Text = currentText;
+        var percentage = metric.PercentageChange.HasValue ? $" ({metric.PercentageChange:+0.#;-0.#;0}%)" : "";
+        _kpiChanges[key].Text = $"Onceki: {metric.Previous.ToString(format)} | {metric.Difference.ToString($"+{format};-{format};0")}{percentage}";
+        _kpiChanges[key].ForeColor = metric.Difference switch
+        {
+            > 0 => Color.FromArgb(20, 126, 76),
+            < 0 => Color.FromArgb(190, 57, 52),
+            _ => Color.FromArgb(82, 93, 110),
+        };
     }
 
     private void ConfigureProductsGrid()
@@ -139,12 +161,17 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         _productsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _productsGrid.BackgroundColor = Color.White;
         _productsGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
-        AddColumn("#", nameof(ProductRow.Rank), 55);
-        AddColumn("Listing", nameof(ProductRow.ListingId), 105);
-        AddColumn("Urun basligi", nameof(ProductRow.Title), 500, true);
-        AddColumn("Siparis", nameof(ProductRow.OrderCount), 100);
-        AddColumn("Satilan adet", nameof(ProductRow.UnitsSold), 110);
-        AddColumn("Urun cirosu", nameof(ProductRow.Revenue), 150);
+        AddColumn("#", nameof(ProductComparisonRow.Rank), 45);
+        AddColumn("Listing", nameof(ProductComparisonRow.ListingId), 90);
+        AddColumn("Urun basligi", nameof(ProductComparisonRow.Title), 320, true);
+        AddColumn("Siparis", nameof(ProductComparisonRow.CurrentOrders), 80);
+        AddColumn("Onceki", nameof(ProductComparisonRow.PreviousOrders), 80);
+        AddColumn("Adet", nameof(ProductComparisonRow.CurrentUnits), 70);
+        AddColumn("Onceki", nameof(ProductComparisonRow.PreviousUnits), 70);
+        AddColumn("Adet fark", nameof(ProductComparisonRow.UnitDifference), 85);
+        AddColumn("Ciro", nameof(ProductComparisonRow.CurrentRevenue), 125);
+        AddColumn("Onceki ciro", nameof(ProductComparisonRow.PreviousRevenue), 125);
+        AddColumn("Ciro fark", nameof(ProductComparisonRow.RevenueDifference), 125);
     }
 
     private void AddColumn(string header, string property, int width, bool fill = false) =>
@@ -158,20 +185,25 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
 
     private void AddKpi(TableLayoutPanel parent, int column, string title, string key)
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = Color.White, Margin = new Padding(column == 0 ? 0 : 5, 2, column == 4 ? 0 : 5, 4), Padding = new Padding(12, 7, 12, 7), CellBorderStyle = TableLayoutPanelCellBorderStyle.Single };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, BackColor = Color.White, Margin = new Padding(column == 0 ? 0 : 5, 2, column == 4 ? 0 : 5, 4), Padding = new Padding(12, 7, 12, 7), CellBorderStyle = TableLayoutPanelCellBorderStyle.Single };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 23));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 23));
         panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, ForeColor = Color.FromArgb(82, 93, 110) }, 0, 0);
-        var value = new Label { Dock = DockStyle.Fill, Text = "-", Font = new Font("Segoe UI Semibold", 16F), ForeColor = Color.FromArgb(23, 32, 49), TextAlign = ContentAlignment.MiddleLeft };
+        var value = new Label { Dock = DockStyle.Fill, Text = "-", Font = new Font("Segoe UI Semibold", 15F), ForeColor = Color.FromArgb(23, 32, 49), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         panel.Controls.Add(value, 0, 1);
-        _kpis[key] = value;
+        var change = new Label { Dock = DockStyle.Fill, Text = "Onceki: -", Font = new Font("Segoe UI", 8.5F), ForeColor = Color.FromArgb(82, 93, 110), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+        panel.Controls.Add(change, 0, 2);
+        _kpiValues[key] = value;
+        _kpiChanges[key] = change;
         parent.Controls.Add(panel, column, 0);
     }
 
     private void OpenShop()
     {
-        if (_report is null || string.IsNullOrWhiteSpace(_report.Shop.ShopUrl)) return;
-        Process.Start(new ProcessStartInfo(_report.Shop.ShopUrl) { UseShellExecute = true });
+        var shopUrl = _comparison?.Current.Shop.ShopUrl;
+        if (string.IsNullOrWhiteSpace(shopUrl)) return;
+        Process.Start(new ProcessStartInfo(shopUrl) { UseShellExecute = true });
     }
 
     private static void ConfigurePicker(DateTimePicker picker)
@@ -202,13 +234,18 @@ internal sealed class OwnShopPerformanceForm(ShopPerformanceService performanceS
         return button;
     }
 
-    private sealed class ProductRow(int rank, ProductPerformance item)
+    private sealed class ProductComparisonRow(int rank, ProductPerformanceComparison item)
     {
         public int Rank => rank;
         public long ListingId => item.ListingId;
         public string Title => item.Title;
-        public int OrderCount => item.OrderCount;
-        public int UnitsSold => item.UnitsSold;
-        public string Revenue => $"{item.CurrencyCode} {item.Revenue:N2}";
+        public int CurrentOrders => item.CurrentOrderCount;
+        public int PreviousOrders => item.PreviousOrderCount;
+        public int CurrentUnits => item.CurrentUnitsSold;
+        public int PreviousUnits => item.PreviousUnitsSold;
+        public string UnitDifference => item.UnitDifference.ToString("+0;-0;0");
+        public string CurrentRevenue => $"{item.CurrencyCode} {item.CurrentRevenue:N2}";
+        public string PreviousRevenue => $"{item.CurrencyCode} {item.PreviousRevenue:N2}";
+        public string RevenueDifference => $"{item.CurrencyCode} {item.RevenueDifference:+0.00;-0.00;0.00}";
     }
 }
