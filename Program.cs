@@ -1,6 +1,7 @@
 namespace SimilarProductsWinForms;
 
 using EtsyMarketPlace.Application.KeywordResearch;
+using EtsyMarketPlace.Application.Dashboard;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Infrastructure.Tracking;
 using SimilarProductsWinForms.Infrastructure.KeywordResearch;
@@ -25,6 +26,7 @@ static class Program
             "market-tracking.db");
         var trackingService = new TrackingService(new SqliteTrackingRepository(databasePath));
         trackingService.InitializeAsync().GetAwaiter().GetResult();
-        Application.Run(new MarketResearchForm(analyzeKeywordUseCase, trackingService));
+        var dashboardService = new DashboardService(trackingService);
+        Application.Run(new DashboardForm(analyzeKeywordUseCase, trackingService, dashboardService));
     }    
 }

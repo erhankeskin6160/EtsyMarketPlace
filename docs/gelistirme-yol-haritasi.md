@@ -56,10 +56,14 @@ Yerel veri tabanı `%LocalAppData%/EtsyMarketPlace/market-tracking.db` konumunda
 
 ## Aşama 4 - Kontrol paneli ve grafikler
 
+Durum: İlk sürüm feature dalında geliştirildi, kullanıcı kabul testi bekleniyor
+
 - KPI özeti
 - Yükselen ürün ve etiketler
 - Fiyat ve performans grafikleri
 - Kritik değişim uyarıları
+
+İlk sürüm; takip sayıları, snapshot toplamı, anahtar kelime fırsatları, en büyük değişimler ve seçili takip trendini içerir. Ürün trendinde favori, mağazada toplam satış, anahtar kelimede fırsat puanı kullanılır. Dashboard yalnızca yerel SQLite verisini okur ve açılışta Etsy API kotası tüketmez.
 
 ## Aşama 5 - Kendi mağaza performansı
 

@@ -41,10 +41,13 @@ SQLite bağımsız Infrastructure projesine taşındı. Etsy adaptörü mevcut A
 ### Presentation
 
 - `KeywordOpportunityAnalysisForm`
+- `DashboardForm` ve `TrendChartControl`
 - KPI, sekme, tablo, resim ve kullanıcı olayları
 - Presentation'a özel `KeywordProductRow` görünüm modeli
 
 Form puan hesaplamaz ve doğrudan HTTP isteği oluşturmaz. `AnalyzeKeywordUseCase` çağırır ve sonucu gösterir.
+
+Dashboard da değişim veya fırsat hesabı yapmaz. `DashboardService`, takip geçmişini KPI ve karşılaştırma modellerine dönüştürür; Presentation yalnızca tablo ve grafiği çizer.
 
 ## Bağımlılık yönü
 
