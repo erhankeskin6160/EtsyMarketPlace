@@ -4,13 +4,16 @@ using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using EtsyMarketPlace.Application.ShopPerformance;
+using EtsyMarketPlace.Infrastructure.Http;
 using SimilarProductsWinForms.Models;
 
 internal sealed class EtsyApiClient
 {
     private const string BaseUrl = "https://api.etsy.com/v3/application";
     private const string TokenUrl = "https://api.etsy.com/v3/public/oauth/token";
-    private readonly HttpClient _httpClient = new();
+    private static readonly HttpClient SharedHttpClient = new(
+        new ApiResilienceHandler(new HttpClientHandler()));
+    private readonly HttpClient _httpClient = SharedHttpClient;
     private readonly Dictionary<long, ShopSnapshot> _shopCache = [];
 
     public Uri CreateAuthorizationUri(EtsyApiSettings settings, string scopes)

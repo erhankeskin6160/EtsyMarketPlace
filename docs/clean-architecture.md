@@ -55,6 +55,8 @@ Kalıcı mağaza geçmişinde `IShopPerformanceHistoryRepository` Application po
 
 Otomasyonda `AutomationRunService` zaman aralığı, snapshot, uyarı ve rapor üretimi kullanım senaryosunu yönetir. Ayar saklama ve dosya üretme işlemleri `IAutomationSettingsStore` ile `IAutomationReportExporter` portlarının arkasındadır. `AutomationScheduler` yalnızca uygulama yaşam döngüsünde zamanı kontrol eder; iş kurallarını hesaplamaz.
 
+API dayanıklılığı `EtsyApiClient` metotlarına dağılmaz. Infrastructure katmanındaki `ApiResilienceHandler`, ortak `HttpClient` için hız kuyruğu, geçici hata sınıflandırması, `Retry-After` ve kademeli beklemeyi uygular. Tek kullanımlık veya yan etkili POST çağrıları retry dışındadır. `ApiResilienceTelemetry` yalnızca gözlemlenebilirlik sağlar; Presentation bu olayları otomasyon günlüğünde gösterir.
+
 ## Bağımlılık yönü
 
 ```text

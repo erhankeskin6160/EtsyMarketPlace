@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
 using EtsyMarketPlace.Application.Automation;
+using EtsyMarketPlace.Infrastructure.Http;
 using SimilarProductsWinForms.Services;
 
 internal sealed class AutomationReportingForm(
@@ -23,12 +24,15 @@ internal sealed class AutomationReportingForm(
         BuildLayout();
         LoadSettings();
         scheduler.StatusChanged += SchedulerOnStatusChanged;
+        ApiResilienceTelemetry.EventPublished += ApiTelemetryOnEventPublished;
         AppendStatus(scheduler.LastStatus);
+        if (ApiResilienceTelemetry.LastEvent is { } lastEvent) AppendApiEvent(lastEvent);
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         scheduler.StatusChanged -= SchedulerOnStatusChanged;
+        ApiResilienceTelemetry.EventPublished -= ApiTelemetryOnEventPublished;
         base.OnFormClosed(e);
     }
 
@@ -184,6 +188,20 @@ internal sealed class AutomationReportingForm(
         if (IsDisposed) return;
         if (InvokeRequired) BeginInvoke(() => AppendStatus(status));
         else AppendStatus(status);
+    }
+
+    private void ApiTelemetryOnEventPublished(ApiRequestEvent item)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired) BeginInvoke(() => AppendApiEvent(item));
+        else AppendApiEvent(item);
+    }
+
+    private void AppendApiEvent(ApiRequestEvent item)
+    {
+        var status = item.StatusCode.HasValue ? $"HTTP {item.StatusCode}" : "HTTP -";
+        var wait = item.Delay > TimeSpan.Zero ? $" | bekleme {item.Delay.TotalSeconds:0.##} sn" : "";
+        AppendStatus($"API | {status} | deneme {item.Attempt} | kuyruk {item.QueueDepth}{wait} | {item.Message}");
     }
 
     private void AppendStatus(string status) =>
