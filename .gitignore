@@ -5,6 +5,7 @@ obj/
 artifacts/
 publish/
 publish-*/
+EtsyMarketPlace-*.zip
 *.user
 *.suo
 ms-persist.xml

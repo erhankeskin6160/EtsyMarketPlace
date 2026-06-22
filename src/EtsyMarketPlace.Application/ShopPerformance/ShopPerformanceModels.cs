@@ -43,6 +43,38 @@ public sealed class ShopPerformanceReport
     public required IReadOnlyList<ProductPerformance> Products { get; init; }
 }
 
+public sealed record PerformanceMetric(decimal Current, decimal Previous)
+{
+    public decimal Difference => Current - Previous;
+    public decimal? PercentageChange => Previous == 0 ? null : Difference * 100m / Previous;
+}
+
+public sealed record ProductPerformanceComparison(
+    long ListingId,
+    string Title,
+    int CurrentOrderCount,
+    int PreviousOrderCount,
+    int CurrentUnitsSold,
+    int PreviousUnitsSold,
+    decimal CurrentRevenue,
+    decimal PreviousRevenue,
+    string CurrencyCode)
+{
+    public int UnitDifference => CurrentUnitsSold - PreviousUnitsSold;
+    public decimal RevenueDifference => CurrentRevenue - PreviousRevenue;
+}
+
+public sealed class ShopPerformanceComparison
+{
+    public required ShopPerformanceReport Current { get; init; }
+    public required ShopPerformanceReport Previous { get; init; }
+    public required PerformanceMetric Orders { get; init; }
+    public required PerformanceMetric Units { get; init; }
+    public required PerformanceMetric Revenue { get; init; }
+    public required PerformanceMetric AverageOrder { get; init; }
+    public required IReadOnlyList<ProductPerformanceComparison> Products { get; init; }
+}
+
 public interface IOwnShopGateway
 {
     Task<OwnShopPerformanceSource> GetPerformanceSourceAsync(
