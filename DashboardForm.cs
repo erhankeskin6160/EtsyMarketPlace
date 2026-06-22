@@ -62,7 +62,14 @@ internal sealed class DashboardForm : Form
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var nav = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, Padding = new Padding(0, 4, 0, 8) };
+        var nav = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 6,
+            RowCount = 1,
+            Padding = new Padding(0, 4, 0, 8),
+        };
+        nav.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         nav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var index = 1; index < 6; index++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
         nav.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
@@ -224,8 +231,22 @@ internal sealed class DashboardForm : Form
     private static void AddColumn(DataGridView grid, string header, string property, int width, bool fill = false) => grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, DataPropertyName = property, Width = width, AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None });
     private static Button CreateButton(string text)
     {
-        var button = new Button { Dock = DockStyle.Fill, Text = text, BackColor = Color.FromArgb(32, 97, 165), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Margin = new Padding(6, 2, 0, 2) };
+        var button = new Button
+        {
+            Dock = DockStyle.Fill,
+            Text = text,
+            BackColor = Color.FromArgb(32, 97, 165),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI Semibold", 9.5F),
+            TextAlign = ContentAlignment.MiddleCenter,
+            UseVisualStyleBackColor = false,
+            AutoEllipsis = true,
+            Padding = new Padding(0),
+            Margin = new Padding(6, 2, 0, 2),
+        };
         button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 112, 184);
         return button;
     }
 
