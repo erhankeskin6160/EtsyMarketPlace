@@ -42,10 +42,17 @@ Durum: İlk sürüm feature dalında geliştirildi, canlı API ve arayüz kabul 
 
 ## Aşama 3 - Takip ve geçmiş veriler
 
+Durum: İlk sürüm feature dalında geliştirildi, kullanıcı kabul testi bekleniyor
+
 - Ürün, mağaza ve anahtar kelime takip listeleri
 - SQLite veri tabanı
 - Tarihli veri anları
 - Fiyat, favori, görüntülenme ve mağaza satışı değişimleri
+- Anahtar kelime rekabet, talep ve fırsat değişimleri
+- Son iki snapshot karşılaştırması
+- Takip geçmişini CSV olarak dışa aktarma
+
+Yerel veri tabanı `%LocalAppData%/EtsyMarketPlace/market-tracking.db` konumunda tutulur ve Git deposuna eklenmez. Aynı öğeyi yeniden takibe eklemek yeni öğe oluşturmaz; yeni tarihli snapshot kaydeder.
 
 ## Aşama 4 - Kontrol paneli ve grafikler
 

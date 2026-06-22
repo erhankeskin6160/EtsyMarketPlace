@@ -20,6 +20,10 @@ C# ve Windows Forms ile geliştirilen Etsy pazar araştırma, rakip mağaza anal
 - Rekabet, talep sinyali, fırsat ve veri güven puanları
 - Etiket, başlık kelimesi ve long-tail analizi
 - Dört anahtar kelimeyi yan yana karşılaştırma
+- Ürün, rakip mağaza ve anahtar kelime takip listeleri
+- SQLite üzerinde tarihli fiyat, etkileşim ve analiz snapshot'ları
+- Son iki snapshot arasındaki değişim karşılaştırması
+- Takip geçmişini CSV olarak dışa aktarma
 
 ## Veri doğruluğu
 
@@ -58,7 +62,8 @@ Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared sec
 - `Models/`: API, analiz ve ekran modelleri
 - `src/EtsyMarketPlace.Domain`: arayüz ve Etsy bağımlılığı olmayan iş modelleri
 - `src/EtsyMarketPlace.Application`: kullanım senaryoları, portlar ve puanlama kuralları
-- `Infrastructure/`: Etsy API gibi dış sistem adaptörleri
+- `src/EtsyMarketPlace.Infrastructure`: SQLite gibi kalıcı veri adaptörleri
+- `Infrastructure/`: WinForms composition projesindeki Etsy API adaptörleri
 - `tests/`: Domain/Application birim testleri
 - `docs/`: geliştirme planı ve teknik notlar
 
@@ -67,7 +72,7 @@ Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared sec
 1. Pazar araştırma temeli - tamamlandı
 2. Rakip mağaza analizi - ilk sürüm tamamlandı
 3. Anahtar kelime ve fırsat analizi - feature testi yapılıyor
-4. Takip listeleri ve geçmiş veriler
+4. Takip listeleri ve geçmiş veriler - feature testi yapılıyor
 5. Kontrol paneli ve grafikler
 6. Kendi mağaza satış analizi
 7. Otomasyon, raporlama ve yapay zeka destekli optimizasyon

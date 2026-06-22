@@ -29,12 +29,14 @@ Application, verinin Etsy'den mi SQLite'tan mı geldiğini bilmez. Yalnızca Dom
 
 ### Infrastructure
 
-`Infrastructure/KeywordResearch`
+`src/EtsyMarketPlace.Infrastructure` ve geçişli `Infrastructure/KeywordResearch`
 
 - `EtsyKeywordMarketGateway`: Application portunun Etsy adaptörü
 - API DTO'larını Domain modellerine dönüştürme
+- `SqliteTrackingRepository`: takip portunun kalıcı veri adaptörü
+- Parametreli SQL, transaction, foreign key ve WAL kullanımı
 
-Mevcut proje geçişli olarak tek WinForms projesi içerdiğinden adaptör şimdilik ana proje içinde yer alıyor. Diğer Etsy servisleri taşındığında bağımsız `EtsyMarketPlace.Infrastructure` projesine dönüştürülecek.
+SQLite bağımsız Infrastructure projesine taşındı. Etsy adaptörü mevcut API istemcisine bağımlı olduğu için geçişli olarak ana composition projesinde; diğer Etsy servisleri taşındığında aynı Infrastructure projesine alınacak.
 
 ### Presentation
 

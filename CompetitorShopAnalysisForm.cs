@@ -2,12 +2,15 @@ namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
 using System.Text;
+using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Domain.Tracking;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
 internal sealed class CompetitorShopAnalysisForm : Form
 {
     private readonly EtsyApiClient _apiClient = new();
+    private readonly TrackingService _trackingService;
     private readonly HttpClient _imageHttpClient = new();
     private readonly long _shopId;
     private readonly string _initialShopName;
@@ -25,8 +28,9 @@ internal sealed class CompetitorShopAnalysisForm : Form
     private readonly Dictionary<string, Label> _kpiValues = [];
     private CompetitorShopAnalysis? _analysis;
 
-    public CompetitorShopAnalysisForm(MarketListingResult listing)
+    public CompetitorShopAnalysisForm(MarketListingResult listing, TrackingService trackingService)
     {
+        _trackingService = trackingService;
         _shopId = listing.ShopId;
         _initialShopName = listing.ShopName;
         BuildLayout();
@@ -87,11 +91,12 @@ internal sealed class CompetitorShopAnalysisForm : Form
         AddKpi(kpis, 6, "Rakip gucu", "strength");
         root.Controls.Add(kpis, 0, 1);
 
-        var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 5, 0, 7) };
+        var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, Padding = new Padding(0, 5, 0, 7) };
         commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
         commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
         commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
+        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
         commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         commands.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
         var shopButton = CreateButton("Etsy'de Magazayi Ac");
@@ -100,13 +105,16 @@ internal sealed class CompetitorShopAnalysisForm : Form
         var csvButton = CreateButton("CSV Aktar");
         csvButton.Click += (_, _) => ExportCsv();
         commands.Controls.Add(csvButton, 2, 0);
+        var trackButton = CreateButton("Takibe Ekle");
+        trackButton.Click += async (_, _) => await TrackShopAsync();
+        commands.Controls.Add(trackButton, 3, 0);
         ConfigureButton(_refreshButton, "Verileri Yenile");
         _refreshButton.Click += async (_, _) => await LoadAnalysisAsync();
-        commands.Controls.Add(_refreshButton, 3, 0);
+        commands.Controls.Add(_refreshButton, 4, 0);
         var closeButton = CreateButton("Geri Don");
         closeButton.BackColor = Color.FromArgb(82, 93, 110);
         closeButton.Click += (_, _) => Close();
-        commands.Controls.Add(closeButton, 4, 0);
+        commands.Controls.Add(closeButton, 5, 0);
         root.Controls.Add(commands, 0, 2);
 
         var tabs = new TabControl { Dock = DockStyle.Fill };
@@ -412,6 +420,40 @@ internal sealed class CompetitorShopAnalysisForm : Form
         }
         File.WriteAllText(dialog.FileName, builder.ToString(), Encoding.UTF8);
         _statusLabel.Text = "Rakip magaza CSV dosyasi kaydedildi";
+    }
+
+    private async Task TrackShopAsync()
+    {
+        if (_analysis is null)
+        {
+            MessageBox.Show(this, "Once magaza analizinin tamamlanmasini bekleyin.", "Takibe Ekle", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        await _trackingService.TrackAsync(new TrackingCapture(
+            TrackingEntityType.Shop,
+            _analysis.Shop.ShopId.ToString(),
+            _analysis.Shop.ShopName,
+            _analysis.Shop.ShopUrl,
+            new TrackingSnapshot(
+                0,
+                0,
+                DateTimeOffset.Now,
+                _analysis.AveragePrice,
+                _analysis.PriceCurrency,
+                null,
+                null,
+                _analysis.Shop.TotalSales,
+                _analysis.Shop.ReviewCount,
+                _analysis.Shop.ReviewAverage,
+                _analysis.AverageSeoScore,
+                _analysis.CompetitorStrengthScore,
+                null,
+                null,
+                null,
+                _analysis.Shop.ActiveListingCount,
+                _analysis.Listings.Count)));
+        _statusLabel.Text = "Magaza takibe eklendi ve snapshot kaydedildi";
     }
 
     private void AddKpi(TableLayoutPanel parent, int column, string title, string key)

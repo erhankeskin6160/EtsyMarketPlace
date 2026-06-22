@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using EtsyMarketPlace.Application.KeywordResearch;
+using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Domain.Tracking;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
@@ -11,6 +13,7 @@ internal sealed class MarketResearchForm : Form
 {
     private readonly EtsyApiClient _apiClient = new();
     private readonly AnalyzeKeywordUseCase _analyzeKeywordUseCase;
+    private readonly TrackingService _trackingService;
     private readonly HttpClient _imageHttpClient = new();
     private readonly BindingSource _bindingSource = new();
     private List<MarketListingResult> _results = [];
@@ -27,9 +30,10 @@ internal sealed class MarketResearchForm : Form
     private int _currentImageIndex;
     private bool _favoriteSortDescending;
 
-    public MarketResearchForm(AnalyzeKeywordUseCase analyzeKeywordUseCase)
+    public MarketResearchForm(AnalyzeKeywordUseCase analyzeKeywordUseCase, TrackingService trackingService)
     {
         _analyzeKeywordUseCase = analyzeKeywordUseCase;
+        _trackingService = trackingService;
         BuildLayout();
     }
 
@@ -75,7 +79,8 @@ internal sealed class MarketResearchForm : Form
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var searchPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 1 };
+        var searchPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 10, RowCount = 1 };
+        searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
@@ -134,6 +139,10 @@ internal sealed class MarketResearchForm : Form
             form.ShowDialog(this);
         };
         searchPanel.Controls.Add(plannerButton, 8, 0);
+
+        var trackingButton = CreateButton("Takip Merkezi");
+        trackingButton.Click += (_, _) => OpenTrackingCenter();
+        searchPanel.Controls.Add(trackingButton, 9, 0);
         root.Controls.Add(searchPanel, 0, 1);
 
         ConfigureGrid();
@@ -192,18 +201,19 @@ internal sealed class MarketResearchForm : Form
         _detailTextBox.BackColor = Color.White;
         detailPanel.Controls.Add(_detailTextBox, 1, 0);
 
-        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 7 };
-        for (var row = 0; row < 7; row++)
+        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8 };
+        for (var row = 0; row < 8; row++)
         {
-            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 7));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 12.5F));
         }
         actions.Controls.Add(ActionButton("Listing Ac", OpenListing), 0, 0);
-        actions.Controls.Add(ActionButton("Kelime Analizi", OpenKeywordAnalysis), 0, 1);
-        actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 0, 2);
-        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 0, 3);
-        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 4);
-        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 0, 5);
-        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 0, 6);
+        actions.Controls.Add(ActionButton("Takibe Ekle", () => _ = TrackSelectedListingAsync()), 0, 1);
+        actions.Controls.Add(ActionButton("Kelime Analizi", OpenKeywordAnalysis), 0, 2);
+        actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 0, 3);
+        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 0, 4);
+        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 5);
+        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 0, 6);
+        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 0, 7);
         detailPanel.Controls.Add(actions, 2, 0);
         root.Controls.Add(detailPanel, 0, 3);
     }
@@ -404,7 +414,7 @@ internal sealed class MarketResearchForm : Form
             return;
         }
 
-        using var form = new KeywordOpportunityAnalysisForm(_analyzeKeywordUseCase, keyword);
+        using var form = new KeywordOpportunityAnalysisForm(_analyzeKeywordUseCase, _trackingService, keyword);
         form.ShowDialog(this);
     }
 
@@ -417,7 +427,43 @@ internal sealed class MarketResearchForm : Form
             return;
         }
 
-        using var form = new CompetitorShopAnalysisForm(listing);
+        using var form = new CompetitorShopAnalysisForm(listing, _trackingService);
+        form.ShowDialog(this);
+    }
+
+    private async Task TrackSelectedListingAsync()
+    {
+        var item = SelectedListing;
+        if (item is null)
+        {
+            MessageBox.Show(this, "Takip edilecek urunu secin.", "Takibe Ekle", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        await _trackingService.TrackAsync(new TrackingCapture(
+            TrackingEntityType.Listing,
+            item.ListingId.ToString(CultureInfo.InvariantCulture),
+            item.Title,
+            item.ListingUrl,
+            new TrackingSnapshot(
+                0,
+                0,
+                DateTimeOffset.Now,
+                item.Price,
+                item.CurrencyCode,
+                item.Favorites,
+                item.Views,
+                item.ShopSales,
+                item.ReviewCount,
+                item.ReviewAverage,
+                item.SeoScore,
+                item.MarketScore)));
+        _statusLabel.Text = "Urun takip listesine eklendi ve snapshot kaydedildi";
+    }
+
+    private void OpenTrackingCenter()
+    {
+        using var form = new TrackingHistoryForm(_trackingService);
         form.ShowDialog(this);
     }
 
