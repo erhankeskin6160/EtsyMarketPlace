@@ -78,10 +78,14 @@ Durum: Temel mağaza performansı ve dönem karşılaştırması tamamlandı; ka
 
 ## Aşama 6 - Otomasyon ve raporlama
 
+Durum: Uygulama içi zamanlayıcı ve haftalık rapor ilk sürümü feature testinde
+
 - Zamanlanmış veri yenileme
 - API hız limiti ve yeniden deneme kuyruğu
 - Haftalık HTML/CSV raporları
 - Fiyat ve performans uyarıları
+
+İlk sürüm uygulama açıkken ayarlanan saat aralığında kendi mağaza verisini yeniler, günlük SQLite snapshot kaydeder ve seçilen klasöre HTML/CSV raporu üretir. Sipariş ve ciro düşüş eşikleri kullanıcı tarafından ayarlanabilir. API retry/rate-limit kuyruğu ile Windows kapalıyken çalışacak görev desteği sonraki feature parçalarında geliştirilecektir.
 
 ## Aşama 7 - Yapay zeka destekli optimizasyon
 

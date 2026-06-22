@@ -53,6 +53,8 @@ Kendi mağaza performansında `IOwnShopGateway` Etsy erişimini soyutlar. `ShopP
 
 Kalıcı mağaza geçmişinde `IShopPerformanceHistoryRepository` Application portudur. `SqliteShopPerformanceHistoryRepository` günlük snapshot ve ürün kırılımlarını aynı transaction içinde saklayan Infrastructure adaptörüdür. Form doğrudan SQL kullanmaz; kayıt ve sorgulama işlemlerini `ShopPerformanceHistoryService` üzerinden yürütür.
 
+Otomasyonda `AutomationRunService` zaman aralığı, snapshot, uyarı ve rapor üretimi kullanım senaryosunu yönetir. Ayar saklama ve dosya üretme işlemleri `IAutomationSettingsStore` ile `IAutomationReportExporter` portlarının arkasındadır. `AutomationScheduler` yalnızca uygulama yaşam döngüsünde zamanı kontrol eder; iş kurallarını hesaplamaz.
+
 ## Bağımlılık yönü
 
 ```text
