@@ -18,9 +18,14 @@ internal sealed class OpenAiListingOptimizer(
         CancellationToken cancellationToken = default)
     {
         var settings = loadSettings();
-        if (!settings.UseOpenAi)
+        if (settings.IsOffline)
         {
             return localOptimizer.Optimize(input);
+        }
+
+        if (!settings.UseOpenAi)
+        {
+            throw new InvalidOperationException($"{settings.Provider} adapteri henuz aktif degil. Simdilik Offline veya OpenAI kullanin.");
         }
 
         var local = localOptimizer.Optimize(input);

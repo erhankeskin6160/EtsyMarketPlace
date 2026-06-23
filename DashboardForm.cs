@@ -108,7 +108,11 @@ internal sealed class DashboardForm : Form
         var ownShop = CreateButton("Kendi Magazam");
         ownShop.Click += (_, _) =>
         {
-            using var form = new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService);
+            using var form = new OwnShopPerformanceForm(
+                _shopPerformanceService,
+                _shopPerformanceHistoryService,
+                _aiListingOptimizer,
+                _optimizationHistoryService);
             form.ShowDialog(this);
         };
         nav.Controls.Add(ownShop, 2, 0);

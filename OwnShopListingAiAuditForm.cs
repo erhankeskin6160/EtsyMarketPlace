@@ -1,0 +1,394 @@
+namespace SimilarProductsWinForms;
+
+using System.Diagnostics;
+using System.Globalization;
+using EtsyMarketPlace.Application.ListingOptimization;
+using SimilarProductsWinForms.Models;
+using SimilarProductsWinForms.Services;
+
+internal sealed class OwnShopListingAiAuditForm(
+    IAiListingOptimizer aiOptimizer,
+    ListingOptimizationHistoryService historyService) : Form
+{
+    private readonly EtsyApiClient _apiClient = new();
+    private readonly HttpClient _imageHttpClient = new();
+    private readonly BindingSource _bindingSource = new();
+    private readonly DataGridView _grid = new();
+    private readonly PictureBox _pictureBox = new();
+    private readonly TextBox _detailTextBox = new();
+    private readonly TextBox _suggestionTextBox = new();
+    private readonly Label _statusLabel = new();
+    private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
+    private List<AuditRow> _rows = [];
+    private ListingOptimizationResult? _lastResult;
+
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        BuildLayout();
+    }
+
+    private AuditRow? SelectedRow => _bindingSource.Current as AuditRow;
+
+    private void BuildLayout()
+    {
+        Text = "Kendi Magaza Listing AI Analizi";
+        StartPosition = FormStartPosition.CenterParent;
+        WindowState = FormWindowState.Maximized;
+        MinimumSize = new Size(1280, 780);
+        Font = new Font("Segoe UI", 10F);
+        BackColor = Color.FromArgb(247, 248, 250);
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 250));
+        Controls.Add(root);
+
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 420));
+        header.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Kendi Magaza Listing AI Analizi",
+            Font = new Font("Segoe UI Semibold", 22F),
+            ForeColor = Color.FromArgb(23, 32, 49),
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 0);
+        _statusLabel.Dock = DockStyle.Fill;
+        _statusLabel.TextAlign = ContentAlignment.MiddleRight;
+        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.Text = "Listingleri yuklemek icin yenile";
+        header.Controls.Add(_statusLabel, 1, 0);
+        root.Controls.Add(header, 0, 0);
+
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8 };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var index = 3; index < 8; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
+        toolbar.Controls.Add(LabelFor("Limit"), 0, 0);
+        _limitInput.Dock = DockStyle.Left;
+        toolbar.Controls.Add(_limitInput, 1, 0);
+        var load = CreateButton("Listingleri Yukle");
+        load.Click += async (_, _) => await LoadListingsAsync();
+        toolbar.Controls.Add(load, 3, 0);
+        var aiAnalyze = CreateButton("AI ile Puanla");
+        aiAnalyze.Click += async (_, _) => await AnalyzeSelectedAsync();
+        toolbar.Controls.Add(aiAnalyze, 4, 0);
+        var settings = CreateButton("AI Ayarlari");
+        settings.Click += (_, _) => { using var form = new AiOptimizationSettingsForm(); form.ShowDialog(this); };
+        toolbar.Controls.Add(settings, 5, 0);
+        var open = CreateButton("Listing Ac");
+        open.Click += (_, _) => OpenListing();
+        toolbar.Controls.Add(open, 6, 0);
+        var history = CreateButton("Gecmis");
+        history.Click += (_, _) => { using var form = new ListingOptimizationHistoryForm(historyService); form.ShowDialog(this); };
+        toolbar.Controls.Add(history, 7, 0);
+        root.Controls.Add(toolbar, 0, 1);
+
+        ConfigureGrid();
+        root.Controls.Add(_grid, 0, 2);
+        root.Controls.Add(BuildDetailArea(), 0, 3);
+    }
+
+    private Control BuildDetailArea()
+    {
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Padding = new Padding(0, 12, 0, 0) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175));
+
+        _pictureBox.Dock = DockStyle.Fill;
+        _pictureBox.SizeMode = PictureBoxSizeMode.Zoom;
+        _pictureBox.BackColor = Color.White;
+        _pictureBox.BorderStyle = BorderStyle.FixedSingle;
+        layout.Controls.Add(_pictureBox, 0, 0);
+
+        ConfigureText(_detailTextBox);
+        layout.Controls.Add(_detailTextBox, 1, 0);
+        ConfigureText(_suggestionTextBox);
+        layout.Controls.Add(_suggestionTextBox, 2, 0);
+
+        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5 };
+        for (var row = 0; row < 5; row++) actions.RowStyles.Add(new RowStyle(SizeType.Percent, 20));
+        var save = CreateButton("Versiyon Kaydet");
+        save.Click += async (_, _) => await SaveVersionAsync();
+        actions.Controls.Add(save, 0, 0);
+        var copy = CreateButton("Oneriyi Kopyala");
+        copy.Click += (_, _) => CopySuggestion();
+        actions.Controls.Add(copy, 0, 1);
+        var draft = CreateButton("Guncelleme Taslagi");
+        draft.Click += (_, _) => ShowUpdateDraftNotice();
+        actions.Controls.Add(draft, 0, 2);
+        var shop = CreateButton("Magaza Ac");
+        shop.Click += (_, _) => OpenShop();
+        actions.Controls.Add(shop, 0, 3);
+        var close = CreateButton("Kapat");
+        close.BackColor = Color.FromArgb(82, 93, 110);
+        close.Click += (_, _) => Close();
+        actions.Controls.Add(close, 0, 4);
+        layout.Controls.Add(actions, 3, 0);
+        return layout;
+    }
+
+    private void ConfigureGrid()
+    {
+        _grid.Dock = DockStyle.Fill;
+        _grid.AutoGenerateColumns = false;
+        _grid.AllowUserToAddRows = false;
+        _grid.AllowUserToDeleteRows = false;
+        _grid.ReadOnly = true;
+        _grid.MultiSelect = false;
+        _grid.RowHeadersVisible = false;
+        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _grid.BackgroundColor = Color.White;
+        _grid.RowTemplate.MinimumHeight = 78;
+        _grid.DataSource = _bindingSource;
+        _grid.SelectionChanged += async (_, _) => await UpdateDetailAsync();
+        _grid.Columns.Add(new DataGridViewImageColumn
+        {
+            HeaderText = "Resim",
+            DataPropertyName = nameof(AuditRow.ThumbnailImage),
+            Width = 90,
+            ImageLayout = DataGridViewImageCellLayout.Zoom,
+        });
+        AddColumn("#", nameof(AuditRow.Rank), 48);
+        AddColumn("Listing", nameof(AuditRow.Title), 380, true);
+        AddColumn("SEO", nameof(AuditRow.SeoScore), 70);
+        AddColumn("AI", nameof(AuditRow.AiScore), 70);
+        AddColumn("Fiyat", nameof(AuditRow.Price), 85);
+        AddColumn("Favori", nameof(AuditRow.Favorites), 80);
+        AddColumn("Stok", nameof(AuditRow.Quantity), 70);
+        AddColumn("Tag", nameof(AuditRow.TagCount), 70);
+        AddColumn("Durum", nameof(AuditRow.Status), 150);
+    }
+
+    private async Task LoadListingsAsync()
+    {
+        try
+        {
+            UseWaitCursor = true;
+            _statusLabel.Text = "Kendi listinglerin aliniyor...";
+            var settings = EtsyApiSettingsStore.Load();
+            var listings = await _apiClient.GetOwnShopActiveListingsAsync(settings, (int)_limitInput.Value);
+            EtsyApiSettingsStore.Save(settings);
+            _rows = listings
+                .Select((item, index) => new AuditRow(index + 1, item, ScoreListing(item), "Bekliyor"))
+                .OrderBy(row => row.SeoScore)
+                .ThenBy(row => row.Title)
+                .ToList();
+            _bindingSource.DataSource = _rows;
+            _statusLabel.Text = $"{_rows.Count} listing yuklendi | dusuk puanlar ustte";
+            await LoadThumbnailsAsync();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Kendi Listing AI Analizi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = "Listingler alinamadi";
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task AnalyzeSelectedAsync()
+    {
+        if (SelectedRow is null) return;
+        try
+        {
+            UseWaitCursor = true;
+            var row = SelectedRow;
+            var input = ToOptimizationInput(row.Listing);
+            _lastResult = await aiOptimizer.OptimizeAsync(input);
+            row.AiScore = _lastResult.OptimizedSeoScore;
+            row.Status = _lastResult.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
+            _grid.Refresh();
+            RenderSuggestion(row, _lastResult);
+            _statusLabel.Text = $"{row.Title} analiz edildi";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "AI Analiz", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task SaveVersionAsync()
+    {
+        if (SelectedRow is null || _lastResult is null) return;
+        var row = SelectedRow;
+        await historyService.SaveAsync(new SaveListingOptimizationHistory(
+            row.Listing.ListingId.ToString(CultureInfo.InvariantCulture),
+            row.Title,
+            PrimaryKeyword(row.Listing),
+            _lastResult));
+        _statusLabel.Text = "Optimizasyon versiyonu kaydedildi";
+    }
+
+    private async Task UpdateDetailAsync()
+    {
+        if (SelectedRow is null)
+        {
+            _detailTextBox.Text = "Listing secilmedi.";
+            _suggestionTextBox.Clear();
+            _pictureBox.Image = null;
+            return;
+        }
+
+        var row = SelectedRow;
+        _detailTextBox.Text =
+            $"BASLIK{Environment.NewLine}{row.Title}{Environment.NewLine}{Environment.NewLine}" +
+            $"PUANLAR{Environment.NewLine}SEO: {row.SeoScore}/100 | AI: {row.AiScore}/100 | Durum: {row.Status}{Environment.NewLine}{Environment.NewLine}" +
+            $"VERI{Environment.NewLine}Fiyat: {row.Price} | Favori: {row.Favorites:N0} | Stok: {row.Quantity} | Tag: {row.TagCount}{Environment.NewLine}{Environment.NewLine}" +
+            $"TAGLER{Environment.NewLine}{string.Join(", ", row.Listing.Tags)}";
+        _suggestionTextBox.Text = "AI ile Puanla butonuna basinca oneriler burada gorunecek.";
+        if (row.ThumbnailImage is not null) _pictureBox.Image = row.ThumbnailImage;
+        else await LoadThumbnailAsync(row);
+    }
+
+    private async Task LoadThumbnailsAsync()
+    {
+        foreach (var row in _rows.Where(item => item.ThumbnailImage is null).Take(30))
+        {
+            await LoadThumbnailAsync(row);
+        }
+        _grid.Refresh();
+    }
+
+    private async Task LoadThumbnailAsync(AuditRow row)
+    {
+        if (string.IsNullOrWhiteSpace(row.Listing.ImageUrl)) return;
+        try
+        {
+            await using var stream = await _imageHttpClient.GetStreamAsync(row.Listing.ImageUrl);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            memory.Position = 0;
+            using var image = Image.FromStream(memory);
+            row.ThumbnailImage = new Bitmap(image);
+            if (ReferenceEquals(row, SelectedRow)) _pictureBox.Image = row.ThumbnailImage;
+        }
+        catch
+        {
+            row.ThumbnailImage = null;
+        }
+    }
+
+    private void RenderSuggestion(AuditRow row, ListingOptimizationResult result)
+    {
+        _suggestionTextBox.Text =
+            $"ONERILEN BASLIK{Environment.NewLine}{result.TitleSuggestions.FirstOrDefault()}{Environment.NewLine}{Environment.NewLine}" +
+            $"ONERILEN TAGLER{Environment.NewLine}{string.Join(", ", result.TagSuggestions)}{Environment.NewLine}{Environment.NewLine}" +
+            $"ACIKLAMA TASLAGI{Environment.NewLine}{result.DescriptionDraft}{Environment.NewLine}{Environment.NewLine}" +
+            $"RISKLER{Environment.NewLine}{string.Join(Environment.NewLine, result.RiskWarnings.DefaultIfEmpty("Risk uyarisi yok."))}";
+    }
+
+    private static int ScoreListing(MarketListingResult listing)
+    {
+        var tagScore = Math.Min(25, listing.Tags.Count * 25 / 13);
+        var titleScore = listing.Title.Length is >= 55 and <= 135 ? 25 : listing.Title.Length is >= 35 and <= 140 ? 18 : 8;
+        var imageScore = listing.ImageUrls.Count >= 5 ? 20 : listing.ImageUrls.Count * 4;
+        var descriptionScore = listing.Description.Length >= 500 ? 20 : listing.Description.Length >= 250 ? 12 : 5;
+        var signalScore = listing.Favorites > 0 ? 10 : 0;
+        return Math.Clamp(tagScore + titleScore + imageScore + descriptionScore + signalScore, 0, 100);
+    }
+
+    private static ListingOptimizationInput ToOptimizationInput(MarketListingResult listing) =>
+        new(listing.Title, listing.Description, listing.Tags, PrimaryKeyword(listing));
+
+    private static string PrimaryKeyword(MarketListingResult listing) =>
+        listing.Tags.FirstOrDefault(tag => tag.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
+        ?? listing.Tags.FirstOrDefault()
+        ?? listing.Title.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(3).Aggregate("", (current, next) => $"{current} {next}").Trim();
+
+    private void CopySuggestion()
+    {
+        if (!string.IsNullOrWhiteSpace(_suggestionTextBox.Text)) Clipboard.SetText(_suggestionTextBox.Text);
+    }
+
+    private void ShowUpdateDraftNotice()
+    {
+        MessageBox.Show(
+            this,
+            "Bu asamada guvenli taslak hazirlandi. Etsy'de direkt guncelleme sonraki feature'da listings_w izni ve son onay penceresiyle acilacak.",
+            "Guncelleme Taslagi",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    private void OpenListing() => OpenUrl(SelectedRow?.Listing.ListingUrl);
+    private void OpenShop() => OpenUrl(SelectedRow?.Listing.ShopUrl);
+
+    private static void OpenUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+    }
+
+    private void AddColumn(string header, string property, int width, bool fill = false)
+    {
+        _grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = header,
+            DataPropertyName = property,
+            Width = width,
+            AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None,
+        });
+    }
+
+    private static void ConfigureText(TextBox textBox)
+    {
+        textBox.Dock = DockStyle.Fill;
+        textBox.Multiline = true;
+        textBox.ReadOnly = true;
+        textBox.ScrollBars = ScrollBars.Vertical;
+        textBox.BackColor = Color.White;
+    }
+
+    private static Label LabelFor(string text) => new()
+    {
+        Dock = DockStyle.Fill,
+        Text = text,
+        TextAlign = ContentAlignment.MiddleLeft,
+    };
+
+    private static Button CreateButton(string text)
+    {
+        var button = new Button
+        {
+            Dock = DockStyle.Fill,
+            Text = text,
+            BackColor = Color.FromArgb(32, 97, 165),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI Semibold", 9.2F),
+            Margin = new Padding(6, 3, 0, 3),
+            UseVisualStyleBackColor = false,
+        };
+        button.FlatAppearance.BorderSize = 0;
+        return button;
+    }
+
+    private sealed class AuditRow(int rank, MarketListingResult listing, int seoScore, string status)
+    {
+        public int Rank { get; } = rank;
+        public MarketListingResult Listing { get; } = listing;
+        public Image? ThumbnailImage { get; set; }
+        public string Title => Listing.Title;
+        public string Price => Listing.PriceDisplay;
+        public int Favorites => Listing.Favorites;
+        public int Quantity => Listing.Quantity;
+        public int TagCount => Listing.Tags.Count;
+        public int SeoScore { get; } = seoScore;
+        public int AiScore { get; set; } = seoScore;
+        public string Status { get; set; } = status;
+    }
+}
