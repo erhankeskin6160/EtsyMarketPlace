@@ -113,4 +113,7 @@ Durum: Ilk calisma alani feature dalinda gelistirildi
 - Aciklama taslagi ve SEO once/sonra puani gosterilir.
 - Marka/telif riski olabilecek kelimeler icin kontrol uyarisi verilir.
 - Ilk surum dis AI API kullanmaz; offline kural motoru olarak calisir.
-- Sonraki parca, kullanici onayli gercek AI API entegrasyonu ve versiyon gecmisi olabilir.
+- Optimizasyon sonucu versiyon olarak SQLite gecmisine kaydedilir.
+- Gecmis ekraninda once/sonra SEO puani, hedef kelime, onerilen baslik, tagler,
+  aciklama taslagi ve risk uyarilari incelenebilir.
+- Sonraki parca, kullanici onayli gercek AI API entegrasyonu olabilir.

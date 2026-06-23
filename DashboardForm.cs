@@ -5,6 +5,7 @@ using EtsyMarketPlace.Application.KeywordResearch;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Automation;
+using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Domain.Tracking;
 using EtsyMarketPlace.Infrastructure.Automation;
 using SimilarProductsWinForms.Controls;
@@ -20,6 +21,7 @@ internal sealed class DashboardForm : Form
     private readonly IAutomationSettingsStore _automationSettingsStore;
     private readonly AutomationScheduler _automationScheduler;
     private readonly WindowsTaskSchedulerService _windowsTaskScheduler;
+    private readonly ListingOptimizationHistoryService _optimizationHistoryService;
     private readonly Label _statusLabel = new();
     private readonly Dictionary<string, Label> _kpis = [];
     private readonly DataGridView _opportunitiesGrid = new();
@@ -36,7 +38,8 @@ internal sealed class DashboardForm : Form
         ShopPerformanceHistoryService shopPerformanceHistoryService,
         IAutomationSettingsStore automationSettingsStore,
         AutomationScheduler automationScheduler,
-        WindowsTaskSchedulerService windowsTaskScheduler)
+        WindowsTaskSchedulerService windowsTaskScheduler,
+        ListingOptimizationHistoryService optimizationHistoryService)
     {
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
@@ -46,6 +49,7 @@ internal sealed class DashboardForm : Form
         _automationSettingsStore = automationSettingsStore;
         _automationScheduler = automationScheduler;
         _windowsTaskScheduler = windowsTaskScheduler;
+        _optimizationHistoryService = optimizationHistoryService;
         BuildLayout();
         Shown += async (_, _) => await LoadDashboardAsync();
     }
@@ -118,7 +122,7 @@ internal sealed class DashboardForm : Form
         var optimization = CreateButton("AI Optimizasyon");
         optimization.Click += (_, _) =>
         {
-            using var form = new ListingOptimizationForm();
+            using var form = new ListingOptimizationForm(_optimizationHistoryService);
             form.ShowDialog(this);
         };
         nav.Controls.Add(optimization, 4, 0);
@@ -204,7 +208,7 @@ internal sealed class DashboardForm : Form
 
     private async Task OpenResearchAsync()
     {
-        using var form = new MarketResearchForm(_keywordUseCase, _trackingService);
+        using var form = new MarketResearchForm(_keywordUseCase, _trackingService, _optimizationHistoryService);
         form.ShowDialog(this);
         await LoadDashboardAsync();
     }
