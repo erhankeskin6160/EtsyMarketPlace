@@ -121,3 +121,15 @@ Ilk surumde offline calisan listing optimizasyon calisma alani eklendi.
 - Optimizasyon sonucunu versiyon olarak kaydedebilir ve gecmisten inceleyebilir.
 
 Bu ilk surum dis AI API kullanmaz; hizli, maliyetsiz ve test edilebilir kural motoru olarak calisir.
+
+### OpenAI provider
+
+`AI Optimizasyon` ekranindaki `AI Ayarlari` bolumunden saglayici `OpenAI` secilip API key ve model girilebilir.
+`AI ile Uret` butonu bu modda OpenAI Responses API uzerinden baslik, tag, aciklama ve risk uyarisi uretir.
+Saglayici `Offline` ise uygulama hic dis AI cagrisi yapmaz.
+
+AI ayarlari yerel kullanici profilinde saklanir:
+
+```text
+%AppData%\SimilarProductsWinForms\ai-optimization-settings.json
+```

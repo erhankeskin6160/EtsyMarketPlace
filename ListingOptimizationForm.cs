@@ -7,6 +7,7 @@ internal sealed class ListingOptimizationForm : Form
 {
     private readonly ListingOptimizationService _service = new();
     private readonly ListingOptimizationHistoryService _historyService;
+    private readonly IAiListingOptimizer _aiOptimizer;
     private readonly TextBox _titleTextBox = new();
     private readonly TextBox _keywordTextBox = new();
     private readonly TextBox _tagsTextBox = new();
@@ -23,10 +24,12 @@ internal sealed class ListingOptimizationForm : Form
 
     public ListingOptimizationForm(
         ListingOptimizationHistoryService historyService,
+        IAiListingOptimizer aiOptimizer,
         MarketListingResult? listing = null,
         string targetKeyword = "")
     {
         _historyService = historyService;
+        _aiOptimizer = aiOptimizer;
         BuildLayout();
         if (listing is not null) LoadListing(listing, targetKeyword);
         Analyze();
@@ -66,20 +69,29 @@ internal sealed class ListingOptimizationForm : Form
         header.Controls.Add(_scoreLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6 };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        for (var index = 2; index < 6; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135));
         toolbar.Controls.Add(LabelFor("Hedef anahtar kelime"), 0, 0);
         _keywordTextBox.Dock = DockStyle.Fill;
         toolbar.Controls.Add(_keywordTextBox, 1, 0);
         var analyze = CreateButton("Analiz Et");
         analyze.Click += (_, _) => Analyze();
         toolbar.Controls.Add(analyze, 2, 0);
+        var aiGenerate = CreateButton("AI ile Uret");
+        aiGenerate.Click += async (_, _) => await GenerateWithAiAsync();
+        toolbar.Controls.Add(aiGenerate, 3, 0);
+        var aiSettings = CreateButton("AI Ayarlari");
+        aiSettings.Click += (_, _) =>
+        {
+            using var form = new AiOptimizationSettingsForm();
+            form.ShowDialog(this);
+        };
+        toolbar.Controls.Add(aiSettings, 4, 0);
         var copyAll = CreateButton("Tumunu Kopyala");
         copyAll.Click += (_, _) => CopyAll();
-        toolbar.Controls.Add(copyAll, 3, 0);
+        toolbar.Controls.Add(copyAll, 5, 0);
         root.Controls.Add(toolbar, 0, 1);
 
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
@@ -199,8 +211,37 @@ internal sealed class ListingOptimizationForm : Form
             SplitTags(_tagsTextBox.Text),
             _keywordTextBox.Text.Trim());
         var result = _service.Optimize(input);
-        _lastResult = result;
         _listingTitle = string.IsNullOrWhiteSpace(_listingTitle) ? input.Title : _listingTitle;
+        ApplyResult(result);
+    }
+
+    private async Task GenerateWithAiAsync()
+    {
+        try
+        {
+            UseWaitCursor = true;
+            var input = new ListingOptimizationInput(
+                _titleTextBox.Text.Trim(),
+                _descriptionTextBox.Text.Trim(),
+                SplitTags(_tagsTextBox.Text),
+                _keywordTextBox.Text.Trim());
+            var result = await _aiOptimizer.OptimizeAsync(input);
+            _listingTitle = string.IsNullOrWhiteSpace(_listingTitle) ? input.Title : _listingTitle;
+            ApplyResult(result);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "AI Optimizasyon", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private void ApplyResult(ListingOptimizationResult result)
+    {
+        _lastResult = result;
         _scoreLabel.Text = $"SEO: {result.CurrentSeoScore}/100 -> {result.OptimizedSeoScore}/100";
         _titleSuggestionsTextBox.Text = string.Join(Environment.NewLine, result.TitleSuggestions);
         _tagSuggestionsTextBox.Text = string.Join(", ", result.TagSuggestions);

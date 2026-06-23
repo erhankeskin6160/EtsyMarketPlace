@@ -116,4 +116,6 @@ Durum: Ilk calisma alani feature dalinda gelistirildi
 - Optimizasyon sonucu versiyon olarak SQLite gecmisine kaydedilir.
 - Gecmis ekraninda once/sonra SEO puani, hedef kelime, onerilen baslik, tagler,
   aciklama taslagi ve risk uyarilari incelenebilir.
-- Sonraki parca, kullanici onayli gercek AI API entegrasyonu olabilir.
+- OpenAI provider altyapisi eklendi; ayar yoksa offline motor calisir, ayar varsa
+  `AI ile Uret` butonu gercek Responses API cagrisi yapar.
+- Sonraki parca, AI ciktilari icin kalite puanlama ve maliyet/kullanim logu olabilir.

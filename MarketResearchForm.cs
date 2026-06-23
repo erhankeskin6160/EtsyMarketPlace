@@ -16,6 +16,7 @@ internal sealed class MarketResearchForm : Form
     private readonly AnalyzeKeywordUseCase _analyzeKeywordUseCase;
     private readonly TrackingService _trackingService;
     private readonly ListingOptimizationHistoryService _optimizationHistoryService;
+    private readonly IAiListingOptimizer _aiListingOptimizer;
     private readonly HttpClient _imageHttpClient = new();
     private readonly BindingSource _bindingSource = new();
     private List<MarketListingResult> _results = [];
@@ -35,11 +36,13 @@ internal sealed class MarketResearchForm : Form
     public MarketResearchForm(
         AnalyzeKeywordUseCase analyzeKeywordUseCase,
         TrackingService trackingService,
-        ListingOptimizationHistoryService optimizationHistoryService)
+        ListingOptimizationHistoryService optimizationHistoryService,
+        IAiListingOptimizer aiListingOptimizer)
     {
         _analyzeKeywordUseCase = analyzeKeywordUseCase;
         _trackingService = trackingService;
         _optimizationHistoryService = optimizationHistoryService;
+        _aiListingOptimizer = aiListingOptimizer;
         BuildLayout();
     }
 
@@ -447,7 +450,11 @@ internal sealed class MarketResearchForm : Form
             return;
         }
 
-        using var form = new ListingOptimizationForm(_optimizationHistoryService, listing, _keywordTextBox.Text.Trim());
+        using var form = new ListingOptimizationForm(
+            _optimizationHistoryService,
+            _aiListingOptimizer,
+            listing,
+            _keywordTextBox.Text.Trim());
         form.ShowDialog(this);
     }
 

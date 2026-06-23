@@ -48,6 +48,10 @@ static class Program
         var optimizationHistoryService = new ListingOptimizationHistoryService(
             new SqliteListingOptimizationHistoryRepository(databasePath));
         optimizationHistoryService.InitializeAsync().GetAwaiter().GetResult();
+        var localListingOptimizer = new ListingOptimizationService();
+        var aiListingOptimizer = new OpenAiListingOptimizer(
+            AiOptimizationSettingsStore.Load,
+            localListingOptimizer);
         var dashboardService = new DashboardService(trackingService);
         using var automationScheduler = new AutomationScheduler(automation.RunService, automation.SettingsStore);
         automationScheduler.Start();
@@ -60,7 +64,8 @@ static class Program
             automation.SettingsStore,
             automationScheduler,
             new WindowsTaskSchedulerService(),
-            optimizationHistoryService));
+            optimizationHistoryService,
+            aiListingOptimizer));
     }
 
     private static AutomationServices CreateAutomationServices(string databasePath)
