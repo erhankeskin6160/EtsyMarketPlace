@@ -201,19 +201,20 @@ internal sealed class MarketResearchForm : Form
         _detailTextBox.BackColor = Color.White;
         detailPanel.Controls.Add(_detailTextBox, 1, 0);
 
-        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8 };
-        for (var row = 0; row < 8; row++)
+        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 9 };
+        for (var row = 0; row < 9; row++)
         {
-            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 12.5F));
+            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 9F));
         }
         actions.Controls.Add(ActionButton("Listing Ac", OpenListing), 0, 0);
         actions.Controls.Add(ActionButton("Takibe Ekle", () => _ = TrackSelectedListingAsync()), 0, 1);
         actions.Controls.Add(ActionButton("Kelime Analizi", OpenKeywordAnalysis), 0, 2);
         actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 0, 3);
-        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 0, 4);
-        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 5);
-        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 0, 6);
-        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 0, 7);
+        actions.Controls.Add(ActionButton("AI Optimizasyon", OpenListingOptimization), 0, 4);
+        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 0, 5);
+        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 6);
+        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 0, 7);
+        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 0, 8);
         detailPanel.Controls.Add(actions, 2, 0);
         root.Controls.Add(detailPanel, 0, 3);
     }
@@ -428,6 +429,19 @@ internal sealed class MarketResearchForm : Form
         }
 
         using var form = new CompetitorShopAnalysisForm(listing, _trackingService);
+        form.ShowDialog(this);
+    }
+
+    private void OpenListingOptimization()
+    {
+        var listing = SelectedListing;
+        if (listing is null)
+        {
+            MessageBox.Show(this, "Optimizasyon icin bir urun secin.", "AI Optimizasyon", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new ListingOptimizationForm(listing, _keywordTextBox.Text.Trim());
         form.ShowDialog(this);
     }
 
