@@ -118,5 +118,6 @@ Ilk surumde offline calisan listing optimizasyon calisma alani eklendi.
 - Baslik onerileri, 13 tag onerisi ve aciklama taslagi uretir.
 - Marka/telif riski olabilecek kelimeler icin kontrol uyarisi verir.
 - Sonuclar tek tikla kopyalanabilir.
+- Optimizasyon sonucunu versiyon olarak kaydedebilir ve gecmisten inceleyebilir.
 
 Bu ilk surum dis AI API kullanmaz; hizli, maliyetsiz ve test edilebilir kural motoru olarak calisir.

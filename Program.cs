@@ -5,9 +5,11 @@ using EtsyMarketPlace.Application.Dashboard;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Automation;
+using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Infrastructure.Tracking;
 using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Automation;
+using EtsyMarketPlace.Infrastructure.ListingOptimization;
 using SimilarProductsWinForms.Infrastructure.KeywordResearch;
 using SimilarProductsWinForms.Infrastructure.ShopPerformance;
 using SimilarProductsWinForms.Infrastructure.Automation;
@@ -43,6 +45,9 @@ static class Program
         var analyzeKeywordUseCase = new AnalyzeKeywordUseCase(keywordGateway);
         var trackingService = new TrackingService(new SqliteTrackingRepository(databasePath));
         trackingService.InitializeAsync().GetAwaiter().GetResult();
+        var optimizationHistoryService = new ListingOptimizationHistoryService(
+            new SqliteListingOptimizationHistoryRepository(databasePath));
+        optimizationHistoryService.InitializeAsync().GetAwaiter().GetResult();
         var dashboardService = new DashboardService(trackingService);
         using var automationScheduler = new AutomationScheduler(automation.RunService, automation.SettingsStore);
         automationScheduler.Start();
@@ -54,7 +59,8 @@ static class Program
             automation.HistoryService,
             automation.SettingsStore,
             automationScheduler,
-            new WindowsTaskSchedulerService()));
+            new WindowsTaskSchedulerService(),
+            optimizationHistoryService));
     }
 
     private static AutomationServices CreateAutomationServices(string databasePath)

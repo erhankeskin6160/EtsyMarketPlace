@@ -6,6 +6,7 @@ using SimilarProductsWinForms.Models;
 internal sealed class ListingOptimizationForm : Form
 {
     private readonly ListingOptimizationService _service = new();
+    private readonly ListingOptimizationHistoryService _historyService;
     private readonly TextBox _titleTextBox = new();
     private readonly TextBox _keywordTextBox = new();
     private readonly TextBox _tagsTextBox = new();
@@ -16,9 +17,16 @@ internal sealed class ListingOptimizationForm : Form
     private readonly ListBox _riskListBox = new();
     private readonly ListBox _checklistBox = new();
     private readonly Label _scoreLabel = new();
+    private ListingOptimizationResult? _lastResult;
+    private string _listingId = "";
+    private string _listingTitle = "";
 
-    public ListingOptimizationForm(MarketListingResult? listing = null, string targetKeyword = "")
+    public ListingOptimizationForm(
+        ListingOptimizationHistoryService historyService,
+        MarketListingResult? listing = null,
+        string targetKeyword = "")
     {
+        _historyService = historyService;
         BuildLayout();
         if (listing is not null) LoadListing(listing, targetKeyword);
         Analyze();
@@ -81,21 +89,29 @@ internal sealed class ListingOptimizationForm : Form
         content.Controls.Add(BuildOutputPanel(), 1, 0);
         root.Controls.Add(content, 0, 2);
 
-        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6 };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
-        footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        for (var index = 1; index < 6; index++) footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
+        var save = CreateButton("Versiyonu Kaydet");
+        save.Click += async (_, _) => await SaveVersionAsync();
+        footer.Controls.Add(save, 1, 0);
+        var history = CreateButton("Gecmis");
+        history.Click += (_, _) =>
+        {
+            using var form = new ListingOptimizationHistoryForm(_historyService);
+            form.ShowDialog(this);
+        };
+        footer.Controls.Add(history, 2, 0);
         var copyTitle = CreateButton("Baslik Kopyala");
         copyTitle.Click += (_, _) => CopyText(_titleSuggestionsTextBox.Lines.FirstOrDefault() ?? "");
-        footer.Controls.Add(copyTitle, 1, 0);
+        footer.Controls.Add(copyTitle, 3, 0);
         var copyTags = CreateButton("Tagleri Kopyala");
         copyTags.Click += (_, _) => CopyText(_tagSuggestionsTextBox.Text);
-        footer.Controls.Add(copyTags, 2, 0);
+        footer.Controls.Add(copyTags, 4, 0);
         var close = CreateButton("Kapat");
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
-        footer.Controls.Add(close, 3, 0);
+        footer.Controls.Add(close, 5, 0);
         root.Controls.Add(footer, 0, 3);
     }
 
@@ -165,6 +181,8 @@ internal sealed class ListingOptimizationForm : Form
 
     private void LoadListing(MarketListingResult listing, string targetKeyword)
     {
+        _listingId = listing.ListingId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        _listingTitle = listing.Title;
         _titleTextBox.Text = listing.Title;
         _tagsTextBox.Text = string.Join(", ", listing.Tags);
         _descriptionTextBox.Text = listing.Description;
@@ -181,12 +199,31 @@ internal sealed class ListingOptimizationForm : Form
             SplitTags(_tagsTextBox.Text),
             _keywordTextBox.Text.Trim());
         var result = _service.Optimize(input);
+        _lastResult = result;
+        _listingTitle = string.IsNullOrWhiteSpace(_listingTitle) ? input.Title : _listingTitle;
         _scoreLabel.Text = $"SEO: {result.CurrentSeoScore}/100 -> {result.OptimizedSeoScore}/100";
         _titleSuggestionsTextBox.Text = string.Join(Environment.NewLine, result.TitleSuggestions);
         _tagSuggestionsTextBox.Text = string.Join(", ", result.TagSuggestions);
         _descriptionDraftTextBox.Text = result.DescriptionDraft;
         FillList(_riskListBox, result.RiskWarnings.Count > 0 ? result.RiskWarnings : ["Belirgin marka/telif riski bulunmadi."]);
         FillList(_checklistBox, result.ActionChecklist);
+    }
+
+    private async Task SaveVersionAsync()
+    {
+        if (_lastResult is null)
+        {
+            Analyze();
+        }
+
+        if (_lastResult is null) return;
+
+        var saved = await _historyService.SaveAsync(new SaveListingOptimizationHistory(
+            _listingId,
+            string.IsNullOrWhiteSpace(_listingTitle) ? _titleTextBox.Text.Trim() : _listingTitle,
+            _keywordTextBox.Text.Trim(),
+            _lastResult));
+        _scoreLabel.Text = $"Kaydedildi #{saved.Id} | SEO: {saved.CurrentSeoScore}/100 -> {saved.OptimizedSeoScore}/100";
     }
 
     private void CopyAll()
