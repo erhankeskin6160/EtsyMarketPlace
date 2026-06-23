@@ -133,3 +133,21 @@ AI ayarlari yerel kullanici profilinde saklanir:
 ```text
 %AppData%\SimilarProductsWinForms\ai-optimization-settings.json
 ```
+
+### Kendi magaza listing AI denetimi
+
+`Kendi Magazam` ekranindaki `Listing AI` butonu bagli Etsy magazasinin aktif
+listinglerini resimleriyle birlikte yukler. Her listing icin yerel SEO puani,
+AI onerisi, tag sayisi, stok, favori ve fiyat sinyalleri birlikte gosterilir.
+
+- Dusuk puanli listingler once gorunur.
+- Secili listing icin AI baslik, tag ve aciklama taslagi uretebilir.
+- Oneriler versiyon gecmisine kaydedilebilir.
+- Listing ve magaza linki Etsy'de acilabilir.
+- Canli Etsy guncellemesi bu surumde kapali tutulur; sonraki feature'da
+  `listings_w` izni ve son onay penceresiyle eklenecektir.
+
+AI ayarlarinda `Offline`, `OpenAI`, `Gemini`, `Claude` ve `Platform Token`
+secenekleri gorunur. Bu surumde aktif dis adapter `OpenAI`dir. Gemini, Claude
+ve platform token modeli icin alanlar hazirlandi; odeme, kota ve provider
+kosullari tamamlanmadan gercek cagri yapmaz.

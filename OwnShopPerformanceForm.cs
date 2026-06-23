@@ -1,11 +1,14 @@
 namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
+using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.ShopPerformance;
 
 internal sealed class OwnShopPerformanceForm(
     ShopPerformanceService performanceService,
-    ShopPerformanceHistoryService historyService) : Form
+    ShopPerformanceHistoryService historyService,
+    IAiListingOptimizer aiListingOptimizer,
+    ListingOptimizationHistoryService optimizationHistoryService) : Form
 {
     private readonly DateTimePicker _startPicker = new();
     private readonly DateTimePicker _endPicker = new();
@@ -57,13 +60,14 @@ internal sealed class OwnShopPerformanceForm(
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1, Padding = new Padding(0, 4, 0, 8) };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 1, Padding = new Padding(0, 4, 0, 8) };
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
@@ -79,9 +83,16 @@ internal sealed class OwnShopPerformanceForm(
         var shop = CreateButton("Magazayi Ac");
         shop.Click += (_, _) => OpenShop();
         toolbar.Controls.Add(shop, 6, 0);
+        var listingAi = CreateButton("Listing AI");
+        listingAi.Click += (_, _) =>
+        {
+            using var form = new OwnShopListingAiAuditForm(aiListingOptimizer, optimizationHistoryService);
+            form.ShowDialog(this);
+        };
+        toolbar.Controls.Add(listingAi, 7, 0);
         var api = CreateButton("API Ayarlari");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        toolbar.Controls.Add(api, 7, 0);
+        toolbar.Controls.Add(api, 8, 0);
         root.Controls.Add(toolbar, 0, 1);
 
         var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 4, 0, 8) };

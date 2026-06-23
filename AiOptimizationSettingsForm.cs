@@ -9,6 +9,8 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly ComboBox _providerComboBox = new();
     private readonly TextBox _apiKeyTextBox = new();
     private readonly TextBox _modelTextBox = new();
+    private readonly TextBox _secondaryKeyTextBox = new();
+    private readonly TextBox _secondaryModelTextBox = new();
     private readonly TextBox _statusTextBox = new();
 
     public AiOptimizationSettingsForm()
@@ -22,13 +24,15 @@ internal sealed class AiOptimizationSettingsForm : Form
     {
         Text = "AI Optimizasyon Ayarlari";
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(760, 420);
+        MinimumSize = new Size(820, 540);
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 8 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -39,8 +43,9 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         _providerComboBox.Dock = DockStyle.Left;
         _providerComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
-        _providerComboBox.Width = 180;
-        _providerComboBox.Items.AddRange(["Offline", "OpenAI"]);
+        _providerComboBox.Width = 220;
+        _providerComboBox.Items.AddRange(["Offline", "OpenAI", "Gemini", "Claude", "Platform Token"]);
+        _providerComboBox.SelectedIndexChanged += (_, _) => UpdateFieldLabels(root);
         root.Controls.Add(LabelFor("Saglayici"), 0, 0);
         root.Controls.Add(_providerComboBox, 1, 0);
 
@@ -54,6 +59,16 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(LabelFor("Model"), 0, 2);
         root.Controls.Add(_modelTextBox, 1, 2);
 
+        _secondaryKeyTextBox.Dock = DockStyle.Fill;
+        _secondaryKeyTextBox.UseSystemPasswordChar = true;
+        root.Controls.Add(LabelFor("Gemini/Claude key"), 0, 3);
+        root.Controls.Add(_secondaryKeyTextBox, 1, 3);
+
+        _secondaryModelTextBox.Dock = DockStyle.Left;
+        _secondaryModelTextBox.Width = 240;
+        root.Controls.Add(LabelFor("Gemini/Claude model"), 0, 4);
+        root.Controls.Add(_secondaryModelTextBox, 1, 4);
+
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
         var save = CreateButton("Kaydet");
         save.Click += (_, _) => SaveValues();
@@ -61,23 +76,23 @@ internal sealed class AiOptimizationSettingsForm : Form
         var test = CreateButton("Ayar Test");
         test.Click += (_, _) => TestSettings();
         buttons.Controls.Add(test);
-        root.Controls.Add(new Label(), 0, 3);
-        root.Controls.Add(buttons, 1, 3);
+        root.Controls.Add(new Label(), 0, 5);
+        root.Controls.Add(buttons, 1, 5);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(LabelFor("Durum"), 0, 4);
-        root.Controls.Add(_statusTextBox, 1, 4);
+        root.Controls.Add(LabelFor("Durum"), 0, 6);
+        root.Controls.Add(_statusTextBox, 1, 6);
 
-        root.Controls.Add(new Label(), 0, 5);
+        root.Controls.Add(new Label(), 0, 7);
         root.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
-            Text = "Not: Offline mod ucretsizdir. OpenAI secilirse AI ile Uret butonu API kullanir ve hesabinizdan kota/limit harcayabilir.",
+            Text = "Not: Offline ucretsizdir. OpenAI aktiftir. Gemini, Claude ve Platform Token secenekleri planlandi; adapter/payment aktif edilmeden dis cagri yapmaz.",
             ForeColor = Color.FromArgb(75, 85, 99),
-        }, 1, 5);
+        }, 1, 7);
     }
 
     private void LoadValues()
@@ -86,6 +101,19 @@ internal sealed class AiOptimizationSettingsForm : Form
         if (_providerComboBox.SelectedIndex < 0) _providerComboBox.SelectedIndex = 0;
         _apiKeyTextBox.Text = _settings.OpenAiApiKey;
         _modelTextBox.Text = _settings.OpenAiModel;
+        _secondaryKeyTextBox.Text = _settings.Provider switch
+        {
+            "Gemini" => _settings.GeminiApiKey,
+            "Claude" => _settings.ClaudeApiKey,
+            "Platform Token" => _settings.PlatformToken,
+            _ => "",
+        };
+        _secondaryModelTextBox.Text = _settings.Provider switch
+        {
+            "Gemini" => _settings.GeminiModel,
+            "Claude" => _settings.ClaudeModel,
+            _ => "",
+        };
         WriteStatus($"Ayar dosyasi: {AiOptimizationSettingsStore.SettingsPath}");
     }
 
@@ -94,6 +122,20 @@ internal sealed class AiOptimizationSettingsForm : Form
         _settings.Provider = _providerComboBox.SelectedItem?.ToString() ?? "Offline";
         _settings.OpenAiApiKey = _apiKeyTextBox.Text.Trim();
         _settings.OpenAiModel = string.IsNullOrWhiteSpace(_modelTextBox.Text) ? "gpt-5.5" : _modelTextBox.Text.Trim();
+        if (_settings.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.GeminiApiKey = _secondaryKeyTextBox.Text.Trim();
+            _settings.GeminiModel = string.IsNullOrWhiteSpace(_secondaryModelTextBox.Text) ? _settings.GeminiModel : _secondaryModelTextBox.Text.Trim();
+        }
+        else if (_settings.Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.ClaudeApiKey = _secondaryKeyTextBox.Text.Trim();
+            _settings.ClaudeModel = string.IsNullOrWhiteSpace(_secondaryModelTextBox.Text) ? _settings.ClaudeModel : _secondaryModelTextBox.Text.Trim();
+        }
+        else if (_settings.Provider.Equals("Platform Token", StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.PlatformToken = _secondaryKeyTextBox.Text.Trim();
+        }
         AiOptimizationSettingsStore.Save(_settings);
         WriteStatus("AI ayarlari kaydedildi.");
     }
@@ -101,9 +143,28 @@ internal sealed class AiOptimizationSettingsForm : Form
     private void TestSettings()
     {
         SaveValues();
-        WriteStatus(_settings.UseOpenAi
-            ? "OpenAI modu hazir. AI ile Uret butonu gercek API cagrisi yapacak."
-            : "Offline mod aktif. API key olmadan yerel kural motoru kullanilir.");
+        if (_settings.UseOpenAi)
+        {
+            WriteStatus("OpenAI modu hazir. AI ile Uret butonu gercek API cagrisi yapacak.");
+            return;
+        }
+
+        if (_settings.IsOffline)
+        {
+            WriteStatus("Offline mod aktif. API key olmadan yerel kural motoru kullanilir.");
+            return;
+        }
+
+        WriteStatus($"{_settings.Provider} secildi; adapter ve odeme/token servisi sonraki feature'da aktif edilecek.");
+    }
+
+    private void UpdateFieldLabels(TableLayoutPanel root)
+    {
+        if (_providerComboBox.SelectedItem?.ToString() is not { } provider) return;
+        _apiKeyTextBox.Enabled = provider is "OpenAI" or "Offline";
+        _modelTextBox.Enabled = provider is "OpenAI" or "Offline";
+        _secondaryKeyTextBox.Enabled = provider is "Gemini" or "Claude" or "Platform Token";
+        _secondaryModelTextBox.Enabled = provider is "Gemini" or "Claude";
     }
 
     private void WriteStatus(string message)

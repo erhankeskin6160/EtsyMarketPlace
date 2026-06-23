@@ -119,3 +119,17 @@ Durum: Ilk calisma alani feature dalinda gelistirildi
 - OpenAI provider altyapisi eklendi; ayar yoksa offline motor calisir, ayar varsa
   `AI ile Uret` butonu gercek Responses API cagrisi yapar.
 - Sonraki parca, AI ciktilari icin kalite puanlama ve maliyet/kullanim logu olabilir.
+
+## Asama 7 ek not - Kendi magaza listing AI denetimi
+
+Durum: Feature dalinda gelistirildi
+
+- Kendi magaza aktif listingleri resimleriyle birlikte yuklenir.
+- Listing bazinda yerel SEO puani, AI puani, fiyat, stok, favori ve tag sayisi gorulur.
+- Dusuk puanli listingler once siralanir; kullanici secili listing icin AI onerisi alir.
+- Oneriler optimizasyon gecmisine versiyon olarak kaydedilebilir.
+- `Kendi Magazam` ekranindan `Listing AI` butonuyla acilir.
+- Canli Etsy guncellemesi bu parçada bilincli olarak kapali tutulur; sonraki parca
+  `listings_w`, final onay penceresi, geri alma notu ve guncelleme logu ile ele alinacak.
+- AI ayarlarinda Gemini, Claude ve Platform Token secenekleri gorunur; aktif adapter,
+  kullanim maliyeti, kota ve odeme akisindan sonra acilacak.

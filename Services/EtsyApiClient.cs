@@ -305,6 +305,66 @@ internal sealed class EtsyApiClient
             receipts);
     }
 
+    public async Task<List<MarketListingResult>> GetOwnShopActiveListingsAsync(
+        EtsyApiSettings settings,
+        int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, shopName) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        var query = ToQueryString(new Dictionary<string, string>
+        {
+            ["limit"] = Math.Clamp(limit, 1, 100).ToString(CultureInfo.InvariantCulture),
+            ["sort_on"] = "updated",
+            ["sort_order"] = "desc",
+            ["includes"] = "Images",
+        });
+
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?{query}", useAccessToken: true);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Kendi magaza listingleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        var listings = ParseMarketListings(body, "");
+        foreach (var listing in listings)
+        {
+            listing.ShopName = shopName;
+            listing.ShopUrl = BuildShopUrl(shopName);
+        }
+
+        return listings;
+    }
+
+    private async Task<(long ShopId, string ShopName)> GetOwnShopIdentityAsync(
+        EtsyApiSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var userId = ReadUserIdFromAccessToken(settings.AccessToken);
+        using var shopRequest = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/users/{userId}/shops", useAccessToken: true);
+        using var shopResponse = await _httpClient.SendAsync(shopRequest, cancellationToken);
+        var shopBody = await shopResponse.Content.ReadAsStringAsync(cancellationToken);
+        if (!shopResponse.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Bagli magaza bilgisi alinamadi. HTTP {(int)shopResponse.StatusCode}: {shopBody}");
+        }
+
+        using var shopDocument = JsonDocument.Parse(shopBody);
+        var shop = FirstResultOrRoot(shopDocument.RootElement);
+        var shopId = GetLong(shop, "shop_id");
+        var shopName = GetString(shop, "shop_name");
+        if (shopId <= 0)
+        {
+            throw new InvalidOperationException("OAuth kullanicisina ait Etsy magazasi bulunamadi.");
+        }
+
+        return (shopId, shopName);
+    }
+
     private async Task<List<OwnShopReceipt>> GetOwnShopReceiptsAsync(
         EtsyApiSettings settings,
         long shopId,
