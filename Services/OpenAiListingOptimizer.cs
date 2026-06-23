@@ -1,5 +1,6 @@
 namespace SimilarProductsWinForms.Services;
 
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -84,20 +85,7 @@ internal sealed class OpenAiListingOptimizer(
         CancellationToken cancellationToken)
     {
         var local = localOptimizer.Optimize(input);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
-        request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(CreateGeminiPayload(settings.GeminiModel, input)),
-            Encoding.UTF8,
-            "application/json");
-
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException($"Gemini istegi basarisiz. HTTP {(int)response.StatusCode}: {body}");
-        }
-
+        var body = await SendGeminiRequestAsync(settings, input, cancellationToken);
         var outputText = StripJsonFences(ExtractGeminiOutputText(body));
         var ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
             outputText,
@@ -113,6 +101,45 @@ internal sealed class OpenAiListingOptimizer(
             local.MissingTerms,
             NormalizeList(ai.RiskWarnings, local.RiskWarnings),
             local.ActionChecklist.Concat(["Gemini onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList());
+    }
+
+    private static async Task<string> SendGeminiRequestAsync(
+        AiOptimizationSettings settings,
+        ListingOptimizationInput input,
+        CancellationToken cancellationToken)
+    {
+        const int maxAttempts = 3;
+        string lastBody = "";
+        HttpStatusCode lastStatusCode = 0;
+
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
+            request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(CreateGeminiPayload(settings.GeminiModel, input)),
+                Encoding.UTF8,
+                "application/json");
+
+            using var response = await HttpClient.SendAsync(request, cancellationToken);
+            lastStatusCode = response.StatusCode;
+            lastBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return lastBody;
+            }
+
+            if (!IsTransientGeminiStatus(response.StatusCode) || attempt == maxAttempts)
+            {
+                break;
+            }
+
+            var delay = response.Headers.RetryAfter?.Delta
+                ?? TimeSpan.FromSeconds(attempt * 2);
+            await Task.Delay(delay, cancellationToken);
+        }
+
+        throw new InvalidOperationException(CreateGeminiErrorMessage(lastStatusCode, lastBody));
     }
 
     private static object CreateOpenAiPayload(string model, ListingOptimizationInput input) => new
@@ -140,6 +167,38 @@ internal sealed class OpenAiListingOptimizer(
         $"Current title: {input.Title}\n" +
         $"Current tags: {string.Join(", ", input.Tags)}\n" +
         $"Current description: {input.Description}";
+
+    private static bool IsTransientGeminiStatus(HttpStatusCode statusCode) =>
+        statusCode is HttpStatusCode.TooManyRequests
+            or HttpStatusCode.InternalServerError
+            or HttpStatusCode.BadGateway
+            or HttpStatusCode.ServiceUnavailable
+            or HttpStatusCode.GatewayTimeout;
+
+    private static string CreateGeminiErrorMessage(HttpStatusCode statusCode, string body)
+    {
+        if (IsGeminiOverloaded(body))
+        {
+            return "Gemini modeli su anda yogun. Program 3 kez otomatik denedi ama Google yine yogunluk cevabi verdi. Biraz sonra tekrar deneyin veya gecici olarak AI Ayarlari > Offline modunu kullanin.";
+        }
+
+        if (statusCode == HttpStatusCode.TooManyRequests)
+        {
+            return "Gemini kota veya hiz limitine takildi. Biraz bekleyip tekrar deneyin ya da Google AI Studio kota/limit ayarlarinizi kontrol edin.";
+        }
+
+        if (statusCode == HttpStatusCode.Unauthorized || statusCode == HttpStatusCode.Forbidden)
+        {
+            return "Gemini API key kabul edilmedi. AI Ayarlari ekranindaki Gemini key degerini ve Google AI Studio API izinlerini kontrol edin.";
+        }
+
+        return $"Gemini istegi basarisiz. HTTP {(int)statusCode}: {body}";
+    }
+
+    private static bool IsGeminiOverloaded(string body) =>
+        body.Contains("overloaded", StringComparison.OrdinalIgnoreCase) ||
+        body.Contains("demand", StringComparison.OrdinalIgnoreCase) ||
+        body.Contains("try again later", StringComparison.OrdinalIgnoreCase);
 
     private static string ExtractOutputText(string responseBody)
     {
