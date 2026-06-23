@@ -131,5 +131,7 @@ Durum: Feature dalinda gelistirildi
 - `Kendi Magazam` ekranindan `Listing AI` butonuyla acilir.
 - Canli Etsy guncellemesi bu parçada bilincli olarak kapali tutulur; sonraki parca
   `listings_w`, final onay penceresi, geri alma notu ve guncelleme logu ile ele alinacak.
-- AI ayarlarinda Gemini, Claude ve Platform Token secenekleri gorunur; aktif adapter,
-  kullanim maliyeti, kota ve odeme akisindan sonra acilacak.
+- AI ayarlarinda Gemini, Claude ve Platform Token secenekleri gorunur.
+- Gemini adapteri aktif hale getirildi; Google AI Studio API key ile Gemini
+  uzerinden baslik, tag, aciklama ve risk uyarisi uretilebilir.
+- Claude ve platform token akisi; kullanim maliyeti, kota ve odeme akisindan sonra acilacak.
