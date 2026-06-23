@@ -93,3 +93,13 @@ Durum: Uygulama içi zamanlayıcı ve haftalık rapor tamamlandı; API dayanıkl
 - Önce/sonra SEO karşılaştırması
 - Marka ve telif riski uyarıları
 - Kullanıcı onaylı çalışma akışı
+
+## Asama 6 ek not - Windows Gorev Zamanlayici
+
+Durum: Gelistiriliyor
+
+- Ayni EXE `--automation-run` parametresiyle formsuz calisabilir.
+- Otomasyon ekrani Windows Task Scheduler uzerinde `EtsyMarketPlace-Automation` gorevini olusturur.
+- Gorev zamaninda acilir, raporu uretir, log yazar ve kapanir.
+- VDS acik oldugu surece uygulama ekrani kapali olsa bile calisabilir; VDS kapaliysa calisamaz.
+- Arka plan logu `%LocalAppData%/EtsyMarketPlace/automation-headless.log` konumundadir.
