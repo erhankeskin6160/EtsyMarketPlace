@@ -23,16 +23,34 @@ internal sealed class OpenAiListingOptimizer(
             return localOptimizer.Optimize(input);
         }
 
+        if (settings.UseGemini)
+        {
+            return await OptimizeWithGeminiAsync(settings, input, cancellationToken);
+        }
+
+        if (settings.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Gemini API key girilmemis. AI Ayarlari ekraninda Gemini key alanini doldurun.");
+        }
+
         if (!settings.UseOpenAi)
         {
             throw new InvalidOperationException($"{settings.Provider} adapteri henuz aktif degil. Simdilik Offline veya OpenAI kullanin.");
         }
 
+        return await OptimizeWithOpenAiAsync(settings, input, cancellationToken);
+    }
+
+    private async Task<ListingOptimizationResult> OptimizeWithOpenAiAsync(
+        AiOptimizationSettings settings,
+        ListingOptimizationInput input,
+        CancellationToken cancellationToken)
+    {
         var local = localOptimizer.Optimize(input);
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
         request.Content = new StringContent(
-            JsonSerializer.Serialize(CreatePayload(settings.OpenAiModel, input)),
+            JsonSerializer.Serialize(CreateOpenAiPayload(settings.OpenAiModel, input)),
             Encoding.UTF8,
             "application/json");
 
@@ -60,19 +78,68 @@ internal sealed class OpenAiListingOptimizer(
             local.ActionChecklist.Concat(["AI onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList());
     }
 
-    private static object CreatePayload(string model, ListingOptimizationInput input) => new
+    private async Task<ListingOptimizationResult> OptimizeWithGeminiAsync(
+        AiOptimizationSettings settings,
+        ListingOptimizationInput input,
+        CancellationToken cancellationToken)
+    {
+        var local = localOptimizer.Optimize(input);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
+        request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(CreateGeminiPayload(settings.GeminiModel, input)),
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Gemini istegi basarisiz. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        var outputText = StripJsonFences(ExtractGeminiOutputText(body));
+        var ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
+            outputText,
+            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidOperationException("Gemini yaniti okunamadi.");
+
+        return new ListingOptimizationResult(
+            local.CurrentSeoScore,
+            Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
+            NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
+            NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
+            string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
+            local.MissingTerms,
+            NormalizeList(ai.RiskWarnings, local.RiskWarnings),
+            local.ActionChecklist.Concat(["Gemini onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList());
+    }
+
+    private static object CreateOpenAiPayload(string model, ListingOptimizationInput input) => new
     {
         model = string.IsNullOrWhiteSpace(model) ? "gpt-5.5" : model.Trim(),
-        input =
-            "You are an Etsy SEO listing optimization assistant. " +
-            "Return only valid JSON with keys title_suggestions, tag_suggestions, description_draft, risk_warnings. " +
-            "Rules: title_suggestions must contain 3 titles under 140 characters; tag_suggestions must contain up to 13 Etsy tags, each 20 characters or less; " +
-            "description_draft must be buyer-facing Turkish text; risk_warnings must flag trademark/copyright risks. " +
-            $"Target keyword: {input.TargetKeyword}\n" +
-            $"Current title: {input.Title}\n" +
-            $"Current tags: {string.Join(", ", input.Tags)}\n" +
-            $"Current description: {input.Description}",
+        input = CreatePrompt(input),
     };
+
+    private static object CreateGeminiPayload(string model, ListingOptimizationInput input) => new
+    {
+        model = string.IsNullOrWhiteSpace(model) ? "gemini-3.5-flash" : model.Trim(),
+        system_instruction = "You are an Etsy SEO listing optimization assistant. Return only valid JSON.",
+        input = CreatePrompt(input),
+        generation_config = new
+        {
+            temperature = 0.35,
+        },
+    };
+
+    private static string CreatePrompt(ListingOptimizationInput input) =>
+        "Return only valid JSON with keys title_suggestions, tag_suggestions, description_draft, risk_warnings. " +
+        "Rules: title_suggestions must contain 3 titles under 140 characters; tag_suggestions must contain up to 13 Etsy tags, each 20 characters or less; " +
+        "description_draft must be buyer-facing Turkish text; risk_warnings must flag trademark/copyright risks. " +
+        $"Target keyword: {input.TargetKeyword}\n" +
+        $"Current title: {input.Title}\n" +
+        $"Current tags: {string.Join(", ", input.Tags)}\n" +
+        $"Current description: {input.Description}";
 
     private static string ExtractOutputText(string responseBody)
     {
@@ -98,6 +165,32 @@ internal sealed class OpenAiListingOptimizer(
         }
 
         throw new InvalidOperationException("OpenAI yanitinda output_text bulunamadi.");
+    }
+
+    private static string ExtractGeminiOutputText(string responseBody)
+    {
+        using var document = JsonDocument.Parse(responseBody);
+        if (document.RootElement.TryGetProperty("output_text", out var outputText))
+        {
+            return outputText.GetString() ?? "";
+        }
+
+        if (document.RootElement.TryGetProperty("steps", out var steps))
+        {
+            foreach (var step in steps.EnumerateArray())
+            {
+                if (!step.TryGetProperty("content", out var content)) continue;
+                foreach (var contentItem in content.EnumerateArray())
+                {
+                    if (contentItem.TryGetProperty("text", out var text))
+                    {
+                        return text.GetString() ?? "";
+                    }
+                }
+            }
+        }
+
+        throw new InvalidOperationException("Gemini yanitinda output_text bulunamadi.");
     }
 
     private static string StripJsonFences(string value)

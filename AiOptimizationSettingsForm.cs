@@ -125,7 +125,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         if (_settings.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
         {
             _settings.GeminiApiKey = _secondaryKeyTextBox.Text.Trim();
-            _settings.GeminiModel = string.IsNullOrWhiteSpace(_secondaryModelTextBox.Text) ? _settings.GeminiModel : _secondaryModelTextBox.Text.Trim();
+            _settings.GeminiModel = string.IsNullOrWhiteSpace(_secondaryModelTextBox.Text) ? "gemini-3.5-flash" : _secondaryModelTextBox.Text.Trim();
         }
         else if (_settings.Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))
         {
@@ -146,6 +146,12 @@ internal sealed class AiOptimizationSettingsForm : Form
         if (_settings.UseOpenAi)
         {
             WriteStatus("OpenAI modu hazir. AI ile Uret butonu gercek API cagrisi yapacak.");
+            return;
+        }
+
+        if (_settings.UseGemini)
+        {
+            WriteStatus("Gemini modu hazir. AI ile Uret / AI ile Puanla butonu Gemini API cagrisi yapacak.");
             return;
         }
 

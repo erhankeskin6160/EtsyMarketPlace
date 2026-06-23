@@ -148,6 +148,9 @@ AI onerisi, tag sayisi, stok, favori ve fiyat sinyalleri birlikte gosterilir.
   `listings_w` izni ve son onay penceresiyle eklenecektir.
 
 AI ayarlarinda `Offline`, `OpenAI`, `Gemini`, `Claude` ve `Platform Token`
-secenekleri gorunur. Bu surumde aktif dis adapter `OpenAI`dir. Gemini, Claude
-ve platform token modeli icin alanlar hazirlandi; odeme, kota ve provider
+secenekleri gorunur. Bu surumde aktif dis adapterler `OpenAI` ve `Gemini`dir.
+Claude ve platform token modeli icin alanlar hazirlandi; odeme, kota ve provider
 kosullari tamamlanmadan gercek cagri yapmaz.
+
+Gemini kullanmak icin Google AI Studio uzerinden API key alinip `AI Ayarlari`
+ekraninda saglayici `Gemini` secilir. Varsayilan model `gemini-3.5-flash`tir.
