@@ -22,6 +22,7 @@ internal sealed class DashboardForm : Form
     private readonly AutomationScheduler _automationScheduler;
     private readonly WindowsTaskSchedulerService _windowsTaskScheduler;
     private readonly ListingOptimizationHistoryService _optimizationHistoryService;
+    private readonly IAiListingOptimizer _aiListingOptimizer;
     private readonly Label _statusLabel = new();
     private readonly Dictionary<string, Label> _kpis = [];
     private readonly DataGridView _opportunitiesGrid = new();
@@ -39,7 +40,8 @@ internal sealed class DashboardForm : Form
         IAutomationSettingsStore automationSettingsStore,
         AutomationScheduler automationScheduler,
         WindowsTaskSchedulerService windowsTaskScheduler,
-        ListingOptimizationHistoryService optimizationHistoryService)
+        ListingOptimizationHistoryService optimizationHistoryService,
+        IAiListingOptimizer aiListingOptimizer)
     {
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
@@ -50,6 +52,7 @@ internal sealed class DashboardForm : Form
         _automationScheduler = automationScheduler;
         _windowsTaskScheduler = windowsTaskScheduler;
         _optimizationHistoryService = optimizationHistoryService;
+        _aiListingOptimizer = aiListingOptimizer;
         BuildLayout();
         Shown += async (_, _) => await LoadDashboardAsync();
     }
@@ -122,7 +125,7 @@ internal sealed class DashboardForm : Form
         var optimization = CreateButton("AI Optimizasyon");
         optimization.Click += (_, _) =>
         {
-            using var form = new ListingOptimizationForm(_optimizationHistoryService);
+            using var form = new ListingOptimizationForm(_optimizationHistoryService, _aiListingOptimizer);
             form.ShowDialog(this);
         };
         nav.Controls.Add(optimization, 4, 0);
@@ -208,7 +211,11 @@ internal sealed class DashboardForm : Form
 
     private async Task OpenResearchAsync()
     {
-        using var form = new MarketResearchForm(_keywordUseCase, _trackingService, _optimizationHistoryService);
+        using var form = new MarketResearchForm(
+            _keywordUseCase,
+            _trackingService,
+            _optimizationHistoryService,
+            _aiListingOptimizer);
         form.ShowDialog(this);
         await LoadDashboardAsync();
     }
