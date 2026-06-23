@@ -91,3 +91,11 @@ main <- development <- feature/keyword-analysis
 ```
 
 Feature dalı birim testleri, Release derlemesi ve kullanıcı kabul testinden sonra `development` dalına merge edilir.
+
+## Windows zamanlayici siniri
+
+Windows Task Scheduler entegrasyonunda gorev olusturma ve `schtasks.exe` komutlari
+Infrastructure katmanindaki `WindowsTaskSchedulerService` icinde tutulur. Presentation sadece
+buton olaylarini yonetir ve servisi cagirir. `AutomationHeadlessRunner` ise WinForms acmadan
+Application katmanindaki `AutomationRunService` kullanarak ayni rapor uretim senaryosunu calistirir.
+Bu sayede zamanlama, is kurallarinin icine karismaz.

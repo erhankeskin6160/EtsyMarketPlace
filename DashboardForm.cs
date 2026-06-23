@@ -6,6 +6,7 @@ using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Automation;
 using EtsyMarketPlace.Domain.Tracking;
+using EtsyMarketPlace.Infrastructure.Automation;
 using SimilarProductsWinForms.Controls;
 using SimilarProductsWinForms.Services;
 
@@ -18,6 +19,7 @@ internal sealed class DashboardForm : Form
     private readonly ShopPerformanceHistoryService _shopPerformanceHistoryService;
     private readonly IAutomationSettingsStore _automationSettingsStore;
     private readonly AutomationScheduler _automationScheduler;
+    private readonly WindowsTaskSchedulerService _windowsTaskScheduler;
     private readonly Label _statusLabel = new();
     private readonly Dictionary<string, Label> _kpis = [];
     private readonly DataGridView _opportunitiesGrid = new();
@@ -33,7 +35,8 @@ internal sealed class DashboardForm : Form
         ShopPerformanceService shopPerformanceService,
         ShopPerformanceHistoryService shopPerformanceHistoryService,
         IAutomationSettingsStore automationSettingsStore,
-        AutomationScheduler automationScheduler)
+        AutomationScheduler automationScheduler,
+        WindowsTaskSchedulerService windowsTaskScheduler)
     {
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
@@ -42,6 +45,7 @@ internal sealed class DashboardForm : Form
         _shopPerformanceHistoryService = shopPerformanceHistoryService;
         _automationSettingsStore = automationSettingsStore;
         _automationScheduler = automationScheduler;
+        _windowsTaskScheduler = windowsTaskScheduler;
         BuildLayout();
         Shown += async (_, _) => await LoadDashboardAsync();
     }
@@ -104,7 +108,10 @@ internal sealed class DashboardForm : Form
         var automation = CreateButton("Otomasyon");
         automation.Click += (_, _) =>
         {
-            using var form = new AutomationReportingForm(_automationSettingsStore, _automationScheduler);
+            using var form = new AutomationReportingForm(
+                _automationSettingsStore,
+                _automationScheduler,
+                _windowsTaskScheduler);
             form.ShowDialog(this);
         };
         nav.Controls.Add(automation, 3, 0);

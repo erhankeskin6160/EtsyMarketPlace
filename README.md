@@ -93,3 +93,18 @@ Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared sec
 Ayrıntılar için [geliştirme yol haritasına](docs/gelistirme-yol-haritasi.md) bakın.
 
 Mimari yaklaşım için [Clean Architecture notlarına](docs/clean-architecture.md) bakın.
+
+## Windows Gorev Zamanlayici
+
+Otomasyon ekranindan `Windows gorevi` olusturuldugunda uygulama Windows Task Scheduler uzerine
+`EtsyMarketPlace-Automation` adli bir gorev kaydeder. Bu gorev ayni EXE'yi
+`--automation-run` parametresiyle calistirir; bu modda WinForms ekrani acilmaz, kendi magaza
+raporu uretilir ve is bitince uygulama kapanir.
+
+Arka plan calisma logu:
+
+```text
+%LocalAppData%\EtsyMarketPlace\automation-headless.log
+```
+
+VDS acik kaldigi surece gorev calisir. VDS kapaliysa Windows gorevi de calisamaz.

@@ -2,12 +2,14 @@ namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
 using EtsyMarketPlace.Application.Automation;
+using EtsyMarketPlace.Infrastructure.Automation;
 using EtsyMarketPlace.Infrastructure.Http;
 using SimilarProductsWinForms.Services;
 
 internal sealed class AutomationReportingForm(
     IAutomationSettingsStore settingsStore,
-    AutomationScheduler scheduler) : Form
+    AutomationScheduler scheduler,
+    WindowsTaskSchedulerService taskScheduler) : Form
 {
     private readonly CheckBox _enabledCheckBox = new() { Text = "Otomatik yenilemeyi etkinlestir", AutoSize = true };
     private readonly NumericUpDown _intervalInput = new() { Minimum = 1, Maximum = 720 };
@@ -40,16 +42,17 @@ internal sealed class AutomationReportingForm(
     {
         Text = "Otomasyon ve Raporlama";
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(920, 650);
+        MinimumSize = new Size(980, 760);
         Font = new Font("Segoe UI", 10F);
         BackColor = Color.FromArgb(247, 248, 250);
         Padding = new Padding(22);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 9 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 10 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
         for (var row = 1; row <= 6; row++) root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
@@ -85,6 +88,24 @@ internal sealed class AutomationReportingForm(
         folderPanel.Controls.Add(browse, 1, 0);
         root.Controls.Add(folderPanel, 1, 6);
 
+        root.Controls.Add(LabelFor("Windows gorevi"), 0, 7);
+        var taskCommands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
+        for (var column = 0; column < 4; column++) taskCommands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        var createTask = CreateButton("Gorev Olustur");
+        createTask.Click += async (_, _) => await CreateWindowsTaskAsync();
+        taskCommands.Controls.Add(createTask, 0, 0);
+        var queryTask = CreateButton("Durum");
+        queryTask.Click += async (_, _) => await QueryWindowsTaskAsync();
+        taskCommands.Controls.Add(queryTask, 1, 0);
+        var runTask = CreateButton("Hemen Calistir");
+        runTask.Click += async (_, _) => await RunWindowsTaskAsync();
+        taskCommands.Controls.Add(runTask, 2, 0);
+        var deleteTask = CreateButton("Gorevi Kaldir");
+        deleteTask.BackColor = Color.FromArgb(180, 58, 58);
+        deleteTask.Click += async (_, _) => await DeleteWindowsTaskAsync();
+        taskCommands.Controls.Add(deleteTask, 3, 0);
+        root.Controls.Add(taskCommands, 1, 7);
+
         var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
         commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
@@ -99,7 +120,7 @@ internal sealed class AutomationReportingForm(
         var openFolder = CreateButton("Klasoru Ac");
         openFolder.Click += (_, _) => OpenOutputFolder();
         commands.Controls.Add(openFolder, 3, 0);
-        root.Controls.Add(commands, 0, 7);
+        root.Controls.Add(commands, 0, 8);
         root.SetColumnSpan(commands, 2);
 
         _statusTextBox.Dock = DockStyle.Fill;
@@ -107,7 +128,7 @@ internal sealed class AutomationReportingForm(
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
         _statusTextBox.BackColor = Color.White;
-        root.Controls.Add(_statusTextBox, 0, 8);
+        root.Controls.Add(_statusTextBox, 0, 9);
         root.SetColumnSpan(_statusTextBox, 2);
     }
 
@@ -123,6 +144,7 @@ internal sealed class AutomationReportingForm(
         AppendStatus(_settings.LastRunAt.HasValue
             ? $"Son calisma: {_settings.LastRunAt:dd.MM.yyyy HH:mm}"
             : "Henuz otomasyon calismasi yok.");
+        AppendStatus($"Arka plan log dosyasi: {AutomationHeadlessRunner.LogPath}");
     }
 
     private void SaveSettings()
@@ -152,6 +174,85 @@ internal sealed class AutomationReportingForm(
         {
             UseWaitCursor = false;
         }
+    }
+
+    private async Task CreateWindowsTaskAsync()
+    {
+        try
+        {
+            SaveSettings();
+            UseWaitCursor = true;
+            var result = await taskScheduler.CreateAsync(Application.ExecutablePath, _settings.IntervalHours);
+            AppendTaskResult(result, "Windows gorevi olusturuldu.", "Windows gorevi olusturulamadi.");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Windows gorevi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task QueryWindowsTaskAsync()
+    {
+        try
+        {
+            UseWaitCursor = true;
+            var result = await taskScheduler.QueryAsync();
+            AppendTaskResult(result, "Windows gorev durumu alindi.", "Windows gorevi bulunamadi veya okunamadi.");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Windows gorevi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task RunWindowsTaskAsync()
+    {
+        try
+        {
+            UseWaitCursor = true;
+            var result = await taskScheduler.RunAsync();
+            AppendTaskResult(result, "Windows gorevi baslatildi.", "Windows gorevi baslatilamadi.");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Windows gorevi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task DeleteWindowsTaskAsync()
+    {
+        try
+        {
+            UseWaitCursor = true;
+            var result = await taskScheduler.DeleteAsync();
+            AppendTaskResult(result, "Windows gorevi kaldirildi.", "Windows gorevi kaldirilamadi.");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Windows gorevi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private void AppendTaskResult(WindowsTaskResult result, string successMessage, string failureMessage)
+    {
+        AppendStatus(result.Success ? successMessage : failureMessage);
+        if (!string.IsNullOrWhiteSpace(result.Output)) AppendStatus(result.Output);
     }
 
     private void ApplyControls()
