@@ -103,3 +103,14 @@ Durum: Gelistiriliyor
 - Gorev zamaninda acilir, raporu uretir, log yazar ve kapanir.
 - VDS acik oldugu surece uygulama ekrani kapali olsa bile calisabilir; VDS kapaliysa calisamaz.
 - Arka plan logu `%LocalAppData%/EtsyMarketPlace/automation-headless.log` konumundadir.
+
+## Asama 7 ek not - Yapay zeka destekli optimizasyon
+
+Durum: Ilk calisma alani feature dalinda gelistirildi
+
+- Secili listing icin baslik onerileri uretilir.
+- Etsy tag onerileri 13 alan ve 20 karakter siniri dikkate alinarak hazirlanir.
+- Aciklama taslagi ve SEO once/sonra puani gosterilir.
+- Marka/telif riski olabilecek kelimeler icin kontrol uyarisi verilir.
+- Ilk surum dis AI API kullanmaz; offline kural motoru olarak calisir.
+- Sonraki parca, kullanici onayli gercek AI API entegrasyonu ve versiyon gecmisi olabilir.

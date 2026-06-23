@@ -108,3 +108,15 @@ Arka plan calisma logu:
 ```
 
 VDS acik kaldigi surece gorev calisir. VDS kapaliysa Windows gorevi de calisamaz.
+
+## Asama 7 - Yapay zeka destekli optimizasyon
+
+Ilk surumde offline calisan listing optimizasyon calisma alani eklendi.
+
+- Secili urunun baslik, tag ve aciklamasini analiz eder.
+- SEO once/sonra puani gosterir.
+- Baslik onerileri, 13 tag onerisi ve aciklama taslagi uretir.
+- Marka/telif riski olabilecek kelimeler icin kontrol uyarisi verir.
+- Sonuclar tek tikla kopyalanabilir.
+
+Bu ilk surum dis AI API kullanmaz; hizli, maliyetsiz ve test edilebilir kural motoru olarak calisir.
