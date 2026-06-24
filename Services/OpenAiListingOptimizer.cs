@@ -85,12 +85,24 @@ internal sealed class OpenAiListingOptimizer(
         CancellationToken cancellationToken)
     {
         var local = localOptimizer.Optimize(input);
-        var body = await SendGeminiRequestAsync(settings, input, cancellationToken);
-        var outputText = StripJsonFences(ExtractGeminiOutputText(body));
-        var ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
-            outputText,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-            ?? throw new InvalidOperationException("Gemini yaniti okunamadi.");
+        AiListingOptimizationResponse ai;
+        try
+        {
+            var body = await SendGeminiRequestAsync(settings, input, cancellationToken);
+            var outputText = StripJsonFences(ExtractGeminiOutputText(body));
+            ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
+                outputText,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidOperationException("Gemini yaniti okunamadi.");
+        }
+        catch (InvalidOperationException ex) when (IsRecoverableGeminiException(ex))
+        {
+            return CreateLocalFallbackResult(local, ex.Message);
+        }
+        catch (JsonException ex)
+        {
+            return CreateLocalFallbackResult(local, $"Gemini yaniti JSON formatinda okunamadi. Offline oneriler gosterildi. Detay: {ex.Message}");
+        }
 
         return new ListingOptimizationResult(
             local.CurrentSeoScore,
@@ -101,6 +113,21 @@ internal sealed class OpenAiListingOptimizer(
             local.MissingTerms,
             NormalizeList(ai.RiskWarnings, local.RiskWarnings),
             local.ActionChecklist.Concat(["Gemini onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList());
+    }
+
+    private static ListingOptimizationResult CreateLocalFallbackResult(
+        ListingOptimizationResult local,
+        string reason)
+    {
+        var warning = $"Gemini kullanilamadi; offline oneriler gosterildi. Neden: {reason}";
+        return local with
+        {
+            RiskWarnings = local.RiskWarnings.Concat([warning]).Distinct().ToList(),
+            ActionChecklist = local.ActionChecklist.Concat([
+                "Gemini basarisiz oldugu icin sonuc offline kural motorundan uretildi.",
+                "AI Ayarlari ekraninda daha hafif bir Gemini modeli deneyebilir veya bir sure sonra tekrar calistirabilirsiniz.",
+            ]).Distinct().ToList(),
+        };
     }
 
     private static async Task<string> SendGeminiRequestAsync(
@@ -199,6 +226,14 @@ internal sealed class OpenAiListingOptimizer(
         body.Contains("overloaded", StringComparison.OrdinalIgnoreCase) ||
         body.Contains("demand", StringComparison.OrdinalIgnoreCase) ||
         body.Contains("try again later", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRecoverableGeminiException(InvalidOperationException exception) =>
+        exception.Message.Contains("Gemini modeli su anda yogun", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("Gemini kota veya hiz limitine takildi", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("Gemini istegi basarisiz. HTTP 500", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("Gemini istegi basarisiz. HTTP 502", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("Gemini istegi basarisiz. HTTP 503", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("Gemini istegi basarisiz. HTTP 504", StringComparison.OrdinalIgnoreCase);
 
     private static string ExtractOutputText(string responseBody)
     {
