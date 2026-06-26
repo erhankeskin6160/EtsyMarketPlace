@@ -63,7 +63,7 @@ internal sealed class AiListingImageForm(
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
         _statusTextBox.BackColor = Color.White;
-        _statusTextBox.Text = "Once gorsel uretin veya bilgisayardan gorsel secin. Etsy'ye yukleme icin son onay istenir.";
+        _statusTextBox.Text = "Promptu istedigin gibi yazabilirsin. Saglayici AI Ayarlari ekranindan secilir: OpenAI veya Gemini. Etsy'ye yukleme icin son onay istenir.";
         previewLayout.Controls.Add(_statusTextBox, 1, 0);
         root.Controls.Add(previewLayout, 0, 2);
 
@@ -91,16 +91,16 @@ internal sealed class AiListingImageForm(
     }
 
     private string BuildDefaultPrompt() =>
-        $"Create an Etsy product photo/mockup for this product: {listing.Title}. " +
-        "Use a clean neutral background, realistic lighting, marketplace-ready composition, no watermark, no logo, no copyrighted character branding.";
+        $"Create an Etsy product photo/mockup for this product: {listing.Title}.{Environment.NewLine}{Environment.NewLine}" +
+        "Kullanici istegi: clean neutral background, realistic lighting, marketplace-ready composition, no watermark, no logo, no copyrighted character branding.";
 
     private async Task GenerateImageAsync()
     {
         try
         {
             UseWaitCursor = true;
-            WriteStatus("AI gorsel uretiliyor...");
             var settings = AiOptimizationSettingsStore.Load();
+            WriteStatus($"{settings.Provider} ile AI gorsel uretiliyor...");
             _selectedImagePath = await _imageGenerator.GenerateAsync(settings, listing, _promptTextBox.Text);
             LoadPreview(_selectedImagePath);
             WriteStatus($"Gorsel uretildi: {_selectedImagePath}");

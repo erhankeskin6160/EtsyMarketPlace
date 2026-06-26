@@ -15,11 +15,25 @@ internal sealed class AiListingImageGenerator
         string userPrompt,
         CancellationToken cancellationToken = default)
     {
-        if (!settings.UseOpenAi)
+        if (settings.UseOpenAi)
         {
-            throw new InvalidOperationException("AI gorsel uretimi icin AI Ayarlari ekraninda OpenAI saglayicisini ve API key'i secin.");
+            return await GenerateWithOpenAiAsync(settings, listing, userPrompt, cancellationToken);
         }
 
+        if (settings.UseGemini)
+        {
+            return await GenerateWithGeminiAsync(settings, listing, userPrompt, cancellationToken);
+        }
+
+        throw new InvalidOperationException("AI gorsel uretimi icin AI Ayarlari ekraninda OpenAI veya Gemini saglayicisini ve API key'i secin.");
+    }
+
+    private static async Task<string> GenerateWithOpenAiAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string userPrompt,
+        CancellationToken cancellationToken)
+    {
         var prompt = BuildPrompt(listing, userPrompt);
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/generations");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
@@ -62,12 +76,114 @@ internal sealed class AiListingImageGenerator
             throw new InvalidOperationException("AI gorsel yaniti b64_json veya url icermiyor.");
         }
 
+        return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
+    private static async Task<string> GenerateWithGeminiAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string userPrompt,
+        CancellationToken cancellationToken)
+    {
+        var prompt = BuildPrompt(listing, userPrompt);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
+        request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(new
+            {
+                model = string.IsNullOrWhiteSpace(settings.GeminiImageModel) ? "gemini-3.1-flash-image" : settings.GeminiImageModel.Trim(),
+                input = prompt,
+            }),
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Gemini gorsel uretilemedi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        var bytes = ExtractGeminiImageBytes(body);
+        return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
+    private static byte[] ExtractGeminiImageBytes(string responseBody)
+    {
+        using var document = JsonDocument.Parse(responseBody);
+        var root = document.RootElement;
+        var found = FindBase64Image(root);
+        if (!string.IsNullOrWhiteSpace(found))
+        {
+            return Convert.FromBase64String(found);
+        }
+
+        throw new InvalidOperationException("Gemini yanitinda gorsel verisi bulunamadi. Modelin gorsel uretim destekledigini kontrol edin.");
+    }
+
+    private static string? FindBase64Image(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("inline_data", out var inlineData) &&
+                inlineData.TryGetProperty("data", out var data))
+            {
+                return data.GetString();
+            }
+
+            if (element.TryGetProperty("inlineData", out var inlineDataCamel) &&
+                inlineDataCamel.TryGetProperty("data", out var dataCamel))
+            {
+                return dataCamel.GetString();
+            }
+
+            if (element.TryGetProperty("image", out var image) &&
+                image.ValueKind == JsonValueKind.String)
+            {
+                return image.GetString();
+            }
+
+            if (element.TryGetProperty("b64_json", out var b64Json) &&
+                b64Json.ValueKind == JsonValueKind.String)
+            {
+                return b64Json.GetString();
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                var nested = FindBase64Image(property.Value);
+                if (!string.IsNullOrWhiteSpace(nested))
+                {
+                    return nested;
+                }
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                var nested = FindBase64Image(item);
+                if (!string.IsNullOrWhiteSpace(nested))
+                {
+                    return nested;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static async Task<string> SaveImageAsync(
+        long listingId,
+        byte[] bytes,
+        CancellationToken cancellationToken)
+    {
         var folder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "SimilarProductsWinForms",
             "generated-images");
         Directory.CreateDirectory(folder);
-        var path = Path.Combine(folder, $"listing-{listing.ListingId}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        var path = Path.Combine(folder, $"listing-{listingId}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
         await File.WriteAllBytesAsync(path, bytes, cancellationToken);
         return path;
     }

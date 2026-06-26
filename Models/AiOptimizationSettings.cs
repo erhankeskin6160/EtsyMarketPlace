@@ -8,6 +8,7 @@ internal sealed class AiOptimizationSettings
     public string OpenAiImageModel { get; set; } = "gpt-image-1";
     public string GeminiApiKey { get; set; } = "";
     public string GeminiModel { get; set; } = "gemini-3.5-flash";
+    public string GeminiImageModel { get; set; } = "gemini-3.1-flash-image";
     public string ClaudeApiKey { get; set; } = "";
     public string ClaudeModel { get; set; } = "claude-sonnet";
     public string PlatformToken { get; set; } = "";
