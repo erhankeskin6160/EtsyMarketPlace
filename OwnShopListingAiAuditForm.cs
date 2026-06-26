@@ -386,7 +386,7 @@ internal sealed class OwnShopListingAiAuditForm(
             result.TitleSuggestions.FirstOrDefault()?.Trim() ?? "",
             result.DescriptionDraft.Trim(),
             result.TagSuggestions.Select(tag => tag.Trim()).Where(tag => tag.Length > 0).Take(13).ToList(),
-            result.MaterialSuggestions.Select(material => material.Trim()).Where(material => material.Length > 0).Take(13).ToList());
+            EtsyApiClient.NormalizeListingMaterialsForEtsy(result.MaterialSuggestions));
 
     private static bool ValidateListingUpdate(ListingTextUpdate update, out string message)
     {

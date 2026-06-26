@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms.Services;
 
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.Json;
 using EtsyMarketPlace.Application.ShopPerformance;
@@ -879,14 +880,60 @@ internal sealed class EtsyApiClient
             .Take(13)
             .ToList();
 
-    private static List<string> NormalizeListingMaterials(IEnumerable<string> materials) =>
+    internal static List<string> NormalizeListingMaterialsForEtsy(IEnumerable<string> materials) =>
         materials
-            .Select(material => material.Trim())
+            .Select(SanitizeListingMaterial)
             .Where(material => material.Length > 0)
-            .Select(material => material.Length <= 45 ? material : material[..45].TrimEnd())
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(13)
             .ToList();
+
+    private static List<string> NormalizeListingMaterials(IEnumerable<string> materials) =>
+        NormalizeListingMaterialsForEtsy(materials);
+
+    private static string SanitizeListingMaterial(string material)
+    {
+        var normalized = (material ?? "")
+            .Normalize(NormalizationForm.FormD)
+            .Replace('&', ' ')
+            .Replace('/', ' ')
+            .Replace('\\', ' ')
+            .Replace('|', ' ')
+            .Replace(',', ' ')
+            .Replace(';', ' ')
+            .Replace(':', ' ')
+            .Replace('.', ' ')
+            .Replace('*', ' ')
+            .Replace('•', ' ')
+            .Replace('–', ' ')
+            .Replace('—', ' ');
+
+        var builder = new StringBuilder(normalized.Length);
+        foreach (var character in normalized)
+        {
+            var category = CharUnicodeInfo.GetUnicodeCategory(character);
+            if (category == UnicodeCategory.NonSpacingMark)
+            {
+                continue;
+            }
+
+            if (char.IsLetterOrDigit(character) || character == ' ' || character == '-')
+            {
+                builder.Append(character);
+            }
+        }
+
+        var collapsed = string.Join(
+            ' ',
+            builder
+                .ToString()
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Trim('-', ' ');
+
+        return collapsed.Length <= 45
+            ? collapsed
+            : collapsed[..45].TrimEnd('-', ' ');
+    }
 
     private static JsonElement? GetObject(JsonElement item, params string[] propertyNames)
     {
