@@ -8,6 +8,32 @@ using SimilarProductsWinForms.Models;
 internal sealed class AiListingImageGenerator
 {
     private static readonly HttpClient HttpClient = new();
+    private static readonly string[] BrandRiskTerms =
+    [
+        "donkey kong",
+        "nintendo",
+        "mario",
+        "pokemon",
+        "zelda",
+        "marvel",
+        "dc comics",
+        "star wars",
+        "league of legends",
+        "valorant",
+        "minecraft",
+        "dragon ball",
+        "naruto",
+        "one piece",
+        "demon slayer",
+        "harry potter",
+        "lord of the rings",
+        "lotr",
+        "disney",
+        "pixar",
+        "sony",
+        "playstation",
+        "xbox",
+    ];
 
     public async Task<string> GenerateAsync(
         AiOptimizationSettings settings,
@@ -35,26 +61,19 @@ internal sealed class AiListingImageGenerator
         CancellationToken cancellationToken)
     {
         var prompt = BuildPrompt(listing, userPrompt);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/generations");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(new
-            {
-                model = string.IsNullOrWhiteSpace(settings.OpenAiImageModel) ? "gpt-image-1" : settings.OpenAiImageModel.Trim(),
-                prompt,
-                size = "1024x1024",
-            }),
-            Encoding.UTF8,
-            "application/json");
-
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var result = await SendOpenAiImageRequestAsync(settings, prompt, cancellationToken);
+        if (!result.IsSuccess && IsModerationBlocked(result.Body))
         {
-            throw new InvalidOperationException($"AI gorsel uretilemedi. HTTP {(int)response.StatusCode}: {body}");
+            prompt = BuildStrictFallbackPrompt(listing, userPrompt);
+            result = await SendOpenAiImageRequestAsync(settings, prompt, cancellationToken);
         }
 
-        using var document = JsonDocument.Parse(body);
+        if (!result.IsSuccess)
+        {
+            throw new InvalidOperationException(CreateOpenAiImageErrorMessage(result.StatusCode, result.Body));
+        }
+
+        using var document = JsonDocument.Parse(result.Body);
         var data = document.RootElement.GetProperty("data");
         if (data.GetArrayLength() == 0)
         {
@@ -77,6 +96,28 @@ internal sealed class AiListingImageGenerator
         }
 
         return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
+    private static async Task<OpenAiImageHttpResult> SendOpenAiImageRequestAsync(
+        AiOptimizationSettings settings,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/generations");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(new
+            {
+                model = string.IsNullOrWhiteSpace(settings.OpenAiImageModel) ? "gpt-image-1" : settings.OpenAiImageModel.Trim(),
+                prompt,
+                size = "1024x1024",
+            }),
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        return new OpenAiImageHttpResult(response.IsSuccessStatusCode, (int)response.StatusCode, body);
     }
 
     private static async Task<string> GenerateWithGeminiAsync(
@@ -190,12 +231,85 @@ internal sealed class AiListingImageGenerator
 
     private static string BuildPrompt(MarketListingResult listing, string userPrompt)
     {
-        var tags = string.Join(", ", listing.Tags.Take(10));
+        var safeTitle = SanitizeForImagePrompt(listing.Title);
+        var tags = string.Join(", ", listing.Tags.Select(SanitizeForImagePrompt).Where(tag => tag.Length > 0).Take(8));
+        var safeUserPrompt = SanitizeForImagePrompt(userPrompt);
         return
             "Create a clean Etsy product listing image. The image must look like a real product photo or polished product mockup, not text-heavy advertising. " +
-            "No logos, no copyrighted character names, no brand marks, no watermark, no readable text unless the user explicitly requested simple label text. " +
-            "Use a neutral marketplace-ready background, good lighting, and a clear centered product composition. " +
-            $"Product title: {listing.Title}. Tags: {tags}. " +
-            $"Seller note: {userPrompt}";
+            "Use only an original generic product design. No logos, no copyrighted character names, no brand marks, no watermark, no readable text. " +
+            "Do not imitate any game, movie, anime, brand, mascot, or franchise. Use a neutral marketplace-ready background, good lighting, and a clear centered product composition. " +
+            $"Generic product idea: {safeTitle}. Generic tags: {tags}. " +
+            $"Seller note: {safeUserPrompt}";
     }
+
+    private static string BuildStrictFallbackPrompt(MarketListingResult listing, string userPrompt)
+    {
+        var productType = InferGenericProductType($"{listing.Title} {string.Join(' ', listing.Tags)} {userPrompt}");
+        return
+            "Create a fully original Etsy product photo/mockup for a handmade marketplace listing. " +
+            $"Subject: a generic {productType}. " +
+            "No logos, no brand references, no franchise references, no copyrighted characters, no game or movie references, no readable text, no watermark. " +
+            "Use a clean neutral background, realistic studio lighting, product centered, polished e-commerce composition, high quality, safe generic design.";
+    }
+
+    private static string SanitizeForImagePrompt(string value)
+    {
+        var text = value ?? "";
+        foreach (var term in BrandRiskTerms)
+        {
+            text = ReplaceIgnoreCase(text, term, "original fantasy inspired");
+        }
+
+        var blockedWords = new[]
+        {
+            "copyrighted", "licensed", "official", "replica", "fan art", "fanart", "character", "mascot",
+        };
+        foreach (var term in blockedWords)
+        {
+            text = ReplaceIgnoreCase(text, term, "original");
+        }
+
+        return string.Join(
+                ' ',
+                text
+                    .Split([' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries)
+                    .Take(60))
+            .Trim();
+    }
+
+    private static string ReplaceIgnoreCase(string source, string oldValue, string newValue) =>
+        source.Replace(oldValue, newValue, StringComparison.OrdinalIgnoreCase);
+
+    private static string InferGenericProductType(string text)
+    {
+        var normalized = text.ToLowerInvariant();
+        if (normalized.Contains("barrel")) return "retro wooden barrel shelf decor prop";
+        if (normalized.Contains("sword")) return "fantasy sword display prop";
+        if (normalized.Contains("helmet")) return "fantasy helmet display prop";
+        if (normalized.Contains("mask")) return "fantasy mask display prop";
+        if (normalized.Contains("bust")) return "fantasy bust statue";
+        if (normalized.Contains("figure") || normalized.Contains("statue")) return "original collectible figure";
+        return "3D printed cosplay display prop";
+    }
+
+    private static bool IsModerationBlocked(string body) =>
+        body.Contains("moderation_blocked", StringComparison.OrdinalIgnoreCase) ||
+        body.Contains("safety system", StringComparison.OrdinalIgnoreCase);
+
+    private static string CreateOpenAiImageErrorMessage(int statusCode, string body)
+    {
+        if (IsModerationBlocked(body))
+        {
+            return "AI gorsel uretimi guvenlik/telif filtresine takildi. Urun adi veya prompt marka/oyun/film/karakter cagrisimi iceriyor olabilir. Promptu markasiz ve genel urun diliyle tekrar deneyin; ornek: 'generic fantasy display prop, neutral background, no logo, no character'.";
+        }
+
+        if (statusCode == 429)
+        {
+            return "AI gorsel kotasi veya hiz limiti doldu. Biraz bekleyin ya da API hesabinizdaki kota/billing ayarlarini kontrol edin.";
+        }
+
+        return $"AI gorsel uretilemedi. HTTP {statusCode}: {body}";
+    }
+
+    private sealed record OpenAiImageHttpResult(bool IsSuccess, int StatusCode, string Body);
 }
