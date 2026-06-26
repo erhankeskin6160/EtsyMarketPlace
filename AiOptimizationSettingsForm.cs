@@ -12,6 +12,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly TextBox _imageModelTextBox = new();
     private readonly TextBox _secondaryKeyTextBox = new();
     private readonly TextBox _secondaryModelTextBox = new();
+    private readonly TextBox _secondaryImageModelTextBox = new();
     private readonly TextBox _statusTextBox = new();
 
     public AiOptimizationSettingsForm()
@@ -29,9 +30,10 @@ internal sealed class AiOptimizationSettingsForm : Form
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 9 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 10 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -76,6 +78,11 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(LabelFor("Gemini/Claude model"), 0, 5);
         root.Controls.Add(_secondaryModelTextBox, 1, 5);
 
+        _secondaryImageModelTextBox.Dock = DockStyle.Left;
+        _secondaryImageModelTextBox.Width = 240;
+        root.Controls.Add(LabelFor("Gemini gorsel modeli"), 0, 6);
+        root.Controls.Add(_secondaryImageModelTextBox, 1, 6);
+
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
         var save = CreateButton("Kaydet");
         save.Click += (_, _) => SaveValues();
@@ -83,23 +90,23 @@ internal sealed class AiOptimizationSettingsForm : Form
         var test = CreateButton("Ayar Test");
         test.Click += (_, _) => TestSettings();
         buttons.Controls.Add(test);
-        root.Controls.Add(new Label(), 0, 6);
-        root.Controls.Add(buttons, 1, 6);
+        root.Controls.Add(new Label(), 0, 7);
+        root.Controls.Add(buttons, 1, 7);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(LabelFor("Durum"), 0, 7);
-        root.Controls.Add(_statusTextBox, 1, 7);
+        root.Controls.Add(LabelFor("Durum"), 0, 8);
+        root.Controls.Add(_statusTextBox, 1, 8);
 
-        root.Controls.Add(new Label(), 0, 8);
+        root.Controls.Add(new Label(), 0, 9);
         root.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
             Text = "Not: Metin analizi OpenAI/Gemini ile calisir. AI gorsel uretimi simdilik OpenAI gorsel modeliyle calisir.",
             ForeColor = Color.FromArgb(75, 85, 99),
-        }, 1, 8);
+        }, 1, 9);
     }
 
     private void LoadValues()
@@ -122,6 +129,9 @@ internal sealed class AiOptimizationSettingsForm : Form
             "Claude" => _settings.ClaudeModel,
             _ => "",
         };
+        _secondaryImageModelTextBox.Text = _settings.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase)
+            ? _settings.GeminiImageModel
+            : "";
         WriteStatus($"Ayar dosyasi: {AiOptimizationSettingsStore.SettingsPath}");
     }
 
@@ -135,6 +145,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         {
             _settings.GeminiApiKey = _secondaryKeyTextBox.Text.Trim();
             _settings.GeminiModel = string.IsNullOrWhiteSpace(_secondaryModelTextBox.Text) ? "gemini-3.5-flash" : _secondaryModelTextBox.Text.Trim();
+            _settings.GeminiImageModel = string.IsNullOrWhiteSpace(_secondaryImageModelTextBox.Text) ? "gemini-3.1-flash-image" : _secondaryImageModelTextBox.Text.Trim();
         }
         else if (_settings.Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))
         {
@@ -181,6 +192,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         _imageModelTextBox.Enabled = provider is "OpenAI" or "Offline";
         _secondaryKeyTextBox.Enabled = provider is "Gemini" or "Claude" or "Platform Token";
         _secondaryModelTextBox.Enabled = provider is "Gemini" or "Claude";
+        _secondaryImageModelTextBox.Enabled = provider is "Gemini";
     }
 
     private void WriteStatus(string message)
