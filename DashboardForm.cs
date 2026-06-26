@@ -94,13 +94,13 @@ internal sealed class DashboardForm : Form
         var nav = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 9,
+            ColumnCount = 10,
             RowCount = 1,
             Padding = new Padding(0, 4, 0, 8),
         };
         nav.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         nav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 1; index < 9; index++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        for (var index = 1; index < 10; index++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
         nav.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
         var research = CreateButton("Pazar Arastirma");
         research.Click += async (_, _) => await OpenResearchAsync();
@@ -116,6 +116,13 @@ internal sealed class DashboardForm : Form
             form.ShowDialog(this);
         };
         nav.Controls.Add(ownShop, 2, 0);
+        var creator = CreateButton("Urun Uret");
+        creator.Click += (_, _) =>
+        {
+            using var form = new ProductDiscoveryListingCreatorForm(_aiListingOptimizer);
+            form.ShowDialog(this);
+        };
+        nav.Controls.Add(creator, 3, 0);
         var automation = CreateButton("Otomasyon");
         automation.Click += (_, _) =>
         {
@@ -125,27 +132,27 @@ internal sealed class DashboardForm : Form
                 _windowsTaskScheduler);
             form.ShowDialog(this);
         };
-        nav.Controls.Add(automation, 3, 0);
+        nav.Controls.Add(automation, 4, 0);
         var optimization = CreateButton("AI Optimizasyon");
         optimization.Click += (_, _) =>
         {
             using var form = new ListingOptimizationForm(_optimizationHistoryService, _aiListingOptimizer);
             form.ShowDialog(this);
         };
-        nav.Controls.Add(optimization, 4, 0);
+        nav.Controls.Add(optimization, 5, 0);
         var tracking = CreateButton("Takip Merkezi");
         tracking.Click += async (_, _) => await OpenTrackingAsync();
-        nav.Controls.Add(tracking, 5, 0);
+        nav.Controls.Add(tracking, 6, 0);
         var api = CreateButton("API Ayarlari");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        nav.Controls.Add(api, 6, 0);
+        nav.Controls.Add(api, 7, 0);
         var refresh = CreateButton("Yenile");
         refresh.Click += async (_, _) => await LoadDashboardAsync();
-        nav.Controls.Add(refresh, 7, 0);
+        nav.Controls.Add(refresh, 8, 0);
         var exit = CreateButton("Cikis");
         exit.BackColor = Color.FromArgb(82, 93, 110);
         exit.Click += (_, _) => Close();
-        nav.Controls.Add(exit, 8, 0);
+        nav.Controls.Add(exit, 9, 0);
         root.Controls.Add(nav, 0, 1);
 
         var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 0, 0, 8) };
