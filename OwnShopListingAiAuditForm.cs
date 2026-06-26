@@ -289,6 +289,7 @@ internal sealed class OwnShopListingAiAuditForm(
         _suggestionTextBox.Text =
             $"ONERILEN BASLIK{Environment.NewLine}{result.TitleSuggestions.FirstOrDefault()}{Environment.NewLine}{Environment.NewLine}" +
             $"ONERILEN TAGLER{Environment.NewLine}{string.Join(", ", result.TagSuggestions)}{Environment.NewLine}{Environment.NewLine}" +
+            $"ONERILEN MATERYALLER{Environment.NewLine}{string.Join(", ", result.MaterialSuggestions)}{Environment.NewLine}{Environment.NewLine}" +
             $"ACIKLAMA TASLAGI{Environment.NewLine}{result.DescriptionDraft}{Environment.NewLine}{Environment.NewLine}" +
             $"RISKLER{Environment.NewLine}{string.Join(Environment.NewLine, result.RiskWarnings.DefaultIfEmpty("Risk uyarisi yok."))}";
     }
@@ -369,7 +370,8 @@ internal sealed class OwnShopListingAiAuditForm(
         new(
             result.TitleSuggestions.FirstOrDefault()?.Trim() ?? "",
             result.DescriptionDraft.Trim(),
-            result.TagSuggestions.Select(tag => tag.Trim()).Where(tag => tag.Length > 0).Take(13).ToList());
+            result.TagSuggestions.Select(tag => tag.Trim()).Where(tag => tag.Length > 0).Take(13).ToList(),
+            result.MaterialSuggestions.Select(material => material.Trim()).Where(material => material.Length > 0).Take(13).ToList());
 
     private static bool ValidateListingUpdate(ListingTextUpdate update, out string message)
     {
@@ -401,6 +403,13 @@ internal sealed class OwnShopListingAiAuditForm(
         if (longTag is not null)
         {
             message = $"Tag 20 karakterden uzun: {longTag}";
+            return false;
+        }
+
+        var longMaterial = update.Materials.FirstOrDefault(material => material.Length > 45);
+        if (longMaterial is not null)
+        {
+            message = $"Materyal 45 karakterden uzun: {longMaterial}";
             return false;
         }
 

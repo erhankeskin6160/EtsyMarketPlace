@@ -18,6 +18,7 @@ public sealed class ListingOptimizationServiceTests
 
         Assert.NotEmpty(result.TitleSuggestions);
         Assert.NotEmpty(result.TagSuggestions);
+        Assert.NotNull(result.MaterialSuggestions);
         Assert.Contains(result.TagSuggestions, tag => tag.Contains("dragon", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("dragon wall decor", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
         Assert.True(result.OptimizedSeoScore >= result.CurrentSeoScore);
@@ -51,5 +52,20 @@ public sealed class ListingOptimizationServiceTests
 
         Assert.All(result.TagSuggestions, tag => Assert.InRange(tag.Length, 2, 20));
         Assert.True(result.TagSuggestions.Count <= 13);
+    }
+
+    [Fact]
+    public void Optimize_SuggestsOnlyLikelyMaterials()
+    {
+        var service = new ListingOptimizationService();
+
+        var result = service.Optimize(new ListingOptimizationInput(
+            "3D printed resin sword display",
+            "Printed with resin and hand painted.",
+            ["resin prop", "painted decor"],
+            "fantasy sword display"));
+
+        Assert.Contains(result.MaterialSuggestions, material => material.Equals("resin", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(result.MaterialSuggestions, material => material.Equals("paint", StringComparison.OrdinalIgnoreCase));
     }
 }

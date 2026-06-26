@@ -83,11 +83,13 @@ internal sealed class ListingUpdateConfirmationForm(
     private string CurrentText() =>
         $"BASLIK{Environment.NewLine}{listing.Title}{Environment.NewLine}{Environment.NewLine}" +
         $"TAGLER{Environment.NewLine}{string.Join(", ", listing.Tags)}{Environment.NewLine}{Environment.NewLine}" +
+        $"MATERYALLER{Environment.NewLine}Mevcut materyal bilgisi Etsy listing detayindan kontrol edilmeli.{Environment.NewLine}{Environment.NewLine}" +
         $"ACIKLAMA{Environment.NewLine}{listing.Description}";
 
     private string NewText() =>
         $"BASLIK{Environment.NewLine}{update.Title}{Environment.NewLine}{Environment.NewLine}" +
         $"TAGLER{Environment.NewLine}{string.Join(", ", update.Tags)}{Environment.NewLine}{Environment.NewLine}" +
+        $"MATERYALLER{Environment.NewLine}{string.Join(", ", update.Materials)}{Environment.NewLine}{Environment.NewLine}" +
         $"ACIKLAMA{Environment.NewLine}{update.Description}";
 
     private static Control BuildTextPanel(string title, string text)
