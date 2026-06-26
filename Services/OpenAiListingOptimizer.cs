@@ -73,6 +73,7 @@ internal sealed class OpenAiListingOptimizer(
             Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
             NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
             NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
+            NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
             string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
             local.MissingTerms,
             NormalizeList(ai.RiskWarnings, local.RiskWarnings),
@@ -109,6 +110,7 @@ internal sealed class OpenAiListingOptimizer(
             Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
             NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
             NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
+            NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
             string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
             local.MissingTerms,
             NormalizeList(ai.RiskWarnings, local.RiskWarnings),
@@ -187,8 +189,9 @@ internal sealed class OpenAiListingOptimizer(
     };
 
     private static string CreatePrompt(ListingOptimizationInput input) =>
-        "Return only valid JSON with keys title_suggestions, tag_suggestions, description_draft, risk_warnings. " +
+        "Return only valid JSON with keys title_suggestions, tag_suggestions, material_suggestions, description_draft, risk_warnings. " +
         "Rules: title_suggestions must contain 3 English Etsy titles under 140 characters; tag_suggestions must contain up to 13 English Etsy tags, each 20 characters or less; " +
+        "material_suggestions must contain only true physical/digital materials explicitly supported by the current listing text, up to 13 items, each 45 characters or less; " +
         "description_draft must be buyer-facing English text optimized for Etsy SEO and GEO/search intent. " +
         "risk_warnings must be Turkish notes and include Turkish explanations in parentheses when useful. " +
         "Avoid claiming official, licensed, endorsed, or affiliated status unless the current listing explicitly proves it. " +
@@ -316,6 +319,15 @@ internal sealed class OpenAiListingOptimizer(
             .Take(13)
             .ToList();
 
+    private static IReadOnlyList<string> NormalizeMaterials(
+        IReadOnlyList<string>? values,
+        IReadOnlyList<string> fallback) =>
+        NormalizeList(values, fallback)
+            .Select(value => value.Length <= 45 ? value : value[..45].TrimEnd())
+            .Where(value => value.Length >= 2)
+            .Take(13)
+            .ToList();
+
     private static IReadOnlyList<string> NormalizeList(
         IReadOnlyList<string>? values,
         IReadOnlyList<string> fallback)
@@ -335,6 +347,9 @@ internal sealed class OpenAiListingOptimizer(
 
         [JsonPropertyName("tag_suggestions")]
         public List<string> TagSuggestions { get; set; } = [];
+
+        [JsonPropertyName("material_suggestions")]
+        public List<string> MaterialSuggestions { get; set; } = [];
 
         [JsonPropertyName("description_draft")]
         public string DescriptionDraft { get; set; } = "";

@@ -26,6 +26,7 @@ public sealed class SqliteListingOptimizationHistoryRepositoryTests
                     88,
                     ["Dragon wall decor gift"],
                     ["dragon decor", "wall gift"],
+                    ["resin"],
                     "Draft",
                     ["gift"],
                     ["Risk"],

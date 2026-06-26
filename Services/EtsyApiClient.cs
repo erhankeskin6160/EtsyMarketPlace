@@ -357,6 +357,7 @@ internal sealed class EtsyApiClient
 
         var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
         var tags = NormalizeListingTags(update.Tags);
+        var materials = NormalizeListingMaterials(update.Materials);
         var form = new List<KeyValuePair<string, string>>
         {
             new("title", update.Title.Trim()),
@@ -365,7 +366,12 @@ internal sealed class EtsyApiClient
 
         foreach (var tag in tags)
         {
-            form.Add(new("tags", tag));
+            form.Add(new("tags[]", tag));
+        }
+
+        foreach (var material in materials)
+        {
+            form.Add(new("materials[]", material));
         }
 
         using var request = CreateRequest(settings, HttpMethod.Patch, $"{BaseUrl}/shops/{shopId}/listings/{listingId}", useAccessToken: true);
@@ -810,6 +816,15 @@ internal sealed class EtsyApiClient
             .Take(13)
             .ToList();
 
+    private static List<string> NormalizeListingMaterials(IEnumerable<string> materials) =>
+        materials
+            .Select(material => material.Trim())
+            .Where(material => material.Length > 0)
+            .Select(material => material.Length <= 45 ? material : material[..45].TrimEnd())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(13)
+            .ToList();
+
     private static JsonElement? GetObject(JsonElement item, params string[] propertyNames)
     {
         foreach (var name in propertyNames)
@@ -921,4 +936,5 @@ internal sealed class EtsyApiClient
 internal sealed record ListingTextUpdate(
     string Title,
     string Description,
-    IReadOnlyList<string> Tags);
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> Materials);

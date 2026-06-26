@@ -32,6 +32,7 @@ public sealed class ListingOptimizationService
             .ToList();
         var suggestedTags = BuildTagSuggestions(input, strongTerms);
         var suggestedTitles = BuildTitleSuggestions(input, strongTerms, suggestedTags);
+        var suggestedMaterials = BuildMaterialSuggestions(input);
         var descriptionDraft = BuildDescriptionDraft(input, strongTerms, suggestedTags);
         var currentScore = Score(input.Title, input.Description, input.Tags, targetTerms);
         var optimizedScore = Score(
@@ -45,6 +46,7 @@ public sealed class ListingOptimizationService
             Math.Max(currentScore, optimizedScore),
             suggestedTitles,
             suggestedTags,
+            suggestedMaterials,
             descriptionDraft,
             missingTerms,
             BuildRiskWarnings(input),
@@ -121,6 +123,37 @@ public sealed class ListingOptimizationService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(3)
             .ToList();
+    }
+
+    private static IReadOnlyList<string> BuildMaterialSuggestions(ListingOptimizationInput input)
+    {
+        var blob = $"{input.Title} {input.Description} {string.Join(' ', input.Tags)}";
+        var candidates = new List<string>();
+        AddIfMentioned(blob, candidates, "resin", "resin");
+        AddIfMentioned(blob, candidates, "pla", "pla");
+        AddIfMentioned(blob, candidates, "plastic", "plastic");
+        AddIfMentioned(blob, candidates, "wood", "wood");
+        AddIfMentioned(blob, candidates, "metal", "metal");
+        AddIfMentioned(blob, candidates, "acrylic", "acrylic");
+        AddIfMentioned(blob, candidates, "filament", "filament");
+        AddIfMentioned(blob, candidates, "paint", "paint");
+        AddIfMentioned(blob, candidates, "stl", "digital file");
+        AddIfMentioned(blob, candidates, "svg", "digital file");
+        AddIfMentioned(blob, candidates, "pdf", "digital file");
+
+        return candidates
+            .Where(material => material.Length is >= 2 and <= 45)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(13)
+            .ToList();
+    }
+
+    private static void AddIfMentioned(string blob, List<string> candidates, string needle, string material)
+    {
+        if (blob.Contains(needle, StringComparison.OrdinalIgnoreCase))
+        {
+            candidates.Add(material);
+        }
     }
 
     private static string BuildDescriptionDraft(

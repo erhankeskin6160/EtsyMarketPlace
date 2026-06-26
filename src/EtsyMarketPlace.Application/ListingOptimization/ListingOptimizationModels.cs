@@ -11,6 +11,7 @@ public sealed record ListingOptimizationResult(
     int OptimizedSeoScore,
     IReadOnlyList<string> TitleSuggestions,
     IReadOnlyList<string> TagSuggestions,
+    IReadOnlyList<string> MaterialSuggestions,
     string DescriptionDraft,
     IReadOnlyList<string> MissingTerms,
     IReadOnlyList<string> RiskWarnings,
