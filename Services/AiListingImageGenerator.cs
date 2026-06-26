@@ -54,6 +54,31 @@ internal sealed class AiListingImageGenerator
         throw new InvalidOperationException("AI gorsel uretimi icin AI Ayarlari ekraninda OpenAI veya Gemini saglayicisini ve API key'i secin.");
     }
 
+    public async Task<string> GenerateFromReferenceAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string userPrompt,
+        string referenceImagePath,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(referenceImagePath) || !File.Exists(referenceImagePath))
+        {
+            throw new InvalidOperationException("Referans gorsel bulunamadi. Once rakip listing gorselini indirin veya dosyadan secin.");
+        }
+
+        if (settings.UseOpenAi)
+        {
+            return await EditWithOpenAiAsync(settings, listing, userPrompt, referenceImagePath, cancellationToken);
+        }
+
+        if (settings.UseGemini)
+        {
+            return await EditWithGeminiAsync(settings, listing, userPrompt, referenceImagePath, cancellationToken);
+        }
+
+        throw new InvalidOperationException("Referans gorsel duzenleme icin AI Ayarlari ekraninda OpenAI veya Gemini saglayicisini ve API key'i secin.");
+    }
+
     private static async Task<string> GenerateWithOpenAiAsync(
         AiOptimizationSettings settings,
         MarketListingResult listing,
@@ -120,6 +145,37 @@ internal sealed class AiListingImageGenerator
         return new OpenAiImageHttpResult(response.IsSuccessStatusCode, (int)response.StatusCode, body);
     }
 
+    private static async Task<string> EditWithOpenAiAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string userPrompt,
+        string referenceImagePath,
+        CancellationToken cancellationToken)
+    {
+        var prompt = BuildReferenceEditPrompt(listing, userPrompt);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/edits");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
+        await using var imageStream = File.OpenRead(referenceImagePath);
+        using var imageContent = new StreamContent(imageStream);
+        imageContent.Headers.ContentType = new MediaTypeHeaderValue(GetImageContentType(referenceImagePath));
+        using var form = new MultipartFormDataContent();
+        form.Add(new StringContent(string.IsNullOrWhiteSpace(settings.OpenAiImageModel) ? "gpt-image-1" : settings.OpenAiImageModel.Trim()), "model");
+        form.Add(new StringContent(prompt), "prompt");
+        form.Add(new StringContent("1024x1024"), "size");
+        form.Add(imageContent, "image", Path.GetFileName(referenceImagePath));
+        request.Content = form;
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(CreateOpenAiImageErrorMessage((int)response.StatusCode, body));
+        }
+
+        var bytes = await ExtractOpenAiImageBytesAsync(body, cancellationToken);
+        return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
     private static async Task<string> GenerateWithGeminiAsync(
         AiOptimizationSettings settings,
         MarketListingResult listing,
@@ -147,6 +203,80 @@ internal sealed class AiListingImageGenerator
 
         var bytes = ExtractGeminiImageBytes(body);
         return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
+    private static async Task<string> EditWithGeminiAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string userPrompt,
+        string referenceImagePath,
+        CancellationToken cancellationToken)
+    {
+        var prompt = BuildReferenceEditPrompt(listing, userPrompt);
+        var imageBytes = await File.ReadAllBytesAsync(referenceImagePath, cancellationToken);
+        var model = string.IsNullOrWhiteSpace(settings.GeminiImageModel) ? "gemini-3.1-flash-image" : settings.GeminiImageModel.Trim();
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent?key={Uri.EscapeDataString(settings.GeminiApiKey.Trim())}");
+        request.Content = new StringContent(
+            JsonSerializer.Serialize(new
+            {
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new object[]
+                        {
+                            new { text = prompt },
+                            new
+                            {
+                                inline_data = new
+                                {
+                                    mime_type = GetImageContentType(referenceImagePath),
+                                    data = Convert.ToBase64String(imageBytes),
+                                },
+                            },
+                        },
+                    },
+                },
+                generationConfig = new
+                {
+                    responseModalities = new[] { "TEXT", "IMAGE" },
+                },
+            }),
+            Encoding.UTF8,
+            "application/json");
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Gemini referans gorsel duzenleme basarisiz. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        var bytes = ExtractGeminiImageBytes(body);
+        return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
+    private static async Task<byte[]> ExtractOpenAiImageBytesAsync(string responseBody, CancellationToken cancellationToken)
+    {
+        using var document = JsonDocument.Parse(responseBody);
+        var data = document.RootElement.GetProperty("data");
+        if (data.GetArrayLength() == 0)
+        {
+            throw new InvalidOperationException("AI gorsel yanitinda veri bulunamadi.");
+        }
+
+        var first = data[0];
+        if (first.TryGetProperty("b64_json", out var b64))
+        {
+            return Convert.FromBase64String(b64.GetString() ?? "");
+        }
+
+        if (first.TryGetProperty("url", out var url))
+        {
+            return await HttpClient.GetByteArrayAsync(url.GetString(), cancellationToken);
+        }
+
+        throw new InvalidOperationException("AI gorsel yaniti b64_json veya url icermiyor.");
     }
 
     private static byte[] ExtractGeminiImageBytes(string responseBody)
@@ -250,6 +380,29 @@ internal sealed class AiListingImageGenerator
             $"Subject: a generic {productType}. " +
             "No logos, no brand references, no franchise references, no copyrighted characters, no game or movie references, no readable text, no watermark. " +
             "Use a clean neutral background, realistic studio lighting, product centered, polished e-commerce composition, high quality, safe generic design.";
+    }
+
+    private static string BuildReferenceEditPrompt(MarketListingResult listing, string userPrompt)
+    {
+        var safeTitle = SanitizeForImagePrompt(listing.Title);
+        var safeUserPrompt = SanitizeForImagePrompt(userPrompt);
+        return
+            "Edit the provided product photo for an Etsy listing. Keep the exact same physical product, shape, color, proportions, and visible details from the reference image. " +
+            "Do not invent a different product, do not add accessories, do not add brand logos, do not add characters, and do not add readable text or watermark. " +
+            "Only improve the marketplace presentation: clean neutral background, realistic studio lighting, sharper product focus, natural shadow, centered e-commerce composition. " +
+            $"Reference product title for context: {safeTitle}. Seller background/style request: {safeUserPrompt}";
+    }
+
+    private static string GetImageContentType(string imagePath)
+    {
+        var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            ".gif" => "image/gif",
+            _ => "image/png",
+        };
     }
 
     private static string SanitizeForImagePrompt(string value)

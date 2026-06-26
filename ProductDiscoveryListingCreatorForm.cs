@@ -10,6 +10,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 {
     private readonly EtsyApiClient _apiClient = new();
     private readonly AiListingImageGenerator _imageGenerator = new();
+    private readonly HttpClient _imageHttpClient = new();
     private readonly BindingSource _bindingSource = new();
     private readonly DataGridView _grid = new();
     private readonly TextBox _shopTypeTextBox = new();
@@ -236,8 +237,24 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         _grid.BackgroundColor = Color.White;
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => FillFromSelectedIdea();
+        _grid.CellDoubleClick += (_, _) => OpenSelectedCompetitorListing();
+        _grid.CellContentClick += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == "ListingLink")
+            {
+                OpenUrl((_grid.Rows[e.RowIndex].DataBoundItem as IdeaRow)?.Listing.ListingUrl);
+            }
+        };
         AddColumn("Firsat", nameof(IdeaRow.Opportunity), 70);
         AddColumn("Urun fikri", nameof(IdeaRow.Title), 380, true);
+        _grid.Columns.Add(new DataGridViewButtonColumn
+        {
+            HeaderText = "Rakip listing",
+            Name = "ListingLink",
+            Text = "Ac",
+            UseColumnTextForButtonValue = true,
+            Width = 95,
+        });
         AddColumn("Fiyat", nameof(IdeaRow.Price), 90);
         AddColumn("Magaza", nameof(IdeaRow.Shop), 150);
         AddColumn("Magaza satisi", nameof(IdeaRow.ShopSales), 110);
@@ -369,9 +386,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             var prompt = string.IsNullOrWhiteSpace(_imagePromptTextBox.Text)
                 ? BuildImagePrompt()
                 : _imagePromptTextBox.Text.Trim();
-            var path = await _imageGenerator.GenerateAsync(settings, SelectedRow.Listing, prompt);
+            var referencePath = await DownloadReferenceImageAsync(SelectedRow.Listing);
+            var path = await _imageGenerator.GenerateFromReferenceAsync(settings, SelectedRow.Listing, prompt, referencePath);
             _imagePathTextBox.Text = path;
-            _statusLabel.Text = "AI gorsel uretildi";
+            _statusLabel.Text = "Referans gorselden AI gorsel duzenlendi";
         }
         catch (Exception ex)
         {
@@ -462,6 +480,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         _notesTextBox.Text =
             $"Rakip/ilham listing: {listing.Title}{Environment.NewLine}" +
             $"Magaza: {listing.ShopName} | Satis: {listing.ShopSales:N0} | Favori: {listing.Favorites:N0}{Environment.NewLine}" +
+            $"Rakip listing: {listing.ListingUrl}{Environment.NewLine}" +
             "Bu veri ilham ve pazar analizi icindir; birebir kopyalama yapma.";
     }
 
@@ -535,8 +554,55 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             : _keywordTextBox.Text.Trim();
 
     private string BuildImagePrompt() =>
-        "Create a marketplace-ready Etsy product photo/mockup for this product. Use clean neutral background, realistic lighting, clear product focus, no watermark, no logo, no copyrighted character branding. " +
+        "Use the selected competitor listing image as product reference. Do not invent a new product and do not change the product shape, color, proportions, or visible details. Only clean the background, improve lighting, sharpen the product focus, add natural shadow, and make it marketplace-ready. No watermark, no logo, no copyrighted character branding. " +
         $"Shop type: {_shopTypeTextBox.Text.Trim()}. Product: {_titleTextBox.Text.Trim()}";
+
+    private async Task<string> DownloadReferenceImageAsync(MarketListingResult listing)
+    {
+        if (listing.ImageUrls.Count == 0 && listing.ListingId > 0)
+        {
+            var settings = EtsyApiSettingsStore.Load();
+            listing.ImageUrls = await _apiClient.GetListingImagesAsync(settings, listing.ListingId);
+            EtsyApiSettingsStore.Save(settings);
+        }
+
+        var imageUrl = listing.ImageUrls.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(imageUrl))
+        {
+            imageUrl = listing.ImageUrl;
+        }
+
+        if (string.IsNullOrWhiteSpace(imageUrl))
+        {
+            throw new InvalidOperationException("Secili rakip listing icin referans gorsel bulunamadi. Baska bir listing sec veya gorseli dosyadan kendin sec.");
+        }
+
+        _statusLabel.Text = "Rakip listing referans gorseli indiriliyor...";
+        var bytes = await _imageHttpClient.GetByteArrayAsync(imageUrl);
+        await using var input = new MemoryStream(bytes);
+        using var image = Image.FromStream(input);
+        var folder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SimilarProductsWinForms",
+            "reference-images");
+        Directory.CreateDirectory(folder);
+        var path = Path.Combine(folder, $"reference-{listing.ListingId}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        image.Save(path, System.Drawing.Imaging.ImageFormat.Png);
+        _notesTextBox.Text =
+            $"Referans gorsel indirildi: {path}{Environment.NewLine}" +
+            "AI bu gorseldeki urunu koruyup yalnizca arka plan/isik/kompozisyon duzenlemesi yapacak.";
+        return path;
+    }
+
+    private void OpenSelectedCompetitorListing() => OpenUrl(SelectedRow?.Listing.ListingUrl);
+
+    private static void OpenUrl(string? url)
+    {
+        if (!string.IsNullOrWhiteSpace(url))
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+    }
 
     private void ApplyDefaultFiltersForShopType(string shopType)
     {
