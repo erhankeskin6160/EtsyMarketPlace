@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms.Services;
 
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Text.Json.Serialization;
 using System.Text.Json;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Http;
@@ -338,6 +339,43 @@ internal sealed class EtsyApiClient
         }
 
         return listings;
+    }
+
+    public async Task UpdateOwnShopListingTextAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        ListingTextUpdate update,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        if (listingId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(listingId), "Gecerli bir listing kimligi gerekli.");
+        }
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        var tags = NormalizeListingTags(update.Tags);
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("title", update.Title.Trim()),
+            new("description", update.Description.Trim()),
+        };
+
+        foreach (var tag in tags)
+        {
+            form.Add(new("tags", tag));
+        }
+
+        using var request = CreateRequest(settings, HttpMethod.Patch, $"{BaseUrl}/shops/{shopId}/listings/{listingId}", useAccessToken: true);
+        request.Content = new FormUrlEncodedContent(form);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Listing guncellenemedi. HTTP {(int)response.StatusCode}: {body}");
+        }
     }
 
     private async Task<(long ShopId, string ShopName)> GetOwnShopIdentityAsync(
@@ -763,6 +801,15 @@ internal sealed class EtsyApiClient
             .ToList();
     }
 
+    private static List<string> NormalizeListingTags(IEnumerable<string> tags) =>
+        tags
+            .Select(tag => tag.Trim())
+            .Where(tag => tag.Length > 0)
+            .Select(tag => tag.Length <= 20 ? tag : tag[..20].TrimEnd())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(13)
+            .ToList();
+
     private static JsonElement? GetObject(JsonElement item, params string[] propertyNames)
     {
         foreach (var name in propertyNames)
@@ -870,3 +917,8 @@ internal sealed class EtsyApiClient
 
     private sealed record ShopSnapshot(string ShopName, int Sales, int ReviewCount, decimal ReviewAverage);
 }
+
+internal sealed record ListingTextUpdate(
+    string Title,
+    string Description,
+    IReadOnlyList<string> Tags);

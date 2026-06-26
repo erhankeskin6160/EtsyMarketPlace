@@ -188,8 +188,10 @@ internal sealed class OpenAiListingOptimizer(
 
     private static string CreatePrompt(ListingOptimizationInput input) =>
         "Return only valid JSON with keys title_suggestions, tag_suggestions, description_draft, risk_warnings. " +
-        "Rules: title_suggestions must contain 3 titles under 140 characters; tag_suggestions must contain up to 13 Etsy tags, each 20 characters or less; " +
-        "description_draft must be buyer-facing Turkish text; risk_warnings must flag trademark/copyright risks. " +
+        "Rules: title_suggestions must contain 3 English Etsy titles under 140 characters; tag_suggestions must contain up to 13 English Etsy tags, each 20 characters or less; " +
+        "description_draft must be buyer-facing English text optimized for Etsy SEO and GEO/search intent. " +
+        "risk_warnings must be Turkish notes and include Turkish explanations in parentheses when useful. " +
+        "Avoid claiming official, licensed, endorsed, or affiliated status unless the current listing explicitly proves it. " +
         $"Target keyword: {input.TargetKeyword}\n" +
         $"Current title: {input.Title}\n" +
         $"Current tags: {string.Join(", ", input.Tags)}\n" +
