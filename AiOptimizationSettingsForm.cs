@@ -9,6 +9,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly ComboBox _providerComboBox = new();
     private readonly TextBox _apiKeyTextBox = new();
     private readonly TextBox _modelTextBox = new();
+    private readonly TextBox _imageModelTextBox = new();
     private readonly TextBox _secondaryKeyTextBox = new();
     private readonly TextBox _secondaryModelTextBox = new();
     private readonly TextBox _statusTextBox = new();
@@ -28,9 +29,10 @@ internal sealed class AiOptimizationSettingsForm : Form
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 8 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 9 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
@@ -59,15 +61,20 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(LabelFor("Model"), 0, 2);
         root.Controls.Add(_modelTextBox, 1, 2);
 
+        _imageModelTextBox.Dock = DockStyle.Left;
+        _imageModelTextBox.Width = 240;
+        root.Controls.Add(LabelFor("Gorsel modeli"), 0, 3);
+        root.Controls.Add(_imageModelTextBox, 1, 3);
+
         _secondaryKeyTextBox.Dock = DockStyle.Fill;
         _secondaryKeyTextBox.UseSystemPasswordChar = true;
-        root.Controls.Add(LabelFor("Gemini/Claude key"), 0, 3);
-        root.Controls.Add(_secondaryKeyTextBox, 1, 3);
+        root.Controls.Add(LabelFor("Gemini/Claude key"), 0, 4);
+        root.Controls.Add(_secondaryKeyTextBox, 1, 4);
 
         _secondaryModelTextBox.Dock = DockStyle.Left;
         _secondaryModelTextBox.Width = 240;
-        root.Controls.Add(LabelFor("Gemini/Claude model"), 0, 4);
-        root.Controls.Add(_secondaryModelTextBox, 1, 4);
+        root.Controls.Add(LabelFor("Gemini/Claude model"), 0, 5);
+        root.Controls.Add(_secondaryModelTextBox, 1, 5);
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
         var save = CreateButton("Kaydet");
@@ -76,23 +83,23 @@ internal sealed class AiOptimizationSettingsForm : Form
         var test = CreateButton("Ayar Test");
         test.Click += (_, _) => TestSettings();
         buttons.Controls.Add(test);
-        root.Controls.Add(new Label(), 0, 5);
-        root.Controls.Add(buttons, 1, 5);
+        root.Controls.Add(new Label(), 0, 6);
+        root.Controls.Add(buttons, 1, 6);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(LabelFor("Durum"), 0, 6);
-        root.Controls.Add(_statusTextBox, 1, 6);
+        root.Controls.Add(LabelFor("Durum"), 0, 7);
+        root.Controls.Add(_statusTextBox, 1, 7);
 
-        root.Controls.Add(new Label(), 0, 7);
+        root.Controls.Add(new Label(), 0, 8);
         root.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
-            Text = "Not: Offline ucretsizdir. OpenAI aktiftir. Gemini, Claude ve Platform Token secenekleri planlandi; adapter/payment aktif edilmeden dis cagri yapmaz.",
+            Text = "Not: Metin analizi OpenAI/Gemini ile calisir. AI gorsel uretimi simdilik OpenAI gorsel modeliyle calisir.",
             ForeColor = Color.FromArgb(75, 85, 99),
-        }, 1, 7);
+        }, 1, 8);
     }
 
     private void LoadValues()
@@ -101,6 +108,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         if (_providerComboBox.SelectedIndex < 0) _providerComboBox.SelectedIndex = 0;
         _apiKeyTextBox.Text = _settings.OpenAiApiKey;
         _modelTextBox.Text = _settings.OpenAiModel;
+        _imageModelTextBox.Text = _settings.OpenAiImageModel;
         _secondaryKeyTextBox.Text = _settings.Provider switch
         {
             "Gemini" => _settings.GeminiApiKey,
@@ -122,6 +130,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         _settings.Provider = _providerComboBox.SelectedItem?.ToString() ?? "Offline";
         _settings.OpenAiApiKey = _apiKeyTextBox.Text.Trim();
         _settings.OpenAiModel = string.IsNullOrWhiteSpace(_modelTextBox.Text) ? "gpt-5.5" : _modelTextBox.Text.Trim();
+        _settings.OpenAiImageModel = string.IsNullOrWhiteSpace(_imageModelTextBox.Text) ? "gpt-image-1" : _imageModelTextBox.Text.Trim();
         if (_settings.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
         {
             _settings.GeminiApiKey = _secondaryKeyTextBox.Text.Trim();
@@ -169,6 +178,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         if (_providerComboBox.SelectedItem?.ToString() is not { } provider) return;
         _apiKeyTextBox.Enabled = provider is "OpenAI" or "Offline";
         _modelTextBox.Enabled = provider is "OpenAI" or "Offline";
+        _imageModelTextBox.Enabled = provider is "OpenAI" or "Offline";
         _secondaryKeyTextBox.Enabled = provider is "Gemini" or "Claude" or "Platform Token";
         _secondaryModelTextBox.Enabled = provider is "Gemini" or "Claude";
     }

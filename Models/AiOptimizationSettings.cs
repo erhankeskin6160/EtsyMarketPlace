@@ -5,6 +5,7 @@ internal sealed class AiOptimizationSettings
     public string Provider { get; set; } = "Offline";
     public string OpenAiApiKey { get; set; } = "";
     public string OpenAiModel { get; set; } = "gpt-5.5";
+    public string OpenAiImageModel { get; set; } = "gpt-image-1";
     public string GeminiApiKey { get; set; } = "";
     public string GeminiModel { get; set; } = "gemini-3.5-flash";
     public string ClaudeApiKey { get; set; } = "";
