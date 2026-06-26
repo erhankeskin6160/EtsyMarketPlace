@@ -21,6 +21,7 @@ internal sealed class OwnShopListingAiAuditForm(
     private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
     private List<AuditRow> _rows = [];
     private ListingOptimizationResult? _lastResult;
+    private long _lastResultListingId;
 
     protected override void OnLoad(EventArgs e)
     {
@@ -121,8 +122,8 @@ internal sealed class OwnShopListingAiAuditForm(
         var copy = CreateButton("Oneriyi Kopyala");
         copy.Click += (_, _) => CopySuggestion();
         actions.Controls.Add(copy, 0, 1);
-        var draft = CreateButton("Guncelleme Taslagi");
-        draft.Click += (_, _) => ShowUpdateDraftNotice();
+        var draft = CreateButton("Etsy'de Guncelle");
+        draft.Click += async (_, _) => await UpdateListingWithConfirmationAsync();
         actions.Controls.Add(draft, 0, 2);
         var shop = CreateButton("Magaza Ac");
         shop.Click += (_, _) => OpenShop();
@@ -205,6 +206,7 @@ internal sealed class OwnShopListingAiAuditForm(
             var row = SelectedRow;
             var input = ToOptimizationInput(row.Listing);
             _lastResult = await aiOptimizer.OptimizeAsync(input);
+            _lastResultListingId = row.Listing.ListingId;
             row.AiScore = _lastResult.OptimizedSeoScore;
             row.Status = _lastResult.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
             _grid.Refresh();
@@ -314,14 +316,96 @@ internal sealed class OwnShopListingAiAuditForm(
         if (!string.IsNullOrWhiteSpace(_suggestionTextBox.Text)) Clipboard.SetText(_suggestionTextBox.Text);
     }
 
-    private void ShowUpdateDraftNotice()
+    private async Task UpdateListingWithConfirmationAsync()
     {
-        MessageBox.Show(
-            this,
-            "Bu asamada guvenli taslak hazirlandi. Etsy'de direkt guncelleme sonraki feature'da listings_w izni ve son onay penceresiyle acilacak.",
-            "Guncelleme Taslagi",
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Information);
+        if (SelectedRow is null)
+        {
+            MessageBox.Show(this, "Once bir listing secin.", "Listing guncelleme", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (_lastResult is null || _lastResultListingId != SelectedRow.Listing.ListingId)
+        {
+            MessageBox.Show(this, "Once secili listing icin AI ile Puanla calistirin.", "Listing guncelleme", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var update = CreateListingUpdate(_lastResult);
+        if (!ValidateListingUpdate(update, out var validationMessage))
+        {
+            MessageBox.Show(this, validationMessage, "Listing guncelleme", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var confirmation = new ListingUpdateConfirmationForm(SelectedRow.Listing, update);
+        if (confirmation.ShowDialog(this) != DialogResult.OK || !confirmation.Confirmed)
+        {
+            return;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+            var settings = EtsyApiSettingsStore.Load();
+            await _apiClient.UpdateOwnShopListingTextAsync(settings, SelectedRow.Listing.ListingId, update);
+            EtsyApiSettingsStore.Save(settings);
+            await SaveVersionAsync();
+            SelectedRow.Status = "Etsy guncellendi";
+            _grid.Refresh();
+            _statusLabel.Text = $"Listing Etsy'de guncellendi: {SelectedRow.Title}";
+            MessageBox.Show(this, "Listing Etsy'de guncellendi. Degisikligi Etsy sayfasinda kontrol edin.", "Listing guncelleme", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Listing guncelleme", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private static ListingTextUpdate CreateListingUpdate(ListingOptimizationResult result) =>
+        new(
+            result.TitleSuggestions.FirstOrDefault()?.Trim() ?? "",
+            result.DescriptionDraft.Trim(),
+            result.TagSuggestions.Select(tag => tag.Trim()).Where(tag => tag.Length > 0).Take(13).ToList());
+
+    private static bool ValidateListingUpdate(ListingTextUpdate update, out string message)
+    {
+        if (string.IsNullOrWhiteSpace(update.Title))
+        {
+            message = "AI onerisi baslik uretmedi. Guncelleme yapilmadi.";
+            return false;
+        }
+
+        if (update.Title.Length > 140)
+        {
+            message = "Baslik 140 karakterden uzun. Etsy kabul etmeyebilir.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(update.Description))
+        {
+            message = "AI onerisi aciklama uretmedi. Guncelleme yapilmadi.";
+            return false;
+        }
+
+        if (update.Tags.Count == 0)
+        {
+            message = "AI onerisi tag uretmedi. Guncelleme yapilmadi.";
+            return false;
+        }
+
+        var longTag = update.Tags.FirstOrDefault(tag => tag.Length > 20);
+        if (longTag is not null)
+        {
+            message = $"Tag 20 karakterden uzun: {longTag}";
+            return false;
+        }
+
+        message = "";
+        return true;
     }
 
     private void OpenListing() => OpenUrl(SelectedRow?.Listing.ListingUrl);

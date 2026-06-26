@@ -144,8 +144,7 @@ AI onerisi, tag sayisi, stok, favori ve fiyat sinyalleri birlikte gosterilir.
 - Secili listing icin AI baslik, tag ve aciklama taslagi uretebilir.
 - Oneriler versiyon gecmisine kaydedilebilir.
 - Listing ve magaza linki Etsy'de acilabilir.
-- Canli Etsy guncellemesi bu surumde kapali tutulur; sonraki feature'da
-  `listings_w` izni ve son onay penceresiyle eklenecektir.
+- Canli Etsy metin guncellemesi `listings_w` izni ve son onay penceresiyle yapilir.
 
 AI ayarlarinda `Offline`, `OpenAI`, `Gemini`, `Claude` ve `Platform Token`
 secenekleri gorunur. Bu surumde aktif dis adapterler `OpenAI` ve `Gemini`dir.
@@ -154,3 +153,18 @@ kosullari tamamlanmadan gercek cagri yapmaz.
 
 Gemini kullanmak icin Google AI Studio uzerinden API key alinip `AI Ayarlari`
 ekraninda saglayici `Gemini` secilir. Varsayilan model `gemini-3.5-flash`tir.
+
+### listings_w ile onayli listing guncelleme
+
+AI denetim ekraninda `Etsy'de Guncelle` butonu secili listing icin AI onerilen
+baslik, tag ve aciklamayi Etsy'ye gonderir. Guncelleme canli islem oldugu icin
+once mevcut metin ile yeni metin yan yana gosterilir ve kullanici onay kutusunu
+isaretlemeden Etsy'ye yazma yapilmaz.
+
+Bu islem icin Etsy OAuth baglantisi `listings_w` iznini icermelidir. Eski token
+yalnizca `shops_r listings_r transactions_r` ile alindiysa `API Ayarlari`
+ekranindan OAuth linki yeniden uretilip Etsy onayi tekrar verilmelidir.
+
+AI ile gorsel uretme ve urettigi gorselleri listing'e ekleme, sonraki feature
+parcasinda `listing image upload` onayi, telif/marka kontrolu ve gorsel siralama
+ekraniyla ele alinacaktir.

@@ -129,9 +129,23 @@ Durum: Feature dalinda gelistirildi
 - Dusuk puanli listingler once siralanir; kullanici secili listing icin AI onerisi alir.
 - Oneriler optimizasyon gecmisine versiyon olarak kaydedilebilir.
 - `Kendi Magazam` ekranindan `Listing AI` butonuyla acilir.
-- Canli Etsy guncellemesi bu parçada bilincli olarak kapali tutulur; sonraki parca
-  `listings_w`, final onay penceresi, geri alma notu ve guncelleme logu ile ele alinacak.
+- Canli Etsy metin guncellemesi `listings_w`, final onay penceresi ve gecmis kaydiyla ele alindi.
 - AI ayarlarinda Gemini, Claude ve Platform Token secenekleri gorunur.
 - Gemini adapteri aktif hale getirildi; Google AI Studio API key ile Gemini
   uzerinden baslik, tag, aciklama ve risk uyarisi uretilebilir.
 - Claude ve platform token akisi; kullanim maliyeti, kota ve odeme akisindan sonra acilacak.
+
+## Asama 7 ek not - listings_w ile onayli guncelleme
+
+Durum: Feature dalinda gelistirildi
+
+- Etsy OAuth kapsamlarina `listings_w` eklendi.
+- AI denetim ekranindaki `Etsy'de Guncelle` butonu secili listing icin
+  onerilen baslik, tag ve aciklamayi canli Etsy listingine yazar.
+- Guncelleme oncesinde mevcut metin ve yeni metin yan yana gosterilir.
+- Kullanici onay kutusunu isaretlemeden Etsy'ye yazma yapilmaz.
+- Guncelleme basarili olursa optimizasyon versiyonu gecmise kaydedilir.
+- AI promptu listing metnini Etsy SEO/GEO arama niyetine uygun Ingilizce
+  hazirlayacak sekilde guncellendi; risk notlari Turkce tutulur.
+- AI gorsel uretme, gorsel onaylama ve listing gorseli olarak yukleme sonraki
+  feature parcasidir.
