@@ -502,6 +502,38 @@ internal sealed class EtsyApiClient
         return profiles.OrderBy(profile => profile.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
     }
 
+    public async Task<List<EtsyReadinessStateOption>> GetOwnShopReadinessStateOptionsAsync(
+        EtsyApiSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?limit=100", useAccessToken: true);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Hazirlik durumu secenekleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        using var document = JsonDocument.Parse(body);
+        if (!document.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return results
+            .EnumerateArray()
+            .Select(item => GetLong(item, "readiness_state_id"))
+            .Where(id => id > 0)
+            .Distinct()
+            .OrderBy(id => id)
+            .Select(id => new EtsyReadinessStateOption(id, $"Hazirlik durumu #{id}"))
+            .ToList();
+    }
+
     public async Task<CreatedDraftListing> CreateOwnShopDraftListingAsync(
         EtsyApiSettings settings,
         DraftListingCreateRequest draft,
@@ -528,7 +560,10 @@ internal sealed class EtsyApiClient
         if (!draft.IsDigital && draft.ShippingProfileId > 0)
         {
             form.Add(new("shipping_profile_id", draft.ShippingProfileId.ToString(CultureInfo.InvariantCulture)));
-            form.Add(new("readiness_state_id", Math.Max(1, draft.ReadinessStateId).ToString(CultureInfo.InvariantCulture)));
+            if (draft.ReadinessStateId > 0)
+            {
+                form.Add(new("readiness_state_id", draft.ReadinessStateId.ToString(CultureInfo.InvariantCulture)));
+            }
         }
 
         foreach (var tag in tags)
@@ -568,7 +603,7 @@ internal sealed class EtsyApiClient
     {
         if (body.Contains("readiness_state_id", StringComparison.OrdinalIgnoreCase))
         {
-            return $"Taslak listing olusturulamadi. Fiziksel urunlerde Etsy hazirlik durumu (readiness_state_id) ister. Program varsayilan degeri gonderdi; hata devam ederse urun tipi veya magaza ayarlarina uygun hazirlik durumu ID'si gerekir. HTTP {statusCode}: {body}";
+            return $"Taslak listing olusturulamadi. Fiziksel urunlerde Etsy magazaya bagli gecerli hazirlik durumu (readiness_state_id) ister. Urun Kesif ekranindaki Hazirlik durumu alanindan magazana ait bir deger sec veya mevcut listinglerinden gecen ID'yi gir. HTTP {statusCode}: {body}";
         }
 
         if (body.Contains("shipping_profile_id", StringComparison.OrdinalIgnoreCase))
@@ -1202,7 +1237,7 @@ internal sealed record DraftListingCreateRequest(
     bool IsDigital,
     IReadOnlyList<string> Tags,
     IReadOnlyList<string> Materials,
-    long ReadinessStateId = 1,
+    long ReadinessStateId = 0,
     string WhoMade = "i_did",
     string WhenMade = "made_to_order");
 
@@ -1211,4 +1246,9 @@ internal sealed record CreatedDraftListing(long ListingId, string Url);
 internal sealed record EtsyShippingProfileOption(long ShippingProfileId, string Title)
 {
     public string DisplayName => $"{Title} ({ShippingProfileId})";
+}
+
+internal sealed record EtsyReadinessStateOption(long ReadinessStateId, string Title)
+{
+    public string DisplayName => $"{Title} ({ReadinessStateId})";
 }

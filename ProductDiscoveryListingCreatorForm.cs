@@ -32,6 +32,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     private readonly TextBox _categoryTextBox = new() { ReadOnly = true };
     private readonly ComboBox _listingTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _shippingProfileComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ComboBox _readinessStateComboBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
     private readonly Label _statusLabel = new();
     private List<IdeaRow> _rows = [];
 
@@ -64,6 +65,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         _shippingProfileComboBox.DisplayMember = nameof(EtsyShippingProfileOption.DisplayName);
         _shippingProfileComboBox.ValueMember = nameof(EtsyShippingProfileOption.ShippingProfileId);
         _shippingProfileComboBox.DropDown += async (_, _) => await LoadShippingProfilesAsync();
+        _readinessStateComboBox.DisplayMember = nameof(EtsyReadinessStateOption.DisplayName);
+        _readinessStateComboBox.ValueMember = nameof(EtsyReadinessStateOption.ReadinessStateId);
+        _readinessStateComboBox.DropDown += async (_, _) => await LoadReadinessStatesAsync();
 
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -192,13 +196,13 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         middle.Controls.Add(_imagePromptTextBox, 0, 5);
         layout.Controls.Add(middle, 1, 0);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 18, AutoScroll = true };
-        for (var index = 0; index < 17; index++)
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 20, AutoScroll = true };
+        for (var index = 0; index < 19; index++)
         {
             right.RowStyles.Add(new RowStyle(SizeType.Absolute, index % 2 == 0 ? 18 : 28));
         }
 
-        right.RowStyles[16] = new RowStyle(SizeType.Absolute, 32);
+        right.RowStyles[18] = new RowStyle(SizeType.Absolute, 32);
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         right.Controls.Add(LabelFor("Fiyat"), 0, 0);
         _priceInput.Dock = DockStyle.Fill;
@@ -219,16 +223,18 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         right.Controls.Add(_imageCountInput, 0, 11);
         right.Controls.Add(LabelFor("Shipping profile"), 0, 12);
         right.Controls.Add(_shippingProfileComboBox, 0, 13);
-        right.Controls.Add(LabelFor("Gorsel dosyasi"), 0, 14);
+        right.Controls.Add(LabelFor("Hazirlik durumu"), 0, 14);
+        right.Controls.Add(_readinessStateComboBox, 0, 15);
+        right.Controls.Add(LabelFor("Gorsel dosyasi"), 0, 16);
         _imagePathTextBox.Dock = DockStyle.Fill;
-        right.Controls.Add(_imagePathTextBox, 0, 15);
+        right.Controls.Add(_imagePathTextBox, 0, 17);
         var choose = CreateButton("Dosyadan Sec");
         choose.Click += (_, _) => ChooseImage();
-        right.Controls.Add(choose, 0, 16);
+        right.Controls.Add(choose, 0, 18);
         _notesTextBox.Dock = DockStyle.Fill;
         _notesTextBox.Multiline = true;
         _notesTextBox.ReadOnly = true;
-        right.Controls.Add(_notesTextBox, 0, 17);
+        right.Controls.Add(_notesTextBox, 0, 19);
         layout.Controls.Add(right, 2, 0);
         UpdateListingTypeControls();
         return layout;
@@ -425,6 +431,11 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             await LoadShippingProfilesAsync();
         }
 
+        if (!IsDigitalListingSelected() && _readinessStateComboBox.Items.Count == 0)
+        {
+            await LoadReadinessStatesAsync();
+        }
+
         if (!TryBuildDraftRequest(out var draft, out var validationMessage))
         {
             MessageBox.Show(this, validationMessage, "Etsy taslak", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -439,6 +450,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             $"Taxonomy: {draft.TaxonomyId}{Environment.NewLine}" +
             $"Tip: {(draft.IsDigital ? "Dijital" : "Fiziksel")}{Environment.NewLine}" +
             $"Kargo profili: {(draft.IsDigital ? "Gerekmez" : draft.ShippingProfileId)}{Environment.NewLine}" +
+            $"Hazirlik durumu: {(draft.IsDigital ? "Gerekmez" : draft.ReadinessStateId)}{Environment.NewLine}" +
             $"Gorsel: {(SelectedImagePaths().Count == 0 ? "Yok" : $"{SelectedImagePaths().Count} dosya")}{Environment.NewLine}{Environment.NewLine}" +
             "Onayliyor musun?";
         if (MessageBox.Show(this, confirmationText, "Etsy taslak onayi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
@@ -534,9 +546,16 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 
         var isDigital = IsDigitalListingSelected();
         var shippingProfileId = SelectedShippingProfileId();
+        var readinessStateId = SelectedReadinessStateId();
         if (!isDigital && shippingProfileId <= 0)
         {
             message = "Fiziksel urun icin shipping profile secmen gerekiyor. Shipping profile dropdown'una tiklayip magazadaki profillerden birini sec.";
+            return false;
+        }
+
+        if (!isDigital && readinessStateId <= 0)
+        {
+            message = "Fiziksel urun icin hazirlik durumu secmen gerekiyor. Hazirlik durumu dropdown'una tiklayip mevcut listinglerinden gelen degeri sec veya ID'yi elle gir.";
             return false;
         }
 
@@ -556,7 +575,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             shippingProfileId,
             isDigital,
             tags,
-            SplitCommaList(_materialsTextBox.Text));
+            SplitCommaList(_materialsTextBox.Text),
+            readinessStateId);
         message = "";
         return true;
     }
@@ -614,6 +634,37 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         }
     }
 
+    private async Task LoadReadinessStatesAsync()
+    {
+        if (_readinessStateComboBox.Items.Count > 0 || IsDigitalListingSelected())
+        {
+            return;
+        }
+
+        try
+        {
+            _statusLabel.Text = "Magaza hazirlik durumu secenekleri aliniyor...";
+            var settings = EtsyApiSettingsStore.Load();
+            var states = await _apiClient.GetOwnShopReadinessStateOptionsAsync(settings);
+            EtsyApiSettingsStore.Save(settings);
+            _readinessStateComboBox.DataSource = states;
+            if (states.Count > 0)
+            {
+                _readinessStateComboBox.SelectedIndex = 0;
+                _statusLabel.Text = $"{states.Count} hazirlik durumu listelendi";
+            }
+            else
+            {
+                _statusLabel.Text = "Hazirlik durumu bulunamadi; ID'yi elle girebilirsin";
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Hazirlik durumu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = "Hazirlik durumu alinamadi";
+        }
+    }
+
     private bool IsDigitalListingSelected() =>
         _listingTypeComboBox.SelectedItem?.ToString()?.Contains("Dijital", StringComparison.OrdinalIgnoreCase) == true;
 
@@ -624,10 +675,29 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
                 ? option.ShippingProfileId
                 : 0;
 
+    private long SelectedReadinessStateId()
+    {
+        if (_readinessStateComboBox.SelectedValue is long value)
+        {
+            return value;
+        }
+
+        if (_readinessStateComboBox.SelectedItem is EtsyReadinessStateOption option)
+        {
+            return option.ReadinessStateId;
+        }
+
+        var text = _readinessStateComboBox.Text.Trim();
+        return long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var typedValue)
+            ? typedValue
+            : 0;
+    }
+
     private void UpdateListingTypeControls()
     {
         var physical = !IsDigitalListingSelected();
         _shippingProfileComboBox.Enabled = physical;
+        _readinessStateComboBox.Enabled = physical;
     }
 
     private IReadOnlyList<string> SelectedImagePaths() =>
