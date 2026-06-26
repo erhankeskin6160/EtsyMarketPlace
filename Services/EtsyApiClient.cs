@@ -459,6 +459,49 @@ internal sealed class EtsyApiClient
         }
     }
 
+    public async Task<List<EtsyShippingProfileOption>> GetOwnShopShippingProfilesAsync(
+        EtsyApiSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/shipping-profiles", useAccessToken: true);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Shipping profilleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        using var document = JsonDocument.Parse(body);
+        if (!document.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var profiles = new List<EtsyShippingProfileOption>();
+        foreach (var item in results.EnumerateArray())
+        {
+            var id = GetLong(item, "shipping_profile_id");
+            if (id <= 0)
+            {
+                continue;
+            }
+
+            var title = GetString(item, "title");
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = GetString(item, "name");
+            }
+
+            profiles.Add(new EtsyShippingProfileOption(id, string.IsNullOrWhiteSpace(title) ? $"Shipping profile #{id}" : title));
+        }
+
+        return profiles.OrderBy(profile => profile.Title, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
     public async Task<CreatedDraftListing> CreateOwnShopDraftListingAsync(
         EtsyApiSettings settings,
         DraftListingCreateRequest draft,
@@ -1164,3 +1207,8 @@ internal sealed record DraftListingCreateRequest(
     string WhenMade = "made_to_order");
 
 internal sealed record CreatedDraftListing(long ListingId, string Url);
+
+internal sealed record EtsyShippingProfileOption(long ShippingProfileId, string Title)
+{
+    public string DisplayName => $"{Title} ({ShippingProfileId})";
+}
