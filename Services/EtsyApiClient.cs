@@ -485,6 +485,7 @@ internal sealed class EtsyApiClient
         if (!draft.IsDigital && draft.ShippingProfileId > 0)
         {
             form.Add(new("shipping_profile_id", draft.ShippingProfileId.ToString(CultureInfo.InvariantCulture)));
+            form.Add(new("readiness_state_id", Math.Max(1, draft.ReadinessStateId).ToString(CultureInfo.InvariantCulture)));
         }
 
         foreach (var tag in tags)
@@ -503,7 +504,7 @@ internal sealed class EtsyApiClient
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"Taslak listing olusturulamadi. HTTP {(int)response.StatusCode}: {body}");
+            throw new InvalidOperationException(BuildDraftListingErrorMessage((int)response.StatusCode, body));
         }
 
         using var document = JsonDocument.Parse(body);
@@ -518,6 +519,21 @@ internal sealed class EtsyApiClient
         return new CreatedDraftListing(
             listingId,
             string.IsNullOrWhiteSpace(url) ? $"https://www.etsy.com/listing/{listingId}" : url);
+    }
+
+    private static string BuildDraftListingErrorMessage(int statusCode, string body)
+    {
+        if (body.Contains("readiness_state_id", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Taslak listing olusturulamadi. Fiziksel urunlerde Etsy hazirlik durumu (readiness_state_id) ister. Program varsayilan degeri gonderdi; hata devam ederse urun tipi veya magaza ayarlarina uygun hazirlik durumu ID'si gerekir. HTTP {statusCode}: {body}";
+        }
+
+        if (body.Contains("shipping_profile_id", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"Taslak listing olusturulamadi. Fiziksel urun icin gecerli Shipping profile ID gerekli. Etsy Magaza ayarlarindan teslimat profili ID'sini girip tekrar deneyin. HTTP {statusCode}: {body}";
+        }
+
+        return $"Taslak listing olusturulamadi. HTTP {statusCode}: {body}";
     }
 
     private async Task<(long ShopId, string ShopName)> GetOwnShopIdentityAsync(
@@ -1143,6 +1159,7 @@ internal sealed record DraftListingCreateRequest(
     bool IsDigital,
     IReadOnlyList<string> Tags,
     IReadOnlyList<string> Materials,
+    long ReadinessStateId = 1,
     string WhoMade = "i_did",
     string WhenMade = "made_to_order");
 
