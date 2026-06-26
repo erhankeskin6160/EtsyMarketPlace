@@ -342,6 +342,17 @@ internal sealed class EtsyApiClient
         return listings;
     }
 
+    public async Task<OwnShopProfile> GetOwnShopProfileAsync(
+        EtsyApiSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, shopName) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        return new OwnShopProfile(shopId, shopName, BuildShopUrl(shopName));
+    }
+
     public async Task<MarketListingResult> GetOwnShopListingAsync(
         EtsyApiSettings settings,
         long listingId,
@@ -446,6 +457,67 @@ internal sealed class EtsyApiClient
         {
             throw new InvalidOperationException($"Listing gorseli yuklenemedi. HTTP {(int)response.StatusCode}: {body}");
         }
+    }
+
+    public async Task<CreatedDraftListing> CreateOwnShopDraftListingAsync(
+        EtsyApiSettings settings,
+        DraftListingCreateRequest draft,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        var tags = NormalizeListingTags(draft.Tags);
+        var materials = NormalizeListingMaterials(draft.Materials);
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("quantity", Math.Max(1, draft.Quantity).ToString(CultureInfo.InvariantCulture)),
+            new("title", draft.Title.Trim()),
+            new("description", draft.Description.Trim()),
+            new("price", draft.Price.ToString("0.00", CultureInfo.InvariantCulture)),
+            new("who_made", string.IsNullOrWhiteSpace(draft.WhoMade) ? "i_did" : draft.WhoMade.Trim()),
+            new("when_made", string.IsNullOrWhiteSpace(draft.WhenMade) ? "made_to_order" : draft.WhenMade.Trim()),
+            new("taxonomy_id", draft.TaxonomyId.ToString(CultureInfo.InvariantCulture)),
+            new("type", draft.IsDigital ? "download" : "physical"),
+        };
+
+        if (!draft.IsDigital && draft.ShippingProfileId > 0)
+        {
+            form.Add(new("shipping_profile_id", draft.ShippingProfileId.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        foreach (var tag in tags)
+        {
+            form.Add(new("tags[]", tag));
+        }
+
+        foreach (var material in materials)
+        {
+            form.Add(new("materials[]", material));
+        }
+
+        using var request = CreateRequest(settings, HttpMethod.Post, $"{BaseUrl}/shops/{shopId}/listings", useAccessToken: true);
+        request.Content = new FormUrlEncodedContent(form);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Taslak listing olusturulamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        using var document = JsonDocument.Parse(body);
+        var listing = FirstResultOrRoot(document.RootElement);
+        var listingId = GetLong(listing, "listing_id");
+        if (listingId <= 0)
+        {
+            throw new InvalidOperationException($"Taslak listing olusturuldu ama listing_id okunamadi: {body}");
+        }
+
+        var url = GetString(listing, "url");
+        return new CreatedDraftListing(
+            listingId,
+            string.IsNullOrWhiteSpace(url) ? $"https://www.etsy.com/listing/{listingId}" : url);
     }
 
     private async Task<(long ShopId, string ShopName)> GetOwnShopIdentityAsync(
@@ -1060,3 +1132,18 @@ internal sealed record ListingTextUpdate(
     string Description,
     IReadOnlyList<string> Tags,
     IReadOnlyList<string> Materials);
+
+internal sealed record DraftListingCreateRequest(
+    string Title,
+    string Description,
+    decimal Price,
+    int Quantity,
+    long TaxonomyId,
+    long ShippingProfileId,
+    bool IsDigital,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string> Materials,
+    string WhoMade = "i_did",
+    string WhenMade = "made_to_order");
+
+internal sealed record CreatedDraftListing(long ListingId, string Url);
