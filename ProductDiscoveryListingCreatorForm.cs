@@ -14,6 +14,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     private readonly DataGridView _grid = new();
     private readonly TextBox _shopTypeTextBox = new();
     private readonly TextBox _keywordTextBox = new();
+    private readonly TextBox _includeTextBox = new();
+    private readonly TextBox _excludeTextBox = new();
     private readonly TextBox _titleTextBox = new();
     private readonly TextBox _descriptionTextBox = new();
     private readonly TextBox _tagsTextBox = new();
@@ -48,10 +50,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         BackColor = Color.FromArgb(247, 248, 250);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 88));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
         Controls.Add(root);
 
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
@@ -80,11 +82,13 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 
     private Control BuildToolbar()
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 12, Padding = new Padding(0, 0, 0, 8) };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 12, RowCount = 2, Padding = new Padding(0, 0, 0, 8) };
+        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
         for (var index = 6; index < 12; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
@@ -100,6 +104,16 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         toolbar.Controls.Add(LabelFor("Limit"), 4, 0);
         _limitInput.Dock = DockStyle.Left;
         toolbar.Controls.Add(_limitInput, 5, 0);
+
+        toolbar.Controls.Add(LabelFor("Istenen urun"), 0, 1);
+        _includeTextBox.Dock = DockStyle.Fill;
+        _includeTextBox.PlaceholderText = "Orn: figure, bust, statue, prop";
+        toolbar.Controls.Add(_includeTextBox, 1, 1);
+        toolbar.Controls.Add(LabelFor("Haric kelimeler"), 2, 1);
+        _excludeTextBox.Dock = DockStyle.Fill;
+        _excludeTextBox.PlaceholderText = "Orn: stl, file, digital download";
+        toolbar.Controls.Add(_excludeTextBox, 3, 1);
+        toolbar.SetColumnSpan(_excludeTextBox, 3);
 
         var detect = CreateButton("Magazayi Algila");
         detect.Click += async (_, _) => await DetectShopTypeAsync();
@@ -121,15 +135,21 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
         toolbar.Controls.Add(close, 11, 0);
+        toolbar.SetRowSpan(detect, 2);
+        toolbar.SetRowSpan(search, 2);
+        toolbar.SetRowSpan(draft, 2);
+        toolbar.SetRowSpan(image, 2);
+        toolbar.SetRowSpan(create, 2);
+        toolbar.SetRowSpan(close, 2);
         return toolbar;
     }
 
     private Control BuildDraftArea()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 12, 0, 0) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 10, 0, 0) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
 
         var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
         left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -163,8 +183,20 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         middle.Controls.Add(_imagePromptTextBox, 0, 5);
         layout.Controls.Add(middle, 1, 0);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 14 };
-        for (var row = 0; row < 14; row++) right.RowStyles.Add(new RowStyle(SizeType.Percent, 100f / 14));
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 13 };
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        right.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         right.Controls.Add(LabelFor("Fiyat"), 0, 0);
         _priceInput.Dock = DockStyle.Fill;
         right.Controls.Add(_priceInput, 0, 1);
@@ -184,11 +216,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         var choose = CreateButton("Dosyadan Sec");
         choose.Click += (_, _) => ChooseImage();
         right.Controls.Add(choose, 0, 11);
-        right.Controls.Add(LabelFor("Not"), 0, 12);
         _notesTextBox.Dock = DockStyle.Fill;
         _notesTextBox.Multiline = true;
         _notesTextBox.ReadOnly = true;
-        right.Controls.Add(_notesTextBox, 0, 13);
+        right.Controls.Add(_notesTextBox, 0, 12);
         layout.Controls.Add(right, 2, 0);
         return layout;
     }
@@ -230,6 +261,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             var keywords = ExtractShopKeywords(listings);
             _shopTypeTextBox.Text = GuessShopType(keywords);
             _keywordTextBox.Text = BuildSearchKeyword(_shopTypeTextBox.Text, keywords);
+            ApplyDefaultFiltersForShopType(_shopTypeTextBox.Text);
             _notesTextBox.Text = $"Bagli magaza: {shop.ShopName}{Environment.NewLine}Algilanan kelimeler: {string.Join(", ", keywords.Take(12))}";
             _statusLabel.Text = $"{shop.ShopName} icin magaza turu algilandi";
         }
@@ -262,12 +294,15 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             var settings = EtsyApiSettingsStore.Load();
             var results = await _apiClient.FindMarketListingsAsync(settings, keyword, (int)_limitInput.Value);
             EtsyApiSettingsStore.Save(settings);
+            var includeTerms = SplitFilterTerms(_includeTextBox.Text);
+            var excludeTerms = SplitFilterTerms(_excludeTextBox.Text);
             _rows = results
+                .Where(item => MatchesProductIntent(item, includeTerms, excludeTerms))
                 .Select(item => new IdeaRow(item))
                 .OrderByDescending(row => row.OpportunityScore)
                 .ToList();
             _bindingSource.DataSource = _rows;
-            _statusLabel.Text = $"{_rows.Count} pazar urunu incelendi";
+            _statusLabel.Text = $"{_rows.Count} uygun pazar urunu listelendi";
             FillFromSelectedIdea();
         }
         catch (Exception ex)
@@ -503,6 +538,55 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         "Create a marketplace-ready Etsy product photo/mockup for this product. Use clean neutral background, realistic lighting, clear product focus, no watermark, no logo, no copyrighted character branding. " +
         $"Shop type: {_shopTypeTextBox.Text.Trim()}. Product: {_titleTextBox.Text.Trim()}";
 
+    private void ApplyDefaultFiltersForShopType(string shopType)
+    {
+        var normalized = shopType.ToLowerInvariant();
+        if (normalized.Contains("3d") || normalized.Contains("cosplay") || normalized.Contains("prop"))
+        {
+            if (string.IsNullOrWhiteSpace(_includeTextBox.Text))
+            {
+                _includeTextBox.Text = "figure, bust, statue, prop, helmet, sword, mask, display";
+            }
+
+            if (string.IsNullOrWhiteSpace(_excludeTextBox.Text))
+            {
+                _excludeTextBox.Text = "stl, file, files, digital download, download, svg, png, pdf, template, pattern";
+            }
+        }
+        else if (normalized.Contains("bed") || normalized.Contains("bedding"))
+        {
+            if (string.IsNullOrWhiteSpace(_includeTextBox.Text))
+            {
+                _includeTextBox.Text = "bed, bedding, pillow, duvet, blanket, sheet, cover";
+            }
+
+            if (string.IsNullOrWhiteSpace(_excludeTextBox.Text))
+            {
+                _excludeTextBox.Text = "pattern, digital, download, svg, png, pdf";
+            }
+        }
+    }
+
+    private static bool MatchesProductIntent(
+        MarketListingResult listing,
+        IReadOnlyList<string> includeTerms,
+        IReadOnlyList<string> excludeTerms)
+    {
+        var searchable = BuildSearchableText(listing);
+        if (excludeTerms.Any(term => ContainsTerm(searchable, term)))
+        {
+            return false;
+        }
+
+        return includeTerms.Count == 0 || includeTerms.Any(term => ContainsTerm(searchable, term));
+    }
+
+    private static string BuildSearchableText(MarketListingResult listing) =>
+        $"{listing.Title} {listing.Description} {string.Join(' ', listing.Tags)}".ToLowerInvariant();
+
+    private static bool ContainsTerm(string searchable, string term) =>
+        searchable.Contains(term.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase);
+
     private static string BuildSafeTitle(MarketListingResult listing)
     {
         var title = listing.Title;
@@ -547,6 +631,14 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             .Split([',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
             .Select(item => item.Trim())
             .Where(item => item.Length > 0)
+            .ToList();
+
+    private static IReadOnlyList<string> SplitFilterTerms(string value) =>
+        value
+            .Split([',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(item => item.Trim().ToLowerInvariant())
+            .Where(item => item.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
     private static void ConfigureMultiline(TextBox textBox)
