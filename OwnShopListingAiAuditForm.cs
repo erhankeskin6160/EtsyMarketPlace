@@ -17,6 +17,7 @@ internal sealed class OwnShopListingAiAuditForm(
     private readonly PictureBox _pictureBox = new();
     private readonly TextBox _detailTextBox = new();
     private readonly TextBox _suggestionTextBox = new();
+    private readonly TextBox _searchTextBox = new();
     private readonly Label _statusLabel = new();
     private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
     private List<AuditRow> _rows = [];
@@ -65,29 +66,41 @@ internal sealed class OwnShopListingAiAuditForm(
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8 };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 11 };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 3; index < 8; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
+        for (var index = 4; index < 11; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
         toolbar.Controls.Add(LabelFor("Limit"), 0, 0);
         _limitInput.Dock = DockStyle.Left;
         toolbar.Controls.Add(_limitInput, 1, 0);
+        toolbar.Controls.Add(LabelFor("Urun ara"), 2, 0);
+        _searchTextBox.Dock = DockStyle.Fill;
+        _searchTextBox.PlaceholderText = "Urun adina gore filtrele...";
+        _searchTextBox.TextChanged += (_, _) => ApplyFilter();
+        toolbar.Controls.Add(_searchTextBox, 3, 0);
         var load = CreateButton("Listingleri Yukle");
         load.Click += async (_, _) => await LoadListingsAsync();
-        toolbar.Controls.Add(load, 3, 0);
+        toolbar.Controls.Add(load, 4, 0);
         var aiAnalyze = CreateButton("AI ile Puanla");
         aiAnalyze.Click += async (_, _) => await AnalyzeSelectedAsync();
-        toolbar.Controls.Add(aiAnalyze, 4, 0);
+        toolbar.Controls.Add(aiAnalyze, 5, 0);
         var settings = CreateButton("AI Ayarlari");
         settings.Click += (_, _) => { using var form = new AiOptimizationSettingsForm(); form.ShowDialog(this); };
-        toolbar.Controls.Add(settings, 5, 0);
+        toolbar.Controls.Add(settings, 6, 0);
+        var refreshSelected = CreateButton("AI Sonrasi Yenile");
+        refreshSelected.Click += async (_, _) => await RefreshSelectedListingAsync();
+        toolbar.Controls.Add(refreshSelected, 7, 0);
+        var aiImage = CreateButton("AI Gorsel");
+        aiImage.Click += async (_, _) => await OpenAiImageWorkflowAsync();
+        toolbar.Controls.Add(aiImage, 8, 0);
         var open = CreateButton("Listing Ac");
         open.Click += (_, _) => OpenListing();
-        toolbar.Controls.Add(open, 6, 0);
+        toolbar.Controls.Add(open, 9, 0);
         var history = CreateButton("Gecmis");
         history.Click += (_, _) => { using var form = new ListingOptimizationHistoryForm(historyService); form.ShowDialog(this); };
-        toolbar.Controls.Add(history, 7, 0);
+        toolbar.Controls.Add(history, 10, 0);
         root.Controls.Add(toolbar, 0, 1);
 
         ConfigureGrid();
@@ -161,6 +174,8 @@ internal sealed class OwnShopListingAiAuditForm(
         AddColumn("Listing", nameof(AuditRow.Title), 380, true);
         AddColumn("SEO", nameof(AuditRow.SeoScore), 70);
         AddColumn("AI", nameof(AuditRow.AiScore), 70);
+        AddColumn("SEO Eksikler", nameof(AuditRow.SeoNeeds), 180);
+        AddColumn("Artilar", nameof(AuditRow.SeoStrengths), 180);
         AddColumn("Fiyat", nameof(AuditRow.Price), 85);
         AddColumn("Favori", nameof(AuditRow.Favorites), 80);
         AddColumn("Stok", nameof(AuditRow.Quantity), 70);
@@ -182,7 +197,7 @@ internal sealed class OwnShopListingAiAuditForm(
                 .OrderBy(row => row.SeoScore)
                 .ThenBy(row => row.Title)
                 .ToList();
-            _bindingSource.DataSource = _rows;
+            ApplyFilter();
             _statusLabel.Text = $"{_rows.Count} listing yuklendi | dusuk puanlar ustte";
             await LoadThumbnailsAsync();
         }
@@ -417,6 +432,66 @@ internal sealed class OwnShopListingAiAuditForm(
         return true;
     }
 
+    private void ApplyFilter()
+    {
+        var query = _searchTextBox.Text.Trim();
+        var filtered = string.IsNullOrWhiteSpace(query)
+            ? _rows
+            : _rows.Where(row =>
+                row.Title.Contains(query, StringComparison.CurrentCultureIgnoreCase) ||
+                row.Listing.TagsDisplay.Contains(query, StringComparison.CurrentCultureIgnoreCase))
+                .ToList();
+        _bindingSource.DataSource = filtered;
+        _grid.Refresh();
+    }
+
+    private async Task RefreshSelectedListingAsync()
+    {
+        if (SelectedRow is null)
+        {
+            MessageBox.Show(this, "Once bir listing secin.", "AI sonrasi yenile", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+            var selectedId = SelectedRow.Listing.ListingId;
+            var settings = EtsyApiSettingsStore.Load();
+            var refreshed = await _apiClient.GetOwnShopListingAsync(settings, selectedId);
+            EtsyApiSettingsStore.Save(settings);
+            var index = _rows.FindIndex(row => row.Listing.ListingId == selectedId);
+            if (index >= 0)
+            {
+                _rows[index] = new AuditRow(_rows[index].Rank, refreshed, ScoreListing(refreshed), "Yenilendi");
+            }
+
+            ApplyFilter();
+            _statusLabel.Text = "Secili listing Etsy'den tekrar yuklendi";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "AI sonrasi yenile", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task OpenAiImageWorkflowAsync()
+    {
+        if (SelectedRow is null)
+        {
+            MessageBox.Show(this, "Once bir listing secin.", "AI gorsel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new AiListingImageForm(SelectedRow.Listing, _apiClient);
+        form.ShowDialog(this);
+        await RefreshSelectedListingAsync();
+    }
+
     private void OpenListing() => OpenUrl(SelectedRow?.Listing.ListingUrl);
     private void OpenShop() => OpenUrl(SelectedRow?.Listing.ShopUrl);
 
@@ -483,5 +558,28 @@ internal sealed class OwnShopListingAiAuditForm(
         public int SeoScore { get; } = seoScore;
         public int AiScore { get; set; } = seoScore;
         public string Status { get; set; } = status;
+        public string SeoNeeds => BuildSeoNeeds(Listing);
+        public string SeoStrengths => BuildSeoStrengths(Listing);
+
+        private static string BuildSeoNeeds(MarketListingResult listing)
+        {
+            var needs = new List<string>();
+            if (listing.Tags.Count < 13) needs.Add($"{13 - listing.Tags.Count} tag eksik");
+            if (listing.Title.Length < 55) needs.Add("baslik kisa");
+            if (listing.Title.Length > 140) needs.Add("baslik uzun");
+            if (listing.Description.Length < 500) needs.Add("aciklama kisa");
+            if (listing.ImageUrls.Count < 5) needs.Add("gorsel az");
+            return needs.Count == 0 ? "Temel eksik yok" : string.Join(", ", needs);
+        }
+
+        private static string BuildSeoStrengths(MarketListingResult listing)
+        {
+            var strengths = new List<string>();
+            if (listing.Tags.Count >= 13) strengths.Add("13 tag");
+            if (listing.Title.Length is >= 55 and <= 135) strengths.Add("baslik iyi");
+            if (listing.Description.Length >= 500) strengths.Add("aciklama iyi");
+            if (listing.ImageUrls.Count >= 5) strengths.Add("gorsel iyi");
+            return strengths.Count == 0 ? "-" : string.Join(", ", strengths);
+        }
     }
 }

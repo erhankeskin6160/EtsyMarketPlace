@@ -149,3 +149,15 @@ Durum: Feature dalinda gelistirildi
   hazirlayacak sekilde guncellendi; risk notlari Turkce tutulur.
 - AI gorsel uretme, gorsel onaylama ve listing gorseli olarak yukleme sonraki
   feature parcasidir.
+
+## Asama 7 ek not - AI gorsel uretme ve listing gorseli ekleme
+
+Durum: Feature dalinda gelistirildi
+
+- Listing AI ekranina urun adi/tag arama filtresi eklendi.
+- SEO eksikleri ve artilari ayri kolonlarda gosterilir.
+- `AI Sonrasi Yenile` secili listingi Etsy'den tekrar yukler.
+- `AI Gorsel` penceresi secili listing icin OpenAI gorsel modeliyle gorsel uretir.
+- Kullanici AI gorseli onizler veya bilgisayardan gorsel secer.
+- Gorsel, kullanici son onay vermeden Etsy listing'e yuklenmez.
+- Gorsel uretim promptu marka/telif/logolu gorsel riskini azaltacak sekilde yazildi.

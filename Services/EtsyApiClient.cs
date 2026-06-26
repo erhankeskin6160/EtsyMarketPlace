@@ -341,6 +341,33 @@ internal sealed class EtsyApiClient
         return listings;
     }
 
+    public async Task<MarketListingResult> GetOwnShopListingAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (_, shopName) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/listings/{listingId}?includes=Images,Shop", useAccessToken: true);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Listing yeniden alinamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        var wrapped = body.Contains("\"results\"", StringComparison.OrdinalIgnoreCase)
+            ? body
+            : $"{{\"results\":[{body}]}}";
+        var listing = ParseMarketListings(wrapped, "").FirstOrDefault()
+            ?? throw new InvalidOperationException("Listing yaniti okunamadi.");
+        listing.ShopName = shopName;
+        listing.ShopUrl = BuildShopUrl(shopName);
+        return listing;
+    }
+
     public async Task UpdateOwnShopListingTextAsync(
         EtsyApiSettings settings,
         long listingId,
@@ -381,6 +408,42 @@ internal sealed class EtsyApiClient
         if (!response.IsSuccessStatusCode)
         {
             throw new InvalidOperationException($"Listing guncellenemedi. HTTP {(int)response.StatusCode}: {body}");
+        }
+    }
+
+    public async Task UploadOwnShopListingImageAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        string imagePath,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        if (listingId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(listingId), "Gecerli bir listing kimligi gerekli.");
+        }
+
+        if (!File.Exists(imagePath))
+        {
+            throw new FileNotFoundException("Yuklenecek gorsel bulunamadi.", imagePath);
+        }
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        await using var stream = File.OpenRead(imagePath);
+        using var content = new MultipartFormDataContent();
+        using var imageContent = new StreamContent(stream);
+        imageContent.Headers.ContentType = new MediaTypeHeaderValue(GetImageContentType(imagePath));
+        content.Add(imageContent, "image", Path.GetFileName(imagePath));
+
+        using var request = CreateRequest(settings, HttpMethod.Post, $"{BaseUrl}/shops/{shopId}/listings/{listingId}/images", useAccessToken: true);
+        request.Content = content;
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Listing gorseli yuklenemedi. HTTP {(int)response.StatusCode}: {body}");
         }
     }
 
@@ -905,6 +968,18 @@ internal sealed class EtsyApiClient
         return string.IsNullOrWhiteSpace(shopName)
             ? "https://www.etsy.com"
             : $"https://www.etsy.com/shop/{Uri.EscapeDataString(shopName.Trim())}";
+    }
+
+    private static string GetImageContentType(string imagePath)
+    {
+        var extension = Path.GetExtension(imagePath).ToLowerInvariant();
+        return extension switch
+        {
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            _ => "image/png",
+        };
     }
 
     private static int GetInt(JsonElement item, string propertyName) =>
