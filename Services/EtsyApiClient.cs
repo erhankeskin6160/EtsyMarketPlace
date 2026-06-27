@@ -751,31 +751,40 @@ internal sealed class EtsyApiClient
         CancellationToken cancellationToken = default)
     {
         EnsureApiCredentials(settings);
+        var requestedIds = taxonomyIds.Where(id => id > 0).Distinct().ToHashSet();
         var names = new Dictionary<long, string>();
-        foreach (var taxonomyId in taxonomyIds.Where(id => id > 0).Distinct())
+        if (requestedIds.Count == 0)
         {
-            try
-            {
-                using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/seller-taxonomy/nodes/{taxonomyId}", useAccessToken: false);
-                using var response = await _httpClient.SendAsync(request, cancellationToken);
-                var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
-                {
-                    continue;
-                }
+            return names;
+        }
 
-                using var document = JsonDocument.Parse(body);
-                var root = document.RootElement;
-                var name = ReadTaxonomyName(root);
-                if (!string.IsNullOrWhiteSpace(name))
+        try
+        {
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/seller-taxonomy/nodes", useAccessToken: false);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
+            {
+                return names;
+            }
+
+            using var document = JsonDocument.Parse(body);
+            var roots = GetArray(document.RootElement, "results", "nodes");
+            if (roots.HasValue)
+            {
+                foreach (var node in roots.Value.EnumerateArray())
                 {
-                    names[taxonomyId] = name;
+                    CollectTaxonomyNames(node, [], requestedIds, names);
                 }
             }
-            catch
+            else
             {
-                // Kategori adi ek bilgi; okunamazsa arama akisini durdurma.
+                CollectTaxonomyNames(document.RootElement, [], requestedIds, names);
             }
+        }
+        catch
+        {
+            // Kategori adi ek bilgi; okunamazsa arama akisini durdurma.
         }
 
         return names;
@@ -1242,6 +1251,42 @@ internal sealed class EtsyApiClient
         }
 
         return "";
+    }
+
+    private static void CollectTaxonomyNames(
+        JsonElement node,
+        IReadOnlyList<string> parentPath,
+        HashSet<long> requestedIds,
+        Dictionary<long, string> names)
+    {
+        var nodeId = GetLong(node, "id");
+        if (nodeId <= 0)
+        {
+            nodeId = GetLong(node, "taxonomy_id");
+        }
+
+        var nodeName = GetFirstString(node, "name", "display_name");
+        var currentPath = parentPath.ToList();
+        if (!string.IsNullOrWhiteSpace(nodeName))
+        {
+            currentPath.Add(nodeName);
+        }
+
+        if (nodeId > 0 && requestedIds.Contains(nodeId) && currentPath.Count > 0)
+        {
+            names[nodeId] = string.Join(" > ", currentPath);
+        }
+
+        var children = GetArray(node, "children", "Children", "child_nodes");
+        if (!children.HasValue)
+        {
+            return;
+        }
+
+        foreach (var child in children.Value.EnumerateArray())
+        {
+            CollectTaxonomyNames(child, currentPath, requestedIds, names);
+        }
     }
 
     private static string BuildShopUrl(string shopName)
