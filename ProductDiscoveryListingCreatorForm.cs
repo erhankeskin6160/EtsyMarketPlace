@@ -35,9 +35,14 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     private readonly ComboBox _readinessStateComboBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
     private readonly PictureBox _previewPictureBox = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
     private readonly Label _imageCounterLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
+    private readonly Panel _busyOverlay = new() { Dock = DockStyle.Fill, Visible = false, BackColor = Color.FromArgb(235, 247, 248, 250) };
+    private readonly Label _busyLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Semibold", 12F), ForeColor = Color.FromArgb(23, 32, 49) };
+    private readonly ProgressBar _busyProgressBar = new() { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 28 };
+    private readonly System.Windows.Forms.Timer _busyTimer = new() { Interval = 350 };
     private readonly Label _statusLabel = new();
     private List<IdeaRow> _rows = [];
     private int _selectedImageIndex;
+    private int _busyFrame;
 
     private IdeaRow? SelectedRow => _bindingSource.Current as IdeaRow;
 
@@ -94,6 +99,44 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         ConfigureGrid();
         root.Controls.Add(_grid, 0, 2);
         root.Controls.Add(BuildDraftArea(), 0, 3);
+        Controls.Add(BuildBusyOverlay());
+        _busyTimer.Tick += (_, _) => UpdateBusyAnimation();
+    }
+
+    private Control BuildBusyOverlay()
+    {
+        var outer = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(235, 247, 248, 250) };
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 520));
+        outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 128));
+        outer.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+
+        var card = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            Padding = new Padding(24),
+            BackColor = Color.White,
+        };
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        _busyLabel.Text = "Etsy'de urun araniyor";
+        card.Controls.Add(_busyLabel, 0, 0);
+        card.Controls.Add(_busyProgressBar, 0, 1);
+        card.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Sonuclar, kategoriler ve gorseller yuklenirken lutfen bekle.",
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = Color.FromArgb(82, 93, 110),
+        }, 0, 2);
+
+        outer.Controls.Add(card, 1, 1);
+        _busyOverlay.Controls.Add(outer);
+        return _busyOverlay;
     }
 
     private Control BuildToolbar()
@@ -330,7 +373,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 
         try
         {
-            UseWaitCursor = true;
+            StartBusy("Etsy'de urun araniyor");
             _statusLabel.Text = "Etsy'de anahtar kelimeye gore urun araniyor...";
             _shopTypeTextBox.Text = keyword;
             _includeTextBox.Clear();
@@ -342,7 +385,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
                 .Select(item => new IdeaRow(item))
                 .OrderByDescending(row => row.OpportunityScore)
                 .ToList();
+            SetBusyMessage("Kategori adlari yukleniyor");
             await EnrichCategoriesAsync(settings);
+            SetBusyMessage("Urun gorselleri yukleniyor");
             await LoadGridThumbnailsAsync();
             _bindingSource.DataSource = _rows;
             _statusLabel.Text = $"{_rows.Count} Etsy urunu listelendi";
@@ -355,7 +400,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         }
         finally
         {
-            UseWaitCursor = false;
+            StopBusy();
         }
     }
 
@@ -531,6 +576,45 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             $"Magaza: {listing.ShopName} | Satis: {listing.ShopSales:N0} | Favori: {listing.Favorites:N0}{Environment.NewLine}" +
             $"Rakip listing: {listing.ListingUrl}{Environment.NewLine}" +
             "Bu veri ilham ve pazar analizi icindir; birebir kopyalama yapma.";
+    }
+
+    private void StartBusy(string message)
+    {
+        UseWaitCursor = true;
+        _busyFrame = 0;
+        SetBusyMessage(message);
+        _busyProgressBar.MarqueeAnimationSpeed = 28;
+        _busyOverlay.Visible = true;
+        _busyOverlay.BringToFront();
+        _busyTimer.Start();
+        Application.DoEvents();
+    }
+
+    private void StopBusy()
+    {
+        _busyTimer.Stop();
+        _busyProgressBar.MarqueeAnimationSpeed = 0;
+        _busyOverlay.Visible = false;
+        UseWaitCursor = false;
+    }
+
+    private void SetBusyMessage(string message)
+    {
+        var dots = new string('.', _busyFrame % 4);
+        _busyLabel.Text = $"{message}{dots}";
+        _statusLabel.Text = $"{message}{dots}";
+    }
+
+    private void UpdateBusyAnimation()
+    {
+        if (!_busyOverlay.Visible)
+        {
+            return;
+        }
+
+        _busyFrame++;
+        var text = _busyLabel.Text.TrimEnd('.');
+        SetBusyMessage(text);
     }
 
     private async Task EnrichCategoriesAsync(EtsyApiSettings settings)
