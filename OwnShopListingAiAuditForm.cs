@@ -199,7 +199,7 @@ internal sealed class OwnShopListingAiAuditForm(
                 .ToList();
             ApplyFilter();
             _statusLabel.Text = $"{_rows.Count} listing yuklendi | dusuk puanlar ustte";
-            await LoadThumbnailsAsync();
+            await LoadThumbnailsAsync(settings);
         }
         catch (Exception ex)
         {
@@ -267,31 +267,56 @@ internal sealed class OwnShopListingAiAuditForm(
             $"VERI{Environment.NewLine}Fiyat: {row.Price} | Favori: {row.Favorites:N0} | Stok: {row.Quantity} | Tag: {row.TagCount}{Environment.NewLine}{Environment.NewLine}" +
             $"TAGLER{Environment.NewLine}{string.Join(", ", row.Listing.Tags)}";
         _suggestionTextBox.Text = "AI ile Puanla butonuna basinca oneriler burada gorunecek.";
-        if (row.ThumbnailImage is not null) _pictureBox.Image = row.ThumbnailImage;
-        else await LoadThumbnailAsync(row);
+        if (row.ThumbnailImage is not null)
+        {
+            _pictureBox.Image = row.ThumbnailImage;
+        }
+        else
+        {
+            var settings = EtsyApiSettingsStore.Load();
+            await LoadThumbnailAsync(row, settings);
+        }
     }
 
-    private async Task LoadThumbnailsAsync()
+    private async Task LoadThumbnailsAsync(EtsyApiSettings settings)
     {
         foreach (var row in _rows.Where(item => item.ThumbnailImage is null).Take(30))
         {
-            await LoadThumbnailAsync(row);
+            await LoadThumbnailAsync(row, settings);
         }
-        _grid.Refresh();
+        _bindingSource.ResetBindings(false);
+        _grid.Invalidate();
     }
 
-    private async Task LoadThumbnailAsync(AuditRow row)
+    private async Task LoadThumbnailAsync(AuditRow row, EtsyApiSettings settings)
     {
-        if (string.IsNullOrWhiteSpace(row.Listing.ImageUrl)) return;
+        var imageUrl = row.Listing.ImageUrl;
+        if (string.IsNullOrWhiteSpace(imageUrl) && row.Listing.ListingId > 0)
+        {
+            try
+            {
+                var urls = await _apiClient.GetListingImagesAsync(settings, row.Listing.ListingId);
+                row.Listing.ImageUrls = urls.ToList();
+                imageUrl = urls.FirstOrDefault() ?? "";
+            }
+            catch
+            {
+                imageUrl = "";
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(imageUrl)) return;
         try
         {
-            await using var stream = await _imageHttpClient.GetStreamAsync(row.Listing.ImageUrl);
+            await using var stream = await _imageHttpClient.GetStreamAsync(imageUrl);
             using var memory = new MemoryStream();
             await stream.CopyToAsync(memory);
             memory.Position = 0;
             using var image = Image.FromStream(memory);
             row.ThumbnailImage = new Bitmap(image);
             if (ReferenceEquals(row, SelectedRow)) _pictureBox.Image = row.ThumbnailImage;
+            _bindingSource.ResetBindings(false);
+            _grid.Invalidate();
         }
         catch
         {
