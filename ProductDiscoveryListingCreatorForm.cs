@@ -58,8 +58,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1320, 820);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyTheme(this);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
@@ -84,12 +83,12 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         {
             Dock = DockStyle.Fill,
             Text = "Etsy Urun Bul ve Listing Hazirla",
-            Font = new Font("Segoe UI Semibold", 22F),
-            ForeColor = Color.FromArgb(23, 32, 49),
+            Font = UiStyle.TitleFont,
+            ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
         _statusLabel.Dock = DockStyle.Fill;
-        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
         _statusLabel.Text = "Anahtar kelime girip Etsy'de urun arayin";
         header.Controls.Add(_statusLabel, 1, 0);
@@ -288,14 +287,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 
     private void ConfigureGrid()
     {
-        _grid.Dock = DockStyle.Fill;
-        _grid.AutoGenerateColumns = false;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.ReadOnly = true;
-        _grid.RowHeadersVisible = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.BackgroundColor = Color.White;
+        UiStyle.ConfigureBaseGrid(_grid);
         _grid.RowTemplate.Height = 68;
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => FillFromSelectedIdea();
@@ -1183,25 +1175,26 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     {
         Dock = DockStyle.Fill,
         Text = text,
-        ForeColor = Color.FromArgb(23, 32, 49),
+        ForeColor = UiStyle.TextDark,
         TextAlign = ContentAlignment.MiddleLeft,
     };
 
-    private static Button CreateButton(string text)
+    private static Button CreateButton(string text, bool isSecondary = false)
     {
         var button = new Button
         {
             Dock = DockStyle.Fill,
             Text = text,
-            BackColor = Color.FromArgb(32, 97, 165),
+            BackColor = isSecondary ? UiStyle.SecondaryColor : UiStyle.PrimaryColor,
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI Semibold", 9.3F),
+            Font = UiStyle.SemiboldBaseFont,
             UseVisualStyleBackColor = false,
             AutoEllipsis = true,
             Margin = new Padding(6, 2, 0, 2),
         };
         button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = isSecondary ? UiStyle.SecondaryHover : UiStyle.PrimaryHover;
         return button;
     }
 

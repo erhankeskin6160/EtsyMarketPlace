@@ -45,8 +45,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 760);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyTheme(this);
 
         var root = new TableLayoutPanel
         {
@@ -66,14 +65,14 @@ internal sealed class CompetitorShopAnalysisForm : Form
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 420));
         _titleLabel.Dock = DockStyle.Fill;
         _titleLabel.Text = $"Rakip Analizi: {_initialShopName}";
-        _titleLabel.Font = new Font("Segoe UI Semibold", 21F);
-        _titleLabel.ForeColor = Color.FromArgb(23, 32, 49);
+        _titleLabel.Font = UiStyle.TitleFont;
+        _titleLabel.ForeColor = UiStyle.TextDark;
         _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
         header.Controls.Add(_titleLabel, 0, 0);
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.Text = "Magaza verileri bekleniyor";
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
@@ -82,13 +81,13 @@ internal sealed class CompetitorShopAnalysisForm : Form
         {
             kpis.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 7));
         }
-        AddKpi(kpis, 0, "Toplam satis", "sales");
-        AddKpi(kpis, 1, "Aktif urun", "listings");
-        AddKpi(kpis, 2, "Magaza puani", "reviews");
-        AddKpi(kpis, 3, "Ortalama fiyat", "averagePrice");
-        AddKpi(kpis, 4, "Medyan fiyat", "medianPrice");
-        AddKpi(kpis, 5, "Ortalama SEO", "seo");
-        AddKpi(kpis, 6, "Rakip gucu", "strength");
+        UiStyle.AddKpiCard(kpis, 0, 0, "Toplam satis", "sales", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 1, 0, "Aktif urun", "listings", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 2, 0, "Magaza puani", "reviews", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 3, 0, "Ortalama fiyat", "averagePrice", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 4, 0, "Medyan fiyat", "medianPrice", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 5, 0, "Ortalama SEO", "seo", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 6, 0, "Rakip gucu", "strength", _kpiValues);
         root.Controls.Add(kpis, 0, 1);
 
         var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, Padding = new Padding(0, 5, 0, 7) };
@@ -111,8 +110,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
         ConfigureButton(_refreshButton, "Verileri Yenile");
         _refreshButton.Click += async (_, _) => await LoadAnalysisAsync();
         commands.Controls.Add(_refreshButton, 4, 0);
-        var closeButton = CreateButton("Geri Don");
-        closeButton.BackColor = Color.FromArgb(82, 93, 110);
+        var closeButton = CreateButton("Geri Don", isSecondary: true);
         closeButton.Click += (_, _) => Close();
         commands.Controls.Add(closeButton, 5, 0);
         root.Controls.Add(commands, 0, 2);
@@ -218,7 +216,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
 
     private static void ConfigureMetricGrid(DataGridView grid)
     {
-        ConfigureBaseGrid(grid);
+        UiStyle.ConfigureBaseGrid(grid);
         grid.AutoGenerateColumns = false;
         grid.Columns.Add(new DataGridViewTextBoxColumn
         {
@@ -242,8 +240,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
 
     private static void ConfigureProductGrid(DataGridView grid, bool includeImage)
     {
-        ConfigureBaseGrid(grid);
-        grid.AutoGenerateColumns = false;
+        UiStyle.ConfigureBaseGrid(grid);
         grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         grid.RowTemplate.MinimumHeight = includeImage ? 72 : 48;
         grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
@@ -456,39 +453,6 @@ internal sealed class CompetitorShopAnalysisForm : Form
         _statusLabel.Text = "Magaza takibe eklendi ve snapshot kaydedildi";
     }
 
-    private void AddKpi(TableLayoutPanel parent, int column, string title, string key)
-    {
-        var panel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 2,
-            BackColor = Color.White,
-            Margin = new Padding(column == 0 ? 0 : 5, 2, column == 6 ? 0 : 5, 4),
-            Padding = new Padding(12, 8, 12, 8),
-            CellBorderStyle = TableLayoutPanelCellBorderStyle.Single,
-        };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.Controls.Add(new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = title,
-            ForeColor = Color.FromArgb(82, 93, 110),
-            TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 0);
-        var value = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = "-",
-            Font = new Font("Segoe UI Semibold", 14F),
-            ForeColor = Color.FromArgb(23, 32, 49),
-            TextAlign = ContentAlignment.MiddleLeft,
-        };
-        panel.Controls.Add(value, 0, 1);
-        _kpiValues[key] = value;
-        parent.Controls.Add(panel, column, 0);
-    }
-
     private void SetKpi(string key, string value) => _kpiValues[key].Text = value;
 
     private static string FormatPrice(decimal value, CompetitorShopAnalysis analysis)
@@ -500,44 +464,32 @@ internal sealed class CompetitorShopAnalysisForm : Form
     {
         Dock = DockStyle.Fill,
         Text = text,
+        ForeColor = UiStyle.TextDark,
         TextAlign = ContentAlignment.MiddleLeft,
     };
-
-    private static void ConfigureBaseGrid(DataGridView grid)
-    {
-        grid.Dock = DockStyle.Fill;
-        grid.ReadOnly = true;
-        grid.AllowUserToAddRows = false;
-        grid.AllowUserToDeleteRows = false;
-        grid.AllowUserToResizeRows = false;
-        grid.RowHeadersVisible = false;
-        grid.MultiSelect = false;
-        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        grid.BackgroundColor = Color.White;
-        grid.BorderStyle = BorderStyle.FixedSingle;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
-    }
 
     private static void AddProductColumn(DataGridView grid, string title, string property, int width)
     {
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = title, DataPropertyName = property, Width = width });
     }
 
-    private static Button CreateButton(string text)
+    private static Button CreateButton(string text, bool isSecondary = false)
     {
         var button = new Button();
-        ConfigureButton(button, text);
+        ConfigureButton(button, text, isSecondary);
         return button;
     }
 
-    private static void ConfigureButton(Button button, string text)
+    private static void ConfigureButton(Button button, string text, bool isSecondary = false)
     {
         button.Dock = DockStyle.Fill;
         button.Text = text;
-        button.BackColor = Color.FromArgb(32, 97, 165);
+        button.BackColor = isSecondary ? UiStyle.SecondaryColor : UiStyle.PrimaryColor;
         button.ForeColor = Color.White;
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = isSecondary ? UiStyle.SecondaryHover : UiStyle.PrimaryHover;
+        button.Font = UiStyle.SemiboldBaseFont;
         button.Margin = new Padding(6, 2, 0, 2);
     }
 

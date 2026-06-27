@@ -63,8 +63,7 @@ internal sealed class DashboardForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 760);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyTheme(this);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
@@ -80,14 +79,14 @@ internal sealed class DashboardForm : Form
         {
             Dock = DockStyle.Fill,
             Text = "Etsy Pazar Kontrol Paneli",
-            Font = new Font("Segoe UI Semibold", 22F),
-            ForeColor = Color.FromArgb(23, 32, 49),
+            Font = UiStyle.TitleFont,
+            ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.Text = "Yerel pazar verileri yukleniyor";
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
@@ -102,10 +101,10 @@ internal sealed class DashboardForm : Form
         nav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         for (var index = 1; index < 11; index++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
         nav.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
-        var research = CreateButton("Pazar Arastirma");
+        var research = UiStyle.CreateButton("Pazar Arastirma");
         research.Click += async (_, _) => await OpenResearchAsync();
         nav.Controls.Add(research, 1, 0);
-        var ownShop = CreateButton("Kendi Magazam");
+        var ownShop = UiStyle.CreateButton("Kendi Magazam");
         ownShop.Click += (_, _) =>
         {
             using var form = new OwnShopPerformanceForm(
@@ -116,21 +115,21 @@ internal sealed class DashboardForm : Form
             form.ShowDialog(this);
         };
         nav.Controls.Add(ownShop, 2, 0);
-        var creator = CreateButton("Urun Uret");
+        var creator = UiStyle.CreateButton("Urun Uret");
         creator.Click += (_, _) =>
         {
             using var form = new ProductDiscoveryListingCreatorForm(_aiListingOptimizer);
             form.ShowDialog(this);
         };
         nav.Controls.Add(creator, 3, 0);
-        var external = CreateButton("Dis Pazar");
+        var external = UiStyle.CreateButton("Dis Pazar");
         external.Click += (_, _) =>
         {
             using var form = new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer);
             form.ShowDialog(this);
         };
         nav.Controls.Add(external, 4, 0);
-        var automation = CreateButton("Otomasyon");
+        var automation = UiStyle.CreateButton("Otomasyon");
         automation.Click += (_, _) =>
         {
             using var form = new AutomationReportingForm(
@@ -140,35 +139,34 @@ internal sealed class DashboardForm : Form
             form.ShowDialog(this);
         };
         nav.Controls.Add(automation, 5, 0);
-        var optimization = CreateButton("AI Optimizasyon");
+        var optimization = UiStyle.CreateButton("AI Optimizasyon");
         optimization.Click += (_, _) =>
         {
             using var form = new ListingOptimizationForm(_optimizationHistoryService, _aiListingOptimizer);
             form.ShowDialog(this);
         };
         nav.Controls.Add(optimization, 6, 0);
-        var tracking = CreateButton("Takip Merkezi");
+        var tracking = UiStyle.CreateButton("Takip Merkezi");
         tracking.Click += async (_, _) => await OpenTrackingAsync();
         nav.Controls.Add(tracking, 7, 0);
-        var api = CreateButton("API Ayarlari");
+        var api = UiStyle.CreateButton("API Ayarlari");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
         nav.Controls.Add(api, 8, 0);
-        var refresh = CreateButton("Yenile");
+        var refresh = UiStyle.CreateButton("Yenile");
         refresh.Click += async (_, _) => await LoadDashboardAsync();
         nav.Controls.Add(refresh, 9, 0);
-        var exit = CreateButton("Cikis");
-        exit.BackColor = Color.FromArgb(82, 93, 110);
+        var exit = UiStyle.CreateButton("Cikis", isSecondary: true);
         exit.Click += (_, _) => Close();
         nav.Controls.Add(exit, 10, 0);
         root.Controls.Add(nav, 0, 1);
 
         var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 0, 0, 8) };
         for (var column = 0; column < 5; column++) kpis.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
-        AddKpi(kpis, 0, "Toplam takip", "total");
-        AddKpi(kpis, 1, "Urun", "listings");
-        AddKpi(kpis, 2, "Magaza", "shops");
-        AddKpi(kpis, 3, "Anahtar kelime", "keywords");
-        AddKpi(kpis, 4, "Snapshot", "snapshots");
+        UiStyle.AddKpiCard(kpis, 0, 0, "Toplam takip", "total", _kpis);
+        UiStyle.AddKpiCard(kpis, 1, 0, "Urun", "listings", _kpis);
+        UiStyle.AddKpiCard(kpis, 2, 0, "Magaza", "shops", _kpis);
+        UiStyle.AddKpiCard(kpis, 3, 0, "Anahtar kelime", "keywords", _kpis);
+        UiStyle.AddKpiCard(kpis, 4, 0, "Snapshot", "snapshots", _kpis);
         root.Controls.Add(kpis, 0, 2);
 
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
@@ -247,7 +245,7 @@ internal sealed class DashboardForm : Form
 
     private void ConfigureOpportunitiesGrid()
     {
-        ConfigureBaseGrid(_opportunitiesGrid);
+        UiStyle.ConfigureBaseGrid(_opportunitiesGrid);
         AddColumn(_opportunitiesGrid, "Anahtar kelime", nameof(OpportunityRow.Keyword), 220, true);
         AddColumn(_opportunitiesGrid, "Firsat", nameof(OpportunityRow.Opportunity), 75);
         AddColumn(_opportunitiesGrid, "Talep", nameof(OpportunityRow.Demand), 75);
@@ -257,7 +255,7 @@ internal sealed class DashboardForm : Form
 
     private void ConfigureChangesGrid()
     {
-        ConfigureBaseGrid(_changesGrid);
+        UiStyle.ConfigureBaseGrid(_changesGrid);
         AddColumn(_changesGrid, "Takip edilen", nameof(ChangeRow.DisplayName), 230, true);
         AddColumn(_changesGrid, "Tur", nameof(ChangeRow.Type), 70);
         AddColumn(_changesGrid, "Metrik", nameof(ChangeRow.Metric), 105);
@@ -278,52 +276,8 @@ internal sealed class DashboardForm : Form
         return panel;
     }
 
-    private void AddKpi(TableLayoutPanel parent, int column, string title, string key)
-    {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = Color.White, Margin = new Padding(column == 0 ? 0 : 5, 2, column == 4 ? 0 : 5, 4), Padding = new Padding(12, 7, 12, 7), CellBorderStyle = TableLayoutPanelCellBorderStyle.Single };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 25));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, ForeColor = Color.FromArgb(82, 93, 110) }, 0, 0);
-        var value = new Label { Dock = DockStyle.Fill, Text = "-", Font = new Font("Segoe UI Semibold", 16F), ForeColor = Color.FromArgb(23, 32, 49), TextAlign = ContentAlignment.MiddleLeft };
-        panel.Controls.Add(value, 0, 1);
-        _kpis[key] = value;
-        parent.Controls.Add(panel, column, 0);
-    }
-
     private void SetKpi(string key, int value) => _kpis[key].Text = value.ToString("N0");
-    private static void ConfigureBaseGrid(DataGridView grid)
-    {
-        grid.Dock = DockStyle.Fill;
-        grid.ReadOnly = true;
-        grid.AutoGenerateColumns = false;
-        grid.AllowUserToAddRows = false;
-        grid.AllowUserToDeleteRows = false;
-        grid.RowHeadersVisible = false;
-        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        grid.BackgroundColor = Color.White;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
-    }
     private static void AddColumn(DataGridView grid, string header, string property, int width, bool fill = false) => grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, DataPropertyName = property, Width = width, AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None });
-    private static Button CreateButton(string text)
-    {
-        var button = new Button
-        {
-            Dock = DockStyle.Fill,
-            Text = text,
-            BackColor = Color.FromArgb(32, 97, 165),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI Semibold", 9.5F),
-            TextAlign = ContentAlignment.MiddleCenter,
-            UseVisualStyleBackColor = false,
-            AutoEllipsis = true,
-            Padding = new Padding(0),
-            Margin = new Padding(6, 2, 0, 2),
-        };
-        button.FlatAppearance.BorderSize = 0;
-        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 112, 184);
-        return button;
-    }
 
     private sealed class OpportunityRow(DashboardOpportunity item)
     {

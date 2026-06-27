@@ -43,8 +43,7 @@ internal sealed class AutomationReportingForm(
         Text = "Otomasyon ve Raporlama";
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(980, 760);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyTheme(this);
         Padding = new Padding(22);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 10 };
@@ -61,8 +60,8 @@ internal sealed class AutomationReportingForm(
         {
             Dock = DockStyle.Fill,
             Text = "Otomasyon ve Raporlama",
-            Font = new Font("Segoe UI Semibold", 22F),
-            ForeColor = Color.FromArgb(23, 32, 49),
+            Font = UiStyle.TitleFont,
+            ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         };
         root.Controls.Add(title, 0, 0);
@@ -100,8 +99,7 @@ internal sealed class AutomationReportingForm(
         var runTask = CreateButton("Hemen Calistir");
         runTask.Click += async (_, _) => await RunWindowsTaskAsync();
         taskCommands.Controls.Add(runTask, 2, 0);
-        var deleteTask = CreateButton("Gorevi Kaldir");
-        deleteTask.BackColor = Color.FromArgb(180, 58, 58);
+        var deleteTask = CreateButton("Gorevi Kaldir", isDanger: true);
         deleteTask.Click += async (_, _) => await DeleteWindowsTaskAsync();
         taskCommands.Controls.Add(deleteTask, 3, 0);
         root.Controls.Add(taskCommands, 1, 7);
@@ -321,24 +319,25 @@ internal sealed class AutomationReportingForm(
         Dock = DockStyle.Fill,
         Text = text,
         TextAlign = ContentAlignment.MiddleLeft,
-        ForeColor = Color.FromArgb(52, 61, 75),
+        ForeColor = UiStyle.TextDark,
     };
 
-    private static Button CreateButton(string text)
+    private static Button CreateButton(string text, bool isSecondary = false, bool isDanger = false)
     {
         var button = new Button
         {
             Dock = DockStyle.Fill,
             Text = text,
-            BackColor = Color.FromArgb(32, 97, 165),
+            BackColor = isDanger ? UiStyle.DangerColor : (isSecondary ? UiStyle.SecondaryColor : UiStyle.PrimaryColor),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI Semibold", 9.5F),
+            Font = UiStyle.SemiboldBaseFont,
             TextAlign = ContentAlignment.MiddleCenter,
             UseVisualStyleBackColor = false,
             Margin = new Padding(6, 2, 0, 2),
         };
         button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = isDanger ? Color.FromArgb(220, 38, 38) : (isSecondary ? UiStyle.SecondaryHover : UiStyle.PrimaryHover);
         return button;
     }
 }

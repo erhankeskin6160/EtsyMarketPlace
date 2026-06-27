@@ -54,8 +54,7 @@ internal sealed class MarketResearchForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(1280, 780);
         WindowState = FormWindowState.Maximized;
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyTheme(this);
 
         var root = new TableLayoutPanel
         {
@@ -77,14 +76,14 @@ internal sealed class MarketResearchForm : Form
         {
             Dock = DockStyle.Fill,
             Text = "Etsy Pazar Arastirma",
-            Font = new Font("Segoe UI Semibold", 22F),
-            ForeColor = Color.FromArgb(23, 32, 49),
+            Font = UiStyle.TitleFont,
+            ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.Text = "Anahtar kelime girip arama yapin";
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
@@ -230,20 +229,10 @@ internal sealed class MarketResearchForm : Form
 
     private void ConfigureGrid()
     {
-        _grid.Dock = DockStyle.Fill;
-        _grid.AutoGenerateColumns = false;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.AllowUserToResizeRows = false;
-        _grid.ReadOnly = true;
-        _grid.MultiSelect = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.RowHeadersVisible = false;
-        _grid.BackgroundColor = Color.White;
+        UiStyle.ConfigureBaseGrid(_grid);
         _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         _grid.RowTemplate.MinimumHeight = 76;
         _grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => UpdateDetail();
         _grid.CellDoubleClick += (_, _) => OpenListing();
@@ -687,13 +676,14 @@ internal sealed class MarketResearchForm : Form
     {
         Dock = DockStyle.Fill,
         Text = text,
+        ForeColor = UiStyle.TextDark,
         TextAlign = ContentAlignment.MiddleLeft,
     };
 
-    private static Button CreateButton(string text)
+    private static Button CreateButton(string text, bool isSecondary = false)
     {
         var button = new Button();
-        ConfigureButton(button, text);
+        ConfigureButton(button, text, isSecondary);
         return button;
     }
 
@@ -705,14 +695,16 @@ internal sealed class MarketResearchForm : Form
         return button;
     }
 
-    private static void ConfigureButton(Button button, string text)
+    private static void ConfigureButton(Button button, string text, bool isSecondary = false)
     {
         button.Dock = DockStyle.Fill;
         button.Text = text;
-        button.BackColor = Color.FromArgb(32, 97, 165);
+        button.BackColor = isSecondary ? UiStyle.SecondaryColor : UiStyle.PrimaryColor;
         button.ForeColor = Color.White;
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = isSecondary ? UiStyle.SecondaryHover : UiStyle.PrimaryHover;
+        button.Font = UiStyle.SemiboldBaseFont;
         button.Margin = new Padding(6, 3, 0, 6);
     }
 

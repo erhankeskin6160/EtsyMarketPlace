@@ -35,8 +35,7 @@ internal sealed class OwnShopPerformanceForm(
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 760);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyTheme(this);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(20) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
@@ -50,13 +49,13 @@ internal sealed class OwnShopPerformanceForm(
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 420));
         _titleLabel.Dock = DockStyle.Fill;
         _titleLabel.Text = "Kendi Etsy Magazam";
-        _titleLabel.Font = new Font("Segoe UI Semibold", 22F);
-        _titleLabel.ForeColor = Color.FromArgb(23, 32, 49);
+        _titleLabel.Font = UiStyle.TitleFont;
+        _titleLabel.ForeColor = UiStyle.TextDark;
         _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
         header.Controls.Add(_titleLabel, 0, 0);
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
@@ -90,7 +89,7 @@ internal sealed class OwnShopPerformanceForm(
             form.ShowDialog(this);
         };
         toolbar.Controls.Add(listingAi, 7, 0);
-        var api = CreateButton("API Ayarlari");
+        var api = CreateButton("API Ayarlari", isSecondary: true);
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
         toolbar.Controls.Add(api, 8, 0);
         root.Controls.Add(toolbar, 0, 1);
@@ -224,23 +223,15 @@ internal sealed class OwnShopPerformanceForm(
         _kpiChanges[key].Text = $"Onceki: {metric.Previous.ToString(format)} | {metric.Difference.ToString($"+{format};-{format};0")}{percentage}";
         _kpiChanges[key].ForeColor = metric.Difference switch
         {
-            > 0 => Color.FromArgb(20, 126, 76),
-            < 0 => Color.FromArgb(190, 57, 52),
-            _ => Color.FromArgb(82, 93, 110),
+            > 0 => UiStyle.SuccessColor,
+            < 0 => UiStyle.DangerColor,
+            _ => UiStyle.TextMuted,
         };
     }
 
     private void ConfigureProductsGrid()
     {
-        _productsGrid.Dock = DockStyle.Fill;
-        _productsGrid.ReadOnly = true;
-        _productsGrid.AutoGenerateColumns = false;
-        _productsGrid.AllowUserToAddRows = false;
-        _productsGrid.AllowUserToDeleteRows = false;
-        _productsGrid.RowHeadersVisible = false;
-        _productsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _productsGrid.BackgroundColor = Color.White;
-        _productsGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
+        UiStyle.ConfigureBaseGrid(_productsGrid);
         AddColumn("#", nameof(ProductComparisonRow.Rank), 45);
         AddColumn("Listing", nameof(ProductComparisonRow.ListingId), 90);
         AddColumn("Urun basligi", nameof(ProductComparisonRow.Title), 320, true);
@@ -256,15 +247,7 @@ internal sealed class OwnShopPerformanceForm(
 
     private void ConfigureHistoryGrid()
     {
-        _historyGrid.Dock = DockStyle.Fill;
-        _historyGrid.ReadOnly = true;
-        _historyGrid.AutoGenerateColumns = false;
-        _historyGrid.AllowUserToAddRows = false;
-        _historyGrid.AllowUserToDeleteRows = false;
-        _historyGrid.RowHeadersVisible = false;
-        _historyGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _historyGrid.BackgroundColor = Color.White;
-        _historyGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
+        UiStyle.ConfigureBaseGrid(_historyGrid);
         AddHistoryColumn("Kayit zamani", nameof(HistoryRow.CapturedAt), 150);
         AddHistoryColumn("Donem baslangici", nameof(HistoryRow.PeriodStart), 135);
         AddHistoryColumn("Donem bitisi", nameof(HistoryRow.PeriodEnd), 135);
@@ -297,14 +280,22 @@ internal sealed class OwnShopPerformanceForm(
 
     private void AddKpi(TableLayoutPanel parent, int column, string title, string key)
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, BackColor = Color.White, Margin = new Padding(column == 0 ? 0 : 5, 2, column == 4 ? 0 : 5, 4), Padding = new Padding(12, 7, 12, 7), CellBorderStyle = TableLayoutPanelCellBorderStyle.Single };
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3,
+            BackColor = UiStyle.CardBackground,
+            Margin = new Padding(column == 0 ? 0 : 5, 2, column == 4 ? 0 : 5, 4),
+            Padding = new Padding(12, 7, 12, 7),
+            CellBorderStyle = TableLayoutPanelCellBorderStyle.Single
+        };
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 23));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 23));
-        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, ForeColor = Color.FromArgb(82, 93, 110) }, 0, 0);
-        var value = new Label { Dock = DockStyle.Fill, Text = "-", Font = new Font("Segoe UI Semibold", 15F), ForeColor = Color.FromArgb(23, 32, 49), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, ForeColor = UiStyle.TextMuted, Font = UiStyle.BaseFont }, 0, 0);
+        var value = new Label { Dock = DockStyle.Fill, Text = "-", Font = UiStyle.KpiValueFont, ForeColor = UiStyle.TextDark, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         panel.Controls.Add(value, 0, 1);
-        var change = new Label { Dock = DockStyle.Fill, Text = "Onceki: -", Font = new Font("Segoe UI", 8.5F), ForeColor = Color.FromArgb(82, 93, 110), TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
+        var change = new Label { Dock = DockStyle.Fill, Text = "Onceki: -", Font = new Font("Segoe UI", 8.5F), ForeColor = UiStyle.TextMuted, TextAlign = ContentAlignment.MiddleLeft, AutoEllipsis = true };
         panel.Controls.Add(change, 0, 2);
         _kpiValues[key] = value;
         _kpiChanges[key] = change;
@@ -325,25 +316,26 @@ internal sealed class OwnShopPerformanceForm(
         picker.CustomFormat = "dd.MM.yyyy";
     }
 
-    private static Label LabelFor(string text) => new() { Dock = DockStyle.Fill, Text = text, TextAlign = ContentAlignment.MiddleLeft };
+    private static Label LabelFor(string text) => new() { Dock = DockStyle.Fill, Text = text, ForeColor = UiStyle.TextDark, TextAlign = ContentAlignment.MiddleLeft };
 
-    private static Button CreateButton(string text)
+    private static Button CreateButton(string text, bool isSecondary = false)
     {
-        var button = new Button
-        {
-            Dock = DockStyle.Fill,
-            Text = text,
-            BackColor = Color.FromArgb(32, 97, 165),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI Semibold", 9.5F),
-            TextAlign = ContentAlignment.MiddleCenter,
-            UseVisualStyleBackColor = false,
-            AutoEllipsis = true,
-            Margin = new Padding(6, 2, 0, 2),
-        };
-        button.FlatAppearance.BorderSize = 0;
+        var button = new Button();
+        ConfigureButton(button, text, isSecondary);
         return button;
+    }
+
+    private static void ConfigureButton(Button button, string text, bool isSecondary = false)
+    {
+        button.Dock = DockStyle.Fill;
+        button.Text = text;
+        button.BackColor = isSecondary ? UiStyle.SecondaryColor : UiStyle.PrimaryColor;
+        button.ForeColor = Color.White;
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = isSecondary ? UiStyle.SecondaryHover : UiStyle.PrimaryHover;
+        button.Font = UiStyle.SemiboldBaseFont;
+        button.Margin = new Padding(6, 2, 0, 2);
     }
 
     private sealed class ProductComparisonRow(int rank, ProductPerformanceComparison item)
