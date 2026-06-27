@@ -422,12 +422,14 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
                 listing.Tags,
                 PrimaryKeyword());
             var result = await aiOptimizer.OptimizeAsync(input);
-            _titleTextBox.Text = SelectRelevantTitle(result.TitleSuggestions, listing);
-            _descriptionTextBox.Text = result.DescriptionDraft;
+            var materials = EtsyApiClient.NormalizeListingMaterialsForEtsy(result.MaterialSuggestions);
+            _titleTextBox.Text = SelectEnglishTitle(result.TitleSuggestions, listing);
+            _descriptionTextBox.Text = SelectEnglishDescription(result.DescriptionDraft, listing, materials);
             _tagsTextBox.Text = string.Join(", ", result.TagSuggestions.Take(13));
-            _materialsTextBox.Text = string.Join(", ", EtsyApiClient.NormalizeListingMaterialsForEtsy(result.MaterialSuggestions));
+            _materialsTextBox.Text = string.Join(", ", materials);
+            ApplyDraftCategoryRecommendation(listing);
             _imagePromptTextBox.Text = BuildImagePrompt();
-            _notesTextBox.Text = "AI taslak hazir. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
+            _notesTextBox.Text = "AI taslak hazir. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
             _statusLabel.Text = "Listing taslagi uretildi";
         }
         catch (Exception ex)
@@ -853,21 +855,34 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     {
         var parts = new[]
         {
+            "OUTPUT LANGUAGE: English only. Do not write Turkish.",
             $"Selected marketplace listing: {listing.Title}",
             $"Etsy search keyword: {PrimaryKeyword()}",
             $"Use the selected listing as the product reference",
+            "Infer the best Etsy product category from the product itself, not from unrelated competitor categories.",
         };
         return string.Join(" | ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 
     private string BuildDraftSourceDescription(MarketListingResult listing) =>
+        "OUTPUT LANGUAGE: English only. Title, description, tags, materials, checklist, and warnings must be written in English. " +
+        "Never write Turkish words such as urun, icin, taslak, listeleme, aciklama, or musteri. " +
         "Write the Etsy draft for the selected listing's actual product type and the user's search intent. " +
         "Do not switch to another character, object, theme, or product name from unrelated tags. " +
         "Use the selected listing title as the main product anchor, then make original buyer-facing English copy. " +
+        "Choose the most accurate Etsy category/taxonomy concept from the actual product type and buyer intent. " +
+        "If the competitor category conflicts with the product, prefer the real product type. " +
         "Avoid official, licensed, endorsed, or affiliated claims unless legally proven. " +
         $"Selected listing title: {listing.Title}{Environment.NewLine}" +
         $"Etsy search keyword: {PrimaryKeyword()}{Environment.NewLine}" +
+        $"Current competitor category: {listing.TaxonomyDisplay}{Environment.NewLine}" +
         $"Competitor description: {listing.Description}";
+
+    private string SelectEnglishTitle(IReadOnlyList<string> suggestions, MarketListingResult listing)
+    {
+        var title = SelectRelevantTitle(suggestions, listing);
+        return LooksLikeTurkish(title) ? BuildSafeTitle(listing) : title;
+    }
 
     private string SelectRelevantTitle(IReadOnlyList<string> suggestions, MarketListingResult listing)
     {
@@ -876,6 +891,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         {
             var title = suggestion.Trim();
             if (title.Length == 0) continue;
+            if (LooksLikePromptLeak(title)) continue;
             if (requiredTerms.Count == 0 || requiredTerms.Any(term => title.Contains(term, StringComparison.OrdinalIgnoreCase)))
             {
                 return title.Length <= 140 ? title : title[..140].TrimEnd();
@@ -883,6 +899,148 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         }
 
         return BuildSafeTitle(listing);
+    }
+
+    private string SelectEnglishDescription(
+        string description,
+        MarketListingResult listing,
+        IReadOnlyList<string> materialSuggestions)
+    {
+        var cleanDescription = description.Trim();
+        if (cleanDescription.Length > 0 && !LooksLikeTurkish(cleanDescription))
+        {
+            return cleanDescription;
+        }
+
+        var title = SelectRelevantTitle([listing.Title], listing);
+        var tags = listing.Tags.Count > 0
+            ? string.Join(", ", listing.Tags.Take(8))
+            : PrimaryKeyword();
+        var materialText = string.Join(", ", materialSuggestions);
+        var materials = materialText.Length > 0 ? materialText : "quality materials";
+
+        return
+            $"{title} is prepared as an Etsy-ready product listing based on the selected marketplace reference and search intent.{Environment.NewLine}{Environment.NewLine}" +
+            $"This item is positioned for buyers searching for {tags}. It is written as original English copy for a clear Etsy title, searchable tags, and a buyer-friendly description.{Environment.NewLine}{Environment.NewLine}" +
+            $"Materials: {materials}.{Environment.NewLine}" +
+            "Please review the final product details, measurements, production method, and any brand or character references before publishing.";
+    }
+
+    private void ApplyDraftCategoryRecommendation(MarketListingResult selectedListing)
+    {
+        var recommended = BestCategoryCandidate(selectedListing);
+        if (recommended.TaxonomyId <= 0)
+        {
+            return;
+        }
+
+        _taxonomyInput.Text = recommended.TaxonomyId.ToString(CultureInfo.InvariantCulture);
+        _categoryTextBox.Text = recommended.TaxonomyDisplay;
+    }
+
+    private MarketListingResult BestCategoryCandidate(MarketListingResult fallback)
+    {
+        var draftText = $"{_titleTextBox.Text} {_descriptionTextBox.Text} {_tagsTextBox.Text} {PrimaryKeyword()}";
+        var draftTerms = CategoryTerms(draftText);
+        if (draftTerms.Count == 0)
+        {
+            return fallback;
+        }
+
+        return _rows
+            .Select(row => row.Listing)
+            .Where(listing => listing.TaxonomyId > 0)
+            .Select(listing => new
+            {
+                Listing = listing,
+                Score = CategoryScore(listing, draftTerms),
+            })
+            .OrderByDescending(item => item.Score)
+            .ThenByDescending(item => item.Listing.SeoScore)
+            .ThenByDescending(item => item.Listing.Favorites)
+            .FirstOrDefault(item => item.Score > 0)?.Listing ?? fallback;
+    }
+
+    private static int CategoryScore(MarketListingResult listing, IReadOnlyList<string> draftTerms)
+    {
+        var text = $"{listing.Title} {listing.TaxonomyDisplay} {listing.Description} {string.Join(' ', listing.Tags)}";
+        var score = draftTerms.Sum(term => text.Contains(term, StringComparison.OrdinalIgnoreCase) ? 3 : 0);
+        if (listing.TaxonomyName.Length > 0)
+        {
+            score += draftTerms.Sum(term => listing.TaxonomyName.Contains(term, StringComparison.OrdinalIgnoreCase) ? 4 : 0);
+        }
+
+        score += CategoryIntentBonus(text);
+        return score;
+    }
+
+    private static int CategoryIntentBonus(string value)
+    {
+        var text = value.ToLowerInvariant();
+        var isPhysicalCollectible = ContainsAny(text, "bust", "statue", "figurine", "figure", "sculpture", "collectible", "miniature");
+        if (!isPhysicalCollectible)
+        {
+            return 0;
+        }
+
+        var bonus = 0;
+        if (ContainsAny(text, "art & collectibles", "sculpture", "figurines", "dolls & miniatures", "collectibles"))
+        {
+            bonus += 18;
+        }
+
+        if (ContainsAny(text, "patterns & how to", "craft supplies", "digital", "stl", "file", "download", "template"))
+        {
+            bonus -= 14;
+        }
+
+        return bonus;
+    }
+
+    private static bool ContainsAny(string value, params string[] terms) =>
+        terms.Any(term => value.Contains(term, StringComparison.OrdinalIgnoreCase));
+
+    private static IReadOnlyList<string> CategoryTerms(string value)
+    {
+        var blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "and", "with", "for", "from", "gift", "custom", "handmade", "printed", "print", "file", "files",
+            "digital", "adult", "kids", "etsy", "ready", "listing", "selected", "marketplace", "product", "buyer",
+            "description", "title", "search", "intent", "quality", "materials"
+        };
+        return value
+            .Split([' ', '-', '|', ',', '/', '(', ')', ':', ';', '.', '\'', '"'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(term => term.Trim())
+            .Where(term => term.Length >= 4 && !blocked.Contains(term))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(16)
+            .ToList();
+    }
+
+    private static bool LooksLikeTurkish(string value)
+    {
+        if (value.IndexOfAny(['ı', 'İ', 'ğ', 'Ğ', 'ş', 'Ş', 'ö', 'Ö', 'ü', 'Ü', 'ç', 'Ç']) >= 0)
+        {
+            return true;
+        }
+
+        var text = $" {value.ToLowerInvariant()} ";
+        var markers = new[]
+        {
+            " icin ", " urun ", " urunu ", " listeleme ", " taslak ", " aciklama ", " alici ", " muster",
+            " konumlandiril", " optimize edilmis ", " hazirlandi ", " arayan ", " magaza "
+        };
+        return markers.Any(text.Contains);
+    }
+
+    private static bool LooksLikePromptLeak(string value)
+    {
+        var text = value.ToLowerInvariant();
+        return text.Contains("selected marketplace")
+            || text.Contains("selected listing")
+            || text.Contains("listing selected")
+            || text.Contains("etsy draft")
+            || text.Contains("search keyword");
     }
 
     private IReadOnlyList<string> ImagePrompts()
