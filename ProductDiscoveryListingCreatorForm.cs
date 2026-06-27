@@ -33,8 +33,11 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     private readonly ComboBox _listingTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _shippingProfileComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _readinessStateComboBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
+    private readonly PictureBox _previewPictureBox = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
+    private readonly Label _imageCounterLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
     private readonly Label _statusLabel = new();
     private List<IdeaRow> _rows = [];
+    private int _selectedImageIndex;
 
     private IdeaRow? SelectedRow => _bindingSource.Current as IdeaRow;
 
@@ -138,18 +141,21 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
 
-        var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6 };
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
         left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        left.RowStyles.Add(new RowStyle(SizeType.Percent, 44));
+        left.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
         left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        left.RowStyles.Add(new RowStyle(SizeType.Percent, 56));
-        left.Controls.Add(LabelFor("Baslik"), 0, 0);
+        left.RowStyles.Add(new RowStyle(SizeType.Percent, 62));
+        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
+        left.Controls.Add(BuildImagePreviewPanel(), 0, 0);
+        left.Controls.Add(LabelFor("Baslik"), 0, 1);
         _titleTextBox.Dock = DockStyle.Fill;
         _titleTextBox.Multiline = true;
-        left.Controls.Add(_titleTextBox, 0, 1);
-        left.Controls.Add(LabelFor("Aciklama"), 0, 2);
+        left.Controls.Add(_titleTextBox, 0, 2);
+        left.Controls.Add(LabelFor("Aciklama"), 0, 3);
         ConfigureMultiline(_descriptionTextBox);
-        left.Controls.Add(_descriptionTextBox, 0, 3);
+        left.Controls.Add(_descriptionTextBox, 0, 4);
         layout.Controls.Add(left, 0, 0);
 
         var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6 };
@@ -214,6 +220,29 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         return layout;
     }
 
+    private Control BuildImagePreviewPanel()
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(0, 0, 8, 8) };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+
+        panel.Controls.Add(_previewPictureBox, 0, 0);
+        panel.SetColumnSpan(_previewPictureBox, 3);
+
+        var previous = CreateButton("<");
+        previous.Click += async (_, _) => await MoveSelectedImageAsync(-1);
+        panel.Controls.Add(previous, 0, 1);
+        _imageCounterLabel.Text = "Resim yok";
+        panel.Controls.Add(_imageCounterLabel, 1, 1);
+        var next = CreateButton(">");
+        next.Click += async (_, _) => await MoveSelectedImageAsync(1);
+        panel.Controls.Add(next, 2, 1);
+        return panel;
+    }
+
     private void ConfigureGrid()
     {
         _grid.Dock = DockStyle.Fill;
@@ -224,6 +253,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         _grid.RowHeadersVisible = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.BackgroundColor = Color.White;
+        _grid.RowTemplate.Height = 68;
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => FillFromSelectedIdea();
         _grid.CellDoubleClick += (_, _) => OpenSelectedCompetitorListing();
@@ -234,6 +264,13 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
                 OpenUrl((_grid.Rows[e.RowIndex].DataBoundItem as IdeaRow)?.Listing.ListingUrl);
             }
         };
+        _grid.Columns.Add(new DataGridViewImageColumn
+        {
+            HeaderText = "Resim",
+            DataPropertyName = nameof(IdeaRow.Thumbnail),
+            ImageLayout = DataGridViewImageCellLayout.Zoom,
+            Width = 78,
+        });
         AddColumn("Firsat", nameof(IdeaRow.Opportunity), 70);
         AddColumn("Urun fikri", nameof(IdeaRow.Title), 380, true);
         _grid.Columns.Add(new DataGridViewButtonColumn
@@ -250,7 +287,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         AddColumn("Favori", nameof(IdeaRow.Favorites), 75);
         AddColumn("Goruntulenme", nameof(IdeaRow.Views), 105);
         AddColumn("SEO", nameof(IdeaRow.Seo), 60);
-        AddColumn("Taxonomy", nameof(IdeaRow.TaxonomyId), 90);
+        AddColumn("Kategori", nameof(IdeaRow.Category), 170);
         AddColumn("Tagler", nameof(IdeaRow.Tags), 320);
     }
 
@@ -305,6 +342,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
                 .Select(item => new IdeaRow(item))
                 .OrderByDescending(row => row.OpportunityScore)
                 .ToList();
+            await EnrichCategoriesAsync(settings);
+            await LoadGridThumbnailsAsync();
             _bindingSource.DataSource = _rows;
             _statusLabel.Text = $"{_rows.Count} Etsy urunu listelendi";
             FillFromSelectedIdea();
@@ -462,6 +501,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     {
         if (SelectedRow is null) return;
         var listing = SelectedRow.Listing;
+        _selectedImageIndex = 0;
+        _ = ShowSelectedImageAsync();
         if (string.IsNullOrWhiteSpace(_titleTextBox.Text))
         {
             _titleTextBox.Text = BuildSafeTitle(listing);
@@ -490,6 +531,158 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             $"Magaza: {listing.ShopName} | Satis: {listing.ShopSales:N0} | Favori: {listing.Favorites:N0}{Environment.NewLine}" +
             $"Rakip listing: {listing.ListingUrl}{Environment.NewLine}" +
             "Bu veri ilham ve pazar analizi icindir; birebir kopyalama yapma.";
+    }
+
+    private async Task EnrichCategoriesAsync(EtsyApiSettings settings)
+    {
+        var ids = _rows.Select(row => row.Listing.TaxonomyId).Where(id => id > 0).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return;
+        }
+
+        _statusLabel.Text = "Kategori adlari aliniyor...";
+        var names = await _apiClient.GetSellerTaxonomyNamesAsync(settings, ids);
+        foreach (var row in _rows)
+        {
+            if (names.TryGetValue(row.Listing.TaxonomyId, out var name))
+            {
+                row.Listing.TaxonomyName = name;
+            }
+        }
+    }
+
+    private async Task LoadGridThumbnailsAsync()
+    {
+        _statusLabel.Text = "Urun gorselleri yukleniyor...";
+        foreach (var row in _rows)
+        {
+            var imageUrl = row.Listing.ImageUrls.FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(imageUrl))
+            {
+                imageUrl = row.Listing.ImageUrl;
+            }
+
+            if (string.IsNullOrWhiteSpace(imageUrl))
+            {
+                continue;
+            }
+
+            try
+            {
+                using var image = await DownloadImageAsync(imageUrl);
+                row.Listing.ThumbnailImage = CreateThumbnail(image, 72, 58);
+            }
+            catch
+            {
+                // Gorsel yoksa listeyi yine kullanilabilir tut.
+            }
+        }
+    }
+
+    private async Task MoveSelectedImageAsync(int delta)
+    {
+        if (SelectedRow is null)
+        {
+            return;
+        }
+
+        var listing = SelectedRow.Listing;
+        await EnsureListingImagesAsync(listing);
+        var count = ImageUrlsFor(listing).Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        _selectedImageIndex = (_selectedImageIndex + delta + count) % count;
+        await ShowSelectedImageAsync();
+    }
+
+    private async Task ShowSelectedImageAsync()
+    {
+        if (SelectedRow is null)
+        {
+            SetPreviewImage(null, "Resim yok");
+            return;
+        }
+
+        var listing = SelectedRow.Listing;
+        await EnsureListingImagesAsync(listing);
+        var urls = ImageUrlsFor(listing);
+        if (urls.Count == 0)
+        {
+            SetPreviewImage(null, "Resim yok");
+            return;
+        }
+
+        _selectedImageIndex = Math.Clamp(_selectedImageIndex, 0, urls.Count - 1);
+        try
+        {
+            var image = await DownloadImageAsync(urls[_selectedImageIndex]);
+            SetPreviewImage(image, $"{_selectedImageIndex + 1} / {urls.Count}");
+        }
+        catch
+        {
+            SetPreviewImage(null, "Resim yuklenemedi");
+        }
+    }
+
+    private async Task EnsureListingImagesAsync(MarketListingResult listing)
+    {
+        if (listing.ImageUrls.Count > 0 || listing.ListingId <= 0)
+        {
+            return;
+        }
+
+        var settings = EtsyApiSettingsStore.Load();
+        listing.ImageUrls = await _apiClient.GetListingImagesAsync(settings, listing.ListingId);
+        EtsyApiSettingsStore.Save(settings);
+    }
+
+    private static IReadOnlyList<string> ImageUrlsFor(MarketListingResult listing)
+    {
+        if (listing.ImageUrls.Count > 0)
+        {
+            return listing.ImageUrls;
+        }
+
+        return string.IsNullOrWhiteSpace(listing.ImageUrl) ? [] : [listing.ImageUrl];
+    }
+
+    private async Task<Image> DownloadImageAsync(string imageUrl)
+    {
+        var bytes = await _imageHttpClient.GetByteArrayAsync(imageUrl);
+        await using var stream = new MemoryStream(bytes);
+        using var image = Image.FromStream(stream);
+        return new Bitmap(image);
+    }
+
+    private static Image CreateThumbnail(Image image, int width, int height)
+    {
+        var thumbnail = new Bitmap(width, height);
+        using var graphics = Graphics.FromImage(thumbnail);
+        graphics.Clear(Color.White);
+        graphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        var ratio = Math.Min(width / (float)image.Width, height / (float)image.Height);
+        var targetWidth = (int)(image.Width * ratio);
+        var targetHeight = (int)(image.Height * ratio);
+        var x = (width - targetWidth) / 2;
+        var y = (height - targetHeight) / 2;
+        graphics.DrawImage(image, x, y, targetWidth, targetHeight);
+        return thumbnail;
+    }
+
+    private void SetPreviewImage(Image? image, string counterText)
+    {
+        var oldImage = _previewPictureBox.Image;
+        _previewPictureBox.Image = image;
+        if (oldImage is not null && !ReferenceEquals(oldImage, image))
+        {
+            oldImage.Dispose();
+        }
+
+        _imageCounterLabel.Text = counterText;
     }
 
     private bool TryBuildDraftRequest(out DraftListingCreateRequest draft, out string message)
@@ -955,6 +1148,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         public string Views => Listing.Views.ToString("N0");
         public string Seo => Listing.SeoScore.ToString(CultureInfo.InvariantCulture);
         public string TaxonomyId => Listing.TaxonomyId > 0 ? Listing.TaxonomyId.ToString(CultureInfo.InvariantCulture) : "-";
+        public Image? Thumbnail => Listing.ThumbnailImage;
+        public string Category => Listing.TaxonomyDisplay;
         public string Tags => string.Join(", ", Listing.Tags.Take(10));
     }
 }
