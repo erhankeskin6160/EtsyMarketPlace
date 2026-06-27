@@ -387,9 +387,10 @@ internal sealed class AiListingImageGenerator
         var safeTitle = SanitizeForImagePrompt(listing.Title);
         var safeUserPrompt = SanitizeForImagePrompt(userPrompt);
         return
-            "Edit the provided product photo for an Etsy listing. Keep the exact same physical product, shape, color, proportions, and visible details from the reference image. " +
+            "Edit the provided product photo for an Etsy listing. Preserve the same product category, silhouette, pose, scale, proportions, and main physical details from the reference image. " +
             "Do not invent a different product, do not add accessories, do not add brand logos, do not add characters, and do not add readable text or watermark. " +
-            "Only improve the marketplace presentation: clean neutral background, realistic studio lighting, sharper product focus, natural shadow, centered e-commerce composition. " +
+            "Improve the marketplace presentation: clean neutral background, realistic studio lighting, sharper product focus, natural shadow, centered e-commerce composition. " +
+            "If the seller requests a painted or premium collectible look, add tasteful realistic hand-painted miniature colors while keeping the original product shape and structure recognizable. " +
             $"Reference product title for context: {safeTitle}. Seller background/style request: {safeUserPrompt}";
     }
 
