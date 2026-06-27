@@ -91,13 +91,13 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
 
     private Control BuildToolbar()
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 2, Padding = new Padding(0, 0, 0, 8) };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 10, RowCount = 2, Padding = new Padding(0, 0, 0, 8) };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
-        for (var index = 5; index < 9; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135));
+        for (var index = 5; index < 10; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
@@ -126,14 +126,17 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         var open = CreateButton("Kaynak Ac");
         open.Click += (_, _) => OpenSelectedSource();
         toolbar.Controls.Add(open, 6, 0);
+        var verify = CreateButton("Etsy'de Dogrula");
+        verify.Click += (_, _) => VerifyOnEtsy();
+        toolbar.Controls.Add(verify, 7, 0);
         var aiDraft = CreateButton("AI Taslak");
         aiDraft.Click += async (_, _) => await GenerateAiDraftAsync();
-        toolbar.Controls.Add(aiDraft, 7, 0);
+        toolbar.Controls.Add(aiDraft, 8, 0);
         var create = CreateButton("Etsy Taslak");
         create.BackColor = Color.FromArgb(20, 126, 76);
         create.Click += async (_, _) => await CreateDraftListingAsync();
-        toolbar.Controls.Add(create, 8, 0);
-        foreach (var button in new[] { search, open, aiDraft, create })
+        toolbar.Controls.Add(create, 9, 0);
+        foreach (var button in new[] { search, open, verify, aiDraft, create })
         {
             toolbar.SetRowSpan(button, 2);
         }
@@ -219,14 +222,17 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         var ai = CreateButton("AI Taslak Uret");
         ai.Click += async (_, _) => await GenerateAiDraftAsync();
         right.Controls.Add(ai, 0, 13);
+        var verify = CreateButton("Etsy'de Dogrula");
+        verify.Click += (_, _) => VerifyOnEtsy();
+        right.Controls.Add(verify, 0, 14);
         var create = CreateButton("Etsy Taslak Ekle");
         create.BackColor = Color.FromArgb(20, 126, 76);
         create.Click += async (_, _) => await CreateDraftListingAsync();
-        right.Controls.Add(create, 0, 14);
+        right.Controls.Add(create, 0, 15);
         var close = CreateButton("Kapat");
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
-        right.Controls.Add(close, 0, 15);
+        right.Controls.Add(close, 0, 16);
         layout.Controls.Add(right, 2, 0);
         return layout;
     }
@@ -418,6 +424,24 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
 
     private void OpenSelectedSource() => OpenUrl(SelectedIdea?.ProductUrl ?? _externalUrlTextBox.Text);
 
+    private void VerifyOnEtsy()
+    {
+        var keyword = _externalTitleTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            keyword = _keywordTextBox.Text.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(keyword))
+        {
+            MessageBox.Show(this, "Etsy'de dogrulamak icin once dis kaynak basligi veya aranacak urun gir.", "Etsy'de dogrula", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new ProductDiscoveryListingCreatorForm(aiOptimizer, keyword);
+        form.ShowDialog(this);
+    }
+
     private async Task LoadShippingProfilesAsync()
     {
         if (_shippingProfileComboBox.Items.Count > 0 || IsDigitalListingSelected())
@@ -467,9 +491,13 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     }
 
     private string BuildExternalDescriptionForAi() =>
-        "Create an original Etsy listing draft inspired by this external marketplace product research. " +
-        "Do not copy competitor wording. Avoid official, licensed, endorsed, or affiliated claims unless legally proven. " +
-        $"Shop type: {_shopTypeTextBox.Text.Trim()}. External source URL: {_externalUrlTextBox.Text.Trim()}.";
+        "Create an original Etsy listing draft in English inspired by this external marketplace product research. " +
+        "Do not copy competitor wording. Do not claim official, licensed, endorsed, branded, or affiliated status unless legally proven. " +
+        "Keep the Etsy title, tags, materials, and description buyer-facing and English. Use Turkish only inside risk warnings if needed. " +
+        $"Shop type: {_shopTypeTextBox.Text.Trim()}. " +
+        $"External product title: {_externalTitleTextBox.Text.Trim()}. " +
+        $"External source URL: {_externalUrlTextBox.Text.Trim()}. " +
+        $"Research notes: {_notesTextBox.Text.Trim()}.";
 
     private IReadOnlyList<string> BuildSeedTags() =>
         SplitCommaList($"{_shopTypeTextBox.Text}, {_keywordTextBox.Text}, {_externalTitleTextBox.Text}")

@@ -27,19 +27,61 @@ internal sealed class ExternalMarketplaceSearchService
         }
 
         var query = BuildQuery(shopType, cleanKeyword);
-        var encoded = Uri.EscapeDataString(query);
         return Sources
             .Where(source => enabledSources.Count == 0 || enabledSources.Contains(source.Name, StringComparer.OrdinalIgnoreCase))
-            .Select(source => new ExternalProductIdea
+            .SelectMany(source => BuildSourceIdeas(source, query, shopType, cleanKeyword))
+            .OrderByDescending(idea => idea.OpportunityScore)
+            .ToList();
+    }
+
+    private static IReadOnlyList<ExternalProductIdea> BuildSourceIdeas(
+        ExternalSource source,
+        string query,
+        string shopType,
+        string keyword)
+    {
+        var variants = new[]
+        {
+            new QueryVariant(query, "Genel urun aramasi", 0),
+            new QueryVariant($"{query} best seller", "Cok satan sinyali aramasi", 4),
+            new QueryVariant($"{query} handmade", "El yapimi/Etsy uyumu aramasi", 3),
+        };
+
+        return variants
+            .Select(variant =>
             {
-                Source = source.Name,
-                Title = $"{query} icin {source.Name} aramasi",
-                SearchUrl = string.Format(source.SearchUrlFormat, encoded),
-                ProductUrl = string.Format(source.SearchUrlFormat, encoded),
-                OpportunityScore = source.BaseScore,
-                Notes = "Kaynakta ac, uygun urunu incele, sonra baslik/fiyat/link alanlarini elle netlestir. Otomatik kazima yerine onayli arastirma akisi kullanilir.",
+                var encoded = Uri.EscapeDataString(variant.Query);
+                var url = string.Format(source.SearchUrlFormat, encoded);
+                return new ExternalProductIdea
+                {
+                    Source = source.Name,
+                    Title = $"{keyword.Trim()} - {source.Name} {variant.Label}",
+                    SearchUrl = url,
+                    ProductUrl = url,
+                    OpportunityScore = Math.Clamp(source.BaseScore + variant.Bonus + ShopTypeBonus(shopType, source.Name), 0, 100),
+                    Notes = $"{variant.Label}. Kaynakta ac, uygun urunu incele, sonra dis kaynak basligi/fiyat/link alanlarini elle netlestir. Otomatik kazima yerine onayli arastirma akisi kullanilir.",
+                };
             })
             .ToList();
+    }
+
+    private static int ShopTypeBonus(string shopType, string sourceName)
+    {
+        var text = shopType.ToLowerInvariant();
+        if ((text.Contains("3d") || text.Contains("cosplay") || text.Contains("prop")) &&
+            sourceName.Contains("eBay", StringComparison.OrdinalIgnoreCase))
+        {
+            return 5;
+        }
+
+        if ((text.Contains("yatak") || text.Contains("bed")) &&
+            (sourceName.Contains("Trendyol", StringComparison.OrdinalIgnoreCase) ||
+             sourceName.Contains("Hepsiburada", StringComparison.OrdinalIgnoreCase)))
+        {
+            return 5;
+        }
+
+        return 0;
     }
 
     private static string BuildQuery(string shopType, string keyword)
@@ -51,4 +93,6 @@ internal sealed class ExternalMarketplaceSearchService
     }
 
     private sealed record ExternalSource(string Name, string SearchUrlFormat, int BaseScore);
+
+    private sealed record QueryVariant(string Query, string Label, int Bonus);
 }
