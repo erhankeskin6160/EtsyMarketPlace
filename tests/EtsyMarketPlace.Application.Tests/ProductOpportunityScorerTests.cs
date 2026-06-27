@@ -59,4 +59,26 @@ public sealed class ProductOpportunityScorerTests
         Assert.True(riskyScore.Risk > safeScore.Risk);
         Assert.True(riskyScore.Opportunity < safeScore.Opportunity);
     }
+
+    [Fact]
+    public void DetectRiskTerms_ReturnsMatchedTrademarkTerms()
+    {
+        var scorer = new ProductOpportunityScorer();
+        var terms = scorer.DetectRiskTerms(new ProductOpportunityInput(
+            "Gandalf Lord of the Rings LOTR Bust",
+            "Fantasy collectible inspired decor.",
+            ["gandalf", "lotr bust"],
+            68,
+            120,
+            3000,
+            500,
+            72,
+            2,
+            "wizard bust",
+            "Art & Collectibles"));
+
+        Assert.Contains("gandalf", terms);
+        Assert.Contains("lotr", terms);
+        Assert.Contains("lord of the rings", terms);
+    }
 }

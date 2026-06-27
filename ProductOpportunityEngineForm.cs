@@ -82,15 +82,17 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
 
     private Control BuildToolbar()
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 10, RowCount = 2, Padding = new Padding(0, 8, 0, 8) };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 12, RowCount = 2, Padding = new Padding(0, 8, 0, 8) };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 124));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
 
@@ -120,18 +122,26 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
         _searchButton.Click += async (_, _) => await SearchOpportunitiesAsync();
         toolbar.Controls.Add(_searchButton, 6, 0);
 
-        var ai = CreateButton("AI ile Yorumla");
+        var ai = CreateButton("AI Strateji");
         ai.Click += async (_, _) => await ExplainSelectedAsync();
         toolbar.Controls.Add(ai, 7, 0);
 
+        var safe = CreateButton("Guvenli Ad");
+        safe.Click += async (_, _) => await GenerateSafePositioningAsync();
+        toolbar.Controls.Add(safe, 8, 0);
+
+        var variation = CreateButton("Varyasyon");
+        variation.Click += async (_, _) => await GenerateVariationIdeasAsync();
+        toolbar.Controls.Add(variation, 9, 0);
+
         var send = CreateButton("Listinge Gonder");
         send.Click += (_, _) => SendToListingCreator();
-        toolbar.Controls.Add(send, 8, 0);
+        toolbar.Controls.Add(send, 10, 0);
 
         var close = CreateButton("Kapat");
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
-        toolbar.Controls.Add(close, 9, 0);
+        toolbar.Controls.Add(close, 11, 0);
 
         toolbar.Controls.Add(LabelFor("Dahil"), 0, 1);
         _includeTextBox.Dock = DockStyle.Fill;
@@ -165,6 +175,8 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
         var api = CreateButton("API Ayarlari");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
         toolbar.Controls.Add(api, 9, 1);
+        toolbar.Controls.Add(new Panel { Dock = DockStyle.Fill }, 10, 1);
+        toolbar.Controls.Add(new Panel { Dock = DockStyle.Fill }, 11, 1);
         return toolbar;
     }
 
@@ -190,7 +202,7 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
         _aiTextBox.ReadOnly = true;
         _aiTextBox.ScrollBars = ScrollBars.Vertical;
         _aiTextBox.BackColor = Color.White;
-        _aiTextBox.Text = "AI ile Yorumla butonuna basinca secili firsat icin strateji burada gorunecek.";
+        _aiTextBox.Text = "AI Strateji, Guvenli Ad veya Varyasyon butonuna basinca secili firsat icin analiz burada gorunecek.";
         detail.Controls.Add(_aiTextBox, 2, 0);
         return detail;
     }
@@ -285,35 +297,65 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
 
     private async Task ExplainSelectedAsync()
     {
+        await RunAiOpportunityAnalysisAsync(
+            "AI STRATEJI",
+            "AI firsat stratejisi yaziyor...",
+            "AI firsat yorumu hazir",
+            "AI stratejisi alinamadi",
+            BuildAiOpportunityPrompt);
+    }
+
+    private async Task GenerateSafePositioningAsync()
+    {
+        await RunAiOpportunityAnalysisAsync(
+            "GUVENLI ADLANDIRMA",
+            "AI guvenli urun konumu yaziyor...",
+            "Guvenli adlandirma hazir",
+            "Guvenli adlandirma alinamadi",
+            BuildSafePositioningPrompt);
+    }
+
+    private async Task GenerateVariationIdeasAsync()
+    {
+        await RunAiOpportunityAnalysisAsync(
+            "VARYASYON FIKIRLERI",
+            "AI varyasyon fikirleri yaziyor...",
+            "Varyasyon fikirleri hazir",
+            "Varyasyon fikirleri alinamadi",
+            BuildVariationPrompt);
+    }
+
+    private async Task RunAiOpportunityAnalysisAsync(
+        string heading,
+        string loadingStatus,
+        string successStatus,
+        string failedStatus,
+        Func<OpportunityRow, string> promptFactory)
+    {
         var row = SelectedRow;
         if (row is null)
         {
-            MessageBox.Show(this, "AI yorumu icin bir firsat secin.", "AI ile Yorumla", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "AI analizi icin bir firsat secin.", heading, MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
         try
         {
             UseWaitCursor = true;
-            _statusLabel.Text = "AI firsat stratejisi yaziyor...";
+            _statusLabel.Text = loadingStatus;
             var input = new ListingOptimizationInput(
                 $"Opportunity product: {row.Listing.Title}",
-                BuildAiOpportunityPrompt(row),
+                promptFactory(row),
                 row.Listing.Tags,
                 SearchKeyword());
             var result = await aiListingOptimizer.OptimizeAsync(input);
-            _aiTextBox.Text =
-                $"AI STRATEJI{Environment.NewLine}{result.DescriptionDraft}{Environment.NewLine}{Environment.NewLine}" +
-                $"BASLIK ONERILERI{Environment.NewLine}{string.Join(Environment.NewLine, result.TitleSuggestions)}{Environment.NewLine}{Environment.NewLine}" +
-                $"TAG ONERILERI{Environment.NewLine}{string.Join(", ", result.TagSuggestions)}{Environment.NewLine}{Environment.NewLine}" +
-                $"RISKLER{Environment.NewLine}{string.Join(Environment.NewLine, result.RiskWarnings.DefaultIfEmpty("-"))}{Environment.NewLine}{Environment.NewLine}" +
-                $"AKSIYON{Environment.NewLine}{string.Join(Environment.NewLine, result.ActionChecklist)}";
-            _statusLabel.Text = "AI firsat yorumu hazir";
+            _aiTextBox.Text = FormatAiOpportunityResult(heading, row, result);
+            _statusLabel.Text = successStatus;
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "AI ile Yorumla", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            _statusLabel.Text = "AI yorumu alinamadi";
+            MessageBox.Show(this, ex.Message, heading, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = failedStatus;
         }
         finally
         {
@@ -385,15 +427,61 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
             listing.TaxonomyDisplay);
 
     private string BuildAiOpportunityPrompt(OpportunityRow row) =>
-        "Analyze this Etsy product as a product opportunity for a seller. Write practical Turkish notes, but keep proposed Etsy title and tags in English. " +
-        "Focus on why it can sell, competition, SEO gap, price angle, visual angle, safer generic positioning, and first listing test plan. " +
-        $"Shop type: {_shopTypeTextBox.Text.Trim()}\n" +
-        $"Keyword: {SearchKeyword()}\n" +
-        $"Scores: opportunity {row.Score.Opportunity}, demand {row.Score.Demand}, competition {row.Score.Competition}, risk {row.Score.Risk}\n" +
-        $"Category: {row.Listing.TaxonomyDisplay}\n" +
-        $"Price: {row.Listing.PriceDisplay}\n" +
-        $"Tags: {row.Listing.TagsDisplay}\n" +
-        $"Description: {row.Listing.Description}";
+        BuildBaseAiPrompt(row) +
+        "Task: Analyze this Etsy product as a product opportunity for a seller. " +
+        "Use risk_warnings and action_checklist for practical Turkish notes. Keep proposed Etsy title, tags and description_draft in English. " +
+        "Focus on why it can sell, competition, SEO gap, price angle, visual angle, safer generic positioning, and first listing test plan.";
+
+    private string BuildSafePositioningPrompt(OpportunityRow row) =>
+        BuildBaseAiPrompt(row) +
+        "Task: Create a safer generic positioning plan for this opportunity. " +
+        "Do not use trademark, brand, copyrighted character, movie, game, anime, or celebrity names in title or tags. " +
+        "Keep product type, material, buyer intent, style, room/use case, size, color and gift angle. " +
+        "Return English title suggestions, English tags, English materials, and a short English description draft. " +
+        "Use Turkish risk_warnings to explain which risky words were removed and why.";
+
+    private string BuildVariationPrompt(OpportunityRow row) =>
+        BuildBaseAiPrompt(row) +
+        "Task: Suggest practical listing variations for testing this opportunity. " +
+        "Use title_suggestions as different English variation titles. Use tag_suggestions as reusable English SEO tags. " +
+        "Use description_draft to explain the best first variation in English. " +
+        "Use Turkish risk_warnings and action_checklist to list price tests, visual tests, bundle ideas, personalization options, and publish warnings.";
+
+    private string BuildBaseAiPrompt(OpportunityRow row)
+    {
+        var input = ToOpportunityInput(row.Listing);
+        var riskTerms = _scorer.DetectRiskTerms(input);
+        return
+            $"Shop type: {_shopTypeTextBox.Text.Trim()}\n" +
+            $"Keyword: {SearchKeyword()}\n" +
+            $"Scores: opportunity {row.Score.Opportunity}, demand {row.Score.Demand}, competition {row.Score.Competition}, risk {row.Score.Risk}, seo gap {row.Score.SeoGap}\n" +
+            $"Detected risky terms: {string.Join(", ", riskTerms.DefaultIfEmpty("none"))}\n" +
+            $"Decision: {row.Score.Decision}\n" +
+            $"Reasons: {string.Join(" | ", row.Score.Reasons)}\n" +
+            $"Category: {row.Listing.TaxonomyDisplay}\n" +
+            $"Price: {row.Listing.PriceDisplay}\n" +
+            $"Shop sales: {row.Listing.ShopSalesDisplay}\n" +
+            $"Favorites: {row.Listing.Favorites:N0}\n" +
+            $"Views: {row.Listing.ViewsDisplay}\n" +
+            $"Tags: {row.Listing.TagsDisplay}\n" +
+            $"Description: {row.Listing.Description}\n\n";
+    }
+
+    private string FormatAiOpportunityResult(string heading, OpportunityRow row, ListingOptimizationResult result)
+    {
+        var riskTerms = _scorer.DetectRiskTerms(ToOpportunityInput(row.Listing));
+        return
+            $"{heading}{Environment.NewLine}" +
+            $"Secili urun: {row.Listing.Title}{Environment.NewLine}" +
+            $"Skor: {row.Score.Opportunity}/100 | Talep: {row.Score.Demand}/100 | Rekabet: {row.Score.Competition}/100 | Risk: {row.Score.Risk}/100{Environment.NewLine}" +
+            $"Riskli terimler: {string.Join(", ", riskTerms.DefaultIfEmpty("-"))}{Environment.NewLine}{Environment.NewLine}" +
+            $"INGILIZCE LISTING TASLAGI / STRATEJI{Environment.NewLine}{result.DescriptionDraft}{Environment.NewLine}{Environment.NewLine}" +
+            $"INGILIZCE BASLIK ONERILERI{Environment.NewLine}{string.Join(Environment.NewLine, result.TitleSuggestions.DefaultIfEmpty("-"))}{Environment.NewLine}{Environment.NewLine}" +
+            $"INGILIZCE TAG ONERILERI{Environment.NewLine}{string.Join(", ", result.TagSuggestions.DefaultIfEmpty("-"))}{Environment.NewLine}{Environment.NewLine}" +
+            $"MATERYAL ONERILERI{Environment.NewLine}{string.Join(", ", result.MaterialSuggestions.DefaultIfEmpty("-"))}{Environment.NewLine}{Environment.NewLine}" +
+            $"TURKCE RISK / NOTLAR{Environment.NewLine}{string.Join(Environment.NewLine, result.RiskWarnings.DefaultIfEmpty("-"))}{Environment.NewLine}{Environment.NewLine}" +
+            $"AKSIYON LISTESI{Environment.NewLine}{string.Join(Environment.NewLine, result.ActionChecklist.DefaultIfEmpty("-"))}";
+    }
 
     private string SearchKeyword()
     {

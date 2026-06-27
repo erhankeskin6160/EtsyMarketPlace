@@ -37,6 +37,15 @@ public sealed class ProductOpportunityScorer
             Reasons(input, demand, competition, seoGap, pricePotential, risk));
     }
 
+    public IReadOnlyList<string> DetectRiskTerms(ProductOpportunityInput input)
+    {
+        var blob = $"{input.Title} {input.Description} {string.Join(' ', input.Tags)} {input.TargetKeyword} {input.Category}";
+        return RiskTerms
+            .Where(term => blob.Contains(term, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private static int DemandScore(ProductOpportunityInput input)
     {
         var favoriteScore = Scale(input.Favorites, 0, 250);
