@@ -365,8 +365,9 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
 
     private void SendToListingCreator()
     {
-        var keyword = SelectedRow?.Listing.Title ?? SearchKeyword();
-        using var form = new ProductDiscoveryListingCreatorForm(aiListingOptimizer, keyword);
+        var row = SelectedRow;
+        var keyword = row?.Listing.Title ?? SearchKeyword();
+        using var form = new ProductDiscoveryListingCreatorForm(aiListingOptimizer, keyword, row?.Listing);
         form.ShowDialog(this);
     }
 

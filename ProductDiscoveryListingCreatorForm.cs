@@ -6,7 +6,10 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
-internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiOptimizer, string? initialKeyword = null) : Form
+internal sealed class ProductDiscoveryListingCreatorForm(
+    IAiListingOptimizer aiOptimizer,
+    string? initialKeyword = null,
+    MarketListingResult? initialListing = null) : Form
 {
     private readonly EtsyApiClient _apiClient = new();
     private readonly AiListingImageGenerator _imageGenerator = new();
@@ -105,6 +108,22 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         {
             _keywordTextBox.Text = initialKeyword.Trim();
         }
+
+        ApplyInitialListing();
+    }
+
+    private void ApplyInitialListing()
+    {
+        if (initialListing is null)
+        {
+            return;
+        }
+
+        _rows = [new IdeaRow(initialListing)];
+        _bindingSource.DataSource = _rows;
+        _bindingSource.Position = 0;
+        FillFromSelectedIdea();
+        _statusLabel.Text = "Firsat Motoru secimi listing taslagina aktarildi";
     }
 
     private Control BuildBusyOverlay()
