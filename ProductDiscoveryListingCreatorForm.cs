@@ -43,6 +43,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     private List<IdeaRow> _rows = [];
     private int _selectedImageIndex;
     private int _busyFrame;
+    private bool _favoriteSortDescending;
+    private bool _opportunitySortDescending;
+    private bool _viewsSortDescending;
 
     private IdeaRow? SelectedRow => _bindingSource.Current as IdeaRow;
 
@@ -292,6 +295,22 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => FillFromSelectedIdea();
         _grid.CellDoubleClick += (_, _) => OpenSelectedCompetitorListing();
+        _grid.ColumnHeaderMouseClick += (_, e) =>
+        {
+            var propName = _grid.Columns[e.ColumnIndex].DataPropertyName;
+            if (propName == nameof(IdeaRow.Favorites))
+            {
+                ApplyFavoriteSort();
+            }
+            else if (propName == nameof(IdeaRow.Opportunity))
+            {
+                ApplyOpportunitySort();
+            }
+            else if (propName == nameof(IdeaRow.Views))
+            {
+                ApplyViewsSort();
+            }
+        };
         _grid.CellContentClick += (_, e) =>
         {
             if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == "ListingLink")
@@ -375,7 +394,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             EtsyApiSettingsStore.Save(settings);
             _rows = results
                 .Select(item => new IdeaRow(item))
-                .OrderByDescending(row => row.OpportunityScore)
+                .OrderByDescending(row => row.Listing.Views)
                 .ToList();
             SetBusyMessage("Kategori adlari yukleniyor");
             await EnrichCategoriesAsync(settings);
@@ -1206,6 +1225,66 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             Width = width,
             AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None,
         });
+
+    private void ApplyFavoriteSort()
+    {
+        _favoriteSortDescending = !_favoriteSortDescending;
+        _rows = _favoriteSortDescending
+            ? _rows.OrderByDescending(row => row.Listing.Favorites).ThenByDescending(row => row.Listing.Views).ToList()
+            : _rows.OrderBy(row => row.Listing.Favorites).ThenBy(row => row.Listing.Views).ToList();
+        
+        RefreshGridSort(nameof(IdeaRow.Favorites), _favoriteSortDescending);
+        _statusLabel.Text = _favoriteSortDescending
+            ? $"{_rows.Count} Etsy urunu | Favori: coktan aza"
+            : $"{_rows.Count} Etsy urunu | Favori: azdan coga";
+    }
+
+    private void ApplyOpportunitySort()
+    {
+        _opportunitySortDescending = !_opportunitySortDescending;
+        _rows = _opportunitySortDescending
+            ? _rows.OrderByDescending(row => row.OpportunityScore).ThenByDescending(row => row.Listing.Views).ToList()
+            : _rows.OrderBy(row => row.OpportunityScore).ThenBy(row => row.Listing.Views).ToList();
+        
+        RefreshGridSort(nameof(IdeaRow.Opportunity), _opportunitySortDescending);
+        _statusLabel.Text = _opportunitySortDescending
+            ? $"{_rows.Count} Etsy urunu | Firsat puani: coktan aza"
+            : $"{_rows.Count} Etsy urunu | Firsat puani: azdan coga";
+    }
+
+    private void ApplyViewsSort()
+    {
+        _viewsSortDescending = !_viewsSortDescending;
+        _rows = _viewsSortDescending
+            ? _rows.OrderByDescending(row => row.Listing.Views).ThenByDescending(row => row.Listing.Favorites).ToList()
+            : _rows.OrderBy(row => row.Listing.Views).ThenBy(row => row.Listing.Favorites).ToList();
+        
+        RefreshGridSort(nameof(IdeaRow.Views), _viewsSortDescending);
+        _statusLabel.Text = _viewsSortDescending
+            ? $"{_rows.Count} Etsy urunu | Goruntulenme: coktan aza"
+            : $"{_rows.Count} Etsy urunu | Goruntulenme: azdan coga";
+    }
+
+    private void RefreshGridSort(string dataPropertyName, bool descending)
+    {
+        _bindingSource.DataSource = null;
+        _bindingSource.DataSource = _rows;
+        _grid.Refresh();
+
+        foreach (DataGridViewColumn col in _grid.Columns)
+        {
+            col.HeaderCell.SortGlyphDirection = SortOrder.None;
+        }
+
+        var targetColumn = _grid.Columns.Cast<DataGridViewColumn>()
+            .FirstOrDefault(col => col.DataPropertyName == dataPropertyName);
+        if (targetColumn != null)
+        {
+            targetColumn.HeaderCell.SortGlyphDirection = descending 
+                ? SortOrder.Descending 
+                : SortOrder.Ascending;
+        }
+    }
 
     private sealed class IdeaRow
     {
