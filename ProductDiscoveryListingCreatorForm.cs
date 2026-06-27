@@ -109,7 +109,13 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 
     private Control BuildBusyOverlay()
     {
-        var outer = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.FromArgb(235, 247, 248, 250) };
+        var outer = new TableLayoutPanel 
+        { 
+            Dock = DockStyle.Fill, 
+            ColumnCount = 3,
+            RowCount = 3,
+            BackColor = Color.FromArgb(235, 247, 248, 250) 
+        };
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 520));
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -120,6 +126,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         var card = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
+            ColumnCount = 1,
             RowCount = 3,
             Padding = new Padding(24, 18, 24, 18),
             BackColor = Color.White,
