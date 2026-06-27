@@ -6,6 +6,7 @@ internal sealed class MarketListingResult
     public long ListingId { get; init; }
     public long ShopId { get; init; }
     public long TaxonomyId { get; init; }
+    public string TaxonomyName { get; set; } = "";
     public string Title { get; init; } = "";
     public string Description { get; init; } = "";
     public string ListingUrl { get; init; } = "";
@@ -32,5 +33,7 @@ internal sealed class MarketListingResult
     public string ShopSalesDisplay => ShopSales > 0 ? ShopSales.ToString("N0") : "Veri yok";
     public string ViewsDisplay => Views > 0 ? Views.ToString("N0") : "Veri yok";
     public string ImageCountDisplay => ImageUrls.Count > 0 ? $"{ImageUrls.Count} resim" : "Resim yok";
-    public string TaxonomyDisplay => TaxonomyId > 0 ? $"Taksonomi #{TaxonomyId}" : "Kategori verisi yok";
+    public string TaxonomyDisplay => !string.IsNullOrWhiteSpace(TaxonomyName)
+        ? TaxonomyName
+        : TaxonomyId > 0 ? $"Kategori bulunamadi (#{TaxonomyId})" : "Kategori verisi yok";
 }

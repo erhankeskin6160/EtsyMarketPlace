@@ -745,6 +745,42 @@ internal sealed class EtsyApiClient
         return string.IsNullOrWhiteSpace(body) ? "API baglantisi basarili." : body;
     }
 
+    public async Task<Dictionary<long, string>> GetSellerTaxonomyNamesAsync(
+        EtsyApiSettings settings,
+        IEnumerable<long> taxonomyIds,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        var names = new Dictionary<long, string>();
+        foreach (var taxonomyId in taxonomyIds.Where(id => id > 0).Distinct())
+        {
+            try
+            {
+                using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/seller-taxonomy/nodes/{taxonomyId}", useAccessToken: false);
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (!response.IsSuccessStatusCode || string.IsNullOrWhiteSpace(body))
+                {
+                    continue;
+                }
+
+                using var document = JsonDocument.Parse(body);
+                var root = document.RootElement;
+                var name = ReadTaxonomyName(root);
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    names[taxonomyId] = name;
+                }
+            }
+            catch
+            {
+                // Kategori adi ek bilgi; okunamazsa arama akisini durdurma.
+            }
+        }
+
+        return names;
+    }
+
     private static HttpRequestMessage CreateRequest(EtsyApiSettings settings, HttpMethod method, string url, bool useAccessToken)
     {
         var request = new HttpRequestMessage(method, url);
@@ -1170,6 +1206,38 @@ internal sealed class EtsyApiClient
             if (!string.IsNullOrWhiteSpace(value))
             {
                 return value;
+            }
+        }
+
+        return "";
+    }
+
+    private static string ReadTaxonomyName(JsonElement root)
+    {
+        var path = GetStringArray(root, "path")
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .ToList();
+        if (path.Count > 0)
+        {
+            return string.Join(" > ", path);
+        }
+
+        var name = GetFirstString(root, "name", "display_name");
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+            return name;
+        }
+
+        var fullPath = GetArray(root, "full_path");
+        if (fullPath.HasValue)
+        {
+            var names = fullPath.Value.EnumerateArray()
+                .Select(item => GetFirstString(item, "name", "display_name"))
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .ToList();
+            if (names.Count > 0)
+            {
+                return string.Join(" > ", names);
             }
         }
 
