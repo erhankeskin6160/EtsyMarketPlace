@@ -5,6 +5,7 @@ using System.Globalization;
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiOptimizer) : Form
 {
@@ -38,6 +39,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     private readonly Panel _busyOverlay = new() { Dock = DockStyle.Fill, Visible = false, BackColor = Color.FromArgb(235, 247, 248, 250) };
     private readonly Label _busyLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Semibold", 12F), ForeColor = Color.FromArgb(23, 32, 49) };
     private readonly ProgressBar _busyProgressBar = new() { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 28 };
+    private readonly ModernSpinner _busySpinner = new() { Width = 74, Height = 74, Anchor = AnchorStyles.None, BackColor = Color.White };
     private readonly System.Windows.Forms.Timer _busyTimer = new() { Interval = 350 };
     private readonly Label _statusLabel = new();
     private List<IdeaRow> _rows = [];
@@ -112,28 +114,29 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 520));
         outer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         outer.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 128));
+        outer.RowStyles.Add(new RowStyle(SizeType.Absolute, 205));
         outer.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
         var card = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             RowCount = 3,
-            Padding = new Padding(24),
+            Padding = new Padding(24, 18, 24, 18),
             BackColor = Color.White,
         };
-        card.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-        card.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         _busyLabel.Text = "Etsy'de urun araniyor";
         card.Controls.Add(_busyLabel, 0, 0);
-        card.Controls.Add(_busyProgressBar, 0, 1);
+        card.Controls.Add(_busySpinner, 0, 1);
         card.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
             Text = "Sonuclar, kategoriler ve gorseller yuklenirken lutfen bekle.",
             TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = Color.FromArgb(82, 93, 110),
+            ForeColor = UiStyle.TextMuted,
+            Font = UiStyle.BaseFont,
         }, 0, 2);
 
         outer.Controls.Add(card, 1, 1);
@@ -594,7 +597,6 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         UseWaitCursor = true;
         _busyFrame = 0;
         SetBusyMessage(message);
-        _busyProgressBar.MarqueeAnimationSpeed = 28;
         _busyOverlay.Visible = true;
         _busyOverlay.BringToFront();
         _busyTimer.Start();
@@ -604,7 +606,6 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     private void StopBusy()
     {
         _busyTimer.Stop();
-        _busyProgressBar.MarqueeAnimationSpeed = 0;
         _busyOverlay.Visible = false;
         UseWaitCursor = false;
     }
