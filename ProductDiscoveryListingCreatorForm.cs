@@ -75,7 +75,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         header.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
-            Text = "Magaza Turune Gore Urun Bul ve Listing Hazirla",
+            Text = "Etsy Urun Bul ve Listing Hazirla",
             Font = new Font("Segoe UI Semibold", 22F),
             ForeColor = Color.FromArgb(23, 32, 49),
             TextAlign = ContentAlignment.MiddleLeft,
@@ -83,7 +83,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.Text = "Once magaza turunu algila veya anahtar kelime yaz";
+        _statusLabel.Text = "Anahtar kelime girip Etsy'de urun arayin";
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
@@ -95,65 +95,39 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 
     private Control BuildToolbar()
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 12, RowCount = 2, Padding = new Padding(0, 0, 0, 8) };
-        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 32));
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 1, Padding = new Padding(0, 18, 0, 18) };
+        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));
-        for (var index = 6; index < 12; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
+        for (var index = 4; index < 9; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
 
-        toolbar.Controls.Add(LabelFor("Magaza turu"), 0, 0);
-        _shopTypeTextBox.Dock = DockStyle.Fill;
-        _shopTypeTextBox.PlaceholderText = "Orn: 3D cosplay, yatak, dijital davetiye";
-        toolbar.Controls.Add(_shopTypeTextBox, 1, 0);
-        toolbar.Controls.Add(LabelFor("Aranacak urun"), 2, 0);
+        toolbar.Controls.Add(LabelFor("Anahtar kelime"), 0, 0);
         _keywordTextBox.Dock = DockStyle.Fill;
-        _keywordTextBox.PlaceholderText = "Orn: 3d cosplay prop";
-        toolbar.Controls.Add(_keywordTextBox, 3, 0);
-        toolbar.Controls.Add(LabelFor("Limit"), 4, 0);
+        _keywordTextBox.PlaceholderText = "Orn: k sparrow figur, gandalf bust, 3d cosplay prop";
+        toolbar.Controls.Add(_keywordTextBox, 1, 0);
+        toolbar.Controls.Add(LabelFor("Sonuc"), 2, 0);
         _limitInput.Dock = DockStyle.Left;
-        toolbar.Controls.Add(_limitInput, 5, 0);
+        toolbar.Controls.Add(_limitInput, 3, 0);
 
-        toolbar.Controls.Add(LabelFor("Istenen urun"), 0, 1);
-        _includeTextBox.Dock = DockStyle.Fill;
-        _includeTextBox.PlaceholderText = "Orn: figure, bust, statue, prop";
-        toolbar.Controls.Add(_includeTextBox, 1, 1);
-        toolbar.Controls.Add(LabelFor("Haric kelimeler"), 2, 1);
-        _excludeTextBox.Dock = DockStyle.Fill;
-        _excludeTextBox.PlaceholderText = "Orn: stl, file, digital download";
-        toolbar.Controls.Add(_excludeTextBox, 3, 1);
-        toolbar.SetColumnSpan(_excludeTextBox, 3);
-
-        var detect = CreateButton("Magazayi Algila");
-        detect.Click += async (_, _) => await DetectShopTypeAsync();
-        toolbar.Controls.Add(detect, 6, 0);
-        var search = CreateButton("Urun Bul");
+        var search = CreateButton("Etsy'de Ara");
         search.Click += async (_, _) => await SearchIdeasAsync();
-        toolbar.Controls.Add(search, 7, 0);
+        toolbar.Controls.Add(search, 4, 0);
         var draft = CreateButton("Taslak Uret");
         draft.Click += async (_, _) => await GenerateDraftAsync();
-        toolbar.Controls.Add(draft, 8, 0);
+        toolbar.Controls.Add(draft, 5, 0);
         var image = CreateButton("AI Gorsel");
         image.Click += async (_, _) => await GenerateImageAsync();
-        toolbar.Controls.Add(image, 9, 0);
+        toolbar.Controls.Add(image, 6, 0);
         var create = CreateButton("Etsy Taslak Ekle");
         create.BackColor = Color.FromArgb(20, 126, 76);
         create.Click += async (_, _) => await CreateDraftListingAsync();
-        toolbar.Controls.Add(create, 10, 0);
+        toolbar.Controls.Add(create, 7, 0);
         var close = CreateButton("Kapat");
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
-        toolbar.Controls.Add(close, 11, 0);
-        toolbar.SetRowSpan(detect, 2);
-        toolbar.SetRowSpan(search, 2);
-        toolbar.SetRowSpan(draft, 2);
-        toolbar.SetRowSpan(image, 2);
-        toolbar.SetRowSpan(create, 2);
-        toolbar.SetRowSpan(close, 2);
+        toolbar.Controls.Add(close, 8, 0);
         return toolbar;
     }
 
@@ -310,36 +284,34 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
 
     private async Task SearchIdeasAsync()
     {
-        var keyword = string.IsNullOrWhiteSpace(_keywordTextBox.Text)
-            ? _shopTypeTextBox.Text.Trim()
-            : _keywordTextBox.Text.Trim();
+        var keyword = _keywordTextBox.Text.Trim();
         if (string.IsNullOrWhiteSpace(keyword))
         {
-            MessageBox.Show(this, "Once magaza turu veya aranacak urun girin.", "Urun bul", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Once anahtar kelime girin.", "Etsy'de ara", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
         try
         {
             UseWaitCursor = true;
-            _statusLabel.Text = "Etsy pazarinda firsat urunleri araniyor...";
+            _statusLabel.Text = "Etsy'de anahtar kelimeye gore urun araniyor...";
+            _shopTypeTextBox.Text = keyword;
+            _includeTextBox.Clear();
+            _excludeTextBox.Clear();
             var settings = EtsyApiSettingsStore.Load();
             var results = await _apiClient.FindMarketListingsAsync(settings, keyword, (int)_limitInput.Value);
             EtsyApiSettingsStore.Save(settings);
-            var includeTerms = SplitFilterTerms(_includeTextBox.Text);
-            var excludeTerms = SplitFilterTerms(_excludeTextBox.Text);
             _rows = results
-                .Where(item => MatchesProductIntent(item, includeTerms, excludeTerms))
                 .Select(item => new IdeaRow(item))
                 .OrderByDescending(row => row.OpportunityScore)
                 .ToList();
             _bindingSource.DataSource = _rows;
-            _statusLabel.Text = $"{_rows.Count} uygun pazar urunu listelendi";
+            _statusLabel.Text = $"{_rows.Count} Etsy urunu listelendi";
             FillFromSelectedIdea();
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "Urun bul", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, ex.Message, "Etsy'de ara", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _statusLabel.Text = "Pazar aramasi basarisiz";
         }
         finally
@@ -594,23 +566,19 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         }
     }
 
-    private string PrimaryKeyword() =>
-        string.IsNullOrWhiteSpace(_keywordTextBox.Text)
-            ? _shopTypeTextBox.Text.Trim()
-            : _keywordTextBox.Text.Trim();
+    private string PrimaryKeyword() => _keywordTextBox.Text.Trim();
 
     private string BuildImagePrompt() =>
         "Use the selected competitor listing image as product reference. Keep the same product category, silhouette, pose, scale, and main physical details. Do not invent a different product. Improve the Etsy presentation with a clean studio background, realistic lighting, sharper product focus, natural shadow, and marketplace-ready composition. If the seller asks for a painted look, add tasteful hand-painted miniature colors while preserving the product shape. No watermark, no logo, no readable text, no official brand claims. " +
-        $"Shop type: {_shopTypeTextBox.Text.Trim()}. Search intent: {PrimaryKeyword()}. Wanted product terms: {_includeTextBox.Text.Trim()}. Selected listing: {SelectedRow?.Listing.Title ?? _titleTextBox.Text.Trim()}";
+        $"Search keyword: {PrimaryKeyword()}. Selected Etsy listing: {SelectedRow?.Listing.Title ?? _titleTextBox.Text.Trim()}";
 
     private string BuildDraftSourceTitle(MarketListingResult listing)
     {
         var parts = new[]
         {
             $"Selected marketplace listing: {listing.Title}",
-            $"Search intent: {PrimaryKeyword()}",
-            $"Wanted product terms: {_includeTextBox.Text.Trim()}",
-            $"Shop type: {_shopTypeTextBox.Text.Trim()}",
+            $"Etsy search keyword: {PrimaryKeyword()}",
+            $"Use the selected listing as the product reference",
         };
         return string.Join(" | ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
@@ -621,13 +589,12 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         "Use the selected listing title as the main product anchor, then make original buyer-facing English copy. " +
         "Avoid official, licensed, endorsed, or affiliated claims unless legally proven. " +
         $"Selected listing title: {listing.Title}{Environment.NewLine}" +
-        $"Search intent: {PrimaryKeyword()}{Environment.NewLine}" +
-        $"Wanted product terms: {_includeTextBox.Text.Trim()}{Environment.NewLine}" +
+        $"Etsy search keyword: {PrimaryKeyword()}{Environment.NewLine}" +
         $"Competitor description: {listing.Description}";
 
     private string SelectRelevantTitle(IReadOnlyList<string> suggestions, MarketListingResult listing)
     {
-        var requiredTerms = ImportantTerms($"{PrimaryKeyword()} {_includeTextBox.Text} {listing.Title}");
+        var requiredTerms = ImportantTerms($"{PrimaryKeyword()} {listing.Title}");
         foreach (var suggestion in suggestions)
         {
             var title = suggestion.Trim();
