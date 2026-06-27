@@ -191,7 +191,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         middle.Controls.Add(LabelFor("Materyaller"), 0, 2);
         ConfigureMultiline(_materialsTextBox);
         middle.Controls.Add(_materialsTextBox, 0, 3);
-        middle.Controls.Add(LabelFor("AI gorsel promptu"), 0, 4);
+        middle.Controls.Add(LabelFor("AI gorsel promptlari (satir satir)"), 0, 4);
         ConfigureMultiline(_imagePromptTextBox);
         middle.Controls.Add(_imagePromptTextBox, 0, 5);
         layout.Controls.Add(middle, 1, 0);
@@ -361,12 +361,12 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             UseWaitCursor = true;
             var listing = SelectedRow.Listing;
             var input = new ListingOptimizationInput(
-                listing.Title,
-                listing.Description,
+                BuildDraftSourceTitle(listing),
+                BuildDraftSourceDescription(listing),
                 listing.Tags,
                 PrimaryKeyword());
             var result = await aiOptimizer.OptimizeAsync(input);
-            _titleTextBox.Text = result.TitleSuggestions.FirstOrDefault() ?? BuildSafeTitle(listing);
+            _titleTextBox.Text = SelectRelevantTitle(result.TitleSuggestions, listing);
             _descriptionTextBox.Text = result.DescriptionDraft;
             _tagsTextBox.Text = string.Join(", ", result.TagSuggestions.Take(13));
             _materialsTextBox.Text = string.Join(", ", EtsyApiClient.NormalizeListingMaterialsForEtsy(result.MaterialSuggestions));
@@ -398,14 +398,13 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             UseWaitCursor = true;
             _statusLabel.Text = "AI ile urun gorseli uretiliyor...";
             var settings = AiOptimizationSettingsStore.Load();
-            var prompt = string.IsNullOrWhiteSpace(_imagePromptTextBox.Text)
-                ? BuildImagePrompt()
-                : _imagePromptTextBox.Text.Trim();
             var referencePath = await DownloadReferenceImageAsync(SelectedRow.Listing);
             var paths = new List<string>();
+            var prompts = ImagePrompts();
             for (var index = 1; index <= (int)_imageCountInput.Value; index++)
             {
                 _statusLabel.Text = $"Referans gorselden AI gorsel duzenleniyor ({index}/{_imageCountInput.Value})...";
+                var prompt = PromptForImageIndex(prompts, index);
                 var path = await _imageGenerator.GenerateFromReferenceAsync(settings, SelectedRow.Listing, prompt, referencePath);
                 paths.Add(path);
             }
@@ -587,10 +586,11 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         {
             Title = "Listing gorseli sec",
             Filter = "Image files|*.png;*.jpg;*.jpeg;*.webp;*.gif|All files|*.*",
+            Multiselect = true,
         };
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
-            _imagePathTextBox.Text = dialog.FileName;
+            _imagePathTextBox.Text = string.Join("; ", dialog.FileNames);
         }
     }
 
@@ -600,8 +600,62 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
             : _keywordTextBox.Text.Trim();
 
     private string BuildImagePrompt() =>
-        "Use the selected competitor listing image as product reference. Do not invent a new product and do not change the product shape, color, proportions, or visible details. Only clean the background, improve lighting, sharpen the product focus, add natural shadow, and make it marketplace-ready. No watermark, no logo, no copyrighted character branding. " +
-        $"Shop type: {_shopTypeTextBox.Text.Trim()}. Product: {_titleTextBox.Text.Trim()}";
+        "Use the selected competitor listing image as product reference. Keep the same product category, silhouette, pose, scale, and main physical details. Do not invent a different product. Improve the Etsy presentation with a clean studio background, realistic lighting, sharper product focus, natural shadow, and marketplace-ready composition. If the seller asks for a painted look, add tasteful hand-painted miniature colors while preserving the product shape. No watermark, no logo, no readable text, no official brand claims. " +
+        $"Shop type: {_shopTypeTextBox.Text.Trim()}. Search intent: {PrimaryKeyword()}. Wanted product terms: {_includeTextBox.Text.Trim()}. Selected listing: {SelectedRow?.Listing.Title ?? _titleTextBox.Text.Trim()}";
+
+    private string BuildDraftSourceTitle(MarketListingResult listing)
+    {
+        var parts = new[]
+        {
+            $"Selected marketplace listing: {listing.Title}",
+            $"Search intent: {PrimaryKeyword()}",
+            $"Wanted product terms: {_includeTextBox.Text.Trim()}",
+            $"Shop type: {_shopTypeTextBox.Text.Trim()}",
+        };
+        return string.Join(" | ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private string BuildDraftSourceDescription(MarketListingResult listing) =>
+        "Write the Etsy draft for the selected listing's actual product type and the user's search intent. " +
+        "Do not switch to another character, object, theme, or product name from unrelated tags. " +
+        "Use the selected listing title as the main product anchor, then make original buyer-facing English copy. " +
+        "Avoid official, licensed, endorsed, or affiliated claims unless legally proven. " +
+        $"Selected listing title: {listing.Title}{Environment.NewLine}" +
+        $"Search intent: {PrimaryKeyword()}{Environment.NewLine}" +
+        $"Wanted product terms: {_includeTextBox.Text.Trim()}{Environment.NewLine}" +
+        $"Competitor description: {listing.Description}";
+
+    private string SelectRelevantTitle(IReadOnlyList<string> suggestions, MarketListingResult listing)
+    {
+        var requiredTerms = ImportantTerms($"{PrimaryKeyword()} {_includeTextBox.Text} {listing.Title}");
+        foreach (var suggestion in suggestions)
+        {
+            var title = suggestion.Trim();
+            if (title.Length == 0) continue;
+            if (requiredTerms.Count == 0 || requiredTerms.Any(term => title.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            {
+                return title.Length <= 140 ? title : title[..140].TrimEnd();
+            }
+        }
+
+        return BuildSafeTitle(listing);
+    }
+
+    private IReadOnlyList<string> ImagePrompts()
+    {
+        var prompts = _imagePromptTextBox.Text
+            .Split(['\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(prompt => prompt.Trim())
+            .Where(prompt => prompt.Length > 0)
+            .ToList();
+        return prompts.Count > 0 ? prompts : [BuildImagePrompt()];
+    }
+
+    private string PromptForImageIndex(IReadOnlyList<string> prompts, int oneBasedIndex)
+    {
+        var index = Math.Clamp(oneBasedIndex - 1, 0, prompts.Count - 1);
+        return prompts[index];
+    }
 
     private async Task LoadShippingProfilesAsync()
     {
@@ -807,6 +861,23 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
     {
         var title = listing.Title;
         return title.Length <= 140 ? title : title[..140].TrimEnd();
+    }
+
+    private static IReadOnlyList<string> ImportantTerms(string value)
+    {
+        var blocked = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "and", "with", "for", "from", "gift", "custom", "handmade", "printed", "print", "file", "files",
+            "digital", "adult", "kids", "3d", "stl", "pla", "resin", "fan", "art", "sculpture", "statue", "figure",
+            "bust", "prop", "collectible", "decor", "display", "inspired", "middle", "earth", "lord", "rings", "lotr"
+        };
+        return value
+            .Split([' ', '-', '|', ',', '/', '(', ')', ':', ';', '.', '\'', '"'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(term => term.Trim())
+            .Where(term => term.Length >= 4 && !blocked.Contains(term))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToList();
     }
 
     private static IReadOnlyList<string> ExtractShopKeywords(IEnumerable<MarketListingResult> listings)
