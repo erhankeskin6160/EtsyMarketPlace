@@ -6,7 +6,7 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
-internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiOptimizer) : Form
+internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiOptimizer, string? initialKeyword = null) : Form
 {
     private readonly EtsyApiClient _apiClient = new();
     private readonly AiListingImageGenerator _imageGenerator = new();
@@ -101,6 +101,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(IAiListingOptimizer aiO
         root.Controls.Add(BuildDraftArea(), 0, 3);
         Controls.Add(BuildBusyOverlay());
         _busyTimer.Tick += (_, _) => UpdateBusyAnimation();
+        if (!string.IsNullOrWhiteSpace(initialKeyword))
+        {
+            _keywordTextBox.Text = initialKeyword.Trim();
+        }
     }
 
     private Control BuildBusyOverlay()
