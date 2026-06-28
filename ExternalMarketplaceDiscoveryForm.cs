@@ -294,7 +294,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         var enabled = _sourcesList.CheckedItems.Cast<string>().ToList();
         var rows = _searchService.BuildSearchIdeas(_shopTypeTextBox.Text, _keywordTextBox.Text, enabled);
         _bindingSource.DataSource = rows;
-        _statusLabel.Text = $"{rows.Count} dis kaynak arama linki hazirlandi";
+        _statusLabel.Text = $"{rows.Count} dis kaynak firsati provider motoruyla puanlandi";
         FillSelectedIdea();
     }
 
