@@ -19,6 +19,9 @@ internal sealed class ExternalProductIdea
     public int CompetitionAdvantageScore { get; init; }
     public int SeoGapScore { get; init; }
     public int PricePotentialScore { get; init; }
+    public string DecisionGroup { get; init; } = "";
+    public string SuggestedStatus { get; init; } = "";
+    public string UserStatus { get; set; } = "";
     public string Decision { get; init; } = "";
     public string Reasons { get; init; } = "";
     public string RiskTerms { get; init; } = "";

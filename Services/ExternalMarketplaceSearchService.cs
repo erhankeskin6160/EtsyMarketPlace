@@ -1,6 +1,7 @@
 namespace SimilarProductsWinForms.Services;
 
 using EtsyMarketPlace.Application.ExternalMarketplaces;
+using EtsyMarketPlace.Domain.ProductOpportunity;
 using EtsyMarketPlace.Infrastructure.ExternalMarketplaces;
 using SimilarProductsWinForms.Models;
 
@@ -51,6 +52,9 @@ internal sealed class ExternalMarketplaceSearchService
             CompetitionAdvantageScore = opportunity.ScoreBreakdown.CompetitionAdvantage,
             SeoGapScore = opportunity.ScoreBreakdown.SeoGap,
             PricePotentialScore = opportunity.ScoreBreakdown.PricePotential,
+            DecisionGroup = DecisionGroupLabel(opportunity.DecisionGroup),
+            SuggestedStatus = StatusLabel(opportunity.SuggestedStatus),
+            UserStatus = StatusLabel(opportunity.SuggestedStatus),
             Decision = opportunity.Decision,
             RiskTerms = riskTerms,
             Reasons = string.Join(" | ", opportunity.Reasons.Take(4)),
@@ -58,4 +62,23 @@ internal sealed class ExternalMarketplaceSearchService
             Notes = $"{product.Notes}. {opportunity.Decision}. Skor: {string.Join(" | ", opportunity.ScoreBreakdown.Summary)}. Kaynakta urunu ac, gercek fiyat/gorsel/satici bilgisini dogrula. Risk: {(opportunity.RiskTerms.Count == 0 ? "belirgin risk yok" : riskTerms)}.",
         };
     }
+
+    public static string DecisionGroupLabel(OpportunityDecisionGroup group) => group switch
+    {
+        OpportunityDecisionGroup.StrongOpportunity => "Guclu firsat",
+        OpportunityDecisionGroup.WorthTesting => "Test edilebilir",
+        OpportunityDecisionGroup.Risky => "Riskli",
+        OpportunityDecisionGroup.Weak => "Zayif / beklet",
+        _ => "Tum kararlar",
+    };
+
+    public static string StatusLabel(OpportunityUserStatus status) => status switch
+    {
+        OpportunityUserStatus.Watch => "Izle",
+        OpportunityUserStatus.TestList => "Test listesi",
+        OpportunityUserStatus.DraftGenerated => "Taslak uretildi",
+        OpportunityUserStatus.AddedToEtsyDraft => "Etsy taslak eklendi",
+        OpportunityUserStatus.Rejected => "Reddedildi",
+        _ => "Yeni",
+    };
 }

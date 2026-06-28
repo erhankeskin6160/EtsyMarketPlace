@@ -4,9 +4,11 @@ using EtsyMarketPlace.Application.ProductOpportunity;
 
 public sealed class ExternalMarketplaceOpportunityService(
     IEnumerable<IExternalMarketplaceProvider> providers,
-    ProductOpportunityScorer? scorer = null)
+    ProductOpportunityScorer? scorer = null,
+    OpportunityDecisionService? decisionService = null)
 {
     private readonly ProductOpportunityScorer scorer = scorer ?? new ProductOpportunityScorer();
+    private readonly OpportunityDecisionService decisionService = decisionService ?? new OpportunityDecisionService();
     private readonly IReadOnlyList<IExternalMarketplaceProvider> providers = providers.ToList();
 
     public IReadOnlyList<string> SourceNames => providers.Select(provider => provider.Name).ToList();
@@ -57,6 +59,8 @@ public sealed class ExternalMarketplaceOpportunityService(
         var score = scorer.Score(input);
         var riskTerms = scorer.DetectRiskTerms(input);
         var opportunity = Math.Clamp((int)Math.Round(score.Opportunity * 0.70m + etsyFit * 0.24m + product.BaseScore * 0.06m), 0, 100);
+        var adjustedScore = score with { Opportunity = opportunity };
+        var decision = decisionService.Classify(adjustedScore);
 
         return new ExternalMarketplaceOpportunity(
             product,
@@ -66,9 +70,14 @@ public sealed class ExternalMarketplaceOpportunityService(
             etsyFit,
             score.Risk,
             score.Breakdown,
-            score.Decision,
+            decision.Group,
+            decision.DefaultStatus,
+            decision.Label,
             riskTerms,
-            score.Reasons.Take(4).ToList());
+            score.Reasons
+                .Prepend(decision.Reason)
+                .Take(4)
+                .ToList());
     }
 
     public static string BuildQuery(string shopType, string keyword)

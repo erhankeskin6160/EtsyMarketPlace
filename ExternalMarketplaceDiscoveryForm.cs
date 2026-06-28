@@ -12,6 +12,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly EtsyApiClient _apiClient = new();
     private readonly AiListingImageGenerator _imageGenerator = new();
     private readonly BindingSource _bindingSource = new();
+    private readonly List<ExternalProductIdea> _allIdeas = [];
     private readonly DataGridView _grid = new();
     private readonly CheckedListBox _sourcesList = new();
     private readonly TextBox _shopTypeTextBox = new();
@@ -40,7 +41,13 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly ComboBox _listingTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _shippingProfileComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _readinessStateComboBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
+    private readonly ComboBox _userStatusComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly Label _statusLabel = new();
+    private string _activeDecisionFilter = AllDecisionFilter;
+
+    private const string AllDecisionFilter = "Tum kararlar";
+    private static readonly string[] DecisionFilters = [AllDecisionFilter, "Guclu firsat", "Test edilebilir", "Riskli", "Zayif / beklet"];
+    private static readonly string[] UserStatuses = ["Yeni", "Izle", "Test listesi", "Taslak uretildi", "Etsy taslak eklendi", "Reddedildi"];
 
     private ExternalProductIdea? SelectedIdea => _bindingSource.Current as ExternalProductIdea;
 
@@ -69,9 +76,13 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         _readinessStateComboBox.ValueMember = nameof(EtsyReadinessStateOption.ReadinessStateId);
         _readinessStateComboBox.DropDown += async (_, _) => await LoadReadinessStatesAsync();
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
+        _userStatusComboBox.Items.AddRange(UserStatuses);
+        _userStatusComboBox.SelectedItem = "Yeni";
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 142));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 42));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 58));
         Controls.Add(root);
@@ -95,9 +106,10 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         root.Controls.Add(header, 0, 0);
 
         root.Controls.Add(BuildToolbar(), 0, 1);
+        root.Controls.Add(BuildDecisionBar(), 0, 2);
         ConfigureGrid();
-        root.Controls.Add(_grid, 0, 2);
-        root.Controls.Add(BuildDraftArea(), 0, 3);
+        root.Controls.Add(_grid, 0, 3);
+        root.Controls.Add(BuildDraftArea(), 0, 4);
         UpdateListingTypeControls();
     }
 
@@ -157,6 +169,38 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         }
 
         return toolbar;
+    }
+
+    private Control BuildDecisionBar()
+    {
+        var bar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, Padding = new Padding(0, 0, 0, 6) };
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        bar.Controls.Add(LabelFor("Karar filtresi"), 0, 0);
+        for (var index = 0; index < DecisionFilters.Length; index++)
+        {
+            var filter = DecisionFilters[index];
+            var button = CreateButton(filter);
+            button.BackColor = index == 0 ? Color.FromArgb(82, 93, 110) : Color.FromArgb(35, 101, 166);
+            button.Click += (_, _) => SetDecisionFilter(filter);
+            bar.Controls.Add(button, index + 1, 0);
+        }
+
+        bar.Controls.Add(LabelFor("Secili durum"), 6, 0);
+        bar.Controls.Add(_userStatusComboBox, 7, 0);
+        var apply = CreateButton("Durumu Uygula");
+        apply.Click += (_, _) => ApplySelectedUserStatus();
+        bar.Controls.Add(apply, 8, 0);
+
+        return bar;
     }
 
     private Control BuildDraftArea()
@@ -296,6 +340,8 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         AddColumn("Fiyat pot.", nameof(ExternalProductIdea.PricePotential), 85);
         AddColumn("Etsy uyum", nameof(ExternalProductIdea.EtsyFit), 85);
         AddColumn("Risk", nameof(ExternalProductIdea.Risk), 75);
+        AddColumn("Kuyruk", nameof(ExternalProductIdea.UserStatus), 125);
+        AddColumn("Karar grubu", nameof(ExternalProductIdea.DecisionGroup), 125);
         AddColumn("Karar", nameof(ExternalProductIdea.Decision), 145);
         AddColumn("Arama / urun fikri", nameof(ExternalProductIdea.Title), 420, true);
         AddColumn("Fiyat", nameof(ExternalProductIdea.Price), 90);
@@ -369,8 +415,50 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     {
         var enabled = _sourcesList.CheckedItems.Cast<string>().ToList();
         var rows = _searchService.BuildSearchIdeas(_shopTypeTextBox.Text, _keywordTextBox.Text, enabled);
+        _allIdeas.Clear();
+        _allIdeas.AddRange(rows);
+        _activeDecisionFilter = AllDecisionFilter;
+        ApplyDecisionFilter();
+        FillSelectedIdea();
+    }
+
+    private void SetDecisionFilter(string filter)
+    {
+        _activeDecisionFilter = filter;
+        ApplyDecisionFilter();
+    }
+
+    private void ApplyDecisionFilter()
+    {
+        var rows = _activeDecisionFilter == AllDecisionFilter
+            ? _allIdeas.ToList()
+            : _allIdeas.Where(idea => idea.DecisionGroup == _activeDecisionFilter).ToList();
         _bindingSource.DataSource = rows;
-        _statusLabel.Text = $"{rows.Count} dis kaynak firsati provider motoruyla puanlandi";
+        _statusLabel.Text = $"{_allIdeas.Count} firsat puanlandi | {rows.Count} satir: {_activeDecisionFilter}";
+        FillSelectedIdea();
+    }
+
+    private void ApplySelectedUserStatus()
+    {
+        if (SelectedIdea is null)
+        {
+            MessageBox.Show(this, "Durum vermek icin once bir urun sec.", "Karar kuyrugu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        SetSelectedUserStatus(_userStatusComboBox.Text);
+    }
+
+    private void SetSelectedUserStatus(string status)
+    {
+        if (SelectedIdea is null || string.IsNullOrWhiteSpace(status))
+        {
+            return;
+        }
+
+        SelectedIdea.UserStatus = status;
+        _grid.Refresh();
+        _statusLabel.Text = $"Secili urun kuyruk durumu: {status}";
         FillSelectedIdea();
     }
 
@@ -400,6 +488,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             _notesTextBox.Text =
                 "AI taslak dis kaynak urununden ilham alarak hazirlandi. Birebir kopyalama yapma; marka/telif riskini kontrol et." +
                 $"{Environment.NewLine}Risk notlari: {string.Join("; ", result.RiskWarnings)}";
+            SetSelectedUserStatus("Taslak uretildi");
             _statusLabel.Text = "AI Etsy taslagi hazir";
         }
         catch (Exception ex)
@@ -446,6 +535,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             }
 
             EtsyApiSettingsStore.Save(settings);
+            SetSelectedUserStatus("Etsy taslak eklendi");
             _statusLabel.Text = $"Taslak listing olusturuldu: #{created.ListingId}";
             if (MessageBox.Show(this, "Taslak listing olusturuldu. Etsy'de acmak ister misin?", "Etsy taslak", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
             {
@@ -654,11 +744,17 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         }
 
         UpdateScoreCard(SelectedIdea);
+        if (_userStatusComboBox.Items.Contains(SelectedIdea.UserStatus))
+        {
+            _userStatusComboBox.SelectedItem = SelectedIdea.UserStatus;
+        }
+
         _externalTitleTextBox.Text = SelectedIdea.Title;
         _externalUrlTextBox.Text = SelectedIdea.ProductUrl;
         _tagsTextBox.Text = SelectedIdea.Tags;
         _notesTextBox.Text =
             $"Karar: {SelectedIdea.Decision}{Environment.NewLine}" +
+            $"Kuyruk: {SelectedIdea.UserStatus} | Onerilen: {SelectedIdea.SuggestedStatus} | Grup: {SelectedIdea.DecisionGroup}{Environment.NewLine}" +
             $"Etsy uyum: {SelectedIdea.EtsyFit} | Risk: {SelectedIdea.Risk}{Environment.NewLine}" +
             $"Kategori: {SelectedIdea.Category}{Environment.NewLine}" +
             $"Risk kelimeleri: {SelectedIdea.RiskTerms}{Environment.NewLine}{Environment.NewLine}" +
