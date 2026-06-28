@@ -35,6 +35,8 @@ public sealed record ExternalMarketplaceOpportunity(
     int EtsyFitScore,
     int RiskScore,
     OpportunityScoreBreakdown ScoreBreakdown,
+    OpportunityDecisionGroup DecisionGroup,
+    OpportunityUserStatus SuggestedStatus,
     string Decision,
     IReadOnlyList<string> RiskTerms,
     IReadOnlyList<string> Reasons);
