@@ -10,6 +10,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
 {
     private readonly ExternalMarketplaceSearchService _searchService = new();
     private readonly EtsyApiClient _apiClient = new();
+    private readonly AiListingImageGenerator _imageGenerator = new();
     private readonly BindingSource _bindingSource = new();
     private readonly DataGridView _grid = new();
     private readonly CheckedListBox _sourcesList = new();
@@ -22,6 +23,9 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly TextBox _tagsTextBox = new();
     private readonly TextBox _materialsTextBox = new();
     private readonly TextBox _notesTextBox = new();
+    private readonly TextBox _imagePromptTextBox = new();
+    private readonly TextBox _sourceImagePathTextBox = new();
+    private readonly TextBox _generatedImagePathTextBox = new();
     private readonly NumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
     private readonly NumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
     private readonly TextBox _taxonomyInput = new();
@@ -175,29 +179,34 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         left.Controls.Add(_descriptionTextBox, 0, 7);
         layout.Controls.Add(left, 0, 0);
 
-        var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6 };
+        var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8 };
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 28));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 32));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
+        middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
         middle.Controls.Add(LabelFor("Tagler"), 0, 0);
         ConfigureMultiline(_tagsTextBox);
         middle.Controls.Add(_tagsTextBox, 0, 1);
         middle.Controls.Add(LabelFor("Materyaller"), 0, 2);
         ConfigureMultiline(_materialsTextBox);
         middle.Controls.Add(_materialsTextBox, 0, 3);
-        middle.Controls.Add(LabelFor("Notlar / kaynak kontrolu"), 0, 4);
+        middle.Controls.Add(LabelFor("AI gorsel promptu"), 0, 4);
+        ConfigureMultiline(_imagePromptTextBox);
+        middle.Controls.Add(_imagePromptTextBox, 0, 5);
+        middle.Controls.Add(LabelFor("Notlar / kaynak kontrolu"), 0, 6);
         ConfigureMultiline(_notesTextBox);
         _notesTextBox.ReadOnly = true;
-        middle.Controls.Add(_notesTextBox, 0, 5);
+        middle.Controls.Add(_notesTextBox, 0, 7);
         layout.Controls.Add(middle, 1, 0);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 18, AutoScroll = true };
-        for (var index = 0; index < 17; index++)
+        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 28, AutoScroll = true };
+        for (var index = 0; index < 27; index++)
         {
-            right.RowStyles.Add(new RowStyle(SizeType.Absolute, index % 2 == 0 ? 18 : 28));
+            right.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         }
 
         right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -216,23 +225,38 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         right.Controls.Add(_shippingProfileComboBox, 0, 9);
         right.Controls.Add(LabelFor("Hazirlik durumu"), 0, 10);
         right.Controls.Add(_readinessStateComboBox, 0, 11);
+        right.Controls.Add(LabelFor("Kaynak gorsel dosyasi"), 0, 12);
+        _sourceImagePathTextBox.Dock = DockStyle.Fill;
+        right.Controls.Add(_sourceImagePathTextBox, 0, 13);
+        var chooseSourceImage = CreateButton("Kaynak Gorsel Sec");
+        chooseSourceImage.Click += (_, _) => ChooseSourceImage();
+        right.Controls.Add(chooseSourceImage, 0, 14);
+        right.Controls.Add(LabelFor("AI gorsel dosyasi"), 0, 15);
+        _generatedImagePathTextBox.Dock = DockStyle.Fill;
+        right.Controls.Add(_generatedImagePathTextBox, 0, 16);
+        var generateImage = CreateButton("AI Gorsel Uret");
+        generateImage.Click += async (_, _) => await GenerateAiImageAsync();
+        right.Controls.Add(generateImage, 0, 17);
+        var openImage = CreateButton("Gorseli Ac");
+        openImage.Click += (_, _) => OpenGeneratedImage();
+        right.Controls.Add(openImage, 0, 18);
         var open = CreateButton("Dis Kaynagi Ac");
         open.Click += (_, _) => OpenUrl(_externalUrlTextBox.Text);
-        right.Controls.Add(open, 0, 12);
+        right.Controls.Add(open, 0, 19);
         var ai = CreateButton("AI Taslak Uret");
         ai.Click += async (_, _) => await GenerateAiDraftAsync();
-        right.Controls.Add(ai, 0, 13);
+        right.Controls.Add(ai, 0, 20);
         var verify = CreateButton("Etsy'de Dogrula");
         verify.Click += (_, _) => VerifyOnEtsy();
-        right.Controls.Add(verify, 0, 14);
+        right.Controls.Add(verify, 0, 21);
         var create = CreateButton("Etsy Taslak Ekle");
         create.BackColor = Color.FromArgb(20, 126, 76);
         create.Click += async (_, _) => await CreateDraftListingAsync();
-        right.Controls.Add(create, 0, 15);
+        right.Controls.Add(create, 0, 22);
         var close = CreateButton("Kapat");
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
-        right.Controls.Add(close, 0, 16);
+        right.Controls.Add(close, 0, 23);
         layout.Controls.Add(right, 2, 0);
         return layout;
     }
@@ -319,7 +343,8 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             $"Dis kaynak: {_externalUrlTextBox.Text.Trim()}{Environment.NewLine}" +
             $"Baslik: {draft.Title}{Environment.NewLine}" +
             $"Fiyat: {draft.Price:0.00}{Environment.NewLine}" +
-            $"Tip: {(draft.IsDigital ? "Dijital" : "Fiziksel")}{Environment.NewLine}{Environment.NewLine}" +
+            $"Tip: {(draft.IsDigital ? "Dijital" : "Fiziksel")}{Environment.NewLine}" +
+            $"Gorsel: {(SelectedImagePaths().Count == 0 ? "Yok" : $"{SelectedImagePaths().Count} dosya")}{Environment.NewLine}{Environment.NewLine}" +
             "Onayliyor musun?";
         if (MessageBox.Show(this, confirmation, "Etsy taslak onayi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
         {
@@ -332,6 +357,11 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             _statusLabel.Text = "Etsy'de dis pazar kaynakli taslak olusturuluyor...";
             var settings = EtsyApiSettingsStore.Load();
             var created = await _apiClient.CreateOwnShopDraftListingAsync(settings, draft);
+            foreach (var imagePath in SelectedImagePaths())
+            {
+                await _apiClient.UploadOwnShopListingImageAsync(settings, created.ListingId, imagePath);
+            }
+
             EtsyApiSettingsStore.Save(settings);
             _statusLabel.Text = $"Taslak listing olusturuldu: #{created.ListingId}";
             if (MessageBox.Show(this, "Taslak listing olusturuldu. Etsy'de acmak ister misin?", "Etsy taslak", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
@@ -410,6 +440,128 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         return true;
     }
 
+    private void ChooseSourceImage()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Dis kaynaktan veya kendi urununden referans gorsel sec",
+            Filter = "Gorsel dosyalari|*.png;*.jpg;*.jpeg;*.webp;*.bmp|Tum dosyalar|*.*",
+            CheckFileExists = true,
+        };
+
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        _sourceImagePathTextBox.Text = dialog.FileName;
+        if (string.IsNullOrWhiteSpace(_imagePromptTextBox.Text))
+        {
+            _imagePromptTextBox.Text = BuildExternalImagePrompt();
+        }
+
+        _statusLabel.Text = "Kaynak gorsel secildi. AI gorsel uretmeden once promptu kontrol et.";
+    }
+
+    private async Task GenerateAiImageAsync()
+    {
+        var sourcePath = _sourceImagePathTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
+        {
+            MessageBox.Show(this, "Once kaynak gorsel dosyasi sec.", "AI gorsel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+            _statusLabel.Text = "Kaynak gorsel referans alinarak AI gorsel uretiliyor...";
+            var settings = AiOptimizationSettingsStore.Load();
+            var path = await _imageGenerator.GenerateFromReferenceAsync(settings, BuildReferenceListingForImage(), BuildExternalImagePrompt(), sourcePath);
+            _generatedImagePathTextBox.Text = path;
+            _statusLabel.Text = "AI gorsel uretildi. Etsy taslak eklerken bu gorsel yuklenecek.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "AI gorsel", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = "AI gorsel uretilemedi";
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private void OpenGeneratedImage()
+    {
+        var imagePath = _generatedImagePathTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(imagePath))
+        {
+            imagePath = _sourceImagePathTextBox.Text.Trim();
+        }
+
+        if (!File.Exists(imagePath))
+        {
+            MessageBox.Show(this, "Acilacak gorsel dosyasi bulunamadi.", "Gorsel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        Process.Start(new ProcessStartInfo(imagePath) { UseShellExecute = true });
+    }
+
+    private IReadOnlyList<string> SelectedImagePaths()
+    {
+        var generated = SplitPathList(_generatedImagePathTextBox.Text);
+        if (generated.Count > 0)
+        {
+            return generated;
+        }
+
+        return SplitPathList(_sourceImagePathTextBox.Text);
+    }
+
+    private MarketListingResult BuildReferenceListingForImage()
+    {
+        var title = _titleTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            title = _externalTitleTextBox.Text.Trim();
+        }
+
+        return new MarketListingResult
+        {
+            ListingId = 0,
+            Title = SafeTitle(title),
+            Description = _descriptionTextBox.Text.Trim(),
+            ListingUrl = _externalUrlTextBox.Text.Trim(),
+            Price = _priceInput.Value,
+            CurrencyCode = "USD",
+            Quantity = (int)_quantityInput.Value,
+            Tags = SplitCommaList(_tagsTextBox.Text).Take(13).ToList(),
+        };
+    }
+
+    private string BuildExternalImagePrompt()
+    {
+        var productTitle = _titleTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(productTitle))
+        {
+            productTitle = _externalTitleTextBox.Text.Trim();
+        }
+
+        var userPrompt = _imagePromptTextBox.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(userPrompt))
+        {
+            return userPrompt;
+        }
+
+        return
+            "Use the selected source image as the product reference. Do not invent a new product, do not change the product shape, color, scale, proportions, visible details, or physical category. " +
+            "Only improve the Etsy presentation: clean neutral studio background, realistic lighting, sharper product focus, natural shadow, marketplace-ready composition. " +
+            "No watermark, no logo, no copyrighted character branding, no text overlay. " +
+            $"Shop type: {_shopTypeTextBox.Text.Trim()}. Product: {productTitle}.";
+    }
+
     private void FillSelectedIdea()
     {
         if (SelectedIdea is null)
@@ -420,6 +572,10 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         _externalTitleTextBox.Text = SelectedIdea.Title;
         _externalUrlTextBox.Text = SelectedIdea.ProductUrl;
         _notesTextBox.Text = SelectedIdea.Notes;
+        if (string.IsNullOrWhiteSpace(_imagePromptTextBox.Text))
+        {
+            _imagePromptTextBox.Text = BuildExternalImagePrompt();
+        }
     }
 
     private void OpenSelectedSource() => OpenUrl(SelectedIdea?.ProductUrl ?? _externalUrlTextBox.Text);
@@ -546,6 +702,13 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             .Split([',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
             .Select(item => item.Trim())
             .Where(item => item.Length > 0)
+            .ToList();
+
+    private static IReadOnlyList<string> SplitPathList(string value) =>
+        value
+            .Split([';', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(path => path.Trim())
+            .Where(path => path.Length > 0 && File.Exists(path))
             .ToList();
 
     private static void OpenUrl(string? url)
