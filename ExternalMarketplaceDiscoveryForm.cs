@@ -26,6 +26,14 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly TextBox _imagePromptTextBox = new();
     private readonly TextBox _sourceImagePathTextBox = new();
     private readonly TextBox _generatedImagePathTextBox = new();
+    private readonly Label _scoreDecisionLabel = new();
+    private readonly Label _opportunityScoreLabel = new();
+    private readonly Label _demandScoreLabel = new();
+    private readonly Label _competitionScoreLabel = new();
+    private readonly Label _seoGapScoreLabel = new();
+    private readonly Label _priceScoreLabel = new();
+    private readonly Label _riskScoreLabel = new();
+    private readonly TextBox _scoreStrategyTextBox = new();
     private readonly NumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
     private readonly NumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
     private readonly TextBox _taxonomyInput = new();
@@ -182,28 +190,31 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         left.Controls.Add(_descriptionTextBox, 0, 7);
         layout.Controls.Add(left, 0, 0);
 
-        var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8 };
+        var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 10 };
+        middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 28));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 22));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 22));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 22));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
-        middle.Controls.Add(LabelFor("Tagler"), 0, 0);
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
+        middle.Controls.Add(BuildScoreCard(), 0, 0);
+        middle.Controls.Add(LabelFor("Tagler"), 0, 1);
         ConfigureMultiline(_tagsTextBox);
-        middle.Controls.Add(_tagsTextBox, 0, 1);
-        middle.Controls.Add(LabelFor("Materyaller"), 0, 2);
+        middle.Controls.Add(_tagsTextBox, 0, 2);
+        middle.Controls.Add(LabelFor("Materyaller"), 0, 3);
         ConfigureMultiline(_materialsTextBox);
-        middle.Controls.Add(_materialsTextBox, 0, 3);
-        middle.Controls.Add(LabelFor("AI gorsel promptu"), 0, 4);
+        middle.Controls.Add(_materialsTextBox, 0, 4);
+        middle.Controls.Add(LabelFor("AI gorsel promptu"), 0, 5);
         ConfigureMultiline(_imagePromptTextBox);
-        middle.Controls.Add(_imagePromptTextBox, 0, 5);
-        middle.Controls.Add(LabelFor("Notlar / kaynak kontrolu"), 0, 6);
+        middle.Controls.Add(_imagePromptTextBox, 0, 6);
+        middle.Controls.Add(LabelFor("Notlar / kaynak kontrolu"), 0, 7);
         ConfigureMultiline(_notesTextBox);
         _notesTextBox.ReadOnly = true;
-        middle.Controls.Add(_notesTextBox, 0, 7);
+        middle.Controls.Add(_notesTextBox, 0, 8);
+        middle.SetRowSpan(_notesTextBox, 2);
         layout.Controls.Add(middle, 1, 0);
 
         var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 28, AutoScroll = true };
@@ -295,6 +306,63 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         AddColumn("Skor detayi", nameof(ExternalProductIdea.ScoreDetails), 520);
         AddColumn("Neden firsat?", nameof(ExternalProductIdea.Reasons), 420);
         AddColumn("Not", nameof(ExternalProductIdea.Notes), 420);
+    }
+
+    private Control BuildScoreCard()
+    {
+        var card = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(8),
+            BackColor = Color.White,
+        };
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        card.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        card.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+        header.Controls.Add(new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Firsat puan karti",
+            Font = new Font("Segoe UI Semibold", 10.5F),
+            ForeColor = Color.FromArgb(23, 32, 49),
+            TextAlign = ContentAlignment.MiddleLeft,
+        }, 0, 0);
+        ConfigureBadge(_scoreDecisionLabel);
+        _scoreDecisionLabel.Text = "Urun sec";
+        header.Controls.Add(_scoreDecisionLabel, 1, 0);
+        card.Controls.Add(header, 0, 0);
+
+        var metrics = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6 };
+        for (var index = 0; index < 6; index++)
+        {
+            metrics.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.66F));
+        }
+
+        foreach (var label in new[] { _opportunityScoreLabel, _demandScoreLabel, _competitionScoreLabel, _seoGapScoreLabel, _priceScoreLabel, _riskScoreLabel })
+        {
+            ConfigureBadge(label);
+            metrics.Controls.Add(label);
+        }
+
+        card.Controls.Add(metrics, 0, 1);
+
+        _scoreStrategyTextBox.Dock = DockStyle.Fill;
+        _scoreStrategyTextBox.Multiline = true;
+        _scoreStrategyTextBox.ReadOnly = true;
+        _scoreStrategyTextBox.ScrollBars = ScrollBars.Vertical;
+        _scoreStrategyTextBox.BorderStyle = BorderStyle.None;
+        _scoreStrategyTextBox.BackColor = Color.White;
+        _scoreStrategyTextBox.ForeColor = Color.FromArgb(49, 59, 73);
+        card.Controls.Add(_scoreStrategyTextBox, 0, 2);
+
+        UpdateScoreCard(null);
+        return card;
     }
 
     private void SearchExternalSources()
@@ -581,9 +649,11 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     {
         if (SelectedIdea is null)
         {
+            UpdateScoreCard(null);
             return;
         }
 
+        UpdateScoreCard(SelectedIdea);
         _externalTitleTextBox.Text = SelectedIdea.Title;
         _externalUrlTextBox.Text = SelectedIdea.ProductUrl;
         _tagsTextBox.Text = SelectedIdea.Tags;
@@ -598,6 +668,85 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         {
             _imagePromptTextBox.Text = BuildExternalImagePrompt();
         }
+    }
+
+    private void UpdateScoreCard(ExternalProductIdea? idea)
+    {
+        if (idea is null)
+        {
+            SetBadge(_scoreDecisionLabel, "Urun sec", 0, true);
+            SetBadge(_opportunityScoreLabel, "Firsat", 0, true);
+            SetBadge(_demandScoreLabel, "Talep", 0, true);
+            SetBadge(_competitionScoreLabel, "Rekabet", 0, true);
+            SetBadge(_seoGapScoreLabel, "SEO", 0, true);
+            SetBadge(_priceScoreLabel, "Fiyat", 0, true);
+            SetBadge(_riskScoreLabel, "Risk", 0, false);
+            _scoreStrategyTextBox.Text = "Dis pazarlardan urun arayip bir satir sectiginde burada puan karti ve AI strateji notu gorunecek.";
+            return;
+        }
+
+        SetBadge(_scoreDecisionLabel, idea.Decision, idea.OpportunityScore, idea.RiskScore < 70);
+        SetBadge(_opportunityScoreLabel, "Firsat", idea.OpportunityScore, true);
+        SetBadge(_demandScoreLabel, "Talep", idea.DemandScore, true);
+        SetBadge(_competitionScoreLabel, "Rekabet", idea.CompetitionAdvantageScore, true);
+        SetBadge(_seoGapScoreLabel, "SEO", idea.SeoGapScore, true);
+        SetBadge(_priceScoreLabel, "Fiyat", idea.PricePotentialScore, true);
+        SetBadge(_riskScoreLabel, "Risk", idea.RiskScore, false);
+
+        _scoreStrategyTextBox.Text =
+            $"AI strateji notu: {BuildAiStrategyNote(idea)}{Environment.NewLine}" +
+            $"Skor detayi: {idea.ScoreDetails}{Environment.NewLine}" +
+            $"Risk kelimeleri: {idea.RiskTerms}";
+    }
+
+    private static string BuildAiStrategyNote(ExternalProductIdea idea)
+    {
+        if (idea.RiskScore >= 70)
+        {
+            return "Marka/telif riski yuksek. AI taslakta jenerik, lisans iddiasi olmayan ve rakip metnini kopyalamayan konumlandirma kullan.";
+        }
+
+        if (idea.OpportunityScore >= 75)
+        {
+            return "Guclu firsat. AI taslakta ana faydayi ilk 80 karakterde ver, fiyat/malzeme netligini artir ve gorselde urun odagini temiz tut.";
+        }
+
+        if (idea.OpportunityScore >= 55)
+        {
+            return "Test etmeye deger. Dusuk adetli taslak ac, baslik/tag SEO'sunu guclendir ve rakip gorsellerden daha temiz sunum hedefle.";
+        }
+
+        return "Izleme veya eleme adayi. Once fiyat, kategori ve talep sinyalini dogrula; AI taslak uretmeden once daha guclu rakip ornekleri ara.";
+    }
+
+    private static void ConfigureBadge(Label label)
+    {
+        label.Dock = DockStyle.Fill;
+        label.TextAlign = ContentAlignment.MiddleCenter;
+        label.ForeColor = Color.White;
+        label.Font = new Font("Segoe UI Semibold", 8.8F);
+        label.Margin = new Padding(3);
+        label.AutoEllipsis = true;
+    }
+
+    private static void SetBadge(Label label, string title, int score, bool highIsGood)
+    {
+        label.Text = title.Contains('/', StringComparison.Ordinal) || title.Length > 14
+            ? title
+            : $"{title}: {score}/100";
+        label.BackColor = ScoreColor(score, highIsGood);
+    }
+
+    private static Color ScoreColor(int score, bool highIsGood)
+    {
+        var normalized = highIsGood ? score : 100 - score;
+        return normalized switch
+        {
+            >= 75 => Color.FromArgb(20, 126, 76),
+            >= 55 => Color.FromArgb(190, 129, 26),
+            >= 40 => Color.FromArgb(198, 83, 35),
+            _ => Color.FromArgb(160, 58, 58),
+        };
     }
 
     private void OpenSelectedSource() => OpenUrl(SelectedIdea?.ProductUrl ?? _externalUrlTextBox.Text);
