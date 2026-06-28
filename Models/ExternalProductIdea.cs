@@ -22,6 +22,9 @@ internal sealed class ExternalProductIdea
     public string DecisionGroup { get; init; } = "";
     public string SuggestedStatus { get; init; } = "";
     public string UserStatus { get; set; } = "";
+    public string RecommendedAction { get; init; } = "";
+    public string ActionPriority { get; init; } = "";
+    public string ActionReason { get; init; } = "";
     public string Decision { get; init; } = "";
     public string Reasons { get; init; } = "";
     public string RiskTerms { get; init; } = "";

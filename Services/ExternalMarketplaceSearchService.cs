@@ -1,6 +1,7 @@
 namespace SimilarProductsWinForms.Services;
 
 using EtsyMarketPlace.Application.ExternalMarketplaces;
+using EtsyMarketPlace.Application.Automation;
 using EtsyMarketPlace.Domain.ProductOpportunity;
 using EtsyMarketPlace.Infrastructure.ExternalMarketplaces;
 using SimilarProductsWinForms.Models;
@@ -15,6 +16,7 @@ internal sealed class ExternalMarketplaceSearchService
         new HepsiburadaMarketplaceProvider(),
         new GoogleWebMarketplaceProvider(),
     ]);
+    private readonly OpportunityAutomationService automationService = new();
 
     public IReadOnlyList<string> SourceNames => opportunityService.SourceNames;
 
@@ -27,9 +29,17 @@ internal sealed class ExternalMarketplaceSearchService
             .Select(ToViewModel)
             .ToList();
 
-    private static ExternalProductIdea ToViewModel(ExternalMarketplaceOpportunity opportunity)
+    private ExternalProductIdea ToViewModel(ExternalMarketplaceOpportunity opportunity)
     {
         var product = opportunity.Product;
+        var recommendation = automationService.Recommend(new OpportunityAutomationInput(
+            product.Title,
+            opportunity.OpportunityScore,
+            opportunity.ScoreBreakdown.Demand,
+            opportunity.RiskScore,
+            opportunity.EtsyFitScore,
+            opportunity.DecisionGroup,
+            opportunity.SuggestedStatus));
         var riskTerms = opportunity.RiskTerms.Count == 0
             ? "Yok"
             : string.Join(", ", opportunity.RiskTerms);
@@ -55,12 +65,28 @@ internal sealed class ExternalMarketplaceSearchService
             DecisionGroup = DecisionGroupLabel(opportunity.DecisionGroup),
             SuggestedStatus = StatusLabel(opportunity.SuggestedStatus),
             UserStatus = StatusLabel(opportunity.SuggestedStatus),
+            RecommendedAction = recommendation.Action,
+            ActionPriority = recommendation.Priority,
+            ActionReason = recommendation.Reason,
             Decision = opportunity.Decision,
             RiskTerms = riskTerms,
             Reasons = string.Join(" | ", opportunity.Reasons.Take(4)),
             ScoreDetails = string.Join(" | ", opportunity.ScoreBreakdown.Summary),
             Notes = $"{product.Notes}. {opportunity.Decision}. Skor: {string.Join(" | ", opportunity.ScoreBreakdown.Summary)}. Kaynakta urunu ac, gercek fiyat/gorsel/satici bilgisini dogrula. Risk: {(opportunity.RiskTerms.Count == 0 ? "belirgin risk yok" : riskTerms)}.",
         };
+    }
+
+    public OpportunityAutomationReport BuildAutomationReport(IReadOnlyList<ExternalProductIdea> ideas)
+    {
+        var inputs = ideas.Select(idea => new OpportunityAutomationInput(
+            idea.Title,
+            idea.OpportunityScore,
+            idea.DemandScore,
+            idea.RiskScore,
+            idea.EtsyFitScore,
+            ParseDecisionGroup(idea.DecisionGroup),
+            ParseStatus(idea.UserStatus)));
+        return automationService.BuildReport(inputs);
     }
 
     public static string DecisionGroupLabel(OpportunityDecisionGroup group) => group switch
@@ -80,5 +106,24 @@ internal sealed class ExternalMarketplaceSearchService
         OpportunityUserStatus.AddedToEtsyDraft => "Etsy taslak eklendi",
         OpportunityUserStatus.Rejected => "Reddedildi",
         _ => "Yeni",
+    };
+
+    private static OpportunityDecisionGroup ParseDecisionGroup(string label) => label switch
+    {
+        "Guclu firsat" => OpportunityDecisionGroup.StrongOpportunity,
+        "Test edilebilir" => OpportunityDecisionGroup.WorthTesting,
+        "Riskli" => OpportunityDecisionGroup.Risky,
+        "Zayif / beklet" => OpportunityDecisionGroup.Weak,
+        _ => OpportunityDecisionGroup.All,
+    };
+
+    private static OpportunityUserStatus ParseStatus(string label) => label switch
+    {
+        "Izle" => OpportunityUserStatus.Watch,
+        "Test listesi" => OpportunityUserStatus.TestList,
+        "Taslak uretildi" => OpportunityUserStatus.DraftGenerated,
+        "Etsy taslak eklendi" => OpportunityUserStatus.AddedToEtsyDraft,
+        "Reddedildi" => OpportunityUserStatus.Rejected,
+        _ => OpportunityUserStatus.New,
     };
 }

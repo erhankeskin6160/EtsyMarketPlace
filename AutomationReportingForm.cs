@@ -1,9 +1,11 @@
 namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
+using System.Text;
 using EtsyMarketPlace.Application.Automation;
 using EtsyMarketPlace.Infrastructure.Automation;
 using EtsyMarketPlace.Infrastructure.Http;
+using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
 internal sealed class AutomationReportingForm(
@@ -18,6 +20,14 @@ internal sealed class AutomationReportingForm(
     private readonly NumericUpDown _orderAlertInput = new() { Minimum = 1, Maximum = 100, DecimalPlaces = 1 };
     private readonly TextBox _outputTextBox = new();
     private readonly TextBox _statusTextBox = new();
+    private readonly TextBox _queueShopTypeTextBox = new();
+    private readonly TextBox _queueKeywordTextBox = new();
+    private readonly NumericUpDown _queueLimitInput = new() { Minimum = 5, Maximum = 100, Value = 30 };
+    private readonly Label _queueSummaryLabel = new();
+    private readonly BindingSource _queueBindingSource = new();
+    private readonly DataGridView _queueGrid = new();
+    private readonly ExternalMarketplaceSearchService _externalSearchService = new();
+    private IReadOnlyList<ExternalProductIdea> _queueRows = [];
     private AutomationSettings _settings = new();
 
     protected override void OnLoad(EventArgs e)
@@ -47,13 +57,16 @@ internal sealed class AutomationReportingForm(
         BackColor = Color.FromArgb(247, 248, 250);
         Padding = new Padding(22);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 10 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 13 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 230));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
         for (var row = 1; row <= 6; row++) root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
@@ -123,13 +136,195 @@ internal sealed class AutomationReportingForm(
         root.Controls.Add(commands, 0, 8);
         root.SetColumnSpan(commands, 2);
 
+        var queueTitle = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "Firsat kuyrugu raporu",
+            Font = new Font("Segoe UI Semibold", 13F),
+            TextAlign = ContentAlignment.MiddleLeft,
+            ForeColor = Color.FromArgb(23, 32, 49),
+        };
+        root.Controls.Add(queueTitle, 0, 9);
+        root.SetColumnSpan(queueTitle, 2);
+        root.Controls.Add(BuildOpportunityQueueToolbar(), 0, 10);
+        root.SetColumnSpan(root.GetControlFromPosition(0, 10)!, 2);
+        ConfigureOpportunityQueueGrid();
+        root.Controls.Add(_queueGrid, 0, 11);
+        root.SetColumnSpan(_queueGrid, 2);
+
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
         _statusTextBox.BackColor = Color.White;
-        root.Controls.Add(_statusTextBox, 0, 9);
+        root.Controls.Add(_statusTextBox, 0, 12);
         root.SetColumnSpan(_statusTextBox, 2);
+    }
+
+    private Control BuildOpportunityQueueToolbar()
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9 };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
+
+        panel.Controls.Add(LabelFor("Magaza turu"), 0, 0);
+        _queueShopTypeTextBox.Dock = DockStyle.Fill;
+        _queueShopTypeTextBox.PlaceholderText = "Orn: 3D cosplay prop";
+        panel.Controls.Add(_queueShopTypeTextBox, 1, 0);
+        panel.Controls.Add(LabelFor("Anahtar kelime"), 2, 0);
+        _queueKeywordTextBox.Dock = DockStyle.Fill;
+        _queueKeywordTextBox.PlaceholderText = "Orn: fantasy bust";
+        panel.Controls.Add(_queueKeywordTextBox, 3, 0);
+        panel.Controls.Add(LabelFor("Limit"), 4, 0);
+        _queueLimitInput.Dock = DockStyle.Fill;
+        panel.Controls.Add(_queueLimitInput, 5, 0);
+        var run = CreateButton("Rapor Uret");
+        run.Click += (_, _) => RunOpportunityQueueReport();
+        panel.Controls.Add(run, 6, 0);
+        var export = CreateButton("CSV Aktar");
+        export.Click += (_, _) => ExportOpportunityQueueCsv();
+        panel.Controls.Add(export, 7, 0);
+        _queueSummaryLabel.Dock = DockStyle.Fill;
+        _queueSummaryLabel.TextAlign = ContentAlignment.MiddleLeft;
+        _queueSummaryLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _queueSummaryLabel.Text = "Urun arayip otomasyon aksiyon raporu uret.";
+        panel.Controls.Add(_queueSummaryLabel, 8, 0);
+        return panel;
+    }
+
+    private void ConfigureOpportunityQueueGrid()
+    {
+        _queueGrid.Dock = DockStyle.Fill;
+        _queueGrid.AutoGenerateColumns = false;
+        _queueGrid.AllowUserToAddRows = false;
+        _queueGrid.AllowUserToDeleteRows = false;
+        _queueGrid.ReadOnly = true;
+        _queueGrid.RowHeadersVisible = false;
+        _queueGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _queueGrid.BackgroundColor = Color.White;
+        _queueGrid.DataSource = _queueBindingSource;
+        _queueGrid.CellDoubleClick += (_, _) => OpenSelectedQueueUrl();
+        AddQueueColumn("Aksiyon", nameof(ExternalProductIdea.RecommendedAction), 130);
+        AddQueueColumn("Oncelik", nameof(ExternalProductIdea.ActionPriority), 85);
+        AddQueueColumn("Firsat", nameof(ExternalProductIdea.Opportunity), 70);
+        AddQueueColumn("Karar", nameof(ExternalProductIdea.DecisionGroup), 120);
+        AddQueueColumn("Kuyruk", nameof(ExternalProductIdea.UserStatus), 110);
+        AddQueueColumn("Urun", nameof(ExternalProductIdea.Title), 360, true);
+        AddQueueColumn("Kaynak", nameof(ExternalProductIdea.Source), 120);
+        AddQueueColumn("Fiyat", nameof(ExternalProductIdea.Price), 110);
+        AddQueueColumn("Risk", nameof(ExternalProductIdea.Risk), 70);
+        AddQueueColumn("Neden", nameof(ExternalProductIdea.ActionReason), 460);
+        AddQueueColumn("Link", nameof(ExternalProductIdea.ProductUrl), 320);
+    }
+
+    private void RunOpportunityQueueReport()
+    {
+        try
+        {
+            UseWaitCursor = true;
+            var rows = _externalSearchService
+                .BuildSearchIdeas(_queueShopTypeTextBox.Text, _queueKeywordTextBox.Text, [])
+                .Take((int)_queueLimitInput.Value)
+                .ToList();
+            var report = _externalSearchService.BuildAutomationReport(rows);
+            _queueRows = rows
+                .OrderBy(row => PriorityRank(row.ActionPriority))
+                .ThenByDescending(row => row.OpportunityScore)
+                .ToList();
+            _queueBindingSource.DataSource = _queueRows;
+            _queueSummaryLabel.Text =
+                $"Toplam {report.Summary.Total} | Guclu {report.Summary.Strong} | Test {report.Summary.WorthTesting} | Riskli {report.Summary.Risky} | AI taslak {report.Summary.DraftReady} | Ort. {report.Summary.AverageOpportunity:0.#}";
+            AppendStatus($"Firsat kuyrugu raporu uretildi: {_queueRows.Count} satir.");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Firsat kuyrugu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            AppendStatus("Firsat kuyrugu raporu uretilemedi.");
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private void ExportOpportunityQueueCsv()
+    {
+        if (_queueRows.Count == 0)
+        {
+            MessageBox.Show(this, "Aktarilacak firsat raporu yok.", "CSV", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Firsat kuyrugu CSV kaydet",
+            Filter = "CSV dosyasi|*.csv",
+            FileName = $"firsat-kuyrugu-{DateTime.Now:yyyyMMdd-HHmm}.csv",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        File.WriteAllText(dialog.FileName, BuildOpportunityQueueCsv(), Encoding.UTF8);
+        AppendStatus($"Firsat kuyrugu CSV aktarildi: {dialog.FileName}");
+    }
+
+    private string BuildOpportunityQueueCsv()
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine("Aksiyon,Oncelik,Firsat,Karar,Kuyruk,Urun,Kaynak,Fiyat,Risk,Neden,Link");
+        foreach (var row in _queueRows)
+        {
+            builder.AppendLine(string.Join(",", [
+                Csv(row.RecommendedAction),
+                Csv(row.ActionPriority),
+                Csv(row.Opportunity),
+                Csv(row.DecisionGroup),
+                Csv(row.UserStatus),
+                Csv(row.Title),
+                Csv(row.Source),
+                Csv(row.Price),
+                Csv(row.Risk),
+                Csv(row.ActionReason),
+                Csv(row.ProductUrl),
+            ]));
+        }
+
+        return builder.ToString();
+    }
+
+    private void OpenSelectedQueueUrl()
+    {
+        if (_queueBindingSource.Current is not ExternalProductIdea idea || string.IsNullOrWhiteSpace(idea.ProductUrl)) return;
+        Process.Start(new ProcessStartInfo(idea.ProductUrl) { UseShellExecute = true });
+    }
+
+    private void AddQueueColumn(string header, string property, int width, bool fill = false)
+    {
+        _queueGrid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            HeaderText = header,
+            DataPropertyName = property,
+            Width = width,
+            AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None,
+        });
+    }
+
+    private static int PriorityRank(string priority) => priority switch
+    {
+        "Yuksek" => 0,
+        "Orta" => 1,
+        _ => 2,
+    };
+
+    private static string Csv(string value)
+    {
+        var clean = value.Replace("\"", "\"\"");
+        return $"\"{clean}\"";
     }
 
     private void LoadSettings()
