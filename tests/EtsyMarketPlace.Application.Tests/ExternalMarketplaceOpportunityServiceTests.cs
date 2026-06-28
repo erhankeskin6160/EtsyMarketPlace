@@ -42,6 +42,41 @@ public sealed class ExternalMarketplaceOpportunityServiceTests
         });
     }
 
+    [Fact]
+    public void EbayProviderFallsBackWhenApiSettingsAreMissing()
+    {
+        var provider = new EbayMarketplaceProvider(new FakeEbayApiClient(), () => new EbayApiSettings());
+        var products = provider.Search(new ExternalMarketplaceSearchContext(
+            "3D cosplay prop",
+            "dragon bust",
+            ExternalMarketplaceOpportunityService.BuildQuery("3D cosplay prop", "dragon bust")));
+
+        Assert.Equal(3, products.Count);
+        Assert.All(products, product => Assert.Contains("ebay.com", product.SearchUrl));
+    }
+
+    [Fact]
+    public void EbayProviderMapsApiProductsWhenCredentialsExist()
+    {
+        var provider = new EbayMarketplaceProvider(
+            new FakeEbayApiClient(),
+            () => new EbayApiSettings { ClientId = "client", ClientSecret = "secret", MarketplaceId = "EBAY_US" });
+
+        var products = provider.Search(new ExternalMarketplaceSearchContext(
+            "3D cosplay prop",
+            "dragon bust",
+            ExternalMarketplaceOpportunityService.BuildQuery("3D cosplay prop", "dragon bust")));
+
+        var product = Assert.Single(products);
+        Assert.Equal("eBay", product.Source);
+        Assert.Equal("Handmade Dragon Bust Display", product.Title);
+        Assert.Equal("https://www.ebay.com/itm/123", product.ProductUrl);
+        Assert.Equal("https://i.ebayimg.test/dragon.jpg", product.ImageUrl);
+        Assert.Equal(89, product.Price);
+        Assert.Contains("Collectibles", product.CategoryHint);
+        Assert.Contains("api", product.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class FakeProvider : IExternalMarketplaceProvider
     {
         public string Name => "Fake Market";
@@ -77,5 +112,30 @@ public sealed class ExternalMarketplaceOpportunityServiceTests
                 120,
                 "Weak signal"),
         ];
+    }
+
+    private sealed class FakeEbayApiClient : IEbayApiClient
+    {
+        public Task<IReadOnlyList<EbayApiProduct>> SearchAsync(
+            EbayApiSettings settings,
+            string query,
+            CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<EbayApiProduct> products =
+            [
+                new(
+                    "Handmade Dragon Bust Display",
+                    "https://www.ebay.com/itm/123",
+                    "https://i.ebayimg.test/dragon.jpg",
+                    "DragonSeller",
+                    "Collectibles > Fantasy",
+                    89,
+                    "USD",
+                    190,
+                    2400,
+                    ["dragon", "bust", "fantasy", "display", "collectible"]),
+            ];
+            return Task.FromResult(products);
+        }
     }
 }

@@ -9,7 +9,7 @@ internal sealed class ExternalMarketplaceSearchService
     private readonly ExternalMarketplaceOpportunityService opportunityService = new(
     [
         new GoogleShoppingMarketplaceProvider(),
-        new EbayMarketplaceProvider(),
+        new EbayMarketplaceProvider(new EbayApiClient(), EbayApiSettingsStore.Load),
         new TrendyolMarketplaceProvider(),
         new HepsiburadaMarketplaceProvider(),
         new GoogleWebMarketplaceProvider(),

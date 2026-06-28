@@ -10,7 +10,7 @@ public abstract class SearchUrlMarketplaceProvider : IExternalMarketplaceProvide
 
     protected abstract int BaseScore { get; }
 
-    public IReadOnlyList<MarketplaceProduct> Search(ExternalMarketplaceSearchContext context) =>
+    public virtual IReadOnlyList<MarketplaceProduct> Search(ExternalMarketplaceSearchContext context) =>
         Variants(context)
             .Select(variant => ToProduct(context, variant))
             .ToList();
@@ -69,11 +69,50 @@ public sealed class GoogleShoppingMarketplaceProvider : SearchUrlMarketplaceProv
 
 public sealed class EbayMarketplaceProvider : SearchUrlMarketplaceProvider
 {
+    private readonly IEbayApiClient? apiClient;
+    private readonly Func<EbayApiSettings>? settingsProvider;
+
+    public EbayMarketplaceProvider()
+    {
+    }
+
+    public EbayMarketplaceProvider(IEbayApiClient apiClient, Func<EbayApiSettings> settingsProvider)
+    {
+        this.apiClient = apiClient;
+        this.settingsProvider = settingsProvider;
+    }
+
     public override string Name => "eBay";
 
     protected override string SearchUrlFormat => "https://www.ebay.com/sch/i.html?_nkw={0}";
 
     protected override int BaseScore => 76;
+
+    public override IReadOnlyList<MarketplaceProduct> Search(ExternalMarketplaceSearchContext context)
+    {
+        if (apiClient is null || settingsProvider is null)
+        {
+            return base.Search(context);
+        }
+
+        var settings = settingsProvider();
+        if (!settings.HasCredentials)
+        {
+            return base.Search(context);
+        }
+
+        try
+        {
+            var products = apiClient.SearchAsync(settings, context.Query).GetAwaiter().GetResult();
+            return products.Count == 0
+                ? base.Search(context)
+                : products.Select(product => ToMarketplaceProduct(product, context)).ToList();
+        }
+        catch
+        {
+            return base.Search(context);
+        }
+    }
 
     protected override IReadOnlyList<QueryVariant> Variants(ExternalMarketplaceSearchContext context) =>
     [
@@ -81,6 +120,31 @@ public sealed class EbayMarketplaceProvider : SearchUrlMarketplaceProvider
         new($"{context.Query} collectible", "Koleksiyon/nis urun sinyali", 6, 75, "eBay seller", ""),
         new($"{context.Query} custom handmade", "Etsy uyumlu varyasyon sinyali", 8, 85, "eBay seller", ""),
     ];
+
+    private static MarketplaceProduct ToMarketplaceProduct(EbayApiProduct product, ExternalMarketplaceSearchContext context)
+    {
+        var category = string.IsNullOrWhiteSpace(product.Category)
+            ? ExternalMarketplaceOpportunityService.InferCategory(context.ShopType, context.Keyword)
+            : product.Category;
+        var tags = product.Tags.Count == 0
+            ? ExternalMarketplaceOpportunityService.BuildTags(context.ShopType, context.Keyword, product.Title)
+            : product.Tags;
+
+        return new MarketplaceProduct(
+            "eBay",
+            product.Title,
+            product.Url,
+            $"https://www.ebay.com/sch/i.html?_nkw={Uri.EscapeDataString(context.Query)}",
+            string.IsNullOrWhiteSpace(product.SellerName) ? "eBay seller" : product.SellerName,
+            product.ImageUrl,
+            category,
+            tags,
+            product.Price,
+            84,
+            Math.Clamp(product.DemandSignal, 15, 260),
+            Math.Clamp(product.ShopSignal, 80, 7000),
+            $"eBay API gercek urun verisi. Para birimi: {(string.IsNullOrWhiteSpace(product.Currency) ? "bilinmiyor" : product.Currency)}");
+    }
 }
 
 public sealed class TrendyolMarketplaceProvider : SearchUrlMarketplaceProvider
