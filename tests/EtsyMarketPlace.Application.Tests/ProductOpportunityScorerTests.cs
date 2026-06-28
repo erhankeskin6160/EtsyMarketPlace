@@ -25,6 +25,9 @@ public sealed class ProductOpportunityScorerTests
         Assert.True(score.Opportunity >= 50);
         Assert.True(score.Demand >= 50);
         Assert.True(score.SeoGap >= 40);
+        Assert.Equal(score.Demand, score.Breakdown.Demand);
+        Assert.Equal(score.SeoGap, score.Breakdown.SeoGap);
+        Assert.NotEmpty(score.Breakdown.Summary);
     }
 
     [Fact]
@@ -80,5 +83,28 @@ public sealed class ProductOpportunityScorerTests
         Assert.Contains("gandalf", terms);
         Assert.Contains("lotr", terms);
         Assert.Contains("lord of the rings", terms);
+    }
+
+    [Fact]
+    public void ScoreBreakdown_ExplainsCompetitionAdvantageAndRiskPenalty()
+    {
+        var scorer = new ProductOpportunityScorer();
+        var score = scorer.Score(new ProductOpportunityInput(
+            "Generic Hand Painted Dragon Shelf Bust",
+            "Fantasy shelf decor for collectors with original handmade styling.",
+            ["dragon bust", "fantasy decor", "shelf display"],
+            74,
+            90,
+            1800,
+            240,
+            68,
+            3,
+            "dragon bust",
+            "Art & Collectibles > Sculpture > Figurines"));
+
+        Assert.Equal(100 - score.Competition, score.Breakdown.CompetitionAdvantage);
+        Assert.Equal(score.Risk, score.Breakdown.RiskPenalty);
+        Assert.Contains(score.Breakdown.Summary, item => item.Contains("Rekabet", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("opportunity-v2.1", score.Breakdown.AlgorithmVersion);
     }
 }

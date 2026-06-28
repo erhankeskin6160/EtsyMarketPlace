@@ -1,5 +1,7 @@
 namespace EtsyMarketPlace.Application.ExternalMarketplaces;
 
+using EtsyMarketPlace.Domain.ProductOpportunity;
+
 public sealed record ExternalMarketplaceSearchRequest(
     string ShopType,
     string Keyword,
@@ -32,6 +34,7 @@ public sealed record ExternalMarketplaceOpportunity(
     int OpportunityScore,
     int EtsyFitScore,
     int RiskScore,
+    OpportunityScoreBreakdown ScoreBreakdown,
     string Decision,
     IReadOnlyList<string> RiskTerms,
     IReadOnlyList<string> Reasons);

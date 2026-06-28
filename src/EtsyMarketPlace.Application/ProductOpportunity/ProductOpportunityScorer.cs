@@ -1,7 +1,16 @@
 namespace EtsyMarketPlace.Application.ProductOpportunity;
 
+using EtsyMarketPlace.Domain.ProductOpportunity;
+
 public sealed class ProductOpportunityScorer
 {
+    private const string AlgorithmVersion = "opportunity-v2.1";
+    private const decimal DemandWeight = 0.34m;
+    private const decimal CompetitionWeight = 0.20m;
+    private const decimal SeoGapWeight = 0.18m;
+    private const decimal PriceWeight = 0.18m;
+    private const decimal RiskWeight = 0.20m;
+
     private static readonly string[] RiskTerms =
     [
         "disney", "marvel", "dc", "pokemon", "nintendo", "harry potter", "star wars", "lotr",
@@ -14,17 +23,34 @@ public sealed class ProductOpportunityScorer
     {
         var demand = DemandScore(input);
         var competition = CompetitionScore(input);
+        var competitionAdvantage = Math.Clamp(100 - competition, 0, 100);
         var seoGap = Math.Clamp(100 - input.SeoScore, 0, 100);
         var pricePotential = PricePotentialScore(input.Price);
         var risk = RiskScore(input);
+        var riskPenalty = Math.Clamp(risk, 0, 100);
 
         var opportunity = (int)Math.Round(
-            demand * 0.34m +
-            seoGap * 0.18m +
-            pricePotential * 0.18m +
-            Math.Clamp(100 - competition, 0, 100) * 0.20m -
-            risk * 0.20m);
+            demand * DemandWeight +
+            seoGap * SeoGapWeight +
+            pricePotential * PriceWeight +
+            competitionAdvantage * CompetitionWeight -
+            riskPenalty * RiskWeight);
         opportunity = Math.Clamp(opportunity, 0, 100);
+        var breakdown = new OpportunityScoreBreakdown(
+            demand,
+            competition,
+            competitionAdvantage,
+            seoGap,
+            pricePotential,
+            risk,
+            riskPenalty,
+            DemandWeight,
+            CompetitionWeight,
+            SeoGapWeight,
+            PriceWeight,
+            RiskWeight,
+            AlgorithmVersion,
+            BreakdownSummary(demand, competitionAdvantage, seoGap, pricePotential, risk));
 
         return new ProductOpportunityScore(
             opportunity,
@@ -34,6 +60,7 @@ public sealed class ProductOpportunityScorer
             pricePotential,
             risk,
             Decision(opportunity, risk),
+            breakdown,
             Reasons(input, demand, competition, seoGap, pricePotential, risk));
     }
 
@@ -119,6 +146,35 @@ public sealed class ProductOpportunityScorer
         }
 
         return reasons;
+    }
+
+    private static IReadOnlyList<string> BreakdownSummary(
+        int demand,
+        int competitionAdvantage,
+        int seoGap,
+        int pricePotential,
+        int risk)
+    {
+        var summary = new List<string>
+        {
+            $"Talep: {demand}/100",
+            $"Rekabet avantaji: {competitionAdvantage}/100",
+            $"SEO boslugu: {seoGap}/100",
+            $"Fiyat potansiyeli: {pricePotential}/100",
+            $"Risk cezasi: -{risk}/100",
+        };
+
+        if (demand >= 70 && competitionAdvantage >= 45)
+        {
+            summary.Add("Yuksek talep ve yonetilebilir rekabet birlikte gorunuyor.");
+        }
+
+        if (risk >= 45)
+        {
+            summary.Add("Marka/telif riski manuel kontrol gerektirir.");
+        }
+
+        return summary;
     }
 
     private static string Decision(int opportunity, int risk) =>

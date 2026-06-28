@@ -15,10 +15,19 @@ internal sealed class ExternalProductIdea
     public int OpportunityScore { get; init; }
     public int EtsyFitScore { get; init; }
     public int RiskScore { get; init; }
+    public int DemandScore { get; init; }
+    public int CompetitionAdvantageScore { get; init; }
+    public int SeoGapScore { get; init; }
+    public int PricePotentialScore { get; init; }
     public string Decision { get; init; } = "";
     public string Reasons { get; init; } = "";
     public string RiskTerms { get; init; } = "";
+    public string ScoreDetails { get; init; } = "";
     public string Opportunity => $"{OpportunityScore}/100";
     public string EtsyFit => $"{EtsyFitScore}/100";
     public string Risk => $"{RiskScore}/100";
+    public string Demand => $"{DemandScore}/100";
+    public string CompetitionAdvantage => $"{CompetitionAdvantageScore}/100";
+    public string SeoGap => $"{SeoGapScore}/100";
+    public string PricePotential => $"{PricePotentialScore}/100";
 }

@@ -279,6 +279,10 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         _grid.CellDoubleClick += (_, _) => OpenSelectedSource();
         AddColumn("Kaynak", nameof(ExternalProductIdea.Source), 130);
         AddColumn("Firsat", nameof(ExternalProductIdea.Opportunity), 75);
+        AddColumn("Talep", nameof(ExternalProductIdea.Demand), 75);
+        AddColumn("Rekabet avantaji", nameof(ExternalProductIdea.CompetitionAdvantage), 125);
+        AddColumn("SEO boslugu", nameof(ExternalProductIdea.SeoGap), 95);
+        AddColumn("Fiyat pot.", nameof(ExternalProductIdea.PricePotential), 85);
         AddColumn("Etsy uyum", nameof(ExternalProductIdea.EtsyFit), 85);
         AddColumn("Risk", nameof(ExternalProductIdea.Risk), 75);
         AddColumn("Karar", nameof(ExternalProductIdea.Decision), 145);
@@ -288,6 +292,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         AddColumn("Kategori", nameof(ExternalProductIdea.Category), 220);
         AddColumn("Link", nameof(ExternalProductIdea.ProductUrl), 360);
         AddColumn("Risk kelimeleri", nameof(ExternalProductIdea.RiskTerms), 180);
+        AddColumn("Skor detayi", nameof(ExternalProductIdea.ScoreDetails), 520);
         AddColumn("Neden firsat?", nameof(ExternalProductIdea.Reasons), 420);
         AddColumn("Not", nameof(ExternalProductIdea.Notes), 420);
     }
