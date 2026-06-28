@@ -276,9 +276,16 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         _grid.CellDoubleClick += (_, _) => OpenSelectedSource();
         AddColumn("Kaynak", nameof(ExternalProductIdea.Source), 130);
         AddColumn("Firsat", nameof(ExternalProductIdea.Opportunity), 75);
+        AddColumn("Etsy uyum", nameof(ExternalProductIdea.EtsyFit), 85);
+        AddColumn("Risk", nameof(ExternalProductIdea.Risk), 75);
+        AddColumn("Karar", nameof(ExternalProductIdea.Decision), 145);
         AddColumn("Arama / urun fikri", nameof(ExternalProductIdea.Title), 420, true);
         AddColumn("Fiyat", nameof(ExternalProductIdea.Price), 90);
+        AddColumn("Satici", nameof(ExternalProductIdea.SellerName), 125);
+        AddColumn("Kategori", nameof(ExternalProductIdea.Category), 220);
         AddColumn("Link", nameof(ExternalProductIdea.ProductUrl), 360);
+        AddColumn("Risk kelimeleri", nameof(ExternalProductIdea.RiskTerms), 180);
+        AddColumn("Neden firsat?", nameof(ExternalProductIdea.Reasons), 420);
         AddColumn("Not", nameof(ExternalProductIdea.Notes), 420);
     }
 
@@ -571,7 +578,14 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
 
         _externalTitleTextBox.Text = SelectedIdea.Title;
         _externalUrlTextBox.Text = SelectedIdea.ProductUrl;
-        _notesTextBox.Text = SelectedIdea.Notes;
+        _tagsTextBox.Text = SelectedIdea.Tags;
+        _notesTextBox.Text =
+            $"Karar: {SelectedIdea.Decision}{Environment.NewLine}" +
+            $"Etsy uyum: {SelectedIdea.EtsyFit} | Risk: {SelectedIdea.Risk}{Environment.NewLine}" +
+            $"Kategori: {SelectedIdea.Category}{Environment.NewLine}" +
+            $"Risk kelimeleri: {SelectedIdea.RiskTerms}{Environment.NewLine}{Environment.NewLine}" +
+            $"Neden firsat olabilir:{Environment.NewLine}{SelectedIdea.Reasons}{Environment.NewLine}{Environment.NewLine}" +
+            SelectedIdea.Notes;
         if (string.IsNullOrWhiteSpace(_imagePromptTextBox.Text))
         {
             _imagePromptTextBox.Text = BuildExternalImagePrompt();
