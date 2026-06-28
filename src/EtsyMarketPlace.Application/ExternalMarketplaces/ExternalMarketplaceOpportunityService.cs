@@ -65,6 +65,7 @@ public sealed class ExternalMarketplaceOpportunityService(
             opportunity,
             etsyFit,
             score.Risk,
+            score.Breakdown,
             score.Decision,
             riskTerms,
             score.Reasons.Take(4).ToList());

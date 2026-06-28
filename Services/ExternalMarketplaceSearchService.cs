@@ -47,10 +47,15 @@ internal sealed class ExternalMarketplaceSearchService
             OpportunityScore = opportunity.OpportunityScore,
             EtsyFitScore = opportunity.EtsyFitScore,
             RiskScore = opportunity.RiskScore,
+            DemandScore = opportunity.ScoreBreakdown.Demand,
+            CompetitionAdvantageScore = opportunity.ScoreBreakdown.CompetitionAdvantage,
+            SeoGapScore = opportunity.ScoreBreakdown.SeoGap,
+            PricePotentialScore = opportunity.ScoreBreakdown.PricePotential,
             Decision = opportunity.Decision,
             RiskTerms = riskTerms,
             Reasons = string.Join(" | ", opportunity.Reasons.Take(4)),
-            Notes = $"{product.Notes}. {opportunity.Decision}. Kaynakta urunu ac, gercek fiyat/gorsel/satici bilgisini dogrula. Risk: {(opportunity.RiskTerms.Count == 0 ? "belirgin risk yok" : riskTerms)}.",
+            ScoreDetails = string.Join(" | ", opportunity.ScoreBreakdown.Summary),
+            Notes = $"{product.Notes}. {opportunity.Decision}. Skor: {string.Join(" | ", opportunity.ScoreBreakdown.Summary)}. Kaynakta urunu ac, gercek fiyat/gorsel/satici bilgisini dogrula. Risk: {(opportunity.RiskTerms.Count == 0 ? "belirgin risk yok" : riskTerms)}.",
         };
     }
 }

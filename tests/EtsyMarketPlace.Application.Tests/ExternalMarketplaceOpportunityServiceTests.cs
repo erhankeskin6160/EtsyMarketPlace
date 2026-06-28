@@ -21,6 +21,9 @@ public sealed class ExternalMarketplaceOpportunityServiceTests
         Assert.Equal("Fake Market", results[0].Product.Source);
         Assert.NotEmpty(results[0].Tags);
         Assert.Contains("Sculpture", results[0].Category);
+        Assert.NotNull(results[0].ScoreBreakdown);
+        Assert.NotEmpty(results[0].ScoreBreakdown.Summary);
+        Assert.True(results[0].ScoreBreakdown.Demand >= 0);
     }
 
     [Fact]

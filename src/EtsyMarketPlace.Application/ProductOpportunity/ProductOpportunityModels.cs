@@ -1,5 +1,7 @@
 namespace EtsyMarketPlace.Application.ProductOpportunity;
 
+using EtsyMarketPlace.Domain.ProductOpportunity;
+
 public sealed record ProductOpportunityInput(
     string Title,
     string Description,
@@ -21,4 +23,5 @@ public sealed record ProductOpportunityScore(
     int PricePotential,
     int Risk,
     string Decision,
+    OpportunityScoreBreakdown Breakdown,
     IReadOnlyList<string> Reasons);
