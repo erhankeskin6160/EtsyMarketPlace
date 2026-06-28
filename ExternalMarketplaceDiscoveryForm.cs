@@ -95,13 +95,13 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
 
     private Control BuildToolbar()
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 10, RowCount = 2, Padding = new Padding(0, 0, 0, 8) };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 11, RowCount = 2, Padding = new Padding(0, 0, 0, 8) };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
-        for (var index = 5; index < 10; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        for (var index = 5; index < 11; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
@@ -140,7 +140,10 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         create.BackColor = Color.FromArgb(20, 126, 76);
         create.Click += async (_, _) => await CreateDraftListingAsync();
         toolbar.Controls.Add(create, 9, 0);
-        foreach (var button in new[] { search, open, verify, aiDraft, create })
+        var settings = CreateButton("Pazar API");
+        settings.Click += (_, _) => OpenExternalMarketplaceSettings();
+        toolbar.Controls.Add(settings, 10, 0);
+        foreach (var button in new[] { search, open, verify, aiDraft, create, settings })
         {
             toolbar.SetRowSpan(button, 2);
         }
@@ -707,6 +710,12 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         var physical = !IsDigitalListingSelected();
         _shippingProfileComboBox.Enabled = physical;
         _readinessStateComboBox.Enabled = physical;
+    }
+
+    private void OpenExternalMarketplaceSettings()
+    {
+        using var form = new ExternalMarketplaceSettingsForm();
+        form.ShowDialog(this);
     }
 
     private static string SafeTitle(string title) => title.Length <= 140 ? title : title[..140].TrimEnd();
