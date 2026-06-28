@@ -10,6 +10,26 @@ public sealed class EbayApiClient(HttpClient? httpClient = null) : IEbayApiClien
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly HttpClient httpClient = httpClient ?? new HttpClient { Timeout = TimeSpan.FromSeconds(18) };
 
+    public async Task<string> TestConnectionAsync(
+        EbayApiSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        if (!settings.HasCredentials)
+        {
+            throw new InvalidOperationException("eBay Client ID ve Client Secret girilmelidir.");
+        }
+
+        var testSettings = new EbayApiSettings
+        {
+            ClientId = settings.ClientId,
+            ClientSecret = settings.ClientSecret,
+            MarketplaceId = string.IsNullOrWhiteSpace(settings.MarketplaceId) ? "EBAY_US" : settings.MarketplaceId,
+            Limit = Math.Clamp(settings.Limit <= 0 ? 5 : settings.Limit, 1, 5),
+        };
+        var products = await SearchAsync(testSettings, "handmade gift", cancellationToken);
+        return $"Baglanti basarili. {products.Count} eBay urunu okundu.";
+    }
+
     public async Task<IReadOnlyList<EbayApiProduct>> SearchAsync(
         EbayApiSettings settings,
         string query,
