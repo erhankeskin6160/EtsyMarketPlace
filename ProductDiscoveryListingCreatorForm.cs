@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
@@ -18,12 +19,14 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private readonly DataGridView _grid = new();
     private readonly TextBox _shopTypeTextBox = new();
     private readonly TextBox _keywordTextBox = new();
+    private readonly TextBox _listingLinkTextBox = new();
     private readonly TextBox _includeTextBox = new();
     private readonly TextBox _excludeTextBox = new();
     private readonly TextBox _titleTextBox = new();
     private readonly TextBox _descriptionTextBox = new();
     private readonly TextBox _tagsTextBox = new();
     private readonly TextBox _materialsTextBox = new();
+    private readonly TextBox _variationsTextBox = new();
     private readonly TextBox _imagePromptTextBox = new();
     private readonly TextBox _imagePathTextBox = new();
     private readonly TextBox _notesTextBox = new();
@@ -66,7 +69,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 126));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 154));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
         Controls.Add(root);
@@ -164,8 +167,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private Control BuildToolbar()
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 1, Padding = new Padding(0, 18, 0, 18) };
-        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 2, Padding = new Padding(0, 10, 0, 10) };
+        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
@@ -197,6 +201,15 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
         toolbar.Controls.Add(close, 8, 0);
+
+        toolbar.Controls.Add(LabelFor("Etsy listing linki"), 0, 1);
+        _listingLinkTextBox.Dock = DockStyle.Fill;
+        _listingLinkTextBox.PlaceholderText = "Orn: https://www.etsy.com/listing/123456789/urun-adi";
+        toolbar.Controls.Add(_listingLinkTextBox, 1, 1);
+        toolbar.SetColumnSpan(_listingLinkTextBox, 3);
+        var importLink = CreateButton("Linkten Al");
+        importLink.Click += async (_, _) => await ImportListingLinkAsync();
+        toolbar.Controls.Add(importLink, 4, 1);
         return toolbar;
     }
 
@@ -224,22 +237,27 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         left.Controls.Add(_descriptionTextBox, 0, 4);
         layout.Controls.Add(left, 0, 0);
 
-        var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6 };
+        var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8 };
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 33));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 33));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 22));
         middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 34));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
+        middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
+        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
         middle.Controls.Add(LabelFor("Tagler"), 0, 0);
         ConfigureMultiline(_tagsTextBox);
         middle.Controls.Add(_tagsTextBox, 0, 1);
         middle.Controls.Add(LabelFor("Materyaller"), 0, 2);
         ConfigureMultiline(_materialsTextBox);
         middle.Controls.Add(_materialsTextBox, 0, 3);
-        middle.Controls.Add(LabelFor("AI gorsel promptlari (satir satir)"), 0, 4);
+        middle.Controls.Add(LabelFor("Varyasyon onerileri"), 0, 4);
+        ConfigureMultiline(_variationsTextBox);
+        middle.Controls.Add(_variationsTextBox, 0, 5);
+        middle.Controls.Add(LabelFor("AI gorsel promptlari (satir satir)"), 0, 6);
         ConfigureMultiline(_imagePromptTextBox);
-        middle.Controls.Add(_imagePromptTextBox, 0, 5);
+        middle.Controls.Add(_imagePromptTextBox, 0, 7);
         layout.Controls.Add(middle, 1, 0);
 
         var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 20, AutoScroll = true };
@@ -427,6 +445,95 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         }
     }
 
+    private async Task ImportListingLinkAsync()
+    {
+        var link = _listingLinkTextBox.Text.Trim();
+        if (!TryExtractListingId(link, out var listingId))
+        {
+            MessageBox.Show(this, "Gecerli bir Etsy listing linki girin. Ornek: https://www.etsy.com/listing/123456789/urun-adi", "Linkten al", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            StartBusy("Etsy linkinden listing aliniyor");
+            ClearDraftFields();
+            var settings = EtsyApiSettingsStore.Load();
+            var listing = await _apiClient.GetPublicListingAsync(settings, listingId, PrimaryKeyword());
+            EtsyApiSettingsStore.Save(settings);
+
+            if (string.IsNullOrWhiteSpace(_keywordTextBox.Text))
+            {
+                _keywordTextBox.Text = GuessKeywordFromListing(listing);
+            }
+
+            _rows = [new IdeaRow(listing)];
+            SetBusyMessage("Kategori adi yukleniyor");
+            await EnrichCategoriesAsync(settings);
+            SetBusyMessage("Urun gorseli yukleniyor");
+            await LoadGridThumbnailsAsync();
+            _bindingSource.DataSource = _rows;
+            _bindingSource.Position = 0;
+            FillFromSelectedIdea();
+            _variationsTextBox.Text = BuildVariationSuggestions(listing);
+            _statusLabel.Text = "Etsy linkinden listing alindi; Taslak Uret ile AI taslagi hazirlayabilirsin";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "Linkten al", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = "Listing linkinden veri alinamadi";
+        }
+        finally
+        {
+            StopBusy();
+        }
+    }
+
+    private static bool TryExtractListingId(string value, out long listingId)
+    {
+        listingId = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var match = Regex.Match(value, @"(?:listing|copy)/(?<id>\d{6,})", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            match = Regex.Match(value, @"(?<id>\d{8,})");
+        }
+
+        return match.Success && long.TryParse(match.Groups["id"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out listingId);
+    }
+
+    private void ClearDraftFields()
+    {
+        _titleTextBox.Clear();
+        _descriptionTextBox.Clear();
+        _tagsTextBox.Clear();
+        _materialsTextBox.Clear();
+        _variationsTextBox.Clear();
+        _imagePromptTextBox.Clear();
+        _imagePathTextBox.Clear();
+        _taxonomyInput.Clear();
+        _categoryTextBox.Clear();
+        _notesTextBox.Clear();
+    }
+
+    private static string GuessKeywordFromListing(MarketListingResult listing)
+    {
+        var tagKeyword = listing.Tags.FirstOrDefault(tag => tag.Length >= 4);
+        if (!string.IsNullOrWhiteSpace(tagKeyword))
+        {
+            return tagKeyword;
+        }
+
+        return string.Join(' ', listing.Title
+            .Split([' ', '-', '|', ',', '/', '(', ')', ':', ';', '.', '\'', '"'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(part => part.Length >= 4)
+            .Take(4));
+    }
+
     private async Task GenerateDraftAsync()
     {
         if (SelectedRow is null)
@@ -450,9 +557,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _descriptionTextBox.Text = SelectEnglishDescription(result.DescriptionDraft, listing, materials);
             _tagsTextBox.Text = string.Join(", ", result.TagSuggestions.Take(13));
             _materialsTextBox.Text = string.Join(", ", materials);
+            _variationsTextBox.Text = BuildVariationSuggestions(listing);
             ApplyDraftCategoryRecommendation(listing);
             _imagePromptTextBox.Text = BuildImagePrompt();
-            _notesTextBox.Text = "AI taslak hazir. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
+            _notesTextBox.Text = "AI taslak hazir. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon onerileri taslaga not olarak eklenecek. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
             _statusLabel.Text = "Listing taslagi uretildi";
         }
         catch (Exception ex)
@@ -581,6 +689,11 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         if (string.IsNullOrWhiteSpace(_tagsTextBox.Text))
         {
             _tagsTextBox.Text = string.Join(", ", listing.Tags.Take(13));
+        }
+
+        if (string.IsNullOrWhiteSpace(_variationsTextBox.Text))
+        {
+            _variationsTextBox.Text = BuildVariationSuggestions(listing);
         }
 
         if (string.IsNullOrWhiteSpace(_taxonomyInput.Text) && listing.TaxonomyId > 0)
@@ -798,14 +911,15 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     {
         draft = new DraftListingCreateRequest("", "", 0, 0, 0, 0, false, [], []);
         var title = _titleTextBox.Text.Trim();
-        var description = _descriptionTextBox.Text.Trim();
+        var baseDescription = _descriptionTextBox.Text.Trim();
+        var description = AppendVariationNotes(baseDescription);
         if (string.IsNullOrWhiteSpace(title) || title.Length > 140)
         {
             message = "Baslik bos olamaz ve 140 karakteri gecemez.";
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(description))
+        if (string.IsNullOrWhiteSpace(baseDescription))
         {
             message = "Aciklama bos olamaz.";
             return false;
@@ -852,6 +966,59 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             readinessStateId);
         message = "";
         return true;
+    }
+
+    private string AppendVariationNotes(string description)
+    {
+        var variations = _variationsTextBox.Text.Trim();
+        if (string.IsNullOrWhiteSpace(variations))
+        {
+            return description;
+        }
+
+        if (description.Contains("Variation options to configure", StringComparison.OrdinalIgnoreCase))
+        {
+            return description;
+        }
+
+        return
+            $"{description.Trim()}{Environment.NewLine}{Environment.NewLine}" +
+            "Variation options to configure before publishing:" + Environment.NewLine +
+            variations;
+    }
+
+    private string BuildVariationSuggestions(MarketListingResult listing)
+    {
+        var text = $"{PrimaryKeyword()} {listing.Title} {listing.Description} {string.Join(' ', listing.Tags)}".ToLowerInvariant();
+        var lines = new List<string>();
+
+        if (ContainsAny(text, "digital", "download", "stl", "svg", "png", "pdf", "template", "file"))
+        {
+            lines.Add("File format: STL, OBJ, ZIP, PDF");
+            lines.Add("License/use: Personal use, Commercial use");
+        }
+        else
+        {
+            lines.Add("Finish: Unpainted, Primer ready, Hand painted");
+            lines.Add("Size: Small, Medium, Large");
+        }
+
+        if (ContainsAny(text, "shirt", "costume", "vest", "wear", "clothing", "hoodie"))
+        {
+            lines.Add("Wearable size: S, M, L, XL, XXL");
+        }
+
+        if (ContainsAny(text, "color", "paint", "painted", "red", "blue", "green", "black", "white"))
+        {
+            lines.Add("Color: Natural, Black, White, Custom color");
+        }
+
+        if (ContainsAny(text, "cm", "inch", "miniature", "statue", "bust", "figure", "figurine", "prop"))
+        {
+            lines.Add("Scale/height: Mini, Standard, Large display");
+        }
+
+        return string.Join(Environment.NewLine, lines.Distinct(StringComparer.OrdinalIgnoreCase));
     }
 
     private void ChooseImage()
