@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms.Models;
 
 internal sealed class ExternalProductIdea
 {
+    public bool IsSelected { get; set; }
     public string Source { get; init; } = "";
     public string Title { get; init; } = "";
     public string SearchUrl { get; init; } = "";
@@ -22,9 +23,9 @@ internal sealed class ExternalProductIdea
     public string DecisionGroup { get; init; } = "";
     public string SuggestedStatus { get; init; } = "";
     public string UserStatus { get; set; } = "";
-    public string RecommendedAction { get; init; } = "";
-    public string ActionPriority { get; init; } = "";
-    public string ActionReason { get; init; } = "";
+    public string RecommendedAction { get; set; } = "";
+    public string ActionPriority { get; set; } = "";
+    public string ActionReason { get; set; } = "";
     public string Decision { get; init; } = "";
     public string Reasons { get; init; } = "";
     public string RiskTerms { get; init; } = "";
