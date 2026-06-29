@@ -639,6 +639,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             $"Tip: {(draft.IsDigital ? "Dijital" : "Fiziksel")}{Environment.NewLine}" +
             $"Kargo profili: {(draft.IsDigital ? "Gerekmez" : draft.ShippingProfileId)}{Environment.NewLine}" +
             $"Hazirlik durumu: {(draft.IsDigital ? "Gerekmez" : draft.ReadinessStateId)}{Environment.NewLine}" +
+            $"Varyasyon: {(BuildInventoryUpdate(draft) is null ? "Yok" : "Etsy dropdown olarak eklenecek")}{Environment.NewLine}" +
             $"Gorsel: {(SelectedImagePaths().Count == 0 ? "Yok" : $"{SelectedImagePaths().Count} dosya")}{Environment.NewLine}{Environment.NewLine}" +
             "Onayliyor musun?";
         if (MessageBox.Show(this, confirmationText, "Etsy taslak onayi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
@@ -652,14 +653,34 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _statusLabel.Text = "Etsy'de taslak listing olusturuluyor...";
             var settings = EtsyApiSettingsStore.Load();
             var created = await _apiClient.CreateOwnShopDraftListingAsync(settings, draft);
+            var variationWarning = "";
+            var inventory = BuildInventoryUpdate(draft);
+            if (inventory is not null)
+            {
+                try
+                {
+                    _statusLabel.Text = "Etsy varyasyonlari ekleniyor...";
+                    await _apiClient.UpdateOwnShopListingInventoryAsync(settings, created.ListingId, inventory);
+                }
+                catch (Exception variationEx)
+                {
+                    variationWarning = variationEx.Message;
+                }
+            }
+
             foreach (var imagePath in SelectedImagePaths())
             {
                 await _apiClient.UploadOwnShopListingImageAsync(settings, created.ListingId, imagePath);
             }
 
             EtsyApiSettingsStore.Save(settings);
-            _statusLabel.Text = $"Taslak listing olusturuldu: #{created.ListingId}";
-            if (MessageBox.Show(this, "Taslak listing olusturuldu. Etsy'de acmak ister misin?", "Etsy taslak", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
+            _statusLabel.Text = string.IsNullOrWhiteSpace(variationWarning)
+                ? $"Taslak listing ve varyasyonlar olusturuldu: #{created.ListingId}"
+                : $"Taslak olustu ama varyasyon eklenemedi: #{created.ListingId}";
+            var successMessage = string.IsNullOrWhiteSpace(variationWarning)
+                ? "Taslak listing olusturuldu. Etsy'de acmak ister misin?"
+                : $"Taslak listing olusturuldu ama varyasyonlar Etsy tarafindan kabul edilmedi.{Environment.NewLine}{Environment.NewLine}{variationWarning}{Environment.NewLine}{Environment.NewLine}Etsy'de acmak ister misin?";
+            if (MessageBox.Show(this, successMessage, "Etsy taslak", MessageBoxButtons.YesNo, MessageBoxIcon.Information) == DialogResult.Yes)
             {
                 Process.Start(new ProcessStartInfo(created.Url) { UseShellExecute = true });
             }
@@ -985,6 +1006,97 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             $"{description.Trim()}{Environment.NewLine}{Environment.NewLine}" +
             "Variation options to configure before publishing:" + Environment.NewLine +
             variations;
+    }
+
+    private DraftListingInventoryUpdate? BuildInventoryUpdate(DraftListingCreateRequest draft)
+    {
+        var groups = ParseVariationGroups(_variationsTextBox.Text);
+        if (groups.Count == 0)
+        {
+            return null;
+        }
+
+        return new DraftListingInventoryUpdate(draft.Price, draft.Quantity, groups);
+    }
+
+    private static List<DraftListingVariationGroup> ParseVariationGroups(string value)
+    {
+        var groups = new List<DraftListingVariationGroup>();
+        foreach (var rawLine in value.Split([Environment.NewLine, "\n"], StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.Trim();
+            var separatorIndex = line.IndexOf(':');
+            if (separatorIndex <= 0 || separatorIndex >= line.Length - 1)
+            {
+                continue;
+            }
+
+            var rawName = line[..separatorIndex].Trim();
+            var propertyId = ExtractPropertyId(rawName, out var nameWithoutId);
+            var name = NormalizeVariationText(nameWithoutId, 32);
+            var options = SplitCommaList(line[(separatorIndex + 1)..])
+                .Select(option => NormalizeVariationText(option, 40))
+                .Where(option => option.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(20)
+                .ToList();
+
+            if (name.Length == 0 || options.Count == 0)
+            {
+                continue;
+            }
+
+            groups.Add(new DraftListingVariationGroup(name, propertyId, options));
+            if (groups.Count == 2)
+            {
+                break;
+            }
+        }
+
+        return groups;
+    }
+
+    private static long ExtractPropertyId(string rawName, out string cleanName)
+    {
+        var match = Regex.Match(rawName, @"^(?<name>.+?)\[(?<id>\d+)\]$");
+        if (match.Success && long.TryParse(match.Groups["id"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0)
+        {
+            cleanName = match.Groups["name"].Value.Trim();
+            return id;
+        }
+
+        cleanName = rawName.Trim();
+        return DefaultVariationPropertyId(cleanName);
+    }
+
+    private static long DefaultVariationPropertyId(string name)
+    {
+        var text = name.ToLowerInvariant();
+        if (ContainsAny(text, "size", "beden", "height", "scale"))
+        {
+            return 513;
+        }
+
+        if (ContainsAny(text, "color", "colour", "renk"))
+        {
+            return 514;
+        }
+
+        return 513;
+    }
+
+    private static string NormalizeVariationText(string value, int maxLength)
+    {
+        var clean = new string(value
+            .Where(ch => !char.IsControl(ch) && ch != '"' && ch != '\\')
+            .ToArray());
+        clean = Regex.Replace(clean, @"\s+", " ").Trim();
+        if (clean.Length > maxLength)
+        {
+            clean = clean[..maxLength].TrimEnd();
+        }
+
+        return clean;
     }
 
     private string BuildVariationSuggestions(MarketListingResult listing)

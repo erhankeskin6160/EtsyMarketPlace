@@ -639,6 +639,114 @@ internal sealed class EtsyApiClient
             string.IsNullOrWhiteSpace(url) ? $"https://www.etsy.com/listing/{listingId}" : url);
     }
 
+    public async Task UpdateOwnShopListingInventoryAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        DraftListingInventoryUpdate inventory,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        if (listingId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(listingId), "Gecerli bir listing kimligi gerekli.");
+        }
+
+        if (inventory.Variations.Count == 0)
+        {
+            return;
+        }
+
+        var products = BuildInventoryProducts(listingId, inventory);
+        if (products.Count == 0)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            products,
+            price_on_property = Array.Empty<long>(),
+            quantity_on_property = Array.Empty<long>(),
+            sku_on_property = Array.Empty<long>(),
+        };
+
+        using var request = CreateRequest(settings, HttpMethod.Put, $"{BaseUrl}/listings/{listingId}/inventory", useAccessToken: true);
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Varyasyonlar Etsy inventory sistemine yazilamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+    }
+
+    private static List<object> BuildInventoryProducts(long listingId, DraftListingInventoryUpdate inventory)
+    {
+        var groups = inventory.Variations
+            .Where(group => group.Values.Count > 0)
+            .Take(2)
+            .ToList();
+        if (groups.Count == 0)
+        {
+            return [];
+        }
+
+        var combinations = BuildVariationCombinations(groups)
+            .Take(70)
+            .ToList();
+
+        var products = new List<object>();
+        for (var index = 0; index < combinations.Count; index++)
+        {
+            var combination = combinations[index];
+            products.Add(new
+            {
+                sku = $"AUTO-{listingId}-{index + 1}",
+                property_values = combination.Select(item => new
+                {
+                    property_id = item.Group.PropertyId,
+                    property_name = item.Group.Name,
+                    values = new[] { item.Value },
+                }).ToList(),
+                offerings = new[]
+                {
+                    new
+                    {
+                        price = inventory.Price.ToString("0.00", CultureInfo.InvariantCulture),
+                        quantity = Math.Max(1, inventory.Quantity),
+                        is_enabled = true,
+                    },
+                },
+            });
+        }
+
+        return products;
+    }
+
+    private static IEnumerable<List<(DraftListingVariationGroup Group, string Value)>> BuildVariationCombinations(
+        IReadOnlyList<DraftListingVariationGroup> groups)
+    {
+        if (groups.Count == 1)
+        {
+            foreach (var value in groups[0].Values)
+            {
+                yield return [(groups[0], value)];
+            }
+
+            yield break;
+        }
+
+        foreach (var first in groups[0].Values)
+        {
+            foreach (var second in groups[1].Values)
+            {
+                yield return [(groups[0], first), (groups[1], second)];
+            }
+        }
+    }
+
     private static string BuildDraftListingErrorMessage(int statusCode, string body)
     {
         if (body.Contains("readiness_state_id", StringComparison.OrdinalIgnoreCase))
@@ -1395,6 +1503,16 @@ internal sealed record DraftListingCreateRequest(
     string WhenMade = "made_to_order");
 
 internal sealed record CreatedDraftListing(long ListingId, string Url);
+
+internal sealed record DraftListingInventoryUpdate(
+    decimal Price,
+    int Quantity,
+    IReadOnlyList<DraftListingVariationGroup> Variations);
+
+internal sealed record DraftListingVariationGroup(
+    string Name,
+    long PropertyId,
+    IReadOnlyList<string> Values);
 
 internal sealed record EtsyShippingProfileOption(long ShippingProfileId, string Title)
 {
