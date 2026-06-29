@@ -1016,7 +1016,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             return null;
         }
 
-        return new DraftListingInventoryUpdate(draft.Price, draft.Quantity, groups);
+        return new DraftListingInventoryUpdate(draft.Price, draft.Quantity, draft.IsDigital ? null : draft.ReadinessStateId, groups);
     }
 
     private static List<DraftListingVariationGroup> ParseVariationGroups(string value)
