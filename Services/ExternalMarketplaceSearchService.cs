@@ -89,6 +89,16 @@ internal sealed class ExternalMarketplaceSearchService
         return automationService.BuildReport(inputs);
     }
 
+    public OpportunityAutomationRecommendation Recommend(ExternalProductIdea idea) =>
+        automationService.Recommend(new OpportunityAutomationInput(
+            idea.Title,
+            idea.OpportunityScore,
+            idea.DemandScore,
+            idea.RiskScore,
+            idea.EtsyFitScore,
+            ParseDecisionGroup(idea.DecisionGroup),
+            ParseStatus(idea.UserStatus)));
+
     public static string DecisionGroupLabel(OpportunityDecisionGroup group) => group switch
     {
         OpportunityDecisionGroup.StrongOpportunity => "Guclu firsat",
@@ -108,7 +118,7 @@ internal sealed class ExternalMarketplaceSearchService
         _ => "Yeni",
     };
 
-    private static OpportunityDecisionGroup ParseDecisionGroup(string label) => label switch
+    public static OpportunityDecisionGroup ParseDecisionGroup(string label) => label switch
     {
         "Guclu firsat" => OpportunityDecisionGroup.StrongOpportunity,
         "Test edilebilir" => OpportunityDecisionGroup.WorthTesting,
@@ -117,7 +127,7 @@ internal sealed class ExternalMarketplaceSearchService
         _ => OpportunityDecisionGroup.All,
     };
 
-    private static OpportunityUserStatus ParseStatus(string label) => label switch
+    public static OpportunityUserStatus ParseStatus(string label) => label switch
     {
         "Izle" => OpportunityUserStatus.Watch,
         "Test listesi" => OpportunityUserStatus.TestList,

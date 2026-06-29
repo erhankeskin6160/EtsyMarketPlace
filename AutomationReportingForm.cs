@@ -3,6 +3,7 @@ namespace SimilarProductsWinForms;
 using System.Diagnostics;
 using System.Text;
 using EtsyMarketPlace.Application.Automation;
+using EtsyMarketPlace.Domain.ProductOpportunity;
 using EtsyMarketPlace.Infrastructure.Automation;
 using EtsyMarketPlace.Infrastructure.Http;
 using SimilarProductsWinForms.Models;
@@ -27,7 +28,8 @@ internal sealed class AutomationReportingForm(
     private readonly BindingSource _queueBindingSource = new();
     private readonly DataGridView _queueGrid = new();
     private readonly ExternalMarketplaceSearchService _externalSearchService = new();
-    private IReadOnlyList<ExternalProductIdea> _queueRows = [];
+    private readonly OpportunityBatchActionService _batchActionService = new();
+    private List<ExternalProductIdea> _queueRows = [];
     private AutomationSettings _settings = new();
 
     protected override void OnLoad(EventArgs e)
@@ -65,8 +67,8 @@ internal sealed class AutomationReportingForm(
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 210));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
@@ -163,16 +165,19 @@ internal sealed class AutomationReportingForm(
 
     private Control BuildOpportunityQueueToolbar()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9 };
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 10, RowCount = 2 };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 128));
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 44));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
         panel.Controls.Add(LabelFor("Magaza turu"), 0, 0);
         _queueShopTypeTextBox.Dock = DockStyle.Fill;
@@ -191,11 +196,28 @@ internal sealed class AutomationReportingForm(
         var export = CreateButton("CSV Aktar");
         export.Click += (_, _) => ExportOpportunityQueueCsv();
         panel.Controls.Add(export, 7, 0);
+
+        panel.Controls.Add(LabelFor("Toplu islem"), 0, 1);
+        var testList = CreateButton("Teste Al");
+        testList.Click += (_, _) => ApplyQueueBatchAction(OpportunityBatchActionType.MoveToTestList);
+        panel.Controls.Add(testList, 1, 1);
+        var aiDraft = CreateButton("AI Taslak");
+        aiDraft.Click += (_, _) => ApplyQueueBatchAction(OpportunityBatchActionType.GenerateAiDraft);
+        panel.Controls.Add(aiDraft, 2, 1);
+        var manual = CreateButton("Manuel");
+        manual.Click += (_, _) => ApplyQueueBatchAction(OpportunityBatchActionType.MarkManualReview);
+        panel.Controls.Add(manual, 3, 1);
+        var reject = CreateButton("Reddet");
+        reject.BackColor = Color.FromArgb(180, 58, 58);
+        reject.Click += (_, _) => ApplyQueueBatchAction(OpportunityBatchActionType.Reject);
+        panel.Controls.Add(reject, 4, 1);
+
         _queueSummaryLabel.Dock = DockStyle.Fill;
         _queueSummaryLabel.TextAlign = ContentAlignment.MiddleLeft;
         _queueSummaryLabel.ForeColor = Color.FromArgb(82, 93, 110);
         _queueSummaryLabel.Text = "Urun arayip otomasyon aksiyon raporu uret.";
         panel.Controls.Add(_queueSummaryLabel, 8, 0);
+        panel.SetColumnSpan(_queueSummaryLabel, 2);
         return panel;
     }
 
@@ -205,12 +227,19 @@ internal sealed class AutomationReportingForm(
         _queueGrid.AutoGenerateColumns = false;
         _queueGrid.AllowUserToAddRows = false;
         _queueGrid.AllowUserToDeleteRows = false;
-        _queueGrid.ReadOnly = true;
+        _queueGrid.ReadOnly = false;
         _queueGrid.RowHeadersVisible = false;
         _queueGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _queueGrid.BackgroundColor = Color.White;
         _queueGrid.DataSource = _queueBindingSource;
         _queueGrid.CellDoubleClick += (_, _) => OpenSelectedQueueUrl();
+        _queueGrid.Columns.Add(new DataGridViewCheckBoxColumn
+        {
+            HeaderText = "Sec",
+            DataPropertyName = nameof(ExternalProductIdea.IsSelected),
+            Width = 48,
+            ReadOnly = false,
+        });
         AddQueueColumn("Aksiyon", nameof(ExternalProductIdea.RecommendedAction), 130);
         AddQueueColumn("Oncelik", nameof(ExternalProductIdea.ActionPriority), 85);
         AddQueueColumn("Firsat", nameof(ExternalProductIdea.Opportunity), 70);
@@ -239,8 +268,7 @@ internal sealed class AutomationReportingForm(
                 .ThenByDescending(row => row.OpportunityScore)
                 .ToList();
             _queueBindingSource.DataSource = _queueRows;
-            _queueSummaryLabel.Text =
-                $"Toplam {report.Summary.Total} | Guclu {report.Summary.Strong} | Test {report.Summary.WorthTesting} | Riskli {report.Summary.Risky} | AI taslak {report.Summary.DraftReady} | Ort. {report.Summary.AverageOpportunity:0.#}";
+            RefreshOpportunityQueueSummary(report);
             AppendStatus($"Firsat kuyrugu raporu uretildi: {_queueRows.Count} satir.");
         }
         catch (Exception ex)
@@ -269,15 +297,17 @@ internal sealed class AutomationReportingForm(
             FileName = $"firsat-kuyrugu-{DateTime.Now:yyyyMMdd-HHmm}.csv",
         };
         if (dialog.ShowDialog(this) != DialogResult.OK) return;
-        File.WriteAllText(dialog.FileName, BuildOpportunityQueueCsv(), Encoding.UTF8);
+        var selectedRows = GetSelectedQueueRows();
+        var rowsToExport = selectedRows.Count == 0 ? _queueRows : selectedRows;
+        File.WriteAllText(dialog.FileName, BuildOpportunityQueueCsv(rowsToExport), Encoding.UTF8);
         AppendStatus($"Firsat kuyrugu CSV aktarildi: {dialog.FileName}");
     }
 
-    private string BuildOpportunityQueueCsv()
+    private string BuildOpportunityQueueCsv(IReadOnlyList<ExternalProductIdea> rows)
     {
         var builder = new StringBuilder();
         builder.AppendLine("Aksiyon,Oncelik,Firsat,Karar,Kuyruk,Urun,Kaynak,Fiyat,Risk,Neden,Link");
-        foreach (var row in _queueRows)
+        foreach (var row in rows)
         {
             builder.AppendLine(string.Join(",", [
                 Csv(row.RecommendedAction),
@@ -297,6 +327,107 @@ internal sealed class AutomationReportingForm(
         return builder.ToString();
     }
 
+    private void ApplyQueueBatchAction(OpportunityBatchActionType action)
+    {
+        var selectedRows = GetSelectedQueueRows();
+        if (selectedRows.Count == 0)
+        {
+            MessageBox.Show(this, "Once kuyrukta islem yapilacak satirlari sec.", "Toplu islem", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var riskyCount = selectedRows.Count(IsRisky);
+        if (action == OpportunityBatchActionType.GenerateAiDraft && riskyCount > 0)
+        {
+            var riskyDecision = MessageBox.Show(
+                this,
+                $"{riskyCount} riskli urun secili. Bu urunleri AI taslak kuyruguna almak istiyor musun?",
+                "Riskli AI taslak onayi",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+            if (riskyDecision != DialogResult.Yes) return;
+        }
+
+        var decision = MessageBox.Show(
+            this,
+            $"{selectedRows.Count} secili urun icin '{BatchActionLabel(action)}' islemi uygulanacak. Devam edilsin mi?",
+            "Toplu islem onayi",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+        if (decision != DialogResult.Yes) return;
+
+        var request = new OpportunityBatchActionRequest(
+            action,
+            selectedRows.Select(ToAutomationInput).ToList(),
+            AllowRiskyAiDraft: action == OpportunityBatchActionType.GenerateAiDraft && riskyCount > 0);
+        var result = _batchActionService.Apply(request);
+
+        for (var index = 0; index < selectedRows.Count; index++)
+        {
+            var itemResult = result.Items[index];
+            if (!itemResult.Success) continue;
+            selectedRows[index].UserStatus = ExternalMarketplaceSearchService.StatusLabel(itemResult.NewStatus);
+            RefreshQueueRecommendation(selectedRows[index]);
+        }
+
+        _queueGrid.Refresh();
+        RefreshOpportunityQueueSummary();
+        AppendStatus($"{BatchActionLabel(action)}: {result.SuccessCount} basarili, {result.BlockedCount} engellendi.");
+    }
+
+    private List<ExternalProductIdea> GetSelectedQueueRows()
+    {
+        _queueGrid.EndEdit();
+        return _queueRows.Where(row => row.IsSelected).ToList();
+    }
+
+    private void RefreshQueueRecommendation(ExternalProductIdea row)
+    {
+        var recommendation = _externalSearchService.Recommend(row);
+        row.RecommendedAction = recommendation.Action;
+        row.ActionPriority = recommendation.Priority;
+        row.ActionReason = recommendation.Reason;
+    }
+
+    private void RefreshOpportunityQueueSummary()
+    {
+        if (_queueRows.Count == 0)
+        {
+            _queueSummaryLabel.Text = "Urun arayip otomasyon aksiyon raporu uret.";
+            return;
+        }
+
+        RefreshOpportunityQueueSummary(_externalSearchService.BuildAutomationReport(_queueRows));
+    }
+
+    private void RefreshOpportunityQueueSummary(OpportunityAutomationReport report)
+    {
+        _queueSummaryLabel.Text =
+            $"Toplam {report.Summary.Total} | Guclu {report.Summary.Strong} | Test {report.Summary.WorthTesting} | Riskli {report.Summary.Risky} | AI taslak {report.Summary.DraftReady} | Ort. {report.Summary.AverageOpportunity:0.#}";
+    }
+
+    private static OpportunityAutomationInput ToAutomationInput(ExternalProductIdea row) =>
+        new(
+            row.Title,
+            row.OpportunityScore,
+            row.DemandScore,
+            row.RiskScore,
+            row.EtsyFitScore,
+            ExternalMarketplaceSearchService.ParseDecisionGroup(row.DecisionGroup),
+            ExternalMarketplaceSearchService.ParseStatus(row.UserStatus));
+
+    private static bool IsRisky(ExternalProductIdea row) =>
+        row.RiskScore >= 70 || ExternalMarketplaceSearchService.ParseDecisionGroup(row.DecisionGroup) == OpportunityDecisionGroup.Risky;
+
+    private static string BatchActionLabel(OpportunityBatchActionType action) => action switch
+    {
+        OpportunityBatchActionType.MoveToTestList => "Test listesine al",
+        OpportunityBatchActionType.GenerateAiDraft => "AI taslak uret",
+        OpportunityBatchActionType.MarkManualReview => "Manuel inceleme",
+        OpportunityBatchActionType.Reject => "Reddet",
+        _ => "Toplu islem",
+    };
+
     private void OpenSelectedQueueUrl()
     {
         if (_queueBindingSource.Current is not ExternalProductIdea idea || string.IsNullOrWhiteSpace(idea.ProductUrl)) return;
@@ -311,6 +442,7 @@ internal sealed class AutomationReportingForm(
             DataPropertyName = property,
             Width = width,
             AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None,
+            ReadOnly = true,
         });
     }
 
