@@ -144,6 +144,46 @@ internal sealed class EtsyApiClient
         return listings.OrderByDescending(listing => listing.MarketScore).ToList();
     }
 
+    public async Task<MarketListingResult> GetPublicListingAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        string primaryKeyword = "",
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        if (listingId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(listingId), "Gecerli bir Etsy listing ID gerekli.");
+        }
+
+        var query = ToQueryString(new Dictionary<string, string>
+        {
+            ["includes"] = "Shop,Images",
+        });
+
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/listings/{listingId}?{query}", useAccessToken: false);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Listing linkinden urun alinamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        var wrapped = body.Contains("\"results\"", StringComparison.OrdinalIgnoreCase)
+            ? body
+            : $"{{\"results\":[{body}]}}";
+        var listing = ParseMarketListings(wrapped, primaryKeyword).FirstOrDefault()
+            ?? throw new InvalidOperationException("Etsy listing verisi okunamadi.");
+
+        if (listing.ImageUrls.Count == 0)
+        {
+            listing.ImageUrls = await GetListingImagesAsync(settings, listingId, cancellationToken);
+        }
+
+        await EnrichShopDataAsync(settings, [listing], primaryKeyword, cancellationToken);
+        return listing;
+    }
+
     public async Task<KeywordMarketApiSample> GetKeywordMarketSampleAsync(
         EtsyApiSettings settings,
         string keywords,
