@@ -701,6 +701,17 @@ internal sealed class EtsyApiClient
         for (var index = 0; index < combinations.Count; index++)
         {
             var combination = combinations[index];
+            var offering = new Dictionary<string, object>
+            {
+                ["price"] = inventory.Price.ToString("0.00", CultureInfo.InvariantCulture),
+                ["quantity"] = Math.Max(1, inventory.Quantity),
+                ["is_enabled"] = true,
+            };
+            if (inventory.ReadinessStateId is > 0)
+            {
+                offering["readiness_state_id"] = inventory.ReadinessStateId.Value;
+            }
+
             products.Add(new
             {
                 sku = $"AUTO-{listingId}-{index + 1}",
@@ -710,15 +721,7 @@ internal sealed class EtsyApiClient
                     property_name = item.Group.Name,
                     values = new[] { item.Value },
                 }).ToList(),
-                offerings = new[]
-                {
-                    new
-                    {
-                        price = inventory.Price.ToString("0.00", CultureInfo.InvariantCulture),
-                        quantity = Math.Max(1, inventory.Quantity),
-                        is_enabled = true,
-                    },
-                },
+                offerings = new[] { offering },
             });
         }
 
@@ -1507,6 +1510,7 @@ internal sealed record CreatedDraftListing(long ListingId, string Url);
 internal sealed record DraftListingInventoryUpdate(
     decimal Price,
     int Quantity,
+    long? ReadinessStateId,
     IReadOnlyList<DraftListingVariationGroup> Variations);
 
 internal sealed record DraftListingVariationGroup(
