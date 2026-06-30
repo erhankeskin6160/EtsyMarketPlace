@@ -476,7 +476,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _bindingSource.Position = 0;
             FillFromSelectedIdea();
             _variationsTextBox.Text = BuildVariationSuggestions(listing);
-            _statusLabel.Text = "Etsy linkinden listing alindi; Taslak Uret ile AI taslagi hazirlayabilirsin";
+            _statusLabel.Text = listing.VariationOptions.Count > 0
+                ? "Etsy linkinden listing ve gercek varyasyonlar alindi"
+                : "Etsy linkinden listing alindi; bu listingde okunabilir varyasyon bulunamadi";
         }
         catch (Exception ex)
         {
@@ -560,7 +562,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _variationsTextBox.Text = BuildVariationSuggestions(listing);
             ApplyDraftCategoryRecommendation(listing);
             _imagePromptTextBox.Text = BuildImagePrompt();
-            _notesTextBox.Text = "AI taslak hazir. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon onerileri taslaga not olarak eklenecek. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
+            _notesTextBox.Text = "AI taslak hazir. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon alani sadece Etsy listinginden okunan gercek varyasyonlarla doldurulur, AI varyasyon uretmez. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
             _statusLabel.Text = "Listing taslagi uretildi";
         }
         catch (Exception ex)
@@ -1097,45 +1099,11 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private string BuildVariationSuggestions(MarketListingResult listing)
     {
-        if (listing.VariationOptions.Count > 0)
-        {
-            return string.Join(
-                Environment.NewLine,
-                listing.VariationOptions
-                    .Where(group => group.Values.Count > 0)
-                    .Select(group => $"{NormalizeVariationText(group.Name, 32)}[{group.PropertyId}]: {string.Join(", ", group.Values.Select(value => NormalizeVariationText(value, 40)).Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Take(25))}"));
-        }
-
-        var text = $"{PrimaryKeyword()} {listing.Title} {listing.Description} {string.Join(' ', listing.Tags)}".ToLowerInvariant();
-        var lines = new List<string>();
-
-        if (ContainsAny(text, "digital", "download", "stl", "svg", "png", "pdf", "template", "file"))
-        {
-            lines.Add("File format: STL, OBJ, ZIP, PDF");
-            lines.Add("License/use: Personal use, Commercial use");
-        }
-        else
-        {
-            lines.Add("Finish: Unpainted, Primer ready, Hand painted");
-            lines.Add("Size: Small, Medium, Large");
-        }
-
-        if (ContainsAny(text, "shirt", "costume", "vest", "wear", "clothing", "hoodie"))
-        {
-            lines.Add("Wearable size: S, M, L, XL, XXL");
-        }
-
-        if (ContainsAny(text, "color", "paint", "painted", "red", "blue", "green", "black", "white"))
-        {
-            lines.Add("Color: Natural, Black, White, Custom color");
-        }
-
-        if (ContainsAny(text, "cm", "inch", "miniature", "statue", "bust", "figure", "figurine", "prop"))
-        {
-            lines.Add("Scale/height: Mini, Standard, Large display");
-        }
-
-        return string.Join(Environment.NewLine, lines.Distinct(StringComparer.OrdinalIgnoreCase));
+        return string.Join(
+            Environment.NewLine,
+            listing.VariationOptions
+                .Where(group => group.Values.Count > 0)
+                .Select(group => $"{NormalizeVariationText(group.Name, 32)}[{group.PropertyId}]: {string.Join(", ", group.Values.Select(value => NormalizeVariationText(value, 40)).Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Take(70))}"));
     }
 
     private void ChooseImage()
