@@ -721,6 +721,7 @@ internal sealed class EtsyApiClient
             .ToList();
 
         var products = new List<object>();
+        var sharedSku = $"AUTO-{listingId}";
         for (var index = 0; index < combinations.Count; index++)
         {
             var combination = combinations[index];
@@ -737,7 +738,7 @@ internal sealed class EtsyApiClient
 
             products.Add(new
             {
-                sku = $"AUTO-{listingId}-{index + 1}",
+                sku = sharedSku,
                 property_values = combination.Select(item => new
                 {
                     property_id = item.Group.PropertyId,
