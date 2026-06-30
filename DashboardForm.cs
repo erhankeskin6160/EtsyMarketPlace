@@ -126,7 +126,9 @@ internal sealed class DashboardForm : Form
         var creator = CreateButton("Urun Uret");
         creator.Click += (_, _) =>
         {
-            using var form = new ProductDiscoveryListingCreatorForm(_aiListingOptimizer);
+            using var form = new ProductDiscoveryListingCreatorForm(
+                _aiListingOptimizer,
+                historyService: _optimizationHistoryService);
             form.ShowDialog(this);
         };
         nav.Controls.Add(creator, 4, 0);
