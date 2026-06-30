@@ -630,6 +630,13 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             return;
         }
 
+        var inventory = BuildInventoryUpdate(draft);
+        var variationStatus = inventory is not null
+            ? "Etsy dropdown olarak eklenecek"
+            : string.IsNullOrWhiteSpace(_variationsTextBox.Text)
+                ? "Yok"
+                : "Sadece aciklama notu olarak eklenecek";
+
         var confirmationText =
             $"Bu islem Etsy magazanda TASLAK listing olusturacak.{Environment.NewLine}{Environment.NewLine}" +
             $"Baslik: {draft.Title}{Environment.NewLine}" +
@@ -639,7 +646,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             $"Tip: {(draft.IsDigital ? "Dijital" : "Fiziksel")}{Environment.NewLine}" +
             $"Kargo profili: {(draft.IsDigital ? "Gerekmez" : draft.ShippingProfileId)}{Environment.NewLine}" +
             $"Hazirlik durumu: {(draft.IsDigital ? "Gerekmez" : draft.ReadinessStateId)}{Environment.NewLine}" +
-            $"Varyasyon: {(BuildInventoryUpdate(draft) is null ? "Yok" : "Etsy dropdown olarak eklenecek")}{Environment.NewLine}" +
+            $"Varyasyon: {variationStatus}{Environment.NewLine}" +
             $"Gorsel: {(SelectedImagePaths().Count == 0 ? "Yok" : $"{SelectedImagePaths().Count} dosya")}{Environment.NewLine}{Environment.NewLine}" +
             "Onayliyor musun?";
         if (MessageBox.Show(this, confirmationText, "Etsy taslak onayi", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
@@ -654,7 +661,6 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             var settings = EtsyApiSettingsStore.Load();
             var created = await _apiClient.CreateOwnShopDraftListingAsync(settings, draft);
             var variationWarning = "";
-            var inventory = BuildInventoryUpdate(draft);
             if (inventory is not null)
             {
                 try
@@ -1010,7 +1016,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private DraftListingInventoryUpdate? BuildInventoryUpdate(DraftListingCreateRequest draft)
     {
-        var groups = ParseVariationGroups(_variationsTextBox.Text);
+        var groups = ParseInventoryVariationGroups(_variationsTextBox.Text);
         if (groups.Count == 0)
         {
             return null;
@@ -1019,7 +1025,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         return new DraftListingInventoryUpdate(draft.Price, draft.Quantity, draft.IsDigital ? null : draft.ReadinessStateId, groups);
     }
 
-    private static List<DraftListingVariationGroup> ParseVariationGroups(string value)
+    private static List<DraftListingVariationGroup> ParseInventoryVariationGroups(string value)
     {
         var groups = new List<DraftListingVariationGroup>();
         foreach (var rawLine in value.Split([Environment.NewLine, "\n"], StringSplitOptions.RemoveEmptyEntries))
@@ -1032,7 +1038,11 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             }
 
             var rawName = line[..separatorIndex].Trim();
-            var propertyId = ExtractPropertyId(rawName, out var nameWithoutId);
+            if (!TryExtractPropertyId(rawName, out var propertyId, out var nameWithoutId))
+            {
+                continue;
+            }
+
             var name = NormalizeVariationText(nameWithoutId, 32);
             var options = SplitCommaList(line[(separatorIndex + 1)..])
                 .Select(option => NormalizeVariationText(option, 40))
@@ -1056,33 +1066,19 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         return groups;
     }
 
-    private static long ExtractPropertyId(string rawName, out string cleanName)
+    private static bool TryExtractPropertyId(string rawName, out long propertyId, out string cleanName)
     {
+        propertyId = 0;
         var match = Regex.Match(rawName, @"^(?<name>.+?)\[(?<id>\d+)\]$");
         if (match.Success && long.TryParse(match.Groups["id"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var id) && id > 0)
         {
             cleanName = match.Groups["name"].Value.Trim();
-            return id;
+            propertyId = id;
+            return true;
         }
 
         cleanName = rawName.Trim();
-        return DefaultVariationPropertyId(cleanName);
-    }
-
-    private static long DefaultVariationPropertyId(string name)
-    {
-        var text = name.ToLowerInvariant();
-        if (ContainsAny(text, "size", "beden", "height", "scale"))
-        {
-            return 513;
-        }
-
-        if (ContainsAny(text, "color", "colour", "renk"))
-        {
-            return 514;
-        }
-
-        return 513;
+        return false;
     }
 
     private static string NormalizeVariationText(string value, int maxLength)
