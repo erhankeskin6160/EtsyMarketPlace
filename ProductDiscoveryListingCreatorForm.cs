@@ -1101,6 +1101,15 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private string BuildVariationSuggestions(MarketListingResult listing)
     {
+        if (listing.VariationOptions.Count > 0)
+        {
+            return string.Join(
+                Environment.NewLine,
+                listing.VariationOptions
+                    .Where(group => group.Values.Count > 0)
+                    .Select(group => $"{NormalizeVariationText(group.Name, 32)}[{group.PropertyId}]: {string.Join(", ", group.Values.Select(value => NormalizeVariationText(value, 40)).Where(value => value.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Take(25))}"));
+        }
+
         var text = $"{PrimaryKeyword()} {listing.Title} {listing.Description} {string.Join(' ', listing.Tags)}".ToLowerInvariant();
         var lines = new List<string>();
 

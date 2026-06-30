@@ -180,8 +180,31 @@ internal sealed class EtsyApiClient
             listing.ImageUrls = await GetListingImagesAsync(settings, listingId, cancellationToken);
         }
 
+        listing.VariationOptions = await GetListingVariationOptionsAsync(settings, listingId, cancellationToken);
         await EnrichShopDataAsync(settings, [listing], primaryKeyword, cancellationToken);
         return listing;
+    }
+
+    public async Task<List<ListingVariationOption>> GetListingVariationOptionsAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        if (listingId <= 0)
+        {
+            return [];
+        }
+
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/listings/{listingId}/inventory", useAccessToken: false);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return [];
+        }
+
+        return ParseListingVariationOptions(body);
     }
 
     public async Task<KeywordMarketApiSample> GetKeywordMarketSampleAsync(
@@ -746,6 +769,91 @@ internal sealed class EtsyApiClient
             foreach (var second in groups[1].Values)
             {
                 yield return [(groups[0], first), (groups[1], second)];
+            }
+        }
+    }
+
+    private static List<ListingVariationOption> ParseListingVariationOptions(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("products", out var products) || products.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var groups = new Dictionary<long, (string Name, SortedSet<string> Values)>();
+        foreach (var product in products.EnumerateArray())
+        {
+            if (!product.TryGetProperty("property_values", out var propertyValues) || propertyValues.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var propertyValue in propertyValues.EnumerateArray())
+            {
+                var propertyId = GetLong(propertyValue, "property_id");
+                if (propertyId <= 0)
+                {
+                    continue;
+                }
+
+                var name = GetFirstString(propertyValue, "property_name", "scale_name", "display_name");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = $"Option {propertyId}";
+                }
+
+                if (!groups.TryGetValue(propertyId, out var group))
+                {
+                    group = (name.Trim(), new SortedSet<string>(StringComparer.OrdinalIgnoreCase));
+                    groups[propertyId] = group;
+                }
+
+                foreach (var value in ReadPropertyValueOptions(propertyValue))
+                {
+                    group.Values.Add(value);
+                }
+            }
+        }
+
+        return groups
+            .Select(group => new ListingVariationOption(
+                group.Value.Name,
+                group.Key,
+                group.Value.Values.Take(70).ToList()))
+            .Where(group => group.Values.Count > 0)
+            .Take(2)
+            .ToList();
+    }
+
+    private static IEnumerable<string> ReadPropertyValueOptions(JsonElement propertyValue)
+    {
+        var values = ReadPropertyValueArray(propertyValue, "values").ToList();
+        if (values.Count > 0)
+        {
+            return values;
+        }
+
+        return ReadPropertyValueArray(propertyValue, "value_ids");
+    }
+
+    private static IEnumerable<string> ReadPropertyValueArray(JsonElement propertyValue, string arrayName)
+    {
+        if (!propertyValue.TryGetProperty(arrayName, out var values) || values.ValueKind != JsonValueKind.Array)
+        {
+            yield break;
+        }
+
+        foreach (var value in values.EnumerateArray())
+        {
+            var text = value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : value.ValueKind == JsonValueKind.Number
+                    ? value.GetRawText()
+                    : "";
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                yield return text.Trim();
             }
         }
     }

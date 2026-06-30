@@ -23,6 +23,7 @@ internal sealed class MarketListingResult
     public decimal ReviewAverage { get; set; }
     public List<string> Tags { get; init; } = [];
     public List<string> ImageUrls { get; set; } = [];
+    public List<ListingVariationOption> VariationOptions { get; set; } = [];
     public System.Drawing.Image? ThumbnailImage { get; set; }
     public int SeoScore { get; init; }
     public int MarketScore { get; set; }
@@ -37,3 +38,8 @@ internal sealed class MarketListingResult
         ? TaxonomyName
         : TaxonomyId > 0 ? $"Kategori bulunamadi (#{TaxonomyId})" : "Kategori verisi yok";
 }
+
+internal sealed record ListingVariationOption(
+    string Name,
+    long PropertyId,
+    List<string> Values);
