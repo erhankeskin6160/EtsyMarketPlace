@@ -10,7 +10,8 @@ using SimilarProductsWinForms.Services;
 internal sealed class ProductDiscoveryListingCreatorForm(
     IAiListingOptimizer aiOptimizer,
     string? initialKeyword = null,
-    MarketListingResult? initialListing = null) : Form
+    MarketListingResult? initialListing = null,
+    ListingOptimizationHistoryService? historyService = null) : Form
 {
     private readonly EtsyApiClient _apiClient = new();
     private readonly AiListingImageGenerator _imageGenerator = new();
@@ -49,6 +50,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private List<IdeaRow> _rows = [];
     private int _selectedImageIndex;
     private int _busyFrame;
+    private long? _lastCreatedListingId;
 
     private IdeaRow? SelectedRow => _bindingSource.Current as IdeaRow;
 
@@ -210,6 +212,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         var importLink = CreateButton("Linkten Al");
         importLink.Click += async (_, _) => await ImportListingLinkAsync();
         toolbar.Controls.Add(importLink, 4, 1);
+        var aiReview = CreateButton("2. Sayfa");
+        aiReview.Click += (_, _) => OpenAiReviewPage();
+        toolbar.Controls.Add(aiReview, 5, 1);
         return toolbar;
     }
 
@@ -662,6 +667,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _statusLabel.Text = "Etsy'de taslak listing olusturuluyor...";
             var settings = EtsyApiSettingsStore.Load();
             var created = await _apiClient.CreateOwnShopDraftListingAsync(settings, draft);
+            _lastCreatedListingId = created.ListingId;
             var variationWarning = "";
             if (inventory is not null)
             {
@@ -702,6 +708,18 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         {
             UseWaitCursor = false;
         }
+    }
+
+    private void OpenAiReviewPage()
+    {
+        if (historyService is null)
+        {
+            MessageBox.Show(this, "Bu ekran ana kontrol panelinden acildiginda 2. sayfa baglantisi aktif olur.", "2. Sayfa", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new OwnShopListingAiAuditForm(aiOptimizer, historyService, _lastCreatedListingId);
+        form.ShowDialog(this);
     }
 
     private void FillFromSelectedIdea()

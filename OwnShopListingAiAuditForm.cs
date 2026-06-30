@@ -8,7 +8,8 @@ using SimilarProductsWinForms.Services;
 
 internal sealed class OwnShopListingAiAuditForm(
     IAiListingOptimizer aiOptimizer,
-    ListingOptimizationHistoryService historyService) : Form
+    ListingOptimizationHistoryService historyService,
+    long? initialListingId = null) : Form
 {
     private readonly EtsyApiClient _apiClient = new();
     private readonly HttpClient _imageHttpClient = new();
@@ -24,10 +25,14 @@ internal sealed class OwnShopListingAiAuditForm(
     private ListingOptimizationResult? _lastResult;
     private long _lastResultListingId;
 
-    protected override void OnLoad(EventArgs e)
+    protected override async void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
         BuildLayout();
+        if (initialListingId is > 0)
+        {
+            await LoadSingleListingAsync(initialListingId.Value);
+        }
     }
 
     private AuditRow? SelectedRow => _bindingSource.Current as AuditRow;
@@ -89,7 +94,7 @@ internal sealed class OwnShopListingAiAuditForm(
         var settings = CreateButton("AI Ayarlari");
         settings.Click += (_, _) => { using var form = new AiOptimizationSettingsForm(); form.ShowDialog(this); };
         toolbar.Controls.Add(settings, 6, 0);
-        var refreshSelected = CreateButton("AI Sonrasi Yenile");
+        var refreshSelected = CreateButton("Rev");
         refreshSelected.Click += async (_, _) => await RefreshSelectedListingAsync();
         toolbar.Controls.Add(refreshSelected, 7, 0);
         var aiImage = CreateButton("AI Gorsel");
@@ -474,29 +479,48 @@ internal sealed class OwnShopListingAiAuditForm(
     {
         if (SelectedRow is null)
         {
-            MessageBox.Show(this, "Once bir listing secin.", "AI sonrasi yenile", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Once bir listing secin.", "Rev", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
+        await LoadSingleListingAsync(SelectedRow.Listing.ListingId);
+    }
+
+    private async Task LoadSingleListingAsync(long listingId)
+    {
         try
         {
             UseWaitCursor = true;
-            var selectedId = SelectedRow.Listing.ListingId;
+            _statusLabel.Text = "Listing Etsy'den en guncel haliyle aliniyor...";
             var settings = EtsyApiSettingsStore.Load();
-            var refreshed = await _apiClient.GetOwnShopListingAsync(settings, selectedId);
+            var refreshed = await _apiClient.GetOwnShopListingAsync(settings, listingId);
             EtsyApiSettingsStore.Save(settings);
-            var index = _rows.FindIndex(row => row.Listing.ListingId == selectedId);
+            var index = _rows.FindIndex(row => row.Listing.ListingId == listingId);
             if (index >= 0)
             {
                 _rows[index] = new AuditRow(_rows[index].Rank, refreshed, ScoreListing(refreshed), "Yenilendi");
             }
+            else
+            {
+                _rows.Insert(0, new AuditRow(1, refreshed, ScoreListing(refreshed), "Yenilendi"));
+            }
 
             ApplyFilter();
-            _statusLabel.Text = "Secili listing Etsy'den tekrar yuklendi";
+            var row = _rows.FirstOrDefault(item => item.Listing.ListingId == listingId);
+            if (row is not null)
+            {
+                _bindingSource.Position = Math.Max(0, (_bindingSource.DataSource as List<AuditRow>)?.FindIndex(item => item.Listing.ListingId == listingId) ?? 0);
+                await LoadThumbnailAsync(row, settings);
+            }
+
+            _lastResult = null;
+            _lastResultListingId = 0;
+            _statusLabel.Text = "Rev tamamlandi: listing Etsy'den en guncel haliyle yuklendi";
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "AI sonrasi yenile", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, ex.Message, "Rev", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = "Rev islemi basarisiz";
         }
         finally
         {
