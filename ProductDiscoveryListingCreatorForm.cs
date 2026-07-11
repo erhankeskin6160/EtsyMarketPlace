@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
@@ -553,6 +554,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         {
             UseWaitCursor = true;
             var listing = SelectedRow.Listing;
+            var settings = AiOptimizationSettingsStore.Load();
             var input = new ListingOptimizationInput(
                 BuildDraftSourceTitle(listing),
                 BuildDraftSourceDescription(listing),
@@ -567,7 +569,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _variationsTextBox.Text = BuildVariationSuggestions(listing);
             ApplyDraftCategoryRecommendation(listing);
             _imagePromptTextBox.Text = BuildImagePrompt();
-            _notesTextBox.Text = "AI taslak hazir. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon alani sadece Etsy listinginden okunan gercek varyasyonlarla doldurulur, AI varyasyon uretmez. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
+            _notesTextBox.Text = $"Taslak kaynagi: {DraftSourceLabel(settings)}. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon alani sadece Etsy listinginden okunan gercek varyasyonlarla doldurulur, AI varyasyon uretmez. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
             _statusLabel.Text = "Listing taslagi uretildi";
         }
         catch (Exception ex)
@@ -1205,18 +1207,155 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             return cleanDescription;
         }
 
-        var title = SelectRelevantTitle([listing.Title], listing);
-        var tags = listing.Tags.Count > 0
-            ? string.Join(", ", listing.Tags.Take(8))
-            : PrimaryKeyword();
-        var materialText = string.Join(", ", materialSuggestions);
-        var materials = materialText.Length > 0 ? materialText : "quality materials";
+        return BuildDynamicEnglishDescription(listing, materialSuggestions);
+    }
 
-        return
-            $"{title} is prepared as an Etsy-ready product listing based on the selected marketplace reference and search intent.{Environment.NewLine}{Environment.NewLine}" +
-            $"This item is positioned for buyers searching for {tags}. It is written as original English copy for a clear Etsy title, searchable tags, and a buyer-friendly description.{Environment.NewLine}{Environment.NewLine}" +
-            $"Materials: {materials}.{Environment.NewLine}" +
-            "Please review the final product details, measurements, production method, and any brand or character references before publishing.";
+    private string BuildDynamicEnglishDescription(
+        MarketListingResult listing,
+        IReadOnlyList<string> materialSuggestions)
+    {
+        var title = SelectRelevantTitle([listing.Title], listing);
+        var productName = ShortProductName(title);
+        var searchIntent = PrimaryKeyword();
+        var category = ReadableCategoryName(listing);
+        var tags = listing.Tags.Count > 0
+            ? listing.Tags
+                .Where(tag => tag.Length > 2)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8)
+                .ToList()
+            : ImportantTerms($"{title} {searchIntent}").ToList();
+        var materials = materialSuggestions.Count > 0
+            ? materialSuggestions
+                .Where(item => item.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(5)
+                .ToList()
+            : InferMaterials(listing);
+        var useCases = BuildUseCases($"{title} {listing.Description} {string.Join(' ', listing.Tags)}");
+
+        var builder = new StringBuilder();
+        builder.Append(productName);
+        builder.Append(" is designed for shoppers looking for ");
+        builder.Append(searchIntent.Length > 0 ? searchIntent : category.ToLowerInvariant());
+        builder.Append(". This ");
+        builder.Append(category.Length > 0 ? category.ToLowerInvariant() : "collectible piece");
+        builder.Append(" brings a focused, marketplace-ready presentation for collectors, gift buyers, and display-focused Etsy customers.");
+        builder.AppendLine();
+        builder.AppendLine();
+
+        builder.Append("The listing highlights ");
+        builder.Append(tags.Count > 0 ? string.Join(", ", tags.Take(5)) : "clear product details, searchable style terms, and buyer intent");
+        builder.Append(". It is written to help buyers quickly understand the product style, display purpose, and why it fits their collection or decor setup.");
+        builder.AppendLine();
+        builder.AppendLine();
+
+        builder.Append("Materials and finish: ");
+        builder.Append(materials.Count > 0 ? string.Join(", ", materials) : "quality materials selected according to the final production method");
+        builder.Append(". Review the exact size, color, finish, and production details before publishing so the final Etsy listing matches the item you will ship.");
+        builder.AppendLine();
+        builder.AppendLine();
+
+        builder.Append("Great for ");
+        builder.Append(string.Join(", ", useCases));
+        builder.Append(". Before publishing, check trademark, character, and brand references carefully and keep the final wording accurate to your own handmade product.");
+        return builder.ToString();
+    }
+
+    private static string DraftSourceLabel(AiOptimizationSettings settings)
+    {
+        if (settings.IsOffline)
+        {
+            return "Offline dinamik motor";
+        }
+
+        if (settings.UseGemini)
+        {
+            return $"Gemini ({settings.GeminiModel})";
+        }
+
+        if (settings.UseOpenAi)
+        {
+            return $"OpenAI ({settings.OpenAiModel})";
+        }
+
+        return $"{settings.Provider} ayari eksik; offline fallback";
+    }
+
+    private static string ShortProductName(string title)
+    {
+        var firstPart = title
+            .Split(['|', '-', ','], StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Trim())
+            .FirstOrDefault(part => part.Length > 0) ?? title.Trim();
+        return firstPart.Length <= 85 ? firstPart : firstPart[..85].TrimEnd();
+    }
+
+    private static string ReadableCategoryName(MarketListingResult listing)
+    {
+        var category = listing.TaxonomyName.Length > 0 ? listing.TaxonomyName : listing.TaxonomyDisplay;
+        if (category.Length > 0)
+        {
+            var lastPart = category
+                .Split('>', StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => part.Trim())
+                .LastOrDefault(part => part.Length > 0);
+            if (!string.IsNullOrWhiteSpace(lastPart))
+            {
+                return lastPart;
+            }
+        }
+
+        return ProductTypeFromText($"{listing.Title} {listing.Description}");
+    }
+
+    private static string ProductTypeFromText(string value)
+    {
+        var text = value.ToLowerInvariant();
+        if (ContainsAny(text, "bust")) return "display bust";
+        if (ContainsAny(text, "statue", "sculpture")) return "display statue";
+        if (ContainsAny(text, "figurine", "figure")) return "collectible figure";
+        if (ContainsAny(text, "helmet", "mask", "sword", "prop")) return "cosplay prop";
+        if (ContainsAny(text, "lamp", "light")) return "decor light";
+        if (ContainsAny(text, "poster", "print")) return "wall art";
+        return "collectible item";
+    }
+
+    private static IReadOnlyList<string> InferMaterials(MarketListingResult listing)
+    {
+        var blob = $"{listing.Title} {listing.Description} {string.Join(' ', listing.Tags)}";
+        var materials = new List<string>();
+        AddMaterialIfMentioned(blob, materials, "resin", "resin");
+        AddMaterialIfMentioned(blob, materials, "pla", "PLA");
+        AddMaterialIfMentioned(blob, materials, "plastic", "plastic");
+        AddMaterialIfMentioned(blob, materials, "paint", "paint");
+        AddMaterialIfMentioned(blob, materials, "wood", "wood");
+        AddMaterialIfMentioned(blob, materials, "metal", "metal");
+        AddMaterialIfMentioned(blob, materials, "leather", "leather");
+        AddMaterialIfMentioned(blob, materials, "fabric", "fabric");
+        return materials.Count > 0 ? materials : ["quality materials"];
+    }
+
+    private static void AddMaterialIfMentioned(string blob, List<string> materials, string needle, string material)
+    {
+        if (blob.Contains(needle, StringComparison.OrdinalIgnoreCase) &&
+            !materials.Contains(material, StringComparer.OrdinalIgnoreCase))
+        {
+            materials.Add(material);
+        }
+    }
+
+    private static IReadOnlyList<string> BuildUseCases(string value)
+    {
+        var text = value.ToLowerInvariant();
+        var useCases = new List<string>();
+        if (ContainsAny(text, "cosplay", "prop", "helmet", "sword", "mask")) useCases.Add("cosplay displays");
+        if (ContainsAny(text, "gamer", "gaming", "game", "rpg")) useCases.Add("gamer room decor");
+        if (ContainsAny(text, "desk", "shelf", "office")) useCases.Add("desk and shelf styling");
+        if (ContainsAny(text, "collector", "collectible", "statue", "figure", "bust")) useCases.Add("collector displays");
+        if (ContainsAny(text, "gift", "birthday", "father", "mother")) useCases.Add("thoughtful gifting");
+        if (useCases.Count == 0) useCases.AddRange(["home decor", "collection displays", "gift ideas"]);
+        return useCases.Take(4).ToList();
     }
 
     private void ApplyDraftCategoryRecommendation(MarketListingResult selectedListing)
