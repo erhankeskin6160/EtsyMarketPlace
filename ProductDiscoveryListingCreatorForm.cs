@@ -590,17 +590,82 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _variationsTextBox.Text = BuildVariationSuggestions(listing);
             ApplyDraftCategoryRecommendation(listing);
             _imagePromptTextBox.Text = BuildImagePrompt();
-            var validator = new ListingDraftValidator();
-            var validationReport = validator.Validate(new ListingDraftValidationInput(
+
+            // Validate and auto-repair loop
+            var repairService = new ListingDraftRepairService();
+            var validationReport = repairService.ValidateDraft(
                 _titleTextBox.Text,
                 _descriptionTextBox.Text,
                 result.TagSuggestions.Take(13).ToList(),
                 materials,
                 _categoryTextBox.Text,
-                PrimaryKeyword()));
+                PrimaryKeyword());
+
+            var repairLog = new System.Text.StringBuilder();
+            var decision = repairService.Evaluate(validationReport);
+
+            if (decision.NeedsRepair && !settings.IsOffline)
+            {
+                for (var attempt = 0; attempt < ListingDraftRepairService.MaxRepairIterations && decision.NeedsRepair; attempt++)
+                {
+                    _statusLabel.Text = $"Taslak onariliyor (deneme {attempt + 1}/{ListingDraftRepairService.MaxRepairIterations})...";
+                    repairLog.AppendLine($"Onarim denemesi {attempt + 1}: Puan {validationReport.OverallScore}/100, hedef alanlar: {string.Join(", ", decision.RepairTargets)}");
+
+                    var repairPrompt = ListingDraftRepairService.BuildRepairPrompt(
+                        decision,
+                        _titleTextBox.Text,
+                        _descriptionTextBox.Text,
+                        result.TagSuggestions.Take(13).ToList(),
+                        materials,
+                        PrimaryKeyword());
+
+                    var repairInput = new ListingOptimizationInput(
+                        _titleTextBox.Text,
+                        repairPrompt,
+                        result.TagSuggestions.Take(13).ToList(),
+                        PrimaryKeyword());
+
+                    try
+                    {
+                        var repairResult = await aiOptimizer.OptimizeAsync(repairInput);
+
+                        if (decision.RepairTargets.Contains("title") && repairResult.TitleSuggestions.Count > 0)
+                            _titleTextBox.Text = SelectEnglishTitle(repairResult.TitleSuggestions, listing);
+                        if (decision.RepairTargets.Contains("tags") && repairResult.TagSuggestions.Count > 0)
+                            _tagsTextBox.Text = string.Join(", ", repairResult.TagSuggestions.Take(13));
+                        if (decision.RepairTargets.Contains("description") && !string.IsNullOrWhiteSpace(repairResult.DescriptionDraft))
+                            _descriptionTextBox.Text = SelectEnglishDescription(repairResult.DescriptionDraft, listing, materials);
+                        if (decision.RepairTargets.Contains("materials") && repairResult.MaterialSuggestions.Count > 0)
+                        {
+                            materials = EtsyApiClient.NormalizeListingMaterialsForEtsy(repairResult.MaterialSuggestions);
+                            _materialsTextBox.Text = string.Join(", ", materials);
+                        }
+
+                        result = repairResult;
+                    }
+                    catch
+                    {
+                        repairLog.AppendLine($"Onarim denemesi {attempt + 1} basarisiz, mevcut taslak korunuyor.");
+                        break;
+                    }
+
+                    validationReport = repairService.ValidateDraft(
+                        _titleTextBox.Text,
+                        _descriptionTextBox.Text,
+                        result.TagSuggestions.Take(13).ToList(),
+                        materials,
+                        _categoryTextBox.Text,
+                        PrimaryKeyword());
+                    decision = repairService.Evaluate(validationReport);
+                }
+
+                repairLog.AppendLine($"Son puan: {validationReport.OverallScore}/100");
+            }
+
             _notesTextBox.Text =
                 $"Taslak kaynagi: {DraftSourceLabel(settings)}. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon alani sadece Etsy listinginden okunan gercek varyasyonlarla doldurulur, AI varyasyon uretmez. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.{Environment.NewLine}{Environment.NewLine}" +
-                ListingDraftValidator.FormatReport(validationReport);
+                ListingDraftValidator.FormatReport(validationReport) +
+                (repairLog.Length > 0 ? $"{Environment.NewLine}{Environment.NewLine}Onarim gecmisi:{Environment.NewLine}{repairLog}" : "");
             _statusLabel.Text = "Listing taslagi uretildi";
         }
         catch (Exception ex)
