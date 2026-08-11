@@ -30,9 +30,26 @@ internal static class UiStyle
 
     public static void ApplyTheme(Form form)
     {
+        ApplyResponsiveTheme(form);
+    }
+
+    public static void ApplyResponsiveTheme(Form form, Size? minSize = null)
+    {
         form.BackColor = BackgroundColor;
         form.Font = BaseFont;
+        form.MinimumSize = minSize ?? new Size(1280, 760);
+        SetDoubleBuffered(form);
         ApplyToControls(form.Controls);
+    }
+
+    private static void SetDoubleBuffered(Control control)
+    {
+        try
+        {
+            typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.SetValue(control, true, null);
+        }
+        catch { }
     }
 
     private static void ApplyToControls(Control.ControlCollection controls)
@@ -95,6 +112,7 @@ internal static class UiStyle
 
     public static void ConfigureBaseGrid(DataGridView grid)
     {
+        SetDoubleBuffered(grid);
         grid.Dock = DockStyle.Fill;
         grid.ReadOnly = true;
         grid.AutoGenerateColumns = false;
