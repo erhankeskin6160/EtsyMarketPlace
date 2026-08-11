@@ -56,6 +56,10 @@ static class Program
         abTestRepository.InitializeAsync().GetAwaiter().GetResult();
         var abTestService = new EtsyMarketPlace.Application.AbTesting.AbTestService(abTestRepository);
 
+        var batchQueueRepository = new EtsyMarketPlace.Infrastructure.BatchQueue.SqliteBatchQueueRepository(databasePath);
+        batchQueueRepository.InitializeAsync().GetAwaiter().GetResult();
+        var batchQueueProcessorService = new EtsyMarketPlace.Application.BatchQueue.BatchQueueProcessorService(batchQueueRepository, aiListingOptimizer);
+
         var dashboardService = new DashboardService(trackingService);
         using var automationScheduler = new AutomationScheduler(automation.RunService, automation.SettingsStore);
         automationScheduler.Start();
@@ -70,7 +74,8 @@ static class Program
             new WindowsTaskSchedulerService(),
             optimizationHistoryService,
             aiListingOptimizer,
-            abTestService));
+            abTestService,
+            batchQueueProcessorService));
     }
 
     private static AutomationServices CreateAutomationServices(string databasePath)

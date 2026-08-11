@@ -7,6 +7,7 @@ using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Automation;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.AbTesting;
+using EtsyMarketPlace.Application.BatchQueue;
 using EtsyMarketPlace.Domain.Tracking;
 using EtsyMarketPlace.Infrastructure.Automation;
 using SimilarProductsWinForms.Controls;
@@ -33,6 +34,7 @@ internal sealed class DashboardForm : Form
     private DashboardOverview? _overview;
 
     private readonly AbTestService _abTestService;
+    private readonly BatchQueueProcessorService _batchQueueProcessorService;
 
     public DashboardForm(
         AnalyzeKeywordUseCase keywordUseCase,
@@ -45,7 +47,8 @@ internal sealed class DashboardForm : Form
         WindowsTaskSchedulerService windowsTaskScheduler,
         ListingOptimizationHistoryService optimizationHistoryService,
         IAiListingOptimizer aiListingOptimizer,
-        AbTestService? abTestService = null)
+        AbTestService? abTestService = null,
+        BatchQueueProcessorService? batchQueueProcessorService = null)
     {
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
@@ -58,6 +61,7 @@ internal sealed class DashboardForm : Form
         _optimizationHistoryService = optimizationHistoryService;
         _aiListingOptimizer = aiListingOptimizer;
         _abTestService = abTestService ?? CreateDefaultAbTestService();
+        _batchQueueProcessorService = batchQueueProcessorService ?? CreateDefaultBatchQueueProcessorService();
         BuildLayout();
         Shown += async (_, _) => await LoadDashboardAsync();
     }
@@ -162,28 +166,31 @@ internal sealed class DashboardForm : Form
         ((Button)primary.GetControlFromPosition(3, 0)!).Click += (_, _) => OpenAutomation();
         hub.Controls.Add(primary, 0, 0);
 
-        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, RowCount = 1 };
+        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1 };
         secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 1; index < 7; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+        for (var index = 1; index < 8; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
         secondary.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
+        var batchQueue = UiStyle.CreateButton("Toplu İşlem");
+        batchQueue.Click += (_, _) => OpenBatchQueue();
+        secondary.Controls.Add(batchQueue, 1, 0);
         var profitCalc = UiStyle.CreateButton("Kâr Simülatörü");
         profitCalc.Click += (_, _) => OpenProfitCalc();
-        secondary.Controls.Add(profitCalc, 1, 0);
+        secondary.Controls.Add(profitCalc, 2, 0);
         var abTest = UiStyle.CreateButton("A/B Test");
         abTest.Click += (_, _) => OpenAbTest();
-        secondary.Controls.Add(abTest, 2, 0);
+        secondary.Controls.Add(abTest, 3, 0);
         var tracking = UiStyle.CreateButton("Takip");
         tracking.Click += async (_, _) => await OpenTrackingAsync();
-        secondary.Controls.Add(tracking, 3, 0);
+        secondary.Controls.Add(tracking, 4, 0);
         var api = UiStyle.CreateButton("API");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        secondary.Controls.Add(api, 4, 0);
+        secondary.Controls.Add(api, 5, 0);
         var refresh = UiStyle.CreateButton("Yenile");
         refresh.Click += async (_, _) => await LoadDashboardAsync();
-        secondary.Controls.Add(refresh, 5, 0);
+        secondary.Controls.Add(refresh, 6, 0);
         var exit = UiStyle.CreateButton("Cikis", isSecondary: true);
         exit.Click += (_, _) => Close();
-        secondary.Controls.Add(exit, 6, 0);
+        secondary.Controls.Add(exit, 7, 0);
         hub.Controls.Add(secondary, 0, 1);
 
         return hub;
@@ -248,6 +255,12 @@ internal sealed class DashboardForm : Form
             _automationSettingsStore,
             _automationScheduler,
             _windowsTaskScheduler);
+        form.ShowDialog(this);
+    }
+
+    private void OpenBatchQueue()
+    {
+        using var form = new BatchQueueForm(_batchQueueProcessorService);
         form.ShowDialog(this);
     }
 
@@ -324,6 +337,17 @@ internal sealed class DashboardForm : Form
         var repo = new EtsyMarketPlace.Infrastructure.AbTesting.SqliteAbTestRepository(databasePath);
         repo.InitializeAsync().GetAwaiter().GetResult();
         return new AbTestService(repo);
+    }
+
+    private BatchQueueProcessorService CreateDefaultBatchQueueProcessorService()
+    {
+        var databasePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EtsyMarketPlace",
+            "market-tracking.db");
+        var repo = new EtsyMarketPlace.Infrastructure.BatchQueue.SqliteBatchQueueRepository(databasePath);
+        repo.InitializeAsync().GetAwaiter().GetResult();
+        return new BatchQueueProcessorService(repo, _aiListingOptimizer);
     }
 
     private sealed class OpportunityRow(DashboardOpportunity item)
