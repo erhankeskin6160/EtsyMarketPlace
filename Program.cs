@@ -52,6 +52,10 @@ static class Program
         var aiListingOptimizer = new OpenAiListingOptimizer(
             AiOptimizationSettingsStore.Load,
             localListingOptimizer);
+        var abTestRepository = new EtsyMarketPlace.Infrastructure.AbTesting.SqliteAbTestRepository(databasePath);
+        abTestRepository.InitializeAsync().GetAwaiter().GetResult();
+        var abTestService = new EtsyMarketPlace.Application.AbTesting.AbTestService(abTestRepository);
+
         var dashboardService = new DashboardService(trackingService);
         using var automationScheduler = new AutomationScheduler(automation.RunService, automation.SettingsStore);
         automationScheduler.Start();
@@ -65,7 +69,8 @@ static class Program
             automationScheduler,
             new WindowsTaskSchedulerService(),
             optimizationHistoryService,
-            aiListingOptimizer));
+            aiListingOptimizer,
+            abTestService));
     }
 
     private static AutomationServices CreateAutomationServices(string databasePath)

@@ -6,6 +6,7 @@ using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Automation;
 using EtsyMarketPlace.Application.ListingOptimization;
+using EtsyMarketPlace.Application.AbTesting;
 using EtsyMarketPlace.Domain.Tracking;
 using EtsyMarketPlace.Infrastructure.Automation;
 using SimilarProductsWinForms.Controls;
@@ -31,6 +32,8 @@ internal sealed class DashboardForm : Form
     private readonly TrendChartControl _trendChart = new();
     private DashboardOverview? _overview;
 
+    private readonly AbTestService _abTestService;
+
     public DashboardForm(
         AnalyzeKeywordUseCase keywordUseCase,
         TrackingService trackingService,
@@ -41,7 +44,8 @@ internal sealed class DashboardForm : Form
         AutomationScheduler automationScheduler,
         WindowsTaskSchedulerService windowsTaskScheduler,
         ListingOptimizationHistoryService optimizationHistoryService,
-        IAiListingOptimizer aiListingOptimizer)
+        IAiListingOptimizer aiListingOptimizer,
+        AbTestService? abTestService = null)
     {
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
@@ -53,6 +57,7 @@ internal sealed class DashboardForm : Form
         _windowsTaskScheduler = windowsTaskScheduler;
         _optimizationHistoryService = optimizationHistoryService;
         _aiListingOptimizer = aiListingOptimizer;
+        _abTestService = abTestService ?? CreateDefaultAbTestService();
         BuildLayout();
         Shown += async (_, _) => await LoadDashboardAsync();
     }
@@ -157,22 +162,25 @@ internal sealed class DashboardForm : Form
         ((Button)primary.GetControlFromPosition(3, 0)!).Click += (_, _) => OpenAutomation();
         hub.Controls.Add(primary, 0, 0);
 
-        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1 };
+        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1 };
         secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 1; index < 5; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+        for (var index = 1; index < 6; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
         secondary.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
+        var abTest = UiStyle.CreateButton("A/B Test");
+        abTest.Click += (_, _) => OpenAbTest();
+        secondary.Controls.Add(abTest, 1, 0);
         var tracking = UiStyle.CreateButton("Takip");
         tracking.Click += async (_, _) => await OpenTrackingAsync();
-        secondary.Controls.Add(tracking, 1, 0);
+        secondary.Controls.Add(tracking, 2, 0);
         var api = UiStyle.CreateButton("API");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        secondary.Controls.Add(api, 2, 0);
+        secondary.Controls.Add(api, 3, 0);
         var refresh = UiStyle.CreateButton("Yenile");
         refresh.Click += async (_, _) => await LoadDashboardAsync();
-        secondary.Controls.Add(refresh, 3, 0);
+        secondary.Controls.Add(refresh, 4, 0);
         var exit = UiStyle.CreateButton("Cikis", isSecondary: true);
         exit.Click += (_, _) => Close();
-        secondary.Controls.Add(exit, 4, 0);
+        secondary.Controls.Add(exit, 5, 0);
         hub.Controls.Add(secondary, 0, 1);
 
         return hub;
@@ -240,6 +248,12 @@ internal sealed class DashboardForm : Form
         form.ShowDialog(this);
     }
 
+    private void OpenAbTest()
+    {
+        using var form = new ListingAbTestForm(_abTestService);
+        form.ShowDialog(this);
+    }
+
     private async Task OpenTrackingAsync()
     {
         using var form = new TrackingHistoryForm(_trackingService);
@@ -290,6 +304,17 @@ internal sealed class DashboardForm : Form
         button.Margin = new Padding(0, 2, 8, 6);
         button.AutoEllipsis = false;
         return button;
+    }
+
+    private static AbTestService CreateDefaultAbTestService()
+    {
+        var databasePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EtsyMarketPlace",
+            "market-tracking.db");
+        var repo = new EtsyMarketPlace.Infrastructure.AbTesting.SqliteAbTestRepository(databasePath);
+        repo.InitializeAsync().GetAwaiter().GetResult();
+        return new AbTestService(repo);
     }
 
     private sealed class OpportunityRow(DashboardOpportunity item)
