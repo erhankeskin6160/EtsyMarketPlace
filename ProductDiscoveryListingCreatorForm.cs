@@ -569,7 +569,16 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _variationsTextBox.Text = BuildVariationSuggestions(listing);
             ApplyDraftCategoryRecommendation(listing);
             _imagePromptTextBox.Text = BuildImagePrompt();
-            _notesTextBox.Text = $"Taslak kaynagi: {DraftSourceLabel(settings)}. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon alani sadece Etsy listinginden okunan gercek varyasyonlarla doldurulur, AI varyasyon uretmez. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.";
+            var qualityReport = EtsyListingKnowledgeBase.EvaluateDraft(
+                _titleTextBox.Text,
+                _descriptionTextBox.Text,
+                result.TagSuggestions.Take(13).ToList(),
+                materials,
+                _categoryTextBox.Text,
+                PrimaryKeyword());
+            _notesTextBox.Text =
+                $"Taslak kaynagi: {DraftSourceLabel(settings)}. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon alani sadece Etsy listinginden okunan gercek varyasyonlarla doldurulur, AI varyasyon uretmez. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.{Environment.NewLine}{Environment.NewLine}" +
+                EtsyListingKnowledgeBase.FormatReport(qualityReport);
             _statusLabel.Text = "Listing taslagi uretildi";
         }
         catch (Exception ex)
