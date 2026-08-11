@@ -33,6 +33,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private readonly TextBox _imagePromptTextBox = new();
     private readonly TextBox _imagePathTextBox = new();
     private readonly TextBox _notesTextBox = new();
+    private readonly ListingQualityReportControl _qualityReportControl = new();
     private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 30 };
     private readonly NumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
     private readonly NumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
@@ -313,10 +314,19 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         var choose = CreateButton("Dosyadan Sec");
         choose.Click += (_, _) => ChooseImage();
         right.Controls.Add(choose, 0, 18);
+        var tabControl = new TabControl { Dock = DockStyle.Fill };
+        var qualityTab = new TabPage("📊 Kalite Karnesi") { BackColor = Color.White };
+        qualityTab.Controls.Add(_qualityReportControl);
+        tabControl.TabPages.Add(qualityTab);
+
+        var notesTab = new TabPage("📝 Notlar") { BackColor = Color.White };
         _notesTextBox.Dock = DockStyle.Fill;
         _notesTextBox.Multiline = true;
         _notesTextBox.ReadOnly = true;
-        right.Controls.Add(_notesTextBox, 0, 19);
+        notesTab.Controls.Add(_notesTextBox);
+        tabControl.TabPages.Add(notesTab);
+
+        right.Controls.Add(tabControl, 0, 19);
         layout.Controls.Add(right, 2, 0);
         UpdateListingTypeControls();
         return layout;
@@ -662,6 +672,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
                 repairLog.AppendLine($"Son puan: {validationReport.OverallScore}/100");
             }
 
+            _qualityReportControl.SetReport(validationReport, async () => await RepairDraftManuallyAsync());
             _notesTextBox.Text =
                 $"Taslak kaynagi: {DraftSourceLabel(settings)}. Metin Ingilizce uretildi; kategori taslak icerigine gore yeniden onerildi. Varyasyon alani sadece Etsy listinginden okunan gercek varyasyonlarla doldurulur, AI varyasyon uretmez. Etsy'ye eklemeden once fiyat, stok, taxonomy ve kargo profilini kontrol et.{Environment.NewLine}{Environment.NewLine}" +
                 ListingDraftValidator.FormatReport(validationReport) +
@@ -672,6 +683,84 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         {
             MessageBox.Show(this, ex.Message, "Taslak uret", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             _statusLabel.Text = "Taslak uretilemedi";
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    private async Task RepairDraftManuallyAsync()
+    {
+        if (SelectedRow is null) return;
+        try
+        {
+            UseWaitCursor = true;
+            _statusLabel.Text = "AI taslagi manuel onariyor...";
+            var listing = SelectedRow.Listing;
+            var tags = _tagsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+            var materials = _materialsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(m => m.Trim()).ToList();
+            var repairService = new ListingDraftRepairService();
+            var validationReport = repairService.ValidateDraft(
+                _titleTextBox.Text,
+                _descriptionTextBox.Text,
+                tags,
+                materials,
+                _categoryTextBox.Text,
+                PrimaryKeyword());
+
+            var decision = repairService.Evaluate(validationReport);
+            if (!decision.NeedsRepair)
+            {
+                MessageBox.Show(this, "Taslak zaten yeterli kalitede (>=75), ekstra onarim gerekmiyor.", "AI Onarim", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _statusLabel.Text = "Taslak puani yeterli";
+                return;
+            }
+
+            var repairPrompt = ListingDraftRepairService.BuildRepairPrompt(
+                decision,
+                _titleTextBox.Text,
+                _descriptionTextBox.Text,
+                tags,
+                materials,
+                PrimaryKeyword());
+
+            var repairInput = new ListingOptimizationInput(
+                _titleTextBox.Text,
+                repairPrompt,
+                tags,
+                PrimaryKeyword());
+
+            var repairResult = await aiOptimizer.OptimizeAsync(repairInput);
+
+            if (repairResult.TitleSuggestions.Count > 0)
+                _titleTextBox.Text = SelectEnglishTitle(repairResult.TitleSuggestions, listing);
+            if (repairResult.TagSuggestions.Count > 0)
+                _tagsTextBox.Text = string.Join(", ", repairResult.TagSuggestions.Take(13));
+            if (!string.IsNullOrWhiteSpace(repairResult.DescriptionDraft))
+                _descriptionTextBox.Text = SelectEnglishDescription(repairResult.DescriptionDraft, listing, materials);
+            if (repairResult.MaterialSuggestions.Count > 0)
+            {
+                materials = EtsyApiClient.NormalizeListingMaterialsForEtsy(repairResult.MaterialSuggestions);
+                _materialsTextBox.Text = string.Join(", ", materials);
+            }
+
+            tags = _tagsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+            var updatedReport = repairService.ValidateDraft(
+                _titleTextBox.Text,
+                _descriptionTextBox.Text,
+                tags,
+                materials,
+                _categoryTextBox.Text,
+                PrimaryKeyword());
+
+            _qualityReportControl.SetReport(updatedReport, async () => await RepairDraftManuallyAsync());
+            _statusLabel.Text = $"Taslak manuel onarildi (Yeni puan: {updatedReport.OverallScore}/100)";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "AI Onarim", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = "Onarim basarisiz";
         }
         finally
         {
