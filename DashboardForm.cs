@@ -162,25 +162,28 @@ internal sealed class DashboardForm : Form
         ((Button)primary.GetControlFromPosition(3, 0)!).Click += (_, _) => OpenAutomation();
         hub.Controls.Add(primary, 0, 0);
 
-        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1 };
+        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, RowCount = 1 };
         secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 1; index < 6; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+        for (var index = 1; index < 7; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
         secondary.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
+        var profitCalc = UiStyle.CreateButton("Kâr Simülatörü");
+        profitCalc.Click += (_, _) => OpenProfitCalc();
+        secondary.Controls.Add(profitCalc, 1, 0);
         var abTest = UiStyle.CreateButton("A/B Test");
         abTest.Click += (_, _) => OpenAbTest();
-        secondary.Controls.Add(abTest, 1, 0);
+        secondary.Controls.Add(abTest, 2, 0);
         var tracking = UiStyle.CreateButton("Takip");
         tracking.Click += async (_, _) => await OpenTrackingAsync();
-        secondary.Controls.Add(tracking, 2, 0);
+        secondary.Controls.Add(tracking, 3, 0);
         var api = UiStyle.CreateButton("API");
         api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        secondary.Controls.Add(api, 3, 0);
+        secondary.Controls.Add(api, 4, 0);
         var refresh = UiStyle.CreateButton("Yenile");
         refresh.Click += async (_, _) => await LoadDashboardAsync();
-        secondary.Controls.Add(refresh, 4, 0);
+        secondary.Controls.Add(refresh, 5, 0);
         var exit = UiStyle.CreateButton("Cikis", isSecondary: true);
         exit.Click += (_, _) => Close();
-        secondary.Controls.Add(exit, 5, 0);
+        secondary.Controls.Add(exit, 6, 0);
         hub.Controls.Add(secondary, 0, 1);
 
         return hub;
@@ -245,6 +248,12 @@ internal sealed class DashboardForm : Form
             _automationSettingsStore,
             _automationScheduler,
             _windowsTaskScheduler);
+        form.ShowDialog(this);
+    }
+
+    private void OpenProfitCalc()
+    {
+        using var form = new ProfitCalculatorForm();
         form.ShowDialog(this);
     }
 
