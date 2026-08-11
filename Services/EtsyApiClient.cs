@@ -144,6 +144,69 @@ internal sealed class EtsyApiClient
         return listings.OrderByDescending(listing => listing.MarketScore).ToList();
     }
 
+    public async Task<MarketListingResult> GetPublicListingAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        string primaryKeyword = "",
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        if (listingId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(listingId), "Gecerli bir Etsy listing ID gerekli.");
+        }
+
+        var query = ToQueryString(new Dictionary<string, string>
+        {
+            ["includes"] = "Shop,Images",
+        });
+
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/listings/{listingId}?{query}", useAccessToken: false);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Listing linkinden urun alinamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        var wrapped = body.Contains("\"results\"", StringComparison.OrdinalIgnoreCase)
+            ? body
+            : $"{{\"results\":[{body}]}}";
+        var listing = ParseMarketListings(wrapped, primaryKeyword).FirstOrDefault()
+            ?? throw new InvalidOperationException("Etsy listing verisi okunamadi.");
+
+        if (listing.ImageUrls.Count == 0)
+        {
+            listing.ImageUrls = await GetListingImagesAsync(settings, listingId, cancellationToken);
+        }
+
+        listing.VariationOptions = await GetListingVariationOptionsAsync(settings, listingId, cancellationToken);
+        await EnrichShopDataAsync(settings, [listing], primaryKeyword, cancellationToken);
+        return listing;
+    }
+
+    public async Task<List<ListingVariationOption>> GetListingVariationOptionsAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        if (listingId <= 0)
+        {
+            return [];
+        }
+
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/listings/{listingId}/inventory", useAccessToken: false);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return [];
+        }
+
+        return ParseListingVariationOptions(body);
+    }
+
     public async Task<KeywordMarketApiSample> GetKeywordMarketSampleAsync(
         EtsyApiSettings settings,
         string keywords,
@@ -597,6 +660,203 @@ internal sealed class EtsyApiClient
         return new CreatedDraftListing(
             listingId,
             string.IsNullOrWhiteSpace(url) ? $"https://www.etsy.com/listing/{listingId}" : url);
+    }
+
+    public async Task UpdateOwnShopListingInventoryAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        DraftListingInventoryUpdate inventory,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        if (listingId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(listingId), "Gecerli bir listing kimligi gerekli.");
+        }
+
+        if (inventory.Variations.Count == 0)
+        {
+            return;
+        }
+
+        var products = BuildInventoryProducts(listingId, inventory);
+        if (products.Count == 0)
+        {
+            return;
+        }
+
+        var payload = new
+        {
+            products,
+            price_on_property = Array.Empty<long>(),
+            quantity_on_property = Array.Empty<long>(),
+            sku_on_property = Array.Empty<long>(),
+        };
+
+        using var request = CreateRequest(settings, HttpMethod.Put, $"{BaseUrl}/listings/{listingId}/inventory", useAccessToken: true);
+        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Varyasyonlar Etsy inventory sistemine yazilamadi. HTTP {(int)response.StatusCode}: {body}");
+        }
+    }
+
+    private static List<object> BuildInventoryProducts(long listingId, DraftListingInventoryUpdate inventory)
+    {
+        var groups = inventory.Variations
+            .Where(group => group.Values.Count > 0)
+            .Take(2)
+            .ToList();
+        if (groups.Count == 0)
+        {
+            return [];
+        }
+
+        var combinations = BuildVariationCombinations(groups)
+            .Take(70)
+            .ToList();
+
+        var products = new List<object>();
+        var sharedSku = $"AUTO-{listingId}";
+        for (var index = 0; index < combinations.Count; index++)
+        {
+            var combination = combinations[index];
+            var offering = new Dictionary<string, object>
+            {
+                ["price"] = inventory.Price.ToString("0.00", CultureInfo.InvariantCulture),
+                ["quantity"] = Math.Max(1, inventory.Quantity),
+                ["is_enabled"] = true,
+            };
+            if (inventory.ReadinessStateId is > 0)
+            {
+                offering["readiness_state_id"] = inventory.ReadinessStateId.Value;
+            }
+
+            products.Add(new
+            {
+                sku = sharedSku,
+                property_values = combination.Select(item => new
+                {
+                    property_id = item.Group.PropertyId,
+                    property_name = item.Group.Name,
+                    values = new[] { item.Value },
+                }).ToList(),
+                offerings = new[] { offering },
+            });
+        }
+
+        return products;
+    }
+
+    private static IEnumerable<List<(DraftListingVariationGroup Group, string Value)>> BuildVariationCombinations(
+        IReadOnlyList<DraftListingVariationGroup> groups)
+    {
+        if (groups.Count == 1)
+        {
+            foreach (var value in groups[0].Values)
+            {
+                yield return [(groups[0], value)];
+            }
+
+            yield break;
+        }
+
+        foreach (var first in groups[0].Values)
+        {
+            foreach (var second in groups[1].Values)
+            {
+                yield return [(groups[0], first), (groups[1], second)];
+            }
+        }
+    }
+
+    private static List<ListingVariationOption> ParseListingVariationOptions(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("products", out var products) || products.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var groups = new Dictionary<long, (string Name, SortedSet<string> Values)>();
+        foreach (var product in products.EnumerateArray())
+        {
+            if (!product.TryGetProperty("property_values", out var propertyValues) || propertyValues.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var propertyValue in propertyValues.EnumerateArray())
+            {
+                var propertyId = GetLong(propertyValue, "property_id");
+                if (propertyId <= 0)
+                {
+                    continue;
+                }
+
+                var name = GetFirstString(propertyValue, "property_name", "scale_name", "display_name");
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = $"Option {propertyId}";
+                }
+
+                if (!groups.TryGetValue(propertyId, out var group))
+                {
+                    group = (name.Trim(), new SortedSet<string>(StringComparer.OrdinalIgnoreCase));
+                    groups[propertyId] = group;
+                }
+
+                foreach (var value in ReadPropertyValueOptions(propertyValue))
+                {
+                    group.Values.Add(value);
+                }
+            }
+        }
+
+        return groups
+            .Select(group => new ListingVariationOption(
+                group.Value.Name,
+                group.Key,
+                group.Value.Values.Take(70).ToList()))
+            .Where(group => group.Values.Count > 0)
+            .Take(2)
+            .ToList();
+    }
+
+    private static IEnumerable<string> ReadPropertyValueOptions(JsonElement propertyValue)
+    {
+        var values = ReadPropertyValueArray(propertyValue, "values").ToList();
+        if (values.Count > 0)
+        {
+            return values;
+        }
+
+        return ReadPropertyValueArray(propertyValue, "value_ids");
+    }
+
+    private static IEnumerable<string> ReadPropertyValueArray(JsonElement propertyValue, string arrayName)
+    {
+        if (!propertyValue.TryGetProperty(arrayName, out var values) || values.ValueKind != JsonValueKind.Array)
+        {
+            yield break;
+        }
+
+        foreach (var value in values.EnumerateArray())
+        {
+            var text = value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : value.ValueKind == JsonValueKind.Number
+                    ? value.GetRawText()
+                    : "";
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                yield return text.Trim();
+            }
+        }
     }
 
     private static string BuildDraftListingErrorMessage(int statusCode, string body)
@@ -1355,6 +1615,17 @@ internal sealed record DraftListingCreateRequest(
     string WhenMade = "made_to_order");
 
 internal sealed record CreatedDraftListing(long ListingId, string Url);
+
+internal sealed record DraftListingInventoryUpdate(
+    decimal Price,
+    int Quantity,
+    long? ReadinessStateId,
+    IReadOnlyList<DraftListingVariationGroup> Variations);
+
+internal sealed record DraftListingVariationGroup(
+    string Name,
+    long PropertyId,
+    IReadOnlyList<string> Values);
 
 internal sealed record EtsyShippingProfileOption(long ShippingProfileId, string Title)
 {

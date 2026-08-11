@@ -162,14 +162,22 @@ public sealed class ListingOptimizationService
         IReadOnlyList<string> suggestedTags)
     {
         var target = CleanPhrase(input.TargetKeyword);
-        var benefits = string.Join(", ", strongTerms.Take(6));
+        var productName = CleanPhrase(input.Title)
+            .Split(['|', '-', ','], StringSplitOptions.RemoveEmptyEntries)
+            .Select(part => part.Trim())
+            .FirstOrDefault(part => part.Length > 0) ?? target;
+        var productTerms = string.Join(", ", strongTerms.Take(6));
         var tags = string.Join(", ", suggestedTags.Take(8));
+        var materials = string.Join(", ", BuildMaterialSuggestions(input).Take(5));
+        var materialText = materials.Length > 0
+            ? materials
+            : "the materials and finish confirmed by your production process";
         return
-            $"{target} icin optimize edilmis listeleme taslagi.{Environment.NewLine}{Environment.NewLine}" +
-            $"Bu urun {benefits} arayan alicilar icin konumlandirilir. Baslik, etiket ve aciklama ayni ana niyeti destekleyecek sekilde yazilmalidir.{Environment.NewLine}{Environment.NewLine}" +
-            $"Kullanim alanlari: hediye, koleksiyon, dekor, dijital proje veya kisiye ozel sunum senaryosuna gore netlestirilebilir.{Environment.NewLine}{Environment.NewLine}" +
-            $"One cikarilacak SEO kelimeleri: {tags}.{Environment.NewLine}{Environment.NewLine}" +
-            "Not: Marka, karakter veya telifli evren isimleri kullaniliyorsa listing yayinlanmadan once hak sahipligi ve Etsy politika riski kontrol edilmelidir.";
+            $"{productName} is written for shoppers searching for {target}. The listing keeps the product identity clear in the first lines and connects the title, tags, and description around the same buying intent.{Environment.NewLine}{Environment.NewLine}" +
+            $"This item is best positioned for buyers interested in {productTerms}. Use the final listing to explain the exact style, display purpose, size, finish, and what makes this piece useful for collectors, gift buyers, or decor-focused customers.{Environment.NewLine}{Environment.NewLine}" +
+            $"Materials and finish: {materialText}. Confirm the real production method, color options, measurements, and package contents before publishing so the listing matches the product you will ship or deliver.{Environment.NewLine}{Environment.NewLine}" +
+            $"Search terms to support naturally: {tags}. Do not copy competitor wording; keep the final copy original, readable, and accurate to your own product.{Environment.NewLine}{Environment.NewLine}" +
+            "Publishing review: if the product uses brand, character, movie, game, or fan-art references, check intellectual-property risk and Etsy policy compliance before making the draft active.";
     }
 
     private static IReadOnlyList<string> BuildRiskWarnings(ListingOptimizationInput input)

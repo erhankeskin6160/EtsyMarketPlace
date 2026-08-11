@@ -67,7 +67,7 @@ internal sealed class DashboardForm : Form
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 116));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 105));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
@@ -90,75 +90,7 @@ internal sealed class DashboardForm : Form
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var nav = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 11,
-            RowCount = 1,
-            Padding = new Padding(0, 4, 0, 8),
-        };
-        nav.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        nav.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 1; index < 11; index++) nav.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
-        nav.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
-        var research = UiStyle.CreateButton("Pazar Arastirma");
-        research.Click += async (_, _) => await OpenResearchAsync();
-        nav.Controls.Add(research, 1, 0);
-        var ownShop = UiStyle.CreateButton("Kendi Magazam");
-        ownShop.Click += (_, _) =>
-        {
-            using var form = new OwnShopPerformanceForm(
-                _shopPerformanceService,
-                _shopPerformanceHistoryService,
-                _aiListingOptimizer,
-                _optimizationHistoryService);
-            form.ShowDialog(this);
-        };
-        nav.Controls.Add(ownShop, 2, 0);
-        var creator = UiStyle.CreateButton("Urun Uret");
-        creator.Click += (_, _) =>
-        {
-            using var form = new ProductDiscoveryListingCreatorForm(_aiListingOptimizer);
-            form.ShowDialog(this);
-        };
-        nav.Controls.Add(creator, 3, 0);
-        var external = UiStyle.CreateButton("Dis Pazar");
-        external.Click += (_, _) =>
-        {
-            using var form = new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer);
-            form.ShowDialog(this);
-        };
-        nav.Controls.Add(external, 4, 0);
-        var automation = UiStyle.CreateButton("Otomasyon");
-        automation.Click += (_, _) =>
-        {
-            using var form = new AutomationReportingForm(
-                _automationSettingsStore,
-                _automationScheduler,
-                _windowsTaskScheduler);
-            form.ShowDialog(this);
-        };
-        nav.Controls.Add(automation, 5, 0);
-        var optimization = UiStyle.CreateButton("AI Optimizasyon");
-        optimization.Click += (_, _) =>
-        {
-            using var form = new ListingOptimizationForm(_optimizationHistoryService, _aiListingOptimizer);
-            form.ShowDialog(this);
-        };
-        nav.Controls.Add(optimization, 6, 0);
-        var tracking = UiStyle.CreateButton("Takip Merkezi");
-        tracking.Click += async (_, _) => await OpenTrackingAsync();
-        nav.Controls.Add(tracking, 7, 0);
-        var api = UiStyle.CreateButton("API Ayarlari");
-        api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        nav.Controls.Add(api, 8, 0);
-        var refresh = UiStyle.CreateButton("Yenile");
-        refresh.Click += async (_, _) => await LoadDashboardAsync();
-        nav.Controls.Add(refresh, 9, 0);
-        var exit = UiStyle.CreateButton("Cikis", isSecondary: true);
-        exit.Click += (_, _) => Close();
-        nav.Controls.Add(exit, 10, 0);
-        root.Controls.Add(nav, 0, 1);
+        root.Controls.Add(BuildActionHub(), 0, 1);
 
         var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 0, 0, 8) };
         for (var column = 0; column < 5; column++) kpis.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
@@ -201,6 +133,51 @@ internal sealed class DashboardForm : Form
         return panel;
     }
 
+    private Control BuildActionHub()
+    {
+        var hub = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            ColumnCount = 1,
+            Padding = new Padding(0, 4, 0, 10),
+        };
+        hub.RowStyles.Add(new RowStyle(SizeType.Percent, 62));
+        hub.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
+
+        var primary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1 };
+        for (var index = 0; index < 4; index++) primary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        primary.Controls.Add(CreatePrimaryButton("Urun Bul ve Taslak"), 0, 0);
+        ((Button)primary.GetControlFromPosition(0, 0)!).Click += (_, _) => OpenCreator();
+        primary.Controls.Add(CreatePrimaryButton("Magazam"), 1, 0);
+        ((Button)primary.GetControlFromPosition(1, 0)!).Click += (_, _) => OpenOwnShop();
+        primary.Controls.Add(CreatePrimaryButton("Pazar Arastir"), 2, 0);
+        ((Button)primary.GetControlFromPosition(2, 0)!).Click += async (_, _) => await OpenResearchAsync();
+        primary.Controls.Add(CreatePrimaryButton("Otomasyon"), 3, 0);
+        ((Button)primary.GetControlFromPosition(3, 0)!).Click += (_, _) => OpenAutomation();
+        hub.Controls.Add(primary, 0, 0);
+
+        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1 };
+        secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var index = 1; index < 5; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
+        secondary.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
+        var tracking = UiStyle.CreateButton("Takip");
+        tracking.Click += async (_, _) => await OpenTrackingAsync();
+        secondary.Controls.Add(tracking, 1, 0);
+        var api = UiStyle.CreateButton("API");
+        api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
+        secondary.Controls.Add(api, 2, 0);
+        var refresh = UiStyle.CreateButton("Yenile");
+        refresh.Click += async (_, _) => await LoadDashboardAsync();
+        secondary.Controls.Add(refresh, 3, 0);
+        var exit = UiStyle.CreateButton("Cikis", isSecondary: true);
+        exit.Click += (_, _) => Close();
+        secondary.Controls.Add(exit, 4, 0);
+        hub.Controls.Add(secondary, 0, 1);
+
+        return hub;
+    }
+
     private async Task LoadDashboardAsync()
     {
         try
@@ -234,6 +211,33 @@ internal sealed class DashboardForm : Form
             _aiListingOptimizer);
         form.ShowDialog(this);
         await LoadDashboardAsync();
+    }
+
+    private void OpenCreator()
+    {
+        using var form = new ProductDiscoveryListingCreatorForm(
+            _aiListingOptimizer,
+            historyService: _optimizationHistoryService);
+        form.ShowDialog(this);
+    }
+
+    private void OpenOwnShop()
+    {
+        using var form = new OwnShopPerformanceForm(
+            _shopPerformanceService,
+            _shopPerformanceHistoryService,
+            _aiListingOptimizer,
+            _optimizationHistoryService);
+        form.ShowDialog(this);
+    }
+
+    private void OpenAutomation()
+    {
+        using var form = new AutomationReportingForm(
+            _automationSettingsStore,
+            _automationScheduler,
+            _windowsTaskScheduler);
+        form.ShowDialog(this);
     }
 
     private async Task OpenTrackingAsync()
@@ -278,6 +282,15 @@ internal sealed class DashboardForm : Form
 
     private void SetKpi(string key, int value) => _kpis[key].Text = value.ToString("N0");
     private static void AddColumn(DataGridView grid, string header, string property, int width, bool fill = false) => grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, DataPropertyName = property, Width = width, AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None });
+
+    private static Button CreatePrimaryButton(string text)
+    {
+        var button = UiStyle.CreateButton(text);
+        button.Font = new Font("Segoe UI Semibold", 12F);
+        button.Margin = new Padding(0, 2, 8, 6);
+        button.AutoEllipsis = false;
+        return button;
+    }
 
     private sealed class OpportunityRow(DashboardOpportunity item)
     {
