@@ -68,4 +68,36 @@ public sealed class ListingOptimizationServiceTests
         Assert.Contains(result.MaterialSuggestions, material => material.Equals("resin", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(result.MaterialSuggestions, material => material.Equals("paint", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void Optimize_OfflineDescriptionUsesEnglishEtsyGuidance()
+    {
+        var service = new ListingOptimizationService();
+
+        var result = service.Optimize(new ListingOptimizationInput(
+            "Hand painted resin dragon bust for fantasy shelf decor",
+            "Made from resin and paint for collectors.",
+            ["dragon bust", "resin decor", "fantasy gift"],
+            "dragon bust"));
+
+        Assert.Contains("shoppers searching", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Publishing review", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("icin optimize edilmis", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void KnowledgeBase_FlagsGenericOrTurkishDrafts()
+    {
+        var report = EtsyListingKnowledgeBase.EvaluateDraft(
+            "Dragon Bust Shelf Decor",
+            "Dragon bust icin optimize edilmis listeleme taslagi. This item is prepared as an Etsy-ready product listing.",
+            ["dragon bust", "resin decor"],
+            ["resin"],
+            "Figurines",
+            "dragon bust");
+
+        Assert.True(report.Score < 80);
+        Assert.Contains(report.Issues, issue => issue.Contains("Turkce", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(report.Issues, issue => issue.Contains("sabit kalip", StringComparison.OrdinalIgnoreCase));
+    }
 }
