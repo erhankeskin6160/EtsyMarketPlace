@@ -174,34 +174,22 @@ internal sealed class OpenAiListingOptimizer(
     private static object CreateOpenAiPayload(string model, ListingOptimizationInput input) => new
     {
         model = string.IsNullOrWhiteSpace(model) ? "gpt-5.5" : model.Trim(),
-        input = CreatePrompt(input),
+        instructions = ListingDraftInstructionBuilder.BuildSystemInstruction(),
+        input = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input),
     };
 
     private static object CreateGeminiPayload(string model, ListingOptimizationInput input) => new
     {
         model = string.IsNullOrWhiteSpace(model) ? "gemini-3.5-flash" : model.Trim(),
-        system_instruction = "You are an Etsy SEO listing optimization assistant. Return only valid JSON.",
-        input = CreatePrompt(input),
+        system_instruction = ListingDraftInstructionBuilder.BuildSystemInstruction(),
+        input = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input),
         generation_config = new
         {
             temperature = 0.65,
         },
     };
 
-    private static string CreatePrompt(ListingOptimizationInput input) =>
-        "Return only valid JSON with keys title_suggestions, tag_suggestions, material_suggestions, description_draft, risk_warnings. " +
-        EtsyListingKnowledgeBase.BuildAiInstructionBlock() + "\n" +
-        "Rules: title_suggestions must contain 3 English Etsy titles under 140 characters; tag_suggestions must contain up to 13 English Etsy tags, each 20 characters or less; " +
-        "material_suggestions must contain only true physical/digital materials explicitly supported by the current listing text, up to 13 items, each 45 characters or less; " +
-        "description_draft must be buyer-facing English text optimized for Etsy SEO and GEO/search intent. " +
-        "Write a unique description for this exact product, not a reusable template. Use 4 concise paragraphs: product identity, buyer use case, materials/finish, and publishing risk/review note. " +
-        "Do not start with generic phrases like 'This item is prepared as an Etsy-ready product listing' or 'This item is positioned for buyers'. " +
-        "risk_warnings must be Turkish notes and include Turkish explanations in parentheses when useful. " +
-        "Avoid claiming official, licensed, endorsed, or affiliated status unless the current listing explicitly proves it. " +
-        $"Target keyword: {input.TargetKeyword}\n" +
-        $"Current title: {input.Title}\n" +
-        $"Current tags: {string.Join(", ", input.Tags)}\n" +
-        $"Current description: {input.Description}";
+
 
     private static bool IsTransientGeminiStatus(HttpStatusCode statusCode) =>
         statusCode is HttpStatusCode.TooManyRequests
