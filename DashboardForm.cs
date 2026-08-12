@@ -125,13 +125,21 @@ internal sealed class DashboardForm : Form
 
     private Control BuildTrendSection()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6) };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        var card = new SimilarProductsWinForms.Controls.ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(6),
+            Padding = new Padding(12),
+            CornerRadius = 12,
+        };
+
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        toolbar.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "Takip trendi", Font = new Font("Segoe UI Semibold", 12F), TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        toolbar.Controls.Add(new Label { Dock = DockStyle.Fill, Text = "TAKİP TRENDİ", Font = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold), ForeColor = UiStyle.TextDark, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         _trendComboBox.Dock = DockStyle.Fill;
         _trendComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
         _trendComboBox.SelectedIndexChanged += (_, _) => _trendChart.SetHistory((_trendComboBox.SelectedItem as TrendOption)?.History);
@@ -139,7 +147,8 @@ internal sealed class DashboardForm : Form
         panel.Controls.Add(toolbar, 0, 0);
         _trendChart.Dock = DockStyle.Fill;
         panel.Controls.Add(_trendChart, 0, 1);
-        return panel;
+        card.Controls.Add(panel);
+        return card;
     }
 
     private Control BuildActionHub()
@@ -307,13 +316,22 @@ internal sealed class DashboardForm : Form
 
     private static Control BuildGridSection(string title, DataGridView grid, Action configure)
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6) };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        var card = new SimilarProductsWinForms.Controls.ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(6),
+            Padding = new Padding(12),
+            CornerRadius = 12,
+        };
+
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, Font = new Font("Segoe UI Semibold", 12F), TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, Font = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold), ForeColor = UiStyle.TextDark, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         configure();
         panel.Controls.Add(grid, 0, 1);
-        return panel;
+        card.Controls.Add(panel);
+        return card;
     }
 
     private void SetKpi(string key, int value) => _kpis[key].Text = value.ToString("N0");

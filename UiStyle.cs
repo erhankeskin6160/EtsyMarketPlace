@@ -91,23 +91,62 @@ internal static class UiStyle
 
     public static Button CreateButton(string text, bool isSecondary = false)
     {
-        var button = new Button
+        var button = new SimilarProductsWinForms.Controls.ModernButtonControl
         {
             Dock = DockStyle.Fill,
             Text = text,
-            BackColor = isSecondary ? SecondaryColor : PrimaryColor,
+            NormalColor = isSecondary ? SecondaryColor : PrimaryColor,
+            HoverColor = isSecondary ? SecondaryHover : PrimaryHover,
             ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Font = SemiboldBaseFont,
-            TextAlign = ContentAlignment.MiddleCenter,
-            UseVisualStyleBackColor = false,
-            AutoEllipsis = true,
-            Padding = new Padding(0),
             Margin = new Padding(6, 2, 0, 2),
         };
-        button.FlatAppearance.BorderSize = 0;
-        button.FlatAppearance.MouseOverBackColor = isSecondary ? SecondaryHover : PrimaryHover;
         return button;
+    }
+
+    public static void AddKpiCard(TableLayoutPanel parent, int column, int row, string title, string key, Dictionary<string, Label> kpis)
+    {
+        var card = new SimilarProductsWinForms.Controls.ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(6, 2, 6, 4),
+            Padding = new Padding(14, 10, 14, 10),
+            CornerRadius = 12,
+            CardColor = CardBackground,
+            BorderColor = BorderColor,
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var titleLabel = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = title.ToUpperInvariant(),
+            ForeColor = TextMuted,
+            Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        layout.Controls.Add(titleLabel, 0, 0);
+
+        var valueLabel = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "0",
+            Font = new Font("Segoe UI Semibold", 18F, FontStyle.Bold),
+            ForeColor = TextDark,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        layout.Controls.Add(valueLabel, 0, 1);
+
+        card.Controls.Add(layout);
+        kpis[key] = valueLabel;
+        parent.Controls.Add(card, column, row);
     }
 
     public static void ConfigureBaseGrid(DataGridView grid)
@@ -148,43 +187,5 @@ internal static class UiStyle
             property?.SetValue(grid, true, null);
         }
         catch { }
-    }
-
-    public static void AddKpiCard(TableLayoutPanel parent, int column, int row, string title, string key, Dictionary<string, Label> kpis)
-    {
-        var panel = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 2,
-            BackColor = CardBackground,
-            Margin = new Padding(5, 2, 5, 4),
-            Padding = new Padding(12, 8, 12, 8),
-            CellBorderStyle = TableLayoutPanelCellBorderStyle.Single
-        };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var titleLabel = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = title,
-            ForeColor = TextMuted,
-            Font = BaseFont,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-        panel.Controls.Add(titleLabel, 0, 0);
-
-        var valueLabel = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = "-",
-            Font = KpiValueFont,
-            ForeColor = TextDark,
-            TextAlign = ContentAlignment.MiddleLeft
-        };
-        panel.Controls.Add(valueLabel, 0, 1);
-
-        kpis[key] = valueLabel;
-        parent.Controls.Add(panel, column, row);
     }
 }
