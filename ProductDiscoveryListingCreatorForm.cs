@@ -235,9 +235,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private Control BuildDraftArea()
     {
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 10, 0, 0) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
 
         var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6 };
         left.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
