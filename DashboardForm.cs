@@ -175,6 +175,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("batch", "Toplu İşlem Kuyruğu", "📦", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("profit", "Kâr Simülatörü", "💰", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
+        _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
 
         _sidebarNav.AddItem("notifications", "Bildirim & Bot Ayarları", "🔔", "Sistem");
         _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
@@ -238,6 +239,9 @@ internal sealed class DashboardForm : Form
                 break;
             case "notifications":
                 await ShowModuleDialogAsync(new NotificationSettingsForm());
+                break;
+            case "financial":
+                await ShowModuleDialogAsync(new FinancialReportForm());
                 break;
         }
     }

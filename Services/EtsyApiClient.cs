@@ -976,18 +976,28 @@ internal sealed class EtsyApiClient
 
     private async Task EnsureAccessTokenAsync(EtsyApiSettings settings, CancellationToken cancellationToken)
     {
+        // HasAccessToken hem doluluk hem de süre sonu kontrolü yapar:
+        // !string.IsNullOrWhiteSpace(AccessToken) && AccessTokenExpiresAtUtc > UtcNow + 2 dk
         if (settings.HasAccessToken)
         {
             return;
         }
 
+        // Token süresi dolmuşsa veya hiç alınmamışsa; refresh token varsa sessizce yenile.
         if (!string.IsNullOrWhiteSpace(settings.RefreshToken))
         {
             await RefreshAccessTokenAsync(settings, cancellationToken);
             return;
         }
 
-        throw new InvalidOperationException("Kendi magaza verileri icin OAuth baglantisi gerekli. API Ayarlari ekranindan shops_r, listings_r ve transactions_r izinleriyle baglanin.");
+        // Refresh token da yoksa kullanıcının yeniden OAuth yapması gerekiyor.
+        var reason = !string.IsNullOrWhiteSpace(settings.AccessToken)
+            ? "Access token süresi doldu ve refresh token bulunamadı."
+            : "Henüz OAuth ile giriş yapılmamış.";
+
+        throw new InvalidOperationException(
+            $"{reason} Kendi magaza verileri icin OAuth baglantisi gerekli. " +
+            "API Ayarlari ekranindan shops_r, listings_r ve transactions_r izinleriyle yeniden baglanin.");
     }
 
     public async Task<string> TestConnectionAsync(EtsyApiSettings settings, CancellationToken cancellationToken = default)

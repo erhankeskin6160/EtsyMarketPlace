@@ -212,15 +212,16 @@ internal sealed class MarketResearchForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 3,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(4, 0, 0, 0),
         };
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
         actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34F));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
-        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 33.34F));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 25));
 
         actions.Controls.Add(ActionButton("Listing Ac", OpenListing), 0, 0);
         actions.Controls.Add(ActionButton("Takibe Ekle", () => _ = TrackSelectedListingAsync()), 1, 0);
@@ -233,6 +234,14 @@ internal sealed class MarketResearchForm : Form
         actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 2);
         actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 1, 2);
         actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 2, 2);
+
+        // 4. satır — Listing Klonlama
+        var cloneButton = ActionButton("Listing Klonla", OpenListingClone);
+        cloneButton.BackColor = Color.FromArgb(20, 126, 76);   // yeşil — birincil aksiyon
+        cloneButton.ForeColor = Color.White;
+        actions.Controls.Add(cloneButton, 0, 3);
+        actions.Controls.Add(ActionButton("Aciklamay\u0131 Kopyala", CopyDescription), 1, 3);
+        actions.Controls.Add(ActionButton("Linki Kopyala", CopyListingUrl), 2, 3);
 
         detailPanel.Controls.Add(actions, 2, 0);
         root.Controls.Add(detailPanel, 0, 3);
@@ -498,6 +507,32 @@ internal sealed class MarketResearchForm : Form
 
     private void CopyTags() => CopyText(SelectedListing?.TagsDisplay, "Tagler kopyalandi");
     private void CopyTitle() => CopyText(SelectedListing?.Title, "Baslik kopyalandi");
+    private void CopyDescription() => CopyText(SelectedListing?.Description, "Aciklama kopyalandi");
+    private void CopyListingUrl() => CopyText(SelectedListing?.ListingUrl, "Listing linki kopyalandi");
+
+    private void OpenListingClone()
+    {
+        var listing = SelectedListing;
+        if (listing is null)
+        {
+            MessageBox.Show(
+                this,
+                "Klonlanacak bir listing secin.",
+                "Listing Klonla",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        // ProductDiscoveryListingCreatorForm'u initialListing ile ac:
+        // form baslik, tag, aciklama, fiyat ve kategori alanlarini otomatik doldurur.
+        using var form = new ProductDiscoveryListingCreatorForm(
+            _aiListingOptimizer,
+            initialKeyword: _keywordTextBox.Text.Trim(),
+            initialListing: listing,
+            historyService: _optimizationHistoryService);
+        form.ShowDialog(this);
+    }
 
     private async Task EnsureImagesAndShowAsync(MarketListingResult item)
     {
