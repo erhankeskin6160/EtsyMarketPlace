@@ -44,8 +44,7 @@ internal sealed class ProfitCalculatorForm : Form
         Text = "Etsy Komisyon ve Net Kâr Marjı Simülatörü (Profitability Calculator)";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1280, 780);
-        UiStyle.ApplyTheme(this);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
@@ -101,6 +100,8 @@ internal sealed class ProfitCalculatorForm : Form
         bottomBar.Controls.Add(closeBtn, 2, 0);
 
         root.Controls.Add(bottomBar, 0, 2);
+
+        UiStyle.AttachSidebarNav(this, "profit");
     }
 
     private Control BuildInputPanel()

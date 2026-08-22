@@ -148,13 +148,14 @@ public class ModernKpiTile : ModernCardPanel
 public class ModernButtonControl : Button
 {
     public int CornerRadius { get; set; } = 8;
-    public Color NormalColor { get; set; } = Color.FromArgb(37, 99, 235);
-    public Color HoverColor { get; set; } = Color.FromArgb(29, 78, 216);
+    public Color NormalColor { get; set; } = Color.FromArgb(99, 102, 241);
+    public Color HoverColor { get; set; } = Color.FromArgb(79, 70, 229);
 
     private bool _isHovered;
 
     public ModernButtonControl()
     {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
         DoubleBuffered = true;
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
@@ -182,15 +183,25 @@ public class ModernButtonControl : Button
     {
         var g = pevent.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
         using var path = ModernCardPanel.CreateRoundedRectanglePath(rect, CornerRadius);
 
-        using var bgBrush = new SolidBrush(_isHovered ? HoverColor : NormalColor);
+        Color currentBg = !Enabled ? Color.FromArgb(203, 213, 225) : (_isHovered ? HoverColor : NormalColor);
+        Color currentFg = !Enabled ? Color.FromArgb(100, 116, 139) : ForeColor;
+
+        using var bgBrush = new SolidBrush(currentBg);
         g.FillPath(bgBrush, path);
 
-        using var textBrush = new SolidBrush(ForeColor);
-        using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-        g.DrawString(Text, Font, textBrush, rect, format);
+        TextRenderer.DrawText(
+            g,
+            Text,
+            Font,
+            rect,
+            currentFg,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
     }
 }

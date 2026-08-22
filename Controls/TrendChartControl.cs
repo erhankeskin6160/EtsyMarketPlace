@@ -11,8 +11,8 @@ internal sealed class TrendChartControl : Control
     public TrendChartControl()
     {
         DoubleBuffered = true;
-        BackColor = Color.White;
-        ForeColor = Color.FromArgb(52, 64, 85);
+        BackColor = UiStyle.CardBackground;
+        ForeColor = UiStyle.TextDark;
         ResizeRedraw = true;
         Font = new Font("Segoe UI", 9F);
     }
@@ -47,12 +47,14 @@ internal sealed class TrendChartControl : Control
     {
         base.OnPaint(e);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-        e.Graphics.Clear(BackColor);
+        e.Graphics.Clear(UiStyle.CardBackground);
         using var titleFont = new Font("Segoe UI Semibold", 11F);
-        e.Graphics.DrawString(_title, titleFont, Brushes.Black, 18, 14);
+        using var titleBrush = new SolidBrush(UiStyle.TextDark);
+        using var textMutedBrush = new SolidBrush(UiStyle.TextMuted);
+        e.Graphics.DrawString(_title, titleFont, titleBrush, 18, 14);
 
         var plot = new RectangleF(65, 52, Math.Max(1, Width - 90), Math.Max(1, Height - 92));
-        using var borderPen = new Pen(Color.FromArgb(199, 207, 218));
+        using var borderPen = new Pen(UiStyle.BorderColor);
         e.Graphics.DrawRectangle(borderPen, plot.X, plot.Y, plot.Width, plot.Height);
 
         if (_points.Count == 0)
@@ -72,13 +74,13 @@ internal sealed class TrendChartControl : Control
         min -= padding;
         max += padding;
 
-        using var gridPen = new Pen(Color.FromArgb(232, 236, 241));
+        using var gridPen = new Pen(Color.FromArgb(40, UiStyle.BorderColor));
         for (var row = 0; row <= 4; row++)
         {
             var y = plot.Top + plot.Height * row / 4F;
             e.Graphics.DrawLine(gridPen, plot.Left, y, plot.Right, y);
             var label = max - (max - min) * row / 4m;
-            e.Graphics.DrawString(label.ToString("0.##"), Font, Brushes.DimGray, 6, y - 8);
+            e.Graphics.DrawString(label.ToString("0.##"), Font, textMutedBrush, 6, y - 8);
         }
 
         var rendered = _points.Select((item, index) => new PointF(
@@ -87,16 +89,16 @@ internal sealed class TrendChartControl : Control
 
         if (rendered.Length > 1)
         {
-            using var linePen = new Pen(Color.FromArgb(32, 97, 165), 3F) { LineJoin = LineJoin.Round };
+            using var linePen = new Pen(UiStyle.PrimaryColor, 3F) { LineJoin = LineJoin.Round };
             e.Graphics.DrawLines(linePen, rendered);
         }
-        using var pointBrush = new SolidBrush(Color.FromArgb(241, 100, 30));
+        using var pointBrush = new SolidBrush(UiStyle.EtsyColor);
         foreach (var point in rendered) e.Graphics.FillEllipse(pointBrush, point.X - 4, point.Y - 4, 8, 8);
 
-        e.Graphics.DrawString(_points[0].CapturedAt.LocalDateTime.ToString("dd.MM HH:mm"), Font, Brushes.DimGray, plot.Left, plot.Bottom + 8);
+        e.Graphics.DrawString(_points[0].CapturedAt.LocalDateTime.ToString("dd.MM HH:mm"), Font, textMutedBrush, plot.Left, plot.Bottom + 8);
         var lastLabel = _points[^1].CapturedAt.LocalDateTime.ToString("dd.MM HH:mm");
         var lastSize = e.Graphics.MeasureString(lastLabel, Font);
-        e.Graphics.DrawString(lastLabel, Font, Brushes.DimGray, plot.Right - lastSize.Width, plot.Bottom + 8);
+        e.Graphics.DrawString(lastLabel, Font, textMutedBrush, plot.Right - lastSize.Width, plot.Bottom + 8);
     }
 
     private static decimal? GetValue(TrackingEntityType type, TrackingSnapshot snapshot) => type switch

@@ -66,61 +66,209 @@ internal sealed class DashboardForm : Form
         Shown += async (_, _) => await LoadDashboardAsync();
     }
 
+    private ModernSidebarNav _sidebarNav = null!;
+
     private void BuildLayout()
     {
         Text = "Etsy Market Place - Kontrol Paneli";
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1180, 760);
-        UiStyle.ApplyTheme(this);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 116));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 105));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        Controls.Add(root);
-
-        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 430));
-        header.Controls.Add(new Label
+        var formGrid = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+        };
+        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        _sidebarNav = new ModernSidebarNav();
+        _sidebarNav.Dock = DockStyle.Fill;
+        PopulateSidebarItems();
+        _sidebarNav.ItemSelected += OnSidebarItemSelected;
+
+        var mainContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 12, 16, 12), AutoScroll = true };
+
+        formGrid.Controls.Add(_sidebarNav, 0, 0);
+        formGrid.Controls.Add(mainContainer, 1, 0);
+        Controls.Add(formGrid);
+
+        UiStyle.MakeResponsive(this, _sidebarNav);
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(0) };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        mainContainer.Controls.Add(root);
+
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+
+        var titlePanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        titlePanel.Controls.Add(new Label
+        {
+            AutoSize = true,
             Text = "Etsy Pazar Kontrol Paneli",
             Font = UiStyle.TitleFont,
             ForeColor = UiStyle.TextDark,
-            TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 0);
+        });
+        titlePanel.Controls.Add(new Label
+        {
+            AutoSize = true,
+            Text = "3DArtDesignsStore Canlı İstatistikler ve Mağaza Performansı",
+            Font = UiStyle.SubtitleFont,
+            ForeColor = UiStyle.TextMuted,
+        });
+        header.Controls.Add(titlePanel, 0, 0);
+
         _statusLabel.Dock = DockStyle.Fill;
-        _statusLabel.Text = "Yerel pazar verileri yukleniyor";
+        _statusLabel.Text = "Yerel pazar verileri yukleniyor...";
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
         _statusLabel.ForeColor = UiStyle.TextMuted;
         header.Controls.Add(_statusLabel, 1, 0);
+
         root.Controls.Add(header, 0, 0);
 
         root.Controls.Add(BuildActionHub(), 0, 1);
 
-        var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 0, 0, 8) };
+        var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 0, 0, 6) };
         for (var column = 0; column < 5; column++) kpis.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
         UiStyle.AddKpiCard(kpis, 0, 0, "Toplam takip", "total", _kpis);
-        UiStyle.AddKpiCard(kpis, 1, 0, "Urun", "listings", _kpis);
-        UiStyle.AddKpiCard(kpis, 2, 0, "Magaza", "shops", _kpis);
+        UiStyle.AddKpiCard(kpis, 1, 0, "Ürün", "listings", _kpis);
+        UiStyle.AddKpiCard(kpis, 2, 0, "Mağaza", "shops", _kpis);
         UiStyle.AddKpiCard(kpis, 3, 0, "Anahtar kelime", "keywords", _kpis);
         UiStyle.AddKpiCard(kpis, 4, 0, "Snapshot", "snapshots", _kpis);
         root.Controls.Add(kpis, 0, 2);
 
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-        content.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
-        content.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
-        content.Controls.Add(BuildGridSection("En iyi anahtar kelime firsatlari", _opportunitiesGrid, ConfigureOpportunitiesGrid), 0, 0);
-        content.Controls.Add(BuildGridSection("En buyuk degisimler", _changesGrid, ConfigureChangesGrid), 1, 0);
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 52));
+        content.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        content.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        content.Controls.Add(BuildGridSection("🔥 En iyi anahtar kelime fırsatları", _opportunitiesGrid, ConfigureOpportunitiesGrid), 0, 0);
+        content.Controls.Add(BuildGridSection("⚡ En büyük değişimler", _changesGrid, ConfigureChangesGrid), 1, 0);
         var trend = BuildTrendSection();
         content.Controls.Add(trend, 0, 1);
         content.SetColumnSpan(trend, 2);
         root.Controls.Add(content, 0, 3);
+    }
+
+    private void PopulateSidebarItems()
+    {
+        _sidebarNav.ClearItems();
+        _sidebarNav.AddItem("dashboard", "Kontrol Paneli", "📊", "Genel");
+        _sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel", "YENİ");
+        _sidebarNav.AddItem("ai_image", "AI Görsel Studio", "🖼️", "Genel", "YENİ");
+        _sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
+
+        _sidebarNav.AddItem("research", "Pazar Araştırması", "🔍", "Araştırma & Analiz");
+        _sidebarNav.AddItem("external", "Dış Pazar Yeri Bulucu", "🌐", "Araştırma & Analiz");
+        _sidebarNav.AddItem("ai_audit", "Mağaza AI Analizi", "🤖", "Araştırma & Analiz", "YENİ");
+        _sidebarNav.AddItem("ab_test", "A/B Test Paneli", "📈", "Araştırma & Analiz");
+
+        _sidebarNav.AddItem("automation", "Otomasyon Raporu", "⚡", "Otomasyon & Araçlar");
+        _sidebarNav.AddItem("batch", "Toplu İşlem Kuyruğu", "📦", "Otomasyon & Araçlar");
+        _sidebarNav.AddItem("profit", "Kâr Simülatörü", "💰", "Otomasyon & Araçlar");
+        _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
+
+        _sidebarNav.AddItem("notifications", "Bildirim & Bot Ayarları", "🔔", "Sistem");
+        _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
+        _sidebarNav.AddItem("api", "Etsy API Ayarları", "⚙️", "Sistem");
+    }
+
+    private async void OnSidebarItemSelected(object? sender, SidebarItemSelectedEventArgs e)
+    {
+        if (e.Item.Id == "theme")
+        {
+            ToggleTheme();
+            return;
+        }
+        await OpenModuleByIdAsync(e.Item.Id);
+    }
+
+    public async Task OpenModuleByIdAsync(string targetModule)
+    {
+        switch (targetModule)
+        {
+            case "dashboard":
+                await LoadDashboardAsync();
+                break;
+            case "creator":
+                await ShowModuleDialogAsync(new ProductDiscoveryListingCreatorForm(_aiListingOptimizer, historyService: _optimizationHistoryService));
+                break;
+            case "ai_image":
+                await ShowModuleDialogAsync(new AiListingImageForm(_aiListingOptimizer));
+                break;
+            case "shop":
+                await ShowModuleDialogAsync(new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService, _aiListingOptimizer, _optimizationHistoryService));
+                break;
+            case "research":
+                await ShowModuleDialogAsync(new MarketResearchForm(_keywordUseCase, _trackingService, _optimizationHistoryService, _aiListingOptimizer));
+                await LoadDashboardAsync();
+                break;
+            case "external":
+                await ShowModuleDialogAsync(new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer));
+                break;
+            case "ai_audit":
+                await ShowModuleDialogAsync(new OwnShopListingAiAuditForm(_aiListingOptimizer, _optimizationHistoryService));
+                break;
+            case "ab_test":
+                await ShowModuleDialogAsync(new ListingAbTestForm(_abTestService));
+                break;
+            case "automation":
+                await ShowModuleDialogAsync(new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler));
+                break;
+            case "batch":
+                await ShowModuleDialogAsync(new BatchQueueForm(_batchQueueProcessorService));
+                break;
+            case "profit":
+                await ShowModuleDialogAsync(new ProfitCalculatorForm());
+                break;
+            case "tracking":
+                await ShowModuleDialogAsync(new TrackingHistoryForm(_trackingService));
+                await LoadDashboardAsync();
+                break;
+            case "api":
+                await ShowModuleDialogAsync(new EtsyApiSettingsForm());
+                break;
+            case "notifications":
+                await ShowModuleDialogAsync(new NotificationSettingsForm());
+                break;
+        }
+    }
+
+    private async Task ShowModuleDialogAsync(Form form)
+    {
+        using (form)
+        {
+            var result = form.ShowDialog(this);
+            if (result == DialogResult.Retry && form.Tag is string targetModule)
+            {
+                await OpenModuleByIdAsync(targetModule);
+            }
+        }
+    }
+
+    private async void OpenExternalDiscovery() => await OpenModuleByIdAsync("external");
+    private async void OpenCreator() => await OpenModuleByIdAsync("creator");
+    private async void OpenOwnShop() => await OpenModuleByIdAsync("shop");
+    private async void OpenAutomation() => await OpenModuleByIdAsync("automation");
+    private async void OpenBatchQueue() => await OpenModuleByIdAsync("batch");
+    private async void OpenProfitCalc() => await OpenModuleByIdAsync("profit");
+    private async void OpenAbTest() => await OpenModuleByIdAsync("ab_test");
+    private async Task OpenResearchAsync() => await OpenModuleByIdAsync("research");
+    private async Task OpenTrackingAsync() => await OpenModuleByIdAsync("tracking");
+
+    private void ToggleTheme()
+    {
+        UiStyle.CurrentTheme = UiStyle.CurrentTheme == UiStyle.AppTheme.Light ? UiStyle.AppTheme.Dark : UiStyle.AppTheme.Light;
+        UiStyle.ApplyTheme(this);
+        PopulateSidebarItems();
     }
 
     private Control BuildTrendSection()
@@ -175,31 +323,36 @@ internal sealed class DashboardForm : Form
         ((Button)primary.GetControlFromPosition(3, 0)!).Click += (_, _) => OpenAutomation();
         hub.Controls.Add(primary, 0, 0);
 
-        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 1 };
-        secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 1; index < 8; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118));
-        secondary.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
+        var secondary = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 7, RowCount = 1 };
+        for (var index = 0; index < 7; index++) secondary.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 14.28f));
+
         var batchQueue = UiStyle.CreateButton("Toplu İşlem");
         batchQueue.Click += (_, _) => OpenBatchQueue();
-        secondary.Controls.Add(batchQueue, 1, 0);
+        secondary.Controls.Add(batchQueue, 0, 0);
+
         var profitCalc = UiStyle.CreateButton("Kâr Simülatörü");
         profitCalc.Click += (_, _) => OpenProfitCalc();
-        secondary.Controls.Add(profitCalc, 2, 0);
+        secondary.Controls.Add(profitCalc, 1, 0);
+
         var abTest = UiStyle.CreateButton("A/B Test");
         abTest.Click += (_, _) => OpenAbTest();
-        secondary.Controls.Add(abTest, 3, 0);
+        secondary.Controls.Add(abTest, 2, 0);
+
         var tracking = UiStyle.CreateButton("Takip");
         tracking.Click += async (_, _) => await OpenTrackingAsync();
-        secondary.Controls.Add(tracking, 4, 0);
+        secondary.Controls.Add(tracking, 3, 0);
+
         var api = UiStyle.CreateButton("API");
-        api.Click += (_, _) => { using var form = new EtsyApiSettingsForm(); form.ShowDialog(this); };
-        secondary.Controls.Add(api, 5, 0);
+        api.Click += (_, _) => { _ = OpenModuleByIdAsync("api"); };
+        secondary.Controls.Add(api, 4, 0);
+
         var refresh = UiStyle.CreateButton("Yenile");
         refresh.Click += async (_, _) => await LoadDashboardAsync();
-        secondary.Controls.Add(refresh, 6, 0);
+        secondary.Controls.Add(refresh, 5, 0);
+
         var exit = UiStyle.CreateButton("Cikis", isSecondary: true);
         exit.Click += (_, _) => Close();
-        secondary.Controls.Add(exit, 7, 0);
+        secondary.Controls.Add(exit, 6, 0);
         hub.Controls.Add(secondary, 0, 1);
 
         return hub;
@@ -227,69 +380,6 @@ internal sealed class DashboardForm : Form
             MessageBox.Show(this, ex.Message, "Kontrol Paneli", MessageBoxButtons.OK, MessageBoxIcon.Error);
             _statusLabel.Text = "Dashboard yuklenemedi";
         }
-    }
-
-    private async Task OpenResearchAsync()
-    {
-        using var form = new MarketResearchForm(
-            _keywordUseCase,
-            _trackingService,
-            _optimizationHistoryService,
-            _aiListingOptimizer);
-        form.ShowDialog(this);
-        await LoadDashboardAsync();
-    }
-
-    private void OpenCreator()
-    {
-        using var form = new ProductDiscoveryListingCreatorForm(
-            _aiListingOptimizer,
-            historyService: _optimizationHistoryService);
-        form.ShowDialog(this);
-    }
-
-    private void OpenOwnShop()
-    {
-        using var form = new OwnShopPerformanceForm(
-            _shopPerformanceService,
-            _shopPerformanceHistoryService,
-            _aiListingOptimizer,
-            _optimizationHistoryService);
-        form.ShowDialog(this);
-    }
-
-    private void OpenAutomation()
-    {
-        using var form = new AutomationReportingForm(
-            _automationSettingsStore,
-            _automationScheduler,
-            _windowsTaskScheduler);
-        form.ShowDialog(this);
-    }
-
-    private void OpenBatchQueue()
-    {
-        using var form = new BatchQueueForm(_batchQueueProcessorService);
-        form.ShowDialog(this);
-    }
-
-    private void OpenProfitCalc()
-    {
-        using var form = new ProfitCalculatorForm();
-        form.ShowDialog(this);
-    }
-
-    private void OpenAbTest()
-    {
-        using var form = new ListingAbTestForm(_abTestService);
-        form.ShowDialog(this);
-    }
-
-    private async Task OpenTrackingAsync()
-    {
-        using var form = new TrackingHistoryForm(_trackingService);
-        form.ShowDialog(this);
-        await LoadDashboardAsync();
     }
 
     private void ConfigureOpportunitiesGrid()

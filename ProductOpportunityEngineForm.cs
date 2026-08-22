@@ -623,12 +623,7 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
         ForeColor = Color.FromArgb(23, 32, 49),
     };
 
-    private Button CreateButton(string text)
-    {
-        var button = new Button();
-        ConfigureButton(button, text);
-        return button;
-    }
+    private static Button CreateButton(string text, bool isSecondary = false) => UiStyle.CreateButton(text, isSecondary);
 
     private static void ConfigureButton(Button button, string text)
     {

@@ -62,9 +62,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         Text = "Dis Pazar Urun Kesfi ve Etsy Taslak";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1280, 820);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         _listingTypeComboBox.Items.AddRange(["Fiziksel urun", "Dijital urun"]);
         _listingTypeComboBox.SelectedIndex = 0;
@@ -95,11 +93,11 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             Dock = DockStyle.Fill,
             Text = "Dis Pazarlardan Urun Bul ve Etsy Listing Hazirla",
             Font = new Font("Segoe UI Semibold", 21F),
-            ForeColor = Color.FromArgb(23, 32, 49),
+            ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
         _statusLabel.Dock = DockStyle.Fill;
-        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
         _statusLabel.Text = "Google, Trendyol, Hepsiburada ve eBay kaynaklari hazir";
         header.Controls.Add(_statusLabel, 1, 0);
@@ -111,6 +109,8 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         root.Controls.Add(_grid, 0, 3);
         root.Controls.Add(BuildDraftArea(), 0, 4);
         UpdateListingTypeControls();
+
+        UiStyle.AttachSidebarNav(this, "external");
     }
 
     private Control BuildToolbar()
@@ -145,22 +145,27 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         toolbar.SetColumnSpan(_sourcesList, 4);
 
         var search = CreateButton("Kaynaklarda Ara");
+        search.BackColor = UiStyle.PrimaryColor;
         search.Click += (_, _) => SearchExternalSources();
         toolbar.Controls.Add(search, 5, 0);
         var open = CreateButton("Kaynak Ac");
+        open.BackColor = UiStyle.SecondaryColor;
         open.Click += (_, _) => OpenSelectedSource();
         toolbar.Controls.Add(open, 6, 0);
         var verify = CreateButton("Etsy'de Dogrula");
+        verify.BackColor = UiStyle.EtsyColor;
         verify.Click += (_, _) => VerifyOnEtsy();
         toolbar.Controls.Add(verify, 7, 0);
         var aiDraft = CreateButton("AI Taslak");
+        aiDraft.BackColor = UiStyle.AiColor;
         aiDraft.Click += async (_, _) => await GenerateAiDraftAsync();
         toolbar.Controls.Add(aiDraft, 8, 0);
         var create = CreateButton("Etsy Taslak");
-        create.BackColor = Color.FromArgb(20, 126, 76);
+        create.BackColor = UiStyle.SuccessColor;
         create.Click += async (_, _) => await CreateDraftListingAsync();
         toolbar.Controls.Add(create, 9, 0);
         var settings = CreateButton("Pazar API");
+        settings.BackColor = UiStyle.SecondaryColor;
         settings.Click += (_, _) => OpenExternalMarketplaceSettings();
         toolbar.Controls.Add(settings, 10, 0);
         foreach (var button in new[] { search, open, verify, aiDraft, create, settings })
@@ -189,18 +194,36 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         {
             var filter = DecisionFilters[index];
             var button = CreateButton(filter);
-            button.BackColor = index == 0 ? Color.FromArgb(82, 93, 110) : Color.FromArgb(35, 101, 166);
-            button.Click += (_, _) => SetDecisionFilter(filter);
+            button.BackColor = index == 0 ? UiStyle.PrimaryColor : UiStyle.SecondaryColor;
+            button.Click += (_, _) =>
+            {
+                SetDecisionFilter(filter);
+                UpdateDecisionFilterButtons(bar, filter);
+            };
             bar.Controls.Add(button, index + 1, 0);
         }
 
         bar.Controls.Add(LabelFor("Secili durum"), 6, 0);
         bar.Controls.Add(_userStatusComboBox, 7, 0);
         var apply = CreateButton("Durumu Uygula");
+        apply.BackColor = UiStyle.PrimaryColor;
         apply.Click += (_, _) => ApplySelectedUserStatus();
         bar.Controls.Add(apply, 8, 0);
 
         return bar;
+    }
+
+    private static void UpdateDecisionFilterButtons(TableLayoutPanel bar, string activeFilter)
+    {
+        for (var i = 1; i <= DecisionFilters.Length; i++)
+        {
+            if (bar.Controls.Count >= i && bar.GetControlFromPosition(i, 0) is Button btn)
+            {
+                bool isActive = btn.Text == activeFilter;
+                btn.BackColor = isActive ? UiStyle.PrimaryColor : UiStyle.SecondaryColor;
+                btn.ForeColor = isActive ? Color.White : UiStyle.TextDark;
+            }
+        }
     }
 
     private Control BuildDraftArea()
@@ -362,7 +385,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             ColumnCount = 1,
             RowCount = 3,
             Padding = new Padding(8),
-            BackColor = Color.White,
+            BackColor = UiStyle.CardBackground,
         };
         card.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         card.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
@@ -376,7 +399,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
             Dock = DockStyle.Fill,
             Text = "Firsat puan karti",
             Font = new Font("Segoe UI Semibold", 10.5F),
-            ForeColor = Color.FromArgb(23, 32, 49),
+            ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
         ConfigureBadge(_scoreDecisionLabel);
@@ -403,8 +426,8 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         _scoreStrategyTextBox.ReadOnly = true;
         _scoreStrategyTextBox.ScrollBars = ScrollBars.Vertical;
         _scoreStrategyTextBox.BorderStyle = BorderStyle.None;
-        _scoreStrategyTextBox.BackColor = Color.White;
-        _scoreStrategyTextBox.ForeColor = Color.FromArgb(49, 59, 73);
+        _scoreStrategyTextBox.BackColor = UiStyle.CardBackground;
+        _scoreStrategyTextBox.ForeColor = UiStyle.TextMuted;
         card.Controls.Add(_scoreStrategyTextBox, 0, 2);
 
         UpdateScoreCard(null);
@@ -838,10 +861,10 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         var normalized = highIsGood ? score : 100 - score;
         return normalized switch
         {
-            >= 75 => Color.FromArgb(20, 126, 76),
-            >= 55 => Color.FromArgb(190, 129, 26),
-            >= 40 => Color.FromArgb(198, 83, 35),
-            _ => Color.FromArgb(160, 58, 58),
+            >= 75 => UiStyle.SuccessColor,
+            >= 55 => UiStyle.AccentColor,
+            >= 40 => UiStyle.WarningColor,
+            _ => UiStyle.DangerColor,
         };
     }
 
@@ -1003,7 +1026,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     {
         Dock = DockStyle.Fill,
         Text = text,
-        ForeColor = Color.FromArgb(23, 32, 49),
+        ForeColor = UiStyle.TextDark,
         TextAlign = ContentAlignment.MiddleLeft,
     };
 
@@ -1013,7 +1036,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         {
             Dock = DockStyle.Fill,
             Text = text,
-            BackColor = Color.FromArgb(32, 97, 165),
+            BackColor = UiStyle.PrimaryColor,
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Font = new Font("Segoe UI Semibold", 9.2F),

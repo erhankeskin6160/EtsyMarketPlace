@@ -34,8 +34,7 @@ internal sealed class OwnShopPerformanceForm(
         Text = "Kendi Magaza Performansi";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1180, 760);
-        UiStyle.ApplyTheme(this);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(20) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
@@ -106,6 +105,8 @@ internal sealed class OwnShopPerformanceForm(
         ConfigureProductsGrid();
         ConfigureHistoryGrid();
         root.Controls.Add(BuildContentTabs(), 0, 3);
+
+        UiStyle.AttachSidebarNav(this, "shop");
     }
 
     private async Task LoadReportAsync()
@@ -318,12 +319,7 @@ internal sealed class OwnShopPerformanceForm(
 
     private static Label LabelFor(string text) => new() { Dock = DockStyle.Fill, Text = text, ForeColor = UiStyle.TextDark, TextAlign = ContentAlignment.MiddleLeft };
 
-    private static Button CreateButton(string text, bool isSecondary = false)
-    {
-        var button = new Button();
-        ConfigureButton(button, text, isSecondary);
-        return button;
-    }
+    private static Button CreateButton(string text, bool isSecondary = false) => UiStyle.CreateButton(text, isSecondary);
 
     private static void ConfigureButton(Button button, string text, bool isSecondary = false)
     {

@@ -122,6 +122,8 @@ internal sealed class EtsyApiSettingsForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
 
         Controls.Add(root);
+
+        UiStyle.AttachSidebarNav(this, "api");
     }
 
     private static void AddRow(TableLayoutPanel root, int row, string label, TextBox textBox)

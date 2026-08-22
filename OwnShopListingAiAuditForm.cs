@@ -42,9 +42,7 @@ internal sealed class OwnShopListingAiAuditForm(
         Text = "Kendi Magaza Listing AI Analizi";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1280, 780);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
@@ -111,6 +109,8 @@ internal sealed class OwnShopListingAiAuditForm(
         ConfigureGrid();
         root.Controls.Add(_grid, 0, 2);
         root.Controls.Add(BuildDetailArea(), 0, 3);
+
+        UiStyle.AttachSidebarNav(this, "ai_audit");
     }
 
     private Control BuildDetailArea()

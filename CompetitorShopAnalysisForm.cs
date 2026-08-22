@@ -44,8 +44,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
         Text = "Rakip Magaza Analizi";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1180, 760);
-        UiStyle.ApplyTheme(this);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel
         {
@@ -90,29 +89,24 @@ internal sealed class CompetitorShopAnalysisForm : Form
         UiStyle.AddKpiCard(kpis, 6, 0, "Rakip gucu", "strength", _kpiValues);
         root.Controls.Add(kpis, 0, 1);
 
-        var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, Padding = new Padding(0, 5, 0, 7) };
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-        commands.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
+        var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 5, 0, 7) };
+        for (var i = 0; i < 5; i++) commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+
         var shopButton = CreateButton("Etsy'de Magazayi Ac");
         shopButton.Click += (_, _) => OpenUrl(_analysis?.Shop.ShopUrl);
-        commands.Controls.Add(shopButton, 1, 0);
+        commands.Controls.Add(shopButton, 0, 0);
         var csvButton = CreateButton("CSV Aktar");
         csvButton.Click += (_, _) => ExportCsv();
-        commands.Controls.Add(csvButton, 2, 0);
+        commands.Controls.Add(csvButton, 1, 0);
         var trackButton = CreateButton("Takibe Ekle");
         trackButton.Click += async (_, _) => await TrackShopAsync();
-        commands.Controls.Add(trackButton, 3, 0);
+        commands.Controls.Add(trackButton, 2, 0);
         ConfigureButton(_refreshButton, "Verileri Yenile");
         _refreshButton.Click += async (_, _) => await LoadAnalysisAsync();
-        commands.Controls.Add(_refreshButton, 4, 0);
+        commands.Controls.Add(_refreshButton, 3, 0);
         var closeButton = CreateButton("Geri Don", isSecondary: true);
         closeButton.Click += (_, _) => Close();
-        commands.Controls.Add(closeButton, 5, 0);
+        commands.Controls.Add(closeButton, 4, 0);
         root.Controls.Add(commands, 0, 2);
 
         var tabs = new TabControl { Dock = DockStyle.Fill };

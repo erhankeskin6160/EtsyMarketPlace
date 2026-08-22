@@ -46,7 +46,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private readonly PictureBox _previewPictureBox = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
     private readonly Label _imageCounterLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
     private readonly Panel _busyOverlay = new() { Dock = DockStyle.Fill, Visible = false, BackColor = Color.FromArgb(235, 247, 248, 250) };
-    private readonly Label _busyLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Semibold", 12F), ForeColor = Color.FromArgb(23, 32, 49) };
+    private readonly Label _busyLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI Semibold", 12F), ForeColor = UiStyle.TextDark };
     private readonly ProgressBar _busyProgressBar = new() { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 28 };
     private readonly ModernSpinner _busySpinner = new() { Width = 74, Height = 74, Anchor = AnchorStyles.None, BackColor = Color.White };
     private readonly System.Windows.Forms.Timer _busyTimer = new() { Interval = 350 };
@@ -72,8 +72,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         Text = "Urun Kesif ve Listing Olusturucu";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1320, 820);
-        UiStyle.ApplyTheme(this);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));
@@ -121,6 +120,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         }
 
         ApplyInitialListing();
+
+        UiStyle.AttachSidebarNav(this, "creator");
     }
 
     private void ApplyInitialListing()
@@ -1960,24 +1961,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         TextAlign = ContentAlignment.MiddleLeft,
     };
 
-    private static Button CreateButton(string text, bool isSecondary = false)
-    {
-        var button = new Button
-        {
-            Dock = DockStyle.Fill,
-            Text = text,
-            BackColor = isSecondary ? UiStyle.SecondaryColor : UiStyle.PrimaryColor,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Font = UiStyle.SemiboldBaseFont,
-            UseVisualStyleBackColor = false,
-            AutoEllipsis = true,
-            Margin = new Padding(6, 2, 0, 2),
-        };
-        button.FlatAppearance.BorderSize = 0;
-        button.FlatAppearance.MouseOverBackColor = isSecondary ? UiStyle.SecondaryHover : UiStyle.PrimaryHover;
-        return button;
-    }
+    private static Button CreateButton(string text, bool isSecondary = false) => UiStyle.CreateButton(text, isSecondary);
 
     private void AddColumn(string header, string property, int width, bool fill = false) =>
         _grid.Columns.Add(new DataGridViewTextBoxColumn

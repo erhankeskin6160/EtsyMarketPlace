@@ -46,12 +46,9 @@ internal sealed class KeywordOpportunityAnalysisForm : Form
 
     private void BuildLayout()
     {
-        Text = "Anahtar Kelime ve Firsat Analizi";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1180, 760);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel
         {

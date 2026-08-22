@@ -65,26 +65,24 @@ internal sealed class ListingAbTestForm : Form
         root.Controls.Add(header, 0, 0);
 
         // Toolbar
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5 };
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 1; i < 5; i++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1 };
+        for (var i = 0; i < 4; i++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
 
-        toolbar.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
         var newTestBtn = UiStyle.CreateButton("Yeni A/B Testi");
         newTestBtn.Click += async (_, _) => await OpenNewTestDialogAsync();
-        toolbar.Controls.Add(newTestBtn, 1, 0);
+        toolbar.Controls.Add(newTestBtn, 0, 0);
 
         var updateMetricsBtn = UiStyle.CreateButton("Metrik Güncelle");
         updateMetricsBtn.Click += async (_, _) => await OpenUpdateMetricsDialogAsync();
-        toolbar.Controls.Add(updateMetricsBtn, 2, 0);
+        toolbar.Controls.Add(updateMetricsBtn, 1, 0);
 
         var refreshBtn = UiStyle.CreateButton("Yenile");
         refreshBtn.Click += async (_, _) => await LoadDataAsync();
-        toolbar.Controls.Add(refreshBtn, 3, 0);
+        toolbar.Controls.Add(refreshBtn, 2, 0);
 
         var closeBtn = UiStyle.CreateButton("Kapat", isSecondary: true);
         closeBtn.Click += (_, _) => Close();
-        toolbar.Controls.Add(closeBtn, 4, 0);
+        toolbar.Controls.Add(closeBtn, 3, 0);
         root.Controls.Add(toolbar, 0, 1);
 
         // Content Area (Grid left 45%, Details right 55%)
@@ -101,6 +99,8 @@ internal sealed class ListingAbTestForm : Form
         root.Controls.Add(content, 0, 2);
 
         _bindingSource.CurrentChanged += (_, _) => DisplaySelectedExperimentDetails();
+
+        UiStyle.AttachSidebarNav(this, "ab_test");
     }
 
     private Control BuildDetailPanel()
@@ -164,10 +164,10 @@ internal sealed class ListingAbTestForm : Form
         winnerTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         _winnerBadge.Dock = DockStyle.Fill;
-        _winnerBadge.Font = new Font("Segoe UI Semibold", 11F);
+        _winnerBadge.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
         _winnerBadge.TextAlign = ContentAlignment.MiddleCenter;
-        _winnerBadge.ForeColor = Color.White;
-        _winnerBadge.BackColor = UiStyle.SecondaryColor;
+        _winnerBadge.ForeColor = UiStyle.TextDark;
+        _winnerBadge.BackColor = Color.FromArgb(238, 242, 255); // Indigo Tint
         _winnerBadge.Text = "Kazanan: Belirlenmedi";
         winnerTable.Controls.Add(_winnerBadge, 0, 0);
 
@@ -190,11 +190,21 @@ internal sealed class ListingAbTestForm : Form
 
     private static void AddKpiCard(TableLayoutPanel parent, int col, string title, Label valueLabel)
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = Color.White, Margin = new Padding(col == 0 ? 0 : 4, 2, col == 2 ? 0 : 4, 4), Padding = new Padding(8, 4, 8, 4), CellBorderStyle = TableLayoutPanelCellBorderStyle.Single };
+        var card = new SimilarProductsWinForms.Controls.ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(col == 0 ? 0 : 4, 2, col == 2 ? 0 : 4, 4),
+            Padding = new Padding(10, 6, 10, 6),
+            CornerRadius = 8,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor
+        };
+
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = Color.Transparent };
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, Font = new Font("Segoe UI", 8.5F), ForeColor = UiStyle.TextMuted }, 0, 0);
+        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, Font = new Font("Segoe UI Semibold", 8.5F), ForeColor = UiStyle.TextMuted, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         valueLabel.Dock = DockStyle.Fill;
         valueLabel.Text = "-";
         valueLabel.Font = UiStyle.KpiValueFont;
@@ -202,7 +212,8 @@ internal sealed class ListingAbTestForm : Form
         valueLabel.TextAlign = ContentAlignment.MiddleLeft;
         panel.Controls.Add(valueLabel, 0, 1);
 
-        parent.Controls.Add(panel, col, 0);
+        card.Controls.Add(panel);
+        parent.Controls.Add(card, col, 0);
     }
 
     private void ConfigureGrid()

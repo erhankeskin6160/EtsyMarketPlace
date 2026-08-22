@@ -52,9 +52,8 @@ internal sealed class MarketResearchForm : Form
     {
         Text = "Etsy Pazar Arastirma ve SEO Araci";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(1280, 780);
         WindowState = FormWindowState.Maximized;
-        UiStyle.ApplyTheme(this);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel
         {
@@ -164,7 +163,7 @@ internal sealed class MarketResearchForm : Form
         };
         detailPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 235));
         detailPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        detailPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        detailPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380));
 
         var imageSlider = new TableLayoutPanel
         {
@@ -209,22 +208,36 @@ internal sealed class MarketResearchForm : Form
         _detailTextBox.BackColor = Color.White;
         detailPanel.Controls.Add(_detailTextBox, 1, 0);
 
-        var actions = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 9 };
-        for (var row = 0; row < 9; row++)
+        var actions = new TableLayoutPanel
         {
-            actions.RowStyles.Add(new RowStyle(SizeType.Percent, 100F / 9F));
-        }
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 3,
+            Padding = new Padding(4, 0, 0, 0),
+        };
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+        actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34F));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 33.33F));
+        actions.RowStyles.Add(new RowStyle(SizeType.Percent, 33.34F));
+
         actions.Controls.Add(ActionButton("Listing Ac", OpenListing), 0, 0);
-        actions.Controls.Add(ActionButton("Takibe Ekle", () => _ = TrackSelectedListingAsync()), 0, 1);
-        actions.Controls.Add(ActionButton("Kelime Analizi", OpenKeywordAnalysis), 0, 2);
-        actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 0, 3);
-        actions.Controls.Add(ActionButton("AI Optimizasyon", OpenListingOptimization), 0, 4);
-        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 0, 5);
-        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 6);
-        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 0, 7);
-        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 0, 8);
+        actions.Controls.Add(ActionButton("Takibe Ekle", () => _ = TrackSelectedListingAsync()), 1, 0);
+        actions.Controls.Add(ActionButton("AI Optimizasyon", OpenListingOptimization), 2, 0);
+
+        actions.Controls.Add(ActionButton("Kelime Analizi", OpenKeywordAnalysis), 0, 1);
+        actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 1, 1);
+        actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 2, 1);
+
+        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 2);
+        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 1, 2);
+        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 2, 2);
+
         detailPanel.Controls.Add(actions, 2, 0);
         root.Controls.Add(detailPanel, 0, 3);
+
+        UiStyle.AttachSidebarNav(this, "research");
     }
 
     private void ConfigureGrid()
@@ -690,7 +703,8 @@ internal sealed class MarketResearchForm : Form
     private static Button ActionButton(string text, Action action)
     {
         var button = CreateButton(text);
-        button.Margin = new Padding(10, 0, 0, 8);
+        button.Margin = new Padding(3, 3, 3, 3);
+        button.Font = new Font("Segoe UI Semibold", 8.5F);
         button.Click += (_, _) => action();
         return button;
     }

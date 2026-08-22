@@ -111,6 +111,8 @@ internal sealed class TrackingHistoryForm : Form
         right.Controls.Add(_changeTextBox, 0, 1);
         split.Panel2.Controls.Add(right);
         root.Controls.Add(split, 0, 2);
+
+        UiStyle.AttachSidebarNav(this, "tracking");
     }
 
     private void ConfigureItemsGrid()
@@ -248,26 +250,7 @@ internal sealed class TrackingHistoryForm : Form
     }
 
     private void AddSnapshotColumn(string header, string property, int width) => _snapshotsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, DataPropertyName = property, Width = width });
-    private static Button CreateButton(string text)
-    {
-        var button = new Button
-        {
-            Dock = DockStyle.Fill,
-            Text = text,
-            BackColor = Color.FromArgb(32, 97, 165),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI Semibold", 9.5F),
-            TextAlign = ContentAlignment.MiddleCenter,
-            UseVisualStyleBackColor = false,
-            AutoEllipsis = true,
-            Padding = new Padding(0),
-            Margin = new Padding(6, 2, 0, 2),
-        };
-        button.FlatAppearance.BorderSize = 0;
-        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 112, 184);
-        return button;
-    }
+    private static Button CreateButton(string text, bool isSecondary = false) => UiStyle.CreateButton(text, isSecondary);
     private static void OpenUrl(string? url) { if (!string.IsNullOrWhiteSpace(url)) Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
     private static string Csv(string value) => $"\"{value.Replace("\"", "\"\"")}\"";
 

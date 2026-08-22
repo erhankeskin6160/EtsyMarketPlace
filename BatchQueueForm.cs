@@ -43,7 +43,7 @@ internal sealed class BatchQueueForm : Form
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5, Padding = new Padding(18) };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64)); // Header
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68)); // KPI Summary Badges
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90)); // KPI Summary Badges (increased for responsive card display)
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); // Toolbar + Progress
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Main Content (Grid + Details)
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // Bottom Bar
@@ -74,7 +74,7 @@ internal sealed class BatchQueueForm : Form
         var kpiTable = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5 };
         for (var i = 0; i < 5; i++) kpiTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
 
-        AddKpiBadge(kpiTable, 0, "Toplam Ürün", _totalBadge, UiStyle.SecondaryColor);
+        AddKpiBadge(kpiTable, 0, "Toplam Ürün", _totalBadge, UiStyle.TextDark);
         AddKpiBadge(kpiTable, 1, "Bekleyen", _pendingBadge, UiStyle.AccentColor);
         AddKpiBadge(kpiTable, 2, "Tamamlanan", _completedBadge, UiStyle.SuccessColor);
         AddKpiBadge(kpiTable, 3, "Telif Riski", _riskBadge, UiStyle.DangerColor);
@@ -83,14 +83,16 @@ internal sealed class BatchQueueForm : Form
 
         // Toolbar + Progress Bar
         var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6 };
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
-        for (var i = 1; i < 6; i++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35f));
+        for (var i = 1; i < 6; i++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 13f));
 
+        var progressContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 12, 4, 12) };
         _progressBar.Dock = DockStyle.Fill;
         _progressBar.Minimum = 0;
         _progressBar.Maximum = 100;
         _progressBar.Value = 0;
-        toolbar.Controls.Add(_progressBar, 0, 0);
+        progressContainer.Controls.Add(_progressBar);
+        toolbar.Controls.Add(progressContainer, 0, 0);
 
         var addItemsBtn = UiStyle.CreateButton("Toplu Ürün Ekle");
         addItemsBtn.Click += async (_, _) => await OpenAddBatchItemsDialogAsync();
@@ -135,6 +137,8 @@ internal sealed class BatchQueueForm : Form
         root.Controls.Add(bottom, 0, 4);
 
         _bindingSource.CurrentChanged += (_, _) => DisplaySelectedItemDetails();
+
+        UiStyle.AttachSidebarNav(this, "batch");
     }
 
     private Control BuildDetailPanel()
@@ -172,19 +176,45 @@ internal sealed class BatchQueueForm : Form
 
     private static void AddKpiBadge(TableLayoutPanel parent, int col, string title, Label badge, Color color)
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, BackColor = Color.White, Margin = new Padding(col == 0 ? 0 : 3, 2, col == 4 ? 0 : 3, 2), Padding = new Padding(6, 2, 6, 2), CellBorderStyle = TableLayoutPanelCellBorderStyle.Single };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        var card = new SimilarProductsWinForms.Controls.ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(col == 0 ? 0 : 4, 3, col == 4 ? 0 : 4, 3),
+            Padding = new Padding(12, 8, 12, 8),
+            CornerRadius = 12,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+        };
 
-        panel.Controls.Add(new Label { Dock = DockStyle.Fill, Text = title, Font = new Font("Segoe UI", 8F), ForeColor = UiStyle.TextMuted }, 0, 0);
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var titleLabel = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = title.ToUpperInvariant(),
+            ForeColor = UiStyle.TextMuted,
+            Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoEllipsis = true,
+        };
+        layout.Controls.Add(titleLabel, 0, 0);
+
         badge.Dock = DockStyle.Fill;
         badge.Text = "0";
-        badge.Font = new Font("Segoe UI Semibold", 13F);
+        badge.Font = UiStyle.KpiValueFont;
         badge.ForeColor = color;
         badge.TextAlign = ContentAlignment.MiddleLeft;
-        panel.Controls.Add(badge, 0, 1);
+        layout.Controls.Add(badge, 0, 1);
 
-        parent.Controls.Add(panel, col, 0);
+        card.Controls.Add(layout);
+        parent.Controls.Add(card, col, 0);
     }
 
     private void ConfigureGrid()

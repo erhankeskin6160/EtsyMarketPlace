@@ -54,8 +54,7 @@ internal sealed class AutomationReportingForm(
     {
         Text = "Otomasyon ve Raporlama";
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(980, 760);
-        UiStyle.ApplyTheme(this);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
         Padding = new Padding(22);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 13 };
@@ -159,6 +158,8 @@ internal sealed class AutomationReportingForm(
         _statusTextBox.BackColor = Color.White;
         root.Controls.Add(_statusTextBox, 0, 12);
         root.SetColumnSpan(_statusTextBox, 2);
+
+        UiStyle.AttachSidebarNav(this, "automation");
     }
 
     private Control BuildOpportunityQueueToolbar()
