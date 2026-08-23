@@ -6,7 +6,7 @@ using SimilarProductsWinForms.Services;
 
 internal sealed class EtsyApiSettingsForm : Form
 {
-    private const string DefaultScopes = "shops_r listings_r listings_w transactions_r";
+    private const string DefaultScopes = "shops_r listings_r listings_w transactions_r billing_r";
     private readonly EtsyApiClient _apiClient = new();
     private readonly EtsyApiSettings _settings;
 
@@ -122,8 +122,6 @@ internal sealed class EtsyApiSettingsForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
 
         Controls.Add(root);
-
-        UiStyle.AttachSidebarNav(this, "api");
     }
 
     private static void AddRow(TableLayoutPanel root, int row, string label, TextBox textBox)

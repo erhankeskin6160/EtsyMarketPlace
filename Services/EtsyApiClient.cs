@@ -963,12 +963,19 @@ internal sealed class EtsyApiClient
             })
             .ToList() ?? [];
         var created = GetLong(receipt, "create_timestamp");
+        var status = GetString(receipt, "status");
+        bool isCanceledOrRefunded = GetBool(receipt, "is_canceled")
+            || GetBool(receipt, "was_canceled")
+            || GetBool(receipt, "is_refunded")
+            || GetBool(receipt, "was_refunded")
+            || status.Equals("canceled", StringComparison.OrdinalIgnoreCase)
+            || status.Equals("refunded", StringComparison.OrdinalIgnoreCase);
 
         return new OwnShopReceipt(
             GetLong(receipt, "receipt_id"),
             created > 0 ? DateTimeOffset.FromUnixTimeSeconds(created) : DateTimeOffset.MinValue,
             GetBool(receipt, "is_paid"),
-            GetBool(receipt, "is_canceled"),
+            isCanceledOrRefunded,
             grandTotal,
             currency,
             transactions);

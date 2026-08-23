@@ -309,68 +309,10 @@ internal static class UiStyle
         catch { }
     }
 
-    public static SimilarProductsWinForms.Controls.ModernSidebarNav AttachSidebarNav(Form form, string activeItemId, Action<string>? onNavigate = null)
+    public static SimilarProductsWinForms.Controls.ModernSidebarNav? AttachSidebarNav(Form form, string activeItemId, Action<string>? onNavigate = null)
     {
-        var formGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Padding = new Padding(0),
-            Margin = new Padding(0),
-        };
-        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        var sidebarNav = new SimilarProductsWinForms.Controls.ModernSidebarNav();
-        sidebarNav.Dock = DockStyle.Fill;
-
-        PopulateSidebarNavItems(sidebarNav, activeItemId);
-
-        sidebarNav.ItemSelected += (sender, e) =>
-        {
-            if (e.Item.Id == "theme")
-            {
-                CurrentTheme = CurrentTheme == AppTheme.Light ? AppTheme.Dark : AppTheme.Light;
-                ApplyTheme(form);
-                PopulateSidebarNavItems(sidebarNav, activeItemId);
-                return;
-            }
-
-            if (e.Item.Id != activeItemId)
-            {
-                if (onNavigate != null)
-                {
-                    onNavigate(e.Item.Id);
-                }
-                else
-                {
-                    form.Tag = e.Item.Id;
-                    form.DialogResult = DialogResult.Retry;
-                    form.Close();
-                }
-            }
-        };
-
-        var existingControls = new List<Control>();
-        foreach (Control ctrl in form.Controls)
-        {
-            existingControls.Add(ctrl);
-        }
-        form.Controls.Clear();
-
-        var mainContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 12, 12, 12), AutoScroll = true };
-        foreach (var ctrl in existingControls)
-        {
-            mainContainer.Controls.Add(ctrl);
-        }
-
-        formGrid.Controls.Add(sidebarNav, 0, 0);
-        formGrid.Controls.Add(mainContainer, 1, 0);
-        form.Controls.Add(formGrid);
-
-        MakeResponsive(form, sidebarNav);
-        return sidebarNav;
+        // Form is embedded inside single-window container (DashboardForm), sidebar is on the parent window.
+        return null;
     }
 
     public static void PopulateSidebarNavItems(SimilarProductsWinForms.Controls.ModernSidebarNav sidebarNav, string activeItemId)
@@ -382,6 +324,7 @@ internal static class UiStyle
         sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
         sidebarNav.AddItem("research", "Pazar Araştırması", "🔍", "Araştırma & Analiz");
+        sidebarNav.AddItem("health_score", "Listing Sağlık Skoru", "🩺", "Araştırma & Analiz", "YENİ");
         sidebarNav.AddItem("external", "Dış Pazar Yeri Bulucu", "🌐", "Araştırma & Analiz");
         sidebarNav.AddItem("ai_audit", "Mağaza AI Analizi", "🤖", "Araştırma & Analiz", "YENİ");
         sidebarNav.AddItem("ab_test", "A/B Test Paneli", "📈", "Araştırma & Analiz");

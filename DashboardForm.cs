@@ -36,6 +36,12 @@ internal sealed class DashboardForm : Form
     private readonly AbTestService _abTestService;
     private readonly BatchQueueProcessorService _batchQueueProcessorService;
 
+    public static DashboardForm? Instance { get; private set; }
+
+    private Panel _mainContainer = null!;
+    private TableLayoutPanel _dashboardRootPanel = null!;
+    private Form? _currentEmbeddedForm;
+
     public DashboardForm(
         AnalyzeKeywordUseCase keywordUseCase,
         TrackingService trackingService,
@@ -50,6 +56,7 @@ internal sealed class DashboardForm : Form
         AbTestService? abTestService = null,
         BatchQueueProcessorService? batchQueueProcessorService = null)
     {
+        Instance = this;
         _keywordUseCase = keywordUseCase;
         _trackingService = trackingService;
         _dashboardService = dashboardService;
@@ -90,20 +97,20 @@ internal sealed class DashboardForm : Form
         PopulateSidebarItems();
         _sidebarNav.ItemSelected += OnSidebarItemSelected;
 
-        var mainContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 12, 16, 12), AutoScroll = true };
+        _mainContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(16, 12, 16, 12), AutoScroll = true };
 
         formGrid.Controls.Add(_sidebarNav, 0, 0);
-        formGrid.Controls.Add(mainContainer, 1, 0);
+        formGrid.Controls.Add(_mainContainer, 1, 0);
         Controls.Add(formGrid);
 
         UiStyle.MakeResponsive(this, _sidebarNav);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(0) };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        mainContainer.Controls.Add(root);
+        _dashboardRootPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(0) };
+        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));
+        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _mainContainer.Controls.Add(_dashboardRootPanel);
 
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
@@ -132,9 +139,9 @@ internal sealed class DashboardForm : Form
         _statusLabel.ForeColor = UiStyle.TextMuted;
         header.Controls.Add(_statusLabel, 1, 0);
 
-        root.Controls.Add(header, 0, 0);
+        _dashboardRootPanel.Controls.Add(header, 0, 0);
 
-        root.Controls.Add(BuildActionHub(), 0, 1);
+        _dashboardRootPanel.Controls.Add(BuildActionHub(), 0, 1);
 
         var kpis = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 0, 0, 6) };
         for (var column = 0; column < 5; column++) kpis.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20));
@@ -143,7 +150,7 @@ internal sealed class DashboardForm : Form
         UiStyle.AddKpiCard(kpis, 2, 0, "Mağaza", "shops", _kpis);
         UiStyle.AddKpiCard(kpis, 3, 0, "Anahtar kelime", "keywords", _kpis);
         UiStyle.AddKpiCard(kpis, 4, 0, "Snapshot", "snapshots", _kpis);
-        root.Controls.Add(kpis, 0, 2);
+        _dashboardRootPanel.Controls.Add(kpis, 0, 2);
 
         var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2 };
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
@@ -155,7 +162,7 @@ internal sealed class DashboardForm : Form
         var trend = BuildTrendSection();
         content.Controls.Add(trend, 0, 1);
         content.SetColumnSpan(trend, 2);
-        root.Controls.Add(content, 0, 3);
+        _dashboardRootPanel.Controls.Add(content, 0, 3);
     }
 
     private void PopulateSidebarItems()
@@ -192,69 +199,85 @@ internal sealed class DashboardForm : Form
         await OpenModuleByIdAsync(e.Item.Id);
     }
 
-    public async Task OpenModuleByIdAsync(string targetModule)
+    public void EmbedModuleForm(Form moduleForm)
     {
-        switch (targetModule)
+        if (_currentEmbeddedForm != null)
         {
-            case "dashboard":
-                await LoadDashboardAsync();
-                break;
-            case "creator":
-                await ShowModuleDialogAsync(new ProductDiscoveryListingCreatorForm(_aiListingOptimizer, historyService: _optimizationHistoryService));
-                break;
-            case "ai_image":
-                await ShowModuleDialogAsync(new AiListingImageForm(_aiListingOptimizer));
-                break;
-            case "shop":
-                await ShowModuleDialogAsync(new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService, _aiListingOptimizer, _optimizationHistoryService));
-                break;
-            case "research":
-                await ShowModuleDialogAsync(new MarketResearchForm(_keywordUseCase, _trackingService, _optimizationHistoryService, _aiListingOptimizer));
-                await LoadDashboardAsync();
-                break;
-            case "external":
-                await ShowModuleDialogAsync(new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer));
-                break;
-            case "ai_audit":
-                await ShowModuleDialogAsync(new OwnShopListingAiAuditForm(_aiListingOptimizer, _optimizationHistoryService));
-                break;
-            case "ab_test":
-                await ShowModuleDialogAsync(new ListingAbTestForm(_abTestService));
-                break;
-            case "automation":
-                await ShowModuleDialogAsync(new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler));
-                break;
-            case "batch":
-                await ShowModuleDialogAsync(new BatchQueueForm(_batchQueueProcessorService));
-                break;
-            case "profit":
-                await ShowModuleDialogAsync(new ProfitCalculatorForm());
-                break;
-            case "tracking":
-                await ShowModuleDialogAsync(new TrackingHistoryForm(_trackingService));
-                await LoadDashboardAsync();
-                break;
-            case "api":
-                await ShowModuleDialogAsync(new EtsyApiSettingsForm());
-                break;
-            case "notifications":
-                await ShowModuleDialogAsync(new NotificationSettingsForm());
-                break;
-            case "financial":
-                await ShowModuleDialogAsync(new FinancialReportForm());
-                break;
+            _mainContainer.Controls.Remove(_currentEmbeddedForm);
+            _currentEmbeddedForm.Close();
+            _currentEmbeddedForm.Dispose();
+            _currentEmbeddedForm = null;
         }
+
+        _mainContainer.Controls.Clear();
+        _currentEmbeddedForm = moduleForm;
+
+        moduleForm.TopLevel = false;
+        moduleForm.FormBorderStyle = FormBorderStyle.None;
+        moduleForm.Dock = DockStyle.Fill;
+        _mainContainer.Controls.Add(moduleForm);
+        moduleForm.Show();
     }
 
-    private async Task ShowModuleDialogAsync(Form form)
+    private void ShowDashboardView()
     {
-        using (form)
+        if (_currentEmbeddedForm != null)
         {
-            var result = form.ShowDialog(this);
-            if (result == DialogResult.Retry && form.Tag is string targetModule)
-            {
-                await OpenModuleByIdAsync(targetModule);
-            }
+            _mainContainer.Controls.Remove(_currentEmbeddedForm);
+            _currentEmbeddedForm.Close();
+            _currentEmbeddedForm.Dispose();
+            _currentEmbeddedForm = null;
+        }
+
+        _mainContainer.Controls.Clear();
+        _mainContainer.Controls.Add(_dashboardRootPanel);
+    }
+
+    public async Task OpenModuleByIdAsync(string targetModule)
+    {
+        _sidebarNav.SelectedItemId = targetModule;
+
+        if (targetModule == "dashboard")
+        {
+            ShowDashboardView();
+            await LoadDashboardAsync();
+            return;
+        }
+
+        if (targetModule is "api")
+        {
+            using var form = new EtsyApiSettingsForm();
+            form.ShowDialog(this);
+            return;
+        }
+        if (targetModule is "notifications")
+        {
+            using var form = new NotificationSettingsForm();
+            form.ShowDialog(this);
+            return;
+        }
+
+        Form? nextForm = targetModule switch
+        {
+            "creator" => new ProductDiscoveryListingCreatorForm(_aiListingOptimizer, historyService: _optimizationHistoryService),
+            "ai_image" => new AiListingImageForm(_aiListingOptimizer),
+            "shop" => new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService, _aiListingOptimizer, _optimizationHistoryService),
+            "research" => new MarketResearchForm(_keywordUseCase, _trackingService, _optimizationHistoryService, _aiListingOptimizer),
+            "health_score" => new ListingHealthScoreForm(aiOptimizer: _aiListingOptimizer, historyService: _optimizationHistoryService),
+            "external" => new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer),
+            "ai_audit" => new OwnShopListingAiAuditForm(_aiListingOptimizer, _optimizationHistoryService),
+            "ab_test" => new ListingAbTestForm(_abTestService),
+            "automation" => new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler),
+            "batch" => new BatchQueueForm(_batchQueueProcessorService),
+            "profit" => new ProfitCalculatorForm(),
+            "tracking" => new TrackingHistoryForm(_trackingService),
+            "financial" => new FinancialReportForm(),
+            _ => null
+        };
+
+        if (nextForm != null)
+        {
+            EmbedModuleForm(nextForm);
         }
     }
 

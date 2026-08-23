@@ -16,9 +16,9 @@ public sealed class AutomationRunService(
         Validate(settings);
         var completedAt = now ?? DateTimeOffset.Now;
         var localDate = completedAt.LocalDateTime.Date;
-        var startDate = localDate.AddDays(-(settings.LookbackDays - 1));
+        var startDate = DateTime.SpecifyKind(localDate.AddDays(-(settings.LookbackDays - 1)), DateTimeKind.Unspecified);
         var start = new DateTimeOffset(startDate, TimeZoneInfo.Local.GetUtcOffset(startDate));
-        var endDate = localDate.AddDays(1).AddTicks(-1);
+        var endDate = DateTime.SpecifyKind(localDate.AddDays(1).AddTicks(-1), DateTimeKind.Unspecified);
         var end = new DateTimeOffset(endDate, TimeZoneInfo.Local.GetUtcOffset(endDate));
 
         var comparison = await performanceService.GetComparisonAsync(start, end, cancellationToken);

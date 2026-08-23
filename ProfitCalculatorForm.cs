@@ -100,8 +100,6 @@ internal sealed class ProfitCalculatorForm : Form
         bottomBar.Controls.Add(closeBtn, 2, 0);
 
         root.Controls.Add(bottomBar, 0, 2);
-
-        UiStyle.AttachSidebarNav(this, "profit");
     }
 
     private Control BuildInputPanel()

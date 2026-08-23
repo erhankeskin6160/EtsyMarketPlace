@@ -8,7 +8,7 @@ internal sealed class MarketListingResult
     public long TaxonomyId { get; init; }
     public string TaxonomyName { get; set; } = "";
     public string Title { get; init; } = "";
-    public string Description { get; init; } = "";
+    public string Description { get; set; } = "";
     public string ListingUrl { get; init; } = "";
     public string ImageUrl { get; init; } = "";
     public string ShopName { get; set; } = "";

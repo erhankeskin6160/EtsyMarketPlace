@@ -33,7 +33,6 @@ internal sealed class NotificationSettingsForm : Form
         _testWhatsAppBtn = UiStyle.CreateButton("🧪 WhatsApp Test Bildirimi");
         BuildLayout();
         LoadValues();
-        UiStyle.AttachSidebarNav(this, "notifications");
     }
 
     private void BuildLayout()

@@ -137,8 +137,6 @@ internal sealed class BatchQueueForm : Form
         root.Controls.Add(bottom, 0, 4);
 
         _bindingSource.CurrentChanged += (_, _) => DisplaySelectedItemDetails();
-
-        UiStyle.AttachSidebarNav(this, "batch");
     }
 
     private Control BuildDetailPanel()

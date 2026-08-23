@@ -111,8 +111,6 @@ internal sealed class TrackingHistoryForm : Form
         right.Controls.Add(_changeTextBox, 0, 1);
         split.Panel2.Controls.Add(right);
         root.Controls.Add(split, 0, 2);
-
-        UiStyle.AttachSidebarNav(this, "tracking");
     }
 
     private void ConfigureItemsGrid()

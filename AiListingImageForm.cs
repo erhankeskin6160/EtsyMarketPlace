@@ -33,7 +33,6 @@ internal sealed class AiListingImageForm : Form
         _photoRoomSettings = PhotoRoomSettingsStore.Load();
         BuildLayout();
         LoadSettings();
-        UiStyle.AttachSidebarNav(this, "ai_image");
     }
 
     public AiListingImageForm(object? listing, object? apiClient) : this(null)

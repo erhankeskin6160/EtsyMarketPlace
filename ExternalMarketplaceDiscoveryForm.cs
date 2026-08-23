@@ -109,8 +109,6 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         root.Controls.Add(_grid, 0, 3);
         root.Controls.Add(BuildDraftArea(), 0, 4);
         UpdateListingTypeControls();
-
-        UiStyle.AttachSidebarNav(this, "external");
     }
 
     private Control BuildToolbar()

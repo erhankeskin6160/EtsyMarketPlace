@@ -158,8 +158,6 @@ internal sealed class AutomationReportingForm(
         _statusTextBox.BackColor = Color.White;
         root.Controls.Add(_statusTextBox, 0, 12);
         root.SetColumnSpan(_statusTextBox, 2);
-
-        UiStyle.AttachSidebarNav(this, "automation");
     }
 
     private Control BuildOpportunityQueueToolbar()

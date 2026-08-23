@@ -120,8 +120,6 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         }
 
         ApplyInitialListing();
-
-        UiStyle.AttachSidebarNav(this, "creator");
     }
 
     private void ApplyInitialListing()
@@ -252,7 +250,19 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         _titleTextBox.Dock = DockStyle.Fill;
         _titleTextBox.Multiline = true;
         left.Controls.Add(_titleTextBox, 0, 2);
-        left.Controls.Add(LabelFor("Aciklama"), 0, 3);
+        var descHeaderPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        descHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        descHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135));
+        descHeaderPanel.Controls.Add(LabelFor("Aciklama"), 0, 0);
+
+        var btnAiDesc = CreateButton("\u2728 AI Aciklama");
+        btnAiDesc.BackColor = UiStyle.AiColor;
+        btnAiDesc.ForeColor = Color.White;
+        btnAiDesc.Font = UiStyle.SemiboldBaseFont;
+        btnAiDesc.Click += async (_, _) => await GenerateDescriptionWithAiAsync();
+        descHeaderPanel.Controls.Add(btnAiDesc, 1, 0);
+
+        left.Controls.Add(descHeaderPanel, 0, 3);
         ConfigureMultiline(_descriptionTextBox);
         left.Controls.Add(_descriptionTextBox, 0, 4);
         layout.Controls.Add(left, 0, 0);
@@ -537,7 +547,15 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             return false;
         }
 
-        var match = Regex.Match(value, @"(?:listing|copy)/(?<id>\d{6,})", RegexOptions.IgnoreCase);
+        var match = Regex.Match(value, @"/listing/(?<id>\d{6,})", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            match = Regex.Match(value, @"(?:listing|copy)/(?<id>\d{6,})", RegexOptions.IgnoreCase);
+        }
+        if (!match.Success)
+        {
+            match = Regex.Match(value, @"listing_id=(?<id>\d{6,})", RegexOptions.IgnoreCase);
+        }
         if (!match.Success)
         {
             match = Regex.Match(value, @"(?<id>\d{8,})");
@@ -921,6 +939,15 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _titleTextBox.Text = BuildSafeTitle(listing);
         }
 
+        if (!string.IsNullOrWhiteSpace(listing.Description))
+        {
+            _descriptionTextBox.Text = listing.Description;
+        }
+        else
+        {
+            _ = FetchAndSetDescriptionAsync(listing);
+        }
+
         if (string.IsNullOrWhiteSpace(_tagsTextBox.Text))
         {
             _tagsTextBox.Text = string.Join(", ", listing.Tags.Take(13));
@@ -949,6 +976,87 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             $"Magaza: {listing.ShopName} | Satis: {listing.ShopSales:N0} | Favori: {listing.Favorites:N0}{Environment.NewLine}" +
             $"Rakip listing: {listing.ListingUrl}{Environment.NewLine}" +
             "Bu veri ilham ve pazar analizi icindir; birebir kopyalama yapma.";
+    }
+
+    private async Task FetchAndSetDescriptionAsync(MarketListingResult listing)
+    {
+        if (listing.ListingId <= 0) return;
+        try
+        {
+            var settings = EtsyApiSettingsStore.Load();
+            if (!settings.HasApiCredentials) return;
+
+            var fullListing = await _apiClient.GetPublicListingAsync(settings, listing.ListingId);
+            if (!string.IsNullOrWhiteSpace(fullListing.Description))
+            {
+                listing.Description = fullListing.Description;
+                if (SelectedRow?.Listing.ListingId == listing.ListingId)
+                {
+                    if (IsHandleCreated)
+                    {
+                        BeginInvoke(() =>
+                        {
+                            if (string.IsNullOrWhiteSpace(_descriptionTextBox.Text))
+                            {
+                                _descriptionTextBox.Text = listing.Description;
+                            }
+                        });
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Silently ignore background fetch errors
+        }
+    }
+
+    private async Task GenerateDescriptionWithAiAsync()
+    {
+        var listing = SelectedRow?.Listing;
+        if (listing is null && string.IsNullOrWhiteSpace(_titleTextBox.Text))
+        {
+            MessageBox.Show(this, "Once bir urun fikri secin veya baslik girin.", "AI Aciklama Uret", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            StartBusy("AI ile aciklama uretiliyor");
+            _statusLabel.Text = "Yapay zeka ile aciklama uretiliyor...";
+
+            var title = string.IsNullOrWhiteSpace(_titleTextBox.Text) ? listing?.Title ?? "" : _titleTextBox.Text;
+            var currentDesc = string.IsNullOrWhiteSpace(_descriptionTextBox.Text) ? listing?.Description ?? "" : _descriptionTextBox.Text;
+            var tags = string.IsNullOrWhiteSpace(_tagsTextBox.Text)
+                ? (listing?.Tags ?? [])
+                : _tagsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+
+            var input = new ListingOptimizationInput(title, currentDesc, tags, PrimaryKeyword());
+            var result = await aiOptimizer.OptimizeAsync(input);
+
+            var dummyListing = listing ?? new MarketListingResult { Title = title, Description = currentDesc, Tags = tags };
+            var materials = EtsyApiClient.NormalizeListingMaterialsForEtsy(result.MaterialSuggestions);
+            var generatedDesc = SelectEnglishDescription(result.DescriptionDraft, dummyListing, materials);
+
+            if (!string.IsNullOrWhiteSpace(generatedDesc))
+            {
+                _descriptionTextBox.Text = generatedDesc;
+                _statusLabel.Text = "Yapay zeka ile yeni aciklama olusturuldu";
+            }
+            else
+            {
+                _statusLabel.Text = "Aciklama uretilemedi";
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "AI Aciklama Uret", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            _statusLabel.Text = "AI aciklama uretimi basarisiz";
+        }
+        finally
+        {
+            StopBusy();
+        }
     }
 
     private void StartBusy(string message)

@@ -231,22 +231,23 @@ internal sealed class MarketResearchForm : Form
         actions.Controls.Add(ActionButton("Rakip Analizi", OpenCompetitorAnalysis), 1, 1);
         actions.Controls.Add(ActionButton("Magaza Ac", OpenShop), 2, 1);
 
-        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 0, 2);
-        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 1, 2);
-        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 2, 2);
+        var healthButton = ActionButton("Sa\u011fl\u0131k Skoru", OpenHealthScore);
+        healthButton.BackColor = UiStyle.PrimaryColor;
+        healthButton.ForeColor = Color.White;
+        actions.Controls.Add(healthButton, 0, 2);
+        actions.Controls.Add(ActionButton("Tagleri Kopyala", CopyTags), 1, 2);
+        actions.Controls.Add(ActionButton("Basligi Kopyala", CopyTitle), 2, 2);
 
-        // 4. satır — Listing Klonlama
+        // 4. satır — Listing Klonlama & Aktar
         var cloneButton = ActionButton("Listing Klonla", OpenListingClone);
         cloneButton.BackColor = Color.FromArgb(20, 126, 76);   // yeşil — birincil aksiyon
         cloneButton.ForeColor = Color.White;
         actions.Controls.Add(cloneButton, 0, 3);
-        actions.Controls.Add(ActionButton("Aciklamay\u0131 Kopyala", CopyDescription), 1, 3);
+        actions.Controls.Add(ActionButton("CSV Aktar", ExportCsv), 1, 3);
         actions.Controls.Add(ActionButton("Linki Kopyala", CopyListingUrl), 2, 3);
 
         detailPanel.Controls.Add(actions, 2, 0);
         root.Controls.Add(detailPanel, 0, 3);
-
-        UiStyle.AttachSidebarNav(this, "research");
     }
 
     private void ConfigureGrid()
@@ -442,14 +443,15 @@ internal sealed class MarketResearchForm : Form
     private void OpenCompetitorAnalysis()
     {
         var listing = SelectedListing;
-        if (listing is null || listing.ShopId <= 0)
+        if (listing is null || (listing.ShopId <= 0 && string.IsNullOrWhiteSpace(listing.ShopName)))
         {
             MessageBox.Show(this, "Rakip analizi icin magaza bilgisi bulunan bir urun secin.", "Rakip Analizi", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
-        using var form = new CompetitorShopAnalysisForm(listing, _trackingService);
-        form.ShowDialog(this);
+        var form = new CompetitorShopAnalysisForm(listing, _trackingService);
+        if (DashboardForm.Instance != null) DashboardForm.Instance.EmbedModuleForm(form);
+        else form.ShowDialog(this);
     }
 
     private void OpenListingOptimization()
@@ -461,12 +463,13 @@ internal sealed class MarketResearchForm : Form
             return;
         }
 
-        using var form = new ListingOptimizationForm(
+        var form = new ListingOptimizationForm(
             _optimizationHistoryService,
             _aiListingOptimizer,
             listing,
             _keywordTextBox.Text.Trim());
-        form.ShowDialog(this);
+        if (DashboardForm.Instance != null) DashboardForm.Instance.EmbedModuleForm(form);
+        else form.ShowDialog(this);
     }
 
     private async Task TrackSelectedListingAsync()
@@ -501,8 +504,15 @@ internal sealed class MarketResearchForm : Form
 
     private void OpenTrackingCenter()
     {
-        using var form = new TrackingHistoryForm(_trackingService);
-        form.ShowDialog(this);
+        if (DashboardForm.Instance != null)
+        {
+            _ = DashboardForm.Instance.OpenModuleByIdAsync("tracking");
+        }
+        else
+        {
+            using var form = new TrackingHistoryForm(_trackingService);
+            form.ShowDialog(this);
+        }
     }
 
     private void CopyTags() => CopyText(SelectedListing?.TagsDisplay, "Tagler kopyalandi");
@@ -524,14 +534,27 @@ internal sealed class MarketResearchForm : Form
             return;
         }
 
-        // ProductDiscoveryListingCreatorForm'u initialListing ile ac:
-        // form baslik, tag, aciklama, fiyat ve kategori alanlarini otomatik doldurur.
-        using var form = new ProductDiscoveryListingCreatorForm(
+        var form = new ProductDiscoveryListingCreatorForm(
             _aiListingOptimizer,
             initialKeyword: _keywordTextBox.Text.Trim(),
             initialListing: listing,
             historyService: _optimizationHistoryService);
-        form.ShowDialog(this);
+        if (DashboardForm.Instance != null) DashboardForm.Instance.EmbedModuleForm(form);
+        else form.ShowDialog(this);
+    }
+
+    private void OpenHealthScore()
+    {
+        var listing = SelectedListing;
+        if (listing is null)
+        {
+            MessageBox.Show(this, "Sağlık skoru hesaplamak için bir ürün seçin.", "Sağlık Skoru", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var form = new ListingHealthScoreForm(listing, _aiListingOptimizer, _optimizationHistoryService);
+        if (DashboardForm.Instance != null) DashboardForm.Instance.EmbedModuleForm(form);
+        else form.ShowDialog(this);
     }
 
     private async Task EnsureImagesAndShowAsync(MarketListingResult item)

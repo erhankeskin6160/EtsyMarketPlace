@@ -99,8 +99,6 @@ internal sealed class ListingAbTestForm : Form
         root.Controls.Add(content, 0, 2);
 
         _bindingSource.CurrentChanged += (_, _) => DisplaySelectedExperimentDetails();
-
-        UiStyle.AttachSidebarNav(this, "ab_test");
     }
 
     private Control BuildDetailPanel()

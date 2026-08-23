@@ -69,12 +69,12 @@ internal sealed class OwnShopListingAiAuditForm(
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 11 };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 12 };
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
         toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var index = 4; index < 11; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+        for (var index = 4; index < 12; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
         toolbar.Controls.Add(LabelFor("Limit"), 0, 0);
         _limitInput.Dock = DockStyle.Left;
         toolbar.Controls.Add(_limitInput, 1, 0);
@@ -89,28 +89,29 @@ internal sealed class OwnShopListingAiAuditForm(
         var aiAnalyze = CreateButton("AI ile Puanla");
         aiAnalyze.Click += async (_, _) => await AnalyzeSelectedAsync();
         toolbar.Controls.Add(aiAnalyze, 5, 0);
+        var healthBtn = CreateButton("Sa\u011fl\u0131k Skoru");
+        healthBtn.Click += (_, _) => OpenHealthScore();
+        toolbar.Controls.Add(healthBtn, 6, 0);
         var settings = CreateButton("AI Ayarlari");
         settings.Click += (_, _) => { using var form = new AiOptimizationSettingsForm(); form.ShowDialog(this); };
-        toolbar.Controls.Add(settings, 6, 0);
+        toolbar.Controls.Add(settings, 7, 0);
         var refreshSelected = CreateButton("Rev");
         refreshSelected.Click += async (_, _) => await RefreshSelectedListingAsync();
-        toolbar.Controls.Add(refreshSelected, 7, 0);
+        toolbar.Controls.Add(refreshSelected, 8, 0);
         var aiImage = CreateButton("AI Gorsel");
         aiImage.Click += async (_, _) => await OpenAiImageWorkflowAsync();
-        toolbar.Controls.Add(aiImage, 8, 0);
+        toolbar.Controls.Add(aiImage, 9, 0);
         var open = CreateButton("Listing Ac");
         open.Click += (_, _) => OpenListing();
-        toolbar.Controls.Add(open, 9, 0);
+        toolbar.Controls.Add(open, 10, 0);
         var history = CreateButton("Gecmis");
         history.Click += (_, _) => { using var form = new ListingOptimizationHistoryForm(historyService); form.ShowDialog(this); };
-        toolbar.Controls.Add(history, 10, 0);
+        toolbar.Controls.Add(history, 11, 0);
         root.Controls.Add(toolbar, 0, 1);
 
         ConfigureGrid();
         root.Controls.Add(_grid, 0, 2);
         root.Controls.Add(BuildDetailArea(), 0, 3);
-
-        UiStyle.AttachSidebarNav(this, "ai_audit");
     }
 
     private Control BuildDetailArea()
@@ -592,6 +593,19 @@ internal sealed class OwnShopListingAiAuditForm(
         };
         button.FlatAppearance.BorderSize = 0;
         return button;
+    }
+
+    private void OpenHealthScore()
+    {
+        var row = SelectedRow;
+        if (row is null)
+        {
+            MessageBox.Show(this, "Sağlık skoru hesaplamak için bir ürün seçin.", "Sağlık Skoru", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var form = new ListingHealthScoreForm(row.Listing, aiOptimizer, historyService);
+        form.ShowDialog(this);
     }
 
     private sealed class AuditRow(int rank, MarketListingResult listing, int seoScore, string status)

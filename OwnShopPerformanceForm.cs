@@ -105,8 +105,6 @@ internal sealed class OwnShopPerformanceForm(
         ConfigureProductsGrid();
         ConfigureHistoryGrid();
         root.Controls.Add(BuildContentTabs(), 0, 3);
-
-        UiStyle.AttachSidebarNav(this, "shop");
     }
 
     private async Task LoadReportAsync()
@@ -115,8 +113,9 @@ internal sealed class OwnShopPerformanceForm(
         {
             UseWaitCursor = true;
             _statusLabel.Text = "Yetkili magaza verileri aliniyor...";
-            var start = new DateTimeOffset(_startPicker.Value.Date, TimeZoneInfo.Local.GetUtcOffset(_startPicker.Value.Date));
-            var endDate = _endPicker.Value.Date.AddDays(1).AddTicks(-1);
+            var startDate = DateTime.SpecifyKind(_startPicker.Value.Date, DateTimeKind.Unspecified);
+            var endDate = DateTime.SpecifyKind(_endPicker.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Unspecified);
+            var start = new DateTimeOffset(startDate, TimeZoneInfo.Local.GetUtcOffset(startDate));
             var end = new DateTimeOffset(endDate, TimeZoneInfo.Local.GetUtcOffset(endDate));
             _comparison = await performanceService.GetComparisonAsync(start, end);
             BindComparison(_comparison);

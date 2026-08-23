@@ -15,44 +15,47 @@ internal sealed class FinancialReportForm : Form
     // ── State ──────────────────────────────────────────────────────────────────
     private FinancialReport _report = FinancialReport.Empty;
     private readonly FinancialReportService _service = new();
-    private bool _isMockMode = true;
     private CancellationTokenSource _cts = new();
 
     // ── UI: KPI Labels ─────────────────────────────────────────────────────────
     private readonly Label _kpiGross        = new();
-    private readonly Label _kpiNet          = new();
     private readonly Label _kpiFees         = new();
+    private readonly Label _kpiInnerAds     = new();
+    private readonly Label _kpiOffsiteAds   = new();
     private readonly Label _kpiRefunds      = new();
-    private readonly Label _kpiAds          = new();
-    private readonly Label _kpiOrders       = new();
-    private readonly Label _kpiAov          = new();
+    private readonly Label _kpiNet          = new();
+    private readonly Label _kpiProductCosts = new();
+    private readonly Label _kpiRealProfit   = new();
+    private readonly Label _kpiDeposits     = new();
     private readonly Label _statusLabel     = new();
 
-    // ── UI: Filters ────────────────────────────────────────────────────────────
+    // ── UI: Filters & Currency ────────────────────────────────────────────────
     private readonly ComboBox _cboDateRange     = new();
     private readonly DateTimePicker _dtpFrom    = new();
     private readonly DateTimePicker _dtpTo      = new();
+    private readonly CheckBox _chkUseTry        = new();
+    private readonly NumericUpDown _numExchangeRate = new();
     private readonly Label _lblMode             = new();
 
-    // ── UI: Charts ────────────────────────────────────────────────────────────
+    // ── UI: Charts & Grids ─────────────────────────────────────────────────────
     private CartesianChart  _barChart   = null!;
     private CartesianChart  _lineChart  = null!;
     private PieChart        _pieChart   = null!;
-    private readonly TabControl _tabCharts = new();
+    private readonly TabControl _tabMain = new();
 
-    // ── UI: Grid ──────────────────────────────────────────────────────────────
+    private readonly DataGridView _gridPeriod  = new();
     private readonly DataGridView _gridEntries = new();
+    private readonly ComboBox _cboPeriodType   = new();
 
     public FinancialReportForm()
     {
-        Text = "💳 Finansal Raporlama — Etsy Ödeme Analizi";
+        Text = "💳 Finansal Raporlama & Muhasebe — Etsy Ödeme Analizi";
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1280, 780);
 
         InitializeCharts();
         BuildLayout();
-        UiStyle.AttachSidebarNav(this, "financial");
         UiStyle.ApplyTheme(this);
         Shown += async (_, _) => await LoadReportAsync();
     }
@@ -100,10 +103,10 @@ internal sealed class FinancialReportForm : Form
             RowCount = 4,
             Padding = new Padding(0),
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));   // Başlık
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));   // Filtre çubuğu
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 108));  // KPI kartları
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // İçerik (grafik + grid)
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 55));   // Başlık
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));   // Filtre çubuğu
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));  // KPI kartları (8 Adet)
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));   // İçerik sekmeleri
         Controls.Add(root);
 
         root.Controls.Add(BuildHeader(),     0, 0);
@@ -134,14 +137,14 @@ internal sealed class FinancialReportForm : Form
         titlePanel.Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "💳 Finansal Raporlama",
+            Text = "💳 Finansal Raporlama & Muhasebe Paneli",
             Font = UiStyle.TitleFont,
             ForeColor = UiStyle.TextDark,
         });
         titlePanel.Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "Etsy Ödeme Defteri — Gelir, Gider ve Net Kazanç Analizi",
+            Text = "Etsy Ödeme Defteri, Banka Transferleri, Ürün Maliyetleri ve TL Kâr Analizi",
             Font = UiStyle.SubtitleFont,
             ForeColor = UiStyle.TextMuted,
         });
@@ -164,28 +167,31 @@ internal sealed class FinancialReportForm : Form
         var bar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 8,
-            Padding = new Padding(0, 4, 0, 4),
+            ColumnCount = 11,
+            Padding = new Padding(0, 2, 0, 2),
         };
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155)); // ComboBox
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // DtpFrom
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // DtpTo
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); // Yenile
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); // Excel
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // CSV
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // boşluk
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180)); // mode etiketi
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // ComboBox
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); // DtpFrom
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); // DtpTo
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // Yenile
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160)); // Maliyet Yönetimi
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // API Ayarları
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // TL Kur Checkbox
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));  // Kur Tutar
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // Excel
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // Boşluk
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); // Mode etiketi
 
         // Tarih ön-ayarları
         _cboDateRange.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboDateRange.Dock = DockStyle.Fill;
-        _cboDateRange.Margin = new Padding(0, 0, 6, 0);
+        _cboDateRange.Margin = new Padding(0, 0, 4, 0);
         _cboDateRange.Items.AddRange(new object[]
         {
             "Son 7 Gün", "Son 30 Gün", "Son 90 Gün",
             "Bu Ay", "Geçen Ay", "Bu Yıl", "Özel Aralık"
         });
-        _cboDateRange.SelectedIndex = 1; // Son 30 Gün
+        _cboDateRange.SelectedIndex = 1;
         _cboDateRange.SelectedIndexChanged += OnDateRangeChanged;
         bar.Controls.Add(_cboDateRange, 0, 0);
 
@@ -197,7 +203,7 @@ internal sealed class FinancialReportForm : Form
 
         _dtpTo.Format = DateTimePickerFormat.Short;
         _dtpTo.Dock = DockStyle.Fill;
-        _dtpTo.Margin = new Padding(0, 0, 8, 0);
+        _dtpTo.Margin = new Padding(0, 0, 6, 0);
         _dtpTo.Value = DateTime.Today;
         bar.Controls.Add(_dtpTo, 2, 0);
 
@@ -209,36 +215,75 @@ internal sealed class FinancialReportForm : Form
             NormalColor = UiStyle.PrimaryColor,
             HoverColor = UiStyle.PrimaryHover,
             ForeColor = Color.White,
-            Margin = new Padding(0, 0, 6, 0),
+            Margin = new Padding(0, 0, 4, 0),
         };
         btnRefresh.Click += async (_, _) => await LoadReportAsync(forceApi: true);
         bar.Controls.Add(btnRefresh, 3, 0);
+
+        // Ürün Maliyetleri Butonu
+        var btnCosts = new ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🏷️ Ürün Maliyetleri",
+            NormalColor = UiStyle.SecondaryColor,
+            HoverColor = UiStyle.SecondaryHover,
+            ForeColor = UiStyle.TextDark,
+            Margin = new Padding(0, 0, 4, 0),
+        };
+        btnCosts.Click += (_, _) =>
+        {
+            using var form = new ProductCostManagerForm();
+            form.ShowDialog(this);
+            _ = LoadReportAsync(forceApi: false);
+        };
+        bar.Controls.Add(btnCosts, 4, 0);
+
+        // API Ayarları Butonu
+        var btnApi = new ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "⚙️ API Ayarları",
+            NormalColor = UiStyle.AccentColor,
+            HoverColor = Color.FromArgb(79, 70, 229),
+            ForeColor = Color.White,
+            Margin = new Padding(0, 0, 4, 0),
+        };
+        btnApi.Click += (_, _) =>
+        {
+            using var form = new EtsyApiSettingsForm();
+            form.ShowDialog(this);
+            _ = LoadReportAsync(forceApi: true);
+        };
+        bar.Controls.Add(btnApi, 5, 0);
+
+        // TL Kur Dönüşüm Checkbox & Input
+        _chkUseTry.Text = "🇹🇷 TL (₺) Kur:";
+        _chkUseTry.Dock = DockStyle.Fill;
+        _chkUseTry.Checked = true;
+        _chkUseTry.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        _chkUseTry.ForeColor = UiStyle.TextDark;
+        _chkUseTry.CheckedChanged += (_, _) => UpdateKpis();
+        bar.Controls.Add(_chkUseTry, 6, 0);
+
+        _numExchangeRate.Dock = DockStyle.Fill;
+        _numExchangeRate.DecimalPlaces = 2;
+        _numExchangeRate.Maximum = 500;
+        _numExchangeRate.Value = 36.50m;
+        _numExchangeRate.ValueChanged += (_, _) => UpdateKpis();
+        bar.Controls.Add(_numExchangeRate, 7, 0);
 
         // Excel Butonu
         var btnExcel = new ModernButtonControl
         {
             Dock = DockStyle.Fill,
-            Text = "📊 Excel'e Aktar",
+            Text = "📊 Excel",
             NormalColor = UiStyle.SuccessColor,
             HoverColor = Color.FromArgb(5, 150, 105),
             ForeColor = Color.White,
-            Margin = new Padding(0, 0, 6, 0),
+            Margin = new Padding(0, 0, 4, 0),
         };
         btnExcel.Click += OnExportExcel;
-        bar.Controls.Add(btnExcel, 4, 0);
-
-        // CSV Butonu
-        var btnCsv = new ModernButtonControl
-        {
-            Dock = DockStyle.Fill,
-            Text = "📋 CSV",
-            NormalColor = UiStyle.SecondaryColor,
-            HoverColor = UiStyle.SecondaryHover,
-            ForeColor = UiStyle.TextDark,
-            Margin = new Padding(0, 0, 0, 0),
-        };
-        btnCsv.Click += OnExportCsv;
-        bar.Controls.Add(btnCsv, 5, 0);
+        bar.Controls.Add(btnExcel, 8, 0);
 
         // Mod Etiketi
         _lblMode.Dock = DockStyle.Fill;
@@ -246,31 +291,35 @@ internal sealed class FinancialReportForm : Form
         _lblMode.TextAlign = ContentAlignment.MiddleRight;
         _lblMode.ForeColor = UiStyle.WarningColor;
         _lblMode.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-        bar.Controls.Add(_lblMode, 7, 0);
+        bar.Controls.Add(_lblMode, 10, 0);
 
         return bar;
     }
 
-    // — KPI Kartları Şeridi ————————————————————————————————————————————————────
+    // — KPI Kartları Şeridi (8 Kartlı Yapı) ———————————————————————————————————
+
+    // — KPI Kartları Şeridi (9 Kartlı Yapı - Etsy Shop Manager Uyumlu) ——————————
 
     private Control BuildKpiStrip()
     {
         var strip = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 7,
-            Padding = new Padding(0, 0, 0, 6),
+            ColumnCount = 9,
+            Padding = new Padding(0, 0, 0, 4),
         };
-        for (int i = 0; i < 7; i++)
-            strip.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 7));
+        for (int i = 0; i < 9; i++)
+            strip.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / 9));
 
-        BuildKpiCard(strip, 0, "💰 BRÜT SATIŞ",    _kpiGross,   UiStyle.SuccessColor);
-        BuildKpiCard(strip, 1, "✅ NET GELİR",      _kpiNet,     UiStyle.PrimaryColor);
-        BuildKpiCard(strip, 2, "📋 ETSy ÜCRETLERİ", _kpiFees,   UiStyle.WarningColor);
-        BuildKpiCard(strip, 3, "📢 REKLAM GİDERİ",  _kpiAds,    UiStyle.DangerColor);
-        BuildKpiCard(strip, 4, "↩️ İADELER",        _kpiRefunds, UiStyle.DangerColor);
-        BuildKpiCard(strip, 5, "📦 SİPARİŞ SAYISI", _kpiOrders,  UiStyle.AccentColor);
-        BuildKpiCard(strip, 6, "📐 ORT. SİPARİŞ",   _kpiAov,    UiStyle.TextMuted);
+        BuildKpiCard(strip, 0, "💰 BRÜT SATIŞ",     _kpiGross,        UiStyle.SuccessColor);
+        BuildKpiCard(strip, 1, "📋 ETSY KESİNTİSİ",  _kpiFees,         UiStyle.WarningColor);
+        BuildKpiCard(strip, 2, "📢 İÇ REKLAM",       _kpiInnerAds,     UiStyle.DangerColor);
+        BuildKpiCard(strip, 3, "🌐 DIŞ REKLAM",      _kpiOffsiteAds,   Color.FromArgb(234, 88, 12));
+        BuildKpiCard(strip, 4, "↩️ İADELER",         _kpiRefunds,      UiStyle.DangerColor);
+        BuildKpiCard(strip, 5, "✅ ETSY NET GELİR",  _kpiNet,          UiStyle.PrimaryColor);
+        BuildKpiCard(strip, 6, "📦 SİPARİŞ MALİYETİ",_kpiProductCosts, UiStyle.WarningColor);
+        BuildKpiCard(strip, 7, "💵 GERÇEK NET KÂR", _kpiRealProfit,   UiStyle.SuccessColor);
+        BuildKpiCard(strip, 8, "🏦 BANKA YATIRIMI",  _kpiDeposits,     UiStyle.AccentColor);
 
         return strip;
     }
@@ -280,9 +329,9 @@ internal sealed class FinancialReportForm : Form
         var card = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
-            Margin = new Padding(4, 0, 4, 0),
-            Padding = new Padding(12, 8, 12, 8),
-            CornerRadius = 12,
+            Margin = new Padding(3, 0, 3, 0),
+            Padding = new Padding(8, 6, 8, 6),
+            CornerRadius = 10,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
         };
@@ -293,27 +342,26 @@ internal sealed class FinancialReportForm : Form
             RowCount = 3,
             BackColor = Color.Transparent,
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 4));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 3));
 
         layout.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
             Text = title,
             ForeColor = UiStyle.TextMuted,
-            Font = new Font("Segoe UI", 7.5F, FontStyle.Bold),
+            Font = new Font("Segoe UI", 7F, FontStyle.Bold),
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
 
         valueLabel.Dock = DockStyle.Fill;
         valueLabel.Text = "—";
-        valueLabel.Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold);
+        valueLabel.Font = new Font("Segoe UI Semibold", 13.5F, FontStyle.Bold);
         valueLabel.ForeColor = accentColor;
         valueLabel.TextAlign = ContentAlignment.MiddleLeft;
         layout.Controls.Add(valueLabel, 0, 1);
 
-        // Alt renk çizgisi
         var accent = new Panel
         {
             Dock = DockStyle.Fill,
@@ -326,88 +374,108 @@ internal sealed class FinancialReportForm : Form
         parent.Controls.Add(card, col, 0);
     }
 
-    // — İçerik Alanı (Grafik + Grid) ——————————————————————————————————————————
+    // — Ana Sekme Yapısı —————————————————————————————————————————————————————
 
     private Control BuildContent()
     {
-        var split = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 2,
-        };
-        split.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
-        split.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
+        _tabMain.Dock = DockStyle.Fill;
+        _tabMain.Font = new Font("Segoe UI Semibold", 9.5F);
 
-        split.Controls.Add(BuildChartPanel(), 0, 0);
-        split.Controls.Add(BuildGridPanel(), 0, 1);
+        var tabCharts = new TabPage("📊 Grafik Analizleri")   { Padding = new Padding(6) };
+        var tabPeriod = new TabPage("📅 Dönemsel Muhasebe")   { Padding = new Padding(6) };
+        var tabGrid   = new TabPage("📋 Ödeme Defteri Kayıtları") { Padding = new Padding(6) };
 
-        return split;
+        tabCharts.Controls.Add(BuildChartPanel());
+        tabPeriod.Controls.Add(BuildPeriodPanel());
+        tabGrid.Controls.Add(BuildGridPanel());
+
+        _tabMain.TabPages.Add(tabCharts);
+        _tabMain.TabPages.Add(tabPeriod);
+        _tabMain.TabPages.Add(tabGrid);
+
+        return _tabMain;
     }
-
-    // — Grafik Paneli ——————————————————————————————————————————————————————————
 
     private Control BuildChartPanel()
     {
-        var card = new ModernCardPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 0, 6),
-            Padding = new Padding(12),
-            CornerRadius = 12,
-            CardColor = UiStyle.CardBackground,
-            BorderColor = UiStyle.BorderColor,
-        };
+        var tabCharts = new TabControl { Dock = DockStyle.Fill, Font = new Font("Segoe UI Semibold", 9F) };
 
-        _tabCharts.Dock = DockStyle.Fill;
-        _tabCharts.Font = new Font("Segoe UI Semibold", 9.5F);
-
-        var tabBar   = new TabPage("📊 Aylık Gelir/Gider")  { Padding = new Padding(4) };
-        var tabLine  = new TabPage("📈 Net Gelir Trendi")   { Padding = new Padding(4) };
-        var tabPie   = new TabPage("🥧 Gelir Kaynakları")   { Padding = new Padding(4) };
+        var tabBar  = new TabPage("📊 Aylık Gelir/Gider") { Padding = new Padding(4) };
+        var tabLine = new TabPage("📈 Net Gelir Trendi")  { Padding = new Padding(4) };
+        var tabPie  = new TabPage("🥧 Dağılım Grafiği")  { Padding = new Padding(4) };
 
         tabBar.Controls.Add(_barChart);
         tabLine.Controls.Add(_lineChart);
         tabPie.Controls.Add(_pieChart);
 
-        _tabCharts.TabPages.Add(tabBar);
-        _tabCharts.TabPages.Add(tabLine);
-        _tabCharts.TabPages.Add(tabPie);
+        tabCharts.TabPages.Add(tabBar);
+        tabCharts.TabPages.Add(tabLine);
+        tabCharts.TabPages.Add(tabPie);
 
-        card.Controls.Add(_tabCharts);
-        return card;
+        return tabCharts;
     }
 
-    // — Grid Paneli ————————————————————————————————————————————————————————────
+    private Control BuildPeriodPanel()
+    {
+        var card = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10),
+            CornerRadius = 10,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+        };
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var topBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+        };
+
+        topBar.Controls.Add(new Label
+        {
+            Text = "📅 Dönem Tipi:",
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+            ForeColor = UiStyle.TextDark,
+            Padding = new Padding(0, 4, 6, 0),
+        });
+
+        _cboPeriodType.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboPeriodType.Items.AddRange(new object[] { "Günlük Muhasebe", "Haftalık Muhasebe", "Aylık Muhasebe", "Yıllık Muhasebe" });
+        _cboPeriodType.SelectedIndex = 0;
+        _cboPeriodType.Width = 160;
+        _cboPeriodType.SelectedIndexChanged += (_, _) => UpdatePeriodGrid();
+        topBar.Controls.Add(_cboPeriodType);
+
+        root.Controls.Add(topBar, 0, 0);
+
+        UiStyle.ConfigureBaseGrid(_gridPeriod);
+        _gridPeriod.Dock = DockStyle.Fill;
+        root.Controls.Add(_gridPeriod, 0, 1);
+
+        card.Controls.Add(root);
+        return card;
+    }
 
     private Control BuildGridPanel()
     {
         var card = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
-            Margin = new Padding(0),
-            Padding = new Padding(12),
-            CornerRadius = 12,
+            Padding = new Padding(10),
+            CornerRadius = 10,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
         };
 
-        var inner = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        inner.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        inner.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        inner.BackColor = Color.Transparent;
-
-        inner.Controls.Add(new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = "📋 Defter Kayıtları",
-            Font = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold),
-            ForeColor = UiStyle.TextDark,
-            TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 0);
-
         ConfigureGrid();
-        inner.Controls.Add(_gridEntries, 0, 1);
-        card.Controls.Add(inner);
+        card.Controls.Add(_gridEntries);
         return card;
     }
 
@@ -415,17 +483,7 @@ internal sealed class FinancialReportForm : Form
     {
         UiStyle.ConfigureBaseGrid(_gridEntries);
         _gridEntries.Dock = DockStyle.Fill;
-
-        AddCol("Tarih",         nameof(LedgerRow.Date),        120);
-        AddCol("Tür",           nameof(LedgerRow.TypeLabel),   160);
-        AddCol("Brüt Tutar",    nameof(LedgerRow.AmountStr),   110);
-        AddCol("Net Tutar",     nameof(LedgerRow.NetAmountStr),110);
-        AddCol("Para Birimi",   nameof(LedgerRow.Currency),    90);
-        AddCol("Açıklama",      nameof(LedgerRow.Description), 0, fill: true);
     }
-
-    private static void AddCol(string header, string prop, int width, bool fill = false)
-    { /* Inline helper kullanmak yerine grid extension yapalım */ }
 
     // ── Veri Yükleme ───────────────────────────────────────────────────────────
 
@@ -439,30 +497,27 @@ internal sealed class FinancialReportForm : Form
 
         try
         {
-            var from = new DateTimeOffset(_dtpFrom.Value.Date, TimeSpan.Zero);
-            var to   = new DateTimeOffset(_dtpTo.Value.Date.AddDays(1).AddSeconds(-1), TimeSpan.Zero);
+            var fromDt = DateTime.SpecifyKind(_dtpFrom.Value.Date, DateTimeKind.Unspecified);
+            var toDt   = DateTime.SpecifyKind(_dtpTo.Value.Date.AddDays(1).AddSeconds(-1), DateTimeKind.Unspecified);
+            var from   = new DateTimeOffset(fromDt, TimeZoneInfo.Local.GetUtcOffset(fromDt));
+            var to     = new DateTimeOffset(toDt, TimeZoneInfo.Local.GetUtcOffset(toDt));
 
-            // API key kontrolü
             var settings = EtsyApiSettingsStore.Load();
-            bool hasApiAccess = forceApi
-                && !string.IsNullOrWhiteSpace(settings.AccessToken)
-                && !string.IsNullOrWhiteSpace(settings.ShopId);
+            bool canAttemptApi = settings.HasApiCredentials && (!string.IsNullOrWhiteSpace(settings.AccessToken) || !string.IsNullOrWhiteSpace(settings.RefreshToken));
 
-            if (hasApiAccess)
+            if (canAttemptApi)
             {
-                _isMockMode = false;
-                _report = await _service.GetReportAsync(
-                    settings.ShopId!, settings.Keystring!, settings.AccessToken!, from, to, ct);
-                _lblMode.Text = "🟢 Canlı API";
+                _report = await _service.GetReportAsync(settings, from, to, _numExchangeRate.Value, ct);
+                _lblMode.Text = string.IsNullOrWhiteSpace(settings.ShopId) ? "🟢 Canlı Etsy API" : $"🟢 Canlı Etsy API ({settings.ShopId})";
                 _lblMode.ForeColor = UiStyle.SuccessColor;
+                SetStatus($"✅ Canlı Etsy API verisi yüklendi: {_report.Entries.Count} kayıt | {_report.PeriodStart:dd.MM.yyyy} — {_report.PeriodEnd:dd.MM.yyyy}", UiStyle.SuccessColor);
             }
             else
             {
-                _isMockMode = true;
-                await Task.Delay(400, ct); // animasyon etkisi
-                _report = FinancialReportService.GenerateMockReport(from, to);
-                _lblMode.Text = "🎮 Demo Modu";
+                _report = FinancialReport.Empty;
+                _lblMode.Text = "⚠️ Mağaza Bağlı Değil";
                 _lblMode.ForeColor = UiStyle.WarningColor;
+                SetStatus("⚠️ Gerçek dükkan verilerinizi görüntülemek için '⚙️ API Ayarları' butonuna tıklayarak Etsy mağazanızı bağlayın.", UiStyle.WarningColor);
             }
 
             if (ct.IsCancellationRequested) return;
@@ -470,12 +525,14 @@ internal sealed class FinancialReportForm : Form
             UpdateKpis();
             UpdateCharts();
             UpdateGrid();
-            SetStatus($"{_report.Entries.Count} kayıt | {_report.PeriodStart:dd.MM.yyyy} — {_report.PeriodEnd:dd.MM.yyyy}", UiStyle.TextMuted);
+            UpdatePeriodGrid();
         }
         catch (OperationCanceledException) { /* ignore */ }
         catch (Exception ex)
         {
-            SetStatus($"❌ Hata: {ex.Message}", UiStyle.DangerColor);
+            SetStatus($"❌ Etsy API Hatası: {ex.Message}", UiStyle.DangerColor);
+            _lblMode.Text = "❌ API Bağlantı Hatası";
+            _lblMode.ForeColor = UiStyle.DangerColor;
         }
     }
 
@@ -483,20 +540,77 @@ internal sealed class FinancialReportForm : Form
 
     private void UpdateKpis()
     {
-        string sym = _report.Currency == "USD" ? "$" :
-                     _report.Currency == "EUR" ? "€" :
-                     _report.Currency == "TRY" ? "₺" : _report.Currency + " ";
+        decimal rate = _numExchangeRate.Value;
+        bool showTry = _chkUseTry.Checked && rate > 0;
 
-        _kpiGross.Text   = $"{sym}{_report.TotalGross:N2}";
-        _kpiNet.Text     = $"{sym}{_report.TotalNet:N2}";
-        _kpiFees.Text    = $"{sym}{_report.TotalFees:N2} ({_report.FeeRatePct}%)";
-        _kpiAds.Text     = $"{sym}{_report.TotalAdFees:N2} ({_report.AdSpendPct}%)";
-        _kpiRefunds.Text = $"{sym}{_report.TotalRefunds:N2} ({_report.RefundRatePct}%)";
-        _kpiOrders.Text  = _report.TransactionCount.ToString("N0");
-        _kpiAov.Text     = $"{sym}{_report.AverageOrderValue:N2}";
+        _kpiGross.Text        = showTry ? $"₺{_report.DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate):N2}" : $"${_report.TotalGross:N2}";
+        _kpiFees.Text         = showTry ? $"₺{_report.DailySummaries.Sum(d => d.EtsyFees * d.AverageExchangeRate):N2}" : $"${_report.TotalFees:N2}";
+        _kpiInnerAds.Text     = showTry ? $"₺{_report.DailySummaries.Sum(d => d.InnerAdFees * d.AverageExchangeRate):N2}" : $"${_report.TotalInnerAdFees:N2}";
+        _kpiOffsiteAds.Text   = showTry ? $"₺{_report.DailySummaries.Sum(d => d.OffsiteAdFees * d.AverageExchangeRate):N2}" : $"${_report.TotalOffsiteAdFees:N2}";
+        _kpiRefunds.Text      = showTry ? $"₺{_report.DailySummaries.Sum(d => d.Refunds * d.AverageExchangeRate):N2}"   : $"${_report.TotalRefunds:N2}";
+        _kpiNet.Text          = showTry ? $"₺{_report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate):N2}" : $"${_report.TotalNet:N2}";
+        _kpiProductCosts.Text = showTry ? $"₺{_report.DailySummaries.Sum(d => d.ProductCosts * d.AverageExchangeRate):N2}" : $"${_report.TotalProductCosts:N2}";
 
-        // Net gelirin rengini dinamik ayarla
+        decimal profitUSD = _report.RealNetProfitUSD;
+        decimal profitTRY = _report.DailySummaries.Sum(d => d.RealNetProfitTRY);
+        _kpiRealProfit.Text   = showTry ? $"₺{profitTRY:N2}" : $"${profitUSD:N2}";
+        _kpiRealProfit.ForeColor = profitUSD >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor;
+
+        _kpiDeposits.Text     = showTry ? $"₺{_report.DailySummaries.Sum(d => d.Deposits * d.AverageExchangeRate):N2}"   : $"${_report.TotalDeposits:N2}";
+
         _kpiNet.ForeColor = _report.TotalNet >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor;
+    }
+
+    // ── Dönemsel Muhasebe Grid Güncellemesi ───────────────────────────────────
+
+    private void UpdatePeriodGrid()
+    {
+        _gridPeriod.Columns.Clear();
+        UiStyle.ConfigureBaseGrid(_gridPeriod);
+
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Dönem / Tarih", Name = "Period", Width = 120 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Brüt Satış", Name = "Gross", Width = 100 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Etsy Ücretleri", Name = "Fees", Width = 105 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "İç Reklam", Name = "InnerAds", Width = 100 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Dış Reklam", Name = "OffsiteAds", Width = 100 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "İadeler", Name = "Refunds", Width = 95 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Banka Yatırımı", Name = "Deposits", Width = 110 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ürün Maliyetleri", Name = "Costs", Width = 115 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Etsy Net Gelir", Name = "NetRevenue", Width = 115 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sipariş Gün Kuru", Name = "Rate", Width = 120 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Gerçek Net Kâr ($)", Name = "ProfitUSD", Width = 125 });
+        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Günlük TL Kârı (₺)", Name = "ProfitTRY", Width = 135 });
+
+        List<PeriodFinancialSummary> summaries = _cboPeriodType.SelectedIndex switch
+        {
+            0 => _report.DailySummaries,
+            1 => _report.WeeklySummaries,
+            2 => _report.MonthlySummaries,
+            _ => _report.YearlySummaries,
+        };
+
+        _gridPeriod.Rows.Clear();
+        foreach (var s in summaries)
+        {
+            int idx = _gridPeriod.Rows.Add(
+                s.PeriodLabel,
+                $"${s.GrossSales:N2}",
+                $"${s.EtsyFees:N2}",
+                $"${s.InnerAdFees:N2}",
+                $"${s.OffsiteAdFees:N2}",
+                $"${s.Refunds:N2}",
+                $"${s.Deposits:N2}",
+                $"${s.ProductCosts:N2}",
+                $"${s.EtsyNetRevenue:N2}",
+                $"₺{s.AverageExchangeRate:N2}",
+                $"${s.RealNetProfitUSD:N2}",
+                $"₺{s.RealNetProfitTRY:N2}");
+
+            if (s.RealNetProfitUSD >= 0)
+                _gridPeriod.Rows[idx].DefaultCellStyle.ForeColor = UiStyle.SuccessColor;
+            else
+                _gridPeriod.Rows[idx].DefaultCellStyle.ForeColor = UiStyle.DangerColor;
+        }
     }
 
     // ── Grafik Güncellemesi ────────────────────────────────────────────────────
@@ -507,9 +621,8 @@ internal sealed class FinancialReportForm : Form
         if (months.Count == 0) return;
 
         var labels = months.Select(m => m.MonthName).ToArray();
-        var textPaint = new SolidColorPaint(new SKColor(148, 163, 184)); // TextMuted
+        var textPaint = new SolidColorPaint(new SKColor(148, 163, 184));
 
-        // — Bar Chart (Aylık Gelir/Gider) ——————————————————————————————————————
         var salesVals    = months.Select(m => (double)m.GrossSales).ToArray();
         var netVals      = months.Select(m => (double)m.NetIncome).ToArray();
         var feeVals      = months.Select(m => (double)m.TotalFees).ToArray();
@@ -517,120 +630,38 @@ internal sealed class FinancialReportForm : Form
 
         _barChart.Series = new ISeries[]
         {
-            new ColumnSeries<double>
-            {
-                Name = "Brüt Satış",
-                Values = salesVals,
-                Fill = new SolidColorPaint(new SKColor(16, 185, 129, 200)),  // Emerald
-                Rx = 4, Ry = 4,
-            },
-            new ColumnSeries<double>
-            {
-                Name = "Net Gelir",
-                Values = netVals,
-                Fill = new SolidColorPaint(new SKColor(99, 102, 241, 220)),  // Indigo
-                Rx = 4, Ry = 4,
-            },
-            new ColumnSeries<double>
-            {
-                Name = "Ücretler",
-                Values = feeVals,
-                Fill = new SolidColorPaint(new SKColor(245, 158, 11, 200)),  // Amber
-                Rx = 4, Ry = 4,
-            },
-            new ColumnSeries<double>
-            {
-                Name = "İadeler",
-                Values = refundVals,
-                Fill = new SolidColorPaint(new SKColor(239, 68, 68, 200)),   // Red
-                Rx = 4, Ry = 4,
-            },
+            new ColumnSeries<double> { Name = "Brüt Satış", Values = salesVals, Fill = new SolidColorPaint(new SKColor(16, 185, 129, 200)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "Net Gelir", Values = netVals, Fill = new SolidColorPaint(new SKColor(99, 102, 241, 220)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "Ücretler", Values = feeVals, Fill = new SolidColorPaint(new SKColor(245, 158, 11, 200)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "İadeler", Values = refundVals, Fill = new SolidColorPaint(new SKColor(239, 68, 68, 200)), Rx = 4, Ry = 4 },
         };
-        _barChart.XAxes = new[] { new Axis
-        {
-            Labels = labels,
-            TextSize = 11,
-            LabelsPaint = textPaint,
-        }};
-        _barChart.YAxes = new[] { new Axis
-        {
-            TextSize = 11,
-            LabelsPaint = textPaint,
-            Labeler = v => $"${v:N0}",
-        }};
+        _barChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
+        _barChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"${v:N0}" } };
 
-        // — Line Chart (Net Gelir Trendi) ——————————————————————————————————————
         _lineChart.Series = new ISeries[]
         {
             new LineSeries<double>
             {
-                Name = "Net Gelir",
-                Values = netVals,
-                Fill = new LinearGradientPaint(
-                    new SKColor(99, 102, 241, 60),
-                    new SKColor(99, 102, 241, 0)),
+                Name = "Net Gelir", Values = netVals,
+                Fill = new LinearGradientPaint(new SKColor(99, 102, 241, 60), new SKColor(99, 102, 241, 0)),
                 Stroke = new SolidColorPaint(new SKColor(99, 102, 241), 3),
-                GeometrySize = 8,
-                GeometryFill = new SolidColorPaint(new SKColor(99, 102, 241)),
-                GeometryStroke = new SolidColorPaint(SKColors.White, 2),
-                LineSmoothness = 0.5,
-            },
-            new LineSeries<double>
-            {
-                Name = "Brüt Satış",
-                Values = salesVals,
-                Fill = null,
-                Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 2) { PathEffect = new DashEffect(new float[] { 6, 3 }) },
-                GeometrySize = 0,
-                LineSmoothness = 0.5,
+                GeometrySize = 8, LineSmoothness = 0.5,
             },
         };
         _lineChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
         _lineChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"${v:N0}" } };
 
-        // — Pie Chart (Gelir Kaynakları dağılımı) ——————————————————————————————
-        decimal totalCosts = _report.TotalFees + _report.TotalRefunds + _report.TotalAdFees;
-        decimal netPortion = Math.Max(0, _report.TotalNet);
-
         _pieChart.Series = new ISeries[]
         {
-            new PieSeries<double>
-            {
-                Name = "✅ Net Gelir",
-                Values = new[] { (double)netPortion },
-                Fill = new SolidColorPaint(new SKColor(16, 185, 129)),
-                DataLabelsSize = 13,
-                DataLabelsPaint = new SolidColorPaint(SKColors.White),
-                DataLabelsFormatter = p => $"{p.Coordinate.PrimaryValue:N0}$",
-            },
-            new PieSeries<double>
-            {
-                Name = "📋 Etsy Ücretleri",
-                Values = new[] { (double)_report.TotalFees },
-                Fill = new SolidColorPaint(new SKColor(245, 158, 11)),
-                DataLabelsSize = 11,
-                DataLabelsPaint = new SolidColorPaint(SKColors.White),
-            },
-            new PieSeries<double>
-            {
-                Name = "↩️ İadeler",
-                Values = new[] { (double)_report.TotalRefunds },
-                Fill = new SolidColorPaint(new SKColor(239, 68, 68)),
-                DataLabelsSize = 11,
-                DataLabelsPaint = new SolidColorPaint(SKColors.White),
-            },
-            new PieSeries<double>
-            {
-                Name = "📢 Reklam",
-                Values = new[] { (double)_report.TotalAdFees },
-                Fill = new SolidColorPaint(new SKColor(139, 92, 246)),
-                DataLabelsSize = 11,
-                DataLabelsPaint = new SolidColorPaint(SKColors.White),
-            },
+            new PieSeries<double> { Name = "✅ Net Gelir", Values = new[] { (double)Math.Max(0, _report.TotalNet) }, Fill = new SolidColorPaint(new SKColor(16, 185, 129)) },
+            new PieSeries<double> { Name = "📋 Etsy Ücretleri", Values = new[] { (double)_report.TotalFees }, Fill = new SolidColorPaint(new SKColor(245, 158, 11)) },
+            new PieSeries<double> { Name = "📢 İç Reklam", Values = new[] { (double)_report.TotalInnerAdFees }, Fill = new SolidColorPaint(new SKColor(139, 92, 246)) },
+            new PieSeries<double> { Name = "🌐 Dış Reklam", Values = new[] { (double)_report.TotalOffsiteAdFees }, Fill = new SolidColorPaint(new SKColor(234, 88, 12)) },
+            new PieSeries<double> { Name = "↩️ İadeler", Values = new[] { (double)_report.TotalRefunds }, Fill = new SolidColorPaint(new SKColor(239, 68, 68)) },
         };
     }
 
-    // ── Grid Güncellemesi ──────────────────────────────────────────────────────
+    // ── Defter Kayıtları Grid Güncellemesi ─────────────────────────────────────
 
     private void UpdateGrid()
     {
@@ -651,17 +682,6 @@ internal sealed class FinancialReportForm : Form
             .ToList();
 
         _gridEntries.DataSource = rows;
-
-        // Koşullu renklendirme
-        _gridEntries.CellFormatting += (_, args) =>
-        {
-            if (args.RowIndex < 0 || args.RowIndex >= rows.Count) return;
-            var row = rows[args.RowIndex];
-            if (row.IsCredit)
-                _gridEntries.Rows[args.RowIndex].DefaultCellStyle.ForeColor = UiStyle.SuccessColor;
-            else if (row.IsDebit)
-                _gridEntries.Rows[args.RowIndex].DefaultCellStyle.ForeColor = UiStyle.DangerColor;
-        };
     }
 
     // ── Tarih Aralığı Değişimi ────────────────────────────────────────────────
@@ -671,24 +691,16 @@ internal sealed class FinancialReportForm : Form
         var today = DateTime.Today;
         switch (_cboDateRange.SelectedIndex)
         {
-            case 0: // Son 7 Gün
-                _dtpFrom.Value = today.AddDays(-7); _dtpTo.Value = today; break;
-            case 1: // Son 30 Gün
-                _dtpFrom.Value = today.AddDays(-30); _dtpTo.Value = today; break;
-            case 2: // Son 90 Gün
-                _dtpFrom.Value = today.AddDays(-90); _dtpTo.Value = today; break;
-            case 3: // Bu Ay
-                _dtpFrom.Value = new DateTime(today.Year, today.Month, 1);
-                _dtpTo.Value = today; break;
-            case 4: // Geçen Ay
+            case 0: _dtpFrom.Value = today.AddDays(-7); _dtpTo.Value = today; break;
+            case 1: _dtpFrom.Value = today.AddDays(-30); _dtpTo.Value = today; break;
+            case 2: _dtpFrom.Value = today.AddDays(-90); _dtpTo.Value = today; break;
+            case 3: _dtpFrom.Value = new DateTime(today.Year, today.Month, 1); _dtpTo.Value = today; break;
+            case 4:
                 var lastMonth = today.AddMonths(-1);
                 _dtpFrom.Value = new DateTime(lastMonth.Year, lastMonth.Month, 1);
-                _dtpTo.Value   = new DateTime(lastMonth.Year, lastMonth.Month,
-                    DateTime.DaysInMonth(lastMonth.Year, lastMonth.Month)); break;
-            case 5: // Bu Yıl
-                _dtpFrom.Value = new DateTime(today.Year, 1, 1); _dtpTo.Value = today; break;
-            case 6: // Özel Aralık — tarihçi elle girer
-                return;
+                _dtpTo.Value   = new DateTime(lastMonth.Year, lastMonth.Month, DateTime.DaysInMonth(lastMonth.Year, lastMonth.Month)); break;
+            case 5: _dtpFrom.Value = new DateTime(today.Year, 1, 1); _dtpTo.Value = today; break;
+            case 6: return;
         }
         _ = LoadReportAsync();
     }
@@ -712,53 +724,20 @@ internal sealed class FinancialReportForm : Form
         try
         {
             FinancialReportExporter.ExportToExcel(_report, dlg.FileName);
-            MessageBox.Show($"Excel raporu kaydedildi:\n{dlg.FileName}", "✅ Başarılı",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show($"Excel raporu kaydedildi:\n{dlg.FileName}", "✅ Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
             System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{dlg.FileName}\"");
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Excel dışa aktarma hatası: {ex.Message}", "❌ Hata",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Excel dışa aktarma hatası: {ex.Message}", "❌ Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
-
-    private void OnExportCsv(object? sender, EventArgs e)
-    {
-        if (_report.Entries.Count == 0)
-        {
-            MessageBox.Show("Dışa aktarılacak veri yok.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            return;
-        }
-        using var dlg = new SaveFileDialog
-        {
-            Title = "CSV Raporu Kaydet",
-            Filter = "CSV Dosyası (*.csv)|*.csv",
-            FileName = $"Etsy_Defter_{_report.PeriodStart:yyyyMMdd}_{_report.PeriodEnd:yyyyMMdd}.csv",
-        };
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-        try
-        {
-            FinancialReportExporter.ExportToCsv(_report, dlg.FileName);
-            MessageBox.Show($"CSV raporu kaydedildi:\n{dlg.FileName}", "✅ Başarılı",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"CSV dışa aktarma hatası: {ex.Message}", "❌ Hata",
-                MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-    }
-
-    // ── Yardımcılar ───────────────────────────────────────────────────────────
 
     private void SetStatus(string text, Color color)
     {
         _statusLabel.Text = text;
         _statusLabel.ForeColor = color;
     }
-
-    // ── Grid Satır Modeli ──────────────────────────────────────────────────────
 
     private sealed class LedgerRow(LedgerEntry e)
     {
@@ -769,8 +748,9 @@ internal sealed class FinancialReportForm : Form
             "refund"             => "↩️ İade",
             "listing_fee"        => "📋 Liste Ücreti",
             "transaction_fee"    => "🔄 İşlem Ücreti",
-            "ad_fee"             => "📢 Reklam",
-            "offsite_ads"        => "📢 Dış Reklam",
+            "ad_fee"             => "📢 İç Reklam",
+            "offsite_ads"        => "🌐 Dış Reklam",
+            "deposit"            => "🏦 Banka Yatırımı",
             "shipping"           => "🚚 Kargo",
             "payment_processing" => "💳 Ödeme İşlem",
             _                    => e.Type
@@ -779,10 +759,6 @@ internal sealed class FinancialReportForm : Form
         public string NetAmountStr => $"{e.NetAmount:+#,##0.00;-#,##0.00} {e.Currency}";
         public string Currency     => e.Currency;
         public string Description  => e.Description;
-        public bool   IsCredit     => e.Type is "sale" or "shipping";
-        public bool   IsDebit      => e.Type is "refund" or "listing_fee"
-                                        or "transaction_fee" or "ad_fee"
-                                        or "payment_processing";
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
