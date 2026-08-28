@@ -15,6 +15,11 @@ public sealed record OwnShopReceipt(
     bool IsPaid,
     bool IsCanceled,
     decimal GrandTotal,
+    decimal Subtotal,           // Ürün bedeli (kargo/vergi hariç)
+    decimal ShippingCost,       // Kargo tutarı
+    decimal TotalTaxCost,       // Vergi tutarı
+    decimal DiscountAmt,        // İndirim tutarı
+    bool IsFromOffsiteAds,      // Dış reklam (Offsite Ads) kaynağı mı?
     string CurrencyCode,
     IReadOnlyList<OwnShopTransaction> Transactions);
 

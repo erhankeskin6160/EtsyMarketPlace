@@ -97,9 +97,21 @@ public static class ListingDraftInstructionBuilder
         """
         Field constraints:
         - title_suggestions: exactly 3 items. Each must be a readable English Etsy title under 140 characters. Put the product identity in the first 3-5 words. Avoid vague claims (perfect, best, official, licensed, authentic) unless the source listing explicitly proves them. Do not keyword-stuff; keep titles natural and buyer-friendly.
-        - tag_suggestions: up to 13 items. Each tag must be 20 characters or less. Use multi-word, long-tail buyer search phrases when possible. Do not repeat the same word across more than 3 tags. Every tag must be in English.
+        - tag_suggestions: exactly 13 items.
+          * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase (e.g. "sauron dark tower", "lotr collectible", "fantasy desk decor", "3d printed statue", "geeky boyfriend gift").
+          * STRICTLY FORBIDDEN: NEVER generate single-word tags (such as "gift", "hand", "lotr", "tower", "dark", "painted", "printed").
+          * Each tag must be 20 characters or less in length. Every tag must be in English.
+          * Cover 6 search angles: (1) Product/Character Name, (2) Craft & Technique, (3) Recipient & Gift, (4) Room & Placement, (5) Theme & Universe, (6) Material & Style.
         - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text. Up to 13 items, each 45 characters or less. Never invent materials.
-        - description_draft: write unique, buyer-facing English copy for this exact product. Structure in 4-6 short paragraphs: (1) product identity and appeal, (2) who it is for / use cases, (3) materials, finish, dimensions, (4) care or usage instructions if applicable, (5) publishing review note with any brand/IP risk. Do not start with generic phrases like "This item is prepared as an Etsy-ready product listing". Naturally weave the target keyword into the first paragraph without forcing it.
+        - description_draft: write unique, buyer-facing English copy for this exact product.
+          * CRITICAL RULE: First, thoroughly READ and EXTRACT all authentic product details from the "Current description" (e.g. exact dimensions like 24cm, 3D printing technology, layer line notices, hand-painted details, included items, physical vs digital shipping, packaging, customization/size options).
+          * You MUST PRESERVE all these authentic factual product details. NEVER replace them with generic placeholder sentences (such as "This item is prepared as an Etsy-ready product listing" or "This item is best positioned for buyers interested in..."). Do not start with generic phrases like "This item is prepared as an Etsy-ready product listing". Naturally weave the target keyword into the first paragraph without forcing it.
+          * Structure the new description cleanly in 4-6 short sections:
+            (1) Engaging Hook & Product Identity (naturally weaving in the target keyword in the first sentence).
+            (2) Key Features & Uses (who it is for, display, cosplay, gift).
+            (3) Specifications, Dimensions & Materials (retaining real measurements, finish, filament/resin details).
+            (4) Packaging, Shipping & Customization Options (custom heights, colors, physical item delivery note).
+            (5) Care & Buyer Information.
         - risk_warnings: Turkish language notes. Flag any brand, character, movie, game, or fan-art terms. Include Turkish explanations in parentheses. Example: "Ben 10 ve Omnitrix terimleri telif riski tasiyabilir (Cartoon Network markasi)."
         """;
 

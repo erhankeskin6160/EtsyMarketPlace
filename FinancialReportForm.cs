@@ -28,6 +28,13 @@ internal sealed class FinancialReportForm : Form
     private readonly Label _kpiRealProfit   = new();
     private readonly Label _kpiDeposits     = new();
     private readonly Label _statusLabel     = new();
+    
+    private readonly SimilarProductsWinForms.Controls.AnimatedToolTipForm _customToolTipForm = new();
+    private readonly System.Windows.Forms.Timer _hoverCheckTimer = new() { Interval = 50 };
+    private Control? _hoveredCard = null;
+    private string _salesTooltipText = "";
+    private string _refundsTooltipText = "";
+    private string _costsTooltipText = "";
 
     // ── UI: Filters & Currency ────────────────────────────────────────────────
     private readonly ComboBox _cboDateRange     = new();
@@ -38,14 +45,52 @@ internal sealed class FinancialReportForm : Form
     private readonly Label _lblMode             = new();
 
     // ── UI: Charts & Grids ─────────────────────────────────────────────────────
-    private CartesianChart  _barChart   = null!;
-    private CartesianChart  _lineChart  = null!;
-    private PieChart        _pieChart   = null!;
-    private readonly TabControl _tabMain = new();
+    private CartesianChart  _barChart      = null!;
+    private CartesianChart  _lineChart     = null!;
+    private CartesianChart  _ratioChart    = null!;
+    private CartesianChart  _forecastChart = null!;
+    private PieChart        _pieChart      = null!;
+    private readonly TabControl _tabMain   = new();
+
+    private Label _lblForecastGross  = null!;
+    private Label _lblForecastProfit = null!;
+    private Label _lblForecastOrders = null!;
+    private Label _lblForecastStock  = null!;
+    private FlowLayoutPanel _pnlAiRecommendations = null!;
+    private readonly Label _lblForecastAiBadge = new()
+    {
+        AutoSize = true,
+        Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+        ForeColor = Color.White,
+        BackColor = Color.FromArgb(30, 41, 59),
+        Padding = new Padding(6, 3, 6, 3),
+        Cursor = Cursors.Hand,
+        Anchor = AnchorStyles.Right,
+        Margin = new Padding(0, 2, 6, 0)
+    };
+    private readonly Button _btnRefreshForecastAi = new()
+    {
+        Text = "✨ Canlı CFO Analizi Al",
+        AutoSize = true,
+        Height = 26,
+        FlatStyle = FlatStyle.Flat,
+        BackColor = Color.FromArgb(99, 102, 241),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+        Cursor = Cursors.Hand,
+        Margin = new Padding(0, 1, 0, 0)
+    };
 
     private readonly DataGridView _gridPeriod  = new();
     private readonly DataGridView _gridEntries = new();
+    private readonly DataGridView _gridOrders  = new();
     private readonly ComboBox _cboPeriodType   = new();
+
+    private string _periodSortColumn = "Period";
+    private bool _periodSortAscending = true;
+
+    private string _orderSortColumn = "ODate";
+    private bool _orderSortAscending = false;
 
     public FinancialReportForm()
     {
@@ -75,6 +120,26 @@ internal sealed class FinancialReportForm : Form
         };
 
         _lineChart = new CartesianChart
+        {
+            Dock = DockStyle.Fill,
+            Series = Array.Empty<ISeries>(),
+            XAxes = new[] { new Axis { Labels = Array.Empty<string>(), TextSize = 11 } },
+            YAxes = new[] { new Axis { TextSize = 11, Labeler = v => $"${v:N0}" } },
+            LegendPosition = LiveChartsCore.Measure.LegendPosition.Bottom,
+            BackColor = Color.Transparent,
+        };
+
+        _ratioChart = new CartesianChart
+        {
+            Dock = DockStyle.Fill,
+            Series = Array.Empty<ISeries>(),
+            XAxes = new[] { new Axis { Labels = Array.Empty<string>(), TextSize = 11 } },
+            YAxes = new[] { new Axis { TextSize = 11, Labeler = v => $"%{v:N0}" } },
+            LegendPosition = LiveChartsCore.Measure.LegendPosition.Bottom,
+            BackColor = Color.Transparent,
+        };
+
+        _forecastChart = new CartesianChart
         {
             Dock = DockStyle.Fill,
             Series = Array.Empty<ISeries>(),
@@ -151,7 +216,7 @@ internal sealed class FinancialReportForm : Form
         p.Controls.Add(titlePanel, 0, 0);
 
         _statusLabel.Dock = DockStyle.Fill;
-        _statusLabel.Text = "Veriler yükleniyor...";
+        _statusLabel.Text = $"Son Güncelleme: {DateTime.Now:HH:mm:ss} | API Bağlantısı Başarılı";
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
         _statusLabel.ForeColor = UiStyle.TextMuted;
         _statusLabel.Font = new Font("Segoe UI", 8.5F);
@@ -160,7 +225,73 @@ internal sealed class FinancialReportForm : Form
         return p;
     }
 
-    // — Filtre Çubuğu ——————————————————————————————————————————————————————————
+    private void HoverCheckTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_hoveredCard == null)
+        {
+            _customToolTipForm.HideTooltip();
+            _hoverCheckTimer.Stop();
+            return;
+        }
+
+        Point mousePos = Cursor.Position;
+        Rectangle cardBounds = _hoveredCard.RectangleToScreen(_hoveredCard.ClientRectangle);
+
+        // If mouse left the card, hide tooltip immediately
+        if (!cardBounds.Contains(mousePos))
+        {
+            _customToolTipForm.HideTooltip();
+            _hoveredCard = null;
+            _hoverCheckTimer.Stop();
+        }
+    }
+
+    private void AttachAnimatedHover(Control rootCard, Control currentControl, Func<string> textProvider)
+    {
+        currentControl.MouseEnter += (s, e) => 
+        {
+            if (_hoveredCard == rootCard) return; // Already hovering
+            string text = textProvider();
+            if (string.IsNullOrEmpty(text)) return;
+
+            _hoveredCard = rootCard;
+
+            // Calculate position: centered below the card
+            var cardScreenBounds = rootCard.RectangleToScreen(rootCard.ClientRectangle);
+            int centerX = cardScreenBounds.Left + cardScreenBounds.Width / 2;
+            int belowY = cardScreenBounds.Bottom + 4;
+            var position = new Point(centerX, belowY);
+
+            _customToolTipForm.ShowTooltip(text, position, 2000);
+            _hoverCheckTimer.Start();
+        };
+
+        currentControl.MouseLeave += (s, e) =>
+        {
+            // Small delay before hiding – mouse may just be moving between child controls
+            BeginInvoke((Action)(() =>
+            {
+                if (_hoveredCard != rootCard) return;
+
+                Point mousePos = Cursor.Position;
+                Rectangle cardBounds = rootCard.RectangleToScreen(rootCard.ClientRectangle);
+
+                if (!cardBounds.Contains(mousePos))
+                {
+                    _customToolTipForm.HideTooltip();
+                    _hoveredCard = null;
+                    _hoverCheckTimer.Stop();
+                }
+            }));
+        };
+
+        foreach (Control child in currentControl.Controls)
+        {
+            AttachAnimatedHover(rootCard, child, textProvider);
+        }
+    }
+
+    // — Ana Layout —————————————————————————————————————————————————————————————
 
     private Control BuildFilterBar()
     {
@@ -178,7 +309,8 @@ internal sealed class FinancialReportForm : Form
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // API Ayarları
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // TL Kur Checkbox
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));  // Kur Tutar
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // Excel
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // Excel
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155)); // Telegram
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // Boşluk
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); // Mode etiketi
 
@@ -257,19 +389,20 @@ internal sealed class FinancialReportForm : Form
         bar.Controls.Add(btnApi, 5, 0);
 
         // TL Kur Dönüşüm Checkbox & Input
-        _chkUseTry.Text = "🇹🇷 TL (₺) Kur:";
+        _chkUseTry.Text = "🇹🇷 Oto Kur:";
         _chkUseTry.Dock = DockStyle.Fill;
         _chkUseTry.Checked = true;
         _chkUseTry.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
         _chkUseTry.ForeColor = UiStyle.TextDark;
-        _chkUseTry.CheckedChanged += (_, _) => UpdateKpis();
+        _chkUseTry.CheckedChanged += (_, _) => { UpdateKpis(); UpdateForecastView(); };
         bar.Controls.Add(_chkUseTry, 6, 0);
 
         _numExchangeRate.Dock = DockStyle.Fill;
         _numExchangeRate.DecimalPlaces = 2;
         _numExchangeRate.Maximum = 500;
         _numExchangeRate.Value = 36.50m;
-        _numExchangeRate.ValueChanged += (_, _) => UpdateKpis();
+        _numExchangeRate.Enabled = false; // Kullanıcı artık manuel giremez
+        _numExchangeRate.ValueChanged += (_, _) => { UpdateKpis(); UpdateForecastView(); };
         bar.Controls.Add(_numExchangeRate, 7, 0);
 
         // Excel Butonu
@@ -285,13 +418,52 @@ internal sealed class FinancialReportForm : Form
         btnExcel.Click += OnExportExcel;
         bar.Controls.Add(btnExcel, 8, 0);
 
+        // Telegram Butonu
+        var btnTelegram = new ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "📱 Telegram'a Gönder",
+            NormalColor = Color.FromArgb(14, 165, 233), // Sky Blue #0EA5E9
+            HoverColor = Color.FromArgb(2, 132, 199),
+            ForeColor = Color.White,
+            Margin = new Padding(0, 0, 4, 0),
+        };
+        btnTelegram.Click += async (_, _) =>
+        {
+            btnTelegram.Enabled = false;
+            try
+            {
+                var settings = NotificationSettingsStore.Load();
+                if (!settings.TelegramEnabled || string.IsNullOrWhiteSpace(settings.TelegramBotToken) || string.IsNullOrWhiteSpace(settings.TelegramChatId))
+                {
+                    MessageBox.Show(this, "Telegram bildirimleri kapalı veya Bot Token / Chat ID girilmemiş.\nLütfen Bildirim Ayarları menüsünden Telegram'ı yapılandırın.", "📱 Telegram Raporu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                decimal rate = _numExchangeRate.Value > 0 ? _numExchangeRate.Value : 36.50m;
+                string msgHtml = DailyFinancialReportNotificationService.FormatTelegramReportHtml(_report, rate, isManualTrigger: true, settings.IncludeAiSummaryInNightReport);
+
+                var (success, msg) = await NotificationService.SendTelegramMessageAsync(settings.TelegramBotToken, settings.TelegramChatId, msgHtml);
+                MessageBox.Show(this, msg, "📱 Telegram Finans Raporu", MessageBoxButtons.OK, success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Gönderim hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnTelegram.Enabled = true;
+            }
+        };
+        bar.Controls.Add(btnTelegram, 9, 0);
+
         // Mod Etiketi
         _lblMode.Dock = DockStyle.Fill;
         _lblMode.Text = "🎮 Demo Modu";
         _lblMode.TextAlign = ContentAlignment.MiddleRight;
         _lblMode.ForeColor = UiStyle.WarningColor;
         _lblMode.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-        bar.Controls.Add(_lblMode, 10, 0);
+        bar.Controls.Add(_lblMode, 11, 0);
 
         return bar;
     }
@@ -320,6 +492,31 @@ internal sealed class FinancialReportForm : Form
         BuildKpiCard(strip, 6, "📦 SİPARİŞ MALİYETİ",_kpiProductCosts, UiStyle.WarningColor);
         BuildKpiCard(strip, 7, "💵 GERÇEK NET KÂR", _kpiRealProfit,   UiStyle.SuccessColor);
         BuildKpiCard(strip, 8, "🏦 BANKA YATIRIMI",  _kpiDeposits,     UiStyle.AccentColor);
+
+        // Attach ToolTips after controls are added
+        strip.Layout += (s, e) => 
+        {
+            var grossCard = strip.GetControlFromPosition(0, 0);
+            if (grossCard != null && grossCard.Tag == null)
+            {
+                grossCard.Tag = "attached";
+                AttachAnimatedHover(grossCard, grossCard, () => _salesTooltipText);
+            }
+
+            var refundsCard = strip.GetControlFromPosition(4, 0);
+            if (refundsCard != null && refundsCard.Tag == null)
+            {
+                refundsCard.Tag = "attached";
+                AttachAnimatedHover(refundsCard, refundsCard, () => _refundsTooltipText);
+            }
+
+            var costsCard = strip.GetControlFromPosition(6, 0);
+            if (costsCard != null && costsCard.Tag == null)
+            {
+                costsCard.Tag = "attached";
+                AttachAnimatedHover(costsCard, costsCard, () => _costsTooltipText);
+            }
+        };
 
         return strip;
     }
@@ -381,35 +578,261 @@ internal sealed class FinancialReportForm : Form
         _tabMain.Dock = DockStyle.Fill;
         _tabMain.Font = new Font("Segoe UI Semibold", 9.5F);
 
-        var tabCharts = new TabPage("📊 Grafik Analizleri")   { Padding = new Padding(6) };
-        var tabPeriod = new TabPage("📅 Dönemsel Muhasebe")   { Padding = new Padding(6) };
-        var tabGrid   = new TabPage("📋 Ödeme Defteri Kayıtları") { Padding = new Padding(6) };
+        var tabCharts   = new TabPage("📊 Grafik Analizleri")       { Padding = new Padding(6) };
+        var tabForecast = new TabPage("🔮 AI Kâr & Ciro Tahmini")   { Padding = new Padding(6) };
+        var tabPeriod   = new TabPage("📅 Dönemsel Muhasebe")       { Padding = new Padding(6) };
+        var tabOrders   = new TabPage("📦 Siparişler & Net Kâr")   { Padding = new Padding(6) };
+        var tabGrid     = new TabPage("📋 Ödeme Defteri Kayıtları") { Padding = new Padding(6) };
 
         tabCharts.Controls.Add(BuildChartPanel());
+        tabForecast.Controls.Add(BuildForecastPanel());
         tabPeriod.Controls.Add(BuildPeriodPanel());
+        tabOrders.Controls.Add(BuildOrdersPanel());
         tabGrid.Controls.Add(BuildGridPanel());
 
         _tabMain.TabPages.Add(tabCharts);
+        _tabMain.TabPages.Add(tabForecast);
         _tabMain.TabPages.Add(tabPeriod);
+        _tabMain.TabPages.Add(tabOrders);
         _tabMain.TabPages.Add(tabGrid);
 
         return _tabMain;
+    }
+
+    private Control BuildForecastPanel()
+    {
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            ColumnCount = 1,
+            BackColor = Color.Transparent,
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 115));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        // 1. Üst Satır: 4 Adet Projeksiyon Kartı
+        var kpiGrid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 1,
+            ColumnCount = 4,
+            Margin = new Padding(0, 0, 0, 8),
+            BackColor = Color.Transparent,
+        };
+        for (int i = 0; i < 4; i++)
+            kpiGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+
+        _lblForecastGross  = CreateForecastKpiCard(kpiGrid, 0, "🔮 GELECEK AY BEKLENEN CİRO", "$0 / ₺0", "Min: $0 — Max: $0", UiStyle.PrimaryColor);
+        _lblForecastProfit = CreateForecastKpiCard(kpiGrid, 1, "💵 BEKLENEN GERÇEK NET KÂR", "$0 / ₺0", "Beklenen Kâr Marjı: %0", UiStyle.SuccessColor);
+        _lblForecastOrders = CreateForecastKpiCard(kpiGrid, 2, "📦 TAHMİNİ SİPARİŞ & BÜYÜME", "0 Sipariş", "Aylık Büyüme: %0", Color.FromArgb(56, 189, 248));
+        _lblForecastStock  = CreateForecastKpiCard(kpiGrid, 3, "🖨️ STOK & HAMMADDE İHTİYACI", "0 kg Filament", "0 Adet Kargo Kutusu", UiStyle.WarningColor);
+
+        root.Controls.Add(kpiGrid, 0, 0);
+
+        // 2. Alt Satır: Sol Grafik, Sağ AI Öneri Paneli
+        var split = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 1,
+            ColumnCount = 2,
+            BackColor = Color.Transparent,
+        };
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58f));
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42f));
+
+        // Sol: LiveCharts2 Projeksiyon Grafiği
+        var chartCard = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12),
+            CornerRadius = 10,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+            Margin = new Padding(0, 0, 6, 0)
+        };
+        var chartLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        chartLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        chartLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var chartTitle = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "📈 Gelecek 60 Gün Kâr & Ciro Projeksiyon Eğrisi (Zaman Serisi & Sezonluk Trend)",
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+            ForeColor = UiStyle.TextDark,
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        chartLayout.Controls.Add(chartTitle, 0, 0);
+        chartLayout.Controls.Add(_forecastChart, 0, 1);
+        chartCard.Controls.Add(chartLayout);
+        split.Controls.Add(chartCard, 0, 0);
+
+        // Sağ: AI Finansal Tavsiyeler & Strateji Paneli
+        var adviceCard = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12),
+            CornerRadius = 10,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+            Margin = new Padding(6, 0, 0, 0)
+        };
+        var adviceLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        adviceLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        adviceLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var adviceHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = new Padding(0) };
+        adviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        adviceHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+
+        var adviceTitle = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = "🤖 Yapay Zekâ CFO & Finansal İçgörüler",
+            Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(167, 139, 250), // Vibrant Lavender/Purple
+            TextAlign = ContentAlignment.MiddleLeft
+        };
+        adviceHeader.Controls.Add(adviceTitle, 0, 0);
+
+        var rightPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = new Padding(0)
+        };
+
+        _btnRefreshForecastAi.FlatAppearance.BorderSize = 0;
+        _btnRefreshForecastAi.Click += async (_, _) => await RunLiveAiCfoAnalysisAsync();
+        rightPanel.Controls.Add(_btnRefreshForecastAi);
+
+        _lblForecastAiBadge.Click += (_, _) =>
+        {
+            using var form = new AiOptimizationSettingsForm();
+            form.ShowDialog(this);
+            UpdateForecastAiBadge();
+        };
+        UpdateForecastAiBadge();
+        rightPanel.Controls.Add(_lblForecastAiBadge);
+
+        adviceHeader.Controls.Add(rightPanel, 1, 0);
+        adviceLayout.Controls.Add(adviceHeader, 0, 0);
+
+        _pnlAiRecommendations = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Padding = new Padding(0, 4, 4, 0)
+        };
+        _pnlAiRecommendations.SizeChanged += (_, _) =>
+        {
+            int targetWidth = Math.Max(260, _pnlAiRecommendations.ClientSize.Width - 12);
+            int contentWidth = Math.Max(220, targetWidth - 28);
+            var fTitle = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
+            var fBody = new Font("Segoe UI", 9F);
+
+            foreach (Control c in _pnlAiRecommendations.Controls)
+            {
+                if (c is ModernCardPanel card && card.Controls.Count >= 2)
+                {
+                    if (card.Controls[0] is Label lblT && card.Controls[1] is Label lblB)
+                    {
+                        var tSize = TextRenderer.MeasureText(lblT.Text, fTitle, new Size(contentWidth, 0), TextFormatFlags.WordBreak);
+                        var bSize = TextRenderer.MeasureText(lblB.Text, fBody, new Size(contentWidth, 0), TextFormatFlags.WordBreak);
+                        card.Width = targetWidth;
+                        card.Height = tSize.Height + bSize.Height + 28;
+                        lblT.Location = new Point(14, 8);
+                        lblT.Size = new Size(contentWidth, tSize.Height + 2);
+                        lblB.Location = new Point(14, 12 + tSize.Height);
+                        lblB.Size = new Size(contentWidth, bSize.Height + 6);
+                    }
+                }
+            }
+        };
+
+        adviceLayout.Controls.Add(_pnlAiRecommendations, 0, 1);
+        adviceCard.Controls.Add(adviceLayout);
+        split.Controls.Add(adviceCard, 1, 0);
+
+        root.Controls.Add(split, 0, 1);
+        return root;
+    }
+
+    private Label CreateForecastKpiCard(TableLayoutPanel parent, int col, string title, string val, string sub, Color accentColor)
+    {
+        var card = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12, 8, 12, 8),
+            CornerRadius = 10,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+            Margin = new Padding(col == 0 ? 0 : 4, 0, col == 3 ? 0 : 4, 0),
+        };
+
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3 };
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+
+        var titleLabel = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = title,
+            Font = new Font("Segoe UI Semibold", 7.8F, FontStyle.Bold),
+            ForeColor = UiStyle.TextMuted,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        layout.Controls.Add(titleLabel, 0, 0);
+
+        var valLabel = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = val,
+            Font = new Font("Segoe UI", 13.5F, FontStyle.Bold),
+            ForeColor = accentColor,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        layout.Controls.Add(valLabel, 0, 1);
+
+        var subLabel = new Label
+        {
+            Name = "lblSub",
+            Dock = DockStyle.Fill,
+            Text = sub,
+            Font = new Font("Segoe UI", 8.2F),
+            ForeColor = UiStyle.TextMuted,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        layout.Controls.Add(subLabel, 0, 2);
+
+        card.Controls.Add(layout);
+        parent.Controls.Add(card, col, 0);
+        return valLabel;
     }
 
     private Control BuildChartPanel()
     {
         var tabCharts = new TabControl { Dock = DockStyle.Fill, Font = new Font("Segoe UI Semibold", 9F) };
 
-        var tabBar  = new TabPage("📊 Aylık Gelir/Gider") { Padding = new Padding(4) };
-        var tabLine = new TabPage("📈 Net Gelir Trendi")  { Padding = new Padding(4) };
-        var tabPie  = new TabPage("🥧 Dağılım Grafiği")  { Padding = new Padding(4) };
+        var tabBar   = new TabPage("📊 Aylık Gelir & Kâr (Bar)") { Padding = new Padding(4) };
+        var tabLine  = new TabPage("📈 Gerçek Net Kâr Trendi")    { Padding = new Padding(4) };
+        var tabRatio = new TabPage("🎯 Kâr Marjı & Oranlar (%)")  { Padding = new Padding(4) };
+        var tabPie   = new TabPage("🥧 Maliyet & Gider Dağılımı") { Padding = new Padding(4) };
 
         tabBar.Controls.Add(_barChart);
         tabLine.Controls.Add(_lineChart);
+        tabRatio.Controls.Add(_ratioChart);
         tabPie.Controls.Add(_pieChart);
 
         tabCharts.TabPages.Add(tabBar);
         tabCharts.TabPages.Add(tabLine);
+        tabCharts.TabPages.Add(tabRatio);
         tabCharts.TabPages.Add(tabPie);
 
         return tabCharts;
@@ -457,6 +880,7 @@ internal sealed class FinancialReportForm : Form
 
         UiStyle.ConfigureBaseGrid(_gridPeriod);
         _gridPeriod.Dock = DockStyle.Fill;
+        _gridPeriod.ColumnHeaderMouseClick += OnPeriodGridColumnHeaderClick;
         root.Controls.Add(_gridPeriod, 0, 1);
 
         card.Controls.Add(root);
@@ -479,6 +903,120 @@ internal sealed class FinancialReportForm : Form
         return card;
     }
 
+    private Control BuildOrdersPanel()
+    {
+        var card = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10),
+            CornerRadius = 10,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+        };
+
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        // Özet bilgi etiketi (üstte)
+        var summaryLabel = new Label
+        {
+            Name = "lblOrderSummary",
+            Dock = DockStyle.Fill,
+            Text = "📦 Sipariş listesi yükleniyor...",
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+            ForeColor = UiStyle.TextMuted,
+            TextAlign = ContentAlignment.MiddleLeft,
+        };
+        root.Controls.Add(summaryLabel, 0, 0);
+
+        // Grid yapılandır
+        UiStyle.ConfigureBaseGrid(_gridOrders);
+        _gridOrders.Dock = DockStyle.Fill;
+        _gridOrders.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        _gridOrders.MultiSelect = false;
+        _gridOrders.CellDoubleClick += OnOrderGridDoubleClick;
+        _gridOrders.ColumnHeaderMouseClick += OnOrdersGridColumnHeaderClick;
+        var ctxMenu = new ContextMenuStrip();
+        
+        var mnuDetails = new ToolStripMenuItem("📄 Sipariş Detaylarını Gör", null, (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count == 0) return;
+            var row = _gridOrders.SelectedRows[0];
+            if (row.Tag is OrderFinancialSummary order)
+            {
+                using var form = new OrderDetailsForm(order);
+                if (form.ShowDialog(this) == DialogResult.OK)
+                {
+                    _ = LoadReportAsync();
+                }
+            }
+        });
+
+        var mnuOpenInvoice = new ToolStripMenuItem("📄 Kargo Faturasını Aç / Önizle", null, (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count == 0) return;
+            var row = _gridOrders.SelectedRows[0];
+            if (row.Tag is OrderFinancialSummary order)
+            {
+                if (order.HasInvoice)
+                {
+                    InvoiceStorageService.OpenInvoice(order.InvoiceFilePath);
+                }
+                else
+                {
+                    MessageBox.Show(this, "Bu ürün/sipariş için yüklenmiş bir kargo faturası bulunamadı.\n'Hızlı Maliyet Düzenle' seçeneğiyle fatura (PDF/Resim) ekleyebilirsiniz.", "Fatura Bulunamadı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        });
+        
+        var mnuQuickCost = new ToolStripMenuItem("💰 Hızlı Maliyet & Fatura Düzenle", null, async (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count == 0) return;
+            var row = _gridOrders.SelectedRows[0];
+            if (row.Tag is OrderFinancialSummary order)
+            {
+                var repo = new SqliteProductCostRepository();
+                var currentCost = await repo.GetByIdAsync(order.ListingId.ToString());
+                
+                using var popup = new CostDetailsPopupForm(currentCost);
+                if (popup.ShowDialog(this) == DialogResult.OK)
+                {
+                    var newEntry = new ProductCostEntry(
+                        order.ListingId.ToString(), 
+                        order.ProductTitle, 
+                        popup.UnitCost, 
+                        popup.UnitShippingCost, 
+                        popup.UnitPackagingCost, 
+                        DateTimeOffset.UtcNow,
+                        popup.InvoiceFilePath);
+                        
+                    await repo.SaveAsync(newEntry);
+                    _ = LoadReportAsync();
+                }
+            }
+        });
+        
+        ctxMenu.Items.Add(mnuDetails);
+        ctxMenu.Items.Add(mnuOpenInvoice);
+        ctxMenu.Items.Add(mnuQuickCost);
+        _gridOrders.ContextMenuStrip = ctxMenu;
+
+        _gridOrders.CellMouseDown += (s, e) =>
+        {
+            if (e.Button == MouseButtons.Right && e.RowIndex >= 0)
+            {
+                _gridOrders.ClearSelection();
+                _gridOrders.Rows[e.RowIndex].Selected = true;
+            }
+        };
+
+        root.Controls.Add(_gridOrders, 0, 1);
+
+        card.Controls.Add(root);
+        return card;
+    }
+
     private void ConfigureGrid()
     {
         UiStyle.ConfigureBaseGrid(_gridEntries);
@@ -493,7 +1031,17 @@ internal sealed class FinancialReportForm : Form
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
 
-        SetStatus("⏳ Yükleniyor...", UiStyle.TextMuted);
+        _statusLabel.Text = "Veriler yükleniyor... (Kur bilgileri güncelleniyor)";
+        _statusLabel.ForeColor = UiStyle.PrimaryColor;
+        Application.DoEvents();
+
+        try
+        {
+            // O günkü (güncel) kuru çek ve kutuya otomatik yaz
+            decimal todayRate = await new ExchangeRateService().GetHistoricalRateAsync(DateTime.UtcNow);
+            _numExchangeRate.Value = todayRate;
+        }
+        catch { /* ignored, fallback is used */ }
 
         try
         {
@@ -524,8 +1072,10 @@ internal sealed class FinancialReportForm : Form
 
             UpdateKpis();
             UpdateCharts();
+            UpdateForecastView();
             UpdateGrid();
             UpdatePeriodGrid();
+            UpdateOrdersGrid();
         }
         catch (OperationCanceledException) { /* ignore */ }
         catch (Exception ex)
@@ -543,45 +1093,277 @@ internal sealed class FinancialReportForm : Form
         decimal rate = _numExchangeRate.Value;
         bool showTry = _chkUseTry.Checked && rate > 0;
 
-        _kpiGross.Text        = showTry ? $"₺{_report.DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate):N2}" : $"${_report.TotalGross:N2}";
-        _kpiFees.Text         = showTry ? $"₺{_report.DailySummaries.Sum(d => d.EtsyFees * d.AverageExchangeRate):N2}" : $"${_report.TotalFees:N2}";
-        _kpiInnerAds.Text     = showTry ? $"₺{_report.DailySummaries.Sum(d => d.InnerAdFees * d.AverageExchangeRate):N2}" : $"${_report.TotalInnerAdFees:N2}";
-        _kpiOffsiteAds.Text   = showTry ? $"₺{_report.DailySummaries.Sum(d => d.OffsiteAdFees * d.AverageExchangeRate):N2}" : $"${_report.TotalOffsiteAdFees:N2}";
-        _kpiRefunds.Text      = showTry ? $"₺{_report.DailySummaries.Sum(d => d.Refunds * d.AverageExchangeRate):N2}"   : $"${_report.TotalRefunds:N2}";
-        _kpiNet.Text          = showTry ? $"₺{_report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate):N2}" : $"${_report.TotalNet:N2}";
-        _kpiProductCosts.Text = showTry ? $"₺{_report.DailySummaries.Sum(d => d.ProductCosts * d.AverageExchangeRate):N2}" : $"${_report.TotalProductCosts:N2}";
+        string FormatKpi(decimal usdValue, decimal tryValue)
+        {
+            decimal val = showTry ? tryValue : usdValue;
+            string prefix = showTry ? "₺" : "$";
+            return val < 0 ? $"-{prefix}{Math.Abs(val):N2}" : $"{prefix}{val:N2}";
+        }
+
+        _kpiGross.Text        = FormatKpi(_report.TotalGross, _report.DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate));
+        _kpiFees.Text         = FormatKpi(_report.TotalFees, _report.DailySummaries.Sum(d => d.EtsyFees * d.AverageExchangeRate));
+        _kpiInnerAds.Text     = FormatKpi(_report.TotalInnerAdFees, _report.DailySummaries.Sum(d => d.InnerAdFees * d.AverageExchangeRate));
+        _kpiOffsiteAds.Text   = FormatKpi(_report.TotalOffsiteAdFees, _report.DailySummaries.Sum(d => d.OffsiteAdFees * d.AverageExchangeRate));
+        _kpiRefunds.Text      = FormatKpi(_report.TotalRefunds, _report.DailySummaries.Sum(d => d.Refunds * d.AverageExchangeRate));
+        _kpiNet.Text          = FormatKpi(_report.TotalNet, _report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate));
+        _kpiProductCosts.Text = FormatKpi(-_report.TotalProductCosts, -_report.DailySummaries.Sum(d => d.ProductCosts * d.AverageExchangeRate));
 
         decimal profitUSD = _report.RealNetProfitUSD;
         decimal profitTRY = _report.DailySummaries.Sum(d => d.RealNetProfitTRY);
-        _kpiRealProfit.Text   = showTry ? $"₺{profitTRY:N2}" : $"${profitUSD:N2}";
+        _kpiRealProfit.Text   = FormatKpi(profitUSD, profitTRY);
         _kpiRealProfit.ForeColor = profitUSD >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor;
 
-        _kpiDeposits.Text     = showTry ? $"₺{_report.DailySummaries.Sum(d => d.Deposits * d.AverageExchangeRate):N2}"   : $"${_report.TotalDeposits:N2}";
+        if (_report.IsFallbackMode)
+        {
+            _kpiDeposits.Text = "YETKİ YOK";
+            _kpiDeposits.ForeColor = UiStyle.DangerColor;
+            _kpiDeposits.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
+        }
+        else
+        {
+            _kpiDeposits.Text = FormatKpi(_report.TotalDeposits, _report.DailySummaries.Sum(d => d.Deposits * d.AverageExchangeRate));
+            _kpiDeposits.ForeColor = UiStyle.AccentColor;
+            _kpiDeposits.Font = new Font("Segoe UI Semibold", 13.5F, FontStyle.Bold);
+        }
 
         _kpiNet.ForeColor = _report.TotalNet >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor;
+
+        UpdateRefundsToolTip(showTry);
+        UpdateSalesToolTip(showTry);
+        UpdateCostsToolTip(showTry);
+    }
+
+    private void UpdateRefundsToolTip(bool showTry)
+    {
+        if (_report.IsFallbackMode) return;
+
+        var refundEntries = _report.Entries.Where(e => e.Type == "refund").ToList();
+        var sb = new System.Text.StringBuilder();
+
+        if (refundEntries.Count == 0)
+        {
+            sb.AppendLine("Bu dönemde hiç iade bulunmuyor.");
+        }
+        else
+        {
+            sb.AppendLine($"🔴 Toplam {refundEntries.Count} adet iade işlemi yapıldı:\n");
+            sb.AppendLine("Tarih       | Müşteri        | Tutar       | Sipariş & Ürün Detayı");
+            sb.AppendLine(new string('-', 90));
+            
+            foreach (var r in refundEntries.Take(15))
+            {
+                decimal displayAmt = showTry ? Math.Abs(r.Amount * r.ExchangeRate) : Math.Abs(r.Amount);
+                string curSymbol = showTry ? "₺" : "$";
+                string dateStr = r.CreatedAt.ToString("dd.MM.yy");
+                
+                string title = r.Description;
+                string buyer = "Bilinmiyor";
+                string qtyInfo = "";
+                
+                var match = System.Text.RegularExpressions.Regex.Match(r.Description, @"\d{9,}");
+                if (match.Success && long.TryParse(match.Value, out long receiptId))
+                {
+                    var order = _report.OrderSummaries.FirstOrDefault(o => o.ReceiptId == receiptId);
+                    if (order != null)
+                    {
+                        title = $"Sipariş #{receiptId} - {order.ProductTitle}";
+                        qtyInfo = $" ({order.Quantity} Adet)";
+                    }
+                }
+                
+                if (title.Length > 45) title = title[..42] + "...";
+                if (buyer.Length > 12) buyer = buyer[..10] + "..";
+
+                sb.AppendLine($"{dateStr,-10} | {buyer,-14} | {curSymbol}{displayAmt,8:N2} | {title}{qtyInfo}");
+            }
+
+            if (refundEntries.Count > 15)
+            {
+                sb.AppendLine($"\n... ve {refundEntries.Count - 15} iade daha.");
+            }
+        }
+
+        _refundsTooltipText = sb.ToString();
+    }
+
+    private void UpdateSalesToolTip(bool showTry)
+    {
+        if (_report.IsFallbackMode) return;
+
+        var salesEntries = _report.Entries.Where(e => e.Type == "sale").ToList();
+        var sb = new System.Text.StringBuilder();
+
+        if (salesEntries.Count == 0)
+        {
+            sb.AppendLine("Bu dönemde hiç satış bulunmuyor.");
+        }
+        else
+        {
+            sb.AppendLine($"🟢 Toplam {salesEntries.Count} adet satış işlemi yapıldı:\n");
+            sb.AppendLine("Tarih       | Müşteri        | Tutar       | Sipariş & Ürün Detayı");
+            sb.AppendLine(new string('-', 90));
+            
+            foreach (var r in salesEntries.Take(15))
+            {
+                decimal displayAmt = showTry ? Math.Abs(r.Amount * r.ExchangeRate) : Math.Abs(r.Amount);
+                string curSymbol = showTry ? "₺" : "$";
+                string dateStr = r.CreatedAt.ToString("dd.MM.yy");
+                
+                string title = r.Description;
+                string buyer = "Bilinmiyor";
+                string qtyInfo = "";
+
+                var match = System.Text.RegularExpressions.Regex.Match(r.Description, @"\d{9,}");
+                if (match.Success && long.TryParse(match.Value, out long receiptId))
+                {
+                    var order = _report.OrderSummaries.FirstOrDefault(o => o.ReceiptId == receiptId);
+                    if (order != null)
+                    {
+                        title = $"Sipariş #{receiptId} - {order.ProductTitle}";
+                        qtyInfo = $" ({order.Quantity} Adet)";
+                    }
+                }
+                
+                if (title.Length > 45) title = title[..42] + "...";
+                if (buyer.Length > 12) buyer = buyer[..10] + "..";
+
+                sb.AppendLine($"{dateStr,-10} | {buyer,-14} | {curSymbol}{displayAmt,8:N2} | {title}{qtyInfo}");
+            }
+
+            if (salesEntries.Count > 15)
+            {
+                sb.AppendLine($"\n... ve {salesEntries.Count - 15} satış daha.");
+            }
+        }
+
+        _salesTooltipText = sb.ToString();
+    }
+
+    private void UpdateCostsToolTip(bool showTry)
+    {
+        var orders = _report.OrderSummaries;
+        var sb = new System.Text.StringBuilder();
+
+        decimal totalCOGS_USD = orders.Sum(o => o.ProductCost);
+        decimal totalShipping_USD = orders.Sum(o => o.TotalOrderShippingCost);
+        decimal totalProduction_USD = orders.Sum(o => o.TotalOrderProductionCost);
+        decimal totalPackaging_USD = orders.Sum(o => o.TotalOrderPackagingCost);
+
+        decimal totalCOGS_TRY = orders.Sum(o => Math.Round(o.ProductCost * o.ExchangeRate, 2));
+        decimal totalShipping_TRY = orders.Sum(o => Math.Round(o.TotalOrderShippingCost * o.ExchangeRate, 2));
+        decimal totalProduction_TRY = orders.Sum(o => Math.Round(o.TotalOrderProductionCost * o.ExchangeRate, 2));
+        decimal totalPackaging_TRY = orders.Sum(o => Math.Round(o.TotalOrderPackagingCost * o.ExchangeRate, 2));
+
+        string cur = showTry ? "₺" : "$";
+        decimal dispCOGS = showTry ? totalCOGS_TRY : totalCOGS_USD;
+        decimal dispShip = showTry ? totalShipping_TRY : totalShipping_USD;
+        decimal dispProd = showTry ? totalProduction_TRY : totalProduction_USD;
+        decimal dispPack = showTry ? totalPackaging_TRY : totalPackaging_USD;
+
+        double shipShare = totalCOGS_USD > 0 ? (double)(totalShipping_USD / totalCOGS_USD * 100) : 0;
+        int invoiceCount = orders.Count(o => o.HasInvoice);
+
+        sb.AppendLine($"📦 TOPLAM SİPARİŞ MALİYETİ (COGS): {cur}{dispCOGS:N2}");
+        sb.AppendLine($"🚚 ├─ Toplam Kargo Maliyeti     : {cur}{dispShip:N2} (Maliyetin %{shipShare:N1}'i)");
+        sb.AppendLine($"🏭 ├─ Toplam Üretim / Hammadde   : {cur}{dispProd:N2}");
+        sb.AppendLine($"🎁 └─ Toplam Paketleme Maliyeti : {cur}{dispPack:N2}");
+        sb.AppendLine($"📄 Sistemde Kayıtlı Kargo Faturası: {invoiceCount} adet\n");
+
+        if (orders.Count == 0)
+        {
+            sb.AppendLine("Bu dönemde henüz sipariş kaydı bulunmuyor.");
+        }
+        else
+        {
+            sb.AppendLine("Tarih       | Sipariş No  | Adet | Kargo Maliyeti | Fatura | Ürün Başlığı");
+            sb.AppendLine(new string('-', 95));
+
+            foreach (var o in orders.Take(15))
+            {
+                string dateStr = o.OrderDate.ToString("dd.MM.yy");
+                string orderNo = $"#{o.ReceiptId}";
+                decimal orderShipDisp = showTry ? Math.Round(o.TotalOrderShippingCost * o.ExchangeRate, 2) : o.TotalOrderShippingCost;
+                string invoiceStatus = o.HasInvoice ? "✅ Var" : "—";
+                string title = o.ProductTitle;
+                if (title.Length > 36) title = title[..33] + "...";
+
+                sb.AppendLine($"{dateStr,-10} | {orderNo,-11} | {o.Quantity,4} | {cur}{orderShipDisp,12:N2} | {invoiceStatus,-6} | {title}");
+            }
+
+            if (orders.Count > 15)
+            {
+                sb.AppendLine($"\n... ve {orders.Count - 15} sipariş daha.");
+            }
+        }
+
+        _costsTooltipText = sb.ToString();
     }
 
     // ── Dönemsel Muhasebe Grid Güncellemesi ───────────────────────────────────
+
+    private void OnPeriodGridColumnHeaderClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.ColumnIndex < 0 || e.ColumnIndex >= _gridPeriod.Columns.Count) return;
+        string colName = _gridPeriod.Columns[e.ColumnIndex].Name;
+
+        if (_periodSortColumn == colName)
+        {
+            _periodSortAscending = !_periodSortAscending;
+        }
+        else
+        {
+            _periodSortColumn = colName;
+            // Dönem/Tarih için varsayılan A-Z / Kronolojik (true), Sayısal kâr/ciro sütunları için varsayılan Yüksekten Düşüğe (false)
+            _periodSortAscending = (colName == "Period");
+        }
+
+        UpdatePeriodGrid();
+    }
 
     private void UpdatePeriodGrid()
     {
         _gridPeriod.Columns.Clear();
         UiStyle.ConfigureBaseGrid(_gridPeriod);
 
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Dönem / Tarih", Name = "Period", Width = 120 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Brüt Satış", Name = "Gross", Width = 100 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Etsy Ücretleri", Name = "Fees", Width = 105 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "İç Reklam", Name = "InnerAds", Width = 100 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Dış Reklam", Name = "OffsiteAds", Width = 100 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "İadeler", Name = "Refunds", Width = 95 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Banka Yatırımı", Name = "Deposits", Width = 110 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ürün Maliyetleri", Name = "Costs", Width = 115 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Etsy Net Gelir", Name = "NetRevenue", Width = 115 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sipariş Gün Kuru", Name = "Rate", Width = 120 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Gerçek Net Kâr ($)", Name = "ProfitUSD", Width = 125 });
-        _gridPeriod.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Günlük TL Kârı (₺)", Name = "ProfitTRY", Width = 135 });
+        AddPeriodCol("Dönem / Tarih", "Period", 120);
+        AddPeriodCol("Brüt Satış", "Gross", 100);
+        AddPeriodCol("Etsy Ücretleri", "Fees", 105);
+        AddPeriodCol("İç Reklam", "InnerAds", 100);
+        AddPeriodCol("Dış Reklam", "OffsiteAds", 100);
+        AddPeriodCol("İadeler", "Refunds", 95);
+        AddPeriodCol("Banka Yatırımı", "Deposits", 110);
+        AddPeriodCol("Ürün Maliyetleri", "Costs", 115);
+        AddPeriodCol("Etsy Net Gelir", "NetRevenue", 115);
+        AddPeriodCol("Sipariş Gün Kuru", "Rate", 120);
+        AddPeriodCol("Gerçek Net Kâr ($)", "ProfitUSD", 125);
+        AddPeriodCol("Günlük TL Kârı (₺)", "ProfitTRY", 135);
 
-        List<PeriodFinancialSummary> summaries = _cboPeriodType.SelectedIndex switch
+        void AddPeriodCol(string headerText, string name, int width)
+        {
+            string displayHeader = headerText;
+            if (_periodSortColumn == name)
+            {
+                displayHeader += _periodSortAscending ? " ▲" : " ▼";
+            }
+            var col = new DataGridViewTextBoxColumn
+            {
+                HeaderText = displayHeader,
+                Name = name,
+                Width = width,
+                SortMode = DataGridViewColumnSortMode.Programmatic
+            };
+            _gridPeriod.Columns.Add(col);
+            try
+            {
+                if (_periodSortColumn == name)
+                {
+                    col.HeaderCell.SortGlyphDirection = _periodSortAscending ? SortOrder.Ascending : SortOrder.Descending;
+                }
+            }
+            catch { /* ignore */ }
+        }
+
+        List<PeriodFinancialSummary> rawSummaries = _cboPeriodType.SelectedIndex switch
         {
             0 => _report.DailySummaries,
             1 => _report.WeeklySummaries,
@@ -589,8 +1371,25 @@ internal sealed class FinancialReportForm : Form
             _ => _report.YearlySummaries,
         };
 
+        IEnumerable<PeriodFinancialSummary> sorted = _periodSortColumn switch
+        {
+            "Period" => _periodSortAscending ? rawSummaries.OrderBy(s => s.SortDate) : rawSummaries.OrderByDescending(s => s.SortDate),
+            "Gross" => _periodSortAscending ? rawSummaries.OrderBy(s => s.GrossSales) : rawSummaries.OrderByDescending(s => s.GrossSales),
+            "Fees" => _periodSortAscending ? rawSummaries.OrderBy(s => s.EtsyFees) : rawSummaries.OrderByDescending(s => s.EtsyFees),
+            "InnerAds" => _periodSortAscending ? rawSummaries.OrderBy(s => s.InnerAdFees) : rawSummaries.OrderByDescending(s => s.InnerAdFees),
+            "OffsiteAds" => _periodSortAscending ? rawSummaries.OrderBy(s => s.OffsiteAdFees) : rawSummaries.OrderByDescending(s => s.OffsiteAdFees),
+            "Refunds" => _periodSortAscending ? rawSummaries.OrderBy(s => s.Refunds) : rawSummaries.OrderByDescending(s => s.Refunds),
+            "Deposits" => _periodSortAscending ? rawSummaries.OrderBy(s => s.Deposits) : rawSummaries.OrderByDescending(s => s.Deposits),
+            "Costs" => _periodSortAscending ? rawSummaries.OrderBy(s => s.ProductCosts) : rawSummaries.OrderByDescending(s => s.ProductCosts),
+            "NetRevenue" => _periodSortAscending ? rawSummaries.OrderBy(s => s.EtsyNetRevenue) : rawSummaries.OrderByDescending(s => s.EtsyNetRevenue),
+            "Rate" => _periodSortAscending ? rawSummaries.OrderBy(s => s.AverageExchangeRate) : rawSummaries.OrderByDescending(s => s.AverageExchangeRate),
+            "ProfitUSD" => _periodSortAscending ? rawSummaries.OrderBy(s => s.RealNetProfitUSD) : rawSummaries.OrderByDescending(s => s.RealNetProfitUSD),
+            "ProfitTRY" => _periodSortAscending ? rawSummaries.OrderBy(s => s.RealNetProfitTRY) : rawSummaries.OrderByDescending(s => s.RealNetProfitTRY),
+            _ => _periodSortAscending ? rawSummaries.OrderBy(s => s.SortDate) : rawSummaries.OrderByDescending(s => s.SortDate)
+        };
+
         _gridPeriod.Rows.Clear();
-        foreach (var s in summaries)
+        foreach (var s in sorted)
         {
             int idx = _gridPeriod.Rows.Add(
                 s.PeriodLabel,
@@ -606,6 +1405,8 @@ internal sealed class FinancialReportForm : Form
                 $"${s.RealNetProfitUSD:N2}",
                 $"₺{s.RealNetProfitTRY:N2}");
 
+            _gridPeriod.Rows[idx].Tag = s;
+
             if (s.RealNetProfitUSD >= 0)
                 _gridPeriod.Rows[idx].DefaultCellStyle.ForeColor = UiStyle.SuccessColor;
             else
@@ -613,52 +1414,499 @@ internal sealed class FinancialReportForm : Form
         }
     }
 
+    // ── Sipariş Net Kâr Grid Güncellemesi ─────────────────────────────────────
+
+    private void OnOrdersGridColumnHeaderClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.ColumnIndex < 0 || e.ColumnIndex >= _gridOrders.Columns.Count) return;
+        string colName = _gridOrders.Columns[e.ColumnIndex].Name;
+
+        if (_orderSortColumn == colName)
+        {
+            _orderSortAscending = !_orderSortAscending;
+        }
+        else
+        {
+            _orderSortColumn = colName;
+            _orderSortAscending = (colName == "OTitle");
+        }
+
+        UpdateOrdersGrid();
+    }
+
+    private void UpdateOrdersGrid()
+    {
+        _gridOrders.Columns.Clear();
+        UiStyle.ConfigureBaseGrid(_gridOrders);
+
+        AddOrderCol("Tarih", "ODate", 120);
+        AddOrderCol("Sipariş No", "OReceiptId", 100);
+        AddOrderCol("Ürün", "OTitle", 0, fill: true);
+        AddOrderCol("Adet", "OQty", 60);
+        AddOrderCol("Müşteri Ödemesi ($)", "OGross", 135);
+        AddOrderCol("Etsy Kesimleri ($)", "OFees", 135);
+        AddOrderCol("Dış Reklam ($)", "OAds", 110);
+        AddOrderCol("Ürün Maliyeti ($)", "OCost", 125);
+        AddOrderCol("Net Kâr ($)", "OProfitUSD", 110);
+        AddOrderCol("Kur (₺)", "ORate", 85);
+        AddOrderCol("Net Kâr (₺)", "OProfitTRY", 115);
+        AddOrderCol("Maliyet", "OCostFlag", 75);
+
+        void AddOrderCol(string headerText, string name, int width, bool fill = false)
+        {
+            string displayHeader = headerText;
+            if (_orderSortColumn == name)
+            {
+                displayHeader += _orderSortAscending ? " ▲" : " ▼";
+            }
+            var col = new DataGridViewTextBoxColumn
+            {
+                HeaderText = displayHeader,
+                Name = name,
+                Width = width,
+                AutoSizeMode = fill ? DataGridViewAutoSizeColumnMode.Fill : DataGridViewAutoSizeColumnMode.None,
+                SortMode = DataGridViewColumnSortMode.Programmatic
+            };
+            _gridOrders.Columns.Add(col);
+            try
+            {
+                if (_orderSortColumn == name)
+                {
+                    col.HeaderCell.SortGlyphDirection = _orderSortAscending ? SortOrder.Ascending : SortOrder.Descending;
+                }
+            }
+            catch { /* ignore */ }
+        }
+
+        var orders = _report.OrderSummaries;
+        _gridOrders.Rows.Clear();
+
+        // Özet etiketi güncelle
+        var lbl = _gridOrders.Parent?.Controls.OfType<Label>().FirstOrDefault(l => l.Name == "lblOrderSummary")
+                ?? Controls.Find("lblOrderSummary", true).OfType<Label>().FirstOrDefault();
+        if (lbl != null)
+        {
+            int missingCost = orders.Count(o => !o.HasCostData);
+            decimal totalNetUSD = orders.Sum(o => o.NetProfitUSD);
+            decimal totalNetTRY = orders.Sum(o => o.NetProfitTRY);
+            lbl.Text = $"📦 {orders.Count} sipariş  |  Toplam Net Kâr: ${totalNetUSD:N2}  /  ₺{totalNetTRY:N2}" +
+                       (missingCost > 0 ? $"  |  ⚠️ {missingCost} siparişin maliyeti girilmemiş (çift tıklayın)" : "  |  ✅ Tüm maliyetler girilmiş");
+            lbl.ForeColor = missingCost > 0 ? UiStyle.WarningColor : UiStyle.SuccessColor;
+        }
+
+        IEnumerable<OrderFinancialSummary> sorted = _orderSortColumn switch
+        {
+            "ODate" => _orderSortAscending ? orders.OrderBy(o => o.OrderDate) : orders.OrderByDescending(o => o.OrderDate),
+            "OReceiptId" => _orderSortAscending ? orders.OrderBy(o => o.ReceiptId) : orders.OrderByDescending(o => o.ReceiptId),
+            "OTitle" => _orderSortAscending ? orders.OrderBy(o => o.ProductTitle) : orders.OrderByDescending(o => o.ProductTitle),
+            "OQty" => _orderSortAscending ? orders.OrderBy(o => o.Quantity) : orders.OrderByDescending(o => o.Quantity),
+            "OGross" => _orderSortAscending ? orders.OrderBy(o => o.GrandTotal) : orders.OrderByDescending(o => o.GrandTotal),
+            "OFees" => _orderSortAscending ? orders.OrderBy(o => o.EtsyFees) : orders.OrderByDescending(o => o.EtsyFees),
+            "OAds" => _orderSortAscending ? orders.OrderBy(o => o.OffsiteAdFee) : orders.OrderByDescending(o => o.OffsiteAdFee),
+            "OCost" => _orderSortAscending ? orders.OrderBy(o => o.ProductCost) : orders.OrderByDescending(o => o.ProductCost),
+            "OProfitUSD" => _orderSortAscending ? orders.OrderBy(o => o.NetProfitUSD) : orders.OrderByDescending(o => o.NetProfitUSD),
+            "ORate" => _orderSortAscending ? orders.OrderBy(o => o.ExchangeRate) : orders.OrderByDescending(o => o.ExchangeRate),
+            "OProfitTRY" => _orderSortAscending ? orders.OrderBy(o => o.NetProfitTRY) : orders.OrderByDescending(o => o.NetProfitTRY),
+            "OCostFlag" => _orderSortAscending ? orders.OrderBy(o => o.HasCostData) : orders.OrderByDescending(o => o.HasCostData),
+            _ => _orderSortAscending ? orders.OrderBy(o => o.OrderDate) : orders.OrderByDescending(o => o.OrderDate)
+        };
+
+        foreach (var o in sorted)
+        {
+            int idx = _gridOrders.Rows.Add(
+                o.OrderDate.LocalDateTime.ToString("dd.MM.yyyy HH:mm"),
+                $"#{o.ReceiptId}",
+                o.ProductTitle,
+                o.Quantity,
+                $"${o.GrandTotal:N2}",
+                $"${o.EtsyFees:N2}",
+                o.OffsiteAdFee > 0 ? $"${o.OffsiteAdFee:N2}" : "—",
+                o.HasCostData ? $"${o.ProductCost:N2}" : "—",
+                $"${o.NetProfitUSD:N2}",
+                $"₺{o.ExchangeRate:N2}",
+                $"₺{o.NetProfitTRY:N2}",
+                o.HasCostData ? (o.HasInvoice ? "✅ 📎" : "✅") : "⚠️ Gir");
+
+            var row = _gridOrders.Rows[idx];
+            row.Tag = o;  // double-click için saklıyoruz
+
+            if (o.NetProfitUSD >= 0)
+                row.DefaultCellStyle.ForeColor = UiStyle.SuccessColor;
+            else
+                row.DefaultCellStyle.ForeColor = UiStyle.DangerColor;
+
+            if (!o.HasCostData)
+                row.Cells["OCostFlag"].Style.ForeColor = UiStyle.WarningColor;
+        }
+    }
+
+    private void OnOrderGridDoubleClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _gridOrders.Rows.Count) return;
+        if (_gridOrders.Rows[e.RowIndex].Tag is not OrderFinancialSummary order) return;
+
+        using var form = new OrderDetailsForm(order);
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            // Maliyet güncellendiyse raporu yenile
+            _ = LoadReportAsync();
+        }
+    }
+
     // ── Grafik Güncellemesi ────────────────────────────────────────────────────
 
     private void UpdateCharts()
     {
-        var months = _report.Monthly;
+        var months = _report.MonthlySummaries;
         if (months.Count == 0) return;
 
-        var labels = months.Select(m => m.MonthName).ToArray();
+        var labels = months.Select(m => m.PeriodLabel).ToArray();
         var textPaint = new SolidColorPaint(new SKColor(148, 163, 184));
 
-        var salesVals    = months.Select(m => (double)m.GrossSales).ToArray();
-        var netVals      = months.Select(m => (double)m.NetIncome).ToArray();
-        var feeVals      = months.Select(m => (double)m.TotalFees).ToArray();
-        var refundVals   = months.Select(m => (double)m.Refunds).ToArray();
+        var salesVals      = months.Select(m => (double)m.GrossSales).ToArray();
+        var etsyNetVals    = months.Select(m => (double)m.EtsyNetRevenue).ToArray();
+        var costsVals      = months.Select(m => (double)m.ProductCosts).ToArray();
+        var realProfitVals = months.Select(m => (double)m.RealNetProfitUSD).ToArray();
+        var feeVals        = months.Select(m => (double)m.EtsyFees).ToArray();
+        var refundVals     = months.Select(m => (double)m.Refunds).ToArray();
 
+        // 1. Bar Chart: Aylık Gelir, Maliyet ve Gerçek Net Kâr Karşılaştırması
         _barChart.Series = new ISeries[]
         {
-            new ColumnSeries<double> { Name = "Brüt Satış", Values = salesVals, Fill = new SolidColorPaint(new SKColor(16, 185, 129, 200)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "Net Gelir", Values = netVals, Fill = new SolidColorPaint(new SKColor(99, 102, 241, 220)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "Ücretler", Values = feeVals, Fill = new SolidColorPaint(new SKColor(245, 158, 11, 200)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "İadeler", Values = refundVals, Fill = new SolidColorPaint(new SKColor(239, 68, 68, 200)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "Brüt Satış", Values = salesVals, Fill = new SolidColorPaint(new SKColor(59, 130, 246, 180)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "Etsy Net Gelir", Values = etsyNetVals, Fill = new SolidColorPaint(new SKColor(99, 102, 241, 220)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "Ürün Maliyeti", Values = costsVals, Fill = new SolidColorPaint(new SKColor(249, 115, 22, 200)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "Gerçek Net Kâr", Values = realProfitVals, Fill = new SolidColorPaint(new SKColor(16, 185, 129, 230)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "Etsy Kesintileri", Values = feeVals, Fill = new SolidColorPaint(new SKColor(245, 158, 11, 180)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = "İadeler", Values = refundVals, Fill = new SolidColorPaint(new SKColor(239, 68, 68, 180)), Rx = 4, Ry = 4 },
         };
         _barChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
         _barChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"${v:N0}" } };
 
+        // 2. Line Chart: Gerçek Net Kâr vs Etsy Net Gelir Trendi
         _lineChart.Series = new ISeries[]
         {
             new LineSeries<double>
             {
-                Name = "Net Gelir", Values = netVals,
-                Fill = new LinearGradientPaint(new SKColor(99, 102, 241, 60), new SKColor(99, 102, 241, 0)),
-                Stroke = new SolidColorPaint(new SKColor(99, 102, 241), 3),
-                GeometrySize = 8, LineSmoothness = 0.5,
+                Name = "Gerçek Net Kâr (Nihai)",
+                Values = realProfitVals,
+                Fill = new LinearGradientPaint(new SKColor(16, 185, 129, 70), new SKColor(16, 185, 129, 0)),
+                Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 3.5f),
+                GeometrySize = 9,
+                GeometryFill = new SolidColorPaint(new SKColor(16, 185, 129)),
+                GeometryStroke = new SolidColorPaint(SKColors.White, 2),
+                LineSmoothness = 0.4,
             },
+            new LineSeries<double>
+            {
+                Name = "Etsy Net Gelir (Kesintiler Sonrası)",
+                Values = etsyNetVals,
+                Fill = new LinearGradientPaint(new SKColor(99, 102, 241, 35), new SKColor(99, 102, 241, 0)),
+                Stroke = new SolidColorPaint(new SKColor(99, 102, 241), 2.5f),
+                GeometrySize = 7,
+                GeometryFill = new SolidColorPaint(new SKColor(99, 102, 241)),
+                LineSmoothness = 0.4,
+            },
+            new LineSeries<double>
+            {
+                Name = "Ürün & Sipariş Maliyeti",
+                Values = costsVals,
+                Fill = null,
+                Stroke = new SolidColorPaint(new SKColor(249, 115, 22), 2f),
+                GeometrySize = 6,
+                GeometryFill = new SolidColorPaint(new SKColor(249, 115, 22)),
+                LineSmoothness = 0.4,
+            },
+            new LineSeries<double>
+            {
+                Name = "Brüt Satış (Ciro)",
+                Values = salesVals,
+                Fill = null,
+                Stroke = new SolidColorPaint(new SKColor(148, 163, 184), 1.5f),
+                GeometrySize = 0,
+                LineSmoothness = 0.4,
+            }
         };
         _lineChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
         _lineChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"${v:N0}" } };
 
+        // 3. Ratio Chart: Etsy Net Gelir ile Gerçek Net Kâr Arasındaki Yüzdelik Dönüşüm ve Kâr Marjı (%)
+        var etsyRetentionPct = months.Select(m => m.EtsyNetRevenue <= 0 ? 0 : Math.Round((double)(m.RealNetProfitUSD / m.EtsyNetRevenue * 100), 1)).ToArray();
+        var realMarginPct = months.Select(m => m.GrossSales == 0 ? 0 : Math.Round((double)(m.RealNetProfitUSD / m.GrossSales * 100), 1)).ToArray();
+        var costToEtsyNetPct = months.Select(m => m.EtsyNetRevenue <= 0 ? 0 : Math.Round((double)(m.ProductCosts / m.EtsyNetRevenue * 100), 1)).ToArray();
+        var feeToGrossPct = months.Select(m => m.GrossSales == 0 ? 0 : Math.Round((double)(m.EtsyFees / m.GrossSales * 100), 1)).ToArray();
+
+        _ratioChart.Series = new ISeries[]
+        {
+            new LineSeries<double>
+            {
+                Name = "Etsy Net -> Kâr Dönüşümü (%) [Gerçek Kâr / Etsy Net]",
+                Values = etsyRetentionPct,
+                Fill = new LinearGradientPaint(new SKColor(16, 185, 129, 65), new SKColor(16, 185, 129, 0)),
+                Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 3.5f),
+                GeometrySize = 9,
+                GeometryFill = new SolidColorPaint(new SKColor(16, 185, 129)),
+                GeometryStroke = new SolidColorPaint(SKColors.White, 2),
+                LineSmoothness = 0.4,
+            },
+            new LineSeries<double>
+            {
+                Name = "Ciro Kâr Marjı (%) [Gerçek Kâr / Ciro]",
+                Values = realMarginPct,
+                Fill = null,
+                Stroke = new SolidColorPaint(new SKColor(6, 182, 212), 2.5f),
+                GeometrySize = 7,
+                GeometryFill = new SolidColorPaint(new SKColor(6, 182, 212)),
+                LineSmoothness = 0.4,
+            },
+            new LineSeries<double>
+            {
+                Name = "Ürün Maliyet Payı (%) [Maliyet / Etsy Net]",
+                Values = costToEtsyNetPct,
+                Fill = null,
+                Stroke = new SolidColorPaint(new SKColor(249, 115, 22), 2.2f),
+                GeometrySize = 6,
+                GeometryFill = new SolidColorPaint(new SKColor(249, 115, 22)),
+                LineSmoothness = 0.4,
+            },
+            new LineSeries<double>
+            {
+                Name = "Etsy Kesinti Payı (%) [Ücretler / Ciro]",
+                Values = feeToGrossPct,
+                Fill = null,
+                Stroke = new SolidColorPaint(new SKColor(245, 158, 11), 2f),
+                GeometrySize = 6,
+                GeometryFill = new SolidColorPaint(new SKColor(245, 158, 11)),
+                LineSmoothness = 0.4,
+            }
+        };
+        _ratioChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
+        _ratioChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"%{v:N1}" } };
+
+        // 4. Pie Chart: Dağılım
+        decimal totalCosts = _report.TotalProductCosts;
+        decimal realProfit = Math.Max(0, _report.RealNetProfitUSD);
+
         _pieChart.Series = new ISeries[]
         {
-            new PieSeries<double> { Name = "✅ Net Gelir", Values = new[] { (double)Math.Max(0, _report.TotalNet) }, Fill = new SolidColorPaint(new SKColor(16, 185, 129)) },
-            new PieSeries<double> { Name = "📋 Etsy Ücretleri", Values = new[] { (double)_report.TotalFees }, Fill = new SolidColorPaint(new SKColor(245, 158, 11)) },
-            new PieSeries<double> { Name = "📢 İç Reklam", Values = new[] { (double)_report.TotalInnerAdFees }, Fill = new SolidColorPaint(new SKColor(139, 92, 246)) },
-            new PieSeries<double> { Name = "🌐 Dış Reklam", Values = new[] { (double)_report.TotalOffsiteAdFees }, Fill = new SolidColorPaint(new SKColor(234, 88, 12)) },
-            new PieSeries<double> { Name = "↩️ İadeler", Values = new[] { (double)_report.TotalRefunds }, Fill = new SolidColorPaint(new SKColor(239, 68, 68)) },
+            new PieSeries<double> { Name = "Gerçek Net Kâr", Values = new[] { (double)realProfit }, Fill = new SolidColorPaint(new SKColor(16, 185, 129)) },
+            new PieSeries<double> { Name = "Ürün Maliyetleri", Values = new[] { (double)totalCosts }, Fill = new SolidColorPaint(new SKColor(249, 115, 22)) },
+            new PieSeries<double> { Name = "Etsy Ücretleri", Values = new[] { (double)_report.TotalFees }, Fill = new SolidColorPaint(new SKColor(245, 158, 11)) },
+            new PieSeries<double> { Name = "İç Reklam", Values = new[] { (double)_report.TotalInnerAdFees }, Fill = new SolidColorPaint(new SKColor(139, 92, 246)) },
+            new PieSeries<double> { Name = "Dış Reklam", Values = new[] { (double)_report.TotalOffsiteAdFees }, Fill = new SolidColorPaint(new SKColor(234, 88, 12)) },
+            new PieSeries<double> { Name = "İadeler", Values = new[] { (double)_report.TotalRefunds }, Fill = new SolidColorPaint(new SKColor(239, 68, 68)) },
         };
+    }
+
+    // ── AI Finansal Tahmin & Projeksiyon Güncellemesi ─────────────────────────
+
+    private void UpdateForecastView()
+    {
+        bool useTry = _chkUseTry.Checked;
+        decimal rate = _numExchangeRate.Value;
+
+        var forecast = FinancialForecastingService.GenerateForecast(_report, rate);
+
+        // 1. KPI Kartlarını Güncelle
+        if (useTry)
+        {
+            _lblForecastGross.Text = $"₺{forecast.NextMonthGrossTRY:N0}";
+            _lblForecastProfit.Text = $"₺{forecast.NextMonthNetProfitTRY:N0}";
+            SetCardSubText(_lblForecastGross, $"Min: ₺{forecast.LowScenarioTRY:N0} — Max: ₺{forecast.HighScenarioTRY:N0}");
+            SetCardSubText(_lblForecastProfit, $"Tahmini Dolar: ${forecast.NextMonthNetProfitUSD:N0}");
+        }
+        else
+        {
+            _lblForecastGross.Text = $"${forecast.NextMonthGrossUSD:N0}";
+            _lblForecastProfit.Text = $"${forecast.NextMonthNetProfitUSD:N0}";
+            SetCardSubText(_lblForecastGross, $"Min: ${forecast.LowScenarioUSD:N0} — Max: ${forecast.HighScenarioUSD:N0}");
+            SetCardSubText(_lblForecastProfit, $"Tahmini TL: ₺{forecast.NextMonthNetProfitTRY:N0}");
+        }
+
+        string growthSign = forecast.GrowthRateMoM >= 0 ? "+" : "";
+        _lblForecastOrders.Text = $"~{forecast.NextMonthOrders} Sipariş";
+        SetCardSubText(_lblForecastOrders, $"Aylık Büyüme: {growthSign}%{forecast.GrowthRateMoM:N1}");
+
+        _lblForecastStock.Text = $"~{forecast.EstimatedFilamentKg:N1} kg Filament";
+        SetCardSubText(_lblForecastStock, $"~{forecast.EstimatedPackagingBoxes} Adet Kargo Kutusu");
+
+        void SetCardSubText(Label lblVal, string text)
+        {
+            if (lblVal.Parent is TableLayoutPanel p)
+            {
+                foreach (Control c in p.Controls)
+                {
+                    if (c.Name == "lblSub" && c is Label sub)
+                    {
+                        sub.Text = text;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 2. Canlı Projeksiyon Grafiği
+        if (forecast.Timeline.Count > 0)
+        {
+            var labels = forecast.Timeline.Select(t => t.PeriodLabel).ToArray();
+            var textPaint = new SolidColorPaint(new SKColor(148, 163, 184));
+
+            var profitVals = forecast.Timeline.Select(t => (double)t.ExpectedNetProfitUSD).ToArray();
+            var grossVals = forecast.Timeline.Select(t => (double)t.ExpectedGrossUSD).ToArray();
+            var lowVals = forecast.Timeline.Select(t => (double)t.LowScenarioProfitUSD).ToArray();
+            var highVals = forecast.Timeline.Select(t => (double)t.HighScenarioProfitUSD).ToArray();
+
+            _forecastChart.Series = new ISeries[]
+            {
+                new LineSeries<double>
+                {
+                    Name = "Gerçek Net Kâr ($)",
+                    Values = profitVals,
+                    Fill = new LinearGradientPaint(new SKColor(16, 185, 129, 60), new SKColor(16, 185, 129, 0)),
+                    Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 3.5f),
+                    GeometrySize = 9,
+                    GeometryFill = new SolidColorPaint(new SKColor(16, 185, 129)),
+                    GeometryStroke = new SolidColorPaint(SKColors.White, 2),
+                    LineSmoothness = 0.4,
+                },
+                new LineSeries<double>
+                {
+                    Name = "Tahmini Ciro ($)",
+                    Values = grossVals,
+                    Fill = null,
+                    Stroke = new SolidColorPaint(new SKColor(99, 102, 241), 2.5f),
+                    GeometrySize = 7,
+                    GeometryFill = new SolidColorPaint(new SKColor(99, 102, 241)),
+                    LineSmoothness = 0.4,
+                },
+                new LineSeries<double>
+                {
+                    Name = "İyimser Senaryo (+%20)",
+                    Values = highVals,
+                    Fill = null,
+                    Stroke = new SolidColorPaint(new SKColor(16, 185, 129, 150), 2f),
+                    GeometrySize = 5,
+                    LineSmoothness = 0.4,
+                },
+                new LineSeries<double>
+                {
+                    Name = "Kötü Senaryo (-%20)",
+                    Values = lowVals,
+                    Fill = null,
+                    Stroke = new SolidColorPaint(new SKColor(239, 68, 68, 150), 2f),
+                    GeometrySize = 5,
+                    LineSmoothness = 0.4,
+                }
+            };
+            _forecastChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
+            _forecastChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"${v:N0}" } };
+        }
+
+        // 3. AI Öneri Listesi (Kesin Piksel Boyutlandırmalı & Okunaklı Renkli Kartlar)
+        UpdateForecastAiBadge();
+        RenderAiRecommendations(forecast.AiRecommendations);
+    }
+
+    private void UpdateForecastAiBadge()
+    {
+        var settings = AiOptimizationSettingsStore.Load();
+        _lblForecastAiBadge.Text = settings.GetActiveBadgeText();
+        _lblForecastAiBadge.BackColor = settings.UseOpenAi
+            ? Color.FromArgb(16, 80, 50)
+            : (settings.UseGemini ? Color.FromArgb(20, 60, 120) : Color.FromArgb(40, 50, 65));
+    }
+
+    private async Task RunLiveAiCfoAnalysisAsync()
+    {
+        var settings = AiOptimizationSettingsStore.Load();
+        decimal rate = _numExchangeRate.Value;
+        var forecast = FinancialForecastingService.GenerateForecast(_report, rate);
+
+        try
+        {
+            _btnRefreshForecastAi.Enabled = false;
+            _btnRefreshForecastAi.Text = "⏳ Analiz Ediliyor...";
+            var liveInsights = await FinancialForecastingService.GenerateDeepAiInsightsAsync(_report, forecast, rate, settings);
+            RenderAiRecommendations(liveInsights);
+        }
+        finally
+        {
+            _btnRefreshForecastAi.Enabled = true;
+            _btnRefreshForecastAi.Text = "✨ Canlı CFO Analizi Al";
+        }
+    }
+
+    private void RenderAiRecommendations(IEnumerable<string> recommendations)
+    {
+        int targetWidth = Math.Max(260, _pnlAiRecommendations.ClientSize.Width - 12);
+        _pnlAiRecommendations.Controls.Clear();
+
+        var fontTitle = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
+        var fontBody = new Font("Segoe UI", 9F);
+        int contentWidth = Math.Max(220, targetWidth - 28);
+
+        foreach (var rec in recommendations)
+        {
+            Color accentColor = rec switch
+            {
+                var r when r.Contains("🔮") => Color.FromArgb(129, 140, 248), // Bright Indigo
+                var r when r.Contains("🚀") || r.Contains("🌸") || r.Contains("☀️") => Color.FromArgb(251, 191, 36), // Bright Amber
+                var r when r.Contains("📦") => Color.FromArgb(251, 146, 60), // Bright Orange
+                var r when r.Contains("🎯") => Color.FromArgb(52, 211, 153), // Bright Emerald
+                var r when r.Contains("⚠️") => Color.FromArgb(248, 113, 113), // Bright Red
+                _ => Color.FromArgb(167, 139, 250)
+            };
+
+            string title = "💡 AI Tavsiyesi";
+            string body = rec.Replace("**", "");
+            var parts = rec.Split(new[] { "**" }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                title = parts[0].Trim();
+                body = string.Join("", parts.Skip(1)).Trim();
+            }
+
+            var titleSize = TextRenderer.MeasureText(title, fontTitle, new Size(contentWidth, 0), TextFormatFlags.WordBreak);
+            var bodySize = TextRenderer.MeasureText(body, fontBody, new Size(contentWidth, 0), TextFormatFlags.WordBreak);
+            int totalCardHeight = titleSize.Height + bodySize.Height + 28;
+
+            var itemCard = new ModernCardPanel
+            {
+                Width = targetWidth,
+                Height = totalCardHeight,
+                Margin = new Padding(0, 0, 0, 8),
+                Padding = new Padding(12, 8, 12, 8),
+                CornerRadius = 8,
+                CardColor = Color.FromArgb(30, 41, 59), // #1E293B Dark Slate Card
+                BorderColor = Color.FromArgb(51, 65, 85), // #334155 Slate Border
+            };
+
+            var lblTitle = new Label
+            {
+                Text = title,
+                Font = fontTitle,
+                ForeColor = accentColor,
+                BackColor = Color.Transparent,
+                Location = new Point(14, 8),
+                Size = new Size(contentWidth, titleSize.Height + 2),
+                AutoEllipsis = false,
+            };
+
+            var lblBody = new Label
+            {
+                Text = body,
+                Font = fontBody,
+                ForeColor = Color.FromArgb(241, 245, 249), // Pure readable bright text (#F1F5F9)
+                BackColor = Color.Transparent,
+                Location = new Point(14, 12 + titleSize.Height),
+                Size = new Size(contentWidth, bodySize.Height + 6),
+                AutoEllipsis = false,
+            };
+
+            itemCard.Controls.Add(lblTitle);
+            itemCard.Controls.Add(lblBody);
+            _pnlAiRecommendations.Controls.Add(itemCard);
+        }
     }
 
     // ── Defter Kayıtları Grid Güncellemesi ─────────────────────────────────────

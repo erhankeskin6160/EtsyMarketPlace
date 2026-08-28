@@ -84,12 +84,32 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(_secondaryImageModelTextBox, 1, 6);
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
-        var save = CreateButton("Kaydet");
-        save.Click += (_, _) => SaveValues();
+        var save = CreateButton("💾 Kaydet");
+        save.BackColor = Color.FromArgb(16, 140, 90);
+        save.ForeColor = Color.White;
+        save.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        save.Click += (_, _) =>
+        {
+            SaveValues();
+            MessageBox.Show(
+                this,
+                $"✅ AI Ayarları başarıyla kaydedildi!\n\nAktif Sağlayıcı: {_settings.GetActiveEngineName()}",
+                "AI Ayarları",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            DialogResult = DialogResult.OK;
+            Close();
+        };
         buttons.Controls.Add(save);
-        var test = CreateButton("Ayar Test");
+
+        var test = CreateButton("🧪 Ayar Test");
         test.Click += (_, _) => TestSettings();
         buttons.Controls.Add(test);
+
+        var close = CreateButton("Kapat");
+        close.Click += (_, _) => Close();
+        buttons.Controls.Add(close);
+
         root.Controls.Add(new Label(), 0, 7);
         root.Controls.Add(buttons, 1, 7);
 
@@ -144,7 +164,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         if (_settings.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
         {
             _settings.GeminiApiKey = _secondaryKeyTextBox.Text.Trim();
-            _settings.GeminiModel = string.IsNullOrWhiteSpace(_secondaryModelTextBox.Text) ? "gemini-3.5-flash" : _secondaryModelTextBox.Text.Trim();
+            _settings.GeminiModel = string.IsNullOrWhiteSpace(_secondaryModelTextBox.Text) ? "gemini-3.7-flash" : _secondaryModelTextBox.Text.Trim();
             _settings.GeminiImageModel = string.IsNullOrWhiteSpace(_secondaryImageModelTextBox.Text) ? "gemini-3.1-flash-image" : _secondaryImageModelTextBox.Text.Trim();
         }
         else if (_settings.Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))

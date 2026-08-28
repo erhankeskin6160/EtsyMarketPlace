@@ -89,17 +89,88 @@ public sealed class ListingOptimizationService
 
     private static IReadOnlyList<string> BuildTagSuggestions(ListingOptimizationInput input, IReadOnlyList<string> strongTerms)
     {
-        var candidates = input.Tags
-            .Concat([input.TargetKeyword])
-            .Concat(strongTerms)
-            .Concat(BuildPhrases(strongTerms))
-            .Select(NormalizeTag)
-            .Where(tag => tag.Length is >= 2 and <= 20)
+        var rawText = $"{input.Title} {input.TargetKeyword} {string.Join(' ', input.Tags)} {input.Description}";
+        var titleTerms = Tokenize(input.Title).ToList();
+
+        var multiWordCandidates = new List<string>();
+
+        // 1. Kullanıcının mevcut 2+ kelimelik uygun tagleri
+        foreach (var tag in input.Tags)
+        {
+            var norm = NormalizeTag(tag);
+            if (norm.Length is >= 4 and <= 20 && norm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
+            {
+                multiWordCandidates.Add(norm);
+            }
+        }
+
+        // 2. Hedef anahtar kelime
+        var targetNorm = NormalizeTag(input.TargetKeyword);
+        if (targetNorm.Length is >= 4 and <= 20 && targetNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
+        {
+            multiWordCandidates.Add(targetNorm);
+        }
+
+        // 3. Başlıktan 2'li ve 3'lü ardışık kelime öbekleri (N-gram)
+        for (int i = 0; i < titleTerms.Count; i++)
+        {
+            if (i + 1 < titleTerms.Count)
+            {
+                var twoWord = $"{titleTerms[i]} {titleTerms[i + 1]}";
+                if (twoWord.Length is >= 5 and <= 20) multiWordCandidates.Add(twoWord);
+            }
+            if (i + 2 < titleTerms.Count)
+            {
+                var threeWord = $"{titleTerms[i]} {titleTerms[i + 1]} {titleTerms[i + 2]}";
+                if (threeWord.Length is >= 8 and <= 20) multiWordCandidates.Add(threeWord);
+            }
+        }
+
+        // 4. Güçlü kelimelerden 2'li ve 3'lü kombinasyonlar
+        for (int i = 0; i < strongTerms.Count; i++)
+        {
+            for (int j = i + 1; j < strongTerms.Count; j++)
+            {
+                var pair1 = $"{strongTerms[i]} {strongTerms[j]}";
+                if (pair1.Length is >= 6 and <= 20) multiWordCandidates.Add(pair1);
+
+                if (j + 1 < strongTerms.Count)
+                {
+                    var triple = $"{strongTerms[i]} {strongTerms[j]} {strongTerms[j + 1]}";
+                    if (triple.Length is >= 8 and <= 20) multiWordCandidates.Add(triple);
+                }
+            }
+        }
+
+        // 5. Niche ve Kategoriye Özel Zengin Long-Tail Havuzu
+        var fallbackPool = new List<string>
+        {
+            "fantasy desk decor",
+            "hand painted statue",
+            "3d printed model",
+            "collectible figure",
+            "geeky boyfriend gift",
+            "nerdy room decor",
+            "tabletop miniature",
+            "custom display prop",
+            "movie fan gift",
+            "fantasy home art",
+            "unique gamer gift",
+            "handmade collector",
+            "shelf decor prop"
+        };
+
+        foreach (var fallback in fallbackPool)
+        {
+            multiWordCandidates.Add(fallback);
+        }
+
+        return multiWordCandidates
+            .Select(t => t.Trim().ToLowerInvariant())
+            .Where(t => t.Length is >= 4 and <= 20 && t.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(13)
             .ToList();
-
-        return candidates.Count > 0 ? candidates : ["etsy product", "gift idea", "handmade"];
     }
 
     private static IReadOnlyList<string> BuildTitleSuggestions(
@@ -107,18 +178,66 @@ public sealed class ListingOptimizationService
         IReadOnlyList<string> strongTerms,
         IReadOnlyList<string> suggestedTags)
     {
-        var target = CleanPhrase(input.TargetKeyword);
-        var baseTerms = strongTerms
-            .Where(term => !target.Contains(term, StringComparison.OrdinalIgnoreCase))
-            .Take(5)
-            .ToList();
-        var modifier = suggestedTags.FirstOrDefault(tag => tag.Split(' ').Length >= 2) ?? suggestedTags.FirstOrDefault() ?? "gift";
-        return new[]
+        var rawBaseTitle = CleanPhrase(input.Title);
+        var primaryPart = rawBaseTitle.Split(['|', '-', ',', '–', '—', '/'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim() ?? CleanPhrase(input.TargetKeyword);
+
+        if (primaryPart.Length < 10 && rawBaseTitle.Length > primaryPart.Length)
         {
-            LimitTitle($"{target} {string.Join(' ', baseTerms.Take(3))} - {modifier}"),
-            LimitTitle($"{target} for gift, {string.Join(' ', baseTerms.Take(4))}"),
-            LimitTitle($"{CleanPhrase(input.Title)} | {string.Join(' ', suggestedTags.Take(3))}"),
+            primaryPart = rawBaseTitle;
         }
+
+        var tagsTitleCased = suggestedTags
+            .Select(ToTitleCase)
+            .Where(t => !primaryPart.Contains(t, StringComparison.OrdinalIgnoreCase))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // 1. Zengin, 115-135 Karakterlik Ana Başlık
+        var sb1 = new System.Text.StringBuilder();
+        sb1.Append(ToTitleCase(primaryPart));
+        foreach (var tag in tagsTitleCased)
+        {
+            var candidate = sb1.Length == primaryPart.Length ? $" - {tag}" : $", {tag}";
+            if (sb1.Length + candidate.Length <= 138)
+            {
+                sb1.Append(candidate);
+            }
+            else
+            {
+                break;
+            }
+        }
+        var title1 = LimitTitle(sb1.ToString());
+
+        // 2. Arama ve Koleksiyon Odaklı 2. Başlık
+        var sb2 = new System.Text.StringBuilder();
+        var targetTitle = ToTitleCase(input.TargetKeyword);
+        sb2.Append(targetTitle);
+        if (!primaryPart.Contains(input.TargetKeyword, StringComparison.OrdinalIgnoreCase))
+        {
+            sb2.Append(" - ");
+            sb2.Append(ToTitleCase(primaryPart));
+        }
+        foreach (var tag in tagsTitleCased)
+        {
+            var candidate = $", {tag}";
+            if (sb2.Length + candidate.Length <= 138)
+            {
+                sb2.Append(candidate);
+            }
+            else
+            {
+                break;
+            }
+        }
+        var title2 = LimitTitle(sb2.ToString());
+
+        // 3. Hediye ve Dekorasyon Odaklı 3. Başlık
+        var modifier = tagsTitleCased.FirstOrDefault() ?? "Collectible Gift";
+        var title3 = LimitTitle($"{ToTitleCase(primaryPart)} | {modifier}, Handcrafted Fantasy Decor");
+
+        return new[] { title1, title2, title3 }
             .Where(title => !string.IsNullOrWhiteSpace(title))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(3)
@@ -166,18 +285,50 @@ public sealed class ListingOptimizationService
             .Split(['|', '-', ','], StringSplitOptions.RemoveEmptyEntries)
             .Select(part => part.Trim())
             .FirstOrDefault(part => part.Length > 0) ?? target;
-        var productTerms = string.Join(", ", strongTerms.Take(6));
-        var tags = string.Join(", ", suggestedTags.Take(8));
         var materials = string.Join(", ", BuildMaterialSuggestions(input).Take(5));
-        var materialText = materials.Length > 0
-            ? materials
-            : "the materials and finish confirmed by your production process";
+        var materialText = materials.Length > 0 ? materials : "High-quality materials";
+
+        // 1. Eğer kullanıcının mevcut bir açıklaması varsa, bu gerçek verileri %100 koru ve yapılandır:
+        if (!string.IsNullOrWhiteSpace(input.Description) && input.Description.Trim().Length > 30)
+        {
+            var rawDesc = input.Description.Trim();
+            
+            // Eğer mevcut açıklama zaten hedef kelimeyi içermiyorsa, başına SEO tanıtım kancası ekle
+            var hook = rawDesc.Contains(target, StringComparison.OrdinalIgnoreCase)
+                ? ""
+                : $"{productName} is tailored for shoppers searching for {target}, bringing exceptional quality and craftsmanship to your collection.{Environment.NewLine}{Environment.NewLine}";
+
+            var sb = new System.Text.StringBuilder();
+            if (!string.IsNullOrEmpty(hook)) sb.Append(hook);
+            sb.AppendLine(rawDesc);
+            sb.AppendLine();
+            sb.AppendLine("─────────────────────────────");
+            sb.AppendLine("📦 KEY DETAILS & HIGHLIGHTS:");
+            sb.AppendLine($"• Product: {productName}");
+            if (materials.Length > 0) sb.AppendLine($"• Materials: {materials}");
+            sb.AppendLine("• Handcrafted & carefully inspected before shipment");
+            sb.AppendLine("• Secure, protective packaging for safe worldwide delivery");
+            sb.AppendLine("• Custom requests or sizing? Feel free to send us a message!");
+            sb.AppendLine();
+            sb.AppendLine("Publishing review: ensure all dimensions, materials, and shipping specifications accurately match your physical inventory.");
+            
+            return sb.ToString().Trim();
+        }
+
+        // 2. Eğer sıfırdan oluşturuluyorsa, gerçekçi ve yapılandırılmış profesyonel taslak sun:
+        var tags = string.Join(", ", suggestedTags.Take(8));
         return
-            $"{productName} is written for shoppers searching for {target}. The listing keeps the product identity clear in the first lines and connects the title, tags, and description around the same buying intent.{Environment.NewLine}{Environment.NewLine}" +
-            $"This item is best positioned for buyers interested in {productTerms}. Use the final listing to explain the exact style, display purpose, size, finish, and what makes this piece useful for collectors, gift buyers, or decor-focused customers.{Environment.NewLine}{Environment.NewLine}" +
-            $"Materials and finish: {materialText}. Confirm the real production method, color options, measurements, and package contents before publishing so the listing matches the product you will ship or deliver.{Environment.NewLine}{Environment.NewLine}" +
-            $"Search terms to support naturally: {tags}. Do not copy competitor wording; keep the final copy original, readable, and accurate to your own product.{Environment.NewLine}{Environment.NewLine}" +
-            "Publishing review: if the product uses brand, character, movie, game, or fan-art references, check intellectual-property risk and Etsy policy compliance before making the draft active.";
+            $"{productName} is tailored for shoppers searching for {target}, crafted to bring standout quality and charm to your space or collection.{Environment.NewLine}{Environment.NewLine}" +
+            "✨ PRODUCT HIGHLIGHTS & FEATURES:" + Environment.NewLine +
+            $"• Beautifully detailed and crafted with premium {materialText}" + Environment.NewLine +
+            "• Ideal for collectors, tabletop displays, home decor, or as a memorable gift" + Environment.NewLine +
+            "• Carefully inspected and hand-finished with exceptional attention to detail" + Environment.NewLine + Environment.NewLine +
+            "📦 PACKAGING & SHIPPING:" + Environment.NewLine +
+            "• Every order is securely packaged in protective materials to ensure safe transit" + Environment.NewLine +
+            "• Tracked shipping provided upon dispatch" + Environment.NewLine + Environment.NewLine +
+            "💬 CUSTOM INQUIRIES & QUESTIONS:" + Environment.NewLine +
+            "• Have a question about dimensions, colors, or custom finishes? Reach out anytime—we are happy to help!" + Environment.NewLine + Environment.NewLine +
+            "Publishing review: check intellectual-property risk and verify listing details before publishing.";
     }
 
     private static IReadOnlyList<string> BuildRiskWarnings(ListingOptimizationInput input)
@@ -244,5 +395,26 @@ public sealed class ListingOptimizationService
     {
         var title = CleanPhrase(value);
         return title.Length <= 140 ? title : title[..140].TrimEnd();
+    }
+
+    private static string ToTitleCase(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return text;
+        var words = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var minorWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "a", "an", "the", "and", "but", "or", "for", "nor", "on", "at", "to", "from", "by", "with", "in", "of" };
+        
+        for (int i = 0; i < words.Length; i++)
+        {
+            var word = words[i];
+            if (i > 0 && minorWords.Contains(word))
+            {
+                words[i] = word.ToLowerInvariant();
+            }
+            else if (word.Length > 0)
+            {
+                words[i] = char.ToUpperInvariant(word[0]) + (word.Length > 1 ? word[1..] : "");
+            }
+        }
+        return string.Join(' ', words);
     }
 }

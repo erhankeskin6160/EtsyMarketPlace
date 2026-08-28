@@ -23,19 +23,21 @@ public class ModernCardPanel : Panel
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
 
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = CreateRoundedRectanglePath(rect, CornerRadius);
 
-        // Fill background
+        // 1. Zemin boyama (en altta)
         using var fillBrush = new SolidBrush(CardColor);
         e.Graphics.FillPath(fillBrush, path);
 
-        // Draw border
+        // 2. Kenarlık çizimi
         using var borderPen = new Pen(BorderColor, 1.5f);
         e.Graphics.DrawPath(borderPen, path);
+
+        // 3. Çocuk kontrolleri en üst katmana çiz (metinler asla zeminin altında kalmaz)
+        base.OnPaint(e);
     }
 
     public static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)

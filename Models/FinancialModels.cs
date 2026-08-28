@@ -46,12 +46,53 @@ internal sealed record MonthlyFinancial(
 internal sealed record ProductCostEntry(
     string ListingId,
     string Title,
-    decimal UnitCost,         // Ürün üretim / hammadde birim maliyeti ($)
-    decimal UnitShippingCost, // Ambalaj / kargo birim maliyeti ($)
-    DateTimeOffset UpdatedAt
+    decimal UnitCost,         // Üretim
+    decimal UnitShippingCost, // Kargo
+    decimal UnitPackagingCost,// Paketleme
+    DateTimeOffset UpdatedAt,
+    string? InvoiceFilePath = null // Kargo Faturası Dosya Yolu (PDF / Görsel)
 )
 {
-    public decimal TotalUnitCost => UnitCost + UnitShippingCost;
+    public decimal TotalUnitCost => UnitCost + UnitShippingCost + UnitPackagingCost;
+    public bool HasInvoice => !string.IsNullOrWhiteSpace(InvoiceFilePath) && System.IO.File.Exists(InvoiceFilePath);
+}
+
+/// <summary>
+/// Sipariş Bazında Net Kâr Özeti (Mağaza Fişi'nden türetilir)
+/// </summary>
+internal sealed record OrderFinancialSummary(
+    long ReceiptId,
+    DateTimeOffset OrderDate,
+    string ProductTitle,        // İlk transaction başlığı
+    long ListingId,             // İlk transaction listing_id
+    int Quantity,               // Toplam adet
+    decimal GrandTotal,         // Müşterinin ödediği tutar
+    decimal Subtotal,           // Ürün fiyatı
+    decimal ShippingPrice,      // Kargo
+    decimal DiscountAmt,        // İndirim
+    decimal TaxPaidByBuyer,     // Vergi
+    decimal TransactionFee,     // %6.5 İşlem
+    decimal PaymentProcessingFee, // %6.5 + 3TL Ödeme İşleme
+    decimal RegulatoryOperatingFee, // %1.5 Yasal
+    decimal ListingFee,         // $0.20 İlan
+    decimal VatOnFees,          // %20 KDV
+    decimal EtsyFees,           // Toplam kesintiler (vergi hariç/dahil)
+    decimal OffsiteAdFee,       // %15 Dış Reklam kesimi (eğer uygulanabilirse)
+    decimal ProductCost,        // Kullanıcının girdiği maliyet × adet
+    decimal NetProfitUSD,       // GrandTotal − EtsyFees − OffsiteAdFee − ProductCost
+    decimal ExchangeRate,       // Sipariş günü USD/TRY kuru
+    decimal NetProfitTRY,       // NetProfitUSD × ExchangeRate
+    bool HasCostData,           // Maliyet girilmiş mi?
+    decimal UnitProductionCost = 0m,  // Birim üretim maliyeti
+    decimal UnitShippingCost = 0m,    // Birim kargo maliyeti
+    decimal UnitPackagingCost = 0m,   // Birim paketleme maliyeti
+    string? InvoiceFilePath = null    // Sipariş/Ürün Kargo Faturası
+)
+{
+    public decimal TotalOrderShippingCost => UnitShippingCost * Quantity;
+    public decimal TotalOrderProductionCost => UnitProductionCost * Quantity;
+    public decimal TotalOrderPackagingCost => UnitPackagingCost * Quantity;
+    public bool HasInvoice => !string.IsNullOrWhiteSpace(InvoiceFilePath) && System.IO.File.Exists(InvoiceFilePath);
 }
 
 /// <summary>
@@ -59,6 +100,7 @@ internal sealed record ProductCostEntry(
 /// </summary>
 internal sealed record PeriodFinancialSummary(
     string PeriodLabel,        // "23.08.2026", "2026-W34", "Ağustos 2026", "2026"
+    DateTime SortDate,         // Gerçek kronolojik sıralama tarihi
     decimal GrossSales,
     decimal EtsyFees,
     decimal InnerAdFees,
@@ -97,14 +139,21 @@ internal sealed record FinancialReport(
     List<PeriodFinancialSummary> WeeklySummaries,
     List<PeriodFinancialSummary> MonthlySummaries,
     List<PeriodFinancialSummary> YearlySummaries,
+    List<OrderFinancialSummary> OrderSummaries, // [YENİ] Sipariş bazında net kâr
     string Currency,
     DateTimeOffset PeriodStart,
-    DateTimeOffset PeriodEnd
+    DateTimeOffset PeriodEnd,
+    bool IsFallbackMode = false
 )
 {
     public decimal RealNetProfitUSD => TotalNet - TotalProductCosts;
-    public decimal RealNetProfitTRY => Math.Round(RealNetProfitUSD * ExchangeRate, 2);
-    public decimal TotalGrossTRY => Math.Round(TotalGross * ExchangeRate, 2);
+    public decimal RealNetProfitTRY => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.RealNetProfitTRY) 
+        : (OrderSummaries.Count > 0 ? OrderSummaries.Sum(o => o.NetProfitTRY) : Math.Round(RealNetProfitUSD * ExchangeRate, 2));
+
+    public decimal TotalGrossTRY => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate) 
+        : (OrderSummaries.Count > 0 ? OrderSummaries.Sum(o => Math.Round(o.GrandTotal * o.ExchangeRate, 2)) : Math.Round(TotalGross * ExchangeRate, 2));
     public decimal FeeRatePct => TotalGross == 0 ? 0 : Math.Round(TotalFees / TotalGross * 100, 1);
     public decimal RefundRatePct => TotalGross == 0 ? 0 : Math.Round(TotalRefunds / TotalGross * 100, 1);
     public decimal AdSpendPct => TotalGross == 0 ? 0 : Math.Round(TotalAdFees / TotalGross * 100, 1);
@@ -114,7 +163,7 @@ internal sealed record FinancialReport(
 
     public static FinancialReport Empty => new(
         [], [], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36.50m,
-        [], [], [], [], "USD",
+        [], [], [], [], [], "USD",
         DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow
     );
 }
@@ -132,3 +181,38 @@ internal enum DateRangePreset
     ThisYear,
     Custom
 }
+
+/// <summary>
+/// Zaman Serisi Tahmin Veri Noktası
+/// </summary>
+internal sealed record ForecastDataPoint(
+    string PeriodLabel,
+    DateTime Date,
+    decimal ExpectedGrossUSD,
+    decimal ExpectedNetProfitUSD,
+    decimal ExpectedNetProfitTRY,
+    decimal LowScenarioProfitUSD,
+    decimal HighScenarioProfitUSD,
+    int ExpectedOrders,
+    bool IsHistorical = false
+);
+
+/// <summary>
+/// AI Finansal Tahmin & Projeksiyon Sonucu
+/// </summary>
+internal sealed record FinancialForecastResult(
+    decimal NextMonthGrossUSD,
+    decimal NextMonthGrossTRY,
+    decimal NextMonthNetProfitUSD,
+    decimal NextMonthNetProfitTRY,
+    decimal LowScenarioUSD,
+    decimal LowScenarioTRY,
+    decimal HighScenarioUSD,
+    decimal HighScenarioTRY,
+    int NextMonthOrders,
+    decimal GrowthRateMoM,
+    double EstimatedFilamentKg,
+    int EstimatedPackagingBoxes,
+    List<ForecastDataPoint> Timeline,
+    List<string> AiRecommendations
+);

@@ -30,6 +30,31 @@ internal sealed class ProductCostManagerForm : Form
         LoadData();
     }
 
+    /// <summary>
+    /// Finansal rapordaki siparişten çift tıklanarak açılınca listing_id ve başlığı önceden doldurur.
+    /// </summary>
+    public ProductCostManagerForm(string listingId, string title) : this()
+    {
+        if (!string.IsNullOrWhiteSpace(listingId))
+        {
+            _txtListingId.Text = listingId;
+            _txtTitle.Text = title;
+
+            // Eğer bu listing için mevcut kayıt varsa grid'de seç
+            foreach (DataGridViewRow row in _grid.Rows)
+            {
+                if (row.Cells["ListingId"].Value?.ToString() == listingId)
+                {
+                    _grid.ClearSelection();
+                    row.Selected = true;
+                    _grid.FirstDisplayedScrollingRowIndex = row.Index;
+                    break;
+                }
+            }
+        }
+    }
+
+
     private void BuildLayout()
     {
         var root = new TableLayoutPanel
@@ -198,7 +223,7 @@ internal sealed class ProductCostManagerForm : Form
             return;
         }
 
-        var entry = new ProductCostEntry(id, title, _numUnitCost.Value, _numShippingCost.Value, DateTimeOffset.UtcNow);
+        var entry = new ProductCostEntry(id, title, _numUnitCost.Value, _numShippingCost.Value, 0m, DateTimeOffset.UtcNow);
         await _repository.SaveAsync(entry);
         LoadData();
     }

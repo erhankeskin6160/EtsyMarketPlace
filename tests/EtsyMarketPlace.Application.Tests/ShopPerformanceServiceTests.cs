@@ -67,5 +67,5 @@ public sealed class ShopPerformanceServiceTests
         bool canceled,
         decimal total,
         IReadOnlyList<OwnShopTransaction> transactions) =>
-        new(id, created, paid, canceled, total, "USD", transactions);
+        new(id, created, paid, canceled, total, total, 0m, 0m, 0m, false, "USD", transactions);
 }

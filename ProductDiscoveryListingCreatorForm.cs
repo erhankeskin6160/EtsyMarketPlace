@@ -50,7 +50,20 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private readonly ProgressBar _busyProgressBar = new() { Dock = DockStyle.Fill, Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 28 };
     private readonly ModernSpinner _busySpinner = new() { Width = 74, Height = 74, Anchor = AnchorStyles.None, BackColor = Color.White };
     private readonly System.Windows.Forms.Timer _busyTimer = new() { Interval = 350 };
+    private readonly Label _lblTitleCounter = new() { AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 8.5F) };
+    private readonly Label _lblTagCounter = new() { AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 8.5F) };
     private readonly Label _statusLabel = new();
+    private readonly Label _lblAiBadge = new()
+    {
+        AutoSize = true,
+        Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+        ForeColor = Color.White,
+        BackColor = Color.FromArgb(30, 41, 59),
+        Padding = new Padding(8, 4, 8, 4),
+        Cursor = Cursors.Hand,
+        Anchor = AnchorStyles.Right,
+        Margin = new Padding(0, 0, 10, 0)
+    };
     private List<IdeaRow> _rows = [];
     private int _selectedImageIndex;
     private int _busyFrame;
@@ -90,9 +103,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         _readinessStateComboBox.ValueMember = nameof(EtsyReadinessStateOption.ReadinessStateId);
         _readinessStateComboBox.DropDown += async (_, _) => await LoadReadinessStatesAsync();
 
-        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 520));
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         header.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
@@ -101,11 +115,21 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
+
+        _lblAiBadge.Click += (_, _) =>
+        {
+            using var form = new AiOptimizationSettingsForm();
+            form.ShowDialog(this);
+            UpdateAiBadge();
+        };
+        UpdateAiBadge();
+        header.Controls.Add(_lblAiBadge, 1, 0);
+
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.ForeColor = UiStyle.TextMuted;
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
         _statusLabel.Text = "Anahtar kelime girip Etsy'de urun arayin";
-        header.Controls.Add(_statusLabel, 1, 0);
+        header.Controls.Add(_statusLabel, 2, 0);
         root.Controls.Add(header, 0, 0);
 
         root.Controls.Add(BuildToolbar(), 0, 1);
@@ -120,6 +144,15 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         }
 
         ApplyInitialListing();
+    }
+
+    private void UpdateAiBadge()
+    {
+        var settings = AiOptimizationSettingsStore.Load();
+        _lblAiBadge.Text = settings.GetActiveBadgeText();
+        _lblAiBadge.BackColor = settings.UseOpenAi
+            ? Color.FromArgb(16, 80, 50)
+            : (settings.UseGemini ? Color.FromArgb(20, 60, 120) : Color.FromArgb(40, 50, 65));
     }
 
     private void ApplyInitialListing()
@@ -182,188 +215,462 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private Control BuildToolbar()
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9, RowCount = 2, Padding = new Padding(0, 10, 0, 10) };
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, RowCount = 2, Padding = new Padding(0, 4, 0, 8) };
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
         toolbar.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));
-        for (var index = 4; index < 9; index++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // Label Anahtar Kelime
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // _keywordTextBox
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));  // Label Sonuc
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 70));  // _limitInput
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // Etsy'de Ara
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 210)); // 🚀 1-Tık Full AI Listing
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145)); // Etsy Taslak Ekle
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));  // Kapat
 
-        toolbar.Controls.Add(LabelFor("Anahtar kelime"), 0, 0);
+        toolbar.Controls.Add(LabelFor("Anahtar Kelime:"), 0, 0);
         _keywordTextBox.Dock = DockStyle.Fill;
-        _keywordTextBox.PlaceholderText = "Orn: k sparrow figur, gandalf bust, 3d cosplay prop";
+        _keywordTextBox.PlaceholderText = "Örn: 3d cosplay prop, miniature figure, wall art";
         toolbar.Controls.Add(_keywordTextBox, 1, 0);
-        toolbar.Controls.Add(LabelFor("Sonuc"), 2, 0);
-        _limitInput.Dock = DockStyle.Left;
+
+        toolbar.Controls.Add(LabelFor("Adet:"), 2, 0);
+        _limitInput.Dock = DockStyle.Fill;
         toolbar.Controls.Add(_limitInput, 3, 0);
 
-        var search = CreateButton("Etsy'de Ara");
+        var search = CreateButton("🔍 Etsy'de Ara");
         search.Click += async (_, _) => await SearchIdeasAsync();
         toolbar.Controls.Add(search, 4, 0);
-        var draft = CreateButton("Taslak Uret");
-        draft.Click += async (_, _) => await GenerateDraftAsync();
-        toolbar.Controls.Add(draft, 5, 0);
-        var image = CreateButton("AI Gorsel");
-        image.Click += async (_, _) => await GenerateImageAsync();
-        toolbar.Controls.Add(image, 6, 0);
-        var create = CreateButton("Etsy Taslak Ekle");
+
+        var btnAutoPilot = new ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🚀 1-Tık Full AI Listing",
+            NormalColor = UiStyle.PrimaryColor,
+            HoverColor = UiStyle.PrimaryHover,
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+        };
+        btnAutoPilot.Click += async (_, _) => await GenerateFullAutoPilotListingAsync();
+        toolbar.Controls.Add(btnAutoPilot, 5, 0);
+
+        var create = CreateButton("💾 Etsy Taslak Ekle");
         create.BackColor = Color.FromArgb(20, 126, 76);
         create.Click += async (_, _) => await CreateDraftListingAsync();
-        toolbar.Controls.Add(create, 7, 0);
-        var close = CreateButton("Kapat");
-        close.BackColor = Color.FromArgb(82, 93, 110);
-        close.Click += (_, _) => Close();
-        toolbar.Controls.Add(close, 8, 0);
+        toolbar.Controls.Add(create, 6, 0);
 
-        toolbar.Controls.Add(LabelFor("Etsy listing linki"), 0, 1);
+        var close = CreateButton("Kapat", isSecondary: true);
+        close.Click += (_, _) => Close();
+        toolbar.Controls.Add(close, 7, 0);
+
+        // Row 2: Linkten Al & 2. Sayfa
+        toolbar.Controls.Add(LabelFor("Etsy Listing Linki:"), 0, 1);
         _listingLinkTextBox.Dock = DockStyle.Fill;
-        _listingLinkTextBox.PlaceholderText = "Orn: https://www.etsy.com/listing/123456789/urun-adi";
+        _listingLinkTextBox.PlaceholderText = "Örn: https://www.etsy.com/listing/123456789/urun-adi";
         toolbar.Controls.Add(_listingLinkTextBox, 1, 1);
         toolbar.SetColumnSpan(_listingLinkTextBox, 3);
-        var importLink = CreateButton("Linkten Al");
+
+        var importLink = CreateButton("🔗 Linkten Al");
         importLink.Click += async (_, _) => await ImportListingLinkAsync();
         toolbar.Controls.Add(importLink, 4, 1);
-        var aiReview = CreateButton("2. Sayfa");
+
+        var btnImage = CreateButton("✨ AI Görsel");
+        btnImage.Click += async (_, _) => await GenerateImageAsync();
+        toolbar.Controls.Add(btnImage, 5, 1);
+
+        var aiReview = CreateButton("📄 2. Sayfa", isSecondary: true);
         aiReview.Click += (_, _) => OpenAiReviewPage();
-        toolbar.Controls.Add(aiReview, 5, 1);
+        toolbar.Controls.Add(aiReview, 6, 1);
+
         return toolbar;
     }
 
     private Control BuildDraftArea()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(0, 10, 0, 0) };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 48));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24));
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Padding = new Padding(0, 6, 0, 0) };
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220)); // Left Image Preview & Quick Actions
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Right Tabbed Workspace
 
-        var left = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6 };
-        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 132));
-        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        left.RowStyles.Add(new RowStyle(SizeType.Percent, 38));
-        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        left.RowStyles.Add(new RowStyle(SizeType.Percent, 62));
-        left.RowStyles.Add(new RowStyle(SizeType.Absolute, 0));
-        left.Controls.Add(BuildImagePreviewPanel(), 0, 0);
-        left.Controls.Add(LabelFor("Baslik"), 0, 1);
+        // --- SOL PANEL: Görsel Önizleme & Hızlı Butonlar ---
+        var leftPanel = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 0, 8, 0),
+            Padding = new Padding(8),
+            CornerRadius = 10,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor
+        };
+        var leftLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Picture Preview
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // Carousel controls
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // 1-Tık Full AI
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));  // AI Görsel Üret
+
+        leftLayout.Controls.Add(_previewPictureBox, 0, 0);
+
+        var navPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
+        navPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
+        navPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        navPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
+
+        var prevBtn = CreateButton("<");
+        prevBtn.Click += async (_, _) => await MoveSelectedImageAsync(-1);
+        navPanel.Controls.Add(prevBtn, 0, 0);
+        _imageCounterLabel.Text = "Resim yok";
+        _imageCounterLabel.Font = new Font("Segoe UI Semibold", 8F);
+        navPanel.Controls.Add(_imageCounterLabel, 1, 0);
+        var nextBtn = CreateButton(">");
+        nextBtn.Click += async (_, _) => await MoveSelectedImageAsync(1);
+        navPanel.Controls.Add(nextBtn, 2, 0);
+        leftLayout.Controls.Add(navPanel, 0, 1);
+
+        var btnQuickFullAi = new ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🚀 1-Tık Full AI",
+            NormalColor = UiStyle.PrimaryColor,
+            HoverColor = UiStyle.PrimaryHover,
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold)
+        };
+        btnQuickFullAi.Click += async (_, _) => await GenerateFullAutoPilotListingAsync();
+        leftLayout.Controls.Add(btnQuickFullAi, 0, 2);
+
+        var btnGenImg = new ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "✨ AI Görsel Üret",
+            NormalColor = UiStyle.AiColor,
+            HoverColor = Color.FromArgb(147, 51, 234),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold)
+        };
+        btnGenImg.Click += async (_, _) => await GenerateImageAsync();
+        leftLayout.Controls.Add(btnGenImg, 0, 3);
+
+        leftPanel.Controls.Add(leftLayout);
+        root.Controls.Add(leftPanel, 0, 0);
+
+        // --- SAĞ PANEL: Sekmeli Modern Çalışma Alanı ---
+        var tabControl = new TabControl 
+        { 
+            Dock = DockStyle.Fill, 
+            Font = new Font("Segoe UI Semibold", 9.5F),
+            Padding = new Point(14, 8)
+        };
+
+        // SEKME 1: ✍️ Başlık & SEO Açıklama
+        var tabSeo = new TabPage("✍️ Başlık & SEO Açıklama") { BackColor = UiStyle.CardBackground, Padding = new Padding(12) };
+        tabSeo.Controls.Add(BuildSeoTitleDescTab());
+        tabControl.TabPages.Add(tabSeo);
+
+        // SEKME 2: 🏷️ 13 Tag & Materyaller
+        var tabTags = new TabPage("🏷️ 13 Tag & Materyaller") { BackColor = UiStyle.CardBackground, Padding = new Padding(12) };
+        tabTags.Controls.Add(BuildTagsMaterialsTab());
+        tabControl.TabPages.Add(tabTags);
+
+        // SEKME 3: 💰 Fiyat, Kargo & Etsy Ayarları
+        var tabSettings = new TabPage("💰 Fiyat & Kargo Ayarları") { BackColor = UiStyle.CardBackground, Padding = new Padding(12) };
+        tabSettings.Controls.Add(BuildPriceShippingTab());
+        tabControl.TabPages.Add(tabSettings);
+
+        // SEKME 4: 🎨 AI Görsel Promptları
+        var tabVisuals = new TabPage("🎨 AI Görsel & Promptlar") { BackColor = UiStyle.CardBackground, Padding = new Padding(12) };
+        tabVisuals.Controls.Add(BuildVisualsTab());
+        tabControl.TabPages.Add(tabVisuals);
+
+        // SEKME 5: 📊 Kalite Karnesi & Notlar
+        var tabQuality = new TabPage("📊 Kalite Karnesi & Notlar") { BackColor = UiStyle.CardBackground, Padding = new Padding(12) };
+        tabQuality.Controls.Add(BuildQualityNotesTab());
+        tabControl.TabPages.Add(tabQuality);
+
+        root.Controls.Add(tabControl, 1, 0);
+        UpdateListingTypeControls();
+
+        _titleTextBox.TextChanged += (_, _) => UpdateTitleCounter();
+        _tagsTextBox.TextChanged += (_, _) => UpdateTagCounter();
+
+        return root;
+    }
+
+    private Control BuildSeoTitleDescTab()
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Başlık header + Sayaç
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 52)); // Başlık kutusu
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Açıklama header + AI butonu
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Açıklama kutusu
+
+        var titleHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        titleHeader.Controls.Add(LabelFor("Etsy SEO Başlığı (Maks. 140 Karakter):"), 0, 0);
+        _lblTitleCounter.Text = "0 / 140 Karakter";
+        _lblTitleCounter.TextAlign = ContentAlignment.MiddleRight;
+        titleHeader.Controls.Add(_lblTitleCounter, 1, 0);
+        panel.Controls.Add(titleHeader, 0, 0);
+
         _titleTextBox.Dock = DockStyle.Fill;
         _titleTextBox.Multiline = true;
-        left.Controls.Add(_titleTextBox, 0, 2);
-        var descHeaderPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        descHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        descHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135));
-        descHeaderPanel.Controls.Add(LabelFor("Aciklama"), 0, 0);
+        panel.Controls.Add(_titleTextBox, 0, 1);
 
-        var btnAiDesc = CreateButton("\u2728 AI Aciklama");
+        var descHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        descHeader.Controls.Add(LabelFor("Satış Odaklı Açıklama (Biçimlendirilmiş):"), 0, 0);
+
+        var btnAiDesc = CreateButton("✨ AI Açıklama Yenile");
         btnAiDesc.BackColor = UiStyle.AiColor;
         btnAiDesc.ForeColor = Color.White;
         btnAiDesc.Font = UiStyle.SemiboldBaseFont;
         btnAiDesc.Click += async (_, _) => await GenerateDescriptionWithAiAsync();
-        descHeaderPanel.Controls.Add(btnAiDesc, 1, 0);
+        descHeader.Controls.Add(btnAiDesc, 1, 0);
+        panel.Controls.Add(descHeader, 0, 2);
 
-        left.Controls.Add(descHeaderPanel, 0, 3);
         ConfigureMultiline(_descriptionTextBox);
-        left.Controls.Add(_descriptionTextBox, 0, 4);
-        layout.Controls.Add(left, 0, 0);
+        panel.Controls.Add(_descriptionTextBox, 0, 3);
 
-        var middle = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8 };
-        middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
-        middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 22));
-        middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 24));
-        middle.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        middle.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-        middle.Controls.Add(LabelFor("Tagler"), 0, 0);
+        return panel;
+    }
+
+    private Control BuildTagsMaterialsTab()
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5 };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // Tag Header + Sayaç + Casus Butonu
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 45)); // Tag Kutusu
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Materyal Header
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 25)); // Materyal Kutusu
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 30)); // Varyasyon Kutusu
+
+        var tagHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
+        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+
+        tagHeader.Controls.Add(LabelFor("13 Adet Etsy Tag (Virgülle veya alt alta ayırın, maks 20 karakter):"), 0, 0);
+        _lblTagCounter.Text = "0 / 13 Tag";
+        _lblTagCounter.TextAlign = ContentAlignment.MiddleRight;
+        tagHeader.Controls.Add(_lblTagCounter, 1, 0);
+
+        var btnTagSpy = CreateButton("🕵️ Rakip Taglerini Al");
+        btnTagSpy.Click += (_, _) => CopyCompetitorTags();
+        tagHeader.Controls.Add(btnTagSpy, 2, 0);
+        panel.Controls.Add(tagHeader, 0, 0);
+
         ConfigureMultiline(_tagsTextBox);
-        middle.Controls.Add(_tagsTextBox, 0, 1);
-        middle.Controls.Add(LabelFor("Materyaller"), 0, 2);
+        panel.Controls.Add(_tagsTextBox, 0, 1);
+
+        panel.Controls.Add(LabelFor("Ürün Materyalleri:"), 0, 2);
         ConfigureMultiline(_materialsTextBox);
-        middle.Controls.Add(_materialsTextBox, 0, 3);
-        middle.Controls.Add(LabelFor("Varyasyon onerileri"), 0, 4);
+        panel.Controls.Add(_materialsTextBox, 0, 3);
+
+        var varHeader = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        varHeader.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        varHeader.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        varHeader.Controls.Add(LabelFor("Varyasyon & Beden Önerileri:"), 0, 0);
         ConfigureMultiline(_variationsTextBox);
-        middle.Controls.Add(_variationsTextBox, 0, 5);
-        middle.Controls.Add(LabelFor("AI gorsel promptlari (satir satir)"), 0, 6);
-        ConfigureMultiline(_imagePromptTextBox);
-        middle.Controls.Add(_imagePromptTextBox, 0, 7);
-        layout.Controls.Add(middle, 1, 0);
+        varHeader.Controls.Add(_variationsTextBox, 0, 1);
+        panel.Controls.Add(varHeader, 0, 4);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 20, AutoScroll = true };
-        for (var index = 0; index < 19; index++)
-        {
-            right.RowStyles.Add(new RowStyle(SizeType.Absolute, index % 2 == 0 ? 18 : 28));
-        }
+        return panel;
+    }
 
-        right.RowStyles[18] = new RowStyle(SizeType.Absolute, 32);
-        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        right.Controls.Add(LabelFor("Fiyat"), 0, 0);
-        _priceInput.Dock = DockStyle.Fill;
-        right.Controls.Add(_priceInput, 0, 1);
-        right.Controls.Add(LabelFor("Stok"), 0, 2);
-        _quantityInput.Dock = DockStyle.Fill;
-        right.Controls.Add(_quantityInput, 0, 3);
-        right.Controls.Add(LabelFor("Taxonomy ID"), 0, 4);
-        _taxonomyInput.Dock = DockStyle.Fill;
-        right.Controls.Add(_taxonomyInput, 0, 5);
-        right.Controls.Add(LabelFor("Kategori"), 0, 6);
-        _categoryTextBox.Dock = DockStyle.Fill;
-        right.Controls.Add(_categoryTextBox, 0, 7);
-        right.Controls.Add(LabelFor("Listing tipi"), 0, 8);
-        right.Controls.Add(_listingTypeComboBox, 0, 9);
-        right.Controls.Add(LabelFor("AI gorsel adedi"), 0, 10);
-        _imageCountInput.Dock = DockStyle.Fill;
-        right.Controls.Add(_imageCountInput, 0, 11);
-        right.Controls.Add(LabelFor("Shipping profile"), 0, 12);
-        right.Controls.Add(_shippingProfileComboBox, 0, 13);
-        right.Controls.Add(LabelFor("Hazirlik durumu"), 0, 14);
-        right.Controls.Add(_readinessStateComboBox, 0, 15);
-        right.Controls.Add(LabelFor("Gorsel dosyasi"), 0, 16);
-        _imagePathTextBox.Dock = DockStyle.Fill;
-        right.Controls.Add(_imagePathTextBox, 0, 17);
-        var choose = CreateButton("Dosyadan Sec");
-        choose.Click += (_, _) => ChooseImage();
-        right.Controls.Add(choose, 0, 18);
-        var tabControl = new TabControl { Dock = DockStyle.Fill };
-        var qualityTab = new TabPage("📊 Kalite Karnesi") { BackColor = Color.White };
-        qualityTab.Controls.Add(_qualityReportControl);
-        tabControl.TabPages.Add(qualityTab);
+    private Control BuildPriceShippingTab()
+    {
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(8) };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
 
-        var notesTab = new TabPage("📝 Notlar") { BackColor = Color.White };
-        _notesTextBox.Dock = DockStyle.Fill;
-        _notesTextBox.Multiline = true;
-        _notesTextBox.ReadOnly = true;
-        notesTab.Controls.Add(_notesTextBox);
-        tabControl.TabPages.Add(notesTab);
+        // Sol Sütun 1: Fiyat ($)
+        var pnlPrice = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlPrice.Controls.Add(LabelFor("Satış Fiyatı ($ USD):"));
+        _priceInput.Width = 240;
+        pnlPrice.Controls.Add(_priceInput);
+        layout.Controls.Add(pnlPrice, 0, 0);
 
-        right.Controls.Add(tabControl, 0, 19);
-        layout.Controls.Add(right, 2, 0);
-        UpdateListingTypeControls();
+        // Sağ Sütun 1: Taxonomy ID
+        var pnlTax = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlTax.Controls.Add(LabelFor("Taxonomy ID (Kategori Kodu):"));
+        _taxonomyInput.Width = 240;
+        pnlTax.Controls.Add(_taxonomyInput);
+        layout.Controls.Add(pnlTax, 1, 0);
+
+        // Sol Sütun 2: Stok Adedi
+        var pnlQty = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlQty.Controls.Add(LabelFor("Stok Miktarı (Quantity):"));
+        _quantityInput.Width = 240;
+        pnlQty.Controls.Add(_quantityInput);
+        layout.Controls.Add(pnlQty, 0, 1);
+
+        // Sağ Sütun 2: Kategori Açıklaması
+        var pnlCat = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlCat.Controls.Add(LabelFor("Etsy Kategori Yolu:"));
+        _categoryTextBox.Width = 320;
+        pnlCat.Controls.Add(_categoryTextBox);
+        layout.Controls.Add(pnlCat, 1, 1);
+
+        // Sol Sütun 3: Listing Tipi
+        var pnlType = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlType.Controls.Add(LabelFor("Listing Türü:"));
+        _listingTypeComboBox.Width = 240;
+        pnlType.Controls.Add(_listingTypeComboBox);
+        layout.Controls.Add(pnlType, 0, 2);
+
+        // Sağ Sütun 3: Kargo Profili
+        var pnlShip = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlShip.Controls.Add(LabelFor("Kargo Profili (Shipping Profile):"));
+        _shippingProfileComboBox.Width = 320;
+        pnlShip.Controls.Add(_shippingProfileComboBox);
+        layout.Controls.Add(pnlShip, 1, 2);
+
+        // Sol Sütun 4: AI Görsel Adedi
+        var pnlImgCnt = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlImgCnt.Controls.Add(LabelFor("Üretilecek AI Görsel Adedi:"));
+        _imageCountInput.Width = 240;
+        pnlImgCnt.Controls.Add(_imageCountInput);
+        layout.Controls.Add(pnlImgCnt, 0, 3);
+
+        // Sağ Sütun 4: Hazırlık Durumu
+        var pnlReady = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
+        pnlReady.Controls.Add(LabelFor("Hazırlık Durumu (Readiness State):"));
+        _readinessStateComboBox.Width = 320;
+        pnlReady.Controls.Add(_readinessStateComboBox);
+        layout.Controls.Add(pnlReady, 1, 3);
+
         return layout;
     }
 
-    private Control BuildImagePreviewPanel()
+    private Control BuildVisualsTab()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(0, 0, 8, 8) };
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(8) };
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
 
-        panel.Controls.Add(_previewPictureBox, 0, 0);
-        panel.SetColumnSpan(_previewPictureBox, 3);
+        panel.Controls.Add(LabelFor("AI Görsel Promptları (Midjourney / DALL-E - Satır Satır):"), 0, 0);
+        ConfigureMultiline(_imagePromptTextBox);
+        panel.Controls.Add(_imagePromptTextBox, 0, 1);
 
-        var previous = CreateButton("<");
-        previous.Click += async (_, _) => await MoveSelectedImageAsync(-1);
-        panel.Controls.Add(previous, 0, 1);
-        _imageCounterLabel.Text = "Resim yok";
-        panel.Controls.Add(_imageCounterLabel, 1, 1);
-        var next = CreateButton(">");
-        next.Click += async (_, _) => await MoveSelectedImageAsync(1);
-        panel.Controls.Add(next, 2, 1);
+        panel.Controls.Add(LabelFor("Manuel Seçilen Görsel Dosyası Yolu:"), 0, 2);
+
+        var fileRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        fileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        fileRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+        _imagePathTextBox.Dock = DockStyle.Fill;
+        fileRow.Controls.Add(_imagePathTextBox, 0, 0);
+        var choose = CreateButton("📁 Dosyadan Seç");
+        choose.Click += (_, _) => ChooseImage();
+        fileRow.Controls.Add(choose, 1, 0);
+        panel.Controls.Add(fileRow, 0, 3);
+
         return panel;
+    }
+
+    private Control BuildQualityNotesTab()
+    {
+        var split = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(6) };
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+
+        var qualityCard = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4),
+            Padding = new Padding(8),
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor
+        };
+        qualityCard.Controls.Add(_qualityReportControl);
+        split.Controls.Add(qualityCard, 0, 0);
+
+        var notesCard = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4),
+            Padding = new Padding(8),
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor
+        };
+        var notesLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        notesLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        notesLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        notesLayout.Controls.Add(LabelFor("📝 Optimizasyon & Mağaza Notları:"), 0, 0);
+        ConfigureMultiline(_notesTextBox);
+        notesLayout.Controls.Add(_notesTextBox, 0, 1);
+        notesCard.Controls.Add(notesLayout);
+        split.Controls.Add(notesCard, 1, 0);
+
+        return split;
+    }
+
+    private void UpdateTitleCounter()
+    {
+        int len = _titleTextBox.Text.Length;
+        _lblTitleCounter.Text = $"{len} / 140 Karakter";
+        _lblTitleCounter.ForeColor = len > 140 ? UiStyle.DangerColor : (len >= 100 ? UiStyle.SuccessColor : UiStyle.TextMuted);
+    }
+
+    private void UpdateTagCounter()
+    {
+        var tags = _tagsTextBox.Text
+            .Split([',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim())
+            .Where(t => !string.IsNullOrEmpty(t))
+            .ToList();
+
+        int overLengthCount = tags.Count(t => t.Length > 20);
+        _lblTagCounter.Text = $"{tags.Count} / 13 Tag" + (overLengthCount > 0 ? $" ({overLengthCount} tag 20 karaktere sığmıyor!)" : "");
+        _lblTagCounter.ForeColor = tags.Count > 13 || overLengthCount > 0 ? UiStyle.DangerColor : (tags.Count == 13 ? UiStyle.SuccessColor : UiStyle.TextMuted);
+    }
+
+    private void CopyCompetitorTags()
+    {
+        if (SelectedRow != null && SelectedRow.Listing.Tags.Count > 0)
+        {
+            _tagsTextBox.Text = string.Join(", ", SelectedRow.Listing.Tags.Take(13));
+            UpdateTagCounter();
+            _statusLabel.Text = $"Seçilen rakip üründen {Math.Min(13, SelectedRow.Listing.Tags.Count)} tag kopyalandı";
+        }
+        else
+        {
+            MessageBox.Show(this, "Seçilen üründe kopyalanacak tag bulunamadı.", "Tag Casusu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+    }
+
+    private async Task GenerateFullAutoPilotListingAsync()
+    {
+        if (SelectedRow is null)
+        {
+            MessageBox.Show(this, "Lütfen önce tablodan bir rakip ürün fikri seçin.", "1-Tık Full AI Listing", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            StartBusy("🚀 1-Tık Full AI Listing hazırlanıyor...");
+            _statusLabel.Text = "Yapay zeka SEO başlığı, 13 tag, açıklama ve görselleri hazırlıyor...";
+            
+            // 1. Taslak ve SEO bilgilerini üret
+            await GenerateDraftAsync();
+            
+            // 2. Açıklamayı AI ile zenginleştir
+            SetBusyMessage("Satış odaklı AI açıklaması yazılıyor...");
+            await GenerateDescriptionWithAiAsync();
+
+            _statusLabel.Text = "✅ 1-Tık Full AI Listing başarıyla hazırlandı! İnceleyip 'Etsy Taslak Ekle' ile gönderebilirsiniz.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "AI Listing oluşturulurken hata: " + ex.Message, "Full AI Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            StopBusy();
+        }
     }
 
     private void ConfigureGrid()

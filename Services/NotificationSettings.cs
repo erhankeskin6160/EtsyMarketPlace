@@ -17,4 +17,10 @@ public sealed class NotificationSettings
     public bool NotifyOnAutomationRun { get; set; } = true;
     public bool NotifyOnAbTestWinner { get; set; } = true;
     public bool NotifyOnError { get; set; } = true;
+
+    // ── 🌙 Günlük Gece Finans Raporu Ayarları ────────────────────────────────
+    public bool EnableDailyFinancialNightReport { get; set; } = true;
+    public string DailyFinancialReportTime { get; set; } = "23:55";
+    public bool IncludeAiSummaryInNightReport { get; set; } = true;
+    public string LastDailyFinancialReportSentDate { get; set; } = string.Empty;
 }

@@ -24,6 +24,11 @@ internal sealed class NotificationSettingsForm : Form
     private readonly CheckBox _notifyAbTestWinnerChk = new() { Text = "📈 A/B Test Kazananı Belli Olduğunda Gönder", AutoSize = true };
     private readonly CheckBox _notifyErrorChk = new() { Text = "⚠️ Kritik Sistem/API Hatası Oluştuğunda Gönder", AutoSize = true };
 
+    // ── 🌙 Günlük Gece Finans Raporu ──────────────────────────────────────────
+    private readonly CheckBox _dailyNightReportChk = new() { Text = "🌙 Günlük Gece Finans Raporu (Her Gece Otomatik)", AutoSize = true };
+    private readonly TextBox _dailyReportTimeTxt = new() { Text = "23:55", Width = 80 };
+    private readonly Button _testNightReportBtn;
+
     private readonly Label _statusLabel = new() { UseMnemonic = false };
 
     public NotificationSettingsForm()
@@ -31,6 +36,7 @@ internal sealed class NotificationSettingsForm : Form
         _settings = NotificationSettingsStore.Load();
         _testTelegramBtn = UiStyle.CreateButton("🧪 Telegram Test Bildirimi");
         _testWhatsAppBtn = UiStyle.CreateButton("🧪 WhatsApp Test Bildirimi");
+        _testNightReportBtn = UiStyle.CreateButton("🌙 Şimdi Gece Finans Raporunu Gönder (Test)");
         BuildLayout();
         LoadValues();
     }
@@ -183,14 +189,29 @@ internal sealed class NotificationSettingsForm : Form
         stack.Controls.Add(_notifyAbTestWinnerChk);
         stack.Controls.Add(_notifyErrorChk);
 
+        // ── 🌙 Gece Finans Raporu Paneli ──
+        var pnlNight = new Panel { AutoSize = true, Width = 460, Margin = new Padding(0, 10, 0, 0), Padding = new Padding(8), BackColor = UiStyle.CardBackground };
+        var nightLayout = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown };
+        nightLayout.Controls.Add(_dailyNightReportChk);
+
+        var timeRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Margin = new Padding(20, 4, 0, 4) };
+        timeRow.Controls.Add(new Label { Text = "⏰ Gönderim Saati (SS:DD):", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 4, 0) });
+        timeRow.Controls.Add(_dailyReportTimeTxt);
+        nightLayout.Controls.Add(timeRow);
+
+        _testNightReportBtn.Click += async (_, _) => await TestNightReportAsync();
+        nightLayout.Controls.Add(_testNightReportBtn);
+        pnlNight.Controls.Add(nightLayout);
+        stack.Controls.Add(pnlNight);
+
         var hintLabel = new Label
         {
             Width = 460,
-            Height = 140,
-            Text = "💡 İpucu:\nTelegram Botunuzu kurmak için Telegram'da @BotFather kullanıcısına /newbot yazıp 30 saniyede ücretsiz token alabilirsiniz.\nChat ID'nizi öğrenmek için ise @userinfobot kullanabilirsiniz.\n\nSipariş ve Fırsat bildirimleri VDS üzerinde 7/24 arka planda otomatik gönderilir.",
+            Height = 120,
+            Text = "💡 İpucu:\nTelegram Botunuzu kurmak için Telegram'da @BotFather kullanıcısına /newbot yazıp 30 saniyede ücretsiz token alabilirsiniz.\nChat ID'nizi öğrenmek için ise @userinfobot kullanabilirsiniz.\n\nSipariş, Fırsat ve Gece Finans bildirimleri VDS üzerinde 7/24 arka planda otomatik gönderilir.",
             ForeColor = UiStyle.TextMuted,
             Font = new Font("Segoe UI", 9F, FontStyle.Italic),
-            Margin = new Padding(0, 20, 0, 0),
+            Margin = new Padding(0, 10, 0, 0),
             UseMnemonic = false
         };
         stack.Controls.Add(hintLabel);
@@ -217,6 +238,9 @@ internal sealed class NotificationSettingsForm : Form
 
         _notifyAbTestWinnerChk.Checked = _settings.NotifyOnAbTestWinner;
         _notifyErrorChk.Checked = _settings.NotifyOnError;
+
+        _dailyNightReportChk.Checked = _settings.EnableDailyFinancialNightReport;
+        _dailyReportTimeTxt.Text = string.IsNullOrWhiteSpace(_settings.DailyFinancialReportTime) ? "23:55" : _settings.DailyFinancialReportTime;
     }
 
     private void SaveValues()
@@ -236,6 +260,9 @@ internal sealed class NotificationSettingsForm : Form
         _settings.NotifyOnAutomationRun = _notifyAutomationRunChk.Checked;
         _settings.NotifyOnAbTestWinner = _notifyAbTestWinnerChk.Checked;
         _settings.NotifyOnError = _notifyErrorChk.Checked;
+
+        _settings.EnableDailyFinancialNightReport = _dailyNightReportChk.Checked;
+        _settings.DailyFinancialReportTime = string.IsNullOrWhiteSpace(_dailyReportTimeTxt.Text) ? "23:55" : _dailyReportTimeTxt.Text.Trim();
 
         NotificationSettingsStore.Save(_settings);
         _statusLabel.Text = "Ayarlar başarıyla kaydedildi!";
@@ -257,6 +284,14 @@ internal sealed class NotificationSettingsForm : Form
         var (success, msg) = await NotificationService.SendTelegramMessageAsync(token, chatId, "🎉 <b>Etsy Marketplace Bot Testi</b>\n\nTelegram bildirim entegrasyonunuz başarıyla çalışıyor!");
         _statusLabel.Text = msg;
         MessageBox.Show(this, msg, "Telegram Test", MessageBoxButtons.OK, success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+    }
+
+    private async Task TestNightReportAsync()
+    {
+        _statusLabel.Text = "Finans raporu derleniyor ve Telegram'a gönderiliyor...";
+        var (success, msg) = await DailyFinancialReportNotificationService.SendDailyReportAsync(isManualTrigger: true);
+        _statusLabel.Text = msg;
+        MessageBox.Show(this, msg, "🌙 Gece Finans Raporu", MessageBoxButtons.OK, success ? MessageBoxIcon.Information : MessageBoxIcon.Error);
     }
 
     private async Task TestWhatsAppAsync()

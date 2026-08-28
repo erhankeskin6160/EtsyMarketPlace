@@ -49,6 +49,15 @@ internal static class UiStyle
 
     public static void ApplyResponsiveTheme(Form form, Size? minSize = null)
     {
+        try
+        {
+            if (System.IO.File.Exists("app.ico"))
+            {
+                form.Icon = new Icon("app.ico");
+            }
+        }
+        catch { }
+
         form.BackColor = BackgroundColor;
         form.Font = BaseFont;
         form.MinimumSize = minSize ?? new Size(1024, 680);

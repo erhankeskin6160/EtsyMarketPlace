@@ -187,11 +187,27 @@ public class ModernSidebarNav : UserControl
         return -1;
     }
 
+    private static Image? _cachedAppLogo;
+    private static Image? GetAppLogo()
+    {
+        if (_cachedAppLogo != null) return _cachedAppLogo;
+        try
+        {
+            if (File.Exists("app_icon.png"))
+            {
+                _cachedAppLogo = Image.FromFile("app_icon.png");
+            }
+        }
+        catch { }
+        return _cachedAppLogo;
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
         // Background
         using (var bgBrush = new SolidBrush(NavBackColor))
@@ -206,17 +222,38 @@ public class ModernSidebarNav : UserControl
         }
 
         // Header Branding & Toggle Button
+        var logoImg = GetAppLogo();
+
         if (!_isCollapsed)
         {
-            using (var titleFont = new Font("Segoe UI Semibold", 12F, FontStyle.Bold))
-            using (var titleBrush = new SolidBrush(Color.White))
+            if (logoImg != null)
             {
-                g.DrawString("⚡ EtsyMarketPlace", titleFont, titleBrush, new PointF(16, 16));
+                var logoRect = new Rectangle(12, 14, 32, 32);
+                g.DrawImage(logoImg, logoRect);
+
+                using (var titleFont = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold))
+                using (var titleBrush = new SolidBrush(Color.White))
+                {
+                    g.DrawString("EtsyMarketPlace", titleFont, titleBrush, new PointF(48, 12));
+                }
+                using (var subFont = new Font("Segoe UI", 8F))
+                using (var subBrush = new SolidBrush(TextMutedColor))
+                {
+                    g.DrawString("3DArtDesignsStore Engine", subFont, subBrush, new PointF(50, 32));
+                }
             }
-            using (var subFont = new Font("Segoe UI", 8F))
-            using (var subBrush = new SolidBrush(TextMutedColor))
+            else
             {
-                g.DrawString("3DArtDesignsStore Engine", subFont, subBrush, new PointF(18, 38));
+                using (var titleFont = new Font("Segoe UI Semibold", 12F, FontStyle.Bold))
+                using (var titleBrush = new SolidBrush(Color.White))
+                {
+                    g.DrawString("⚡ EtsyMarketPlace", titleFont, titleBrush, new PointF(16, 16));
+                }
+                using (var subFont = new Font("Segoe UI", 8F))
+                using (var subBrush = new SolidBrush(TextMutedColor))
+                {
+                    g.DrawString("3DArtDesignsStore Engine", subFont, subBrush, new PointF(18, 38));
+                }
             }
 
             // Expanded Toggle Icon (◀ or ☰)
@@ -244,16 +281,24 @@ public class ModernSidebarNav : UserControl
                 g.FillPath(hoverBrush, hoverPath);
             }
 
-            using (var iconFont = new Font("Segoe UI", 13F))
-            using (var iconBrush = new SolidBrush(ItemActiveColor))
+            if (logoImg != null)
             {
-                g.DrawString("⚡", iconFont, iconBrush, new PointF(12, 18));
+                var logoRect = new Rectangle(14, 14, 32, 32);
+                g.DrawImage(logoImg, logoRect);
             }
-
-            using (var arrowFont = new Font("Segoe UI Semibold", 10F, FontStyle.Bold))
-            using (var arrowBrush = new SolidBrush(_isHeaderToggleHovered ? Color.White : TextMutedColor))
+            else
             {
-                g.DrawString("▶", arrowFont, arrowBrush, new PointF(34, 21));
+                using (var iconFont = new Font("Segoe UI", 13F))
+                using (var iconBrush = new SolidBrush(ItemActiveColor))
+                {
+                    g.DrawString("⚡", iconFont, iconBrush, new PointF(12, 18));
+                }
+
+                using (var arrowFont = new Font("Segoe UI Semibold", 10F, FontStyle.Bold))
+                using (var arrowBrush = new SolidBrush(_isHeaderToggleHovered ? Color.White : TextMutedColor))
+                {
+                    g.DrawString("▶", arrowFont, arrowBrush, new PointF(34, 21));
+                }
             }
         }
 

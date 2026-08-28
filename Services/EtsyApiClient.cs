@@ -907,40 +907,49 @@ internal sealed class EtsyApiClient
         CancellationToken cancellationToken)
     {
         const int pageSize = 100;
-        var offset = 0;
         var receipts = new List<OwnShopReceipt>();
+        var currentStart = periodStart;
 
-        while (true)
+        while (currentStart < periodEnd)
         {
-            var query = ToQueryString(new Dictionary<string, string>
+            var currentEnd = currentStart.AddDays(30);
+            if (currentEnd > periodEnd) currentEnd = periodEnd;
+
+            var offset = 0;
+            while (true)
             {
-                ["min_created"] = periodStart.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
-                ["max_created"] = periodEnd.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
-                ["limit"] = pageSize.ToString(CultureInfo.InvariantCulture),
-                ["offset"] = offset.ToString(CultureInfo.InvariantCulture),
-            });
-            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/receipts?{query}", useAccessToken: true);
-            using var response = await _httpClient.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException($"Magaza siparisleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+                var query = ToQueryString(new Dictionary<string, string>
+                {
+                    ["min_created"] = currentStart.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                    ["max_created"] = currentEnd.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture),
+                    ["limit"] = pageSize.ToString(CultureInfo.InvariantCulture),
+                    ["offset"] = offset.ToString(CultureInfo.InvariantCulture),
+                });
+                using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/receipts?{query}", useAccessToken: true);
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException($"Magaza siparisleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+                }
+
+                using var document = JsonDocument.Parse(body);
+                var results = GetArray(document.RootElement, "results");
+                if (!results.HasValue || results.Value.GetArrayLength() == 0)
+                {
+                    break;
+                }
+
+                receipts.AddRange(results.Value.EnumerateArray().Select(ParseOwnShopReceipt));
+                offset += results.Value.GetArrayLength();
+                var count = GetInt(document.RootElement, "count");
+                if (results.Value.GetArrayLength() < pageSize || (count > 0 && offset >= count))
+                {
+                    break;
+                }
             }
 
-            using var document = JsonDocument.Parse(body);
-            var results = GetArray(document.RootElement, "results");
-            if (!results.HasValue || results.Value.GetArrayLength() == 0)
-            {
-                break;
-            }
-
-            receipts.AddRange(results.Value.EnumerateArray().Select(ParseOwnShopReceipt));
-            offset += results.Value.GetArrayLength();
-            var count = GetInt(document.RootElement, "count");
-            if (results.Value.GetArrayLength() < pageSize || (count > 0 && offset >= count))
-            {
-                break;
-            }
+            currentStart = currentEnd.AddSeconds(1);
         }
 
         return receipts;
@@ -949,6 +958,12 @@ internal sealed class EtsyApiClient
     private static OwnShopReceipt ParseOwnShopReceipt(JsonElement receipt)
     {
         var (grandTotal, currency) = ReadMoney(receipt, "grandtotal");
+        var (subtotal, _)          = ReadMoney(receipt, "subtotal");
+        var (shippingCost, _)      = ReadMoney(receipt, "total_shipping_cost");
+        var (totalTax, _)          = ReadMoney(receipt, "total_tax_cost");
+        var (discountAmt, _)       = ReadMoney(receipt, "discount_amt");
+        bool isFromOffsiteAds      = GetBool(receipt, "is_from_offsite_ads");
+
         var transactions = GetArray(receipt, "transactions", "Transactions")?
             .EnumerateArray()
             .Select(transaction =>
@@ -977,6 +992,11 @@ internal sealed class EtsyApiClient
             GetBool(receipt, "is_paid"),
             isCanceledOrRefunded,
             grandTotal,
+            subtotal,
+            shippingCost,
+            totalTax,
+            discountAmt,
+            isFromOffsiteAds,
             currency,
             transactions);
     }
