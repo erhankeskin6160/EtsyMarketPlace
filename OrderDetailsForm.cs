@@ -1,5 +1,6 @@
 namespace SimilarProductsWinForms;
 
+using System;
 using System.Globalization;
 using System.Drawing;
 using System.Windows.Forms;
@@ -20,10 +21,11 @@ internal sealed class OrderDetailsForm : Form
     {
         _order = order;
         Text = $"🧾 Sipariş Detayları: #{order.ReceiptId}";
-        Size = new Size(860, 600);
+        Size = new Size(880, 660);
+        MinimumSize = new Size(840, 620);
         StartPosition = FormStartPosition.CenterParent;
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
+        FormBorderStyle = FormBorderStyle.Sizable;
+        MaximizeBox = true;
         MinimizeBox = false;
 
         Load += OrderDetailsForm_Load;
@@ -43,10 +45,9 @@ internal sealed class OrderDetailsForm : Form
         }
         else
         {
-            // Default to whatever was previously saved as total if we can't find it?
-            // Actually, if it wasn't found, it's 0.
             _productionCost = _order.ProductCost / Math.Max(1, _order.Quantity);
         }
+        UpdateProfitLabel();
     }
 
     private void BuildLayout()
@@ -55,21 +56,24 @@ internal sealed class OrderDetailsForm : Form
         {
             Dock = DockStyle.Fill,
             RowCount = 2,
+            ColumnCount = 1,
             Padding = new Padding(20),
             BackColor = Color.White
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Main cards
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 120)); // Bottom profit/cost section
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Bottom profit/cost section
         Controls.Add(mainLayout);
 
         // -- Top Section (Left: Earnings, Right: Fees)
         var topLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2
+            ColumnCount = 2,
+            RowCount = 1
         };
         topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        topLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         mainLayout.Controls.Add(topLayout, 0, 0);
 
         // Left Panel (Earnings)
@@ -100,8 +104,9 @@ internal sealed class OrderDetailsForm : Form
         var pnlBottom = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(20),
-            Margin = new Padding(0, 20, 0, 0),
+            AutoSize = true,
+            Padding = new Padding(20, 16, 20, 16),
+            Margin = new Padding(0, 16, 0, 0),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
@@ -187,7 +192,7 @@ internal sealed class OrderDetailsForm : Form
 
     private void BuildBottomPanel(Panel container)
     {
-        var pnlProfit = new Panel { Dock = DockStyle.Fill, Name = "pnlProfit" };
+        var pnlProfit = new Panel { Dock = DockStyle.Fill, AutoSize = true, Name = "pnlProfit" };
         container.Controls.Add(pnlProfit);
         
         UpdateProfitLabel(pnlProfit);
@@ -212,7 +217,8 @@ internal sealed class OrderDetailsForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            AutoSize = true
+            AutoSize = true,
+            Padding = new Padding(0)
         };
 
         var lblProfit = new Label 
@@ -221,7 +227,7 @@ internal sealed class OrderDetailsForm : Form
             AutoSize = true,
             Font = new Font("Segoe UI", 15F, FontStyle.Bold),
             ForeColor = netUSD >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = new Padding(0, 0, 0, 6)
         };
         layout.Controls.Add(lblProfit);
 
@@ -229,16 +235,17 @@ internal sealed class OrderDetailsForm : Form
         {
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 4)
         };
 
         var lblCostBreakdown = new Label
         {
             Text = $"Üretim: ${_productionCost * _order.Quantity:N2} | 🚚 Kargo: ${totalShipping:N2} | Paketleme: ${_packagingCost * _order.Quantity:N2}",
             AutoSize = true,
-            Font = new Font("Segoe UI", 9F),
+            Font = new Font("Segoe UI", 9.5F),
             ForeColor = UiStyle.TextMuted,
-            Padding = new Padding(0, 4, 10, 0)
+            Padding = new Padding(0, 4, 12, 0)
         };
         subInfo.Controls.Add(lblCostBreakdown);
 
@@ -248,12 +255,13 @@ internal sealed class OrderDetailsForm : Form
             {
                 Text = "📄 Kargo Faturasını Aç",
                 AutoSize = true,
-                Height = 26,
+                Height = 28,
                 BackColor = Color.FromArgb(79, 70, 229),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
-                Cursor = Cursors.Hand
+                Cursor = Cursors.Hand,
+                Padding = new Padding(8, 0, 8, 0)
             };
             btnInvoice.FlatAppearance.BorderSize = 0;
             btnInvoice.Click += (_, _) => InvoiceStorageService.OpenInvoice(_order.InvoiceFilePath);

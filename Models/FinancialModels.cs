@@ -111,10 +111,20 @@ internal sealed record PeriodFinancialSummary(
     decimal EtsyNetRevenue,    // Gross - Refunds - Fees - InnerAds - OffsiteAds
     decimal RealNetProfitUSD,  // EtsyNetRevenue - ProductCosts
     decimal RealNetProfitTRY,  // Sipariş Gününün Kuru İle Hesaplanan Gerçek TL Kârı
-    decimal AverageExchangeRate// Sipariş Günündeki Kur Ortalaması
+    decimal AverageExchangeRate,// Sipariş Günündeki Kur Ortalaması
+    decimal GrossSalesTRY = 0m,
+    decimal EtsyFeesTRY = 0m,
+    decimal InnerAdFeesTRY = 0m,
+    decimal OffsiteAdFeesTRY = 0m,
+    decimal RefundsTRY = 0m,
+    decimal ProductCostsTRY = 0m,
+    decimal EtsyNetRevenueTRY = 0m
 )
 {
     public decimal TotalAds => InnerAdFees + OffsiteAdFees;
+    public decimal TotalAdsTRY => InnerAdFeesTRY + OffsiteAdFeesTRY;
+    public decimal TotalExpensesUSD => Math.Abs(EtsyFees) + Math.Abs(InnerAdFees) + Math.Abs(OffsiteAdFees) + Math.Abs(Refunds) + ProductCosts;
+    public decimal TotalExpensesTRY => Math.Abs(EtsyFeesTRY) + Math.Abs(InnerAdFeesTRY) + Math.Abs(OffsiteAdFeesTRY) + Math.Abs(RefundsTRY) + ProductCostsTRY;
     public decimal NetMarginPct => GrossSales == 0 ? 0 : Math.Round(RealNetProfitUSD / GrossSales * 100, 1);
 }
 

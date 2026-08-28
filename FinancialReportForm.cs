@@ -30,11 +30,12 @@ internal sealed class FinancialReportForm : Form
     private readonly Label _statusLabel     = new();
     
     private readonly SimilarProductsWinForms.Controls.AnimatedToolTipForm _customToolTipForm = new();
+    private readonly ToolTip _toolTip = new();
     private readonly System.Windows.Forms.Timer _hoverCheckTimer = new() { Interval = 50 };
     private Control? _hoveredCard = null;
-    private string _salesTooltipText = "";
-    private string _refundsTooltipText = "";
-    private string _costsTooltipText = "";
+    private ToolTipDataPayload? _salesTooltipPayload = null;
+    private ToolTipDataPayload? _refundsTooltipPayload = null;
+    private ToolTipDataPayload? _costsTooltipPayload = null;
 
     // ── UI: Filters & Currency ────────────────────────────────────────────────
     private readonly ComboBox _cboDateRange     = new();
@@ -246,14 +247,11 @@ internal sealed class FinancialReportForm : Form
         }
     }
 
-    private void AttachAnimatedHover(Control rootCard, Control currentControl, Func<string> textProvider)
+    private void AttachAnimatedHover(Control rootCard, Control currentControl, Action<SimilarProductsWinForms.Controls.AnimatedToolTipForm, Point> showAction)
     {
         currentControl.MouseEnter += (s, e) => 
         {
             if (_hoveredCard == rootCard) return; // Already hovering
-            string text = textProvider();
-            if (string.IsNullOrEmpty(text)) return;
-
             _hoveredCard = rootCard;
 
             // Calculate position: centered below the card
@@ -262,13 +260,12 @@ internal sealed class FinancialReportForm : Form
             int belowY = cardScreenBounds.Bottom + 4;
             var position = new Point(centerX, belowY);
 
-            _customToolTipForm.ShowTooltip(text, position, 2000);
+            showAction(_customToolTipForm, position);
             _hoverCheckTimer.Start();
         };
 
         currentControl.MouseLeave += (s, e) =>
         {
-            // Small delay before hiding – mouse may just be moving between child controls
             BeginInvoke((Action)(() =>
             {
                 if (_hoveredCard != rootCard) return;
@@ -287,7 +284,7 @@ internal sealed class FinancialReportForm : Form
 
         foreach (Control child in currentControl.Controls)
         {
-            AttachAnimatedHover(rootCard, child, textProvider);
+            AttachAnimatedHover(rootCard, child, showAction);
         }
     }
 
@@ -394,7 +391,7 @@ internal sealed class FinancialReportForm : Form
         _chkUseTry.Checked = true;
         _chkUseTry.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
         _chkUseTry.ForeColor = UiStyle.TextDark;
-        _chkUseTry.CheckedChanged += (_, _) => { UpdateKpis(); UpdateForecastView(); };
+        _chkUseTry.CheckedChanged += (_, _) => { UpdateKpis(); UpdateForecastView(); UpdateCharts(); };
         bar.Controls.Add(_chkUseTry, 6, 0);
 
         _numExchangeRate.Dock = DockStyle.Fill;
@@ -402,7 +399,7 @@ internal sealed class FinancialReportForm : Form
         _numExchangeRate.Maximum = 500;
         _numExchangeRate.Value = 36.50m;
         _numExchangeRate.Enabled = false; // Kullanıcı artık manuel giremez
-        _numExchangeRate.ValueChanged += (_, _) => { UpdateKpis(); UpdateForecastView(); };
+        _numExchangeRate.ValueChanged += (_, _) => { UpdateKpis(); UpdateForecastView(); UpdateCharts(); };
         bar.Controls.Add(_numExchangeRate, 7, 0);
 
         // Excel Butonu
@@ -500,28 +497,40 @@ internal sealed class FinancialReportForm : Form
             if (grossCard != null && grossCard.Tag == null)
             {
                 grossCard.Tag = "attached";
-                AttachAnimatedHover(grossCard, grossCard, () => _salesTooltipText);
+                AttachAnimatedHover(grossCard, grossCard, (tt, pt) => 
+                {
+                    if (_salesTooltipPayload != null)
+                        tt.ShowStructuredTooltip(_salesTooltipPayload, pt, 2000);
+                });
             }
 
             var refundsCard = strip.GetControlFromPosition(4, 0);
             if (refundsCard != null && refundsCard.Tag == null)
             {
                 refundsCard.Tag = "attached";
-                AttachAnimatedHover(refundsCard, refundsCard, () => _refundsTooltipText);
+                AttachAnimatedHover(refundsCard, refundsCard, (tt, pt) => 
+                {
+                    if (_refundsTooltipPayload != null)
+                        tt.ShowStructuredTooltip(_refundsTooltipPayload, pt, 2000);
+                });
             }
 
             var costsCard = strip.GetControlFromPosition(6, 0);
             if (costsCard != null && costsCard.Tag == null)
             {
                 costsCard.Tag = "attached";
-                AttachAnimatedHover(costsCard, costsCard, () => _costsTooltipText);
+                AttachAnimatedHover(costsCard, costsCard, (tt, pt) => 
+                {
+                    if (_costsTooltipPayload != null)
+                        tt.ShowStructuredTooltip(_costsTooltipPayload, pt, 2000);
+                });
             }
         };
 
         return strip;
     }
 
-    private static void BuildKpiCard(TableLayoutPanel parent, int col, string title, Label valueLabel, Color accentColor)
+    private void BuildKpiCard(TableLayoutPanel parent, int col, string title, Label valueLabel, Color accentColor)
     {
         var card = new ModernCardPanel
         {
@@ -531,6 +540,7 @@ internal sealed class FinancialReportForm : Form
             CornerRadius = 10,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
+            Cursor = Cursors.Hand,
         };
 
         var layout = new TableLayoutPanel
@@ -538,25 +548,29 @@ internal sealed class FinancialReportForm : Form
             Dock = DockStyle.Fill,
             RowCount = 3,
             BackColor = Color.Transparent,
+            Cursor = Cursors.Hand,
         };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 16));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 3));
 
-        layout.Controls.Add(new Label
+        var titleLabel = new Label
         {
             Dock = DockStyle.Fill,
             Text = title,
             ForeColor = UiStyle.TextMuted,
             Font = new Font("Segoe UI", 7F, FontStyle.Bold),
             TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 0);
+            Cursor = Cursors.Hand,
+        };
+        layout.Controls.Add(titleLabel, 0, 0);
 
         valueLabel.Dock = DockStyle.Fill;
         valueLabel.Text = "—";
         valueLabel.Font = new Font("Segoe UI Semibold", 13.5F, FontStyle.Bold);
         valueLabel.ForeColor = accentColor;
         valueLabel.TextAlign = ContentAlignment.MiddleLeft;
+        valueLabel.Cursor = Cursors.Hand;
         layout.Controls.Add(valueLabel, 0, 1);
 
         var accent = new Panel
@@ -564,8 +578,36 @@ internal sealed class FinancialReportForm : Form
             Dock = DockStyle.Fill,
             BackColor = accentColor,
             Height = 3,
+            Cursor = Cursors.Hand,
         };
         layout.Controls.Add(accent, 0, 2);
+
+        // Click-to-copy handler
+        Action copyAction = () =>
+        {
+            string txt = valueLabel.Text;
+            if (!string.IsNullOrWhiteSpace(txt) && txt != "—")
+            {
+                Clipboard.SetText(txt);
+                SetStatus($"📋 Kopyalandı: {title} ➔ {txt}", UiStyle.SuccessColor);
+            }
+        };
+
+        card.Click += (s, e) => copyAction();
+        layout.Click += (s, e) => copyAction();
+        titleLabel.Click += (s, e) => copyAction();
+        valueLabel.Click += (s, e) => copyAction();
+        accent.Click += (s, e) => copyAction();
+
+        var cms = new ContextMenuStrip();
+        cms.Items.Add("📋 Değeri Kopyala", null, (s, e) => copyAction());
+        card.ContextMenuStrip = cms;
+        layout.ContextMenuStrip = cms;
+        titleLabel.ContextMenuStrip = cms;
+        valueLabel.ContextMenuStrip = cms;
+
+        _toolTip.SetToolTip(card, $"Tıklayarak '{title}' tutarını panoya kopyalayın");
+        _toolTip.SetToolTip(valueLabel, $"Tıklayarak '{title}' tutarını panoya kopyalayın");
 
         card.Controls.Add(layout);
         parent.Controls.Add(card, col, 0);
@@ -996,11 +1038,41 @@ internal sealed class FinancialReportForm : Form
                 }
             }
         });
+
+        var mnuCopyCell = new ToolStripMenuItem("📋 Seçili Hücreyi Kopyala", null, (s, e) =>
+        {
+            if (_gridOrders.CurrentCell?.Value != null)
+            {
+                string val = _gridOrders.CurrentCell.Value.ToString() ?? "";
+                Clipboard.SetText(val);
+                SetStatus($"📋 Kopyalandı: {val}", UiStyle.SuccessColor);
+            }
+        });
+
+        var mnuCopyRow = new ToolStripMenuItem("📑 Tüm Satırı Kopyala", null, (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count > 0)
+            {
+                var row = _gridOrders.SelectedRows[0];
+                var cells = new List<string>();
+                foreach (DataGridViewCell cell in row.Cells)
+                {
+                    cells.Add(cell.Value?.ToString() ?? "");
+                }
+                string rowText = string.Join(" | ", cells);
+                Clipboard.SetText(rowText);
+                SetStatus("📑 Satır panoya kopyalandı.", UiStyle.SuccessColor);
+            }
+        });
         
         ctxMenu.Items.Add(mnuDetails);
         ctxMenu.Items.Add(mnuOpenInvoice);
         ctxMenu.Items.Add(mnuQuickCost);
+        ctxMenu.Items.Add(new ToolStripSeparator());
+        ctxMenu.Items.Add(mnuCopyCell);
+        ctxMenu.Items.Add(mnuCopyRow);
         _gridOrders.ContextMenuStrip = ctxMenu;
+        _gridOrders.ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableWithoutHeaderText;
 
         _gridOrders.CellMouseDown += (s, e) =>
         {
@@ -1008,6 +1080,10 @@ internal sealed class FinancialReportForm : Form
             {
                 _gridOrders.ClearSelection();
                 _gridOrders.Rows[e.RowIndex].Selected = true;
+                if (e.ColumnIndex >= 0)
+                {
+                    _gridOrders.CurrentCell = _gridOrders.Rows[e.RowIndex].Cells[e.ColumnIndex];
+                }
             }
         };
 
@@ -1135,114 +1211,143 @@ internal sealed class FinancialReportForm : Form
 
     private void UpdateRefundsToolTip(bool showTry)
     {
-        if (_report.IsFallbackMode) return;
+        if (_report.IsFallbackMode)
+        {
+            _refundsTooltipPayload = null;
+            return;
+        }
 
         var refundEntries = _report.Entries.Where(e => e.Type == "refund").ToList();
-        var sb = new System.Text.StringBuilder();
+        string cur = showTry ? "₺" : "$";
+        decimal totalRefundAmt = showTry ? _report.DailySummaries.Sum(d => d.Refunds * d.AverageExchangeRate) : _report.TotalRefunds;
+        decimal totalGrossAmt = showTry ? _report.TotalGrossTRY : _report.TotalGross;
+        double refundRate = totalGrossAmt > 0 ? (double)(Math.Abs(totalRefundAmt) / totalGrossAmt * 100) : 0;
 
-        if (refundEntries.Count == 0)
+        var kpiCards = new List<ToolTipKpiCard>
         {
-            sb.AppendLine("Bu dönemde hiç iade bulunmuyor.");
-        }
-        else
+            new("↩️ Toplam İade Tutarı", $"{cur}{Math.Abs(totalRefundAmt):N2}", $"Cironun %{refundRate:N1}'i", Color.FromArgb(239, 68, 68)),
+            new("🔢 İade İşlem Adedi", $"{refundEntries.Count} Adet", null, Color.FromArgb(249, 115, 22)),
+            new("📊 İade Oranı", $"%{refundRate:N1}", null, Color.FromArgb(245, 158, 11))
+        };
+
+        var rows = new List<ToolTipTableRow>();
+        foreach (var r in refundEntries.Take(15))
         {
-            sb.AppendLine($"🔴 Toplam {refundEntries.Count} adet iade işlemi yapıldı:\n");
-            sb.AppendLine("Tarih       | Müşteri        | Tutar       | Sipariş & Ürün Detayı");
-            sb.AppendLine(new string('-', 90));
-            
-            foreach (var r in refundEntries.Take(15))
+            decimal displayAmt = showTry ? Math.Abs(r.Amount * r.ExchangeRate) : Math.Abs(r.Amount);
+            string dateStr = r.CreatedAt.ToString("dd.MM.yy");
+            string orderNo = $"İşlem #{r.EntryId}";
+            string title = string.IsNullOrWhiteSpace(r.Description) || r.Description == "refund_gross" ? "İade / Geri Ödeme Kesintisi" : r.Description;
+
+            // 1. Check if description has 9+ digits receipt id
+            var match = System.Text.RegularExpressions.Regex.Match(r.Description ?? "", @"\d{9,}");
+            if (match.Success && long.TryParse(match.Value, out long receiptId))
             {
-                decimal displayAmt = showTry ? Math.Abs(r.Amount * r.ExchangeRate) : Math.Abs(r.Amount);
-                string curSymbol = showTry ? "₺" : "$";
-                string dateStr = r.CreatedAt.ToString("dd.MM.yy");
-                
-                string title = r.Description;
-                string buyer = "Bilinmiyor";
-                string qtyInfo = "";
-                
-                var match = System.Text.RegularExpressions.Regex.Match(r.Description, @"\d{9,}");
-                if (match.Success && long.TryParse(match.Value, out long receiptId))
+                orderNo = $"#{receiptId}";
+                var order = _report.OrderSummaries.FirstOrDefault(o => o.ReceiptId == receiptId);
+                if (order != null)
                 {
-                    var order = _report.OrderSummaries.FirstOrDefault(o => o.ReceiptId == receiptId);
-                    if (order != null)
-                    {
-                        title = $"Sipariş #{receiptId} - {order.ProductTitle}";
-                        qtyInfo = $" ({order.Quantity} Adet)";
-                    }
+                    title = order.ProductTitle;
                 }
-                
-                if (title.Length > 45) title = title[..42] + "...";
-                if (buyer.Length > 12) buyer = buyer[..10] + "..";
-
-                sb.AppendLine($"{dateStr,-10} | {buyer,-14} | {curSymbol}{displayAmt,8:N2} | {title}{qtyInfo}");
             }
-
-            if (refundEntries.Count > 15)
+            else
             {
-                sb.AppendLine($"\n... ve {refundEntries.Count - 15} iade daha.");
+                // 2. Proximity match with orders by date and amount
+                var matchedOrder = _report.OrderSummaries.FirstOrDefault(o => 
+                    Math.Abs((o.OrderDate - r.CreatedAt).TotalDays) <= 14 &&
+                    (Math.Abs(o.GrandTotal - Math.Abs(r.Amount)) < 0.1m || Math.Abs(o.GrandTotal - Math.Abs(r.NetAmount)) < 0.1m));
+                if (matchedOrder != null)
+                {
+                    orderNo = $"#{matchedOrder.ReceiptId}";
+                    title = matchedOrder.ProductTitle;
+                }
             }
+
+            rows.Add(new ToolTipTableRow(dateStr, orderNo, "1 Ad", $"-{cur}{displayAmt:N2}", false, "", title));
         }
 
-        _refundsTooltipText = sb.ToString();
+        _refundsTooltipPayload = new ToolTipDataPayload(
+            "🔴 İade ve Geri Ödeme Analizi",
+            "Dönem içinde müşterilere yapılan para iadeleri ve kesinti detayları",
+            kpiCards,
+            new[] { "Tarih", "Sipariş No", "Adet", "İade Tutarı", "Durum", "İade Açıklaması / Ürün" },
+            new[] { 0.14f, 0.16f, 0.08f, 0.16f, 0.10f, 0.36f },
+            rows,
+            refundEntries.Count > 15 ? $"ℹ️ ... ve {refundEntries.Count - 15} adet iade daha listelenmedi." : null
+        );
     }
 
     private void UpdateSalesToolTip(bool showTry)
     {
-        if (_report.IsFallbackMode) return;
+        if (_report.IsFallbackMode)
+        {
+            _salesTooltipPayload = null;
+            return;
+        }
 
         var salesEntries = _report.Entries.Where(e => e.Type == "sale").ToList();
-        var sb = new System.Text.StringBuilder();
+        string cur = showTry ? "₺" : "$";
+        decimal totalGross = showTry ? _report.TotalGrossTRY : _report.TotalGross;
+        decimal totalNet = showTry ? _report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate) : _report.TotalNet;
+        decimal aov = salesEntries.Count > 0 ? (totalGross / salesEntries.Count) : 0;
 
-        if (salesEntries.Count == 0)
+        var kpiCards = new List<ToolTipKpiCard>
         {
-            sb.AppendLine("Bu dönemde hiç satış bulunmuyor.");
-        }
-        else
+            new("💰 Toplam Brüt Satış", $"{cur}{totalGross:N2}", $"{salesEntries.Count} İşlem", Color.FromArgb(59, 130, 246)),
+            new("✅ Etsy Net Gelir", $"{cur}{totalNet:N2}", null, Color.FromArgb(16, 185, 129)),
+            new("🏷️ Ortalama Sepet (AOV)", $"{cur}{aov:N2}", null, Color.FromArgb(99, 102, 241))
+        };
+
+        var rows = new List<ToolTipTableRow>();
+        foreach (var r in salesEntries.Take(15))
         {
-            sb.AppendLine($"🟢 Toplam {salesEntries.Count} adet satış işlemi yapıldı:\n");
-            sb.AppendLine("Tarih       | Müşteri        | Tutar       | Sipariş & Ürün Detayı");
-            sb.AppendLine(new string('-', 90));
-            
-            foreach (var r in salesEntries.Take(15))
+            decimal displayAmt = showTry ? Math.Abs(r.Amount * r.ExchangeRate) : Math.Abs(r.Amount);
+            string dateStr = r.CreatedAt.ToString("dd.MM.yy");
+            string orderNo = $"İşlem #{r.EntryId}";
+            string title = string.IsNullOrWhiteSpace(r.Description) || r.Description == "payment" ? "Satış Tahsilatı (Sipariş Ödemesi)" : r.Description;
+            int qty = 1;
+
+            var match = System.Text.RegularExpressions.Regex.Match(r.Description ?? "", @"\d{9,}");
+            if (match.Success && long.TryParse(match.Value, out long receiptId))
             {
-                decimal displayAmt = showTry ? Math.Abs(r.Amount * r.ExchangeRate) : Math.Abs(r.Amount);
-                string curSymbol = showTry ? "₺" : "$";
-                string dateStr = r.CreatedAt.ToString("dd.MM.yy");
-                
-                string title = r.Description;
-                string buyer = "Bilinmiyor";
-                string qtyInfo = "";
-
-                var match = System.Text.RegularExpressions.Regex.Match(r.Description, @"\d{9,}");
-                if (match.Success && long.TryParse(match.Value, out long receiptId))
+                orderNo = $"#{receiptId}";
+                var order = _report.OrderSummaries.FirstOrDefault(o => o.ReceiptId == receiptId);
+                if (order != null)
                 {
-                    var order = _report.OrderSummaries.FirstOrDefault(o => o.ReceiptId == receiptId);
-                    if (order != null)
-                    {
-                        title = $"Sipariş #{receiptId} - {order.ProductTitle}";
-                        qtyInfo = $" ({order.Quantity} Adet)";
-                    }
+                    title = order.ProductTitle;
+                    qty = order.Quantity;
                 }
-                
-                if (title.Length > 45) title = title[..42] + "...";
-                if (buyer.Length > 12) buyer = buyer[..10] + "..";
-
-                sb.AppendLine($"{dateStr,-10} | {buyer,-14} | {curSymbol}{displayAmt,8:N2} | {title}{qtyInfo}");
             }
-
-            if (salesEntries.Count > 15)
+            else
             {
-                sb.AppendLine($"\n... ve {salesEntries.Count - 15} satış daha.");
+                var matchedOrder = _report.OrderSummaries.FirstOrDefault(o => 
+                    Math.Abs((o.OrderDate - r.CreatedAt).TotalDays) <= 3 &&
+                    (Math.Abs(o.GrandTotal - Math.Abs(r.Amount)) < 0.1m || Math.Abs(o.Subtotal - Math.Abs(r.Amount)) < 0.1m));
+                if (matchedOrder != null)
+                {
+                    orderNo = $"#{matchedOrder.ReceiptId}";
+                    title = matchedOrder.ProductTitle;
+                    qty = matchedOrder.Quantity;
+                }
             }
+
+            rows.Add(new ToolTipTableRow(dateStr, orderNo, $"{qty} Ad", $"{cur}{displayAmt:N2}", false, "", title));
         }
 
-        _salesTooltipText = sb.ToString();
+        _salesTooltipPayload = new ToolTipDataPayload(
+            "🟢 Satış ve Gelir Analizi",
+            "Dönem içinde mağazanıza gelen siparişler ve brüt satış hareketleri",
+            kpiCards,
+            new[] { "Tarih", "Sipariş No", "Adet", "Tutar", "Durum", "Ürün / İlan Başlığı" },
+            new[] { 0.14f, 0.16f, 0.08f, 0.16f, 0.10f, 0.36f },
+            rows,
+            salesEntries.Count > 15 ? $"ℹ️ ... ve {salesEntries.Count - 15} adet satış daha listelenmedi." : null
+        );
     }
 
     private void UpdateCostsToolTip(bool showTry)
     {
         var orders = _report.OrderSummaries;
-        var sb = new System.Text.StringBuilder();
+        string cur = showTry ? "₺" : "$";
 
         decimal totalCOGS_USD = orders.Sum(o => o.ProductCost);
         decimal totalShipping_USD = orders.Sum(o => o.TotalOrderShippingCost);
@@ -1254,7 +1359,6 @@ internal sealed class FinancialReportForm : Form
         decimal totalProduction_TRY = orders.Sum(o => Math.Round(o.TotalOrderProductionCost * o.ExchangeRate, 2));
         decimal totalPackaging_TRY = orders.Sum(o => Math.Round(o.TotalOrderPackagingCost * o.ExchangeRate, 2));
 
-        string cur = showTry ? "₺" : "$";
         decimal dispCOGS = showTry ? totalCOGS_TRY : totalCOGS_USD;
         decimal dispShip = showTry ? totalShipping_TRY : totalShipping_USD;
         decimal dispProd = showTry ? totalProduction_TRY : totalProduction_USD;
@@ -1263,40 +1367,40 @@ internal sealed class FinancialReportForm : Form
         double shipShare = totalCOGS_USD > 0 ? (double)(totalShipping_USD / totalCOGS_USD * 100) : 0;
         int invoiceCount = orders.Count(o => o.HasInvoice);
 
-        sb.AppendLine($"📦 TOPLAM SİPARİŞ MALİYETİ (COGS): {cur}{dispCOGS:N2}");
-        sb.AppendLine($"🚚 ├─ Toplam Kargo Maliyeti     : {cur}{dispShip:N2} (Maliyetin %{shipShare:N1}'i)");
-        sb.AppendLine($"🏭 ├─ Toplam Üretim / Hammadde   : {cur}{dispProd:N2}");
-        sb.AppendLine($"🎁 └─ Toplam Paketleme Maliyeti : {cur}{dispPack:N2}");
-        sb.AppendLine($"📄 Sistemde Kayıtlı Kargo Faturası: {invoiceCount} adet\n");
-
-        if (orders.Count == 0)
+        var kpiCards = new List<ToolTipKpiCard>
         {
-            sb.AppendLine("Bu dönemde henüz sipariş kaydı bulunmuyor.");
-        }
-        else
+            new("🚚 Toplam Kargo Maliyeti", $"{cur}{dispShip:N2}", $"Maliyetin %{shipShare:N1}'i", Color.FromArgb(99, 102, 241)),
+            new("🏭 Üretim / Hammadde", $"{cur}{dispProd:N2}", null, Color.FromArgb(59, 130, 246)),
+            new("🎁 Paketleme & Fatura", $"{cur}{dispPack:N2}", $"{invoiceCount} Fatura Kayıtlı", Color.FromArgb(16, 185, 129))
+        };
+
+        var rows = new List<ToolTipTableRow>();
+        foreach (var o in orders.Take(15))
         {
-            sb.AppendLine("Tarih       | Sipariş No  | Adet | Kargo Maliyeti | Fatura | Ürün Başlığı");
-            sb.AppendLine(new string('-', 95));
+            string dateStr = o.OrderDate.ToString("dd.MM.yy");
+            string orderNo = $"#{o.ReceiptId}";
+            decimal orderShipDisp = showTry ? Math.Round(o.TotalOrderShippingCost * o.ExchangeRate, 2) : o.TotalOrderShippingCost;
 
-            foreach (var o in orders.Take(15))
-            {
-                string dateStr = o.OrderDate.ToString("dd.MM.yy");
-                string orderNo = $"#{o.ReceiptId}";
-                decimal orderShipDisp = showTry ? Math.Round(o.TotalOrderShippingCost * o.ExchangeRate, 2) : o.TotalOrderShippingCost;
-                string invoiceStatus = o.HasInvoice ? "✅ Var" : "—";
-                string title = o.ProductTitle;
-                if (title.Length > 36) title = title[..33] + "...";
-
-                sb.AppendLine($"{dateStr,-10} | {orderNo,-11} | {o.Quantity,4} | {cur}{orderShipDisp,12:N2} | {invoiceStatus,-6} | {title}");
-            }
-
-            if (orders.Count > 15)
-            {
-                sb.AppendLine($"\n... ve {orders.Count - 15} sipariş daha.");
-            }
+            rows.Add(new ToolTipTableRow(
+                dateStr,
+                orderNo,
+                $"{o.Quantity} Ad",
+                $"{cur}{orderShipDisp:N2}",
+                o.HasInvoice,
+                "📎 Fatura",
+                o.ProductTitle
+            ));
         }
 
-        _costsTooltipText = sb.ToString();
+        _costsTooltipPayload = new ToolTipDataPayload(
+            "📦 Sipariş & Kargo Maliyet Analizi",
+            $"Toplam Sipariş Maliyeti (COGS): {cur}{dispCOGS:N2} | Kargo Harcamaları ve Fatura Durumu",
+            kpiCards,
+            new[] { "Tarih", "Sipariş No", "Adet", "Kargo Maliyeti", "Fatura", "Ürün / İlan Başlığı" },
+            new[] { 0.13f, 0.16f, 0.08f, 0.16f, 0.14f, 0.33f },
+            rows,
+            orders.Count > 15 ? $"ℹ️ ... ve {orders.Count - 15} adet sipariş daha listelenmedi." : null
+        );
     }
 
     // ── Dönemsel Muhasebe Grid Güncellemesi ───────────────────────────────────
@@ -1528,7 +1632,7 @@ internal sealed class FinancialReportForm : Form
                 o.HasCostData ? (o.HasInvoice ? "✅ 📎" : "✅") : "⚠️ Gir");
 
             var row = _gridOrders.Rows[idx];
-            row.Tag = o;  // double-click için saklıyoruz
+            row.Tag = o;
 
             if (o.NetProfitUSD >= 0)
                 row.DefaultCellStyle.ForeColor = UiStyle.SuccessColor;
@@ -1548,89 +1652,54 @@ internal sealed class FinancialReportForm : Form
         using var form = new OrderDetailsForm(order);
         if (form.ShowDialog(this) == DialogResult.OK)
         {
-            // Maliyet güncellendiyse raporu yenile
             _ = LoadReportAsync();
         }
     }
-
-    // ── Grafik Güncellemesi ────────────────────────────────────────────────────
 
     private void UpdateCharts()
     {
         var months = _report.MonthlySummaries;
         if (months.Count == 0) return;
 
+        bool useTry = _chkUseTry.Checked;
+        string curSymbol = useTry ? "₺" : "$";
+
         var labels = months.Select(m => m.PeriodLabel).ToArray();
-        var textPaint = new SolidColorPaint(new SKColor(148, 163, 184));
+        var textPaint = new SolidColorPaint(new SKColor(51, 65, 85));
+        var gridLinePaint = new SolidColorPaint(new SKColor(226, 232, 240, 180));
 
-        var salesVals      = months.Select(m => (double)m.GrossSales).ToArray();
-        var etsyNetVals    = months.Select(m => (double)m.EtsyNetRevenue).ToArray();
-        var costsVals      = months.Select(m => (double)m.ProductCosts).ToArray();
-        var realProfitVals = months.Select(m => (double)m.RealNetProfitUSD).ToArray();
-        var feeVals        = months.Select(m => (double)m.EtsyFees).ToArray();
-        var refundVals     = months.Select(m => (double)m.Refunds).ToArray();
+        var salesVals = months.Select(m => (double)(useTry ? m.GrossSalesTRY : m.GrossSales)).ToArray();
+        var totalExpensesVals = months.Select(m => (double)(useTry ? m.TotalExpensesTRY : m.TotalExpensesUSD)).ToArray();
+        var realProfitVals = months.Select(m => (double)(useTry ? m.RealNetProfitTRY : m.RealNetProfitUSD)).ToArray();
+        var etsyNetVals = months.Select(m => (double)(useTry ? m.EtsyNetRevenueTRY : m.EtsyNetRevenue)).ToArray();
+        var costsVals = months.Select(m => (double)(useTry ? m.ProductCostsTRY : m.ProductCosts)).ToArray();
 
-        // 1. Bar Chart: Aylık Gelir, Maliyet ve Gerçek Net Kâr Karşılaştırması
+        // 1. Bar Chart: 3 Temel Finansal Metrik Karşılaştırması
         _barChart.Series = new ISeries[]
         {
-            new ColumnSeries<double> { Name = "Brüt Satış", Values = salesVals, Fill = new SolidColorPaint(new SKColor(59, 130, 246, 180)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "Etsy Net Gelir", Values = etsyNetVals, Fill = new SolidColorPaint(new SKColor(99, 102, 241, 220)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "Ürün Maliyeti", Values = costsVals, Fill = new SolidColorPaint(new SKColor(249, 115, 22, 200)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "Gerçek Net Kâr", Values = realProfitVals, Fill = new SolidColorPaint(new SKColor(16, 185, 129, 230)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "Etsy Kesintileri", Values = feeVals, Fill = new SolidColorPaint(new SKColor(245, 158, 11, 180)), Rx = 4, Ry = 4 },
-            new ColumnSeries<double> { Name = "İadeler", Values = refundVals, Fill = new SolidColorPaint(new SKColor(239, 68, 68, 180)), Rx = 4, Ry = 4 },
+            new ColumnSeries<double> { Name = $"💰 Brüt Ciro ({curSymbol})", Values = salesVals, Fill = new SolidColorPaint(new SKColor(59, 130, 246, 230)), MaxBarWidth = 44, Rx = 6, Ry = 6 },
+            new ColumnSeries<double> { Name = $"📉 Toplam Gider ({curSymbol})", Values = totalExpensesVals, Fill = new SolidColorPaint(new SKColor(244, 63, 94, 220)), MaxBarWidth = 44, Rx = 6, Ry = 6 },
+            new ColumnSeries<double> { Name = $"💵 Gerçek Net Kâr ({curSymbol})", Values = realProfitVals, Fill = new SolidColorPaint(new SKColor(16, 185, 129, 240)), MaxBarWidth = 44, Rx = 6, Ry = 6 }
         };
-        _barChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
-        _barChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"${v:N0}" } };
+        _barChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 12, LabelsPaint = textPaint, SeparatorsPaint = gridLinePaint } };
+        _barChart.YAxes = new[] { new Axis { TextSize = 12, LabelsPaint = textPaint, Labeler = v => $"{curSymbol}{v:N0}", SeparatorsPaint = gridLinePaint } };
+        _barChart.LegendPosition = LiveChartsCore.Measure.LegendPosition.Top;
+        _barChart.LegendTextPaint = textPaint;
 
         // 2. Line Chart: Gerçek Net Kâr vs Etsy Net Gelir Trendi
         _lineChart.Series = new ISeries[]
         {
-            new LineSeries<double>
-            {
-                Name = "Gerçek Net Kâr (Nihai)",
-                Values = realProfitVals,
-                Fill = new LinearGradientPaint(new SKColor(16, 185, 129, 70), new SKColor(16, 185, 129, 0)),
-                Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 3.5f),
-                GeometrySize = 9,
-                GeometryFill = new SolidColorPaint(new SKColor(16, 185, 129)),
-                GeometryStroke = new SolidColorPaint(SKColors.White, 2),
-                LineSmoothness = 0.4,
-            },
-            new LineSeries<double>
-            {
-                Name = "Etsy Net Gelir (Kesintiler Sonrası)",
-                Values = etsyNetVals,
-                Fill = new LinearGradientPaint(new SKColor(99, 102, 241, 35), new SKColor(99, 102, 241, 0)),
-                Stroke = new SolidColorPaint(new SKColor(99, 102, 241), 2.5f),
-                GeometrySize = 7,
-                GeometryFill = new SolidColorPaint(new SKColor(99, 102, 241)),
-                LineSmoothness = 0.4,
-            },
-            new LineSeries<double>
-            {
-                Name = "Ürün & Sipariş Maliyeti",
-                Values = costsVals,
-                Fill = null,
-                Stroke = new SolidColorPaint(new SKColor(249, 115, 22), 2f),
-                GeometrySize = 6,
-                GeometryFill = new SolidColorPaint(new SKColor(249, 115, 22)),
-                LineSmoothness = 0.4,
-            },
-            new LineSeries<double>
-            {
-                Name = "Brüt Satış (Ciro)",
-                Values = salesVals,
-                Fill = null,
-                Stroke = new SolidColorPaint(new SKColor(148, 163, 184), 1.5f),
-                GeometrySize = 0,
-                LineSmoothness = 0.4,
-            }
+            new LineSeries<double> { Name = $"Gerçek Net Kâr ({curSymbol})", Values = realProfitVals, Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 3.5f), GeometrySize = 9 },
+            new LineSeries<double> { Name = $"Etsy Net Gelir ({curSymbol})", Values = etsyNetVals, Stroke = new SolidColorPaint(new SKColor(99, 102, 241), 2.5f), GeometrySize = 7 },
+            new LineSeries<double> { Name = $"Maliyet ({curSymbol})", Values = costsVals, Stroke = new SolidColorPaint(new SKColor(249, 115, 22), 2f), GeometrySize = 6 },
+            new LineSeries<double> { Name = $"Brüt Satış ({curSymbol})", Values = salesVals, Stroke = new SolidColorPaint(new SKColor(148, 163, 184), 1.5f), GeometrySize = 0 }
         };
-        _lineChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
-        _lineChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"${v:N0}" } };
+        _lineChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint, SeparatorsPaint = gridLinePaint } };
+        _lineChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"{curSymbol}{v:N0}", SeparatorsPaint = gridLinePaint } };
+        _lineChart.LegendPosition = LiveChartsCore.Measure.LegendPosition.Top;
+        _lineChart.LegendTextPaint = textPaint;
 
-        // 3. Ratio Chart: Etsy Net Gelir ile Gerçek Net Kâr Arasındaki Yüzdelik Dönüşüm ve Kâr Marjı (%)
+        // 3. Ratio Chart: Kâr Marjı ve Maliyet Oranları
         var etsyRetentionPct = months.Select(m => m.EtsyNetRevenue <= 0 ? 0 : Math.Round((double)(m.RealNetProfitUSD / m.EtsyNetRevenue * 100), 1)).ToArray();
         var realMarginPct = months.Select(m => m.GrossSales == 0 ? 0 : Math.Round((double)(m.RealNetProfitUSD / m.GrossSales * 100), 1)).ToArray();
         var costToEtsyNetPct = months.Select(m => m.EtsyNetRevenue <= 0 ? 0 : Math.Round((double)(m.ProductCosts / m.EtsyNetRevenue * 100), 1)).ToArray();
@@ -1638,63 +1707,32 @@ internal sealed class FinancialReportForm : Form
 
         _ratioChart.Series = new ISeries[]
         {
-            new LineSeries<double>
-            {
-                Name = "Etsy Net -> Kâr Dönüşümü (%) [Gerçek Kâr / Etsy Net]",
-                Values = etsyRetentionPct,
-                Fill = new LinearGradientPaint(new SKColor(16, 185, 129, 65), new SKColor(16, 185, 129, 0)),
-                Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 3.5f),
-                GeometrySize = 9,
-                GeometryFill = new SolidColorPaint(new SKColor(16, 185, 129)),
-                GeometryStroke = new SolidColorPaint(SKColors.White, 2),
-                LineSmoothness = 0.4,
-            },
-            new LineSeries<double>
-            {
-                Name = "Ciro Kâr Marjı (%) [Gerçek Kâr / Ciro]",
-                Values = realMarginPct,
-                Fill = null,
-                Stroke = new SolidColorPaint(new SKColor(6, 182, 212), 2.5f),
-                GeometrySize = 7,
-                GeometryFill = new SolidColorPaint(new SKColor(6, 182, 212)),
-                LineSmoothness = 0.4,
-            },
-            new LineSeries<double>
-            {
-                Name = "Ürün Maliyet Payı (%) [Maliyet / Etsy Net]",
-                Values = costToEtsyNetPct,
-                Fill = null,
-                Stroke = new SolidColorPaint(new SKColor(249, 115, 22), 2.2f),
-                GeometrySize = 6,
-                GeometryFill = new SolidColorPaint(new SKColor(249, 115, 22)),
-                LineSmoothness = 0.4,
-            },
-            new LineSeries<double>
-            {
-                Name = "Etsy Kesinti Payı (%) [Ücretler / Ciro]",
-                Values = feeToGrossPct,
-                Fill = null,
-                Stroke = new SolidColorPaint(new SKColor(245, 158, 11), 2f),
-                GeometrySize = 6,
-                GeometryFill = new SolidColorPaint(new SKColor(245, 158, 11)),
-                LineSmoothness = 0.4,
-            }
+            new LineSeries<double> { Name = "Etsy Net -> Kâr Dönüşümü (%)", Values = etsyRetentionPct, Stroke = new SolidColorPaint(new SKColor(16, 185, 129), 3.5f), GeometrySize = 9 },
+            new LineSeries<double> { Name = "Ciro Kâr Marjı (%)", Values = realMarginPct, Stroke = new SolidColorPaint(new SKColor(6, 182, 212), 2.5f), GeometrySize = 7 },
+            new LineSeries<double> { Name = "Maliyet / Net Gelir Payı (%)", Values = costToEtsyNetPct, Stroke = new SolidColorPaint(new SKColor(249, 115, 22), 2f), GeometrySize = 6 },
+            new LineSeries<double> { Name = "Etsy Kesinti / Ciro Oranı (%)", Values = feeToGrossPct, Stroke = new SolidColorPaint(new SKColor(239, 68, 68), 2f), GeometrySize = 6 }
         };
-        _ratioChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint } };
-        _ratioChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"%{v:N1}" } };
+        _ratioChart.XAxes = new[] { new Axis { Labels = labels, TextSize = 11, LabelsPaint = textPaint, SeparatorsPaint = gridLinePaint } };
+        _ratioChart.YAxes = new[] { new Axis { TextSize = 11, LabelsPaint = textPaint, Labeler = v => $"%{v:N1}", SeparatorsPaint = gridLinePaint } };
+        _ratioChart.LegendPosition = LiveChartsCore.Measure.LegendPosition.Top;
+        _ratioChart.LegendTextPaint = textPaint;
 
         // 4. Pie Chart: Dağılım
-        decimal totalCosts = _report.TotalProductCosts;
-        decimal realProfit = Math.Max(0, _report.RealNetProfitUSD);
+        decimal totalCosts = useTry ? _report.DailySummaries.Sum(d => d.ProductCostsTRY) : _report.TotalProductCosts;
+        decimal realProfit = Math.Max(0, useTry ? _report.DailySummaries.Sum(d => d.RealNetProfitTRY) : _report.RealNetProfitUSD);
+        decimal fees = useTry ? _report.DailySummaries.Sum(d => d.EtsyFeesTRY) : _report.TotalFees;
+        decimal innerAds = useTry ? _report.DailySummaries.Sum(d => d.InnerAdFeesTRY) : _report.TotalInnerAdFees;
+        decimal offsiteAds = useTry ? _report.DailySummaries.Sum(d => d.OffsiteAdFeesTRY) : _report.TotalOffsiteAdFees;
+        decimal refunds = useTry ? _report.DailySummaries.Sum(d => d.RefundsTRY) : _report.TotalRefunds;
 
         _pieChart.Series = new ISeries[]
         {
-            new PieSeries<double> { Name = "Gerçek Net Kâr", Values = new[] { (double)realProfit }, Fill = new SolidColorPaint(new SKColor(16, 185, 129)) },
-            new PieSeries<double> { Name = "Ürün Maliyetleri", Values = new[] { (double)totalCosts }, Fill = new SolidColorPaint(new SKColor(249, 115, 22)) },
-            new PieSeries<double> { Name = "Etsy Ücretleri", Values = new[] { (double)_report.TotalFees }, Fill = new SolidColorPaint(new SKColor(245, 158, 11)) },
-            new PieSeries<double> { Name = "İç Reklam", Values = new[] { (double)_report.TotalInnerAdFees }, Fill = new SolidColorPaint(new SKColor(139, 92, 246)) },
-            new PieSeries<double> { Name = "Dış Reklam", Values = new[] { (double)_report.TotalOffsiteAdFees }, Fill = new SolidColorPaint(new SKColor(234, 88, 12)) },
-            new PieSeries<double> { Name = "İadeler", Values = new[] { (double)_report.TotalRefunds }, Fill = new SolidColorPaint(new SKColor(239, 68, 68)) },
+            new PieSeries<double> { Name = $"Gerçek Net Kâr ({curSymbol})", Values = new[] { (double)realProfit }, Fill = new SolidColorPaint(new SKColor(16, 185, 129)) },
+            new PieSeries<double> { Name = $"Ürün Maliyetleri ({curSymbol})", Values = new[] { (double)totalCosts }, Fill = new SolidColorPaint(new SKColor(249, 115, 22)) },
+            new PieSeries<double> { Name = $"Etsy Ücretleri ({curSymbol})", Values = new[] { (double)fees }, Fill = new SolidColorPaint(new SKColor(245, 158, 11)) },
+            new PieSeries<double> { Name = $"İç Reklam ({curSymbol})", Values = new[] { (double)innerAds }, Fill = new SolidColorPaint(new SKColor(139, 92, 246)) },
+            new PieSeries<double> { Name = $"Dış Reklam ({curSymbol})", Values = new[] { (double)offsiteAds }, Fill = new SolidColorPaint(new SKColor(234, 88, 12)) },
+            new PieSeries<double> { Name = $"İadeler ({curSymbol})", Values = new[] { (double)refunds }, Fill = new SolidColorPaint(new SKColor(239, 68, 68)) },
         };
     }
 

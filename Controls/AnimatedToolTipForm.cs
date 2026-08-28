@@ -1,24 +1,50 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 namespace SimilarProductsWinForms.Controls;
 
+public sealed record ToolTipKpiCard(string Title, string PrimaryValue, string? SubValue, Color AccentColor);
+
+public sealed record ToolTipTableRow(string Date, string Identifier, string Quantity, string Amount, bool HasBadge, string BadgeText, string Description);
+
+public sealed record ToolTipDataPayload(
+    string HeaderTitle,
+    string? Subtitle,
+    List<ToolTipKpiCard> KpiCards,
+    string[] ColumnHeaders,
+    float[] ColumnWidthWeights,
+    List<ToolTipTableRow> Rows,
+    string? FooterNote = null
+);
+
 public class AnimatedToolTipForm : Form
 {
     private readonly System.Windows.Forms.Timer _animTimer = new() { Interval = 16 }; // ~60fps
     private int _elapsedMs = 0;
     private int _targetDurationMs = 2000;
-    private string _tooltipText = "";
-    private string? _customHeader = null;
-    private bool _isShowingContent = false;
     private float _sweepAngle = 0f;
+    private bool _isShowingContent = false;
 
-    // Colors for the gradient arc
+    private ToolTipDataPayload? _payload = null;
+    private string _fallbackText = "";
+    private string? _customHeader = null;
+
+    // Accent colors
     private static readonly Color ArcColor1 = Color.FromArgb(16, 185, 129);   // Emerald
     private static readonly Color ArcColor2 = Color.FromArgb(99, 102, 241);   // Indigo
-    private static readonly Color ArcBgColor = Color.FromArgb(80, 120, 120, 120);
+    private static readonly Color ArcBgColor = Color.FromArgb(60, 80, 100);
+
+    // Dark theme palette
+    private static readonly Color BgColor = Color.FromArgb(20, 24, 33);
+    private static readonly Color CardBgColor = Color.FromArgb(28, 33, 46);
+    private static readonly Color RowAltColor = Color.FromArgb(24, 29, 41);
+    private static readonly Color HeaderBgColor = Color.FromArgb(33, 39, 54);
+    private static readonly Color BorderColor = Color.FromArgb(51, 65, 85);
+    private static readonly Color TextPrimary = Color.FromArgb(241, 245, 249);
+    private static readonly Color TextMuted = Color.FromArgb(148, 163, 184);
 
     protected override bool ShowWithoutActivation => true;
     protected override CreateParams CreateParams
@@ -26,7 +52,7 @@ public class AnimatedToolTipForm : Form
         get
         {
             var cp = base.CreateParams;
-            cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW - hide from taskbar/alt-tab
+            cp.ExStyle |= 0x00000080; // WS_EX_TOOLWINDOW
             return cp;
         }
     }
@@ -45,10 +71,24 @@ public class AnimatedToolTipForm : Form
         _animTimer.Tick += AnimTimer_Tick;
     }
 
+    public void ShowStructuredTooltip(ToolTipDataPayload payload, Point screenPosition, int durationMs = 2000)
+    {
+        _payload = payload;
+        _fallbackText = "";
+        _customHeader = payload.HeaderTitle;
+        StartCountdown(screenPosition, durationMs);
+    }
+
     public void ShowTooltip(string text, Point screenPosition, int durationMs = 2000, string? customHeader = null)
     {
-        _tooltipText = text;
+        _payload = null;
+        _fallbackText = text;
         _customHeader = customHeader;
+        StartCountdown(screenPosition, durationMs);
+    }
+
+    private void StartCountdown(Point screenPosition, int durationMs)
+    {
         _targetDurationMs = durationMs;
         _elapsedMs = 0;
         _sweepAngle = 0f;
@@ -58,7 +98,6 @@ public class AnimatedToolTipForm : Form
         BackColor = Color.Magenta;
         Size = new Size(54, 54);
 
-        // Position at the specified screen location (centered horizontally)
         Location = new Point(screenPosition.X - 27, screenPosition.Y);
 
         if (!Visible)
@@ -82,7 +121,7 @@ public class AnimatedToolTipForm : Form
         _elapsedMs += _animTimer.Interval;
         float progress = Math.Min(1f, (float)_elapsedMs / _targetDurationMs);
 
-        // Ease-out cubic for smooth deceleration
+        // Ease-out cubic
         float eased = 1f - (1f - progress) * (1f - progress) * (1f - progress);
         _sweepAngle = eased * 360f;
 
@@ -100,24 +139,47 @@ public class AnimatedToolTipForm : Form
     private void ShowContent()
     {
         TransparencyKey = Color.Empty;
-        BackColor = Color.FromArgb(30, 30, 38);
+        BackColor = BgColor;
 
-        using var g = CreateGraphics();
-        using var font = new Font("Consolas", 9F);
-        var measured = g.MeasureString(_tooltipText, font, 700);
+        int width = 780;
+        int height;
 
-        int w = Math.Min(750, (int)measured.Width + 36);
-        int h = Math.Min(500, (int)measured.Height + 70); // extra space for header
-        Size = new Size(w, h);
+        if (_payload != null)
+        {
+            int baseHeight = 110; // Header + padding
+            if (_payload.KpiCards.Count > 0) baseHeight += 65; // KPI cards
+            if (_payload.Rows.Count > 0)
+            {
+                baseHeight += 32; // Table header
+                baseHeight += _payload.Rows.Count * 28; // Rows
+            }
+            else
+            {
+                baseHeight += 40; // "No records" note
+            }
+            if (!string.IsNullOrWhiteSpace(_payload.FooterNote)) baseHeight += 25;
 
-        // Reposition to ensure it's on screen
+            height = Math.Min(560, Math.Max(180, baseHeight + 15));
+        }
+        else
+        {
+            using var g = CreateGraphics();
+            using var font = new Font("Segoe UI", 9F);
+            var measured = g.MeasureString(_fallbackText, font, 720);
+            width = Math.Min(780, (int)measured.Width + 40);
+            height = Math.Min(520, (int)measured.Height + 80);
+        }
+
+        Size = new Size(width, height);
+
+        // Keep inside screen area
         var screen = Screen.FromPoint(Location).WorkingArea;
         int x = Location.X;
         int y = Location.Y;
-        if (x + w > screen.Right) x = screen.Right - w - 10;
-        if (y + h > screen.Bottom) y = screen.Bottom - h - 10;
-        if (x < screen.Left) x = screen.Left + 5;
-        if (y < screen.Top) y = screen.Top + 5;
+        if (x + width > screen.Right) x = screen.Right - width - 12;
+        if (y + height > screen.Bottom) y = screen.Bottom - height - 12;
+        if (x < screen.Left) x = screen.Left + 8;
+        if (y < screen.Top) y = screen.Top + 8;
         Location = new Point(x, y);
 
         Invalidate();
@@ -131,16 +193,14 @@ public class AnimatedToolTipForm : Form
 
         if (!_isShowingContent)
         {
-            // === Draw animated loading ring ===
+            // === Loading Ring ===
             int ringSize = 42;
             int pad = 6;
             var ringRect = new Rectangle(pad, pad, ringSize, ringSize);
 
-            // Background circle (track)
             using var bgPen = new Pen(ArcBgColor, 5f);
             g.DrawEllipse(bgPen, ringRect);
 
-            // Foreground arc with gradient
             if (_sweepAngle > 0.5f)
             {
                 using var brush = new LinearGradientBrush(
@@ -152,7 +212,6 @@ public class AnimatedToolTipForm : Form
                 g.DrawArc(pen, ringRect, -90, _sweepAngle);
             }
 
-            // Percentage text in center
             int pct = (int)(_sweepAngle / 3.6f);
             string pctText = $"{pct}%";
             using var pctFont = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
@@ -164,54 +223,238 @@ public class AnimatedToolTipForm : Form
         }
         else
         {
-            // === Draw tooltip content ===
+            // === Background Card & Border ===
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-
-            // Rounded rectangle background
-            using var path = CreateRoundedRect(rect, 10);
-            using var bgBrush = new SolidBrush(Color.FromArgb(30, 30, 38));
+            using var path = CreateRoundedRect(rect, 12);
+            using var bgBrush = new SolidBrush(BgColor);
             g.FillPath(bgBrush, path);
 
-            // Border with accent gradient
             using var borderBrush = new LinearGradientBrush(rect, ArcColor1, ArcColor2, 45f);
             using var borderPen = new Pen(borderBrush, 1.5f);
             g.DrawPath(borderPen, path);
 
-            // Header line
-            int headerY = 10;
-            string headerText;
-            if (!string.IsNullOrWhiteSpace(_customHeader))
+            if (_payload != null)
             {
-                headerText = _customHeader;
-            }
-            else if (_tooltipText.Contains("kargo", StringComparison.OrdinalIgnoreCase) || _tooltipText.Contains("maliyet", StringComparison.OrdinalIgnoreCase))
-            {
-                headerText = "📦 Sipariş & Kargo Maliyet Analizi";
-            }
-            else if (_tooltipText.Contains("satış", StringComparison.OrdinalIgnoreCase))
-            {
-                headerText = "🟢 Satış Detayları";
+                DrawStructuredPayload(g, rect);
             }
             else
             {
-                headerText = "🔴 İade Detayları";
+                DrawFallbackText(g, rect);
+            }
+        }
+    }
+
+    private void DrawStructuredPayload(Graphics g, Rectangle bounds)
+    {
+        int padX = 16;
+        int curY = 12;
+
+        // 1. Header
+        using var titleFont = new Font("Segoe UI", 11.5F, FontStyle.Bold);
+        using var titleBrush = new SolidBrush(Color.FromArgb(52, 211, 153)); // Emerald
+        g.DrawString(_payload!.HeaderTitle, titleFont, titleBrush, padX, curY);
+        curY += 22;
+
+        if (!string.IsNullOrWhiteSpace(_payload.Subtitle))
+        {
+            using var subFont = new Font("Segoe UI", 8.5F);
+            using var subBrush = new SolidBrush(TextMuted);
+            g.DrawString(_payload.Subtitle, subFont, subBrush, padX, curY);
+            curY += 18;
+        }
+
+        // Divider
+        using var divPen = new Pen(BorderColor, 1f);
+        g.DrawLine(divPen, padX, curY, bounds.Width - padX, curY);
+        curY += 10;
+
+        // 2. Mini KPI Cards
+        if (_payload.KpiCards.Count > 0)
+        {
+            int cardCount = _payload.KpiCards.Count;
+            int gap = 10;
+            int availableWidth = bounds.Width - (padX * 2) - ((cardCount - 1) * gap);
+            int cardW = availableWidth / cardCount;
+            int cardH = 50;
+
+            for (int i = 0; i < cardCount; i++)
+            {
+                var kpi = _payload.KpiCards[i];
+                var cardRect = new Rectangle(padX + i * (cardW + gap), curY, cardW, cardH);
+
+                using var cardPath = CreateRoundedRect(cardRect, 8);
+                using var cardBg = new SolidBrush(CardBgColor);
+                using var cardBorder = new Pen(BorderColor, 1f);
+                g.FillPath(cardBg, cardPath);
+                g.DrawPath(cardBorder, cardPath);
+
+                // Accent vertical left bar
+                var leftBar = new Rectangle(cardRect.X, cardRect.Y + 6, 3, cardRect.Height - 12);
+                using var barBrush = new SolidBrush(kpi.AccentColor);
+                g.FillRectangle(barBrush, leftBar);
+
+                // Title
+                using var kpiTitleFont = new Font("Segoe UI Semibold", 8F, FontStyle.Bold);
+                using var kpiTitleBrush = new SolidBrush(TextMuted);
+                g.DrawString(kpi.Title, kpiTitleFont, kpiTitleBrush, cardRect.X + 10, cardRect.Y + 6);
+
+                // Primary Value
+                using var kpiValFont = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+                using var kpiValBrush = new SolidBrush(kpi.AccentColor);
+                g.DrawString(kpi.PrimaryValue, kpiValFont, kpiValBrush, cardRect.X + 10, cardRect.Y + 22);
+
+                // Sub Value (right-aligned if present)
+                if (!string.IsNullOrWhiteSpace(kpi.SubValue))
+                {
+                    using var kpiSubFont = new Font("Segoe UI", 7.8F);
+                    using var kpiSubBrush = new SolidBrush(TextMuted);
+                    var subSize = g.MeasureString(kpi.SubValue, kpiSubFont);
+                    g.DrawString(kpi.SubValue, kpiSubFont, kpiSubBrush, cardRect.Right - subSize.Width - 8, cardRect.Y + 8);
+                }
             }
 
-            using var headerFont = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold);
-            using var headerBrush = new SolidBrush(ArcColor1);
-            g.DrawString(headerText, headerFont, headerBrush, 14, headerY);
-
-            // Divider line
-            int divY = headerY + 28;
-            using var divPen = new Pen(Color.FromArgb(60, 60, 70), 1f);
-            g.DrawLine(divPen, 12, divY, Width - 12, divY);
-
-            // Body text
-            using var bodyFont = new Font("Consolas", 9F);
-            using var bodyBrush = new SolidBrush(Color.FromArgb(220, 220, 230));
-            var textRect = new RectangleF(14, divY + 6, Width - 28, Height - divY - 16);
-            g.DrawString(_tooltipText, bodyFont, bodyBrush, textRect);
+            curY += cardH + 12;
         }
+
+        // 3. Table Header
+        if (_payload.ColumnHeaders.Length > 0 && _payload.ColumnWidthWeights.Length == _payload.ColumnHeaders.Length)
+        {
+            int tableW = bounds.Width - (padX * 2);
+            var headerRect = new Rectangle(padX, curY, tableW, 26);
+
+            using var headerPath = CreateRoundedRect(headerRect, 6);
+            using var headerBg = new SolidBrush(HeaderBgColor);
+            g.FillPath(headerBg, headerPath);
+
+            using var thFont = new Font("Segoe UI Semibold", 8F, FontStyle.Bold);
+            using var thBrush = new SolidBrush(TextMuted);
+            using var sfRight = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
+            using var sfLeft = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+
+            float currentX = padX + 8;
+            for (int c = 0; c < _payload.ColumnHeaders.Length; c++)
+            {
+                float colW = tableW * _payload.ColumnWidthWeights[c];
+                var colRect = new RectangleF(currentX, curY, colW - 6, 26);
+
+                bool isNumeric = (c == 2 || c == 3); // Quantity or Amount
+                g.DrawString(_payload.ColumnHeaders[c], thFont, thBrush, colRect, isNumeric ? sfRight : sfLeft);
+                currentX += colW;
+            }
+
+            curY += 28;
+
+            // 4. Table Rows
+            using var rowFont = new Font("Segoe UI", 8.5F);
+            using var idFont = new Font("Consolas", 8.5F, FontStyle.Bold);
+            using var amtFont = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+            using var sfTrimming = new StringFormat
+            {
+                Alignment = StringAlignment.Near,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+
+            for (int r = 0; r < _payload.Rows.Count; r++)
+            {
+                if (curY + 24 > bounds.Height - 30) break; // Don't overflow
+
+                var row = _payload.Rows[r];
+                var rowRect = new Rectangle(padX, curY, tableW, 24);
+
+                if (r % 2 == 1)
+                {
+                    using var rowBg = new SolidBrush(RowAltColor);
+                    using var rPath = CreateRoundedRect(rowRect, 4);
+                    g.FillPath(rowBg, rPath);
+                }
+
+                currentX = padX + 8;
+
+                // Col 0: Date
+                float w0 = tableW * _payload.ColumnWidthWeights[0];
+                using (var brush = new SolidBrush(TextMuted))
+                    g.DrawString(row.Date, rowFont, brush, new RectangleF(currentX, curY, w0 - 6, 24), sfLeft);
+                currentX += w0;
+
+                // Col 1: Identifier (#ReceiptId)
+                float w1 = tableW * _payload.ColumnWidthWeights[1];
+                using (var brush = new SolidBrush(Color.FromArgb(96, 165, 250))) // Sky Blue
+                    g.DrawString(row.Identifier, idFont, brush, new RectangleF(currentX, curY, w1 - 6, 24), sfLeft);
+                currentX += w1;
+
+                // Col 2: Quantity
+                float w2 = tableW * _payload.ColumnWidthWeights[2];
+                using (var brush = new SolidBrush(TextPrimary))
+                    g.DrawString(row.Quantity, rowFont, brush, new RectangleF(currentX, curY, w2 - 6, 24), sfRight);
+                currentX += w2;
+
+                // Col 3: Amount
+                float w3 = tableW * _payload.ColumnWidthWeights[3];
+                using (var brush = new SolidBrush(Color.FromArgb(52, 211, 153))) // Emerald
+                    g.DrawString(row.Amount, amtFont, brush, new RectangleF(currentX, curY, w3 - 6, 24), sfRight);
+                currentX += w3;
+
+                // Col 4: Badge (Fatura Durumu)
+                float w4 = tableW * _payload.ColumnWidthWeights[4];
+                var badgeBounds = new Rectangle((int)currentX + 4, curY + 3, (int)w4 - 14, 18);
+                if (row.HasBadge)
+                {
+                    using var badgePath = CreateRoundedRect(badgeBounds, 9);
+                    using var badgeBg = new SolidBrush(Color.FromArgb(6, 78, 59)); // Dark Emerald
+                    using var badgeBorder = new Pen(Color.FromArgb(16, 185, 129), 1f);
+                    using var badgeTextBrush = new SolidBrush(Color.FromArgb(110, 231, 183));
+                    using var badgeFont = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold);
+                    using var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+
+                    g.FillPath(badgeBg, badgePath);
+                    g.DrawPath(badgeBorder, badgePath);
+                    g.DrawString(row.BadgeText, badgeFont, badgeTextBrush, badgeBounds, sfCenter);
+                }
+                else
+                {
+                    using var mutedBrush = new SolidBrush(Color.FromArgb(100, 116, 139));
+                    using var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                    g.DrawString("—", rowFont, mutedBrush, badgeBounds, sfCenter);
+                }
+                currentX += w4;
+
+                // Col 5: Description (Product Title)
+                float w5 = tableW * _payload.ColumnWidthWeights[5];
+                using (var descBrush = new SolidBrush(TextPrimary))
+                    g.DrawString(row.Description, rowFont, descBrush, new RectangleF(currentX, curY, w5 - 6, 24), sfTrimming);
+
+                curY += 24;
+            }
+        }
+
+        // 5. Footer Note
+        if (!string.IsNullOrWhiteSpace(_payload.FooterNote) && curY < bounds.Height - 16)
+        {
+            using var footFont = new Font("Segoe UI Italic", 8F);
+            using var footBrush = new SolidBrush(TextMuted);
+            g.DrawString(_payload.FooterNote, footFont, footBrush, padX, bounds.Height - 20);
+        }
+    }
+
+    private void DrawFallbackText(Graphics g, Rectangle bounds)
+    {
+        int headerY = 12;
+        string headerText = _customHeader ?? "ℹ️ Detay Bilgisi";
+
+        using var headerFont = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold);
+        using var headerBrush = new SolidBrush(ArcColor1);
+        g.DrawString(headerText, headerFont, headerBrush, 16, headerY);
+
+        int divY = headerY + 26;
+        using var divPen = new Pen(BorderColor, 1f);
+        g.DrawLine(divPen, 16, divY, bounds.Width - 16, divY);
+
+        using var bodyFont = new Font("Segoe UI", 9F);
+        using var bodyBrush = new SolidBrush(TextPrimary);
+        var textRect = new RectangleF(16, divY + 8, bounds.Width - 32, bounds.Height - divY - 16);
+        g.DrawString(_fallbackText, bodyFont, bodyBrush, textRect);
     }
 
     private static GraphicsPath CreateRoundedRect(Rectangle bounds, int radius)

@@ -64,13 +64,22 @@ internal sealed class AiListingImageForm : Form
     private Bitmap? _finalDisplayBitmap;
     private string _loadedImagePath = string.Empty;
 
-    public AiListingImageForm(IAiListingOptimizer? aiOptimizer = null)
+    public AiListingImageForm(IAiListingOptimizer? aiOptimizer = null, string? initialImagePath = null, string? initialTitle = null)
     {
         _aiOptimizer = aiOptimizer;
         _photoRoomSettings = PhotoRoomSettingsStore.Load();
         _aiSettings = AiOptimizationSettingsStore.Load();
         BuildLayout();
         LoadSettings();
+
+        if (!string.IsNullOrWhiteSpace(initialImagePath) && File.Exists(initialImagePath))
+        {
+            LoadImageFromPath(initialImagePath);
+            if (!string.IsNullOrWhiteSpace(initialTitle))
+            {
+                _productTitleTxt.Text = initialTitle;
+            }
+        }
     }
 
     public AiListingImageForm(object? listing, object? apiClient) : this(null)

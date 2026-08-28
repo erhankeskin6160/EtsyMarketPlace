@@ -413,7 +413,9 @@ internal sealed class FinancialReportService
                 totalInnerAds = 0, totalOffsiteAds = 0, totalDeposits = 0,
                 totalShipping = 0, totalProductCosts = 0;
 
-        var costLookup = productCosts.ToDictionary(c => c.ListingId, c => c.TotalUnitCost);
+        var costLookup = productCosts
+            .GroupBy(c => c.ListingId)
+            .ToDictionary(g => g.Key, g => g.Last().TotalUnitCost);
 
         foreach (var e in entries)
         {
@@ -493,12 +495,6 @@ internal sealed class FinancialReportService
             })
             .ToList();
 
-        // Dönemsel Muhasebe Özetleri (Kronolojik Tarih Sıralı)
-        var dailySummaries = BuildPeriodSummaries(entries, costLookup, exchangeRate, e => (e.CreatedAt.ToString("dd.MM.yyyy"), e.CreatedAt.Date));
-        var weeklySummaries = BuildPeriodSummaries(entries, costLookup, exchangeRate, e => ($"{e.CreatedAt.Year}-W{CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(e.CreatedAt.DateTime, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday):D2}", e.CreatedAt.Date.AddDays(-(int)e.CreatedAt.DayOfWeek)));
-        var monthlySummaries = BuildPeriodSummaries(entries, costLookup, exchangeRate, e => (e.CreatedAt.ToString("MMM yyyy", CultureInfo.GetCultureInfo("tr-TR")), new DateTime(e.CreatedAt.Year, e.CreatedAt.Month, 1)));
-        var yearlySummaries = BuildPeriodSummaries(entries, costLookup, exchangeRate, e => (e.CreatedAt.Year.ToString(), new DateTime(e.CreatedAt.Year, 1, 1)));
-
         // Sipariş bazında net kâr özetleri (mağaza fişleri üzerinden)
         var orderSummaries = await BuildOrderSummariesAsync(receipts, productCosts, exchangeRate, ct);
 
@@ -507,6 +503,23 @@ internal sealed class FinancialReportService
         {
             totalProductCosts = orderSummaries.Sum(o => o.ProductCost);
         }
+
+        // Dönemsel Muhasebe Özetleri (Kronolojik Tarih Sıralı ve Gerçek Fiş Maliyetli)
+        var dailySummaries = BuildPeriodSummaries(entries, orderSummaries, exchangeRate, 
+            e => (e.CreatedAt.ToString("dd.MM.yyyy"), e.CreatedAt.Date),
+            o => (o.OrderDate.ToString("dd.MM.yyyy"), o.OrderDate.Date));
+            
+        var weeklySummaries = BuildPeriodSummaries(entries, orderSummaries, exchangeRate, 
+            e => ($"{e.CreatedAt.Year}-W{CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(e.CreatedAt.DateTime, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday):D2}", e.CreatedAt.Date.AddDays(-(int)e.CreatedAt.DayOfWeek)),
+            o => ($"{o.OrderDate.Year}-W{CultureInfo.CurrentCulture.Calendar.GetWeekOfYear(o.OrderDate.DateTime, CalendarWeekRule.FirstFourDayWeek, DayOfWeek.Monday):D2}", o.OrderDate.Date.AddDays(-(int)o.OrderDate.DayOfWeek)));
+            
+        var monthlySummaries = BuildPeriodSummaries(entries, orderSummaries, exchangeRate, 
+            e => (e.CreatedAt.ToString("MMM yyyy", CultureInfo.GetCultureInfo("tr-TR")), new DateTime(e.CreatedAt.Year, e.CreatedAt.Month, 1)),
+            o => (o.OrderDate.ToString("MMM yyyy", CultureInfo.GetCultureInfo("tr-TR")), new DateTime(o.OrderDate.Year, o.OrderDate.Month, 1)));
+            
+        var yearlySummaries = BuildPeriodSummaries(entries, orderSummaries, exchangeRate, 
+            e => (e.CreatedAt.Year.ToString(), new DateTime(e.CreatedAt.Year, 1, 1)),
+            o => (o.OrderDate.Year.ToString(), new DateTime(o.OrderDate.Year, 1, 1)));
 
         string currency = entries.Select(e => e.Currency).FirstOrDefault() ?? "USD";
 
@@ -532,7 +545,9 @@ internal sealed class FinancialReportService
     {
         var result = new List<OrderFinancialSummary>();
         var exchangeService = new ExchangeRateService();
-        var costMap = productCosts.ToDictionary(c => c.ListingId, c => c);
+        var costMap = productCosts
+            .GroupBy(c => c.ListingId)
+            .ToDictionary(g => g.Key, g => g.Last());
 
         foreach (var r in receipts)
         {
@@ -652,10 +667,15 @@ internal sealed class FinancialReportService
 
     private static List<PeriodFinancialSummary> BuildPeriodSummaries(
         List<LedgerEntry> entries,
-        Dictionary<string, decimal> costLookup,
+        IReadOnlyList<OrderFinancialSummary> orderSummaries,
         decimal exchangeRate,
-        Func<LedgerEntry, (string label, DateTime sortDate)> keySelector)
+        Func<LedgerEntry, (string label, DateTime sortDate)> keySelector,
+        Func<OrderFinancialSummary, (string label, DateTime sortDate)> orderKeySelector)
     {
+        var ordersByPeriod = orderSummaries
+            .GroupBy(o => orderKeySelector(o).label)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
         return entries
             .GroupBy(keySelector)
             .OrderBy(g => g.Key.sortDate)
@@ -668,24 +688,35 @@ internal sealed class FinancialReportService
                 var deposits = g.Where(e => e.Type == "deposit").Sum(e => e.Amount);
                 var fees = g.Where(e => e.Type is "listing_fee" or "transaction_fee" or "payment_processing" or "regulatory_operating_fee" or "etsy_tax_fee").Sum(e => e.Amount);
 
+                // Kuruş Kuruşuna Kesin TRY Toplamları
+                var grossTRY = g.Where(e => e.Type == "sale").Sum(e => e.AmountTRY);
+                var refundsTRY = g.Where(e => e.Type == "refund").Sum(e => e.AmountTRY);
+                var innerAdsTRY = g.Where(e => e.Type == "ad_fee").Sum(e => e.AmountTRY);
+                var offsiteAdsTRY = g.Where(e => e.Type == "offsite_ads").Sum(e => e.AmountTRY);
+                var feesTRY = g.Where(e => e.Type is "listing_fee" or "transaction_fee" or "payment_processing" or "regulatory_operating_fee" or "etsy_tax_fee").Sum(e => e.AmountTRY);
+
                 decimal productCosts = 0;
-                int salesCount = g.Count(e => e.Type == "sale");
-                if (salesCount > 0 && costLookup.Count > 0)
+                decimal productCostsTRY = 0;
+
+                if (ordersByPeriod.TryGetValue(g.Key.label, out var periodOrders) && periodOrders.Count > 0)
                 {
-                    productCosts = salesCount * costLookup.Values.Average();
+                    productCosts = periodOrders.Sum(o => o.ProductCost);
+                    productCostsTRY = periodOrders.Sum(o => Math.Round(o.ProductCost * o.ExchangeRate, 2));
                 }
 
                 // Gider kalemleri negatif olduğu için net kârı bulmak amacıyla hepsini topluyoruz.
                 decimal netRevenue = gross + refunds + fees + innerAds + offsiteAds;
                 decimal realProfitUSD = netRevenue - productCosts;
+
+                decimal netRevenueTRY = grossTRY + refundsTRY + feesTRY + innerAdsTRY + offsiteAdsTRY;
+                decimal realProfitTRY = netRevenueTRY - productCostsTRY;
                 
-                // Siparişin geldiği günkü kur değerlerinin ortalaması ile hassas TL Kâr hesaplama
-                decimal avgExchangeRate = g.Any() ? Math.Round(g.Average(e => e.ExchangeRate), 2) : exchangeRate;
-                decimal realProfitTRY = Math.Round(realProfitUSD * avgExchangeRate, 2);
+                decimal avgExchangeRate = gross > 0 ? Math.Round(grossTRY / gross, 4) : (g.Any() ? Math.Round(g.Average(e => e.ExchangeRate), 4) : exchangeRate);
 
                 return new PeriodFinancialSummary(
                     g.Key.label, g.Key.sortDate, gross, fees, innerAds, offsiteAds, refunds, deposits, productCosts,
-                    netRevenue, realProfitUSD, realProfitTRY, avgExchangeRate);
+                    netRevenue, realProfitUSD, realProfitTRY, avgExchangeRate,
+                    grossTRY, feesTRY, innerAdsTRY, offsiteAdsTRY, refundsTRY, productCostsTRY, netRevenueTRY);
             })
             .ToList();
     }
