@@ -1,16 +1,19 @@
 namespace SimilarProductsWinForms.Models;
 
+using System;
+using SimilarProductsWinForms.Services;
+
 internal sealed class AiOptimizationSettings
 {
     public string Provider { get; set; } = "Offline";
     public string OpenAiApiKey { get; set; } = "";
-    public string OpenAiModel { get; set; } = "gpt-5.5";
-    public string OpenAiImageModel { get; set; } = "gpt-image-1";
+    public string OpenAiModel { get; set; } = "gpt-4o";
+    public string OpenAiImageModel { get; set; } = "dall-e-3";
     public string GeminiApiKey { get; set; } = "";
     public string GeminiModel { get; set; } = "gemini-3.7-flash";
-    public string GeminiImageModel { get; set; } = "gemini-3.1-flash-image";
+    public string GeminiImageModel { get; set; } = "imagen-3.0-generate-002";
     public string ClaudeApiKey { get; set; } = "";
-    public string ClaudeModel { get; set; } = "claude-3-7-sonnet";
+    public string ClaudeModel { get; set; } = "claude-3-7-sonnet-20250219";
     public string PlatformToken { get; set; } = "";
 
     public bool UseOpenAi =>
@@ -25,15 +28,15 @@ internal sealed class AiOptimizationSettings
 
     public string GetActiveBadgeText()
     {
-        if (UseOpenAi) return $"🟢 Aktif: OpenAI ({OpenAiModel})";
-        if (UseGemini) return $"🔵 Aktif: Gemini ({GeminiModel})";
+        if (UseOpenAi) return $"🟢 Aktif: OpenAI ({AiModelNormalizer.NormalizeOpenAiTextModel(OpenAiModel)})";
+        if (UseGemini) return $"🔵 Aktif: Gemini ({AiModelNormalizer.NormalizeGeminiTextModel(GeminiModel)})";
         return "⚡ Aktif: Offline Kural Motoru";
     }
 
     public string GetActiveEngineName()
     {
-        if (UseOpenAi) return $"OpenAI ({OpenAiModel})";
-        if (UseGemini) return $"Google Gemini ({GeminiModel})";
+        if (UseOpenAi) return $"OpenAI ({AiModelNormalizer.NormalizeOpenAiTextModel(OpenAiModel)})";
+        if (UseGemini) return $"Google Gemini ({AiModelNormalizer.NormalizeGeminiTextModel(GeminiModel)})";
         return "Offline Yerel Kural Motoru";
     }
 }

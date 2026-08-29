@@ -201,7 +201,7 @@ internal sealed class MarketAnalysisService
 
     private static async Task<string> FetchGeminiMarketReportAsync(string prompt, string apiKey, string model, CancellationToken cancellationToken)
     {
-        string actualModel = string.IsNullOrWhiteSpace(model) ? "gemini-1.5-flash" : model.Trim();
+        string actualModel = AiModelNormalizer.NormalizeGeminiTextModel(model);
         string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateContent?key={apiKey.Trim()}";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url);

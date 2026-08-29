@@ -183,14 +183,21 @@ internal sealed class AiListingImageGenerator
         CancellationToken cancellationToken)
     {
         var prompt = BuildPrompt(listing, userPrompt);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
+        string actualModel = AiModelNormalizer.NormalizeGeminiImageModel(settings.GeminiImageModel);
+        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateImages";
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
+        var payload = new
+        {
+            prompt = prompt.Trim(),
+            number_of_images = 1,
+            output_mime_type = "image/jpeg",
+            aspect_ratio = "1:1",
+            person_generation = "ALLOW_ADULT"
+        };
         request.Content = new StringContent(
-            JsonSerializer.Serialize(new
-            {
-                model = string.IsNullOrWhiteSpace(settings.GeminiImageModel) ? "gemini-3.1-flash-image" : settings.GeminiImageModel.Trim(),
-                input = prompt,
-            }),
+            JsonSerializer.Serialize(payload),
             Encoding.UTF8,
             "application/json");
 
@@ -214,7 +221,7 @@ internal sealed class AiListingImageGenerator
     {
         var prompt = BuildReferenceEditPrompt(listing, userPrompt);
         var imageBytes = await File.ReadAllBytesAsync(referenceImagePath, cancellationToken);
-        var model = string.IsNullOrWhiteSpace(settings.GeminiImageModel) ? "gemini-3.1-flash-image" : settings.GeminiImageModel.Trim();
+        var model = AiModelNormalizer.NormalizeGeminiImageModel(settings.GeminiImageModel);
         using var request = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent?key={Uri.EscapeDataString(settings.GeminiApiKey.Trim())}");
         request.Content = new StringContent(
             JsonSerializer.Serialize(new
@@ -300,6 +307,12 @@ internal sealed class AiListingImageGenerator
                 inlineData.TryGetProperty("data", out var data))
             {
                 return data.GetString();
+            }
+
+            if (element.TryGetProperty("imageBytes", out var imgBytes) &&
+                imgBytes.ValueKind == JsonValueKind.String)
+            {
+                return imgBytes.GetString();
             }
 
             if (element.TryGetProperty("inlineData", out var inlineDataCamel) &&

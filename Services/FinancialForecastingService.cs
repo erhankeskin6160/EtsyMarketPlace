@@ -339,16 +339,27 @@ internal static class FinancialForecastingService
         string prompt,
         CancellationToken cancellationToken)
     {
+        string actualModel = AiModelNormalizer.NormalizeGeminiTextModel(settings.GeminiModel);
+        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateContent?key={settings.GeminiApiKey.Trim()}";
+
         using var client = new System.Net.Http.HttpClient();
-        using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
-        request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
+        using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url);
 
         var payload = new
         {
-            model = string.IsNullOrWhiteSpace(settings.GeminiModel) ? "gemini-3.7-flash" : settings.GeminiModel.Trim(),
-            system_instruction = "Sen profesyonel bir Etsy Finans Direktörü (CFO) ve E-Ticaret Büyüme Danışmanısın. Sadece geçerli JSON yanıtı döndür.",
-            input = prompt,
-            generation_config = new { temperature = 0.6 }
+            system_instruction = new
+            {
+                parts = new[] { new { text = "Sen profesyonel bir Etsy Finans Direktörü (CFO) ve E-Ticaret Büyüme Danışmanısın. Sadece geçerli JSON yanıtı döndür." } }
+            },
+            contents = new[]
+            {
+                new { parts = new[] { new { text = prompt } } }
+            },
+            generationConfig = new
+            {
+                temperature = 0.6,
+                response_mime_type = "application/json"
+            }
         };
 
         request.Content = new System.Net.Http.StringContent(
@@ -371,7 +382,19 @@ internal static class FinancialForecastingService
         using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
         string text = "";
 
-        if (doc.RootElement.TryGetProperty("output_text", out var outProp))
+        if (doc.RootElement.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
+        {
+            var firstCandidate = candidates[0];
+            if (firstCandidate.TryGetProperty("content", out var content) &&
+                content.TryGetProperty("parts", out var parts) && parts.GetArrayLength() > 0)
+            {
+                if (parts[0].TryGetProperty("text", out var textElem))
+                {
+                    text = textElem.GetString() ?? "";
+                }
+            }
+        }
+        else if (doc.RootElement.TryGetProperty("output_text", out var outProp))
         {
             text = outProp.GetString() ?? "";
         }

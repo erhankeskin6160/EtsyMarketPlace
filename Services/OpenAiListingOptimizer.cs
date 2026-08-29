@@ -86,23 +86,23 @@ internal sealed class OpenAiListingOptimizer(
         CancellationToken cancellationToken)
     {
         var local = localOptimizer.Optimize(input);
-        AiListingOptimizationResponse ai;
+        AiListingOptimizationResponse? ai = null;
         try
         {
             var body = await SendGeminiRequestAsync(settings, input, cancellationToken);
             var outputText = StripJsonFences(ExtractGeminiOutputText(body));
             ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
                 outputText,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                ?? throw new InvalidOperationException("Gemini yaniti okunamadi.");
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
         }
-        catch (InvalidOperationException ex) when (IsRecoverableGeminiException(ex))
+        catch (Exception ex)
         {
             return CreateLocalFallbackResult(local, ex.Message);
         }
-        catch (JsonException ex)
+
+        if (ai is null)
         {
-            return CreateLocalFallbackResult(local, $"Gemini yaniti JSON formatinda okunamadi. Offline oneriler gosterildi. Detay: {ex.Message}");
+            return CreateLocalFallbackResult(local, "Gemini yaniti JSON olarak okunamadi.");
         }
 
         return new ListingOptimizationResult(
@@ -126,8 +126,8 @@ internal sealed class OpenAiListingOptimizer(
         {
             RiskWarnings = local.RiskWarnings.Concat([warning]).Distinct().ToList(),
             ActionChecklist = local.ActionChecklist.Concat([
-                "Gemini basarisiz oldugu icin sonuc offline kural motorundan uretildi.",
-                "AI Ayarlari ekraninda daha hafif bir Gemini modeli deneyebilir veya bir sure sonra tekrar calistirabilirsiniz.",
+                "Gemini gecici olarak yanit veremedigi icin sonuc offline kural motorundan aninda uretildi.",
+                "AI Ayarlari ekraninda baska bir model (ornegin gemini-1.5-flash veya gpt-4o) secebilirsiniz.",
             ]).Distinct().ToList(),
         };
     }
@@ -140,31 +140,61 @@ internal sealed class OpenAiListingOptimizer(
         const int maxAttempts = 3;
         string lastBody = "";
         HttpStatusCode lastStatusCode = 0;
+        string currentModel = AiModelNormalizer.NormalizeGeminiTextModel(settings.GeminiModel);
 
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
-            request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
-            request.Content = new StringContent(
-                JsonSerializer.Serialize(CreateGeminiPayload(settings.GeminiModel, input)),
-                Encoding.UTF8,
-                "application/json");
-
-            using var response = await HttpClient.SendAsync(request, cancellationToken);
-            lastStatusCode = response.StatusCode;
-            lastBody = await response.Content.ReadAsStringAsync(cancellationToken);
-            if (response.IsSuccessStatusCode)
+            try
             {
-                return lastBody;
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{currentModel}:generateContent?key={settings.GeminiApiKey.Trim()}";
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Content = new StringContent(
+                    JsonSerializer.Serialize(CreateGeminiPayload(input, currentModel)),
+                    Encoding.UTF8,
+                    "application/json");
+
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(25)); // 25s per call
+
+                using var response = await HttpClient.SendAsync(request, cts.Token);
+                lastStatusCode = response.StatusCode;
+                lastBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    return lastBody;
+                }
+
+                if (lastStatusCode == HttpStatusCode.NotFound && currentModel != "gemini-1.5-flash")
+                {
+                    currentModel = "gemini-1.5-flash";
+                    continue;
+                }
+
+                if (!IsTransientGeminiStatus(response.StatusCode) || attempt == maxAttempts)
+                {
+                    break;
+                }
             }
-
-            if (!IsTransientGeminiStatus(response.StatusCode) || attempt == maxAttempts)
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
+                // Timeout on 3.7 -> instantly fallback to 1.5-flash
+                if (currentModel != "gemini-1.5-flash")
+                {
+                    currentModel = "gemini-1.5-flash";
+                    continue;
+                }
                 break;
             }
+            catch when (attempt < maxAttempts)
+            {
+                if (currentModel != "gemini-1.5-flash")
+                {
+                    currentModel = "gemini-1.5-flash";
+                    continue;
+                }
+            }
 
-            var delay = response.Headers.RetryAfter?.Delta
-                ?? TimeSpan.FromSeconds(attempt * 2);
+            var delay = TimeSpan.FromSeconds(attempt * 1.5);
             await Task.Delay(delay, cancellationToken);
         }
 
@@ -173,23 +203,60 @@ internal sealed class OpenAiListingOptimizer(
 
     private static object CreateOpenAiPayload(string model, ListingOptimizationInput input) => new
     {
-        model = string.IsNullOrWhiteSpace(model) ? "gpt-5.5" : model.Trim(),
+        model = AiModelNormalizer.NormalizeOpenAiTextModel(model),
         instructions = ListingDraftInstructionBuilder.BuildSystemInstruction(),
         input = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input),
     };
 
-    private static object CreateGeminiPayload(string model, ListingOptimizationInput input) => new
+    private static object CreateGeminiPayload(ListingOptimizationInput input, string model)
     {
-        model = string.IsNullOrWhiteSpace(model) ? "gemini-3.5-flash" : model.Trim(),
-        system_instruction = ListingDraftInstructionBuilder.BuildSystemInstruction(),
-        input = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input),
-        generation_config = new
+        if (model.Contains("3.7") || model.Contains("3-7"))
         {
-            temperature = 0.65,
-        },
-    };
+            return new
+            {
+                system_instruction = new
+                {
+                    parts = new[] { new { text = ListingDraftInstructionBuilder.BuildSystemInstruction() } }
+                },
+                contents = new[]
+                {
+                    new
+                    {
+                        parts = new[] { new { text = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input) } }
+                    }
+                },
+                generationConfig = new
+                {
+                    temperature = 0.65,
+                    response_mime_type = "application/json",
+                    thinking_config = new
+                    {
+                        thinking_level = "low"
+                    }
+                }
+            };
+        }
 
-
+        return new
+        {
+            system_instruction = new
+            {
+                parts = new[] { new { text = ListingDraftInstructionBuilder.BuildSystemInstruction() } }
+            },
+            contents = new[]
+            {
+                new
+                {
+                    parts = new[] { new { text = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input) } }
+                }
+            },
+            generationConfig = new
+            {
+                temperature = 0.65,
+                response_mime_type = "application/json"
+            }
+        };
+    }
 
     private static bool IsTransientGeminiStatus(HttpStatusCode statusCode) =>
         statusCode is HttpStatusCode.TooManyRequests
@@ -202,20 +269,25 @@ internal sealed class OpenAiListingOptimizer(
     {
         if (IsGeminiOverloaded(body))
         {
-            return "Gemini modeli su anda yogun. Program 3 kez otomatik denedi ama Google yine yogunluk cevabi verdi. Biraz sonra tekrar deneyin veya gecici olarak AI Ayarlari > Offline modunu kullanin.";
+            return "Gemini modeli şu anda yoğun. Program 3 kez otomatik denedi ama Google yine yoğunluk cevabı verdi. Biraz sonra tekrar deneyin veya geçici olarak AI Ayarları > Offline modunu kullanın.";
         }
 
         if (statusCode == HttpStatusCode.TooManyRequests)
         {
-            return "Gemini kota veya hiz limitine takildi. Biraz bekleyip tekrar deneyin ya da Google AI Studio kota/limit ayarlarinizi kontrol edin.";
+            return "Gemini kota veya hız limitine takıldı. Biraz bekleyip tekrar deneyin ya da Google AI Studio kota/limit ayarlarınızı kontrol edin.";
         }
 
         if (statusCode == HttpStatusCode.Unauthorized || statusCode == HttpStatusCode.Forbidden)
         {
-            return "Gemini API key kabul edilmedi. AI Ayarlari ekranindaki Gemini key degerini ve Google AI Studio API izinlerini kontrol edin.";
+            return "Gemini API key kabul edilmedi. AI Ayarları ekranındaki Gemini key değerini ve Google AI Studio API izinlerini kontrol edin.";
         }
 
-        return $"Gemini istegi basarisiz. HTTP {(int)statusCode}: {body}";
+        if (statusCode == HttpStatusCode.NotFound)
+        {
+            return "Gemini modeli bulunamadı (HTTP 404). AI Ayarları ekranında 'gemini-3.7-flash' veya 'gemini-1.5-flash' modelini seçtiğinizden emin olun.";
+        }
+
+        return $"Gemini isteği başarısız. HTTP {(int)statusCode}: {body}";
     }
 
     private static bool IsGeminiOverloaded(string body) =>
@@ -224,12 +296,14 @@ internal sealed class OpenAiListingOptimizer(
         body.Contains("try again later", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsRecoverableGeminiException(InvalidOperationException exception) =>
-        exception.Message.Contains("Gemini modeli su anda yogun", StringComparison.OrdinalIgnoreCase) ||
-        exception.Message.Contains("Gemini kota veya hiz limitine takildi", StringComparison.OrdinalIgnoreCase) ||
-        exception.Message.Contains("Gemini istegi basarisiz. HTTP 500", StringComparison.OrdinalIgnoreCase) ||
-        exception.Message.Contains("Gemini istegi basarisiz. HTTP 502", StringComparison.OrdinalIgnoreCase) ||
-        exception.Message.Contains("Gemini istegi basarisiz. HTTP 503", StringComparison.OrdinalIgnoreCase) ||
-        exception.Message.Contains("Gemini istegi basarisiz. HTTP 504", StringComparison.OrdinalIgnoreCase);
+        exception.Message.Contains("Gemini modeli şu anda yoğun", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("Gemini kota veya hız limitine takıldı", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("Gemini modeli bulunamadı", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("HTTP 404", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("HTTP 500", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("HTTP 502", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("HTTP 503", StringComparison.OrdinalIgnoreCase) ||
+        exception.Message.Contains("HTTP 504", StringComparison.OrdinalIgnoreCase);
 
     private static string ExtractOutputText(string responseBody)
     {
@@ -260,6 +334,19 @@ internal sealed class OpenAiListingOptimizer(
     private static string ExtractGeminiOutputText(string responseBody)
     {
         using var document = JsonDocument.Parse(responseBody);
+        if (document.RootElement.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
+        {
+            var firstCandidate = candidates[0];
+            if (firstCandidate.TryGetProperty("content", out var content) &&
+                content.TryGetProperty("parts", out var parts) && parts.GetArrayLength() > 0)
+            {
+                if (parts[0].TryGetProperty("text", out var text))
+                {
+                    return text.GetString() ?? "";
+                }
+            }
+        }
+
         if (document.RootElement.TryGetProperty("output_text", out var outputText))
         {
             return outputText.GetString() ?? "";
@@ -280,7 +367,7 @@ internal sealed class OpenAiListingOptimizer(
             }
         }
 
-        throw new InvalidOperationException("Gemini yanitinda output_text bulunamadi.");
+        throw new InvalidOperationException("Gemini yanitinda metin bulunamadi.");
     }
 
     private static string StripJsonFences(string value)

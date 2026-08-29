@@ -238,13 +238,24 @@ internal sealed class AiImageGenerationService
 
                 if (aiSettings.UseGemini && !string.IsNullOrWhiteSpace(aiSettings.GeminiApiKey))
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, "https://generativelanguage.googleapis.com/v1beta/interactions");
-                    request.Headers.Add("x-goog-api-key", aiSettings.GeminiApiKey.Trim());
+                    string actualModel = AiModelNormalizer.NormalizeGeminiTextModel(aiSettings.GeminiModel);
+                    string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateContent?key={aiSettings.GeminiApiKey.Trim()}";
+
+                    using var request = new HttpRequestMessage(HttpMethod.Post, url);
                     var payload = new
                     {
-                        model = string.IsNullOrWhiteSpace(aiSettings.GeminiModel) ? "gemini-3.7-flash" : aiSettings.GeminiModel.Trim(),
-                        system_instruction = systemPrompt,
-                        input = userPrompt
+                        system_instruction = new
+                        {
+                            parts = new[] { new { text = systemPrompt } }
+                        },
+                        contents = new[]
+                        {
+                            new { parts = new[] { new { text = userPrompt } } }
+                        },
+                        generationConfig = new
+                        {
+                            temperature = 0.7
+                        }
                     };
                     request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
                     using var resp = await HttpClient.SendAsync(request, cancellationToken);
@@ -405,6 +416,18 @@ internal sealed class AiImageGenerationService
     private static string ExtractTextFromGeminiResponse(string json)
     {
         using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
+        {
+            var firstCandidate = candidates[0];
+            if (firstCandidate.TryGetProperty("content", out var content) &&
+                content.TryGetProperty("parts", out var parts) && parts.GetArrayLength() > 0)
+            {
+                if (parts[0].TryGetProperty("text", out var textElem))
+                {
+                    return textElem.GetString() ?? "";
+                }
+            }
+        }
         if (doc.RootElement.TryGetProperty("output_text", out var outProp)) return outProp.GetString() ?? "";
         if (doc.RootElement.TryGetProperty("output", out var outArray))
         {

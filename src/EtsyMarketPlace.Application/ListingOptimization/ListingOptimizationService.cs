@@ -178,7 +178,7 @@ public sealed class ListingOptimizationService
         IReadOnlyList<string> strongTerms,
         IReadOnlyList<string> suggestedTags)
     {
-        var rawBaseTitle = CleanPhrase(input.Title);
+        var rawBaseTitle = SanitizeSourceTitle(input.Title);
         var primaryPart = rawBaseTitle.Split(['|', '-', ',', '–', '—', '/'], StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault()?.Trim() ?? CleanPhrase(input.TargetKeyword);
 
@@ -193,55 +193,69 @@ public sealed class ListingOptimizationService
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // 1. Zengin, 115-135 Karakterlik Ana Başlık
-        var sb1 = new System.Text.StringBuilder();
-        sb1.Append(ToTitleCase(primaryPart));
-        foreach (var tag in tagsTitleCased)
-        {
-            var candidate = sb1.Length == primaryPart.Length ? $" - {tag}" : $", {tag}";
-            if (sb1.Length + candidate.Length <= 138)
-            {
-                sb1.Append(candidate);
-            }
-            else
-            {
-                break;
-            }
-        }
-        var title1 = LimitTitle(sb1.ToString());
+        var tag1 = tagsTitleCased.ElementAtOrDefault(0) ?? "Handcrafted Design";
+        var tag2 = tagsTitleCased.ElementAtOrDefault(1) ?? "Unique Gift Idea";
+        var tag3 = tagsTitleCased.ElementAtOrDefault(2) ?? "Display Prop & Decor";
+        var tag4 = tagsTitleCased.ElementAtOrDefault(3) ?? "Collector Edition";
 
-        // 2. Arama ve Koleksiyon Odaklı 2. Başlık
-        var sb2 = new System.Text.StringBuilder();
+        var basePrimary = ToTitleCase(primaryPart);
+
+        // 1. Altın Formül: [Ana Ürün Adı] | [Özellik/Kullanım] | [Kitle/Hediye]
+        var candidate1 = $"{basePrimary} | {tag1} | {tag2} & {tag3}";
+        if (candidate1.Length > 138) candidate1 = $"{basePrimary} | {tag1} | {tag2}";
+        if (candidate1.Length > 138) candidate1 = $"{basePrimary} | {tag1}";
+        var title1 = LimitTitle(candidate1);
+
+        // 2. Arama & Anahtar Kelime Odaklı 2. Başlık
         var targetTitle = ToTitleCase(input.TargetKeyword);
-        sb2.Append(targetTitle);
-        if (!primaryPart.Contains(input.TargetKeyword, StringComparison.OrdinalIgnoreCase))
-        {
-            sb2.Append(" - ");
-            sb2.Append(ToTitleCase(primaryPart));
-        }
-        foreach (var tag in tagsTitleCased)
-        {
-            var candidate = $", {tag}";
-            if (sb2.Length + candidate.Length <= 138)
-            {
-                sb2.Append(candidate);
-            }
-            else
-            {
-                break;
-            }
-        }
-        var title2 = LimitTitle(sb2.ToString());
+        var baseWithKeyword = basePrimary.Contains(targetTitle, StringComparison.OrdinalIgnoreCase)
+            ? basePrimary
+            : $"{targetTitle} - {basePrimary}";
+        var candidate2 = $"{baseWithKeyword} | {tag2} | {tag4} for Fans";
+        if (candidate2.Length > 138) candidate2 = $"{baseWithKeyword} | {tag2} | {tag4}";
+        if (candidate2.Length > 138) candidate2 = $"{baseWithKeyword} | {tag2}";
+        var title2 = LimitTitle(candidate2);
 
-        // 3. Hediye ve Dekorasyon Odaklı 3. Başlık
-        var modifier = tagsTitleCased.FirstOrDefault() ?? "Collectible Gift";
-        var title3 = LimitTitle($"{ToTitleCase(primaryPart)} | {modifier}, Handcrafted Fantasy Decor");
+        // 3. Hediye & Niche Kullanım Odaklı 3. Başlık
+        var candidate3 = $"{basePrimary} | {tag3} | Perfect Gift for Collectors & Gamers";
+        if (candidate3.Length > 138) candidate3 = $"{basePrimary} | {tag3} | Gift for Collectors";
+        if (candidate3.Length > 138) candidate3 = $"{basePrimary} | {tag3}";
+        var title3 = LimitTitle(candidate3);
 
         return new[] { title1, title2, title3 }
             .Where(title => !string.IsNullOrWhiteSpace(title))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(3)
             .ToList();
+    }
+
+    private static string SanitizeSourceTitle(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "Etsy Handmade Product";
+        var clean = raw.Trim();
+        var junkPatterns = new[]
+        {
+            "OUTPUT LANGUAGE: English only. Do not write Turkish.",
+            "OUTPUT LANGUAGE: English only.",
+            "OUTPUT LANGUAGE:",
+            "English only.",
+            "Do not write Turkish.",
+            "Selected marketplace listing:",
+            "Etsy search keyword:",
+            "Use the selected listing as the product reference",
+            "Infer the best Etsy product category",
+        };
+
+        foreach (var junk in junkPatterns)
+        {
+            if (clean.Contains(junk, StringComparison.OrdinalIgnoreCase))
+            {
+                clean = clean.Replace(junk, "", StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        clean = clean.Trim().TrimStart('|', '-', ':', ' ').TrimEnd('|', '-', ':', ' ');
+        return clean.Length > 0 ? clean : "Etsy Handmade Product";
     }
 
     private static IReadOnlyList<string> BuildMaterialSuggestions(ListingOptimizationInput input)
@@ -281,54 +295,84 @@ public sealed class ListingOptimizationService
         IReadOnlyList<string> suggestedTags)
     {
         var target = CleanPhrase(input.TargetKeyword);
-        var productName = CleanPhrase(input.Title)
+        var cleanTitle = SanitizeSourceTitle(input.Title);
+        var productName = cleanTitle
             .Split(['|', '-', ','], StringSplitOptions.RemoveEmptyEntries)
             .Select(part => part.Trim())
             .FirstOrDefault(part => part.Length > 0) ?? target;
         var materials = string.Join(", ", BuildMaterialSuggestions(input).Take(5));
         var materialText = materials.Length > 0 ? materials : "High-quality materials";
 
-        // 1. Eğer kullanıcının mevcut bir açıklaması varsa, bu gerçek verileri %100 koru ve yapılandır:
-        if (!string.IsNullOrWhiteSpace(input.Description) && input.Description.Trim().Length > 30)
-        {
-            var rawDesc = input.Description.Trim();
-            
-            // Eğer mevcut açıklama zaten hedef kelimeyi içermiyorsa, başına SEO tanıtım kancası ekle
-            var hook = rawDesc.Contains(target, StringComparison.OrdinalIgnoreCase)
-                ? ""
-                : $"{productName} is tailored for shoppers searching for {target}, bringing exceptional quality and craftsmanship to your collection.{Environment.NewLine}{Environment.NewLine}";
+        var cleanSourceDesc = SanitizeSourceDescription(input.Description);
 
-            var sb = new System.Text.StringBuilder();
-            if (!string.IsNullOrEmpty(hook)) sb.Append(hook);
-            sb.AppendLine(rawDesc);
-            sb.AppendLine();
-            sb.AppendLine("─────────────────────────────");
-            sb.AppendLine("📦 KEY DETAILS & HIGHLIGHTS:");
-            sb.AppendLine($"• Product: {productName}");
-            if (materials.Length > 0) sb.AppendLine($"• Materials: {materials}");
-            sb.AppendLine("• Handcrafted & carefully inspected before shipment");
-            sb.AppendLine("• Secure, protective packaging for safe worldwide delivery");
-            sb.AppendLine("• Custom requests or sizing? Feel free to send us a message!");
-            sb.AppendLine();
-            sb.AppendLine("Publishing review: ensure all dimensions, materials, and shipping specifications accurately match your physical inventory.");
-            
-            return sb.ToString().Trim();
+        var sb = new System.Text.StringBuilder();
+
+        // 1. Google Meta Hook & Target Keyword (First 160-200 Chars)
+        sb.AppendLine($"Elevate your collection with this premium {productName}! Tailored for shoppers searching for {target}, this handcrafted piece brings outstanding quality and unique character to any setup.");
+        sb.AppendLine();
+
+        // 2. Why You'll Love It
+        sb.AppendLine("✨ WHY YOU'LL LOVE IT:");
+        sb.AppendLine($"• Expertly crafted with high-grade {materialText} for a clean, premium finish.");
+        sb.AppendLine("• Ideal for hobbyists, collectors, tabletop display, or as a memorable gift.");
+        sb.AppendLine("• Carefully inspected and hand-finished with exceptional attention to detail.");
+        sb.AppendLine();
+
+        // 3. Specifications & Source Details
+        sb.AppendLine("📏 SPECIFICATIONS & DETAILS:");
+        sb.AppendLine($"• Materials: {materialText}");
+        sb.AppendLine("• Craftsmanship: Precision manufacturing & strict quality inspection before shipment");
+        if (!string.IsNullOrWhiteSpace(cleanSourceDesc) && cleanSourceDesc.Length > 20)
+        {
+            sb.AppendLine($"• Overview: {cleanSourceDesc}");
+        }
+        sb.AppendLine();
+
+        // 4. Perfect For
+        sb.AppendLine("🎁 PERFECT FOR:");
+        sb.AppendLine("• Everyday display, room styling, cosplay, and collector collections.");
+        sb.AppendLine("• Unique birthday or holiday gift for gaming fans and enthusiasts.");
+        sb.AppendLine();
+
+        // 5. Packaging & Shipping
+        sb.AppendLine("📦 PACKAGING & SHIPPING:");
+        sb.AppendLine("• Securely wrapped in protective packaging to guarantee 100% safe worldwide delivery.");
+        sb.AppendLine("• Tracked dispatch provided upon shipment.");
+        sb.AppendLine();
+
+        // 6. Custom Inquiries
+        sb.AppendLine("💬 CUSTOM REQUESTS & QUESTIONS:");
+        sb.AppendLine("• Looking for a custom color, size, or have any questions? Reach out anytime—we are happy to help!");
+        sb.AppendLine();
+        sb.AppendLine("Publishing review: check dimensions, materials, and copyright policies before publishing.");
+
+        return sb.ToString().Trim();
+    }
+
+    private static string SanitizeSourceDescription(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "";
+        var lines = raw.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        var clean = new List<string>();
+
+        foreach (var line in lines)
+        {
+            var trimmed = line.Trim();
+            if (trimmed.StartsWith("Selected listing title:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Etsy search keyword:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Current competitor category:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Competitor description:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("OUTPUT LANGUAGE:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Do not write Turkish", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Publishing review:", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            clean.Add(line);
         }
 
-        // 2. Eğer sıfırdan oluşturuluyorsa, gerçekçi ve yapılandırılmış profesyonel taslak sun:
-        var tags = string.Join(", ", suggestedTags.Take(8));
-        return
-            $"{productName} is tailored for shoppers searching for {target}, crafted to bring standout quality and charm to your space or collection.{Environment.NewLine}{Environment.NewLine}" +
-            "✨ PRODUCT HIGHLIGHTS & FEATURES:" + Environment.NewLine +
-            $"• Beautifully detailed and crafted with premium {materialText}" + Environment.NewLine +
-            "• Ideal for collectors, tabletop displays, home decor, or as a memorable gift" + Environment.NewLine +
-            "• Carefully inspected and hand-finished with exceptional attention to detail" + Environment.NewLine + Environment.NewLine +
-            "📦 PACKAGING & SHIPPING:" + Environment.NewLine +
-            "• Every order is securely packaged in protective materials to ensure safe transit" + Environment.NewLine +
-            "• Tracked shipping provided upon dispatch" + Environment.NewLine + Environment.NewLine +
-            "💬 CUSTOM INQUIRIES & QUESTIONS:" + Environment.NewLine +
-            "• Have a question about dimensions, colors, or custom finishes? Reach out anytime—we are happy to help!" + Environment.NewLine + Environment.NewLine +
-            "Publishing review: check intellectual-property risk and verify listing details before publishing.";
+        return string.Join(" ", clean).Trim();
     }
 
     private static IReadOnlyList<string> BuildRiskWarnings(ListingOptimizationInput input)
