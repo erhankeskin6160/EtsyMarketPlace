@@ -141,39 +141,39 @@ public class AnimatedToolTipForm : Form
         TransparencyKey = Color.Empty;
         BackColor = BgColor;
 
-        int width = 780;
+        var screen = Screen.FromPoint(Location).WorkingArea;
+        int width = Math.Min(960, Math.Max(900, screen.Width - 60));
         int height;
 
         if (_payload != null)
         {
             int baseHeight = 110; // Header + padding
-            if (_payload.KpiCards.Count > 0) baseHeight += 65; // KPI cards
+            if (_payload.KpiCards.Count > 0) baseHeight += 78; // KPI cards (62px card + gap)
             if (_payload.Rows.Count > 0)
             {
-                baseHeight += 32; // Table header
-                baseHeight += _payload.Rows.Count * 28; // Rows
+                baseHeight += 34; // Table header
+                baseHeight += _payload.Rows.Count * 29; // Rows
             }
             else
             {
                 baseHeight += 40; // "No records" note
             }
-            if (!string.IsNullOrWhiteSpace(_payload.FooterNote)) baseHeight += 25;
+            if (!string.IsNullOrWhiteSpace(_payload.FooterNote)) baseHeight += 28;
 
-            height = Math.Min(560, Math.Max(180, baseHeight + 15));
+            height = Math.Min(screen.Height - 60, Math.Max(190, baseHeight + 20));
         }
         else
         {
             using var g = CreateGraphics();
             using var font = new Font("Segoe UI", 9F);
-            var measured = g.MeasureString(_fallbackText, font, 720);
-            width = Math.Min(780, (int)measured.Width + 40);
-            height = Math.Min(520, (int)measured.Height + 80);
+            var measured = g.MeasureString(_fallbackText, font, width - 60);
+            width = Math.Min(width, (int)measured.Width + 40);
+            height = Math.Min(screen.Height - 60, (int)measured.Height + 80);
         }
 
         Size = new Size(width, height);
 
         // Keep inside screen area
-        var screen = Screen.FromPoint(Location).WorkingArea;
         int x = Location.X;
         int y = Location.Y;
         if (x + width > screen.Right) x = screen.Right - width - 12;
@@ -268,14 +268,14 @@ public class AnimatedToolTipForm : Form
         g.DrawLine(divPen, padX, curY, bounds.Width - padX, curY);
         curY += 10;
 
-        // 2. Mini KPI Cards
+        // 2. Mini KPI Cards (Responsive 3-tier vertical hierarchy)
         if (_payload.KpiCards.Count > 0)
         {
             int cardCount = _payload.KpiCards.Count;
-            int gap = 10;
+            int gap = 12;
             int availableWidth = bounds.Width - (padX * 2) - ((cardCount - 1) * gap);
             int cardW = availableWidth / cardCount;
-            int cardH = 50;
+            int cardH = 62;
 
             for (int i = 0; i < cardCount; i++)
             {
@@ -289,27 +289,26 @@ public class AnimatedToolTipForm : Form
                 g.DrawPath(cardBorder, cardPath);
 
                 // Accent vertical left bar
-                var leftBar = new Rectangle(cardRect.X, cardRect.Y + 6, 3, cardRect.Height - 12);
+                var leftBar = new Rectangle(cardRect.X, cardRect.Y + 8, 3, cardRect.Height - 16);
                 using var barBrush = new SolidBrush(kpi.AccentColor);
                 g.FillRectangle(barBrush, leftBar);
 
-                // Title
+                // Line 1: Title (Kategori Başlığı)
                 using var kpiTitleFont = new Font("Segoe UI Semibold", 8F, FontStyle.Bold);
                 using var kpiTitleBrush = new SolidBrush(TextMuted);
                 g.DrawString(kpi.Title, kpiTitleFont, kpiTitleBrush, cardRect.X + 10, cardRect.Y + 6);
 
-                // Primary Value
-                using var kpiValFont = new Font("Segoe UI", 10.5F, FontStyle.Bold);
+                // Line 2: Primary Value (Ana Rakam)
+                using var kpiValFont = new Font("Segoe UI", 11F, FontStyle.Bold);
                 using var kpiValBrush = new SolidBrush(kpi.AccentColor);
                 g.DrawString(kpi.PrimaryValue, kpiValFont, kpiValBrush, cardRect.X + 10, cardRect.Y + 22);
 
-                // Sub Value (right-aligned if present)
+                // Line 3: Sub Value (Alt Bilgi / Rozet)
                 if (!string.IsNullOrWhiteSpace(kpi.SubValue))
                 {
                     using var kpiSubFont = new Font("Segoe UI", 7.8F);
-                    using var kpiSubBrush = new SolidBrush(TextMuted);
-                    var subSize = g.MeasureString(kpi.SubValue, kpiSubFont);
-                    g.DrawString(kpi.SubValue, kpiSubFont, kpiSubBrush, cardRect.Right - subSize.Width - 8, cardRect.Y + 8);
+                    using var kpiSubBrush = new SolidBrush(Color.FromArgb(180, 195, 215));
+                    g.DrawString(kpi.SubValue, kpiSubFont, kpiSubBrush, cardRect.X + 10, cardRect.Y + 42);
                 }
             }
 
@@ -328,8 +327,27 @@ public class AnimatedToolTipForm : Form
 
             using var thFont = new Font("Segoe UI Semibold", 8F, FontStyle.Bold);
             using var thBrush = new SolidBrush(TextMuted);
-            using var sfRight = new StringFormat { Alignment = StringAlignment.Far, LineAlignment = StringAlignment.Center };
-            using var sfLeft = new StringFormat { Alignment = StringAlignment.Near, LineAlignment = StringAlignment.Center };
+            using var sfRightNoWrap = new StringFormat
+            {
+                Alignment = StringAlignment.Far,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+            using var sfLeftNoWrap = new StringFormat
+            {
+                Alignment = StringAlignment.Near,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
+            using var sfCenterNoWrap = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center,
+                Trimming = StringTrimming.EllipsisCharacter,
+                FormatFlags = StringFormatFlags.NoWrap
+            };
 
             float currentX = padX + 8;
             for (int c = 0; c < _payload.ColumnHeaders.Length; c++)
@@ -338,7 +356,7 @@ public class AnimatedToolTipForm : Form
                 var colRect = new RectangleF(currentX, curY, colW - 6, 26);
 
                 bool isNumeric = (c == 2 || c == 3); // Quantity or Amount
-                g.DrawString(_payload.ColumnHeaders[c], thFont, thBrush, colRect, isNumeric ? sfRight : sfLeft);
+                g.DrawString(_payload.ColumnHeaders[c], thFont, thBrush, colRect, isNumeric ? sfRightNoWrap : sfLeftNoWrap);
                 currentX += colW;
             }
 
@@ -348,20 +366,13 @@ public class AnimatedToolTipForm : Form
             using var rowFont = new Font("Segoe UI", 8.5F);
             using var idFont = new Font("Consolas", 8.5F, FontStyle.Bold);
             using var amtFont = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
-            using var sfTrimming = new StringFormat
-            {
-                Alignment = StringAlignment.Near,
-                LineAlignment = StringAlignment.Center,
-                Trimming = StringTrimming.EllipsisCharacter,
-                FormatFlags = StringFormatFlags.NoWrap
-            };
 
             for (int r = 0; r < _payload.Rows.Count; r++)
             {
-                if (curY + 24 > bounds.Height - 30) break; // Don't overflow
+                if (curY + 26 > bounds.Height - 30) break; // Don't overflow
 
                 var row = _payload.Rows[r];
-                var rowRect = new Rectangle(padX, curY, tableW, 24);
+                var rowRect = new Rectangle(padX, curY, tableW, 26);
 
                 if (r % 2 == 1)
                 {
@@ -372,33 +383,41 @@ public class AnimatedToolTipForm : Form
 
                 currentX = padX + 8;
 
-                // Col 0: Date
+                // Col 0: Date / Tür
                 float w0 = tableW * _payload.ColumnWidthWeights[0];
                 using (var brush = new SolidBrush(TextMuted))
-                    g.DrawString(row.Date, rowFont, brush, new RectangleF(currentX, curY, w0 - 6, 24), sfLeft);
+                    g.DrawString(row.Date, rowFont, brush, new RectangleF(currentX, curY, w0 - 6, 26), sfLeftNoWrap);
                 currentX += w0;
 
-                // Col 1: Identifier (#ReceiptId)
+                // Col 1: Identifier / Kalem Adı
                 float w1 = tableW * _payload.ColumnWidthWeights[1];
                 using (var brush = new SolidBrush(Color.FromArgb(96, 165, 250))) // Sky Blue
-                    g.DrawString(row.Identifier, idFont, brush, new RectangleF(currentX, curY, w1 - 6, 24), sfLeft);
+                    g.DrawString(row.Identifier, idFont, brush, new RectangleF(currentX, curY, w1 - 6, 26), sfLeftNoWrap);
                 currentX += w1;
 
-                // Col 2: Quantity
+                // Col 2: Quantity / Kategori
                 float w2 = tableW * _payload.ColumnWidthWeights[2];
                 using (var brush = new SolidBrush(TextPrimary))
-                    g.DrawString(row.Quantity, rowFont, brush, new RectangleF(currentX, curY, w2 - 6, 24), sfRight);
+                    g.DrawString(row.Quantity, rowFont, brush, new RectangleF(currentX, curY, w2 - 6, 26), sfRightNoWrap);
                 currentX += w2;
 
-                // Col 3: Amount
+                // Col 3: Amount with smart financial tinting
                 float w3 = tableW * _payload.ColumnWidthWeights[3];
-                using (var brush = new SolidBrush(Color.FromArgb(52, 211, 153))) // Emerald
-                    g.DrawString(row.Amount, amtFont, brush, new RectangleF(currentX, curY, w3 - 6, 24), sfRight);
+                Color amtColor = Color.FromArgb(52, 211, 153); // Default Emerald
+                if (row.Amount.StartsWith("-"))
+                    amtColor = Color.FromArgb(248, 113, 113); // Coral / Red for deductions
+                else if (row.Amount.StartsWith("="))
+                    amtColor = Color.FromArgb(56, 189, 248);  // Sky Blue for Net
+                else if (row.Amount.StartsWith("+"))
+                    amtColor = Color.FromArgb(52, 211, 153);  // Emerald for Gross Income
+
+                using (var brush = new SolidBrush(amtColor))
+                    g.DrawString(row.Amount, amtFont, brush, new RectangleF(currentX, curY, w3 - 6, 26), sfRightNoWrap);
                 currentX += w3;
 
-                // Col 4: Badge (Fatura Durumu)
+                // Col 4: Badge (Fatura / Net Durumu)
                 float w4 = tableW * _payload.ColumnWidthWeights[4];
-                var badgeBounds = new Rectangle((int)currentX + 4, curY + 3, (int)w4 - 14, 18);
+                var badgeBounds = new Rectangle((int)currentX + 4, curY + 4, (int)w4 - 10, 18);
                 if (row.HasBadge)
                 {
                     using var badgePath = CreateRoundedRect(badgeBounds, 9);
@@ -406,26 +425,24 @@ public class AnimatedToolTipForm : Form
                     using var badgeBorder = new Pen(Color.FromArgb(16, 185, 129), 1f);
                     using var badgeTextBrush = new SolidBrush(Color.FromArgb(110, 231, 183));
                     using var badgeFont = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold);
-                    using var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
                     g.FillPath(badgeBg, badgePath);
                     g.DrawPath(badgeBorder, badgePath);
-                    g.DrawString(row.BadgeText, badgeFont, badgeTextBrush, badgeBounds, sfCenter);
+                    g.DrawString(row.BadgeText, badgeFont, badgeTextBrush, badgeBounds, sfCenterNoWrap);
                 }
                 else
                 {
                     using var mutedBrush = new SolidBrush(Color.FromArgb(100, 116, 139));
-                    using var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                    g.DrawString("—", rowFont, mutedBrush, badgeBounds, sfCenter);
+                    g.DrawString("—", rowFont, mutedBrush, badgeBounds, sfCenterNoWrap);
                 }
                 currentX += w4;
 
-                // Col 5: Description (Product Title)
+                // Col 5: Description (Product Title / Explanation)
                 float w5 = tableW * _payload.ColumnWidthWeights[5];
                 using (var descBrush = new SolidBrush(TextPrimary))
-                    g.DrawString(row.Description, rowFont, descBrush, new RectangleF(currentX, curY, w5 - 6, 24), sfTrimming);
+                    g.DrawString(row.Description, rowFont, descBrush, new RectangleF(currentX, curY, w5 - 6, 26), sfLeftNoWrap);
 
-                curY += 24;
+                curY += 26;
             }
         }
 

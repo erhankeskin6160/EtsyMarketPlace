@@ -11,7 +11,7 @@ internal sealed record LedgerEntry(
     string Currency,     // "USD" | "EUR" | "TRY" ...
     string Description,
     DateTimeOffset CreatedAt,
-    decimal ExchangeRate = 36.50m // Sipariş/İşlem Günü Kabul Edilen Dolar/TL Kuru
+    decimal ExchangeRate = 48.25m // Sipariş/İşlem Günü Kabul Edilen Dolar/TL Kuru
 )
 {
     public decimal AmountTRY => Math.Round(Amount * ExchangeRate, 2);
@@ -172,7 +172,7 @@ internal sealed record FinancialReport(
     public decimal ProfitMarginPct => TotalGross == 0 ? 0 : Math.Round(RealNetProfitUSD / TotalGross * 100, 1);
 
     public static FinancialReport Empty => new(
-        [], [], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 36.50m,
+        [], [], 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 48.25m,
         [], [], [], [], [], "USD",
         DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow
     );

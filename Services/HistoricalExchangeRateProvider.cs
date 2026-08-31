@@ -9,21 +9,19 @@ internal static class HistoricalExchangeRateProvider
     // Örnek bilinen dönemsel Dolar/TL kurları (TCMB / Piyasa Kapanış)
     private static readonly Dictionary<DateTime, decimal> KnownRates = new()
     {
-        { new DateTime(2026, 1, 1),  35.20m },
-        { new DateTime(2026, 2, 1),  35.60m },
-        { new DateTime(2026, 3, 1),  35.95m },
-        { new DateTime(2026, 4, 1),  36.10m },
-        { new DateTime(2026, 5, 1),  36.25m },
-        { new DateTime(2026, 6, 1),  36.40m },
-        { new DateTime(2026, 7, 1),  36.45m },
-        { new DateTime(2026, 8, 1),  36.50m },
-        { new DateTime(2026, 8, 23), 36.55m },
+        { new DateTime(2026, 1, 1),  46.80m },
+        { new DateTime(2026, 3, 1),  47.20m },
+        { new DateTime(2026, 5, 1),  47.65m },
+        { new DateTime(2026, 7, 1),  48.00m },
+        { new DateTime(2026, 8, 1),  48.20m },
+        { new DateTime(2026, 8, 15), 48.25m },
+        { new DateTime(2026, 8, 30), 48.26m },
     };
 
     /// <summary>
     /// Belirtilen sipariş/işlem gününe ait Dolar/TL kurunu döndürür.
     /// </summary>
-    public static decimal GetRateForDate(DateTime date, decimal fallbackRate = 36.50m)
+    public static decimal GetRateForDate(DateTime date, decimal fallbackRate = 48.25m)
     {
         var targetDate = date.Date;
 

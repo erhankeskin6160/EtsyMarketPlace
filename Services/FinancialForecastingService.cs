@@ -263,7 +263,12 @@ internal static class FinancialForecastingService
         catch (Exception ex)
         {
             var fallback = forecast.AiRecommendations.ToList();
-            fallback.Insert(0, $"⚠️ Canlı AI analizi alınamadı ({ex.Message}). Yerel finansal model tavsiyeleri gösteriliyor:");
+            string cleanMsg = ex.Message.Trim();
+            if (cleanMsg.StartsWith("{") || cleanMsg.Contains("\"error\""))
+            {
+                cleanMsg = "Google Gemini sunucularında anlık aşırı yüklenme (HTTP 503).";
+            }
+            fallback.Insert(0, $"ℹ️ **Canlı AI Modeli Bilgisi:** {cleanMsg} Yerel deterministik finans modeli devrede:");
             return fallback;
         }
 
@@ -308,28 +313,24 @@ internal static class FinancialForecastingService
         string prompt,
         CancellationToken cancellationToken)
     {
-        using var client = new System.Net.Http.HttpClient();
-        using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "https://api.openai.com/v1/responses");
-        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
-
+        string actualModel = AiModelNormalizer.NormalizeOpenAiTextModel(settings.OpenAiModel);
         var payload = new
         {
-            model = string.IsNullOrWhiteSpace(settings.OpenAiModel) ? "gpt-5.5" : settings.OpenAiModel.Trim(),
-            instructions = "Sen profesyonel bir Etsy Finans Direktörü (CFO) ve E-Ticaret Büyüme Danışmanısın. Sadece geçerli JSON yanıtı döndür.",
-            input = prompt
+            model = actualModel,
+            messages = new[]
+            {
+                new { role = "system", content = "Sen profesyonel bir Etsy Finans Direktörü (CFO) ve E-Ticaret Büyüme Danışmanısın. Sadece geçerli JSON yanıtı döndür." },
+                new { role = "user", content = prompt }
+            },
+            temperature = 0.6
         };
 
-        request.Content = new System.Net.Http.StringContent(
-            System.Text.Json.JsonSerializer.Serialize(payload),
-            System.Text.Encoding.UTF8,
-            "application/json");
-
-        using var response = await client.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException($"OpenAI HTTP {(int)response.StatusCode}: {body}");
-        }
+        var body = await AiResilienceInvoker.ExecuteOpenAiWithFallbackAsync(
+            settings.OpenAiApiKey,
+            actualModel,
+            payload,
+            "https://api.openai.com/v1/chat/completions",
+            cancellationToken);
 
         return ExtractRecommendationsFromJson(body);
     }
@@ -339,12 +340,6 @@ internal static class FinancialForecastingService
         string prompt,
         CancellationToken cancellationToken)
     {
-        string actualModel = AiModelNormalizer.NormalizeGeminiTextModel(settings.GeminiModel);
-        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateContent?key={settings.GeminiApiKey.Trim()}";
-
-        using var client = new System.Net.Http.HttpClient();
-        using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, url);
-
         var payload = new
         {
             system_instruction = new
@@ -362,17 +357,11 @@ internal static class FinancialForecastingService
             }
         };
 
-        request.Content = new System.Net.Http.StringContent(
-            System.Text.Json.JsonSerializer.Serialize(payload),
-            System.Text.Encoding.UTF8,
-            "application/json");
-
-        using var response = await client.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException($"Gemini HTTP {(int)response.StatusCode}: {body}");
-        }
+        var body = await AiResilienceInvoker.ExecuteGeminiWithFallbackAsync(
+            settings.GeminiApiKey,
+            settings.GeminiModel,
+            payload,
+            cancellationToken);
 
         return ExtractRecommendationsFromJson(body);
     }

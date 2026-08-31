@@ -34,15 +34,30 @@ internal static class AiModelNormalizer
 
     public static string NormalizeGeminiImageModel(string? model)
     {
-        if (string.IsNullOrWhiteSpace(model)) return "imagen-3.0-generate-002";
+        if (string.IsNullOrWhiteSpace(model)) return "gemini-3.1-flash-image";
 
         var clean = model.Trim().ToLowerInvariant();
-        if (clean.Contains("imagen") || clean.Contains("image") || clean.Contains("flash-image"))
+        if (clean.Contains("banana") || clean.Contains("3.1") || clean.Contains("3-1") || clean.Contains("flash-image") || clean == "gemini-image")
+        {
+            return "gemini-3.1-flash-image";
+        }
+
+        if (clean.Contains("2.5") || clean.Contains("2-5"))
+        {
+            return "gemini-2.5-flash-image";
+        }
+
+        if (clean.Contains("imagen-3") || clean.Contains("imagen 3"))
         {
             return "imagen-3.0-generate-002";
         }
 
-        return "imagen-3.0-generate-002";
+        if (clean.StartsWith("gemini-"))
+        {
+            return clean;
+        }
+
+        return "gemini-3.1-flash-image";
     }
 
     public static string NormalizeOpenAiTextModel(string? model)

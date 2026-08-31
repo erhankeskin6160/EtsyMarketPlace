@@ -48,7 +48,7 @@ internal sealed class DashboardForm : Form
     private readonly FinancialReportService _financialService = new();
     private readonly ExchangeRateService _exchangeRateService = new();
     private FinancialReport _liveReport = FinancialReport.Empty;
-    private decimal _liveExchangeRate = 36.50m;
+    private decimal _liveExchangeRate = 48.25m;
     private CancellationTokenSource _cts = new();
 
     private readonly Label _lblTitle = new();
@@ -252,7 +252,7 @@ internal sealed class DashboardForm : Form
         rightPanel.Controls.Add(_lblApiStatus);
 
         _lblLiveRate.AutoSize = true;
-        _lblLiveRate.Text = "💱 1 USD = 36.50 ₺";
+        _lblLiveRate.Text = "💱 1 USD = 48.25 ₺";
         _lblLiveRate.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
         _lblLiveRate.ForeColor = UiStyle.AccentColor;
         _lblLiveRate.Padding = new Padding(8, 6, 8, 6);

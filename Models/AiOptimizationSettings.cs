@@ -11,7 +11,7 @@ internal sealed class AiOptimizationSettings
     public string OpenAiImageModel { get; set; } = "dall-e-3";
     public string GeminiApiKey { get; set; } = "";
     public string GeminiModel { get; set; } = "gemini-3.7-flash";
-    public string GeminiImageModel { get; set; } = "imagen-3.0-generate-002";
+    public string GeminiImageModel { get; set; } = "gemini-3.1-flash-image";
     public string ClaudeApiKey { get; set; } = "";
     public string ClaudeModel { get; set; } = "claude-3-7-sonnet-20250219";
     public string PlatformToken { get; set; } = "";

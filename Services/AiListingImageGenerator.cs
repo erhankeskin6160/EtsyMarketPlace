@@ -183,18 +183,264 @@ internal sealed class AiListingImageGenerator
         CancellationToken cancellationToken)
     {
         var prompt = BuildPrompt(listing, userPrompt);
-        string actualModel = AiModelNormalizer.NormalizeGeminiImageModel(settings.GeminiImageModel);
-        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateImages";
+        string model = AiModelNormalizer.NormalizeGeminiImageModel(settings.GeminiImageModel);
+
+        // 1. Banana 2 / Gemini Image modeli ile üretmeyi dene (:generateContent)
+        if (model.StartsWith("gemini-", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                return await GenerateWithGeminiBananaTextToImageAsync(settings, listing, model, prompt, cancellationToken);
+            }
+            catch (Exception ex) when (model != "imagen-3.0-generate-002")
+            {
+                // Fallback olarak imagen predict dene
+                try
+                {
+                    return await GenerateWithGeminiImagenPromptAsync(settings, listing, prompt, cancellationToken);
+                }
+                catch
+                {
+                    throw new InvalidOperationException($"Gemini Banana 2 görsel üretilemedi: {ex.Message}");
+                }
+            }
+        }
+
+        return await GenerateWithGeminiImagenPromptAsync(settings, listing, prompt, cancellationToken);
+    }
+
+    private static async Task<string> EditWithGeminiAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string userPrompt,
+        string referenceImagePath,
+        CancellationToken cancellationToken)
+    {
+        string model = AiModelNormalizer.NormalizeGeminiImageModel(settings.GeminiImageModel);
+
+        // 🍌 1. YOL: Gemini Banana 2 (gemini-3.1-flash-image) Doğal Multimodal Dönüştürme
+        // Referans ürün fotoğrafı + prompt tek bir istekte doğrudan görsele dönüştürülür
+        if (model.StartsWith("gemini-", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                return await EditWithGeminiBananaMultimodalAsync(settings, listing, model, userPrompt, referenceImagePath, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                // Banana 2 başarısız olursa 2 aşamalı sentez + predict yedek yolunu dene
+                try
+                {
+                    var fallbackPrompt = await SynthesizePromptFromReferenceAsync(settings, listing, userPrompt, referenceImagePath, cancellationToken);
+                    return await GenerateWithGeminiImagenPromptAsync(settings, listing, fallbackPrompt, cancellationToken);
+                }
+                catch
+                {
+                    throw new InvalidOperationException($"Gemini Banana 2 görsel düzenleme başarısız: {ex.Message}");
+                }
+            }
+        }
+
+        // 2. YOL: Imagen 3 Sentezleme & Predict
+        string finalPrompt;
+        try
+        {
+            finalPrompt = await SynthesizePromptFromReferenceAsync(settings, listing, userPrompt, referenceImagePath, cancellationToken);
+        }
+        catch
+        {
+            finalPrompt = BuildReferenceEditPrompt(listing, userPrompt);
+        }
+
+        return await GenerateWithGeminiImagenPromptAsync(settings, listing, finalPrompt, cancellationToken);
+    }
+
+    private static async Task<string> EditWithGeminiBananaMultimodalAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string model,
+        string userPrompt,
+        string referenceImagePath,
+        CancellationToken cancellationToken)
+    {
+        var imageBytes = await File.ReadAllBytesAsync(referenceImagePath, cancellationToken);
+        string apiKey = settings.GeminiApiKey.Trim();
+        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent?key={Uri.EscapeDataString(apiKey)}";
+
+        string promptText = $"You are an expert commercial product studio photographer. Generate a high-end commercial Etsy product photo featuring this exact physical item from the reference photo. Do not alter the item's core geometry, 3D printing features, colors, blade, or essential parts. Place this physical item on a clean matte studio background with soft dramatic directional lighting, sharp focus, 8k resolution. User style details: '{userPrompt}'. Output image only.";
+
+        var requestPayload = new
+        {
+            contents = new[]
+            {
+                new
+                {
+                    parts = new object[]
+                    {
+                        new { text = promptText },
+                        new
+                        {
+                            inline_data = new
+                            {
+                                mime_type = GetImageContentType(referenceImagePath),
+                                data = Convert.ToBase64String(imageBytes)
+                            }
+                        }
+                    }
+                }
+            },
+            generationConfig = new
+            {
+                responseModalities = new[] { "IMAGE" }
+            }
+        };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("x-goog-api-key", settings.GeminiApiKey.Trim());
+        request.Headers.Add("x-goog-api-key", apiKey);
+        request.Content = new StringContent(JsonSerializer.Serialize(requestPayload), Encoding.UTF8, "application/json");
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(CreateGeminiImageErrorMessage((int)response.StatusCode, body));
+        }
+
+        var bytes = ExtractGeminiImageBytes(body);
+        return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
+    private static async Task<string> GenerateWithGeminiBananaTextToImageAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string model,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        string apiKey = settings.GeminiApiKey.Trim();
+        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent?key={Uri.EscapeDataString(apiKey)}";
+
+        string promptText = $"Commercial product studio photography for Etsy listing '{listing.Title}'. Scene: {prompt}. Clean neutral studio background, dramatic soft lighting, sharp focus, 8k resolution. Output image only.";
+
+        var requestPayload = new
+        {
+            contents = new[]
+            {
+                new
+                {
+                    parts = new object[]
+                    {
+                        new { text = promptText }
+                    }
+                }
+            },
+            generationConfig = new
+            {
+                responseModalities = new[] { "IMAGE" }
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Add("x-goog-api-key", apiKey);
+        request.Content = new StringContent(JsonSerializer.Serialize(requestPayload), Encoding.UTF8, "application/json");
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(CreateGeminiImageErrorMessage((int)response.StatusCode, body));
+        }
+
+        var bytes = ExtractGeminiImageBytes(body);
+        return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+    }
+
+    private static async Task<string> SynthesizePromptFromReferenceAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string userPrompt,
+        string referenceImagePath,
+        CancellationToken cancellationToken)
+    {
+        var imageBytes = await File.ReadAllBytesAsync(referenceImagePath, cancellationToken);
+        var visionModel = AiModelNormalizer.NormalizeGeminiTextModel(settings.GeminiModel);
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(visionModel)}:generateContent?key={Uri.EscapeDataString(settings.GeminiApiKey.Trim())}";
+
+        var requestPayload = new
+        {
+            contents = new[]
+            {
+                new
+                {
+                    parts = new object[]
+                    {
+                        new
+                        {
+                            text = $"You are an expert commercial product photographer. Analyze the attached reference product image (exact object shape, silhouette, colors, 3D printed materials, details) for the listing '{listing.Title}'. The user wants to generate a high-end commercial Etsy product photo: '{userPrompt}'. Write a concise, 1-paragraph, highly detailed English prompt for Imagen 3 describing this exact physical item in a clean commercial studio setting with soft directional lighting, neutral studio background, sharp product focus, 8k resolution. Output only the prompt text and nothing else."
+                        },
+                        new
+                        {
+                            inline_data = new
+                            {
+                                mime_type = GetImageContentType(referenceImagePath),
+                                data = Convert.ToBase64String(imageBytes)
+                            }
+                        }
+                    }
+                }
+            },
+            generationConfig = new
+            {
+                temperature = 0.4
+            }
+        };
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Content = new StringContent(JsonSerializer.Serialize(requestPayload), Encoding.UTF8, "application/json");
+
+        using var response = await HttpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Vision prompt synthesis failed: {body}");
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var text = doc.RootElement
+            .GetProperty("candidates")[0]
+            .GetProperty("content")
+            .GetProperty("parts")[0]
+            .GetProperty("text")
+            .GetString();
+
+        return !string.IsNullOrWhiteSpace(text) ? text.Trim() : BuildReferenceEditPrompt(listing, userPrompt);
+    }
+
+    private static async Task<string> GenerateWithGeminiImagenPromptAsync(
+        AiOptimizationSettings settings,
+        MarketListingResult listing,
+        string prompt,
+        CancellationToken cancellationToken)
+    {
+        string actualModel = "imagen-3.0-generate-002";
+        string apiKey = settings.GeminiApiKey.Trim();
+        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:predict?key={Uri.EscapeDataString(apiKey)}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, url);
+        request.Headers.Add("x-goog-api-key", apiKey);
         var payload = new
         {
-            prompt = prompt.Trim(),
-            number_of_images = 1,
-            output_mime_type = "image/jpeg",
-            aspect_ratio = "1:1",
-            person_generation = "ALLOW_ADULT"
+            instances = new[]
+            {
+                new { prompt = prompt.Trim() }
+            },
+            parameters = new
+            {
+                sampleCount = 1,
+                aspectRatio = "1:1",
+                outputOptions = new { mimeType = "image/jpeg" },
+                personGeneration = "ALLOW_ADULT"
+            }
         };
         request.Content = new StringContent(
             JsonSerializer.Serialize(payload),
@@ -205,62 +451,24 @@ internal sealed class AiListingImageGenerator
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"Gemini gorsel uretilemedi. HTTP {(int)response.StatusCode}: {body}");
+            throw new InvalidOperationException(CreateGeminiImageErrorMessage((int)response.StatusCode, body));
         }
 
         var bytes = ExtractGeminiImageBytes(body);
         return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
     }
 
-    private static async Task<string> EditWithGeminiAsync(
-        AiOptimizationSettings settings,
-        MarketListingResult listing,
-        string userPrompt,
-        string referenceImagePath,
-        CancellationToken cancellationToken)
+    private static string CreateGeminiImageErrorMessage(int statusCode, string body)
     {
-        var prompt = BuildReferenceEditPrompt(listing, userPrompt);
-        var imageBytes = await File.ReadAllBytesAsync(referenceImagePath, cancellationToken);
-        var model = AiModelNormalizer.NormalizeGeminiImageModel(settings.GeminiImageModel);
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(model)}:generateContent?key={Uri.EscapeDataString(settings.GeminiApiKey.Trim())}");
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(new
-            {
-                contents = new[]
-                {
-                    new
-                    {
-                        parts = new object[]
-                        {
-                            new { text = prompt },
-                            new
-                            {
-                                inline_data = new
-                                {
-                                    mime_type = GetImageContentType(referenceImagePath),
-                                    data = Convert.ToBase64String(imageBytes),
-                                },
-                            },
-                        },
-                    },
-                },
-                generationConfig = new
-                {
-                    responseModalities = new[] { "TEXT", "IMAGE" },
-                },
-            }),
-            Encoding.UTF8,
-            "application/json");
-
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        if (body.Contains("RESOURCE_EXHAUSTED", StringComparison.OrdinalIgnoreCase) || statusCode == 429)
         {
-            throw new InvalidOperationException($"Gemini referans gorsel duzenleme basarisiz. HTTP {(int)response.StatusCode}: {body}");
+            return "⚠️ Google Gemini API Kotası Aşıldı:\n\nİstek limitine ulaşıldı veya bakiyeniz yetersiz. Lütfen 1 dakika sonra tekrar deneyin veya OpenAI modeline geçiş yapın.";
         }
-
-        var bytes = ExtractGeminiImageBytes(body);
-        return await SaveImageAsync(listing.ListingId, bytes, cancellationToken);
+        if (body.Contains("API_KEY_INVALID", StringComparison.OrdinalIgnoreCase) || (statusCode == 400 && body.Contains("API key", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "⚠️ Geçersiz Gemini API Key:\n\nLütfen AI Ayarları alanından geçerli bir Google AI Studio API anahtarı girin.";
+        }
+        return $"Google Gemini Görsel Üretim Hatası (HTTP {statusCode}):\n{body}";
     }
 
     private static async Task<byte[]> ExtractOpenAiImageBytesAsync(string responseBody, CancellationToken cancellationToken)
@@ -313,6 +521,12 @@ internal sealed class AiListingImageGenerator
                 imgBytes.ValueKind == JsonValueKind.String)
             {
                 return imgBytes.GetString();
+            }
+
+            if (element.TryGetProperty("bytesBase64Encoded", out var b64Enc) &&
+                b64Enc.ValueKind == JsonValueKind.String)
+            {
+                return b64Enc.GetString();
             }
 
             if (element.TryGetProperty("inlineData", out var inlineDataCamel) &&

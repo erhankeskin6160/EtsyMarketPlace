@@ -207,3 +207,121 @@ public class ModernButtonControl : Button
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
     }
 }
+
+/// <summary>
+/// Modern dark-theme TabControl with pill-style tab headers, smooth antialiasing, and zero white borders.
+/// </summary>
+public class ModernTabControl : TabControl
+{
+    public Color HeaderBackgroundColor { get; set; } = Color.FromArgb(15, 23, 42); // Slate 900
+    public Color ActiveTabColor { get; set; } = Color.FromArgb(99, 102, 241); // Indigo 500
+    public Color InactiveTabColor { get; set; } = Color.FromArgb(30, 41, 59); // Slate 800
+    public Color ActiveTextColor { get; set; } = Color.White;
+    public Color InactiveTextColor { get; set; } = Color.FromArgb(148, 163, 184); // Slate 400
+    public Color BorderColor { get; set; } = Color.FromArgb(51, 65, 85); // Slate 700
+
+    private int _hoveredIndex = -1;
+
+    public ModernTabControl()
+    {
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw |
+            ControlStyles.SupportsTransparentBackColor,
+            true);
+        DoubleBuffered = true;
+        DrawMode = TabDrawMode.OwnerDrawFixed;
+        SizeMode = TabSizeMode.Normal;
+        ItemSize = new Size(165, 36);
+        Padding = new Point(16, 6);
+        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        int oldHover = _hoveredIndex;
+        _hoveredIndex = -1;
+        for (int i = 0; i < TabCount; i++)
+        {
+            if (GetTabRect(i).Contains(e.Location))
+            {
+                _hoveredIndex = i;
+                break;
+            }
+        }
+        if (oldHover != _hoveredIndex) Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (_hoveredIndex != -1)
+        {
+            _hoveredIndex = -1;
+            Invalidate();
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+        // 1. Arka planı koyu temaya boya
+        using (var bgBrush = new SolidBrush(HeaderBackgroundColor))
+        {
+            g.FillRectangle(bgBrush, ClientRectangle);
+        }
+
+        // 2. Tab başlıklarını çiz
+        for (int i = 0; i < TabCount; i++)
+        {
+            var tabRect = GetTabRect(i);
+            var isSelected = (SelectedIndex == i);
+            var isHovered = (_hoveredIndex == i && !isSelected);
+
+            // Tab hap (pill) alanı
+            var pillRect = new Rectangle(tabRect.X + 2, tabRect.Y + 2, tabRect.Width - 4, tabRect.Height - 4);
+            if (pillRect.Width <= 0 || pillRect.Height <= 0) continue;
+
+            using var path = ModernCardPanel.CreateRoundedRectanglePath(pillRect, 8);
+
+            Color bg = isSelected ? ActiveTabColor : (isHovered ? Color.FromArgb(45, 55, 75) : InactiveTabColor);
+            Color fg = isSelected ? ActiveTextColor : InactiveTextColor;
+
+            using (var brush = new SolidBrush(bg))
+            {
+                g.FillPath(brush, path);
+            }
+
+            if (!isSelected)
+            {
+                using var borderPen = new Pen(BorderColor, 1f);
+                g.DrawPath(borderPen, path);
+            }
+
+            // Metni çiz
+            var tabText = TabPages[i].Text;
+            TextRenderer.DrawText(
+                g,
+                tabText,
+                Font,
+                pillRect,
+                fg,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+        }
+
+        // 3. TabPage içerik alanının etrafına şık çerçeve çiz
+        if (SelectedTab != null)
+        {
+            var displayRect = DisplayRectangle;
+            var borderRect = new Rectangle(displayRect.X - 1, displayRect.Y - 1, displayRect.Width + 1, displayRect.Height + 1);
+            using var pageBorderPen = new Pen(BorderColor, 1.5f);
+            g.DrawRectangle(pageBorderPen, borderRect);
+        }
+    }
+}

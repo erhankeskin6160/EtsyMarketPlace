@@ -82,10 +82,7 @@ internal static class ShopAiConsultantService
 
     private static async Task<string> FetchOpenAiReportAsync(string prompt, string apiKey, string model, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
-
-        string actualModel = string.IsNullOrWhiteSpace(model) ? "gpt-4o" : model.Trim();
+        string actualModel = AiModelNormalizer.NormalizeOpenAiTextModel(model);
         var payload = new
         {
             model = actualModel,
@@ -97,21 +94,26 @@ internal static class ShopAiConsultantService
             temperature = 0.7
         };
 
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode) return string.Empty;
+        try
+        {
+            var body = await AiResilienceInvoker.ExecuteOpenAiWithFallbackAsync(
+                apiKey,
+                actualModel,
+                payload,
+                "https://api.openai.com/v1/chat/completions",
+                cancellationToken);
 
-        using var doc = JsonDocument.Parse(body);
-        return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString() ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private static async Task<string> FetchGeminiReportAsync(string prompt, string apiKey, string model, CancellationToken cancellationToken)
     {
-        string actualModel = AiModelNormalizer.NormalizeGeminiTextModel(model);
-        string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateContent?key={apiKey.Trim()}";
-
-        using var request = new HttpRequestMessage(HttpMethod.Post, url);
         var payload = new
         {
             contents = new[]
@@ -120,13 +122,21 @@ internal static class ShopAiConsultantService
             }
         };
 
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode) return string.Empty;
+        try
+        {
+            var body = await AiResilienceInvoker.ExecuteGeminiWithFallbackAsync(
+                apiKey,
+                model,
+                payload,
+                cancellationToken);
 
-        using var doc = JsonDocument.Parse(body);
-        return doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? string.Empty;
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.GetProperty("candidates")[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString() ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
     }
 
     private static string GenerateDeterministicAudit(ShopPerformanceComparison comparison, ShopParetoAnalysisService.ParetoSummary pareto)

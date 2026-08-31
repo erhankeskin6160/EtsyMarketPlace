@@ -50,8 +50,8 @@ internal sealed class ListingQualityReportControl : UserControl
 
         _titleLabel.Dock = DockStyle.Fill;
         _titleLabel.Text = "Etsy Taslak Kalite Karnesi";
-        _titleLabel.Font = new Font("Segoe UI Semibold", 11F);
-        _titleLabel.ForeColor = UiStyle.TextDark;
+        _titleLabel.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold);
+        _titleLabel.ForeColor = Color.White;
         _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
         header.Controls.Add(_titleLabel, 0, 0);
 
@@ -65,9 +65,9 @@ internal sealed class ListingQualityReportControl : UserControl
 
         // Score Breakdown Table
         var breakdown = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 5, Padding = new Padding(0, 4, 0, 4) };
-        breakdown.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));
+        breakdown.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
         breakdown.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        breakdown.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));
+        breakdown.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 95));
         breakdown.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
         for (var r = 0; r < 5; r++) breakdown.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
@@ -80,14 +80,23 @@ internal sealed class ListingQualityReportControl : UserControl
 
         root.Controls.Add(breakdown, 0, 1);
 
-        // Issues ListView
+        // Issues ListView (Koyu Temalı & Responsive)
         _issuesListView.Dock = DockStyle.Fill;
         _issuesListView.View = View.Details;
         _issuesListView.HeaderStyle = ColumnHeaderStyle.None;
         _issuesListView.FullRowSelect = true;
-        _issuesListView.Columns.Add("Detay", -2);
-        _issuesListView.BorderStyle = BorderStyle.FixedSingle;
+        _issuesListView.BackColor = Color.FromArgb(15, 23, 42);
+        _issuesListView.ForeColor = UiStyle.TextDark;
+        _issuesListView.BorderStyle = BorderStyle.None;
         _issuesListView.Font = new Font("Segoe UI", 9F);
+        _issuesListView.Columns.Add("Detay", 300);
+        _issuesListView.Resize += (_, _) =>
+        {
+            if (_issuesListView.Columns.Count > 0)
+            {
+                _issuesListView.Columns[0].Width = Math.Max(100, _issuesListView.ClientSize.Width - 4);
+            }
+        };
         root.Controls.Add(_issuesListView, 0, 2);
 
         // Repair Button
@@ -178,6 +187,7 @@ internal sealed class ListingQualityReportControl : UserControl
         scoreLabel.Dock = DockStyle.Fill;
         scoreLabel.Text = $"{labelText}: -";
         scoreLabel.Font = new Font("Segoe UI", 8.5F);
+        scoreLabel.ForeColor = UiStyle.TextDark;
         scoreLabel.TextAlign = ContentAlignment.MiddleLeft;
         parent.Controls.Add(scoreLabel, col, row);
 

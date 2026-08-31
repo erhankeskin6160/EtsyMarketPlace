@@ -146,60 +146,134 @@ internal sealed class AiImageGenerationService
 
         try
         {
-            string actualModel = string.IsNullOrWhiteSpace(model) ? "imagen-3.0-generate-002" : model.Trim();
-            string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateImages";
+            string actualModel = string.IsNullOrWhiteSpace(model) ? "gemini-3.1-flash-image" : model.Trim();
+            string cleanKey = apiKey.Trim();
 
-            using var request = new HttpRequestMessage(HttpMethod.Post, url);
-            request.Headers.Add("x-goog-api-key", apiKey.Trim());
-
-            var payload = new
+            // 🍌 1. YOL: Gemini 3.1 Flash Image (Banana 2) / Gemini Image Modelleri (:generateContent)
+            if (actualModel.StartsWith("gemini-", StringComparison.OrdinalIgnoreCase))
             {
-                prompt = prompt.Trim(),
-                number_of_images = 1,
-                output_mime_type = "image/jpeg",
-                aspect_ratio = aspectRatio,
-                person_generation = "ALLOW_ADULT"
-            };
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{Uri.EscapeDataString(actualModel)}:generateContent?key={Uri.EscapeDataString(cleanKey)}";
 
-            request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Add("x-goog-api-key", cleanKey);
 
-            using var response = await HttpClient.SendAsync(request, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                var payload = new
+                {
+                    contents = new[]
+                    {
+                        new
+                        {
+                            parts = new object[]
+                            {
+                                new { text = prompt.Trim() }
+                            }
+                        }
+                    },
+                    generationConfig = new
+                    {
+                        responseModalities = new[] { "IMAGE" }
+                    }
+                };
 
-            if (!response.IsSuccessStatusCode)
-            {
-                string friendlyMsg = ParseGeminiError((int)response.StatusCode, body);
-                return (false, null, friendlyMsg);
+                request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+                using var response = await HttpClient.SendAsync(request, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    using var doc = JsonDocument.Parse(body);
+                    var b64 = FindBase64(doc.RootElement);
+                    if (!string.IsNullOrWhiteSpace(b64))
+                    {
+                        byte[] bytes = Convert.FromBase64String(b64);
+                        using var ms = new MemoryStream(bytes);
+                        return (true, new Bitmap(ms), "Başarılı");
+                    }
+                }
+                else if (!actualModel.Equals("imagen-3.0-generate-002", StringComparison.OrdinalIgnoreCase))
+                {
+                    string friendlyMsg = ParseGeminiError((int)response.StatusCode, body);
+                    return (false, null, friendlyMsg);
+                }
             }
 
-            using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("generatedImages", out var genImages) && genImages.GetArrayLength() > 0)
+            // 2. YOL: Imagen 3 :predict
             {
-                var first = genImages[0];
-                if (first.TryGetProperty("image", out var imgObj) && imgObj.TryGetProperty("imageBytes", out var b64Prop))
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key={Uri.EscapeDataString(cleanKey)}";
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                request.Headers.Add("x-goog-api-key", cleanKey);
+
+                var payload = new
                 {
-                    byte[] bytes = Convert.FromBase64String(b64Prop.GetString()!);
+                    instances = new[]
+                    {
+                        new { prompt = prompt.Trim() }
+                    },
+                    parameters = new
+                    {
+                        sampleCount = 1,
+                        aspectRatio = string.IsNullOrWhiteSpace(aspectRatio) ? "1:1" : aspectRatio,
+                        outputOptions = new { mimeType = "image/jpeg" },
+                        personGeneration = "ALLOW_ADULT"
+                    }
+                };
+
+                request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+                using var response = await HttpClient.SendAsync(request, cancellationToken);
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    string friendlyMsg = ParseGeminiError((int)response.StatusCode, body);
+                    return (false, null, friendlyMsg);
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var b64 = FindBase64(doc.RootElement);
+                if (!string.IsNullOrWhiteSpace(b64))
+                {
+                    byte[] bytes = Convert.FromBase64String(b64);
                     using var ms = new MemoryStream(bytes);
                     return (true, new Bitmap(ms), "Başarılı");
                 }
             }
-            else if (doc.RootElement.TryGetProperty("predictions", out var predictions) && predictions.GetArrayLength() > 0)
-            {
-                var first = predictions[0];
-                if (first.TryGetProperty("bytesBase64Encoded", out var b64Prop))
-                {
-                    byte[] bytes = Convert.FromBase64String(b64Prop.GetString()!);
-                    using var ms = new MemoryStream(bytes);
-                    return (true, new Bitmap(ms), "Başarılı");
-                }
-            }
 
-            return (false, null, "Gemini Imagen yanıtında görsel verisi bulunamadı.");
+            return (false, null, "Gemini görsel yanıtında veri bulunamadı.");
         }
         catch (Exception ex)
         {
-            return (false, null, $"Gemini Imagen Bağlantı Hatası: {ex.Message}");
+            return (false, null, $"Gemini Bağlantı Hatası: {ex.Message}");
         }
+    }
+
+    private static string? FindBase64(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            if (element.TryGetProperty("data", out var data) && data.ValueKind == JsonValueKind.String) return data.GetString();
+            if (element.TryGetProperty("imageBytes", out var imgBytes) && imgBytes.ValueKind == JsonValueKind.String) return imgBytes.GetString();
+            if (element.TryGetProperty("bytesBase64Encoded", out var b64Enc) && b64Enc.ValueKind == JsonValueKind.String) return b64Enc.GetString();
+            if (element.TryGetProperty("b64_json", out var b64Json) && b64Json.ValueKind == JsonValueKind.String) return b64Json.GetString();
+
+            foreach (var prop in element.EnumerateObject())
+            {
+                var found = FindBase64(prop.Value);
+                if (!string.IsNullOrWhiteSpace(found)) return found;
+            }
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in element.EnumerateArray())
+            {
+                var found = FindBase64(item);
+                if (!string.IsNullOrWhiteSpace(found)) return found;
+            }
+        }
+
+        return null;
     }
 
     private static string ParseGeminiError(int statusCode, string body)

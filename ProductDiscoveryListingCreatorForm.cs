@@ -351,11 +351,17 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         root.Controls.Add(leftPanel, 0, 0);
 
         // --- SAĞ PANEL: Sekmeli Modern Çalışma Alanı ---
-        var tabControl = new TabControl 
+        var tabControl = new ModernTabControl 
         { 
             Dock = DockStyle.Fill, 
-            Font = new Font("Segoe UI Semibold", 9.5F),
-            Padding = new Point(14, 8)
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+            ItemSize = new Size(160, 36),
+            HeaderBackgroundColor = UiStyle.BackgroundColor,
+            ActiveTabColor = UiStyle.PrimaryColor,
+            InactiveTabColor = UiStyle.CardBackground,
+            ActiveTextColor = Color.White,
+            InactiveTextColor = UiStyle.TextMuted,
+            BorderColor = UiStyle.BorderColor
         };
 
         // SEKME 1: ✍️ Başlık & SEO Açıklama
@@ -476,7 +482,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private Control BuildPriceShippingTab()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(8) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(6) };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
@@ -485,62 +491,51 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
 
         // Sol Sütun 1: Fiyat ($)
-        var pnlPrice = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlPrice.Controls.Add(LabelFor("Satış Fiyatı ($ USD):"));
-        _priceInput.Width = 240;
-        pnlPrice.Controls.Add(_priceInput);
-        layout.Controls.Add(pnlPrice, 0, 0);
+        layout.Controls.Add(CreateFieldContainer("Satış Fiyatı ($ USD):", _priceInput), 0, 0);
 
         // Sağ Sütun 1: Taxonomy ID
-        var pnlTax = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlTax.Controls.Add(LabelFor("Taxonomy ID (Kategori Kodu):"));
-        _taxonomyInput.Width = 240;
-        pnlTax.Controls.Add(_taxonomyInput);
-        layout.Controls.Add(pnlTax, 1, 0);
+        layout.Controls.Add(CreateFieldContainer("Taxonomy ID (Kategori Kodu):", _taxonomyInput), 1, 0);
 
         // Sol Sütun 2: Stok Adedi
-        var pnlQty = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlQty.Controls.Add(LabelFor("Stok Miktarı (Quantity):"));
-        _quantityInput.Width = 240;
-        pnlQty.Controls.Add(_quantityInput);
-        layout.Controls.Add(pnlQty, 0, 1);
+        layout.Controls.Add(CreateFieldContainer("Stok Miktarı (Quantity):", _quantityInput), 0, 1);
 
         // Sağ Sütun 2: Kategori Açıklaması
-        var pnlCat = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlCat.Controls.Add(LabelFor("Etsy Kategori Yolu:"));
-        _categoryTextBox.Width = 320;
-        pnlCat.Controls.Add(_categoryTextBox);
-        layout.Controls.Add(pnlCat, 1, 1);
+        layout.Controls.Add(CreateFieldContainer("Etsy Kategori Yolu:", _categoryTextBox), 1, 1);
 
         // Sol Sütun 3: Listing Tipi
-        var pnlType = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlType.Controls.Add(LabelFor("Listing Türü:"));
-        _listingTypeComboBox.Width = 240;
-        pnlType.Controls.Add(_listingTypeComboBox);
-        layout.Controls.Add(pnlType, 0, 2);
+        layout.Controls.Add(CreateFieldContainer("Listing Türü:", _listingTypeComboBox), 0, 2);
 
         // Sağ Sütun 3: Kargo Profili
-        var pnlShip = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlShip.Controls.Add(LabelFor("Kargo Profili (Shipping Profile):"));
-        _shippingProfileComboBox.Width = 320;
-        pnlShip.Controls.Add(_shippingProfileComboBox);
-        layout.Controls.Add(pnlShip, 1, 2);
+        layout.Controls.Add(CreateFieldContainer("Kargo Profili (Shipping Profile):", _shippingProfileComboBox), 1, 2);
 
         // Sol Sütun 4: AI Görsel Adedi
-        var pnlImgCnt = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlImgCnt.Controls.Add(LabelFor("Üretilecek AI Görsel Adedi:"));
-        _imageCountInput.Width = 240;
-        pnlImgCnt.Controls.Add(_imageCountInput);
-        layout.Controls.Add(pnlImgCnt, 0, 3);
+        layout.Controls.Add(CreateFieldContainer("Üretilecek AI Görsel Adedi:", _imageCountInput), 0, 3);
 
         // Sağ Sütun 4: Hazırlık Durumu
-        var pnlReady = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown };
-        pnlReady.Controls.Add(LabelFor("Hazırlık Durumu (Readiness State):"));
-        _readinessStateComboBox.Width = 320;
-        pnlReady.Controls.Add(_readinessStateComboBox);
-        layout.Controls.Add(pnlReady, 1, 3);
+        layout.Controls.Add(CreateFieldContainer("Hazırlık Durumu (Readiness State):", _readinessStateComboBox), 1, 3);
 
         return layout;
+    }
+
+    private static Control CreateFieldContainer(string labelText, Control inputControl)
+    {
+        var container = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Margin = new Padding(4, 2, 4, 2) };
+        container.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        container.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        var label = new Label
+        {
+            Dock = DockStyle.Fill,
+            Text = labelText,
+            ForeColor = UiStyle.TextDark,
+            Font = new Font("Segoe UI Semibold", 8.5F),
+            TextAlign = ContentAlignment.BottomLeft
+        };
+        container.Controls.Add(label, 0, 0);
+
+        inputControl.Dock = DockStyle.Fill;
+        container.Controls.Add(inputControl, 0, 1);
+        return container;
     }
 
     private Control BuildVisualsTab()
@@ -573,8 +568,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private Control BuildQualityNotesTab()
     {
         var split = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(6) };
-        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
         var qualityCard = new ModernCardPanel
         {

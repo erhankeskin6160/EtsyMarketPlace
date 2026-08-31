@@ -36,6 +36,8 @@ internal sealed class FinancialReportForm : Form
     private ToolTipDataPayload? _salesTooltipPayload = null;
     private ToolTipDataPayload? _refundsTooltipPayload = null;
     private ToolTipDataPayload? _costsTooltipPayload = null;
+    private ToolTipDataPayload? _netIncomeTooltipPayload = null;
+    private ToolTipDataPayload? _realProfitTooltipPayload = null;
 
     // ── UI: Filters & Currency ────────────────────────────────────────────────
     private readonly ComboBox _cboDateRange     = new();
@@ -397,7 +399,7 @@ internal sealed class FinancialReportForm : Form
         _numExchangeRate.Dock = DockStyle.Fill;
         _numExchangeRate.DecimalPlaces = 2;
         _numExchangeRate.Maximum = 500;
-        _numExchangeRate.Value = 36.50m;
+        _numExchangeRate.Value = 48.25m;
         _numExchangeRate.Enabled = false; // Kullanıcı artık manuel giremez
         _numExchangeRate.ValueChanged += (_, _) => { UpdateKpis(); UpdateForecastView(); UpdateCharts(); };
         bar.Controls.Add(_numExchangeRate, 7, 0);
@@ -437,7 +439,7 @@ internal sealed class FinancialReportForm : Form
                     return;
                 }
 
-                decimal rate = _numExchangeRate.Value > 0 ? _numExchangeRate.Value : 36.50m;
+                decimal rate = _numExchangeRate.Value > 0 ? _numExchangeRate.Value : 48.25m;
                 string msgHtml = DailyFinancialReportNotificationService.FormatTelegramReportHtml(_report, rate, isManualTrigger: true, settings.IncludeAiSummaryInNightReport);
 
                 var (success, msg) = await NotificationService.SendTelegramMessageAsync(settings.TelegramBotToken, settings.TelegramChatId, msgHtml);
@@ -515,6 +517,17 @@ internal sealed class FinancialReportForm : Form
                 });
             }
 
+            var netIncomeCard = strip.GetControlFromPosition(5, 0);
+            if (netIncomeCard != null && netIncomeCard.Tag == null)
+            {
+                netIncomeCard.Tag = "attached";
+                AttachAnimatedHover(netIncomeCard, netIncomeCard, (tt, pt) => 
+                {
+                    if (_netIncomeTooltipPayload != null)
+                        tt.ShowStructuredTooltip(_netIncomeTooltipPayload, pt, 2000);
+                });
+            }
+
             var costsCard = strip.GetControlFromPosition(6, 0);
             if (costsCard != null && costsCard.Tag == null)
             {
@@ -523,6 +536,17 @@ internal sealed class FinancialReportForm : Form
                 {
                     if (_costsTooltipPayload != null)
                         tt.ShowStructuredTooltip(_costsTooltipPayload, pt, 2000);
+                });
+            }
+
+            var realProfitCard = strip.GetControlFromPosition(7, 0);
+            if (realProfitCard != null && realProfitCard.Tag == null)
+            {
+                realProfitCard.Tag = "attached";
+                AttachAnimatedHover(realProfitCard, realProfitCard, (tt, pt) => 
+                {
+                    if (_realProfitTooltipPayload != null)
+                        tt.ShowStructuredTooltip(_realProfitTooltipPayload, pt, 2000);
                 });
             }
         };
@@ -1176,18 +1200,26 @@ internal sealed class FinancialReportForm : Form
             return val < 0 ? $"-{prefix}{Math.Abs(val):N2}" : $"{prefix}{val:N2}";
         }
 
-        _kpiGross.Text        = FormatKpi(_report.TotalGross, _report.DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate));
-        _kpiFees.Text         = FormatKpi(_report.TotalFees, _report.DailySummaries.Sum(d => d.EtsyFees * d.AverageExchangeRate));
-        _kpiInnerAds.Text     = FormatKpi(_report.TotalInnerAdFees, _report.DailySummaries.Sum(d => d.InnerAdFees * d.AverageExchangeRate));
-        _kpiOffsiteAds.Text   = FormatKpi(_report.TotalOffsiteAdFees, _report.DailySummaries.Sum(d => d.OffsiteAdFees * d.AverageExchangeRate));
-        _kpiRefunds.Text      = FormatKpi(_report.TotalRefunds, _report.DailySummaries.Sum(d => d.Refunds * d.AverageExchangeRate));
-        _kpiNet.Text          = FormatKpi(_report.TotalNet, _report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate));
-        _kpiProductCosts.Text = FormatKpi(-_report.TotalProductCosts, -_report.DailySummaries.Sum(d => d.ProductCosts * d.AverageExchangeRate));
+        decimal grossTRY      = _report.DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate);
+        decimal feesTRY       = _report.DailySummaries.Sum(d => d.EtsyFees * d.AverageExchangeRate);
+        decimal innerAdsTRY   = _report.DailySummaries.Sum(d => d.InnerAdFees * d.AverageExchangeRate);
+        decimal offsiteAdsTRY = _report.DailySummaries.Sum(d => d.OffsiteAdFees * d.AverageExchangeRate);
+        decimal refundsTRY    = _report.DailySummaries.Sum(d => d.Refunds * d.AverageExchangeRate);
+        decimal netTRY        = _report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate);
+        decimal costsTRY      = _report.OrderSummaries.Sum(o => Math.Round(o.ProductCost * o.ExchangeRate, 2));
+        decimal profitTRY     = netTRY - costsTRY;
+
+        _kpiGross.Text        = FormatKpi(_report.TotalGross, grossTRY);
+        _kpiFees.Text         = FormatKpi(_report.TotalFees, feesTRY);
+        _kpiInnerAds.Text     = FormatKpi(_report.TotalInnerAdFees, innerAdsTRY);
+        _kpiOffsiteAds.Text   = FormatKpi(_report.TotalOffsiteAdFees, offsiteAdsTRY);
+        _kpiRefunds.Text      = FormatKpi(_report.TotalRefunds, refundsTRY);
+        _kpiNet.Text          = FormatKpi(_report.TotalNet, netTRY);
+        _kpiProductCosts.Text = FormatKpi(-_report.TotalProductCosts, -costsTRY);
 
         decimal profitUSD = _report.RealNetProfitUSD;
-        decimal profitTRY = _report.DailySummaries.Sum(d => d.RealNetProfitTRY);
         _kpiRealProfit.Text   = FormatKpi(profitUSD, profitTRY);
-        _kpiRealProfit.ForeColor = profitUSD >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor;
+        _kpiRealProfit.ForeColor = (showTry ? profitTRY : profitUSD) >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor;
 
         if (_report.IsFallbackMode)
         {
@@ -1207,6 +1239,8 @@ internal sealed class FinancialReportForm : Form
         UpdateRefundsToolTip(showTry);
         UpdateSalesToolTip(showTry);
         UpdateCostsToolTip(showTry);
+        UpdateNetIncomeToolTip(showTry);
+        UpdateRealProfitToolTip(showTry);
     }
 
     private void UpdateRefundsToolTip(bool showTry)
@@ -1400,6 +1434,123 @@ internal sealed class FinancialReportForm : Form
             new[] { 0.13f, 0.16f, 0.08f, 0.16f, 0.14f, 0.33f },
             rows,
             orders.Count > 15 ? $"ℹ️ ... ve {orders.Count - 15} adet sipariş daha listelenmedi." : null
+        );
+    }
+
+    private void UpdateNetIncomeToolTip(bool showTry)
+    {
+        if (_report.IsFallbackMode)
+        {
+            _netIncomeTooltipPayload = null;
+            return;
+        }
+
+        string cur = showTry ? "₺" : "$";
+        decimal gross = showTry ? _report.DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate) : _report.TotalGross;
+        decimal refunds = showTry ? _report.DailySummaries.Sum(d => d.Refunds * d.AverageExchangeRate) : _report.TotalRefunds;
+        decimal fees = showTry ? _report.DailySummaries.Sum(d => d.EtsyFees * d.AverageExchangeRate) : _report.TotalFees;
+        decimal innerAds = showTry ? _report.DailySummaries.Sum(d => d.InnerAdFees * d.AverageExchangeRate) : _report.TotalInnerAdFees;
+        decimal offsiteAds = showTry ? _report.DailySummaries.Sum(d => d.OffsiteAdFees * d.AverageExchangeRate) : _report.TotalOffsiteAdFees;
+        decimal totalNet = showTry ? _report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate) : _report.TotalNet;
+        decimal totalExpenses = Math.Abs(refunds) + Math.Abs(fees) + Math.Abs(innerAds) + Math.Abs(offsiteAds);
+        double netMargin = gross > 0 ? (double)(totalNet / gross * 100) : 0;
+
+        var entries = _report.Entries;
+        decimal txFees = showTry ? entries.Where(e => e.Type == "transaction_fee").Sum(e => Math.Abs(e.AmountTRY)) : entries.Where(e => e.Type == "transaction_fee").Sum(e => Math.Abs(e.Amount));
+        decimal procFees = showTry ? entries.Where(e => e.Type == "payment_processing").Sum(e => Math.Abs(e.AmountTRY)) : entries.Where(e => e.Type == "payment_processing").Sum(e => Math.Abs(e.Amount));
+        decimal regFees = showTry ? entries.Where(e => e.Type == "regulatory_operating_fee").Sum(e => Math.Abs(e.AmountTRY)) : entries.Where(e => e.Type == "regulatory_operating_fee").Sum(e => Math.Abs(e.Amount));
+        decimal listFees = showTry ? entries.Where(e => e.Type == "listing_fee").Sum(e => Math.Abs(e.AmountTRY)) : entries.Where(e => e.Type == "listing_fee").Sum(e => Math.Abs(e.Amount));
+        decimal taxFees = showTry ? entries.Where(e => e.Type == "etsy_tax_fee").Sum(e => Math.Abs(e.AmountTRY)) : entries.Where(e => e.Type == "etsy_tax_fee").Sum(e => Math.Abs(e.Amount));
+
+        decimal subtotalFees = txFees + procFees + regFees + listFees + taxFees;
+        if (subtotalFees <= 0 && Math.Abs(fees) > 0)
+        {
+            txFees = Math.Round(Math.Abs(fees) * 0.45m, 2);
+            procFees = Math.Round(Math.Abs(fees) * 0.40m, 2);
+            regFees = Math.Round(Math.Abs(fees) * 0.10m, 2);
+            listFees = Math.Round(Math.Abs(fees) * 0.05m, 2);
+        }
+
+        var kpiCards = new List<ToolTipKpiCard>
+        {
+            new("💰 Toplam Brüt Ciro", $"{cur}{gross:N2}", $"{_report.OrderSummaries.Count} Sipariş", Color.FromArgb(59, 130, 246)),
+            new("📉 Toplam Etsy Giderleri", $"-{cur}{totalExpenses:N2}", "Komisyon, Reklam & İade", Color.FromArgb(239, 68, 68)),
+            new("💎 Net Gelir Oranı", $"%{netMargin:N1}", $"{cur}{totalNet:N2} Net Hakediş", Color.FromArgb(16, 185, 129))
+        };
+
+        var rows = new List<ToolTipTableRow>
+        {
+            new("Gelir", "Ciro", $"{_report.OrderSummaries.Count} Sipariş", $"+{cur}{gross:N2}", false, "", "Müşteri kartlarından çekilen toplam brüt tutar"),
+            new("Gider", "İadeler", $"{entries.Count(e => e.Type == "refund")} İade", $"-{cur}{Math.Abs(refunds):N2}", false, "", "Müşterilere geri ödenen iptal ve iadeler"),
+            new("Kesinti", "İşlem Komisyonu", "%6.5", $"-{cur}{txFees:N2}", false, "", "Ürün ve kargo bedeli üzerinden %6.5 Etsy komisyonu"),
+            new("Kesinti", "Ödeme İşleme", "%6.5+3TL", $"-{cur}{procFees:N2}", false, "", "Etsy Payments ödeme işleme alma masrafı"),
+            new("Kesinti", "Yasal & İlan", "Regülasyon", $"-{cur}{(regFees + listFees + taxFees):N2}", false, "", "Yasal işletim payı (%1.5), İlan ($0.20) ve KDV"),
+            new("Reklam", "İç Reklam", "Etsy Ads", $"-{cur}{Math.Abs(innerAds):N2}", false, "", "Etsy içi arama tıklama reklam harcaması"),
+            new("Reklam", "Dış Reklam", "Offsite Ads", $"-{cur}{Math.Abs(offsiteAds):N2}", false, "", "Dış platformlardan gelen satış komisyonu"),
+            new("Net", "Etsy Net Gelir", "Net Hakediş", $"={cur}{totalNet:N2}", true, "💎 Net", "Etsy tarafından banka hesabınıza aktarılacak net nakit")
+        };
+
+        _netIncomeTooltipPayload = new ToolTipDataPayload(
+            "💎 Etsy Net Gelir Hesaplama & Bakiye Analizi",
+            $"Brüt Satıştan tüm Etsy komisyon, reklam ve iadeleri düşülmüş net tutar: {cur}{totalNet:N2}",
+            kpiCards,
+            new[] { "Tür", "Kalem Adı", "Oran / Adet", "Tutar", "Durum", "Açıklama / Muhasebe Mantığı" },
+            new[] { 0.07f, 0.22f, 0.15f, 0.16f, 0.07f, 0.33f },
+            rows,
+            "💡 Bu tutardan üretim (hammadde) ve kargo masrafları düşüldükten sonra Gerçek Net Kârınız elde edilir."
+        );
+    }
+
+    private void UpdateRealProfitToolTip(bool showTry)
+    {
+        if (_report.IsFallbackMode)
+        {
+            _realProfitTooltipPayload = null;
+            return;
+        }
+
+        string cur = showTry ? "₺" : "$";
+        decimal gross = showTry ? _report.DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate) : _report.TotalGross;
+        decimal netIncome = showTry ? _report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate) : _report.TotalNet;
+        
+        var orders = _report.OrderSummaries;
+        decimal totalShipping = showTry ? orders.Sum(o => Math.Round(o.TotalOrderShippingCost * o.ExchangeRate, 2)) : orders.Sum(o => o.TotalOrderShippingCost);
+        decimal totalProduction = showTry ? orders.Sum(o => Math.Round(o.TotalOrderProductionCost * o.ExchangeRate, 2)) : orders.Sum(o => o.TotalOrderProductionCost);
+        decimal totalPackaging = showTry ? orders.Sum(o => Math.Round(o.TotalOrderPackagingCost * o.ExchangeRate, 2)) : orders.Sum(o => o.TotalOrderPackagingCost);
+        decimal totalCOGS = showTry ? orders.Sum(o => Math.Round(o.ProductCost * o.ExchangeRate, 2)) : orders.Sum(o => o.ProductCost);
+
+        decimal profit = netIncome - totalCOGS;
+        double profitMargin = gross > 0 ? (double)(profit / gross * 100) : 0;
+        int noCostCount = orders.Count(o => !o.HasCostData);
+
+        var kpiCards = new List<ToolTipKpiCard>
+        {
+            new("💎 Etsy Net Gelir", $"{cur}{netIncome:N2}", "Platform Hakedişi", Color.FromArgb(16, 185, 129)),
+            new("📦 Toplam Ürün Maliyeti", $"-{cur}{totalCOGS:N2}", "Kargo, Hammadde & Paketleme", Color.FromArgb(245, 158, 11)),
+            new("🏆 Gerçek Net Kâr", $"{cur}{profit:N2}", $"%{profitMargin:N1} Net Kâr Marjı", Color.FromArgb(59, 130, 246))
+        };
+
+        var rows = new List<ToolTipTableRow>
+        {
+            new("Gelir", "Etsy Net Gelir", "Net Hakediş", $"+{cur}{netIncome:N2}", true, "💎 Net", "Komisyon ve iadeler sonrası platformdan kalan net para"),
+            new("Kargo", "Kargo Gönderimleri", $"{orders.Count(o => o.TotalOrderShippingCost > 0)} Gönderi", $"-{cur}{totalShipping:N2}", false, "", "Siparişlerin müşterilere kargolanma ve lojistik masrafları"),
+            new("Üretim", "3D Baskı / Hammadde", "Filament & Reçine", $"-{cur}{totalProduction:N2}", false, "", "Üretimde harcanan hammadde, reçine, boya ve sarf giderleri"),
+            new("Paket", "Paketleme & Fatura", $"{orders.Count(o => o.HasInvoice)} Fatura", $"-{cur}{totalPackaging:N2}", false, "", "Kutu, baloncuklu naylon, etiket ve faturalandırma masrafı"),
+            new("KÂR", "GERÇEK NET KÂR", "Saf Kâr", $"={cur}{profit:N2}", true, "🏆 Kâr", "Tüm platform ve operasyonel giderler çıktıktan sonra cebinize kalan")
+        };
+
+        string footerNote = noCostCount > 0 
+            ? $"💡 İpucu: Henüz maliyeti girilmemiş {noCostCount} siparişin maliyetini girdiğinizde bu net kâr kuruşu kuruşuna kesinleşecektir."
+            : "✅ Tüm siparişlerin maliyetleri eksiksiz hesaplanmıştır.";
+
+        _realProfitTooltipPayload = new ToolTipDataPayload(
+            "🏆 Gerçek Net Kâr & Bilanço Analizi",
+            $"Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: {cur}{profit:N2}",
+            kpiCards,
+            new[] { "Tür", "Kalem Adı", "Kategori / Detay", "Tutar", "Durum", "Açıklama / Muhasebe Mantığı" },
+            new[] { 0.07f, 0.23f, 0.15f, 0.16f, 0.07f, 0.32f },
+            rows,
+            footerNote
         );
     }
 
@@ -1891,6 +2042,7 @@ internal sealed class FinancialReportForm : Form
                 var r when r.Contains("🚀") || r.Contains("🌸") || r.Contains("☀️") => Color.FromArgb(251, 191, 36), // Bright Amber
                 var r when r.Contains("📦") => Color.FromArgb(251, 146, 60), // Bright Orange
                 var r when r.Contains("🎯") => Color.FromArgb(52, 211, 153), // Bright Emerald
+                var r when r.Contains("ℹ️") => Color.FromArgb(56, 189, 248), // Bright Sky Blue (Info)
                 var r when r.Contains("⚠️") => Color.FromArgb(248, 113, 113), // Bright Red
                 _ => Color.FromArgb(167, 139, 250)
             };

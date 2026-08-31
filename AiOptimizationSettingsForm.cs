@@ -109,6 +109,8 @@ internal sealed class AiOptimizationSettingsForm : Form
         _secondaryImageModelComboBox.Dock = DockStyle.Left;
         _secondaryImageModelComboBox.Width = 340;
         _secondaryImageModelComboBox.Items.AddRange([
+            "gemini-3.1-flash-image",
+            "gemini-2.5-flash-image",
             "imagen-3.0-generate-002"
         ]);
         root.Controls.Add(LabelFor("Gemini Görsel Modeli:"), 0, 6);
@@ -155,7 +157,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
-            Text = "💡 Önerilen En Güncel Modeller: 'gemini-3.7-flash', 'gpt-4o', 'claude-3-7-sonnet' ve 'imagen-3.0-generate-002'.",
+            Text = "💡 Önerilen En Güncel Modeller: 'gemini-3.7-flash', 'gpt-4o', 'claude-3-7-sonnet' ve 'gemini-3.1-flash-image' (Banana 2).",
             ForeColor = Color.FromArgb(75, 85, 99),
         }, 1, 9);
     }
