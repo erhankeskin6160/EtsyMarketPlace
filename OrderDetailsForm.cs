@@ -10,7 +10,8 @@ using SimilarProductsWinForms.Services;
 
 internal sealed class OrderDetailsForm : Form
 {
-    private readonly SqliteProductCostRepository _repository = new();
+    private readonly SqliteOrderCostRepository _orderCostRepo = new();
+    private readonly SqliteProductCostRepository _productCostRepo = new();
     private readonly OrderFinancialSummary _order;
     
     private decimal _productionCost;
@@ -20,7 +21,7 @@ internal sealed class OrderDetailsForm : Form
     public OrderDetailsForm(OrderFinancialSummary order)
     {
         _order = order;
-        Text = $"🧾 Sipariş Detayları: #{order.ReceiptId}";
+        Text = $"🧾 Sipariş Detayları: #{order.ReceiptId}  —  {order.DisplayCustomer}";
         Size = new Size(880, 660);
         MinimumSize = new Size(840, 620);
         StartPosition = FormStartPosition.CenterParent;
@@ -36,16 +37,28 @@ internal sealed class OrderDetailsForm : Form
 
     private async void OrderDetailsForm_Load(object? sender, EventArgs e)
     {
-        var entry = await _repository.GetByIdAsync(_order.ListingId.ToString());
-        if (entry != null)
+        var orderEntry = await _orderCostRepo.GetByReceiptIdAsync(_order.ReceiptId.ToString());
+        if (orderEntry != null)
         {
-            _productionCost = entry.UnitCost;
-            _shippingCost = entry.UnitShippingCost;
-            _packagingCost = entry.UnitPackagingCost;
+            _productionCost = orderEntry.UnitCost;
+            _shippingCost = orderEntry.UnitShippingCost;
+            _packagingCost = orderEntry.UnitPackagingCost;
         }
         else
         {
-            _productionCost = _order.ProductCost / Math.Max(1, _order.Quantity);
+            var prodEntry = await _productCostRepo.GetByIdAsync(_order.ListingId.ToString());
+            if (prodEntry != null)
+            {
+                _productionCost = prodEntry.UnitCost;
+                _shippingCost = prodEntry.UnitShippingCost;
+                _packagingCost = prodEntry.UnitPackagingCost;
+            }
+            else
+            {
+                _productionCost = _order.UnitProductionCost;
+                _shippingCost = _order.UnitShippingCost;
+                _packagingCost = _order.UnitPackagingCost;
+            }
         }
         UpdateProfitLabel();
     }
@@ -248,6 +261,35 @@ internal sealed class OrderDetailsForm : Form
             Padding = new Padding(0, 4, 12, 0)
         };
         subInfo.Controls.Add(lblCostBreakdown);
+
+        var btnGenInvoice = new Button
+        {
+            Text = "⚡ Otomatik Fatura & Konşimento (PDF)",
+            AutoSize = true,
+            Height = 28,
+            BackColor = Color.FromArgb(14, 165, 233), // Sky blue
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Padding = new Padding(8, 0, 8, 0),
+            Margin = new Padding(0, 0, 6, 0)
+        };
+        btnGenInvoice.FlatAppearance.BorderSize = 0;
+        btnGenInvoice.Click += async (_, _) =>
+        {
+            try
+            {
+                string pdfPath = EtsyInvoicePdfService.GenerateInvoicePdf(_order);
+                await _orderCostRepo.SaveInvoicePathAsync(_order.ReceiptId.ToString(), pdfPath);
+                InvoiceStorageService.OpenInvoice(pdfPath);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Fatura oluşturulamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+        subInfo.Controls.Add(btnGenInvoice);
 
         if (_order.HasInvoice)
         {

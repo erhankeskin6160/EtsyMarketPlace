@@ -19,11 +19,15 @@ internal static class FinancialReportExporter
         var wsSummary = wb.Worksheets.Add("📊 Finansal Özet");
         BuildSummarySheet(wsSummary, report);
 
-        // — Sayfa 2: Aylık Dökümü ————————————————————————————————
+        // — Sayfa 2: Siparişler & Net Kâr ———————————————————————
+        var wsOrders = wb.Worksheets.Add("📦 Siparişler & Net Kâr");
+        BuildOrdersSheet(wsOrders, report);
+
+        // — Sayfa 3: Aylık Dökümü ————————————————————————————————
         var wsMonthly = wb.Worksheets.Add("📅 Aylık Döküm");
         BuildMonthlySheet(wsMonthly, report);
 
-        // — Sayfa 3: Ham Kayıtlar ————————————————————————————————
+        // — Sayfa 4: Ham Kayıtlar ————————————————————————————————
         var wsRaw = wb.Worksheets.Add("📋 Defter Kayıtları");
         BuildRawSheet(wsRaw, report);
 
@@ -86,6 +90,104 @@ internal static class FinancialReportExporter
 
         ws.Columns().AdjustToContents();
         ws.Column(2).Width = 18;
+    }
+
+    private static void BuildOrdersSheet(IXLWorksheet ws, FinancialReport r)
+    {
+        ws.Cell("A1").Value = "Sipariş Bazında Finansal & Net Kâr Dökümü";
+        ws.Cell("A1").Style.Font.Bold = true;
+        ws.Cell("A1").Style.Font.FontSize = 14;
+
+        ws.Cell("A2").Value = $"Dönem: {r.PeriodStart:dd.MM.yyyy} — {r.PeriodEnd:dd.MM.yyyy} | Toplam Sipariş: {r.OrderSummaries.Count}";
+        ws.Cell("A2").Style.Font.Italic = true;
+        ws.Cell("A2").Style.Font.FontColor = XLColor.FromHtml("#64748B");
+
+        var headers = new[]
+        {
+            "Tarih", "Sipariş No", "Durum", "Alıcı / Müşteri", "Ürün Başlığı", "Adet",
+            "Müşteri Ödemesi ($)", "Etsy Kesintisi ($)", "Dış Reklam ($)", "Sipariş Maliyeti ($)",
+            "Net Kâr ($)", "Kur (₺)", "Net Kâr (₺)", "Maliyet Durumu", "Fatura Durumu"
+        };
+
+        for (int col = 0; col < headers.Length; col++)
+            ws.Cell(4, col + 1).Value = headers[col];
+        StyleHeaderRow(ws.Range(4, 1, 4, headers.Length));
+
+        int row = 5;
+        foreach (var o in r.OrderSummaries.OrderByDescending(x => x.OrderDate))
+        {
+            ws.Cell(row, 1).Value = o.OrderDate.LocalDateTime.ToString("dd.MM.yyyy HH:mm");
+            ws.Cell(row, 2).Value = $"#{o.ReceiptId}";
+            ws.Cell(row, 3).Value = o.DisplayStatus;
+            ws.Cell(row, 4).Value = o.DisplayCustomer;
+            ws.Cell(row, 5).Value = o.ProductTitle;
+            ws.Cell(row, 6).Value = o.Quantity;
+            ws.Cell(row, 7).Value = (double)(o.IsCanceled ? 0m : o.GrandTotal);
+            ws.Cell(row, 8).Value = (double)(o.IsCanceled ? 0m : o.EtsyFees);
+            ws.Cell(row, 9).Value = (double)o.OffsiteAdFee;
+            ws.Cell(row, 10).Value = (double)(o.IsCanceled ? 0m : o.ProductCost);
+            ws.Cell(row, 11).Value = (double)(o.IsCanceled ? 0m : o.NetProfitUSD);
+            ws.Cell(row, 12).Value = (double)o.ExchangeRate;
+            ws.Cell(row, 13).Value = (double)(o.IsCanceled ? 0m : o.NetProfitTRY);
+            ws.Cell(row, 14).Value = o.IsCanceled ? "İptal" : (o.HasCostData ? "Girilmiş" : "Eksik");
+            ws.Cell(row, 15).Value = o.HasInvoice ? "Fatura Ekli" : "Yok";
+
+            // Para formatları
+            ws.Cell(row, 7).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Cell(row, 8).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Cell(row, 9).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Cell(row, 10).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Cell(row, 11).Style.NumberFormat.Format = "$#,##0.00";
+            ws.Cell(row, 12).Style.NumberFormat.Format = "₺#,##0.00";
+            ws.Cell(row, 13).Style.NumberFormat.Format = "₺#,##0.00";
+
+            if (o.IsCanceled)
+            {
+                ws.Range(row, 1, row, headers.Length).Style.Fill.BackgroundColor = XLColor.FromHtml("#FEF2F2");
+                ws.Range(row, 1, row, headers.Length).Style.Font.FontColor = XLColor.FromHtml("#991B1B");
+            }
+            else if (o.NetProfitUSD >= 0)
+            {
+                ws.Cell(row, 11).Style.Font.Bold = true;
+                ws.Cell(row, 11).Style.Font.FontColor = XLColor.FromHtml("#10B981");
+                ws.Cell(row, 13).Style.Font.Bold = true;
+                ws.Cell(row, 13).Style.Font.FontColor = XLColor.FromHtml("#10B981");
+            }
+            else
+            {
+                ws.Cell(row, 11).Style.Font.Bold = true;
+                ws.Cell(row, 11).Style.Font.FontColor = XLColor.FromHtml("#EF4444");
+                ws.Cell(row, 13).Style.Font.Bold = true;
+                ws.Cell(row, 13).Style.Font.FontColor = XLColor.FromHtml("#EF4444");
+            }
+
+            row++;
+        }
+
+        // Toplam Satırı
+        ws.Cell(row, 1).Value = "TOPLAM";
+        ws.Cell(row, 1).Style.Font.Bold = true;
+        ws.Cell(row, 6).Value = r.OrderSummaries.Sum(x => x.Quantity);
+        ws.Cell(row, 7).Value = (double)r.OrderSummaries.Where(x => !x.IsCanceled).Sum(x => x.GrandTotal);
+        ws.Cell(row, 8).Value = (double)r.OrderSummaries.Where(x => !x.IsCanceled).Sum(x => x.EtsyFees);
+        ws.Cell(row, 9).Value = (double)r.OrderSummaries.Where(x => !x.IsCanceled).Sum(x => x.OffsiteAdFee);
+        ws.Cell(row, 10).Value = (double)r.OrderSummaries.Where(x => !x.IsCanceled).Sum(x => x.ProductCost);
+        ws.Cell(row, 11).Value = (double)r.OrderSummaries.Where(x => !x.IsCanceled).Sum(x => x.NetProfitUSD);
+        ws.Cell(row, 13).Value = (double)r.OrderSummaries.Where(x => !x.IsCanceled).Sum(x => x.NetProfitTRY);
+
+        for (int c = 1; c <= headers.Length; c++)
+        {
+            ws.Cell(row, c).Style.Font.Bold = true;
+            ws.Cell(row, c).Style.Fill.BackgroundColor = XLColor.FromHtml("#F1F5F9");
+        }
+        ws.Cell(row, 7).Style.NumberFormat.Format = "$#,##0.00";
+        ws.Cell(row, 8).Style.NumberFormat.Format = "$#,##0.00";
+        ws.Cell(row, 9).Style.NumberFormat.Format = "$#,##0.00";
+        ws.Cell(row, 10).Style.NumberFormat.Format = "$#,##0.00";
+        ws.Cell(row, 11).Style.NumberFormat.Format = "$#,##0.00";
+        ws.Cell(row, 13).Style.NumberFormat.Format = "₺#,##0.00";
+
+        ws.Columns().AdjustToContents();
     }
 
     private static void BuildMonthlySheet(IXLWorksheet ws, FinancialReport r)

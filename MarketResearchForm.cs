@@ -732,7 +732,7 @@ internal sealed class MarketResearchForm : Form
             return;
         }
 
-        var form = new CompetitorShopAnalysisForm(listing, _trackingService);
+        var form = new CompetitorAndTrendSpyForm(_aiListingOptimizer, listing.ShopName);
         if (DashboardForm.Instance != null) DashboardForm.Instance.EmbedModuleForm(form);
         else form.ShowDialog(this);
     }

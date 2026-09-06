@@ -10,7 +10,7 @@ internal sealed class MarketListingResult
     public string Title { get; init; } = "";
     public string Description { get; set; } = "";
     public string ListingUrl { get; init; } = "";
-    public string ImageUrl { get; init; } = "";
+    public string ImageUrl { get; set; } = "";
     public string ShopName { get; set; } = "";
     public string ShopUrl { get; set; } = "";
     public decimal Price { get; init; }

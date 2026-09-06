@@ -16,6 +16,8 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly TextBox _secondaryKeyTextBox = new();
     private readonly ComboBox _secondaryModelComboBox = new();
     private readonly ComboBox _secondaryImageModelComboBox = new();
+    private readonly TextBox _bflKeyTextBox = new();
+    private readonly TextBox _ideogramKeyTextBox = new();
     private readonly TextBox _statusTextBox = new();
 
     public AiOptimizationSettingsForm()
@@ -29,13 +31,15 @@ internal sealed class AiOptimizationSettingsForm : Form
     {
         Text = "AI Optimizasyon Ayarları & En Güncel Modeller";
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(860, 580);
+        MinimumSize = new Size(880, 680);
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 10 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 12 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
@@ -51,7 +55,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         _providerComboBox.Dock = DockStyle.Left;
         _providerComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
         _providerComboBox.Width = 260;
-        _providerComboBox.Items.AddRange(["Offline", "Gemini", "OpenAI", "Claude", "Platform Token"]);
+        _providerComboBox.Items.AddRange(["Offline", "Gemini", "OpenAI", "Claude", "DeepSeek", "Grok", "Platform Token"]);
         _providerComboBox.SelectedIndexChanged += (_, _) => UpdateFieldLabels(root);
         root.Controls.Add(LabelFor("Sağlayıcı:"), 0, 0);
         root.Controls.Add(_providerComboBox, 1, 0);
@@ -62,18 +66,22 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(_apiKeyTextBox, 1, 1);
 
         _modelComboBox.Dock = DockStyle.Left;
+        _modelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
         _modelComboBox.Width = 340;
         _modelComboBox.Items.AddRange([
             "gpt-4o",
             "gpt-4o-mini",
             "o3-mini",
             "o1",
+            "o1-mini",
+            "chatgpt-4o-latest",
             "gpt-4-turbo"
         ]);
         root.Controls.Add(LabelFor("OpenAI Metin Modeli:"), 0, 2);
         root.Controls.Add(_modelComboBox, 1, 2);
 
         _imageModelComboBox.Dock = DockStyle.Left;
+        _imageModelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
         _imageModelComboBox.Width = 340;
         _imageModelComboBox.Items.AddRange([
             "dall-e-3",
@@ -84,37 +92,43 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         _secondaryKeyTextBox.Dock = DockStyle.Fill;
         _secondaryKeyTextBox.UseSystemPasswordChar = true;
-        root.Controls.Add(LabelFor("Gemini/Claude Key:"), 0, 4);
+        root.Controls.Add(LabelFor("Diğer Sağlayıcı Key:"), 0, 4);
         root.Controls.Add(_secondaryKeyTextBox, 1, 4);
 
         _secondaryModelComboBox.Dock = DockStyle.Left;
+        _secondaryModelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
         _secondaryModelComboBox.Width = 340;
         _secondaryModelComboBox.Items.AddRange([
-            "gemini-3.7-flash",
-            "gemini-3.6-flash",
-            "gemini-3.5-flash",
-            "gemini-3.1-pro-preview",
+            "gemini-2.5-flash",
             "gemini-2.5-pro",
             "gemini-2.0-flash",
             "gemini-2.0-flash-thinking-exp",
             "gemini-1.5-pro",
-            "gemini-1.5-flash",
-            "claude-3-7-sonnet-20250219",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-5-haiku-20241022"
+            "gemini-1.5-flash"
         ]);
-        root.Controls.Add(LabelFor("Gemini/Claude Modeli:"), 0, 5);
+        root.Controls.Add(LabelFor("Seçili Sağlayıcı Modeli:"), 0, 5);
         root.Controls.Add(_secondaryModelComboBox, 1, 5);
 
         _secondaryImageModelComboBox.Dock = DockStyle.Left;
+        _secondaryImageModelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
         _secondaryImageModelComboBox.Width = 340;
         _secondaryImageModelComboBox.Items.AddRange([
-            "gemini-3.1-flash-image",
+            "imagen-3.0-generate-002",
             "gemini-2.5-flash-image",
-            "imagen-3.0-generate-002"
+            "gemini-2.0-flash"
         ]);
         root.Controls.Add(LabelFor("Gemini Görsel Modeli:"), 0, 6);
         root.Controls.Add(_secondaryImageModelComboBox, 1, 6);
+
+        _bflKeyTextBox.Dock = DockStyle.Fill;
+        _bflKeyTextBox.UseSystemPasswordChar = true;
+        root.Controls.Add(LabelFor("BFL (FLUX) API Key:"), 0, 7);
+        root.Controls.Add(_bflKeyTextBox, 1, 7);
+
+        _ideogramKeyTextBox.Dock = DockStyle.Fill;
+        _ideogramKeyTextBox.UseSystemPasswordChar = true;
+        root.Controls.Add(LabelFor("Ideogram API Key:"), 0, 8);
+        root.Controls.Add(_ideogramKeyTextBox, 1, 8);
 
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 4, 0, 0) };
         var save = CreateButton("💾 Kaydet");
@@ -143,23 +157,23 @@ internal sealed class AiOptimizationSettingsForm : Form
         close.Click += (_, _) => Close();
         buttons.Controls.Add(close);
 
-        root.Controls.Add(new Label(), 0, 7);
-        root.Controls.Add(buttons, 1, 7);
+        root.Controls.Add(new Label(), 0, 9);
+        root.Controls.Add(buttons, 1, 9);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(LabelFor("Durum:"), 0, 8);
-        root.Controls.Add(_statusTextBox, 1, 8);
+        root.Controls.Add(LabelFor("Durum:"), 0, 10);
+        root.Controls.Add(_statusTextBox, 1, 10);
 
-        root.Controls.Add(new Label(), 0, 9);
+        root.Controls.Add(new Label(), 0, 11);
         root.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
-            Text = "💡 Önerilen En Güncel Modeller: 'gemini-3.7-flash', 'gpt-4o', 'claude-3-7-sonnet' ve 'gemini-3.1-flash-image' (Banana 2).",
+            Text = "💡 Önerilen En Güncel Görsel Modelleri: OpenAI 'dall-e-3', Google 'imagen-3.0-generate-002', BFL 'flux-pro-1.1' ve 'ideogram-v4'.",
             ForeColor = Color.FromArgb(75, 85, 99),
-        }, 1, 9);
+        }, 1, 11);
     }
 
     private void LoadValues()
@@ -175,6 +189,8 @@ internal sealed class AiOptimizationSettingsForm : Form
         {
             "Gemini" => _settings.GeminiApiKey,
             "Claude" => _settings.ClaudeApiKey,
+            "DeepSeek" => _settings.DeepSeekApiKey,
+            "Grok" => _settings.GrokApiKey,
             "Platform Token" => _settings.PlatformToken,
             _ => !string.IsNullOrWhiteSpace(_settings.GeminiApiKey) ? _settings.GeminiApiKey : "",
         };
@@ -183,10 +199,14 @@ internal sealed class AiOptimizationSettingsForm : Form
         {
             "Gemini" => AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel),
             "Claude" => AiModelNormalizer.NormalizeClaudeTextModel(_settings.ClaudeModel),
+            "DeepSeek" => AiModelNormalizer.NormalizeDeepSeekModel(_settings.DeepSeekModel),
+            "Grok" => AiModelNormalizer.NormalizeGrokModel(_settings.GrokModel),
             _ => AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel),
         };
 
         _secondaryImageModelComboBox.Text = AiModelNormalizer.NormalizeGeminiImageModel(_settings.GeminiImageModel);
+        _bflKeyTextBox.Text = _settings.BflApiKey;
+        _ideogramKeyTextBox.Text = _settings.IdeogramApiKey;
 
         WriteStatus($"Ayar dosyası yüklendi: {AiOptimizationSettingsStore.SettingsPath}");
     }
@@ -209,10 +229,23 @@ internal sealed class AiOptimizationSettingsForm : Form
             _settings.ClaudeApiKey = _secondaryKeyTextBox.Text.Trim();
             _settings.ClaudeModel = AiModelNormalizer.NormalizeClaudeTextModel(_secondaryModelComboBox.Text);
         }
+        else if (_settings.Provider.Equals("DeepSeek", StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.DeepSeekApiKey = _secondaryKeyTextBox.Text.Trim();
+            _settings.DeepSeekModel = AiModelNormalizer.NormalizeDeepSeekModel(_secondaryModelComboBox.Text);
+        }
+        else if (_settings.Provider.Equals("Grok", StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.GrokApiKey = _secondaryKeyTextBox.Text.Trim();
+            _settings.GrokModel = AiModelNormalizer.NormalizeGrokModel(_secondaryModelComboBox.Text);
+        }
         else if (_settings.Provider.Equals("Platform Token", StringComparison.OrdinalIgnoreCase))
         {
             _settings.PlatformToken = _secondaryKeyTextBox.Text.Trim();
         }
+
+        _settings.BflApiKey = _bflKeyTextBox.Text.Trim();
+        _settings.IdeogramApiKey = _ideogramKeyTextBox.Text.Trim();
 
         AiOptimizationSettingsStore.Save(_settings);
         WriteStatus("AI ayarları kaydedildi ve tüm model kodları en güncel sürümlere doğrulandı.");
@@ -223,13 +256,25 @@ internal sealed class AiOptimizationSettingsForm : Form
         SaveValues();
         if (_settings.UseOpenAi)
         {
-            WriteStatus($"OpenAI modu hazır: {_settings.OpenAiModel}. AI ile Üret gerçek API çağrısı yapacak.");
+            WriteStatus($"OpenAI modu hazır: {_settings.OpenAiModel}.");
             return;
         }
 
         if (_settings.UseGemini)
         {
-            WriteStatus($"Gemini modu hazır: {_settings.GeminiModel}. AI ile Üret / AI ile Puanla Gemini API çağrısı yapacak.");
+            WriteStatus($"Gemini modu hazır: {_settings.GeminiModel}.");
+            return;
+        }
+
+        if (_settings.UseDeepSeek)
+        {
+            WriteStatus($"DeepSeek modu hazır: {_settings.DeepSeekModel}.");
+            return;
+        }
+
+        if (_settings.UseGrok)
+        {
+            WriteStatus($"xAI Grok modu hazır: {_settings.GrokModel}.");
             return;
         }
 
@@ -248,9 +293,39 @@ internal sealed class AiOptimizationSettingsForm : Form
         _apiKeyTextBox.Enabled = provider is "OpenAI" or "Offline";
         _modelComboBox.Enabled = provider is "OpenAI" or "Offline";
         _imageModelComboBox.Enabled = provider is "OpenAI" or "Offline";
-        _secondaryKeyTextBox.Enabled = provider is "Gemini" or "Claude" or "Platform Token";
-        _secondaryModelComboBox.Enabled = provider is "Gemini" or "Claude";
+        _secondaryKeyTextBox.Enabled = provider is "Gemini" or "Claude" or "DeepSeek" or "Grok" or "Platform Token";
+        _secondaryModelComboBox.Enabled = provider is "Gemini" or "Claude" or "DeepSeek" or "Grok";
         _secondaryImageModelComboBox.Enabled = provider is "Gemini";
+
+        _secondaryModelComboBox.Items.Clear();
+        if (provider == "Gemini")
+        {
+            _secondaryModelComboBox.Items.AddRange(["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-thinking-exp", "gemini-1.5-pro", "gemini-1.5-flash"]);
+            if (!string.IsNullOrWhiteSpace(_settings.GeminiApiKey)) _secondaryKeyTextBox.Text = _settings.GeminiApiKey;
+            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel);
+        }
+        else if (provider == "Claude")
+        {
+            _secondaryModelComboBox.Items.AddRange(["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"]);
+            if (!string.IsNullOrWhiteSpace(_settings.ClaudeApiKey)) _secondaryKeyTextBox.Text = _settings.ClaudeApiKey;
+            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeClaudeTextModel(_settings.ClaudeModel);
+        }
+        else if (provider == "DeepSeek")
+        {
+            _secondaryModelComboBox.Items.AddRange(["deepseek-reasoner", "deepseek-chat"]);
+            if (!string.IsNullOrWhiteSpace(_settings.DeepSeekApiKey)) _secondaryKeyTextBox.Text = _settings.DeepSeekApiKey;
+            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeDeepSeekModel(_settings.DeepSeekModel);
+        }
+        else if (provider == "Grok")
+        {
+            _secondaryModelComboBox.Items.AddRange(["grok-3", "grok-2-latest"]);
+            if (!string.IsNullOrWhiteSpace(_settings.GrokApiKey)) _secondaryKeyTextBox.Text = _settings.GrokApiKey;
+            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeGrokModel(_settings.GrokModel);
+        }
+        else if (provider == "Platform Token")
+        {
+            _secondaryKeyTextBox.Text = _settings.PlatformToken;
+        }
     }
 
     private void WriteStatus(string message)

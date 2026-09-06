@@ -143,18 +143,37 @@ internal sealed class DashboardForm : Form
             Padding = new Padding(0),
             Margin = new Padding(0),
         };
-        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
         _sidebarNav = new ModernSidebarNav();
         _sidebarNav.Dock = DockStyle.Fill;
         PopulateSidebarItems();
         _sidebarNav.ItemSelected += OnSidebarItemSelected;
 
+        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, _sidebarNav.IsCollapsed ? 64 : 260));
+        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        _sidebarNav.CollapsedChanged += (_, _) =>
+        {
+            formGrid.SuspendLayout();
+            _mainContainer.SuspendLayout();
+            formGrid.ColumnStyles[0].Width = _sidebarNav.IsCollapsed ? 64 : 260;
+            formGrid.ResumeLayout(true);
+            _mainContainer.ResumeLayout(true);
+            formGrid.PerformLayout();
+            _mainContainer.PerformLayout();
+            if (_currentEmbeddedForm != null)
+            {
+                _currentEmbeddedForm.Dock = DockStyle.None;
+                _currentEmbeddedForm.Size = _mainContainer.ClientSize;
+                _currentEmbeddedForm.Dock = DockStyle.Fill;
+                _currentEmbeddedForm.PerformLayout();
+                _currentEmbeddedForm.Invalidate(true);
+            }
+        };
+
         _mainContainer = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(16, 12, 16, 12),
+            Padding = new Padding(0),
             AutoScroll = true,
             BackColor = UiStyle.BackgroundColor
         };
@@ -999,6 +1018,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
         _sidebarNav.AddItem("research", "Pazar Araştırması", "🔍", "Araştırma & Analiz");
+        _sidebarNav.AddItem("competitor_spy", "Rakip & Trend Casusu", "🕵️", "Araştırma & Analiz", "YENİ");
         _sidebarNav.AddItem("external", "Dış Pazar Yeri Bulucu", "🌐", "Araştırma & Analiz");
         _sidebarNav.AddItem("ai_audit", "Mağaza AI Analizi", "🤖", "Araştırma & Analiz", "YENİ");
         _sidebarNav.AddItem("ab_test", "A/B Test Paneli", "📈", "Araştırma & Analiz");
@@ -1026,15 +1046,27 @@ internal sealed class DashboardForm : Form
 
     public void EmbedModuleForm(Form moduleForm)
     {
+        UseWaitCursor = false;
+        Cursor = Cursors.Default;
+        Cursor.Current = Cursors.Default;
+
         if (_currentEmbeddedForm != null)
         {
-            _mainContainer.Controls.Remove(_currentEmbeddedForm);
-            _currentEmbeddedForm.Close();
-            _currentEmbeddedForm.Dispose();
-            _currentEmbeddedForm = null;
+            try
+            {
+                _mainContainer.Controls.Remove(_currentEmbeddedForm);
+                _currentEmbeddedForm.Close();
+                _currentEmbeddedForm.Dispose();
+            }
+            catch { }
+            finally
+            {
+                _currentEmbeddedForm = null;
+            }
         }
 
         _mainContainer.Controls.Clear();
+        _mainContainer.Padding = new Padding(0);
         _currentEmbeddedForm = moduleForm;
 
         moduleForm.TopLevel = false;
@@ -1042,20 +1074,40 @@ internal sealed class DashboardForm : Form
         moduleForm.Dock = DockStyle.Fill;
         _mainContainer.Controls.Add(moduleForm);
         moduleForm.Show();
+
+        UseWaitCursor = false;
+        Cursor = Cursors.Default;
+        Cursor.Current = Cursors.Default;
     }
 
     private void ShowDashboardView()
     {
+        UseWaitCursor = false;
+        Cursor = Cursors.Default;
+        Cursor.Current = Cursors.Default;
+
         if (_currentEmbeddedForm != null)
         {
-            _mainContainer.Controls.Remove(_currentEmbeddedForm);
-            _currentEmbeddedForm.Close();
-            _currentEmbeddedForm.Dispose();
-            _currentEmbeddedForm = null;
+            try
+            {
+                _mainContainer.Controls.Remove(_currentEmbeddedForm);
+                _currentEmbeddedForm.Close();
+                _currentEmbeddedForm.Dispose();
+            }
+            catch { }
+            finally
+            {
+                _currentEmbeddedForm = null;
+            }
         }
 
         _mainContainer.Controls.Clear();
+        _mainContainer.Padding = new Padding(16, 12, 16, 12);
         _mainContainer.Controls.Add(_dashboardRootPanel);
+
+        UseWaitCursor = false;
+        Cursor = Cursors.Default;
+        Cursor.Current = Cursors.Default;
     }
 
     public async Task OpenModuleByIdAsync(string targetModule)
@@ -1088,6 +1140,7 @@ internal sealed class DashboardForm : Form
             "ai_image" => new AiListingImageForm(_aiListingOptimizer),
             "shop" => new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService, _aiListingOptimizer, _optimizationHistoryService),
             "research" => new MarketResearchForm(_keywordUseCase, _trackingService, _optimizationHistoryService, _aiListingOptimizer),
+            "competitor_spy" => new CompetitorAndTrendSpyForm(_aiListingOptimizer),
             "external" => new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer),
             "ai_audit" => new OwnShopListingAiAuditForm(_aiListingOptimizer, _optimizationHistoryService),
             "ab_test" => new ListingAbTestForm(_abTestService),

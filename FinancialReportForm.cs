@@ -89,6 +89,10 @@ internal sealed class FinancialReportForm : Form
     private readonly DataGridView _gridOrders  = new();
     private readonly ComboBox _cboPeriodType   = new();
 
+    private readonly TextBox _txtOrderSearch   = new();
+    private readonly ComboBox _cboCostFilter   = new();
+    private readonly Label _lblOrderSummary    = new();
+
     private string _periodSortColumn = "Period";
     private bool _periodSortAscending = true;
 
@@ -981,20 +985,87 @@ internal sealed class FinancialReportForm : Form
         };
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        // Özet bilgi etiketi (üstte)
-        var summaryLabel = new Label
+        // Arama, Filtreleme ve Özet Çubuğu
+        var topBar = new TableLayoutPanel
         {
-            Name = "lblOrderSummary",
             Dock = DockStyle.Fill,
-            Text = "📦 Sipariş listesi yükleniyor...",
-            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-            ForeColor = UiStyle.TextMuted,
-            TextAlign = ContentAlignment.MiddleLeft,
+            ColumnCount = 5,
+            RowCount = 1,
+            Padding = new Padding(0, 0, 0, 6)
         };
-        root.Controls.Add(summaryLabel, 0, 0);
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 310)); // Arama kutusu
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); // Maliyet filtresi
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 35));  // Temizle butonu
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // Kâr Farkı Butonu
+        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // Özet etiketi
+
+        _txtOrderSearch.Dock = DockStyle.Fill;
+        _txtOrderSearch.Font = new Font("Segoe UI", 9.5F);
+        _txtOrderSearch.PlaceholderText = "🔍 Sipariş No, Müşteri No / Adı veya Ürün Ara...";
+        _txtOrderSearch.TextChanged += (_, _) => UpdateOrdersGrid();
+        topBar.Controls.Add(_txtOrderSearch, 0, 0);
+
+        _cboCostFilter.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboCostFilter.Dock = DockStyle.Fill;
+        _cboCostFilter.Font = new Font("Segoe UI", 9F);
+        _cboCostFilter.Items.AddRange(new object[]
+        {
+            "📦 Tüm Siparişler",
+            "🟢 Başarılı Siparişler",
+            "🔴 İptal / İade Edilenler",
+            "✅ Maliyeti Girilmiş",
+            "⚠️ Maliyeti Eksik",
+            "📎 Faturalı Siparişler"
+        });
+        _cboCostFilter.SelectedIndex = 0;
+        _cboCostFilter.SelectedIndexChanged += (_, _) => UpdateOrdersGrid();
+        topBar.Controls.Add(_cboCostFilter, 1, 0);
+
+        var btnClear = new Button
+        {
+            Text = "✕",
+            Dock = DockStyle.Fill,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(40, 45, 60),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        btnClear.FlatAppearance.BorderSize = 0;
+        btnClear.Click += (_, _) =>
+        {
+            _txtOrderSearch.Clear();
+            _cboCostFilter.SelectedIndex = 0;
+        };
+        topBar.Controls.Add(btnClear, 2, 0);
+
+        var btnProfitInfo = new Button
+        {
+            Text = "❓ Kâr Farkı Nedir?",
+            Dock = DockStyle.Fill,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(55, 48, 163),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        btnProfitInfo.FlatAppearance.BorderSize = 0;
+        btnProfitInfo.Click += (_, _) => ShowProfitReconciliationDialog();
+        topBar.Controls.Add(btnProfitInfo, 3, 0);
+
+        // Özet bilgi etiketi (sağda)
+        _lblOrderSummary.Name = "lblOrderSummary";
+        _lblOrderSummary.Dock = DockStyle.Fill;
+        _lblOrderSummary.Text = "📦 Sipariş listesi yükleniyor...";
+        _lblOrderSummary.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        _lblOrderSummary.ForeColor = UiStyle.TextMuted;
+        _lblOrderSummary.TextAlign = ContentAlignment.MiddleRight;
+        topBar.Controls.Add(_lblOrderSummary, 4, 0);
+
+        root.Controls.Add(topBar, 0, 0);
 
         // Grid yapılandır
         UiStyle.ConfigureBaseGrid(_gridOrders);
@@ -1005,7 +1076,46 @@ internal sealed class FinancialReportForm : Form
         _gridOrders.ColumnHeaderMouseClick += OnOrdersGridColumnHeaderClick;
         var ctxMenu = new ContextMenuStrip();
         
-        var mnuDetails = new ToolStripMenuItem("📄 Sipariş Detaylarını Gör", null, (s, e) =>
+        var mnuAutoInvoice = new ToolStripMenuItem("⚡ Otomatik Fatura / Konşimento Oluştur (PDF)", null, async (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count == 0) return;
+            var row = _gridOrders.SelectedRows[0];
+            if (row.Tag is OrderFinancialSummary order)
+            {
+                try
+                {
+                    string pdfPath = EtsyInvoicePdfService.GenerateInvoicePdf(order);
+                    var repo = new SqliteOrderCostRepository();
+                    await repo.SaveInvoicePathAsync(order.ReceiptId.ToString(), pdfPath);
+                    _ = LoadReportAsync();
+                    InvoiceStorageService.OpenInvoice(pdfPath);
+                    SetStatus($"🧾 Fatura PDF'i oluşturuldu ve açıldı: #{order.ReceiptId}", UiStyle.SuccessColor);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, $"Fatura oluşturulamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        });
+
+        var mnuOpenInvoice = new ToolStripMenuItem("📄 Faturayı / PDF'i Aç", null, (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count == 0) return;
+            var row = _gridOrders.SelectedRows[0];
+            if (row.Tag is OrderFinancialSummary order)
+            {
+                if (order.HasInvoice)
+                {
+                    InvoiceStorageService.OpenInvoice(order.InvoiceFilePath);
+                }
+                else
+                {
+                    MessageBox.Show(this, "Bu sipariş için yüklenmiş bir fatura bulunamadı.\n'Otomatik Fatura Oluştur' seçeneğiyle tek tıkla resmi PDF fatura üretebilirsiniz.", "Fatura Bulunamadı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        });
+
+        var mnuDetails = new ToolStripMenuItem("📊 Sipariş Detaylarını Gör", null, (s, e) =>
         {
             if (_gridOrders.SelectedRows.Count == 0) return;
             var row = _gridOrders.SelectedRows[0];
@@ -1018,52 +1128,84 @@ internal sealed class FinancialReportForm : Form
                 }
             }
         });
-
-        var mnuOpenInvoice = new ToolStripMenuItem("📄 Kargo Faturasını Aç / Önizle", null, (s, e) =>
-        {
-            if (_gridOrders.SelectedRows.Count == 0) return;
-            var row = _gridOrders.SelectedRows[0];
-            if (row.Tag is OrderFinancialSummary order)
-            {
-                if (order.HasInvoice)
-                {
-                    InvoiceStorageService.OpenInvoice(order.InvoiceFilePath);
-                }
-                else
-                {
-                    MessageBox.Show(this, "Bu ürün/sipariş için yüklenmiş bir kargo faturası bulunamadı.\n'Hızlı Maliyet Düzenle' seçeneğiyle fatura (PDF/Resim) ekleyebilirsiniz.", "Fatura Bulunamadı", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-            }
-        });
         
-        var mnuQuickCost = new ToolStripMenuItem("💰 Hızlı Maliyet & Fatura Düzenle", null, async (s, e) =>
+        var mnuQuickCost = new ToolStripMenuItem("💰 Maliyet & Fatura Düzenle", null, async (s, e) =>
         {
             if (_gridOrders.SelectedRows.Count == 0) return;
             var row = _gridOrders.SelectedRows[0];
             if (row.Tag is OrderFinancialSummary order)
             {
-                var repo = new SqliteProductCostRepository();
-                var currentCost = await repo.GetByIdAsync(order.ListingId.ToString());
+                var orderRepo = new SqliteOrderCostRepository();
+                var currentCost = await orderRepo.GetByReceiptIdAsync(order.ReceiptId.ToString());
                 
-                using var popup = new CostDetailsPopupForm(currentCost);
+                using var popup = new CostDetailsPopupForm(order, currentCost);
                 if (popup.ShowDialog(this) == DialogResult.OK)
                 {
-                    var newEntry = new ProductCostEntry(
+                    var newEntry = new OrderCostEntry(
+                        order.ReceiptId.ToString(), 
                         order.ListingId.ToString(), 
                         order.ProductTitle, 
                         popup.UnitCost, 
                         popup.UnitShippingCost, 
                         popup.UnitPackagingCost, 
                         DateTimeOffset.UtcNow,
-                        popup.InvoiceFilePath);
+                        popup.InvoiceFilePath,
+                        order.BuyerUserId,
+                        order.BuyerName,
+                        order.BuyerEmail);
                         
-                    await repo.SaveAsync(newEntry);
+                    await orderRepo.SaveAsync(newEntry);
+
+                    if (popup.ApplyToAllOrdersOfListing && order.ListingId > 0)
+                    {
+                        int count = await orderRepo.BulkApplyCostToListingOrdersAsync(
+                            order.ListingId.ToString(), 
+                            popup.UnitCost, 
+                            popup.UnitShippingCost, 
+                            popup.UnitPackagingCost);
+                        if (count > 0)
+                        {
+                            MessageBox.Show(this, $"{count} adet eşleşen siparişin maliyeti otomatik olarak güncellendi!", "Toplu Maliyet Güncelleme", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }
+
                     _ = LoadReportAsync();
                 }
             }
         });
 
-        var mnuCopyCell = new ToolStripMenuItem("📋 Seçili Hücreyi Kopyala", null, (s, e) =>
+        var mnuCopyReceiptId = new ToolStripMenuItem("📋 Sipariş No Kopyala", null, (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count > 0 && _gridOrders.SelectedRows[0].Tag is OrderFinancialSummary o)
+            {
+                Clipboard.SetText($"#{o.ReceiptId}");
+                SetStatus($"📋 Sipariş No kopyalandı: #{o.ReceiptId}", UiStyle.SuccessColor);
+            }
+        });
+
+        var mnuCopyCustomer = new ToolStripMenuItem("👤 Müşteri Bilgisini Kopyala", null, (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count > 0 && _gridOrders.SelectedRows[0].Tag is OrderFinancialSummary o)
+            {
+                Clipboard.SetText(o.DisplayCustomer);
+                SetStatus($"👤 Müşteri kopyalandı: {o.DisplayCustomer}", UiStyle.SuccessColor);
+            }
+        });
+
+        var mnuOpenEtsy = new ToolStripMenuItem("🌐 Etsy'de Siparişi Aç", null, (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count > 0 && _gridOrders.SelectedRows[0].Tag is OrderFinancialSummary o)
+            {
+                try
+                {
+                    string url = $"https://www.etsy.com/your/orders/sold?order_id={o.ReceiptId}";
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+                }
+                catch { }
+            }
+        });
+
+        var mnuCopyCell = new ToolStripMenuItem("📄 Seçili Hücreyi Kopyala", null, (s, e) =>
         {
             if (_gridOrders.CurrentCell?.Value != null)
             {
@@ -1089,10 +1231,15 @@ internal sealed class FinancialReportForm : Form
             }
         });
         
-        ctxMenu.Items.Add(mnuDetails);
+        ctxMenu.Items.Add(mnuAutoInvoice);
         ctxMenu.Items.Add(mnuOpenInvoice);
-        ctxMenu.Items.Add(mnuQuickCost);
         ctxMenu.Items.Add(new ToolStripSeparator());
+        ctxMenu.Items.Add(mnuDetails);
+        ctxMenu.Items.Add(mnuQuickCost);
+        ctxMenu.Items.Add(mnuOpenEtsy);
+        ctxMenu.Items.Add(new ToolStripSeparator());
+        ctxMenu.Items.Add(mnuCopyReceiptId);
+        ctxMenu.Items.Add(mnuCopyCustomer);
         ctxMenu.Items.Add(mnuCopyCell);
         ctxMenu.Items.Add(mnuCopyRow);
         _gridOrders.ContextMenuStrip = ctxMenu;
@@ -1694,18 +1841,20 @@ internal sealed class FinancialReportForm : Form
         _gridOrders.Columns.Clear();
         UiStyle.ConfigureBaseGrid(_gridOrders);
 
-        AddOrderCol("Tarih", "ODate", 120);
-        AddOrderCol("Sipariş No", "OReceiptId", 100);
+        AddOrderCol("Tarih", "ODate", 115);
+        AddOrderCol("Sipariş No", "OReceiptId", 90);
+        AddOrderCol("Durum", "OStatus", 100);
+        AddOrderCol("Müşteri", "OCustomer", 125);
         AddOrderCol("Ürün", "OTitle", 0, fill: true);
-        AddOrderCol("Adet", "OQty", 60);
-        AddOrderCol("Müşteri Ödemesi ($)", "OGross", 135);
-        AddOrderCol("Etsy Kesimleri ($)", "OFees", 135);
-        AddOrderCol("Dış Reklam ($)", "OAds", 110);
-        AddOrderCol("Ürün Maliyeti ($)", "OCost", 125);
-        AddOrderCol("Net Kâr ($)", "OProfitUSD", 110);
-        AddOrderCol("Kur (₺)", "ORate", 85);
-        AddOrderCol("Net Kâr (₺)", "OProfitTRY", 115);
-        AddOrderCol("Maliyet", "OCostFlag", 75);
+        AddOrderCol("Adet", "OQty", 50);
+        AddOrderCol("Müşteri Ödemesi ($)", "OGross", 125);
+        AddOrderCol("Etsy Kesimleri ($)", "OFees", 125);
+        AddOrderCol("Dış Reklam ($)", "OAds", 100);
+        AddOrderCol("Sipariş Maliyeti ($)", "OCost", 120);
+        AddOrderCol("Net Kâr ($)", "OProfitUSD", 105);
+        AddOrderCol("Kur (₺)", "ORate", 80);
+        AddOrderCol("Net Kâr (₺)", "OProfitTRY", 110);
+        AddOrderCol("Maliyet", "OCostFlag", 70);
 
         void AddOrderCol(string headerText, string name, int width, bool fill = false)
         {
@@ -1733,37 +1882,81 @@ internal sealed class FinancialReportForm : Form
             catch { /* ignore */ }
         }
 
-        var orders = _report.OrderSummaries;
+        var orders = _report.OrderSummaries.AsEnumerable();
+
+        // 1. Canlı Arama Filtresi (Sipariş No, Müşteri No, Müşteri Adı, E-posta veya Ürün)
+        string search = _txtOrderSearch.Text.Trim();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            string q = search.ToLowerInvariant();
+            orders = orders.Where(o =>
+                o.ReceiptId.ToString().Contains(q) ||
+                o.ProductTitle.ToLowerInvariant().Contains(q) ||
+                o.BuyerName.ToLowerInvariant().Contains(q) ||
+                o.BuyerUserId.ToString().Contains(q) ||
+                o.BuyerEmail.ToLowerInvariant().Contains(q) ||
+                o.ListingId.ToString().Contains(q) ||
+                o.OrderStatus.ToLowerInvariant().Contains(q)
+            );
+        }
+
+        // 2. Maliyet / Durum Filtresi
+        switch (_cboCostFilter.SelectedIndex)
+        {
+            case 1: // Başarılı Siparişler
+                orders = orders.Where(o => !o.IsCanceled && o.RefundedAmount == 0);
+                break;
+            case 2: // İptal / İade Edilenler
+                orders = orders.Where(o => o.IsCanceled || o.RefundedAmount > 0);
+                break;
+            case 3: // Maliyeti Girilmiş
+                orders = orders.Where(o => o.HasCostData && !o.IsCanceled);
+                break;
+            case 4: // Maliyeti Eksik
+                orders = orders.Where(o => !o.HasCostData && !o.IsCanceled);
+                break;
+            case 5: // Faturalı
+                orders = orders.Where(o => o.HasInvoice);
+                break;
+        }
+
+        var orderList = orders.ToList();
         _gridOrders.Rows.Clear();
 
         // Özet etiketi güncelle
-        var lbl = _gridOrders.Parent?.Controls.OfType<Label>().FirstOrDefault(l => l.Name == "lblOrderSummary")
-                ?? Controls.Find("lblOrderSummary", true).OfType<Label>().FirstOrDefault();
-        if (lbl != null)
-        {
-            int missingCost = orders.Count(o => !o.HasCostData);
-            decimal totalNetUSD = orders.Sum(o => o.NetProfitUSD);
-            decimal totalNetTRY = orders.Sum(o => o.NetProfitTRY);
-            lbl.Text = $"📦 {orders.Count} sipariş  |  Toplam Net Kâr: ${totalNetUSD:N2}  /  ₺{totalNetTRY:N2}" +
-                       (missingCost > 0 ? $"  |  ⚠️ {missingCost} siparişin maliyeti girilmemiş (çift tıklayın)" : "  |  ✅ Tüm maliyetler girilmiş");
-            lbl.ForeColor = missingCost > 0 ? UiStyle.WarningColor : UiStyle.SuccessColor;
-        }
+        int missingCost = orderList.Count(o => !o.HasCostData && !o.IsCanceled);
+        int canceledCount = orderList.Count(o => o.IsCanceled);
+        decimal totalNetUSD = orderList.Where(o => !o.IsCanceled).Sum(o => o.NetProfitUSD);
+        decimal totalNetTRY = orderList.Where(o => !o.IsCanceled).Sum(o => o.NetProfitTRY);
+
+        string filterInfo = !string.IsNullOrWhiteSpace(search) || _cboCostFilter.SelectedIndex > 0
+            ? $" (Filtrelenen: {orderList.Count}/{_report.OrderSummaries.Count})"
+            : "";
+
+        _lblOrderSummary.Text = $"📦 {orderList.Count} sipariş{filterInfo}" +
+                               (canceledCount > 0 ? $" ({canceledCount} iptal)" : "") +
+                               $"  |  Sipariş Kârı: ₺{totalNetTRY:N2} (${totalNetUSD:N2})" +
+                               $"  |  🏛️ Mağaza Net: ₺{_report.RealNetProfitTRY:N2}" +
+                               (missingCost > 0 ? $"  |  ⚠️ {missingCost} maliyetsiz" : "  |  ✅ Tamamlandı");
+        _lblOrderSummary.ForeColor = missingCost > 0 ? UiStyle.WarningColor : UiStyle.SuccessColor;
 
         IEnumerable<OrderFinancialSummary> sorted = _orderSortColumn switch
         {
-            "ODate" => _orderSortAscending ? orders.OrderBy(o => o.OrderDate) : orders.OrderByDescending(o => o.OrderDate),
-            "OReceiptId" => _orderSortAscending ? orders.OrderBy(o => o.ReceiptId) : orders.OrderByDescending(o => o.ReceiptId),
-            "OTitle" => _orderSortAscending ? orders.OrderBy(o => o.ProductTitle) : orders.OrderByDescending(o => o.ProductTitle),
-            "OQty" => _orderSortAscending ? orders.OrderBy(o => o.Quantity) : orders.OrderByDescending(o => o.Quantity),
-            "OGross" => _orderSortAscending ? orders.OrderBy(o => o.GrandTotal) : orders.OrderByDescending(o => o.GrandTotal),
-            "OFees" => _orderSortAscending ? orders.OrderBy(o => o.EtsyFees) : orders.OrderByDescending(o => o.EtsyFees),
-            "OAds" => _orderSortAscending ? orders.OrderBy(o => o.OffsiteAdFee) : orders.OrderByDescending(o => o.OffsiteAdFee),
-            "OCost" => _orderSortAscending ? orders.OrderBy(o => o.ProductCost) : orders.OrderByDescending(o => o.ProductCost),
-            "OProfitUSD" => _orderSortAscending ? orders.OrderBy(o => o.NetProfitUSD) : orders.OrderByDescending(o => o.NetProfitUSD),
-            "ORate" => _orderSortAscending ? orders.OrderBy(o => o.ExchangeRate) : orders.OrderByDescending(o => o.ExchangeRate),
-            "OProfitTRY" => _orderSortAscending ? orders.OrderBy(o => o.NetProfitTRY) : orders.OrderByDescending(o => o.NetProfitTRY),
-            "OCostFlag" => _orderSortAscending ? orders.OrderBy(o => o.HasCostData) : orders.OrderByDescending(o => o.HasCostData),
-            _ => _orderSortAscending ? orders.OrderBy(o => o.OrderDate) : orders.OrderByDescending(o => o.OrderDate)
+            "ODate" => _orderSortAscending ? orderList.OrderBy(o => o.OrderDate) : orderList.OrderByDescending(o => o.OrderDate),
+            "OReceiptId" => _orderSortAscending ? orderList.OrderBy(o => o.ReceiptId) : orderList.OrderByDescending(o => o.ReceiptId),
+            "OStatus" => _orderSortAscending ? orderList.OrderBy(o => o.OrderStatus) : orderList.OrderByDescending(o => o.OrderStatus),
+            "OCustomer" => _orderSortAscending ? orderList.OrderBy(o => o.DisplayCustomer) : orderList.OrderByDescending(o => o.DisplayCustomer),
+            "OTitle" => _orderSortAscending ? orderList.OrderBy(o => o.ProductTitle) : orderList.OrderByDescending(o => o.ProductTitle),
+            "OQty" => _orderSortAscending ? orderList.OrderBy(o => o.Quantity) : orderList.OrderByDescending(o => o.Quantity),
+            "OGross" => _orderSortAscending ? orderList.OrderBy(o => o.GrandTotal) : orderList.OrderByDescending(o => o.GrandTotal),
+            "OFees" => _orderSortAscending ? orderList.OrderBy(o => o.EtsyFees) : orderList.OrderByDescending(o => o.EtsyFees),
+            "OAds" => _orderSortAscending ? orderList.OrderBy(o => o.OffsiteAdFee) : orderList.OrderByDescending(o => o.OffsiteAdFee),
+            "OCost" => _orderSortAscending ? orderList.OrderBy(o => o.ProductCost) : orderList.OrderByDescending(o => o.ProductCost),
+            "OProfitUSD" => _orderSortAscending ? orderList.OrderBy(o => o.NetProfitUSD) : orderList.OrderByDescending(o => o.NetProfitUSD),
+            "ORate" => _orderSortAscending ? orderList.OrderBy(o => o.ExchangeRate) : orderList.OrderByDescending(o => o.ExchangeRate),
+            "OProfitTRY" => _orderSortAscending ? orderList.OrderBy(o => o.NetProfitTRY) : orderList.OrderByDescending(o => o.NetProfitTRY),
+            "OCostFlag" => _orderSortAscending ? orderList.OrderBy(o => o.HasCostData) : orderList.OrderByDescending(o => o.HasCostData),
+            _ => _orderSortAscending ? orderList.OrderBy(o => o.OrderDate) : orderList.OrderByDescending(o => o.OrderDate)
         };
 
         foreach (var o in sorted)
@@ -1771,39 +1964,134 @@ internal sealed class FinancialReportForm : Form
             int idx = _gridOrders.Rows.Add(
                 o.OrderDate.LocalDateTime.ToString("dd.MM.yyyy HH:mm"),
                 $"#{o.ReceiptId}",
+                o.DisplayStatus,
+                o.DisplayCustomer,
                 o.ProductTitle,
                 o.Quantity,
-                $"${o.GrandTotal:N2}",
-                $"${o.EtsyFees:N2}",
+                o.IsCanceled ? "$0.00" : $"${o.GrandTotal:N2}",
+                o.IsCanceled ? "$0.00" : $"${o.EtsyFees:N2}",
                 o.OffsiteAdFee > 0 ? $"${o.OffsiteAdFee:N2}" : "—",
-                o.HasCostData ? $"${o.ProductCost:N2}" : "—",
-                $"${o.NetProfitUSD:N2}",
+                o.IsCanceled ? "—" : (o.HasCostData ? $"${o.ProductCost:N2}" : "—"),
+                o.IsCanceled ? "$0.00" : $"${o.NetProfitUSD:N2}",
                 $"₺{o.ExchangeRate:N2}",
-                $"₺{o.NetProfitTRY:N2}",
-                o.HasCostData ? (o.HasInvoice ? "✅ 📎" : "✅") : "⚠️ Gir");
+                o.IsCanceled ? "₺0.00" : $"₺{o.NetProfitTRY:N2}",
+                o.IsCanceled ? "🔴 İptal" : (o.HasCostData ? (o.HasInvoice ? "✅ 📎" : "✅") : "⚠️ Gir"));
 
             var row = _gridOrders.Rows[idx];
             row.Tag = o;
 
-            if (o.NetProfitUSD >= 0)
-                row.DefaultCellStyle.ForeColor = UiStyle.SuccessColor;
+            if (o.IsCanceled)
+            {
+                row.DefaultCellStyle.ForeColor = Color.FromArgb(148, 163, 184); // Muted slate gray
+                row.Cells["OStatus"].Style.ForeColor = Color.FromArgb(248, 113, 113); // Light red
+            }
             else
-                row.DefaultCellStyle.ForeColor = UiStyle.DangerColor;
+            {
+                if (o.NetProfitUSD >= 0)
+                    row.DefaultCellStyle.ForeColor = UiStyle.SuccessColor;
+                else
+                    row.DefaultCellStyle.ForeColor = UiStyle.DangerColor;
 
-            if (!o.HasCostData)
-                row.Cells["OCostFlag"].Style.ForeColor = UiStyle.WarningColor;
+                if (o.RefundedAmount > 0)
+                {
+                    row.Cells["OStatus"].Style.ForeColor = UiStyle.WarningColor;
+                }
+                else
+                {
+                    row.Cells["OStatus"].Style.ForeColor = Color.FromArgb(52, 211, 153); // Emerald
+                }
+
+                if (!o.HasCostData)
+                    row.Cells["OCostFlag"].Style.ForeColor = UiStyle.WarningColor;
+            }
         }
     }
 
-    private void OnOrderGridDoubleClick(object? sender, DataGridViewCellEventArgs e)
+    private void ShowProfitReconciliationDialog()
+    {
+        decimal orderNetUSD = _report.OrderSummaries.Where(o => !o.IsCanceled).Sum(o => o.NetProfitUSD);
+        decimal orderNetTRY = _report.OrderSummaries.Where(o => !o.IsCanceled).Sum(o => o.NetProfitTRY);
+        decimal storeNetTRY = _report.RealNetProfitTRY;
+        decimal storeNetUSD = _report.RealNetProfitUSD;
+
+        decimal innerAdsTRY = _report.TotalInnerAdFees * _report.ExchangeRate;
+        decimal offsiteAdsTRY = _report.TotalOffsiteAdFees * _report.ExchangeRate;
+        decimal refundsTRY = Math.Abs(_report.TotalRefunds) * _report.ExchangeRate;
+        int missingCount = _report.OrderSummaries.Count(o => !o.HasCostData && !o.IsCanceled);
+
+        string message = 
+            "📊 KÂR MUTABAKATI & FARK ANALİZİ\n\n" +
+            $"1️⃣ Siparişlerin Toplam Katkı Kârı: ₺{orderNetTRY:N2} (${orderNetUSD:N2})\n" +
+            $"   • Tek tek siparişlerden elde edilen operasyonel ürün kârıdır.\n" +
+            $"   • Henüz mağaza genel reklamları ve sabit giderler bundan düşülmemiştir.\n\n" +
+            $"2️⃣ Mağaza Geneline Ait Giderler (Siparişten Bağımsız):\n" +
+            $"   • 📢 İç Reklam Harcaması (Etsy Ads): -₺{innerAdsTRY:N2}\n" +
+            $"   • 🌐 Dış Reklam Harcaması (Offsite Ads): -₺{offsiteAdsTRY:N2}\n" +
+            $"   • ↩️ Dönemsel Genel İadeler: -₺{refundsTRY:N2}\n" +
+            (missingCount > 0 ? $"   • ⚠️ {missingCount} siparişin maliyeti girilmediği için geçici olarak yüksek görünmektedir.\n" : "") +
+            $"\n" +
+            $"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+            $"🏛️ Üst Karttaki GERÇEK NET KÂR: ₺{storeNetTRY:N2} (${storeNetUSD:N2})\n" +
+            $"(Tüm mağaza reklamları, iadeler ve genel giderler düşüldükten sonra banka hesabınıza ve cebinize kalan nihai kârdır.)";
+
+        MessageBox.Show(this, message, "📊 Kâr Seviyeleri ve Mutabakat Açıklaması", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private async void OnOrderGridDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
         if (e.RowIndex < 0 || e.RowIndex >= _gridOrders.Rows.Count) return;
         if (_gridOrders.Rows[e.RowIndex].Tag is not OrderFinancialSummary order) return;
 
-        using var form = new OrderDetailsForm(order);
-        if (form.ShowDialog(this) == DialogResult.OK)
+        // Maliyet sütununa veya bayrağına tıklandıysa doğrudan Maliyet Giriş Penceresini aç
+        bool isCostColumn = e.ColumnIndex >= 0 && 
+            (_gridOrders.Columns[e.ColumnIndex].Name == "OCost" || _gridOrders.Columns[e.ColumnIndex].Name == "OCostFlag");
+
+        if (isCostColumn || !order.HasCostData)
         {
-            _ = LoadReportAsync();
+            var orderRepo = new SqliteOrderCostRepository();
+            var currentCost = await orderRepo.GetByReceiptIdAsync(order.ReceiptId.ToString());
+
+            using var popup = new CostDetailsPopupForm(order, currentCost);
+            if (popup.ShowDialog(this) == DialogResult.OK)
+            {
+                var newEntry = new OrderCostEntry(
+                    order.ReceiptId.ToString(),
+                    order.ListingId.ToString(),
+                    order.ProductTitle,
+                    popup.UnitCost,
+                    popup.UnitShippingCost,
+                    popup.UnitPackagingCost,
+                    DateTimeOffset.UtcNow,
+                    popup.InvoiceFilePath,
+                    order.BuyerUserId,
+                    order.BuyerName,
+                    order.BuyerEmail);
+
+                await orderRepo.SaveAsync(newEntry);
+
+                if (popup.ApplyToAllOrdersOfListing && order.ListingId > 0)
+                {
+                    int count = await orderRepo.BulkApplyCostToListingOrdersAsync(
+                        order.ListingId.ToString(), 
+                        popup.UnitCost, 
+                        popup.UnitShippingCost, 
+                        popup.UnitPackagingCost);
+                    if (count > 0)
+                    {
+                        MessageBox.Show(this, $"{count} adet eşleşen siparişin maliyeti otomatik olarak güncellendi!", "Toplu Maliyet Güncelleme", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                }
+
+                _ = LoadReportAsync();
+            }
+        }
+        else
+        {
+            using var form = new OrderDetailsForm(order);
+            if (form.ShowDialog(this) == DialogResult.OK)
+            {
+                _ = LoadReportAsync();
+            }
         }
     }
 

@@ -225,4 +225,23 @@ public sealed class ListingDraftInstructionBuilderTests
         Assert.Contains("description_draft", prompt);
         Assert.Contains("risk_warnings", prompt);
     }
+
+    [Fact]
+    public void BuildSystemInstruction_EnforcesMultilingualTurkishToEnglishOutput()
+    {
+        var instruction = ListingDraftInstructionBuilder.BuildSystemInstruction();
+
+        Assert.Contains("TURKISH", instruction, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("ENGLISH", instruction, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CRITICAL MULTILINGUAL & TRANSLATION RULES", instruction, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void BuildFieldRules_EnforcesMultilingualComprehensionAndEnglishOutputs()
+    {
+        var rules = ListingDraftInstructionBuilder.BuildFieldRules();
+
+        Assert.Contains("MULTILINGUAL INPUT & ENGLISH OUTPUT", rules);
+        Assert.Contains("All in English", rules);
+    }
 }

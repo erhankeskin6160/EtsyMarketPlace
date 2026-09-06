@@ -5,6 +5,10 @@ obj/
 artifacts/
 publish/
 publish-*/
+publish_*/
+*.exe
+*.dll
+*.pdb
 EtsyMarketPlace-*.zip
 *.user
 *.suo

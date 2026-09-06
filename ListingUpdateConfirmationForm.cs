@@ -81,16 +81,16 @@ internal sealed class ListingUpdateConfirmationForm(
     }
 
     private string CurrentText() =>
-        $"BASLIK{Environment.NewLine}{listing.Title}{Environment.NewLine}{Environment.NewLine}" +
-        $"TAGLER{Environment.NewLine}{string.Join(", ", listing.Tags)}{Environment.NewLine}{Environment.NewLine}" +
-        $"MATERYALLER{Environment.NewLine}Mevcut materyal bilgisi Etsy listing detayindan kontrol edilmeli.{Environment.NewLine}{Environment.NewLine}" +
-        $"ACIKLAMA{Environment.NewLine}{listing.Description}";
+        $"📌 MEVCUT BAŞLIK{Environment.NewLine}{listing.Title}{Environment.NewLine}{Environment.NewLine}" +
+        $"🏷️ MEVCUT TAGLER{Environment.NewLine}{string.Join(", ", listing.Tags)}{Environment.NewLine}{Environment.NewLine}" +
+        $"🧱 MEVCUT MATERYALLER{Environment.NewLine}Mevcut materyal bilgisi Etsy listing detayından kontrol edilmeli.{Environment.NewLine}{Environment.NewLine}" +
+        $"📄 MEVCUT AÇIKLAMA{Environment.NewLine}{listing.Description}";
 
     private string NewText() =>
-        $"BASLIK{Environment.NewLine}{update.Title}{Environment.NewLine}{Environment.NewLine}" +
-        $"TAGLER{Environment.NewLine}{string.Join(", ", update.Tags)}{Environment.NewLine}{Environment.NewLine}" +
-        $"MATERYALLER{Environment.NewLine}{string.Join(", ", update.Materials)}{Environment.NewLine}{Environment.NewLine}" +
-        $"ACIKLAMA{Environment.NewLine}{update.Description}";
+        $"✨ YENİ OPTİMİZE BAŞLIK ({update.Title.Length}/140 Karakter){Environment.NewLine}{update.Title}{Environment.NewLine}{Environment.NewLine}" +
+        $"🏷️ YENİ 13 LONG-TAIL TAG ({update.Tags.Count} Tag){Environment.NewLine}{string.Join(", ", update.Tags)}{Environment.NewLine}{Environment.NewLine}" +
+        $"🧱 YENİ MATERYALLER{Environment.NewLine}{string.Join(", ", update.Materials)}{Environment.NewLine}{Environment.NewLine}" +
+        $"📄 YENİ PARAGRAFLI AÇIKLAMA (ETSY FORMATI){Environment.NewLine}{EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(update.Description)}";
 
     private static Control BuildTextPanel(string title, string text)
     {

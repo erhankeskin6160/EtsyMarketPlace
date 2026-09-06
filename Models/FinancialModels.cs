@@ -41,7 +41,29 @@ internal sealed record MonthlyFinancial(
 }
 
 /// <summary>
-/// Ürün Maliyet Kaydı (COGS - Cost of Goods Sold)
+/// Sipariş Bazlı Maliyet Kaydı (Order-Level COGS - Sipariş Numarasına Göre İndeksli)
+/// </summary>
+internal sealed record OrderCostEntry(
+    string ReceiptId,
+    string ListingId,
+    string Title,
+    decimal UnitCost,         // Üretim / Hammadde
+    decimal UnitShippingCost, // Kargo
+    decimal UnitPackagingCost,// Paketleme
+    DateTimeOffset UpdatedAt,
+    string? InvoiceFilePath = null, // Kargo Faturası Dosya Yolu (PDF / Görsel)
+    long BuyerUserId = 0,
+    string BuyerName = "",
+    string BuyerEmail = "",
+    string? Notes = null
+)
+{
+    public decimal TotalUnitCost => UnitCost + UnitShippingCost + UnitPackagingCost;
+    public bool HasInvoice => !string.IsNullOrWhiteSpace(InvoiceFilePath) && System.IO.File.Exists(InvoiceFilePath);
+}
+
+/// <summary>
+/// Ürün Maliyet Kaydı (COGS - Cost of Goods Sold - Geriye Dönük Uyumluluk)
 /// </summary>
 internal sealed record ProductCostEntry(
     string ListingId,
@@ -86,13 +108,26 @@ internal sealed record OrderFinancialSummary(
     decimal UnitProductionCost = 0m,  // Birim üretim maliyeti
     decimal UnitShippingCost = 0m,    // Birim kargo maliyeti
     decimal UnitPackagingCost = 0m,   // Birim paketleme maliyeti
-    string? InvoiceFilePath = null    // Sipariş/Ürün Kargo Faturası
+    string? InvoiceFilePath = null,   // Sipariş/Ürün Kargo Faturası
+    long BuyerUserId = 0,             // Müşteri No / User ID
+    string BuyerName = "",            // Müşteri Adı / Alıcı
+    string BuyerEmail = "",           // Müşteri E-Postası
+    bool IsCanceled = false,          // Sipariş iptal edildi mi?
+    decimal RefundedAmount = 0m,      // İade edilen tutar ($)
+    string OrderStatus = "Completed"  // Completed, Canceled, PartialRefund
 )
 {
     public decimal TotalOrderShippingCost => UnitShippingCost * Quantity;
     public decimal TotalOrderProductionCost => UnitProductionCost * Quantity;
     public decimal TotalOrderPackagingCost => UnitPackagingCost * Quantity;
     public bool HasInvoice => !string.IsNullOrWhiteSpace(InvoiceFilePath) && System.IO.File.Exists(InvoiceFilePath);
+    public string DisplayCustomer => !string.IsNullOrWhiteSpace(BuyerName) 
+        ? (BuyerUserId > 0 ? $"{BuyerName} (#{BuyerUserId})" : BuyerName)
+        : (BuyerUserId > 0 ? $"Müşteri #{BuyerUserId}" : "—");
+
+    public string DisplayStatus => (IsCanceled || OrderStatus.Equals("Canceled", StringComparison.OrdinalIgnoreCase)) 
+        ? "🔴 İptal Edildi" 
+        : (RefundedAmount > 0 ? $"🟡 Kısmi İade (-${RefundedAmount:N2})" : "🟢 Tamamlandı");
 }
 
 /// <summary>

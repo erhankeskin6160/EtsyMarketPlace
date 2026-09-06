@@ -23,6 +23,18 @@ internal sealed class OwnShopListingAiAuditForm(
     private readonly Label _statusLabel = new();
     private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
     
+    // Pagination Fields
+    private int _currentPage = 1;
+    private int _pageSize = 10;
+    private List<AuditRow> _filteredRows = [];
+    private readonly Label _lblPageInfo = new() { AutoSize = true, Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold), ForeColor = Color.White, TextAlign = ContentAlignment.MiddleCenter };
+    private readonly Label _lblTotalInfo = new() { AutoSize = true, Font = new Font("Segoe UI", 8.5F), ForeColor = UiStyle.TextMuted, TextAlign = ContentAlignment.MiddleRight };
+    private readonly Button _btnFirstPage = new();
+    private readonly Button _btnPrevPage = new();
+    private readonly Button _btnNextPage = new();
+    private readonly Button _btnLastPage = new();
+    private readonly ComboBox _cboPageSize = new();
+
     // KPI Labels
     private readonly Label _lblKpiTotal = new() { Text = "0 Ürün", Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold), ForeColor = Color.White, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label _lblKpiAvgSeo = new() { Text = "0 / 100", Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold), ForeColor = UiStyle.SuccessColor, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
@@ -63,18 +75,16 @@ internal sealed class OwnShopListingAiAuditForm(
 
     private void BuildLayout()
     {
-        Text = "Kendi Magaza Listing AI Analizi";
+        Text = "Kendi Mağaza Listing AI Analizi";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
         UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 6, Padding = new Padding(12) };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); // Header
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 82)); // KPI Strip (4 Cards)
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // Toolbar
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Filter Chips
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // DataGridView
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 280)); // Before / After Detail Area
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(12, 8, 12, 8) };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // 0: Header
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // 1: KPI Stat Pills
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40)); // 2: Combined Toolbar & Filters
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 3: SplitContainer (Grid + Detail)
         Controls.Add(root);
 
         // 1. Header
@@ -86,7 +96,7 @@ internal sealed class OwnShopListingAiAuditForm(
         {
             Dock = DockStyle.Fill,
             Text = "🚀 Kendi Mağaza Listing AI Analizi & Optimizasyon",
-            Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 14F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             TextAlign = ContentAlignment.MiddleLeft,
         }, 0, 0);
@@ -109,123 +119,175 @@ internal sealed class OwnShopListingAiAuditForm(
         header.Controls.Add(_statusLabel, 2, 0);
         root.Controls.Add(header, 0, 0);
 
-        // 2. KPI Strip
+        // 2. KPI Stat Pills
         root.Controls.Add(BuildKpiStrip(), 0, 1);
 
-        // 3. Toolbar
-        root.Controls.Add(BuildToolbar(), 0, 2);
+        // 3. Combined Toolbar & Filters
+        root.Controls.Add(BuildCombinedToolbar(), 0, 2);
 
-        // 4. Filter Chips
-        root.Controls.Add(BuildFilterChips(), 0, 3);
+        // 4. Responsive SplitContainer
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Horizontal,
+            SplitterWidth = 6,
+            BackColor = Color.FromArgb(30, 41, 59),
+            Panel1MinSize = 0,
+            Panel2MinSize = 0,
+        };
 
-        // 5. DataGridView
+        // Split Panel 1: DataGridView + Pagination
+        var gridPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        gridPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        gridPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         ConfigureGrid();
-        root.Controls.Add(_grid, 0, 4);
+        gridPanel.Controls.Add(_grid, 0, 0);
+        gridPanel.Controls.Add(BuildPaginationBar(), 0, 1);
+        split.Panel1.Controls.Add(gridPanel);
 
-        // 6. Before / After Detail Area
-        root.Controls.Add(BuildDetailArea(), 0, 5);
+        // Split Panel 2: Detail Area
+        split.Panel2.Controls.Add(BuildDetailArea());
+
+        void AdjustSplitter()
+        {
+            try
+            {
+                if (split.Height > 100)
+                {
+                    int target = (int)(split.Height * 0.48);
+                    split.SplitterDistance = Math.Clamp(target, 30, Math.Max(40, split.Height - 40));
+                }
+            }
+            catch { }
+        }
+
+        Shown += (_, _) => AdjustSplitter();
+        split.SizeChanged += (_, _) =>
+        {
+            if (split.Height > 100 && split.SplitterDistance <= 0)
+            {
+                AdjustSplitter();
+            }
+        };
+
+        root.Controls.Add(split, 0, 3);
     }
 
     private Control BuildKpiStrip()
     {
-        var strip = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, Margin = new Padding(0, 0, 0, 4) };
-        for (int i = 0; i < 4; i++) strip.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+        var strip = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0),
+            Margin = new Padding(0, 0, 0, 2)
+        };
 
-        strip.Controls.Add(CreateKpiCard("📦 TOPLAM AKTİF LİSTİNG", _lblKpiTotal, Color.FromArgb(59, 130, 246)), 0, 0);
-        strip.Controls.Add(CreateKpiCard("🎯 ORTALAMA SEO SKORU", _lblKpiAvgSeo, UiStyle.SuccessColor), 1, 0);
-        strip.Controls.Add(CreateKpiCard("⚠️ KRİTİK EKSİK LİSTİNGLER", _lblKpiCritical, UiStyle.DangerColor), 2, 0);
-        strip.Controls.Add(CreateKpiCard("✨ AI İLE OPTİMİZE EDİLENLER", _lblKpiOptimized, UiStyle.AccentColor), 3, 0);
+        strip.Controls.Add(CreateStatPill("📦 Aktif:", _lblKpiTotal, Color.FromArgb(59, 130, 246)));
+        strip.Controls.Add(CreateStatPill("🎯 Ort. SEO:", _lblKpiAvgSeo, UiStyle.SuccessColor));
+        strip.Controls.Add(CreateStatPill("⚠️ Kritik:", _lblKpiCritical, UiStyle.DangerColor));
+        strip.Controls.Add(CreateStatPill("✨ AI Hazır:", _lblKpiOptimized, Color.FromArgb(147, 51, 234)));
 
         return strip;
     }
 
-    private static Control CreateKpiCard(string title, Label valueLabel, Color accentColor)
+    private static Control CreateStatPill(string prefix, Label valueLabel, Color accentColor)
     {
-        var card = new ModernCardPanel
+        var pill = new Panel
         {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(3),
-            Padding = new Padding(12, 6, 12, 6),
-            CornerRadius = 8,
-            CardColor = UiStyle.CardBackground,
-            BorderColor = UiStyle.BorderColor
+            Height = 28,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0, 0, 8, 0),
+            Padding = new Padding(10, 2, 10, 2),
+            BackColor = Color.FromArgb(30, 41, 59),
         };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var lblTitle = new Label
+        var flow = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Text = title,
-            Font = new Font("Segoe UI", 7.8F, FontStyle.Bold),
-            ForeColor = UiStyle.TextMuted,
-            TextAlign = ContentAlignment.MiddleLeft,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0),
             Margin = new Padding(0)
         };
-        valueLabel.Margin = new Padding(0);
-        valueLabel.Font = new Font("Segoe UI Semibold", 13.5F, FontStyle.Bold);
-        layout.Controls.Add(lblTitle, 0, 0);
-        layout.Controls.Add(valueLabel, 0, 1);
-        card.Controls.Add(layout);
-        return card;
+
+        var lblPrefix = new Label
+        {
+            AutoSize = true,
+            Text = prefix + " ",
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            ForeColor = accentColor,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Margin = new Padding(0, 3, 0, 0)
+        };
+
+        valueLabel.AutoSize = true;
+        valueLabel.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        valueLabel.ForeColor = Color.White;
+        valueLabel.TextAlign = ContentAlignment.MiddleLeft;
+        valueLabel.Margin = new Padding(0, 2, 0, 0);
+
+        flow.Controls.Add(lblPrefix);
+        flow.Controls.Add(valueLabel);
+        pill.Controls.Add(flow);
+
+        pill.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var pen = new Pen(Color.FromArgb(90, accentColor.R, accentColor.G, accentColor.B), 1.2f);
+            var rect = new Rectangle(0, 0, pill.Width - 1, pill.Height - 1);
+            using var path = CreateRoundedRectanglePath(rect, 8);
+            e.Graphics.DrawPath(pen, path);
+        };
+
+        return pill;
     }
 
-    private Control BuildToolbar()
+    private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedRectanglePath(Rectangle rect, int radius)
     {
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8, Padding = new Padding(0, 1, 0, 1) };
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));  // Limit:
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 60));  // _limitInput
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // _searchTextBox
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); // 🔄 Listingleri Yükle
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 195)); // ⚡ Tümünü AI ile Denetle
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // 🎯 AI ile Puanla
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // ⚙️ AI Ayarları
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 75));  // Kapat
+        var path = new System.Drawing.Drawing2D.GraphicsPath();
+        int d = radius * 2;
+        path.AddArc(rect.X, rect.Y, d, d, 180, 90);
+        path.AddArc(rect.Right - d, rect.Y, d, d, 270, 90);
+        path.AddArc(rect.Right - d, rect.Bottom - d, d, d, 0, 90);
+        path.AddArc(rect.X, rect.Bottom - d, d, d, 90, 90);
+        path.CloseFigure();
+        return path;
+    }
 
-        toolbar.Controls.Add(LabelFor("Limit:"), 0, 0);
-        _limitInput.Dock = DockStyle.Fill;
-        toolbar.Controls.Add(_limitInput, 1, 0);
+    private Control BuildCombinedToolbar()
+    {
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(0), Margin = new Padding(0, 0, 0, 2) };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Sol: Limit + Arama + Filtreler
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));    // Sağ: Aksiyon Butonları
 
-        _searchTextBox.Dock = DockStyle.Fill;
-        _searchTextBox.PlaceholderText = "🔍 Ürün adına veya etiketine göre filtrele...";
-        _searchTextBox.TextChanged += (_, _) => ApplyFilter();
-        toolbar.Controls.Add(_searchTextBox, 2, 0);
-
-        var load = CreateButton("🔄 Listingleri Yükle");
-        load.Click += async (_, _) => await LoadListingsAsync();
-        toolbar.Controls.Add(load, 3, 0);
-
-        var btnBatchAi = new ModernButtonControl
+        // 1. Sol: Arama ve Filtre Çipleri
+        var leftFlow = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Text = "⚡ Tümünü AI ile Denetle",
-            NormalColor = UiStyle.PrimaryColor,
-            HoverColor = UiStyle.PrimaryHover,
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold)
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0),
+            Margin = new Padding(0)
         };
-        btnBatchAi.Click += async (_, _) => await BatchAnalyzeAllAsync();
-        toolbar.Controls.Add(btnBatchAi, 4, 0);
 
-        var aiAnalyze = CreateButton("🎯 AI ile Puanla");
-        aiAnalyze.Click += async (_, _) => await AnalyzeSelectedAsync();
-        toolbar.Controls.Add(aiAnalyze, 5, 0);
+        var lblLimit = LabelFor("Limit:");
+        lblLimit.AutoSize = true;
+        lblLimit.Margin = new Padding(0, 6, 4, 0);
+        leftFlow.Controls.Add(lblLimit);
 
-        var settings = CreateButton("⚙️ AI Ayarları", isSecondary: true);
-        settings.Click += (_, _) => { using var form = new AiOptimizationSettingsForm(); form.ShowDialog(this); UpdateAiBadge(); };
-        toolbar.Controls.Add(settings, 6, 0);
+        _limitInput.Width = 50;
+        _limitInput.Margin = new Padding(0, 3, 8, 0);
+        leftFlow.Controls.Add(_limitInput);
 
-        var close = CreateButton("Kapat", isSecondary: true);
-        close.Click += (_, _) => Close();
-        toolbar.Controls.Add(close, 7, 0);
-
-        return toolbar;
-    }
-
-    private Control BuildFilterChips()
-    {
-        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Padding = new Padding(0) };
+        _searchTextBox.Width = 175;
+        _searchTextBox.Margin = new Padding(0, 3, 8, 0);
+        _searchTextBox.PlaceholderText = "🔍 Ürün veya etiket ara...";
+        _searchTextBox.TextChanged += (_, _) => ApplyFilter();
+        leftFlow.Controls.Add(_searchTextBox);
 
         Button CreateChip(string text, string filterKey)
         {
@@ -235,33 +297,170 @@ internal sealed class OwnShopListingAiAuditForm(
                 AutoSize = true,
                 Height = 28,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI Semibold", 8.5F),
+                Font = new Font("Segoe UI Semibold", 8.2F),
                 BackColor = _activeFilter == filterKey ? UiStyle.PrimaryColor : Color.FromArgb(30, 41, 59),
                 ForeColor = Color.White,
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 1, 6, 1)
+                Margin = new Padding(0, 2, 4, 0)
             };
             btn.FlatAppearance.BorderSize = 0;
             btn.Click += (_, _) =>
             {
                 _activeFilter = filterKey;
-                foreach (Control c in panel.Controls)
+                foreach (Control c in leftFlow.Controls)
                 {
-                    if (c is Button b) b.BackColor = Color.FromArgb(30, 41, 59);
+                    if (c is Button b && b.Tag is string)
+                    {
+                        b.BackColor = (string)b.Tag == filterKey ? UiStyle.PrimaryColor : Color.FromArgb(30, 41, 59);
+                    }
                 }
-                btn.BackColor = UiStyle.PrimaryColor;
                 ApplyFilter();
             };
+            btn.Tag = filterKey;
             return btn;
         }
 
-        panel.Controls.Add(CreateChip("Tümü", "ALL"));
-        panel.Controls.Add(CreateChip("Düşük SEO (<60)", "LOW_SEO"));
-        panel.Controls.Add(CreateChip("Eksik Tag (<13)", "MISSING_TAGS"));
-        panel.Controls.Add(CreateChip("Önerisi Hazır", "OPTIMIZED"));
-        panel.Controls.Add(CreateChip("0 Favorili Ürünler", "LOW_VIEWS"));
+        leftFlow.Controls.Add(CreateChip("Tümü", "ALL"));
+        leftFlow.Controls.Add(CreateChip("Düşük SEO (<60)", "LOW_SEO"));
+        leftFlow.Controls.Add(CreateChip("Eksik Tag (<13)", "MISSING_TAGS"));
+        leftFlow.Controls.Add(CreateChip("Önerisi Hazır", "OPTIMIZED"));
+        leftFlow.Controls.Add(CreateChip("0 Favori", "LOW_VIEWS"));
+
+        toolbar.Controls.Add(leftFlow, 0, 0);
+
+        // 2. Sağ: Aksiyon Butonları
+        var rightFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(0),
+            Margin = new Padding(0)
+        };
+
+        var load = CreateButton("🔄 Listingleri Yükle");
+        load.Margin = new Padding(0, 2, 4, 0);
+        load.Click += async (_, _) => await LoadListingsAsync();
+        rightFlow.Controls.Add(load);
+
+        var btnBatchAi = new ModernButtonControl
+        {
+            Text = "⚡ Tümünü AI ile Denetle",
+            NormalColor = UiStyle.PrimaryColor,
+            HoverColor = UiStyle.PrimaryHover,
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
+            Width = 165,
+            Height = 28,
+            Margin = new Padding(0, 2, 4, 0)
+        };
+        btnBatchAi.Click += async (_, _) => await BatchAnalyzeAllAsync();
+        rightFlow.Controls.Add(btnBatchAi);
+
+        var aiAnalyze = CreateButton("🎯 AI ile Puanla");
+        aiAnalyze.Margin = new Padding(0, 2, 4, 0);
+        aiAnalyze.Click += async (_, _) => await AnalyzeSelectedAsync();
+        rightFlow.Controls.Add(aiAnalyze);
+
+        var settings = CreateButton("⚙️ AI Ayarları", isSecondary: true);
+        settings.Margin = new Padding(0, 2, 4, 0);
+        settings.Click += (_, _) => { using var form = new AiOptimizationSettingsForm(); form.ShowDialog(this); UpdateAiBadge(); };
+        rightFlow.Controls.Add(settings);
+
+        var close = CreateButton("Kapat", isSecondary: true);
+        close.Width = 60;
+        close.Margin = new Padding(0, 2, 0, 0);
+        close.Click += (_, _) => Close();
+        rightFlow.Controls.Add(close);
+
+        toolbar.Controls.Add(rightFlow, 1, 0);
+
+        return toolbar;
+    }
+
+    private Control BuildPaginationBar()
+    {
+        var panel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 6,
+            RowCount = 1,
+            Padding = new Padding(4, 2, 4, 2),
+            BackColor = Color.FromArgb(20, 20, 28),
+            Margin = new Padding(0, 3, 0, 3)
+        };
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Nav buttons (İlk, Önceki)
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Sayfa 1 / 5
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Nav buttons (Sonraki, Son)
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Sayfa Boyutu
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Spacer
+        panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Toplam & Gösterilen
+
+        // Left nav buttons
+        var leftNav = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
+        ConfigureNavButton(_btnFirstPage, "⏮️ İlk", () => GoToPage(1));
+        ConfigureNavButton(_btnPrevPage, "◀️ Önceki", () => GoToPage(_currentPage - 1));
+        leftNav.Controls.Add(_btnFirstPage);
+        leftNav.Controls.Add(_btnPrevPage);
+        panel.Controls.Add(leftNav, 0, 0);
+
+        _lblPageInfo.Text = "Sayfa 1 / 1";
+        _lblPageInfo.Margin = new Padding(10, 5, 10, 0);
+        panel.Controls.Add(_lblPageInfo, 1, 0);
+
+        var rightNav = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0) };
+        ConfigureNavButton(_btnNextPage, "Sonraki ▶️", () => GoToPage(_currentPage + 1));
+        ConfigureNavButton(_btnLastPage, "Son ⏭️", () => GoToPage(TotalPages));
+        rightNav.Controls.Add(_btnNextPage);
+        rightNav.Controls.Add(_btnLastPage);
+        panel.Controls.Add(rightNav, 2, 0);
+
+        var sizePanel = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(16, 0, 0, 0) };
+        var lblSize = new Label { Text = "Sayfa Başına:", AutoSize = true, Font = new Font("Segoe UI", 8.5F), ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 5, 6, 0) };
+        _cboPageSize.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cboPageSize.Items.AddRange(new object[] { "10 Ürün", "15 Ürün", "25 Ürün", "50 Ürün" });
+        _cboPageSize.SelectedIndex = 0; // 10 Ürün varsayılan
+        _cboPageSize.Width = 90;
+        _cboPageSize.Height = 26;
+        _cboPageSize.BackColor = UiStyle.InputBackground;
+        _cboPageSize.ForeColor = UiStyle.TextDark;
+        _cboPageSize.SelectedIndexChanged += (_, _) =>
+        {
+            _pageSize = _cboPageSize.SelectedIndex switch
+            {
+                0 => 10,
+                1 => 15,
+                2 => 25,
+                3 => 50,
+                _ => 10
+            };
+            GoToPage(1);
+        };
+        sizePanel.Controls.Add(lblSize);
+        sizePanel.Controls.Add(_cboPageSize);
+        panel.Controls.Add(sizePanel, 3, 0);
+
+        _lblTotalInfo.Text = "📦 Toplam: 0 listing";
+        _lblTotalInfo.Margin = new Padding(0, 5, 8, 0);
+        panel.Controls.Add(_lblTotalInfo, 5, 0);
 
         return panel;
+    }
+
+    private static void ConfigureNavButton(Button btn, string text, Action onClick)
+    {
+        btn.Text = text;
+        btn.AutoSize = true;
+        btn.Height = 28;
+        btn.FlatStyle = FlatStyle.Flat;
+        btn.FlatAppearance.BorderSize = 0;
+        btn.BackColor = Color.FromArgb(30, 41, 59);
+        btn.ForeColor = Color.White;
+        btn.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        btn.Cursor = Cursors.Hand;
+        btn.Margin = new Padding(0, 0, 4, 0);
+        btn.Click += (_, _) => onClick();
     }
 
     private Control BuildDetailArea()
@@ -281,8 +480,9 @@ internal sealed class OwnShopListingAiAuditForm(
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
-        var leftLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        var leftLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 5 };
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         leftLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
@@ -304,13 +504,18 @@ internal sealed class OwnShopListingAiAuditForm(
         btnPushEtsy.Click += async (_, _) => await UpdateListingWithConfirmationAsync();
         leftLayout.Controls.Add(btnPushEtsy, 0, 1);
 
+        var btnFormatTemplate = CreateButton("📐 Şablonla Paragrafla", isSecondary: false);
+        btnFormatTemplate.BackColor = Color.FromArgb(79, 70, 229); // Indigo
+        btnFormatTemplate.Click += (_, _) => ApplyTemplateToSelected();
+        leftLayout.Controls.Add(btnFormatTemplate, 0, 2);
+
         var btnCopy = CreateButton("📋 Öneriyi Kopyala");
         btnCopy.Click += (_, _) => CopySuggestion();
-        leftLayout.Controls.Add(btnCopy, 0, 2);
+        leftLayout.Controls.Add(btnCopy, 0, 3);
 
         var btnSave = CreateButton("💾 Versiyon Kaydet", isSecondary: true);
         btnSave.Click += async (_, _) => await SaveVersionAsync();
-        leftLayout.Controls.Add(btnSave, 0, 3);
+        leftLayout.Controls.Add(btnSave, 0, 4);
 
         leftCard.Controls.Add(leftLayout);
         layout.Controls.Add(leftCard, 0, 0);
@@ -412,6 +617,32 @@ internal sealed class OwnShopListingAiAuditForm(
         _lblKpiOptimized.Text = $"{optimized} Ürün";
     }
 
+    private void SetBusy(bool busy, string? statusText = null)
+    {
+        if (statusText != null)
+        {
+            _statusLabel.Text = statusText;
+        }
+
+        UseWaitCursor = false;
+        Cursor = busy ? Cursors.WaitCursor : Cursors.Default;
+        Cursor.Current = busy ? Cursors.WaitCursor : Cursors.Default;
+
+        if (!busy)
+        {
+            if (ParentForm != null)
+            {
+                ParentForm.UseWaitCursor = false;
+                ParentForm.Cursor = Cursors.Default;
+            }
+            if (TopLevelControl is Form topForm)
+            {
+                topForm.UseWaitCursor = false;
+                topForm.Cursor = Cursors.Default;
+            }
+        }
+    }
+
     private async Task BatchAnalyzeAllAsync()
     {
         if (_rows.Count == 0)
@@ -422,8 +653,7 @@ internal sealed class OwnShopListingAiAuditForm(
 
         try
         {
-            UseWaitCursor = true;
-            _statusLabel.Text = $"Mağazadaki {_rows.Count} ürün sırayla AI ile denetleniyor...";
+            SetBusy(true, $"Mağazadaki {_rows.Count} ürün sırayla AI ile denetleniyor...");
 
             for (int i = 0; i < _rows.Count; i++)
             {
@@ -451,18 +681,27 @@ internal sealed class OwnShopListingAiAuditForm(
 
             _grid.Refresh();
             UpdateKpis();
+            RenderCurrentPage();
             _statusLabel.Text = $"✅ Tüm mağaza ({_rows.Count} ürün) başarıyla denetlendi!";
             MessageBox.Show(this, "Tüm mağaza ürünleriniz başarıyla analiz edildi! Önerileri inceleyip tek tıkla güncelleyebilirsiniz.", "Toplu AI Denetimi Tamamlandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         finally
         {
-            UseWaitCursor = false;
+            SetBusy(false);
         }
     }
 
     private void ConfigureGrid()
     {
         UiStyle.ConfigureBaseGrid(_grid);
+        try
+        {
+            typeof(DataGridView).InvokeMember("DoubleBuffered",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
+                null, _grid, new object[] { true });
+        }
+        catch { }
+
         _grid.RowTemplate.MinimumHeight = 70;
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += async (_, _) => await UpdateDetailAsync();
@@ -500,30 +739,27 @@ internal sealed class OwnShopListingAiAuditForm(
 
         _grid.Columns.Add(new DataGridViewImageColumn
         {
-            HeaderText = "Resim",
+            HeaderText = "Görsel",
             DataPropertyName = nameof(AuditRow.ThumbnailImage),
-            Width = 80,
+            Width = 65,
             ImageLayout = DataGridViewImageCellLayout.Zoom,
         });
-        AddColumn("#", nameof(AuditRow.Rank), 45);
-        AddColumn("Listing Başlığı", nameof(AuditRow.Title), 360, true);
+        AddColumn("#", nameof(AuditRow.Rank), 40);
+        AddColumn("Listing Başlığı", nameof(AuditRow.Title), 320, true);
         AddColumn("SEO", nameof(AuditRow.SeoScore), 65);
         AddColumn("AI", nameof(AuditRow.AiScore), 65);
-        AddColumn("SEO Eksikler", nameof(AuditRow.SeoNeeds), 180);
-        AddColumn("Artılar", nameof(AuditRow.SeoStrengths), 160);
-        AddColumn("Fiyat", nameof(AuditRow.Price), 80);
-        AddColumn("Favori", nameof(AuditRow.Favorites), 75);
-        AddColumn("Stok", nameof(AuditRow.Quantity), 65);
-        AddColumn("Tag", nameof(AuditRow.TagCount), 65);
-        AddColumn("Durum", nameof(AuditRow.Status), 130);
+        AddColumn("Tag", nameof(AuditRow.TagCount), 55);
+        AddColumn("Fiyat", nameof(AuditRow.Price), 75);
+        AddColumn("Favori", nameof(AuditRow.Favorites), 65);
+        AddColumn("Stok", nameof(AuditRow.Quantity), 55);
+        AddColumn("Durum", nameof(AuditRow.Status), 120);
     }
 
     private async Task LoadListingsAsync()
     {
         try
         {
-            UseWaitCursor = true;
-            _statusLabel.Text = "Kendi listingleriniz Etsy'den çekiliyor...";
+            SetBusy(true, "Kendi listingleriniz Etsy'den çekiliyor...");
             var settings = EtsyApiSettingsStore.Load();
             var listings = await _apiClient.GetOwnShopActiveListingsAsync(settings, (int)_limitInput.Value);
             EtsyApiSettingsStore.Save(settings);
@@ -536,7 +772,6 @@ internal sealed class OwnShopListingAiAuditForm(
             UpdateKpis();
             ApplyFilter();
             _statusLabel.Text = $"{_rows.Count} listing yüklendi | Düşük SEO puanları üstte";
-            await LoadThumbnailsAsync(settings);
         }
         catch (Exception ex)
         {
@@ -545,8 +780,56 @@ internal sealed class OwnShopListingAiAuditForm(
         }
         finally
         {
-            UseWaitCursor = false;
+            SetBusy(false);
         }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_filteredRows.Count / (double)_pageSize));
+
+    private void GoToPage(int page)
+    {
+        if (page < 1) page = 1;
+        if (page > TotalPages) page = TotalPages;
+        _currentPage = page;
+
+        RenderCurrentPage();
+    }
+
+    private void RenderCurrentPage()
+    {
+        int total = _filteredRows.Count;
+        int totalPages = TotalPages;
+        if (_currentPage > totalPages) _currentPage = totalPages;
+        if (_currentPage < 1) _currentPage = 1;
+
+        var pageItems = _filteredRows
+            .Skip((_currentPage - 1) * _pageSize)
+            .Take(_pageSize)
+            .ToList();
+
+        _bindingSource.DataSource = pageItems;
+        _bindingSource.ResetBindings(false);
+        _grid.Invalidate();
+
+        // Update Nav Buttons
+        _btnFirstPage.Enabled = _currentPage > 1;
+        _btnPrevPage.Enabled = _currentPage > 1;
+        _btnNextPage.Enabled = _currentPage < totalPages;
+        _btnLastPage.Enabled = _currentPage < totalPages;
+
+        _btnFirstPage.BackColor = _btnFirstPage.Enabled ? Color.FromArgb(30, 41, 59) : Color.FromArgb(20, 25, 35);
+        _btnPrevPage.BackColor = _btnPrevPage.Enabled ? Color.FromArgb(30, 41, 59) : Color.FromArgb(20, 25, 35);
+        _btnNextPage.BackColor = _btnNextPage.Enabled ? Color.FromArgb(30, 41, 59) : Color.FromArgb(20, 25, 35);
+        _btnLastPage.BackColor = _btnLastPage.Enabled ? Color.FromArgb(30, 41, 59) : Color.FromArgb(20, 25, 35);
+
+        _lblPageInfo.Text = $"Sayfa {_currentPage} / {totalPages}";
+        int startItem = total == 0 ? 0 : ((_currentPage - 1) * _pageSize + 1);
+        int endItem = Math.Min(_currentPage * _pageSize, total);
+        _lblTotalInfo.Text = $"📦 Gösterilen: {startItem} - {endItem} / {total} listing (Toplam {_rows.Count})";
+
+        // Yalnızca geçerli sayfadaki resimleri indir (Lazy Loading)
+        var currentSettings = EtsyApiSettingsStore.Load();
+        _ = LoadThumbnailsForPageAsync(pageItems, currentSettings);
     }
 
     private void ApplyFilter()
@@ -579,11 +862,9 @@ internal sealed class OwnShopListingAiAuditForm(
                 break;
         }
 
-        var list = filtered.ToList();
-        _bindingSource.DataSource = list;
-        _bindingSource.ResetBindings(false);
-        _grid.Invalidate();
-        _statusLabel.Text = $"{list.Count} / {_rows.Count} listing gösteriliyor";
+        _filteredRows = filtered.ToList();
+        _currentPage = 1;
+        RenderCurrentPage();
     }
 
     private async Task AnalyzeSelectedAsync()
@@ -591,7 +872,7 @@ internal sealed class OwnShopListingAiAuditForm(
         if (SelectedRow is null) return;
         try
         {
-            UseWaitCursor = true;
+            SetBusy(true);
             var row = SelectedRow;
             var input = ToOptimizationInput(row.Listing);
             _lastResult = await aiOptimizer.OptimizeAsync(input);
@@ -609,7 +890,7 @@ internal sealed class OwnShopListingAiAuditForm(
         }
         finally
         {
-            UseWaitCursor = false;
+            SetBusy(false);
         }
     }
 
@@ -670,13 +951,15 @@ internal sealed class OwnShopListingAiAuditForm(
         }
     }
 
-    private async Task LoadThumbnailsAsync(EtsyApiSettings settings)
+    private async Task LoadThumbnailsForPageAsync(List<AuditRow> pageItems, EtsyApiSettings settings)
     {
-        foreach (var row in _rows.Where(item => item.ThumbnailImage is null).Take(30))
+        var needed = pageItems.Where(item => item.ThumbnailImage is null).ToList();
+        if (needed.Count == 0) return;
+
+        foreach (var row in needed)
         {
             await LoadThumbnailAsync(row, settings);
         }
-        _bindingSource.ResetBindings(false);
         _grid.Invalidate();
     }
 
@@ -707,7 +990,6 @@ internal sealed class OwnShopListingAiAuditForm(
             using var image = Image.FromStream(memory);
             row.ThumbnailImage = new Bitmap(image);
             if (ReferenceEquals(row, SelectedRow)) _pictureBox.Image = row.ThumbnailImage;
-            _bindingSource.ResetBindings(false);
             _grid.Invalidate();
         }
         catch
@@ -737,13 +1019,55 @@ internal sealed class OwnShopListingAiAuditForm(
         string engineName = aiSettings.GetActiveEngineName();
         string optTitle = result.TitleSuggestions.FirstOrDefault() ?? row.Title;
         var optTags = result.TagSuggestions.Take(13).ToList();
+        var normalizedDesc = EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(result.DescriptionDraft);
 
         _suggestionTextBox.Text =
             $"[AI İLE OPTİMİZE EDİLMİŞ BAŞLIK - {optTitle.Length}/140 Karakter]  (Aktif Motor: {engineName}){Environment.NewLine}{optTitle}{Environment.NewLine}{Environment.NewLine}" +
             $"[ÖNERİLEN 13 LONG-TAIL TAG - {optTags.Count}/13 Tag]{Environment.NewLine}{string.Join(", ", optTags)}{Environment.NewLine}{Environment.NewLine}" +
             $"[ÖNERİLEN MATERYALLER]{Environment.NewLine}{string.Join(", ", result.MaterialSuggestions)}{Environment.NewLine}{Environment.NewLine}" +
-            $"[SATIŞ ODAKLI AÇIKLAMA]{Environment.NewLine}{result.DescriptionDraft}{Environment.NewLine}{Environment.NewLine}" +
+            $"[SATIŞ ODAKLI AÇIKLAMA]{Environment.NewLine}{normalizedDesc}{Environment.NewLine}{Environment.NewLine}" +
             $"[RİSK VE KURAL UYARILARI]{Environment.NewLine}{string.Join(Environment.NewLine, result.RiskWarnings.DefaultIfEmpty("Risk veya kural ihlali bulunamadı."))}";
+    }
+
+    private void ApplyTemplateToSelected()
+    {
+        if (SelectedRow is null)
+        {
+            MessageBox.Show(this, "Lütfen önce tablodan bir listing seçin.", "Şablon Uygula", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var row = SelectedRow;
+        string sourceDesc = _lastResult?.DescriptionDraft ?? row.Listing.Description;
+        var materials = _lastResult?.MaterialSuggestions ?? [];
+        var formatted = EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.FormatToStandardTemplate(
+            sourceDesc,
+            row.Title,
+            row.Listing.Tags,
+            materials,
+            PrimaryKeyword(row.Listing));
+
+        if (_lastResult is null || _lastResultListingId != row.Listing.ListingId)
+        {
+            _lastResult = new ListingOptimizationResult(
+                row.SeoScore,
+                Math.Max(85, row.SeoScore + 15),
+                [row.Title],
+                row.Listing.Tags,
+                materials,
+                formatted,
+                [],
+                [],
+                []);
+            _lastResultListingId = row.Listing.ListingId;
+        }
+        else
+        {
+            _lastResult = _lastResult with { DescriptionDraft = formatted };
+        }
+
+        RenderSuggestion(row, _lastResult);
+        _statusLabel.Text = $"'{row.Title}' açıklaması standart Etsy paragraf şablonuna dönüştürüldü!";
     }
 
     private static int ScoreListing(MarketListingResult listing)
@@ -808,7 +1132,7 @@ internal sealed class OwnShopListingAiAuditForm(
 
         try
         {
-            UseWaitCursor = true;
+            SetBusy(true);
             var settings = EtsyApiSettingsStore.Load();
             await _apiClient.UpdateOwnShopListingTextAsync(settings, SelectedRow.Listing.ListingId, update);
             EtsyApiSettingsStore.Save(settings);
@@ -824,14 +1148,14 @@ internal sealed class OwnShopListingAiAuditForm(
         }
         finally
         {
-            UseWaitCursor = false;
+            SetBusy(false);
         }
     }
 
     private static ListingTextUpdate CreateListingUpdate(ListingOptimizationResult result) =>
         new(
             result.TitleSuggestions.FirstOrDefault()?.Trim() ?? "",
-            result.DescriptionDraft.Trim(),
+            EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(result.DescriptionDraft),
             result.TagSuggestions.Select(tag => tag.Trim()).Where(tag => tag.Length > 0).Take(13).ToList(),
             EtsyApiClient.NormalizeListingMaterialsForEtsy(result.MaterialSuggestions));
 
@@ -894,8 +1218,7 @@ internal sealed class OwnShopListingAiAuditForm(
     {
         try
         {
-            UseWaitCursor = true;
-            _statusLabel.Text = "Listing Etsy'den en guncel haliyle aliniyor...";
+            SetBusy(true, "Listing Etsy'den en guncel haliyle aliniyor...");
             var settings = EtsyApiSettingsStore.Load();
             var refreshed = await _apiClient.GetOwnShopListingAsync(settings, listingId);
             EtsyApiSettingsStore.Save(settings);
@@ -928,7 +1251,7 @@ internal sealed class OwnShopListingAiAuditForm(
         }
         finally
         {
-            UseWaitCursor = false;
+            SetBusy(false);
         }
     }
 

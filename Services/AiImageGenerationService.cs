@@ -23,8 +23,9 @@ internal sealed class AiImageGenerationService
     public static async Task<(bool Success, Bitmap? ResultImage, string ErrorMessage)> GenerateWithOpenAiAsync(
         string prompt,
         string apiKey,
-        string model = "dall-e-3",
+        string model = "gpt-image-2",
         string size = "1024x1024",
+        string? background = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -42,17 +43,30 @@ internal sealed class AiImageGenerationService
             using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/generations");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
 
-            string actualModel = model.Contains("image", StringComparison.OrdinalIgnoreCase) || model.Contains("dall", StringComparison.OrdinalIgnoreCase)
-                ? model.Trim()
-                : "dall-e-3";
+            string actualModel = AiModelNormalizer.NormalizeOpenAiImageModel(model);
 
-            var payload = new
+            object payload;
+            if (!string.IsNullOrWhiteSpace(background) && (actualModel.Contains("image-2") || actualModel.Contains("gpt-image")))
             {
-                prompt = prompt.Trim(),
-                model = actualModel,
-                n = 1,
-                size = size
-            };
+                payload = new
+                {
+                    prompt = prompt.Trim(),
+                    model = actualModel,
+                    n = 1,
+                    size = size,
+                    background = background.Trim()
+                };
+            }
+            else
+            {
+                payload = new
+                {
+                    prompt = prompt.Trim(),
+                    model = actualModel,
+                    n = 1,
+                    size = size
+                };
+            }
 
             request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
@@ -64,7 +78,7 @@ internal sealed class AiImageGenerationService
                 // Eğer DALL-E 3 hesap tier yetersizliği nedeniyle başarısız olduysa, otomatik DALL-E 2'yi dene
                 if (actualModel == "dall-e-3" && body.Contains("does not exist", StringComparison.OrdinalIgnoreCase))
                 {
-                    return await GenerateWithOpenAiAsync(prompt, apiKey, "dall-e-2", "1024x1024", cancellationToken);
+                    return await GenerateWithOpenAiAsync(prompt, apiKey, "dall-e-2", "1024x1024", background: null, cancellationToken: cancellationToken);
                 }
 
                 string friendlyMsg = ParseOpenAiError((int)response.StatusCode, body);
@@ -289,6 +303,192 @@ internal sealed class AiImageGenerationService
         }
 
         return $"Gemini Imagen API Hatası (HTTP {statusCode}): {body}";
+    }
+
+    /// <summary>
+    /// Black Forest Labs (BFL) Resmi API'si (api.bfl.ml) üzerinden FLUX.1 / FLUX.2 ile fotogerçekçi görsel üretir.
+    /// </summary>
+    public static async Task<(bool Success, Bitmap? ResultImage, string ErrorMessage)> GenerateWithBflFluxAsync(
+        string prompt,
+        string apiKey,
+        string model = "flux-pro-1.1",
+        int width = 1024,
+        int height = 1024,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return (false, null, "Black Forest Labs (BFL) API Key tanımlı değil. Lütfen AI Ayarları penceresinden BFL API Key girin.");
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return (false, null, "Lütfen bir sahne promptu girin.");
+        }
+
+        try
+        {
+            string cleanKey = apiKey.Trim();
+            string endpoint = model.Contains("dev")
+                ? "https://api.bfl.ml/v1/flux-dev"
+                : (model.Contains("schnell") ? "https://api.bfl.ml/v1/flux-schnell" : "https://api.bfl.ml/v1/flux-pro-1.1");
+
+            using var submitReq = new HttpRequestMessage(HttpMethod.Post, endpoint);
+            submitReq.Headers.Add("x-key", cleanKey);
+
+            var payload = new
+            {
+                prompt = prompt.Trim(),
+                width = width,
+                height = height,
+                prompt_upsampling = false,
+                safety_tolerance = 2
+            };
+
+            submitReq.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            using var submitResp = await HttpClient.SendAsync(submitReq, cancellationToken);
+            var submitBody = await submitResp.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!submitResp.IsSuccessStatusCode)
+            {
+                return (false, null, $"BFL API Hatası (HTTP {(int)submitResp.StatusCode}): {submitBody}");
+            }
+
+            using var submitDoc = JsonDocument.Parse(submitBody);
+            if (!submitDoc.RootElement.TryGetProperty("id", out var idProp))
+            {
+                return (false, null, "BFL API yanıtında task id bulunamadı.");
+            }
+
+            string taskId = idProp.GetString() ?? "";
+            if (string.IsNullOrWhiteSpace(taskId))
+            {
+                return (false, null, "Geçersiz BFL task id.");
+            }
+
+            // Polling loop (max 60 seconds)
+            var pollUrl = $"https://api.bfl.ml/v1/get_result?id={Uri.EscapeDataString(taskId)}";
+            for (int i = 0; i < 40; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await Task.Delay(1500, cancellationToken);
+
+                using var pollReq = new HttpRequestMessage(HttpMethod.Get, pollUrl);
+                pollReq.Headers.Add("x-key", cleanKey);
+
+                using var pollResp = await HttpClient.SendAsync(pollReq, cancellationToken);
+                var pollBody = await pollResp.Content.ReadAsStringAsync(cancellationToken);
+
+                if (!pollResp.IsSuccessStatusCode) continue;
+
+                using var pollDoc = JsonDocument.Parse(pollBody);
+                string status = pollDoc.RootElement.TryGetProperty("status", out var st) ? (st.GetString() ?? "") : "";
+
+                if (status.Equals("Ready", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (pollDoc.RootElement.TryGetProperty("result", out var resObj) &&
+                        resObj.TryGetProperty("sample", out var sampleUrl))
+                    {
+                        var imgUrl = sampleUrl.GetString();
+                        if (!string.IsNullOrWhiteSpace(imgUrl))
+                        {
+                            var bytes = await HttpClient.GetByteArrayAsync(imgUrl, cancellationToken);
+                            using var ms = new MemoryStream(bytes);
+                            return (true, new Bitmap(ms), "Başarılı");
+                        }
+                    }
+                    return (false, null, "BFL görsel URL'i okunamadı.");
+                }
+                else if (status.Equals("Failed", StringComparison.OrdinalIgnoreCase) || status.Equals("Error", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (false, null, $"BFL üretim başarısız oldu: {pollBody}");
+                }
+            }
+
+            return (false, null, "BFL görsel üretimi zaman aşımına uğradı (60s). Lütfen tekrar deneyin.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, $"BFL FLUX Bağlantı Hatası: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Ideogram 4.0 API (api.ideogram.ai) üzerinden görsel içine kusursuz tipografi basarak üretir.
+    /// </summary>
+    public static async Task<(bool Success, Bitmap? ResultImage, string ErrorMessage)> GenerateWithIdeogramAsync(
+        string prompt,
+        string apiKey,
+        string? typographyText = null,
+        string stylePreset = "REALISTIC",
+        string aspectRatio = "ASPECT_1_1",
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return (false, null, "Ideogram API Key tanımlı değil. Lütfen AI Ayarları penceresinden Ideogram API Key girin.");
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return (false, null, "Lütfen bir sahne promptu girin.");
+        }
+
+        try
+        {
+            string finalPrompt = prompt.Trim();
+            if (!string.IsNullOrWhiteSpace(typographyText))
+            {
+                finalPrompt += $", with crisp legible bold typography text \"{typographyText.Trim()}\" printed clearly on the product surface";
+            }
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.ideogram.ai/v1/ideogram-v4/generate");
+            request.Headers.Add("Api-Key", apiKey.Trim());
+
+            var payload = new
+            {
+                image_request = new
+                {
+                    prompt = finalPrompt,
+                    aspect_ratio = aspectRatio,
+                    model = "V_2",
+                    magic_prompt_option = "AUTO",
+                    style_preset = stylePreset
+                }
+            };
+
+            request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+            using var response = await HttpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return (false, null, $"Ideogram API Hatası (HTTP {(int)response.StatusCode}): {body}");
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("data", out var dataArray) && dataArray.GetArrayLength() > 0)
+            {
+                var first = dataArray[0];
+                if (first.TryGetProperty("url", out var urlProp))
+                {
+                    var imgUrl = urlProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(imgUrl))
+                    {
+                        var bytes = await HttpClient.GetByteArrayAsync(imgUrl, cancellationToken);
+                        using var ms = new MemoryStream(bytes);
+                        return (true, new Bitmap(ms), "Başarılı");
+                    }
+                }
+            }
+
+            return (false, null, "Ideogram yanıtında görsel bulunamadı.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, $"Ideogram Bağlantı Hatası: {ex.Message}");
+        }
     }
 
     /// <summary>

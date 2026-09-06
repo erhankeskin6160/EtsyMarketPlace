@@ -23,6 +23,32 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+        AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+        {
+            var msg = e.ExceptionObject?.ToString() ?? "Bilinmeyen kritik hata.";
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EtsyMarketPlace");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "crash.log"), msg);
+            }
+            catch { }
+            MessageBox.Show($"Uygulama başlatılırken hata oluştu:\n{msg}", "Kritik Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        };
+        Application.ThreadException += (s, e) =>
+        {
+            var msg = e.Exception?.ToString() ?? "Bilinmeyen arayüz hatası.";
+            try
+            {
+                var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EtsyMarketPlace");
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "crash.log"), msg);
+            }
+            catch { }
+            MessageBox.Show($"Arayüz hatası:\n{msg}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        };
+
         var databasePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "EtsyMarketPlace",

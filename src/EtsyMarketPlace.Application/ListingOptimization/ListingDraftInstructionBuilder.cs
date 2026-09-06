@@ -15,9 +15,16 @@ public static class ListingDraftInstructionBuilder
     /// </summary>
     public static string BuildSystemInstruction() =>
         """
-        You are an expert Etsy listing optimization assistant trained on Etsy Seller Handbook best practices.
-        Your goal is to produce high-quality, buyer-searchable, policy-compliant Etsy listings.
-        Always respond with valid JSON only. Do not include explanations, markdown, or commentary outside the JSON object.
+        You are an expert Etsy listing optimization assistant and professional e-commerce copywriter trained on Etsy Seller Handbook best practices.
+        Your goal is to produce high-quality, buyer-searchable, policy-compliant Etsy listings in fluent, native English for the international global market.
+
+        CRITICAL MULTILINGUAL & TRANSLATION RULES:
+        - The seller may input title, description, tags, keywords, or specifications in TURKISH or other languages.
+        - You MUST accurately understand the product concept, dimensions, materials, craftsmanship, and use cases from the seller's input language.
+        - You MUST output ALL buyer-facing listing fields ("title_suggestions", "tag_suggestions", "material_suggestions", "description_draft") 100% IN NATURAL, HIGH-CONVERTING ENGLISH.
+        - NEVER output Turkish words or untranslated Turkish terms in titles, tags, materials, or description.
+        - Only "risk_warnings" should contain Turkish explanations for the seller's internal policy awareness.
+        - Always respond with valid JSON only. Do not include explanations, markdown, or commentary outside the JSON object.
         """;
 
     /// <summary>
@@ -85,7 +92,7 @@ public static class ListingDraftInstructionBuilder
         Return only valid JSON with the following keys:
         - "title_suggestions": array of 3 English Etsy titles
         - "tag_suggestions": array of up to 13 English Etsy tags
-        - "material_suggestions": array of materials found in the product
+        - "material_suggestions": array of materials found in the product (in English)
         - "description_draft": string with buyer-facing English description
         - "risk_warnings": array of Turkish risk/policy warning strings
         """;
@@ -96,20 +103,23 @@ public static class ListingDraftInstructionBuilder
     public static string BuildFieldRules() =>
         """
         Field constraints:
-        - title_suggestions: exactly 3 items.
+        - MULTILINGUAL INPUT & ENGLISH OUTPUT:
+          * When the seller provides Turkish title, description, or tags, understand the product intent completely and translate/adapt it into high-search-volume English terminology used by global Etsy buyers.
+        - title_suggestions: exactly 3 items. All in English.
           * GOLDEN ETSY SEO TITLE FORMULA: Format every title with 2-3 readable segments separated by " | " or " - ":
             [Core Product Name (First 30-40 characters, Front-loaded)] | [Key Features, Style, Materials or Use-Case] | [Target Audience, Room Decor, Cosplay or Gift Long-Tail]
           * FRONT-LOADING: Put the exact core product name in the very first 3 to 5 words so mobile shoppers immediately understand the item.
           * LENGTH: Each title must be between 115 and 138 characters (maximizing Etsy's 140 character limit).
           * NO KEYWORD STUFFING: Do NOT produce raw comma-separated lists of tags (e.g. NEVER output "Title - tag1, tag2, tag3"). Titles must read like natural, premium human-written product titles.
           * NO SYSTEM PROMPT LEAKS: NEVER include instructions, metadata, or phrases like "OUTPUT LANGUAGE", "English only", "Do not write Turkish", "Title 1:", etc. in any title.
-        - tag_suggestions: exactly 13 items.
+        - tag_suggestions: exactly 13 items. All in English.
           * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase (e.g. "sauron dark tower", "lotr collectible", "fantasy desk decor", "3d printed statue", "geeky boyfriend gift").
           * STRICTLY FORBIDDEN: NEVER generate single-word tags (such as "gift", "hand", "lotr", "tower", "dark", "painted", "printed").
           * Each tag must be 20 characters or less in length. Every tag must be in English.
           * Cover 6 search angles: (1) Product/Character Name, (2) Craft & Technique, (3) Recipient & Gift, (4) Room & Placement, (5) Theme & Universe, (6) Material & Style.
-        - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text. Up to 13 items, each 45 characters or less. Never invent materials.
+        - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text (in English, e.g. "Wood", "PLA Plastic", "Resin", "Cotton"). Up to 13 items, each 45 characters or less. Never invent materials.
         - description_draft: write a high-converting, buyer-facing English Etsy description structured in 6 clean sections with emojis:
+          * FORMATTING: ALWAYS separate every section and paragraph with a blank line (\n\n). Use bullet points ("• ") for list items so text renders in clean, distinct paragraphs on Etsy mobile and web.
           * SECTION 1 (Google Meta Hook): 2-3 engaging opening sentences naturally featuring the target keyword in the first sentence. State what makes this item unique and must-have.
           * SECTION 2 (✨ WHY YOU'LL LOVE IT): 3-4 bullet points highlighting key benefits, design quality, and display/practical use.
           * SECTION 3 (📏 SPECIFICATIONS & DETAILS): Extract and preserve ALL real dimensions (cm/inches), 3D print material (PLA/Resin/Wood), finish, and colors from the source description.

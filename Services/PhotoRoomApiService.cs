@@ -17,7 +17,8 @@ public sealed class PhotoRoomApiService
         string? bgPrompt = null,
         string? bgColor = null,
         string shadowMode = "ai_soft",
-        double padding = 0.1)
+        double padding = 0.1,
+        CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -59,10 +60,10 @@ public sealed class PhotoRoomApiService
             request.Headers.Add("x-api-key", apiKey.Trim());
             request.Content = content;
 
-            var response = await HttpClient.SendAsync(request);
+            var response = await HttpClient.SendAsync(request, cancellationToken);
             if (response.IsSuccessStatusCode)
             {
-                var resultBytes = await response.Content.ReadAsByteArrayAsync();
+                var resultBytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
                 using var ms = new MemoryStream(resultBytes);
                 var bmp = new Bitmap(ms);
                 return (true, new Bitmap(bmp), "Başarılı");

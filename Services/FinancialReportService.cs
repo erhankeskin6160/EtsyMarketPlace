@@ -29,6 +29,7 @@ internal sealed class FinancialReportService
 
     // ─── Public API ──────────────────────────────────────────────────────────
 
+    private static readonly SqliteOrderCostRepository OrderCostRepo = new();
     private static readonly SqliteProductCostRepository ProductCostRepo = new();
 
     /// <summary>
@@ -253,7 +254,7 @@ internal sealed class FinancialReportService
             }
         }
 
-        return await BuildReportInternalAsync(entries, [], from, to, [], exchangeRate, CancellationToken.None, false);
+        return await BuildReportInternalAsync(entries, [], from, to, [], [], exchangeRate, CancellationToken.None, false);
     }
 
     // ─── Private Yardımcı Metotlar ────────────────────────────────────────────
@@ -395,8 +396,9 @@ internal sealed class FinancialReportService
         CancellationToken ct,
         bool isFallbackMode = false)
     {
+        var orderCosts = await OrderCostRepo.GetAllAsync(ct);
         var productCosts = await ProductCostRepo.GetAllAsync(ct);
-        return await BuildReportInternalAsync(entries, receipts, from, to, productCosts, exchangeRate, ct, isFallbackMode);
+        return await BuildReportInternalAsync(entries, receipts, from, to, orderCosts, productCosts, exchangeRate, ct, isFallbackMode);
     }
 
     private static async Task<FinancialReport> BuildReportInternalAsync(
@@ -404,6 +406,7 @@ internal sealed class FinancialReportService
         IReadOnlyList<OwnShopReceipt> receipts,
         DateTimeOffset from,
         DateTimeOffset to,
+        List<OrderCostEntry> orderCosts,
         List<ProductCostEntry> productCosts,
         decimal exchangeRate,
         CancellationToken ct,
@@ -514,7 +517,7 @@ internal sealed class FinancialReportService
             .ToList();
 
         // Sipariş bazında net kâr özetleri (mağaza fişleri üzerinden - RAM'deki kilitli kur sözlüğüyle 0 ms'de eşleşir)
-        var orderSummaries = await BuildOrderSummariesAsync(receipts, productCosts, rateMap, exchangeRate, ct);
+        var orderSummaries = await BuildOrderSummariesAsync(receipts, orderCosts, productCosts, rateMap, exchangeRate, ct);
 
         // Sipariş maliyetlerini receipt'lerden topla (daha doğru)
         if (orderSummaries.Count > 0)
@@ -573,23 +576,28 @@ internal sealed class FinancialReportService
 
     /// <summary>
     /// Her Etsy siparişi (receipt) için gerçek net kâr hesaplar.
-    /// Formül (Türkiye): GrandTotal - Tax - İşlem(%6.5) - Ödeme(%6.5+3TL) - Yasal(%1.5) - KDV(%20) - İlan - [Dış Reklam(%15)] - Ürün Maliyeti
+    /// Formül (Türkiye): GrandTotal - Tax - İşlem(%6.5) - Ödeme(%6.5+3TL) - Yasal(%1.5) - KDV(%20) - İlan - [Dış Reklam(%15)] - Sipariş Maliyeti
     /// </summary>
     private static async Task<List<OrderFinancialSummary>> BuildOrderSummariesAsync(
         IReadOnlyList<OwnShopReceipt> receipts,
+        List<OrderCostEntry> orderCosts,
         List<ProductCostEntry> productCosts,
         Dictionary<DateTime, decimal> rateMap,
         decimal defaultExchangeRate,
         CancellationToken ct)
     {
         var result = new List<OrderFinancialSummary>();
-        var costMap = productCosts
+        var orderCostMap = orderCosts
+            .GroupBy(c => c.ReceiptId)
+            .ToDictionary(g => g.Key, g => g.Last());
+
+        var productCostMap = productCosts
             .GroupBy(c => c.ListingId)
             .ToDictionary(g => g.Key, g => g.Last());
 
         foreach (var r in receipts)
         {
-            if (!r.IsPaid || r.IsCanceled) continue;
+            if (!r.IsPaid && !r.IsCanceled) continue;
 
             var firstTx = r.Transactions.Count > 0 ? r.Transactions[0] : null;
             string title = firstTx?.Title ?? $"Sipariş #{r.ReceiptId}";
@@ -607,6 +615,7 @@ internal sealed class FinancialReportService
             decimal shippingCost = r.ShippingCost;
             decimal discountAmt = r.DiscountAmt;
             decimal tax = r.TotalTaxCost;
+            decimal refundedAmt = r.RefundedAmount;
 
             if (r.CurrencyCode.Equals("TRY", StringComparison.OrdinalIgnoreCase))
             {
@@ -615,60 +624,102 @@ internal sealed class FinancialReportService
                 shippingCost /= rate;
                 discountAmt /= rate;
                 tax /= rate;
+                refundedAmt /= rate;
             }
 
-            // Subtotal boş gelirse GrandTotal'dan türet (İşlem komisyonunun %0 hesaplanmasını önler)
-            if (subtotal <= 0 && grandTotal > 0)
-            {
-                subtotal = Math.Max(0, grandTotal - shippingCost - tax + discountAmt);
-            }
+            decimal originalGrandTotal = grandTotal;
+            bool isFullRefundOrCanceled = r.IsCanceled || (originalGrandTotal > 0 && refundedAmt >= originalGrandTotal);
+            bool isPartialRefund = !isFullRefundOrCanceled && refundedAmt > 0 && refundedAmt < originalGrandTotal;
+            string orderStatus = isFullRefundOrCanceled ? "Canceled" : (isPartialRefund ? "PartialRefund" : "Completed");
+            bool isCanceled = isFullRefundOrCanceled;
 
-            // 1. Vergi Düşülmesi (Etsy'nin alıp hemen kestiği müşteri satış vergisi)
-            // 2. İşlem Komisyonu (%6.5) - Ürün bedeli + kargo üzerinden
-            decimal subtotalAndShipping = Math.Max(grandTotal, subtotal + shippingCost);
-            decimal transactionFee = Math.Round(subtotalAndShipping * 0.065m, 2);
-
-            // 3. Ödeme İşleme Komisyonu (TR için %6.5 + 3 TL sabit)
-            decimal trPaymentFixedUsd = Math.Round(3m / rate, 2);
-            decimal paymentFee = Math.Round(grandTotal * 0.065m, 2) + trPaymentFixedUsd;
-
-            // 4. Yasal İşlem Ücreti (TR için %1.5)
-            decimal regulatoryFee = Math.Round(subtotalAndShipping * 0.015m, 2);
-
-            // 5. İlan Yenileme Ücreti (Listing Fee $0.20)
+            decimal transactionFee = 0m;
+            decimal paymentFee = 0m;
+            decimal regulatoryFee = 0m;
             decimal listingFee = 0.20m;
-
-            // 6. Dış Reklam (Offsite Ads) Kesimi (%15)
-            decimal offsiteAdFee = r.IsFromOffsiteAds ? Math.Round(grandTotal * 0.15m, 2) : 0m;
-
-            // 7. KDV (%20) - Etsy tüm komisyon ve ilan ücretlerinden %20 KDV keser
-            decimal totalFeesToTax = transactionFee + paymentFee + regulatoryFee + listingFee + offsiteAdFee;
-            decimal vatOnFees = Math.Round(totalFeesToTax * 0.20m, 2);
-
-            // Toplam Etsy Kesintileri
-            decimal etsyFees = transactionFee + paymentFee + regulatoryFee + listingFee + vatOnFees + tax;
-
-            // Ürün maliyeti — listing_id üzerinden eşleştir
+            decimal offsiteAdFee = 0m;
+            decimal vatOnFees = 0m;
+            decimal etsyFees = 0m;
+            decimal productCost = 0m;
             decimal unitProductionCost = 0m;
             decimal unitShippingCost = 0m;
             decimal unitPackagingCost = 0m;
             string? invoicePath = null;
-            bool    hasCost   = false;
-            string  listingIdStr = listingId.ToString(CultureInfo.InvariantCulture);
+            bool hasCost = false;
 
-            if (listingId > 0 && costMap.TryGetValue(listingIdStr, out var entry))
+            if (isCanceled)
             {
-                unitProductionCost = entry.UnitCost;
-                unitShippingCost = entry.UnitShippingCost;
-                unitPackagingCost = entry.UnitPackagingCost;
-                invoicePath = entry.InvoiceFilePath;
-                hasCost = true;
+                grandTotal = 0m;
+                subtotal = 0m;
+                shippingCost = 0m;
+                discountAmt = 0m;
+                tax = 0m;
+                etsyFees = 0m;
+                productCost = 0m; // İptal / tam iade edilen sipariş için üretim/kargo masrafı yapılmamıştır
             }
-            decimal totalUnitCost = unitProductionCost + unitShippingCost + unitPackagingCost;
-            decimal productCost = Math.Round(totalUnitCost * Math.Max(1, totalQty), 2);
+            else
+            {
+                // Kısmi iade varsa müşteri ödemesinden düş
+                if (isPartialRefund)
+                {
+                    grandTotal = Math.Max(0, originalGrandTotal - refundedAmt);
+                }
 
-            // Net kâr hesapla: (Müşterinin ödediği toplam) - (Etsy kesintileri) - (Dış reklam) - (Ürün maliyeti)
-            decimal netProfitUSD = Math.Round(grandTotal - etsyFees - offsiteAdFee - productCost, 2);
+                // Subtotal boş gelirse GrandTotal'dan türet (İşlem komisyonunun %0 hesaplanmasını önler)
+                if (subtotal <= 0 && grandTotal > 0)
+                {
+                    subtotal = Math.Max(0, grandTotal - shippingCost - tax + discountAmt);
+                }
+
+                // 1. Vergi Düşülmesi (Etsy'nin alıp hemen kestiği müşteri satış vergisi)
+                // 2. İşlem Komisyonu (%6.5) - Ürün bedeli + kargo üzerinden
+                decimal subtotalAndShipping = Math.Max(grandTotal, subtotal + shippingCost);
+                transactionFee = Math.Round(subtotalAndShipping * 0.065m, 2);
+
+                // 3. Ödeme İşleme Komisyonu (TR için %6.5 + 3 TL sabit)
+                decimal trPaymentFixedUsd = Math.Round(3m / rate, 2);
+                paymentFee = Math.Round(grandTotal * 0.065m, 2) + trPaymentFixedUsd;
+
+                // 4. Yasal İşlem Ücreti (TR için %1.5)
+                regulatoryFee = Math.Round(subtotalAndShipping * 0.015m, 2);
+
+                // 5. Dış Reklam (Offsite Ads) Kesimi (%15)
+                offsiteAdFee = r.IsFromOffsiteAds ? Math.Round(grandTotal * 0.15m, 2) : 0m;
+
+                // 6. KDV (%20) - Etsy tüm komisyon ve ilan ücretlerinden %20 KDV keser
+                decimal totalFeesToTax = transactionFee + paymentFee + regulatoryFee + listingFee + offsiteAdFee;
+                vatOnFees = Math.Round(totalFeesToTax * 0.20m, 2);
+
+                // Toplam Etsy Kesintileri
+                etsyFees = transactionFee + paymentFee + regulatoryFee + listingFee + vatOnFees + tax;
+
+                // Maliyet: 1. Öncelik doğrudan Sipariş Numarasına (ReceiptId) ait kayıt, 2. Öncelik ürün varsayılanı
+                string receiptIdStr = r.ReceiptId.ToString(CultureInfo.InvariantCulture);
+                string listingIdStr = listingId.ToString(CultureInfo.InvariantCulture);
+
+                if (orderCostMap.TryGetValue(receiptIdStr, out var orderEntry))
+                {
+                    unitProductionCost = orderEntry.UnitCost;
+                    unitShippingCost = orderEntry.UnitShippingCost;
+                    unitPackagingCost = orderEntry.UnitPackagingCost;
+                    invoicePath = orderEntry.InvoiceFilePath;
+                    hasCost = true;
+                }
+                else if (listingId > 0 && productCostMap.TryGetValue(listingIdStr, out var prodEntry))
+                {
+                    unitProductionCost = prodEntry.UnitCost;
+                    unitShippingCost = prodEntry.UnitShippingCost;
+                    unitPackagingCost = prodEntry.UnitPackagingCost;
+                    invoicePath = prodEntry.InvoiceFilePath;
+                    hasCost = true;
+                }
+
+                decimal totalUnitCost = unitProductionCost + unitShippingCost + unitPackagingCost;
+                productCost = Math.Round(totalUnitCost * Math.Max(1, totalQty), 2);
+            }
+
+            // Net kâr hesapla: (Müşterinin ödediği toplam) - (Etsy kesintileri) - (Dış reklam) - (Sipariş maliyeti)
+            decimal netProfitUSD = isCanceled ? 0m : Math.Round(grandTotal - etsyFees - offsiteAdFee - productCost, 2);
 
             // Sipariş gününün kuru ile hesaplanan TRY kârı
             decimal netProfitTRY = Math.Round(netProfitUSD * rate, 2);
@@ -699,7 +750,13 @@ internal sealed class FinancialReportService
                 unitProductionCost,
                 unitShippingCost,
                 unitPackagingCost,
-                invoicePath));
+                invoicePath,
+                r.BuyerUserId,
+                r.BuyerName,
+                r.BuyerEmail,
+                isCanceled,
+                refundedAmt,
+                orderStatus));
         }
 
         return result.OrderByDescending(o => o.OrderDate).ToList();

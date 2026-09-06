@@ -284,7 +284,7 @@ internal sealed class OpenAiListingOptimizer(
 
         if (statusCode == HttpStatusCode.NotFound)
         {
-            return "Gemini modeli bulunamadı (HTTP 404). AI Ayarları ekranında 'gemini-3.7-flash' veya 'gemini-1.5-flash' modelini seçtiğinizden emin olun.";
+            return "Gemini modeli bulunamadı (HTTP 404). AI Ayarları ekranında 'gemini-2.5-flash' veya 'gemini-2.0-flash' modelini seçtiğinizden emin olun.";
         }
 
         return $"Gemini isteği başarısız. HTTP {(int)statusCode}: {body}";

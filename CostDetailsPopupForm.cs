@@ -13,20 +13,52 @@ internal sealed class CostDetailsPopupForm : Form
     private readonly NumericUpDown _numProduction = new();
     private readonly NumericUpDown _numShipping = new();
     private readonly NumericUpDown _numPackaging = new();
+    private readonly CheckBox _chkApplyToAll = new();
 
     private readonly Label _lblInvoiceStatus = new();
     private readonly Button _btnViewInvoice = new();
     private readonly Button _btnRemoveInvoice = new();
+    private readonly OrderFinancialSummary? _order;
 
     public decimal UnitCost => _numProduction.Value;
     public decimal UnitShippingCost => _numShipping.Value;
     public decimal UnitPackagingCost => _numPackaging.Value;
+    public bool ApplyToAllOrdersOfListing => _chkApplyToAll.Checked;
     public string? InvoiceFilePath { get; private set; }
+    public string StorageKey { get; }
+
+    public CostDetailsPopupForm(OrderFinancialSummary order, OrderCostEntry? currentEntry = null)
+    {
+        _order = order;
+        StorageKey = order.ReceiptId.ToString();
+        Text = $"💰 Sipariş #{order.ReceiptId} Maliyet & Fatura Düzenle";
+        Size = new Size(540, 560);
+        StartPosition = FormStartPosition.CenterParent;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+
+        InvoiceFilePath = currentEntry?.InvoiceFilePath ?? order.InvoiceFilePath;
+
+        BuildLayout(
+            storageKey: StorageKey,
+            title: order.ProductTitle,
+            customerText: order.DisplayCustomer,
+            orderNo: $"#{order.ReceiptId}",
+            prodCost: currentEntry?.UnitCost ?? order.UnitProductionCost,
+            shipCost: currentEntry?.UnitShippingCost ?? order.UnitShippingCost,
+            packCost: currentEntry?.UnitPackagingCost ?? order.UnitPackagingCost);
+
+        UpdateInvoiceUi();
+        UiStyle.ApplyTheme(this);
+    }
 
     public CostDetailsPopupForm(ProductCostEntry? currentEntry)
     {
+        _order = null;
+        StorageKey = currentEntry?.ListingId ?? "custom";
         Text = "Maliyet & Kargo Faturası Detayları";
-        Size = new Size(460, 440);
+        Size = new Size(500, 480);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -34,53 +66,126 @@ internal sealed class CostDetailsPopupForm : Form
 
         InvoiceFilePath = currentEntry?.InvoiceFilePath;
 
-        BuildLayout(currentEntry);
+        BuildLayout(
+            storageKey: StorageKey,
+            title: currentEntry?.Title ?? "",
+            customerText: null,
+            orderNo: null,
+            prodCost: currentEntry?.UnitCost ?? 0m,
+            shipCost: currentEntry?.UnitShippingCost ?? 0m,
+            packCost: currentEntry?.UnitPackagingCost ?? 0m);
+
         UpdateInvoiceUi();
         UiStyle.ApplyTheme(this);
     }
 
-    private void BuildLayout(ProductCostEntry? currentEntry)
+    private void BuildLayout(
+        string storageKey,
+        string title,
+        string? customerText,
+        string? orderNo,
+        decimal prodCost,
+        decimal shipCost,
+        decimal packCost)
     {
         var mainPanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 6,
+            RowCount = 8,
             ColumnCount = 1,
-            Padding = new Padding(24, 16, 24, 16),
+            Padding = new Padding(20, 14, 20, 14),
             BackColor = UiStyle.CardBackground
         };
 
         int row = 0;
 
+        // Üst Bilgi Kartı (Sipariş & Müşteri Bilgisi)
+        if (!string.IsNullOrWhiteSpace(orderNo) || !string.IsNullOrWhiteSpace(customerText))
+        {
+            var pnlInfo = new ModernCardPanel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(12, 8, 12, 8),
+                Margin = new Padding(0, 0, 0, 10),
+                CornerRadius = 8,
+                CardColor = Color.FromArgb(30, 41, 59),
+                BorderColor = UiStyle.BorderColor,
+                AutoSize = true
+            };
+            var infoFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoSize = true
+            };
+            if (!string.IsNullOrWhiteSpace(orderNo))
+            {
+                infoFlow.Controls.Add(new Label
+                {
+                    Text = $"📦 Sipariş: {orderNo}  |  👤 Müşteri: {customerText ?? "—"}",
+                    Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+                    ForeColor = UiStyle.PrimaryHover,
+                    AutoSize = true,
+                    Margin = new Padding(0, 0, 0, 2)
+                });
+            }
+            if (!string.IsNullOrWhiteSpace(title))
+            {
+                infoFlow.Controls.Add(new Label
+                {
+                    Text = title.Length > 65 ? title[..65] + "..." : title,
+                    Font = new Font("Segoe UI", 8.5F),
+                    ForeColor = UiStyle.TextMuted,
+                    AutoSize = true
+                });
+            }
+            pnlInfo.Controls.Add(infoFlow);
+            mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            mainPanel.Controls.Add(pnlInfo, 0, row++);
+        }
+
         _numProduction.DecimalPlaces = 2;
         _numProduction.Maximum = 10000;
-        _numProduction.Value = currentEntry?.UnitCost ?? 0m;
-        AddRow(mainPanel, "Üretim Maliyeti ($):", _numProduction, row++);
+        _numProduction.Value = prodCost;
+        AddRow(mainPanel, "Üretim / Hammadde Maliyeti ($):", _numProduction, row++);
 
         _numShipping.DecimalPlaces = 2;
         _numShipping.Maximum = 10000;
-        _numShipping.Value = currentEntry?.UnitShippingCost ?? 0m;
-        AddRow(mainPanel, "Kargo Maliyeti ($):", _numShipping, row++);
+        _numShipping.Value = shipCost;
+        AddRow(mainPanel, "Sipariş Kargo Maliyeti ($):", _numShipping, row++);
 
         _numPackaging.DecimalPlaces = 2;
         _numPackaging.Maximum = 10000;
-        _numPackaging.Value = currentEntry?.UnitPackagingCost ?? 0m;
-        AddRow(mainPanel, "Paketleme Maliyeti ($):", _numPackaging, row++);
+        _numPackaging.Value = packCost;
+        AddRow(mainPanel, "Paketleme & Kutu Maliyeti ($):", _numPackaging, row++);
+
+        // Bulk apply to all orders of listing checkbox
+        if (_order != null && _order.ListingId > 0)
+        {
+            _chkApplyToAll.Text = "Bu ürünün (Listing) maliyeti girilmemiş tüm siparişlerine de uygula";
+            _chkApplyToAll.Font = new Font("Segoe UI", 8.5F);
+            _chkApplyToAll.ForeColor = UiStyle.TextDark;
+            _chkApplyToAll.AutoSize = true;
+            _chkApplyToAll.Margin = new Padding(0, 4, 0, 6);
+            mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            mainPanel.Controls.Add(_chkApplyToAll, 0, row++);
+        }
 
         // Invoice Section Card
-        var invoiceGroup = BuildInvoiceSection(currentEntry?.ListingId ?? "order");
+        var invoiceGroup = BuildInvoiceSection(storageKey);
         mainPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         mainPanel.Controls.Add(invoiceGroup, 0, row++);
 
         // Save Button
         var btnSave = new Button
         {
-            Text = "💾 Maliyetleri & Faturayı Kaydet",
+            Text = "💾 Sipariş Maliyetini & Faturayı Kaydet",
             Dock = DockStyle.Fill,
             BackColor = UiStyle.PrimaryColor,
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
-            Margin = new Padding(0, 15, 0, 0),
+            Margin = new Padding(0, 10, 0, 0),
             Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
             Cursor = Cursors.Hand
         };
@@ -98,13 +203,13 @@ internal sealed class CostDetailsPopupForm : Form
         Controls.Add(mainPanel);
     }
 
-    private Control BuildInvoiceSection(string listingId)
+    private Control BuildInvoiceSection(string storageKey)
     {
         var card = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12, 10, 12, 10),
-            Margin = new Padding(0, 5, 0, 10),
+            Margin = new Padding(0, 4, 0, 8),
             CornerRadius = 8,
             CardColor = Color.FromArgb(24, 24, 32),
             BorderColor = UiStyle.BorderColor
@@ -138,6 +243,38 @@ internal sealed class CostDetailsPopupForm : Form
             Margin = new Padding(0, 0, 0, 6)
         };
 
+        if (_order != null)
+        {
+            var btnAutoInvoice = new Button
+            {
+                Text = "⚡ Otomatik Fatura (PDF)",
+                AutoSize = true,
+                Height = 30,
+                BackColor = Color.FromArgb(14, 165, 233), // Sky Blue
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 6, 0)
+            };
+            btnAutoInvoice.FlatAppearance.BorderSize = 0;
+            btnAutoInvoice.Click += (s, e) =>
+            {
+                try
+                {
+                    string pdfPath = EtsyInvoicePdfService.GenerateInvoicePdf(_order);
+                    InvoiceFilePath = pdfPath;
+                    UpdateInvoiceUi();
+                    MessageBox.Show(this, $"Sipariş #{_order.ReceiptId} için resmi fatura ve sevk irsaliyesi PDF'i başarıyla oluşturuldu!\n\nDosya: {pdfPath}", "🧾 Fatura Oluşturuldu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, $"Fatura oluşturulamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
+            actionsPanel.Controls.Add(btnAutoInvoice);
+        }
+
         var btnPick = new Button
         {
             Text = "📎 Fatura Seç...",
@@ -161,7 +298,7 @@ internal sealed class CostDetailsPopupForm : Form
             if (ofd.ShowDialog(this) == DialogResult.OK)
             {
                 // Invoices klasörüne güvenle kopyala
-                string? savedPath = InvoiceStorageService.SaveInvoiceFile(ofd.FileName, listingId);
+                string? savedPath = InvoiceStorageService.SaveInvoiceFile(ofd.FileName, storageKey);
                 InvoiceFilePath = savedPath ?? ofd.FileName;
                 UpdateInvoiceUi();
             }
@@ -251,7 +388,7 @@ internal sealed class CostDetailsPopupForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            Margin = new Padding(0, 0, 0, 10),
+            Margin = new Padding(0, 0, 0, 8),
             AutoSize = true
         };
         container.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
@@ -262,12 +399,12 @@ internal sealed class CostDetailsPopupForm : Form
             Text = labelText,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            Font = new Font("Segoe UI", 10F),
+            Font = new Font("Segoe UI", 9.5F),
             ForeColor = UiStyle.TextDark
         };
 
         num.Dock = DockStyle.Fill;
-        num.Font = new Font("Segoe UI", 10.5F);
+        num.Font = new Font("Segoe UI", 10F);
         num.BackColor = UiStyle.InputBackground;
         num.ForeColor = UiStyle.TextDark;
         num.BorderStyle = BorderStyle.FixedSingle;
@@ -278,4 +415,3 @@ internal sealed class CostDetailsPopupForm : Form
         panel.Controls.Add(container, 0, row);
     }
 }
-

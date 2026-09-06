@@ -261,6 +261,73 @@ internal sealed class EtsyApiClient
         return ReadImageUrls(results);
     }
 
+    public static string ExtractShopName(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return "";
+        var trimmed = input.Trim().TrimEnd('/');
+        if (trimmed.Contains("etsy.com/shop/", StringComparison.OrdinalIgnoreCase))
+        {
+            var idx = trimmed.IndexOf("etsy.com/shop/", StringComparison.OrdinalIgnoreCase);
+            var part = trimmed[(idx + "etsy.com/shop/".Length)..];
+            var endIdx = part.IndexOfAny(['?', '#', '/']);
+            return endIdx >= 0 ? part[..endIdx] : part;
+        }
+        if (trimmed.Contains("etsy.com/", StringComparison.OrdinalIgnoreCase))
+        {
+            var uri = new Uri(trimmed.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? trimmed : "https://" + trimmed);
+            var segments = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (segments.Length > 0) return segments[^1];
+        }
+        return trimmed;
+    }
+
+    public async Task<CompetitorShopAnalysis> GetCompetitorShopAnalysisByNameOrUrlAsync(
+        EtsyApiSettings settings,
+        string shopNameOrUrl,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        var clean = ExtractShopName(shopNameOrUrl);
+        if (string.IsNullOrWhiteSpace(clean))
+        {
+            throw new ArgumentException("Lütfen geçerli bir mağaza adı veya linki girin.");
+        }
+
+        if (long.TryParse(clean, out var shopId))
+        {
+            return await GetCompetitorShopAnalysisAsync(settings, shopId, limit, cancellationToken);
+        }
+
+        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops?shop_name={Uri.EscapeDataString(clean)}", useAccessToken: false);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"'{clean}' mağazası Etsy'de bulunamadı (HTTP {(int)response.StatusCode}). Lütfen mağaza adını veya linkini kontrol edin.");
+        }
+
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+        var shopElem = root;
+        if (root.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array && results.GetArrayLength() > 0)
+        {
+            shopElem = results[0];
+        }
+        else if (root.TryGetProperty("count", out var count) && count.GetInt32() == 0)
+        {
+            throw new InvalidOperationException($"'{clean}' isimli mağaza bulunamadı.");
+        }
+
+        var foundId = GetLong(shopElem, "shop_id");
+        if (foundId <= 0)
+        {
+            throw new InvalidOperationException($"'{clean}' mağazasının kimlik numarası doğrulanamadı.");
+        }
+
+        return await GetCompetitorShopAnalysisAsync(settings, foundId, limit, cancellationToken);
+    }
+
     public async Task<CompetitorShopAnalysis> GetCompetitorShopAnalysisAsync(
         EtsyApiSettings settings,
         long shopId,
@@ -324,6 +391,12 @@ internal sealed class EtsyApiClient
         }
 
         var shopName = GetString(shop, "shop_name");
+        DateTimeOffset? created = null;
+        if (shop.TryGetProperty("create_date", out var cd) && cd.TryGetInt64(out var epoch))
+        {
+            created = DateTimeOffset.FromUnixTimeSeconds(epoch);
+        }
+
         return new CompetitorShopProfile
         {
             ShopId = shopId,
@@ -334,6 +407,7 @@ internal sealed class EtsyApiClient
             ReviewCount = GetInt(shop, "review_count"),
             ReviewAverage = GetDecimal(shop, "review_average"),
             ActiveListingCount = GetInt(shop, "listing_active_count"),
+            CreatedDate = created,
         };
     }
 
@@ -463,7 +537,7 @@ internal sealed class EtsyApiClient
         var form = new List<KeyValuePair<string, string>>
         {
             new("title", update.Title.Trim()),
-            new("description", update.Description.Trim()),
+            new("description", EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(update.Description)),
         };
 
         foreach (var tag in tags)
@@ -490,6 +564,7 @@ internal sealed class EtsyApiClient
         EtsyApiSettings settings,
         long listingId,
         string imagePath,
+        int? rank = null,
         CancellationToken cancellationToken = default)
     {
         EnsureApiCredentials(settings);
@@ -511,6 +586,10 @@ internal sealed class EtsyApiClient
         using var imageContent = new StreamContent(stream);
         imageContent.Headers.ContentType = new MediaTypeHeaderValue(GetImageContentType(imagePath));
         content.Add(imageContent, "image", Path.GetFileName(imagePath));
+        if (rank.HasValue && rank.Value > 0)
+        {
+            content.Add(new StringContent(rank.Value.ToString()), "rank");
+        }
 
         using var request = CreateRequest(settings, HttpMethod.Post, $"{BaseUrl}/shops/{shopId}/listings/{listingId}/images", useAccessToken: true);
         request.Content = content;
@@ -979,12 +1058,33 @@ internal sealed class EtsyApiClient
             .ToList() ?? [];
         var created = GetLong(receipt, "create_timestamp");
         var status = GetString(receipt, "status");
+
+        decimal refundedAmount = 0m;
+        if (receipt.TryGetProperty("refunds", out var propRefunds) && propRefunds.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var rf in propRefunds.EnumerateArray())
+            {
+                var (rfAmt, _) = ReadMoney(rf, "amount");
+                refundedAmount += rfAmt;
+            }
+        }
+        else if (receipt.TryGetProperty("refund_amount", out _))
+        {
+            var (rfAmt, _) = ReadMoney(receipt, "refund_amount");
+            refundedAmount = rfAmt;
+        }
+
         bool isCanceledOrRefunded = GetBool(receipt, "is_canceled")
             || GetBool(receipt, "was_canceled")
             || GetBool(receipt, "is_refunded")
             || GetBool(receipt, "was_refunded")
             || status.Equals("canceled", StringComparison.OrdinalIgnoreCase)
-            || status.Equals("refunded", StringComparison.OrdinalIgnoreCase);
+            || status.Equals("refunded", StringComparison.OrdinalIgnoreCase)
+            || (grandTotal > 0 && refundedAmount >= grandTotal);
+
+        long buyerUserId = GetLong(receipt, "buyer_user_id");
+        string buyerName = GetFirstString(receipt, "name", "buyer_name");
+        string buyerEmail = GetString(receipt, "buyer_email");
 
         return new OwnShopReceipt(
             GetLong(receipt, "receipt_id"),
@@ -998,7 +1098,12 @@ internal sealed class EtsyApiClient
             discountAmt,
             isFromOffsiteAds,
             currency,
-            transactions);
+            transactions,
+            buyerUserId,
+            buyerName,
+            buyerEmail,
+            refundedAmount,
+            status);
     }
 
     private async Task EnsureAccessTokenAsync(EtsyApiSettings settings, CancellationToken cancellationToken)

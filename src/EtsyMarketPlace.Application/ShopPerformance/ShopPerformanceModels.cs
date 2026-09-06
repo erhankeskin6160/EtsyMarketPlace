@@ -21,7 +21,12 @@ public sealed record OwnShopReceipt(
     decimal DiscountAmt,        // İndirim tutarı
     bool IsFromOffsiteAds,      // Dış reklam (Offsite Ads) kaynağı mı?
     string CurrencyCode,
-    IReadOnlyList<OwnShopTransaction> Transactions);
+    IReadOnlyList<OwnShopTransaction> Transactions,
+    long BuyerUserId = 0,
+    string BuyerName = "",
+    string BuyerEmail = "",
+    decimal RefundedAmount = 0m,
+    string Status = "");
 
 public sealed record OwnShopPerformanceSource(
     OwnShopProfile Shop,
