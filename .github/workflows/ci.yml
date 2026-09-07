@@ -1,8 +1,6 @@
-name: .NET CI Build & Test
+name: .NET CI (Pull Request Gate)
 
 on:
-  push:
-    branches: [ "main", "development" ]
   pull_request:
     branches: [ "main", "development" ]
 

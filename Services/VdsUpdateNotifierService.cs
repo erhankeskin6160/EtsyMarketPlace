@@ -41,26 +41,59 @@ internal sealed class VdsUpdateNotifierService
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
             var root = doc.RootElement;
 
-            if (!root.TryGetProperty("published_at", out var pubProp) ||
-                !DateTimeOffset.TryParse(pubProp.GetString(), out var publishedAt))
+            DateTimeOffset effectiveTime = DateTimeOffset.MinValue;
+            long remoteAssetSize = 0;
+
+            if (root.TryGetProperty("assets", out var assetsProp) && assetsProp.ValueKind == JsonValueKind.Array)
             {
-                return new UpdateCheckResult(false, string.Empty, DateTimeOffset.MinValue, string.Empty);
+                foreach (var asset in assetsProp.EnumerateArray())
+                {
+                    if (asset.TryGetProperty("name", out var nameProp) &&
+                        nameProp.GetString()?.Equals("SimilarProductsWinForms.exe", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        if (asset.TryGetProperty("updated_at", out var updatedProp) &&
+                            DateTimeOffset.TryParse(updatedProp.GetString(), out var assetUpdatedAt))
+                        {
+                            effectiveTime = assetUpdatedAt;
+                        }
+
+                        if (asset.TryGetProperty("size", out var sizeProp))
+                        {
+                            remoteAssetSize = sizeProp.GetInt64();
+                        }
+                        break;
+                    }
+                }
             }
 
-            // Mevcut çalışan EXE'nin derlenme / yazılma zamanı
+            if (effectiveTime == DateTimeOffset.MinValue)
+            {
+                if (root.TryGetProperty("published_at", out var pubProp) &&
+                    DateTimeOffset.TryParse(pubProp.GetString(), out var pubAt))
+                {
+                    effectiveTime = pubAt;
+                }
+            }
+
+            // Mevcut çalışan EXE'nin derlenme / yazılma zamanı ve dosya boyutu
             var currentExePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
             if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
             {
                 return new UpdateCheckResult(false, string.Empty, DateTimeOffset.MinValue, string.Empty);
             }
 
-            var localWriteTime = new DateTimeOffset(File.GetLastWriteTimeUtc(currentExePath), TimeSpan.Zero);
+            var localFileInfo = new FileInfo(currentExePath);
+            var localWriteTime = new DateTimeOffset(localFileInfo.LastWriteTimeUtc, TimeSpan.Zero);
+            long localSize = localFileInfo.Length;
 
-            // Eğer GitHub'daki release, yerel exe'den daha yeniyse güncelleme var demektir
-            if (publishedAt > localWriteTime.AddSeconds(15))
+            // Eğer GitHub'daki asset dosyası yerel exe'den daha yeniyse (veya boyutu farklıysa) güncelleme var demektir
+            bool isNewer = effectiveTime > localWriteTime.AddSeconds(10);
+            bool isDifferentSize = remoteAssetSize > 10_000_000 && Math.Abs(remoteAssetSize - localSize) > 4096;
+
+            if (isNewer || isDifferentSize)
             {
                 string downloadUrl = "https://github.com/erhankeskin6160/EtsyMarketPlace/releases/download/dev-latest/SimilarProductsWinForms.exe";
-                return new UpdateCheckResult(true, "dev-latest", publishedAt, downloadUrl);
+                return new UpdateCheckResult(true, "dev-latest", effectiveTime, downloadUrl);
             }
         }
         catch
