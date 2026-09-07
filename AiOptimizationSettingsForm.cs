@@ -18,6 +18,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly ComboBox _secondaryImageModelComboBox = new();
     private readonly TextBox _bflKeyTextBox = new();
     private readonly TextBox _ideogramKeyTextBox = new();
+    private readonly TextBox _photoRoomKeyTextBox = new();
     private readonly TextBox _statusTextBox = new();
 
     public AiOptimizationSettingsForm()
@@ -31,13 +32,14 @@ internal sealed class AiOptimizationSettingsForm : Form
     {
         Text = "AI Optimizasyon Ayarları & En Güncel Modeller";
         StartPosition = FormStartPosition.CenterParent;
-        MinimumSize = new Size(880, 680);
+        MinimumSize = new Size(880, 720);
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 12 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 13 };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
@@ -130,6 +132,11 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(LabelFor("Ideogram API Key:"), 0, 8);
         root.Controls.Add(_ideogramKeyTextBox, 1, 8);
 
+        _photoRoomKeyTextBox.Dock = DockStyle.Fill;
+        _photoRoomKeyTextBox.UseSystemPasswordChar = true;
+        root.Controls.Add(LabelFor("PhotoRoom API Key:"), 0, 9);
+        root.Controls.Add(_photoRoomKeyTextBox, 1, 9);
+
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 4, 0, 0) };
         var save = CreateButton("💾 Kaydet");
         save.BackColor = Color.FromArgb(16, 140, 90);
@@ -157,23 +164,23 @@ internal sealed class AiOptimizationSettingsForm : Form
         close.Click += (_, _) => Close();
         buttons.Controls.Add(close);
 
-        root.Controls.Add(new Label(), 0, 9);
-        root.Controls.Add(buttons, 1, 9);
+        root.Controls.Add(new Label(), 0, 10);
+        root.Controls.Add(buttons, 1, 10);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(LabelFor("Durum:"), 0, 10);
-        root.Controls.Add(_statusTextBox, 1, 10);
+        root.Controls.Add(LabelFor("Durum:"), 0, 11);
+        root.Controls.Add(_statusTextBox, 1, 11);
 
-        root.Controls.Add(new Label(), 0, 11);
+        root.Controls.Add(new Label(), 0, 12);
         root.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
-            Text = "💡 Önerilen En Güncel Görsel Modelleri: OpenAI 'dall-e-3', Google 'imagen-3.0-generate-002', BFL 'flux-pro-1.1' ve 'ideogram-v4'.",
+            Text = "💡 Önerilen En Güncel Görsel Modelleri: PhotoRoom (Arka Plan Silme), OpenAI 'dall-e-3', Google 'gemini-2.5-flash-image', BFL 'flux-pro-1.1' ve 'ideogram-v4'.",
             ForeColor = Color.FromArgb(75, 85, 99),
-        }, 1, 11);
+        }, 1, 12);
     }
 
     private void LoadValues()
@@ -207,6 +214,9 @@ internal sealed class AiOptimizationSettingsForm : Form
         _secondaryImageModelComboBox.Text = AiModelNormalizer.NormalizeGeminiImageModel(_settings.GeminiImageModel);
         _bflKeyTextBox.Text = _settings.BflApiKey;
         _ideogramKeyTextBox.Text = _settings.IdeogramApiKey;
+        _photoRoomKeyTextBox.Text = !string.IsNullOrWhiteSpace(_settings.PhotoRoomApiKey)
+            ? _settings.PhotoRoomApiKey
+            : PhotoRoomSettingsStore.Load().ApiKey;
 
         WriteStatus($"Ayar dosyası yüklendi: {AiOptimizationSettingsStore.SettingsPath}");
     }
@@ -246,9 +256,11 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         _settings.BflApiKey = _bflKeyTextBox.Text.Trim();
         _settings.IdeogramApiKey = _ideogramKeyTextBox.Text.Trim();
+        _settings.PhotoRoomApiKey = _photoRoomKeyTextBox.Text.Trim();
 
+        PhotoRoomSettingsStore.Save(new PhotoRoomSettings { ApiKey = _settings.PhotoRoomApiKey });
         AiOptimizationSettingsStore.Save(_settings);
-        WriteStatus("AI ayarları kaydedildi ve tüm model kodları en güncel sürümlere doğrulandı.");
+        WriteStatus("AI ve PhotoRoom ayarları kaydedildi.");
     }
 
     private void TestSettings()

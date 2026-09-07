@@ -13,6 +13,9 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Controls;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Studio.Core;
+using SimilarProductsWinForms.Studio.Services;
+using SimilarProductsWinForms.Studio.UI;
 
 internal sealed class AiListingImageForm : Form
 {
@@ -62,6 +65,7 @@ internal sealed class AiListingImageForm : Form
     private readonly TextBox _txtIdeogramTypography = new();
     private readonly ComboBox _ideogramStyleComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _geminiModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _geminiEditModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernButtonControl _btnProcess = new();
     private readonly ModernButtonControl _btnBatchProcess = new();
 
@@ -82,6 +86,17 @@ internal sealed class AiListingImageForm : Form
         _aiOptimizer = aiOptimizer;
         _photoRoomSettings = PhotoRoomSettingsStore.Load();
         _aiSettings = AiOptimizationSettingsStore.Load();
+
+        if (string.IsNullOrWhiteSpace(_photoRoomSettings.ApiKey) && !string.IsNullOrWhiteSpace(_aiSettings.PhotoRoomApiKey))
+        {
+            _photoRoomSettings.ApiKey = _aiSettings.PhotoRoomApiKey;
+            PhotoRoomSettingsStore.Save(_photoRoomSettings);
+        }
+        else if (!string.IsNullOrWhiteSpace(_photoRoomSettings.ApiKey) && string.IsNullOrWhiteSpace(_aiSettings.PhotoRoomApiKey))
+        {
+            _aiSettings.PhotoRoomApiKey = _photoRoomSettings.ApiKey;
+            AiOptimizationSettingsStore.Save(_aiSettings);
+        }
 
         KeyPreview = true;
         BuildLayout();
@@ -259,11 +274,11 @@ internal sealed class AiListingImageForm : Form
         _cboEngine.Width = 340;
         _cboEngine.Font = new Font("Segoe UI", 9.5F);
         _cboEngine.Items.AddRange([
+            "🔵 Google Gemini (Görsel Düzenleme & Sahneleme - SOTA)",
             "🟣 PhotoRoom Native (Arka Plan Silme & AI Gölge)",
-            "🏆 OpenAI (GPT Image 2 / SOTA ELO 1177)",
+            "🏆 OpenAI (GPT Image 2 / DALL-E 3)",
             "⚡ Black Forest Labs FLUX.1 (Ultra Realism)",
-            "🟡 Ideogram 4.0 (Kusursuz Tipografi & Yazı)",
-            "🔵 Google Gemini (Gemini 3.1 Flash Image / Nano Banana 2)"
+            "🟡 Ideogram 4.0 (Kusursuz Tipografi & Yazı)"
         ]);
         _cboEngine.SelectedIndex = 0;
         _cboEngine.SelectedIndexChanged += (_, _) => OnEngineSelectionChanged();
@@ -642,13 +657,98 @@ internal sealed class AiListingImageForm : Form
         _engineOptionsPanel.SuspendLayout();
         _engineOptionsPanel.Controls.Clear();
 
-        if (_cboEngine.SelectedIndex == 0) // PhotoRoom Native
+        string engineId = _cboEngine.SelectedIndex switch
+        {
+            0 => "gemini",
+            1 => "photoroom",
+            2 => "openai",
+            3 => "flux",
+            _ => "ideogram"
+        };
+
+        var (isConfigured, keyName) = AiImageEngineRegistry.GetConfigurationState(engineId);
+
+        // Universal Engine Key Header Row
+        var keyRow = new TableLayoutPanel { Width = 340, Height = 34, Margin = new Padding(0, 4, 0, 6), ColumnCount = 2 };
+        keyRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        keyRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+
+        var keyStatusLbl = new Label
+        {
+            Text = isConfigured ? $"🟢 {keyName} Bağlı" : $"⚠️ {keyName} Tanımsız",
+            ForeColor = isConfigured ? Color.FromArgb(16, 185, 129) : Color.FromArgb(245, 158, 11),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Font = new Font("Segoe UI Semibold", 8.8F)
+        };
+        keyRow.Controls.Add(keyStatusLbl, 0, 0);
+
+        var keyBtn = UiStyle.CreateButton("🔑 Key Yapılandır", isSecondary: true);
+        keyBtn.Dock = DockStyle.Fill;
+        keyBtn.Height = 28;
+        keyBtn.Font = new Font("Segoe UI Semibold", 8.2F);
+        keyBtn.Click += (_, _) =>
+        {
+            using var dlg = new StudioKeyConfigDialog(engineId);
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                var refreshedPr = PhotoRoomSettingsStore.Load();
+                _photoRoomSettings.ApiKey = refreshedPr.ApiKey;
+                _photoRoomSettings.AddShadow = refreshedPr.AddShadow;
+                _photoRoomSettings.Padding = refreshedPr.Padding;
+
+                _aiSettings = AiOptimizationSettingsStore.Load();
+                BuildEngineSpecificControls();
+                UpdateAiBadge();
+            }
+        };
+        keyRow.Controls.Add(keyBtn, 1, 0);
+        _engineOptionsPanel.Controls.Add(keyRow);
+
+        if (_cboEngine.SelectedIndex == 0) // 🔵 Google Gemini (Primary Default Engine)
+        {
+            _engineOptionsPanel.Controls.Add(new Label { Text = "Google Gemini Görsel Modeli:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
+            _geminiModelComboBox.Width = 340;
+            _geminiModelComboBox.Items.Clear();
+            _geminiModelComboBox.Items.AddRange([
+                "gemini-3.1-flash-image (Nano Banana 2 - SOTA)",
+                "gemini-2.5-flash-image (Stabil GA)",
+                "gemini-3.1-flash-lite-image (Ultra Hızlı)",
+                "gemini-3-pro-image (Nano Banana Pro)",
+                "imagen-3.0-generate-002 (Legacy)"
+            ]);
+            _geminiModelComboBox.SelectedIndex = 0;
+            _engineOptionsPanel.Controls.Add(_geminiModelComboBox);
+
+            _engineOptionsPanel.Controls.Add(new Label { Text = "E-Ticaret Düzenleme Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
+            _geminiEditModeComboBox.Width = 340;
+            _geminiEditModeComboBox.Items.Clear();
+            _geminiEditModeComboBox.Items.AddRange([
+                "🏛️ Lüks E-Ticaret Sahnesi (Mermer / Ahşap Kaide)",
+                "👤 Manken & Yaşam Alanı (Model Üzerinde Göster)",
+                "☀️ Stüdyo Işığı & Atmosfer Yenileme",
+                "🎨 Özel Prompt ile Sahne Düzenleme"
+            ]);
+            _geminiEditModeComboBox.SelectedIndex = 0;
+            _engineOptionsPanel.Controls.Add(_geminiEditModeComboBox);
+
+            var groundingNotice = new Label
+            {
+                Text = "✨ Visual Grounding: Yüklediğiniz ürünün şekli, dokusu ve renkleri piksel seviyesinde korunarak Gemini tarafından yeni sahneye giydirilir.",
+                ForeColor = Color.FromArgb(129, 140, 248),
+                Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
+                Width = 340,
+                Margin = new Padding(0, 6, 0, 0)
+            };
+            _engineOptionsPanel.Controls.Add(groundingNotice);
+        }
+        else if (_cboEngine.SelectedIndex == 1) // 🟣 PhotoRoom Native
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "İşlem Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
             _photoRoomModeComboBox.Width = 340;
             _photoRoomModeComboBox.Items.Clear();
             _photoRoomModeComboBox.Items.AddRange(["✂️ Şeffaf Arka Plan (Remove BG)", "⚪ Beyaz E-Ticaret Arka Planı", "🎨 AI Arka Plan Sahnesi"]);
-            _photoRoomModeComboBox.SelectedIndex = 2;
+            _photoRoomModeComboBox.SelectedIndex = 0;
             _engineOptionsPanel.Controls.Add(_photoRoomModeComboBox);
 
             _engineOptionsPanel.Controls.Add(new Label { Text = "AI Gölge Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
@@ -665,7 +765,7 @@ internal sealed class AiListingImageForm : Form
             _paddingComboBox.SelectedIndex = 0;
             _engineOptionsPanel.Controls.Add(_paddingComboBox);
         }
-        else if (_cboEngine.SelectedIndex == 1) // OpenAI (GPT Image 2)
+        else if (_cboEngine.SelectedIndex == 2) // 🏆 OpenAI (GPT Image 2)
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "OpenAI Görsel Modeli:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
             _openAiModelComboBox.Width = 340;
@@ -691,7 +791,7 @@ internal sealed class AiListingImageForm : Form
                 Margin = new Padding(0, 6, 0, 0)
             });
         }
-        else if (_cboEngine.SelectedIndex == 2) // Black Forest Labs FLUX
+        else if (_cboEngine.SelectedIndex == 3) // ⚡ Black Forest Labs FLUX
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "BFL FLUX Modeli (api.bfl.ml):", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
             _bflModelComboBox.Width = 340;
@@ -713,7 +813,7 @@ internal sealed class AiListingImageForm : Form
                 Margin = new Padding(0, 6, 0, 0)
             });
         }
-        else if (_cboEngine.SelectedIndex == 3) // Ideogram 4.0
+        else // 4: 🟡 Ideogram 4.0
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "Ürün Üzerine Basılacak Yazı (Tipografi):", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
             _txtIdeogramTypography.Width = 340;
@@ -737,29 +837,6 @@ internal sealed class AiListingImageForm : Form
                 Margin = new Padding(0, 6, 0, 0)
             });
         }
-        else // Google Gemini (Gemini 3.1 Flash Image / Nano Banana 2)
-        {
-            _engineOptionsPanel.Controls.Add(new Label { Text = "Google Gemini Görsel Modeli:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _geminiModelComboBox.Width = 340;
-            _geminiModelComboBox.Items.Clear();
-            _geminiModelComboBox.Items.AddRange([
-                "gemini-3.1-flash-image (Nano Banana 2 - SOTA)",
-                "gemini-3-pro-image (Nano Banana Pro)",
-                "gemini-3.1-flash-lite-image (Ultra Hızlı)",
-                "imagen-3.0-generate-002 (Legacy)"
-            ]);
-            _geminiModelComboBox.SelectedIndex = 0;
-            _engineOptionsPanel.Controls.Add(_geminiModelComboBox);
-
-            _engineOptionsPanel.Controls.Add(new Label
-            {
-                Text = "🔵 Google Gemini 3.1 Flash Image ('Nano Banana 2'), 4K çözünürlük desteği ve doğal ışıklandırmayla yüksek dönüşüm getirir.",
-                ForeColor = UiStyle.TextMuted,
-                Font = new Font("Segoe UI", 8.2F),
-                Width = 340,
-                Margin = new Padding(0, 6, 0, 0)
-            });
-        }
 
         _engineOptionsPanel.ResumeLayout(true);
     }
@@ -775,7 +852,33 @@ internal sealed class AiListingImageForm : Form
     private void LoadSettings()
     {
         UpdateAiBadge();
+        AutoSelectActiveEngine();
         OnScenePresetSelected(_presetChips.SelectedPreset);
+    }
+
+    private void AutoSelectActiveEngine()
+    {
+        var cfg = StudioConfigurationManager.Current;
+        if (!string.IsNullOrWhiteSpace(cfg.DefaultEngineId))
+        {
+            int idx = cfg.DefaultEngineId.ToLowerInvariant() switch
+            {
+                "gemini" => 0,
+                "photoroom" => 1,
+                "openai" => 2,
+                "flux" => 3,
+                "ideogram" => 4,
+                _ => 0
+            };
+            if (idx >= 0 && idx < _cboEngine.Items.Count)
+            {
+                _cboEngine.SelectedIndex = idx;
+                return;
+            }
+        }
+
+        // Default to Google Gemini (0)
+        _cboEngine.SelectedIndex = 0;
     }
 
     private void UpdateAiBadge()
@@ -797,13 +900,25 @@ internal sealed class AiListingImageForm : Form
     private void OnEngineSelectionChanged()
     {
         BuildEngineSpecificControls();
+        string engineId = _cboEngine.SelectedIndex switch
+        {
+            0 => "gemini",
+            1 => "photoroom",
+            2 => "openai",
+            3 => "flux",
+            _ => "ideogram"
+        };
+        var cfg = StudioConfigurationManager.Current;
+        cfg.DefaultEngineId = engineId;
+        StudioConfigurationManager.Save(cfg);
+
         string engineName = _cboEngine.SelectedIndex switch
         {
-            0 => "PhotoRoom Native",
-            1 => "OpenAI GPT Image 2",
-            2 => "Black Forest Labs FLUX.1 Pro",
-            3 => "Ideogram 4.0",
-            _ => "Google Gemini 3.1 Flash Image"
+            0 => "Google Gemini (Görsel Düzenleme & Sahneleme)",
+            1 => "PhotoRoom Native",
+            2 => "OpenAI GPT Image 2",
+            3 => "Black Forest Labs FLUX.1 Pro",
+            _ => "Ideogram 4.0"
         };
         _statusLabel.Text = $"Aktif Motor: {engineName}";
     }
@@ -1007,206 +1122,128 @@ internal sealed class AiListingImageForm : Form
 
         try
         {
-            int engineIdx = _cboEngine.SelectedIndex;
-
-            if (engineIdx == 0) // PhotoRoom Native
+            string engineId = _cboEngine.SelectedIndex switch
             {
-                if (_sessionManager.OriginalBitmap is null)
-                {
-                    MessageBox.Show(this, "PhotoRoom için lütfen önce sol taraftan düzenlenecek bir ürün fotoğrafı yükleyin.", "Görsel Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
+                0 => "gemini",
+                1 => "photoroom",
+                2 => "openai",
+                3 => "flux",
+                _ => "ideogram"
+            };
 
-                if (string.IsNullOrWhiteSpace(_photoRoomSettings.ApiKey))
-                {
-                    MessageBox.Show(this, "Lütfen PhotoRoom API Key tanımlayın.", "PhotoRoom API Key", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                byte[] imageBytes;
-                using (var ms = new MemoryStream())
-                {
-                    _sessionManager.OriginalBitmap.Save(ms, ImageFormat.Png);
-                    imageBytes = ms.ToArray();
-                }
-
-                string mode = _photoRoomModeComboBox.SelectedIndex == 0 ? "remove_bg" : "ai_background";
-                string? bgColor = _photoRoomModeComboBox.SelectedIndex == 1 ? "FFFFFF" : null;
-                string? prompt = _photoRoomModeComboBox.SelectedIndex == 2 ? _promptTxt.Text.Trim() : null;
-                string shadowMode = _shadowComboBox.SelectedIndex switch { 0 => "ai_soft", 1 => "ai_hard", _ => "none" };
-                double padding = _paddingComboBox.SelectedIndex switch { 0 => 0.1, 1 => 0.05, 2 => 0.15, _ => 0.0 };
-
-                var (success, resultImg, errMsg) = await PhotoRoomApiService.EditProductPhotoAsync(
-                    imageBytes,
-                    _photoRoomSettings.ApiKey,
-                    mode,
-                    prompt,
-                    bgColor,
-                    shadowMode,
-                    padding);
-
-                if (success && resultImg != null)
-                {
-                    OnGenerationSuccess(resultImg, "PhotoRoom Native");
-                }
-                else
-                {
-                    MessageBox.Show(this, errMsg, "PhotoRoom Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+            var engine = AiImageEngineRegistry.GetEngine(engineId);
+            if (engine == null)
+            {
+                MessageBox.Show(this, "Seçilen AI görsel motoru bulunamadı.", "Motor Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
             }
-            else if (engineIdx == 1) // OpenAI (GPT Image 2 / SOTA)
+
+            if (!engine.IsConfigured())
             {
-                if (string.IsNullOrWhiteSpace(_aiSettings.OpenAiApiKey))
+                var ask = MessageBox.Show(
+                    this,
+                    $"{engine.DisplayName} için API Key henüz girilmemiş.\n\nŞimdi anahtarınızı yapılandırmak ister misiniz?",
+                    "API Key Gerekli",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (ask == DialogResult.Yes)
                 {
-                    MessageBox.Show(this, "OpenAI API Key tanımlı değil. Lütfen 'AI Ayarları' penceresinden API Key girin.", "OpenAI API Key Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
+                    using var dlg = new StudioKeyConfigDialog(engineId);
+                    if (dlg.ShowDialog(this) == DialogResult.OK)
+                    {
+                        var refreshedPr = PhotoRoomSettingsStore.Load();
+                        _photoRoomSettings.ApiKey = refreshedPr.ApiKey;
+                        _photoRoomSettings.AddShadow = refreshedPr.AddShadow;
+                        _photoRoomSettings.Padding = refreshedPr.Padding;
+
+                        _aiSettings = AiOptimizationSettingsStore.Load();
+                        BuildEngineSpecificControls();
+                        UpdateAiBadge();
+                    }
                 }
 
-                string prompt = _promptTxt.Text.Trim();
-                if (string.IsNullOrWhiteSpace(prompt))
-                {
-                    MessageBox.Show(this, "Lütfen bir sahne promptu girin veya 'AI ile Prompt Yaz' butonunu kullanın.", "Prompt Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
+                if (!engine.IsConfigured()) return;
+            }
 
-                string model = _openAiModelComboBox.SelectedIndex switch
+            // Engine-specific validations
+            if (engineId == "photoroom" && _sessionManager.OriginalBitmap is null)
+            {
+                MessageBox.Show(this, "PhotoRoom için lütfen önce sol taraftan düzenlenecek bir ürün fotoğrafı yükleyin.", "Görsel Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string prompt = _promptTxt.Text.Trim();
+            if (engineId == "gemini" && string.IsNullOrWhiteSpace(prompt))
+            {
+                // Auto-generate scene prompt based on selected Gemini Edit Mode
+                prompt = _geminiEditModeComboBox.SelectedIndex switch
+                {
+                    0 => "Luxury minimalist marble and warm oak surface in a sunlit boutique studio, soft natural daylight, shallow depth of field, high-end commercial packaging photography",
+                    1 => "Worn and held naturally in real life, lifestyle aesthetic, bright airy environment, authentic photography, depth of field",
+                    2 => "Clean commercial studio strobe lighting, crisp high-key lighting, soft natural contact shadow, 8k ultra-sharp commercial packshot",
+                    _ => "Professional commercial e-commerce product photograph, high detail, studio lighting"
+                };
+            }
+            else if (engineId != "photoroom" && string.IsNullOrWhiteSpace(prompt))
+            {
+                MessageBox.Show(this, "Lütfen bir sahne promptu girin veya 'AI ile Prompt Yaz' butonunu kullanın.", "Prompt Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Determine model name
+            string modelName = engineId switch
+            {
+                "gemini" => _geminiModelComboBox.SelectedIndex switch
+                {
+                    0 => "gemini-3.1-flash-image",
+                    1 => "gemini-2.5-flash-image",
+                    2 => "gemini-3.1-flash-lite-image",
+                    3 => "gemini-3-pro-image",
+                    _ => "imagen-3.0-generate-002"
+                },
+                "openai" => _openAiModelComboBox.SelectedIndex switch
                 {
                     0 => "gpt-image-2",
                     1 => "gpt-image-1.5",
                     2 => "dall-e-3",
                     _ => "dall-e-2"
-                };
-
-                string? background = _chkOpenAiTransparentBg.Checked ? "transparent" : null;
-
-                var (success, resultImg, errMsg) = await AiImageGenerationService.GenerateWithOpenAiAsync(
-                    prompt,
-                    _aiSettings.OpenAiApiKey,
-                    model,
-                    "1024x1024",
-                    background);
-
-                if (success && resultImg != null)
-                {
-                    OnGenerationSuccess(resultImg, $"OpenAI {model}");
-                }
-                else
-                {
-                    MessageBox.Show(this, errMsg, "OpenAI Görsel Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-            else if (engineIdx == 2) // Black Forest Labs (FLUX.1 Pro)
-            {
-                if (string.IsNullOrWhiteSpace(_aiSettings.BflApiKey))
-                {
-                    MessageBox.Show(this, "Black Forest Labs (BFL) API Key tanımlı değil. Lütfen 'AI Ayarları' penceresinden BFL API Key girin.", "BFL API Key Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                string prompt = _promptTxt.Text.Trim();
-                if (string.IsNullOrWhiteSpace(prompt))
-                {
-                    MessageBox.Show(this, "Lütfen bir sahne promptu girin veya 'AI ile Prompt Yaz' butonunu kullanın.", "Prompt Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                string model = _bflModelComboBox.SelectedIndex switch
+                },
+                "flux" => _bflModelComboBox.SelectedIndex switch
                 {
                     0 => "flux-pro-1.1",
                     1 => "flux-dev",
                     _ => "flux-schnell"
-                };
+                },
+                _ => ""
+            };
 
-                var (success, resultImg, errMsg) = await AiImageGenerationService.GenerateWithBflFluxAsync(
-                    prompt,
-                    _aiSettings.BflApiKey,
-                    model,
-                    1024,
-                    1024);
-
-                if (success && resultImg != null)
-                {
-                    OnGenerationSuccess(resultImg, $"BFL {model}");
-                }
-                else
-                {
-                    MessageBox.Show(this, errMsg, "BFL FLUX Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-            else if (engineIdx == 3) // Ideogram 4.0
+            var request = new ImageEngineRequest
             {
-                if (string.IsNullOrWhiteSpace(_aiSettings.IdeogramApiKey))
-                {
-                    MessageBox.Show(this, "Ideogram API Key tanımlı değil. Lütfen 'AI Ayarları' penceresinden Ideogram API Key girin.", "Ideogram API Key Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
+                InputImage = _sessionManager.OriginalBitmap,
+                Prompt = prompt,
+                ModelName = modelName,
+                LightingPreset = _lightingSelector.SelectedLighting,
+                CameraAnglePreset = _lightingSelector.SelectedCamera,
+                PreserveProduct = true,
+                TransparentBackground = _chkOpenAiTransparentBg.Checked,
+                ProcessMode = _photoRoomModeComboBox.SelectedIndex == 0 ? "remove_bg" : (_photoRoomModeComboBox.SelectedIndex == 1 ? "white_bg" : "ai_background"),
+                ShadowMode = _shadowComboBox.SelectedIndex switch { 0 => "ai_soft", 1 => "ai_hard", _ => "none" },
+                Padding = _paddingComboBox.SelectedIndex switch { 0 => 0.1, 1 => 0.05, 2 => 0.15, _ => 0.0 }
+            };
 
-                string prompt = _promptTxt.Text.Trim();
-                if (string.IsNullOrWhiteSpace(prompt))
-                {
-                    MessageBox.Show(this, "Lütfen bir sahne promptu girin veya 'AI ile Prompt Yaz' butonunu kullanın.", "Prompt Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
+            var result = await engine.ProcessAsync(request);
 
-                string typo = _txtIdeogramTypography.Text.Trim();
-                string style = _ideogramStyleComboBox.SelectedIndex switch
-                {
-                    0 => "REALISTIC",
-                    1 => "DESIGN",
-                    2 => "RENDER_3D",
-                    3 => "ANIME",
-                    _ => "GENERAL"
-                };
-
-                var (success, resultImg, errMsg) = await AiImageGenerationService.GenerateWithIdeogramAsync(
-                    prompt,
-                    _aiSettings.IdeogramApiKey,
-                    typo,
-                    style,
-                    "ASPECT_1_1");
-
-                if (success && resultImg != null)
-                {
-                    OnGenerationSuccess(resultImg, "Ideogram 4.0");
-                }
-                else
-                {
-                    MessageBox.Show(this, errMsg, "Ideogram Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-            }
-            else // 4: Google Gemini (Gemini 3.1 Flash Image / Nano Banana 2)
+            if (result.Success && result.ResultImage != null)
             {
-                if (string.IsNullOrWhiteSpace(_aiSettings.GeminiApiKey))
-                {
-                    MessageBox.Show(this, "Gemini API Key tanımlı değil. Lütfen 'AI Ayarları' penceresinden Gemini API Key girin.", "Gemini API Key Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                string prompt = _promptTxt.Text.Trim();
-                if (string.IsNullOrWhiteSpace(prompt))
-                {
-                    MessageBox.Show(this, "Lütfen bir sahne promptu girin veya 'AI ile Prompt Yaz' butonunu kullanın.", "Prompt Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-
-                string model = _geminiModelComboBox.SelectedIndex switch
-                {
-                    0 => "gemini-3.1-flash-image",
-                    1 => "gemini-3-pro-image",
-                    2 => "gemini-3.1-flash-lite-image",
-                    _ => "imagen-3.0-generate-002"
-                };
-
-                var (success, resultImg, errMsg) = await AiImageGenerationService.GenerateWithGeminiImagenAsync(prompt, _aiSettings.GeminiApiKey, model, "1:1");
-
-                if (success && resultImg != null)
-                {
-                    OnGenerationSuccess(resultImg, $"Google Gemini {model}");
-                }
-                else
-                {
-                    MessageBox.Show(this, errMsg, "Gemini Image Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+                string infoText = string.IsNullOrWhiteSpace(result.ModelUsed)
+                    ? result.EngineName
+                    : $"{result.EngineName} ({result.ModelUsed} - {result.ElapsedMilliseconds}ms)";
+                OnGenerationSuccess(result.ResultImage, infoText);
+            }
+            else
+            {
+                MessageBox.Show(this, result.ErrorMessage, $"{engine.DisplayName} Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
         catch (Exception ex)
@@ -1494,6 +1531,93 @@ internal sealed class AiListingImageForm : Form
         }
 
         return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    private void ShowPhotoRoomKeyDialog(Label? statusLabel = null)
+    {
+        using var dialog = new Form
+        {
+            Text = "🪞 PhotoRoom API Key Yapılandırması",
+            Size = new Size(480, 260),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = UiStyle.CardBackground,
+            ForeColor = UiStyle.TextDark,
+        };
+
+        var lbl = new Label
+        {
+            Text = "PhotoRoom API Dashboard'dan aldığınız API Key'i yapıştırın:\n(Live: sk_pr_... veya Sandbox: sandbox_sk_...)",
+            Location = new Point(20, 16),
+            Size = new Size(420, 36),
+            Font = new Font("Segoe UI", 9F),
+        };
+        dialog.Controls.Add(lbl);
+
+        var txtKey = new TextBox
+        {
+            Location = new Point(20, 58),
+            Size = new Size(420, 30),
+            Font = new Font("Consolas", 10F),
+            Text = _photoRoomSettings.ApiKey,
+            PlaceholderText = "sk_pr_etsy_... veya sandbox_sk_...",
+        };
+        dialog.Controls.Add(txtKey);
+
+        var info = new Label
+        {
+            Text = "💡 Live Key (sk_pr_...): Filigransız yüksek çözünürlüklü ticari görsel üretir.\n💡 Sandbox Key (sandbox_sk_...): Ayda 1000 görsel ücretsizdir (filigranlı).",
+            Location = new Point(20, 96),
+            Size = new Size(420, 38),
+            Font = new Font("Segoe UI", 8.2F),
+            ForeColor = UiStyle.TextMuted,
+        };
+        dialog.Controls.Add(info);
+
+        var btnOk = new Button
+        {
+            Text = "💾 Kaydet",
+            DialogResult = DialogResult.OK,
+            Location = new Point(20, 150),
+            Size = new Size(110, 36),
+            BackColor = UiStyle.SuccessColor,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+        };
+        dialog.Controls.Add(btnOk);
+
+        var btnCancel = new Button
+        {
+            Text = "İptal",
+            DialogResult = DialogResult.Cancel,
+            Location = new Point(140, 150),
+            Size = new Size(90, 36),
+            BackColor = Color.FromArgb(51, 65, 85),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+        };
+        dialog.Controls.Add(btnCancel);
+
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            var newKey = txtKey.Text.Trim();
+            _photoRoomSettings.ApiKey = newKey;
+            PhotoRoomSettingsStore.Save(_photoRoomSettings);
+
+            _aiSettings.PhotoRoomApiKey = newKey;
+            AiOptimizationSettingsStore.Save(_aiSettings);
+
+            if (statusLabel != null)
+            {
+                statusLabel.Text = string.IsNullOrWhiteSpace(newKey) ? "⚠️ Key Tanımsız" : "🟢 PhotoRoom Bağlı";
+                statusLabel.ForeColor = string.IsNullOrWhiteSpace(newKey) ? Color.FromArgb(245, 158, 11) : Color.FromArgb(16, 185, 129);
+            }
+
+            MessageBox.Show(this, "PhotoRoom API Key başarıyla kaydedildi!", "Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
     }
 
     protected override void Dispose(bool disposing)

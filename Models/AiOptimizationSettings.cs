@@ -22,6 +22,7 @@ internal sealed class AiOptimizationSettings
     public string DeepSeekModel { get; set; } = "deepseek-reasoner";
     public string GrokApiKey { get; set; } = "";
     public string GrokModel { get; set; } = "grok-3";
+    public string PhotoRoomApiKey { get; set; } = "";
     public string PlatformToken { get; set; } = "";
 
     public bool UseOpenAi =>

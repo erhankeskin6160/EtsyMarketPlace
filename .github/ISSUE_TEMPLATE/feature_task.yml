@@ -1,0 +1,68 @@
+name: "🚀 Görev / Yeni Özellik (Task & Feature)"
+description: "Geliştirilecek yeni bir özellik, mimari görev veya iyileştirme planı açın."
+title: "[TASK]: "
+labels: ["enhancement", "task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 🎯 Yeni Görev & Özellik Tanımlama Formu
+        Bu formu kullanarak arkadaşınıza veya kendinize atanacak işin detaylarını belirleyin.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: Geliştirilecek Modül
+      description: Bu görev hangi sistem bileşenini kapsıyor?
+      options:
+        - "AI Görsel Studio (Yeni Motor, Prompt Stilleri)"
+        - "Finansal Raporlama & Muhasebe (Yeni Grafikler, Raporlar)"
+        - "Etsy API & Otomasyon Servisleri"
+        - "Pazar Araştırması & Trend Algoritmaları"
+        - "VDS & Windows Arka Plan Görevleri"
+        - "UI Modernizasyonu & Tasarım"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: İş Önceliği
+      description: Bu görevin tamamlanma önceliği nedir?
+      options:
+        - "🔥 Çok Yüksek (Bu Sprint / Bugün Yapılmalı)"
+        - "⚡ Yüksek (Öncelikli Geliştirme)"
+        - "☕ Normal (Sıradaki Geliştirmeler)"
+        - "💡 Düşük / Fikir (İleride Değerlendirilecek)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Görev Özeti & Amacı
+      description: Ne yapılacak ve bu özellik kullanıcıya/sisteme ne kazandıracak?
+      placeholder: "Örn: Finansal rapora aylık kargo maliyetlerinin değişim grafiğini ekleme..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: Kabul Kriterleri (İşin Bittiği Nasıl Anlaşılacak?)
+      description: Görevin 'Tamamlandı' (Done) sayılması için sağlanması gereken somut şartlar:
+      value: |
+        - [ ] Yeni özellik arayüzde doğru şekilde çalışmalı.
+        - [ ] İlgili birim testleri (dotnet test) hatasız geçmeli.
+        - [ ] VDS standalone build derlemesi alınabilmeli.
+    validations:
+      required: true
+
+  - type: textarea
+    id: technical_notes
+    attributes:
+      label: Teknik Notlar veya İlgili Dosyalar (İsteğe Bağlı)
+      description: Değişiklik yapılacak dosya yolları, API dokümantasyonu veya algoritma ipuçları.
+      placeholder: "Örn: Services/FinancialReportService.cs ve Models/FinancialModels.cs güncellenecek."
+    validations:
+      required: false

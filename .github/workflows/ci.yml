@@ -1,0 +1,28 @@
+name: .NET CI Build & Test
+
+on:
+  push:
+    branches: [ "main", "development" ]
+  pull_request:
+    branches: [ "main", "development" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore SimilarProductsWinForms.sln
+
+    - name: Build Solution
+      run: dotnet build SimilarProductsWinForms.sln -c Release --no-restore
+
+    - name: Run Unit Tests
+      run: dotnet test SimilarProductsWinForms.sln -c Release --no-build --verbosity normal
