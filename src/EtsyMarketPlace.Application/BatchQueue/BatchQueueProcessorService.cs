@@ -175,6 +175,118 @@ public sealed class BatchQueueProcessorService
         await _repository.ClearCompletedAsync(cancellationToken);
     }
 
+    public async Task<BatchQueueItem> SyncItemToEtsyAsync(
+        long itemId,
+        Func<long, string, string, IReadOnlyList<string>, IReadOnlyList<string>, Task> updateAction,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await _repository.GetByIdAsync(itemId, cancellationToken)
+            ?? throw new InvalidOperationException($"Kuyruk öğesi bulunamadı: #{itemId}");
+
+        if (!long.TryParse(item.ListingId, out var listingId) || listingId <= 0)
+        {
+            throw new InvalidOperationException($"Geçersiz Etsy Listing ID: '{item.ListingId}'. Canlı mağazaya senkronize edilemez.");
+        }
+
+        if (string.IsNullOrWhiteSpace(item.OptimizedTitle))
+        {
+            throw new InvalidOperationException($"#{itemId} nolu ürün henüz optimize edilmemiş. Önce optimizasyonu tamamlayın.");
+        }
+
+        await updateAction(
+            listingId,
+            item.OptimizedTitle,
+            item.OptimizedDescription,
+            item.OptimizedTags,
+            item.OptimizedMaterials);
+
+        var syncedItem = item with
+        {
+            Status = BatchQueueItemStatus.SyncedToEtsy,
+            IsSyncedToEtsy = true,
+            SyncedAt = DateTimeOffset.Now,
+            ErrorMessage = null,
+        };
+
+        await _repository.UpdateItemAsync(syncedItem, cancellationToken);
+        return syncedItem;
+    }
+
+    public async Task<BatchSyncResult> SyncBatchToEtsyAsync(
+        IReadOnlyList<long> itemIds,
+        Func<long, string, string, IReadOnlyList<string>, IReadOnlyList<string>, Task> updateAction,
+        IProgress<BatchSyncProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        var errors = new List<string>();
+        int successCount = 0;
+        int failedCount = 0;
+
+        for (int i = 0; i < itemIds.Count; i++)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+
+            var id = itemIds[i];
+            try
+            {
+                var synced = await SyncItemToEtsyAsync(id, updateAction, cancellationToken);
+                successCount++;
+                progress?.Report(new BatchSyncProgress(i + 1, itemIds.Count, synced.OptimizedTitle, true, null));
+            }
+            catch (Exception ex)
+            {
+                failedCount++;
+                errors.Add($"#{id}: {ex.Message}");
+                progress?.Report(new BatchSyncProgress(i + 1, itemIds.Count, $"#{id}", false, ex.Message));
+            }
+
+            // Safe throttling (300ms) between Etsy API requests
+            if (i < itemIds.Count - 1)
+            {
+                await Task.Delay(300, cancellationToken);
+            }
+        }
+
+        return new BatchSyncResult(itemIds.Count, successCount, failedCount, errors);
+    }
+
+    public async Task<BatchQueueItem> RollbackItemAsync(
+        long itemId,
+        Func<long, string, string, IReadOnlyList<string>, IReadOnlyList<string>, Task> updateAction,
+        CancellationToken cancellationToken = default)
+    {
+        var item = await _repository.GetByIdAsync(itemId, cancellationToken)
+            ?? throw new InvalidOperationException($"Kuyruk öğesi bulunamadı: #{itemId}");
+
+        if (!long.TryParse(item.ListingId, out var listingId) || listingId <= 0)
+        {
+            throw new InvalidOperationException($"Geçersiz Etsy Listing ID: '{item.ListingId}'. Geri alma yapılamaz.");
+        }
+
+        if (string.IsNullOrWhiteSpace(item.OriginalTitle))
+        {
+            throw new InvalidOperationException($"#{itemId} nolu ürünün orijinal başlık verisi boş. Geri alma yapılamaz.");
+        }
+
+        // Send original title, description, and tags back to Etsy
+        await updateAction(
+            listingId,
+            item.OriginalTitle,
+            item.OriginalDescription,
+            item.OriginalTags,
+            []);
+
+        var rolledBackItem = item with
+        {
+            Status = BatchQueueItemStatus.RolledBack,
+            IsSyncedToEtsy = false,
+            ErrorMessage = null,
+        };
+
+        await _repository.UpdateItemAsync(rolledBackItem, cancellationToken);
+        return rolledBackItem;
+    }
+
     private static BatchQueueSummary CalculateSummary(IReadOnlyList<BatchQueueItem> items, string statusMessage)
     {
         var total = items.Count;

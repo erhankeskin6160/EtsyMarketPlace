@@ -52,6 +52,21 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
                 ON batch_queue_items(created_at DESC);
             """;
         await command.ExecuteNonQueryAsync(cancellationToken);
+
+        // Safe migrations for live sync
+        try
+        {
+            command.CommandText = "ALTER TABLE batch_queue_items ADD COLUMN is_synced_to_etsy INTEGER NOT NULL DEFAULT 0;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (SqliteException) { }
+
+        try
+        {
+            command.CommandText = "ALTER TABLE batch_queue_items ADD COLUMN synced_at TEXT NULL;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (SqliteException) { }
     }
 
     public async Task<IReadOnlyList<BatchQueueItem>> EnqueueBatchAsync(
@@ -70,9 +85,9 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
             command.Transaction = (SqliteTransaction)transaction;
             command.CommandText = """
                 INSERT INTO batch_queue_items(
-                    created_at, listing_id, original_title, original_description, original_tags, target_keyword, category, status)
+                    created_at, listing_id, original_title, original_description, original_tags, target_keyword, category, status, is_synced_to_etsy, synced_at)
                 VALUES (
-                    $created_at, $listing_id, $original_title, $original_description, $original_tags, $target_keyword, $category, $status);
+                    $created_at, $listing_id, $original_title, $original_description, $original_tags, $target_keyword, $category, $status, 0, NULL);
 
                 SELECT last_insert_rowid();
                 """;
@@ -106,6 +121,8 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
                 [],
                 [],
                 null,
+                null,
+                false,
                 null));
         }
 
@@ -166,7 +183,9 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
                 risk_warnings = $risk_warnings,
                 issues = $issues,
                 processed_at = $processed_at,
-                error_message = $error_message
+                error_message = $error_message,
+                is_synced_to_etsy = $is_synced_to_etsy,
+                synced_at = $synced_at
             WHERE id = $id;
             """;
 
@@ -181,6 +200,8 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
         command.Parameters.AddWithValue("$issues", Join(item.Issues));
         command.Parameters.AddWithValue("$processed_at", item.ProcessedAt?.ToString("O") ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$error_message", item.ErrorMessage ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$is_synced_to_etsy", item.IsSyncedToEtsy ? 1 : 0);
+        command.Parameters.AddWithValue("$synced_at", item.SyncedAt?.ToString("O") ?? (object)DBNull.Value);
 
         var rows = await command.ExecuteNonQueryAsync(cancellationToken);
         return rows > 0 ? item : null;
@@ -190,7 +211,7 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
     {
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "DELETE FROM batch_queue_items WHERE status IN ('Completed', 'RiskWarning', 'Failed');";
+        command.CommandText = "DELETE FROM batch_queue_items WHERE status IN ('Completed', 'RiskWarning', 'Failed', 'SyncedToEtsy', 'RolledBack');";
         return await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -209,25 +230,45 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
         return connection;
     }
 
-    private static BatchQueueItem ReadRow(SqliteDataReader reader) => new(
-        reader.GetInt64(reader.GetOrdinal("id")),
-        DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("created_at"))),
-        reader.GetString(reader.GetOrdinal("listing_id")),
-        reader.GetString(reader.GetOrdinal("original_title")),
-        reader.GetString(reader.GetOrdinal("original_description")),
-        Split(reader.GetString(reader.GetOrdinal("original_tags"))),
-        reader.GetString(reader.GetOrdinal("target_keyword")),
-        reader.GetString(reader.GetOrdinal("category")),
-        Enum.TryParse<BatchQueueItemStatus>(reader.GetString(reader.GetOrdinal("status")), out var status) ? status : BatchQueueItemStatus.Pending,
-        reader.GetInt32(reader.GetOrdinal("overall_score")),
-        reader.GetString(reader.GetOrdinal("optimized_title")),
-        reader.GetString(reader.GetOrdinal("optimized_description")),
-        Split(reader.GetString(reader.GetOrdinal("optimized_tags"))),
-        Split(reader.GetString(reader.GetOrdinal("optimized_materials"))),
-        Split(reader.GetString(reader.GetOrdinal("risk_warnings"))),
-        Split(reader.GetString(reader.GetOrdinal("issues"))),
-        reader.IsDBNull(reader.GetOrdinal("processed_at")) ? null : DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("processed_at"))),
-        reader.IsDBNull(reader.GetOrdinal("error_message")) ? null : reader.GetString(reader.GetOrdinal("error_message")));
+    private static BatchQueueItem ReadRow(SqliteDataReader reader)
+    {
+        var hasSyncedCol = HasColumn(reader, "is_synced_to_etsy");
+        var hasSyncedAtCol = HasColumn(reader, "synced_at");
+
+        bool isSynced = hasSyncedCol && !reader.IsDBNull(reader.GetOrdinal("is_synced_to_etsy")) && reader.GetInt32(reader.GetOrdinal("is_synced_to_etsy")) == 1;
+        DateTimeOffset? syncedAt = hasSyncedAtCol && !reader.IsDBNull(reader.GetOrdinal("synced_at")) ? DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("synced_at"))) : null;
+
+        return new(
+            reader.GetInt64(reader.GetOrdinal("id")),
+            DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("created_at"))),
+            reader.GetString(reader.GetOrdinal("listing_id")),
+            reader.GetString(reader.GetOrdinal("original_title")),
+            reader.GetString(reader.GetOrdinal("original_description")),
+            Split(reader.GetString(reader.GetOrdinal("original_tags"))),
+            reader.GetString(reader.GetOrdinal("target_keyword")),
+            reader.GetString(reader.GetOrdinal("category")),
+            Enum.TryParse<BatchQueueItemStatus>(reader.GetString(reader.GetOrdinal("status")), out var status) ? status : BatchQueueItemStatus.Pending,
+            reader.GetInt32(reader.GetOrdinal("overall_score")),
+            reader.GetString(reader.GetOrdinal("optimized_title")),
+            reader.GetString(reader.GetOrdinal("optimized_description")),
+            Split(reader.GetString(reader.GetOrdinal("optimized_tags"))),
+            Split(reader.GetString(reader.GetOrdinal("optimized_materials"))),
+            Split(reader.GetString(reader.GetOrdinal("risk_warnings"))),
+            Split(reader.GetString(reader.GetOrdinal("issues"))),
+            reader.IsDBNull(reader.GetOrdinal("processed_at")) ? null : DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("processed_at"))),
+            reader.IsDBNull(reader.GetOrdinal("error_message")) ? null : reader.GetString(reader.GetOrdinal("error_message")),
+            isSynced,
+            syncedAt);
+    }
+
+    private static bool HasColumn(SqliteDataReader reader, string columnName)
+    {
+        for (int i = 0; i < reader.FieldCount; i++)
+        {
+            if (string.Equals(reader.GetName(i), columnName, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
 
     private static string Join(IReadOnlyList<string>? items) =>
         items is null || items.Count == 0 ? "" : string.Join(Separator, items);
