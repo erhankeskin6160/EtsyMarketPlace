@@ -56,6 +56,7 @@ internal sealed class DashboardForm : Form
     private readonly Label _lblLiveRate = new();
     private readonly Label _lblApiStatus = new();
     private readonly Label _lblLastUpdated = new();
+    private readonly ModernButtonControl _btnVdsUpdate = new();
 
     private readonly Label _lblKpiGross = new();
     private readonly Label _lblKpiNetProfit = new();
@@ -261,6 +262,30 @@ internal sealed class DashboardForm : Form
         };
         btnRefresh.Click += async (_, _) => await LoadLiveDashboardAsync();
         rightPanel.Controls.Add(btnRefresh);
+
+        _btnVdsUpdate.Text = "⚡ Yeni Sürüm";
+        _btnVdsUpdate.Size = new Size(140, 34);
+        _btnVdsUpdate.NormalColor = UiStyle.EtsyColor;
+        _btnVdsUpdate.HoverColor = UiStyle.EtsyHover;
+        _btnVdsUpdate.ForeColor = Color.White;
+        _btnVdsUpdate.Visible = false;
+        _btnVdsUpdate.Margin = new Padding(6, 0, 0, 0);
+        _btnVdsUpdate.Click += (_, _) =>
+        {
+            var res = MessageBox.Show(
+                this,
+                "GitHub üzerinde yeni bir VDS geliştirme sürümü (dev-latest) tespit edildi!\n\nUygulama otomatik güncellenip yeniden başlatılsın mı?",
+                "VDS Otomatik Güncelleme",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (res == DialogResult.Yes)
+            {
+                VdsUpdateNotifierService.TriggerVdsUpdateAndRestart();
+                Application.Exit();
+            }
+        };
+        rightPanel.Controls.Add(_btnVdsUpdate);
 
         _lblApiStatus.AutoSize = true;
         _lblApiStatus.Text = "🟢 Canlı Etsy API";
@@ -780,11 +805,29 @@ internal sealed class DashboardForm : Form
             UpdateRevenueTrendChart();
 
             _lblLastUpdated.Text = $"Son Güncelleme: {DateTime.Now:HH:mm:ss}";
+            _ = CheckVdsUpdateAsync();
         }
         catch (Exception ex)
         {
             _lblLastUpdated.Text = $"Hata: {ex.Message}";
         }
+    }
+
+    private async Task CheckVdsUpdateAsync()
+    {
+        try
+        {
+            var update = await VdsUpdateNotifierService.CheckForUpdateAsync(_cts.Token);
+            if (update.IsUpdateAvailable && !IsDisposed)
+            {
+                BeginInvoke(() =>
+                {
+                    _btnVdsUpdate.Visible = true;
+                    _btnVdsUpdate.Text = $"⚡ Yeni Sürüm ({update.PublishedAt.LocalDateTime:HH:mm})";
+                });
+            }
+        }
+        catch { }
     }
 
     private void PopulateRecentOrdersGrid()
