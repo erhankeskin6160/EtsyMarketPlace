@@ -1,0 +1,78 @@
+name: "🐛 Hata Bildirimi (Bug Report)"
+description: "Sistemde veya arayüzde karşılaşılan bir hatayı bildirin ve geliştiriciye atayın."
+title: "[BUG]: "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ### 🐞 Etsy MarketPlace Hata Bildirim Formu
+        Lütfen geliştirici arkadaşınızın hatayı hızlıca çözebilmesi için aşağıdaki bilgileri eksiksiz doldurun.
+
+  - type: dropdown
+    id: module
+    attributes:
+      label: İlgili Modül / Bileşen
+      description: Hatanın meydana geldiği sistem bileşeni hangisi?
+      options:
+        - "AI Görsel Studio & Mockup Üretici (Google Gemini / PhotoRoom)"
+        - "Finansal Raporlama & Muhasebe (Excel, KDV, Kar Analizi)"
+        - "Etsy API Senkronizasyonu & OAuth Bağlantısı"
+        - "Pazar Araştırması & Rakip Casus Paneli"
+        - "VDS Standalone EXE & Windows Servisleri"
+        - "Diğer / Genel Arayüz"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Öncelik / Aciliyet Seviyesi
+      description: Bu hata sistemi veya operasyonu ne kadar engelliyor?
+      options:
+        - "🔴 Kritik (Kullanımı tamamen engelliyor / Çökme)"
+        - "🟡 Yüksek (Önemli bir fonksiyon çalışmıyor)"
+        - "🔵 Normal (Standart hata / Yanlış veri)"
+        - "⚪ Düşük (Kozmetik / UI kayması)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Hata Açıklaması
+      description: Ne oldu? Hangi işlem sırasında bu hatayla karşılaştınız?
+      placeholder: "Örn: AI Görsel Studio'da 'Görseli Üret' butonuna basıldığında 429 Quota Exceeded hatası popup olarak çıkıyor..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Hatayı Yeniden Oluşturma Adımları
+      description: Geliştirici bu hatayı kendi bilgisayarında nasıl görebilir?
+      value: |
+        1. '...' menüsüne git
+        2. '...' butonuna tıkla
+        3. '...' değerini seç
+        4. Hatanın oluştuğunu gör
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Beklenen Davranış
+      description: Normalde ne olması gerekiyordu?
+      placeholder: "Örn: Fotoğraf Gemini API'ye gönderilip stüdyo arka planı başarıyla üretilmeliydi."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Ekran Görüntüsü, Hata Kodu veya Log Çıktısı
+      description: Varsa hata metnini veya ekran görüntüsünü buraya yapıştırın (Ctrl+V ile görsel eklenebilir).
+      placeholder: "Log veya ekran görüntüsünü buraya yapıştırın..."
+    validations:
+      required: false

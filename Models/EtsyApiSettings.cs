@@ -12,6 +12,8 @@ internal sealed class EtsyApiSettings
 
     public string RefreshToken { get; set; } = "";
 
+    public string ShopId { get; set; } = "";
+
     public DateTimeOffset AccessTokenExpiresAtUtc { get; set; }
 
     public string LastCodeVerifier { get; set; } = "";

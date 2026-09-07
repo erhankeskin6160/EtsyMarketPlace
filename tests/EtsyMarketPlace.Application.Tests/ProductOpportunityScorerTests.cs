@@ -1,0 +1,110 @@
+namespace EtsyMarketPlace.Application.Tests;
+
+using EtsyMarketPlace.Application.ProductOpportunity;
+using Xunit;
+
+public sealed class ProductOpportunityScorerTests
+{
+    [Fact]
+    public void Score_RewardsDemandAndSeoGap()
+    {
+        var scorer = new ProductOpportunityScorer();
+        var score = scorer.Score(new ProductOpportunityInput(
+            "Fantasy Wizard Bust Figurine",
+            "Hand painted fantasy decor for collectors and gamer room display.",
+            ["fantasy bust", "wizard decor", "gamer gift"],
+            68,
+            180,
+            4200,
+            850,
+            55,
+            2,
+            "fantasy bust",
+            "Art & Collectibles > Sculpture > Figurines"));
+
+        Assert.True(score.Opportunity >= 50);
+        Assert.True(score.Demand >= 50);
+        Assert.True(score.SeoGap >= 40);
+        Assert.Equal(score.Demand, score.Breakdown.Demand);
+        Assert.Equal(score.SeoGap, score.Breakdown.SeoGap);
+        Assert.NotEmpty(score.Breakdown.Summary);
+    }
+
+    [Fact]
+    public void Score_PenalizesTrademarkRisk()
+    {
+        var scorer = new ProductOpportunityScorer();
+        var safeScore = scorer.Score(new ProductOpportunityInput(
+            "Fantasy Wizard Bust Figurine",
+            "Generic fantasy decor for collectors.",
+            ["fantasy bust", "wizard decor"],
+            68,
+            120,
+            3000,
+            500,
+            72,
+            2,
+            "fantasy bust",
+            "Art & Collectibles"));
+        var riskyScore = scorer.Score(new ProductOpportunityInput(
+            "Gandalf Lord of the Rings LOTR Bust",
+            "Gandalf LOTR replica collectible.",
+            ["gandalf", "lotr", "lord of the rings"],
+            68,
+            120,
+            3000,
+            500,
+            72,
+            2,
+            "gandalf bust",
+            "Art & Collectibles"));
+
+        Assert.True(riskyScore.Risk > safeScore.Risk);
+        Assert.True(riskyScore.Opportunity < safeScore.Opportunity);
+    }
+
+    [Fact]
+    public void DetectRiskTerms_ReturnsMatchedTrademarkTerms()
+    {
+        var scorer = new ProductOpportunityScorer();
+        var terms = scorer.DetectRiskTerms(new ProductOpportunityInput(
+            "Gandalf Lord of the Rings LOTR Bust",
+            "Fantasy collectible inspired decor.",
+            ["gandalf", "lotr bust"],
+            68,
+            120,
+            3000,
+            500,
+            72,
+            2,
+            "wizard bust",
+            "Art & Collectibles"));
+
+        Assert.Contains("gandalf", terms);
+        Assert.Contains("lotr", terms);
+        Assert.Contains("lord of the rings", terms);
+    }
+
+    [Fact]
+    public void ScoreBreakdown_ExplainsCompetitionAdvantageAndRiskPenalty()
+    {
+        var scorer = new ProductOpportunityScorer();
+        var score = scorer.Score(new ProductOpportunityInput(
+            "Generic Hand Painted Dragon Shelf Bust",
+            "Fantasy shelf decor for collectors with original handmade styling.",
+            ["dragon bust", "fantasy decor", "shelf display"],
+            74,
+            90,
+            1800,
+            240,
+            68,
+            3,
+            "dragon bust",
+            "Art & Collectibles > Sculpture > Figurines"));
+
+        Assert.Equal(100 - score.Competition, score.Breakdown.CompetitionAdvantage);
+        Assert.Equal(score.Risk, score.Breakdown.RiskPenalty);
+        Assert.Contains(score.Breakdown.Summary, item => item.Contains("Rekabet", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("opportunity-v2.1", score.Breakdown.AlgorithmVersion);
+    }
+}

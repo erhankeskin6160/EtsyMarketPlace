@@ -2,12 +2,15 @@ namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
 using System.Text;
+using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Domain.Tracking;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
 internal sealed class CompetitorShopAnalysisForm : Form
 {
     private readonly EtsyApiClient _apiClient = new();
+    private readonly TrackingService _trackingService;
     private readonly HttpClient _imageHttpClient = new();
     private readonly long _shopId;
     private readonly string _initialShopName;
@@ -25,8 +28,9 @@ internal sealed class CompetitorShopAnalysisForm : Form
     private readonly Dictionary<string, Label> _kpiValues = [];
     private CompetitorShopAnalysis? _analysis;
 
-    public CompetitorShopAnalysisForm(MarketListingResult listing)
+    public CompetitorShopAnalysisForm(MarketListingResult listing, TrackingService trackingService)
     {
+        _trackingService = trackingService;
         _shopId = listing.ShopId;
         _initialShopName = listing.ShopName;
         BuildLayout();
@@ -40,9 +44,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
         Text = "Rakip Magaza Analizi";
         StartPosition = FormStartPosition.CenterParent;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1180, 760);
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1024, 680));
 
         var root = new TableLayoutPanel
         {
@@ -62,14 +64,14 @@ internal sealed class CompetitorShopAnalysisForm : Form
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 420));
         _titleLabel.Dock = DockStyle.Fill;
         _titleLabel.Text = $"Rakip Analizi: {_initialShopName}";
-        _titleLabel.Font = new Font("Segoe UI Semibold", 21F);
-        _titleLabel.ForeColor = Color.FromArgb(23, 32, 49);
+        _titleLabel.Font = UiStyle.TitleFont;
+        _titleLabel.ForeColor = UiStyle.TextDark;
         _titleLabel.TextAlign = ContentAlignment.MiddleLeft;
         header.Controls.Add(_titleLabel, 0, 0);
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.Text = "Magaza verileri bekleniyor";
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.ForeColor = Color.FromArgb(82, 93, 110);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
         header.Controls.Add(_statusLabel, 1, 0);
         root.Controls.Add(header, 0, 0);
 
@@ -78,33 +80,31 @@ internal sealed class CompetitorShopAnalysisForm : Form
         {
             kpis.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F / 7));
         }
-        AddKpi(kpis, 0, "Toplam satis", "sales");
-        AddKpi(kpis, 1, "Aktif urun", "listings");
-        AddKpi(kpis, 2, "Magaza puani", "reviews");
-        AddKpi(kpis, 3, "Ortalama fiyat", "averagePrice");
-        AddKpi(kpis, 4, "Medyan fiyat", "medianPrice");
-        AddKpi(kpis, 5, "Ortalama SEO", "seo");
-        AddKpi(kpis, 6, "Rakip gucu", "strength");
+        UiStyle.AddKpiCard(kpis, 0, 0, "Toplam satis", "sales", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 1, 0, "Aktif urun", "listings", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 2, 0, "Magaza puani", "reviews", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 3, 0, "Ortalama fiyat", "averagePrice", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 4, 0, "Medyan fiyat", "medianPrice", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 5, 0, "Ortalama SEO", "seo", _kpiValues);
+        UiStyle.AddKpiCard(kpis, 6, 0, "Rakip gucu", "strength", _kpiValues);
         root.Controls.Add(kpis, 0, 1);
 
         var commands = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, Padding = new Padding(0, 5, 0, 7) };
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
-        commands.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-        commands.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, 0);
+        for (var i = 0; i < 5; i++) commands.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+
         var shopButton = CreateButton("Etsy'de Magazayi Ac");
         shopButton.Click += (_, _) => OpenUrl(_analysis?.Shop.ShopUrl);
-        commands.Controls.Add(shopButton, 1, 0);
+        commands.Controls.Add(shopButton, 0, 0);
         var csvButton = CreateButton("CSV Aktar");
         csvButton.Click += (_, _) => ExportCsv();
-        commands.Controls.Add(csvButton, 2, 0);
+        commands.Controls.Add(csvButton, 1, 0);
+        var trackButton = CreateButton("Takibe Ekle");
+        trackButton.Click += async (_, _) => await TrackShopAsync();
+        commands.Controls.Add(trackButton, 2, 0);
         ConfigureButton(_refreshButton, "Verileri Yenile");
         _refreshButton.Click += async (_, _) => await LoadAnalysisAsync();
         commands.Controls.Add(_refreshButton, 3, 0);
-        var closeButton = CreateButton("Geri Don");
-        closeButton.BackColor = Color.FromArgb(82, 93, 110);
+        var closeButton = CreateButton("Geri Don", isSecondary: true);
         closeButton.Click += (_, _) => Close();
         commands.Controls.Add(closeButton, 4, 0);
         root.Controls.Add(commands, 0, 2);
@@ -210,7 +210,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
 
     private static void ConfigureMetricGrid(DataGridView grid)
     {
-        ConfigureBaseGrid(grid);
+        UiStyle.ConfigureBaseGrid(grid);
         grid.AutoGenerateColumns = false;
         grid.Columns.Add(new DataGridViewTextBoxColumn
         {
@@ -234,8 +234,7 @@ internal sealed class CompetitorShopAnalysisForm : Form
 
     private static void ConfigureProductGrid(DataGridView grid, bool includeImage)
     {
-        ConfigureBaseGrid(grid);
-        grid.AutoGenerateColumns = false;
+        UiStyle.ConfigureBaseGrid(grid);
         grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         grid.RowTemplate.MinimumHeight = includeImage ? 72 : 48;
         grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
@@ -414,37 +413,38 @@ internal sealed class CompetitorShopAnalysisForm : Form
         _statusLabel.Text = "Rakip magaza CSV dosyasi kaydedildi";
     }
 
-    private void AddKpi(TableLayoutPanel parent, int column, string title, string key)
+    private async Task TrackShopAsync()
     {
-        var panel = new TableLayoutPanel
+        if (_analysis is null)
         {
-            Dock = DockStyle.Fill,
-            RowCount = 2,
-            BackColor = Color.White,
-            Margin = new Padding(column == 0 ? 0 : 5, 2, column == 6 ? 0 : 5, 4),
-            Padding = new Padding(12, 8, 12, 8),
-            CellBorderStyle = TableLayoutPanelCellBorderStyle.Single,
-        };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.Controls.Add(new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = title,
-            ForeColor = Color.FromArgb(82, 93, 110),
-            TextAlign = ContentAlignment.MiddleLeft,
-        }, 0, 0);
-        var value = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = "-",
-            Font = new Font("Segoe UI Semibold", 14F),
-            ForeColor = Color.FromArgb(23, 32, 49),
-            TextAlign = ContentAlignment.MiddleLeft,
-        };
-        panel.Controls.Add(value, 0, 1);
-        _kpiValues[key] = value;
-        parent.Controls.Add(panel, column, 0);
+            MessageBox.Show(this, "Once magaza analizinin tamamlanmasini bekleyin.", "Takibe Ekle", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        await _trackingService.TrackAsync(new TrackingCapture(
+            TrackingEntityType.Shop,
+            _analysis.Shop.ShopId.ToString(),
+            _analysis.Shop.ShopName,
+            _analysis.Shop.ShopUrl,
+            new TrackingSnapshot(
+                0,
+                0,
+                DateTimeOffset.Now,
+                _analysis.AveragePrice,
+                _analysis.PriceCurrency,
+                null,
+                null,
+                _analysis.Shop.TotalSales,
+                _analysis.Shop.ReviewCount,
+                _analysis.Shop.ReviewAverage,
+                _analysis.AverageSeoScore,
+                _analysis.CompetitorStrengthScore,
+                null,
+                null,
+                null,
+                _analysis.Shop.ActiveListingCount,
+                _analysis.Listings.Count)));
+        _statusLabel.Text = "Magaza takibe eklendi ve snapshot kaydedildi";
     }
 
     private void SetKpi(string key, string value) => _kpiValues[key].Text = value;
@@ -458,44 +458,32 @@ internal sealed class CompetitorShopAnalysisForm : Form
     {
         Dock = DockStyle.Fill,
         Text = text,
+        ForeColor = UiStyle.TextDark,
         TextAlign = ContentAlignment.MiddleLeft,
     };
-
-    private static void ConfigureBaseGrid(DataGridView grid)
-    {
-        grid.Dock = DockStyle.Fill;
-        grid.ReadOnly = true;
-        grid.AllowUserToAddRows = false;
-        grid.AllowUserToDeleteRows = false;
-        grid.AllowUserToResizeRows = false;
-        grid.RowHeadersVisible = false;
-        grid.MultiSelect = false;
-        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        grid.BackgroundColor = Color.White;
-        grid.BorderStyle = BorderStyle.FixedSingle;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
-    }
 
     private static void AddProductColumn(DataGridView grid, string title, string property, int width)
     {
         grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = title, DataPropertyName = property, Width = width });
     }
 
-    private static Button CreateButton(string text)
+    private static Button CreateButton(string text, bool isSecondary = false)
     {
         var button = new Button();
-        ConfigureButton(button, text);
+        ConfigureButton(button, text, isSecondary);
         return button;
     }
 
-    private static void ConfigureButton(Button button, string text)
+    private static void ConfigureButton(Button button, string text, bool isSecondary = false)
     {
         button.Dock = DockStyle.Fill;
         button.Text = text;
-        button.BackColor = Color.FromArgb(32, 97, 165);
+        button.BackColor = isSecondary ? UiStyle.SecondaryColor : UiStyle.PrimaryColor;
         button.ForeColor = Color.White;
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderSize = 0;
+        button.FlatAppearance.MouseOverBackColor = isSecondary ? UiStyle.SecondaryHover : UiStyle.PrimaryHover;
+        button.Font = UiStyle.SemiboldBaseFont;
         button.Margin = new Padding(6, 2, 0, 2);
     }
 

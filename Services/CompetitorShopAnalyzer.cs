@@ -55,7 +55,76 @@ internal static partial class CompetitorShopAnalyzer
             RetrievedAt = DateTimeOffset.Now,
             CurrencyDisplay = currencies.Count > 0 ? string.Join(", ", currencies) : "Para birimi yok",
             PriceCurrency = dominantCurrency,
+            EstimatedDailySalesVelocity = CalculateDailySalesVelocity(shop),
+            EstimatedMonthlyTurnover = CalculateMonthlyTurnover(shop, priced.Count > 0 ? priced.Average() : 0),
+            AiCompetitiveGapInsight = GenerateCompetitiveGapInsight(shop, listings, priced.Count > 0 ? priced.Average() : 0),
         };
+    }
+
+    private static decimal CalculateDailySalesVelocity(CompetitorShopProfile shop)
+    {
+        if (shop.TotalSales <= 0) return 0;
+        if (shop.DailySalesEstimate > 0) return shop.DailySalesEstimate;
+
+        if (shop.CreatedDate.HasValue)
+        {
+            var days = Math.Max(30, (DateTimeOffset.UtcNow - shop.CreatedDate.Value).TotalDays);
+            return Math.Round((decimal)shop.TotalSales / (decimal)days, 1);
+        }
+
+        // Tahmini: Ortalama Etsy mağaza yaşam döngüsüne göre normalize
+        var estimatedDays = Math.Clamp(shop.TotalSales * 2.5, 90, 1800);
+        return Math.Round((decimal)shop.TotalSales / (decimal)estimatedDays, 1);
+    }
+
+    private static decimal CalculateMonthlyTurnover(CompetitorShopProfile shop, decimal avgPrice)
+    {
+        var daily = CalculateDailySalesVelocity(shop);
+        var price = avgPrice > 0 ? avgPrice : (shop.MonthlyRevenueEstimate > 0 ? shop.MonthlyRevenueEstimate / 30 : 35m);
+        return Math.Round(daily * 30 * price, 2);
+    }
+
+    public static string GenerateCompetitiveGapInsight(CompetitorShopProfile shop, List<MarketListingResult> listings, decimal avgPrice)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"🎯 RAKİP AÇIĞI VE STRATEJİK DEĞERLENDİRME: {shop.ShopName.ToUpperInvariant()}");
+        sb.AppendLine(new string('-', 60));
+
+        // 1. Fiyat Konumlandırması
+        if (avgPrice > 0)
+        {
+            sb.AppendLine($"• Fiyatlandırma: Rakibin ortalama ürün fiyatı {avgPrice:C2}. Eğer ürünleriniz benzer kalitede ise %10-15 indirimle veya kargo dahil bundle (set) teklifleriyle öne geçebilirsiniz.");
+        }
+
+        // 2. SEO & Başlık Eksikleri
+        if (listings.Count > 0)
+        {
+            var lowSeoCount = listings.Count(l => l.SeoScore < 65);
+            var shortTitleCount = listings.Count(l => l.Title.Length < 90);
+            if (lowSeoCount > 0 || shortTitleCount > 0)
+            {
+                sb.AppendLine($"• SEO Zayıflığı: Rakibin {listings.Count} ürününden {shortTitleCount} tanesi kısa başlığa, {lowSeoCount} tanesi ise zayıf SEO puanına sahip. 140 karakteri dolduran altın formüllü başlıklarımızla organik aramada bu rakibi rahatlıkla geçebilirsiniz.");
+            }
+            else
+            {
+                sb.AppendLine("• SEO Gücü: Rakibin başlıkları ve SEO optimizasyonu güçlü görünüyor. Öne geçmek için daha niş ve spesifik 2-3 kelimelik long-tail taglere odaklanın.");
+            }
+
+            // 3. Tag Çeşitliliği
+            var totalTags = listings.SelectMany(l => l.Tags).Distinct().Count();
+            if (totalTags < listings.Count * 6)
+            {
+                sb.AppendLine($"• Tag Tekrarı: Rakip ürünlerinde sürekli aynı kelimeleri tekrar ediyor (Toplam {totalTags} farklı etiket). Farklı kullanım alanları ve hediye kitlelerine hitap eden alternatif taglerle yeni alıcı trafiği yakalayabilirsiniz.");
+            }
+        }
+
+        // 4. Müşteri Memnuniyeti & Güven
+        if (shop.ReviewCount > 0)
+        {
+            sb.AppendLine($"• Müşteri Güveni: {shop.ReviewCount:N0} değerlendirme ile ortalama {shop.ReviewAverage:0.0} yıldız almış. Hızlı kargo, özenli hediye paketi ve 6 bölümlü profesyonel açıklama ile güven farkı yaratabilirsiniz.");
+        }
+
+        return sb.ToString();
     }
 
     private static List<FrequencyMetric> BuildFrequency(IEnumerable<string> values, int listingCount, int limit)

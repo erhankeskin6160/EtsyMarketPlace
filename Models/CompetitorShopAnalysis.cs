@@ -10,6 +10,9 @@ internal sealed class CompetitorShopProfile
     public int ReviewCount { get; init; }
     public decimal ReviewAverage { get; init; }
     public int ActiveListingCount { get; init; }
+    public DateTimeOffset? CreatedDate { get; init; }
+    public decimal DailySalesEstimate { get; init; }
+    public decimal MonthlyRevenueEstimate { get; init; }
 }
 
 internal sealed class CompetitorShopAnalysis
@@ -30,6 +33,9 @@ internal sealed class CompetitorShopAnalysis
     public DateTimeOffset RetrievedAt { get; init; }
     public string CurrencyDisplay { get; init; } = "";
     public string PriceCurrency { get; init; } = "";
+    public decimal EstimatedDailySalesVelocity { get; init; }
+    public decimal EstimatedMonthlyTurnover { get; init; }
+    public string AiCompetitiveGapInsight { get; set; } = "";
 }
 
 internal sealed record FrequencyMetric(string Name, int Count, decimal Percentage)

@@ -31,11 +31,10 @@ public partial class Form1 : Form
 
     private void BuildLayout()
     {
-        Text = "3DArtDesignsStore - Benzer Urun Bulucu";
+        Text = "3DArtDesignsStore - Benzer Ürün Bulucu";
         MinimumSize = new Size(1120, 720);
         StartPosition = FormStartPosition.CenterScreen;
-        Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
+        UiStyle.ApplyTheme(this);
 
         var root = new TableLayoutPanel
         {
