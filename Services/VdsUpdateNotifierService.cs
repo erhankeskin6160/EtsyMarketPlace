@@ -56,8 +56,8 @@ internal sealed class VdsUpdateNotifierService
 
             var localWriteTime = new DateTimeOffset(File.GetLastWriteTimeUtc(currentExePath), TimeSpan.Zero);
 
-            // Eğer GitHub'daki release, yerel exe'den en az 2 dakika daha yeniyse güncelleme var demektir
-            if (publishedAt > localWriteTime.AddMinutes(2))
+            // Eğer GitHub'daki release, yerel exe'den daha yeniyse güncelleme var demektir
+            if (publishedAt > localWriteTime.AddSeconds(15))
             {
                 string downloadUrl = "https://github.com/erhankeskin6160/EtsyMarketPlace/releases/download/dev-latest/SimilarProductsWinForms.exe";
                 return new UpdateCheckResult(true, "dev-latest", publishedAt, downloadUrl);
@@ -126,10 +126,10 @@ internal sealed class VdsUpdateNotifierService
 
         Task.Run(async () =>
         {
-            // İlk kontrolü program açıldıktan 15 saniye sonra yap
+            // İlk kontrolü program açıldıktan 5 saniye sonra yap
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(15), ct);
+                await Task.Delay(TimeSpan.FromSeconds(5), ct);
             }
             catch (OperationCanceledException)
             {
@@ -145,14 +145,14 @@ internal sealed class VdsUpdateNotifierService
                     {
                         _isUpdating = true;
                         var pubTimeStr = result.PublishedAt.LocalDateTime.ToString("HH:mm:ss");
-                        onStatusChanged?.Invoke($"⚡ Yeni geliştirme sürümü algılandı ({pubTimeStr}). 5 saniye içinde otomatik güncelleniyor...");
+                        onStatusChanged?.Invoke($"⚡ Yeni publish algılandı ({pubTimeStr})! 3 saniye içinde güncelleniyor...");
 
-                        // Varsa devam eden UI/DB işlemlerinin kapanması için 5 saniye bekle
-                        await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                        // Devam eden işlemlerin temiz kapanması için 3 saniye bekle
+                        await Task.Delay(TimeSpan.FromSeconds(3), ct);
 
                         TriggerVdsUpdateAndRestart();
 
-                        // Güncelleyici scriptinin başlaması için 1 saniye bekle ve temiz şekilde kapan
+                        // Güncelleyicinin başlaması için 1 saniye bekle ve temiz şekilde kapan
                         await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None);
                         Environment.Exit(0);
                         return;
@@ -167,7 +167,7 @@ internal sealed class VdsUpdateNotifierService
                     Debug.WriteLine($"Auto-updater loop error: {ex.Message}");
                 }
 
-                // Belirtilen aralık kadar bekle (varsayılan 5 dakika)
+                // Belirtilen aralık kadar bekle (varsayılan 20 saniye)
                 try
                 {
                     await Task.Delay(checkInterval, ct);

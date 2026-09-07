@@ -112,7 +112,7 @@ internal sealed class DashboardForm : Form
         Shown += async (_, _) =>
         {
             DailyFinancialReportScheduler.Instance.Start();
-            VdsUpdateNotifierService.StartPeriodicAutoUpdater(TimeSpan.FromMinutes(5), statusMsg =>
+            VdsUpdateNotifierService.StartPeriodicAutoUpdater(TimeSpan.FromSeconds(20), statusMsg =>
             {
                 if (!IsDisposed)
                 {
