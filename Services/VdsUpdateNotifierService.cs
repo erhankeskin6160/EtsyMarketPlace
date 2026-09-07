@@ -113,4 +113,70 @@ internal sealed class VdsUpdateNotifierService
             Debug.WriteLine($"Update trigger error: {ex.Message}");
         }
     }
+
+    private static CancellationTokenSource? _autoUpdateCts;
+    private static bool _isUpdating = false;
+
+    public static void StartPeriodicAutoUpdater(TimeSpan checkInterval, Action<string>? onStatusChanged = null)
+    {
+        if (_autoUpdateCts != null) return; // Already running
+
+        _autoUpdateCts = new CancellationTokenSource();
+        var ct = _autoUpdateCts.Token;
+
+        Task.Run(async () =>
+        {
+            // İlk kontrolü program açıldıktan 15 saniye sonra yap
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(15), ct);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    var result = await CheckForUpdateAsync(ct);
+                    if (result.IsUpdateAvailable && !_isUpdating)
+                    {
+                        _isUpdating = true;
+                        var pubTimeStr = result.PublishedAt.LocalDateTime.ToString("HH:mm:ss");
+                        onStatusChanged?.Invoke($"⚡ Yeni geliştirme sürümü algılandı ({pubTimeStr}). 5 saniye içinde otomatik güncelleniyor...");
+
+                        // Varsa devam eden UI/DB işlemlerinin kapanması için 5 saniye bekle
+                        await Task.Delay(TimeSpan.FromSeconds(5), ct);
+
+                        TriggerVdsUpdateAndRestart();
+
+                        // Güncelleyici scriptinin başlaması için 1 saniye bekle ve temiz şekilde kapan
+                        await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None);
+                        Environment.Exit(0);
+                        return;
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Auto-updater loop error: {ex.Message}");
+                }
+
+                // Belirtilen aralık kadar bekle (varsayılan 5 dakika)
+                try
+                {
+                    await Task.Delay(checkInterval, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }, ct);
+    }
 }

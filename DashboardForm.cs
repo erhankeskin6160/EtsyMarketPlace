@@ -112,6 +112,21 @@ internal sealed class DashboardForm : Form
         Shown += async (_, _) =>
         {
             DailyFinancialReportScheduler.Instance.Start();
+            VdsUpdateNotifierService.StartPeriodicAutoUpdater(TimeSpan.FromMinutes(5), statusMsg =>
+            {
+                if (!IsDisposed)
+                {
+                    try
+                    {
+                        BeginInvoke(() =>
+                        {
+                            _lblLastUpdated.Text = statusMsg;
+                            _lblLastUpdated.ForeColor = UiStyle.EtsyColor;
+                        });
+                    }
+                    catch { }
+                }
+            });
             await LoadLiveDashboardAsync();
         };
     }

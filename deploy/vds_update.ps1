@@ -88,14 +88,24 @@ try {
     # 5. Programı başlat
     Write-Host "[5/5] Yeni surum baslatiliyor..." -ForegroundColor Yellow
     Start-Process -FilePath $targetExe -WorkingDirectory $appDir
+    
+    $logFile = Join-Path $appDir "vds_update.log"
+    $logMsg = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] BASARILI: $exeName dev-latest surumune basariyla guncellendi."
+    Add-Content -Path $logFile -Value $logMsg -ErrorAction SilentlyContinue
+
     Write-Host "=================================================================" -ForegroundColor Green
     Write-Host "   ✅ VDS Basariyla Guncellendi ve Program Calistirildi!" -ForegroundColor Green
     Write-Host "=================================================================" -ForegroundColor Green
-    Start-Sleep -Seconds 3
+    Start-Sleep -Seconds 2
 }
 catch {
     Write-Host ""
     Write-Host "❌ HATA OLUSTU: $($_.Exception.Message)" -ForegroundColor Red
+    
+    $logFile = Join-Path $appDir "vds_update.log"
+    $logMsg = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] HATA: $($_.Exception.Message)"
+    Add-Content -Path $logFile -Value $logMsg -ErrorAction SilentlyContinue
+
     if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force -ErrorAction SilentlyContinue }
     
     # Hata durumunda eski exe varsa onu çalıştır
@@ -103,6 +113,5 @@ catch {
         Write-Host "Mevcut surumle program aciliyor..." -ForegroundColor Yellow
         Start-Process -FilePath $targetExe -WorkingDirectory $appDir
     }
-    Write-Host "Devam etmek icin bir tusa basin..."
-    [Console]::ReadKey() | Out-Null
+    Start-Sleep -Seconds 4
 }
