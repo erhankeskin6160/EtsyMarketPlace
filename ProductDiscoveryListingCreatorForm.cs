@@ -71,6 +71,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private bool _opportunitySortDescending;
     private bool _viewsSortDescending;
     private long? _lastCreatedListingId;
+    private int _hoveredButtonRow = -1;
 
     private IdeaRow? SelectedRow => _bindingSource.Current as IdeaRow;
 
@@ -691,29 +692,112 @@ internal sealed class ProductDiscoveryListingCreatorForm(
                 ApplyViewsSort();
             }
         };
-        _grid.CellContentClick += (_, e) =>
+        _grid.CellClick += (_, e) =>
         {
             if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == "ListingLink")
             {
                 OpenUrl((_grid.Rows[e.RowIndex].DataBoundItem as IdeaRow)?.Listing.ListingUrl);
             }
         };
+        _grid.CellMouseMove += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == "ListingLink")
+            {
+                _grid.Cursor = Cursors.Hand;
+                if (_hoveredButtonRow != e.RowIndex)
+                {
+                    int prev = _hoveredButtonRow;
+                    _hoveredButtonRow = e.RowIndex;
+                    if (prev >= 0 && prev < _grid.RowCount)
+                    {
+                        _grid.InvalidateCell(e.ColumnIndex, prev);
+                    }
+                    _grid.InvalidateCell(e.ColumnIndex, e.RowIndex);
+                }
+            }
+            else
+            {
+                if (_hoveredButtonRow != -1)
+                {
+                    int prev = _hoveredButtonRow;
+                    _hoveredButtonRow = -1;
+                    _grid.Cursor = Cursors.Default;
+                    int linkColIndex = _grid.Columns["ListingLink"]?.Index ?? -1;
+                    if (linkColIndex >= 0 && prev >= 0 && prev < _grid.RowCount)
+                    {
+                        _grid.InvalidateCell(linkColIndex, prev);
+                    }
+                }
+            }
+        };
+        _grid.CellMouseLeave += (_, e) =>
+        {
+            if (_hoveredButtonRow != -1)
+            {
+                int prev = _hoveredButtonRow;
+                _hoveredButtonRow = -1;
+                _grid.Cursor = Cursors.Default;
+                int linkColIndex = _grid.Columns["ListingLink"]?.Index ?? -1;
+                if (linkColIndex >= 0 && prev >= 0 && prev < _grid.RowCount)
+                {
+                    _grid.InvalidateCell(linkColIndex, prev);
+                }
+            }
+        };
+        _grid.CellPainting += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _grid.Columns[e.ColumnIndex].Name == "ListingLink")
+            {
+                e.PaintBackground(e.ClipBounds, (e.State & DataGridViewElementStates.Selected) != 0);
+
+                var g = e.Graphics!;
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+
+                bool isHovered = e.RowIndex == _hoveredButtonRow;
+                Color linkColor = isHovered ? Color.FromArgb(56, 189, 248) : Color.FromArgb(14, 165, 233); // Sky 400 hover, Sky 500 normal
+                FontStyle fontStyle = isHovered ? (FontStyle.Bold | FontStyle.Underline) : FontStyle.Regular;
+
+                using var font = new Font("Segoe UI Semibold", 9F, fontStyle);
+                TextRenderer.DrawText(
+                    g,
+                    "🔗 İlanı Gör",
+                    font,
+                    e.CellBounds,
+                    linkColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+                e.Handled = true;
+            }
+        };
+        _grid.CellFormatting += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _grid.Columns[e.ColumnIndex].DataPropertyName == nameof(IdeaRow.Thumbnail))
+            {
+                if (_grid.Rows[e.RowIndex].DataBoundItem is IdeaRow row)
+                {
+                    e.Value = row.Listing.ThumbnailImage;
+                    e.FormattingApplied = true;
+                }
+            }
+        };
+        _grid.DataError += (_, _) => { };
         _grid.Columns.Add(new DataGridViewImageColumn
         {
             HeaderText = "Resim",
             DataPropertyName = nameof(IdeaRow.Thumbnail),
             ImageLayout = DataGridViewImageCellLayout.Zoom,
             Width = 78,
+            DefaultCellStyle = new DataGridViewCellStyle { NullValue = null }
         });
         AddColumn("Firsat", nameof(IdeaRow.Opportunity), 70);
-        AddColumn("Urun fikri", nameof(IdeaRow.Title), 380, true);
+        AddColumn("Urun fikri", nameof(IdeaRow.Title), 360, true);
         _grid.Columns.Add(new DataGridViewButtonColumn
         {
             HeaderText = "Rakip listing",
             Name = "ListingLink",
-            Text = "Ac",
+            Text = "Aç ↗",
             UseColumnTextForButtonValue = true,
-            Width = 95,
+            Width = 115,
         });
         AddColumn("Fiyat", nameof(IdeaRow.Price), 90);
         AddColumn("Magaza", nameof(IdeaRow.Shop), 150);
@@ -778,11 +862,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(
                 .ToList();
             SetBusyMessage("Kategori adlari yukleniyor");
             await EnrichCategoriesAsync(settings);
-            SetBusyMessage("Urun gorselleri yukleniyor");
-            await LoadGridThumbnailsAsync();
             _bindingSource.DataSource = _rows;
             _statusLabel.Text = $"{_rows.Count} Etsy urunu listelendi";
             FillFromSelectedIdea();
+            _ = LoadGridThumbnailsAsync();
         }
         catch (Exception ex)
         {
@@ -820,11 +903,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _rows = [new IdeaRow(listing)];
             SetBusyMessage("Kategori adi yukleniyor");
             await EnrichCategoriesAsync(settings);
-            SetBusyMessage("Urun gorseli yukleniyor");
-            await LoadGridThumbnailsAsync();
             _bindingSource.DataSource = _rows;
             _bindingSource.Position = 0;
             FillFromSelectedIdea();
+            _ = LoadGridThumbnailsAsync();
             _variationsTextBox.Text = BuildVariationSuggestions(listing);
             _statusLabel.Text = listing.VariationOptions.Count > 0
                 ? "Etsy linkinden listing ve gercek varyasyonlar alindi"
@@ -1425,29 +1507,76 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private async Task LoadGridThumbnailsAsync()
     {
-        _statusLabel.Text = "Urun gorselleri yukleniyor...";
-        foreach (var row in _rows)
+        if (_rows.Count == 0)
         {
-            var imageUrl = row.Listing.ImageUrls.FirstOrDefault();
-            if (string.IsNullOrWhiteSpace(imageUrl))
-            {
-                imageUrl = row.Listing.ImageUrl;
-            }
+            return;
+        }
 
-            if (string.IsNullOrWhiteSpace(imageUrl))
-            {
-                continue;
-            }
+        using var semaphore = new SemaphoreSlim(4);
+        var currentRows = _rows.ToList();
 
+        var tasks = currentRows.Select(async row =>
+        {
+            await semaphore.WaitAsync();
             try
             {
+                if (row.Listing.ThumbnailImage is not null)
+                {
+                    return;
+                }
+
+                await EnsureListingImagesAsync(row.Listing);
+
+                var imageUrl = row.Listing.ImageUrls.FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(imageUrl))
+                {
+                    imageUrl = row.Listing.ImageUrl;
+                }
+
+                if (string.IsNullOrWhiteSpace(imageUrl))
+                {
+                    return;
+                }
+
                 using var image = await DownloadImageAsync(imageUrl);
                 row.Listing.ThumbnailImage = CreateThumbnail(image, 72, 58);
+
+                if (!IsDisposed && IsHandleCreated)
+                {
+                    BeginInvoke(() =>
+                    {
+                        try
+                        {
+                            _bindingSource.ResetBindings(false);
+                            _grid.Invalidate();
+                        }
+                        catch { }
+                    });
+                }
             }
             catch
             {
-                // Gorsel yoksa listeyi yine kullanilabilir tut.
+                // Gorsel yuklenemezse urun listesini kullanilabilir tut
             }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+
+        if (!IsDisposed && IsHandleCreated)
+        {
+            BeginInvoke(() =>
+            {
+                try
+                {
+                    _bindingSource.ResetBindings(false);
+                    _grid.Refresh();
+                }
+                catch { }
+            });
         }
     }
 
@@ -1492,6 +1621,22 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         {
             var image = await DownloadImageAsync(urls[_selectedImageIndex]);
             SetPreviewImage(image, $"{_selectedImageIndex + 1} / {urls.Count}");
+            if (listing.ThumbnailImage is null)
+            {
+                listing.ThumbnailImage = CreateThumbnail(image, 72, 58);
+                if (!IsDisposed && IsHandleCreated)
+                {
+                    BeginInvoke(() =>
+                    {
+                        try
+                        {
+                            _bindingSource.ResetBindings(false);
+                            _grid.Invalidate();
+                        }
+                        catch { }
+                    });
+                }
+            }
         }
         catch
         {
