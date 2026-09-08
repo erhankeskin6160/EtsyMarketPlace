@@ -1,14 +1,19 @@
 namespace SimilarProductsWinForms;
 
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
 using EtsyMarketPlace.Application.AbTesting;
+using EtsyMarketPlace.Application.ListingOptimization;
+using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 
 internal sealed class ListingAbTestForm : Form
 {
     private readonly AbTestService _abTestService;
+    private readonly IAiListingOptimizer? _aiOptimizer;
     private readonly EtsyApiClient _apiClient = new();
     private readonly DataGridView _grid = new();
     private readonly BindingSource _bindingSource = new();
@@ -25,9 +30,10 @@ internal sealed class ListingAbTestForm : Form
     private readonly TextBox _variantBTags = new() { ReadOnly = true, Multiline = true };
     private List<ListingAbTestExperiment> _experiments = [];
 
-    public ListingAbTestForm(AbTestService abTestService)
+    public ListingAbTestForm(AbTestService abTestService, IAiListingOptimizer? aiOptimizer = null)
     {
         _abTestService = abTestService;
+        _aiOptimizer = aiOptimizer;
         BuildLayout();
         Shown += async (_, _) => await LoadDataAsync();
     }
@@ -67,24 +73,53 @@ internal sealed class ListingAbTestForm : Form
         root.Controls.Add(header, 0, 0);
 
         // Toolbar
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1 };
-        for (var i = 0; i < 4; i++) toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 6, RowCount = 1 };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f)); // Yeni Test
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f)); // 🔄 Etsy Canlı Senkron
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18f)); // ✏️ Metrik Düzenle
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 13f)); // 🗑️ Sil
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12f)); // Yenile
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12f)); // Kapat
 
-        var newTestBtn = UiStyle.CreateButton("Yeni A/B Testi");
+        var newTestBtn = UiStyle.CreateButton("🧪 Yeni A/B Testi");
         newTestBtn.Click += async (_, _) => await OpenNewTestDialogAsync();
         toolbar.Controls.Add(newTestBtn, 0, 0);
 
-        var updateMetricsBtn = UiStyle.CreateButton("Metrik Güncelle");
-        updateMetricsBtn.Click += async (_, _) => await OpenUpdateMetricsDialogAsync();
-        toolbar.Controls.Add(updateMetricsBtn, 1, 0);
+        var syncEtsyBtn = new Controls.ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🔄 Etsy'den Senkronize Et",
+            NormalColor = UiStyle.SuccessColor,
+            HoverColor = Color.FromArgb(5, 150, 105),
+            ForeColor = Color.White,
+            Margin = new Padding(4, 2, 4, 2),
+        };
+        syncEtsyBtn.Click += async (_, _) => await SyncLiveMetricsFromEtsyAsync();
+        toolbar.Controls.Add(syncEtsyBtn, 1, 0);
 
-        var refreshBtn = UiStyle.CreateButton("Yenile");
+        var updateMetricsBtn = UiStyle.CreateButton("✏️ Metrik Düzenle", isSecondary: true);
+        updateMetricsBtn.Click += async (_, _) => await OpenUpdateMetricsDialogAsync();
+        toolbar.Controls.Add(updateMetricsBtn, 2, 0);
+
+        var deleteBtn = new Controls.ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🗑️ Sil",
+            NormalColor = UiStyle.SecondaryColor,
+            HoverColor = UiStyle.DangerColor,
+            ForeColor = UiStyle.TextDark,
+            Margin = new Padding(4, 2, 4, 2),
+        };
+        deleteBtn.Click += async (_, _) => await DeleteSelectedTestAsync();
+        toolbar.Controls.Add(deleteBtn, 3, 0);
+
+        var refreshBtn = UiStyle.CreateButton("Yenile", isSecondary: true);
         refreshBtn.Click += async (_, _) => await LoadDataAsync();
-        toolbar.Controls.Add(refreshBtn, 2, 0);
+        toolbar.Controls.Add(refreshBtn, 4, 0);
 
         var closeBtn = UiStyle.CreateButton("Kapat", isSecondary: true);
         closeBtn.Click += (_, _) => Close();
-        toolbar.Controls.Add(closeBtn, 3, 0);
+        toolbar.Controls.Add(closeBtn, 5, 0);
         root.Controls.Add(toolbar, 0, 1);
 
         // Content Area (Grid left 45%, Details right 55%)
@@ -458,13 +493,113 @@ internal sealed class ListingAbTestForm : Form
         }
     }
 
+    private async Task SyncLiveMetricsFromEtsyAsync()
+    {
+        if (_bindingSource.Current is not AbTestGridRow row)
+        {
+            MessageBox.Show(this, "Lütfen Etsy metriklerini senkronize etmek için listeden bir A/B testi seçiniz.", "Etsy Senkronizasyonu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var experiment = _experiments.FirstOrDefault(e => e.Id == row.Id);
+        if (experiment == null) return;
+
+        if (!long.TryParse(experiment.ListingId, out var listingId) || listingId <= 0)
+        {
+            MessageBox.Show(this, $"Bu testin geçerli bir Etsy Listing ID'si bulunmuyor (ID: '{experiment.ListingId}'). Canlı senkronizasyon yalnızca gerçek Etsy ürünlerinde çalışır.", "Geçersiz Listing ID", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var settings = EtsyApiSettingsStore.Load();
+        if (!settings.HasApiCredentials)
+        {
+            MessageBox.Show(this, "Etsy API ayarlarınız tanımlı değil. Lütfen önce Dashboard > Ayarlar menüsünden Etsy API anahtarlarınızı girin.", "Etsy API Ayarları Eksik", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+            _statusLabel.Text = $"Etsy'den güncel metrikler alınıyor (Listing #{listingId})...";
+
+            var listing = await _apiClient.GetOwnShopListingAsync(settings, listingId);
+            EtsyApiSettingsStore.Save(settings);
+
+            // Update metrics in SQLite
+            var update = new UpdateAbTestMetrics(
+                experiment.Id,
+                AfterViews: listing.Views,
+                AfterFavorites: listing.Favorites,
+                AfterSales: experiment.AfterSales,
+                CompleteExperiment: false);
+
+            await _abTestService.UpdateMetricsAsync(update);
+            await LoadDataAsync();
+
+            int viewsDiff = listing.Views - experiment.BeforeViews;
+            int favsDiff = listing.Favorites - experiment.BeforeFavorites;
+
+            MessageBox.Show(
+                this,
+                $"✅ Etsy canlı metrikleri başarıyla güncellendi!\n\n" +
+                $"Listing ID: #{listingId}\n" +
+                $"Ürün: {listing.Title}\n\n" +
+                $"• Görüntülenme: {experiment.BeforeViews} ➔ {listing.Views} (Fark: {viewsDiff:+0;-#;0})\n" +
+                $"• Favori: {experiment.BeforeFavorites} ➔ {listing.Favorites} (Fark: {favsDiff:+0;-#;0})",
+                "Etsy Senkronizasyonu Başarılı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Etsy canlı metrikleri alınırken hata oluştu:\n{ex.Message}", "Etsy Senkronizasyon Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+            _statusLabel.Text = "Hazır";
+        }
+    }
+
+    private async Task DeleteSelectedTestAsync()
+    {
+        if (_bindingSource.Current is not AbTestGridRow row)
+        {
+            MessageBox.Show(this, "Lütfen silmek istediğiniz A/B testini seçiniz.", "A/B Test Sil", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var experiment = _experiments.FirstOrDefault(e => e.Id == row.Id);
+        if (experiment == null) return;
+
+        var confirm = MessageBox.Show(
+            this,
+            $"'{experiment.ExperimentName}' isimli A/B testini silmek istediğinize emin misiniz?\n\n(Not: Mağazanızdaki Etsy ürünü etkilenmez, sadece yerel test kaydı silinir.)",
+            "A/B Testini Sil",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (confirm != DialogResult.Yes) return;
+
+        try
+        {
+            await _abTestService.DeleteAsync(experiment.Id);
+            await LoadDataAsync();
+            _statusLabel.Text = "A/B testi başarıyla silindi.";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"A/B testi silinirken hata oluştu:\n{ex.Message}", "Silme Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private async Task OpenNewTestDialogAsync()
     {
         using var dlg = new Form
         {
-            Text = "Yeni A/B Testi Başlat",
-            Width = 580,
-            Height = 480,
+            Text = "🧪 Yeni Etsy A/B Testi Başlat",
+            Width = 720,
+            Height = 680,
             StartPosition = FormStartPosition.CenterParent,
             FormBorderStyle = FormBorderStyle.FixedDialog,
             MaximizeBox = false,
@@ -472,54 +607,192 @@ internal sealed class ListingAbTestForm : Form
         };
         UiStyle.ApplyTheme(dlg);
 
-        var table = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 8, Padding = new Padding(16) };
-        for (var i = 0; i < 7; i++) table.RowStyles.Add(new RowStyle(SizeType.Absolute, i % 2 == 0 ? 22 : 36));
-        table.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+        var rootTable = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 5,
+            Padding = new Padding(12),
+        };
+        rootTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));  // Header
+        rootTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));  // 1. Listing Picker
+        rootTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // 2. Variants (A vs B)
+        rootTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 85));  // 3. Duration & Deploy
+        rootTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));  // 4. Action buttons
 
-        var nameInput = new TextBox { Dock = DockStyle.Fill, Text = "Baslik & SEO Optimizasyon Testi" };
-        var titleAInput = new TextBox { Dock = DockStyle.Fill, Text = "Orijinal Urun Basligi" };
-        var titleBInput = new TextBox { Dock = DockStyle.Fill, Text = "Yeni Yapay Zeka Destekli Etsy Basligi" };
-        var tagsAInput = new TextBox { Dock = DockStyle.Fill, Text = "tag1, tag2, tag3" };
-        var tagsBInput = new TextBox { Dock = DockStyle.Fill, Text = "etsy tag 1, etsy tag 2, long tail tag" };
+        // Row 0: Header Banner
+        var headerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        headerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        headerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        var lblHead = new Label
+        {
+            Text = "Canlı Etsy Listeleme A/B Testi",
+            Font = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold),
+            ForeColor = UiStyle.PrimaryColor,
+            Dock = DockStyle.Fill,
+        };
+        var lblSub = new Label
+        {
+            Text = "Etsy mağazanızdaki aktif ürünü seçin, AI ile Varyant B üretin ve testi başlatın.",
+            Font = new Font("Segoe UI", 8.5F),
+            ForeColor = UiStyle.TextMuted,
+            Dock = DockStyle.Fill,
+        };
+        headerPanel.Controls.Add(lblHead, 0, 0);
+        headerPanel.Controls.Add(lblSub, 0, 1);
+        rootTable.Controls.Add(headerPanel, 0, 0);
 
-        table.Controls.Add(new Label { Text = "Test Adı:", Dock = DockStyle.Fill }, 0, 0);
-        table.Controls.Add(nameInput, 0, 1);
-        table.Controls.Add(new Label { Text = "Varyant A Başlık (Orijinal):", Dock = DockStyle.Fill }, 0, 2);
-        table.Controls.Add(titleAInput, 0, 3);
-        table.Controls.Add(new Label { Text = "Varyant B Başlık (Yeni AI):", Dock = DockStyle.Fill }, 0, 4);
-        table.Controls.Add(titleBInput, 0, 5);
-        table.Controls.Add(new Label { Text = "Varyant B Tagler (Virgülle ayırın):", Dock = DockStyle.Fill }, 0, 6);
-        table.Controls.Add(tagsBInput, 0, 7);
+        // Row 1: Listing Picker GroupBox
+        var grpPicker = new GroupBox
+        {
+            Text = "1. Etsy Mağazanızdan Ürün Seçin",
+            Font = new Font("Segoe UI Semibold", 9F),
+            ForeColor = UiStyle.TextDark,
+            Dock = DockStyle.Fill,
+        };
+        var pickerTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6) };
+        pickerTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        pickerTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
 
+        var cboListings = new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = new Font("Segoe UI", 9F),
+        };
+        cboListings.Items.Add("Etsy mağazanız taranıyor, lütfen bekleyin...");
+        cboListings.SelectedIndex = 0;
+        pickerTable.Controls.Add(cboListings, 0, 0);
+
+        var lblStats = new Label
+        {
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 8.5F, FontStyle.Italic),
+            ForeColor = UiStyle.TextMuted,
+            Text = "Listelemeler mağazadan çekildikten sonra başlangıç metrikleri otomatik doldurulacaktır.",
+        };
+        pickerTable.Controls.Add(lblStats, 0, 1);
+        grpPicker.Controls.Add(pickerTable);
+        rootTable.Controls.Add(grpPicker, 0, 1);
+
+        // Row 2: Variants GroupBox
+        var grpVariants = new GroupBox
+        {
+            Text = "2. Test Başlığı ve Varyantlar (A vs B)",
+            Font = new Font("Segoe UI Semibold", 9F),
+            ForeColor = UiStyle.TextDark,
+            Dock = DockStyle.Fill,
+        };
+        var variantsTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(6) };
+        variantsTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); // Test Name
+        variantsTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Two columns (A vs B)
+        variantsTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // AI Button
+
+        // Test name
+        var testNamePanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
+        testNamePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 18));
+        testNamePanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        testNamePanel.Controls.Add(new Label { Text = "Test Adı:", Font = new Font("Segoe UI", 8.5F), Dock = DockStyle.Fill }, 0, 0);
+        var txtTestName = new TextBox { Dock = DockStyle.Fill, Text = "Etsy SEO & Başlık Optimizasyon Testi" };
+        testNamePanel.Controls.Add(txtTestName, 0, 1);
+        variantsTable.Controls.Add(testNamePanel, 0, 0);
+
+        // Two columns
+        var colsTable = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        colsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        colsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+        // Col A (Variant A)
+        var panelA = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        panelA.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        panelA.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        panelA.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        panelA.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        panelA.Controls.Add(new Label { Text = "Varyant A: Mevcut Canlı Başlık", Font = new Font("Segoe UI Semibold", 8.5F), Dock = DockStyle.Fill }, 0, 0);
+        var txtTitleA = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        panelA.Controls.Add(txtTitleA, 0, 1);
+        panelA.Controls.Add(new Label { Text = "Varyant A: Mevcut Tagler", Font = new Font("Segoe UI Semibold", 8.5F), Dock = DockStyle.Fill }, 0, 2);
+        var txtTagsA = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        panelA.Controls.Add(txtTagsA, 0, 3);
+        colsTable.Controls.Add(panelA, 0, 0);
+
+        // Col B (Variant B)
+        var panelB = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        panelB.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        panelB.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
+        panelB.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
+        panelB.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
+        panelB.Controls.Add(new Label { Text = "Varyant B: Yeni Test Başlığı", Font = new Font("Segoe UI Semibold", 8.5F), ForeColor = UiStyle.PrimaryColor, Dock = DockStyle.Fill }, 0, 0);
+        var txtTitleB = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        panelB.Controls.Add(txtTitleB, 0, 1);
+        panelB.Controls.Add(new Label { Text = "Varyant B: Yeni Test Tagleri", Font = new Font("Segoe UI Semibold", 8.5F), ForeColor = UiStyle.PrimaryColor, Dock = DockStyle.Fill }, 0, 2);
+        var txtTagsB = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        panelB.Controls.Add(txtTagsB, 0, 3);
+        colsTable.Controls.Add(panelB, 1, 0);
+
+        variantsTable.Controls.Add(colsTable, 0, 1);
+
+        // AI Suggest Button
+        var btnAiSuggest = new Controls.ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "✨ AI Başlık ve Tag Öner (Gemini/OpenAI)",
+            NormalColor = UiStyle.AccentColor,
+            HoverColor = UiStyle.PrimaryColor,
+            ForeColor = Color.White,
+            Margin = new Padding(0, 4, 0, 0),
+        };
+        variantsTable.Controls.Add(btnAiSuggest, 0, 2);
+        grpVariants.Controls.Add(variantsTable);
+        rootTable.Controls.Add(grpVariants, 0, 2);
+
+        // Row 3: Test Duration & Deployment Settings
+        var grpSettings = new GroupBox
+        {
+            Text = "3. Test Süresi ve Dağıtım",
+            Font = new Font("Segoe UI Semibold", 9F),
+            ForeColor = UiStyle.TextDark,
+            Dock = DockStyle.Fill,
+        };
+        var settingsTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6) };
+        settingsTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        settingsTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+
+        var durationPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
+        durationPanel.Controls.Add(new Label { Text = "Test Süresi: ", Font = new Font("Segoe UI", 9F), AutoSize = true, Margin = new Padding(0, 4, 6, 0) });
+        var cboDuration = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+        cboDuration.Items.Add("7 Gün");
+        cboDuration.Items.Add("14 Gün (Önerilen)");
+        cboDuration.Items.Add("30 Gün");
+        cboDuration.SelectedIndex = 1;
+        durationPanel.Controls.Add(cboDuration);
+        settingsTable.Controls.Add(durationPanel, 0, 0);
+
+        var chkPublishLive = new CheckBox
+        {
+            Text = "🚀 Varyant B'yi Şimdi Canlı Etsy'ye Uygula (Test başladığı an mağazada aktifleşir)",
+            Font = new Font("Segoe UI Semibold", 9F),
+            ForeColor = UiStyle.SuccessColor,
+            Checked = true,
+            AutoSize = true,
+            Dock = DockStyle.Fill,
+        };
+        settingsTable.Controls.Add(chkPublishLive, 0, 1);
+        grpSettings.Controls.Add(settingsTable);
+        rootTable.Controls.Add(grpSettings, 0, 3);
+
+        // Row 4: Dialog Buttons
         var btnPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         btnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         btnPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
-        var saveBtn = UiStyle.CreateButton("Testi Başlat");
-        saveBtn.Click += async (_, _) =>
+        var saveBtn = new Controls.ModernButtonControl
         {
-            if (string.IsNullOrWhiteSpace(titleAInput.Text) || string.IsNullOrWhiteSpace(titleBInput.Text))
-            {
-                MessageBox.Show(dlg, "Lütfen her iki varyant için de başlık girin.", "A/B Test", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            var exp = new SaveAbTestExperiment(
-                "listing-1",
-                titleAInput.Text.Trim(),
-                nameInput.Text.Trim(),
-                titleAInput.Text.Trim(),
-                titleBInput.Text.Trim(),
-                tagsAInput.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList(),
-                tagsBInput.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList(),
-                "Orijinal aciklama",
-                "Yeni AI aciklamasi",
-                InitialViews: 100,
-                InitialFavorites: 10,
-                InitialSales: 2);
-
-            await _abTestService.StartExperimentAsync(exp);
-            dlg.DialogResult = DialogResult.OK;
+            Dock = DockStyle.Fill,
+            Text = "🧪 A/B Testini Başlat",
+            NormalColor = UiStyle.SuccessColor,
+            HoverColor = Color.FromArgb(5, 150, 105),
+            ForeColor = Color.White,
+            Margin = new Padding(4, 2, 4, 2),
         };
 
         var cancelBtn = UiStyle.CreateButton("İptal", isSecondary: true);
@@ -527,13 +800,218 @@ internal sealed class ListingAbTestForm : Form
 
         btnPanel.Controls.Add(saveBtn, 0, 0);
         btnPanel.Controls.Add(cancelBtn, 1, 0);
-        table.Controls.Add(btnPanel, 0, 7);
-        dlg.Controls.Add(table);
+        rootTable.Controls.Add(btnPanel, 0, 4);
+
+        dlg.Controls.Add(rootTable);
+
+        // State variables
+        string currentListingId = "";
+        string currentDescA = "";
+        string currentDescB = "";
+        int initialViews = 0;
+        int initialFavorites = 0;
+        string prevTitleA = "";
+
+        // Populate listings when shown
+        dlg.Shown += async (_, _) =>
+        {
+            try
+            {
+                var settings = EtsyApiSettingsStore.Load();
+                if (!settings.HasApiCredentials)
+                {
+                    cboListings.Items.Clear();
+                    cboListings.Items.Add("⚠️ Etsy API ayarları yapılmamış. Ayarlar menüsünden API anahtarlarınızı girin.");
+                    cboListings.SelectedIndex = 0;
+                    return;
+                }
+
+                var activeListings = await _apiClient.GetOwnShopActiveListingsAsync(settings, 100);
+                EtsyApiSettingsStore.Save(settings);
+
+                cboListings.Items.Clear();
+                if (activeListings.Count == 0)
+                {
+                    cboListings.Items.Add("Mağazanızda aktif listeleme bulunamadı.");
+                    cboListings.SelectedIndex = 0;
+                    return;
+                }
+
+                foreach (var item in activeListings)
+                {
+                    cboListings.Items.Add(new ListingComboItem(item));
+                }
+                cboListings.SelectedIndex = 0;
+            }
+            catch (Exception ex)
+            {
+                cboListings.Items.Clear();
+                cboListings.Items.Add($"Etsy listelemeleri alınamadı: {ex.Message}");
+                cboListings.SelectedIndex = 0;
+            }
+        };
+
+        cboListings.SelectedIndexChanged += (_, _) =>
+        {
+            if (cboListings.SelectedItem is ListingComboItem item)
+            {
+                var l = item.Listing;
+                currentListingId = l.ListingId.ToString();
+                currentDescA = l.Description;
+                currentDescB = l.Description;
+                initialViews = l.Views;
+                initialFavorites = l.Favorites;
+
+                txtTestName.Text = $"A/B: {(l.Title.Length > 30 ? l.Title[..30] + "..." : l.Title)}";
+                txtTitleA.Text = l.Title;
+                txtTagsA.Text = string.Join(", ", l.Tags);
+
+                if (string.IsNullOrWhiteSpace(txtTitleB.Text) || txtTitleB.Text == prevTitleA)
+                {
+                    txtTitleB.Text = l.Title;
+                    txtTagsB.Text = string.Join(", ", l.Tags);
+                }
+                prevTitleA = l.Title;
+
+                lblStats.Text = $"Seçili Ürün: #{l.ListingId} | 👁️ {l.Views} Görüntülenme | ⭐ {l.Favorites} Favori | Fiyat: {l.PriceDisplay}";
+                lblStats.ForeColor = UiStyle.PrimaryColor;
+            }
+        };
+
+        btnAiSuggest.Click += async (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(txtTitleA.Text))
+            {
+                MessageBox.Show(dlg, "Lütfen önce bir ürün seçin veya Varyant A başlığını girin.", "AI Öneri", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            try
+            {
+                dlg.UseWaitCursor = true;
+                btnAiSuggest.Enabled = false;
+                btnAiSuggest.Text = "⏳ Yapay Zeka Optimize Ediyor...";
+
+                var optimizer = _aiOptimizer ?? new OpenAiListingOptimizer(AiOptimizationSettingsStore.Load, new ListingOptimizationService());
+                var tagsList = txtTagsA.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+                var input = new ListingOptimizationInput(txtTitleA.Text.Trim(), currentDescA, tagsList, "");
+
+                var result = await optimizer.OptimizeAsync(input);
+
+                var suggestedTitle = result.TitleSuggestions.Count > 0 ? result.TitleSuggestions[0] : txtTitleA.Text;
+                txtTitleB.Text = suggestedTitle;
+                txtTagsB.Text = string.Join(", ", result.TagSuggestions);
+                currentDescB = string.IsNullOrWhiteSpace(result.DescriptionDraft) ? currentDescA : result.DescriptionDraft;
+
+                MessageBox.Show(
+                    dlg,
+                    "✨ Yapay Zeka Destekli Varyant B Başarıyla Oluşturuldu!\n\n" +
+                    $"Yeni Başlık: {suggestedTitle}\n" +
+                    $"Yeni Tag Sayısı: {result.TagSuggestions.Count}",
+                    "AI Optimizasyonu Tamamlandı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(dlg, $"AI optimizasyonu sırasında hata oluştu:\n{ex.Message}", "AI Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnAiSuggest.Enabled = true;
+                btnAiSuggest.Text = "✨ AI Başlık ve Tag Öner (Gemini/OpenAI)";
+                dlg.UseWaitCursor = false;
+            }
+        };
+
+        saveBtn.Click += async (_, _) =>
+        {
+            if (string.IsNullOrWhiteSpace(currentListingId))
+            {
+                MessageBox.Show(dlg, "Lütfen mağazanızdan geçerli bir Etsy listelemesi seçiniz.", "A/B Test", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(txtTitleA.Text) || string.IsNullOrWhiteSpace(txtTitleB.Text))
+            {
+                MessageBox.Show(dlg, "Lütfen her iki varyant için de başlık giriniz.", "A/B Test", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            int durationDays = cboDuration.SelectedIndex switch
+            {
+                0 => 7,
+                2 => 30,
+                _ => 14
+            };
+
+            var tagsA = txtTagsA.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+            var tagsB = txtTagsB.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
+            var endDate = DateTimeOffset.Now.AddDays(durationDays);
+
+            var exp = new SaveAbTestExperiment(
+                currentListingId,
+                txtTitleA.Text.Trim(),
+                txtTestName.Text.Trim(),
+                txtTitleA.Text.Trim(),
+                txtTitleB.Text.Trim(),
+                tagsA,
+                tagsB,
+                currentDescA,
+                string.IsNullOrWhiteSpace(currentDescB) ? currentDescA : currentDescB,
+                InitialViews: initialViews,
+                InitialFavorites: initialFavorites,
+                InitialSales: 0,
+                EndDate: endDate);
+
+            try
+            {
+                dlg.UseWaitCursor = true;
+                saveBtn.Enabled = false;
+
+                // 1. Save experiment to SQLite
+                await _abTestService.StartExperimentAsync(exp);
+
+                // 2. Publish to live Etsy if requested
+                if (chkPublishLive.Checked && long.TryParse(currentListingId, out var lid) && lid > 0)
+                {
+                    var settings = EtsyApiSettingsStore.Load();
+                    if (settings.HasApiCredentials)
+                    {
+                        var update = new ListingTextUpdate(
+                            txtTitleB.Text.Trim(),
+                            string.IsNullOrWhiteSpace(currentDescB) ? currentDescA : currentDescB,
+                            tagsB,
+                            null);
+                        await _apiClient.UpdateOwnShopListingTextAsync(settings, lid, update);
+                        EtsyApiSettingsStore.Save(settings);
+                    }
+                }
+
+                dlg.DialogResult = DialogResult.OK;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(dlg, $"A/B testi başlatılırken hata oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                saveBtn.Enabled = true;
+                dlg.UseWaitCursor = false;
+            }
+        };
 
         if (dlg.ShowDialog(this) == DialogResult.OK)
         {
             await LoadDataAsync();
         }
+    }
+
+    private sealed class ListingComboItem(MarketListingResult listing)
+    {
+        public MarketListingResult Listing => listing;
+        public override string ToString() =>
+            $"[#{listing.ListingId}] {(listing.Title.Length > 55 ? listing.Title[..55] + "..." : listing.Title)} (👁️ {listing.Views} | ⭐ {listing.Favorites})";
     }
 
     private async Task OpenUpdateMetricsDialogAsync()

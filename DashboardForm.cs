@@ -1201,7 +1201,7 @@ internal sealed class DashboardForm : Form
             "competitor_spy" => new CompetitorAndTrendSpyForm(_aiListingOptimizer),
             "external" => new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer),
             "ai_audit" => new OwnShopListingAiAuditForm(_aiListingOptimizer, _optimizationHistoryService),
-            "ab_test" => new ListingAbTestForm(_abTestService),
+            "ab_test" => new ListingAbTestForm(_abTestService, _aiListingOptimizer),
             "automation" => new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler),
             "batch" => new BatchQueueForm(_batchQueueProcessorService, _abTestService),
             "profit" => new ProfitCalculatorForm(),

@@ -48,6 +48,13 @@ public sealed class AbTestService
         return await _repository.GetByIdAsync(id, cancellationToken);
     }
 
+    public async Task<bool> DeleteAsync(
+        long id,
+        CancellationToken cancellationToken = default)
+    {
+        return await _repository.DeleteAsync(id, cancellationToken);
+    }
+
     /// <summary>
     /// Launches a batch of A/B test experiments from optimized queue items.
     /// </summary>

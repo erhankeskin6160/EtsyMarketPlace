@@ -189,6 +189,30 @@ public sealed class AbTestServiceTests
         Assert.Equal(AbTestStatus.Completed, updated.Status);
     }
 
+    [Fact]
+    public async Task DeleteAsync_RemovesExperimentFromRepository()
+    {
+        var save = new SaveAbTestExperiment(
+            "listing-999",
+            "Listing To Delete",
+            "Delete Me Test",
+            "Title A",
+            "Title B",
+            ["tag1"],
+            ["tag2"],
+            "Desc A",
+            "Desc B");
+
+        var exp = await _service.StartExperimentAsync(save);
+        Assert.NotNull(exp);
+
+        var deleteResult = await _service.DeleteAsync(exp.Id);
+        Assert.True(deleteResult);
+
+        var retrieved = await _service.GetByIdAsync(exp.Id);
+        Assert.Null(retrieved);
+    }
+
     private sealed class InMemoryAbTestRepository : IAbTestRepository
     {
         private readonly List<ListingAbTestExperiment> _items = [];
