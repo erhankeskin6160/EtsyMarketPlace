@@ -67,6 +67,20 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         catch (SqliteException) { }
+
+        try
+        {
+            command.CommandText = "ALTER TABLE batch_queue_items ADD COLUMN ab_test_experiment_id INTEGER NULL;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (SqliteException) { }
+
+        try
+        {
+            command.CommandText = "ALTER TABLE batch_queue_items ADD COLUMN ab_test_status TEXT NULL;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        catch (SqliteException) { }
     }
 
     public async Task<IReadOnlyList<BatchQueueItem>> EnqueueBatchAsync(
@@ -185,7 +199,9 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
                 processed_at = $processed_at,
                 error_message = $error_message,
                 is_synced_to_etsy = $is_synced_to_etsy,
-                synced_at = $synced_at
+                synced_at = $synced_at,
+                ab_test_experiment_id = $ab_test_experiment_id,
+                ab_test_status = $ab_test_status
             WHERE id = $id;
             """;
 
@@ -202,9 +218,31 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
         command.Parameters.AddWithValue("$error_message", item.ErrorMessage ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$is_synced_to_etsy", item.IsSyncedToEtsy ? 1 : 0);
         command.Parameters.AddWithValue("$synced_at", item.SyncedAt?.ToString("O") ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$ab_test_experiment_id", (object?)item.AbTestExperimentId ?? DBNull.Value);
+        command.Parameters.AddWithValue("$ab_test_status", (object?)item.AbTestStatus ?? DBNull.Value);
 
         var rows = await command.ExecuteNonQueryAsync(cancellationToken);
         return rows > 0 ? item : null;
+    }
+
+    public async Task UpdateAbTestStatusAsync(
+        long itemId,
+        long experimentId,
+        string abTestStatus,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE batch_queue_items
+            SET ab_test_experiment_id = $exp_id,
+                ab_test_status = $ab_status
+            WHERE id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", itemId);
+        command.Parameters.AddWithValue("$exp_id", experimentId);
+        command.Parameters.AddWithValue("$ab_status", abTestStatus ?? "");
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<int> ClearCompletedAsync(CancellationToken cancellationToken = default)
@@ -234,9 +272,13 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
     {
         var hasSyncedCol = HasColumn(reader, "is_synced_to_etsy");
         var hasSyncedAtCol = HasColumn(reader, "synced_at");
+        var hasAbTestIdCol = HasColumn(reader, "ab_test_experiment_id");
+        var hasAbTestStatusCol = HasColumn(reader, "ab_test_status");
 
         bool isSynced = hasSyncedCol && !reader.IsDBNull(reader.GetOrdinal("is_synced_to_etsy")) && reader.GetInt32(reader.GetOrdinal("is_synced_to_etsy")) == 1;
         DateTimeOffset? syncedAt = hasSyncedAtCol && !reader.IsDBNull(reader.GetOrdinal("synced_at")) ? DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("synced_at"))) : null;
+        long? abTestExpId = hasAbTestIdCol && !reader.IsDBNull(reader.GetOrdinal("ab_test_experiment_id")) ? reader.GetInt64(reader.GetOrdinal("ab_test_experiment_id")) : null;
+        string? abTestStatus = hasAbTestStatusCol && !reader.IsDBNull(reader.GetOrdinal("ab_test_status")) ? reader.GetString(reader.GetOrdinal("ab_test_status")) : null;
 
         return new(
             reader.GetInt64(reader.GetOrdinal("id")),
@@ -258,7 +300,9 @@ public sealed class SqliteBatchQueueRepository : IBatchQueueRepository
             reader.IsDBNull(reader.GetOrdinal("processed_at")) ? null : DateTimeOffset.Parse(reader.GetString(reader.GetOrdinal("processed_at"))),
             reader.IsDBNull(reader.GetOrdinal("error_message")) ? null : reader.GetString(reader.GetOrdinal("error_message")),
             isSynced,
-            syncedAt);
+            syncedAt,
+            abTestExpId,
+            abTestStatus);
     }
 
     private static bool HasColumn(SqliteDataReader reader, string columnName)

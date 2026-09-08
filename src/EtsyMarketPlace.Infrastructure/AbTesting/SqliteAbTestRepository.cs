@@ -78,6 +78,7 @@ public sealed class SqliteAbTestRepository : IAbTestRepository
                 variant_a_description,
                 variant_b_description,
                 start_date,
+                end_date,
                 status,
                 before_views,
                 before_favorites,
@@ -97,6 +98,7 @@ public sealed class SqliteAbTestRepository : IAbTestRepository
                 $variant_a_description,
                 $variant_b_description,
                 $start_date,
+                $end_date,
                 $status,
                 $before_views,
                 $before_favorites,
@@ -119,6 +121,7 @@ public sealed class SqliteAbTestRepository : IAbTestRepository
         command.Parameters.AddWithValue("$variant_a_description", experiment.VariantA_Description ?? "");
         command.Parameters.AddWithValue("$variant_b_description", experiment.VariantB_Description ?? "");
         command.Parameters.AddWithValue("$start_date", startDate.ToString("O"));
+        command.Parameters.AddWithValue("$end_date", experiment.EndDate?.ToString("O") ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$status", AbTestStatus.Active.ToString());
         command.Parameters.AddWithValue("$before_views", experiment.InitialViews);
         command.Parameters.AddWithValue("$before_favorites", experiment.InitialFavorites);
@@ -142,7 +145,7 @@ public sealed class SqliteAbTestRepository : IAbTestRepository
             experiment.VariantA_Description ?? "",
             experiment.VariantB_Description ?? "",
             startDate,
-            null,
+            experiment.EndDate,
             AbTestStatus.Active,
             experiment.InitialViews,
             experiment.InitialFavorites,
@@ -238,6 +241,35 @@ public sealed class SqliteAbTestRepository : IAbTestRepository
         if (rows > 0)
         {
             return await GetByIdAsync(update.ExperimentId, cancellationToken);
+        }
+
+        return null;
+    }
+
+    public async Task<ListingAbTestExperiment?> UpdateStatusAsync(
+        long id,
+        AbTestStatus status,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+
+        var endDateStr = status == AbTestStatus.Completed ? DateTimeOffset.Now.ToString("O") : null;
+
+        command.CommandText = """
+            UPDATE listing_ab_tests
+            SET status = $status,
+                end_date = COALESCE($end_date, end_date)
+            WHERE id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$status", status.ToString());
+        command.Parameters.AddWithValue("$end_date", (object?)endDateStr ?? DBNull.Value);
+
+        var rows = await command.ExecuteNonQueryAsync(cancellationToken);
+        if (rows > 0)
+        {
+            return await GetByIdAsync(id, cancellationToken);
         }
 
         return null;

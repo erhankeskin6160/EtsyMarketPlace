@@ -7,12 +7,14 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using EtsyMarketPlace.Application.AbTesting;
 using EtsyMarketPlace.Application.BatchQueue;
 using SimilarProductsWinForms.Services;
 
 internal sealed class BatchQueueForm : Form
 {
     private readonly BatchQueueProcessorService _processorService;
+    private readonly AbTestService _abTestService;
     private readonly EtsyApiClient _apiClient = new();
     private readonly DataGridView _grid = new();
     private readonly BindingSource _bindingSource = new();
@@ -34,11 +36,21 @@ internal sealed class BatchQueueForm : Form
     private CancellationTokenSource? _cts;
     private List<BatchQueueItem> _items = [];
 
-    public BatchQueueForm(BatchQueueProcessorService processorService)
+    public BatchQueueForm(BatchQueueProcessorService processorService, AbTestService? abTestService = null)
     {
         _processorService = processorService;
+        _abTestService = abTestService ?? CreateDefaultAbTestService();
         BuildLayout();
         Shown += async (_, _) => await LoadQueueAsync();
+    }
+
+    private static AbTestService CreateDefaultAbTestService()
+    {
+        var dbPath = System.IO.Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EtsyMarketPlace",
+            "etsy_marketplace.db");
+        return new AbTestService(new EtsyMarketPlace.Infrastructure.AbTesting.SqliteAbTestRepository(dbPath));
     }
 
     private void BuildLayout()
@@ -91,15 +103,16 @@ internal sealed class BatchQueueForm : Form
         root.Controls.Add(kpiTable, 0, 1);
 
         // 3. Toolbar + Progress Bar
-        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 8 };
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f)); // Progress bar
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 11f)); // Toplu Ekle
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12f)); // Optimize Et
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 8f));  // Durdur
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16f)); // ⚡ Etsy'ye Canlı Uygula
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 14f)); // ↩️ Rollback
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 7f));  // Temizle
-        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 7f));  // Yenile
+        var toolbar = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 9 };
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18f)); // Progress bar
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 10f)); // Toplu Ekle
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 11f)); // Optimize Et
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 7f));  // Durdur
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 15f)); // ⚡ Etsy'ye Canlı Uygula
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 13f)); // ↩️ Rollback
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 14f)); // 🧪 A/B Testine Gönder
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6f));  // Temizle
+        toolbar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 6f));  // Yenile
 
         var progressContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(4, 14, 4, 14) };
         _progressBar.Dock = DockStyle.Fill;
@@ -125,7 +138,7 @@ internal sealed class BatchQueueForm : Form
         var syncEtsyBtn = new Controls.ModernButtonControl
         {
             Dock = DockStyle.Fill,
-            Text = "⚡ Etsy'ye Canlı Uygula",
+            Text = "⚡ Canlıya Uygula",
             NormalColor = UiStyle.EtsyColor,
             HoverColor = UiStyle.EtsyHover,
             ForeColor = Color.White,
@@ -147,13 +160,26 @@ internal sealed class BatchQueueForm : Form
         rollbackBtn.Click += async (_, _) => await RollbackSelectedAsync();
         toolbar.Controls.Add(rollbackBtn, 5, 0);
 
+        // 🧪 A/B Testine Gönder Button
+        var abTestBtn = new Controls.ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🧪 A/B Testine Gönder",
+            NormalColor = UiStyle.AiColor,
+            HoverColor = UiStyle.AiHover,
+            ForeColor = Color.White,
+            Margin = new Padding(4, 2, 4, 2),
+        };
+        abTestBtn.Click += async (_, _) => await SendSelectedToAbTestAsync();
+        toolbar.Controls.Add(abTestBtn, 6, 0);
+
         var clearBtn = UiStyle.CreateButton("Temizle", isSecondary: true);
         clearBtn.Click += async (_, _) => await ClearCompletedAsync();
-        toolbar.Controls.Add(clearBtn, 6, 0);
+        toolbar.Controls.Add(clearBtn, 7, 0);
 
         var refreshBtn = UiStyle.CreateButton("Yenile", isSecondary: true);
         refreshBtn.Click += async (_, _) => await LoadQueueAsync();
-        toolbar.Controls.Add(refreshBtn, 7, 0);
+        toolbar.Controls.Add(refreshBtn, 8, 0);
         root.Controls.Add(toolbar, 0, 2);
 
         // 4. Main Content (Grid left 53%, Details right 47%)
@@ -286,6 +312,7 @@ internal sealed class BatchQueueForm : Form
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Anahtar Kelime", DataPropertyName = nameof(BatchGridRow.TargetKeyword), Width = 110 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Kuyruk", DataPropertyName = nameof(BatchGridRow.Status), Width = 95 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Etsy Durumu", DataPropertyName = nameof(BatchGridRow.SyncStatus), Width = 110 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "A/B Test", DataPropertyName = nameof(BatchGridRow.AbTestInfo), Width = 120 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Puan", DataPropertyName = nameof(BatchGridRow.Score), Width = 50 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Kayıt Tarihi", DataPropertyName = nameof(BatchGridRow.Created), Width = 100 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Canlı Senkron", DataPropertyName = nameof(BatchGridRow.SyncedAt), Width = 105 });
@@ -618,6 +645,114 @@ internal sealed class BatchQueueForm : Form
         return ids;
     }
 
+    private List<BatchQueueItem> GetSelectedOrCompletedItems()
+    {
+        var selectedIds = new HashSet<long>(GetSelectedRowItemIds());
+        if (selectedIds.Count > 0)
+        {
+            return _items.Where(i => selectedIds.Contains(i.Id)).ToList();
+        }
+
+        // If no rows explicitly selected, pick all completed/synced items
+        return _items.Where(i => !string.IsNullOrWhiteSpace(i.OptimizedTitle)).ToList();
+    }
+
+    private async Task SendSelectedToAbTestAsync()
+    {
+        var selectedItems = GetSelectedOrCompletedItems();
+        if (selectedItems.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "A/B testine göndermek için listeden optimize edilmiş (Tamamlandı veya Canlıda) en az bir ürün seçiniz.",
+                "Toplu A/B Testi",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        // Filter items that have an optimized title
+        var optimizable = selectedItems.Where(i => !string.IsNullOrWhiteSpace(i.OptimizedTitle)).ToList();
+        if (optimizable.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Seçilen ürünler henüz optimize edilmemiş. Lütfen önce 'AI Optimize Et' işlemini çalıştırın.",
+                "Toplu A/B Testi",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var dialog = new BulkAbTestLaunchDialog(optimizable.Count);
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        var options = dialog.Options;
+        _progressBar.Value = 0;
+        _statusLabel.Text = $"Toplu A/B testi başlatılıyor ({optimizable.Count} ürün)...";
+
+        var requests = optimizable.Select(i => new BulkAbTestItemRequest(
+            BatchQueueItemId: i.Id,
+            ListingId: i.ListingId,
+            OriginalTitle: i.OriginalTitle,
+            OriginalDescription: i.OriginalDescription,
+            OriginalTags: i.OriginalTags,
+            OptimizedTitle: i.OptimizedTitle,
+            OptimizedDescription: i.OptimizedDescription,
+            OptimizedTags: i.OptimizedTags
+        )).ToList();
+
+        var progress = new Progress<BulkAbTestLaunchProgress>(p =>
+        {
+            _progressBar.Value = Math.Clamp((int)((double)p.CurrentIndex / p.TotalCount * 100), 0, 100);
+            _statusLabel.Text = $"A/B Testi: [{p.CurrentIndex}/{p.TotalCount}] {p.ListingTitle}";
+        });
+
+        Func<long, string, string, IReadOnlyList<string>, Task>? deployAction = null;
+        if (options.AutoDeployVariantBToEtsy)
+        {
+            var settings = EtsyApiSettingsStore.Load();
+            deployAction = async (listingId, title, desc, tags) =>
+            {
+                var update = new ListingTextUpdate(title, desc, tags, null);
+                await _apiClient.UpdateOwnShopListingTextAsync(settings, listingId, update);
+                EtsyApiSettingsStore.Save(settings);
+            };
+        }
+
+        try
+        {
+            var result = await _abTestService.BulkStartExperimentsAsync(
+                requests,
+                options,
+                deployAction,
+                progress,
+                CancellationToken.None);
+
+            await LoadQueueAsync();
+
+            var msg = $"{result.SuccessCount} adet ürün başarıyla {options.DurationDays} günlük A/B testine aktarıldı.";
+            if (options.AutoDeployVariantBToEtsy)
+            {
+                msg += "\n⚡ Varyant B (AI sürümü) canlı Etsy mağazanıza uygulandı.";
+            }
+            if (result.FailedCount > 0)
+            {
+                msg += $"\n⚠️ {result.FailedCount} ürün aktarılırken hata oluştu:\n" + string.Join("\n", result.Errors.Take(3));
+            }
+
+            MessageBox.Show(this, msg, "Toplu A/B Testi Başlatıldı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"A/B testi başlatılırken hata oluştu:\n{ex.Message}", "A/B Test Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _progressBar.Value = 0;
+        }
+    }
+
     private async Task OpenAddBatchItemsDialogAsync()
     {
         using var dlg = new Form
@@ -738,6 +873,7 @@ internal sealed class BatchQueueForm : Form
             _ when item.Status == BatchQueueItemStatus.Failed => "❌ Hata",
             _ => "⚪ Bekliyor"
         };
+        public string AbTestInfo => !string.IsNullOrWhiteSpace(item.AbTestStatus) ? $"🧪 {item.AbTestStatus}" : "-";
         public string Score => item.OverallScore > 0 ? $"{item.OverallScore}/100" : "-";
         public string Created => item.CreatedAt.LocalDateTime.ToString("dd.MM.yyyy HH:mm");
         public string SyncedAt => item.SyncedAt.HasValue ? item.SyncedAt.Value.LocalDateTime.ToString("dd.MM.yyyy HH:mm") : "-";

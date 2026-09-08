@@ -185,6 +185,20 @@ public sealed class BatchQueueProcessorServiceTests
             return Task.FromResult<BatchQueueItem?>(null);
         }
 
+        public Task UpdateAbTestStatusAsync(long itemId, long experimentId, string abTestStatus, CancellationToken cancellationToken = default)
+        {
+            var idx = _items.FindIndex(i => i.Id == itemId);
+            if (idx >= 0)
+            {
+                _items[idx] = _items[idx] with
+                {
+                    AbTestExperimentId = experimentId,
+                    AbTestStatus = abTestStatus
+                };
+            }
+            return Task.CompletedTask;
+        }
+
         public Task<int> ClearCompletedAsync(CancellationToken cancellationToken = default)
         {
             var count = _items.RemoveAll(i => i.Status is BatchQueueItemStatus.Completed or BatchQueueItemStatus.RiskWarning or BatchQueueItemStatus.Failed);

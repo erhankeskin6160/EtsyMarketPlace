@@ -4,10 +4,12 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using EtsyMarketPlace.Application.AbTesting;
+using SimilarProductsWinForms.Services;
 
 internal sealed class ListingAbTestForm : Form
 {
     private readonly AbTestService _abTestService;
+    private readonly EtsyApiClient _apiClient = new();
     private readonly DataGridView _grid = new();
     private readonly BindingSource _bindingSource = new();
     private readonly Label _statusLabel = new();
@@ -156,10 +158,11 @@ internal sealed class ListingAbTestForm : Form
             Text = "A/B Testi Sonuç Karnesi ve Kazanan",
             Font = new Font("Segoe UI Semibold", 9.5F),
         };
-        var winnerTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(6) };
+        var winnerTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(6) };
         winnerTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
-        winnerTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        winnerTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         winnerTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        winnerTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
 
         _winnerBadge.Dock = DockStyle.Fill;
         _winnerBadge.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
@@ -179,6 +182,50 @@ internal sealed class ListingAbTestForm : Form
         _takeawaysListBox.Dock = DockStyle.Fill;
         _takeawaysListBox.Font = new Font("Segoe UI", 9F);
         winnerTable.Controls.Add(_takeawaysListBox, 0, 2);
+
+        // Action Buttons Row (Row 3)
+        var actionsPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
+        actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
+        actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36));
+        actionsPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+
+        var applyVariantBBtn = new Controls.ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🏆 Varyant B'yi Kalıcı Yap",
+            NormalColor = UiStyle.SuccessColor,
+            HoverColor = Color.FromArgb(5, 150, 105),
+            ForeColor = Color.White,
+            Margin = new Padding(2),
+        };
+        applyVariantBBtn.Click += async (_, _) => await ResolveWinnerAsync("VariantB");
+        actionsPanel.Controls.Add(applyVariantBBtn, 0, 0);
+
+        var rollbackBtn = new Controls.ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "↩️ Orijinale Dön (Rollback)",
+            NormalColor = UiStyle.SecondaryColor,
+            HoverColor = UiStyle.DangerColor,
+            ForeColor = UiStyle.TextDark,
+            Margin = new Padding(2),
+        };
+        rollbackBtn.Click += async (_, _) => await ResolveWinnerAsync("VariantA");
+        actionsPanel.Controls.Add(rollbackBtn, 1, 0);
+
+        var guardrailBtn = new Controls.ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🛡️ Güvenlik Kontrolü",
+            NormalColor = UiStyle.WarningColor,
+            HoverColor = Color.FromArgb(217, 119, 6),
+            ForeColor = Color.White,
+            Margin = new Padding(2),
+        };
+        guardrailBtn.Click += (_, _) => CheckSelectedGuardrail();
+        actionsPanel.Controls.Add(guardrailBtn, 2, 0);
+
+        winnerTable.Controls.Add(actionsPanel, 0, 3);
 
         winnerGroup.Controls.Add(winnerTable);
         panel.Controls.Add(winnerGroup, 0, 2);
@@ -312,6 +359,103 @@ internal sealed class ListingAbTestForm : Form
         _winnerBadge.BackColor = UiStyle.SecondaryColor;
         _summaryLabel.Text = "Seçili test bulunmuyor.";
         _takeawaysListBox.Items.Clear();
+    }
+
+    private async Task ResolveWinnerAsync(string chosenVariant)
+    {
+        if (_bindingSource.Current is not AbTestGridRow row)
+        {
+            MessageBox.Show(this, "Lütfen işlem yapmak için listeden bir A/B testi seçiniz.", "A/B Testi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var experiment = _experiments.FirstOrDefault(e => e.Id == row.Id);
+        if (experiment == null) return;
+
+        bool isVariantB = chosenVariant.Equals("VariantB", StringComparison.OrdinalIgnoreCase);
+        string variantName = isVariantB ? "Varyant B (AI Optimizasyonu)" : "Varyant A (Orijinal Listing)";
+
+        var confirm = MessageBox.Show(
+            this,
+            $"Bu A/B testi sonuçlandırılacak ve {variantName} canlı Etsy mağazanıza uygulanacaktır.\n\nEmin misiniz?",
+            "A/B Testini Sonuçlandır",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
+
+        if (confirm != DialogResult.Yes) return;
+
+        try
+        {
+            _statusLabel.Text = $"Etsy güncelleniyor ({variantName})...";
+            var settings = EtsyApiSettingsStore.Load();
+
+            Func<long, string, string, IReadOnlyList<string>, Task> deployAction = async (listingId, title, desc, tags) =>
+            {
+                var update = new ListingTextUpdate(title, desc, tags, null);
+                await _apiClient.UpdateOwnShopListingTextAsync(settings, listingId, update);
+                EtsyApiSettingsStore.Save(settings);
+            };
+
+            await _abTestService.ResolveExperimentAsync(
+                experiment.Id,
+                chosenVariant,
+                deployAction,
+                CancellationToken.None);
+
+            await LoadDataAsync();
+
+            MessageBox.Show(
+                this,
+                $"Tebrikler! {variantName} başarıyla kalıcı yapıldı ve A/B testi tamamlandı.",
+                "A/B Testi Tamamlandı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"İşlem sırasında hata oluştu:\n{ex.Message}", "A/B Sonuçlandırma Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _statusLabel.Text = "Hazır";
+        }
+    }
+
+    private void CheckSelectedGuardrail()
+    {
+        if (_bindingSource.Current is not AbTestGridRow row)
+        {
+            MessageBox.Show(this, "Lütfen listeden bir A/B testi seçiniz.", "Güvenlik Kalkanı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var experiment = _experiments.FirstOrDefault(e => e.Id == row.Id);
+        if (experiment == null) return;
+
+        var alert = _abTestService.CheckSafetyGuardrail(experiment, dropThresholdPercent: 30.0);
+        if (alert != null)
+        {
+            var res = MessageBox.Show(
+                this,
+                $"⚠️ ANORMAL DÜŞÜŞ TESPİT EDİLDİ!\n\nÜrün: {alert.ListingTitle}\nDüşüş Oranı: %{alert.DropPercentage}\n\n{alert.WarningMessage}\n\nBu ürünü şimdi Orijinal Varyant A'ya geri almak (Rollback) ister misiniz?",
+                "🛡️ Akıllı Güvenlik Kalkanı Uyarısı",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            if (res == DialogResult.Yes)
+            {
+                _ = ResolveWinnerAsync("VariantA");
+            }
+        }
+        else
+        {
+            MessageBox.Show(
+                this,
+                "✅ Güvenlik Kontrolü Başarılı: Bu üründe herhangi bir anormal düşüş tespit edilmedi. Algoritma performansı olağan seyrinde ilerliyor.",
+                "🛡️ Akıllı Güvenlik Kalkanı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
     }
 
     private async Task OpenNewTestDialogAsync()

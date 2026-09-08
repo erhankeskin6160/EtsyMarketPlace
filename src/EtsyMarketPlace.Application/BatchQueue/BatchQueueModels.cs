@@ -37,7 +37,9 @@ public sealed record BatchQueueItem(
     DateTimeOffset? ProcessedAt,
     string? ErrorMessage,
     bool IsSyncedToEtsy = false,
-    DateTimeOffset? SyncedAt = null);
+    DateTimeOffset? SyncedAt = null,
+    long? AbTestExperimentId = null,
+    string? AbTestStatus = null);
 
 /// <summary>
 /// DTO for adding items to the batch optimization queue.

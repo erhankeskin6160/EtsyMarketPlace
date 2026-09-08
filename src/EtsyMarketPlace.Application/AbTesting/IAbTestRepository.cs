@@ -24,6 +24,11 @@ public interface IAbTestRepository
         UpdateAbTestMetrics update,
         CancellationToken cancellationToken = default);
 
+    Task<ListingAbTestExperiment?> UpdateStatusAsync(
+        long id,
+        AbTestStatus status,
+        CancellationToken cancellationToken = default);
+
     Task<bool> DeleteAsync(
         long id,
         CancellationToken cancellationToken = default);

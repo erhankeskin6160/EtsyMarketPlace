@@ -1203,7 +1203,7 @@ internal sealed class DashboardForm : Form
             "ai_audit" => new OwnShopListingAiAuditForm(_aiListingOptimizer, _optimizationHistoryService),
             "ab_test" => new ListingAbTestForm(_abTestService),
             "automation" => new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler),
-            "batch" => new BatchQueueForm(_batchQueueProcessorService),
+            "batch" => new BatchQueueForm(_batchQueueProcessorService, _abTestService),
             "profit" => new ProfitCalculatorForm(),
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),

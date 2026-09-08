@@ -211,7 +211,7 @@ public sealed class AbTestServiceTests
                 experiment.VariantA_Description,
                 experiment.VariantB_Description,
                 DateTimeOffset.Now,
-                null,
+                experiment.EndDate,
                 AbTestStatus.Active,
                 experiment.InitialViews,
                 experiment.InitialFavorites,
@@ -245,6 +245,21 @@ public sealed class AbTestServiceTests
                 AfterSales = update.AfterSales,
                 Status = update.CompleteExperiment ? AbTestStatus.Completed : existing.Status,
                 EndDate = update.CompleteExperiment ? DateTimeOffset.Now : existing.EndDate,
+            };
+            _items[index] = updated;
+            return Task.FromResult<ListingAbTestExperiment?>(updated);
+        }
+
+        public Task<ListingAbTestExperiment?> UpdateStatusAsync(long id, AbTestStatus status, CancellationToken cancellationToken = default)
+        {
+            var index = _items.FindIndex(i => i.Id == id);
+            if (index < 0) return Task.FromResult<ListingAbTestExperiment?>(null);
+
+            var existing = _items[index];
+            var updated = existing with
+            {
+                Status = status,
+                EndDate = status == AbTestStatus.Completed ? DateTimeOffset.Now : existing.EndDate,
             };
             _items[index] = updated;
             return Task.FromResult<ListingAbTestExperiment?>(updated);
