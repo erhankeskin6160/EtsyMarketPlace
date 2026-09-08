@@ -992,7 +992,8 @@ internal sealed class ListingAbTestForm : Form
             }
             catch (Exception ex)
             {
-                MessageBox.Show(dlg, $"A/B testi başlatılırken hata oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                var errorMsg = ex.InnerException != null ? $"{ex.Message}\n({ex.InnerException.Message})" : ex.Message;
+                MessageBox.Show(dlg, $"A/B testi başlatılırken hata oluştu:\n{errorMsg}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
             finally
             {

@@ -532,22 +532,28 @@ internal sealed class EtsyApiClient
         }
 
         var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
-        var tags = NormalizeListingTags(update.Tags);
-        var materials = NormalizeListingMaterials(update.Materials);
         var form = new List<KeyValuePair<string, string>>
         {
             new("title", update.Title.Trim()),
             new("description", EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(update.Description)),
         };
 
-        foreach (var tag in tags)
+        if (update.Tags != null)
         {
-            form.Add(new("tags[]", tag));
+            var tags = NormalizeListingTags(update.Tags);
+            foreach (var tag in tags)
+            {
+                form.Add(new("tags[]", tag));
+            }
         }
 
-        foreach (var material in materials)
+        if (update.Materials != null)
         {
-            form.Add(new("materials[]", material));
+            var materials = NormalizeListingMaterials(update.Materials);
+            foreach (var material in materials)
+            {
+                form.Add(new("materials[]", material));
+            }
         }
 
         using var request = CreateRequest(settings, HttpMethod.Patch, $"{BaseUrl}/shops/{shopId}/listings/{listingId}", useAccessToken: true);
@@ -1484,8 +1490,9 @@ internal sealed class EtsyApiClient
             .ToList();
     }
 
-    private static List<string> NormalizeListingTags(IEnumerable<string> tags) =>
-        tags
+    private static List<string> NormalizeListingTags(IEnumerable<string>? tags) =>
+        (tags ?? [])
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
             .Select(tag => tag.Trim())
             .Where(tag => tag.Length > 0)
             .Select(tag => tag.Length <= 20 ? tag : tag[..20].TrimEnd())
@@ -1493,15 +1500,16 @@ internal sealed class EtsyApiClient
             .Take(13)
             .ToList();
 
-    internal static List<string> NormalizeListingMaterialsForEtsy(IEnumerable<string> materials) =>
-        materials
+    internal static List<string> NormalizeListingMaterialsForEtsy(IEnumerable<string>? materials) =>
+        (materials ?? [])
+            .Where(material => !string.IsNullOrWhiteSpace(material))
             .Select(SanitizeListingMaterial)
             .Where(material => material.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(13)
             .ToList();
 
-    private static List<string> NormalizeListingMaterials(IEnumerable<string> materials) =>
+    private static List<string> NormalizeListingMaterials(IEnumerable<string>? materials) =>
         NormalizeListingMaterialsForEtsy(materials);
 
     private static string SanitizeListingMaterial(string material)
