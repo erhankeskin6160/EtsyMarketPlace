@@ -846,8 +846,9 @@ internal sealed class DashboardForm : Form
             int activeListings = _liveReport.OrderSummaries.Select(o => o.ListingId).Distinct().Count();
             _lblKpiListings.Text = activeListings > 0 ? $"{activeListings} Aktif Ürün" : "12 Ürün";
             
-            decimal totalDeductions = _liveReport.TotalFees + _liveReport.TotalInnerAdFees + _liveReport.TotalOffsiteAdFees + _liveReport.TotalRefunds;
-            _lblKpiExpenses.Text = FormatUSD(-Math.Abs(totalDeductions));
+            decimal totalDeductionsUSD = -Math.Abs(_liveReport.TotalDeductionsUSD);
+            decimal totalDeductionsTRY = -Math.Abs(_liveReport.TotalDeductionsTRY);
+            _lblKpiExpenses.Text = $"{FormatUSD(totalDeductionsUSD)}  ({FormatTRY(totalDeductionsTRY)})";
 
             PopulateRecentOrdersGrid();
             PopulateAiCopilotInsights();
@@ -941,10 +942,11 @@ internal sealed class DashboardForm : Form
 
         if (_liveReport.TotalGross > 0)
         {
-            decimal adPct = Math.Round((_liveReport.TotalInnerAdFees + _liveReport.TotalOffsiteAdFees) / _liveReport.TotalGross * 100, 1);
+            decimal totalAds = Math.Abs(_liveReport.TotalInnerAdFees + _liveReport.TotalOffsiteAdFees);
+            decimal adPct = Math.Round(totalAds / _liveReport.TotalGross * 100, 1);
             _pnlAiCopilot.Controls.Add(CreateInsightCard(
                 "📢 Reklam & Komisyon Durumu",
-                $"Reklam giderleri bu ay cironuzun %{adPct}'ini oluşturuyor. Toplam net kâr marjınız: %{_liveReport.ProfitMarginPct:N1}.",
+                $"Reklam giderleri bu ay cironuzun %{adPct:N1}'ini oluşturuyor. Toplam net kâr marjınız: %{_liveReport.ProfitMarginPct:N1}.",
                 UiStyle.AccentColor,
                 targetWidth
             ));

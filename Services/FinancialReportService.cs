@@ -279,15 +279,24 @@ internal sealed class FinancialReportService
             netAmount = rawCents / 100m;
             amount = netAmount;
         }
+
+        if ((el.TryGetProperty("net", out var netProp) || el.TryGetProperty("net_amount", out netProp)) && netProp.ValueKind == JsonValueKind.Number)
+        {
+            netAmount = netProp.GetDecimal() / 100m;
+        }
         
-        if (el.TryGetProperty("currency", out var curr) && curr.ValueKind == JsonValueKind.String)
+        if ((el.TryGetProperty("currency_code", out var curr) || el.TryGetProperty("currency", out curr)) && curr.ValueKind == JsonValueKind.String)
         {
             currency = curr.GetString() ?? "USD";
+        }
+        else if (el.TryGetProperty("money", out var moneyEl) && moneyEl.TryGetProperty("currency_code", out var mCurr) && mCurr.ValueKind == JsonValueKind.String)
+        {
+            currency = mCurr.GetString() ?? "USD";
         }
         
         decimal exRate = HistoricalExchangeRateProvider.GetRateForDate(ts.DateTime, 48.25m);
         
-        if (currency.Equals("TRY", StringComparison.OrdinalIgnoreCase))
+        if (currency.Equals("TRY", StringComparison.OrdinalIgnoreCase) || currency.Equals("TL", StringComparison.OrdinalIgnoreCase))
         {
             amount /= exRate;
             netAmount /= exRate;
@@ -482,7 +491,7 @@ internal sealed class FinancialReportService
                     totalFees += e.Amount;
                     break;
                 default:
-                    if (e.Amount > 0 && e.NetAmount < 0)
+                    if (e.Amount < 0 || e.NetAmount < 0)
                     {
                         totalFees += e.Amount;
                     }

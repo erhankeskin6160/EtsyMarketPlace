@@ -199,6 +199,21 @@ internal sealed record FinancialReport(
     public decimal TotalGrossTRY => DailySummaries.Count > 0 
         ? DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate) 
         : (OrderSummaries.Count > 0 ? OrderSummaries.Sum(o => Math.Round(o.GrandTotal * o.ExchangeRate, 2)) : Math.Round(TotalGross * ExchangeRate, 2));
+    public decimal TotalFeesTRY => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.EtsyFeesTRY) 
+        : Math.Round(TotalFees * ExchangeRate, 2);
+    public decimal TotalInnerAdsTRY => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.InnerAdFeesTRY) 
+        : Math.Round(TotalInnerAdFees * ExchangeRate, 2);
+    public decimal TotalOffsiteAdsTRY => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.OffsiteAdFeesTRY) 
+        : Math.Round(TotalOffsiteAdFees * ExchangeRate, 2);
+    public decimal TotalRefundsTRY => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.RefundsTRY) 
+        : Math.Round(TotalRefunds * ExchangeRate, 2);
+    public decimal TotalDeductionsUSD => TotalFees + TotalInnerAdFees + TotalOffsiteAdFees + TotalRefunds;
+    public decimal TotalDeductionsTRY => TotalFeesTRY + TotalInnerAdsTRY + TotalOffsiteAdsTRY + TotalRefundsTRY;
+
     public decimal FeeRatePct => TotalGross == 0 ? 0 : Math.Round(TotalFees / TotalGross * 100, 1);
     public decimal RefundRatePct => TotalGross == 0 ? 0 : Math.Round(TotalRefunds / TotalGross * 100, 1);
     public decimal AdSpendPct => TotalGross == 0 ? 0 : Math.Round(TotalAdFees / TotalGross * 100, 1);
