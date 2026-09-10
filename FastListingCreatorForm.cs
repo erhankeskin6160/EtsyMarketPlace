@@ -17,6 +17,7 @@ using SimilarProductsWinForms.Services;
 internal sealed class FastListingCreatorForm : Form
 {
     private readonly IAiListingOptimizer _aiOptimizer;
+    private readonly IAiCategorySuggester _categorySuggester;
     private readonly EtsyApiClient _apiClient = new();
     private readonly AiListingImageGenerator _imageGenerator = new();
 
@@ -93,9 +94,10 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Label _chkItemDesc = new() { AutoSize = true };
     private readonly Label _chkItemTags = new() { AutoSize = true };
 
-    public FastListingCreatorForm(IAiListingOptimizer aiOptimizer)
+    public FastListingCreatorForm(IAiListingOptimizer aiOptimizer, IAiCategorySuggester? categorySuggester = null)
     {
         _aiOptimizer = aiOptimizer;
+        _categorySuggester = categorySuggester ?? new AiCategorySuggester();
         Text = "🛍️ Hızlı Ürün Ekle & AI Stüdyosu";
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 740);
@@ -520,8 +522,24 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(lblTitleHint);
 
         // --- SECTION 3: Kategori & Kargo Ayarları ---
-        var sec3Header = CreateSectionHeaderLabel("📂 Kategori & Kargo Ayarları");
-        sec3Header.Margin = new Padding(0, 2, 0, 2);
+        var sec3Header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            ColumnCount = 2,
+            Height = 28,
+            Margin = new Padding(0, 2, 0, 2)
+        };
+        sec3Header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        sec3Header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var lblSec3 = CreateSectionHeaderLabel("📂 Kategori & Kargo Ayarları");
+        lblSec3.Margin = new Padding(0, 4, 0, 0);
+        sec3Header.Controls.Add(lblSec3, 0, 0);
+
+        var btnAiCategory = CreateModernActionButton("✨ AI Kategori Belirle", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        btnAiCategory.Click += async (_, _) => await SuggestAiCategoryAsync();
+        _galleryToolTip.SetToolTip(btnAiCategory, "Başlık ve ürün görsellerini yapay zeka ile analiz ederek en uygun Etsy kategorisini ve Taxonomy ID'sini belirler.");
+        sec3Header.Controls.Add(btnAiCategory, 1, 0);
         stack.Controls.Add(sec3Header);
 
         var catRow = new TableLayoutPanel
@@ -2261,6 +2279,107 @@ internal sealed class FastListingCreatorForm : Form
     }
 
     // --- AI Suggestions & Generation ---
+
+    private async Task SuggestAiCategoryAsync()
+    {
+        var title = _txtTitle.Text.Trim();
+        if (string.IsNullOrWhiteSpace(title) && _galleryImagePaths.Count == 0 && string.IsNullOrWhiteSpace(_lastGeneratedImagePath))
+        {
+            MessageBox.Show(
+                this,
+                "Lütfen AI kategori analizi için bir ürün başlığı girin veya sol/orta panelden ürün görseli ekleyin.",
+                "AI Kategori Analizi",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            UseWaitCursor = true;
+            _statusLabel.Text = "AI başlık ve ürün görsellerini analiz ederek en uygun Etsy kategorisini belirliyor...";
+
+            var images = new List<string>(_galleryImagePaths);
+            if (!string.IsNullOrWhiteSpace(_lastGeneratedImagePath) && File.Exists(_lastGeneratedImagePath) && !images.Contains(_lastGeneratedImagePath))
+            {
+                images.Insert(0, _lastGeneratedImagePath);
+            }
+
+            var result = await _categorySuggester.SuggestCategoryAsync(
+                title,
+                images,
+                _txtDescription.Text.Trim(),
+                _txtTags.Text.Trim());
+
+            if (result.TaxonomyId > 0)
+            {
+                var mainDisplay = $"{result.TaxonomyId} - {result.CategoryPath}";
+
+                // Ana öneriyi bul veya ekle ve seç
+                int existingIdx = -1;
+                for (int i = 0; i < _cboTaxonomy.Items.Count; i++)
+                {
+                    var itemStr = _cboTaxonomy.Items[i]?.ToString() ?? "";
+                    if (itemStr.StartsWith($"{result.TaxonomyId} ", StringComparison.OrdinalIgnoreCase) ||
+                        itemStr.StartsWith($"{result.TaxonomyId}-", StringComparison.OrdinalIgnoreCase) ||
+                        itemStr.Equals(mainDisplay, StringComparison.OrdinalIgnoreCase))
+                    {
+                        existingIdx = i;
+                        break;
+                    }
+                }
+
+                if (existingIdx >= 0)
+                {
+                    _cboTaxonomy.SelectedIndex = existingIdx;
+                }
+                else
+                {
+                    _cboTaxonomy.Items.Insert(0, mainDisplay);
+                    _cboTaxonomy.SelectedIndex = 0;
+                }
+
+                _txtCustomTaxonomy.Text = result.TaxonomyId.ToString(CultureInfo.InvariantCulture);
+
+                // Alternatif kategorileri de cboTaxonomy'ye ekleyelim (kullanıcı kolayca geçebilsin)
+                foreach (var alt in result.Alternatives)
+                {
+                    var altDisplay = $"{alt.TaxonomyId} - {alt.CategoryPath}";
+                    bool altExists = false;
+                    for (int i = 0; i < _cboTaxonomy.Items.Count; i++)
+                    {
+                        var s = _cboTaxonomy.Items[i]?.ToString() ?? "";
+                        if (s.StartsWith($"{alt.TaxonomyId} ", StringComparison.OrdinalIgnoreCase) ||
+                            s.StartsWith($"{alt.TaxonomyId}-", StringComparison.OrdinalIgnoreCase))
+                        {
+                            altExists = true;
+                            break;
+                        }
+                    }
+                    if (!altExists)
+                    {
+                        _cboTaxonomy.Items.Insert(1, altDisplay);
+                    }
+                }
+
+                UpdateChecklist();
+                var reasoningShort = string.IsNullOrWhiteSpace(result.Reasoning) ? "" : $" ({result.Reasoning})";
+                _statusLabel.Text = $"✨ Kategori belirlendi: {result.CategoryPath} [Taxonomy ID: {result.TaxonomyId}]{reasoningShort}";
+            }
+            else
+            {
+                _statusLabel.Text = "Kategori belirlenemedi; lütfen manuel Taxonomy ID giriniz.";
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"AI kategori belirleme hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
 
     private async Task SuggestAiTitleAsync()
     {
