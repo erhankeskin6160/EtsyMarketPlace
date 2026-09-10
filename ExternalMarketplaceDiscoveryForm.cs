@@ -5,6 +5,7 @@ using System.Globalization;
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOptimizer) : Form
 {
@@ -282,13 +283,24 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         middle.SetRowSpan(_notesTextBox, 2);
         layout.Controls.Add(middle, 1, 0);
 
-        var right = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 28, AutoScroll = true };
-        for (var index = 0; index < 27; index++)
+        var rightScroll = new ModernScrollPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+        var right = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            RowCount = 28,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoScroll = false
+        };
+        for (var index = 0; index < 28; index++)
         {
             right.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         }
-
-        right.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         right.Controls.Add(LabelFor("Fiyat"), 0, 0);
         _priceInput.Dock = DockStyle.Fill;
         right.Controls.Add(_priceInput, 0, 1);
@@ -336,7 +348,9 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         close.BackColor = Color.FromArgb(82, 93, 110);
         close.Click += (_, _) => Close();
         right.Controls.Add(close, 0, 23);
-        layout.Controls.Add(right, 2, 0);
+
+        rightScroll.SetContent(right);
+        layout.Controls.Add(rightScroll, 2, 0);
         return layout;
     }
 

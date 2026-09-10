@@ -6,6 +6,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.Windows.Forms;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class EtsyListingPreviewDialog : Form
 {
@@ -20,6 +21,7 @@ internal sealed class EtsyListingPreviewDialog : Form
 
     private PictureBox _picMain = null!;
     private FlowLayoutPanel _pnlThumbnails = null!;
+    private ModernScrollPanel? _thumbScroll;
     private Image? _currentMainImage;
 
     public EtsyListingPreviewDialog(
@@ -143,11 +145,18 @@ internal sealed class EtsyListingPreviewDialog : Form
 
     private Panel CreateSearchCardPreview()
     {
-        var root = new Panel
+        var scroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(20),
-            AutoScroll = true
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+
+        var root = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 520,
+            Padding = new Padding(20)
         };
 
         var lblCardSection = new Label
@@ -286,15 +295,23 @@ internal sealed class EtsyListingPreviewDialog : Form
         card.Controls.AddRange([picThumb, lblShop, lblTitle, lblRating, lblPrice, lblFreeShip, lblBadge]);
         root.Controls.Add(card);
 
-        return root;
+        scroll.SetContent(root);
+        return scroll;
     }
 
-    private Panel CreateDetailPagePreview()
+    private ModernScrollPanel CreateDetailPagePreview()
     {
-        var root = new Panel
+        var scroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            AutoScroll = true,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+
+        var root = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 720,
             Padding = new Padding(25)
         };
 
@@ -317,14 +334,24 @@ internal sealed class EtsyListingPreviewDialog : Form
         };
 
         // Thumbnails Strip
-        _pnlThumbnails = new FlowLayoutPanel
+        _thumbScroll = new ModernScrollPanel
         {
             Location = new Point(0, 0),
-            Size = new Size(65, 380),
+            Size = new Size(68, 380),
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+        _pnlThumbnails = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Width = 60,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            AutoScroll = true
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoScroll = false
         };
+        _thumbScroll.SetContent(_pnlThumbnails);
 
         // Large Main PictureBox
         _picMain = new PictureBox
@@ -461,10 +488,11 @@ internal sealed class EtsyListingPreviewDialog : Form
 
         pnlInfo.Controls.AddRange([lblStock, lblPriceLarge, lblTitleFull, btnAddToCart, btnBuyNow]);
 
-        content.Controls.AddRange([_pnlThumbnails, _picMain, pnlInfo]);
+        content.Controls.AddRange([_thumbScroll, _picMain, pnlInfo]);
         root.Controls.Add(content);
 
-        return root;
+        scroll.SetContent(root);
+        return scroll;
     }
 
     private void PopulateDetailImages()
@@ -511,5 +539,6 @@ internal sealed class EtsyListingPreviewDialog : Form
 
             _pnlThumbnails.Controls.Add(thumb);
         }
+        _thumbScroll?.RecalculateScroll();
     }
 }

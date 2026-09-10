@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using EtsyMarketPlace.Application.Profitability;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ProfitCalculatorForm : Form
 {
@@ -66,6 +67,7 @@ internal sealed class ProfitCalculatorForm : Form
     private readonly Label _optimalPriceLabel = new();
     private readonly Label _offsiteComparisonLabel = new();
     private readonly Panel _recommendationsContainer = new();
+    private ModernScrollPanel? _recScroll;
 
     public ProfitCalculatorForm(ProductCandidate? product = null)
     {
@@ -109,7 +111,7 @@ internal sealed class ProfitCalculatorForm : Form
         BackColor = UiStyle.BackgroundColor;
         Font = UiStyle.BaseFont;
         ForeColor = UiStyle.TextDark;
-        AutoScroll = true;
+        AutoScroll = false;
 
         var root = new TableLayoutPanel
         {
@@ -225,11 +227,11 @@ internal sealed class ProfitCalculatorForm : Form
             e.Graphics.DrawRectangle(pen, 0, 0, outerPanel.Width - 1, outerPanel.Height - 1);
         };
 
-        var scrollContainer = new Panel
+        var scrollContainer = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            AutoScroll = true,
-            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
         };
 
         var flow = new FlowLayoutPanel
@@ -269,7 +271,7 @@ internal sealed class ProfitCalculatorForm : Form
         // Target Margin Stepper
         flow.Controls.Add(CreateInputFieldWithTry("Hedef Kâr Marjı (%)", _targetMarginInput, null));
 
-        scrollContainer.Controls.Add(flow);
+        scrollContainer.SetContent(flow);
         outerPanel.Controls.Add(scrollContainer);
 
         return outerPanel;
@@ -557,11 +559,19 @@ internal sealed class ProfitCalculatorForm : Form
         _offsiteComparisonLabel.ForeColor = UiStyle.TextMuted;
         layout.Controls.Add(_offsiteComparisonLabel, 0, 2);
 
-        _recommendationsContainer.Dock = DockStyle.Fill;
-        _recommendationsContainer.AutoScroll = true;
+        _recScroll = new ModernScrollPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+        _recommendationsContainer.Dock = DockStyle.Top;
+        _recommendationsContainer.AutoSize = true;
+        _recommendationsContainer.AutoScroll = false;
         _recommendationsContainer.BackColor = Color.FromArgb(15, 23, 42);
         _recommendationsContainer.Padding = new Padding(8);
-        layout.Controls.Add(_recommendationsContainer, 0, 3);
+        _recScroll.SetContent(_recommendationsContainer);
+        layout.Controls.Add(_recScroll, 0, 3);
 
         group.Controls.Add(layout);
         return group;
@@ -800,6 +810,7 @@ internal sealed class ProfitCalculatorForm : Form
             };
             _recommendationsContainer.Controls.Add(lblRec);
         }
+        _recScroll?.RecalculateScroll();
     }
 
     private void AddFeeRow(string name, string rule, decimal usd, decimal rate)

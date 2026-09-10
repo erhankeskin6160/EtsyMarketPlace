@@ -72,7 +72,17 @@ static class Program
             _ = new SimilarProductsWinForms.Controls.ModernMultilineTextBox();
             _ = new SimilarProductsWinForms.Controls.ModernScrollPanel();
             _ = new SimilarProductsWinForms.Controls.ModernButtonControl();
-            using var testForm = new FastListingCreatorForm(null!);
+            using var f1 = new FastListingCreatorForm(null!);
+            using var f2 = new ProfitCalculatorForm();
+            using var f3 = new CompetitorAndTrendSpyForm(null!);
+            using var f4 = new AiListingImageForm(null!);
+            using var f5 = new NotificationSettingsForm();
+            using var f6 = new ListingHealthScoreForm(null!);
+            using var f7 = new ExternalMarketplaceDiscoveryForm(null!);
+            using var f8 = new FinancialReportForm();
+            using var f9 = new EtsyListingPreviewDialog("Test Title", 29.99m, "Test Desc", ["tag1"], ["mat1"], [], []);
+            using var f10 = new AiStudioImagePickerDialog();
+            using var f11 = new StudioGalleryViewerDialog();
             Console.WriteLine("CONTROLS_VERIFIED_OK");
             return;
         }

@@ -67,6 +67,7 @@ internal sealed class DashboardForm : Form
     private readonly DataGridView _gridRecentOrders = new();
     private readonly Label _lblOrdersSummary = new();
     private readonly FlowLayoutPanel _pnlAiCopilot = new();
+    private ModernScrollPanel? _copilotScroll;
 
     private CartesianChart _chartRevenueProfit = null!;
 
@@ -702,10 +703,19 @@ internal sealed class DashboardForm : Form
         };
         copilotLayout.Controls.Add(lblCopilotTitle, 0, 0);
 
-        _pnlAiCopilot.Dock = DockStyle.Fill;
+        _copilotScroll = new ModernScrollPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+
+        _pnlAiCopilot.Dock = DockStyle.Top;
+        _pnlAiCopilot.AutoSize = true;
+        _pnlAiCopilot.AutoSizeMode = AutoSizeMode.GrowAndShrink;
         _pnlAiCopilot.FlowDirection = FlowDirection.TopDown;
         _pnlAiCopilot.WrapContents = false;
-        _pnlAiCopilot.AutoScroll = true;
+        _pnlAiCopilot.AutoScroll = false;
         _pnlAiCopilot.Padding = new Padding(2, 2, 6, 2);
         _pnlAiCopilot.Resize += (_, _) =>
         {
@@ -725,9 +735,11 @@ internal sealed class DashboardForm : Form
                     }
                 }
             }
+            _copilotScroll?.RecalculateScroll();
         };
 
-        copilotLayout.Controls.Add(_pnlAiCopilot, 0, 1);
+        _copilotScroll.SetContent(_pnlAiCopilot);
+        copilotLayout.Controls.Add(_copilotScroll, 0, 1);
 
         copilotCard.Controls.Add(copilotLayout);
         split.Controls.Add(copilotCard, 1, 0);
@@ -960,6 +972,7 @@ internal sealed class DashboardForm : Form
             "🔍 Pazar Araştırması",
             () => _ = OpenModuleByIdAsync("research")
         ));
+        _copilotScroll?.RecalculateScroll();
     }
 
     private static Control CreateInsightCard(string title, string text, Color accentColor, int width, string? buttonText = null, Action? onButtonClick = null)

@@ -60,6 +60,7 @@ internal sealed class FinancialReportForm : Form
     private Label _lblForecastOrders = null!;
     private Label _lblForecastStock  = null!;
     private FlowLayoutPanel _pnlAiRecommendations = null!;
+    private ModernScrollPanel? _aiRecScroll;
     private readonly Label _lblForecastAiBadge = new()
     {
         AutoSize = true,
@@ -790,13 +791,22 @@ internal sealed class FinancialReportForm : Form
         adviceHeader.Controls.Add(rightPanel, 1, 0);
         adviceLayout.Controls.Add(adviceHeader, 0, 0);
 
-        _pnlAiRecommendations = new FlowLayoutPanel
+        _aiRecScroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            AutoScroll = true,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+
+        _pnlAiRecommendations = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoScroll = false,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            BackColor = Color.Transparent,
+            BackColor = UiStyle.CardBackground,
             Padding = new Padding(0, 4, 4, 0)
         };
         _pnlAiRecommendations.SizeChanged += (_, _) =>
@@ -823,9 +833,11 @@ internal sealed class FinancialReportForm : Form
                     }
                 }
             }
+            _aiRecScroll?.RecalculateScroll();
         };
 
-        adviceLayout.Controls.Add(_pnlAiRecommendations, 0, 1);
+        _aiRecScroll.SetContent(_pnlAiRecommendations);
+        adviceLayout.Controls.Add(_aiRecScroll, 0, 1);
         adviceCard.Controls.Add(adviceLayout);
         split.Controls.Add(adviceCard, 1, 0);
 
@@ -2385,6 +2397,7 @@ internal sealed class FinancialReportForm : Form
             itemCard.Controls.Add(lblBody);
             _pnlAiRecommendations.Controls.Add(itemCard);
         }
+        _aiRecScroll?.RecalculateScroll();
     }
 
     // ── Defter Kayıtları Grid Güncellemesi ─────────────────────────────────────

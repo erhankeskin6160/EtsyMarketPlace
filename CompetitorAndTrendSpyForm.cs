@@ -7,6 +7,7 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.SeasonalTrends;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class CompetitorAndTrendSpyForm : Form
 {
@@ -51,6 +52,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
     private readonly Button _sendToImageStudioBtn = new();
     private readonly Button _copyItemTagsBtn = new();
     private readonly FlowLayoutPanel _selectedItemTagsContainer = new();
+    private ModernScrollPanel? _tagsScroll;
 
     // Bottom Intelligence Switch: Tags vs AI Gap vs eRank Audit
     private readonly Button _btnViewTags = new();
@@ -63,8 +65,8 @@ internal sealed class CompetitorAndTrendSpyForm : Form
     private readonly DataGridView _tagsGrid = new();
     private readonly TextBox _tagSearchTextBox = new();
     private readonly Button _copyTagsBtn = new();
-    private readonly TextBox _gapAnalysisText = new();
-    private readonly TextBox _auditAnalysisText = new();
+    private readonly ModernMultilineTextBox _gapAnalysisText = new();
+    private readonly ModernMultilineTextBox _auditAnalysisText = new();
 
     private CompetitorShopAnalysis? _currentAnalysis;
     private List<MarketListingResult> _filteredListings = [];
@@ -739,12 +741,21 @@ internal sealed class CompetitorAndTrendSpyForm : Form
         root.SetColumnSpan(btnBar, 2);
 
         // Product Tags Chips Container
-        _selectedItemTagsContainer.Dock = DockStyle.Fill;
-        _selectedItemTagsContainer.AutoScroll = true;
+        _tagsScroll = new ModernScrollPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+        _selectedItemTagsContainer.Dock = DockStyle.Top;
+        _selectedItemTagsContainer.AutoSize = true;
+        _selectedItemTagsContainer.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _selectedItemTagsContainer.AutoScroll = false;
         _selectedItemTagsContainer.FlowDirection = FlowDirection.LeftToRight;
         _selectedItemTagsContainer.Padding = new Padding(0, 2, 0, 0);
-        root.Controls.Add(_selectedItemTagsContainer, 0, 2);
-        root.SetColumnSpan(_selectedItemTagsContainer, 2);
+        _tagsScroll.SetContent(_selectedItemTagsContainer);
+        root.Controls.Add(_tagsScroll, 0, 2);
+        root.SetColumnSpan(_tagsScroll, 2);
 
         group.Controls.Add(root);
         return group;
@@ -877,11 +888,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
     {
         _auditPanel.Dock = DockStyle.Fill;
         _auditAnalysisText.Dock = DockStyle.Fill;
-        _auditAnalysisText.Multiline = true;
         _auditAnalysisText.ReadOnly = true;
-        _auditAnalysisText.ScrollBars = ScrollBars.Vertical;
-        _auditAnalysisText.BackColor = Color.FromArgb(20, 29, 47);
-        _auditAnalysisText.ForeColor = Color.FromArgb(226, 232, 240);
         _auditAnalysisText.Font = new Font("Consolas", 8.5F);
         _auditAnalysisText.Text = "eRank SEO Denetimi: Bir ürün seçtiğinizde başlık uzunluğu, 13 tag eksiksizliği ve long-tail kelime oranı burada detaylandırılacaktır.";
         _auditPanel.Controls.Add(_auditAnalysisText);
@@ -891,11 +898,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
     {
         _aiGapPanel.Dock = DockStyle.Fill;
         _gapAnalysisText.Dock = DockStyle.Fill;
-        _gapAnalysisText.Multiline = true;
         _gapAnalysisText.ReadOnly = true;
-        _gapAnalysisText.ScrollBars = ScrollBars.Vertical;
-        _gapAnalysisText.BackColor = Color.FromArgb(20, 29, 47);
-        _gapAnalysisText.ForeColor = Color.FromArgb(226, 232, 240);
         _gapAnalysisText.Font = new Font("Consolas", 8.5F);
         _gapAnalysisText.Text = "AI Rakip Açığı Raporu: Fiyat fırsatları ve zayıf SEO ürünleri burada listelenecektir.";
         _aiGapPanel.Controls.Add(_gapAnalysisText);
@@ -1150,6 +1153,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
             };
             _selectedItemTagsContainer.Controls.Add(chip);
         }
+        _tagsScroll?.RecalculateScroll();
 
         // Render eRank Audit for this item
         var sbAudit = new StringBuilder();
@@ -1175,6 +1179,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
         _selectedSalesEstLabel.Text = "EverBee Projeksiyonu: —";
         _selectedProductPic.Image = null;
         _selectedItemTagsContainer.Controls.Clear();
+        _tagsScroll?.RecalculateScroll();
         _auditAnalysisText.Text = "Bir ürün seçtiğinizde eRank kalite ve SEO denetimi burada listelenir.";
     }
 

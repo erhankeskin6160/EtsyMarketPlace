@@ -51,7 +51,7 @@ internal sealed class AiListingImageForm : Form
     private readonly ModernImageDropZone _dropZone = new();
     private readonly TextBox _productTitleTxt = new();
     private readonly PresetChipSelector _presetChips = new();
-    private readonly TextBox _promptTxt = new() { Multiline = true, Height = 64, ScrollBars = ScrollBars.Vertical };
+    private readonly ModernMultilineTextBox _promptTxt = new() { Height = 64 };
     private readonly Button _btnSmartPrompt = new();
     private readonly StudioLightingSelectorControl _lightingSelector = new();
     private readonly Panel _engineOptionsContainer = new() { AutoSize = true, Dock = DockStyle.Top };
@@ -392,12 +392,21 @@ internal sealed class AiListingImageForm : Form
             BorderColor = UiStyle.BorderColor
         };
 
-        var stack = new FlowLayoutPanel
+        var leftScroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+
+        var stack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            AutoScroll = true
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoScroll = false
         };
 
         // 1. AI Engine Selector
@@ -557,7 +566,8 @@ internal sealed class AiListingImageForm : Form
         _btnBatchProcess.Click += async (_, _) => await RunBatchSceneGenerationAsync();
         stack.Controls.Add(_btnBatchProcess);
 
-        card.Controls.Add(stack);
+        leftScroll.SetContent(stack);
+        card.Controls.Add(leftScroll);
         return card;
     }
 
@@ -638,12 +648,21 @@ internal sealed class AiListingImageForm : Form
             BorderColor = UiStyle.BorderColor
         };
 
-        var stack = new FlowLayoutPanel
+        var rightScroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+
+        var stack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            AutoScroll = true
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoScroll = false
         };
 
         // 1. Marketing Overlay Badge
@@ -779,7 +798,8 @@ internal sealed class AiListingImageForm : Form
         exportEtsyBtn.Click += async (_, _) => await ExportToEtsyAsync();
         stack.Controls.Add(exportEtsyBtn);
 
-        card.Controls.Add(stack);
+        rightScroll.SetContent(stack);
+        card.Controls.Add(rightScroll);
         return card;
     }
 
@@ -1225,8 +1245,10 @@ internal sealed class AiListingImageForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
 
-        var flow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = true };
-        root.Controls.Add(flow, 0, 0);
+        var pickerScroll = new ModernScrollPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(0, 0, 2, 0) };
+        var flow = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, AutoScroll = false, WrapContents = true };
+        pickerScroll.SetContent(flow);
+        root.Controls.Add(pickerScroll, 0, 0);
 
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var btnCancel = UiStyle.CreateButton("İptal", isSecondary: true);

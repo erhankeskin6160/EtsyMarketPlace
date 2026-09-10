@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ListingHealthScoreForm : Form
 {
@@ -23,6 +24,7 @@ internal sealed class ListingHealthScoreForm : Form
     private readonly Label _scoreNumericLabel = new();
     private readonly Label _summaryLabel = new();
     private readonly FlowLayoutPanel _breakdownPanel = new();
+    private ModernScrollPanel? _breakdownScroll;
     
     // Details controls
     private readonly TextBox _strengthsTextBox = new();
@@ -186,14 +188,22 @@ internal sealed class ListingHealthScoreForm : Form
         leftPanel.Controls.Add(scoreCard, 0, 0);
 
         // Breakdown List
-        _breakdownPanel.Dock = DockStyle.Fill;
-        _breakdownPanel.AutoScroll = true;
+        _breakdownScroll = new ModernScrollPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(0, 8, 8, 0),
+            Padding = new Padding(0, 0, 2, 0)
+        };
+        _breakdownPanel.Dock = DockStyle.Top;
+        _breakdownPanel.AutoSize = true;
+        _breakdownPanel.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _breakdownPanel.AutoScroll = false;
         _breakdownPanel.FlowDirection = FlowDirection.TopDown;
         _breakdownPanel.WrapContents = false;
         _breakdownPanel.BackColor = UiStyle.CardBackground;
         _breakdownPanel.Padding = new Padding(12);
-        _breakdownPanel.Margin = new Padding(0, 8, 8, 0);
-        leftPanel.Controls.Add(_breakdownPanel, 0, 1);
+        _breakdownScroll.SetContent(_breakdownPanel);
+        leftPanel.Controls.Add(_breakdownScroll, 0, 1);
 
         contentPanel.Controls.Add(leftPanel, 0, 0);
 
@@ -298,6 +308,7 @@ internal sealed class ListingHealthScoreForm : Form
         {
             _breakdownPanel.Controls.Add(CreateBreakdownItem(item));
         }
+        _breakdownScroll?.RecalculateScroll();
 
         // Render Details Text
         _strengthsTextBox.Text = report.Strengths.Count > 0

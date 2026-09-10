@@ -26,13 +26,13 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private readonly TextBox _includeTextBox = new();
     private readonly TextBox _excludeTextBox = new();
     private readonly TextBox _titleTextBox = new();
-    private readonly TextBox _descriptionTextBox = new();
-    private readonly TextBox _tagsTextBox = new();
-    private readonly TextBox _materialsTextBox = new();
-    private readonly TextBox _variationsTextBox = new();
-    private readonly TextBox _imagePromptTextBox = new();
+    private readonly ModernMultilineTextBox _descriptionTextBox = new();
+    private readonly ModernMultilineTextBox _tagsTextBox = new();
+    private readonly ModernMultilineTextBox _materialsTextBox = new();
+    private readonly ModernMultilineTextBox _variationsTextBox = new();
+    private readonly ModernMultilineTextBox _imagePromptTextBox = new();
     private readonly TextBox _imagePathTextBox = new();
-    private readonly TextBox _notesTextBox = new();
+    private readonly ModernMultilineTextBox _notesTextBox = new();
     private readonly ListingQualityReportControl _qualityReportControl = new();
     private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 30 };
     private readonly NumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
@@ -2560,11 +2560,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-    private static void ConfigureMultiline(TextBox textBox)
+    private static void ConfigureMultiline(ModernMultilineTextBox textBox)
     {
         textBox.Dock = DockStyle.Fill;
-        textBox.Multiline = true;
-        textBox.ScrollBars = ScrollBars.Vertical;
     }
 
     private static Label LabelFor(string text) => new()

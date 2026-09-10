@@ -11,7 +11,8 @@ using SimilarProductsWinForms.Services;
 
 internal sealed class AiStudioImagePickerDialog : Form
 {
-    private readonly FlowLayoutPanel _flowPanel = new();
+    private readonly FlowLayoutPanel _flowPanel = new() { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, AutoScroll = false, WrapContents = true };
+    private ModernScrollPanel? _pickerScroll;
     private readonly List<CheckBox> _checkBoxes = [];
     private readonly List<string> _selectedPaths = [];
     private readonly Label _statusLabel = new();
@@ -65,11 +66,11 @@ internal sealed class AiStudioImagePickerDialog : Form
         root.Controls.Add(headerPanel, 0, 0);
 
         // Flow Panel
-        _flowPanel.Dock = DockStyle.Fill;
-        _flowPanel.AutoScroll = true;
+        _pickerScroll = new ModernScrollPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(0, 0, 2, 0) };
         _flowPanel.BackColor = UiStyle.CardBackground;
         _flowPanel.Padding = new Padding(8);
-        root.Controls.Add(_flowPanel, 0, 1);
+        _pickerScroll.SetContent(_flowPanel);
+        root.Controls.Add(_pickerScroll, 0, 1);
 
         // Bottom Bar
         var bottomPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
@@ -213,6 +214,7 @@ internal sealed class AiStudioImagePickerDialog : Form
                 card.Controls.Add(cardTable);
                 _flowPanel.Controls.Add(card);
             }
+            _pickerScroll?.RecalculateScroll();
 
             _statusLabel.Text = $"{_checkBoxes.Count} stüdyo görseli listelendi.";
         }

@@ -29,7 +29,7 @@ internal sealed class BatchStudioPanelControl : UserControl
 
     // UI Panelleri
     private ModernBeforeAfterSlider _slider = null!;
-    private TextBox _txtPrompt = null!;
+    private ModernMultilineTextBox _txtPrompt = null!;
     private ComboBox _cboEngine = null!;
     private ProgressBar _progressBar = null!;
     private Label _lblProgress = null!;
@@ -205,14 +205,22 @@ internal sealed class BatchStudioPanelControl : UserControl
             Padding = new Padding(12)
         };
 
-        var panel = new FlowLayoutPanel
+        var leftScroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+
+        var panel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            AutoScroll = true
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoScroll = false
         };
-        card.Controls.Add(panel);
 
         // 1. Motor Seçimi
         panel.Controls.Add(CreateSectionTitle("⚙️ 1. AI İşlem Motoru"));
@@ -236,13 +244,19 @@ internal sealed class BatchStudioPanelControl : UserControl
 
         // 2. Hazır Sahne Preset'leri
         panel.Controls.Add(CreateSectionTitle("🎨 2. Popüler Etsy Sahne Şablonları"));
-        var flowPresets = new FlowLayoutPanel
+        var presetsScroll = new ModernScrollPanel
         {
             Width = 330,
             Height = 110,
-            WrapContents = true,
-            AutoScroll = true,
             Margin = new Padding(0, 2, 0, 6)
+        };
+        var flowPresets = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            WrapContents = true,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoScroll = false
         };
         foreach (var preset in PromptTipsService.Presets)
         {
@@ -266,20 +280,16 @@ internal sealed class BatchStudioPanelControl : UserControl
             };
             flowPresets.Controls.Add(btnChip);
         }
-        panel.Controls.Add(flowPresets);
+        presetsScroll.SetContent(flowPresets);
+        panel.Controls.Add(presetsScroll);
 
-        // 3. Sahne Promptu Girişi
-        panel.Controls.Add(CreateSectionTitle("✍️ 3. Arka Plan Sahne Promptu"));
-        _txtPrompt = new TextBox
+        // 3. Prompt Giriş Alanı
+        panel.Controls.Add(CreateSectionTitle("✍️ 3. Özel Sahne & Arka Plan Promptu"));
+        _txtPrompt = new ModernMultilineTextBox
         {
-            Multiline = true,
             Width = 330,
             Height = 85,
-            BackColor = Color.FromArgb(15, 23, 42),
-            ForeColor = Color.White,
             Font = new Font("Segoe UI", 9F),
-            BorderStyle = BorderStyle.FixedSingle,
-            ScrollBars = ScrollBars.Vertical,
             Text = "Professional commercial product photography, placed on a smooth polished white marble countertop in a modern bright sunlit studio, soft natural contact shadow, depth of field, 8k crisp details"
         };
         _txtPrompt.TextChanged += (_, _) => UpdatePromptAnalysis();
@@ -322,6 +332,8 @@ internal sealed class BatchStudioPanelControl : UserControl
         };
         panel.Controls.Add(_lblPromptTip);
 
+        leftScroll.SetContent(panel);
+        card.Controls.Add(leftScroll);
         return card;
     }
 

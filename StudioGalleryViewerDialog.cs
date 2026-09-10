@@ -16,7 +16,8 @@ internal sealed class StudioGalleryViewerDialog : Form
     public Bitmap? SelectedImage { get; private set; }
     public string? SelectedPrompt { get; private set; }
 
-    private readonly FlowLayoutPanel _flowPanel = new() { Dock = DockStyle.Fill, AutoScroll = true, WrapContents = true };
+    private readonly FlowLayoutPanel _flowPanel = new() { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, AutoScroll = false, WrapContents = true };
+    private ModernScrollPanel? _galleryScroll;
     private readonly TextBox _searchBox = new();
 
     public StudioGalleryViewerDialog()
@@ -62,7 +63,9 @@ internal sealed class StudioGalleryViewerDialog : Form
         root.Controls.Add(header, 0, 0);
 
         // 2. Flow Panel
-        root.Controls.Add(_flowPanel, 0, 1);
+        _galleryScroll = new ModernScrollPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(0, 0, 2, 0) };
+        _galleryScroll.SetContent(_flowPanel);
+        root.Controls.Add(_galleryScroll, 0, 1);
 
         // 3. Bottom Bar
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
@@ -163,5 +166,6 @@ internal sealed class StudioGalleryViewerDialog : Form
             card.Controls.Add(stack);
             _flowPanel.Controls.Add(card);
         }
+        _galleryScroll?.RecalculateScroll();
     }
 }

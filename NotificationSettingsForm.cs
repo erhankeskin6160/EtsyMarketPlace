@@ -1,6 +1,7 @@
 namespace SimilarProductsWinForms;
 
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class NotificationSettingsForm : Form
 {
@@ -180,7 +181,8 @@ internal sealed class NotificationSettingsForm : Form
             Padding = new Padding(12),
             Margin = new Padding(8, 0, 0, 0)
         };
-        var stack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, Padding = new Padding(12), WrapContents = false, AutoScroll = true };
+        var scroll = new ModernScrollPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(0, 0, 2, 0) };
+        var stack = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, Padding = new Padding(12), WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, AutoScroll = false };
 
         stack.Controls.Add(_notifyNewOrderChk);
         stack.Controls.Add(_notifyOpportunityChk);
@@ -216,7 +218,8 @@ internal sealed class NotificationSettingsForm : Form
         };
         stack.Controls.Add(hintLabel);
 
-        group.Controls.Add(stack);
+        scroll.SetContent(stack);
+        group.Controls.Add(scroll);
         return group;
     }
 
