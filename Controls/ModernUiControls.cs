@@ -145,7 +145,7 @@ public class ModernKpiTile : ModernCardPanel
 }
 
 /// <summary>
-/// Custom flat button with GDI+ rounded corners and hover effect.
+/// Custom flat button with GDI+ rounded corners, hover effect, and clean container background clearing.
 /// </summary>
 public class ModernButtonControl : Button
 {
@@ -157,7 +157,12 @@ public class ModernButtonControl : Button
 
     public ModernButtonControl()
     {
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
         DoubleBuffered = true;
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
@@ -165,6 +170,32 @@ public class ModernButtonControl : Button
         ForeColor = Color.White;
         Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
         Cursor = Cursors.Hand;
+    }
+
+    private Color GetEffectiveParentBackColor()
+    {
+        Control? p = Parent;
+        while (p != null)
+        {
+            if (p.BackColor != Color.Transparent && p.BackColor.A == 255)
+            {
+                return p.BackColor;
+            }
+            p = p.Parent;
+        }
+        return UiStyle.BackgroundColor;
+    }
+
+    protected override void OnParentBackColorChanged(EventArgs e)
+    {
+        base.OnParentBackColorChanged(e);
+        Invalidate();
+    }
+
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        Invalidate();
     }
 
     protected override void OnMouseEnter(EventArgs e)
@@ -181,19 +212,35 @@ public class ModernButtonControl : Button
         Invalidate();
     }
 
+    protected override void OnPaintBackground(PaintEventArgs pevent)
+    {
+        // Explicitly clear background to container color so no dirty sibling pixels remain in buffer
+        Color parentBg = GetEffectiveParentBackColor();
+        using var clearBrush = new SolidBrush(parentBg);
+        pevent.Graphics.FillRectangle(clearBrush, ClientRectangle);
+    }
+
     protected override void OnPaint(PaintEventArgs pevent)
     {
         var g = pevent.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
+        // 1. Clear control bounds with effective parent background color
+        // This permanently eliminates any green/white/dirty corner artifacts outside the rounded pill
+        Color parentBg = GetEffectiveParentBackColor();
+        using (var clearBrush = new SolidBrush(parentBg))
+        {
+            g.FillRectangle(clearBrush, ClientRectangle);
+        }
+
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
         if (rect.Width <= 0 || rect.Height <= 0) return;
 
         using var path = ModernCardPanel.CreateRoundedRectanglePath(rect, CornerRadius);
 
-        Color currentBg = !Enabled ? Color.FromArgb(203, 213, 225) : (_isHovered ? HoverColor : NormalColor);
-        Color currentFg = !Enabled ? Color.FromArgb(100, 116, 139) : ForeColor;
+        Color currentBg = !Enabled ? Color.FromArgb(71, 85, 105) : (_isHovered ? HoverColor : NormalColor);
+        Color currentFg = !Enabled ? Color.FromArgb(148, 163, 184) : ForeColor;
 
         using var bgBrush = new SolidBrush(currentBg);
         g.FillPath(bgBrush, path);
@@ -205,6 +252,531 @@ public class ModernButtonControl : Button
             rect,
             currentFg,
             TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+    }
+}
+
+/// <summary>
+/// Modern soft vertical scrollbar matching the dark theme palette with rounded pill thumb.
+/// </summary>
+public class ModernVScrollBar : Control
+{
+    private int _min = 0;
+    private int _max = 100;
+    private int _val = 0;
+    private int _largeChange = 20;
+    private int _smallChange = 5;
+    private bool _isHovered = false;
+    private bool _isDragging = false;
+    private int _dragStartY = 0;
+    private int _dragStartVal = 0;
+
+    public event EventHandler? ValueChanged;
+
+    public int Minimum
+    {
+        get => _min;
+        set { _min = value; Invalidate(); }
+    }
+
+    public int Maximum
+    {
+        get => _max;
+        set { _max = Math.Max(_min, value); Invalidate(); }
+    }
+
+    public int Value
+    {
+        get => _val;
+        set
+        {
+            int clamped = Math.Clamp(value, _min, _max);
+            if (_val != clamped)
+            {
+                _val = clamped;
+                Invalidate();
+                ValueChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    public int LargeChange
+    {
+        get => _largeChange;
+        set { _largeChange = Math.Max(1, value); Invalidate(); }
+    }
+
+    public int SmallChange
+    {
+        get => _smallChange;
+        set { _smallChange = Math.Max(1, value); Invalidate(); }
+    }
+
+    public Color TrackColor { get; set; } = Color.Transparent;
+    public Color ThumbNormalColor { get; set; } = Color.FromArgb(71, 85, 105);   // Slate 600
+    public Color ThumbHoverColor { get; set; } = Color.FromArgb(100, 116, 139);  // Slate 500
+    public Color ThumbActiveColor { get; set; } = Color.FromArgb(99, 102, 241);  // Indigo 500
+
+    public ModernVScrollBar()
+    {
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
+        DoubleBuffered = true;
+        Width = 8;
+        BackColor = Color.Transparent;
+        Cursor = Cursors.Default;
+    }
+
+    public void ScrollBy(int delta)
+    {
+        Value += delta;
+    }
+
+    private Color GetEffectiveParentBackColor()
+    {
+        Control? p = Parent;
+        while (p != null)
+        {
+            if (p.BackColor != Color.Transparent && p.BackColor.A == 255)
+            {
+                return p.BackColor;
+            }
+            p = p.Parent;
+        }
+        return UiStyle.CardBackground;
+    }
+
+    private Rectangle GetThumbRect()
+    {
+        if (_max <= _min || Height <= 0) return Rectangle.Empty;
+
+        int totalRange = (_max - _min) + _largeChange;
+        int thumbH = Math.Max(26, (int)((float)_largeChange / totalRange * Height));
+        if (thumbH > Height) thumbH = Height;
+
+        int travel = Height - thumbH;
+        int thumbY = travel > 0 ? (int)((float)(_val - _min) / (_max - _min) * travel) : 0;
+        return new Rectangle(1, thumbY, Math.Max(4, Width - 2), thumbH);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        Color parentBg = TrackColor != Color.Transparent ? TrackColor : GetEffectiveParentBackColor();
+        using (var clearBrush = new SolidBrush(parentBg))
+        {
+            g.FillRectangle(clearBrush, ClientRectangle);
+        }
+
+        var thumb = GetThumbRect();
+        if (thumb.IsEmpty || thumb.Height <= 0 || _max <= _min) return;
+
+        Color thumbCol = _isDragging ? ThumbActiveColor : (_isHovered ? ThumbHoverColor : ThumbNormalColor);
+        using var brush = new SolidBrush(thumbCol);
+
+        int r = Math.Min(3, thumb.Width / 2);
+        using var path = new GraphicsPath();
+        path.AddArc(thumb.X, thumb.Y, r * 2, r * 2, 180, 90);
+        path.AddArc(thumb.Right - r * 2, thumb.Y, r * 2, r * 2, 270, 90);
+        path.AddArc(thumb.Right - r * 2, thumb.Bottom - r * 2, r * 2, r * 2, 0, 90);
+        path.AddArc(thumb.X, thumb.Bottom - r * 2, r * 2, r * 2, 90, 90);
+        path.CloseFigure();
+        g.FillPath(brush, path);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left) return;
+
+        var thumb = GetThumbRect();
+        if (thumb.Contains(e.Location))
+        {
+            _isDragging = true;
+            _dragStartY = e.Y;
+            _dragStartVal = _val;
+            Invalidate();
+        }
+        else if (!thumb.IsEmpty)
+        {
+            if (e.Y < thumb.Y) Value -= _largeChange;
+            else Value += _largeChange;
+        }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_isDragging)
+        {
+            var thumb = GetThumbRect();
+            int travel = Height - thumb.Height;
+            if (travel > 0)
+            {
+                int deltaY = e.Y - _dragStartY;
+                Value = _dragStartVal + (int)((float)deltaY / travel * (_max - _min));
+            }
+        }
+        else
+        {
+            bool hover = GetThumbRect().Contains(e.Location);
+            if (_isHovered != hover)
+            {
+                _isHovered = hover;
+                Invalidate();
+            }
+        }
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (_isDragging)
+        {
+            _isDragging = false;
+            Invalidate();
+        }
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (_isHovered)
+        {
+            _isHovered = false;
+            Invalidate();
+        }
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        int steps = -Math.Sign(e.Delta) * (LargeChange > 0 ? Math.Max(1, LargeChange / 4) : 24);
+        Value += steps;
+    }
+}
+
+/// <summary>
+/// Smooth scrollable container with a sleek ModernVScrollBar and zero native white scrollbars.
+/// </summary>
+public class ModernScrollPanel : Panel, IMessageFilter
+{
+    private readonly Panel _viewport;
+    private readonly ModernVScrollBar _scrollBar;
+    private Control? _content;
+    private bool _isFilterRegistered;
+
+    public Panel Viewport => _viewport;
+    public ModernVScrollBar ScrollBar => _scrollBar;
+
+    public ModernScrollPanel()
+    {
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
+        DoubleBuffered = true;
+        AutoScroll = false;
+        BackColor = Color.Transparent;
+
+        _scrollBar = new ModernVScrollBar
+        {
+            Dock = DockStyle.Right,
+            Width = 8,
+            Visible = false
+        };
+        _scrollBar.ValueChanged += (_, _) => UpdateContentPosition();
+
+        _viewport = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = false,
+            BackColor = Color.Transparent,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        _viewport.Resize += (_, _) => RecalculateScroll();
+
+        Controls.Add(_viewport);
+        Controls.Add(_scrollBar);
+
+        try
+        {
+            System.Windows.Forms.Application.AddMessageFilter(this);
+            _isFilterRegistered = true;
+        }
+        catch { }
+    }
+
+    public void SetContent(Control content)
+    {
+        _content = content;
+        _viewport.Controls.Clear();
+        _viewport.Controls.Add(content);
+
+        content.Location = new Point(0, 0);
+        content.Width = _viewport.ClientSize.Width;
+        content.SizeChanged += (_, _) => RecalculateScroll();
+        content.Layout += (_, _) => RecalculateScroll();
+        RecalculateScroll();
+    }
+
+    public void RecalculateScroll()
+    {
+        if (_content == null || _viewport.ClientSize.Height <= 0) return;
+
+        _content.Width = _viewport.ClientSize.Width;
+        int max = Math.Max(0, _content.Height - _viewport.ClientSize.Height);
+        _scrollBar.Maximum = max;
+        _scrollBar.LargeChange = Math.Max(1, _viewport.ClientSize.Height);
+        _scrollBar.Visible = max > 0;
+
+        if (_scrollBar.Value > max)
+        {
+            _scrollBar.Value = max;
+        }
+        UpdateContentPosition();
+    }
+
+    private void UpdateContentPosition()
+    {
+        if (_content != null)
+        {
+            _content.Top = -_scrollBar.Value;
+        }
+    }
+
+    public bool PreFilterMessage(ref Message m)
+    {
+        // Intercept WM_MOUSEWHEEL (0x020A) if cursor is inside this container
+        if (m.Msg == 0x020A && IsHandleCreated && Visible && _scrollBar.Visible)
+        {
+            var cursorScreen = Cursor.Position;
+            var screenBounds = RectangleToScreen(ClientRectangle);
+            if (screenBounds.Contains(cursorScreen))
+            {
+                var child = FromChildHandle(m.HWnd);
+                if (child is TextBox tb && tb.Multiline && tb.ScrollBars != ScrollBars.None)
+                {
+                    return false;
+                }
+
+                int delta = (short)((m.WParam.ToInt64() >> 16) & 0xFFFF);
+                _scrollBar.ScrollBy(-Math.Sign(delta) * 50);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing && _isFilterRegistered)
+        {
+            try
+            {
+                System.Windows.Forms.Application.RemoveMessageFilter(this);
+                _isFilterRegistered = false;
+            }
+            catch { }
+        }
+        base.Dispose(disposing);
+    }
+}
+
+/// <summary>
+/// Modern multiline text box with integrated soft ModernVScrollBar and dark styled focus border.
+/// </summary>
+public class ModernMultilineTextBox : Panel
+{
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern int SendMessage(IntPtr hWnd, int msg, int wParam, int lParam);
+
+    private const int EM_GETLINECOUNT = 0x00BA;
+    private const int EM_GETFIRSTVISIBLELINE = 0x00CE;
+    private const int EM_LINESCROLL = 0x00B6;
+
+    private readonly TextBox _innerBox;
+    private readonly ModernVScrollBar _scrollBar;
+    private bool _isFocused = false;
+    private bool _isSyncing = false;
+
+    public TextBox InnerTextBox => _innerBox;
+
+    public override string? Text
+    {
+        get => _innerBox.Text;
+        set
+        {
+            _innerBox.Text = value ?? string.Empty;
+            SyncScrollBar();
+        }
+    }
+
+    public new event EventHandler? TextChanged
+    {
+        add => _innerBox.TextChanged += value;
+        remove => _innerBox.TextChanged -= value;
+    }
+
+    public override Font? Font
+    {
+        get => _innerBox.Font;
+        set
+        {
+            base.Font = value;
+            if (value != null) _innerBox.Font = value;
+            SyncScrollBar();
+        }
+    }
+
+    public bool ReadOnly
+    {
+        get => _innerBox.ReadOnly;
+        set => _innerBox.ReadOnly = value;
+    }
+
+    public int MaxLength
+    {
+        get => _innerBox.MaxLength;
+        set => _innerBox.MaxLength = value;
+    }
+
+    public void Clear()
+    {
+        _innerBox.Clear();
+        SyncScrollBar();
+    }
+
+    public void AppendText(string text)
+    {
+        _innerBox.AppendText(text);
+        SyncScrollBar();
+    }
+
+    public void Select(int start, int length)
+    {
+        _innerBox.Select(start, length);
+    }
+
+    public ModernMultilineTextBox()
+    {
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
+        DoubleBuffered = true;
+        Padding = new Padding(6, 6, 2, 6);
+        BackColor = UiStyle.InputBackground;
+
+        _innerBox = new TextBox
+        {
+            Multiline = true,
+            BorderStyle = BorderStyle.None,
+            ScrollBars = ScrollBars.None,
+            Dock = DockStyle.Fill,
+            BackColor = UiStyle.InputBackground,
+            ForeColor = UiStyle.TextDark,
+            Font = new Font("Segoe UI", 9F)
+        };
+
+        _scrollBar = new ModernVScrollBar
+        {
+            Dock = DockStyle.Right,
+            Width = 8,
+            Visible = false
+        };
+
+        _innerBox.Enter += (_, _) => { _isFocused = true; Invalidate(); };
+        _innerBox.Leave += (_, _) => { _isFocused = false; Invalidate(); };
+        _innerBox.TextChanged += (_, _) => SyncScrollBar();
+        _innerBox.SizeChanged += (_, _) => SyncScrollBar();
+        _innerBox.KeyUp += (_, _) => SyncFromBox();
+        _innerBox.MouseUp += (_, _) => SyncFromBox();
+        _innerBox.MouseWheel += (_, _) => SyncFromBox();
+
+        _scrollBar.ValueChanged += (_, _) =>
+        {
+            if (_isSyncing || !_innerBox.IsHandleCreated) return;
+            _isSyncing = true;
+            try
+            {
+                int currentTop = SendMessage(_innerBox.Handle, EM_GETFIRSTVISIBLELINE, 0, 0);
+                int delta = _scrollBar.Value - currentTop;
+                if (delta != 0)
+                {
+                    SendMessage(_innerBox.Handle, EM_LINESCROLL, 0, delta);
+                }
+            }
+            finally
+            {
+                _isSyncing = false;
+            }
+        };
+
+        Controls.Add(_innerBox);
+        Controls.Add(_scrollBar);
+    }
+
+    private void SyncFromBox()
+    {
+        if (_isSyncing || !_innerBox.IsHandleCreated) return;
+        _isSyncing = true;
+        try
+        {
+            int currentTop = SendMessage(_innerBox.Handle, EM_GETFIRSTVISIBLELINE, 0, 0);
+            _scrollBar.Value = currentTop;
+        }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    public void SyncScrollBar()
+    {
+        if (_isSyncing || !_innerBox.IsHandleCreated) return;
+        _isSyncing = true;
+        try
+        {
+            int lineCount = SendMessage(_innerBox.Handle, EM_GETLINECOUNT, 0, 0);
+            int fontH = Math.Max(1, _innerBox.Font.Height);
+            int visibleLines = Math.Max(1, _innerBox.ClientSize.Height / fontH);
+
+            int max = Math.Max(0, lineCount - visibleLines);
+            _scrollBar.Maximum = max;
+            _scrollBar.LargeChange = visibleLines;
+            _scrollBar.Visible = max > 0;
+
+            int currentTop = SendMessage(_innerBox.Handle, EM_GETFIRSTVISIBLELINE, 0, 0);
+            _scrollBar.Value = Math.Clamp(currentTop, 0, max);
+        }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        Color borderColor = _isFocused ? UiStyle.PrimaryColor : UiStyle.BorderColor;
+        using var pen = new Pen(borderColor, _isFocused ? 1.5f : 1f);
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        using var path = ModernCardPanel.CreateRoundedRectanglePath(rect, 6);
+        g.DrawPath(pen, path);
     }
 }
 
