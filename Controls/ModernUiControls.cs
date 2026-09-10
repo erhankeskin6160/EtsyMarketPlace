@@ -161,7 +161,8 @@ public class ModernButtonControl : Button
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw,
+            ControlStyles.ResizeRedraw |
+            ControlStyles.SupportsTransparentBackColor,
             true);
         DoubleBuffered = true;
         FlatStyle = FlatStyle.Flat;
@@ -322,7 +323,8 @@ public class ModernVScrollBar : Control
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw,
+            ControlStyles.ResizeRedraw |
+            ControlStyles.SupportsTransparentBackColor,
             true);
         DoubleBuffered = true;
         Width = 8;
@@ -480,7 +482,8 @@ public class ModernScrollPanel : Panel, IMessageFilter
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw,
+            ControlStyles.ResizeRedraw |
+            ControlStyles.SupportsTransparentBackColor,
             true);
         DoubleBuffered = true;
         AutoScroll = false;
@@ -610,9 +613,10 @@ public class ModernMultilineTextBox : Panel
 
     public TextBox InnerTextBox => _innerBox;
 
-    public override string? Text
+    [System.Diagnostics.CodeAnalysis.AllowNull]
+    public override string Text
     {
-        get => _innerBox.Text;
+        get => _innerBox.Text ?? string.Empty;
         set
         {
             _innerBox.Text = value ?? string.Empty;
@@ -626,12 +630,13 @@ public class ModernMultilineTextBox : Panel
         remove => _innerBox.TextChanged -= value;
     }
 
-    public override Font? Font
+    [System.Diagnostics.CodeAnalysis.AllowNull]
+    public override Font Font
     {
         get => _innerBox.Font;
         set
         {
-            base.Font = value;
+            base.Font = value!;
             if (value != null) _innerBox.Font = value;
             SyncScrollBar();
         }
@@ -672,7 +677,8 @@ public class ModernMultilineTextBox : Panel
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw,
+            ControlStyles.ResizeRedraw |
+            ControlStyles.SupportsTransparentBackColor,
             true);
         DoubleBuffered = true;
         Padding = new Padding(6, 6, 2, 6);
