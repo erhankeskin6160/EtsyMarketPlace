@@ -426,7 +426,7 @@ internal sealed class ListingAbTestForm : Form
 
             Func<long, string, string, IReadOnlyList<string>, Task> deployAction = async (listingId, title, desc, tags) =>
             {
-                var update = new ListingTextUpdate(title, desc, tags, null);
+                var update = new ListingTextUpdate(title, desc, tags, []);
                 await _apiClient.UpdateOwnShopListingTextAsync(settings, listingId, update);
                 EtsyApiSettingsStore.Save(settings);
             };
@@ -982,7 +982,7 @@ internal sealed class ListingAbTestForm : Form
                             txtTitleB.Text.Trim(),
                             string.IsNullOrWhiteSpace(currentDescB) ? currentDescA : currentDescB,
                             tagsB,
-                            null);
+                            []);
                         await _apiClient.UpdateOwnShopListingTextAsync(settings, lid, update);
                         EtsyApiSettingsStore.Save(settings);
                     }

@@ -1748,7 +1748,7 @@ internal sealed record ListingTextUpdate(
     string Title,
     string Description,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<string> Materials);
+    IReadOnlyList<string>? Materials = null);
 
 internal sealed record DraftListingCreateRequest(
     string Title,

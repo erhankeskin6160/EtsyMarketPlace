@@ -714,7 +714,7 @@ internal sealed class BatchQueueForm : Form
             var settings = EtsyApiSettingsStore.Load();
             deployAction = async (listingId, title, desc, tags) =>
             {
-                var update = new ListingTextUpdate(title, desc, tags, null);
+                var update = new ListingTextUpdate(title, desc, tags, []);
                 await _apiClient.UpdateOwnShopListingTextAsync(settings, listingId, update);
                 EtsyApiSettingsStore.Save(settings);
             };
