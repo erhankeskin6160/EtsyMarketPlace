@@ -1071,7 +1071,8 @@ internal sealed class DashboardForm : Form
     {
         _sidebarNav.ClearItems();
         _sidebarNav.AddItem("dashboard", "Kontrol Paneli", "📊", "Genel");
-        _sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel", "YENİ");
+        _sidebarNav.AddItem("fast_creator", "Hızlı Ürün Ekle (AI)", "⚡", "Genel", "YENİ");
+        _sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel");
         _sidebarNav.AddItem("ai_image", "AI Görsel Studio", "🖼️", "Genel", "YENİ");
         _sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
@@ -1194,6 +1195,7 @@ internal sealed class DashboardForm : Form
 
         Form? nextForm = targetModule switch
         {
+            "fast_creator" => new FastListingCreatorForm(_aiListingOptimizer),
             "creator" => new ProductDiscoveryListingCreatorForm(_aiListingOptimizer, historyService: _optimizationHistoryService),
             "ai_image" => new AiListingImageForm(_aiListingOptimizer),
             "shop" => new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService, _aiListingOptimizer, _optimizationHistoryService),
