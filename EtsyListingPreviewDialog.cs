@@ -16,6 +16,7 @@ internal sealed class EtsyListingPreviewDialog : Form
     private readonly IReadOnlyList<string> _materials;
     private readonly IReadOnlyList<string> _imagePaths;
     private readonly IReadOnlyList<(string Name, IReadOnlyList<string> Values)> _variations;
+    private readonly IReadOnlyDictionary<string, decimal>? _variationPrices;
 
     private PictureBox _picMain = null!;
     private FlowLayoutPanel _pnlThumbnails = null!;
@@ -28,7 +29,8 @@ internal sealed class EtsyListingPreviewDialog : Form
         IReadOnlyList<string> tags,
         IReadOnlyList<string> materials,
         IReadOnlyList<string> imagePaths,
-        IReadOnlyList<(string Name, IReadOnlyList<string> Values)> variations)
+        IReadOnlyList<(string Name, IReadOnlyList<string> Values)> variations,
+        IReadOnlyDictionary<string, decimal>? variationPrices = null)
     {
         _title = string.IsNullOrWhiteSpace(title) ? "Örnek Ürün Başlığı (Etsy Listing Title)" : title;
         _price = price > 0 ? price : 24.99m;
@@ -37,6 +39,7 @@ internal sealed class EtsyListingPreviewDialog : Form
         _materials = materials;
         _imagePaths = imagePaths;
         _variations = variations;
+        _variationPrices = variationPrices;
 
         InitializeComponent();
     }
@@ -227,9 +230,29 @@ internal sealed class EtsyListingPreviewDialog : Form
         };
 
         // Price
+        string priceText;
+        if (_variationPrices != null && _variationPrices.Count > 0)
+        {
+            var validPrices = _variationPrices.Values.Where(p => p > 0).ToList();
+            if (validPrices.Count > 0)
+            {
+                var min = validPrices.Min();
+                var max = validPrices.Max();
+                priceText = min != max ? $"USD {min:0.00} - {max:0.00}" : $"USD {min:0.00}";
+            }
+            else
+            {
+                priceText = $"USD {_price:0.00}";
+            }
+        }
+        else
+        {
+            priceText = $"USD {_price:0.00}";
+        }
+
         var lblPrice = new Label
         {
-            Text = $"USD {_price:0.00}",
+            Text = priceText,
             Font = new Font("Segoe UI", 12f, FontStyle.Bold),
             ForeColor = Color.FromArgb(34, 34, 34),
             Location = new Point(12, 342),
@@ -278,10 +301,10 @@ internal sealed class EtsyListingPreviewDialog : Form
         var lblDetailSection = new Label
         {
             Text = "📑 Ürün Detay Sayfası Önizlemesi (Etsy Product Page)",
-            Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
-            ForeColor = Color.FromArgb(50, 50, 60),
-            AutoSize = true,
-            Location = new Point(25, 15)
+            Font = new Font("Segoe UI Semibold", 11.5f, FontStyle.Bold),
+            ForeColor = Color.FromArgb(34, 34, 34),
+            Dock = DockStyle.Top,
+            Height = 35
         };
         root.Controls.Add(lblDetailSection);
 
@@ -351,6 +374,29 @@ internal sealed class EtsyListingPreviewDialog : Form
         };
 
         int curY = 135;
+        var varCombos = new List<ComboBox>();
+
+        void UpdateDetailPrice()
+        {
+            if (_variationPrices == null || _variationPrices.Count == 0 || varCombos.Count == 0)
+            {
+                lblPriceLarge.Text = $"${_price:0.00} USD";
+                return;
+            }
+
+            var parts = varCombos.Select(c => c.SelectedItem?.ToString()?.Trim() ?? "").ToList();
+            var comboKey = string.Join(" / ", parts);
+
+            if (_variationPrices.TryGetValue(comboKey, out var p) ||
+                (parts.Count > 0 && _variationPrices.TryGetValue(parts[0], out p)))
+            {
+                lblPriceLarge.Text = $"${p:0.00} USD";
+            }
+            else
+            {
+                lblPriceLarge.Text = $"${_price:0.00} USD";
+            }
+        }
 
         // Variations dropdowns preview
         if (_variations.Count > 0)
@@ -376,9 +422,14 @@ internal sealed class EtsyListingPreviewDialog : Form
                 foreach (var val in vVals) cbo.Items.Add(val);
                 if (cbo.Items.Count > 0) cbo.SelectedIndex = 0;
 
+                varCombos.Add(cbo);
+                cbo.SelectedIndexChanged += (_, _) => UpdateDetailPrice();
+
                 pnlInfo.Controls.AddRange([lblVar, cbo]);
                 curY += 34;
             }
+
+            UpdateDetailPrice();
         }
 
         // Etsy Buttons

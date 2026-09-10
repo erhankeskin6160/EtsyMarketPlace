@@ -67,6 +67,16 @@ internal sealed class FastListingCreatorForm : Form
     private readonly TextBox _txtVarValues2 = new() { Text = "Siyah, Beyaz, Altın" };
     private readonly Label _lblVarCombinations = new() { AutoSize = true };
 
+    // Custom Variation Pricing Controls
+    private readonly CheckBox _chkCustomVariationPricing = new() { Text = "💲 Her varyasyona özel farklı fiyat & stok belirle", AutoSize = true };
+    private readonly Panel _pnlVariationPricing = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false };
+    private readonly DataGridView _gridVariationPricing = new();
+    private readonly Label _lblPriceRangeBadge = new() { AutoSize = true };
+    private readonly Button _btnSyncBasePrice = new();
+    private readonly Button _btnStepPrice = new();
+    private readonly Dictionary<string, (decimal Price, int Quantity, bool IsEnabled)> _customVariationPrices = new(StringComparer.OrdinalIgnoreCase);
+    private bool _isUpdatingVariationGrid;
+
     private readonly CheckBox _chkMakeActive = new() { Text = "🚀 Hemen Canlı Yayına Al (Aktif Yap)", AutoSize = true, Checked = false };
     private readonly ModernButtonControl _btnPublish = new();
     private readonly Button _btnPreviewSecondary = new();
@@ -257,7 +267,6 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(0, 0, 0, 6)
         };
 
-        // Border painting
         bar.Paint += (s, e) =>
         {
             using var pen = new Pen(UiStyle.BorderColor, 1f);
@@ -944,6 +953,11 @@ internal sealed class FastListingCreatorForm : Form
         _lblVarCombinations.Margin = new Padding(0, 4, 0, 4);
         varTable.Controls.Add(_lblVarCombinations);
 
+        // Custom Variation Pricing Toggle & Grid
+        _chkCustomVariationPricing.Margin = new Padding(0, 6, 0, 4);
+        varTable.Controls.Add(_chkCustomVariationPricing);
+        varTable.Controls.Add(BuildVariationPricingPanel());
+
         varBox.Controls.Add(varTable);
         stack.Controls.Add(varBox);
 
@@ -1038,6 +1052,107 @@ internal sealed class FastListingCreatorForm : Form
         return grp;
     }
 
+    private Control BuildVariationPricingPanel()
+    {
+        _pnlVariationPricing.Padding = new Padding(0, 2, 0, 4);
+
+        var topFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 28,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 4)
+        };
+
+        _btnSyncBasePrice.Text = "⚡ Fiyatı Eşitle";
+        _btnSyncBasePrice.Font = new Font("Segoe UI", 7.5F);
+        _btnSyncBasePrice.Height = 24;
+        _btnSyncBasePrice.AutoSize = true;
+        _btnSyncBasePrice.BackColor = UiStyle.SecondaryColor;
+        _btnSyncBasePrice.ForeColor = UiStyle.TextDark;
+        _btnSyncBasePrice.FlatStyle = FlatStyle.Flat;
+        _btnSyncBasePrice.FlatAppearance.BorderColor = UiStyle.BorderColor;
+        _btnSyncBasePrice.Cursor = Cursors.Hand;
+        _btnSyncBasePrice.Click += (_, _) => SyncBasePriceToAllVariations();
+        topFlow.Controls.Add(_btnSyncBasePrice);
+
+        _btnStepPrice.Text = "📈 +$5 Kademeli";
+        _btnStepPrice.Font = new Font("Segoe UI", 7.5F);
+        _btnStepPrice.Height = 24;
+        _btnStepPrice.AutoSize = true;
+        _btnStepPrice.BackColor = UiStyle.SecondaryColor;
+        _btnStepPrice.ForeColor = UiStyle.TextDark;
+        _btnStepPrice.FlatStyle = FlatStyle.Flat;
+        _btnStepPrice.FlatAppearance.BorderColor = UiStyle.BorderColor;
+        _btnStepPrice.Cursor = Cursors.Hand;
+        _btnStepPrice.Margin = new Padding(4, 0, 0, 0);
+        _btnStepPrice.Click += (_, _) => ApplyStepPricing();
+        topFlow.Controls.Add(_btnStepPrice);
+
+        _pnlVariationPricing.Controls.Add(topFlow);
+
+        // Grid setup
+        _gridVariationPricing.Dock = DockStyle.Top;
+        _gridVariationPricing.Height = 150;
+        _gridVariationPricing.BackgroundColor = UiStyle.CardBackground;
+        _gridVariationPricing.GridColor = UiStyle.BorderColor;
+        _gridVariationPricing.BorderStyle = BorderStyle.FixedSingle;
+        _gridVariationPricing.RowHeadersVisible = false;
+        _gridVariationPricing.AllowUserToAddRows = false;
+        _gridVariationPricing.AllowUserToDeleteRows = false;
+        _gridVariationPricing.AllowUserToResizeRows = false;
+        _gridVariationPricing.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        _gridVariationPricing.Font = new Font("Segoe UI", 8F);
+        _gridVariationPricing.EnableHeadersVisualStyles = false;
+        _gridVariationPricing.ColumnHeadersDefaultCellStyle.BackColor = UiStyle.SecondaryColor;
+        _gridVariationPricing.ColumnHeadersDefaultCellStyle.ForeColor = UiStyle.TextDark;
+        _gridVariationPricing.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8F);
+        _gridVariationPricing.DefaultCellStyle.BackColor = UiStyle.CardBackground;
+        _gridVariationPricing.DefaultCellStyle.ForeColor = UiStyle.TextDark;
+        _gridVariationPricing.DefaultCellStyle.SelectionBackColor = UiStyle.PrimaryColor;
+        _gridVariationPricing.DefaultCellStyle.SelectionForeColor = Color.White;
+
+        _gridVariationPricing.Columns.Clear();
+        var colKey = new DataGridViewTextBoxColumn
+        {
+            Name = "ColKey",
+            HeaderText = "Seçenek",
+            ReadOnly = true,
+            FillWeight = 46
+        };
+        var colPrice = new DataGridViewTextBoxColumn
+        {
+            Name = "ColPrice",
+            HeaderText = "Fiyat ($)",
+            FillWeight = 26
+        };
+        var colQty = new DataGridViewTextBoxColumn
+        {
+            Name = "ColQty",
+            HeaderText = "Stok",
+            FillWeight = 16
+        };
+        var colActive = new DataGridViewCheckBoxColumn
+        {
+            Name = "ColActive",
+            HeaderText = "Aktif",
+            FillWeight = 12
+        };
+
+        _gridVariationPricing.Columns.AddRange([colKey, colPrice, colQty, colActive]);
+        _pnlVariationPricing.Controls.Add(_gridVariationPricing);
+
+        _lblPriceRangeBadge.Dock = DockStyle.Top;
+        _lblPriceRangeBadge.Font = new Font("Segoe UI Semibold", 8F);
+        _lblPriceRangeBadge.ForeColor = UiStyle.PrimaryColor;
+        _lblPriceRangeBadge.Text = "📊 Fiyat Aralığı: Belirlenmedi";
+        _lblPriceRangeBadge.Margin = new Padding(0, 4, 0, 4);
+        _pnlVariationPricing.Controls.Add(_lblPriceRangeBadge);
+
+        return _pnlVariationPricing;
+    }
+
     private static void InitChecklistLabel(Label lbl, string text)
     {
         lbl.Text = $"⚪ {text}";
@@ -1081,7 +1196,11 @@ internal sealed class FastListingCreatorForm : Form
             UpdateChecklist();
         };
 
-        _numPrice.ValueChanged += (_, _) => UpdateChecklist();
+        _numPrice.ValueChanged += (_, _) =>
+        {
+            _btnSyncBasePrice.Text = $"⚡ Eşitle (${_numPrice.Value:0.00})";
+            UpdateChecklist();
+        };
         _numQuantity.ValueChanged += (_, _) => UpdateChecklist();
         _cboShippingProfile.SelectedIndexChanged += (_, _) => UpdateChecklist();
         _txtDescription.TextChanged += (_, _) => UpdateChecklist();
@@ -1092,16 +1211,64 @@ internal sealed class FastListingCreatorForm : Form
             UpdateChecklist();
         };
 
-        _chkEnableVariations.CheckedChanged += (_, _) => UpdateVariationsDisplay();
+        _chkEnableVariations.CheckedChanged += (_, _) =>
+        {
+            UpdateVariationsDisplay();
+            _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
+            if (_chkEnableVariations.Checked && _chkCustomVariationPricing.Checked)
+            {
+                RefreshVariationPricingGrid();
+            }
+            UpdateChecklist();
+        };
+
         _chkEnableVar2.CheckedChanged += (_, _) =>
         {
             _cboVarType2.Visible = _chkEnableVar2.Checked;
             _txtVarValues2.Visible = _chkEnableVar2.Checked;
             UpdateVariationsDisplay();
+            if (_chkCustomVariationPricing.Checked)
+            {
+                RefreshVariationPricingGrid();
+            }
         };
 
-        _txtVarValues1.TextChanged += (_, _) => UpdateVariationsDisplay();
-        _txtVarValues2.TextChanged += (_, _) => UpdateVariationsDisplay();
+        _txtVarValues1.TextChanged += (_, _) =>
+        {
+            UpdateVariationsDisplay();
+            if (_chkCustomVariationPricing.Checked)
+            {
+                RefreshVariationPricingGrid();
+            }
+        };
+
+        _txtVarValues2.TextChanged += (_, _) =>
+        {
+            UpdateVariationsDisplay();
+            if (_chkCustomVariationPricing.Checked)
+            {
+                RefreshVariationPricingGrid();
+            }
+        };
+
+        _chkCustomVariationPricing.CheckedChanged += (_, _) =>
+        {
+            _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
+            if (_chkCustomVariationPricing.Checked)
+            {
+                RefreshVariationPricingGrid();
+            }
+            UpdateChecklist();
+        };
+
+        _gridVariationPricing.CellValueChanged += (_, _) => OnVariationGridCellValueChanged();
+        _gridVariationPricing.CurrentCellDirtyStateChanged += (_, _) =>
+        {
+            if (_gridVariationPricing.IsCurrentCellDirty)
+            {
+                _gridVariationPricing.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        };
 
         UpdateChecklist();
     }
@@ -1114,7 +1281,18 @@ internal sealed class FastListingCreatorForm : Form
 
         // 2. Price & Stock
         bool priceOk = _numPrice.Value > 0 && _numQuantity.Value >= 1;
-        SetChecklistItem(_chkItemPrice, $"Fiyat: ${_numPrice.Value:0.00} | Stok: {_numQuantity.Value}", priceOk);
+        string priceCheckText = $"Fiyat: ${_numPrice.Value:0.00} | Stok: {_numQuantity.Value}";
+        if (_chkEnableVariations.Checked && _chkCustomVariationPricing.Checked && _customVariationPrices.Count > 0)
+        {
+            var activePrices = _customVariationPrices.Values.Where(p => p.IsEnabled).Select(p => p.Price).ToList();
+            if (activePrices.Count > 0)
+            {
+                var min = activePrices.Min();
+                var max = activePrices.Max();
+                priceCheckText = min != max ? $"Fiyatlar: ${min:0.00} - ${max:0.00}" : $"Fiyat: ${min:0.00}";
+            }
+        }
+        SetChecklistItem(_chkItemPrice, priceCheckText, priceOk);
 
         // 3. Images
         bool imageOk = _galleryImagePaths.Count > 0;
@@ -1163,6 +1341,205 @@ internal sealed class FastListingCreatorForm : Form
             _lblVarCombinations.Text = $"📊 {v1Count} x {v2Count} = {total} varyasyon kombinasyonu oluşacak.";
             _lblVarCombinations.ForeColor = total > 0 ? UiStyle.PrimaryColor : UiStyle.DangerColor;
         }
+    }
+
+    private void RefreshVariationPricingGrid()
+    {
+        if (_isUpdatingVariationGrid) return;
+
+        var combinations = GetCurrentVariationCombinationKeys();
+        if (combinations.Count == 0)
+        {
+            _gridVariationPricing.Rows.Clear();
+            _lblPriceRangeBadge.Text = "📊 Fiyat Aralığı: Varyasyon değeri giriniz";
+            return;
+        }
+
+        try
+        {
+            _isUpdatingVariationGrid = true;
+            _gridVariationPricing.Rows.Clear();
+
+            foreach (var key in combinations)
+            {
+                if (!_customVariationPrices.TryGetValue(key, out var pInfo))
+                {
+                    pInfo = (_numPrice.Value, (int)_numQuantity.Value, true);
+                    _customVariationPrices[key] = pInfo;
+                }
+
+                int rowIdx = _gridVariationPricing.Rows.Add(
+                    key,
+                    pInfo.Price.ToString("0.00", CultureInfo.InvariantCulture),
+                    pInfo.Quantity,
+                    pInfo.IsEnabled);
+
+                _gridVariationPricing.Rows[rowIdx].Tag = key;
+            }
+
+            UpdateVariationPriceRangeSummary();
+        }
+        finally
+        {
+            _isUpdatingVariationGrid = false;
+        }
+    }
+
+    private List<string> GetCurrentVariationCombinationKeys()
+    {
+        var v1 = SplitTags(_txtVarValues1.Text);
+        if (v1.Count == 0) return [];
+
+        if (!_chkEnableVar2.Checked)
+        {
+            return v1;
+        }
+
+        var v2 = SplitTags(_txtVarValues2.Text);
+        if (v2.Count == 0) return v1;
+
+        var combinations = new List<string>();
+        foreach (var val1 in v1)
+        {
+            foreach (var val2 in v2)
+            {
+                combinations.Add($"{val1} / {val2}");
+            }
+        }
+        return combinations;
+    }
+
+    private void OnVariationGridCellValueChanged()
+    {
+        if (_isUpdatingVariationGrid) return;
+
+        foreach (DataGridViewRow row in _gridVariationPricing.Rows)
+        {
+            var key = row.Cells["ColKey"].Value?.ToString();
+            if (string.IsNullOrWhiteSpace(key)) continue;
+
+            var priceStr = row.Cells["ColPrice"].Value?.ToString() ?? "";
+            var qtyStr = row.Cells["ColQty"].Value?.ToString() ?? "";
+            var isActive = row.Cells["ColActive"].Value is bool b ? b : true;
+
+            decimal price = decimal.TryParse(priceStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var p) && p > 0 ? p : _numPrice.Value;
+            int qty = int.TryParse(qtyStr, out var q) && q > 0 ? q : (int)_numQuantity.Value;
+
+            _customVariationPrices[key] = (price, qty, isActive);
+        }
+
+        UpdateVariationPriceRangeSummary();
+        UpdateChecklist();
+    }
+
+    private void SyncBasePriceToAllVariations()
+    {
+        _isUpdatingVariationGrid = true;
+        try
+        {
+            foreach (DataGridViewRow row in _gridVariationPricing.Rows)
+            {
+                var key = row.Cells["ColKey"].Value?.ToString();
+                if (string.IsNullOrWhiteSpace(key)) continue;
+
+                row.Cells["ColPrice"].Value = _numPrice.Value.ToString("0.00", CultureInfo.InvariantCulture);
+                row.Cells["ColQty"].Value = (int)_numQuantity.Value;
+                row.Cells["ColActive"].Value = true;
+
+                _customVariationPrices[key] = (_numPrice.Value, (int)_numQuantity.Value, true);
+            }
+        }
+        finally
+        {
+            _isUpdatingVariationGrid = false;
+        }
+
+        UpdateVariationPriceRangeSummary();
+        UpdateChecklist();
+    }
+
+    private void ApplyStepPricing()
+    {
+        _isUpdatingVariationGrid = true;
+        try
+        {
+            decimal curPrice = _numPrice.Value;
+            foreach (DataGridViewRow row in _gridVariationPricing.Rows)
+            {
+                var key = row.Cells["ColKey"].Value?.ToString();
+                if (string.IsNullOrWhiteSpace(key)) continue;
+
+                row.Cells["ColPrice"].Value = curPrice.ToString("0.00", CultureInfo.InvariantCulture);
+                var isActive = row.Cells["ColActive"].Value is bool b ? b : true;
+                int qty = int.TryParse(row.Cells["ColQty"].Value?.ToString(), out var q) ? q : (int)_numQuantity.Value;
+
+                _customVariationPrices[key] = (curPrice, qty, isActive);
+                curPrice += 5m;
+            }
+        }
+        finally
+        {
+            _isUpdatingVariationGrid = false;
+        }
+
+        UpdateVariationPriceRangeSummary();
+        UpdateChecklist();
+    }
+
+    private void UpdateVariationPriceRangeSummary()
+    {
+        var active = _customVariationPrices.Values.Where(v => v.IsEnabled).Select(v => v.Price).ToList();
+        if (active.Count == 0)
+        {
+            _lblPriceRangeBadge.Text = "📊 Fiyat Aralığı: Aktif seçenek yok";
+            _lblPriceRangeBadge.ForeColor = UiStyle.DangerColor;
+            return;
+        }
+
+        var min = active.Min();
+        var max = active.Max();
+        var distinctCount = active.Distinct().Count();
+
+        if (min == max)
+        {
+            _lblPriceRangeBadge.Text = $"📊 Fiyat: ${min:0.00} (Tüm seçenekler aynı)";
+            _lblPriceRangeBadge.ForeColor = UiStyle.PrimaryColor;
+        }
+        else
+        {
+            _lblPriceRangeBadge.Text = $"📊 Fiyat Aralığı: ${min:0.00} — ${max:0.00} ({distinctCount} farklı fiyat)";
+            _lblPriceRangeBadge.ForeColor = UiStyle.SuccessColor;
+        }
+    }
+
+    private Dictionary<string, decimal>? GetCustomPricesForPreview()
+    {
+        if (!_chkEnableVariations.Checked || !_chkCustomVariationPricing.Checked || _customVariationPrices.Count == 0)
+        {
+            return null;
+        }
+
+        var dict = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, v) in _customVariationPrices)
+        {
+            dict[k] = v.Price;
+        }
+        return dict;
+    }
+
+    private Dictionary<string, DraftListingVariationPricing>? BuildCustomPricingForInventory()
+    {
+        if (!_chkEnableVariations.Checked || !_chkCustomVariationPricing.Checked || _customVariationPrices.Count == 0)
+        {
+            return null;
+        }
+
+        var dict = new Dictionary<string, DraftListingVariationPricing>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (k, v) in _customVariationPrices)
+        {
+            dict[k] = new DraftListingVariationPricing(k, v.Price, v.Quantity, v.IsEnabled);
+        }
+        return dict;
     }
 
     private async Task InitializeFormDataAsync()
@@ -1563,18 +1940,28 @@ internal sealed class FastListingCreatorForm : Form
             var variationGroups = BuildVariationGroups();
             if (variationGroups.Count > 0)
             {
-                inventory = new DraftListingInventoryUpdate(_numPrice.Value, (int)_numQuantity.Value, null, variationGroups);
+                Dictionary<string, DraftListingVariationPricing>? customPricing = null;
+                if (_chkCustomVariationPricing.Checked)
+                {
+                    customPricing = BuildCustomPricingForInventory();
+                }
+
+                inventory = new DraftListingInventoryUpdate(_numPrice.Value, (int)_numQuantity.Value, null, variationGroups, customPricing);
             }
         }
 
         // 3. Confirmation Dialog
+        string priceSummaryText = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked && _customVariationPrices.Count > 0
+            ? _lblPriceRangeBadge.Text.Replace("📊 ", "")
+            : $"{_numPrice.Value:0.00} USD | Stok: {_numQuantity.Value}";
+
         var confirmMsg =
             $"Etsy'de yeni listeleme oluşturulacak:\n\n" +
             $"• Başlık: {title}\n" +
-            $"• Fiyat: {_numPrice.Value:0.00} USD | Stok: {_numQuantity.Value}\n" +
+            $"• Fiyatlandırma: {priceSummaryText}\n" +
             $"• Kategori ID: {taxonomyId}\n" +
             $"• Görseller: {_galleryImagePaths.Count} adet\n" +
-            $"• Varyasyonlar: {(inventory?.Variations.Count > 0 ? $"{inventory.Variations.Count} grup" : "Yok")}\n" +
+            $"• Varyasyonlar: {(inventory?.Variations.Count > 0 ? $"{inventory.Variations.Count} grup ({GetCurrentVariationCombinationKeys().Count} seçenek)" : "Yok")}\n" +
             $"• Yayın Durumu: {(_chkMakeActive.Checked ? "🚀 Canlı (Active)" : "💾 Taslak (Draft)")}\n\n" +
             "Devam etmek istiyor musunuz?";
 
@@ -1614,7 +2001,7 @@ internal sealed class FastListingCreatorForm : Form
             {
                 try
                 {
-                    _statusLabel.Text = "Varyasyonlar ekleniyor...";
+                    _statusLabel.Text = "Varyasyonlar ve özel fiyatlar ekleniyor...";
                     await _apiClient.UpdateOwnShopListingInventoryAsync(settings, created.ListingId, inventory);
                     EtsyApiSettingsStore.Save(settings);
                 }
@@ -1716,6 +2103,9 @@ internal sealed class FastListingCreatorForm : Form
         _lastGeneratedImagePath = null;
         _picAiPreview.Image = null;
         _btnAddToGallery.Enabled = false;
+        _chkCustomVariationPricing.Checked = false;
+        _customVariationPrices.Clear();
+        _gridVariationPricing.Rows.Clear();
         RefreshGalleryCards();
         UpdateTagStatus();
         UpdateChecklist();
@@ -1775,6 +2165,22 @@ internal sealed class FastListingCreatorForm : Form
             _chkEnableVar2.Checked = false;
         }
 
+        _customVariationPrices.Clear();
+        if (tmpl.EnableCustomVariationPricing && tmpl.VariationPrices != null && tmpl.VariationPrices.Count > 0)
+        {
+            _chkCustomVariationPricing.Checked = true;
+            foreach (var kvp in tmpl.VariationPrices)
+            {
+                _customVariationPrices[kvp.Key] = (kvp.Value, (int)_numQuantity.Value, true);
+            }
+            RefreshVariationPricingGrid();
+        }
+        else
+        {
+            _chkCustomVariationPricing.Checked = false;
+            _pnlVariationPricing.Visible = false;
+        }
+
         UpdateTagStatus();
         UpdateVariationsDisplay();
         UpdateChecklist();
@@ -1804,7 +2210,11 @@ internal sealed class FastListingCreatorForm : Form
             VariationValues1 = _txtVarValues1.Text.Trim(),
             EnableVariation2 = _chkEnableVar2.Checked,
             VariationType2 = _cboVarType2.SelectedItem?.ToString() ?? "Renk (Primary Color - 506)",
-            VariationValues2 = _txtVarValues2.Text.Trim()
+            VariationValues2 = _txtVarValues2.Text.Trim(),
+            EnableCustomVariationPricing = _chkCustomVariationPricing.Checked,
+            VariationPrices = _chkCustomVariationPricing.Checked
+                ? _customVariationPrices.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.Price)
+                : []
         };
 
         FastListingTemplateStore.SaveCustom(tmpl);
@@ -1921,6 +2331,12 @@ internal sealed class FastListingCreatorForm : Form
             }
         }
 
+        Dictionary<string, decimal>? customPrices = null;
+        if (_chkEnableVariations.Checked && _chkCustomVariationPricing.Checked)
+        {
+            customPrices = GetCustomPricesForPreview();
+        }
+
         using var preview = new EtsyListingPreviewDialog(
             _txtTitle.Text.Trim(),
             _numPrice.Value,
@@ -1928,7 +2344,8 @@ internal sealed class FastListingCreatorForm : Form
             SplitTags(_txtTags.Text),
             SplitTags(_txtMaterials.Text),
             _galleryImagePaths,
-            variations);
+            variations,
+            customPrices);
 
         preview.ShowDialog(this);
     }

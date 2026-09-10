@@ -33,6 +33,12 @@ public static class FastListingTemplateStore
             EnableVariations = true,
             VariationType1 = "Boyut / Beden (Size - 100)",
             VariationValues1 = "11 oz (325 ml), 15 oz (450 ml)",
+            EnableCustomVariationPricing = true,
+            VariationPrices = new Dictionary<string, decimal>
+            {
+                ["11 oz (325 ml)"] = 21.90m,
+                ["15 oz (450 ml)"] = 26.90m
+            },
             IsBuiltIn = true
         },
         new FastListingTemplate

@@ -766,7 +766,7 @@ internal sealed class EtsyApiClient
             return;
         }
 
-        var products = BuildInventoryProducts(listingId, inventory);
+        var (products, priceOnProperty) = BuildInventoryProducts(listingId, inventory);
         if (products.Count == 0)
         {
             return;
@@ -775,7 +775,7 @@ internal sealed class EtsyApiClient
         var payload = new
         {
             products,
-            price_on_property = Array.Empty<long>(),
+            price_on_property = priceOnProperty,
             quantity_on_property = Array.Empty<long>(),
             sku_on_property = Array.Empty<long>(),
         };
@@ -790,7 +790,7 @@ internal sealed class EtsyApiClient
         }
     }
 
-    private static List<object> BuildInventoryProducts(long listingId, DraftListingInventoryUpdate inventory)
+    private static (List<object> Products, long[] PriceOnProperty) BuildInventoryProducts(long listingId, DraftListingInventoryUpdate inventory)
     {
         var groups = inventory.Variations
             .Where(group => group.Values.Count > 0)
@@ -798,7 +798,7 @@ internal sealed class EtsyApiClient
             .ToList();
         if (groups.Count == 0)
         {
-            return [];
+            return ([], Array.Empty<long>());
         }
 
         var combinations = BuildVariationCombinations(groups)
@@ -807,14 +807,41 @@ internal sealed class EtsyApiClient
 
         var products = new List<object>();
         var sharedSku = $"AUTO-{listingId}";
+        var customPricing = inventory.CustomPricing;
+        var distinctPricesPerGroup1 = new HashSet<decimal>();
+        var distinctPricesPerGroup2 = new HashSet<decimal>();
+
         for (var index = 0; index < combinations.Count; index++)
         {
             var combination = combinations[index];
+            var comboKey = string.Join(" / ", combination.Select(item => item.Value.Trim()));
+
+            decimal price = inventory.Price;
+            int qty = inventory.Quantity;
+            bool isEnabled = true;
+
+            if (customPricing != null)
+            {
+                if (customPricing.TryGetValue(comboKey, out var pInfo) ||
+                    (combination.Count > 0 && customPricing.TryGetValue(combination[0].Value.Trim(), out pInfo)))
+                {
+                    price = pInfo.Price > 0 ? pInfo.Price : inventory.Price;
+                    qty = pInfo.Quantity > 0 ? pInfo.Quantity : inventory.Quantity;
+                    isEnabled = pInfo.IsEnabled;
+                }
+            }
+
+            distinctPricesPerGroup1.Add(price);
+            if (combination.Count > 1)
+            {
+                distinctPricesPerGroup2.Add(price);
+            }
+
             var offering = new Dictionary<string, object>
             {
-                ["price"] = inventory.Price.ToString("0.00", CultureInfo.InvariantCulture),
-                ["quantity"] = Math.Max(1, inventory.Quantity),
-                ["is_enabled"] = true,
+                ["price"] = price.ToString("0.00", CultureInfo.InvariantCulture),
+                ["quantity"] = Math.Max(1, qty),
+                ["is_enabled"] = isEnabled,
             };
             if (inventory.ReadinessStateId is > 0)
             {
@@ -834,7 +861,17 @@ internal sealed class EtsyApiClient
             });
         }
 
-        return products;
+        var priceOnProperty = new List<long>();
+        if (distinctPricesPerGroup1.Count > 1 && groups.Count >= 1)
+        {
+            priceOnProperty.Add(groups[0].PropertyId);
+        }
+        if (distinctPricesPerGroup2.Count > 1 && groups.Count >= 2 && !priceOnProperty.Contains(groups[1].PropertyId))
+        {
+            priceOnProperty.Add(groups[1].PropertyId);
+        }
+
+        return (products, priceOnProperty.ToArray());
     }
 
     private static IEnumerable<List<(DraftListingVariationGroup Group, string Value)>> BuildVariationCombinations(
@@ -1766,11 +1803,18 @@ internal sealed record DraftListingCreateRequest(
 
 internal sealed record CreatedDraftListing(long ListingId, string Url);
 
+internal sealed record DraftListingVariationPricing(
+    string CombinationKey,
+    decimal Price,
+    int Quantity = 10,
+    bool IsEnabled = true);
+
 internal sealed record DraftListingInventoryUpdate(
     decimal Price,
     int Quantity,
     long? ReadinessStateId,
-    IReadOnlyList<DraftListingVariationGroup> Variations);
+    IReadOnlyList<DraftListingVariationGroup> Variations,
+    IReadOnlyDictionary<string, DraftListingVariationPricing>? CustomPricing = null);
 
 internal sealed record DraftListingVariationGroup(
     string Name,

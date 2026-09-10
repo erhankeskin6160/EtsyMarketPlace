@@ -22,6 +22,8 @@ public sealed class FastListingTemplate
     public bool EnableVariation2 { get; set; } = false;
     public string VariationType2 { get; set; } = "Renk (Primary Color - 506)";
     public string VariationValues2 { get; set; } = string.Empty;
+    public bool EnableCustomVariationPricing { get; set; } = false;
+    public System.Collections.Generic.Dictionary<string, decimal> VariationPrices { get; set; } = [];
     public bool IsBuiltIn { get; set; } = false;
     public DateTime CreatedAt { get; set; } = DateTime.Now;
 

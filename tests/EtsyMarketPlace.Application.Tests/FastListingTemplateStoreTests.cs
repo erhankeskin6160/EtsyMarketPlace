@@ -92,4 +92,54 @@ public sealed class FastListingTemplateStoreTests
             Assert.DoesNotContain(afterDelete, t => t.Id == customTemplate.Id);
         }
     }
+
+    [Fact]
+    public void BuiltInMugTemplate_HasCustomVariationPricingConfigured()
+    {
+        var builtIns = FastListingTemplateStore.GetBuiltInTemplates();
+        var mug = builtIns.FirstOrDefault(t => t.Id == "builtin_mug");
+
+        Assert.NotNull(mug);
+        Assert.True(mug.EnableVariations);
+        Assert.True(mug.EnableCustomVariationPricing);
+        Assert.NotEmpty(mug.VariationPrices);
+        Assert.True(mug.VariationPrices.ContainsKey("11 oz (325 ml)"));
+        Assert.True(mug.VariationPrices.ContainsKey("15 oz (450 ml)"));
+        Assert.True(mug.VariationPrices["15 oz (450 ml)"] > mug.VariationPrices["11 oz (325 ml)"]);
+    }
+
+    [Fact]
+    public void CustomTemplate_WithVariationPrices_CanBeSavedAndLoaded()
+    {
+        var customTemplate = new FastListingTemplate
+        {
+            Id = "test_custom_price_" + Guid.NewGuid().ToString("N")[..8],
+            Name = "🧪 Test Kupa Özel Fiyat",
+            DefaultPrice = 20.00m,
+            DefaultQuantity = 10,
+            EnableVariations = true,
+            EnableCustomVariationPricing = true,
+            VariationPrices = new Dictionary<string, decimal>
+            {
+                ["Small"] = 18.50m,
+                ["Large"] = 28.50m
+            }
+        };
+
+        try
+        {
+            FastListingTemplateStore.SaveCustom(customTemplate);
+            var loaded = FastListingTemplateStore.LoadAll();
+
+            var found = loaded.FirstOrDefault(t => t.Id == customTemplate.Id);
+            Assert.NotNull(found);
+            Assert.True(found.EnableCustomVariationPricing);
+            Assert.Equal(18.50m, found.VariationPrices["Small"]);
+            Assert.Equal(28.50m, found.VariationPrices["Large"]);
+        }
+        finally
+        {
+            FastListingTemplateStore.DeleteCustom(customTemplate.Id);
+        }
+    }
 }
