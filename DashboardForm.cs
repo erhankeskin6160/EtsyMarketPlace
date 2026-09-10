@@ -66,8 +66,7 @@ internal sealed class DashboardForm : Form
 
     private readonly DataGridView _gridRecentOrders = new();
     private readonly Label _lblOrdersSummary = new();
-    private readonly VerticalScrollFlowPanel _pnlAiCopilot = new();
-    private readonly Label _lblCopilotBadge = new();
+    private readonly FlowLayoutPanel _pnlAiCopilot = new();
 
     private CartesianChart _chartRevenueProfit = null!;
 
@@ -556,8 +555,7 @@ internal sealed class DashboardForm : Form
             Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
             ForeColor = accentColor,
             TextAlign = ContentAlignment.MiddleLeft,
-            Cursor = Cursors.Hand,
-            UseMnemonic = false
+            Cursor = Cursors.Hand
         };
         layout.Controls.Add(lblTitle, 0, 0);
 
@@ -569,29 +567,11 @@ internal sealed class DashboardForm : Form
             ForeColor = UiStyle.TextMuted,
             TextAlign = ContentAlignment.MiddleLeft,
             Cursor = Cursors.Hand,
-            AutoEllipsis = true,
-            UseMnemonic = false
+            AutoEllipsis = true
         };
         layout.Controls.Add(lblDesc, 0, 1);
 
-        void SetHover(bool isHover)
-        {
-            card.BorderColor = isHover ? Color.FromArgb(140, accentColor.R, accentColor.G, accentColor.B) : UiStyle.BorderColor;
-            card.CardColor = isHover ? Color.FromArgb(34, 46, 68) : UiStyle.CardBackground;
-            card.Invalidate();
-        }
-
-        card.MouseEnter += (_, _) => SetHover(true);
-        card.MouseLeave += (_, _) => SetHover(false);
-        layout.MouseEnter += (_, _) => SetHover(true);
-        layout.MouseLeave += (_, _) => SetHover(false);
-        lblTitle.MouseEnter += (_, _) => SetHover(true);
-        lblTitle.MouseLeave += (_, _) => SetHover(false);
-        lblDesc.MouseEnter += (_, _) => SetHover(true);
-        lblDesc.MouseLeave += (_, _) => SetHover(false);
-
         card.Click += (_, _) => onClick();
-        layout.Click += (_, _) => onClick();
         lblTitle.Click += (_, _) => onClick();
         lblDesc.Click += (_, _) => onClick();
 
@@ -639,8 +619,7 @@ internal sealed class DashboardForm : Form
             Text = "🟢 Son Siparişler & Canlı Satış Akışı",
             Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
-            TextAlign = ContentAlignment.MiddleLeft,
-            UseMnemonic = false
+            TextAlign = ContentAlignment.MiddleLeft
         };
         ordersHeader.Controls.Add(lblOrdersTitle, 0, 0);
 
@@ -665,7 +644,7 @@ internal sealed class DashboardForm : Form
         {
             Dock = DockStyle.Fill,
             Margin = new Padding(4),
-            Padding = new Padding(14, 12, 14, 12),
+            Padding = new Padding(12),
             CornerRadius = 10,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
@@ -679,34 +658,40 @@ internal sealed class DashboardForm : Form
         copilotLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         copilotLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-        var copilotHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        copilotHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
-        copilotHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
-
         var lblCopilotTitle = new Label
         {
             Dock = DockStyle.Fill,
             Text = "💡 Akıllı Mağaza Asistanı (Store Copilot)",
             Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
-            TextAlign = ContentAlignment.MiddleLeft,
-            UseMnemonic = false
+            TextAlign = ContentAlignment.MiddleLeft
         };
-        copilotHeader.Controls.Add(lblCopilotTitle, 0, 0);
-
-        _lblCopilotBadge.Dock = DockStyle.Fill;
-        _lblCopilotBadge.Text = "✨ Canlı AI Analizi";
-        _lblCopilotBadge.Font = new Font("Segoe UI Semibold", 8F);
-        _lblCopilotBadge.ForeColor = UiStyle.PrimaryColor;
-        _lblCopilotBadge.TextAlign = ContentAlignment.MiddleRight;
-        _lblCopilotBadge.UseMnemonic = false;
-        copilotHeader.Controls.Add(_lblCopilotBadge, 1, 0);
-
-        copilotLayout.Controls.Add(copilotHeader, 0, 0);
+        copilotLayout.Controls.Add(lblCopilotTitle, 0, 0);
 
         _pnlAiCopilot.Dock = DockStyle.Fill;
-        _pnlAiCopilot.Padding = new Padding(2, 2, 4, 2);
-        _pnlAiCopilot.Resize += (_, _) => AdjustCopilotCardWidths();
+        _pnlAiCopilot.FlowDirection = FlowDirection.TopDown;
+        _pnlAiCopilot.WrapContents = false;
+        _pnlAiCopilot.AutoScroll = true;
+        _pnlAiCopilot.Padding = new Padding(2, 2, 6, 2);
+        _pnlAiCopilot.Resize += (_, _) =>
+        {
+            int targetWidth = Math.Max(260, _pnlAiCopilot.ClientSize.Width - 14);
+            foreach (Control c in _pnlAiCopilot.Controls)
+            {
+                if (c is ModernCardPanel card)
+                {
+                    card.Width = targetWidth;
+                    foreach (Control child in card.Controls)
+                    {
+                        if (child is Label lbl && child.Location.Y > 20)
+                        {
+                            lbl.Size = new Size(targetWidth - 28, 0);
+                            lbl.MaximumSize = new Size(targetWidth - 28, 0);
+                        }
+                    }
+                }
+            }
+        };
 
         copilotLayout.Controls.Add(_pnlAiCopilot, 0, 1);
 
@@ -884,30 +869,22 @@ internal sealed class DashboardForm : Form
 
     private void PopulateAiCopilotInsights()
     {
-        _pnlAiCopilot.SuspendLayout();
         _pnlAiCopilot.Controls.Clear();
-
-        int scrollbarWidth = _pnlAiCopilot.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
-        int targetWidth = Math.Max(220, _pnlAiCopilot.ClientSize.Width - _pnlAiCopilot.Padding.Horizontal - scrollbarWidth - 4);
-        if (targetWidth < 220 && _dashboardRootPanel.Width > 0)
+        int targetWidth = Math.Max(260, _pnlAiCopilot.ClientSize.Width - 14);
+        if (targetWidth < 260 && _dashboardRootPanel.Width > 0)
         {
-            targetWidth = Math.Max(220, (int)(_dashboardRootPanel.Width * 0.40f) - 36);
+            targetWidth = Math.Max(260, (int)(_dashboardRootPanel.Width * 0.40f) - 30);
         }
-
-        int insightCount = 0;
 
         int missingCostCount = _liveReport.OrderSummaries.Count(o => !o.HasCostData);
         if (missingCostCount > 0)
         {
-            insightCount++;
-            _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
-                "⚠️",
-                "MALİYET UYARISI",
-                "Hammadde Maliyetleri Eksik",
-                $"{missingCostCount} siparişinizin henüz ürün hammadde maliyeti girilmedi. Gerçek kâr oranınızı net görmek için maliyetleri tamamlayın.",
+            _pnlAiCopilot.Controls.Add(CreateInsightCard(
+                "⚠️ Maliyet Bilgisi Eksik",
+                $"{missingCostCount} siparişinizin henüz hammadde maliyeti girilmedi. Gerçek kârı tam görmek için maliyet ekleyin.",
                 UiStyle.WarningColor,
                 targetWidth,
-                "Maliyetleri Düzenle",
+                "💰 Maliyetleri Düzenle",
                 () => { using var dlg = new ProductCostManagerForm(); dlg.ShowDialog(this); }
             ));
         }
@@ -919,13 +896,10 @@ internal sealed class DashboardForm : Form
 
         if (topProduct != null)
         {
-            insightCount++;
             decimal productRev = topProduct.Sum(x => x.GrandTotal);
-            _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
-                "🌟",
-                "CİRO LİDERİ",
-                "En Çok Ciro Getiren Ürün",
-                $"'{topProduct.Key}' bu ay toplam ${productRev:N2} ciro sağlayarak mağazanızın en çok kazandıran yıldız ürünü oldu.",
+            _pnlAiCopilot.Controls.Add(CreateInsightCard(
+                "🌟 En Çok Ciro Getiren Ürün",
+                $"'{topProduct.Key}' bu ay toplam ${productRev:N2} ciro sağlayarak mağazanızın yıldız ürünü oldu.",
                 UiStyle.SuccessColor,
                 targetWidth
             ));
@@ -933,51 +907,87 @@ internal sealed class DashboardForm : Form
 
         if (_liveReport.TotalGross > 0)
         {
-            insightCount++;
             decimal adPct = Math.Round((_liveReport.TotalInnerAdFees + _liveReport.TotalOffsiteAdFees) / _liveReport.TotalGross * 100, 1);
-            _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
-                "📢",
-                "REKLAM & GİDER",
-                "Reklam & Komisyon Durumu",
-                $"Reklam giderleri bu ay cironuzun %{adPct}'ini oluşturuyor. Mağazanızın toplam net kâr marjı: %{_liveReport.ProfitMarginPct:N1}.",
+            _pnlAiCopilot.Controls.Add(CreateInsightCard(
+                "📢 Reklam & Komisyon Durumu",
+                $"Reklam giderleri bu ay cironuzun %{adPct}'ini oluşturuyor. Toplam net kâr marjınız: %{_liveReport.ProfitMarginPct:N1}.",
                 UiStyle.AccentColor,
-                targetWidth,
-                "Finans & Giderleri İncele",
-                () => _ = OpenModuleByIdAsync("financial")
+                targetWidth
             ));
         }
 
-        insightCount++;
-        _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
-            "🚀",
-            "AI BÜYÜME TAVSİYESİ",
-            "Büyüme & SEO Tavsiyesi",
+        _pnlAiCopilot.Controls.Add(CreateInsightCard(
+            "🚀 Büyüme & SEO Tavsiyesi",
             "Ürün başlıklarında ve ilk 3 etiketinde en çok aranan uzun kuyruklu anahtar kelimeleri kullanarak organik trafiğinizi %25 artırabilirsiniz.",
             UiStyle.PrimaryColor,
             targetWidth,
-            "Pazar Araştırması",
+            "🔍 Pazar Araştırması",
             () => _ = OpenModuleByIdAsync("research")
         ));
-
-        _lblCopilotBadge.Text = $"✨ {insightCount} Öneri Hazır";
-        _pnlAiCopilot.ResumeLayout(true);
     }
 
-    private void AdjustCopilotCardWidths()
+    private static Control CreateInsightCard(string title, string text, Color accentColor, int width, string? buttonText = null, Action? onButtonClick = null)
     {
-        if (_pnlAiCopilot.ClientSize.Width <= 0) return;
-        int scrollbarWidth = _pnlAiCopilot.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
-        int targetWidth = Math.Max(220, _pnlAiCopilot.ClientSize.Width - _pnlAiCopilot.Padding.Horizontal - scrollbarWidth - 4);
-
-        _pnlAiCopilot.SuspendLayout();
-        foreach (Control c in _pnlAiCopilot.Controls)
+        int cardWidth = Math.Max(260, width);
+        var card = new ModernCardPanel
         {
-            if (c is StoreCopilotInsightCard card)
+            Width = cardWidth,
+            Margin = new Padding(0, 0, 0, 10),
+            Padding = new Padding(14, 12, 14, 12),
+            CornerRadius = 10,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = Color.FromArgb(120, accentColor.R, accentColor.G, accentColor.B),
+        };
+
+        var lblTitle = new Label
+        {
+            Text = title,
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+            ForeColor = accentColor,
+            Location = new Point(14, 12),
+            AutoSize = true
+        };
+        card.Controls.Add(lblTitle);
+
+        int textWidth = cardWidth - 28;
+        var lblText = new Label
+        {
+            Text = text,
+            Font = new Font("Segoe UI", 8.5F),
+            ForeColor = UiStyle.TextDark,
+            Location = new Point(14, 34),
+            Size = new Size(textWidth, 0),
+            MaximumSize = new Size(textWidth, 0),
+            AutoSize = true
+        };
+        card.Controls.Add(lblText);
+
+        int bottomY = lblText.Bottom + 8;
+
+        if (!string.IsNullOrEmpty(buttonText) && onButtonClick != null)
+        {
+            var btn = new ModernButtonControl
             {
-                card.UpdateCardWidth(targetWidth);
-            }
+                Text = buttonText,
+                Size = new Size(160, 30),
+                Location = new Point(14, bottomY),
+                NormalColor = accentColor,
+                HoverColor = Color.FromArgb(Math.Min(255, accentColor.R + 25), Math.Min(255, accentColor.G + 25), Math.Min(255, accentColor.B + 25)),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btn.Click += (_, _) => onButtonClick();
+            card.Controls.Add(btn);
+            bottomY = btn.Bottom + 10;
         }
-        _pnlAiCopilot.ResumeLayout(true);
+        else
+        {
+            bottomY += 4;
+        }
+
+        card.Height = bottomY;
+        return card;
     }
 
     private void UpdateRevenueTrendChart()
