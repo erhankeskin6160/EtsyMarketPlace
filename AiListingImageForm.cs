@@ -82,7 +82,20 @@ internal sealed class AiListingImageForm : Form
     private readonly ComboBox _cboEtsyImageSlot = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Label _lblTargetListingInfo = new() { AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 8.5F) };
 
-    public AiListingImageForm(IAiListingOptimizer? aiOptimizer = null, string? initialImagePath = null, string? initialTitle = null)
+    // Unified Studio Tabs & Containers
+    private readonly Button _btnTabSingleStudio = new();
+    private readonly Button _btnTabBatchStudio = new();
+    private Panel _viewContainer = null!;
+    private TableLayoutPanel _singleDesignContainer = null!;
+    private BatchStudioPanelControl _batchStudioControl = null!;
+    private Control? _bottomBar;
+    private int _currentTabIndex;
+
+    public AiListingImageForm(
+        IAiListingOptimizer? aiOptimizer = null,
+        string? initialImagePath = null,
+        string? initialTitle = null,
+        int initialTab = 0)
     {
         _aiOptimizer = aiOptimizer;
         _photoRoomSettings = PhotoRoomSettingsStore.Load();
@@ -108,6 +121,7 @@ internal sealed class AiListingImageForm : Form
         if (!string.IsNullOrWhiteSpace(initialImagePath) && File.Exists(initialImagePath))
         {
             LoadImageFromPath(initialImagePath);
+            _batchStudioControl.LoadInitialImage(initialImagePath);
         }
 
         if (!string.IsNullOrWhiteSpace(initialTitle))
@@ -115,9 +129,14 @@ internal sealed class AiListingImageForm : Form
             _productTitleTxt.Text = initialTitle;
             OnScenePresetSelected(_presetChips.SelectedPreset);
         }
+
+        if (initialTab == 1)
+        {
+            SwitchToTab(1);
+        }
     }
 
-    public AiListingImageForm(object? listing, object? apiClient) : this(null)
+    public AiListingImageForm(object? listing, object? apiClient) : this(null, null, null, 0)
     {
         _apiClient = apiClient as EtsyApiClient;
 
@@ -154,7 +173,7 @@ internal sealed class AiListingImageForm : Form
 
     private void BuildLayout()
     {
-        Text = "AI Görsel Studio & Mockup Üretici (PhotoRoom / Gemini Imagen / DALL-E)";
+        Text = "🎨 AI Görsel & Arka Plan Stüdyosu (GPT-Image-2.5 • Gemini • PhotoRoom)";
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1280, 820);
@@ -169,51 +188,126 @@ internal sealed class AiListingImageForm : Form
         // 1. Header Toolbar
         root.Controls.Add(BuildHeaderBar(), 0, 0);
 
-        // 2. Main 3-Column Content Split
-        var content = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(0, 4, 0, 4) };
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380));
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
+        // 2. View Container (Hosts Single Design Grid & Batch Studio Panel)
+        _viewContainer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
 
-        content.Controls.Add(BuildLeftControlsPanel(), 0, 0);
-        content.Controls.Add(BuildCenterCanvasPanel(), 1, 0);
-        content.Controls.Add(BuildRightActionsPanel(), 2, 0);
-        root.Controls.Add(content, 0, 1);
+        _singleDesignContainer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(0, 4, 0, 4) };
+        _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380));
+        _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
+
+        _singleDesignContainer.Controls.Add(BuildLeftControlsPanel(), 0, 0);
+        _singleDesignContainer.Controls.Add(BuildCenterCanvasPanel(), 1, 0);
+        _singleDesignContainer.Controls.Add(BuildRightActionsPanel(), 2, 0);
+
+        _batchStudioControl = new BatchStudioPanelControl(_apiClient, _aiSettings) { Dock = DockStyle.Fill, Visible = false };
+        _batchStudioControl.OpenInSingleStudioRequested += bmp =>
+        {
+            SetLoadedBitmap(bmp, "Toplu Fabrikadan Aktarılan");
+            SwitchToTab(0);
+        };
+
+        _viewContainer.Controls.Add(_batchStudioControl);
+        _viewContainer.Controls.Add(_singleDesignContainer);
+        root.Controls.Add(_viewContainer, 0, 1);
 
         // 3. Bottom Bar
-        root.Controls.Add(BuildBottomBar(), 0, 2);
+        _bottomBar = BuildBottomBar();
+        root.Controls.Add(_bottomBar, 0, 2);
+
+        SwitchToTab(0);
+    }
+
+    public void SwitchToTab(int tabIndex)
+    {
+        _currentTabIndex = tabIndex;
+        if (tabIndex == 0)
+        {
+            _singleDesignContainer.Visible = true;
+            _batchStudioControl.Visible = false;
+            if (_bottomBar != null) _bottomBar.Visible = true;
+
+            _btnTabSingleStudio.BackColor = Color.FromArgb(79, 70, 229); // Indigo 600
+            _btnTabSingleStudio.ForeColor = Color.White;
+            _btnTabBatchStudio.BackColor = Color.FromArgb(30, 41, 59);
+            _btnTabBatchStudio.ForeColor = Color.FromArgb(148, 163, 184);
+
+            _btnModeSlider.Visible = true;
+            _btnModeSideBySide.Visible = true;
+            _btnModeAfterOnly.Visible = true;
+        }
+        else
+        {
+            _singleDesignContainer.Visible = false;
+            _batchStudioControl.Visible = true;
+            if (_bottomBar != null) _bottomBar.Visible = false;
+
+            _btnTabSingleStudio.BackColor = Color.FromArgb(30, 41, 59);
+            _btnTabSingleStudio.ForeColor = Color.FromArgb(148, 163, 184);
+            _btnTabBatchStudio.BackColor = Color.FromArgb(16, 185, 129); // Emerald 600
+            _btnTabBatchStudio.ForeColor = Color.White;
+
+            _btnModeSlider.Visible = false;
+            _btnModeSideBySide.Visible = false;
+            _btnModeAfterOnly.Visible = false;
+        }
     }
 
     private Control BuildHeaderBar()
     {
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
 
         // Title & Subtitle
         var titleStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
         titleStack.Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "📸 AI Görsel Studio & Mockup Üretici",
-            Font = new Font("Segoe UI Semibold", 15F, FontStyle.Bold),
+            Text = "🎨 AI Görsel & Arka Plan Stüdyosu",
+            Font = new Font("Segoe UI Semibold", 13.5F, FontStyle.Bold),
             ForeColor = Color.White,
             UseMnemonic = false
         });
         titleStack.Controls.Add(new Label
         {
             AutoSize = true,
-            Text = "PhotoRoom, Google Gemini Imagen 3 ve OpenAI DALL-E ile profesyonel stüdyo mockup sahneleme",
-            Font = new Font("Segoe UI", 8.8F),
+            Text = "GPT-Image-2.5 Inpainting, Google Gemini ve PhotoRoom ile tekli & toplu üretim",
+            Font = new Font("Segoe UI", 8.5F),
             ForeColor = UiStyle.TextMuted,
             UseMnemonic = false
         });
         header.Controls.Add(titleStack, 0, 0);
 
+        // Studio Mode Tabs
+        var tabStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 8, 12, 0) };
+
+        _btnTabSingleStudio.Text = "🎯 Tekli Tasarım Stüdyosu";
+        _btnTabSingleStudio.Height = 32;
+        _btnTabSingleStudio.AutoSize = true;
+        _btnTabSingleStudio.FlatStyle = FlatStyle.Flat;
+        _btnTabSingleStudio.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
+        _btnTabSingleStudio.Cursor = Cursors.Hand;
+        _btnTabSingleStudio.FlatAppearance.BorderSize = 0;
+        _btnTabSingleStudio.Click += (_, _) => SwitchToTab(0);
+        tabStack.Controls.Add(_btnTabSingleStudio);
+
+        _btnTabBatchStudio.Text = "⚡ Toplu Arka Plan Fabrikası (6+ Görsel)";
+        _btnTabBatchStudio.Height = 32;
+        _btnTabBatchStudio.AutoSize = true;
+        _btnTabBatchStudio.FlatStyle = FlatStyle.Flat;
+        _btnTabBatchStudio.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
+        _btnTabBatchStudio.Cursor = Cursors.Hand;
+        _btnTabBatchStudio.FlatAppearance.BorderSize = 0;
+        _btnTabBatchStudio.Click += (_, _) => SwitchToTab(1);
+        tabStack.Controls.Add(_btnTabBatchStudio);
+
+        header.Controls.Add(tabStack, 1, 0);
+
         // Mode Switch Buttons
-        var modeStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 8, 12, 0) };
+        var modeStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 8, 10, 0) };
         _btnModeSlider.Height = 32;
         _btnModeSlider.Click += (_, _) => SetComparisonMode(ImageComparisonMode.SplitSlider);
         modeStack.Controls.Add(_btnModeSlider);
@@ -226,45 +320,17 @@ internal sealed class AiListingImageForm : Form
         _btnModeAfterOnly.Click += (_, _) => SetComparisonMode(ImageComparisonMode.AfterOnly);
         modeStack.Controls.Add(_btnModeAfterOnly);
 
-        var btnOpenBgEditor = new Button
-        {
-            Text = "🌄 Arka Plan Stüdyosu",
-            Height = 32,
-            AutoSize = true,
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(79, 70, 229),
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
-            Cursor = Cursors.Hand
-        };
-        btnOpenBgEditor.FlatAppearance.BorderSize = 0;
-        btnOpenBgEditor.Click += (_, _) =>
-        {
-            string? tempPath = null;
-            if (_sessionManager.OriginalBitmap != null)
-            {
-                tempPath = Path.Combine(Path.GetTempPath(), $"studio_transfer_{Guid.NewGuid():N}.png");
-                _sessionManager.OriginalBitmap.Save(tempPath, System.Drawing.Imaging.ImageFormat.Png);
-            }
-            using var editor = new BackgroundEditorForm(_apiClient, _aiSettings, tempPath, _targetListingId);
-            editor.ShowDialog(this);
-            if (tempPath != null && File.Exists(tempPath))
-            {
-                try { File.Delete(tempPath); } catch { }
-            }
-        };
-        modeStack.Controls.Add(btnOpenBgEditor);
-
         var btnConfigureKeys = new Button
         {
             Text = "🔑 API Key Yapılandır",
             Height = 32,
             AutoSize = true,
             FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(51, 65, 85),
+            BackColor = Color.FromArgb(79, 70, 229),
             ForeColor = Color.White,
             Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
-            Cursor = Cursors.Hand
+            Cursor = Cursors.Hand,
+            Margin = new Padding(6, 0, 0, 0)
         };
         btnConfigureKeys.FlatAppearance.BorderSize = 0;
         btnConfigureKeys.Click += (_, _) =>
@@ -284,12 +350,12 @@ internal sealed class AiListingImageForm : Form
         };
         modeStack.Controls.Add(btnConfigureKeys);
 
-        header.Controls.Add(modeStack, 1, 0);
+        header.Controls.Add(modeStack, 2, 0);
 
         // AI Engine Status Badge
         _lblAiBadge.Click += (_, _) => OpenAiSettingsDialog();
         UpdateAiBadge();
-        header.Controls.Add(_lblAiBadge, 2, 0);
+        header.Controls.Add(_lblAiBadge, 3, 0);
 
         // Live Status Text
         _statusLabel.Dock = DockStyle.Fill;
@@ -631,9 +697,37 @@ internal sealed class AiListingImageForm : Form
         var copyBtn = UiStyle.CreateButton("📋 Panoya Kopyala", isSecondary: true);
         copyBtn.Width = 260;
         copyBtn.Height = 34;
-        copyBtn.Margin = new Padding(0, 6, 0, 12);
+        copyBtn.Margin = new Padding(0, 6, 0, 8);
         copyBtn.Click += (_, _) => CopyToClipboard();
         stack.Controls.Add(copyBtn);
+
+        var sendToBatchBtn = UiStyle.CreateButton("⚡ Toplu Fabrika Kuyruğuna Aktar", isSecondary: true);
+        sendToBatchBtn.Width = 260;
+        sendToBatchBtn.Height = 34;
+        sendToBatchBtn.Margin = new Padding(0, 0, 0, 12);
+        sendToBatchBtn.Click += (_, _) =>
+        {
+            var bmp = _sessionManager.GeneratedBitmap ?? _sessionManager.OriginalBitmap;
+            if (bmp != null)
+            {
+                using var ms = new MemoryStream();
+                bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                var item = new BatchInputItem(
+                    Id: $"studio_{Guid.NewGuid():N}",
+                    Title: string.IsNullOrWhiteSpace(_productTitleTxt.Text) ? "Stüdyo Görseli" : _productTitleTxt.Text.Trim(),
+                    ImageBytes: ms.ToArray(),
+                    OriginalPathOrUrl: "Studio",
+                    TargetListingId: _targetListingId);
+
+                _batchStudioControl.AddItemsToStudio([item]);
+                SwitchToTab(1);
+            }
+            else
+            {
+                MessageBox.Show(this, "Önce düzenlenecek bir görsel yükleyin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        };
+        stack.Controls.Add(sendToBatchBtn);
 
         // 4. Etsy Direct Sync Section (Phase 2 Multi-Slot)
         stack.Controls.Add(new Label
