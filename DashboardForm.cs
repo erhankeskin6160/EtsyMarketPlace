@@ -211,7 +211,7 @@ internal sealed class DashboardForm : Form
         };
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));  // Header (72px to prevent subtitle clipping)
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 108)); // Hero KPI Strip
-        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));  // Quick Action Hub
+        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));  // Quick Action Hub
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 55));   // Middle: Orders (Left) & Copilot (Right)
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 45));   // Bottom: Live Trend Chart
 
@@ -514,89 +514,17 @@ internal sealed class DashboardForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 4,
             RowCount = 1,
-            Padding = new Padding(0, 4, 0, 4)
+            Padding = new Padding(0, 3, 0, 3)
         };
         for (int i = 0; i < 4; i++)
             hub.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
 
-        hub.Controls.Add(CreateActionCard("💳 Finans & Muhasebe", "Ödeme defteri, komisyonlar ve banka transferleri", UiStyle.PrimaryColor, () => _ = OpenModuleByIdAsync("financial")), 0, 0);
-        hub.Controls.Add(CreateActionCard("🛍️ AI Ürün Bul & Taslak", "Trend ürün araştırması ve tek tıkla taslak listeleme", UiStyle.EtsyColor, () => _ = OpenModuleByIdAsync("creator")), 1, 0);
-        hub.Controls.Add(CreateActionCard("🖼️ AI Görsel Studio", "AI ile stüdyo kalitesinde ürün fotoğrafları oluşturma", UiStyle.AiColor, () => _ = OpenModuleByIdAsync("ai_image")), 2, 0);
-        hub.Controls.Add(CreateActionCard("🏬 Mağazama Git & AI Denetim", "Siparişler, SEO skoru ve AI mağaza denetim raporu", UiStyle.SuccessColor, () => _ = OpenModuleByIdAsync("shop")), 3, 0);
+        hub.Controls.Add(new QuickActionCard("💳", "Finans & Muhasebe", "Ödeme defteri, komisyonlar ve banka transferleri", UiStyle.PrimaryColor, () => _ = OpenModuleByIdAsync("financial")), 0, 0);
+        hub.Controls.Add(new QuickActionCard("🛍️", "AI Ürün Bul & Taslak", "Trend ürün araştırması ve tek tıkla taslak listeleme", UiStyle.EtsyColor, () => _ = OpenModuleByIdAsync("creator")), 1, 0);
+        hub.Controls.Add(new QuickActionCard("🖼️", "AI Görsel Studio", "AI ile stüdyo kalitesinde ürün fotoğrafları oluşturma", UiStyle.AiColor, () => _ = OpenModuleByIdAsync("ai_image")), 2, 0);
+        hub.Controls.Add(new QuickActionCard("🏬", "Mağazama Git & AI Denetim", "Siparişler, SEO skoru ve AI mağaza denetim raporu", UiStyle.SuccessColor, () => _ = OpenModuleByIdAsync("shop")), 3, 0);
 
         return hub;
-    }
-
-    private static Control CreateActionCard(string title, string description, Color accentColor, Action onClick)
-    {
-        var card = new ModernCardPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(4, 0, 4, 0),
-            Padding = new Padding(12, 10, 12, 10),
-            CornerRadius = 10,
-            CardColor = UiStyle.CardBackground,
-            BorderColor = UiStyle.BorderColor,
-            Cursor = Cursors.Hand
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 2,
-            BackColor = Color.Transparent
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var lblTitle = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = title,
-            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
-            ForeColor = accentColor,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Cursor = Cursors.Hand,
-            UseMnemonic = false
-        };
-        layout.Controls.Add(lblTitle, 0, 0);
-
-        var lblDesc = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = description,
-            Font = new Font("Segoe UI", 8F),
-            ForeColor = UiStyle.TextMuted,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Cursor = Cursors.Hand,
-            AutoEllipsis = true,
-            UseMnemonic = false
-        };
-        layout.Controls.Add(lblDesc, 0, 1);
-
-        void SetHover(bool isHover)
-        {
-            card.BorderColor = isHover ? Color.FromArgb(140, accentColor.R, accentColor.G, accentColor.B) : UiStyle.BorderColor;
-            card.CardColor = isHover ? Color.FromArgb(34, 46, 68) : UiStyle.CardBackground;
-            card.Invalidate();
-        }
-
-        card.MouseEnter += (_, _) => SetHover(true);
-        card.MouseLeave += (_, _) => SetHover(false);
-        layout.MouseEnter += (_, _) => SetHover(true);
-        layout.MouseLeave += (_, _) => SetHover(false);
-        lblTitle.MouseEnter += (_, _) => SetHover(true);
-        lblTitle.MouseLeave += (_, _) => SetHover(false);
-        lblDesc.MouseEnter += (_, _) => SetHover(true);
-        lblDesc.MouseLeave += (_, _) => SetHover(false);
-
-        card.Click += (_, _) => onClick();
-        layout.Click += (_, _) => onClick();
-        lblTitle.Click += (_, _) => onClick();
-        lblDesc.Click += (_, _) => onClick();
-
-        card.Controls.Add(layout);
-        return card;
     }
 
     private Control BuildMiddleSection()
