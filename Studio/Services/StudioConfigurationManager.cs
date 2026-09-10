@@ -16,7 +16,7 @@ public sealed class StudioConfiguration
 
     public string DefaultEngineId { get; set; } = "photoroom";
     public string DefaultGeminiModel { get; set; } = "gemini-3.1-flash-image";
-    public string DefaultOpenAiModel { get; set; } = "gpt-image-2";
+    public string DefaultOpenAiModel { get; set; } = "gpt-image-2.5-flare";
     public string DefaultFluxModel { get; set; } = "flux-pro-1.1";
 
     public bool AddSoftShadow { get; set; } = true;
@@ -83,6 +83,12 @@ public static class StudioConfigurationManager
                 updated = true;
             }
 
+            if (!string.IsNullOrWhiteSpace(aiLegacy.OpenAiImageModel) && (string.IsNullOrWhiteSpace(config.DefaultOpenAiModel) || config.DefaultOpenAiModel == "gpt-image-2"))
+            {
+                config.DefaultOpenAiModel = aiLegacy.OpenAiImageModel.Trim();
+                updated = true;
+            }
+
             if (string.IsNullOrWhiteSpace(config.BflApiKey) && !string.IsNullOrWhiteSpace(aiLegacy.BflApiKey))
             {
                 config.BflApiKey = aiLegacy.BflApiKey.Trim();
@@ -136,6 +142,7 @@ public static class StudioConfigurationManager
             legacyAi.PhotoRoomApiKey = config.PhotoRoomApiKey;
             legacyAi.GeminiApiKey = config.GoogleGeminiApiKey;
             legacyAi.OpenAiApiKey = config.OpenAiApiKey;
+            legacyAi.OpenAiImageModel = config.DefaultOpenAiModel;
             legacyAi.BflApiKey = config.BflApiKey;
             legacyAi.IdeogramApiKey = config.IdeogramApiKey;
             AiOptimizationSettingsStore.Save(legacyAi);

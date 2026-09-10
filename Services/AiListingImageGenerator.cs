@@ -133,7 +133,7 @@ internal sealed class AiListingImageGenerator
         request.Content = new StringContent(
             JsonSerializer.Serialize(new
             {
-                model = string.IsNullOrWhiteSpace(settings.OpenAiImageModel) ? "gpt-image-1" : settings.OpenAiImageModel.Trim(),
+                model = AiModelNormalizer.NormalizeOpenAiImageModel(settings.OpenAiImageModel),
                 prompt,
                 size = "1024x1024",
             }),
@@ -159,7 +159,7 @@ internal sealed class AiListingImageGenerator
         using var imageContent = new StreamContent(imageStream);
         imageContent.Headers.ContentType = new MediaTypeHeaderValue(GetImageContentType(referenceImagePath));
         using var form = new MultipartFormDataContent();
-        form.Add(new StringContent(string.IsNullOrWhiteSpace(settings.OpenAiImageModel) ? "gpt-image-1" : settings.OpenAiImageModel.Trim()), "model");
+        form.Add(new StringContent(AiModelNormalizer.NormalizeOpenAiImageModel(settings.OpenAiImageModel)), "model");
         form.Add(new StringContent(prompt), "prompt");
         form.Add(new StringContent("1024x1024"), "size");
         form.Add(imageContent, "image", Path.GetFileName(referenceImagePath));

@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Studio.Services;
 
 internal sealed class AiOptimizationSettingsForm : Form
 {
@@ -86,6 +87,9 @@ internal sealed class AiOptimizationSettingsForm : Form
         _imageModelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
         _imageModelComboBox.Width = 340;
         _imageModelComboBox.Items.AddRange([
+            "gpt-image-2.5-flare",
+            "gpt-image-2.5-sunburst",
+            "gpt-image-2",
             "dall-e-3",
             "dall-e-2"
         ]);
@@ -260,6 +264,20 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         PhotoRoomSettingsStore.Save(new PhotoRoomSettings { ApiKey = _settings.PhotoRoomApiKey });
         AiOptimizationSettingsStore.Save(_settings);
+
+        try
+        {
+            var studioCfg = StudioConfigurationManager.Current;
+            studioCfg.OpenAiApiKey = _settings.OpenAiApiKey;
+            studioCfg.DefaultOpenAiModel = _settings.OpenAiImageModel;
+            if (!string.IsNullOrWhiteSpace(_settings.GeminiApiKey)) studioCfg.GoogleGeminiApiKey = _settings.GeminiApiKey;
+            if (!string.IsNullOrWhiteSpace(_settings.BflApiKey)) studioCfg.BflApiKey = _settings.BflApiKey;
+            if (!string.IsNullOrWhiteSpace(_settings.IdeogramApiKey)) studioCfg.IdeogramApiKey = _settings.IdeogramApiKey;
+            if (!string.IsNullOrWhiteSpace(_settings.PhotoRoomApiKey)) studioCfg.PhotoRoomApiKey = _settings.PhotoRoomApiKey;
+            StudioConfigurationManager.Save(studioCfg);
+        }
+        catch { }
+
         WriteStatus("AI ve PhotoRoom ayarları kaydedildi.");
     }
 

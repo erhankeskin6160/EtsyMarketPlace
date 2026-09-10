@@ -114,7 +114,7 @@ internal sealed class BatchImageGenerationService
                 }
                 else if (engineIndex == 1) // OpenAI (GPT Image 2)
                 {
-                    string model = !string.IsNullOrWhiteSpace(aiSettings.OpenAiImageModel) ? aiSettings.OpenAiImageModel : "gpt-image-2";
+                    string model = AiModelNormalizer.NormalizeOpenAiImageModel(aiSettings.OpenAiImageModel);
                     var resp = await AiImageGenerationService.GenerateWithOpenAiAsync(
                         basePrompt,
                         aiSettings.OpenAiApiKey,
