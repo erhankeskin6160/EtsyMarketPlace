@@ -136,6 +136,13 @@ public class PresetChipSelector : FlowLayoutPanel
             var textSize = g.MeasureString(DisplayText, Font);
             Width = (int)textSize.Width + 24;
 
+            Color parentBg = Parent?.BackColor ?? Color.FromArgb(30, 41, 59);
+            if (parentBg == Color.Transparent && Parent?.Parent != null) parentBg = Parent.Parent.BackColor;
+            using (var clearBrush = new SolidBrush(parentBg != Color.Transparent ? parentBg : Color.FromArgb(30, 41, 59)))
+            {
+                g.FillRectangle(clearBrush, ClientRectangle);
+            }
+
             var rect = new Rectangle(0, 0, Width - 1, Height - 1);
             using var path = ModernCardPanel.CreateRoundedRectanglePath(rect, 14);
 

@@ -36,10 +36,10 @@ internal sealed class FastListingCreatorForm : Form
     private readonly TextBox _txtCustomTaxonomy = new() { Text = "1239" };
     private readonly ModernComboBox _cboShippingProfile = new();
     private readonly ModernComboBox _cboReadinessState = new();
-    private readonly TextBox _txtTags = new() { Multiline = true, Height = 68, ScrollBars = ScrollBars.Vertical };
+    private readonly ModernMultilineTextBox _txtTags = new() { Height = 68 };
     private readonly Label _lblTagCounter = new() { AutoSize = true };
     private readonly Label _lblTagStatus = new() { AutoSize = true };
-    private readonly TextBox _txtDescription = new() { Multiline = true, Height = 175, ScrollBars = ScrollBars.Vertical };
+    private readonly ModernMultilineTextBox _txtDescription = new() { Height = 175 };
     private readonly TextBox _txtMaterials = new() { Height = 26 };
 
     // Template Toolbar Controls
@@ -215,6 +215,7 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.RightToLeft,
             WrapContents = false,
+            BackColor = Color.Transparent,
             Margin = new Padding(0)
         };
 
@@ -428,11 +429,11 @@ internal sealed class FastListingCreatorForm : Form
         cardLayout.Controls.Add(divider, 0, 1);
 
         // 2. Scrollable Body
-        var scrollContainer = new Panel
+        var scrollContainer = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            AutoScroll = true,
-            Padding = new Padding(0, 2, 6, 0)
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 2, 2, 0)
         };
 
         var stack = new TableLayoutPanel
@@ -730,7 +731,7 @@ internal sealed class FastListingCreatorForm : Form
         };
         stack.Controls.Add(lblMatHint);
 
-        scrollContainer.Controls.Add(stack);
+        scrollContainer.SetContent(stack);
         cardLayout.Controls.Add(scrollContainer, 0, 2);
         card.Controls.Add(cardLayout);
         return card;
