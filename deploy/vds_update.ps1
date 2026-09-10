@@ -83,7 +83,15 @@ try {
     # 4. Yeni sürümü devreye al
     Write-Host "[4/5] Yeni surum yerlestiriliyor..." -ForegroundColor Yellow
     Move-Item -Path $tempDownload -Destination $targetExe -Force
-    Write-Host "      $exeName guncellendi!" -ForegroundColor Green
+    Write-Host "      $exeName guncellendi ($targetExe)!" -ForegroundColor Green
+
+    # publish_vds_standalone dizini varsa orayı da anında güncelle
+    $standaloneDir = Join-Path $appDir "publish_vds_standalone"
+    if (Test-Path $standaloneDir) {
+        $standaloneExe = Join-Path $standaloneDir $exeName
+        Copy-Item -Path $targetExe -Destination $standaloneExe -Force -ErrorAction SilentlyContinue
+        Write-Host "      publish_vds_standalone\$exeName guncellendi!" -ForegroundColor Green
+    }
 
     # 5. Programı başlat
     Write-Host "[5/5] Yeni surum baslatiliyor..." -ForegroundColor Yellow
