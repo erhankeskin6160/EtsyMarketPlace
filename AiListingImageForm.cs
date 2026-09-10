@@ -192,7 +192,7 @@ internal sealed class AiListingImageForm : Form
         _viewContainer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
 
         _singleDesignContainer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(0, 4, 0, 4) };
-        _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380));
+        _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 395));
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
 
@@ -256,13 +256,13 @@ internal sealed class AiListingImageForm : Form
     private Control BuildHeaderBar()
     {
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         // Title & Subtitle
-        var titleStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        var titleStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true, Margin = new Padding(0, 0, 14, 0) };
         titleStack.Controls.Add(new Label
         {
             AutoSize = true,
@@ -282,7 +282,7 @@ internal sealed class AiListingImageForm : Form
         header.Controls.Add(titleStack, 0, 0);
 
         // Studio Mode Tabs
-        var tabStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 8, 12, 0) };
+        var tabStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0, 8, 12, 0) };
 
         _btnTabSingleStudio.Text = "🎯 Tekli Tasarım Stüdyosu";
         _btnTabSingleStudio.Height = 32;
@@ -307,7 +307,7 @@ internal sealed class AiListingImageForm : Form
         header.Controls.Add(tabStack, 1, 0);
 
         // Mode Switch Buttons
-        var modeStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 8, 10, 0) };
+        var modeStack = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoSize = true, Margin = new Padding(0, 8, 10, 0) };
         _btnModeSlider.Height = 32;
         _btnModeSlider.Click += (_, _) => SetComparisonMode(ImageComparisonMode.SplitSlider);
         modeStack.Controls.Add(_btnModeSlider);
@@ -352,18 +352,31 @@ internal sealed class AiListingImageForm : Form
 
         header.Controls.Add(modeStack, 2, 0);
 
+        // Right-aligned status and badge container
+        var rightStack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            AutoSize = true,
+            Margin = new Padding(0, 8, 4, 0)
+        };
+
         // AI Engine Status Badge
         _lblAiBadge.Click += (_, _) => OpenAiSettingsDialog();
         UpdateAiBadge();
-        header.Controls.Add(_lblAiBadge, 3, 0);
+        rightStack.Controls.Add(_lblAiBadge);
 
         // Live Status Text
-        _statusLabel.Dock = DockStyle.Fill;
+        _statusLabel.AutoSize = true;
         _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.Font = new Font("Segoe UI Semibold", 9F);
+        _statusLabel.Font = new Font("Segoe UI Semibold", 8.8F);
         _statusLabel.ForeColor = UiStyle.TextMuted;
+        _statusLabel.Margin = new Padding(0, 6, 8, 0);
         _statusLabel.Text = "Hazır. Görsel yükleyebilir veya bir sahne seçebilirsiniz.";
-        header.Controls.Add(_statusLabel, 3, 0);
+        rightStack.Controls.Add(_statusLabel);
+
+        header.Controls.Add(rightStack, 3, 0);
 
         return header;
     }
@@ -402,7 +415,7 @@ internal sealed class AiListingImageForm : Form
         _cboEngine.Items.AddRange([
             "🔵 Google Gemini (Görsel Düzenleme & Sahneleme - SOTA)",
             "🟣 PhotoRoom Native (Arka Plan Silme & AI Gölge)",
-            "🏆 OpenAI (GPT Image 2 / DALL-E 3)",
+            "⚡ OpenAI (GPT-Image-2.5 Flare & Sunburst)",
             "⚡ Black Forest Labs FLUX.1 (Ultra Realism)",
             "🟡 Ideogram 4.0 (Kusursuz Tipografi & Yazı)"
         ]);
@@ -1082,7 +1095,7 @@ internal sealed class AiListingImageForm : Form
         {
             0 => "Google Gemini (Görsel Düzenleme & Sahneleme)",
             1 => "PhotoRoom Native",
-            2 => "OpenAI GPT Image 2",
+            2 => "OpenAI GPT-Image-2.5",
             3 => "Black Forest Labs FLUX.1 Pro",
             _ => "Ideogram 4.0"
         };
