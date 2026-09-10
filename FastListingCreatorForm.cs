@@ -23,6 +23,7 @@ internal sealed class FastListingCreatorForm : Form
     // Image gallery
     private readonly List<string> _galleryImagePaths = [];
     private string? _lastGeneratedImagePath;
+    private readonly ToolTip _galleryToolTip = new() { AutoPopDelay = 4000, InitialDelay = 250 };
 
     // Left Column Controls (Product & SEO)
     private readonly ComboBox _cboListingType = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -1737,19 +1738,22 @@ internal sealed class FastListingCreatorForm : Form
 
             var card = new Panel
             {
-                Width = 96,
-                Height = 136,
+                Width = 104,
+                Height = 142,
                 Margin = new Padding(4),
                 BackColor = UiStyle.CardBackground,
                 BorderStyle = BorderStyle.FixedSingle,
+                AllowDrop = true
             };
 
             var pic = new PictureBox
             {
                 Dock = DockStyle.Top,
-                Height = 82,
+                Height = 84,
                 SizeMode = PictureBoxSizeMode.Zoom,
                 BackColor = Color.Black,
+                Cursor = Cursors.SizeAll,
+                AllowDrop = true
             };
 
             try
@@ -1764,7 +1768,7 @@ internal sealed class FastListingCreatorForm : Form
             var lblBadge = new Label
             {
                 Dock = DockStyle.Top,
-                Height = 18,
+                Height = 20,
                 TextAlign = ContentAlignment.MiddleCenter,
                 Font = new Font("Segoe UI Semibold", 7.5F),
                 Text = index == 0 ? "⭐ #1 Kapak" : $"#{index + 1}",
@@ -1773,10 +1777,32 @@ internal sealed class FastListingCreatorForm : Form
             };
             card.Controls.Add(lblBadge);
 
-            var btnRow = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 28, ColumnCount = 2 };
-            btnRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            btnRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+            // 4-Button Reordering Toolbar: [ ◀ ] [ ⭐ ] [ ▶ ] [ 🗑️ ]
+            var btnRow = new TableLayoutPanel { Dock = DockStyle.Bottom, Height = 28, ColumnCount = 4 };
+            btnRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            btnRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            btnRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            btnRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
 
+            // 1. Move Left / Forward
+            var btnLeft = new Button
+            {
+                Text = "◀",
+                Dock = DockStyle.Fill,
+                Font = new Font("Segoe UI", 7F),
+                Cursor = Cursors.Hand,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = UiStyle.SecondaryColor,
+                ForeColor = UiStyle.TextDark,
+                Enabled = index > 0,
+                Margin = new Padding(1)
+            };
+            btnLeft.FlatAppearance.BorderSize = 0;
+            _galleryToolTip.SetToolTip(btnLeft, "Görseli Öne / Sola Taşı (◀)");
+            btnLeft.Click += (_, _) => SwapGalleryImages(index, index - 1);
+            btnRow.Controls.Add(btnLeft, 0, 0);
+
+            // 2. Set as Cover Photo (#1)
             var btnStar = new Button
             {
                 Text = "⭐",
@@ -1787,17 +1813,39 @@ internal sealed class FastListingCreatorForm : Form
                 BackColor = UiStyle.SecondaryColor,
                 ForeColor = UiStyle.TextDark,
                 Enabled = index > 0,
+                Margin = new Padding(1)
             };
             btnStar.FlatAppearance.BorderSize = 0;
+            _galleryToolTip.SetToolTip(btnStar, "Kapak Görseli Yap (#1)");
             btnStar.Click += (_, _) =>
             {
                 var temp = _galleryImagePaths[index];
                 _galleryImagePaths.RemoveAt(index);
                 _galleryImagePaths.Insert(0, temp);
                 RefreshGalleryCards();
+                UpdateChecklist();
             };
-            btnRow.Controls.Add(btnStar, 0, 0);
+            btnRow.Controls.Add(btnStar, 1, 0);
 
+            // 3. Move Right / Backward
+            var btnRight = new Button
+            {
+                Text = "▶",
+                Dock = DockStyle.Fill,
+                Font = new Font("Segoe UI", 7F),
+                Cursor = Cursors.Hand,
+                FlatStyle = FlatStyle.Flat,
+                BackColor = UiStyle.SecondaryColor,
+                ForeColor = UiStyle.TextDark,
+                Enabled = index < _galleryImagePaths.Count - 1,
+                Margin = new Padding(1)
+            };
+            btnRight.FlatAppearance.BorderSize = 0;
+            _galleryToolTip.SetToolTip(btnRight, "Görseli Arkaya / Sağa Taşı (▶)");
+            btnRight.Click += (_, _) => SwapGalleryImages(index, index + 1);
+            btnRow.Controls.Add(btnRight, 2, 0);
+
+            // 4. Delete Image
             var btnDel = new Button
             {
                 Text = "🗑️",
@@ -1807,19 +1855,89 @@ internal sealed class FastListingCreatorForm : Form
                 BackColor = UiStyle.SecondaryColor,
                 Cursor = Cursors.Hand,
                 FlatStyle = FlatStyle.Flat,
+                Margin = new Padding(1)
             };
             btnDel.FlatAppearance.BorderSize = 0;
+            _galleryToolTip.SetToolTip(btnDel, "Görseli Galeriden Sil");
             btnDel.Click += (_, _) =>
             {
                 _galleryImagePaths.RemoveAt(index);
                 RefreshGalleryCards();
                 UpdateChecklist();
             };
-            btnRow.Controls.Add(btnDel, 1, 0);
+            btnRow.Controls.Add(btnDel, 3, 0);
 
             card.Controls.Add(btnRow);
+
+            // Drag & Drop Handling for both card and picture box
+            _galleryToolTip.SetToolTip(pic, "Sırayı değiştirmek için basılı tutup sürükleyin veya alttaki ◀ ▶ butonlarına basın.");
+            pic.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left && e.Clicks == 1)
+                {
+                    card.DoDragDrop(index, DragDropEffects.Move);
+                }
+            };
+            card.MouseDown += (s, e) =>
+            {
+                if (e.Button == MouseButtons.Left && e.Clicks == 1)
+                {
+                    card.DoDragDrop(index, DragDropEffects.Move);
+                }
+            };
+
+            void OnDragEnter(DragEventArgs e)
+            {
+                if (e.Data?.GetDataPresent(typeof(int)) == true)
+                {
+                    e.Effect = DragDropEffects.Move;
+                    card.BackColor = UiStyle.PrimaryHover;
+                }
+            }
+
+            void OnDragLeave()
+            {
+                card.BackColor = UiStyle.CardBackground;
+            }
+
+            void OnDragDrop(DragEventArgs e)
+            {
+                card.BackColor = UiStyle.CardBackground;
+                if (e.Data?.GetDataPresent(typeof(int)) == true)
+                {
+                    int sourceIdx = (int)e.Data.GetData(typeof(int))!;
+                    if (sourceIdx != index && sourceIdx >= 0 && sourceIdx < _galleryImagePaths.Count)
+                    {
+                        var item = _galleryImagePaths[sourceIdx];
+                        _galleryImagePaths.RemoveAt(sourceIdx);
+                        _galleryImagePaths.Insert(index, item);
+                        RefreshGalleryCards();
+                        UpdateChecklist();
+                    }
+                }
+            }
+
+            pic.DragEnter += (s, e) => OnDragEnter(e);
+            card.DragEnter += (s, e) => OnDragEnter(e);
+            pic.DragOver += (s, e) => { if (e.Data?.GetDataPresent(typeof(int)) == true) e.Effect = DragDropEffects.Move; };
+            card.DragOver += (s, e) => { if (e.Data?.GetDataPresent(typeof(int)) == true) e.Effect = DragDropEffects.Move; };
+            pic.DragLeave += (s, e) => OnDragLeave();
+            card.DragLeave += (s, e) => OnDragLeave();
+            pic.DragDrop += (s, e) => OnDragDrop(e);
+            card.DragDrop += (s, e) => OnDragDrop(e);
+
             _galleryFlow.Controls.Add(card);
         }
+    }
+
+    private void SwapGalleryImages(int idx1, int idx2)
+    {
+        if (idx1 < 0 || idx1 >= _galleryImagePaths.Count || idx2 < 0 || idx2 >= _galleryImagePaths.Count || idx1 == idx2)
+            return;
+
+        (_galleryImagePaths[idx1], _galleryImagePaths[idx2]) = (_galleryImagePaths[idx2], _galleryImagePaths[idx1]);
+        RefreshGalleryCards();
+        UpdateChecklist();
     }
 
     // --- AI Suggestions & Generation ---
