@@ -1018,10 +1018,10 @@ internal sealed class FastListingCreatorForm : Form
         varTable.Controls.Add(lblVar1);
 
         _cboVarType1.Items.AddRange([
-            "📏 Boyut / Size (100)",
-            "🎨 Renk / Primary Color (506)",
-            "🪵 Malzeme / Material (507)",
-            "✨ Stil / Style (514)",
+            "📏 Boyut / Size",
+            "🎨 Renk / Color",
+            "🪵 Malzeme / Material",
+            "✨ Stil / Style",
             "⚙️ Özel / Custom..."
         ]);
         _cboVarType1.SelectedIndex = 0;
@@ -1035,10 +1035,10 @@ internal sealed class FastListingCreatorForm : Form
         varTable.Controls.Add(_chkEnableVar2);
 
         _cboVarType2.Items.AddRange([
-            "🎨 Renk / Color (506)",
-            "📏 Boyut / Size (100)",
-            "🪵 Malzeme / Material (507)",
-            "✨ Stil / Style (514)",
+            "🎨 Renk / Color",
+            "📏 Boyut / Size",
+            "🪵 Malzeme / Material",
+            "✨ Stil / Style",
             "⚙️ Özel / Custom..."
         ]);
         _cboVarType2.SelectedIndex = 0;
@@ -1457,17 +1457,27 @@ internal sealed class FastListingCreatorForm : Form
             if (e.Control is TextBox tb)
             {
                 tb.SelectAll();
+                tb.DoubleClick -= OnVariationGridEditingControlDoubleClick;
+                tb.DoubleClick += OnVariationGridEditingControlDoubleClick;
             }
         };
         _gridVariationPricing.CellDoubleClick += (_, e) =>
         {
-            if (e.RowIndex < 0) return;
-            if (e.ColumnIndex == _gridVariationPricing.Columns["ColPrice"]?.Index ||
-                e.ColumnIndex == _gridVariationPricing.Columns["ColQty"]?.Index)
+            if (e.RowIndex >= 0)
             {
-                _gridVariationPricing.BeginEdit(true);
+                PromptEditVariationRow(e.RowIndex);
             }
-            else
+        };
+        _gridVariationPricing.CellMouseDoubleClick += (_, e) =>
+        {
+            if (e.RowIndex >= 0)
+            {
+                PromptEditVariationRow(e.RowIndex);
+            }
+        };
+        _gridVariationPricing.RowHeaderMouseDoubleClick += (_, e) =>
+        {
+            if (e.RowIndex >= 0)
             {
                 PromptEditVariationRow(e.RowIndex);
             }
@@ -1693,6 +1703,16 @@ internal sealed class FastListingCreatorForm : Form
         UpdateChecklist();
     }
 
+    private void OnVariationGridEditingControlDoubleClick(object? sender, EventArgs e)
+    {
+        if (_gridVariationPricing.CurrentRow != null && _gridVariationPricing.CurrentRow.Index >= 0)
+        {
+            var idx = _gridVariationPricing.CurrentRow.Index;
+            _gridVariationPricing.EndEdit();
+            PromptEditVariationRow(idx);
+        }
+    }
+
     private void PromptEditVariationRow(int rowIndex)
     {
         if (rowIndex < 0 || rowIndex >= _gridVariationPricing.Rows.Count) return;
@@ -1754,6 +1774,25 @@ internal sealed class FastListingCreatorForm : Form
             Location = new Point(130, 82),
             Width = 190,
             Font = new Font("Segoe UI Semibold", 9.5f)
+        };
+
+        txtPrice.KeyDown += (_, ke) =>
+        {
+            if (ke.KeyCode == Keys.Enter)
+            {
+                ke.SuppressKeyPress = true;
+                dlg.DialogResult = DialogResult.OK;
+                dlg.Close();
+            }
+        };
+        txtQty.KeyDown += (_, ke) =>
+        {
+            if (ke.KeyCode == Keys.Enter)
+            {
+                ke.SuppressKeyPress = true;
+                dlg.DialogResult = DialogResult.OK;
+                dlg.Close();
+            }
         };
 
         var chkActive = new CheckBox
@@ -2547,7 +2586,7 @@ internal sealed class FastListingCreatorForm : Form
         var v1Values = SplitTags(_txtVarValues1.Text);
         if (v1Values.Count > 0)
         {
-            var (name1, propId1) = FastListingDraftHelper.ParseVariationType(_cboVarType1.SelectedItem?.ToString());
+            var (name1, propId1) = FastListingDraftHelper.ParseVariationType(_cboVarType1.SelectedItem?.ToString(), 1);
             groups.Add(new DraftListingVariationGroup(name1, propId1, v1Values));
         }
 
@@ -2557,7 +2596,7 @@ internal sealed class FastListingCreatorForm : Form
             var v2Values = SplitTags(_txtVarValues2.Text);
             if (v2Values.Count > 0)
             {
-                var (name2, propId2) = FastListingDraftHelper.ParseVariationType(_cboVarType2.SelectedItem?.ToString());
+                var (name2, propId2) = FastListingDraftHelper.ParseVariationType(_cboVarType2.SelectedItem?.ToString(), 2);
                 groups.Add(new DraftListingVariationGroup(name2, propId2, v2Values));
             }
         }
@@ -2565,8 +2604,8 @@ internal sealed class FastListingCreatorForm : Form
         return groups;
     }
 
-    private static (string Name, long PropertyId) ParseVariationType(string? selected) =>
-        FastListingDraftHelper.ParseVariationType(selected);
+    private static (string Name, long PropertyId) ParseVariationType(string? selected, int groupIndex = 1) =>
+        FastListingDraftHelper.ParseVariationType(selected, groupIndex);
 
     private static List<string> SplitTags(string text) =>
         FastListingDraftHelper.SanitizeTags(text);

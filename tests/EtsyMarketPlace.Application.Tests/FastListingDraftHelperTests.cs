@@ -6,22 +6,31 @@ using Xunit;
 public sealed class FastListingDraftHelperTests
 {
     [Theory]
-    [InlineData("Boyut / Beden (Size - 100)", "Size", 100)]
-    [InlineData("Size", "Size", 100)]
-    [InlineData("Renk (Primary Color - 506)", "Primary color", 506)]
-    [InlineData("Color", "Primary color", 506)]
-    [InlineData("Malzeme (Material - 507)", "Material", 507)]
-    [InlineData("Stil (Style - 514)", "Style", 514)]
-    [InlineData("Özel Varyasyon (Custom - 513)", "Custom", 513)]
+    [InlineData("Boyut / Beden (Size)", "Size", 513)]
+    [InlineData("Size", "Size", 513)]
+    [InlineData("Renk (Color)", "Color", 513)]
+    [InlineData("Color", "Color", 513)]
+    [InlineData("Malzeme (Material)", "Material", 513)]
+    [InlineData("Stil (Style)", "Style", 513)]
+    [InlineData("Özel Varyasyon (Custom)", "Custom", 513)]
     [InlineData(null, "Custom", 513)]
     [InlineData("", "Custom", 513)]
     [InlineData("Random Text", "Custom", 513)]
     public void ParseVariationType_CorrectlyIdentifiesPropertyId(string? input, string expectedName, long expectedPropertyId)
     {
-        var (name, propertyId) = FastListingDraftHelper.ParseVariationType(input);
+        var (name, propertyId) = FastListingDraftHelper.ParseVariationType(input, 1);
 
         Assert.Equal(expectedName, name);
         Assert.Equal(expectedPropertyId, propertyId);
+    }
+
+    [Fact]
+    public void ParseVariationType_GroupIndex2_UsesPropertyId514()
+    {
+        var (name, propertyId) = FastListingDraftHelper.ParseVariationType("Color", 2);
+
+        Assert.Equal("Color", name);
+        Assert.Equal(514, propertyId);
     }
 
     [Fact]

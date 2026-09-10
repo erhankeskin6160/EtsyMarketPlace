@@ -17,38 +17,40 @@ public static class FastListingDraftHelper
 
     /// <summary>
     /// Parses variation type dropdown selection or text into Etsy canonical Property Name and Property ID.
-    /// Standard Etsy property IDs:
-    /// Size = 100, Primary Color = 506, Material = 507, Style = 514, Custom = 513.
+    /// In Etsy Open API v3, custom seller-defined variations use reserved property IDs:
+    /// Group 1 = 513, Group 2 = 514. Legacy property ID 100 is deprecated by Etsy.
     /// </summary>
-    public static (string Name, long PropertyId) ParseVariationType(string? selected)
+    public static (string Name, long PropertyId) ParseVariationType(string? selected, int groupIndex = 1)
     {
+        long targetPropertyId = groupIndex == 2 ? 514 : 513;
+
         if (string.IsNullOrWhiteSpace(selected))
         {
-            return ("Custom", 513);
+            return ("Custom", targetPropertyId);
         }
 
         var lower = selected.ToLowerInvariant();
-        if (lower.Contains("boyut") || lower.Contains("size") || lower.Contains("100"))
+        if (lower.Contains("boyut") || lower.Contains("size"))
         {
-            return ("Size", 100);
+            return ("Size", targetPropertyId);
         }
 
-        if (lower.Contains("renk") || lower.Contains("color") || lower.Contains("506"))
+        if (lower.Contains("renk") || lower.Contains("color"))
         {
-            return ("Primary color", 506);
+            return ("Color", targetPropertyId);
         }
 
-        if (lower.Contains("malzeme") || lower.Contains("material") || lower.Contains("507"))
+        if (lower.Contains("malzeme") || lower.Contains("material"))
         {
-            return ("Material", 507);
+            return ("Material", targetPropertyId);
         }
 
-        if (lower.Contains("stil") || lower.Contains("style") || lower.Contains("514"))
+        if (lower.Contains("stil") || lower.Contains("style"))
         {
-            return ("Style", 514);
+            return ("Style", targetPropertyId);
         }
 
-        return ("Custom", 513);
+        return ("Custom", targetPropertyId);
     }
 
     /// <summary>
