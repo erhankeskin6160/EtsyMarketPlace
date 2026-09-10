@@ -12,5 +12,8 @@ public enum EngineCapabilities
     ShadowGeneration = 1 << 3,
     Inpainting = 1 << 4,
     MultipleAspectRatios = 1 << 5,
-    TransparentBackground = 1 << 6
+    TransparentBackground = 1 << 6,
+    BackgroundReplace = 1 << 7,
+    ImageEdit = 1 << 8,
+    DraftAndRefine = 1 << 9
 }

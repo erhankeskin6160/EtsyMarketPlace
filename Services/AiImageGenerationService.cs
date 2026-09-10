@@ -139,6 +139,171 @@ internal sealed class AiImageGenerationService
     }
 
     /// <summary>
+    /// OpenAI /v1/images/edits endpoint'i ile görselin arka planını değiştirir (GPT-Image-2.5 Flare & Sunburst).
+    /// </summary>
+    public static async Task<(bool Success, Bitmap? ResultImage, string ErrorMessage)> EditWithOpenAiAsync(
+        byte[] imageBytes,
+        string prompt,
+        string apiKey,
+        byte[]? maskBytes = null,
+        string model = "gpt-image-2.5-flare",
+        string quality = "high",
+        string size = "2048x2048",
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return (false, null, "OpenAI API Key girmediniz. Lütfen AI Ayarları alanından geçerli bir API Key girin.");
+        }
+
+        if (string.IsNullOrWhiteSpace(prompt))
+        {
+            return (false, null, "Lütfen arka plan için bir sahne promptu girin.");
+        }
+
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            return (false, null, "Düzenlenecek ürün görseli bulunamadı.");
+        }
+
+        try
+        {
+            string actualModel = AiModelNormalizer.NormalizeOpenAiImageModel(model);
+            using var content = new MultipartFormDataContent();
+
+            var imgContent = new ByteArrayContent(imageBytes);
+            imgContent.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
+            content.Add(imgContent, "image", "input.png");
+
+            if (maskBytes != null && maskBytes.Length > 0)
+            {
+                var maskContent = new ByteArrayContent(maskBytes);
+                maskContent.Headers.ContentType = MediaTypeHeaderValue.Parse("image/png");
+                content.Add(maskContent, "mask", "mask.png");
+            }
+
+            content.Add(new StringContent(prompt.Trim()), "prompt");
+            content.Add(new StringContent(actualModel), "model");
+            content.Add(new StringContent(size), "size");
+            content.Add(new StringContent(quality), "quality");
+            content.Add(new StringContent("b64_json"), "response_format");
+
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/edits");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+            request.Content = content;
+
+            using var response = await HttpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                string friendlyMsg = ParseOpenAiError((int)response.StatusCode, body);
+                return (false, null, friendlyMsg);
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("data", out var dataArray) && dataArray.GetArrayLength() > 0)
+            {
+                var firstItem = dataArray[0];
+                if (firstItem.TryGetProperty("b64_json", out var b64Prop))
+                {
+                    byte[] bytes = Convert.FromBase64String(b64Prop.GetString()!);
+                    using var ms = new MemoryStream(bytes);
+                    return (true, new Bitmap(ms), "Başarılı");
+                }
+                else if (firstItem.TryGetProperty("url", out var urlProp))
+                {
+                    var imgUrl = urlProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(imgUrl))
+                    {
+                        var downloadedBytes = await HttpClient.GetByteArrayAsync(imgUrl, cancellationToken);
+                        using var ms = new MemoryStream(downloadedBytes);
+                        return (true, new Bitmap(ms), "Başarılı");
+                    }
+                }
+            }
+
+            return (false, null, "OpenAI yanıt verdi fakat görsel verisi bulunamadı.");
+        }
+        catch (Exception ex)
+        {
+            return (false, null, $"OpenAI Edit Bağlantı Hatası: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Kullanıcının girdiği ham promptu AI (ChatGPT / Gemini) kullanarak profesyonel Etsy e-ticaret fotoğrafçılığı kalıplarına dönüştürür.
+    /// </summary>
+    public static async Task<string> EnhancePromptAsync(
+        string rawPrompt,
+        string productTitle,
+        AiOptimizationSettings aiSettings,
+        CancellationToken cancellationToken = default)
+    {
+        if (aiSettings.IsOffline)
+        {
+            return PromptTipsService.EnhancePromptLocally(rawPrompt, productTitle);
+        }
+
+        try
+        {
+            string systemPrompt = "You are an expert Etsy commercial product photographer. Enhance the given user prompt into an ultra-realistic, commercially appealing background scene prompt. Add professional lighting, depth of field, natural contact shadows, and complementary props. Output ONLY the enhanced English prompt without quotes, markdown, or commentary.";
+            string userPrompt = $"Product: {productTitle}\nUser Idea: {rawPrompt}";
+
+            if (aiSettings.UseGemini && !string.IsNullOrWhiteSpace(aiSettings.GeminiApiKey))
+            {
+                string actualModel = AiModelNormalizer.NormalizeGeminiTextModel(aiSettings.GeminiModel);
+                string url = $"https://generativelanguage.googleapis.com/v1beta/models/{actualModel}:generateContent?key={aiSettings.GeminiApiKey.Trim()}";
+
+                using var request = new HttpRequestMessage(HttpMethod.Post, url);
+                var payload = new
+                {
+                    system_instruction = new { parts = new[] { new { text = systemPrompt } } },
+                    contents = new[] { new { parts = new[] { new { text = userPrompt } } } },
+                    generationConfig = new { temperature = 0.7 }
+                };
+                request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var resp = await HttpClient.SendAsync(request, cancellationToken);
+                if (resp.IsSuccessStatusCode)
+                {
+                    var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+                    var text = ExtractTextFromGeminiResponse(body);
+                    if (!string.IsNullOrWhiteSpace(text)) return text.Trim();
+                }
+            }
+            else if (aiSettings.UseOpenAi && !string.IsNullOrWhiteSpace(aiSettings.OpenAiApiKey))
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", aiSettings.OpenAiApiKey.Trim());
+                var payload = new
+                {
+                    model = string.IsNullOrWhiteSpace(aiSettings.OpenAiModel) ? "gpt-4o" : aiSettings.OpenAiModel.Trim(),
+                    messages = new object[]
+                    {
+                        new { role = "system", content = systemPrompt },
+                        new { role = "user", content = userPrompt }
+                    },
+                    temperature = 0.7
+                };
+                request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                using var resp = await HttpClient.SendAsync(request, cancellationToken);
+                if (resp.IsSuccessStatusCode)
+                {
+                    var body = await resp.Content.ReadAsStringAsync(cancellationToken);
+                    var text = ExtractTextFromOpenAiResponse(body);
+                    if (!string.IsNullOrWhiteSpace(text)) return text.Trim();
+                }
+            }
+        }
+        catch
+        {
+            // fallback to local enhancement
+        }
+
+        return PromptTipsService.EnhancePromptLocally(rawPrompt, productTitle);
+    }
+
+    /// <summary>
     /// Google Gemini Imagen 3 API üzerinden görsel üretir.
     /// </summary>
     public static async Task<(bool Success, Bitmap? ResultImage, string ErrorMessage)> GenerateWithGeminiImagenAsync(

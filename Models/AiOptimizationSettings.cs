@@ -8,7 +8,9 @@ internal sealed class AiOptimizationSettings
     public string Provider { get; set; } = "Offline";
     public string OpenAiApiKey { get; set; } = "";
     public string OpenAiModel { get; set; } = "gpt-4o";
-    public string OpenAiImageModel { get; set; } = "dall-e-3";
+    public string OpenAiImageModel { get; set; } = "gpt-image-2.5-flare";
+    public string OpenAiImageEditModel { get; set; } = "gpt-image-2.5-flare";
+    public string OpenAiImageQuality { get; set; } = "high";
     public string GeminiApiKey { get; set; } = "";
     public string GeminiModel { get; set; } = "gemini-2.5-flash";
     public string GeminiImageModel { get; set; } = "gemini-2.5-flash-image";

@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using SimilarProductsWinForms.Studio.Core;
 using SimilarProductsWinForms.Studio.Services;
+using SimilarProductsWinForms.Services;
 
 public sealed class OpenAiImageEngine : IAiImageEngine
 {
@@ -18,11 +19,14 @@ public sealed class OpenAiImageEngine : IAiImageEngine
     private const string ApiEndpoint = "https://api.openai.com/v1/images/generations";
 
     public string EngineId => "openai";
-    public string DisplayName => "OpenAI (GPT Image 2 & DALL-E 3)";
-    public string Description => "En yüksek görsel muhakeme kabiliyeti, mükemmel tipografi ve sıfırdan e-ticaret sahneleri.";
+    public string DisplayName => "OpenAI (GPT Image 2.5 & DALL-E 3)";
+    public string Description => "En yüksek görsel muhakeme kabiliyeti, milimetrik arka plan düzenleme ve sıfırdan e-ticaret sahneleri.";
 
     public EngineCapabilities Capabilities =>
         EngineCapabilities.TextToImage |
+        EngineCapabilities.BackgroundReplace |
+        EngineCapabilities.ImageEdit |
+        EngineCapabilities.DraftAndRefine |
         EngineCapabilities.TransparentBackground |
         EngineCapabilities.MultipleAspectRatios;
 
@@ -39,13 +43,7 @@ public sealed class OpenAiImageEngine : IAiImageEngine
             return ImageEngineResult.Fail("OpenAI API Key girilmedi. Lütfen 'Key Yapılandır' butonu ile anahtarınızı kaydedin.", DisplayName);
         }
 
-        string model = string.IsNullOrWhiteSpace(request.ModelName) ? "gpt-image-2" : request.ModelName.Trim();
-        if (model.Contains("gpt-image", StringComparison.OrdinalIgnoreCase))
-        {
-            // Normalize to official generation model
-            model = "dall-e-3";
-        }
-
+        string model = string.IsNullOrWhiteSpace(request.ModelName) ? "gpt-image-2.5-flare" : request.ModelName.Trim();
         string basePrompt = request.Prompt.Trim();
         if (string.IsNullOrWhiteSpace(basePrompt))
         {
@@ -57,6 +55,43 @@ public sealed class OpenAiImageEngine : IAiImageEngine
             request.LightingPreset,
             request.CameraAnglePreset,
             "");
+
+        // 🎨 Arka Plan Düzenleme / Edit Modu (Eğer girdi görseli varsa veya EditMode belirtilmişse)
+        bool isEditMode = request.EditMode == "edit" || request.EditMode == "bg_replace" || (request.InputImage != null && request.PreserveProduct);
+        if (isEditMode && request.InputImage != null)
+        {
+            var editSw = Stopwatch.StartNew();
+            using var msInput = new MemoryStream();
+            request.InputImage.Save(msInput, System.Drawing.Imaging.ImageFormat.Png);
+            byte[] inputBytes = msInput.ToArray();
+
+            string editModel = model.Contains("sunburst") ? "gpt-image-2.5-sunburst" : "gpt-image-2.5-flare";
+            string quality = string.IsNullOrWhiteSpace(request.QualityTier) ? "high" : request.QualityTier;
+
+            var (editSuccess, editImg, editErr) = await AiImageGenerationService.EditWithOpenAiAsync(
+                inputBytes,
+                finalPrompt,
+                apiKey,
+                request.MaskBytes,
+                editModel,
+                quality,
+                "2048x2048",
+                cancellationToken);
+
+            editSw.Stop();
+            if (editSuccess && editImg != null)
+            {
+                return ImageEngineResult.Ok(editImg, DisplayName, editModel, editSw.ElapsedMilliseconds);
+            }
+
+            return ImageEngineResult.Fail(editErr, DisplayName);
+        }
+
+        if (model.Contains("gpt-image-2") && !model.Contains("2.5"))
+        {
+            // Normalize legacy
+            model = "gpt-image-2.5-flare";
+        }
 
         if (request.TransparentBackground)
         {

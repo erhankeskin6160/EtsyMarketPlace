@@ -72,13 +72,17 @@ internal static class AiModelNormalizer
 
     public static string NormalizeOpenAiImageModel(string? model)
     {
-        if (string.IsNullOrWhiteSpace(model)) return "dall-e-3";
+        if (string.IsNullOrWhiteSpace(model)) return "gpt-image-2.5-flare";
 
         var clean = model.Trim().ToLowerInvariant();
+        if (clean.Contains("sunburst")) return "gpt-image-2.5-sunburst";
+        if (clean.Contains("flare")) return "gpt-image-2.5-flare";
+        if (clean.Contains("gpt-image-2.5")) return "gpt-image-2.5-flare";
+        if (clean.Contains("gpt-image-2")) return "gpt-image-2";
         if (clean.Contains("dall-e-3") || clean.Contains("dalle-3") || clean.Contains("dall-e 3")) return "dall-e-3";
         if (clean.Contains("dall-e-2") || clean.Contains("dalle-2")) return "dall-e-2";
 
-        return clean.StartsWith("dall-e") ? clean : "dall-e-3";
+        return clean.StartsWith("gpt-image") || clean.StartsWith("dall-e") ? clean : "gpt-image-2.5-flare";
     }
 
     public static string NormalizeClaudeTextModel(string? model)

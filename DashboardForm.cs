@@ -1110,6 +1110,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("fast_creator", "Hızlı Ürün Ekle (AI)", "⚡", "Genel", "YENİ");
         _sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel");
         _sidebarNav.AddItem("ai_image", "AI Görsel Studio", "🖼️", "Genel", "YENİ");
+        _sidebarNav.AddItem("bg_editor", "AI Arka Plan Stüdyosu", "🌄", "Genel", "GPT-2.5");
         _sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
         _sidebarNav.AddItem("research", "Pazar Araştırması", "🔍", "Araştırma & Analiz");
@@ -1234,6 +1235,7 @@ internal sealed class DashboardForm : Form
             "fast_creator" => new FastListingCreatorForm(_aiListingOptimizer),
             "creator" => new ProductDiscoveryListingCreatorForm(_aiListingOptimizer, historyService: _optimizationHistoryService),
             "ai_image" => new AiListingImageForm(_aiListingOptimizer),
+            "bg_editor" => new BackgroundEditorForm(),
             "shop" => new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService, _aiListingOptimizer, _optimizationHistoryService),
             "research" => new MarketResearchForm(_keywordUseCase, _trackingService, _optimizationHistoryService, _aiListingOptimizer),
             "competitor_spy" => new CompetitorAndTrendSpyForm(_aiListingOptimizer),

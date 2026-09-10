@@ -8,6 +8,9 @@ using System.Drawing;
 public sealed class ImageEngineRequest
 {
     public Bitmap? InputImage { get; set; }
+    public byte[]? MaskBytes { get; set; }
+    public string EditMode { get; set; } = "generate"; // "generate", "edit", "bg_replace"
+    public string QualityTier { get; set; } = "high"; // "low", "medium", "high", "xhigh", "max"
     public string Prompt { get; set; } = string.Empty;
     public string NegativePrompt { get; set; } = string.Empty;
     public string ModelName { get; set; } = string.Empty;

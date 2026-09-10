@@ -224,6 +224,35 @@ internal sealed class AiListingImageForm : Form
         _btnModeAfterOnly.Height = 32;
         _btnModeAfterOnly.Click += (_, _) => SetComparisonMode(ImageComparisonMode.AfterOnly);
         modeStack.Controls.Add(_btnModeAfterOnly);
+
+        var btnOpenBgEditor = new Button
+        {
+            Text = "🌄 Arka Plan Stüdyosu",
+            Height = 32,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(79, 70, 229),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        btnOpenBgEditor.FlatAppearance.BorderSize = 0;
+        btnOpenBgEditor.Click += (_, _) =>
+        {
+            string? tempPath = null;
+            if (_sessionManager.OriginalBitmap != null)
+            {
+                tempPath = Path.Combine(Path.GetTempPath(), $"studio_transfer_{Guid.NewGuid():N}.png");
+                _sessionManager.OriginalBitmap.Save(tempPath, System.Drawing.Imaging.ImageFormat.Png);
+            }
+            using var editor = new BackgroundEditorForm(_apiClient, _aiSettings, tempPath, _targetListingId);
+            editor.ShowDialog(this);
+            if (tempPath != null && File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { }
+            }
+        };
+        modeStack.Controls.Add(btnOpenBgEditor);
         header.Controls.Add(modeStack, 1, 0);
 
         // AI Engine Status Badge
