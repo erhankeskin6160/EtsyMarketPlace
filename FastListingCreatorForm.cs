@@ -2547,13 +2547,33 @@ internal sealed class FastListingCreatorForm : Form
                 }
             }
 
-            _statusLabel.Text = $"Listeleme başarıyla oluşturuldu! (#{created.ListingId})";
+            // D. Activate Listing if requested
+            bool isActuallyActive = false;
+            if (_chkMakeActive.Checked)
+            {
+                _statusLabel.Text = "Listeleme canlı yayına alınıyor (Aktif yapılıyor)...";
+                try
+                {
+                    await _apiClient.UpdateOwnShopListingStateAsync(settings, created.ListingId, "active");
+                    EtsyApiSettingsStore.Save(settings);
+                    isActuallyActive = true;
+                }
+                catch (Exception stateEx)
+                {
+                    MessageBox.Show(this, $"Listeleme ve görseller başarıyla yüklendi fakat canlı yayına alınırken Etsy hata verdi (Ürün taslak olarak kaydedildi):\n{stateEx.Message}", "Yayınlama Uyarısı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+
+            _statusLabel.Text = isActuallyActive
+                ? $"Listeleme başarıyla oluşturuldu ve CANLI YAYINA ALINDI! (#{created.ListingId})"
+                : $"Listeleme başarıyla TASLAK olarak oluşturuldu! (#{created.ListingId})";
 
             var openPrompt = MessageBox.Show(
                 this,
                 $"🎉 Tebrikler! Ürününüz Etsy'de başarıyla oluşturuldu!\n\n" +
                 $"Listing ID: #{created.ListingId}\n" +
-                $"Görsel Sayısı: {_galleryImagePaths.Count}\n\n" +
+                $"Görsel Sayısı: {_galleryImagePaths.Count}\n" +
+                $"Yayın Durumu: {(isActuallyActive ? "🚀 CANLI YAYINDA (Active)" : "💾 TASLAK (Draft)")}\n\n" +
                 $"Etsy sayfasını tarayıcıda açmak ister misiniz?",
                 "Listeleme Başarılı",
                 MessageBoxButtons.YesNo,

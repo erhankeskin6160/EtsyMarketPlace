@@ -566,6 +566,36 @@ internal sealed class EtsyApiClient
         }
     }
 
+    public async Task UpdateOwnShopListingStateAsync(
+        EtsyApiSettings settings,
+        long listingId,
+        string state,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        if (listingId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(listingId), "Gecerli bir listing kimligi gerekli.");
+        }
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("state", state.Trim().ToLowerInvariant())
+        };
+
+        using var request = CreateRequest(settings, HttpMethod.Patch, $"{BaseUrl}/shops/{shopId}/listings/{listingId}", useAccessToken: true);
+        request.Content = new FormUrlEncodedContent(form);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Listing durumu '{state}' olarak guncellenemedi. HTTP {(int)response.StatusCode}: {body}");
+        }
+    }
+
     public async Task UploadOwnShopListingImageAsync(
         EtsyApiSettings settings,
         long listingId,
