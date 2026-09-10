@@ -27,7 +27,7 @@ internal sealed class FastListingCreatorForm : Form
 
     // Left Column Controls (Product & SEO)
     private readonly ComboBox _cboListingType = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly TextBox _txtTitle = new() { MaxLength = 140 };
+    private readonly TextBox _txtTitle = new() { MaxLength = 140, Multiline = true };
     private readonly Label _lblTitleCounter = new() { AutoSize = true };
     private readonly NumericUpDown _numPrice = new() { Minimum = 0.20m, Maximum = 50000m, DecimalPlaces = 2, Value = 29.99m };
     private readonly NumericUpDown _numQuantity = new() { Minimum = 1, Maximum = 9999, Value = 10 };
@@ -35,10 +35,10 @@ internal sealed class FastListingCreatorForm : Form
     private readonly TextBox _txtCustomTaxonomy = new() { Text = "1239" };
     private readonly ComboBox _cboShippingProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _cboReadinessState = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly TextBox _txtTags = new() { Multiline = true, Height = 64, ScrollBars = ScrollBars.Vertical };
+    private readonly TextBox _txtTags = new() { Multiline = true, Height = 68, ScrollBars = ScrollBars.Vertical };
     private readonly Label _lblTagCounter = new() { AutoSize = true };
     private readonly Label _lblTagStatus = new() { AutoSize = true };
-    private readonly TextBox _txtDescription = new() { Multiline = true, Height = 120, ScrollBars = ScrollBars.Vertical };
+    private readonly TextBox _txtDescription = new() { Multiline = true, Height = 175, ScrollBars = ScrollBars.Vertical };
     private readonly TextBox _txtMaterials = new() { Height = 26 };
 
     // Template Toolbar Controls
@@ -361,21 +361,76 @@ internal sealed class FastListingCreatorForm : Form
 
     private Control BuildLeftColumn()
     {
-        var grp = new GroupBox
+        var card = new ModernCardPanel
         {
-            Text = "1. Ürün & SEO Bilgileri",
-            Font = new Font("Segoe UI Semibold", 9.5F),
-            ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
-            Padding = new Padding(8, 6, 8, 8),
+            CornerRadius = 12,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+            Padding = new Padding(12, 10, 12, 10),
             Margin = new Padding(0, 0, 5, 0)
         };
 
+        var cardLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3
+        };
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Header Bar
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 6));  // Divider Space
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Scrollable Form Content
+
+        // 1. Header Bar with Title and Badge
+        var headerBar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            Margin = new Padding(0)
+        };
+        headerBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        headerBar.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var lblTitle = new Label
+        {
+            Text = "📝 1. Ürün & SEO Bilgileri",
+            Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
+            ForeColor = UiStyle.TextDark,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            UseMnemonic = false
+        };
+        headerBar.Controls.Add(lblTitle, 0, 0);
+
+        var lblAiBadge = new Label
+        {
+            Text = "✨ AI Destekli",
+            Font = new Font("Segoe UI Semibold", 7.5F),
+            ForeColor = Color.FromArgb(196, 181, 253),
+            BackColor = Color.FromArgb(46, 32, 70),
+            AutoSize = true,
+            Padding = new Padding(7, 3, 7, 3),
+            Margin = new Padding(0, 4, 0, 0),
+            TextAlign = ContentAlignment.MiddleCenter
+        };
+        headerBar.Controls.Add(lblAiBadge, 1, 0);
+        cardLayout.Controls.Add(headerBar, 0, 0);
+
+        // Subtle Divider Line
+        var divider = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 1,
+            BackColor = UiStyle.BorderColor,
+            Margin = new Padding(0, 2, 0, 3)
+        };
+        cardLayout.Controls.Add(divider, 0, 1);
+
+        // 2. Scrollable Body
         var scrollContainer = new Panel
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
-            Padding = new Padding(0, 0, 6, 0)
+            Padding = new Padding(0, 2, 6, 0)
         };
 
         var stack = new TableLayoutPanel
@@ -383,21 +438,25 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             ColumnCount = 1,
             AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0)
         };
 
-        // 1. Temel Bilgiler (Ürün Tipi, Fiyat, Stok)
+        // --- SECTION 1: Temel Satış Bilgileri (Ürün Tipi, Fiyat, Stok) ---
+        stack.Controls.Add(CreateSectionHeaderLabel("🏷️ Temel Satış Bilgileri"));
+
         var topRow = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 3,
-            Height = 56,
-            Margin = new Padding(0, 0, 0, 4)
+            Height = 58,
+            Margin = new Padding(0, 0, 0, 8)
         };
-        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
-        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 31));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 31));
 
+        _cboListingType.Items.Clear();
         _cboListingType.Items.AddRange(["Fiziksel Ürün", "Dijital Ürün"]);
         _cboListingType.SelectedIndex = 0;
         _cboListingType.Dock = DockStyle.Fill;
@@ -409,64 +468,74 @@ internal sealed class FastListingCreatorForm : Form
 
         _numQuantity.Dock = DockStyle.Fill;
         _numQuantity.Font = new Font("Segoe UI Semibold", 9F);
-        topRow.Controls.Add(CreateLabeledControl("Stok:", _numQuantity), 2, 0);
+        topRow.Controls.Add(CreateLabeledControl("Stok Adedi:", _numQuantity), 2, 0);
         stack.Controls.Add(topRow);
 
-        // 2. Başlık & AI Öneri
-        var titleContainer = new Panel
+        // --- SECTION 2: Etsy SEO Başlığı ---
+        var titleHeader = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 68,
-            Margin = new Padding(0, 2, 0, 4)
+            ColumnCount = 3,
+            Height = 28,
+            Margin = new Padding(0, 2, 0, 2)
         };
-        var titleHeader = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 26,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false
-        };
-        titleHeader.Controls.Add(new Label { Text = "Ürün Başlığı (Etsy): ", AutoSize = true, Font = new Font("Segoe UI Semibold", 8.5F), Margin = new Padding(0, 2, 0, 0) });
+        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var lblTitleSec = CreateSectionHeaderLabel("✍️ Ürün Başlığı (Etsy SEO)");
+        lblTitleSec.Margin = new Padding(0, 4, 0, 0);
+        titleHeader.Controls.Add(lblTitleSec, 0, 0);
+
         _lblTitleCounter.Text = "0 / 140";
-        _lblTitleCounter.Font = new Font("Segoe UI", 8F);
+        _lblTitleCounter.Font = new Font("Segoe UI Semibold", 8F);
         _lblTitleCounter.ForeColor = UiStyle.TextMuted;
-        _lblTitleCounter.Margin = new Padding(0, 3, 0, 0);
-        titleHeader.Controls.Add(_lblTitleCounter);
+        _lblTitleCounter.AutoSize = true;
+        _lblTitleCounter.Margin = new Padding(0, 6, 6, 0);
+        titleHeader.Controls.Add(_lblTitleCounter, 1, 0);
 
-        var btnAiTitle = new Button
-        {
-            Text = "✨ AI Başlık Öner",
-            Font = new Font("Segoe UI", 8F),
-            Height = 24,
-            AutoSize = true,
-            BackColor = UiStyle.AiColor,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Margin = new Padding(12, 0, 0, 0),
-        };
-        btnAiTitle.FlatAppearance.BorderSize = 0;
+        var btnAiTitle = CreateModernActionButton("✨ AI Başlık Öner", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
         btnAiTitle.Click += async (_, _) => await SuggestAiTitleAsync();
-        titleHeader.Controls.Add(btnAiTitle);
+        titleHeader.Controls.Add(btnAiTitle, 2, 0);
+        stack.Controls.Add(titleHeader);
 
-        _txtTitle.Dock = DockStyle.Bottom;
-        _txtTitle.Font = new Font("Segoe UI", 9.5F);
-        titleContainer.Controls.Add(titleHeader);
-        titleContainer.Controls.Add(_txtTitle);
-        stack.Controls.Add(titleContainer);
+        _txtTitle.Multiline = true;
+        _txtTitle.Height = 50;
+        _txtTitle.Font = new Font("Segoe UI", 9F);
+        _txtTitle.ScrollBars = ScrollBars.None;
+        _txtTitle.Dock = DockStyle.Top;
+        _txtTitle.Margin = new Padding(0, 0, 0, 2);
+        stack.Controls.Add(_txtTitle);
 
-        // 3. Kategori & Taxonomy
+        var lblTitleHint = new Label
+        {
+            Text = "💡 80-140 karakter arası başlıklar Etsy SEO aramalarında en yüksek performansı verir.",
+            Font = new Font("Segoe UI", 7.5F),
+            ForeColor = UiStyle.TextMuted,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            UseMnemonic = false,
+            Margin = new Padding(1, 0, 0, 8)
+        };
+        stack.Controls.Add(lblTitleHint);
+
+        // --- SECTION 3: Kategori & Kargo Ayarları ---
+        var sec3Header = CreateSectionHeaderLabel("📂 Kategori & Kargo Ayarları");
+        sec3Header.Margin = new Padding(0, 2, 0, 2);
+        stack.Controls.Add(sec3Header);
+
         var catRow = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 2,
             Height = 56,
-            Margin = new Padding(0, 2, 0, 4)
+            Margin = new Padding(0, 0, 0, 4)
         };
         catRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
         catRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
 
         _cboTaxonomy.Dock = DockStyle.Fill;
+        _cboTaxonomy.Items.Clear();
         _cboTaxonomy.Items.AddRange([
             "1239 - Art & Collectibles / 3D Printed",
             "1053 - Home & Living / Home Decor",
@@ -479,8 +548,9 @@ internal sealed class FastListingCreatorForm : Form
         _cboTaxonomy.SelectedIndex = 0;
         _cboTaxonomy.SelectedIndexChanged += (_, _) =>
         {
-            _txtCustomTaxonomy.Visible = _cboTaxonomy.SelectedIndex == _cboTaxonomy.Items.Count - 1;
-            if (_cboTaxonomy.SelectedIndex != _cboTaxonomy.Items.Count - 1)
+            bool isCustom = _cboTaxonomy.SelectedIndex == _cboTaxonomy.Items.Count - 1;
+            _txtCustomTaxonomy.ReadOnly = !isCustom;
+            if (!isCustom)
             {
                 var selected = _cboTaxonomy.SelectedItem?.ToString() ?? "";
                 var idStr = selected.Split('-')[0].Trim();
@@ -490,143 +560,162 @@ internal sealed class FastListingCreatorForm : Form
 
         catRow.Controls.Add(CreateLabeledControl("Kategori / Taxonomy:", _cboTaxonomy), 0, 0);
         _txtCustomTaxonomy.Dock = DockStyle.Fill;
+        _txtCustomTaxonomy.ReadOnly = true;
         catRow.Controls.Add(CreateLabeledControl("Taxonomy ID:", _txtCustomTaxonomy), 1, 0);
         stack.Controls.Add(catRow);
 
-        // 4. Kargo & Hazırlık Durumu (Shipping & Readiness State)
         var shipRow = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 2,
             Height = 56,
-            Margin = new Padding(0, 2, 0, 4)
+            Margin = new Padding(0, 0, 0, 8)
         };
         shipRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
         shipRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
 
         _cboShippingProfile.Dock = DockStyle.Fill;
         _cboShippingProfile.DisplayMember = nameof(EtsyShippingProfileOption.DisplayName);
-        shipRow.Controls.Add(CreateLabeledControl("Kargo Profili (Shipping Profile):", _cboShippingProfile), 0, 0);
+        shipRow.Controls.Add(CreateLabeledControl("🚚 Kargo Profili:", _cboShippingProfile), 0, 0);
 
         _cboReadinessState.Dock = DockStyle.Fill;
         _cboReadinessState.DisplayMember = nameof(EtsyReadinessStateOption.DisplayName);
-        shipRow.Controls.Add(CreateLabeledControl("Hazırlık Durumu (Readiness State):", _cboReadinessState), 1, 0);
+        shipRow.Controls.Add(CreateLabeledControl("⏱️ Hazırlık Durumu:", _cboReadinessState), 1, 0);
         stack.Controls.Add(shipRow);
 
-        // 5. Etiketler (Tags)
-        var tagContainer = new Panel
+        // --- SECTION 4: Arama Etiketleri (Tags - Maks 13) ---
+        var tagHeader = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 126,
-            Margin = new Padding(0, 2, 0, 4)
+            ColumnCount = 4,
+            Height = 28,
+            Margin = new Padding(0, 2, 0, 2)
         };
-        var tagHeader = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 26,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false
-        };
-        tagHeader.Controls.Add(new Label { Text = "Etiketler (Maks 13): ", AutoSize = true, Font = new Font("Segoe UI Semibold", 8.5F), Margin = new Padding(0, 2, 0, 0) });
+        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var lblTagSec = CreateSectionHeaderLabel("🏷️ Etiketler (Tags)");
+        lblTagSec.Margin = new Padding(0, 4, 0, 0);
+        tagHeader.Controls.Add(lblTagSec, 0, 0);
+
         _lblTagCounter.Text = "0 / 13";
-        _lblTagCounter.Font = new Font("Segoe UI", 8F);
+        _lblTagCounter.Font = new Font("Segoe UI Semibold", 8F);
         _lblTagCounter.ForeColor = UiStyle.TextMuted;
-        _lblTagCounter.Margin = new Padding(0, 3, 0, 0);
-        tagHeader.Controls.Add(_lblTagCounter);
+        _lblTagCounter.AutoSize = true;
+        _lblTagCounter.Margin = new Padding(0, 6, 6, 0);
+        tagHeader.Controls.Add(_lblTagCounter, 1, 0);
 
-        var btnAiTags = new Button
-        {
-            Text = "✨ 13 AI Tag",
-            Font = new Font("Segoe UI", 8F),
-            Height = 24,
-            AutoSize = true,
-            BackColor = UiStyle.AiColor,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Margin = new Padding(8, 0, 0, 0),
-        };
-        btnAiTags.FlatAppearance.BorderSize = 0;
+        var btnAiTags = CreateModernActionButton("✨ 13 AI Tag", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
         btnAiTags.Click += async (_, _) => await SuggestAiTagsAsync();
-        tagHeader.Controls.Add(btnAiTags);
+        tagHeader.Controls.Add(btnAiTags, 2, 0);
 
-        var btnCleanTags = new Button
-        {
-            Text = "🧹 Kırp & Düzelt",
-            Font = new Font("Segoe UI", 8F),
-            Height = 24,
-            AutoSize = true,
-            BackColor = UiStyle.SecondaryColor,
-            ForeColor = UiStyle.TextDark,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Margin = new Padding(6, 0, 0, 0),
-        };
+        var btnCleanTags = CreateModernActionButton("🧹 Kırp & Düzelt", UiStyle.SecondaryColor, UiStyle.SecondaryHover, UiStyle.TextDark, 26);
+        btnCleanTags.FlatAppearance.BorderSize = 1;
         btnCleanTags.FlatAppearance.BorderColor = UiStyle.BorderColor;
         btnCleanTags.Click += (_, _) => CleanAndFormatTags();
-        tagHeader.Controls.Add(btnCleanTags);
+        tagHeader.Controls.Add(btnCleanTags, 3, 0);
+        stack.Controls.Add(tagHeader);
 
         _txtTags.Dock = DockStyle.Top;
-        _txtTags.Height = 64;
+        _txtTags.Height = 68;
         _txtTags.Font = new Font("Segoe UI", 9F);
+        _txtTags.Margin = new Padding(0, 0, 0, 2);
+        stack.Controls.Add(_txtTags);
 
-        _lblTagStatus.Dock = DockStyle.Bottom;
+        var tagStatusPanel = new Panel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(8, 5, 8, 5),
+            Margin = new Padding(0, 2, 0, 2),
+            BackColor = Color.FromArgb(24, 32, 47)
+        };
+        _lblTagStatus.Dock = DockStyle.Fill;
         _lblTagStatus.Font = new Font("Segoe UI", 8F);
         _lblTagStatus.ForeColor = UiStyle.TextMuted;
+        _lblTagStatus.UseMnemonic = false;
         _lblTagStatus.Text = "Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.";
+        tagStatusPanel.Controls.Add(_lblTagStatus);
+        stack.Controls.Add(tagStatusPanel);
 
-        tagContainer.Controls.Add(_lblTagStatus);
-        tagContainer.Controls.Add(_txtTags);
-        tagContainer.Controls.Add(tagHeader);
-        stack.Controls.Add(tagContainer);
-
-        // 6. Ürün Açıklaması
-        var descContainer = new Panel
+        var lblTagHint = new Label
         {
+            Text = "💡 Her etiket maksimum 20 karakterdir. Virgülle veya yeni satırla ayırabilirsiniz.",
+            Font = new Font("Segoe UI", 7.5F),
+            ForeColor = UiStyle.TextMuted,
             Dock = DockStyle.Top,
-            Height = 160,
-            Margin = new Padding(0, 2, 0, 4)
-        };
-        var descHeader = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            Height = 26,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false
-        };
-        descHeader.Controls.Add(new Label { Text = "Ürün Açıklaması: ", AutoSize = true, Font = new Font("Segoe UI Semibold", 8.5F), Margin = new Padding(0, 2, 0, 0) });
-
-        var btnAiDesc = new Button
-        {
-            Text = "✨ AI Açıklama Üret",
-            Font = new Font("Segoe UI", 8F),
-            Height = 24,
             AutoSize = true,
-            BackColor = UiStyle.AiColor,
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Margin = new Padding(8, 0, 0, 0),
+            UseMnemonic = false,
+            Margin = new Padding(1, 0, 0, 8)
         };
-        btnAiDesc.FlatAppearance.BorderSize = 0;
+        stack.Controls.Add(lblTagHint);
+
+        // --- SECTION 5: Ürün Açıklaması ---
+        var descHeader = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            ColumnCount = 2,
+            Height = 28,
+            Margin = new Padding(0, 2, 0, 2)
+        };
+        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+
+        var lblDescSec = CreateSectionHeaderLabel("📄 Ürün Açıklaması (Description)");
+        lblDescSec.Margin = new Padding(0, 4, 0, 0);
+        descHeader.Controls.Add(lblDescSec, 0, 0);
+
+        var btnAiDesc = CreateModernActionButton("✨ AI Açıklama Üret", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
         btnAiDesc.Click += async (_, _) => await SuggestAiDescriptionAsync();
-        descHeader.Controls.Add(btnAiDesc);
+        descHeader.Controls.Add(btnAiDesc, 1, 0);
+        stack.Controls.Add(descHeader);
 
-        _txtDescription.Dock = DockStyle.Bottom;
+        _txtDescription.Dock = DockStyle.Top;
+        _txtDescription.Height = 175;
         _txtDescription.Font = new Font("Segoe UI", 9F);
-        descContainer.Controls.Add(descHeader);
-        descContainer.Controls.Add(_txtDescription);
-        stack.Controls.Add(descContainer);
+        _txtDescription.Margin = new Padding(0, 0, 0, 2);
+        stack.Controls.Add(_txtDescription);
 
-        // 7. Malzemeler
-        _txtMaterials.Dock = DockStyle.Fill;
-        var matPanel = CreateLabeledControl("Kullanılan Malzemeler (Virgülle ayırın):", _txtMaterials);
-        matPanel.Margin = new Padding(0, 2, 0, 8);
-        stack.Controls.Add(matPanel);
+        var lblDescHint = new Label
+        {
+            Text = "💡 Hikaye, ölçüler, bakım talimatları ve kutu içeriği gibi alıcı sorularını yanıtlayın.",
+            Font = new Font("Segoe UI", 7.5F),
+            ForeColor = UiStyle.TextMuted,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            UseMnemonic = false,
+            Margin = new Padding(1, 0, 0, 8)
+        };
+        stack.Controls.Add(lblDescHint);
+
+        // --- SECTION 6: Kullanılan Malzemeler ---
+        var sec6Header = CreateSectionHeaderLabel("🧵 Kullanılan Malzemeler (Materials)");
+        sec6Header.Margin = new Padding(0, 2, 0, 2);
+        stack.Controls.Add(sec6Header);
+
+        _txtMaterials.Dock = DockStyle.Top;
+        _txtMaterials.Font = new Font("Segoe UI", 9F);
+        _txtMaterials.Margin = new Padding(0, 0, 0, 2);
+        stack.Controls.Add(_txtMaterials);
+
+        var lblMatHint = new Label
+        {
+            Text = "💡 Etsy filtreleri için virgülle ayırarak yazın (ör: Hakiki Deri, Pirinç Toka, Mumlu İp).",
+            Font = new Font("Segoe UI", 7.5F),
+            ForeColor = UiStyle.TextMuted,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            UseMnemonic = false,
+            Margin = new Padding(1, 0, 0, 12)
+        };
+        stack.Controls.Add(lblMatHint);
 
         scrollContainer.Controls.Add(stack);
-        grp.Controls.Add(scrollContainer);
-        return grp;
+        cardLayout.Controls.Add(scrollContainer, 0, 2);
+        card.Controls.Add(cardLayout);
+        return card;
     }
 
     private Control BuildCenterColumn()
@@ -1195,17 +1284,19 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             RowCount = 2,
             AutoSize = true,
-            Margin = new Padding(0, 2, 0, 2)
+            Margin = new Padding(0, 1, 0, 2)
         };
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
 
         panel.Controls.Add(new Label
         {
             Text = labelText,
             Font = new Font("Segoe UI Semibold", 8.5F),
             ForeColor = UiStyle.TextDark,
-            Dock = DockStyle.Fill
+            Dock = DockStyle.Fill,
+            UseMnemonic = false,
+            TextAlign = ContentAlignment.BottomLeft
         }, 0, 0);
 
         control.Dock = DockStyle.Fill;
@@ -1213,10 +1304,60 @@ internal sealed class FastListingCreatorForm : Form
         return panel;
     }
 
+    private static Label CreateSectionHeaderLabel(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            ForeColor = UiStyle.TextDark,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            UseMnemonic = false,
+            Margin = new Padding(0, 6, 0, 3)
+        };
+    }
+
+    private static Button CreateModernActionButton(string text, Color backColor, Color hoverColor, Color foreColor, int height = 26)
+    {
+        var btn = new Button
+        {
+            Text = text,
+            Font = new Font("Segoe UI Semibold", 8F),
+            Height = height,
+            AutoSize = true,
+            BackColor = backColor,
+            ForeColor = foreColor,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(4, 0, 0, 0),
+            Padding = new Padding(8, 0, 8, 0)
+        };
+        btn.FlatAppearance.BorderSize = 0;
+        btn.MouseEnter += (_, _) => btn.BackColor = hoverColor;
+        btn.MouseLeave += (_, _) => btn.BackColor = backColor;
+        return btn;
+    }
+
     private void WireEvents()
     {
+        _txtTitle.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+            }
+        };
+
         _txtTitle.TextChanged += (_, _) =>
         {
+            if (_txtTitle.Text.Contains('\n') || _txtTitle.Text.Contains('\r'))
+            {
+                var caret = _txtTitle.SelectionStart;
+                _txtTitle.Text = _txtTitle.Text.Replace("\r", "").Replace("\n", " ");
+                _txtTitle.SelectionStart = Math.Min(caret, _txtTitle.Text.Length);
+            }
+
             var len = _txtTitle.Text.Length;
             _lblTitleCounter.Text = $"{len} / 140";
             _lblTitleCounter.ForeColor = len >= 80 && len <= 140 ? UiStyle.SuccessColor : len > 140 ? UiStyle.DangerColor : UiStyle.TextMuted;
