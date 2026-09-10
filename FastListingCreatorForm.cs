@@ -26,15 +26,15 @@ internal sealed class FastListingCreatorForm : Form
     private readonly ToolTip _galleryToolTip = new() { AutoPopDelay = 4000, InitialDelay = 250 };
 
     // Left Column Controls (Product & SEO)
-    private readonly ComboBox _cboListingType = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _cboListingType = new();
     private readonly TextBox _txtTitle = new() { MaxLength = 140, Multiline = true };
     private readonly Label _lblTitleCounter = new() { AutoSize = true };
-    private readonly NumericUpDown _numPrice = new() { Minimum = 0.20m, Maximum = 50000m, DecimalPlaces = 2, Value = 29.99m };
-    private readonly NumericUpDown _numQuantity = new() { Minimum = 1, Maximum = 9999, Value = 10 };
-    private readonly ComboBox _cboTaxonomy = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernNumericUpDown _numPrice = new() { Minimum = 0.20m, Maximum = 50000m, DecimalPlaces = 2, Value = 29.99m };
+    private readonly ModernNumericUpDown _numQuantity = new() { Minimum = 1, Maximum = 9999, Value = 10 };
+    private readonly ModernComboBox _cboTaxonomy = new();
     private readonly TextBox _txtCustomTaxonomy = new() { Text = "1239" };
-    private readonly ComboBox _cboShippingProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _cboReadinessState = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _cboShippingProfile = new();
+    private readonly ModernComboBox _cboReadinessState = new();
     private readonly TextBox _txtTags = new() { Multiline = true, Height = 68, ScrollBars = ScrollBars.Vertical };
     private readonly Label _lblTagCounter = new() { AutoSize = true };
     private readonly Label _lblTagStatus = new() { AutoSize = true };
@@ -42,7 +42,7 @@ internal sealed class FastListingCreatorForm : Form
     private readonly TextBox _txtMaterials = new() { Height = 26 };
 
     // Template Toolbar Controls
-    private readonly ComboBox _cboTemplates = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+    private readonly ModernComboBox _cboTemplates = new() { Width = 260 };
     private readonly Button _btnApplyTemplate = new();
     private readonly Button _btnSaveTemplate = new();
     private readonly Button _btnDeleteTemplate = new();
@@ -62,10 +62,10 @@ internal sealed class FastListingCreatorForm : Form
 
     // Right Column Controls (Variations & Publish)
     private readonly CheckBox _chkEnableVariations = new() { Text = "🎨 Bu ürüne varyasyon ekle (Boyut, Renk vb.)", AutoSize = true };
-    private readonly ComboBox _cboVarType1 = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _cboVarType1 = new();
     private readonly TextBox _txtVarValues1 = new() { Text = "Small, Medium, Large" };
     private readonly CheckBox _chkEnableVar2 = new() { Text = "➕ İkinci varyasyon grubu ekle", AutoSize = true };
-    private readonly ComboBox _cboVarType2 = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _cboVarType2 = new();
     private readonly TextBox _txtVarValues2 = new() { Text = "Siyah, Beyaz, Altın" };
     private readonly Label _lblVarCombinations = new() { AutoSize = true };
 

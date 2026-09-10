@@ -325,3 +325,310 @@ public class ModernTabControl : TabControl
         }
     }
 }
+
+/// <summary>
+/// Modern dark-theme ComboBox with custom-painted sleek dark dropdown button, chevrons, and styled popup list.
+/// </summary>
+public class ModernComboBox : ComboBox
+{
+    private const int WM_PAINT = 0x000F;
+    private bool _isHovered;
+
+    public ModernComboBox()
+    {
+        SetStyle(
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
+        DoubleBuffered = true;
+        DrawMode = DrawMode.OwnerDrawFixed;
+        DropDownStyle = ComboBoxStyle.DropDownList;
+        FlatStyle = FlatStyle.Flat;
+        BackColor = UiStyle.InputBackground;
+        ForeColor = UiStyle.TextDark;
+        ItemHeight = 24;
+        Font = UiStyle.BaseFont;
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _isHovered = true;
+        Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _isHovered = false;
+        Invalidate();
+    }
+
+    protected override void OnDrawItem(DrawItemEventArgs e)
+    {
+        if (e.Index < 0) return;
+
+        bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+        bool isClosedArea = (e.State & DrawItemState.ComboBoxEdit) == DrawItemState.ComboBoxEdit;
+
+        Color bg = isSelected ? UiStyle.PrimaryColor : UiStyle.InputBackground;
+        Color fg = isSelected ? Color.White : UiStyle.TextDark;
+
+        using (var bgBrush = new SolidBrush(bg))
+        {
+            e.Graphics.FillRectangle(bgBrush, e.Bounds);
+        }
+
+        string text = GetItemText(Items[e.Index]) ?? string.Empty;
+        int btnWidth = 26;
+        var textRect = new Rectangle(
+            e.Bounds.X + 8,
+            e.Bounds.Y,
+            Math.Max(0, e.Bounds.Width - (isClosedArea ? btnWidth + 6 : 16)),
+            e.Bounds.Height);
+
+        TextRenderer.DrawText(
+            e.Graphics,
+            text,
+            Font,
+            textRect,
+            fg,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+
+        if (m.Msg == WM_PAINT && DropDownStyle != ComboBoxStyle.Simple)
+        {
+            using var g = Graphics.FromHwnd(Handle);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            int btnWidth = 26;
+            var btnRect = new Rectangle(Width - btnWidth, 1, btnWidth - 1, Height - 2);
+            Color btnBg = _isHovered ? UiStyle.SecondaryHover : UiStyle.SecondaryColor;
+
+            using (var brush = new SolidBrush(btnBg))
+            {
+                g.FillRectangle(brush, btnRect);
+            }
+
+            using (var sepPen = new Pen(UiStyle.BorderColor, 1f))
+            {
+                g.DrawLine(sepPen, btnRect.X, 1, btnRect.X, Height - 2);
+            }
+
+            int centerX = btnRect.X + (btnRect.Width / 2);
+            int centerY = btnRect.Y + (btnRect.Height / 2);
+            Color arrowColor = _isHovered ? Color.White : UiStyle.TextMuted;
+
+            using (var arrowPen = new Pen(arrowColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            {
+                g.DrawLine(arrowPen, centerX - 4, centerY - 2, centerX, centerY + 2);
+                g.DrawLine(arrowPen, centerX, centerY + 2, centerX + 4, centerY - 2);
+            }
+
+            Color borderColor = (_isHovered || DroppedDown) ? UiStyle.PrimaryColor : UiStyle.BorderColor;
+            using (var borderPen = new Pen(borderColor, 1f))
+            {
+                g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
+            }
+        }
+    }
+}
+
+/// <summary>
+/// Modern dark-theme NumericUpDown with custom-painted dark spinner buttons, sleek chevrons, and themed border.
+/// </summary>
+public class ModernNumericUpDown : NumericUpDown
+{
+    private readonly UpDownButtonsPainter _buttonsPainter;
+
+    public ModernNumericUpDown()
+    {
+        SetStyle(
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
+        DoubleBuffered = true;
+        BackColor = UiStyle.InputBackground;
+        ForeColor = UiStyle.TextDark;
+        BorderStyle = BorderStyle.FixedSingle;
+
+        _buttonsPainter = new UpDownButtonsPainter(this);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        DrawOuterBorder(e.Graphics);
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        base.WndProc(ref m);
+        if (m.Msg == 0x000F) // WM_PAINT
+        {
+            using var g = Graphics.FromHwnd(Handle);
+            DrawOuterBorder(g);
+        }
+    }
+
+    private void DrawOuterBorder(Graphics g)
+    {
+        Color borderColor = Focused ? UiStyle.PrimaryColor : UiStyle.BorderColor;
+        using var borderPen = new Pen(borderColor, 1f);
+        g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
+    }
+
+    private sealed class UpDownButtonsPainter : NativeWindow
+    {
+        private readonly ModernNumericUpDown _owner;
+        private Control? _buttonsControl;
+        private bool _upHover;
+        private bool _downHover;
+        private bool _upPressed;
+        private bool _downPressed;
+
+        public UpDownButtonsPainter(ModernNumericUpDown owner)
+        {
+            _owner = owner;
+            _owner.HandleCreated += (_, _) => Attach();
+            if (_owner.IsHandleCreated) Attach();
+        }
+
+        private void Attach()
+        {
+            if (_owner.Controls.Count > 0 && _buttonsControl == null)
+            {
+                _buttonsControl = _owner.Controls[0];
+                if (_buttonsControl.IsHandleCreated)
+                {
+                    AssignHandle(_buttonsControl.Handle);
+                }
+                else
+                {
+                    _buttonsControl.HandleCreated += (_, _) => AssignHandle(_buttonsControl.Handle);
+                }
+
+                _buttonsControl.HandleDestroyed += (_, _) => ReleaseHandle();
+                _buttonsControl.Paint += (_, e) => DrawButtons(e.Graphics);
+                _buttonsControl.Resize += (_, _) => _buttonsControl.Invalidate();
+            }
+
+            if (_owner.Controls.Count > 1)
+            {
+                var editBox = _owner.Controls[1];
+                editBox.BackColor = UiStyle.InputBackground;
+                editBox.ForeColor = UiStyle.TextDark;
+                editBox.Enter += (_, _) => _owner.Invalidate();
+                editBox.Leave += (_, _) => _owner.Invalidate();
+            }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+
+            if (_buttonsControl == null || !_buttonsControl.IsHandleCreated) return;
+
+            switch (m.Msg)
+            {
+                case 0x000F: // WM_PAINT
+                    using (var g = Graphics.FromHwnd(_buttonsControl.Handle))
+                    {
+                        DrawButtons(g);
+                    }
+                    break;
+
+                case 0x0200: // WM_MOUSEMOVE
+                    int y = (int)(m.LParam.ToInt64() >> 16) & 0xFFFF;
+                    int half = _buttonsControl.Height / 2;
+                    bool newUp = y < half;
+                    bool newDown = y >= half;
+                    if (newUp != _upHover || newDown != _downHover)
+                    {
+                        _upHover = newUp;
+                        _downHover = newDown;
+                        _buttonsControl.Invalidate();
+                    }
+                    break;
+
+                case 0x02A3: // WM_MOUSELEAVE
+                    if (_upHover || _downHover)
+                    {
+                        _upHover = false;
+                        _downHover = false;
+                        _buttonsControl.Invalidate();
+                    }
+                    break;
+
+                case 0x0201: // WM_LBUTTONDOWN
+                    int yDown = (int)(m.LParam.ToInt64() >> 16) & 0xFFFF;
+                    int halfDown = _buttonsControl.Height / 2;
+                    if (yDown < halfDown) _upPressed = true; else _downPressed = true;
+                    _buttonsControl.Invalidate();
+                    break;
+
+                case 0x0202: // WM_LBUTTONUP
+                    _upPressed = false;
+                    _downPressed = false;
+                    _buttonsControl.Invalidate();
+                    break;
+            }
+        }
+
+        private void DrawButtons(Graphics g)
+        {
+            if (_buttonsControl == null) return;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            int w = _buttonsControl.Width;
+            int h = _buttonsControl.Height;
+            if (w <= 0 || h <= 0) return;
+
+            int half = h / 2;
+
+            // 1. Up Button
+            var upRect = new Rectangle(0, 0, w, half);
+            Color upColor = _upPressed ? UiStyle.PrimaryColor : (_upHover ? UiStyle.SecondaryHover : UiStyle.SecondaryColor);
+            using (var brush = new SolidBrush(upColor))
+            {
+                g.FillRectangle(brush, upRect);
+            }
+
+            int cx = w / 2;
+            int cyUp = half / 2;
+            Color upArrowColor = (_upHover || _upPressed) ? Color.White : UiStyle.TextMuted;
+            using (var pen = new Pen(upArrowColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            {
+                g.DrawLine(pen, cx - 3, cyUp + 1, cx, cyUp - 2);
+                g.DrawLine(pen, cx, cyUp - 2, cx + 3, cyUp + 1);
+            }
+
+            // 2. Down Button
+            var downRect = new Rectangle(0, half, w, h - half);
+            Color downColor = _downPressed ? UiStyle.PrimaryColor : (_downHover ? UiStyle.SecondaryHover : UiStyle.SecondaryColor);
+            using (var brush = new SolidBrush(downColor))
+            {
+                g.FillRectangle(brush, downRect);
+            }
+
+            int cyDown = half + ((h - half) / 2);
+            Color downArrowColor = (_downHover || _downPressed) ? Color.White : UiStyle.TextMuted;
+            using (var pen = new Pen(downArrowColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            {
+                g.DrawLine(pen, cx - 3, cyDown - 2, cx, cyDown + 1);
+                g.DrawLine(pen, cx, cyDown + 1, cx + 3, cyDown - 2);
+            }
+
+            // 3. Dividers
+            using (var divPen = new Pen(UiStyle.BorderColor, 1f))
+            {
+                g.DrawLine(divPen, 0, half, w, half);
+                g.DrawLine(divPen, 0, 0, 0, h);
+            }
+        }
+    }
+}
