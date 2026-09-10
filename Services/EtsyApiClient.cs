@@ -658,28 +658,86 @@ internal sealed class EtsyApiClient
         await EnsureAccessTokenAsync(settings, cancellationToken);
 
         var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
-        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?limit=100", useAccessToken: true);
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var options = new List<EtsyReadinessStateOption>();
+
+        // 1. Try official readiness-state-definitions endpoint
+        try
         {
-            throw new InvalidOperationException($"Hazirlik durumu secenekleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+            using var defRequest = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/readiness-state-definitions", useAccessToken: true);
+            using var defResponse = await _httpClient.SendAsync(defRequest, cancellationToken);
+            if (defResponse.IsSuccessStatusCode)
+            {
+                var defBody = await defResponse.Content.ReadAsStringAsync(cancellationToken);
+                using var defDoc = JsonDocument.Parse(defBody);
+                if (defDoc.RootElement.TryGetProperty("results", out var defResults) && defResults.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in defResults.EnumerateArray())
+                    {
+                        var id = GetLong(item, "readiness_state_id");
+                        if (id <= 0) continue;
+
+                        var state = item.TryGetProperty("readiness_state", out var rs) ? rs.GetString() : null;
+                        var minTime = item.TryGetProperty("min_processing_time", out var minE) && minE.TryGetInt32(out var minVal) ? minVal : 0;
+                        var maxTime = item.TryGetProperty("max_processing_time", out var maxE) && maxE.TryGetInt32(out var maxVal) ? maxVal : 0;
+                        var unit = item.TryGetProperty("processing_time_unit", out var unitE) ? unitE.GetString() ?? "gün" : "gün";
+
+                        string title;
+                        if (!string.IsNullOrWhiteSpace(state))
+                        {
+                            var stateTr = state.Equals("made_to_order", StringComparison.OrdinalIgnoreCase) ? "Siparişe Özel (Made to order)" : "Hazır Ürün (Ready to ship)";
+                            title = (minTime > 0 || maxTime > 0) ? $"{stateTr} ({minTime}-{maxTime} {unit})" : stateTr;
+                        }
+                        else
+                        {
+                            title = $"Hazırlık Durumu #{id}";
+                        }
+
+                        if (!options.Any(o => o.ReadinessStateId == id))
+                        {
+                            options.Add(new EtsyReadinessStateOption(id, title));
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to active listings scan
         }
 
-        using var document = JsonDocument.Parse(body);
-        if (!document.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        if (options.Count > 0)
         {
-            return [];
+            return options.OrderBy(o => o.ReadinessStateId).ToList();
         }
 
-        return results
-            .EnumerateArray()
-            .Select(item => GetLong(item, "readiness_state_id"))
-            .Where(id => id > 0)
-            .Distinct()
-            .OrderBy(id => id)
-            .Select(id => new EtsyReadinessStateOption(id, $"Hazirlik durumu #{id}"))
-            .ToList();
+        // 2. Fallback: Query active listings to find used readiness_state_ids
+        try
+        {
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?limit=100", useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var document = JsonDocument.Parse(body);
+                if (document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+                {
+                    return results
+                        .EnumerateArray()
+                        .Select(item => GetLong(item, "readiness_state_id"))
+                        .Where(id => id > 0)
+                        .Distinct()
+                        .OrderBy(id => id)
+                        .Select(id => new EtsyReadinessStateOption(id, $"Hazırlık durumu #{id}"))
+                        .ToList();
+                }
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return options;
     }
 
     public async Task<CreatedDraftListing> CreateOwnShopDraftListingAsync(
@@ -705,9 +763,12 @@ internal sealed class EtsyApiClient
             new("type", draft.IsDigital ? "download" : "physical"),
         };
 
-        if (!draft.IsDigital && draft.ShippingProfileId > 0)
+        if (!draft.IsDigital)
         {
-            form.Add(new("shipping_profile_id", draft.ShippingProfileId.ToString(CultureInfo.InvariantCulture)));
+            if (draft.ShippingProfileId > 0)
+            {
+                form.Add(new("shipping_profile_id", draft.ShippingProfileId.ToString(CultureInfo.InvariantCulture)));
+            }
             if (draft.ReadinessStateId > 0)
             {
                 form.Add(new("readiness_state_id", draft.ReadinessStateId.ToString(CultureInfo.InvariantCulture)));

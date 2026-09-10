@@ -33,6 +33,7 @@ internal sealed class FastListingCreatorForm : Form
     private readonly ComboBox _cboTaxonomy = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _txtCustomTaxonomy = new() { Text = "1239" };
     private readonly ComboBox _cboShippingProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _cboReadinessState = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _txtTags = new() { Multiline = true, Height = 64, ScrollBars = ScrollBars.Vertical };
     private readonly Label _lblTagCounter = new() { AutoSize = true };
     private readonly Label _lblTagStatus = new() { AutoSize = true };
@@ -69,7 +70,7 @@ internal sealed class FastListingCreatorForm : Form
 
     // Custom Variation Pricing Controls
     private readonly CheckBox _chkCustomVariationPricing = new() { Text = "💲 Her varyasyona özel farklı fiyat & stok belirle", AutoSize = true };
-    private readonly Panel _pnlVariationPricing = new() { Dock = DockStyle.Top, AutoSize = true, Visible = false };
+    private readonly TableLayoutPanel _pnlVariationPricing = new() { Dock = DockStyle.Top, Height = 230, Visible = false };
     private readonly DataGridView _gridVariationPricing = new();
     private readonly Label _lblPriceRangeBadge = new() { AutoSize = true };
     private readonly Button _btnSyncBasePrice = new();
@@ -87,6 +88,7 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Label _chkItemPrice = new() { AutoSize = true };
     private readonly Label _chkItemImage = new() { AutoSize = true };
     private readonly Label _chkItemShipping = new() { AutoSize = true };
+    private readonly Label _chkItemReadiness = new() { AutoSize = true };
     private readonly Label _chkItemDesc = new() { AutoSize = true };
     private readonly Label _chkItemTags = new() { AutoSize = true };
 
@@ -490,12 +492,25 @@ internal sealed class FastListingCreatorForm : Form
         catRow.Controls.Add(CreateLabeledControl("Taxonomy ID:", _txtCustomTaxonomy), 1, 0);
         stack.Controls.Add(catRow);
 
-        // 4. Kargo Profili (Shipping Profile)
+        // 4. Kargo & Hazırlık Durumu (Shipping & Readiness State)
+        var shipRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            ColumnCount = 2,
+            Height = 56,
+            Margin = new Padding(0, 2, 0, 4)
+        };
+        shipRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
+        shipRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
+
         _cboShippingProfile.Dock = DockStyle.Fill;
         _cboShippingProfile.DisplayMember = nameof(EtsyShippingProfileOption.DisplayName);
-        var shipPanel = CreateLabeledControl("Kargo Profili (Shipping Profile):", _cboShippingProfile);
-        shipPanel.Margin = new Padding(0, 2, 0, 4);
-        stack.Controls.Add(shipPanel);
+        shipRow.Controls.Add(CreateLabeledControl("Kargo Profili (Shipping Profile):", _cboShippingProfile), 0, 0);
+
+        _cboReadinessState.Dock = DockStyle.Fill;
+        _cboReadinessState.DisplayMember = nameof(EtsyReadinessStateOption.DisplayName);
+        shipRow.Controls.Add(CreateLabeledControl("Hazırlık Durumu (Readiness State):", _cboReadinessState), 1, 0);
+        stack.Controls.Add(shipRow);
 
         // 5. Etiketler (Tags)
         var tagContainer = new Panel
@@ -994,6 +1009,7 @@ internal sealed class FastListingCreatorForm : Form
         InitChecklistLabel(_chkItemPrice, "Fiyat ve stok geçerli");
         InitChecklistLabel(_chkItemImage, "En az 1 görsel eklendi");
         InitChecklistLabel(_chkItemShipping, "Kargo profili seçildi");
+        InitChecklistLabel(_chkItemReadiness, "Hazırlık durumu seçildi");
         InitChecklistLabel(_chkItemDesc, "Açıklama dolduruldu");
         InitChecklistLabel(_chkItemTags, "Etiketler (Tag) hazır");
 
@@ -1001,6 +1017,7 @@ internal sealed class FastListingCreatorForm : Form
         pubTable.Controls.Add(_chkItemPrice);
         pubTable.Controls.Add(_chkItemImage);
         pubTable.Controls.Add(_chkItemShipping);
+        pubTable.Controls.Add(_chkItemReadiness);
         pubTable.Controls.Add(_chkItemDesc);
         pubTable.Controls.Add(_chkItemTags);
 
@@ -1054,15 +1071,23 @@ internal sealed class FastListingCreatorForm : Form
 
     private Control BuildVariationPricingPanel()
     {
+        _pnlVariationPricing.Dock = DockStyle.Top;
+        _pnlVariationPricing.Height = 230;
+        _pnlVariationPricing.ColumnCount = 1;
+        _pnlVariationPricing.RowCount = 3;
+        _pnlVariationPricing.RowStyles.Clear();
+        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // Row 0: Quick tools
+        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 166)); // Row 1: DataGridView
+        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // Row 2: Price range badge
         _pnlVariationPricing.Padding = new Padding(0, 2, 0, 4);
+        _pnlVariationPricing.Controls.Clear();
 
         var topFlow = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top,
-            Height = 28,
+            Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = new Padding(0, 0, 0, 2)
         };
 
         _btnSyncBasePrice.Text = "⚡ Fiyatı Eşitle";
@@ -1090,11 +1115,10 @@ internal sealed class FastListingCreatorForm : Form
         _btnStepPrice.Click += (_, _) => ApplyStepPricing();
         topFlow.Controls.Add(_btnStepPrice);
 
-        _pnlVariationPricing.Controls.Add(topFlow);
+        _pnlVariationPricing.Controls.Add(topFlow, 0, 0);
 
         // Grid setup
-        _gridVariationPricing.Dock = DockStyle.Top;
-        _gridVariationPricing.Height = 150;
+        _gridVariationPricing.Dock = DockStyle.Fill;
         _gridVariationPricing.BackgroundColor = UiStyle.CardBackground;
         _gridVariationPricing.GridColor = UiStyle.BorderColor;
         _gridVariationPricing.BorderStyle = BorderStyle.FixedSingle;
@@ -1102,6 +1126,8 @@ internal sealed class FastListingCreatorForm : Form
         _gridVariationPricing.AllowUserToAddRows = false;
         _gridVariationPricing.AllowUserToDeleteRows = false;
         _gridVariationPricing.AllowUserToResizeRows = false;
+        _gridVariationPricing.EditMode = DataGridViewEditMode.EditOnEnter;
+        _gridVariationPricing.SelectionMode = DataGridViewSelectionMode.CellSelect;
         _gridVariationPricing.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         _gridVariationPricing.Font = new Font("Segoe UI", 8F);
         _gridVariationPricing.EnableHeadersVisualStyles = false;
@@ -1141,14 +1167,14 @@ internal sealed class FastListingCreatorForm : Form
         };
 
         _gridVariationPricing.Columns.AddRange([colKey, colPrice, colQty, colActive]);
-        _pnlVariationPricing.Controls.Add(_gridVariationPricing);
+        _pnlVariationPricing.Controls.Add(_gridVariationPricing, 0, 1);
 
-        _lblPriceRangeBadge.Dock = DockStyle.Top;
+        _lblPriceRangeBadge.Dock = DockStyle.Fill;
         _lblPriceRangeBadge.Font = new Font("Segoe UI Semibold", 8F);
         _lblPriceRangeBadge.ForeColor = UiStyle.PrimaryColor;
         _lblPriceRangeBadge.Text = "📊 Fiyat Aralığı: Belirlenmedi";
-        _lblPriceRangeBadge.Margin = new Padding(0, 4, 0, 4);
-        _pnlVariationPricing.Controls.Add(_lblPriceRangeBadge);
+        _lblPriceRangeBadge.Margin = new Padding(0, 4, 0, 2);
+        _pnlVariationPricing.Controls.Add(_lblPriceRangeBadge, 0, 2);
 
         return _pnlVariationPricing;
     }
@@ -1203,6 +1229,14 @@ internal sealed class FastListingCreatorForm : Form
         };
         _numQuantity.ValueChanged += (_, _) => UpdateChecklist();
         _cboShippingProfile.SelectedIndexChanged += (_, _) => UpdateChecklist();
+        _cboReadinessState.SelectedIndexChanged += (_, _) => UpdateChecklist();
+        _cboListingType.SelectedIndexChanged += (_, _) =>
+        {
+            bool isDig = _cboListingType.SelectedIndex == 1;
+            _cboShippingProfile.Enabled = !isDig;
+            _cboReadinessState.Enabled = !isDig;
+            UpdateChecklist();
+        };
         _txtDescription.TextChanged += (_, _) => UpdateChecklist();
 
         _txtTags.TextChanged += (_, _) =>
@@ -1215,8 +1249,9 @@ internal sealed class FastListingCreatorForm : Form
         {
             UpdateVariationsDisplay();
             _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
-            if (_chkEnableVariations.Checked && _chkCustomVariationPricing.Checked)
+            if (_pnlVariationPricing.Visible)
             {
+                _pnlVariationPricing.Height = 230;
                 RefreshVariationPricingGrid();
             }
             UpdateChecklist();
@@ -1253,9 +1288,15 @@ internal sealed class FastListingCreatorForm : Form
 
         _chkCustomVariationPricing.CheckedChanged += (_, _) =>
         {
-            _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
-            if (_chkCustomVariationPricing.Checked)
+            if (_chkCustomVariationPricing.Checked && !_chkEnableVariations.Checked)
             {
+                _chkEnableVariations.Checked = true;
+            }
+
+            _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
+            if (_pnlVariationPricing.Visible)
+            {
+                _pnlVariationPricing.Height = 230;
                 RefreshVariationPricingGrid();
             }
             UpdateChecklist();
@@ -1298,10 +1339,13 @@ internal sealed class FastListingCreatorForm : Form
         bool imageOk = _galleryImagePaths.Count > 0;
         SetChecklistItem(_chkItemImage, $"Görseller: {_galleryImagePaths.Count}/10 adet", imageOk);
 
-        // 4. Shipping Profile
+        // 4. Shipping Profile & Readiness State
         bool isDigital = _cboListingType.SelectedIndex == 1;
         bool shippingOk = isDigital || _cboShippingProfile.SelectedItem != null;
         SetChecklistItem(_chkItemShipping, isDigital ? "Dijital Ürün (Kargo gerekmez)" : "Kargo profili seçildi", shippingOk);
+
+        bool readinessOk = isDigital || SelectedReadinessStateId() > 0;
+        SetChecklistItem(_chkItemReadiness, isDigital ? "Dijital (Hazırlık durumu gerekmez)" : "Hazırlık durumu seçildi", readinessOk);
 
         // 5. Description
         bool descOk = !string.IsNullOrWhiteSpace(_txtDescription.Text);
@@ -1422,7 +1466,8 @@ internal sealed class FastListingCreatorForm : Form
             var qtyStr = row.Cells["ColQty"].Value?.ToString() ?? "";
             var isActive = row.Cells["ColActive"].Value is bool b ? b : true;
 
-            decimal price = decimal.TryParse(priceStr, NumberStyles.Any, CultureInfo.InvariantCulture, out var p) && p > 0 ? p : _numPrice.Value;
+            var normalizedPrice = priceStr.Trim().Replace(',', '.');
+            decimal price = decimal.TryParse(normalizedPrice, NumberStyles.Any, CultureInfo.InvariantCulture, out var p) && p > 0 ? p : _numPrice.Value;
             int qty = int.TryParse(qtyStr, out var q) && q > 0 ? q : (int)_numQuantity.Value;
 
             _customVariationPrices[key] = (price, qty, isActive);
@@ -1542,11 +1587,29 @@ internal sealed class FastListingCreatorForm : Form
         return dict;
     }
 
+    private long SelectedReadinessStateId()
+    {
+        if (_cboReadinessState.SelectedValue is long val && val > 0)
+        {
+            return val;
+        }
+        if (_cboReadinessState.SelectedItem is EtsyReadinessStateOption opt && opt.ReadinessStateId > 0)
+        {
+            return opt.ReadinessStateId;
+        }
+        var text = _cboReadinessState.Text.Trim();
+        if (long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var typedVal) && typedVal > 0)
+        {
+            return typedVal;
+        }
+        return 0;
+    }
+
     private async Task InitializeFormDataAsync()
     {
         try
         {
-            _statusLabel.Text = "Etsy mağaza kargo profilleri alınıyor...";
+            _statusLabel.Text = "Etsy mağaza kargo profilleri ve hazırlık durumları alınıyor...";
             var settings = EtsyApiSettingsStore.Load();
             if (!settings.HasApiCredentials)
             {
@@ -1554,23 +1617,31 @@ internal sealed class FastListingCreatorForm : Form
                 return;
             }
 
-            var profiles = await _apiClient.GetOwnShopShippingProfilesAsync(settings);
+            var profilesTask = _apiClient.GetOwnShopShippingProfilesAsync(settings);
+            var readinessTask = _apiClient.GetOwnShopReadinessStateOptionsAsync(settings);
+
+            await Task.WhenAll(profilesTask, readinessTask);
             EtsyApiSettingsStore.Save(settings);
 
+            var profiles = await profilesTask;
             _cboShippingProfile.DataSource = profiles;
             if (profiles.Count > 0)
             {
                 _cboShippingProfile.SelectedIndex = 0;
-                _statusLabel.Text = $"{profiles.Count} kargo profili yüklendi.";
             }
-            else
+
+            var readinessStates = await readinessTask;
+            _cboReadinessState.DataSource = readinessStates;
+            if (readinessStates.Count > 0)
             {
-                _statusLabel.Text = "Kargo profili bulunamadı.";
+                _cboReadinessState.SelectedIndex = 0;
             }
+
+            _statusLabel.Text = $"{profiles.Count} kargo profili, {readinessStates.Count} hazırlık durumu yüklendi.";
         }
         catch (Exception ex)
         {
-            _statusLabel.Text = $"Kargo profilleri alınamadı: {ex.Message}";
+            _statusLabel.Text = $"Mağaza profilleri alınamadı: {ex.Message}";
         }
         finally
         {
@@ -1920,6 +1991,7 @@ internal sealed class FastListingCreatorForm : Form
 
         bool isDigital = _cboListingType.SelectedIndex == 1;
         long shippingProfileId = 0;
+        long readinessStateId = 0;
         if (!isDigital)
         {
             if (_cboShippingProfile.SelectedItem is EtsyShippingProfileOption prof)
@@ -1929,6 +2001,13 @@ internal sealed class FastListingCreatorForm : Form
             else
             {
                 MessageBox.Show(this, "Fiziksel ürünler için geçerli bir Kargo Profili (Shipping Profile) seçmelisiniz.", "Doğrulama", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            readinessStateId = SelectedReadinessStateId();
+            if (readinessStateId <= 0)
+            {
+                MessageBox.Show(this, "Fiziksel ürünler için Etsy geçerli bir Hazırlık Durumu (readiness_state_id) gerektirir. Lütfen Hazırlık Durumu alanından bir seçenek seçiniz.", "Doğrulama", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
         }
@@ -1946,7 +2025,7 @@ internal sealed class FastListingCreatorForm : Form
                     customPricing = BuildCustomPricingForInventory();
                 }
 
-                inventory = new DraftListingInventoryUpdate(_numPrice.Value, (int)_numQuantity.Value, null, variationGroups, customPricing);
+                inventory = new DraftListingInventoryUpdate(_numPrice.Value, (int)_numQuantity.Value, isDigital ? null : readinessStateId, variationGroups, customPricing);
             }
         }
 
@@ -1988,7 +2067,7 @@ internal sealed class FastListingCreatorForm : Form
                 isDigital,
                 tags,
                 SplitTags(_txtMaterials.Text),
-                0,
+                readinessStateId,
                 "i_did",
                 "made_to_order");
 
