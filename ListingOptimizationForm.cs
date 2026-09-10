@@ -2,19 +2,20 @@ namespace SimilarProductsWinForms;
 
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ListingOptimizationForm : Form
 {
     private readonly ListingOptimizationService _service = new();
     private readonly ListingOptimizationHistoryService _historyService;
     private readonly IAiListingOptimizer _aiOptimizer;
-    private readonly TextBox _titleTextBox = new();
+    private readonly ModernMultilineTextBox _titleTextBox = new();
     private readonly TextBox _keywordTextBox = new();
-    private readonly TextBox _tagsTextBox = new();
-    private readonly TextBox _descriptionTextBox = new();
-    private readonly TextBox _titleSuggestionsTextBox = new();
-    private readonly TextBox _tagSuggestionsTextBox = new();
-    private readonly TextBox _descriptionDraftTextBox = new();
+    private readonly ModernMultilineTextBox _tagsTextBox = new();
+    private readonly ModernMultilineTextBox _descriptionTextBox = new();
+    private readonly ModernMultilineTextBox _titleSuggestionsTextBox = new();
+    private readonly ModernMultilineTextBox _tagSuggestionsTextBox = new();
+    private readonly ModernMultilineTextBox _descriptionDraftTextBox = new();
     private readonly ListBox _riskListBox = new();
     private readonly ListBox _checklistBox = new();
     private readonly Label _scoreLabel = new();
@@ -42,8 +43,8 @@ internal sealed class ListingOptimizationForm : Form
         MinimumSize = new Size(1180, 760);
         WindowState = FormWindowState.Maximized;
         Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
         Padding = new Padding(18);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1180, 760));
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));
@@ -287,13 +288,10 @@ internal sealed class ListingOptimizationForm : Form
         foreach (var value in values) list.Items.Add(value);
     }
 
-    private static void ConfigureMultiline(TextBox textBox, bool readOnly = false)
+    private static void ConfigureMultiline(ModernMultilineTextBox textBox, bool readOnly = false)
     {
         textBox.Dock = DockStyle.Fill;
-        textBox.Multiline = true;
-        textBox.ScrollBars = ScrollBars.Vertical;
         textBox.ReadOnly = readOnly;
-        textBox.BackColor = readOnly ? Color.White : SystemColors.Window;
     }
 
     private static Label SectionLabel(string text) => new()

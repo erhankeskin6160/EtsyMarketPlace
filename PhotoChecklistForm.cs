@@ -1,13 +1,14 @@
 namespace SimilarProductsWinForms;
 
 using System.Text;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class PhotoChecklistForm : Form
 {
     private readonly ProductCandidate? _product;
     private readonly List<CheckBox> _checks = [];
     private readonly Label _scoreLabel = new();
-    private readonly TextBox _planTextBox = new();
+    private readonly ModernMultilineTextBox _planTextBox = new();
 
     public PhotoChecklistForm(ProductCandidate? product)
     {
@@ -23,6 +24,7 @@ internal sealed class PhotoChecklistForm : Form
         MinimumSize = new Size(820, 640);
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
+        UiStyle.ApplyResponsiveTheme(this, new Size(820, 640));
 
         var root = new TableLayoutPanel
         {
@@ -63,10 +65,7 @@ internal sealed class PhotoChecklistForm : Form
         root.Controls.Add(checkPanel, 0, 1);
 
         _planTextBox.Dock = DockStyle.Fill;
-        _planTextBox.Multiline = true;
         _planTextBox.ReadOnly = true;
-        _planTextBox.ScrollBars = ScrollBars.Vertical;
-        _planTextBox.BackColor = Color.White;
         root.Controls.Add(_planTextBox, 0, 2);
 
         var buttonPanel = new FlowLayoutPanel

@@ -17,8 +17,8 @@ internal sealed class OwnShopListingAiAuditForm(
     private readonly BindingSource _bindingSource = new();
     private readonly DataGridView _grid = new();
     private readonly PictureBox _pictureBox = new();
-    private readonly TextBox _detailTextBox = new();
-    private readonly TextBox _suggestionTextBox = new();
+    private readonly ModernMultilineTextBox _detailTextBox = new();
+    private readonly ModernMultilineTextBox _suggestionTextBox = new();
     private readonly TextBox _searchTextBox = new();
     private readonly Label _statusLabel = new();
     private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
@@ -1288,15 +1288,10 @@ internal sealed class OwnShopListingAiAuditForm(
         });
     }
 
-    private static void ConfigureText(TextBox textBox)
+    private static void ConfigureText(ModernMultilineTextBox textBox)
     {
         textBox.Dock = DockStyle.Fill;
-        textBox.Multiline = true;
         textBox.ReadOnly = true;
-        textBox.ScrollBars = ScrollBars.Vertical;
-        textBox.BackColor = UiStyle.CardBackground;
-        textBox.ForeColor = UiStyle.TextDark;
-        textBox.BorderStyle = BorderStyle.None;
         textBox.Font = new Font("Segoe UI", 9F);
     }
 

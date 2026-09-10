@@ -19,6 +19,7 @@ using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Domain.Tracking;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class MarketResearchForm : Form
 {
@@ -41,7 +42,7 @@ internal sealed class MarketResearchForm : Form
     private readonly DataGridView _grid = new();
     private readonly PictureBox _pictureBox = new();
     private readonly Label _imageIndexLabel = new();
-    private readonly TextBox _detailTextBox = new();
+    private readonly ModernMultilineTextBox _detailTextBox = new();
     private readonly Label _statusLabel = new();
     private readonly Label _lblAiBadge = new();
 
@@ -327,13 +328,8 @@ internal sealed class MarketResearchForm : Form
 
         // Middle Detail Box
         _detailTextBox.Dock = DockStyle.Fill;
-        _detailTextBox.Multiline = true;
         _detailTextBox.ReadOnly = true;
-        _detailTextBox.ScrollBars = ScrollBars.Vertical;
-        _detailTextBox.BackColor = Color.FromArgb(15, 23, 42);
-        _detailTextBox.ForeColor = Color.FromArgb(226, 232, 240);
         _detailTextBox.Font = new Font("Consolas", 9F);
-        _detailTextBox.BorderStyle = BorderStyle.FixedSingle;
         detailPanel.Controls.Add(_detailTextBox, 1, 0);
 
         // Right Actions (Grouped & Colorful)

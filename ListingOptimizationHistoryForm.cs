@@ -1,11 +1,12 @@
 namespace SimilarProductsWinForms;
 
 using EtsyMarketPlace.Application.ListingOptimization;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ListingOptimizationHistoryForm(ListingOptimizationHistoryService historyService) : Form
 {
     private readonly DataGridView _grid = new();
-    private readonly TextBox _detailTextBox = new();
+    private readonly ModernMultilineTextBox _detailTextBox = new();
     private readonly BindingSource _bindingSource = new();
 
     protected override async void OnLoad(EventArgs e)
@@ -21,8 +22,8 @@ internal sealed class ListingOptimizationHistoryForm(ListingOptimizationHistoryS
         StartPosition = FormStartPosition.CenterParent;
         MinimumSize = new Size(1000, 650);
         Font = new Font("Segoe UI", 10F);
-        BackColor = Color.FromArgb(247, 248, 250);
         Padding = new Padding(18);
+        UiStyle.ApplyResponsiveTheme(this, new Size(1000, 650));
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
@@ -44,10 +45,7 @@ internal sealed class ListingOptimizationHistoryForm(ListingOptimizationHistoryS
         root.Controls.Add(_grid, 0, 1);
 
         _detailTextBox.Dock = DockStyle.Fill;
-        _detailTextBox.Multiline = true;
         _detailTextBox.ReadOnly = true;
-        _detailTextBox.ScrollBars = ScrollBars.Vertical;
-        _detailTextBox.BackColor = Color.White;
         root.Controls.Add(_detailTextBox, 0, 2);
 
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4 };
@@ -71,15 +69,7 @@ internal sealed class ListingOptimizationHistoryForm(ListingOptimizationHistoryS
 
     private void ConfigureGrid()
     {
-        _grid.Dock = DockStyle.Fill;
-        _grid.AutoGenerateColumns = false;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.ReadOnly = true;
-        _grid.MultiSelect = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.RowHeadersVisible = false;
-        _grid.BackgroundColor = Color.White;
+        UiStyle.ConfigureBaseGrid(_grid);
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => UpdateDetail();
         AddColumn("Tarih", nameof(HistoryRow.CreatedAt), 145);

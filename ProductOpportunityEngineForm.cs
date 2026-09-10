@@ -7,6 +7,7 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.ProductOpportunity;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListingOptimizer) : Form
 {
@@ -22,8 +23,8 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
     private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
     private readonly ComboBox _sortComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly PictureBox _pictureBox = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
-    private readonly TextBox _detailTextBox = new();
-    private readonly TextBox _aiTextBox = new();
+    private readonly ModernMultilineTextBox _detailTextBox = new();
+    private readonly ModernMultilineTextBox _aiTextBox = new();
     private readonly Label _statusLabel = new();
     private readonly Button _searchButton = new();
     private List<OpportunityRow> _rows = [];
@@ -191,17 +192,11 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
         detail.Controls.Add(_pictureBox, 0, 0);
 
         _detailTextBox.Dock = DockStyle.Fill;
-        _detailTextBox.Multiline = true;
         _detailTextBox.ReadOnly = true;
-        _detailTextBox.ScrollBars = ScrollBars.Vertical;
-        _detailTextBox.BackColor = Color.White;
         detail.Controls.Add(_detailTextBox, 1, 0);
 
         _aiTextBox.Dock = DockStyle.Fill;
-        _aiTextBox.Multiline = true;
         _aiTextBox.ReadOnly = true;
-        _aiTextBox.ScrollBars = ScrollBars.Vertical;
-        _aiTextBox.BackColor = Color.White;
         _aiTextBox.Text = "AI Strateji, Guvenli Ad veya Varyasyon butonuna basinca secili firsat icin analiz burada gorunecek.";
         detail.Controls.Add(_aiTextBox, 2, 0);
         return detail;
@@ -209,20 +204,11 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
 
     private void ConfigureGrid()
     {
-        _grid.Dock = DockStyle.Fill;
-        _grid.AutoGenerateColumns = false;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.AllowUserToResizeRows = false;
-        _grid.ReadOnly = true;
+        UiStyle.ConfigureBaseGrid(_grid);
         _grid.MultiSelect = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.RowHeadersVisible = false;
-        _grid.BackgroundColor = Color.White;
         _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         _grid.RowTemplate.MinimumHeight = 70;
         _grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => UpdateDetail();
         _grid.CellDoubleClick += (_, _) => OpenSelectedListing();

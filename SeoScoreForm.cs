@@ -1,14 +1,15 @@
 namespace SimilarProductsWinForms;
 
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class SeoScoreForm : Form
 {
-    private readonly TextBox _titleTextBox = new();
-    private readonly TextBox _descriptionTextBox = new();
-    private readonly TextBox _tagsTextBox = new();
+    private readonly ModernMultilineTextBox _titleTextBox = new();
+    private readonly ModernMultilineTextBox _descriptionTextBox = new();
+    private readonly ModernMultilineTextBox _tagsTextBox = new();
     private readonly TextBox _primaryKeywordTextBox = new();
-    private readonly TextBox _resultTextBox = new();
+    private readonly ModernMultilineTextBox _resultTextBox = new();
 
     public SeoScoreForm(ProductCandidate? product)
     {
@@ -40,10 +41,12 @@ internal sealed class SeoScoreForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
 
-        AddTextBoxRow(root, 0, "Ana keyword", _primaryKeywordTextBox, multiline: false);
-        AddTextBoxRow(root, 1, "Baslik", _titleTextBox, multiline: true);
-        AddTextBoxRow(root, 2, "Aciklama", _descriptionTextBox, multiline: true);
-        AddTextBoxRow(root, 3, "13 tag", _tagsTextBox, multiline: true);
+        UiStyle.ApplyResponsiveTheme(this, new Size(920, 720));
+
+        AddTextBoxRow(root, 0, "Ana keyword", _primaryKeywordTextBox);
+        AddModernBoxRow(root, 1, "Baslik", _titleTextBox);
+        AddModernBoxRow(root, 2, "Aciklama", _descriptionTextBox);
+        AddModernBoxRow(root, 3, "13 tag", _tagsTextBox);
 
         var calculateButton = new Button
         {
@@ -59,10 +62,7 @@ internal sealed class SeoScoreForm : Form
         root.Controls.Add(calculateButton, 1, 4);
 
         _resultTextBox.Dock = DockStyle.Fill;
-        _resultTextBox.Multiline = true;
         _resultTextBox.ReadOnly = true;
-        _resultTextBox.ScrollBars = ScrollBars.Vertical;
-        _resultTextBox.BackColor = Color.White;
         root.Controls.Add(CreateLabel("Sonuc"), 0, 5);
         root.Controls.Add(_resultTextBox, 1, 5);
 
@@ -107,11 +107,16 @@ internal sealed class SeoScoreForm : Form
             $"Oneriler:{Environment.NewLine}{FormatList(result.Suggestions)}";
     }
 
-    private static void AddTextBoxRow(TableLayoutPanel root, int row, string label, TextBox textBox, bool multiline)
+    private static void AddTextBoxRow(TableLayoutPanel root, int row, string label, TextBox textBox)
     {
         textBox.Dock = DockStyle.Fill;
-        textBox.Multiline = multiline;
-        textBox.ScrollBars = multiline ? ScrollBars.Vertical : ScrollBars.None;
+        root.Controls.Add(CreateLabel(label), 0, row);
+        root.Controls.Add(textBox, 1, row);
+    }
+
+    private static void AddModernBoxRow(TableLayoutPanel root, int row, string label, ModernMultilineTextBox textBox)
+    {
+        textBox.Dock = DockStyle.Fill;
         root.Controls.Add(CreateLabel(label), 0, row);
         root.Controls.Add(textBox, 1, row);
     }

@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms;
 
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class WeeklyReportForm : Form
 {
@@ -20,6 +21,7 @@ internal sealed class WeeklyReportForm : Form
         MinimumSize = new Size(980, 760);
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
+        UiStyle.ApplyResponsiveTheme(this, new Size(980, 760));
 
         var root = new TableLayoutPanel
         {
@@ -79,13 +81,10 @@ internal sealed class WeeklyReportForm : Form
     private static TabPage CreatePage(string title, string text)
     {
         var page = new TabPage(title);
-        page.Controls.Add(new TextBox
+        page.Controls.Add(new ModernMultilineTextBox
         {
             Dock = DockStyle.Fill,
-            Multiline = true,
             ReadOnly = true,
-            ScrollBars = ScrollBars.Vertical,
-            BackColor = Color.White,
             Text = text,
         });
         return page;

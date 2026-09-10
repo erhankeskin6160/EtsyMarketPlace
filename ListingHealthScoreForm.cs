@@ -27,9 +27,9 @@ internal sealed class ListingHealthScoreForm : Form
     private ModernScrollPanel? _breakdownScroll;
     
     // Details controls
-    private readonly TextBox _strengthsTextBox = new();
-    private readonly TextBox _warningsTextBox = new();
-    private readonly TextBox _actionsTextBox = new();
+    private readonly ModernMultilineTextBox _strengthsTextBox = new();
+    private readonly ModernMultilineTextBox _warningsTextBox = new();
+    private readonly ModernMultilineTextBox _actionsTextBox = new();
     private readonly TabControl _tabControl = new();
 
     public ListingHealthScoreForm(
@@ -429,14 +429,10 @@ internal sealed class ListingHealthScoreForm : Form
         return match.Success && long.TryParse(match.Groups["id"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out listingId);
     }
 
-    private static void ConfigureTabBox(TextBox tb)
+    private static void ConfigureTabBox(ModernMultilineTextBox tb)
     {
         tb.Dock = DockStyle.Fill;
-        tb.Multiline = true;
         tb.ReadOnly = true;
-        tb.ScrollBars = ScrollBars.Vertical;
-        tb.BackColor = UiStyle.CardBackground;
-        tb.ForeColor = UiStyle.TextDark;
         tb.Font = new Font("Segoe UI", 10F);
         tb.Margin = new Padding(6);
     }

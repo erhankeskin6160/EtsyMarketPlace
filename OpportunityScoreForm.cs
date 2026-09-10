@@ -1,6 +1,7 @@
 namespace SimilarProductsWinForms;
 
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class OpportunityScoreForm : Form
 {
@@ -13,7 +14,7 @@ internal sealed class OpportunityScoreForm : Form
     private readonly NumericUpDown _competitionRiskInput = CreateScoreInput();
     private readonly NumericUpDown _shippingRiskInput = CreateScoreInput();
     private readonly NumericUpDown _ipRiskInput = CreateScoreInput();
-    private readonly TextBox _resultTextBox = new();
+    private readonly ModernMultilineTextBox _resultTextBox = new();
 
     public OpportunityScoreForm(ProductCandidate? product)
     {
@@ -29,6 +30,7 @@ internal sealed class OpportunityScoreForm : Form
         MinimumSize = new Size(850, 700);
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
+        UiStyle.ApplyResponsiveTheme(this, new Size(850, 700));
 
         var root = new TableLayoutPanel
         {
@@ -63,10 +65,7 @@ internal sealed class OpportunityScoreForm : Form
         root.Controls.Add(calculateButton, 1, 9);
 
         _resultTextBox.Dock = DockStyle.Fill;
-        _resultTextBox.Multiline = true;
         _resultTextBox.ReadOnly = true;
-        _resultTextBox.ScrollBars = ScrollBars.Vertical;
-        _resultTextBox.BackColor = Color.White;
         root.Controls.Add(CreateLabel("Sonuc"), 0, 10);
         root.Controls.Add(_resultTextBox, 1, 10);
 

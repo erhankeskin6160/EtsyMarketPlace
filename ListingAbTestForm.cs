@@ -9,6 +9,7 @@ using EtsyMarketPlace.Application.AbTesting;
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ListingAbTestForm : Form
 {
@@ -708,10 +709,10 @@ internal sealed class ListingAbTestForm : Form
         panelA.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
         panelA.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
         panelA.Controls.Add(new Label { Text = "Varyant A: Mevcut Canlı Başlık", Font = new Font("Segoe UI Semibold", 8.5F), Dock = DockStyle.Fill }, 0, 0);
-        var txtTitleA = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        var txtTitleA = new ModernMultilineTextBox { Dock = DockStyle.Fill };
         panelA.Controls.Add(txtTitleA, 0, 1);
         panelA.Controls.Add(new Label { Text = "Varyant A: Mevcut Tagler", Font = new Font("Segoe UI Semibold", 8.5F), Dock = DockStyle.Fill }, 0, 2);
-        var txtTagsA = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        var txtTagsA = new ModernMultilineTextBox { Dock = DockStyle.Fill };
         panelA.Controls.Add(txtTagsA, 0, 3);
         colsTable.Controls.Add(panelA, 0, 0);
 
@@ -722,10 +723,10 @@ internal sealed class ListingAbTestForm : Form
         panelB.RowStyles.Add(new RowStyle(SizeType.Absolute, 20));
         panelB.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
         panelB.Controls.Add(new Label { Text = "Varyant B: Yeni Test Başlığı", Font = new Font("Segoe UI Semibold", 8.5F), ForeColor = UiStyle.PrimaryColor, Dock = DockStyle.Fill }, 0, 0);
-        var txtTitleB = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        var txtTitleB = new ModernMultilineTextBox { Dock = DockStyle.Fill };
         panelB.Controls.Add(txtTitleB, 0, 1);
         panelB.Controls.Add(new Label { Text = "Varyant B: Yeni Test Tagleri", Font = new Font("Segoe UI Semibold", 8.5F), ForeColor = UiStyle.PrimaryColor, Dock = DockStyle.Fill }, 0, 2);
-        var txtTagsB = new TextBox { Dock = DockStyle.Fill, Multiline = true, ScrollBars = ScrollBars.Vertical };
+        var txtTagsB = new ModernMultilineTextBox { Dock = DockStyle.Fill };
         panelB.Controls.Add(txtTagsB, 0, 3);
         colsTable.Controls.Add(panelB, 1, 0);
 

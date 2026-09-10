@@ -20,12 +20,12 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly TextBox _keywordTextBox = new();
     private readonly TextBox _externalTitleTextBox = new();
     private readonly TextBox _externalUrlTextBox = new();
-    private readonly TextBox _titleTextBox = new();
-    private readonly TextBox _descriptionTextBox = new();
-    private readonly TextBox _tagsTextBox = new();
-    private readonly TextBox _materialsTextBox = new();
-    private readonly TextBox _notesTextBox = new();
-    private readonly TextBox _imagePromptTextBox = new();
+    private readonly ModernMultilineTextBox _titleTextBox = new();
+    private readonly ModernMultilineTextBox _descriptionTextBox = new();
+    private readonly ModernMultilineTextBox _tagsTextBox = new();
+    private readonly ModernMultilineTextBox _materialsTextBox = new();
+    private readonly ModernMultilineTextBox _notesTextBox = new();
+    private readonly ModernMultilineTextBox _imagePromptTextBox = new();
     private readonly TextBox _sourceImagePathTextBox = new();
     private readonly TextBox _generatedImagePathTextBox = new();
     private readonly Label _scoreDecisionLabel = new();
@@ -35,7 +35,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly Label _seoGapScoreLabel = new();
     private readonly Label _priceScoreLabel = new();
     private readonly Label _riskScoreLabel = new();
-    private readonly TextBox _scoreStrategyTextBox = new();
+    private readonly ModernMultilineTextBox _scoreStrategyTextBox = new();
     private readonly NumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
     private readonly NumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
     private readonly TextBox _taxonomyInput = new();
@@ -248,8 +248,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         _externalUrlTextBox.Dock = DockStyle.Fill;
         left.Controls.Add(_externalUrlTextBox, 0, 3);
         left.Controls.Add(LabelFor("Etsy basligi"), 0, 4);
-        _titleTextBox.Dock = DockStyle.Fill;
-        _titleTextBox.Multiline = true;
+        ConfigureMultiline(_titleTextBox);
         left.Controls.Add(_titleTextBox, 0, 5);
         left.Controls.Add(LabelFor("Etsy aciklamasi"), 0, 6);
         ConfigureMultiline(_descriptionTextBox);
@@ -356,14 +355,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
 
     private void ConfigureGrid()
     {
-        _grid.Dock = DockStyle.Fill;
-        _grid.AutoGenerateColumns = false;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.ReadOnly = true;
-        _grid.RowHeadersVisible = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _grid.BackgroundColor = Color.White;
+        UiStyle.ConfigureBaseGrid(_grid);
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => FillSelectedIdea();
         _grid.CellDoubleClick += (_, _) => OpenSelectedSource();
@@ -434,12 +426,10 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         card.Controls.Add(metrics, 0, 1);
 
         _scoreStrategyTextBox.Dock = DockStyle.Fill;
-        _scoreStrategyTextBox.Multiline = true;
         _scoreStrategyTextBox.ReadOnly = true;
-        _scoreStrategyTextBox.ScrollBars = ScrollBars.Vertical;
-        _scoreStrategyTextBox.BorderStyle = BorderStyle.None;
         _scoreStrategyTextBox.BackColor = UiStyle.CardBackground;
-        _scoreStrategyTextBox.ForeColor = UiStyle.TextMuted;
+        _scoreStrategyTextBox.InnerTextBox.BackColor = UiStyle.CardBackground;
+        _scoreStrategyTextBox.InnerTextBox.ForeColor = UiStyle.TextMuted;
         card.Controls.Add(_scoreStrategyTextBox, 0, 2);
 
         UpdateScoreCard(null);
@@ -1027,11 +1017,9 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
         }
     }
 
-    private static void ConfigureMultiline(TextBox textBox)
+    private static void ConfigureMultiline(ModernMultilineTextBox textBox)
     {
         textBox.Dock = DockStyle.Fill;
-        textBox.Multiline = true;
-        textBox.ScrollBars = ScrollBars.Vertical;
     }
 
     private static Label LabelFor(string text) => new()

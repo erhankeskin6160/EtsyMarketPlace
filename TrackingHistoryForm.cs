@@ -4,13 +4,14 @@ using System.Diagnostics;
 using System.Text;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Domain.Tracking;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class TrackingHistoryForm : Form
 {
     private readonly TrackingService _trackingService;
     private readonly DataGridView _itemsGrid = new();
     private readonly DataGridView _snapshotsGrid = new();
-    private readonly TextBox _changeTextBox = new();
+    private readonly ModernMultilineTextBox _changeTextBox = new();
     private readonly Label _statusLabel = new();
     private List<TrackingHistory> _histories = [];
 
@@ -103,10 +104,7 @@ internal sealed class TrackingHistoryForm : Form
         ConfigureSnapshotsGrid();
         right.Controls.Add(_snapshotsGrid, 0, 0);
         _changeTextBox.Dock = DockStyle.Fill;
-        _changeTextBox.Multiline = true;
         _changeTextBox.ReadOnly = true;
-        _changeTextBox.ScrollBars = ScrollBars.Vertical;
-        _changeTextBox.BackColor = Color.White;
         _changeTextBox.Font = new Font("Segoe UI", 10.5F);
         right.Controls.Add(_changeTextBox, 0, 1);
         split.Panel2.Controls.Add(right);
@@ -236,15 +234,8 @@ internal sealed class TrackingHistoryForm : Form
 
     private static void ConfigureBaseGrid(DataGridView grid)
     {
-        grid.Dock = DockStyle.Fill;
-        grid.ReadOnly = true;
-        grid.AllowUserToAddRows = false;
-        grid.AllowUserToDeleteRows = false;
-        grid.RowHeadersVisible = false;
+        UiStyle.ConfigureBaseGrid(grid);
         grid.MultiSelect = false;
-        grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        grid.BackgroundColor = Color.White;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
     }
 
     private void AddSnapshotColumn(string header, string property, int width) => _snapshotsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = header, DataPropertyName = property, Width = width });

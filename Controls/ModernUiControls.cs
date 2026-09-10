@@ -474,6 +474,489 @@ public class ModernVScrollBar : Control
 }
 
 /// <summary>
+/// Modern soft horizontal scrollbar matching the dark theme palette with rounded pill thumb.
+/// </summary>
+public class ModernHScrollBar : Control
+{
+    private int _min = 0;
+    private int _max = 100;
+    private int _val = 0;
+    private int _largeChange = 20;
+    private int _smallChange = 5;
+    private bool _isHovered = false;
+    private bool _isDragging = false;
+    private int _dragStartX = 0;
+    private int _dragStartVal = 0;
+
+    public event EventHandler? ValueChanged;
+
+    public int Minimum
+    {
+        get => _min;
+        set { _min = value; Invalidate(); }
+    }
+
+    public int Maximum
+    {
+        get => _max;
+        set { _max = Math.Max(_min, value); Invalidate(); }
+    }
+
+    public int Value
+    {
+        get => _val;
+        set
+        {
+            int clamped = Math.Clamp(value, _min, _max);
+            if (_val != clamped)
+            {
+                _val = clamped;
+                Invalidate();
+                ValueChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    public int LargeChange
+    {
+        get => _largeChange;
+        set { _largeChange = Math.Max(1, value); Invalidate(); }
+    }
+
+    public int SmallChange
+    {
+        get => _smallChange;
+        set { _smallChange = Math.Max(1, value); Invalidate(); }
+    }
+
+    public Color TrackColor { get; set; } = Color.Transparent;
+    public Color ThumbNormalColor { get; set; } = Color.FromArgb(71, 85, 105);   // Slate 600
+    public Color ThumbHoverColor { get; set; } = Color.FromArgb(100, 116, 139);  // Slate 500
+    public Color ThumbActiveColor { get; set; } = Color.FromArgb(99, 102, 241);  // Indigo 500
+
+    public ModernHScrollBar()
+    {
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw |
+            ControlStyles.SupportsTransparentBackColor,
+            true);
+        DoubleBuffered = true;
+        Height = 8;
+        Cursor = Cursors.Default;
+    }
+
+    public override Color BackColor
+    {
+        get => GetEffectiveParentBackColor();
+        set { }
+    }
+
+    public void ScrollBy(int delta)
+    {
+        Value += delta;
+    }
+
+    private Color GetEffectiveParentBackColor()
+    {
+        Control? p = Parent;
+        while (p != null)
+        {
+            if (p.BackColor != Color.Transparent && p.BackColor.A == 255)
+            {
+                return p.BackColor;
+            }
+            p = p.Parent;
+        }
+        return UiStyle.CardBackground;
+    }
+
+    private Rectangle GetThumbRect()
+    {
+        if (_max <= _min || Width <= 0) return Rectangle.Empty;
+
+        int totalRange = (_max - _min) + _largeChange;
+        int thumbW = Math.Max(26, (int)((float)_largeChange / totalRange * Width));
+        if (thumbW > Width) thumbW = Width;
+
+        int travel = Width - thumbW;
+        int thumbX = travel > 0 ? (int)((float)(_val - _min) / (_max - _min) * travel) : 0;
+        return new Rectangle(thumbX, 1, thumbW, Math.Max(4, Height - 2));
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        Color parentBg = TrackColor != Color.Transparent ? TrackColor : GetEffectiveParentBackColor();
+        using (var clearBrush = new SolidBrush(parentBg))
+        {
+            g.FillRectangle(clearBrush, ClientRectangle);
+        }
+
+        var thumb = GetThumbRect();
+        if (thumb.IsEmpty || thumb.Width <= 0 || _max <= _min) return;
+
+        Color thumbCol = _isDragging ? ThumbActiveColor : (_isHovered ? ThumbHoverColor : ThumbNormalColor);
+        using var brush = new SolidBrush(thumbCol);
+
+        int r = Math.Min(3, thumb.Height / 2);
+        using var path = new GraphicsPath();
+        path.AddArc(thumb.X, thumb.Y, r * 2, r * 2, 180, 90);
+        path.AddArc(thumb.Right - r * 2, thumb.Y, r * 2, r * 2, 270, 90);
+        path.AddArc(thumb.Right - r * 2, thumb.Bottom - r * 2, r * 2, r * 2, 0, 90);
+        path.AddArc(thumb.X, thumb.Bottom - r * 2, r * 2, r * 2, 90, 90);
+        path.CloseFigure();
+        g.FillPath(brush, path);
+    }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        base.OnMouseDown(e);
+        if (e.Button != MouseButtons.Left) return;
+
+        var thumb = GetThumbRect();
+        if (thumb.Contains(e.Location))
+        {
+            _isDragging = true;
+            _dragStartX = e.X;
+            _dragStartVal = _val;
+            Invalidate();
+        }
+        else if (!thumb.IsEmpty)
+        {
+            if (e.X < thumb.X) Value -= _largeChange;
+            else Value += _largeChange;
+        }
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        if (_isDragging)
+        {
+            var thumb = GetThumbRect();
+            int travel = Width - thumb.Width;
+            if (travel > 0)
+            {
+                int deltaX = e.X - _dragStartX;
+                Value = _dragStartVal + (int)((float)deltaX / travel * (_max - _min));
+            }
+        }
+        else
+        {
+            bool hover = GetThumbRect().Contains(e.Location);
+            if (_isHovered != hover)
+            {
+                _isHovered = hover;
+                Invalidate();
+            }
+        }
+    }
+
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        base.OnMouseUp(e);
+        if (_isDragging)
+        {
+            _isDragging = false;
+            Invalidate();
+        }
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        if (_isHovered)
+        {
+            _isHovered = false;
+            Invalidate();
+        }
+    }
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        base.OnMouseWheel(e);
+        int steps = -Math.Sign(e.Delta) * (LargeChange > 0 ? Math.Max(1, LargeChange / 4) : 24);
+        Value += steps;
+    }
+}
+
+/// <summary>
+/// Attaches sleek ModernVScrollBar and ModernHScrollBar to any DataGridView,
+/// hiding native Win32 scrollbars and smoothly syncing horizontal pixel offset and vertical rows.
+/// </summary>
+public class ModernGridScrollAdapter : IDisposable
+{
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DataGridView, ModernGridScrollAdapter> _adapters = new();
+
+    private readonly DataGridView _grid;
+    private readonly ModernVScrollBar _vBar;
+    private readonly ModernHScrollBar _hBar;
+    private readonly Panel _corner;
+    private bool _isSyncing = false;
+    private bool _isDisposed = false;
+
+    public static ModernGridScrollAdapter Attach(DataGridView grid)
+    {
+        if (_adapters.TryGetValue(grid, out var existing))
+        {
+            existing.RecalculateScroll();
+            return existing;
+        }
+
+        var adapter = new ModernGridScrollAdapter(grid);
+        _adapters.Add(grid, adapter);
+        return adapter;
+    }
+
+    public ModernVScrollBar VScrollBar => _vBar;
+    public ModernHScrollBar HScrollBar => _hBar;
+
+    private ModernGridScrollAdapter(DataGridView grid)
+    {
+        _grid = grid;
+        _grid.ScrollBars = ScrollBars.None;
+
+        _vBar = new ModernVScrollBar
+        {
+            Width = 8,
+            Visible = false
+        };
+        _hBar = new ModernHScrollBar
+        {
+            Height = 8,
+            Visible = false
+        };
+        _corner = new Panel
+        {
+            Size = new Size(8, 8),
+            BackColor = UiStyle.CardBackground,
+            Visible = false
+        };
+
+        _vBar.ValueChanged += OnVBarValueChanged;
+        _hBar.ValueChanged += OnHBarValueChanged;
+
+        _grid.Controls.Add(_vBar);
+        _grid.Controls.Add(_hBar);
+        _grid.Controls.Add(_corner);
+
+        _grid.Resize += OnGridResize;
+        _grid.RowsAdded += OnGridRowsChanged;
+        _grid.RowsRemoved += OnGridRowsChanged;
+        _grid.ColumnWidthChanged += OnGridColumnsChanged;
+        _grid.ColumnAdded += OnGridColumnsChanged;
+        _grid.ColumnRemoved += OnGridColumnsChanged;
+        _grid.DataSourceChanged += OnGridDataSourceChanged;
+        _grid.DataBindingComplete += OnGridDataBindingComplete;
+        _grid.SelectionChanged += OnGridSelectionChanged;
+        _grid.CurrentCellChanged += OnGridCurrentCellChanged;
+        _grid.MouseWheel += OnGridMouseWheel;
+        _grid.VisibleChanged += OnGridVisibleChanged;
+        _grid.HandleCreated += OnGridHandleCreated;
+        _grid.Disposed += OnGridDisposed;
+
+        if (_grid.IsHandleCreated)
+        {
+            RecalculateScroll();
+        }
+    }
+
+    private void OnVBarValueChanged(object? sender, EventArgs e)
+    {
+        if (_isSyncing || !_grid.IsHandleCreated || _grid.RowCount == 0) return;
+        _isSyncing = true;
+        try
+        {
+            int targetRow = Math.Clamp(_vBar.Value, 0, _grid.RowCount - 1);
+            if (_grid.FirstDisplayedScrollingRowIndex != targetRow)
+            {
+                _grid.FirstDisplayedScrollingRowIndex = targetRow;
+            }
+        }
+        catch { }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    private void OnHBarValueChanged(object? sender, EventArgs e)
+    {
+        if (_isSyncing || !_grid.IsHandleCreated) return;
+        _isSyncing = true;
+        try
+        {
+            _grid.HorizontalScrollingOffset = _hBar.Value;
+        }
+        catch { }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    private void OnGridMouseWheel(object? sender, MouseEventArgs e)
+    {
+        if ((Control.ModifierKeys & Keys.Shift) != 0)
+        {
+            if (_hBar.Visible)
+            {
+                int hDelta = -Math.Sign(e.Delta) * 50;
+                _hBar.Value += hDelta;
+            }
+        }
+        else
+        {
+            if (_vBar.Visible)
+            {
+                int vDelta = -Math.Sign(e.Delta) * 3;
+                _vBar.Value += vDelta;
+            }
+        }
+    }
+
+    private void OnGridSelectionChanged(object? sender, EventArgs e) => SyncFromGrid();
+    private void OnGridCurrentCellChanged(object? sender, EventArgs e) => SyncFromGrid();
+
+    private void SyncFromGrid()
+    {
+        if (_isSyncing || !_grid.IsHandleCreated) return;
+        _isSyncing = true;
+        try
+        {
+            if (_vBar.Visible && _grid.RowCount > 0 && _grid.FirstDisplayedScrollingRowIndex >= 0)
+            {
+                _vBar.Value = Math.Clamp(_grid.FirstDisplayedScrollingRowIndex, 0, _vBar.Maximum);
+            }
+            if (_hBar.Visible)
+            {
+                _hBar.Value = Math.Clamp(_grid.HorizontalScrollingOffset, 0, _hBar.Maximum);
+            }
+        }
+        catch { }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    private void OnGridResize(object? sender, EventArgs e) => RecalculateScroll();
+    private void OnGridRowsChanged(object? sender, EventArgs e) => RecalculateScroll();
+    private void OnGridColumnsChanged(object? sender, EventArgs e) => RecalculateScroll();
+    private void OnGridDataSourceChanged(object? sender, EventArgs e) => RecalculateScroll();
+    private void OnGridDataBindingComplete(object? sender, EventArgs e) => RecalculateScroll();
+    private void OnGridVisibleChanged(object? sender, EventArgs e) => RecalculateScroll();
+    private void OnGridHandleCreated(object? sender, EventArgs e) => RecalculateScroll();
+
+    public void RecalculateScroll()
+    {
+        if (_isDisposed || _grid.IsDisposed || !_grid.IsHandleCreated || _grid.ClientSize.Width <= 0 || _grid.ClientSize.Height <= 0) return;
+
+        try
+        {
+            // 1. Horizontal metrics
+            int totalColsWidth = _grid.Columns.GetColumnsWidth(DataGridViewElementStates.Visible);
+            if (_grid.RowHeadersVisible) totalColsWidth += _grid.RowHeadersWidth;
+            int viewWidth = _grid.ClientSize.Width;
+            int maxH = Math.Max(0, totalColsWidth - viewWidth);
+
+            _hBar.Minimum = 0;
+            _hBar.Maximum = maxH;
+            _hBar.LargeChange = Math.Max(1, viewWidth);
+            _hBar.Visible = maxH > 0;
+            if (_hBar.Value > maxH) _hBar.Value = maxH;
+
+            // 2. Vertical metrics
+            int rowCount = _grid.RowCount;
+            int displayedRows = _grid.DisplayedRowCount(false);
+            int maxV = Math.Max(0, rowCount - displayedRows);
+
+            _vBar.Minimum = 0;
+            _vBar.Maximum = maxV;
+            _vBar.LargeChange = Math.Max(1, displayedRows);
+            _vBar.Visible = maxV > 0;
+            if (_vBar.Value > maxV) _vBar.Value = maxV;
+
+            // 3. Corner panel
+            _corner.Visible = _vBar.Visible && _hBar.Visible;
+            _corner.BackColor = _grid.BackgroundColor != Color.Transparent ? _grid.BackgroundColor : UiStyle.CardBackground;
+
+            // 4. Update bounds
+            UpdateLayout();
+        }
+        catch { }
+    }
+
+    private void UpdateLayout()
+    {
+        if (_isDisposed || _grid.IsDisposed || !_grid.IsHandleCreated) return;
+
+        int vWidth = 8;
+        int hHeight = 8;
+        int clientW = _grid.ClientSize.Width;
+        int clientH = _grid.ClientSize.Height;
+
+        if (_vBar.Visible && _hBar.Visible)
+        {
+            _vBar.SetBounds(clientW - vWidth, 0, vWidth, clientH - hHeight);
+            _hBar.SetBounds(0, clientH - hHeight, clientW - vWidth, hHeight);
+            _corner.SetBounds(clientW - vWidth, clientH - hHeight, vWidth, hHeight);
+        }
+        else if (_vBar.Visible)
+        {
+            _vBar.SetBounds(clientW - vWidth, 0, vWidth, clientH);
+        }
+        else if (_hBar.Visible)
+        {
+            _hBar.SetBounds(0, clientH - hHeight, clientW, hHeight);
+        }
+
+        _vBar.BringToFront();
+        _hBar.BringToFront();
+        _corner.BringToFront();
+    }
+
+    private void OnGridDisposed(object? sender, EventArgs e)
+    {
+        Dispose();
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed) return;
+        _isDisposed = true;
+
+        try
+        {
+            _grid.Resize -= OnGridResize;
+            _grid.RowsAdded -= OnGridRowsChanged;
+            _grid.RowsRemoved -= OnGridRowsChanged;
+            _grid.ColumnWidthChanged -= OnGridColumnsChanged;
+            _grid.ColumnAdded -= OnGridColumnsChanged;
+            _grid.ColumnRemoved -= OnGridColumnsChanged;
+            _grid.DataSourceChanged -= OnGridDataSourceChanged;
+            _grid.DataBindingComplete -= OnGridDataBindingComplete;
+            _grid.SelectionChanged -= OnGridSelectionChanged;
+            _grid.CurrentCellChanged -= OnGridCurrentCellChanged;
+            _grid.MouseWheel -= OnGridMouseWheel;
+            _grid.VisibleChanged -= OnGridVisibleChanged;
+            _grid.HandleCreated -= OnGridHandleCreated;
+            _grid.Disposed -= OnGridDisposed;
+
+            _vBar.Dispose();
+            _hBar.Dispose();
+            _corner.Dispose();
+        }
+        catch { }
+    }
+}
+
+/// <summary>
 /// Smooth scrollable container with a sleek ModernVScrollBar and zero native white scrollbars.
 /// </summary>
 public class ModernScrollPanel : Panel, IMessageFilter
@@ -665,6 +1148,16 @@ public class ModernMultilineTextBox : Panel
         set
         {
             _innerBox.Text = value ?? string.Empty;
+            SyncScrollBar();
+        }
+    }
+
+    public string[] Lines
+    {
+        get => _innerBox.Lines;
+        set
+        {
+            _innerBox.Lines = value ?? [];
             SyncScrollBar();
         }
     }

@@ -69,9 +69,12 @@ static class Program
         if (args.Any(argument => string.Equals(argument, "--verify-controls", StringComparison.OrdinalIgnoreCase)))
         {
             _ = new SimilarProductsWinForms.Controls.ModernVScrollBar();
+            _ = new SimilarProductsWinForms.Controls.ModernHScrollBar();
             _ = new SimilarProductsWinForms.Controls.ModernMultilineTextBox();
             _ = new SimilarProductsWinForms.Controls.ModernScrollPanel();
             _ = new SimilarProductsWinForms.Controls.ModernButtonControl();
+            using var testGrid = new DataGridView();
+            _ = SimilarProductsWinForms.Controls.ModernGridScrollAdapter.Attach(testGrid);
             using var f1 = new FastListingCreatorForm(null!);
             using var f2 = new ProfitCalculatorForm();
             using var f3 = new CompetitorAndTrendSpyForm(null!);
@@ -83,6 +86,14 @@ static class Program
             using var f9 = new EtsyListingPreviewDialog("Test Title", 29.99m, "Test Desc", ["tag1"], ["mat1"], [], []);
             using var f10 = new AiStudioImagePickerDialog();
             using var f11 = new StudioGalleryViewerDialog();
+            using var f12 = new TrackingHistoryForm(null!);
+            using var f13 = new SeoScoreForm(null);
+            using var f14 = new OpportunityScoreForm(null);
+            using var f15 = new ListingDraftForm(null);
+            using var f16 = new ListingOptimizationHistoryForm(null!);
+            using var f17 = new PhotoChecklistForm(null);
+            using var f18 = new WeeklyReportForm([]);
+            using var f19 = new ListingOptimizationForm(null!, null!);
             Console.WriteLine("CONTROLS_VERIFIED_OK");
             return;
         }

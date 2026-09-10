@@ -2,11 +2,12 @@ namespace SimilarProductsWinForms;
 
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ListingDraftForm : Form
 {
     private readonly ListingDraft _draft;
-    private readonly TextBox _allDraftTextBox = new();
+    private readonly ModernMultilineTextBox _allDraftTextBox = new();
 
     public ListingDraftForm(ProductCandidate? product)
     {
@@ -21,6 +22,7 @@ internal sealed class ListingDraftForm : Form
         MinimumSize = new Size(980, 760);
         Font = new Font("Segoe UI", 10F);
         Padding = new Padding(18);
+        UiStyle.ApplyResponsiveTheme(this, new Size(980, 760));
 
         var root = new TableLayoutPanel
         {
@@ -86,22 +88,17 @@ internal sealed class ListingDraftForm : Form
     {
         var page = new TabPage("Tum taslak");
         _allDraftTextBox.Dock = DockStyle.Fill;
-        _allDraftTextBox.Multiline = true;
         _allDraftTextBox.ReadOnly = true;
-        _allDraftTextBox.ScrollBars = ScrollBars.Vertical;
         _allDraftTextBox.Text = BuildAllDraftText();
         page.Controls.Add(_allDraftTextBox);
         return page;
     }
 
-    private static TextBox CreateReadOnlyBox(string text) => new()
+    private static ModernMultilineTextBox CreateReadOnlyBox(string text) => new()
     {
         Dock = DockStyle.Fill,
-        Multiline = true,
         ReadOnly = true,
-        ScrollBars = ScrollBars.Vertical,
         Text = text,
-        BackColor = Color.White,
     };
 
     private string BuildAllDraftText()

@@ -316,6 +316,9 @@ internal static class UiStyle
             property?.SetValue(grid, true, null);
         }
         catch { }
+
+        // Attach modern scrollbars (hides native win32 scrollbars, adds ModernVScrollBar & ModernHScrollBar)
+        SimilarProductsWinForms.Controls.ModernGridScrollAdapter.Attach(grid);
     }
 
     public static SimilarProductsWinForms.Controls.ModernSidebarNav? AttachSidebarNav(Form form, string activeItemId, Action<string>? onNavigate = null)
