@@ -1306,9 +1306,29 @@ internal sealed class FastListingCreatorForm : Form
         _gridVariationPricing.CellValueChanged += (_, _) => OnVariationGridCellValueChanged();
         _gridVariationPricing.CurrentCellDirtyStateChanged += (_, _) =>
         {
-            if (_gridVariationPricing.IsCurrentCellDirty)
+            if (_gridVariationPricing.IsCurrentCellDirty && _gridVariationPricing.CurrentCell is DataGridViewCheckBoxCell)
             {
                 _gridVariationPricing.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        };
+        _gridVariationPricing.EditingControlShowing += (_, e) =>
+        {
+            if (e.Control is TextBox tb)
+            {
+                tb.SelectAll();
+            }
+        };
+        _gridVariationPricing.CellDoubleClick += (_, e) =>
+        {
+            if (e.RowIndex < 0) return;
+            if (e.ColumnIndex == _gridVariationPricing.Columns["ColPrice"]?.Index ||
+                e.ColumnIndex == _gridVariationPricing.Columns["ColQty"]?.Index)
+            {
+                _gridVariationPricing.BeginEdit(true);
+            }
+            else
+            {
+                PromptEditVariationRow(e.RowIndex);
             }
         };
 
@@ -1530,6 +1550,126 @@ internal sealed class FastListingCreatorForm : Form
 
         UpdateVariationPriceRangeSummary();
         UpdateChecklist();
+    }
+
+    private void PromptEditVariationRow(int rowIndex)
+    {
+        if (rowIndex < 0 || rowIndex >= _gridVariationPricing.Rows.Count) return;
+        var row = _gridVariationPricing.Rows[rowIndex];
+        var key = row.Cells["ColKey"].Value?.ToString() ?? "";
+        var currentPriceStr = row.Cells["ColPrice"].Value?.ToString() ?? _numPrice.Value.ToString("0.00", CultureInfo.InvariantCulture);
+        var currentQtyStr = row.Cells["ColQty"].Value?.ToString() ?? _numQuantity.Value.ToString(CultureInfo.InvariantCulture);
+        var currentActive = row.Cells["ColActive"].Value is bool b ? b : true;
+
+        using var dlg = new Form
+        {
+            Text = $"💰 Varyasyon Düzenle: {key}",
+            Size = new Size(380, 240),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = UiStyle.CardBackground,
+            ShowInTaskbar = false
+        };
+
+        var lblOption = new Label
+        {
+            Text = $"Seçenek: {key}",
+            Location = new Point(20, 15),
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 10f),
+            ForeColor = UiStyle.PrimaryColor
+        };
+
+        var lblPrice = new Label
+        {
+            Text = "Fiyat ($):",
+            Location = new Point(20, 48),
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = UiStyle.TextDark
+        };
+        var txtPrice = new TextBox
+        {
+            Text = currentPriceStr,
+            Location = new Point(130, 45),
+            Width = 190,
+            Font = new Font("Segoe UI Semibold", 9.5f)
+        };
+        txtPrice.SelectAll();
+
+        var lblQty = new Label
+        {
+            Text = "Stok Adedi:",
+            Location = new Point(20, 85),
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = UiStyle.TextDark
+        };
+        var txtQty = new TextBox
+        {
+            Text = currentQtyStr,
+            Location = new Point(130, 82),
+            Width = 190,
+            Font = new Font("Segoe UI Semibold", 9.5f)
+        };
+
+        var chkActive = new CheckBox
+        {
+            Text = "Satışta / Aktif",
+            Location = new Point(130, 115),
+            Checked = currentActive,
+            AutoSize = true,
+            Font = new Font("Segoe UI", 9f),
+            ForeColor = UiStyle.TextDark
+        };
+
+        var btnOk = new Button
+        {
+            Text = "Kaydet",
+            DialogResult = DialogResult.OK,
+            Location = new Point(155, 150),
+            Size = new Size(80, 32),
+            BackColor = UiStyle.PrimaryColor,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+        btnOk.FlatAppearance.BorderSize = 0;
+
+        var btnCancel = new Button
+        {
+            Text = "İptal",
+            DialogResult = DialogResult.Cancel,
+            Location = new Point(245, 150),
+            Size = new Size(75, 32),
+            BackColor = UiStyle.SecondaryColor,
+            ForeColor = UiStyle.TextDark,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+        btnCancel.FlatAppearance.BorderColor = UiStyle.BorderColor;
+
+        dlg.Controls.AddRange([lblOption, lblPrice, txtPrice, lblQty, txtQty, chkActive, btnOk, btnCancel]);
+        dlg.AcceptButton = btnOk;
+        dlg.CancelButton = btnCancel;
+
+        if (dlg.ShowDialog(this) == DialogResult.OK)
+        {
+            var pNorm = txtPrice.Text.Trim().Replace(',', '.');
+            if (decimal.TryParse(pNorm, NumberStyles.Any, CultureInfo.InvariantCulture, out var pVal) && pVal > 0)
+            {
+                row.Cells["ColPrice"].Value = pVal.ToString("0.00", CultureInfo.InvariantCulture);
+            }
+            if (int.TryParse(txtQty.Text.Trim(), out var qVal) && qVal >= 0)
+            {
+                row.Cells["ColQty"].Value = qVal;
+            }
+            row.Cells["ColActive"].Value = chkActive.Checked;
+
+            OnVariationGridCellValueChanged();
+        }
     }
 
     private void UpdateVariationPriceRangeSummary()
