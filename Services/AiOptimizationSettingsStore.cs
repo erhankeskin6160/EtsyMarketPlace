@@ -48,6 +48,37 @@ internal static class AiOptimizationSettingsStore
                 needsSave = true;
             }
 
+            // Studio Configuration'dan otomatik anahtar tamamlama
+            string studioCfgPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "SimilarProductsWinForms",
+                "ai-studio-config.json");
+
+            if (File.Exists(studioCfgPath))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(File.ReadAllText(studioCfgPath));
+                    var root = doc.RootElement;
+                    if (string.IsNullOrWhiteSpace(settings.OpenAiApiKey) && root.TryGetProperty("OpenAiApiKey", out var oKey) && !string.IsNullOrWhiteSpace(oKey.GetString()))
+                    {
+                        settings.OpenAiApiKey = oKey.GetString()!.Trim();
+                        needsSave = true;
+                    }
+                    if (string.IsNullOrWhiteSpace(settings.GeminiApiKey) && root.TryGetProperty("GoogleGeminiApiKey", out var gKey) && !string.IsNullOrWhiteSpace(gKey.GetString()))
+                    {
+                        settings.GeminiApiKey = gKey.GetString()!.Trim();
+                        needsSave = true;
+                    }
+                    if (string.IsNullOrWhiteSpace(settings.PhotoRoomApiKey) && root.TryGetProperty("PhotoRoomApiKey", out var pKey) && !string.IsNullOrWhiteSpace(pKey.GetString()))
+                    {
+                        settings.PhotoRoomApiKey = pKey.GetString()!.Trim();
+                        needsSave = true;
+                    }
+                }
+                catch { }
+            }
+
             if (needsSave)
             {
                 Save(settings);
@@ -64,5 +95,32 @@ internal static class AiOptimizationSettingsStore
     public static void Save(AiOptimizationSettings settings)
     {
         File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
+
+        // StudioConfigurationManager ile de senkronize et
+        try
+        {
+            string studioCfgPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "SimilarProductsWinForms",
+                "ai-studio-config.json");
+
+            var studioDict = new Dictionary<string, object>();
+            if (File.Exists(studioCfgPath))
+            {
+                try
+                {
+                    var existing = JsonSerializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(studioCfgPath));
+                    if (existing != null) studioDict = existing;
+                }
+                catch { }
+            }
+
+            if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey)) studioDict["OpenAiApiKey"] = settings.OpenAiApiKey.Trim();
+            if (!string.IsNullOrWhiteSpace(settings.GeminiApiKey)) studioDict["GoogleGeminiApiKey"] = settings.GeminiApiKey.Trim();
+            if (!string.IsNullOrWhiteSpace(settings.PhotoRoomApiKey)) studioDict["PhotoRoomApiKey"] = settings.PhotoRoomApiKey.Trim();
+
+            File.WriteAllText(studioCfgPath, JsonSerializer.Serialize(studioDict, JsonOptions));
+        }
+        catch { }
     }
 }

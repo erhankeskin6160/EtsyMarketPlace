@@ -60,6 +60,7 @@ internal sealed class AiListingImageForm : Form
     private readonly ComboBox _shadowComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _paddingComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _openAiModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ComboBox _openAiModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly CheckBox _chkOpenAiTransparentBg = new() { Text = "Şeffaf Arka Plan (Transparent PNG)", AutoSize = true, ForeColor = Color.White };
     private readonly ComboBox _bflModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _txtIdeogramTypography = new();
@@ -253,6 +254,36 @@ internal sealed class AiListingImageForm : Form
             }
         };
         modeStack.Controls.Add(btnOpenBgEditor);
+
+        var btnConfigureKeys = new Button
+        {
+            Text = "🔑 API Key Yapılandır",
+            Height = 32,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(51, 65, 85),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        btnConfigureKeys.FlatAppearance.BorderSize = 0;
+        btnConfigureKeys.Click += (_, _) =>
+        {
+            using var dlg = new StudioKeyConfigDialog();
+            if (dlg.ShowDialog(this) == DialogResult.OK || true)
+            {
+                var refreshedPr = PhotoRoomSettingsStore.Load();
+                _photoRoomSettings.ApiKey = refreshedPr.ApiKey;
+                _photoRoomSettings.AddShadow = refreshedPr.AddShadow;
+                _photoRoomSettings.Padding = refreshedPr.Padding;
+
+                _aiSettings = AiOptimizationSettingsStore.Load();
+                BuildEngineSpecificControls();
+                UpdateAiBadge();
+            }
+        };
+        modeStack.Controls.Add(btnConfigureKeys);
+
         header.Controls.Add(modeStack, 1, 0);
 
         // AI Engine Status Badge
@@ -794,31 +825,43 @@ internal sealed class AiListingImageForm : Form
             _paddingComboBox.SelectedIndex = 0;
             _engineOptionsPanel.Controls.Add(_paddingComboBox);
         }
-        else if (_cboEngine.SelectedIndex == 2) // 🏆 OpenAI (GPT Image 2)
+        else if (_cboEngine.SelectedIndex == 2) // 🏆 OpenAI (GPT Image 2.5)
         {
+            _engineOptionsPanel.Controls.Add(new Label { Text = "OpenAI İşlem Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
+            _openAiModeComboBox.Width = 340;
+            _openAiModeComboBox.Items.Clear();
+            _openAiModeComboBox.Items.AddRange([
+                "✂️ Arka Planı Değiştir (Inpainting / Ürünü Koru & AI Sahnesi)",
+                "🎨 Sıfırdan Mockup / Sahne Üret (Text-to-Image)",
+                "🔲 Şeffaf Arka Plan (Remove Background)"
+            ]);
+            if (_openAiModeComboBox.SelectedIndex < 0) _openAiModeComboBox.SelectedIndex = 0;
+            _engineOptionsPanel.Controls.Add(_openAiModeComboBox);
+
             _engineOptionsPanel.Controls.Add(new Label { Text = "OpenAI Görsel Modeli:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
             _openAiModelComboBox.Width = 340;
             _openAiModelComboBox.Items.Clear();
             _openAiModelComboBox.Items.AddRange([
-                "gpt-image-2 (Artificial Analysis #1 - ELO 1177)",
-                "gpt-image-1.5 (Hızlı & Dengeli)",
-                "dall-e-3 (Legacy HD)",
-                "dall-e-2 (Geniş Uyumlu)"
+                "gpt-image-2.5-flare (⚡ Hızlı & Arka Plan Düzenleme)",
+                "gpt-image-2.5-sunburst (🌟 Maksimum Detay / Vitrin Kapağı)",
+                "gpt-image-2 (Standard)",
+                "dall-e-3 (Legacy HD)"
             ]);
-            _openAiModelComboBox.SelectedIndex = 0;
+            if (_openAiModelComboBox.SelectedIndex < 0) _openAiModelComboBox.SelectedIndex = 0;
             _engineOptionsPanel.Controls.Add(_openAiModelComboBox);
 
             _chkOpenAiTransparentBg.Margin = new Padding(0, 6, 0, 2);
             _engineOptionsPanel.Controls.Add(_chkOpenAiTransparentBg);
 
-            _engineOptionsPanel.Controls.Add(new Label
+            var infoNotice = new Label
             {
-                Text = "💡 GPT Image 2 görsel muhakeme kabiliyeti ile sıfırdan mockup ve yaşam alanı üretir. 'Şeffaf Arka Plan' seçildiğinde izole cutout çıktısı verir.",
-                ForeColor = UiStyle.TextMuted,
-                Font = new Font("Segoe UI", 8.2F),
+                Text = "💡 GPT-Image-2.5 Flare & Sunburst: Ürününüzün tüm piksellerini koruyarak Etsy'ye özel profesyonel arka plan üretir.",
+                ForeColor = Color.FromArgb(52, 211, 153),
+                Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
                 Width = 340,
                 Margin = new Padding(0, 6, 0, 0)
-            });
+            };
+            _engineOptionsPanel.Controls.Add(infoNotice);
         }
         else if (_cboEngine.SelectedIndex == 3) // ⚡ Black Forest Labs FLUX
         {
@@ -1202,8 +1245,18 @@ internal sealed class AiListingImageForm : Form
                 return;
             }
 
+            if (engineId == "openai" && _openAiModeComboBox.SelectedIndex == 0 && _sessionManager.OriginalBitmap is null)
+            {
+                MessageBox.Show(this, "Arka planı değiştirebilmek için lütfen önce sol panelden düzenlenecek bir ürün fotoğrafı yükleyin.", "Görsel Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
             string prompt = _promptTxt.Text.Trim();
-            if (engineId == "gemini" && string.IsNullOrWhiteSpace(prompt))
+            if (engineId == "openai" && _openAiModeComboBox.SelectedIndex == 0 && string.IsNullOrWhiteSpace(prompt))
+            {
+                prompt = "Professional clean Etsy commercial product staging studio, bright natural daylight, soft contact shadow, ultra-sharp detail";
+            }
+            else if (engineId == "gemini" && string.IsNullOrWhiteSpace(prompt))
             {
                 // Auto-generate scene prompt based on selected Gemini Edit Mode
                 prompt = _geminiEditModeComboBox.SelectedIndex switch
@@ -1233,10 +1286,10 @@ internal sealed class AiListingImageForm : Form
                 },
                 "openai" => _openAiModelComboBox.SelectedIndex switch
                 {
-                    0 => "gpt-image-2",
-                    1 => "gpt-image-1.5",
-                    2 => "dall-e-3",
-                    _ => "dall-e-2"
+                    0 => "gpt-image-2.5-flare",
+                    1 => "gpt-image-2.5-sunburst",
+                    2 => "gpt-image-2",
+                    _ => "dall-e-3"
                 },
                 "flux" => _bflModelComboBox.SelectedIndex switch
                 {
@@ -1247,6 +1300,7 @@ internal sealed class AiListingImageForm : Form
                 _ => ""
             };
 
+            bool isOpenAiBgReplace = engineId == "openai" && _openAiModeComboBox.SelectedIndex == 0;
             var request = new ImageEngineRequest
             {
                 InputImage = _sessionManager.OriginalBitmap,
@@ -1255,7 +1309,8 @@ internal sealed class AiListingImageForm : Form
                 LightingPreset = _lightingSelector.SelectedLighting,
                 CameraAnglePreset = _lightingSelector.SelectedCamera,
                 PreserveProduct = true,
-                TransparentBackground = _chkOpenAiTransparentBg.Checked,
+                EditMode = isOpenAiBgReplace ? "bg_replace" : (_photoRoomModeComboBox.SelectedIndex == 0 ? "remove_bg" : "none"),
+                TransparentBackground = _chkOpenAiTransparentBg.Checked || (engineId == "openai" && _openAiModeComboBox.SelectedIndex == 2),
                 ProcessMode = _photoRoomModeComboBox.SelectedIndex == 0 ? "remove_bg" : (_photoRoomModeComboBox.SelectedIndex == 1 ? "white_bg" : "ai_background"),
                 ShadowMode = _shadowComboBox.SelectedIndex switch { 0 => "ai_soft", 1 => "ai_hard", _ => "none" },
                 Padding = _paddingComboBox.SelectedIndex switch { 0 => 0.1, 1 => 0.05, 2 => 0.15, _ => 0.0 }

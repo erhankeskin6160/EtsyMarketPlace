@@ -68,11 +68,31 @@ public sealed class OpenAiImageEngine : IAiImageEngine
             string editModel = model.Contains("sunburst") ? "gpt-image-2.5-sunburst" : "gpt-image-2.5-flare";
             string quality = string.IsNullOrWhiteSpace(request.QualityTier) ? "high" : request.QualityTier;
 
+            byte[]? maskBytes = request.MaskBytes;
+            if (maskBytes == null)
+            {
+                string prKey = StudioConfigurationManager.Current.PhotoRoomApiKey?.Trim() ?? "";
+                if (!string.IsNullOrWhiteSpace(prKey))
+                {
+                    try
+                    {
+                        var maskRes = await BackgroundMaskService.CreateCutoutAndMaskWithPhotoRoomAsync(inputBytes, prKey, cancellationToken);
+                        if (maskRes.Success && maskRes.MaskPngBytes != null)
+                        {
+                            maskBytes = maskRes.MaskPngBytes;
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            maskBytes ??= BackgroundMaskService.CreateFallbackOpenAiMask(request.InputImage);
+
             var (editSuccess, editImg, editErr) = await AiImageGenerationService.EditWithOpenAiAsync(
                 inputBytes,
                 finalPrompt,
                 apiKey,
-                request.MaskBytes,
+                maskBytes,
                 editModel,
                 quality,
                 "2048x2048",

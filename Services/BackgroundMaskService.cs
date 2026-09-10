@@ -235,4 +235,82 @@ internal static class BackgroundMaskService
 
         return result;
     }
+
+    /// <summary>
+    /// Harici servis (PhotoRoom vb.) olmadan veya görsel opaktan ibaretken
+    /// OpenAI /v1/images/edits için garantili bir 32-bit PNG mask üretir.
+    /// Köşe renk örneklemesi ile arka planı tespit eder veya merkez elips koruma maskı oluşturur.
+    /// </summary>
+    public static byte[] CreateFallbackOpenAiMask(Bitmap original)
+    {
+        try
+        {
+            if (HasAlphaTransparency(original))
+            {
+                return GenerateOpenAiEditMask(original);
+            }
+
+            int w = original.Width;
+            int h = original.Height;
+            Color c1 = original.GetPixel(0, 0);
+            Color c2 = original.GetPixel(Math.Max(0, w - 1), 0);
+            Color c3 = original.GetPixel(0, Math.Max(0, h - 1));
+            Color c4 = original.GetPixel(Math.Max(0, w - 1), Math.Max(0, h - 1));
+
+            int avgR = (c1.R + c2.R + c3.R + c4.R) / 4;
+            int avgG = (c1.G + c2.G + c3.G + c4.G) / 4;
+            int avgB = (c1.B + c2.B + c3.B + c4.B) / 4;
+
+            var (_, maskBytes) = CreateLocalMaskFromThreshold(original, Color.FromArgb(avgR, avgG, avgB), tolerance: 40);
+            return maskBytes;
+        }
+        catch
+        {
+            return GenerateCenterSubjectMask(original.Width, original.Height);
+        }
+    }
+
+    public static bool HasAlphaTransparency(Bitmap bmp)
+    {
+        if (bmp.PixelFormat != PixelFormat.Format32bppArgb && bmp.PixelFormat != PixelFormat.Format32bppPArgb)
+            return false;
+
+        var rect = new Rectangle(0, 0, bmp.Width, bmp.Height);
+        var data = bmp.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        try
+        {
+            int bytes = Math.Abs(data.Stride) * bmp.Height;
+            byte[] pixels = new byte[bytes];
+            System.Runtime.InteropServices.Marshal.Copy(data.Scan0, pixels, 0, bytes);
+            for (int i = 3; i < bytes; i += 16)
+            {
+                if (pixels[i] < 240) return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+        finally
+        {
+            bmp.UnlockBits(data);
+        }
+    }
+
+    public static byte[] GenerateCenterSubjectMask(int width, int height)
+    {
+        using var maskBmp = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+        using var g = Graphics.FromImage(maskBmp);
+        g.Clear(Color.FromArgb(0, 0, 0, 0)); // Dış alan şeffaf (AI değiştirecek)
+
+        using var brush = new SolidBrush(Color.FromArgb(255, 0, 0, 0)); // İç alan opak (Korunacak)
+        int marginX = (int)(width * 0.12);
+        int marginY = (int)(height * 0.12);
+        g.FillEllipse(brush, marginX, marginY, width - (marginX * 2), height - (marginY * 2));
+
+        using var ms = new MemoryStream();
+        maskBmp.Save(ms, ImageFormat.Png);
+        return ms.ToArray();
+    }
 }

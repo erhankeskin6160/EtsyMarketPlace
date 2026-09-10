@@ -211,13 +211,26 @@ internal static class BatchBackgroundChangeService
                 string model = engineChoice == 1 ? "gpt-image-2.5-sunburst" : "gpt-image-2.5-flare";
                 string quality = engineChoice == 1 ? "xhigh" : "high";
 
+                string openAiKey = !string.IsNullOrWhiteSpace(aiSettings.OpenAiApiKey)
+                    ? aiSettings.OpenAiApiKey.Trim()
+                    : StudioConfigurationManager.Current.OpenAiApiKey?.Trim() ?? string.Empty;
+
+                if (string.IsNullOrWhiteSpace(openAiKey))
+                {
+                    return (false, null, "OpenAI API Anahtarı girilmemiş. Lütfen [🔑 API Key] butonuna basarak sk-... anahtarınızı kaydedin.");
+                }
+
                 // Eğer PhotoRoom API anahtarı varsa mask oluşturup OpenAI Edit'e verelim
                 byte[]? maskBytes = null;
-                if (!string.IsNullOrWhiteSpace(aiSettings.PhotoRoomApiKey))
+                string prKey = !string.IsNullOrWhiteSpace(aiSettings.PhotoRoomApiKey)
+                    ? aiSettings.PhotoRoomApiKey.Trim()
+                    : StudioConfigurationManager.Current.PhotoRoomApiKey?.Trim() ?? string.Empty;
+
+                if (!string.IsNullOrWhiteSpace(prKey))
                 {
                     try
                     {
-                        var maskRes = await BackgroundMaskService.CreateCutoutAndMaskWithPhotoRoomAsync(imageBytes, aiSettings.PhotoRoomApiKey, ct);
+                        var maskRes = await BackgroundMaskService.CreateCutoutAndMaskWithPhotoRoomAsync(imageBytes, prKey, ct);
                         if (maskRes.Success && maskRes.MaskPngBytes != null)
                         {
                             maskBytes = maskRes.MaskPngBytes;
@@ -226,10 +239,12 @@ internal static class BatchBackgroundChangeService
                     catch { }
                 }
 
+                maskBytes ??= BackgroundMaskService.CreateFallbackOpenAiMask(originalBmp);
+
                 return await AiImageGenerationService.EditWithOpenAiAsync(
                     imageBytes,
                     backgroundPrompt,
-                    aiSettings.OpenAiApiKey,
+                    openAiKey,
                     maskBytes,
                     model: model,
                     quality: quality,

@@ -14,6 +14,8 @@ using System.Windows.Forms;
 using SimilarProductsWinForms.Controls;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Studio.Services;
+using SimilarProductsWinForms.Studio.UI;
 
 /// <summary>
 /// Etsy ürün fotoğrafları için profesyonel AI arka plan değiştirme, akıllı prompt asistanı
@@ -147,7 +149,13 @@ internal sealed class BackgroundEditorForm : Form
             ForeColor = Color.White,
             TextAlign = ContentAlignment.MiddleLeft
         };
-        header.Controls.Add(lblTitle, 0, 0);
+        var rightStack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = new Padding(0)
+        };
 
         // Model Badge
         var badge = new Label
@@ -157,11 +165,28 @@ internal sealed class BackgroundEditorForm : Form
             Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
             ForeColor = Color.FromArgb(52, 211, 153), // Emerald 400
             BackColor = Color.FromArgb(30, 41, 59),
-            Padding = new Padding(10, 5, 10, 5),
-            Anchor = AnchorStyles.Right,
-            Margin = new Padding(0, 6, 0, 0)
+            Padding = new Padding(10, 6, 10, 6),
+            Margin = new Padding(8, 4, 0, 0)
         };
-        header.Controls.Add(badge, 2, 0);
+
+        var btnConfigureKeys = new Button
+        {
+            Text = "🔑 API Key Yapılandır",
+            Height = 32,
+            AutoSize = true,
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(79, 70, 229), // Indigo
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 4, 4, 0)
+        };
+        btnConfigureKeys.FlatAppearance.BorderSize = 0;
+        btnConfigureKeys.Click += (_, _) => OpenKeyConfigDialog("openai");
+
+        rightStack.Controls.Add(badge);
+        rightStack.Controls.Add(btnConfigureKeys);
+        header.Controls.Add(rightStack, 2, 0);
 
         return header;
     }
@@ -731,6 +756,63 @@ internal sealed class BackgroundEditorForm : Form
         }
     }
 
+    private void OpenKeyConfigDialog(string? focus = "openai")
+    {
+        using var dlg = new StudioKeyConfigDialog(focus);
+        if (dlg.ShowDialog(this) == DialogResult.OK || true)
+        {
+            var fresh = AiOptimizationSettingsStore.Load();
+            _aiSettings.OpenAiApiKey = fresh.OpenAiApiKey;
+            _aiSettings.GeminiApiKey = fresh.GeminiApiKey;
+            _aiSettings.PhotoRoomApiKey = fresh.PhotoRoomApiKey;
+            _aiSettings.BflApiKey = fresh.BflApiKey;
+            _aiSettings.IdeogramApiKey = fresh.IdeogramApiKey;
+        }
+    }
+
+    private bool EnsureApiKeyConfigured(int engineIndex)
+    {
+        string engineKeyName = engineIndex switch
+        {
+            0 or 1 => "OpenAI",
+            2 => "Google Gemini",
+            3 => "PhotoRoom",
+            _ => "OpenAI"
+        };
+
+        bool hasKey = engineIndex switch
+        {
+            0 or 1 => !string.IsNullOrWhiteSpace(_aiSettings.OpenAiApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.OpenAiApiKey),
+            2 => !string.IsNullOrWhiteSpace(_aiSettings.GeminiApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.GoogleGeminiApiKey),
+            3 => !string.IsNullOrWhiteSpace(_aiSettings.PhotoRoomApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.PhotoRoomApiKey),
+            _ => true
+        };
+
+        if (!hasKey)
+        {
+            var res = MessageBox.Show(this,
+                $"{engineKeyName} motoru için henüz bir API Anahtarı girilmemiş.\n\nİşlemi başlatabilmek için şimdi anahtarınızı yapılandırmak ister misiniz?",
+                $"{engineKeyName} API Anahtarı Gerekli",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (res == DialogResult.Yes)
+            {
+                OpenKeyConfigDialog(engineIndex == 2 ? "gemini" : (engineIndex == 3 ? "photoroom" : "openai"));
+                return engineIndex switch
+                {
+                    0 or 1 => !string.IsNullOrWhiteSpace(_aiSettings.OpenAiApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.OpenAiApiKey),
+                    2 => !string.IsNullOrWhiteSpace(_aiSettings.GeminiApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.GoogleGeminiApiKey),
+                    3 => !string.IsNullOrWhiteSpace(_aiSettings.PhotoRoomApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.PhotoRoomApiKey),
+                    _ => true
+                };
+            }
+            return false;
+        }
+
+        return true;
+    }
+
     private async Task RunSingleImageAsync()
     {
         if (_selectedItem == null)
@@ -741,6 +823,9 @@ internal sealed class BackgroundEditorForm : Form
 
         if (_isProcessing) return;
 
+        int engine = _cboEngine.SelectedIndex;
+        if (!EnsureApiKeyConfigured(engine)) return;
+
         SetBusy(true);
         _lblProgress.Text = $"'{_selectedItem.Title}' işleniyor...";
 
@@ -748,7 +833,6 @@ internal sealed class BackgroundEditorForm : Form
         {
             _cts = new CancellationTokenSource();
             var singleList = new List<BatchInputItem> { _selectedItem };
-            int engine = _cboEngine.SelectedIndex;
 
             var results = await BatchBackgroundChangeService.RunBatchAsync(
                 singleList,
@@ -797,6 +881,9 @@ internal sealed class BackgroundEditorForm : Form
 
         if (_isProcessing) return;
 
+        int engine = _cboEngine.SelectedIndex;
+        if (!EnsureApiKeyConfigured(engine)) return;
+
         SetBusy(true);
         _progressBar.Value = 0;
         _progressBar.Maximum = _loadedItems.Count;
@@ -804,7 +891,6 @@ internal sealed class BackgroundEditorForm : Form
         try
         {
             _cts = new CancellationTokenSource();
-            int engine = _cboEngine.SelectedIndex;
 
             var progress = new Progress<BatchProgressReport>(report =>
             {
