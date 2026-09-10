@@ -125,15 +125,24 @@ public sealed class OpenAiImageEngine : IAiImageEngine
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, ApiEndpoint);
             httpRequest.Headers.Add("Authorization", $"Bearer {apiKey}");
 
-            var payload = new
-            {
-                model = model,
-                prompt = finalPrompt,
-                n = 1,
-                size = "1024x1024",
-                quality = "standard",
-                response_format = "b64_json"
-            };
+            object payload = model.StartsWith("dall-e", StringComparison.OrdinalIgnoreCase)
+                ? new
+                {
+                    model = model,
+                    prompt = finalPrompt,
+                    n = 1,
+                    size = "1024x1024",
+                    quality = "standard",
+                    response_format = "b64_json"
+                }
+                : new
+                {
+                    model = model,
+                    prompt = finalPrompt,
+                    n = 1,
+                    size = "1024x1024",
+                    quality = "high"
+                };
 
             httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 

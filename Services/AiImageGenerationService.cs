@@ -185,8 +185,18 @@ internal sealed class AiImageGenerationService
             content.Add(new StringContent(prompt.Trim()), "prompt");
             content.Add(new StringContent(actualModel), "model");
             content.Add(new StringContent(size), "size");
-            content.Add(new StringContent(quality), "quality");
-            content.Add(new StringContent("b64_json"), "response_format");
+
+            if (!actualModel.StartsWith("dall-e", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.IsNullOrWhiteSpace(quality))
+                {
+                    content.Add(new StringContent(quality), "quality");
+                }
+            }
+            else
+            {
+                content.Add(new StringContent("b64_json"), "response_format");
+            }
 
             using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/images/edits");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
