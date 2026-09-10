@@ -66,6 +66,17 @@ static class Program
             return;
         }
 
+        if (args.Any(argument => string.Equals(argument, "--verify-controls", StringComparison.OrdinalIgnoreCase)))
+        {
+            _ = new SimilarProductsWinForms.Controls.ModernVScrollBar();
+            _ = new SimilarProductsWinForms.Controls.ModernMultilineTextBox();
+            _ = new SimilarProductsWinForms.Controls.ModernScrollPanel();
+            _ = new SimilarProductsWinForms.Controls.ModernButtonControl();
+            using var testForm = new FastListingCreatorForm(null!);
+            Console.WriteLine("CONTROLS_VERIFIED_OK");
+            return;
+        }
+
         ApplicationConfiguration.Initialize();
         var keywordGateway = new EtsyKeywordMarketGateway(new EtsyApiClient(), EtsyApiSettingsStore.Load);
         var analyzeKeywordUseCase = new AnalyzeKeywordUseCase(keywordGateway);
