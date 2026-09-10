@@ -532,22 +532,28 @@ internal sealed class EtsyApiClient
         }
 
         var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
-        var tags = NormalizeListingTags(update.Tags);
-        var materials = NormalizeListingMaterials(update.Materials);
         var form = new List<KeyValuePair<string, string>>
         {
             new("title", update.Title.Trim()),
             new("description", EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(update.Description)),
         };
 
-        foreach (var tag in tags)
+        if (update.Tags != null)
         {
-            form.Add(new("tags[]", tag));
+            var tags = NormalizeListingTags(update.Tags);
+            foreach (var tag in tags)
+            {
+                form.Add(new("tags[]", tag));
+            }
         }
 
-        foreach (var material in materials)
+        if (update.Materials != null)
         {
-            form.Add(new("materials[]", material));
+            var materials = NormalizeListingMaterials(update.Materials);
+            foreach (var material in materials)
+            {
+                form.Add(new("materials[]", material));
+            }
         }
 
         using var request = CreateRequest(settings, HttpMethod.Patch, $"{BaseUrl}/shops/{shopId}/listings/{listingId}", useAccessToken: true);
@@ -652,28 +658,86 @@ internal sealed class EtsyApiClient
         await EnsureAccessTokenAsync(settings, cancellationToken);
 
         var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
-        using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?limit=100", useAccessToken: true);
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        var options = new List<EtsyReadinessStateOption>();
+
+        // 1. Try official readiness-state-definitions endpoint
+        try
         {
-            throw new InvalidOperationException($"Hazirlik durumu secenekleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+            using var defRequest = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/readiness-state-definitions", useAccessToken: true);
+            using var defResponse = await _httpClient.SendAsync(defRequest, cancellationToken);
+            if (defResponse.IsSuccessStatusCode)
+            {
+                var defBody = await defResponse.Content.ReadAsStringAsync(cancellationToken);
+                using var defDoc = JsonDocument.Parse(defBody);
+                if (defDoc.RootElement.TryGetProperty("results", out var defResults) && defResults.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in defResults.EnumerateArray())
+                    {
+                        var id = GetLong(item, "readiness_state_id");
+                        if (id <= 0) continue;
+
+                        var state = item.TryGetProperty("readiness_state", out var rs) ? rs.GetString() : null;
+                        var minTime = item.TryGetProperty("min_processing_time", out var minE) && minE.TryGetInt32(out var minVal) ? minVal : 0;
+                        var maxTime = item.TryGetProperty("max_processing_time", out var maxE) && maxE.TryGetInt32(out var maxVal) ? maxVal : 0;
+                        var unit = item.TryGetProperty("processing_time_unit", out var unitE) ? unitE.GetString() ?? "gün" : "gün";
+
+                        string title;
+                        if (!string.IsNullOrWhiteSpace(state))
+                        {
+                            var stateTr = state.Equals("made_to_order", StringComparison.OrdinalIgnoreCase) ? "Siparişe Özel (Made to order)" : "Hazır Ürün (Ready to ship)";
+                            title = (minTime > 0 || maxTime > 0) ? $"{stateTr} ({minTime}-{maxTime} {unit})" : stateTr;
+                        }
+                        else
+                        {
+                            title = $"Hazırlık Durumu #{id}";
+                        }
+
+                        if (!options.Any(o => o.ReadinessStateId == id))
+                        {
+                            options.Add(new EtsyReadinessStateOption(id, title));
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to active listings scan
         }
 
-        using var document = JsonDocument.Parse(body);
-        if (!document.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        if (options.Count > 0)
         {
-            return [];
+            return options.OrderBy(o => o.ReadinessStateId).ToList();
         }
 
-        return results
-            .EnumerateArray()
-            .Select(item => GetLong(item, "readiness_state_id"))
-            .Where(id => id > 0)
-            .Distinct()
-            .OrderBy(id => id)
-            .Select(id => new EtsyReadinessStateOption(id, $"Hazirlik durumu #{id}"))
-            .ToList();
+        // 2. Fallback: Query active listings to find used readiness_state_ids
+        try
+        {
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?limit=100", useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var document = JsonDocument.Parse(body);
+                if (document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+                {
+                    return results
+                        .EnumerateArray()
+                        .Select(item => GetLong(item, "readiness_state_id"))
+                        .Where(id => id > 0)
+                        .Distinct()
+                        .OrderBy(id => id)
+                        .Select(id => new EtsyReadinessStateOption(id, $"Hazırlık durumu #{id}"))
+                        .ToList();
+                }
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return options;
     }
 
     public async Task<CreatedDraftListing> CreateOwnShopDraftListingAsync(
@@ -699,9 +763,12 @@ internal sealed class EtsyApiClient
             new("type", draft.IsDigital ? "download" : "physical"),
         };
 
-        if (!draft.IsDigital && draft.ShippingProfileId > 0)
+        if (!draft.IsDigital)
         {
-            form.Add(new("shipping_profile_id", draft.ShippingProfileId.ToString(CultureInfo.InvariantCulture)));
+            if (draft.ShippingProfileId > 0)
+            {
+                form.Add(new("shipping_profile_id", draft.ShippingProfileId.ToString(CultureInfo.InvariantCulture)));
+            }
             if (draft.ReadinessStateId > 0)
             {
                 form.Add(new("readiness_state_id", draft.ReadinessStateId.ToString(CultureInfo.InvariantCulture)));
@@ -760,7 +827,7 @@ internal sealed class EtsyApiClient
             return;
         }
 
-        var products = BuildInventoryProducts(listingId, inventory);
+        var (products, priceOnProperty) = BuildInventoryProducts(listingId, inventory);
         if (products.Count == 0)
         {
             return;
@@ -769,7 +836,7 @@ internal sealed class EtsyApiClient
         var payload = new
         {
             products,
-            price_on_property = Array.Empty<long>(),
+            price_on_property = priceOnProperty,
             quantity_on_property = Array.Empty<long>(),
             sku_on_property = Array.Empty<long>(),
         };
@@ -784,7 +851,7 @@ internal sealed class EtsyApiClient
         }
     }
 
-    private static List<object> BuildInventoryProducts(long listingId, DraftListingInventoryUpdate inventory)
+    private static (List<object> Products, long[] PriceOnProperty) BuildInventoryProducts(long listingId, DraftListingInventoryUpdate inventory)
     {
         var groups = inventory.Variations
             .Where(group => group.Values.Count > 0)
@@ -792,7 +859,7 @@ internal sealed class EtsyApiClient
             .ToList();
         if (groups.Count == 0)
         {
-            return [];
+            return ([], Array.Empty<long>());
         }
 
         var combinations = BuildVariationCombinations(groups)
@@ -801,14 +868,41 @@ internal sealed class EtsyApiClient
 
         var products = new List<object>();
         var sharedSku = $"AUTO-{listingId}";
+        var customPricing = inventory.CustomPricing;
+        var distinctPricesPerGroup1 = new HashSet<decimal>();
+        var distinctPricesPerGroup2 = new HashSet<decimal>();
+
         for (var index = 0; index < combinations.Count; index++)
         {
             var combination = combinations[index];
+            var comboKey = string.Join(" / ", combination.Select(item => item.Value.Trim()));
+
+            decimal price = inventory.Price;
+            int qty = inventory.Quantity;
+            bool isEnabled = true;
+
+            if (customPricing != null)
+            {
+                if (customPricing.TryGetValue(comboKey, out var pInfo) ||
+                    (combination.Count > 0 && customPricing.TryGetValue(combination[0].Value.Trim(), out pInfo)))
+                {
+                    price = pInfo.Price > 0 ? pInfo.Price : inventory.Price;
+                    qty = pInfo.Quantity > 0 ? pInfo.Quantity : inventory.Quantity;
+                    isEnabled = pInfo.IsEnabled;
+                }
+            }
+
+            distinctPricesPerGroup1.Add(price);
+            if (combination.Count > 1)
+            {
+                distinctPricesPerGroup2.Add(price);
+            }
+
             var offering = new Dictionary<string, object>
             {
-                ["price"] = inventory.Price.ToString("0.00", CultureInfo.InvariantCulture),
-                ["quantity"] = Math.Max(1, inventory.Quantity),
-                ["is_enabled"] = true,
+                ["price"] = price.ToString("0.00", CultureInfo.InvariantCulture),
+                ["quantity"] = Math.Max(1, qty),
+                ["is_enabled"] = isEnabled,
             };
             if (inventory.ReadinessStateId is > 0)
             {
@@ -828,7 +922,17 @@ internal sealed class EtsyApiClient
             });
         }
 
-        return products;
+        var priceOnProperty = new List<long>();
+        if (distinctPricesPerGroup1.Count > 1 && groups.Count >= 1)
+        {
+            priceOnProperty.Add(groups[0].PropertyId);
+        }
+        if (distinctPricesPerGroup2.Count > 1 && groups.Count >= 2 && !priceOnProperty.Contains(groups[1].PropertyId))
+        {
+            priceOnProperty.Add(groups[1].PropertyId);
+        }
+
+        return (products, priceOnProperty.ToArray());
     }
 
     private static IEnumerable<List<(DraftListingVariationGroup Group, string Value)>> BuildVariationCombinations(
@@ -1484,8 +1588,9 @@ internal sealed class EtsyApiClient
             .ToList();
     }
 
-    private static List<string> NormalizeListingTags(IEnumerable<string> tags) =>
-        tags
+    private static List<string> NormalizeListingTags(IEnumerable<string>? tags) =>
+        (tags ?? [])
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
             .Select(tag => tag.Trim())
             .Where(tag => tag.Length > 0)
             .Select(tag => tag.Length <= 20 ? tag : tag[..20].TrimEnd())
@@ -1493,15 +1598,16 @@ internal sealed class EtsyApiClient
             .Take(13)
             .ToList();
 
-    internal static List<string> NormalizeListingMaterialsForEtsy(IEnumerable<string> materials) =>
-        materials
+    internal static List<string> NormalizeListingMaterialsForEtsy(IEnumerable<string>? materials) =>
+        (materials ?? [])
+            .Where(material => !string.IsNullOrWhiteSpace(material))
             .Select(SanitizeListingMaterial)
             .Where(material => material.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(13)
             .ToList();
 
-    private static List<string> NormalizeListingMaterials(IEnumerable<string> materials) =>
+    private static List<string> NormalizeListingMaterials(IEnumerable<string>? materials) =>
         NormalizeListingMaterialsForEtsy(materials);
 
     private static string SanitizeListingMaterial(string material)
@@ -1740,7 +1846,7 @@ internal sealed record ListingTextUpdate(
     string Title,
     string Description,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<string> Materials);
+    IReadOnlyList<string>? Materials = null);
 
 internal sealed record DraftListingCreateRequest(
     string Title,
@@ -1758,11 +1864,18 @@ internal sealed record DraftListingCreateRequest(
 
 internal sealed record CreatedDraftListing(long ListingId, string Url);
 
+internal sealed record DraftListingVariationPricing(
+    string CombinationKey,
+    decimal Price,
+    int Quantity = 10,
+    bool IsEnabled = true);
+
 internal sealed record DraftListingInventoryUpdate(
     decimal Price,
     int Quantity,
     long? ReadinessStateId,
-    IReadOnlyList<DraftListingVariationGroup> Variations);
+    IReadOnlyList<DraftListingVariationGroup> Variations,
+    IReadOnlyDictionary<string, DraftListingVariationPricing>? CustomPricing = null);
 
 internal sealed record DraftListingVariationGroup(
     string Name,

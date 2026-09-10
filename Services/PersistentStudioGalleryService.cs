@@ -106,7 +106,7 @@ internal sealed class PersistentStudioGalleryService
             cmd.Parameters.AddWithValue("@listing_id", (object?)listingId ?? DBNull.Value);
 
             var newId = (long)(await cmd.ExecuteScalarAsync(cancellationToken) ?? 0L);
-            return new StudioGalleryItem(newId, now, fullPath, prompt, engine, productTitle, listingId);
+            return new StudioGalleryItem(newId, now, fullPath, prompt ?? "", engine ?? "", productTitle ?? "", listingId);
         }
         catch
         {

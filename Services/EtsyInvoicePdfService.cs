@@ -1,3 +1,5 @@
+#pragma warning disable CS0618
+
 namespace SimilarProductsWinForms.Services;
 
 using System;

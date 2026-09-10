@@ -34,3 +34,4 @@ etsy-api-settings.json
 Thumbs.db
 .DS_Store
 publish_vds_standalone/SimilarProductsWinForms.exe
+scratch_gh_auth.ps1

@@ -328,7 +328,8 @@ internal static class UiStyle
     {
         sidebarNav.ClearItems();
         sidebarNav.AddItem("dashboard", "Kontrol Paneli", "📊", "Genel");
-        sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel", "YENİ");
+        sidebarNav.AddItem("fast_creator", "Hızlı Ürün Ekle (AI)", "⚡", "Genel", "YENİ");
+        sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel");
         sidebarNav.AddItem("ai_image", "AI Görsel Studio", "🖼️", "Genel", "YENİ");
         sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 

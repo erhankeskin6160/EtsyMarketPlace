@@ -189,6 +189,30 @@ public sealed class AbTestServiceTests
         Assert.Equal(AbTestStatus.Completed, updated.Status);
     }
 
+    [Fact]
+    public async Task DeleteAsync_RemovesExperimentFromRepository()
+    {
+        var save = new SaveAbTestExperiment(
+            "listing-999",
+            "Listing To Delete",
+            "Delete Me Test",
+            "Title A",
+            "Title B",
+            ["tag1"],
+            ["tag2"],
+            "Desc A",
+            "Desc B");
+
+        var exp = await _service.StartExperimentAsync(save);
+        Assert.NotNull(exp);
+
+        var deleteResult = await _service.DeleteAsync(exp.Id);
+        Assert.True(deleteResult);
+
+        var retrieved = await _service.GetByIdAsync(exp.Id);
+        Assert.Null(retrieved);
+    }
+
     private sealed class InMemoryAbTestRepository : IAbTestRepository
     {
         private readonly List<ListingAbTestExperiment> _items = [];
@@ -211,7 +235,7 @@ public sealed class AbTestServiceTests
                 experiment.VariantA_Description,
                 experiment.VariantB_Description,
                 DateTimeOffset.Now,
-                null,
+                experiment.EndDate,
                 AbTestStatus.Active,
                 experiment.InitialViews,
                 experiment.InitialFavorites,
@@ -245,6 +269,21 @@ public sealed class AbTestServiceTests
                 AfterSales = update.AfterSales,
                 Status = update.CompleteExperiment ? AbTestStatus.Completed : existing.Status,
                 EndDate = update.CompleteExperiment ? DateTimeOffset.Now : existing.EndDate,
+            };
+            _items[index] = updated;
+            return Task.FromResult<ListingAbTestExperiment?>(updated);
+        }
+
+        public Task<ListingAbTestExperiment?> UpdateStatusAsync(long id, AbTestStatus status, CancellationToken cancellationToken = default)
+        {
+            var index = _items.FindIndex(i => i.Id == id);
+            if (index < 0) return Task.FromResult<ListingAbTestExperiment?>(null);
+
+            var existing = _items[index];
+            var updated = existing with
+            {
+                Status = status,
+                EndDate = status == AbTestStatus.Completed ? DateTimeOffset.Now : existing.EndDate,
             };
             _items[index] = updated;
             return Task.FromResult<ListingAbTestExperiment?>(updated);

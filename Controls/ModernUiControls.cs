@@ -325,3 +325,405 @@ public class ModernTabControl : TabControl
         }
     }
 }
+
+/// <summary>
+/// Modern vertical FlowLayoutPanel that suppresses horizontal scrollbars at the Win32 level.
+/// </summary>
+public class VerticalScrollFlowPanel : FlowLayoutPanel
+{
+    public VerticalScrollFlowPanel()
+    {
+        DoubleBuffered = true;
+        AutoScroll = true;
+        WrapContents = false;
+        FlowDirection = FlowDirection.TopDown;
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.Style &= ~0x00100000; // WS_HSCROLL - Disable horizontal scrollbar completely
+            return cp;
+        }
+    }
+}
+
+/// <summary>
+/// Premium Store Copilot Insight Card featuring modern layered dark background,
+/// left category accent indicator, pill badge, anti-aliased typography, and action button.
+/// </summary>
+public class StoreCopilotInsightCard : ModernCardPanel
+{
+    private readonly string _badgeText;
+    private readonly string _icon;
+    private readonly string _title;
+    private readonly string _description;
+    private readonly Color _accentColor;
+    private readonly string? _buttonText;
+    private readonly Action? _onButtonClick;
+
+    private readonly ModernButtonControl? _actionButton;
+
+    public StoreCopilotInsightCard(
+        string icon,
+        string badgeText,
+        string title,
+        string description,
+        Color accentColor,
+        int width,
+        string? buttonText = null,
+        Action? onButtonClick = null)
+    {
+        DoubleBuffered = true;
+        _icon = icon;
+        _badgeText = badgeText;
+        _title = title;
+        _description = description;
+        _accentColor = accentColor;
+        _buttonText = buttonText;
+        _onButtonClick = onButtonClick;
+
+        CornerRadius = 10;
+        CardColor = Color.FromArgb(20, 27, 44);
+        BorderColor = Color.FromArgb(45, 55, 78);
+        Margin = new Padding(0, 0, 0, 10);
+        Padding = new Padding(16, 12, 16, 12);
+        Cursor = Cursors.Default;
+
+        if (!string.IsNullOrWhiteSpace(_buttonText) && _onButtonClick != null)
+        {
+            _actionButton = new ModernButtonControl
+            {
+                Text = $"{_buttonText}  →",
+                Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+                NormalColor = Color.FromArgb(32, 44, 70),
+                HoverColor = _accentColor,
+                ForeColor = Color.White,
+                CornerRadius = 7,
+                Cursor = Cursors.Hand,
+                Height = 32
+            };
+            _actionButton.Click += (_, _) => _onButtonClick();
+            Controls.Add(_actionButton);
+        }
+
+        UpdateCardWidth(width);
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        CardColor = Color.FromArgb(27, 36, 60);
+        BorderColor = Color.FromArgb(100, _accentColor.R, _accentColor.G, _accentColor.B);
+        Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        CardColor = Color.FromArgb(20, 27, 44);
+        BorderColor = Color.FromArgb(45, 55, 78);
+        Invalidate();
+    }
+
+    public void UpdateCardWidth(int newWidth)
+    {
+        if (newWidth < 180) newWidth = 180;
+        Width = newWidth;
+
+        int contentWidth = Width - 36; // 18px left, 18px right
+
+        using var titleFont = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
+        using var descFont = new Font("Segoe UI", 8.75F);
+
+        var titleSize = TextRenderer.MeasureText(
+            _title,
+            titleFont,
+            new Size(contentWidth, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+
+        var descSize = TextRenderer.MeasureText(
+            _description,
+            descFont,
+            new Size(contentWidth, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+
+        int currentY = 12 + 20 + 8; // Top padding (12) + Badge (20) + Gap (8)
+        currentY += titleSize.Height + 6; // Title + Gap
+        currentY += descSize.Height + 12; // Description + Gap
+
+        if (_actionButton != null)
+        {
+            int btnWidth = Math.Min(220, contentWidth);
+            _actionButton.Size = new Size(btnWidth, 32);
+            _actionButton.Location = new Point(18, currentY);
+            currentY += _actionButton.Height + 14; // Button + Bottom padding
+        }
+        else
+        {
+            currentY += 4; // Extra bottom breathing room
+        }
+
+        Height = currentY;
+        Invalidate();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
+        using var path = CreateRoundedRectanglePath(rect, CornerRadius);
+
+        // 1. Layered dark background
+        using (var bgBrush = new SolidBrush(CardColor))
+        {
+            g.FillPath(bgBrush, path);
+        }
+
+        // 2. Left vertical accent indicator bar
+        var barRect = new Rectangle(1, 8, 4, Math.Max(12, Height - 16));
+        using (var barPath = CreateRoundedRectanglePath(barRect, 2))
+        using (var barBrush = new SolidBrush(_accentColor))
+        {
+            g.FillPath(barBrush, barPath);
+        }
+
+        // 3. Modern subtle border
+        using (var borderPen = new Pen(BorderColor, 1.2f))
+        {
+            g.DrawPath(borderPen, path);
+        }
+
+        // 4. Pill Badge (with Icon + Category)
+        string fullBadge = string.IsNullOrEmpty(_icon) ? _badgeText : $"{_icon}  {_badgeText}";
+        using var badgeFont = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold);
+        var badgeTextSize = g.MeasureString(fullBadge, badgeFont);
+        var badgeRect = new Rectangle(18, 12, (int)badgeTextSize.Width + 14, 20);
+
+        using (var badgePath = CreateRoundedRectanglePath(badgeRect, 6))
+        using (var badgeBgBrush = new SolidBrush(Color.FromArgb(32, _accentColor.R, _accentColor.G, _accentColor.B)))
+        using (var badgeBorderPen = new Pen(Color.FromArgb(70, _accentColor.R, _accentColor.G, _accentColor.B), 1f))
+        using (var badgeTextBrush = new SolidBrush(_accentColor))
+        {
+            g.FillPath(badgeBgBrush, badgePath);
+            g.DrawPath(badgeBorderPen, badgePath);
+            g.DrawString(fullBadge, badgeFont, badgeTextBrush, badgeRect.X + 7, badgeRect.Y + 3);
+        }
+
+        // 5. Title
+        int contentWidth = Width - 36;
+        using var titleFont = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
+        int titleY = badgeRect.Bottom + 6;
+
+        var measuredTitleSize = TextRenderer.MeasureText(
+            _title,
+            titleFont,
+            new Size(contentWidth, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        var titleRect = new Rectangle(18, titleY, contentWidth, measuredTitleSize.Height);
+
+        TextRenderer.DrawText(
+            g,
+            _title,
+            titleFont,
+            titleRect,
+            Color.FromArgb(248, 250, 252), // Crisp white
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+
+        // 6. Description
+        using var descFont = new Font("Segoe UI", 8.75F);
+        int descY = titleRect.Bottom + 5;
+
+        var measuredDescSize = TextRenderer.MeasureText(
+            _description,
+            descFont,
+            new Size(contentWidth, int.MaxValue),
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+        var descRect = new Rectangle(18, descY, contentWidth, measuredDescSize.Height);
+
+        TextRenderer.DrawText(
+            g,
+            _description,
+            descFont,
+            descRect,
+            Color.FromArgb(203, 213, 225), // Slate 300
+            TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+
+        // 7. Base child painting (e.g. ModernButtonControl)
+        base.OnPaint(e);
+    }
+}
+
+/// <summary>
+/// Prominent, high-contrast Quick Action Hub Card with custom icon box,
+/// accent left bar, crisp typography, and interactive hover elevation.
+/// </summary>
+public class QuickActionCard : ModernCardPanel
+{
+    private readonly string _icon;
+    private readonly string _title;
+    private readonly string _description;
+    private readonly Color _accentColor;
+    private readonly Action _onClick;
+    private bool _isHovered;
+
+    public QuickActionCard(string icon, string title, string description, Color accentColor, Action onClick)
+    {
+        DoubleBuffered = true;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+
+        _icon = icon;
+        _title = title;
+        _description = description;
+        _accentColor = accentColor;
+        _onClick = onClick;
+
+        Dock = DockStyle.Fill;
+        Margin = new Padding(4, 0, 4, 0);
+        Padding = new Padding(0);
+        CornerRadius = 12;
+        CardColor = Color.FromArgb(22, 31, 50);
+        BorderColor = Color.FromArgb(90, accentColor.R, accentColor.G, accentColor.B);
+        Cursor = Cursors.Hand;
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _isHovered = true;
+        CardColor = Color.FromArgb(30, 42, 68);
+        BorderColor = Color.FromArgb(220, _accentColor.R, _accentColor.G, _accentColor.B);
+        Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _isHovered = false;
+        CardColor = Color.FromArgb(22, 31, 50);
+        BorderColor = Color.FromArgb(90, _accentColor.R, _accentColor.G, _accentColor.B);
+        Invalidate();
+    }
+
+    protected override void OnClick(EventArgs e)
+    {
+        base.OnClick(e);
+        _onClick();
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
+        using var path = CreateRoundedRectanglePath(rect, CornerRadius);
+
+        // 1. Zemin
+        using (var bgBrush = new SolidBrush(CardColor))
+        {
+            g.FillPath(bgBrush, path);
+        }
+
+        // 2. Sol Vurgu Çubuğu (Left Accent Indicator)
+        var barRect = new Rectangle(1, 10, 4, Math.Max(10, Height - 20));
+        using (var barPath = CreateRoundedRectanglePath(barRect, 2))
+        using (var barBrush = new SolidBrush(_accentColor))
+        {
+            g.FillPath(barBrush, barPath);
+        }
+
+        // 3. Kenarlık
+        float borderWidth = _isHovered ? 1.6f : 1.2f;
+        using (var borderPen = new Pen(BorderColor, borderWidth))
+        {
+            g.DrawPath(borderPen, path);
+        }
+
+        // 4. Sol İkon Kutusu (Icon Avatar Box)
+        int boxSize = 42;
+        int boxX = 14;
+        int boxY = Math.Max(12, (Height - boxSize) / 2);
+        var iconBoxRect = new Rectangle(boxX, boxY, boxSize, boxSize);
+
+        using (var iconBoxPath = CreateRoundedRectanglePath(iconBoxRect, 9))
+        using (var iconBoxBgBrush = new SolidBrush(Color.FromArgb(_isHovered ? 55 : 38, _accentColor.R, _accentColor.G, _accentColor.B)))
+        using (var iconBoxBorderPen = new Pen(Color.FromArgb(_isHovered ? 180 : 110, _accentColor.R, _accentColor.G, _accentColor.B), 1.2f))
+        {
+            g.FillPath(iconBoxBgBrush, iconBoxPath);
+            g.DrawPath(iconBoxBorderPen, iconBoxPath);
+        }
+
+        // İkon Emojisi
+        using (var iconFont = new Font("Segoe UI Emoji", 14F, FontStyle.Regular))
+        {
+            var sf = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            };
+            g.DrawString(_icon, iconFont, Brushes.White, new RectangleF(iconBoxRect.X, iconBoxRect.Y + 1, iconBoxRect.Width, iconBoxRect.Height), sf);
+        }
+
+        // 5. Başlık ve Sağ Ok İndikatörü
+        int contentLeft = iconBoxRect.Right + 12;
+        int arrowWidth = 20;
+        int contentWidth = Math.Max(40, Width - contentLeft - arrowWidth - 8);
+
+        int titleY = Math.Max(12, (Height - 48) / 2);
+
+        using (var titleFont = new Font("Segoe UI Semibold", 9.75F, FontStyle.Bold))
+        {
+            var titleRect = new Rectangle(contentLeft, titleY, contentWidth, 22);
+            TextRenderer.DrawText(
+                g,
+                _title,
+                titleFont,
+                titleRect,
+                _isHovered ? Color.White : Color.FromArgb(248, 250, 252),
+                TextFormatFlags.NoPrefix | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.VerticalCenter);
+        }
+
+        // Sağ Ok (→)
+        using (var arrowFont = new Font("Segoe UI", 10.5F, FontStyle.Bold))
+        {
+            var arrowRect = new Rectangle(Width - 24, titleY, 18, 22);
+            TextRenderer.DrawText(
+                g,
+                "→",
+                arrowFont,
+                arrowRect,
+                _isHovered ? Color.White : _accentColor,
+                TextFormatFlags.SingleLine | TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter);
+        }
+
+        // 6. Açıklama Metni
+        int descY = titleY + 22;
+        int descWidth = Math.Max(40, Width - contentLeft - 10);
+        using (var descFont = new Font("Segoe UI", 8.25F))
+        {
+            var descRect = new Rectangle(contentLeft, descY, descWidth, Math.Max(20, Height - descY - 6));
+            TextRenderer.DrawText(
+                g,
+                _description,
+                descFont,
+                descRect,
+                _isHovered ? Color.FromArgb(226, 232, 240) : Color.FromArgb(175, 189, 205),
+                TextFormatFlags.NoPrefix | TextFormatFlags.WordBreak | TextFormatFlags.EndEllipsis);
+        }
+
+        base.OnPaint(e);
+    }
+}
+
+

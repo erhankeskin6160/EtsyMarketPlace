@@ -1,0 +1,76 @@
+name: VDS Development Release (Continuous Delivery)
+
+on:
+  push:
+    branches:
+      - development
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Standalone EXE & Publish VDS Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore Dependencies
+        run: dotnet restore SimilarProductsWinForms.sln
+
+      - name: Run Automated Tests
+        run: dotnet test SimilarProductsWinForms.sln --no-restore --verbosity normal
+
+      - name: Build Standalone Win-x64 Executable
+        run: |
+          dotnet publish SimilarProductsWinForms.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:EnableCompressionInSingleFile=true -o publish_vds_standalone
+
+      - name: Verify Published Artifact
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "publish_vds_standalone\SimilarProductsWinForms.exe")) {
+            Write-Error "SimilarProductsWinForms.exe dosyasi bulunamadi!"
+            exit 1
+          }
+          $item = Get-Item "publish_vds_standalone\SimilarProductsWinForms.exe"
+          Write-Host "Uretilen EXE Boyutu: $($item.Length) bayt ($([math]::Round($item.Length / 1MB, 2)) MB)"
+
+      - name: Upload Build Artifact to GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: SimilarProductsWinForms-dev-win-x64
+          path: publish_vds_standalone/SimilarProductsWinForms.exe
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish or Update 'dev-latest' GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: dev-latest
+          name: "VDS Development Build (Son Geliştirme Sürümü)"
+          body: |
+            ## 🚀 Otomatik VDS Geliştirme Sürümü (development)
+            
+            Bu sürüm `development` dalına yapılan son push ile GitHub Actions tarafından otomatik derlenmiştir.
+            
+            - **Commit:** `${{ github.sha }}`
+            - **Tarih:** `${{ github.event.head_commit.timestamp }}`
+            - **Platform:** Windows x64 (Standalone - .NET Runtime GEREKTİRMEZ)
+            - **Hedef:** VDS Sunucusu Otomatik Güncelleme
+            
+            *VDS üzerindeki `Guncelle_Ve_Baslat.bat` bu dosyayı otomatik indirip çalıştırır.*
+          prerelease: true
+          make_latest: false
+          files: publish_vds_standalone/SimilarProductsWinForms.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

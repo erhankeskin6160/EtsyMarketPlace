@@ -10,6 +10,8 @@ public enum BatchQueueItemStatus
     Completed,
     RiskWarning,
     Failed,
+    SyncedToEtsy,
+    RolledBack,
 }
 
 /// <summary>
@@ -33,7 +35,11 @@ public sealed record BatchQueueItem(
     IReadOnlyList<string> RiskWarnings,
     IReadOnlyList<string> Issues,
     DateTimeOffset? ProcessedAt,
-    string? ErrorMessage);
+    string? ErrorMessage,
+    bool IsSyncedToEtsy = false,
+    DateTimeOffset? SyncedAt = null,
+    long? AbTestExperimentId = null,
+    string? AbTestStatus = null);
 
 /// <summary>
 /// DTO for adding items to the batch optimization queue.
@@ -59,3 +65,23 @@ public sealed record BatchQueueSummary(
     double AverageScore,
     double ProgressPercent,
     string StatusMessage);
+
+/// <summary>
+/// Progress reporting during live Etsy synchronization.
+/// </summary>
+public sealed record BatchSyncProgress(
+    int CurrentIndex,
+    int TotalCount,
+    string CurrentTitle,
+    bool IsSuccess,
+    string? Message);
+
+/// <summary>
+/// Summary result of a batch synchronization to Etsy.
+/// </summary>
+public sealed record BatchSyncResult(
+    int TotalRequested,
+    int SuccessCount,
+    int FailedCount,
+    IReadOnlyList<string> Errors);
+

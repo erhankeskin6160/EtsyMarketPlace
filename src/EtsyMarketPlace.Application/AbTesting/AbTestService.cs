@@ -1,12 +1,16 @@
 namespace EtsyMarketPlace.Application.AbTesting;
 
+using EtsyMarketPlace.Application.BatchQueue;
+
 public sealed class AbTestService
 {
     private readonly IAbTestRepository _repository;
+    private readonly IBatchQueueRepository? _batchQueueRepository;
 
-    public AbTestService(IAbTestRepository repository)
+    public AbTestService(IAbTestRepository repository, IBatchQueueRepository? batchQueueRepository = null)
     {
         _repository = repository;
+        _batchQueueRepository = batchQueueRepository;
     }
 
     public async Task<ListingAbTestExperiment> StartExperimentAsync(
@@ -42,6 +46,161 @@ public sealed class AbTestService
         CancellationToken cancellationToken = default)
     {
         return await _repository.GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<bool> DeleteAsync(
+        long id,
+        CancellationToken cancellationToken = default)
+    {
+        return await _repository.DeleteAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    /// Launches a batch of A/B test experiments from optimized queue items.
+    /// </summary>
+    public async Task<BulkAbTestLaunchResult> BulkStartExperimentsAsync(
+        IReadOnlyList<BulkAbTestItemRequest> requests,
+        BulkAbTestLaunchOptions options,
+        Func<long, string, string, IReadOnlyList<string>, Task>? deployVariantBAction = null,
+        IProgress<BulkAbTestLaunchProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        options ??= new BulkAbTestLaunchOptions();
+
+        var created = new List<ListingAbTestExperiment>();
+        var errors = new List<string>();
+        int successCount = 0;
+        int failedCount = 0;
+
+        for (int i = 0; i < requests.Count; i++)
+        {
+            if (cancellationToken.IsCancellationRequested) break;
+
+            var req = requests[i];
+            try
+            {
+                var startDate = DateTimeOffset.Now;
+                var endDate = startDate.AddDays(options.DurationDays);
+                var expName = $"{options.ExperimentPrefix} #{req.ListingId} ({options.DurationDays} Gün)";
+
+                var save = new SaveAbTestExperiment(
+                    req.ListingId,
+                    string.IsNullOrWhiteSpace(req.OriginalTitle) ? $"Listing #{req.ListingId}" : req.OriginalTitle,
+                    expName,
+                    req.OriginalTitle,
+                    req.OptimizedTitle,
+                    req.OriginalTags,
+                    req.OptimizedTags,
+                    req.OriginalDescription,
+                    req.OptimizedDescription,
+                    req.CurrentViews,
+                    req.CurrentFavorites,
+                    req.CurrentSales,
+                    endDate);
+
+                var exp = await StartExperimentAsync(save, cancellationToken);
+                created.Add(exp);
+
+                // Auto-deploy Variant B to Etsy if requested
+                if (options.AutoDeployVariantBToEtsy && deployVariantBAction != null && long.TryParse(req.ListingId, out var parsedListingId))
+                {
+                    try
+                    {
+                        await deployVariantBAction(parsedListingId, req.OptimizedTitle, req.OptimizedDescription, req.OptimizedTags);
+                    }
+                    catch (Exception deployEx)
+                    {
+                        errors.Add($"#{req.ListingId} A/B kaydedildi ancak Etsy'ye aktarılamadı: {deployEx.Message}");
+                    }
+                }
+
+                // Update Batch Queue item if repository exists
+                if (_batchQueueRepository != null && req.BatchQueueItemId > 0)
+                {
+                    await _batchQueueRepository.UpdateAbTestStatusAsync(
+                        req.BatchQueueItemId,
+                        exp.Id,
+                        $"Active ({options.DurationDays}g)",
+                        cancellationToken);
+                }
+
+                successCount++;
+                progress?.Report(new BulkAbTestLaunchProgress(i + 1, requests.Count, req.OriginalTitle, true, null));
+            }
+            catch (Exception ex)
+            {
+                failedCount++;
+                errors.Add($"#{req.ListingId}: {ex.Message}");
+                progress?.Report(new BulkAbTestLaunchProgress(i + 1, requests.Count, req.OriginalTitle, false, ex.Message));
+            }
+
+            if (i < requests.Count - 1 && options.AutoDeployVariantBToEtsy)
+            {
+                await Task.Delay(200, cancellationToken);
+            }
+        }
+
+        return new BulkAbTestLaunchResult(requests.Count, successCount, failedCount, created, errors);
+    }
+
+    /// <summary>
+    /// Checks if an active experiment is suffering an abnormal drop in views or favorites (early warning).
+    /// </summary>
+    public AbTestSafetyAlert? CheckSafetyGuardrail(
+        ListingAbTestExperiment experiment,
+        double dropThresholdPercent = 40.0)
+    {
+        ArgumentNullException.ThrowIfNull(experiment);
+        if (experiment.Status != AbTestStatus.Active) return null;
+
+        // Baseline must be meaningful (>= 10 views) to avoid false positives on low-traffic items
+        if (experiment.BeforeViews >= 10 && experiment.AfterViews < experiment.BeforeViews)
+        {
+            var dropPct = Math.Round(((double)(experiment.BeforeViews - experiment.AfterViews) / experiment.BeforeViews) * 100.0, 1);
+            if (dropPct >= dropThresholdPercent)
+            {
+                return new AbTestSafetyAlert(
+                    experiment.Id,
+                    experiment.ListingId,
+                    experiment.ListingTitle,
+                    dropPct,
+                    $"Görüntülenmeler başlangıca göre %{dropPct} oranında sert düştü ({experiment.BeforeViews} ➔ {experiment.AfterViews}). Yeni başlık veya etiketler Etsy algoritmasında gerilemeye yol açmış olabilir.",
+                    RecommendationRollback: true);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Completes the experiment and optionally deploys the chosen winning variant to Etsy.
+    /// </summary>
+    public async Task<ListingAbTestExperiment> ResolveExperimentAsync(
+        long experimentId,
+        string chosenVariant, // "VariantB" (AI) or "VariantA" (Original)
+        Func<long, string, string, IReadOnlyList<string>, Task>? deployToEtsyAction = null,
+        CancellationToken cancellationToken = default)
+    {
+        var exp = await GetByIdAsync(experimentId, cancellationToken)
+            ?? throw new InvalidOperationException($"A/B testi bulunamadı: #{experimentId}");
+
+        if (deployToEtsyAction != null && long.TryParse(exp.ListingId, out var parsedListingId))
+        {
+            if (chosenVariant.Equals("VariantA", StringComparison.OrdinalIgnoreCase))
+            {
+                // Rollback to original
+                await deployToEtsyAction(parsedListingId, exp.VariantA_Title, exp.VariantA_Description, exp.VariantA_Tags);
+            }
+            else
+            {
+                // Keep / Reapply Variant B
+                await deployToEtsyAction(parsedListingId, exp.VariantB_Title, exp.VariantB_Description, exp.VariantB_Tags);
+            }
+        }
+
+        var updated = await _repository.UpdateStatusAsync(experimentId, AbTestStatus.Completed, cancellationToken);
+        return updated ?? exp with { Status = AbTestStatus.Completed, EndDate = DateTimeOffset.Now };
     }
 
     /// <summary>

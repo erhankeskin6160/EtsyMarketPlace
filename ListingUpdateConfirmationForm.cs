@@ -89,7 +89,7 @@ internal sealed class ListingUpdateConfirmationForm(
     private string NewText() =>
         $"✨ YENİ OPTİMİZE BAŞLIK ({update.Title.Length}/140 Karakter){Environment.NewLine}{update.Title}{Environment.NewLine}{Environment.NewLine}" +
         $"🏷️ YENİ 13 LONG-TAIL TAG ({update.Tags.Count} Tag){Environment.NewLine}{string.Join(", ", update.Tags)}{Environment.NewLine}{Environment.NewLine}" +
-        $"🧱 YENİ MATERYALLER{Environment.NewLine}{string.Join(", ", update.Materials)}{Environment.NewLine}{Environment.NewLine}" +
+        $"🧱 YENİ MATERYALLER{Environment.NewLine}{string.Join(", ", update.Materials ?? [])}{Environment.NewLine}{Environment.NewLine}" +
         $"📄 YENİ PARAGRAFLI AÇIKLAMA (ETSY FORMATI){Environment.NewLine}{EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(update.Description)}";
 
     private static Control BuildTextPanel(string title, string text)

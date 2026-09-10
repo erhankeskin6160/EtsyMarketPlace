@@ -24,6 +24,12 @@ public interface IBatchQueueRepository
         BatchQueueItem item,
         CancellationToken cancellationToken = default);
 
+    Task UpdateAbTestStatusAsync(
+        long itemId,
+        long experimentId,
+        string abTestStatus,
+        CancellationToken cancellationToken = default);
+
     Task<int> ClearCompletedAsync(CancellationToken cancellationToken = default);
 
     Task<int> ClearAllAsync(CancellationToken cancellationToken = default);

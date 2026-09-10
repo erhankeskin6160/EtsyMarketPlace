@@ -713,7 +713,7 @@ internal sealed class OwnShopListingAiAuditForm(
             var colName = _grid.Columns[e.ColumnIndex].DataPropertyName;
             if (colName == nameof(AuditRow.SeoScore))
             {
-                if (e.Value is int score)
+                if (e.CellStyle != null && e.Value is int score)
                 {
                     e.CellStyle.ForeColor = score >= 75 ? UiStyle.SuccessColor : (score >= 55 ? UiStyle.WarningColor : UiStyle.DangerColor);
                     e.CellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
@@ -721,7 +721,7 @@ internal sealed class OwnShopListingAiAuditForm(
             }
             else if (colName == nameof(AuditRow.AiScore))
             {
-                if (e.Value is int aiScore && aiScore > 0)
+                if (e.CellStyle != null && e.Value is int aiScore && aiScore > 0)
                 {
                     e.CellStyle.ForeColor = UiStyle.SuccessColor;
                     e.CellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
@@ -729,7 +729,7 @@ internal sealed class OwnShopListingAiAuditForm(
             }
             else if (colName == nameof(AuditRow.TagCount))
             {
-                if (e.Value is int tags && tags < 13)
+                if (e.CellStyle != null && e.Value is int tags && tags < 13)
                 {
                     e.CellStyle.ForeColor = UiStyle.DangerColor;
                     e.CellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
@@ -1192,7 +1192,7 @@ internal sealed class OwnShopListingAiAuditForm(
             return false;
         }
 
-        var longMaterial = update.Materials.FirstOrDefault(material => material.Length > 45);
+        var longMaterial = update.Materials?.FirstOrDefault(material => material.Length > 45);
         if (longMaterial is not null)
         {
             message = $"Materyal 45 karakterden uzun: {longMaterial}";

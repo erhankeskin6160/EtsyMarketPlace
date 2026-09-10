@@ -56,6 +56,7 @@ internal sealed class DashboardForm : Form
     private readonly Label _lblLiveRate = new();
     private readonly Label _lblApiStatus = new();
     private readonly Label _lblLastUpdated = new();
+    private readonly ModernButtonControl _btnVdsUpdate = new();
 
     private readonly Label _lblKpiGross = new();
     private readonly Label _lblKpiNetProfit = new();
@@ -65,7 +66,8 @@ internal sealed class DashboardForm : Form
 
     private readonly DataGridView _gridRecentOrders = new();
     private readonly Label _lblOrdersSummary = new();
-    private readonly FlowLayoutPanel _pnlAiCopilot = new();
+    private readonly VerticalScrollFlowPanel _pnlAiCopilot = new();
+    private readonly Label _lblCopilotBadge = new();
 
     private CartesianChart _chartRevenueProfit = null!;
 
@@ -111,6 +113,21 @@ internal sealed class DashboardForm : Form
         Shown += async (_, _) =>
         {
             DailyFinancialReportScheduler.Instance.Start();
+            VdsUpdateNotifierService.StartPeriodicAutoUpdater(TimeSpan.FromSeconds(20), statusMsg =>
+            {
+                if (!IsDisposed)
+                {
+                    try
+                    {
+                        BeginInvoke(() =>
+                        {
+                            _lblLastUpdated.Text = statusMsg;
+                            _lblLastUpdated.ForeColor = UiStyle.EtsyColor;
+                        });
+                    }
+                    catch { }
+                }
+            });
             await LoadLiveDashboardAsync();
         };
     }
@@ -194,7 +211,7 @@ internal sealed class DashboardForm : Form
         };
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 72));  // Header (72px to prevent subtitle clipping)
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 108)); // Hero KPI Strip
-        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));  // Quick Action Hub
+        _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 94));  // Quick Action Hub
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 55));   // Middle: Orders (Left) & Copilot (Right)
         _dashboardRootPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 45));   // Bottom: Live Trend Chart
 
@@ -261,6 +278,30 @@ internal sealed class DashboardForm : Form
         };
         btnRefresh.Click += async (_, _) => await LoadLiveDashboardAsync();
         rightPanel.Controls.Add(btnRefresh);
+
+        _btnVdsUpdate.Text = "⚡ Yeni Sürüm";
+        _btnVdsUpdate.Size = new Size(140, 34);
+        _btnVdsUpdate.NormalColor = UiStyle.EtsyColor;
+        _btnVdsUpdate.HoverColor = UiStyle.EtsyHover;
+        _btnVdsUpdate.ForeColor = Color.White;
+        _btnVdsUpdate.Visible = false;
+        _btnVdsUpdate.Margin = new Padding(6, 0, 0, 0);
+        _btnVdsUpdate.Click += (_, _) =>
+        {
+            var res = MessageBox.Show(
+                this,
+                "GitHub üzerinde yeni bir VDS geliştirme sürümü (dev-latest) tespit edildi!\n\nUygulama otomatik güncellenip yeniden başlatılsın mı?",
+                "VDS Otomatik Güncelleme",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (res == DialogResult.Yes)
+            {
+                VdsUpdateNotifierService.TriggerVdsUpdateAndRestart();
+                Application.Exit();
+            }
+        };
+        rightPanel.Controls.Add(_btnVdsUpdate);
 
         _lblApiStatus.AutoSize = true;
         _lblApiStatus.Text = "🟢 Canlı Etsy API";
@@ -473,70 +514,17 @@ internal sealed class DashboardForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 4,
             RowCount = 1,
-            Padding = new Padding(0, 4, 0, 4)
+            Padding = new Padding(0, 3, 0, 3)
         };
         for (int i = 0; i < 4; i++)
             hub.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25f));
 
-        hub.Controls.Add(CreateActionCard("💳 Finans & Muhasebe", "Ödeme defteri, komisyonlar ve banka transferleri", UiStyle.PrimaryColor, () => _ = OpenModuleByIdAsync("financial")), 0, 0);
-        hub.Controls.Add(CreateActionCard("🛍️ AI Ürün Bul & Taslak", "Trend ürün araştırması ve tek tıkla taslak listeleme", UiStyle.EtsyColor, () => _ = OpenModuleByIdAsync("creator")), 1, 0);
-        hub.Controls.Add(CreateActionCard("🖼️ AI Görsel Studio", "AI ile stüdyo kalitesinde ürün fotoğrafları oluşturma", UiStyle.AiColor, () => _ = OpenModuleByIdAsync("ai_image")), 2, 0);
-        hub.Controls.Add(CreateActionCard("🏬 Mağazama Git & AI Denetim", "Siparişler, SEO skoru ve AI mağaza denetim raporu", UiStyle.SuccessColor, () => _ = OpenModuleByIdAsync("shop")), 3, 0);
+        hub.Controls.Add(new QuickActionCard("💳", "Finans & Muhasebe", "Ödeme defteri, komisyonlar ve banka transferleri", UiStyle.PrimaryColor, () => _ = OpenModuleByIdAsync("financial")), 0, 0);
+        hub.Controls.Add(new QuickActionCard("🛍️", "AI Ürün Bul & Taslak", "Trend ürün araştırması ve tek tıkla taslak listeleme", UiStyle.EtsyColor, () => _ = OpenModuleByIdAsync("creator")), 1, 0);
+        hub.Controls.Add(new QuickActionCard("🖼️", "AI Görsel Studio", "AI ile stüdyo kalitesinde ürün fotoğrafları oluşturma", UiStyle.AiColor, () => _ = OpenModuleByIdAsync("ai_image")), 2, 0);
+        hub.Controls.Add(new QuickActionCard("🏬", "Mağazama Git & AI Denetim", "Siparişler, SEO skoru ve AI mağaza denetim raporu", UiStyle.SuccessColor, () => _ = OpenModuleByIdAsync("shop")), 3, 0);
 
         return hub;
-    }
-
-    private static Control CreateActionCard(string title, string description, Color accentColor, Action onClick)
-    {
-        var card = new ModernCardPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = new Padding(4, 0, 4, 0),
-            Padding = new Padding(12, 10, 12, 10),
-            CornerRadius = 10,
-            CardColor = UiStyle.CardBackground,
-            BorderColor = UiStyle.BorderColor,
-            Cursor = Cursors.Hand
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            RowCount = 2,
-            BackColor = Color.Transparent
-        };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        var lblTitle = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = title,
-            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
-            ForeColor = accentColor,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Cursor = Cursors.Hand
-        };
-        layout.Controls.Add(lblTitle, 0, 0);
-
-        var lblDesc = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = description,
-            Font = new Font("Segoe UI", 8F),
-            ForeColor = UiStyle.TextMuted,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Cursor = Cursors.Hand,
-            AutoEllipsis = true
-        };
-        layout.Controls.Add(lblDesc, 0, 1);
-
-        card.Click += (_, _) => onClick();
-        lblTitle.Click += (_, _) => onClick();
-        lblDesc.Click += (_, _) => onClick();
-
-        card.Controls.Add(layout);
-        return card;
     }
 
     private Control BuildMiddleSection()
@@ -579,7 +567,8 @@ internal sealed class DashboardForm : Form
             Text = "🟢 Son Siparişler & Canlı Satış Akışı",
             Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
-            TextAlign = ContentAlignment.MiddleLeft
+            TextAlign = ContentAlignment.MiddleLeft,
+            UseMnemonic = false
         };
         ordersHeader.Controls.Add(lblOrdersTitle, 0, 0);
 
@@ -604,7 +593,7 @@ internal sealed class DashboardForm : Form
         {
             Dock = DockStyle.Fill,
             Margin = new Padding(4),
-            Padding = new Padding(12),
+            Padding = new Padding(14, 12, 14, 12),
             CornerRadius = 10,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
@@ -618,40 +607,34 @@ internal sealed class DashboardForm : Form
         copilotLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         copilotLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
+        var copilotHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        copilotHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 65));
+        copilotHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35));
+
         var lblCopilotTitle = new Label
         {
             Dock = DockStyle.Fill,
             Text = "💡 Akıllı Mağaza Asistanı (Store Copilot)",
             Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
-            TextAlign = ContentAlignment.MiddleLeft
+            TextAlign = ContentAlignment.MiddleLeft,
+            UseMnemonic = false
         };
-        copilotLayout.Controls.Add(lblCopilotTitle, 0, 0);
+        copilotHeader.Controls.Add(lblCopilotTitle, 0, 0);
+
+        _lblCopilotBadge.Dock = DockStyle.Fill;
+        _lblCopilotBadge.Text = "✨ Canlı AI Analizi";
+        _lblCopilotBadge.Font = new Font("Segoe UI Semibold", 8F);
+        _lblCopilotBadge.ForeColor = UiStyle.PrimaryColor;
+        _lblCopilotBadge.TextAlign = ContentAlignment.MiddleRight;
+        _lblCopilotBadge.UseMnemonic = false;
+        copilotHeader.Controls.Add(_lblCopilotBadge, 1, 0);
+
+        copilotLayout.Controls.Add(copilotHeader, 0, 0);
 
         _pnlAiCopilot.Dock = DockStyle.Fill;
-        _pnlAiCopilot.FlowDirection = FlowDirection.TopDown;
-        _pnlAiCopilot.WrapContents = false;
-        _pnlAiCopilot.AutoScroll = true;
-        _pnlAiCopilot.Padding = new Padding(2, 2, 6, 2);
-        _pnlAiCopilot.Resize += (_, _) =>
-        {
-            int targetWidth = Math.Max(260, _pnlAiCopilot.ClientSize.Width - 14);
-            foreach (Control c in _pnlAiCopilot.Controls)
-            {
-                if (c is ModernCardPanel card)
-                {
-                    card.Width = targetWidth;
-                    foreach (Control child in card.Controls)
-                    {
-                        if (child is Label lbl && child.Location.Y > 20)
-                        {
-                            lbl.Size = new Size(targetWidth - 28, 0);
-                            lbl.MaximumSize = new Size(targetWidth - 28, 0);
-                        }
-                    }
-                }
-            }
-        };
+        _pnlAiCopilot.Padding = new Padding(2, 2, 4, 2);
+        _pnlAiCopilot.Resize += (_, _) => AdjustCopilotCardWidths();
 
         copilotLayout.Controls.Add(_pnlAiCopilot, 0, 1);
 
@@ -780,11 +763,29 @@ internal sealed class DashboardForm : Form
             UpdateRevenueTrendChart();
 
             _lblLastUpdated.Text = $"Son Güncelleme: {DateTime.Now:HH:mm:ss}";
+            _ = CheckVdsUpdateAsync();
         }
         catch (Exception ex)
         {
             _lblLastUpdated.Text = $"Hata: {ex.Message}";
         }
+    }
+
+    private async Task CheckVdsUpdateAsync()
+    {
+        try
+        {
+            var update = await VdsUpdateNotifierService.CheckForUpdateAsync(_cts.Token);
+            if (update.IsUpdateAvailable && !IsDisposed)
+            {
+                BeginInvoke(() =>
+                {
+                    _btnVdsUpdate.Visible = true;
+                    _btnVdsUpdate.Text = $"⚡ Yeni Sürüm ({update.PublishedAt.LocalDateTime:HH:mm})";
+                });
+            }
+        }
+        catch { }
     }
 
     private void PopulateRecentOrdersGrid()
@@ -811,22 +812,30 @@ internal sealed class DashboardForm : Form
 
     private void PopulateAiCopilotInsights()
     {
+        _pnlAiCopilot.SuspendLayout();
         _pnlAiCopilot.Controls.Clear();
-        int targetWidth = Math.Max(260, _pnlAiCopilot.ClientSize.Width - 14);
-        if (targetWidth < 260 && _dashboardRootPanel.Width > 0)
+
+        int scrollbarWidth = _pnlAiCopilot.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+        int targetWidth = Math.Max(220, _pnlAiCopilot.ClientSize.Width - _pnlAiCopilot.Padding.Horizontal - scrollbarWidth - 4);
+        if (targetWidth < 220 && _dashboardRootPanel.Width > 0)
         {
-            targetWidth = Math.Max(260, (int)(_dashboardRootPanel.Width * 0.40f) - 30);
+            targetWidth = Math.Max(220, (int)(_dashboardRootPanel.Width * 0.40f) - 36);
         }
+
+        int insightCount = 0;
 
         int missingCostCount = _liveReport.OrderSummaries.Count(o => !o.HasCostData);
         if (missingCostCount > 0)
         {
-            _pnlAiCopilot.Controls.Add(CreateInsightCard(
-                "⚠️ Maliyet Bilgisi Eksik",
-                $"{missingCostCount} siparişinizin henüz hammadde maliyeti girilmedi. Gerçek kârı tam görmek için maliyet ekleyin.",
+            insightCount++;
+            _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
+                "⚠️",
+                "MALİYET UYARISI",
+                "Hammadde Maliyetleri Eksik",
+                $"{missingCostCount} siparişinizin henüz ürün hammadde maliyeti girilmedi. Gerçek kâr oranınızı net görmek için maliyetleri tamamlayın.",
                 UiStyle.WarningColor,
                 targetWidth,
-                "💰 Maliyetleri Düzenle",
+                "Maliyetleri Düzenle",
                 () => { using var dlg = new ProductCostManagerForm(); dlg.ShowDialog(this); }
             ));
         }
@@ -838,10 +847,13 @@ internal sealed class DashboardForm : Form
 
         if (topProduct != null)
         {
+            insightCount++;
             decimal productRev = topProduct.Sum(x => x.GrandTotal);
-            _pnlAiCopilot.Controls.Add(CreateInsightCard(
-                "🌟 En Çok Ciro Getiren Ürün",
-                $"'{topProduct.Key}' bu ay toplam ${productRev:N2} ciro sağlayarak mağazanızın yıldız ürünü oldu.",
+            _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
+                "🌟",
+                "CİRO LİDERİ",
+                "En Çok Ciro Getiren Ürün",
+                $"'{topProduct.Key}' bu ay toplam ${productRev:N2} ciro sağlayarak mağazanızın en çok kazandıran yıldız ürünü oldu.",
                 UiStyle.SuccessColor,
                 targetWidth
             ));
@@ -849,87 +861,51 @@ internal sealed class DashboardForm : Form
 
         if (_liveReport.TotalGross > 0)
         {
+            insightCount++;
             decimal adPct = Math.Round((_liveReport.TotalInnerAdFees + _liveReport.TotalOffsiteAdFees) / _liveReport.TotalGross * 100, 1);
-            _pnlAiCopilot.Controls.Add(CreateInsightCard(
-                "📢 Reklam & Komisyon Durumu",
-                $"Reklam giderleri bu ay cironuzun %{adPct}'ini oluşturuyor. Toplam net kâr marjınız: %{_liveReport.ProfitMarginPct:N1}.",
+            _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
+                "📢",
+                "REKLAM & GİDER",
+                "Reklam & Komisyon Durumu",
+                $"Reklam giderleri bu ay cironuzun %{adPct}'ini oluşturuyor. Mağazanızın toplam net kâr marjı: %{_liveReport.ProfitMarginPct:N1}.",
                 UiStyle.AccentColor,
-                targetWidth
+                targetWidth,
+                "Finans & Giderleri İncele",
+                () => _ = OpenModuleByIdAsync("financial")
             ));
         }
 
-        _pnlAiCopilot.Controls.Add(CreateInsightCard(
-            "🚀 Büyüme & SEO Tavsiyesi",
+        insightCount++;
+        _pnlAiCopilot.Controls.Add(new StoreCopilotInsightCard(
+            "🚀",
+            "AI BÜYÜME TAVSİYESİ",
+            "Büyüme & SEO Tavsiyesi",
             "Ürün başlıklarında ve ilk 3 etiketinde en çok aranan uzun kuyruklu anahtar kelimeleri kullanarak organik trafiğinizi %25 artırabilirsiniz.",
             UiStyle.PrimaryColor,
             targetWidth,
-            "🔍 Pazar Araştırması",
+            "Pazar Araştırması",
             () => _ = OpenModuleByIdAsync("research")
         ));
+
+        _lblCopilotBadge.Text = $"✨ {insightCount} Öneri Hazır";
+        _pnlAiCopilot.ResumeLayout(true);
     }
 
-    private static Control CreateInsightCard(string title, string text, Color accentColor, int width, string? buttonText = null, Action? onButtonClick = null)
+    private void AdjustCopilotCardWidths()
     {
-        int cardWidth = Math.Max(260, width);
-        var card = new ModernCardPanel
-        {
-            Width = cardWidth,
-            Margin = new Padding(0, 0, 0, 10),
-            Padding = new Padding(14, 12, 14, 12),
-            CornerRadius = 10,
-            CardColor = UiStyle.CardBackground,
-            BorderColor = Color.FromArgb(120, accentColor.R, accentColor.G, accentColor.B),
-        };
+        if (_pnlAiCopilot.ClientSize.Width <= 0) return;
+        int scrollbarWidth = _pnlAiCopilot.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+        int targetWidth = Math.Max(220, _pnlAiCopilot.ClientSize.Width - _pnlAiCopilot.Padding.Horizontal - scrollbarWidth - 4);
 
-        var lblTitle = new Label
+        _pnlAiCopilot.SuspendLayout();
+        foreach (Control c in _pnlAiCopilot.Controls)
         {
-            Text = title,
-            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
-            ForeColor = accentColor,
-            Location = new Point(14, 12),
-            AutoSize = true
-        };
-        card.Controls.Add(lblTitle);
-
-        int textWidth = cardWidth - 28;
-        var lblText = new Label
-        {
-            Text = text,
-            Font = new Font("Segoe UI", 8.5F),
-            ForeColor = UiStyle.TextDark,
-            Location = new Point(14, 34),
-            Size = new Size(textWidth, 0),
-            MaximumSize = new Size(textWidth, 0),
-            AutoSize = true
-        };
-        card.Controls.Add(lblText);
-
-        int bottomY = lblText.Bottom + 8;
-
-        if (!string.IsNullOrEmpty(buttonText) && onButtonClick != null)
-        {
-            var btn = new ModernButtonControl
+            if (c is StoreCopilotInsightCard card)
             {
-                Text = buttonText,
-                Size = new Size(160, 30),
-                Location = new Point(14, bottomY),
-                NormalColor = accentColor,
-                HoverColor = Color.FromArgb(Math.Min(255, accentColor.R + 25), Math.Min(255, accentColor.G + 25), Math.Min(255, accentColor.B + 25)),
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
-                Cursor = Cursors.Hand
-            };
-            btn.Click += (_, _) => onButtonClick();
-            card.Controls.Add(btn);
-            bottomY = btn.Bottom + 10;
+                card.UpdateCardWidth(targetWidth);
+            }
         }
-        else
-        {
-            bottomY += 4;
-        }
-
-        card.Height = bottomY;
-        return card;
+        _pnlAiCopilot.ResumeLayout(true);
     }
 
     private void UpdateRevenueTrendChart()
@@ -1013,7 +989,8 @@ internal sealed class DashboardForm : Form
     {
         _sidebarNav.ClearItems();
         _sidebarNav.AddItem("dashboard", "Kontrol Paneli", "📊", "Genel");
-        _sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel", "YENİ");
+        _sidebarNav.AddItem("fast_creator", "Hızlı Ürün Ekle (AI)", "⚡", "Genel", "YENİ");
+        _sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel");
         _sidebarNav.AddItem("ai_image", "AI Görsel Studio", "🖼️", "Genel", "YENİ");
         _sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
@@ -1136,6 +1113,7 @@ internal sealed class DashboardForm : Form
 
         Form? nextForm = targetModule switch
         {
+            "fast_creator" => new FastListingCreatorForm(_aiListingOptimizer),
             "creator" => new ProductDiscoveryListingCreatorForm(_aiListingOptimizer, historyService: _optimizationHistoryService),
             "ai_image" => new AiListingImageForm(_aiListingOptimizer),
             "shop" => new OwnShopPerformanceForm(_shopPerformanceService, _shopPerformanceHistoryService, _aiListingOptimizer, _optimizationHistoryService),
@@ -1143,9 +1121,9 @@ internal sealed class DashboardForm : Form
             "competitor_spy" => new CompetitorAndTrendSpyForm(_aiListingOptimizer),
             "external" => new ExternalMarketplaceDiscoveryForm(_aiListingOptimizer),
             "ai_audit" => new OwnShopListingAiAuditForm(_aiListingOptimizer, _optimizationHistoryService),
-            "ab_test" => new ListingAbTestForm(_abTestService),
+            "ab_test" => new ListingAbTestForm(_abTestService, _aiListingOptimizer),
             "automation" => new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler),
-            "batch" => new BatchQueueForm(_batchQueueProcessorService),
+            "batch" => new BatchQueueForm(_batchQueueProcessorService, _abTestService),
             "profit" => new ProfitCalculatorForm(),
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),
