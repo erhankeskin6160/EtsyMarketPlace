@@ -55,8 +55,9 @@ internal sealed class FastListingCreatorForm : Form
 
     // Center Column Controls (Gallery & AI Generator)
     private readonly FlowLayoutPanel _galleryFlow = new();
+    private ModernScrollPanel? _galleryScroll;
     private readonly Label _lblGalleryCount = new() { AutoSize = true };
-    private readonly TextBox _txtAiPrompt = new() { Multiline = true, Height = 56, ScrollBars = ScrollBars.Vertical };
+    private readonly ModernMultilineTextBox _txtAiPrompt = new() { Height = 56 };
     private readonly PictureBox _picAiPreview = new() { SizeMode = PictureBoxSizeMode.Zoom, Height = 180 };
     private readonly ModernButtonControl _btnGenerateAi = new();
     private readonly ModernButtonControl _btnAddToGallery = new();
@@ -808,12 +809,21 @@ internal sealed class FastListingCreatorForm : Form
         rootTable.Controls.Add(topBar, 0, 0);
 
         // 2. Gallery Flow Panel
-        _galleryFlow.Dock = DockStyle.Fill;
-        _galleryFlow.AutoScroll = true;
+        _galleryScroll = new ModernScrollPanel
+        {
+            Dock = DockStyle.Fill,
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
+        };
+        _galleryFlow.Dock = DockStyle.Top;
+        _galleryFlow.AutoSize = true;
+        _galleryFlow.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        _galleryFlow.AutoScroll = false;
         _galleryFlow.BackColor = UiStyle.CardBackground;
-        _galleryFlow.BorderStyle = BorderStyle.FixedSingle;
+        _galleryFlow.BorderStyle = BorderStyle.None;
         _galleryFlow.Padding = new Padding(6);
-        rootTable.Controls.Add(_galleryFlow, 0, 1);
+        _galleryScroll.SetContent(_galleryFlow);
+        rootTable.Controls.Add(_galleryScroll, 0, 1);
 
         // Initial render for empty gallery
         RefreshGalleryCards();
@@ -829,10 +839,11 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(0, 4, 0, 0)
         };
 
-        var aiContainer = new Panel
+        var aiContainer = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            AutoScroll = true
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
         };
 
         var aiStack = new TableLayoutPanel
@@ -978,7 +989,7 @@ internal sealed class FastListingCreatorForm : Form
         aiActionRow.Controls.Add(_btnAddToGallery, 1, 0);
         aiStack.Controls.Add(aiActionRow);
 
-        aiContainer.Controls.Add(aiStack);
+        aiContainer.SetContent(aiStack);
         aiBox.Controls.Add(aiContainer);
         rootTable.Controls.Add(aiBox, 0, 2);
 
@@ -998,11 +1009,11 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(5, 0, 0, 0)
         };
 
-        var scrollContainer = new Panel
+        var scrollContainer = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            AutoScroll = true,
-            Padding = new Padding(0, 0, 6, 0)
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 2, 0)
         };
 
         var stack = new TableLayoutPanel
@@ -1173,7 +1184,7 @@ internal sealed class FastListingCreatorForm : Form
         pubBox.Controls.Add(pubTable);
         stack.Controls.Add(pubBox);
 
-        scrollContainer.Controls.Add(stack);
+        scrollContainer.SetContent(stack);
         grp.Controls.Add(scrollContainer);
         return grp;
     }
@@ -2054,7 +2065,7 @@ internal sealed class FastListingCreatorForm : Form
                 Width = 260,
                 Height = 110,
                 Margin = new Padding(12, 16, 12, 16),
-                BackColor = Color.Transparent
+                BackColor = UiStyle.CardBackground
             };
 
             var lblEmpty = new Label
@@ -2067,6 +2078,7 @@ internal sealed class FastListingCreatorForm : Form
             };
             emptyPanel.Controls.Add(lblEmpty);
             _galleryFlow.Controls.Add(emptyPanel);
+            _galleryScroll?.RecalculateScroll();
             return;
         }
 
@@ -2267,6 +2279,7 @@ internal sealed class FastListingCreatorForm : Form
 
             _galleryFlow.Controls.Add(card);
         }
+        _galleryScroll?.RecalculateScroll();
     }
 
     private void SwapGalleryImages(int idx1, int idx2)

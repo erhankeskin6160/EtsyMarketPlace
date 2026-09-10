@@ -167,10 +167,15 @@ public class ModernButtonControl : Button
         DoubleBuffered = true;
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
-        BackColor = Color.Transparent;
         ForeColor = Color.White;
         Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
         Cursor = Cursors.Hand;
+    }
+
+    public override Color BackColor
+    {
+        get => GetEffectiveParentBackColor();
+        set { }
     }
 
     private Color GetEffectiveParentBackColor()
@@ -328,8 +333,13 @@ public class ModernVScrollBar : Control
             true);
         DoubleBuffered = true;
         Width = 8;
-        BackColor = Color.Transparent;
         Cursor = Cursors.Default;
+    }
+
+    public override Color BackColor
+    {
+        get => GetEffectiveParentBackColor();
+        set { }
     }
 
     public void ScrollBy(int delta)
@@ -487,7 +497,6 @@ public class ModernScrollPanel : Panel, IMessageFilter
             true);
         DoubleBuffered = true;
         AutoScroll = false;
-        BackColor = Color.Transparent;
 
         _scrollBar = new ModernVScrollBar
         {
@@ -501,7 +510,6 @@ public class ModernScrollPanel : Panel, IMessageFilter
         {
             Dock = DockStyle.Fill,
             AutoScroll = false,
-            BackColor = Color.Transparent,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
@@ -518,6 +526,34 @@ public class ModernScrollPanel : Panel, IMessageFilter
         catch { }
     }
 
+    public override Color BackColor
+    {
+        get => GetEffectiveParentBackColor();
+        set { }
+    }
+
+    private Color GetEffectiveParentBackColor()
+    {
+        Control? p = Parent;
+        while (p != null)
+        {
+            if (p.BackColor != Color.Transparent && p.BackColor.A == 255)
+            {
+                return p.BackColor;
+            }
+            p = p.Parent;
+        }
+        return UiStyle.CardBackground;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        Color parentBg = GetEffectiveParentBackColor();
+        using var clearBrush = new SolidBrush(parentBg);
+        g.FillRectangle(clearBrush, ClientRectangle);
+    }
+
     public void SetContent(Control content)
     {
         _content = content;
@@ -525,6 +561,10 @@ public class ModernScrollPanel : Panel, IMessageFilter
         _viewport.Controls.Add(content);
 
         content.Location = new Point(0, 0);
+        if (content is FlowLayoutPanel)
+        {
+            content.MaximumSize = new Size(_viewport.ClientSize.Width, 0);
+        }
         content.Width = _viewport.ClientSize.Width;
         content.SizeChanged += (_, _) => RecalculateScroll();
         content.Layout += (_, _) => RecalculateScroll();
@@ -535,7 +575,12 @@ public class ModernScrollPanel : Panel, IMessageFilter
     {
         if (_content == null || _viewport.ClientSize.Height <= 0) return;
 
+        if (_content is FlowLayoutPanel)
+        {
+            _content.MaximumSize = new Size(_viewport.ClientSize.Width, 0);
+        }
         _content.Width = _viewport.ClientSize.Width;
+        _content.PerformLayout();
         int max = Math.Max(0, _content.Height - _viewport.ClientSize.Height);
         _scrollBar.Maximum = max;
         _scrollBar.LargeChange = Math.Max(1, _viewport.ClientSize.Height);
