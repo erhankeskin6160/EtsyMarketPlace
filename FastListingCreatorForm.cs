@@ -35,8 +35,16 @@ internal sealed class FastListingCreatorForm : Form
     private readonly ComboBox _cboShippingProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _txtTags = new() { Multiline = true, Height = 64, ScrollBars = ScrollBars.Vertical };
     private readonly Label _lblTagCounter = new() { AutoSize = true };
+    private readonly Label _lblTagStatus = new() { AutoSize = true };
     private readonly TextBox _txtDescription = new() { Multiline = true, Height = 130, ScrollBars = ScrollBars.Vertical };
     private readonly TextBox _txtMaterials = new() { Height = 26 };
+
+    // Template Toolbar Controls
+    private readonly ComboBox _cboTemplates = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 260 };
+    private readonly Button _btnApplyTemplate = new();
+    private readonly Button _btnSaveTemplate = new();
+    private readonly Button _btnDeleteTemplate = new();
+    private readonly ModernButtonControl _btnLivePreview = new();
 
     // Center Column Controls (Gallery & AI Generator)
     private readonly FlowLayoutPanel _galleryFlow = new();
@@ -75,10 +83,11 @@ internal sealed class FastListingCreatorForm : Form
 
     private void BuildLayout()
     {
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(12) };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));  // Header
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // 3-Column main content
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // Status bar
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4, Padding = new Padding(12) };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));  // Row 0: Header
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));  // Row 1: Template & Action Toolbar
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 2: 3-Column main content
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));  // Row 3: Status bar
         Controls.Add(root);
 
         // Row 0: Header
@@ -112,7 +121,11 @@ internal sealed class FastListingCreatorForm : Form
         header.Controls.Add(btnClearAll, 1, 0);
         root.Controls.Add(header, 0, 0);
 
-        // Row 1: 3-Column Content Layout
+        // Row 1: Template & Preview Toolbar
+        var toolBar = BuildTemplateToolbar();
+        root.Controls.Add(toolBar, 0, 1);
+
+        // Row 2: 3-Column Content Layout
         var contentColumns = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
         contentColumns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36)); // Col 1: Details & SEO
         contentColumns.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34)); // Col 2: Gallery & AI
@@ -121,14 +134,106 @@ internal sealed class FastListingCreatorForm : Form
         contentColumns.Controls.Add(BuildLeftColumn(), 0, 0);
         contentColumns.Controls.Add(BuildCenterColumn(), 1, 0);
         contentColumns.Controls.Add(BuildRightColumn(), 2, 0);
-        root.Controls.Add(contentColumns, 0, 1);
+        root.Controls.Add(contentColumns, 0, 2);
 
-        // Row 2: Status bar
+        // Row 3: Status bar
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.Font = new Font("Segoe UI", 9F);
         _statusLabel.ForeColor = UiStyle.TextMuted;
         _statusLabel.Text = "Hazır.";
-        root.Controls.Add(_statusLabel, 0, 2);
+        root.Controls.Add(_statusLabel, 0, 3);
+    }
+
+    private Control BuildTemplateToolbar()
+    {
+        var bar = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(243, 245, 249),
+            Padding = new Padding(8, 4, 8, 4),
+            Margin = new Padding(0, 0, 0, 6)
+        };
+
+        var flowLeft = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Left,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false
+        };
+
+        flowLeft.Controls.Add(new Label
+        {
+            Text = "📋 Hazır Şablon:",
+            Font = new Font("Segoe UI Semibold", 9F),
+            ForeColor = UiStyle.TextDark,
+            AutoSize = true,
+            Margin = new Padding(0, 7, 6, 0)
+        });
+
+        _cboTemplates.Font = new Font("Segoe UI", 9F);
+        _cboTemplates.Margin = new Padding(0, 4, 6, 0);
+        flowLeft.Controls.Add(_cboTemplates);
+
+        _btnApplyTemplate.Text = "⚡ Uygula";
+        _btnApplyTemplate.Font = new Font("Segoe UI Semibold", 8.5F);
+        _btnApplyTemplate.Height = 28;
+        _btnApplyTemplate.AutoSize = true;
+        _btnApplyTemplate.BackColor = UiStyle.PrimaryColor;
+        _btnApplyTemplate.ForeColor = Color.White;
+        _btnApplyTemplate.FlatStyle = FlatStyle.Flat;
+        _btnApplyTemplate.Cursor = Cursors.Hand;
+        _btnApplyTemplate.Margin = new Padding(0, 4, 6, 0);
+        _btnApplyTemplate.Click += (_, _) => ApplySelectedTemplate();
+        flowLeft.Controls.Add(_btnApplyTemplate);
+
+        _btnSaveTemplate.Text = "💾 Şablon Kaydet";
+        _btnSaveTemplate.Font = new Font("Segoe UI", 8.5F);
+        _btnSaveTemplate.Height = 28;
+        _btnSaveTemplate.AutoSize = true;
+        _btnSaveTemplate.BackColor = Color.White;
+        _btnSaveTemplate.ForeColor = UiStyle.TextDark;
+        _btnSaveTemplate.FlatStyle = FlatStyle.Flat;
+        _btnSaveTemplate.Cursor = Cursors.Hand;
+        _btnSaveTemplate.Margin = new Padding(0, 4, 4, 0);
+        _btnSaveTemplate.Click += (_, _) => SaveCurrentAsTemplate();
+        flowLeft.Controls.Add(_btnSaveTemplate);
+
+        _btnDeleteTemplate.Text = "🗑️";
+        _btnDeleteTemplate.Font = new Font("Segoe UI", 8.5F);
+        _btnDeleteTemplate.Height = 28;
+        _btnDeleteTemplate.Width = 32;
+        _btnDeleteTemplate.BackColor = Color.White;
+        _btnDeleteTemplate.ForeColor = UiStyle.DangerColor;
+        _btnDeleteTemplate.FlatStyle = FlatStyle.Flat;
+        _btnDeleteTemplate.Cursor = Cursors.Hand;
+        _btnDeleteTemplate.Margin = new Padding(0, 4, 0, 0);
+        _btnDeleteTemplate.Click += (_, _) => DeleteSelectedTemplate();
+        flowLeft.Controls.Add(_btnDeleteTemplate);
+
+        var flowRight = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false
+        };
+
+        _btnLivePreview.Text = "👁️ Canlı Etsy Önizleme";
+        _btnLivePreview.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        _btnLivePreview.Height = 30;
+        _btnLivePreview.Width = 190;
+        _btnLivePreview.NormalColor = Color.FromArgb(79, 70, 229);
+        _btnLivePreview.HoverColor = Color.FromArgb(67, 56, 202);
+        _btnLivePreview.ForeColor = Color.White;
+        _btnLivePreview.Cursor = Cursors.Hand;
+        _btnLivePreview.Margin = new Padding(0, 3, 0, 0);
+        _btnLivePreview.Click += (_, _) => OpenEtsyListingPreview();
+        flowRight.Controls.Add(_btnLivePreview);
+
+        bar.Controls.Add(flowLeft);
+        bar.Controls.Add(flowRight);
+        return bar;
     }
 
     private Control BuildLeftColumn()
@@ -229,7 +334,7 @@ internal sealed class FastListingCreatorForm : Form
         panel.Controls.Add(CreateLabeledControl("Kargo Profili (Shipping Profile):", _cboShippingProfile));
 
         // Tags
-        var tagContainer = new Panel { Dock = DockStyle.Top, Height = 95, Margin = new Padding(0, 4, 0, 0) };
+        var tagContainer = new Panel { Dock = DockStyle.Top, Height = 120, Margin = new Padding(0, 4, 0, 0) };
         var tagHeader = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 24, FlowDirection = FlowDirection.LeftToRight };
         tagHeader.Controls.Add(new Label { Text = "Etiketler (Virgülle ayırın, maks 13): ", AutoSize = true, Font = new Font("Segoe UI Semibold", 8.5F) });
         _lblTagCounter.Text = "0 / 13";
@@ -247,15 +352,38 @@ internal sealed class FastListingCreatorForm : Form
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Margin = new Padding(12, 0, 0, 0),
+            Margin = new Padding(8, 0, 0, 0),
         };
         btnAiTags.Click += async (_, _) => await SuggestAiTagsAsync();
         tagHeader.Controls.Add(btnAiTags);
 
-        _txtTags.Dock = DockStyle.Bottom;
+        var btnCleanTags = new Button
+        {
+            Text = "🧹 Kırp & Düzelt",
+            Font = new Font("Segoe UI", 8F),
+            Height = 22,
+            AutoSize = true,
+            BackColor = Color.FromArgb(71, 85, 105),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(6, 0, 0, 0),
+        };
+        btnCleanTags.Click += (_, _) => CleanAndFormatTags();
+        tagHeader.Controls.Add(btnCleanTags);
+
+        _txtTags.Dock = DockStyle.Top;
+        _txtTags.Height = 65;
         _txtTags.Font = new Font("Segoe UI", 9F);
-        tagContainer.Controls.Add(tagHeader);
+
+        _lblTagStatus.Dock = DockStyle.Bottom;
+        _lblTagStatus.Font = new Font("Segoe UI", 8F);
+        _lblTagStatus.ForeColor = UiStyle.TextMuted;
+        _lblTagStatus.Text = "Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.";
+
+        tagContainer.Controls.Add(_lblTagStatus);
         tagContainer.Controls.Add(_txtTags);
+        tagContainer.Controls.Add(tagHeader);
         panel.Controls.Add(tagContainer);
 
         // Description
@@ -355,10 +483,53 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(6),
         };
-        var aiTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3 };
+        var aiTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        aiTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); // Prompt Preset Chips
         aiTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); // Prompt
         aiTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Preview
         aiTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // Buttons
+
+        var chipsPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoScroll = true,
+            Margin = new Padding(0)
+        };
+
+        var promptPresets = new (string Label, string StyleKeyword)[]
+        {
+            ("☕ Masa/Kafe", "on a warm cozy wooden cafe table with morning sunlight, subtle steam, aesthetic atmosphere"),
+            ("🛋️ Salon", "displayed in a stylish Scandinavian modern living room, neutral aesthetic, architectural interior"),
+            ("📸 Stüdyo Beyaz", "isolated on a seamless pure white studio background, commercial softbox lighting, clean catalog"),
+            ("🌿 Bohem Ahşap", "on rustic reclaimed wood with lush green indoor potted plants and bohemian vibes"),
+            ("🎁 Hediye Paketi", "with luxury artisan kraft gift wrapping, elegant satin ribbon, greeting card")
+        };
+
+        foreach (var (pLabel, pStyle) in promptPresets)
+        {
+            var btnChip = new Button
+            {
+                Text = pLabel,
+                Font = new Font("Segoe UI", 7.5F),
+                Height = 24,
+                AutoSize = true,
+                BackColor = Color.FromArgb(240, 243, 248),
+                ForeColor = UiStyle.TextDark,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Margin = new Padding(1, 2, 3, 2)
+            };
+            btnChip.FlatAppearance.BorderColor = Color.FromArgb(215, 220, 228);
+            btnChip.Click += (_, _) =>
+            {
+                var prod = !string.IsNullOrWhiteSpace(_txtTitle.Text) ? _txtTitle.Text.Trim() : "Etsy product";
+                _txtAiPrompt.Text = $"High quality commercial product photography of {prod}, {pStyle}, professional 8k catalog shot, sharp details, realistic textures";
+            };
+            chipsPanel.Controls.Add(btnChip);
+        }
+        aiTable.Controls.Add(chipsPanel, 0, 0);
 
         var promptRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         promptRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 75));
@@ -385,10 +556,10 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
         promptRow.Controls.Add(btnPromptFromTitle, 1, 0);
-        aiTable.Controls.Add(promptRow, 0, 0);
+        aiTable.Controls.Add(promptRow, 0, 1);
 
         _picAiPreview.Dock = DockStyle.Fill;
-        aiTable.Controls.Add(_picAiPreview, 0, 1);
+        aiTable.Controls.Add(_picAiPreview, 0, 2);
 
         var aiActionRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -422,7 +593,7 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
         aiActionRow.Controls.Add(_btnAddToGallery, 1, 0);
-        aiTable.Controls.Add(aiActionRow, 0, 2);
+        aiTable.Controls.Add(aiActionRow, 0, 3);
 
         aiBox.Controls.Add(aiTable);
         rootTable.Controls.Add(aiBox, 0, 2);
@@ -516,12 +687,19 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(6),
         };
-        var pubTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3 };
-        pubTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // Active Checkbox
+        var pubTable = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 4 };
+        pubTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Active Checkbox
+        pubTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // Preview button
         pubTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 45)); // Publish button
         pubTable.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Help notes
 
         pubTable.Controls.Add(_chkMakeActive, 0, 0);
+
+        var btnPreview = UiStyle.CreateButton("👁️ Canlı Etsy Önizleme Yap", isSecondary: true);
+        btnPreview.Dock = DockStyle.Fill;
+        btnPreview.Height = 32;
+        btnPreview.Click += (_, _) => OpenEtsyListingPreview();
+        pubTable.Controls.Add(btnPreview, 0, 1);
 
         _btnPublish.Dock = DockStyle.Fill;
         _btnPublish.Text = "🚀 Etsy'ye Gönder (Listelemeyi Oluştur)";
@@ -530,7 +708,7 @@ internal sealed class FastListingCreatorForm : Form
         _btnPublish.ForeColor = Color.White;
         _btnPublish.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
         _btnPublish.Click += async (_, _) => await PublishListingToEtsyAsync();
-        pubTable.Controls.Add(_btnPublish, 0, 1);
+        pubTable.Controls.Add(_btnPublish, 0, 2);
 
         var lblNote = new Label
         {
@@ -539,7 +717,7 @@ internal sealed class FastListingCreatorForm : Form
             ForeColor = UiStyle.TextMuted,
             Text = "İpucu: 'Canlı Yayına Al' işaretlenmezse listeleme güvenli şekilde TASLAK (Draft) olarak açılır. Eklediğiniz tüm görseller ve varyasyonlar otomatik olarak ürüne iliştirilir.",
         };
-        pubTable.Controls.Add(lblNote, 0, 2);
+        pubTable.Controls.Add(lblNote, 0, 3);
 
         pubBox.Controls.Add(pubTable);
         rootTable.Controls.Add(pubBox, 0, 1);
@@ -568,12 +746,7 @@ internal sealed class FastListingCreatorForm : Form
             _lblTitleCounter.ForeColor = len >= 80 && len <= 140 ? UiStyle.SuccessColor : len > 140 ? UiStyle.DangerColor : UiStyle.TextMuted;
         };
 
-        _txtTags.TextChanged += (_, _) =>
-        {
-            var tags = SplitTags(_txtTags.Text);
-            _lblTagCounter.Text = $"{tags.Count} / 13";
-            _lblTagCounter.ForeColor = tags.Count == 13 ? UiStyle.SuccessColor : tags.Count > 13 ? UiStyle.DangerColor : UiStyle.TextMuted;
-        };
+        _txtTags.TextChanged += (_, _) => UpdateTagStatus();
 
         _chkEnableVariations.CheckedChanged += (_, _) => UpdateVariationsDisplay();
         _chkEnableVar2.CheckedChanged += (_, _) =>
@@ -640,6 +813,10 @@ internal sealed class FastListingCreatorForm : Form
         catch (Exception ex)
         {
             _statusLabel.Text = $"Kargo profilleri alınamadı: {ex.Message}";
+        }
+        finally
+        {
+            LoadTemplatesCombo();
         }
     }
 
@@ -1127,6 +1304,263 @@ internal sealed class FastListingCreatorForm : Form
         _picAiPreview.Image = null;
         _btnAddToGallery.Enabled = false;
         RefreshGalleryCards();
+        UpdateTagStatus();
         _statusLabel.Text = "Form temizlendi.";
+    }
+
+    // --- Template & Live Preview Operations ---
+
+    private void LoadTemplatesCombo(string? selectId = null)
+    {
+        _cboTemplates.Items.Clear();
+        var templates = FastListingTemplateStore.LoadAll();
+        int selectedIndex = 0;
+
+        for (int i = 0; i < templates.Count; i++)
+        {
+            _cboTemplates.Items.Add(templates[i]);
+            if (selectId != null && templates[i].Id == selectId)
+            {
+                selectedIndex = i;
+            }
+        }
+
+        if (_cboTemplates.Items.Count > 0)
+        {
+            _cboTemplates.SelectedIndex = selectedIndex;
+        }
+    }
+
+    private void ApplySelectedTemplate()
+    {
+        if (_cboTemplates.SelectedItem is not FastListingTemplate tmpl) return;
+
+        if (tmpl.DefaultPrice > 0) _numPrice.Value = tmpl.DefaultPrice;
+        if (tmpl.DefaultQuantity > 0) _numQuantity.Value = tmpl.DefaultQuantity;
+        _cboListingType.SelectedIndex = tmpl.IsDigital ? 1 : 0;
+
+        if (!string.IsNullOrWhiteSpace(tmpl.DefaultTags)) _txtTags.Text = tmpl.DefaultTags;
+        if (!string.IsNullOrWhiteSpace(tmpl.DefaultMaterials)) _txtMaterials.Text = tmpl.DefaultMaterials;
+        if (!string.IsNullOrWhiteSpace(tmpl.DescriptionTemplate)) _txtDescription.Text = tmpl.DescriptionTemplate;
+
+        _chkEnableVariations.Checked = tmpl.EnableVariations;
+        if (tmpl.EnableVariations)
+        {
+            SelectVariationTypeInCombo(_cboVarType1, tmpl.VariationType1);
+            _txtVarValues1.Text = tmpl.VariationValues1;
+
+            _chkEnableVar2.Checked = tmpl.EnableVariation2;
+            if (tmpl.EnableVariation2)
+            {
+                SelectVariationTypeInCombo(_cboVarType2, tmpl.VariationType2);
+                _txtVarValues2.Text = tmpl.VariationValues2;
+            }
+        }
+        else
+        {
+            _chkEnableVar2.Checked = false;
+        }
+
+        UpdateTagStatus();
+        UpdateVariationsDisplay();
+        _statusLabel.Text = $"'{tmpl.Name}' şablonu başarıyla uygulandı.";
+    }
+
+    private void SaveCurrentAsTemplate()
+    {
+        var defaultName = !string.IsNullOrWhiteSpace(_txtTitle.Text)
+            ? _txtTitle.Text.Split([' ', ',', '-'])[0] + " Şablonu"
+            : "Yeni Ürün Şablonu";
+
+        var name = ShowTextInputDialog(this, "Şablon Olarak Kaydet", "Yeni şablon için bir isim giriniz:", defaultName);
+        if (string.IsNullOrWhiteSpace(name)) return;
+
+        var tmpl = new FastListingTemplate
+        {
+            Name = name.Trim(),
+            DefaultPrice = _numPrice.Value,
+            DefaultQuantity = (int)_numQuantity.Value,
+            IsDigital = _cboListingType.SelectedIndex == 1,
+            DefaultTags = _txtTags.Text.Trim(),
+            DefaultMaterials = _txtMaterials.Text.Trim(),
+            DescriptionTemplate = _txtDescription.Text.Trim(),
+            EnableVariations = _chkEnableVariations.Checked,
+            VariationType1 = _cboVarType1.SelectedItem?.ToString() ?? "Boyut / Beden (Size - 100)",
+            VariationValues1 = _txtVarValues1.Text.Trim(),
+            EnableVariation2 = _chkEnableVar2.Checked,
+            VariationType2 = _cboVarType2.SelectedItem?.ToString() ?? "Renk (Primary Color - 506)",
+            VariationValues2 = _txtVarValues2.Text.Trim()
+        };
+
+        FastListingTemplateStore.SaveCustom(tmpl);
+        LoadTemplatesCombo(tmpl.Id);
+        _statusLabel.Text = $"'{tmpl.Name}' şablonu kaydedildi.";
+    }
+
+    private void DeleteSelectedTemplate()
+    {
+        if (_cboTemplates.SelectedItem is not FastListingTemplate tmpl) return;
+
+        if (tmpl.IsBuiltIn)
+        {
+            MessageBox.Show(this, "Yerleşik sistem şablonları silinemez.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        if (MessageBox.Show(this, $"'{tmpl.Name}' şablonunu silmek istediğinize emin misiniz?", "Şablon Sil", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+        {
+            FastListingTemplateStore.DeleteCustom(tmpl.Id);
+            LoadTemplatesCombo();
+            _statusLabel.Text = $"'{tmpl.Name}' şablonu silindi.";
+        }
+    }
+
+    private static void SelectVariationTypeInCombo(ComboBox cbo, string targetName)
+    {
+        if (string.IsNullOrWhiteSpace(targetName)) return;
+        for (int i = 0; i < cbo.Items.Count; i++)
+        {
+            var s = cbo.Items[i]?.ToString() ?? "";
+            if (s.Contains(targetName, StringComparison.OrdinalIgnoreCase) || targetName.Contains(s, StringComparison.OrdinalIgnoreCase))
+            {
+                cbo.SelectedIndex = i;
+                return;
+            }
+        }
+    }
+
+    private void CleanAndFormatTags()
+    {
+        var sanitized = FastListingDraftHelper.SanitizeTags(_txtTags.Text);
+        _txtTags.Text = string.Join(", ", sanitized);
+        UpdateTagStatus();
+        _statusLabel.Text = $"{sanitized.Count} etiket Etsy standartlarına göre temizlendi (Maks 13 etiket, 20 karakter).";
+    }
+
+    private void UpdateTagStatus()
+    {
+        var rawTags = _txtTags.Text.Split([',', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Trim())
+            .Where(t => t.Length > 0)
+            .ToList();
+
+        var longTags = rawTags.Where(t => t.Length > 20).ToList();
+        var duplicates = rawTags.GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        if (rawTags.Count == 0)
+        {
+            _lblTagCounter.Text = "0 / 13";
+            _lblTagCounter.ForeColor = UiStyle.TextMuted;
+            _lblTagStatus.Text = "Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.";
+            _lblTagStatus.ForeColor = UiStyle.TextMuted;
+        }
+        else if (longTags.Count > 0)
+        {
+            _lblTagCounter.Text = $"{rawTags.Count} / 13";
+            _lblTagCounter.ForeColor = UiStyle.DangerColor;
+            _lblTagStatus.Text = $"⚠️ {longTags.Count} etiket 20 karakter sınırını aşıyor! ('{longTags[0]}')";
+            _lblTagStatus.ForeColor = UiStyle.DangerColor;
+        }
+        else if (duplicates.Count > 0)
+        {
+            _lblTagCounter.Text = $"{rawTags.Count} / 13";
+            _lblTagCounter.ForeColor = UiStyle.WarningColor;
+            _lblTagStatus.Text = $"⚠️ Yinelenen etiketler var: '{duplicates[0]}'";
+            _lblTagStatus.ForeColor = UiStyle.WarningColor;
+        }
+        else
+        {
+            _lblTagCounter.Text = $"{rawTags.Count} / 13";
+            _lblTagCounter.ForeColor = rawTags.Count == 13 ? UiStyle.SuccessColor : UiStyle.PrimaryColor;
+            _lblTagStatus.Text = rawTags.Count == 13
+                ? "Mükemmel! 13/13 etiket dolu ve Etsy kurallarına uygun ✅"
+                : $"{rawTags.Count}/13 etiket kurallara uygun (Önerilen: 13)";
+            _lblTagStatus.ForeColor = rawTags.Count == 13 ? UiStyle.SuccessColor : UiStyle.TextDark;
+        }
+    }
+
+    private void OpenEtsyListingPreview()
+    {
+        var variations = new List<(string Name, IReadOnlyList<string> Values)>();
+        if (_chkEnableVariations.Checked)
+        {
+            var v1 = SplitTags(_txtVarValues1.Text);
+            if (v1.Count > 0)
+            {
+                var (n1, _) = ParseVariationType(_cboVarType1.SelectedItem?.ToString());
+                variations.Add((n1, v1));
+            }
+
+            if (_chkEnableVar2.Checked)
+            {
+                var v2 = SplitTags(_txtVarValues2.Text);
+                if (v2.Count > 0)
+                {
+                    var (n2, _) = ParseVariationType(_cboVarType2.SelectedItem?.ToString());
+                    variations.Add((n2, v2));
+                }
+            }
+        }
+
+        using var preview = new EtsyListingPreviewDialog(
+            _txtTitle.Text.Trim(),
+            _numPrice.Value,
+            _txtDescription.Text,
+            SplitTags(_txtTags.Text),
+            SplitTags(_txtMaterials.Text),
+            _galleryImagePaths,
+            variations);
+
+        preview.ShowDialog(this);
+    }
+
+    private static string? ShowTextInputDialog(IWin32Window owner, string title, string prompt, string defaultText = "")
+    {
+        using var form = new Form
+        {
+            Text = title,
+            Size = new Size(420, 180),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = Color.White
+        };
+
+        var lbl = new Label { Text = prompt, Location = new Point(20, 15), AutoSize = true, Font = new Font("Segoe UI", 9f) };
+        var txt = new TextBox { Text = defaultText, Location = new Point(20, 45), Width = 360, Font = new Font("Segoe UI", 9.5f) };
+        txt.SelectAll();
+
+        var btnOk = new Button
+        {
+            Text = "Kaydet",
+            DialogResult = DialogResult.OK,
+            Location = new Point(210, 88),
+            Size = new Size(85, 32),
+            BackColor = UiStyle.PrimaryColor,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+
+        var btnCancel = new Button
+        {
+            Text = "İptal",
+            DialogResult = DialogResult.Cancel,
+            Location = new Point(302, 88),
+            Size = new Size(78, 32),
+            BackColor = Color.FromArgb(240, 242, 245),
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+
+        form.Controls.AddRange([lbl, txt, btnOk, btnCancel]);
+        form.AcceptButton = btnOk;
+        form.CancelButton = btnCancel;
+
+        return form.ShowDialog(owner) == DialogResult.OK ? txt.Text.Trim() : null;
     }
 }

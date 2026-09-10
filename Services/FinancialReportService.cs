@@ -517,7 +517,7 @@ internal sealed class FinancialReportService
             .ToList();
 
         // Sipariş bazında net kâr özetleri (mağaza fişleri üzerinden - RAM'deki kilitli kur sözlüğüyle 0 ms'de eşleşir)
-        var orderSummaries = await BuildOrderSummariesAsync(receipts, orderCosts, productCosts, rateMap, exchangeRate, ct);
+        var orderSummaries = BuildOrderSummaries(receipts, orderCosts, productCosts, rateMap, exchangeRate);
 
         // Sipariş maliyetlerini receipt'lerden topla (daha doğru)
         if (orderSummaries.Count > 0)
@@ -578,13 +578,12 @@ internal sealed class FinancialReportService
     /// Her Etsy siparişi (receipt) için gerçek net kâr hesaplar.
     /// Formül (Türkiye): GrandTotal - Tax - İşlem(%6.5) - Ödeme(%6.5+3TL) - Yasal(%1.5) - KDV(%20) - İlan - [Dış Reklam(%15)] - Sipariş Maliyeti
     /// </summary>
-    private static async Task<List<OrderFinancialSummary>> BuildOrderSummariesAsync(
+    private static List<OrderFinancialSummary> BuildOrderSummaries(
         IReadOnlyList<OwnShopReceipt> receipts,
         List<OrderCostEntry> orderCosts,
         List<ProductCostEntry> productCosts,
         Dictionary<DateTime, decimal> rateMap,
-        decimal defaultExchangeRate,
-        CancellationToken ct)
+        decimal defaultExchangeRate)
     {
         var result = new List<OrderFinancialSummary>();
         var orderCostMap = orderCosts
