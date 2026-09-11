@@ -193,6 +193,10 @@ internal static class UiStyle
             cb.BackColor = InputBackground;
             cb.ForeColor = TextDark;
         }
+        else if (ctrl is SimilarProductsWinForms.Controls.ModernCheckBox mchk)
+        {
+            mchk.ForeColor = TextDark;
+        }
         else if (ctrl is CheckBox chk)
         {
             chk.Font = BaseFont;
@@ -325,6 +329,38 @@ internal static class UiStyle
 
         // Attach modern scrollbars (hides native win32 scrollbars, adds ModernVScrollBar & ModernHScrollBar)
         SimilarProductsWinForms.Controls.ModernGridScrollAdapter.Attach(grid);
+
+        // Modern custom painting for DataGridViewCheckBoxColumn
+        grid.CellPainting += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && grid.Columns[e.ColumnIndex] is DataGridViewCheckBoxColumn)
+            {
+                e.PaintBackground(e.CellBounds, true);
+                bool isChecked = false;
+                if (e.FormattedValue is bool b) isChecked = b;
+                else if (e.Value is bool b2) isChecked = b2;
+
+                int boxSize = 16;
+                int bx = e.CellBounds.X + (e.CellBounds.Width - boxSize) / 2;
+                int by = e.CellBounds.Y + (e.CellBounds.Height - boxSize) / 2;
+                var boxRect = new Rectangle(bx, by, boxSize, boxSize);
+
+                if (e.Graphics != null)
+                {
+                    SimilarProductsWinForms.Controls.ModernCheckBox.DrawBox(
+                        e.Graphics,
+                        boxRect,
+                        isChecked,
+                        false,
+                        false,
+                        false,
+                        true,
+                        boxSize,
+                        4);
+                }
+                e.Handled = true;
+            }
+        };
     }
 
     public static SimilarProductsWinForms.Controls.ModernSidebarNav? AttachSidebarNav(Form form, string activeItemId, Action<string>? onNavigate = null)

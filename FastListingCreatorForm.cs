@@ -64,16 +64,16 @@ internal sealed class FastListingCreatorForm : Form
     private readonly ModernButtonControl _btnAddToGallery = new();
 
     // Right Column Controls (Variations & Publish)
-    private readonly CheckBox _chkEnableVariations = new() { Text = "🎨 Bu ürüne varyasyon ekle (Boyut, Renk vb.)", AutoSize = true };
+    private readonly ModernCheckBox _chkEnableVariations = new() { Text = "🎨 Bu ürüne varyasyon ekle (Boyut, Renk vb.)", AutoSize = true };
     private readonly ModernComboBox _cboVarType1 = new();
     private readonly TextBox _txtVarValues1 = new() { Text = "Small, Medium, Large" };
-    private readonly CheckBox _chkEnableVar2 = new() { Text = "➕ İkinci varyasyon grubu ekle", AutoSize = true };
+    private readonly ModernCheckBox _chkEnableVar2 = new() { Text = "➕ İkinci varyasyon grubu ekle", AutoSize = true };
     private readonly ModernComboBox _cboVarType2 = new();
     private readonly TextBox _txtVarValues2 = new() { Text = "Siyah, Beyaz, Altın" };
     private readonly Label _lblVarCombinations = new() { AutoSize = true };
 
     // Custom Variation Pricing Controls
-    private readonly CheckBox _chkCustomVariationPricing = new() { Text = "💲 Her varyasyona özel farklı fiyat & stok belirle", AutoSize = true };
+    private readonly ModernCheckBox _chkCustomVariationPricing = new() { Text = "💲 Her varyasyona özel farklı fiyat & stok belirle", AutoSize = true };
     private readonly TableLayoutPanel _pnlVariationPricing = new() { Dock = DockStyle.Top, Height = 180, Visible = false };
     private readonly DataGridView _gridVariationPricing = new();
     private readonly Label _lblPriceRangeBadge = new() { AutoSize = true };
@@ -1050,6 +1050,8 @@ internal sealed class FastListingCreatorForm : Form
         varTable.ColumnStyles.Clear();
         varTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
+        _chkEnableVariations.Dock = DockStyle.Top;
+        _chkEnableVariations.Margin = new Padding(0, 4, 0, 6);
         varTable.Controls.Add(_chkEnableVariations);
 
         var lblVar1 = new Label { Text = "1. Varyasyon Tipi:", AutoSize = true, Font = new Font("Segoe UI Semibold", 8.5F), Margin = new Padding(0, 6, 0, 2) };
@@ -1070,6 +1072,8 @@ internal sealed class FastListingCreatorForm : Form
         _txtVarValues1.Margin = new Padding(0, 4, 0, 6);
         varTable.Controls.Add(_txtVarValues1);
 
+        _chkEnableVar2.Dock = DockStyle.Top;
+        _chkEnableVar2.Margin = new Padding(0, 6, 0, 6);
         varTable.Controls.Add(_chkEnableVar2);
 
         _cboVarType2.Items.AddRange([
@@ -1325,6 +1329,36 @@ internal sealed class FastListingCreatorForm : Form
         };
 
         _gridVariationPricing.Columns.AddRange([colKey, colPrice, colQty, colActive]);
+        _gridVariationPricing.CellPainting += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && _gridVariationPricing.Columns[e.ColumnIndex] is DataGridViewCheckBoxColumn)
+            {
+                e.PaintBackground(e.CellBounds, true);
+                bool isChecked = false;
+                if (e.FormattedValue is bool b) isChecked = b;
+                else if (e.Value is bool b2) isChecked = b2;
+
+                int boxSize = 16;
+                int bx = e.CellBounds.X + (e.CellBounds.Width - boxSize) / 2;
+                int by = e.CellBounds.Y + (e.CellBounds.Height - boxSize) / 2;
+                var boxRect = new Rectangle(bx, by, boxSize, boxSize);
+
+                if (e.Graphics != null)
+                {
+                    ModernCheckBox.DrawBox(
+                        e.Graphics,
+                        boxRect,
+                        isChecked,
+                        false,
+                        false,
+                        false,
+                        true,
+                        boxSize,
+                        4);
+                }
+                e.Handled = true;
+            }
+        };
         _pnlVariationPricing.Controls.Add(_gridVariationPricing, 0, 1);
 
         _lblPriceRangeBadge.Dock = DockStyle.Fill;
@@ -1868,7 +1902,7 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
 
-        var chkActive = new CheckBox
+        var chkActive = new ModernCheckBox
         {
             Text = "Satışta / Aktif",
             Location = new Point(130, 115),
