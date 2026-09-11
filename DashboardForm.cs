@@ -1133,6 +1133,7 @@ internal sealed class DashboardForm : Form
 
         _sidebarNav.AddItem("automation", "Otomasyon Raporu", "⚡", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("batch", "Toplu İşlem Kuyruğu", "📦", "Otomasyon & Araçlar");
+        _sidebarNav.AddItem("shop_vault", "Mağaza Yedek & Transfer", "🛡️", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("profit", "Kâr Simülatörü", "💰", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
@@ -1256,6 +1257,7 @@ internal sealed class DashboardForm : Form
             "ab_test" => new ListingAbTestForm(_abTestService, _aiListingOptimizer),
             "automation" => new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler),
             "batch" => new BatchQueueForm(_batchQueueProcessorService, _abTestService),
+            "shop_vault" => new ShopVaultForm(),
             "profit" => new ProfitCalculatorForm(),
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),

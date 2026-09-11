@@ -479,6 +479,87 @@ internal sealed class EtsyApiClient
         return listings;
     }
 
+    public async Task<List<MarketListingResult>> GetAllOwnShopListingsPagedAsync(
+        EtsyApiSettings settings,
+        string state = "active",
+        IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, shopName) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        var allListings = new List<MarketListingResult>();
+        int offset = 0;
+        const int pageSize = 100;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var query = ToQueryString(new Dictionary<string, string>
+            {
+                ["limit"] = pageSize.ToString(CultureInfo.InvariantCulture),
+                ["offset"] = offset.ToString(CultureInfo.InvariantCulture),
+                ["sort_on"] = "updated",
+                ["sort_order"] = "desc",
+                ["includes"] = "Images",
+                ["state"] = state
+            });
+
+            string url = $"{BaseUrl}/shops/{shopId}/listings?{query}";
+            using var request = CreateRequest(settings, HttpMethod.Get, url, useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                string fallbackUrl = $"{BaseUrl}/shops/{shopId}/listings/active?limit={pageSize}&offset={offset}&includes=Images";
+                using var fbReq = CreateRequest(settings, HttpMethod.Get, fallbackUrl, useAccessToken: true);
+                using var fbResp = await _httpClient.SendAsync(fbReq, cancellationToken);
+                body = await fbResp.Content.ReadAsStringAsync(cancellationToken);
+                if (!fbResp.IsSuccessStatusCode)
+                {
+                    break;
+                }
+            }
+
+            var batch = ParseMarketListings(body, "");
+            if (batch.Count == 0)
+            {
+                break;
+            }
+
+            foreach (var listing in batch)
+            {
+                listing.ShopName = shopName;
+                listing.ShopUrl = BuildShopUrl(shopName);
+                allListings.Add(listing);
+            }
+
+            progress?.Report($"Mağazadan {allListings.Count} ürün çekildi (Sayfa {offset / pageSize + 1})...");
+
+            if (batch.Count < pageSize)
+            {
+                break;
+            }
+
+            offset += pageSize;
+            await Task.Delay(250, cancellationToken);
+        }
+
+        return allListings;
+    }
+
+    public async Task<byte[]> DownloadImageBytesAsync(string imageUrl, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(imageUrl))
+        {
+            return Array.Empty<byte>();
+        }
+
+        using var response = await _httpClient.GetAsync(imageUrl, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken);
+    }
+
     public async Task<OwnShopProfile> GetOwnShopProfileAsync(
         EtsyApiSettings settings,
         CancellationToken cancellationToken = default)
