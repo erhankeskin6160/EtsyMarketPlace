@@ -985,8 +985,8 @@ public class ModernScrollPanel : Panel, IMessageFilter
         }
     }
 
-    private readonly ModernScrollViewport _viewport;
-    private readonly ModernVScrollBar _scrollBar;
+    private readonly ModernScrollViewport _viewport = new() { Location = new Point(0, 0) };
+    private readonly ModernVScrollBar _scrollBar = new() { Width = 8, Visible = false };
     private Control? _content;
     private bool _isFilterRegistered;
     private bool _isSyncing;
@@ -1001,17 +1001,8 @@ public class ModernScrollPanel : Panel, IMessageFilter
         Margin = Padding.Empty;
         Padding = Padding.Empty;
 
-        _viewport = new ModernScrollViewport
-        {
-            Location = new Point(0, 0)
-        };
         _viewport.Resize += (_, _) => RecalculateScroll();
 
-        _scrollBar = new ModernVScrollBar
-        {
-            Width = 8,
-            Visible = false
-        };
         _scrollBar.ValueChanged += (_, _) =>
         {
             if (_isSyncing || _content == null || _viewport == null) return;
@@ -1020,6 +1011,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
             {
                 _viewport.AutoScrollPosition = new Point(0, _scrollBar.Value);
             }
+            catch { }
             finally
             {
                 _isSyncing = false;
@@ -1063,64 +1055,80 @@ public class ModernScrollPanel : Panel, IMessageFilter
     protected override void OnResize(EventArgs eventargs)
     {
         base.OnResize(eventargs);
-        UpdateLayout();
+        try
+        {
+            UpdateLayout();
+        }
+        catch { }
     }
 
     protected override void OnLayout(LayoutEventArgs levent)
     {
         base.OnLayout(levent);
-        UpdateLayout();
+        try
+        {
+            UpdateLayout();
+        }
+        catch { }
     }
 
     private void UpdateLayout()
     {
-        if (_viewport == null || _scrollBar == null || ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
-
-        int scrollBarW = 8;
-        bool needBar = _scrollBar.Visible;
-        int visibleContentW = needBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
-
-        // Position native scrollbar off-screen by expanding viewport width past the visible content width
-        int nativeBarW = SystemInformation.VerticalScrollBarWidth;
-        int vpW = visibleContentW + nativeBarW + 6;
-
-        _viewport.SetBounds(0, 0, vpW, ClientSize.Height);
-
-        if (_content != null)
+        try
         {
-            if (_content is FlowLayoutPanel)
-            {
-                _content.MaximumSize = new Size(visibleContentW, 0);
-            }
-            _content.Width = visibleContentW;
-        }
+            if (_viewport == null || _scrollBar == null || ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
 
-        _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height);
-        _scrollBar.BringToFront();
+            int scrollBarW = 8;
+            bool needBar = _scrollBar.Visible;
+            int visibleContentW = needBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
+
+            // Position native scrollbar off-screen by expanding viewport width past the visible content width
+            int nativeBarW = SystemInformation.VerticalScrollBarWidth;
+            int vpW = visibleContentW + nativeBarW + 6;
+
+            _viewport.SetBounds(0, 0, vpW, ClientSize.Height);
+
+            if (_content != null)
+            {
+                if (_content is FlowLayoutPanel)
+                {
+                    _content.MaximumSize = new Size(visibleContentW, 0);
+                }
+                _content.Width = visibleContentW;
+            }
+
+            _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height);
+            _scrollBar.BringToFront();
+        }
+        catch { }
     }
 
     public void SetContent(Control content)
     {
-        if (_viewport == null || _scrollBar == null) return;
-
-        _content = content;
-        _viewport.Controls.Clear();
-        _viewport.Controls.Add(content);
-
-        content.Dock = DockStyle.None;
-        content.Anchor = AnchorStyles.Top | AnchorStyles.Left;
-        content.Location = new Point(0, 0);
-
-        Color effectiveBg = GetEffectiveParentBackColor();
-        _viewport.BackColor = effectiveBg;
-        if (content.BackColor == Color.Transparent || content.BackColor == SystemColors.Control)
+        try
         {
-            content.BackColor = effectiveBg;
-        }
+            if (_viewport == null || _scrollBar == null) return;
 
-        content.SizeChanged += (_, _) => RecalculateScroll();
-        content.Layout += (_, _) => RecalculateScroll();
-        RecalculateScroll();
+            _content = content;
+            _viewport.Controls.Clear();
+            _viewport.Controls.Add(content);
+
+            content.Dock = DockStyle.None;
+            content.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            content.Location = new Point(0, 0);
+
+            Color effectiveBg = GetEffectiveParentBackColor();
+            _viewport.BackColor = effectiveBg;
+            if (content.BackColor == Color.Transparent || content.BackColor == SystemColors.Control)
+            {
+                content.BackColor = effectiveBg;
+            }
+
+            content.SizeChanged += (_, _) => RecalculateScroll();
+            content.Layout += (_, _) => RecalculateScroll();
+            RecalculateScroll();
+        }
+        catch { }
     }
 
     public void SyncScrollBarFromViewport()
@@ -1135,6 +1143,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 _scrollBar.Value = currentY;
             }
         }
+        catch { }
         finally
         {
             _isSyncing = false;
@@ -1143,65 +1152,70 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
     public void RecalculateScroll()
     {
-        if (_content == null || _viewport == null || _scrollBar == null || ClientSize.Height <= 0) return;
-
-        Color effectiveBg = GetEffectiveParentBackColor();
-        if (_viewport.BackColor != effectiveBg) _viewport.BackColor = effectiveBg;
-        if (_content.BackColor == Color.Transparent || _content.BackColor == SystemColors.Control)
+        try
         {
-            _content.BackColor = effectiveBg;
-        }
+            if (_content == null || _viewport == null || _scrollBar == null || ClientSize.Height <= 0) return;
 
-        int visibleContentW = Math.Max(0, ClientSize.Width - 8);
-        if (_content is FlowLayoutPanel)
-        {
-            _content.MaximumSize = new Size(visibleContentW, 0);
-        }
-        _content.Width = visibleContentW;
-        _content.PerformLayout();
-
-        int contentH = _content.PreferredSize.Height;
-        foreach (Control c in _content.Controls)
-        {
-            if (c.Visible)
+            Color effectiveBg = GetEffectiveParentBackColor();
+            if (_viewport.BackColor != effectiveBg) _viewport.BackColor = effectiveBg;
+            if (_content.BackColor == Color.Transparent || _content.BackColor == SystemColors.Control)
             {
-                int bottom = c.Bottom + c.Margin.Bottom;
-                if (bottom > contentH) contentH = bottom;
+                _content.BackColor = effectiveBg;
+            }
+
+            int visibleContentW = Math.Max(0, ClientSize.Width - 8);
+            if (_content is FlowLayoutPanel)
+            {
+                _content.MaximumSize = new Size(visibleContentW, 0);
+            }
+            _content.Width = visibleContentW;
+            _content.PerformLayout();
+
+            int contentH = _content.PreferredSize.Height;
+            foreach (Control c in _content.Controls)
+            {
+                if (c.Visible)
+                {
+                    int bottom = c.Bottom + c.Margin.Bottom;
+                    if (bottom > contentH) contentH = bottom;
+                }
+            }
+
+            if (contentH <= 0 || contentH < _content.Height)
+            {
+                contentH = _content.Height;
+            }
+
+            _content.Size = new Size(visibleContentW, contentH);
+            _viewport.AutoScrollMinSize = new Size(0, contentH);
+
+            int max = Math.Max(0, contentH - ClientSize.Height);
+            _scrollBar.Maximum = max;
+            _scrollBar.LargeChange = Math.Max(1, ClientSize.Height);
+            _scrollBar.Visible = max > 0;
+
+            if (_scrollBar.Value > max)
+            {
+                _scrollBar.Value = max;
+            }
+
+            UpdateLayout();
+
+            if (!_isSyncing)
+            {
+                _isSyncing = true;
+                try
+                {
+                    _viewport.AutoScrollPosition = new Point(0, _scrollBar.Value);
+                }
+                catch { }
+                finally
+                {
+                    _isSyncing = false;
+                }
             }
         }
-
-        if (contentH <= 0 || contentH < _content.Height)
-        {
-            contentH = _content.Height;
-        }
-
-        _content.Size = new Size(visibleContentW, contentH);
-        _viewport.AutoScrollMinSize = new Size(0, contentH);
-
-        int max = Math.Max(0, contentH - ClientSize.Height);
-        _scrollBar.Maximum = max;
-        _scrollBar.LargeChange = Math.Max(1, ClientSize.Height);
-        _scrollBar.Visible = max > 0;
-
-        if (_scrollBar.Value > max)
-        {
-            _scrollBar.Value = max;
-        }
-
-        UpdateLayout();
-
-        if (!_isSyncing)
-        {
-            _isSyncing = true;
-            try
-            {
-                _viewport.AutoScrollPosition = new Point(0, _scrollBar.Value);
-            }
-            finally
-            {
-                _isSyncing = false;
-            }
-        }
+        catch { }
     }
 
     public bool PreFilterMessage(ref Message m)
