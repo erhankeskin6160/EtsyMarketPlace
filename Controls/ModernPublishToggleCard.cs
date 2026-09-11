@@ -20,11 +20,11 @@ public class ModernPublishToggleCard : Control
     public event EventHandler? CheckedChanged;
 
     public string Title { get; set; } = "Hemen Canlı Yayına Al";
-    public string ActiveBadgeText { get; set; } = "CANLI (AKTİF)";
-    public string InactiveBadgeText { get; set; } = "TASLAK (DRAFT)";
-    public string ActiveDescription { get; set; } = "Açık: Ürün doğrudan Etsy mağazasında satışa sunulur.";
-    public string InactiveDescription { get; set; } = "Kapalı: Güvenli mod. Ürün taslak olarak saklanır.";
-    public int CornerRadius { get; set; } = 10;
+    public string ActiveBadgeText { get; set; } = "CANLI";
+    public string InactiveBadgeText { get; set; } = "TASLAK";
+    public string ActiveDescription { get; set; } = "Açık: Ürün doğrudan mağazada satışa açılır.";
+    public string InactiveDescription { get; set; } = "Kapalı: Güvenli mod. Taslak olarak saklanır.";
+    public int CornerRadius { get; set; } = 8;
 
     public bool Checked
     {
@@ -53,12 +53,18 @@ public class ModernPublishToggleCard : Control
             true);
 
         DoubleBuffered = true;
-        Height = 66;
+        Height = 58;
         Cursor = Cursors.Hand;
         TabStop = true;
 
         _animTimer = new System.Windows.Forms.Timer { Interval = 15 };
         _animTimer.Tick += OnAnimTimerTick;
+    }
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        int w = proposedSize.Width > 0 ? proposedSize.Width : 260;
+        return new Size(w, 58);
     }
 
     private void StartAnimation()
@@ -186,9 +192,9 @@ public class ModernPublishToggleCard : Control
         }
 
         // 4. Sağ Taraftaki Toggle Switch Çizimi
-        int switchW = 44;
-        int switchH = 24;
-        int switchX = w - switchW - 12;
+        int switchW = 40;
+        int switchH = 22;
+        int switchX = w - switchW - 10;
         int switchY = (h - switchH) / 2;
         var switchRect = new Rectangle(switchX, switchY, switchW, switchH);
 
@@ -206,7 +212,7 @@ public class ModernPublishToggleCard : Control
         }
 
         // Toggle Knob (Yuvarlak Düğme)
-        int knobSize = 18;
+        int knobSize = 16;
         int knobMinX = switchX + 3;
         int knobMaxX = switchX + switchW - 3 - knobSize;
         float currentKnobX = knobMinX + (knobMaxX - knobMinX) * _animProgress;
@@ -227,23 +233,23 @@ public class ModernPublishToggleCard : Control
         }
 
         // 5. Sol / Orta İçerik Çizimi (Başlık, Rozet ve Açıklama)
-        int contentLeft = 12;
-        int contentRight = switchX - 10;
-        int maxContentWidth = Math.Max(50, contentRight - contentLeft);
+        int contentLeft = 10;
+        int contentRight = switchX - 8;
+        int maxContentWidth = Math.Max(40, contentRight - contentLeft);
 
         // 5.1 Başlık Metni
-        using var titleFont = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        using var titleFont = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
         var titleSize = g.MeasureString(Title, titleFont);
-        g.DrawString(Title, titleFont, Brushes.White, new PointF(contentLeft, 11));
+        g.DrawString(Title, titleFont, Brushes.White, new PointF(contentLeft, 9));
 
         // 5.2 Durum Rozeti (Pill Badge)
         string badgeText = _animProgress >= 0.5f ? ActiveBadgeText : InactiveBadgeText;
         using var badgeFont = new Font("Segoe UI Semibold", 7F, FontStyle.Bold);
         var badgeTextSize = g.MeasureString(badgeText, badgeFont);
 
-        float badgeW = badgeTextSize.Width + 20; // 6px dot + gaps
-        float badgeH = 18;
-        bool fitsOnTitleRow = (contentLeft + titleSize.Width + 8 + badgeW) <= contentRight;
+        float badgeW = badgeTextSize.Width + 18; // 6px dot + gaps
+        float badgeH = 17;
+        bool fitsOnTitleRow = (contentLeft + titleSize.Width + 6 + badgeW) <= contentRight;
 
         float badgeX;
         float badgeY;
@@ -251,22 +257,22 @@ public class ModernPublishToggleCard : Control
 
         if (fitsOnTitleRow)
         {
-            badgeX = contentLeft + titleSize.Width + 8;
-            badgeY = 11;
-            descRect = new RectangleF(contentLeft, 36, maxContentWidth, 20);
+            badgeX = contentLeft + titleSize.Width + 6;
+            badgeY = 9;
+            descRect = new RectangleF(contentLeft, 31, maxContentWidth, 18);
         }
         else
         {
             badgeX = contentLeft;
-            badgeY = 36;
+            badgeY = 30;
             float descLeft = badgeX + badgeW + 6;
             float descWidth = Math.Max(20, contentRight - descLeft);
-            descRect = new RectangleF(descLeft, 37, descWidth, 20);
+            descRect = new RectangleF(descLeft, 31, descWidth, 18);
         }
 
         // Rozet Çizimi
         var badgeRect = new RectangleF(badgeX, badgeY, badgeW, badgeH);
-        using var badgePath = ModernCardPanel.CreateRoundedRectanglePath(Rectangle.Round(badgeRect), 5);
+        using var badgePath = ModernCardPanel.CreateRoundedRectanglePath(Rectangle.Round(badgeRect), 4);
 
         Color badgeBgOff = Color.FromArgb(39, 52, 73);
         Color badgeBgOn = Color.FromArgb(6, 78, 59);
@@ -293,18 +299,18 @@ public class ModernPublishToggleCard : Control
         // Rozet içindeki renkli durum noktası
         using (var dotBrush = new SolidBrush(currentDotColor))
         {
-            g.FillEllipse(dotBrush, badgeX + 6, badgeY + 6, 6, 6);
+            g.FillEllipse(dotBrush, badgeX + 5, badgeY + 5.5f, 5.5f, 5.5f);
         }
 
         // Rozet metni
         using (var badgeFgBrush = new SolidBrush(currentBadgeFg))
         {
-            g.DrawString(badgeText, badgeFont, badgeFgBrush, badgeX + 15, badgeY + 2.5f);
+            g.DrawString(badgeText, badgeFont, badgeFgBrush, badgeX + 13, badgeY + 2f);
         }
 
         // 5.3 Alt Açıklama Metni
         string descText = _animProgress >= 0.5f ? ActiveDescription : InactiveDescription;
-        using var descFont = new Font("Segoe UI", 7.8F, FontStyle.Regular);
+        using var descFont = new Font("Segoe UI", 7.5F, FontStyle.Regular);
         Color descOff = Color.FromArgb(148, 163, 184);
         Color descOn = Color.FromArgb(110, 231, 183);
         Color currentDescColor = InterpolateColor(descOff, descOn, _animProgress);
@@ -323,7 +329,7 @@ public class ModernPublishToggleCard : Control
         if (Focused)
         {
             using var focusPen = new Pen(Color.FromArgb(99, 102, 241), 1f) { DashStyle = DashStyle.Dot };
-            var focusRect = new Rectangle(3, 3, w - 7, h - 7);
+            var focusRect = new Rectangle(2, 2, w - 5, h - 5);
             using var focusPath = ModernCardPanel.CreateRoundedRectanglePath(focusRect, CornerRadius - 2);
             g.DrawPath(focusPen, focusPath);
         }

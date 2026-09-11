@@ -56,6 +56,7 @@ internal sealed class FastListingCreatorForm : Form
     // Center Column Controls (Gallery & AI Generator)
     private readonly FlowLayoutPanel _galleryFlow = new();
     private ModernScrollPanel? _galleryScroll;
+    private ModernScrollPanel? _rightScroll;
     private readonly Label _lblGalleryCount = new() { AutoSize = true };
     private readonly ModernMultilineTextBox _txtAiPrompt = new() { Height = 56 };
     private readonly PictureBox _picAiPreview = new() { SizeMode = PictureBoxSizeMode.Zoom, Height = 180 };
@@ -1009,7 +1010,7 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(5, 0, 0, 0)
         };
 
-        var scrollContainer = new ModernScrollPanel
+        _rightScroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
@@ -1018,11 +1019,12 @@ internal sealed class FastListingCreatorForm : Form
 
         var stack = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink
         };
+        stack.ColumnStyles.Clear();
+        stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
         // 1. Variations Box
         var varBox = new GroupBox
@@ -1041,6 +1043,8 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 1,
             AutoSize = true
         };
+        varTable.ColumnStyles.Clear();
+        varTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
         varTable.Controls.Add(_chkEnableVariations);
 
@@ -1113,6 +1117,8 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 1,
             AutoSize = true
         };
+        pubTable.ColumnStyles.Clear();
+        pubTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
         // Checklist items
         var chkHeader = new Label
@@ -1143,13 +1149,14 @@ internal sealed class FastListingCreatorForm : Form
 
         // Modern Publish Mode Toggle Card
         _chkMakeActive.Dock = DockStyle.Top;
-        _chkMakeActive.Margin = new Padding(0, 8, 0, 10);
+        _chkMakeActive.Margin = new Padding(0, 6, 0, 6);
         _chkMakeActive.CheckedChanged += (_, _) => UpdatePublishButtonVisuals();
         pubTable.Controls.Add(_chkMakeActive);
 
         // Secondary Publish Button
         _btnPublish.Dock = DockStyle.Top;
-        _btnPublish.Height = 40;
+        _btnPublish.Height = 38;
+        _btnPublish.Margin = new Padding(0, 2, 0, 4);
         _btnPublish.ForeColor = Color.White;
         _btnPublish.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
         _btnPublish.Click += async (_, _) => await PublishListingToEtsyAsync();
@@ -1158,34 +1165,35 @@ internal sealed class FastListingCreatorForm : Form
 
         // Secondary Preview Button
         _btnPreviewSecondary.Dock = DockStyle.Top;
-        _btnPreviewSecondary.Height = 30;
-        _btnPreviewSecondary.Text = "👁️ Canlı Önizleme Yap";
+        _btnPreviewSecondary.Height = 28;
+        _btnPreviewSecondary.Text = "👁️ Canlı Önizleme";
         _btnPreviewSecondary.Font = new Font("Segoe UI", 8.5F);
         _btnPreviewSecondary.BackColor = UiStyle.SecondaryColor;
         _btnPreviewSecondary.ForeColor = UiStyle.TextDark;
         _btnPreviewSecondary.FlatStyle = FlatStyle.Flat;
         _btnPreviewSecondary.FlatAppearance.BorderColor = UiStyle.BorderColor;
         _btnPreviewSecondary.Cursor = Cursors.Hand;
-        _btnPreviewSecondary.Margin = new Padding(0, 4, 0, 6);
+        _btnPreviewSecondary.Margin = new Padding(0, 0, 0, 4);
         _btnPreviewSecondary.Click += (_, _) => OpenEtsyListingPreview();
         pubTable.Controls.Add(_btnPreviewSecondary);
 
         var lblNote = new Label
         {
             Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 8F),
+            Font = new Font("Segoe UI", 7.5F),
             ForeColor = UiStyle.TextMuted,
-            Text = "💡 Güvenli Gönderim: Taslak listelemeler mağazanızda alıcılara görünmez, Etsy panelinizden dilediğinizde inceleyebilirsiniz.",
-            AutoSize = true,
-            Margin = new Padding(0, 4, 0, 4)
+            Text = "💡 Güvenli Gönderim: Taslak listelemeler mağazanızda görünmez, Etsy panelinizden onaylayabilirsiniz.",
+            AutoSize = false,
+            Height = 32,
+            Margin = new Padding(0, 2, 0, 2)
         };
         pubTable.Controls.Add(lblNote);
 
         pubBox.Controls.Add(pubTable);
         stack.Controls.Add(pubBox);
 
-        scrollContainer.SetContent(stack);
-        grp.Controls.Add(scrollContainer);
+        _rightScroll.SetContent(stack);
+        grp.Controls.Add(_rightScroll);
         return grp;
     }
 
@@ -1193,13 +1201,13 @@ internal sealed class FastListingCreatorForm : Form
     {
         if (_chkMakeActive.Checked)
         {
-            _btnPublish.Text = "🚀 Etsy'ye Gönder (Canlı Yayınla)";
+            _btnPublish.Text = "🚀 Etsy'ye Gönder (Canlı)";
             _btnPublish.NormalColor = UiStyle.SuccessColor;
             _btnPublish.HoverColor = Color.FromArgb(5, 150, 105);
         }
         else
         {
-            _btnPublish.Text = "💾 Etsy'ye Gönder (Taslak Olarak)";
+            _btnPublish.Text = "💾 Etsy'ye Gönder (Taslak)";
             _btnPublish.NormalColor = Color.FromArgb(79, 70, 229);
             _btnPublish.HoverColor = Color.FromArgb(67, 56, 202);
         }
@@ -1209,13 +1217,13 @@ internal sealed class FastListingCreatorForm : Form
     private Control BuildVariationPricingPanel()
     {
         _pnlVariationPricing.Dock = DockStyle.Top;
-        _pnlVariationPricing.Height = 230;
+        _pnlVariationPricing.Height = 180;
         _pnlVariationPricing.ColumnCount = 1;
         _pnlVariationPricing.RowCount = 3;
         _pnlVariationPricing.RowStyles.Clear();
-        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));  // Row 0: Quick tools
-        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 166)); // Row 1: DataGridView
-        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // Row 2: Price range badge
+        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // Row 0: Quick tools
+        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 124)); // Row 1: DataGridView
+        _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));  // Row 2: Price range badge
         _pnlVariationPricing.Padding = new Padding(0, 2, 0, 4);
         _pnlVariationPricing.Controls.Clear();
 
@@ -1440,10 +1448,11 @@ internal sealed class FastListingCreatorForm : Form
             _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
             if (_pnlVariationPricing.Visible)
             {
-                _pnlVariationPricing.Height = 230;
+                _pnlVariationPricing.Height = 180;
                 RefreshVariationPricingGrid();
             }
             UpdateChecklist();
+            _rightScroll?.RecalculateScroll();
         };
 
         _chkEnableVar2.CheckedChanged += (_, _) =>
@@ -1455,6 +1464,7 @@ internal sealed class FastListingCreatorForm : Form
             {
                 RefreshVariationPricingGrid();
             }
+            _rightScroll?.RecalculateScroll();
         };
 
         _txtVarValues1.TextChanged += (_, _) =>
@@ -1464,6 +1474,7 @@ internal sealed class FastListingCreatorForm : Form
             {
                 RefreshVariationPricingGrid();
             }
+            _rightScroll?.RecalculateScroll();
         };
 
         _txtVarValues2.TextChanged += (_, _) =>
@@ -1473,6 +1484,7 @@ internal sealed class FastListingCreatorForm : Form
             {
                 RefreshVariationPricingGrid();
             }
+            _rightScroll?.RecalculateScroll();
         };
 
         _chkCustomVariationPricing.CheckedChanged += (_, _) =>
@@ -1485,10 +1497,11 @@ internal sealed class FastListingCreatorForm : Form
             _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
             if (_pnlVariationPricing.Visible)
             {
-                _pnlVariationPricing.Height = 230;
+                _pnlVariationPricing.Height = 180;
                 RefreshVariationPricingGrid();
             }
             UpdateChecklist();
+            _rightScroll?.RecalculateScroll();
         };
 
         _gridVariationPricing.CellValueChanged += (_, _) => OnVariationGridCellValueChanged();

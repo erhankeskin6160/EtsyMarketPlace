@@ -1000,6 +1000,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
         Controls.Add(_viewport);
         Controls.Add(_scrollBar);
+        _scrollBar.BringToFront();
 
         try
         {
@@ -1043,6 +1044,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
         _viewport.Controls.Clear();
         _viewport.Controls.Add(content);
 
+        content.Dock = DockStyle.None;
         content.Location = new Point(0, 0);
         if (content is FlowLayoutPanel)
         {
@@ -1058,13 +1060,25 @@ public class ModernScrollPanel : Panel, IMessageFilter
     {
         if (_content == null || _viewport.ClientSize.Height <= 0) return;
 
+        int targetW = _viewport.ClientSize.Width;
+        if (targetW <= 0) return;
+
         if (_content is FlowLayoutPanel)
         {
-            _content.MaximumSize = new Size(_viewport.ClientSize.Width, 0);
+            _content.MaximumSize = new Size(targetW, 0);
         }
-        _content.Width = _viewport.ClientSize.Width;
+        _content.Width = targetW;
         _content.PerformLayout();
-        int max = Math.Max(0, _content.Height - _viewport.ClientSize.Height);
+
+        int contentH = _content.PreferredSize.Height;
+        if (contentH <= 0 || contentH < _content.Height)
+        {
+            contentH = _content.Height;
+        }
+
+        _content.Size = new Size(targetW, contentH);
+
+        int max = Math.Max(0, contentH - _viewport.ClientSize.Height);
         _scrollBar.Maximum = max;
         _scrollBar.LargeChange = Math.Max(1, _viewport.ClientSize.Height);
         _scrollBar.Visible = max > 0;
@@ -1080,7 +1094,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
     {
         if (_content != null)
         {
-            _content.Top = -_scrollBar.Value;
+            _content.Location = new Point(0, -_scrollBar.Value);
         }
     }
 
