@@ -1023,7 +1023,8 @@ internal sealed class FastListingCreatorForm : Form
         {
             ColumnCount = 1,
             AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink
+            AutoSizeMode = AutoSizeMode.GrowOnly,
+            MinimumSize = new Size(240, 0)
         };
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
@@ -1037,7 +1038,8 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             Padding = new Padding(8),
             Margin = new Padding(0, 0, 0, 8),
-            AutoSize = true
+            AutoSize = true,
+            MinimumSize = new Size(240, 0)
         };
         var varTable = new TableLayoutPanel
         {
@@ -1095,6 +1097,7 @@ internal sealed class FastListingCreatorForm : Form
         varTable.Controls.Add(_lblVarCombinations);
 
         // Custom Variation Pricing Toggle & Grid
+        _chkCustomVariationPricing.Dock = DockStyle.Top;
         _chkCustomVariationPricing.Margin = new Padding(0, 6, 0, 4);
         varTable.Controls.Add(_chkCustomVariationPricing);
         varTable.Controls.Add(BuildVariationPricingPanel());
@@ -1110,7 +1113,8 @@ internal sealed class FastListingCreatorForm : Form
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Top,
             Padding = new Padding(8),
-            AutoSize = true
+            AutoSize = true,
+            MinimumSize = new Size(240, 0)
         };
 
         var pubTable = new TableLayoutPanel
@@ -1219,9 +1223,12 @@ internal sealed class FastListingCreatorForm : Form
     private Control BuildVariationPricingPanel()
     {
         _pnlVariationPricing.Dock = DockStyle.Top;
-        _pnlVariationPricing.Height = 180;
+        _pnlVariationPricing.Height = 186;
+        _pnlVariationPricing.MinimumSize = new Size(240, 186);
         _pnlVariationPricing.ColumnCount = 1;
         _pnlVariationPricing.RowCount = 3;
+        _pnlVariationPricing.ColumnStyles.Clear();
+        _pnlVariationPricing.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         _pnlVariationPricing.RowStyles.Clear();
         _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));  // Row 0: Quick tools
         _pnlVariationPricing.RowStyles.Add(new RowStyle(SizeType.Absolute, 124)); // Row 1: DataGridView
@@ -1292,25 +1299,29 @@ internal sealed class FastListingCreatorForm : Form
             Name = "ColKey",
             HeaderText = "Seçenek",
             ReadOnly = true,
-            FillWeight = 46
+            FillWeight = 46,
+            MinimumWidth = 70
         };
         var colPrice = new DataGridViewTextBoxColumn
         {
             Name = "ColPrice",
             HeaderText = "Fiyat ($)",
-            FillWeight = 26
+            FillWeight = 26,
+            MinimumWidth = 55
         };
         var colQty = new DataGridViewTextBoxColumn
         {
             Name = "ColQty",
             HeaderText = "Stok",
-            FillWeight = 16
+            FillWeight = 16,
+            MinimumWidth = 40
         };
         var colActive = new DataGridViewCheckBoxColumn
         {
             Name = "ColActive",
             HeaderText = "Aktif",
-            FillWeight = 12
+            FillWeight = 12,
+            MinimumWidth = 35
         };
 
         _gridVariationPricing.Columns.AddRange([colKey, colPrice, colQty, colActive]);
@@ -1450,7 +1461,7 @@ internal sealed class FastListingCreatorForm : Form
             _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
             if (_pnlVariationPricing.Visible)
             {
-                _pnlVariationPricing.Height = 180;
+                _pnlVariationPricing.Height = 186;
                 RefreshVariationPricingGrid();
             }
             UpdateChecklist();
@@ -1499,7 +1510,7 @@ internal sealed class FastListingCreatorForm : Form
             _pnlVariationPricing.Visible = _chkEnableVariations.Checked && _chkCustomVariationPricing.Checked;
             if (_pnlVariationPricing.Visible)
             {
-                _pnlVariationPricing.Height = 180;
+                _pnlVariationPricing.Height = 186;
                 RefreshVariationPricingGrid();
             }
             UpdateChecklist();

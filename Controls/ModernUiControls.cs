@@ -1111,13 +1111,15 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
         if (_content != null)
         {
-            if (_content is FlowLayoutPanel)
+            var targetMin = new Size(visibleContentW, 0);
+            var targetMax = new Size(visibleContentW, 0);
+            if (_content.MinimumSize != targetMin)
             {
-                var targetMaxSize = new Size(visibleContentW, 0);
-                if (_content.MaximumSize != targetMaxSize)
-                {
-                    _content.MaximumSize = targetMaxSize;
-                }
+                _content.MinimumSize = targetMin;
+            }
+            if (_content.MaximumSize != targetMax)
+            {
+                _content.MaximumSize = targetMax;
             }
             if (_content.Width != visibleContentW)
             {
@@ -1197,14 +1199,19 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 _content.BackColor = effectiveBg;
             }
 
-            int visibleContentW = Math.Max(0, ClientSize.Width - 8);
-            if (_content is FlowLayoutPanel)
+            int scrollBarW = 8;
+            bool needBar = _scrollBar.Visible;
+            int visibleContentW = needBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
+
+            var targetMin = new Size(visibleContentW, 0);
+            var targetMax = new Size(visibleContentW, 0);
+            if (_content.MinimumSize != targetMin)
             {
-                var targetMaxSize = new Size(visibleContentW, 0);
-                if (_content.MaximumSize != targetMaxSize)
-                {
-                    _content.MaximumSize = targetMaxSize;
-                }
+                _content.MinimumSize = targetMin;
+            }
+            if (_content.MaximumSize != targetMax)
+            {
+                _content.MaximumSize = targetMax;
             }
             if (_content.Width != visibleContentW)
             {
