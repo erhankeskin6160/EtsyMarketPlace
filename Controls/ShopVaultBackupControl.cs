@@ -59,7 +59,7 @@ internal sealed class ShopVaultBackupControl : UserControl
             RowCount = 1,
             Padding = new Padding(8)
         };
-        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 380));
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 420));
         grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         // LEFT PANEL: Backup Archive List
@@ -105,16 +105,19 @@ internal sealed class ShopVaultBackupControl : UserControl
 
         var btnImport = UiStyle.CreateButton("📂 .etsyvault Aç", isSecondary: true);
         btnImport.Height = 34;
+        btnImport.Width = 135;
         btnImport.Click += async (_, _) => await ImportArchiveDialogAsync();
         leftButtons.Controls.Add(btnImport);
 
         var btnExportZip = UiStyle.CreateButton("💾 Arşiv İndir", isSecondary: true);
         btnExportZip.Height = 34;
+        btnExportZip.Width = 135;
         btnExportZip.Click += async (_, _) => await ExportArchiveDialogAsync();
         leftButtons.Controls.Add(btnExportZip);
 
         var btnDelete = UiStyle.CreateButton("🗑️ Sil", isSecondary: true);
         btnDelete.Height = 34;
+        btnDelete.Width = 85;
         btnDelete.Click += async (_, _) => await DeleteSelectedSessionAsync();
         leftButtons.Controls.Add(btnDelete);
 

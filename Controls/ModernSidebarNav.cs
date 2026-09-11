@@ -362,18 +362,14 @@ public class ModernSidebarNav : UserControl
             // Title & Badge (when expanded)
             if (!_isCollapsed)
             {
-                using (var titleFont = new Font(Font, isSelected ? FontStyle.Bold : FontStyle.Regular))
-                using (var titleBrush = new SolidBrush(isSelected ? Color.White : (isHovered ? Color.White : TextColor)))
-                {
-                    g.DrawString(item.Title, titleFont, titleBrush, new PointF(itemRect.X + 40, itemRect.Y + 11));
-                }
-
+                float badgeReservedWidth = 0;
                 if (!string.IsNullOrEmpty(item.BadgeText))
                 {
                     using (var badgeFont = new Font("Segoe UI Semibold", 7.5F))
                     {
                         var badgeSize = g.MeasureString(item.BadgeText, badgeFont);
-                        var badgeRect = new RectangleF(itemRect.Right - badgeSize.Width - 14, itemRect.Y + 11, badgeSize.Width + 8, 18);
+                        badgeReservedWidth = badgeSize.Width + 14;
+                        var badgeRect = new RectangleF(itemRect.Right - badgeSize.Width - 10, itemRect.Y + 11, badgeSize.Width + 8, 18);
 
                         using var badgeBrush = new SolidBrush(item.BadgeColor);
                         using var badgePath = ModernCardPanel.CreateRoundedRectanglePath(Rectangle.Round(badgeRect), 6);
@@ -382,6 +378,15 @@ public class ModernSidebarNav : UserControl
                         using var badgeTextBrush = new SolidBrush(Color.White);
                         g.DrawString(item.BadgeText, badgeFont, badgeTextBrush, badgeRect.X + 4, badgeRect.Y + 1);
                     }
+                }
+
+                float maxTitleWidth = Math.Max(40, itemRect.Width - 46 - badgeReservedWidth);
+                var titleBounds = new RectangleF(itemRect.X + 38, itemRect.Y + 11, maxTitleWidth, 20);
+                using (var titleFont = new Font(Font, isSelected ? FontStyle.Bold : FontStyle.Regular))
+                using (var titleBrush = new SolidBrush(isSelected ? Color.White : (isHovered ? Color.White : TextColor)))
+                using (var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center })
+                {
+                    g.DrawString(item.Title, titleFont, titleBrush, titleBounds, sf);
                 }
             }
 
