@@ -41,7 +41,7 @@ internal sealed class ProfitCalculatorForm : Form
 
     private readonly ComboBox _countryComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _offsiteAdsComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly CheckBox _currencyConversionCheckBox = new() { Text = "Para birimi dönüştürme (%2.5)", AutoSize = true };
+    private readonly ModernCheckBox _currencyConversionCheckBox = new() { Text = "Para birimi dönüştürme (%2.5)", AutoSize = true };
     private readonly NumericUpDown _targetMarginInput = CreatePercentInput(30.0m);
 
     // KPI Cards Controls

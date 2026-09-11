@@ -61,7 +61,7 @@ internal sealed class AiListingImageForm : Form
     private readonly ComboBox _paddingComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _openAiModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _openAiModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly CheckBox _chkOpenAiTransparentBg = new() { Text = "Şeffaf Arka Plan (Transparent PNG)", AutoSize = true, ForeColor = Color.White };
+    private readonly ModernCheckBox _chkOpenAiTransparentBg = new() { Text = "Şeffaf Arka Plan (Transparent PNG)", AutoSize = true, ForeColor = Color.White };
     private readonly ComboBox _bflModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _txtIdeogramTypography = new();
     private readonly ComboBox _ideogramStyleComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -75,7 +75,7 @@ internal sealed class AiListingImageForm : Form
     private readonly FlowLayoutPanel _filmstripPanel = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true };
 
     // UI: Right Panel Marketing & Export
-    private readonly CheckBox _chkEnableBadge = new() { Text = "Pazarlama Rozeti Ekle", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold), ForeColor = Color.White };
+    private readonly ModernCheckBox _chkEnableBadge = new() { Text = "Pazarlama Rozeti Ekle", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold), ForeColor = Color.White };
     private readonly ComboBox _cboBadgeText = new() { DropDownStyle = ComboBoxStyle.DropDown };
     private readonly ComboBox _cboBadgePosition = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _formatComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };

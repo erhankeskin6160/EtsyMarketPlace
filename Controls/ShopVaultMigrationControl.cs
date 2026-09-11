@@ -68,7 +68,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
     private SecurityTierCardControl _cardTierClone = null!;
 
     // Anti-ban Checkboxes
-    private readonly CheckBox _chkStripExif = new()
+    private readonly ModernCheckBox _chkStripExif = new()
     {
         Text = "EXIF, GPS & Seri No Temizle",
         Checked = true,
@@ -78,7 +78,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
         Margin = new Padding(0, 3, 8, 3)
     };
 
-    private readonly CheckBox _chkPermutateImageHash = new()
+    private readonly ModernCheckBox _chkPermutateImageHash = new()
     {
         Text = "pHash Kırıcı (1-2px Micro-crop)",
         Checked = true,
@@ -88,7 +88,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
         Margin = new Padding(0, 3, 8, 3)
     };
 
-    private readonly CheckBox _chkAiRewriteTitle = new()
+    private readonly ModernCheckBox _chkAiRewriteTitle = new()
     {
         Text = "AI ile Başlığı Özgünleştir",
         Checked = true,
@@ -98,7 +98,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
         Margin = new Padding(0, 3, 8, 3)
     };
 
-    private readonly CheckBox _chkAiRewriteDesc = new()
+    private readonly ModernCheckBox _chkAiRewriteDesc = new()
     {
         Text = "AI ile Açıklamayı Özgünleştir",
         Checked = true,
@@ -108,7 +108,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
         Margin = new Padding(0, 3, 8, 3)
     };
 
-    private readonly CheckBox _chkDraftFirst = new()
+    private readonly ModernCheckBox _chkDraftFirst = new()
     {
         Text = "Taslak Olarak Yükle (Draft Mode)",
         Checked = true,

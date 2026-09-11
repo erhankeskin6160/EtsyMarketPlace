@@ -21,7 +21,7 @@ internal sealed class ShopVaultBackupControl : UserControl
 
     private readonly ListBox _sessionListBox = new();
     private readonly Label _lblActiveShopBadge = new();
-    private readonly CheckBox _chkDownloadImages = new() { Text = "Yüksek Çözünürlüklü Orijinal Fotoğrafları İndir (url_fullxfull)", Checked = true, AutoSize = true };
+    private readonly ModernCheckBox _chkDownloadImages = new() { Text = "Yüksek Çözünürlüklü Orijinal Fotoğrafları İndir (url_fullxfull)", Checked = true, AutoSize = true };
     private readonly ModernButtonControl _btnStartBackup = new();
     private readonly ProgressBar _progressBar = new();
     private readonly Label _lblProgressStats = new();

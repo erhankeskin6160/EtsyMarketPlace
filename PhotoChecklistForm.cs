@@ -6,7 +6,7 @@ using SimilarProductsWinForms.Controls;
 internal sealed class PhotoChecklistForm : Form
 {
     private readonly ProductCandidate? _product;
-    private readonly List<CheckBox> _checks = [];
+    private readonly List<ModernCheckBox> _checks = [];
     private readonly Label _scoreLabel = new();
     private readonly ModernMultilineTextBox _planTextBox = new();
 
@@ -88,7 +88,7 @@ internal sealed class PhotoChecklistForm : Form
 
     private void AddCheck(TableLayoutPanel panel, string text)
     {
-        var check = new CheckBox
+        var check = new ModernCheckBox
         {
             Dock = DockStyle.Fill,
             Text = text,

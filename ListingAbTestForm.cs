@@ -768,7 +768,7 @@ internal sealed class ListingAbTestForm : Form
         durationPanel.Controls.Add(cboDuration);
         settingsTable.Controls.Add(durationPanel, 0, 0);
 
-        var chkPublishLive = new CheckBox
+        var chkPublishLive = new ModernCheckBox
         {
             Text = "🚀 Varyant B'yi Şimdi Canlı Etsy'ye Uygula (Test başladığı an mağazada aktifleşir)",
             Font = new Font("Segoe UI Semibold", 9F),

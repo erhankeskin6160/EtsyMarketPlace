@@ -13,7 +13,7 @@ internal sealed class CostDetailsPopupForm : Form
     private readonly NumericUpDown _numProduction = new();
     private readonly NumericUpDown _numShipping = new();
     private readonly NumericUpDown _numPackaging = new();
-    private readonly CheckBox _chkApplyToAll = new();
+    private readonly ModernCheckBox _chkApplyToAll = new();
 
     private readonly Label _lblInvoiceStatus = new();
     private readonly Button _btnViewInvoice = new();

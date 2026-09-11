@@ -2,12 +2,13 @@ namespace SimilarProductsWinForms;
 
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ListingUpdateConfirmationForm(
     MarketListingResult listing,
     ListingTextUpdate update) : Form
 {
-    private readonly CheckBox _confirmCheckBox = new()
+    private readonly ModernCheckBox _confirmCheckBox = new()
     {
         Dock = DockStyle.Fill,
         Text = "Bu listing Etsy'de canli olarak guncellenecek. Eski metni kontrol ettim ve onayliyorum.",

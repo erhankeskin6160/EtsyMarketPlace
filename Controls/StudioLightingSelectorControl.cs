@@ -13,7 +13,7 @@ public class StudioLightingSelectorControl : UserControl
 
     private readonly ComboBox _cboLighting = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _cboCamera = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly CheckBox _chkNegativeFilter = new()
+    private readonly ModernCheckBox _chkNegativeFilter = new()
     {
         Text = "🛡️ AI Bozulma Önleyici (Anti-Distortion & Clean)",
         Checked = true,

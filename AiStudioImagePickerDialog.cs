@@ -13,7 +13,7 @@ internal sealed class AiStudioImagePickerDialog : Form
 {
     private readonly FlowLayoutPanel _flowPanel = new() { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, AutoScroll = false, WrapContents = true };
     private ModernScrollPanel? _pickerScroll;
-    private readonly List<CheckBox> _checkBoxes = [];
+    private readonly List<ModernCheckBox> _checkBoxes = [];
     private readonly List<string> _selectedPaths = [];
     private readonly Label _statusLabel = new();
 
@@ -188,7 +188,7 @@ internal sealed class AiStudioImagePickerDialog : Form
 
                 cardTable.Controls.Add(pic, 0, 0);
 
-                var cb = new CheckBox
+                var cb = new ModernCheckBox
                 {
                     Text = item.CreatedAt.ToString("dd.MM HH:mm"),
                     Font = new Font("Segoe UI Semibold", 8F),

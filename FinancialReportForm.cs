@@ -43,7 +43,7 @@ internal sealed class FinancialReportForm : Form
     private readonly ComboBox _cboDateRange     = new();
     private readonly DateTimePicker _dtpFrom    = new();
     private readonly DateTimePicker _dtpTo      = new();
-    private readonly CheckBox _chkUseTry        = new();
+    private readonly ModernCheckBox _chkUseTry        = new();
     private readonly NumericUpDown _numExchangeRate = new();
     private readonly Label _lblMode             = new();
 

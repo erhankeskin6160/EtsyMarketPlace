@@ -7,26 +7,26 @@ internal sealed class NotificationSettingsForm : Form
 {
     private readonly NotificationSettings _settings;
 
-    private readonly CheckBox _telegramEnabledChk = new() { Text = "Telegram Bildirimlerini Etkinleştir", AutoSize = true };
+    private readonly ModernCheckBox _telegramEnabledChk = new() { Text = "Telegram Bildirimlerini Etkinleştir", AutoSize = true };
     private readonly TextBox _telegramTokenTxt = new();
     private readonly TextBox _telegramChatIdTxt = new();
     private readonly Button _testTelegramBtn;
 
-    private readonly CheckBox _whatsappEnabledChk = new() { Text = "WhatsApp Bildirimlerini Etkinleştir", AutoSize = true };
+    private readonly ModernCheckBox _whatsappEnabledChk = new() { Text = "WhatsApp Bildirimlerini Etkinleştir", AutoSize = true };
     private readonly TextBox _whatsappUrlTxt = new();
     private readonly TextBox _whatsappTokenTxt = new();
     private readonly TextBox _whatsappPhoneTxt = new();
     private readonly Button _testWhatsAppBtn;
 
-    private readonly CheckBox _notifyNewOrderChk = new() { Text = "🎉 Yeni Sipariş Geldiğinde Bildirim Gönder", AutoSize = true };
-    private readonly CheckBox _notifyOpportunityChk = new() { Text = "🎯 Yüksek Fırsatlı Kelime Yakalandığında Gönder", AutoSize = true };
-    private readonly CheckBox _notifyBatchFinishedChk = new() { Text = "📦 Toplu İşlem Kuyruğu Tamamlandığında Gönder", AutoSize = true };
-    private readonly CheckBox _notifyAutomationRunChk = new() { Text = "⚡ Otomasyon Taraması Bittiğinde Gönder", AutoSize = true };
-    private readonly CheckBox _notifyAbTestWinnerChk = new() { Text = "📈 A/B Test Kazananı Belli Olduğunda Gönder", AutoSize = true };
-    private readonly CheckBox _notifyErrorChk = new() { Text = "⚠️ Kritik Sistem/API Hatası Oluştuğunda Gönder", AutoSize = true };
+    private readonly ModernCheckBox _notifyNewOrderChk = new() { Text = "🎉 Yeni Sipariş Geldiğinde Bildirim Gönder", AutoSize = true };
+    private readonly ModernCheckBox _notifyOpportunityChk = new() { Text = "🎯 Yüksek Fırsatlı Kelime Yakalandığında Gönder", AutoSize = true };
+    private readonly ModernCheckBox _notifyBatchFinishedChk = new() { Text = "📦 Toplu İşlem Kuyruğu Tamamlandığında Gönder", AutoSize = true };
+    private readonly ModernCheckBox _notifyAutomationRunChk = new() { Text = "⚡ Otomasyon Taraması Bittiğinde Gönder", AutoSize = true };
+    private readonly ModernCheckBox _notifyAbTestWinnerChk = new() { Text = "📈 A/B Test Kazananı Belli Olduğunda Gönder", AutoSize = true };
+    private readonly ModernCheckBox _notifyErrorChk = new() { Text = "⚠️ Kritik Sistem/API Hatası Oluştuğunda Gönder", AutoSize = true };
 
     // ── 🌙 Günlük Gece Finans Raporu ──────────────────────────────────────────
-    private readonly CheckBox _dailyNightReportChk = new() { Text = "🌙 Günlük Gece Finans Raporu (Her Gece Otomatik)", AutoSize = true };
+    private readonly ModernCheckBox _dailyNightReportChk = new() { Text = "🌙 Günlük Gece Finans Raporu (Her Gece Otomatik)", AutoSize = true };
     private readonly TextBox _dailyReportTimeTxt = new() { Text = "23:55", Width = 80 };
     private readonly Button _testNightReportBtn;
 

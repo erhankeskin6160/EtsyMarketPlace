@@ -4,6 +4,7 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using EtsyMarketPlace.Application.AbTesting;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class BulkAbTestLaunchDialog : Form
 {
@@ -11,8 +12,8 @@ internal sealed class BulkAbTestLaunchDialog : Form
     private readonly RadioButton _rdo14Days = new() { Text = "⭐ 14 Gün (Önerilen - Etsy Algoritma Döngüsü)", AutoSize = true, Checked = true };
     private readonly RadioButton _rdo30Days = new() { Text = "📅 30 Gün (Uzun Vadeli & Sezonluk Doğrulama)", AutoSize = true };
     private readonly TextBox _txtPrefix = new() { Text = "[Toplu A/B]", Width = 200 };
-    private readonly CheckBox _chkAutoDeploy = new() { Text = "⚡ Varyant B'yi (AI Optimizasyonunu) hemen canlı Etsy'ye uygula", AutoSize = true, Checked = false };
-    private readonly CheckBox _chkGuardrail = new() { Text = "🛡️ Akıllı Güvenlik Kalkanı (Trafik %40+ düşerse erken uyarı ver)", AutoSize = true, Checked = true };
+    private readonly ModernCheckBox _chkAutoDeploy = new() { Text = "⚡ Varyant B'yi (AI Optimizasyonunu) hemen canlı Etsy'ye uygula", AutoSize = true, Checked = false };
+    private readonly ModernCheckBox _chkGuardrail = new() { Text = "🛡️ Akıllı Güvenlik Kalkanı (Trafik %40+ düşerse erken uyarı ver)", AutoSize = true, Checked = true };
 
     public BulkAbTestLaunchOptions Options { get; private set; } = new();
 

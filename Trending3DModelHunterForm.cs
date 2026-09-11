@@ -89,7 +89,7 @@ public sealed class Trending3DModelHunterForm : Form
         Font = new Font("Segoe UI", 9.2F)
     };
 
-    private readonly CheckBox _chkCommercialOnly = new()
+    private readonly ModernCheckBox _chkCommercialOnly = new()
     {
         Text = "Yalnızca Ticari Satışa Uygun (Commercial Use) Modeller",
         Checked = true,
@@ -99,7 +99,7 @@ public sealed class Trending3DModelHunterForm : Form
         Margin = new Padding(10, 6, 8, 0)
     };
 
-    private readonly CheckBox _chkShopNicheOnly = new()
+    private readonly ModernCheckBox _chkShopNicheOnly = new()
     {
         Text = "🎯 Yalnızca Mağazama Uygun (%70+ Uyum)",
         Checked = false,

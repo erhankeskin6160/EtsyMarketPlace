@@ -8,13 +8,14 @@ using EtsyMarketPlace.Infrastructure.Automation;
 using EtsyMarketPlace.Infrastructure.Http;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class AutomationReportingForm(
     IAutomationSettingsStore settingsStore,
     AutomationScheduler scheduler,
     WindowsTaskSchedulerService taskScheduler) : Form
 {
-    private readonly CheckBox _enabledCheckBox = new() { Text = "Otomatik yenilemeyi etkinlestir", AutoSize = true };
+    private readonly ModernCheckBox _enabledCheckBox = new() { Text = "Otomatik yenilemeyi etkinlestir", AutoSize = true };
     private readonly NumericUpDown _intervalInput = new() { Minimum = 1, Maximum = 720 };
     private readonly NumericUpDown _lookbackInput = new() { Minimum = 1, Maximum = 365 };
     private readonly NumericUpDown _revenueAlertInput = new() { Minimum = 1, Maximum = 100, DecimalPlaces = 1 };

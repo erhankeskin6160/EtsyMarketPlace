@@ -376,6 +376,33 @@ internal sealed class ShopVaultCatalogControl : UserControl
             }
         };
 
+        _grid.CellPainting += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex == 0)
+            {
+                e.PaintBackground(e.CellBounds, true);
+                bool isChecked = Convert.ToBoolean(e.FormattedValue);
+                int boxSize = 16;
+                int bx = e.CellBounds.X + (e.CellBounds.Width - boxSize) / 2;
+                int by = e.CellBounds.Y + (e.CellBounds.Height - boxSize) / 2;
+                var boxRect = new Rectangle(bx, by, boxSize, boxSize);
+                if (e.Graphics != null)
+                {
+                    ModernCheckBox.DrawBox(
+                        e.Graphics,
+                        boxRect,
+                        isChecked,
+                        false,
+                        false,
+                        false,
+                        true,
+                        boxSize,
+                        4);
+                }
+                e.Handled = true;
+            }
+        };
+
         _grid.CellValueChanged += (_, e) =>
         {
             if (e.RowIndex >= 0 && e.ColumnIndex == 0)
