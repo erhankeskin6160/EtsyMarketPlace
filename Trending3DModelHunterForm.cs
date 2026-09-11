@@ -13,6 +13,7 @@ using System.Windows.Forms;
 using EtsyMarketPlace.Application.Viral3DModels.Services;
 using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
+using EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Scrapers;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Services;
 using SimilarProductsWinForms.Controls;
@@ -53,23 +54,34 @@ public sealed class Trending3DModelHunterForm : Form
 
     private readonly TextBox _txtSearch = new()
     {
-        Width = 240,
+        Width = 220,
         Height = 32,
-        PlaceholderText = "🔍 Model, etiket veya kategori ara...",
+        PlaceholderText = "🔍 Model, etiket ara...",
         Font = new Font("Segoe UI", 9.2F),
-        Margin = new Padding(8, 2, 8, 0)
+        Margin = new Padding(6, 2, 6, 0)
     };
 
     private readonly ModernButtonControl _btnScan = new()
     {
         Text = "🔄 Platformları Şimdi Tara",
-        Width = 200,
+        Width = 190,
         Height = 34,
         NormalColor = UiStyle.PrimaryColor,
         HoverColor = UiStyle.PrimaryHover,
         ForeColor = Color.White,
         Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
         Cursor = Cursors.Hand
+    };
+
+    private readonly Label _lblEngineBadge = new()
+    {
+        Text = "🛡️ Anti-Bot & Throttled | 💾 SQLite Delta Radarı Aktif",
+        AutoSize = true,
+        ForeColor = Color.FromArgb(52, 211, 153),
+        BackColor = Color.FromArgb(6, 78, 59),
+        Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+        Padding = new Padding(6, 6, 6, 6),
+        Margin = new Padding(8, 4, 0, 0)
     };
 
     // Grid
@@ -184,7 +196,8 @@ public sealed class Trending3DModelHunterForm : Form
             new ThingiverseTrendingScraper()
         };
         var competitionChecker = new EtsyCompetitionCheckerService();
-        _hunterService = new Viral3DModelHunterService(scrapers, competitionChecker);
+        var snapshotRepository = new Sqlite3DModelSnapshotRepository();
+        _hunterService = new Viral3DModelHunterService(scrapers, competitionChecker, snapshotRepository);
 
         BuildLayout();
         HookEvents();
@@ -233,6 +246,7 @@ public sealed class Trending3DModelHunterForm : Form
         toolbar.Controls.Add(_chkCommercialOnly);
         toolbar.Controls.Add(_txtSearch);
         toolbar.Controls.Add(_btnScan);
+        toolbar.Controls.Add(_lblEngineBadge);
         mainLayout.Controls.Add(toolbar, 0, 1);
 
         // Populate Platform combo
@@ -354,19 +368,21 @@ public sealed class Trending3DModelHunterForm : Form
         _grid.Columns.Add("colPlatform", "Platform");
         _grid.Columns.Add("colTitle", "Model Başlığı & Tasarım");
         _grid.Columns.Add("colVelocity", "24s İndirme");
+        _grid.Columns.Add("colDelta", "📈 İvme / 24s Büyüme");
         _grid.Columns.Add("colPrints", "Başarılı Baskı");
         _grid.Columns.Add("colLicense", "Lisans Durumu");
         _grid.Columns.Add("colCompetition", "Etsy Rekabeti");
         _grid.Columns.Add("colScore", "Fırsat Skoru");
 
-        _grid.Columns["colPlatform"]!.Width = 125;
+        _grid.Columns["colPlatform"]!.Width = 120;
         _grid.Columns["colTitle"]!.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-        _grid.Columns["colTitle"]!.MinimumWidth = 240;
-        _grid.Columns["colVelocity"]!.Width = 110;
-        _grid.Columns["colPrints"]!.Width = 110;
-        _grid.Columns["colLicense"]!.Width = 155;
-        _grid.Columns["colCompetition"]!.Width = 135;
-        _grid.Columns["colScore"]!.Width = 115;
+        _grid.Columns["colTitle"]!.MinimumWidth = 230;
+        _grid.Columns["colVelocity"]!.Width = 100;
+        _grid.Columns["colDelta"]!.Width = 145;
+        _grid.Columns["colPrints"]!.Width = 105;
+        _grid.Columns["colLicense"]!.Width = 140;
+        _grid.Columns["colCompetition"]!.Width = 130;
+        _grid.Columns["colScore"]!.Width = 110;
 
         _grid.SelectionChanged += (_, _) => OnGridRowSelected();
     }
@@ -512,10 +528,15 @@ public sealed class Trending3DModelHunterForm : Form
 
             string licenseText = m.License.IsCommercialAllowed ? "✅ Ticari Serbest" : "⚠️ Kişisel Kullanım";
 
+            string deltaText = m.HourlyVelocity > 0
+                ? (m.IsDeltaAccelerating ? $"🔥 +{m.HourlyVelocity:N1}/s (%{m.GrowthRatePercentage:N0})" : $"+{m.HourlyVelocity:N1}/s (%{m.GrowthRatePercentage:N0})")
+                : $"+{m.Downloads24h:N0} (24s)";
+
             int rowIdx = _grid.Rows.Add(
                 platformText,
                 m.Title,
                 $"+{m.Downloads24h:N0}",
+                deltaText,
                 $"{m.PrintsCount:N0} Baskı",
                 licenseText,
                 compText,
@@ -552,9 +573,12 @@ public sealed class Trending3DModelHunterForm : Form
             _lblLicenseBadge.ForeColor = Color.FromArgb(245, 158, 11);
         }
 
-        _lblPrintSpecs.Text = $"• Tahmini Baskı Süresi: {m.PrintSpecs.FormattedPrintTime}\n" +
-                              $"• Filament Gramajı: {m.PrintSpecs.FilamentGrams:N0} gram\n" +
-                              $"• Tahmini Malzeme Maliyeti: ~${m.PrintSpecs.EstimatedMaterialCostUsd:N2} USD\n" +
+        string velocityStatus = m.IsDeltaAccelerating ? "🔥 HIZLI İVME (Viral Yükselişte)" : "Dengeli Talep";
+        _lblPrintSpecs.Text = $"• 📈 Zaman Serisi İvmesi: +{m.HourlyVelocity:N1} indirme/saat (%{m.GrowthRatePercentage:N1} büyüme)\n" +
+                              $"• ⚡ Trend Durumu: {velocityStatus}\n" +
+                              $"• 💾 SQLite Snapshots: {(m.HistoricalSnapshotsCount > 0 ? $"{m.HistoricalSnapshotsCount} kayıt" : "Yeni Model (İlk Snapshot)")}\n" +
+                              $"• Tahmini Baskı Süresi: {m.PrintSpecs.FormattedPrintTime}\n" +
+                              $"• Filament Gramajı: {m.PrintSpecs.FilamentGrams:N0} gram PLA (~${m.PrintSpecs.EstimatedMaterialCostUsd:N2})\n" +
                               $"• Çoklu Renk Desteği: {(m.PrintSpecs.HasMultiColorProfile ? $"Var ({m.PrintSpecs.ColorCount} Renk AMS)" : "Tek Renk")}";
 
         string compNotice = m.EtsyCompetitionCount <= 1

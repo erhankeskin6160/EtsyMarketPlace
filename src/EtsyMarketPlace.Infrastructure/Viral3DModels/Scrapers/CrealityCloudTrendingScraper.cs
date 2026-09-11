@@ -11,6 +11,8 @@ using EtsyMarketPlace.Domain.Viral3DModels.Enums;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
 using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
 
+using EtsyMarketPlace.Infrastructure.Viral3DModels.Protocols;
+
 public sealed class CrealityCloudTrendingScraper : I3DModelPlatformScraper
 {
     private readonly HttpClient _httpClient;
@@ -21,10 +23,7 @@ public sealed class CrealityCloudTrendingScraper : I3DModelPlatformScraper
     public CrealityCloudTrendingScraper(HttpClient? httpClient = null)
     {
         _httpClient = httpClient ?? new HttpClient();
-        if (!_httpClient.DefaultRequestHeaders.Contains("User-Agent"))
-        {
-            _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
-        }
+        SlicerClientProtocolFactory.ApplySlicerHeaders(_httpClient, ModelPlatformType.CrealityCloud);
     }
 
     public async Task<IReadOnlyList<Trending3DModel>> GetTrendingModelsAsync(int page = 1, CancellationToken ct = default)

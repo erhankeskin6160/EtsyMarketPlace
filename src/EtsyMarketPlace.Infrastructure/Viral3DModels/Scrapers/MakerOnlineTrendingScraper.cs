@@ -10,6 +10,8 @@ using EtsyMarketPlace.Domain.Viral3DModels.Enums;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
 using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
 
+using EtsyMarketPlace.Infrastructure.Viral3DModels.Protocols;
+
 public sealed class MakerOnlineTrendingScraper : I3DModelPlatformScraper
 {
     private readonly HttpClient _httpClient;
@@ -20,6 +22,7 @@ public sealed class MakerOnlineTrendingScraper : I3DModelPlatformScraper
     public MakerOnlineTrendingScraper(HttpClient? httpClient = null)
     {
         _httpClient = httpClient ?? new HttpClient();
+        SlicerClientProtocolFactory.ApplySlicerHeaders(_httpClient, ModelPlatformType.MakerOnline);
     }
 
     public Task<IReadOnlyList<Trending3DModel>> GetTrendingModelsAsync(int page = 1, CancellationToken ct = default)

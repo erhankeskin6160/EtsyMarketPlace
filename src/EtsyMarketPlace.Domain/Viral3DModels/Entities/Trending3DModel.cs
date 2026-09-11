@@ -26,6 +26,12 @@ public class Trending3DModel
     public int LikesCount { get; set; }
     public int PrintsCount { get; set; }
 
+    // Delta Time-Series Velocity (Calculated via SQLite Historical Snapshots)
+    public double HourlyVelocity { get; set; }
+    public double GrowthRatePercentage { get; set; }
+    public int HistoricalSnapshotsCount { get; set; }
+    public bool IsDeltaAccelerating => HourlyVelocity >= 40.0 || GrowthRatePercentage >= 15.0;
+
     // License & Slicing specs
     public ModelLicenseInfo License { get; set; } = new();
     public PrintEstimation PrintSpecs { get; set; } = new();
