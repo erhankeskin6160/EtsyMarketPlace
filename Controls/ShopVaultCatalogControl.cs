@@ -78,6 +78,18 @@ internal sealed class ShopVaultCatalogControl : UserControl
         Cursor = Cursors.Hand
     };
 
+    private readonly ModernButtonControl _btnExportArchive = new()
+    {
+        Text = "💾 Arşiv İndir (.etsyvault)",
+        Width = 185,
+        Height = 36,
+        NormalColor = Color.FromArgb(51, 65, 85),
+        HoverColor = Color.FromArgb(71, 85, 105),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+        Cursor = Cursors.Hand
+    };
+
     // Main Grid
     private readonly DataGridView _grid = new();
 
@@ -200,6 +212,7 @@ internal sealed class ShopVaultCatalogControl : UserControl
         toolbar.Controls.Add(_btnClearSelection);
         toolbar.Controls.Add(_lblSelectionCount);
         toolbar.Controls.Add(_btnSendToTransfer);
+        toolbar.Controls.Add(_btnExportArchive);
 
         root.Controls.Add(toolbar, 0, 0);
 
@@ -408,6 +421,50 @@ internal sealed class ShopVaultCatalogControl : UserControl
 
             TransferRequested?.Invoke(selected);
         };
+
+        _btnExportArchive.Click += async (_, _) => await ExportCurrentArchiveAsync();
+    }
+
+    private async Task ExportCurrentArchiveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_currentSessionId))
+        {
+            MessageBox.Show(this, "Lütfen dışa aktarılacak bir yedek oturumu seçin.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var session = await _repository.GetSessionByIdAsync(_currentSessionId);
+        if (session == null)
+        {
+            MessageBox.Show(this, "Seçili yedek oturumu veritabanında bulunamadı.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using var sfd = new SaveFileDialog
+        {
+            Filter = "Etsy Kasa Arşivi (*.etsyvault)|*.etsyvault|ZIP Arşivi (*.zip)|*.zip",
+            FileName = $"EtsyVault_{session.ShopName}_{session.CreatedAtUtc:yyyyMMdd}.etsyvault",
+            Title = "Yedek Paketini (.etsyvault) Kaydedin"
+        };
+
+        if (sfd.ShowDialog(this) == DialogResult.OK)
+        {
+            try
+            {
+                var packager = new ShopVaultPackagerService(_repository);
+                await packager.ExportSessionToArchiveAsync(_currentSessionId, sfd.FileName);
+                MessageBox.Show(
+                    this,
+                    $"Arşiv başarıyla dışa aktarıldı!\n\nDosya: {Path.GetFileName(sfd.FileName)}\n\nBu dosyayı diğer VDS sunucunuza aktarıp 1. sekmedeki '.etsyvault Aç' butonu ile tek tıkla yükleyebilirsiniz.",
+                    "Dışa Aktarma Başarılı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Arşiv dışa aktarılamadı:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
     }
 
     public async Task RefreshSessionsAsync(string? selectSessionId = null)
