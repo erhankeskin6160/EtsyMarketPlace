@@ -71,16 +71,17 @@ try {
         throw "Indirilen dosya boyutu cok kucuk ($fileSizeMb MB). Indirme hatasi olusmus olabilir!"
     }
 
-    # 2. Çalışan mevcut programı kapat
-    Write-Host "[2/5] Calisan uygulama kontrol ediliyor..." -ForegroundColor Yellow
+    # 2. Çalışan mevcut programı ve hayalet süreçleri kapat
+    Write-Host "[2/5] Calisan uygulama ve kilitli surecler temizleniyor..." -ForegroundColor Yellow
+    try {
+        cmd.exe /c "taskkill /F /IM SimilarProductsWinForms.exe /T 2>nul" | Out-Null
+    } catch { }
     $runningProcesses = Get-Process -Name "SimilarProductsWinForms" -ErrorAction SilentlyContinue
     if ($runningProcesses) {
-        Write-Host "      Calisan SimilarProductsWinForms tespit edildi, kapatiliyor..." -ForegroundColor Yellow
-        $runningProcesses | Stop-Process -Force
-        Start-Sleep -Seconds 2
-    } else {
-        Write-Host "      Calisan surec yok, devam ediliyor." -ForegroundColor Gray
+        $runningProcesses | Stop-Process -Force -ErrorAction SilentlyContinue
     }
+    Start-Sleep -Seconds 1
+    Write-Host "      Surecler temizlendi." -ForegroundColor Gray
 
     # 3. Eski sürümü yedekle
     Write-Host "[3/5] Mevcut surum yedekleniyor..." -ForegroundColor Yellow
@@ -101,18 +102,35 @@ try {
         }
     }
 
-    # 4. Yeni sürümü devreye al
-    Write-Host "[4/5] Yeni surum yerlestiriliyor..." -ForegroundColor Yellow
+    # 4. Yeni sürümü devreye al ve Windows SmartScreen engellerini kaldır
+    Write-Host "[4/5] Yeni surum yerlestiriliyor ve guvenlik engelleri kaldiriliyor..." -ForegroundColor Yellow
     Move-Item -Path $tempDownload -Destination $targetExe -Force
-    Write-Host "      $exeName guncellendi ($targetExe)!" -ForegroundColor Green
+    try {
+        Unblock-File -Path $targetExe -ErrorAction SilentlyContinue
+    } catch { }
+    Write-Host "      $exeName guncellendi ve unblock edildi ($targetExe)!" -ForegroundColor Green
 
     # publish_vds_standalone dizini varsa orayı da anında güncelle
     $standaloneDir = Join-Path $appDir "publish_vds_standalone"
     if (Test-Path $standaloneDir) {
         $standaloneExe = Join-Path $standaloneDir $exeName
         Copy-Item -Path $targetExe -Destination $standaloneExe -Force -ErrorAction SilentlyContinue
+        try { Unblock-File -Path $standaloneExe -ErrorAction SilentlyContinue } catch { }
         Write-Host "      publish_vds_standalone\$exeName guncellendi!" -ForegroundColor Green
     }
+
+    # Masaüstüne doğrudan çalıştırılabilir EtsyMarketPlace kısayolu oluştur
+    try {
+        $desktopPath = [Environment]::GetFolderPath("Desktop")
+        $shortcutPath = Join-Path $desktopPath "EtsyMarketPlace.lnk"
+        $wshShell = New-Object -ComObject WScript.Shell
+        $shortcut = $wshShell.CreateShortcut($shortcutPath)
+        $shortcut.TargetPath = $targetExe
+        $shortcut.WorkingDirectory = $appDir
+        $shortcut.Description = "EtsyMarketPlace Magaza Yonetim Paneli"
+        $shortcut.Save()
+        Write-Host "      Masaustu kisayolu hazirlandi: $shortcutPath" -ForegroundColor Green
+    } catch { }
 
     # 5. Programı başlat
     Write-Host "[5/5] Yeni surum baslatiliyor..." -ForegroundColor Yellow
@@ -125,7 +143,8 @@ try {
     Write-Host "=================================================================" -ForegroundColor Green
     Write-Host "   ✅ VDS Basariyla Guncellendi ve Program Calistirildi!" -ForegroundColor Green
     Write-Host "=================================================================" -ForegroundColor Green
-    Start-Sleep -Seconds 2
+    Write-Host "Pencere 4 saniye icinde kapanacak..." -ForegroundColor Gray
+    Start-Sleep -Seconds 4
 }
 catch {
     Write-Host ""
@@ -139,8 +158,10 @@ catch {
     
     # Hata durumunda eski exe varsa onu çalıştır
     if (Test-Path $targetExe) {
+        try { Unblock-File -Path $targetExe -ErrorAction SilentlyContinue } catch { }
         Write-Host "Mevcut surumle program aciliyor..." -ForegroundColor Yellow
         Start-Process -FilePath $targetExe -WorkingDirectory $appDir
     }
-    Start-Sleep -Seconds 4
+    Write-Host "Kapatmak icin bir tusa basin..." -ForegroundColor Yellow
+    Read-Host
 }
