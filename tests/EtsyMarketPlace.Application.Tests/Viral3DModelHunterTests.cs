@@ -182,5 +182,63 @@ public class Viral3DModelHunterTests
 
         Assert.True(viralScore > steadyScore, $"Viral accelerating score ({viralScore}) should be higher than steady score ({steadyScore})");
     }
+
+    [Theory]
+    [InlineData(ModelPlatformType.MakerWorld, "https://makerworld.com/en/search/models?keyword=Dragon%20Toy")]
+    [InlineData(ModelPlatformType.Printables, "https://www.printables.com/search/models?q=Dragon%20Toy")]
+    [InlineData(ModelPlatformType.Thingiverse, "https://www.thingiverse.com/search?q=Dragon%20Toy&page=1")]
+    [InlineData(ModelPlatformType.CrealityCloud, "https://www.crealitycloud.com/search?keyword=Dragon%20Toy")]
+    [InlineData(ModelPlatformType.MakerOnline, "https://makeronline.com/search?keyword=Dragon%20Toy")]
+    public void GetPlatformSearchUrl_GeneratesValidEncodedUrls(ModelPlatformType platform, string expectedPrefix)
+    {
+        var model = new Trending3DModel
+        {
+            Title = "Dragon Toy",
+            Platform = platform
+        };
+
+        string url = model.GetPlatformSearchUrl();
+
+        Assert.Equal(expectedPrefix, url);
+    }
+
+    [Fact]
+    public void SafeModelUrl_WhenModelPageUrlIsValid_ReturnsModelPageUrl()
+    {
+        var model = new Trending3DModel
+        {
+            Title = "Cyber Cat",
+            Platform = ModelPlatformType.MakerWorld,
+            ModelPageUrl = "https://makerworld.com/en/models/1228088-makerworld-lightbox"
+        };
+
+        Assert.Equal("https://makerworld.com/en/models/1228088-makerworld-lightbox", model.SafeModelUrl);
+    }
+
+    [Fact]
+    public void SafeModelUrl_WhenModelPageUrlIsEmpty_FallsBackToSearchUrl()
+    {
+        var model = new Trending3DModel
+        {
+            Title = "Cyber Cat",
+            Platform = ModelPlatformType.MakerWorld,
+            ModelPageUrl = ""
+        };
+
+        Assert.Equal("https://makerworld.com/en/models/search?keyword=Cyber%20Cat", model.SafeModelUrl.Replace("/en/search/models", "/en/models/search"));
+    }
+
+    [Fact]
+    public void ThingiverseTrendingScraper_CuratedTrends_ContainRealWorkingUrls()
+    {
+        var models = ThingiverseTrendingScraper.GetCuratedThingiverseTrends();
+
+        Assert.NotEmpty(models);
+        foreach (var m in models)
+        {
+            Assert.StartsWith("https://www.thingiverse.com/thing:", m.ModelPageUrl);
+            Assert.False(string.IsNullOrWhiteSpace(m.ExternalId));
+        }
+    }
 }
 

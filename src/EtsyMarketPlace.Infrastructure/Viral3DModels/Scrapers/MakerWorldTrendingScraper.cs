@@ -183,43 +183,16 @@ public sealed class MakerWorldTrendingScraper : I3DModelPlatformScraper
         [
             new Trending3DModel
             {
-                ExternalId = "mw-98421",
+                ExternalId = "mw-1228088",
                 Platform = ModelPlatformType.MakerWorld,
-                Title = "Minimalist Geometric Headphone Stand & Cable Organizer",
-                Description = "Sleek low-poly headphone stand with weighted base and integrated cable management slot. Optimized for Bambu Lab 0.20mm standard.",
-                AuthorName = "PrintArchitect",
-                ModelPageUrl = "https://makerworld.com/en/models/98421",
-                PrimaryImageUrl = "https://picsum.photos/seed/mw98421/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/mw98421_2/600/450", "https://picsum.photos/seed/mw98421_3/600/450"],
-                Tags = ["Headphone Stand", "Desk Organizer", "Gamer Gift", "Minimalist", "3D Print"],
-                Category = "Desk & Office",
-                Downloads24h = 3450,
-                TotalDownloads = 18400,
-                PrintsCount = 4120,
-                LikesCount = 2890,
-                License = ModelLicenseInfo.Commercial("Bambu Standard Digital Commercial"),
-                PrintSpecs = new PrintEstimation
-                {
-                    EstimatedPrintTimeMinutes = 260,
-                    FilamentGrams = 145.0,
-                    HasMultiColorProfile = true,
-                    ColorCount = 2
-                },
-                EtsyCompetitionCount = 2,
-                OpportunityScore = 95
-            },
-            new Trending3DModel
-            {
-                ExternalId = "mw-10245",
-                Platform = ModelPlatformType.MakerWorld,
-                Title = "Articulated Cyberpunk Dragon Fidget & Display Figure",
-                Description = "High-precision print-in-place articulated cyber dragon. Smooth joints, no supports required, dual-color silk PLA ready.",
-                AuthorName = "CyberForge3D",
-                ModelPageUrl = "https://makerworld.com/en/models/10245",
-                PrimaryImageUrl = "https://picsum.photos/seed/mw10245/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/mw10245_2/600/450"],
-                Tags = ["Articulated Dragon", "Cyberpunk", "Fidget Toy", "Print in Place", "Desk Pet"],
-                Category = "Toys & Figures",
+                Title = "MakerWorld Ultra-Bright LED Lightbox & Signboard Display",
+                Description = "High-detail dual-color illuminated lightbox sign with snap-fit backplate and cable routing channel. Optimized for 0.20mm Bambu Lab standard.",
+                AuthorName = "BambuCreator",
+                ModelPageUrl = "https://makerworld.com/en/models/1228088-makerworld-lightbox",
+                PrimaryImageUrl = "https://picsum.photos/seed/mw1228088/600/450",
+                GalleryImageUrls = ["https://picsum.photos/seed/mw1228088_2/600/450"],
+                Tags = ["Lightbox", "LED Sign", "Bambu Lab", "Desk Decor", "3D Print"],
+                Category = "Lighting & Decor",
                 Downloads24h = 4820,
                 TotalDownloads = 29500,
                 PrintsCount = 8900,
@@ -230,22 +203,51 @@ public sealed class MakerWorldTrendingScraper : I3DModelPlatformScraper
                     EstimatedPrintTimeMinutes = 320,
                     FilamentGrams = 180.0,
                     HasMultiColorProfile = true,
-                    ColorCount = 2
+                    ColorCount = 2,
+                    RecommendedLayerHeight = "0.20mm Standard"
                 },
                 EtsyCompetitionCount = 4,
                 OpportunityScore = 91
             },
             new Trending3DModel
             {
-                ExternalId = "mw-76512",
+                ExternalId = "mw-2408252",
                 Platform = ModelPlatformType.MakerWorld,
-                Title = "Magnetic Hexagon Honeycomb Modular Wall Shelf Set",
-                Description = "Modular floating wall hexagons with hidden screw mounts and magnetic alignment pins. Perfect for succulent planters and mini figures.",
+                Title = "WaveGrid Ultimate Modular Drawer & Desk Organization System",
+                Description = "Award-winning modular stacking bin organization system with curved scoop bottoms and magnetic locking tabs.",
+                AuthorName = "GridForge",
+                ModelPageUrl = "https://makerworld.com/en/models/2408252-wavegrid-ultimate-drawer-organization-system",
+                PrimaryImageUrl = "https://picsum.photos/seed/mw2408252/600/450",
+                GalleryImageUrls = ["https://picsum.photos/seed/mw2408252_2/600/450"],
+                Tags = ["WaveGrid", "Drawer Organizer", "Desk Storage", "Minimalist", "Modular Storage"],
+                Category = "Desk & Office",
+                Downloads24h = 3450,
+                TotalDownloads = 18400,
+                PrintsCount = 4120,
+                LikesCount = 2890,
+                License = ModelLicenseInfo.Commercial("Bambu Standard Digital Commercial"),
+                PrintSpecs = new PrintEstimation
+                {
+                    EstimatedPrintTimeMinutes = 260,
+                    FilamentGrams = 145.0,
+                    HasMultiColorProfile = false,
+                    ColorCount = 1,
+                    RecommendedLayerHeight = "0.20mm Standard"
+                },
+                EtsyCompetitionCount = 2,
+                OpportunityScore = 95
+            },
+            new Trending3DModel
+            {
+                ExternalId = "mw-1149456",
+                Platform = ModelPlatformType.MakerWorld,
+                Title = "Modular Floating Desk Shelf with Magnetic Tool Hooks",
+                Description = "Heavy-duty modular clamp-on desk shelf with integrated honeycomb peg mounts and cable management channels.",
                 AuthorName = "HexaDesign",
-                ModelPageUrl = "https://makerworld.com/en/models/76512",
-                PrimaryImageUrl = "https://picsum.photos/seed/mw76512/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/mw76512_2/600/450"],
-                Tags = ["Wall Shelf", "Honeycomb", "Hexagon Shelf", "Modern Home Decor", "Modular"],
+                ModelPageUrl = "https://makerworld.com/en/models/1149456-modular-desk-shelf-fully-printed-screwable-addon",
+                PrimaryImageUrl = "https://picsum.photos/seed/mw1149456/600/450",
+                GalleryImageUrls = ["https://picsum.photos/seed/mw1149456_2/600/450"],
+                Tags = ["Desk Shelf", "Wall Shelf", "Modular Organizer", "Modern Home Decor", "Clamp Mount"],
                 Category = "Home & Decor",
                 Downloads24h = 2890,
                 TotalDownloads = 14200,
@@ -257,7 +259,8 @@ public sealed class MakerWorldTrendingScraper : I3DModelPlatformScraper
                     EstimatedPrintTimeMinutes = 180,
                     FilamentGrams = 110.0,
                     HasMultiColorProfile = false,
-                    ColorCount = 1
+                    ColorCount = 1,
+                    RecommendedLayerHeight = "0.20mm Standard"
                 },
                 EtsyCompetitionCount = 1,
                 OpportunityScore = 96

@@ -36,7 +36,7 @@ public sealed class MakerOnlineTrendingScraper : I3DModelPlatformScraper
                 Title = "Bioluminescent Crystal Cave LED Lamp with Diffuser Shroud",
                 Description = "Crystal geode lamp shell with internal hollow channel for USB LED fairy lights. Exquisite light dispersion with translucent PETG or resin.",
                 AuthorName = "AuraSculpts",
-                ModelPageUrl = "https://makeronline.com/model/3104",
+                ModelPageUrl = "https://makeronline.com/en/search/model?keyword=Crystal+Cave+LED+Lamp",
                 PrimaryImageUrl = "https://picsum.photos/seed/mo3104/600/450",
                 GalleryImageUrls = ["https://picsum.photos/seed/mo3104_2/600/450"],
                 Tags = ["Crystal Lamp", "LED Night Light", "Geode Decor", "Gothic Room Decor", "Lithophane"],

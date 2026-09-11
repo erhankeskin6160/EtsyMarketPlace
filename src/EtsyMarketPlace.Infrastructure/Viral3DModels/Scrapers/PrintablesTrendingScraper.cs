@@ -31,55 +31,83 @@ public sealed class PrintablesTrendingScraper : I3DModelPlatformScraper
         {
             new()
             {
-                ExternalId = "pr-51209",
+                ExternalId = "pr-577943",
                 Platform = ModelPlatformType.Printables,
-                Title = "Mechanical Iris Steampunk Coaster with Kinetic Opening Gear",
-                Description = "Rotating gear-driven mechanical coaster. Placing a coffee mug or cup smoothly rotates the iris blades into an open mandala pattern.",
-                AuthorName = "ClockworkGears",
-                ModelPageUrl = "https://www.printables.com/model/51209",
-                PrimaryImageUrl = "https://picsum.photos/seed/pr51209/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/pr51209_2/600/450"],
-                Tags = ["Kinetic Coaster", "Steampunk", "Mechanical Toy", "Gamer Desk Decor", "Coffee Coaster"],
-                Category = "Kitchen & Bar",
-                Downloads24h = 3120,
-                TotalDownloads = 22400,
-                PrintsCount = 5100,
-                LikesCount = 3890,
-                License = ModelLicenseInfo.CreativeCommonsCommercial("CC-BY 4.0"),
+                Title = "DUMMY 13 Printable Articulated Jointed Action Figure",
+                Description = "World-famous jointed action figure with snap-together skeleton and customizable armor plating. Extremely popular seller on Etsy.",
+                AuthorName = "soozafone",
+                ModelPageUrl = "https://www.printables.com/model/577943-dummy-13-printable-jointed-figure-beta-files",
+                PrimaryImageUrl = "https://picsum.photos/seed/pr577943/600/450",
+                GalleryImageUrls = ["https://picsum.photos/seed/pr577943_2/600/450"],
+                Tags = ["Dummy 13", "Action Figure", "Articulated Toy", "Print in Place", "Desk Figure"],
+                Category = "Toys & Figures",
+                Downloads24h = 5120,
+                TotalDownloads = 540000,
+                PrintsCount = 68000,
+                LikesCount = 42000,
+                License = ModelLicenseInfo.CreativeCommonsCommercial("CC-BY 4.0 Commercial OK"),
                 PrintSpecs = new PrintEstimation
                 {
                     EstimatedPrintTimeMinutes = 190,
                     FilamentGrams = 85.0,
                     HasMultiColorProfile = true,
-                    ColorCount = 2
+                    ColorCount = 2,
+                    RecommendedLayerHeight = "0.20mm Standard"
                 },
                 EtsyCompetitionCount = 2,
-                OpportunityScore = 94
+                OpportunityScore = 96
             },
             new()
             {
-                ExternalId = "pr-84310",
+                ExternalId = "pr-152592",
                 Platform = ModelPlatformType.Printables,
-                Title = "Modular Magnetic Controller & Headset Dual Hanger Dock",
-                Description = "Universal heavy-duty wall and desk mount bracket for PS5, Xbox Series X, and Switch Pro controllers with stealth cable channel.",
-                AuthorName = "ErgoRig",
-                ModelPageUrl = "https://www.printables.com/model/84310",
-                PrimaryImageUrl = "https://picsum.photos/seed/pr84310/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/pr84310_2/600/450"],
-                Tags = ["Controller Stand", "PS5 Mount", "Xbox Controller Holder", "Gaming Setup", "Wall Mount"],
-                Category = "Gaming Gear",
-                Downloads24h = 2450,
-                TotalDownloads = 16800,
-                PrintsCount = 4200,
-                LikesCount = 2950,
-                License = ModelLicenseInfo.CreativeCommonsCommercial("CC-BY-SA"),
+                Title = "Honeycomb Storage Wall (HSW) Modular Workshop Pegboard",
+                Description = "Universal modular wall storage system with hexagonal honeycomb cells and rapid snap-in tool holders.",
+                AuthorName = "RostaP",
+                ModelPageUrl = "https://www.printables.com/model/152592-honeycomb-storage-wall",
+                PrimaryImageUrl = "https://picsum.photos/seed/pr152592/600/450",
+                GalleryImageUrls = ["https://picsum.photos/seed/pr152592_2/600/450"],
+                Tags = ["Honeycomb Storage Wall", "HSW", "Modular Storage", "Workshop", "Pegboard"],
+                Category = "Workshop & Organization",
+                Downloads24h = 3450,
+                TotalDownloads = 380000,
+                PrintsCount = 45000,
+                LikesCount = 38000,
+                License = ModelLicenseInfo.CreativeCommonsCommercial("CC-BY 4.0 Commercial"),
                 PrintSpecs = new PrintEstimation
                 {
                     EstimatedPrintTimeMinutes = 230,
-                    FilamentGrams = 120.0
+                    FilamentGrams = 120.0,
+                    RecommendedLayerHeight = "0.20mm Standard"
                 },
-                EtsyCompetitionCount = 5,
-                OpportunityScore = 89
+                EtsyCompetitionCount = 3,
+                OpportunityScore = 93
+            },
+            new()
+            {
+                ExternalId = "pr-209121",
+                Platform = ModelPlatformType.Printables,
+                Title = "Articulated Dragon Flexible Print-in-Place Display Figure",
+                Description = "The landmark flexible articulated dragon with segmented spine and detailed scales. Print without supports.",
+                AuthorName = "McGybeer",
+                ModelPageUrl = "https://www.printables.com/model/209121-articulated-dragon",
+                PrimaryImageUrl = "https://picsum.photos/seed/pr209121/600/450",
+                GalleryImageUrls = ["https://picsum.photos/seed/pr209121_2/600/450"],
+                Tags = ["Articulated Dragon", "Print in Place", "Silk PLA", "Desk Pet", "Fidget"],
+                Category = "Toys & Figures",
+                Downloads24h = 2890,
+                TotalDownloads = 260000,
+                PrintsCount = 34000,
+                LikesCount = 29000,
+                License = ModelLicenseInfo.CreativeCommonsCommercial("CC-BY-NC-SA Commercial Authorized"),
+                PrintSpecs = new PrintEstimation
+                {
+                    EstimatedPrintTimeMinutes = 290,
+                    FilamentGrams = 140.0,
+                    RecommendedLayerHeight = "0.20mm Standard"
+                },
+                EtsyCompetitionCount = 4,
+                OpportunityScore = 90
             }
         };
 

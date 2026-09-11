@@ -42,4 +42,30 @@ public class Trending3DModel
     public DateTime DiscoveredAtUtc { get; set; } = DateTime.UtcNow;
 
     public bool IsGoldenOpportunity => OpportunityScore >= 80 && (EtsyCompetitionCount is >= 0 and <= 5);
+
+    public string SafeModelUrl
+    {
+        get
+        {
+            if (!string.IsNullOrWhiteSpace(ModelPageUrl) && ModelPageUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                return ModelPageUrl;
+            }
+            return GetPlatformSearchUrl();
+        }
+    }
+
+    public string GetPlatformSearchUrl()
+    {
+        string encoded = Uri.EscapeDataString(Title);
+        return Platform switch
+        {
+            ModelPlatformType.MakerWorld => $"https://makerworld.com/en/search/models?keyword={encoded}",
+            ModelPlatformType.Printables => $"https://www.printables.com/search/models?q={encoded}",
+            ModelPlatformType.Thingiverse => $"https://www.thingiverse.com/search?q={encoded}&page=1",
+            ModelPlatformType.CrealityCloud => $"https://www.crealitycloud.com/search?keyword={encoded}",
+            ModelPlatformType.MakerOnline => $"https://makeronline.com/search?keyword={encoded}",
+            _ => $"https://www.google.com/search?q={encoded}+3d+model"
+        };
+    }
 }

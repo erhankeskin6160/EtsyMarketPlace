@@ -179,6 +179,19 @@ public sealed class Trending3DModelHunterForm : Form
         Cursor = Cursors.Hand
     };
 
+    private readonly ModernButtonControl _btnSearchOnPlatform = new()
+    {
+        Text = "🔍 Platformda Bu Modeli Ara (Alternatif)",
+        Width = 310,
+        Height = 32,
+        NormalColor = Color.FromArgb(30, 41, 59),
+        HoverColor = Color.FromArgb(51, 65, 85),
+        ForeColor = Color.FromArgb(203, 213, 225),
+        Font = new Font("Segoe UI", 8.5F),
+        Cursor = Cursors.Hand,
+        Margin = new Padding(0, 4, 0, 0)
+    };
+
     public Trending3DModelHunterForm()
     {
         Text = "Viral 3D Model Avcısı & Etsy Pazar Boşluğu Radarı";
@@ -326,6 +339,7 @@ public sealed class Trending3DModelHunterForm : Form
 
         drawerStack.Controls.Add(_btnCreateEtsyDraft);
         drawerStack.Controls.Add(_btnOpenSourcePage);
+        drawerStack.Controls.Add(_btnSearchOnPlatform);
 
         drawer.Controls.Add(drawerStack);
         split.Controls.Add(drawer, 1, 0);
@@ -397,13 +411,35 @@ public sealed class Trending3DModelHunterForm : Form
 
         _btnOpenSourcePage.Click += (_, _) =>
         {
-            if (_selectedModel != null && !string.IsNullOrWhiteSpace(_selectedModel.ModelPageUrl))
+            if (_selectedModel != null)
             {
-                try
+                OpenModelUrl(_selectedModel);
+            }
+        };
+
+        _btnSearchOnPlatform.Click += (_, _) =>
+        {
+            if (_selectedModel == null) return;
+            try
+            {
+                string searchUrl = _selectedModel.GetPlatformSearchUrl();
+                Process.Start(new ProcessStartInfo { FileName = searchUrl, UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Arama sayfası açılamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        };
+
+        _grid.CellDoubleClick += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.RowIndex < _grid.Rows.Count)
+            {
+                var model = _grid.Rows[e.RowIndex].Tag as Trending3DModel ?? _selectedModel;
+                if (model != null)
                 {
-                    Process.Start(new ProcessStartInfo { FileName = _selectedModel.ModelPageUrl, UseShellExecute = true });
+                    OpenModelUrl(model);
                 }
-                catch { }
             }
         };
 
@@ -431,6 +467,32 @@ public sealed class Trending3DModelHunterForm : Form
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
         };
+    }
+
+    private void OpenModelUrl(Trending3DModel model)
+    {
+        string targetUrl = model.SafeModelUrl;
+        if (string.IsNullOrWhiteSpace(targetUrl))
+        {
+            targetUrl = model.GetPlatformSearchUrl();
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = targetUrl, UseShellExecute = true });
+        }
+        catch
+        {
+            try
+            {
+                string fallbackUrl = model.GetPlatformSearchUrl();
+                Process.Start(new ProcessStartInfo { FileName = fallbackUrl, UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, $"Model linki açılamadı: {ex.Message}", "Bağlantı Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
     }
 
     private async Task RunScanAsync()
