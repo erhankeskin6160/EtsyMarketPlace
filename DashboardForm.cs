@@ -1126,6 +1126,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
         _sidebarNav.AddItem("research", "Pazar Araştırması", "🔍", "Araştırma & Analiz");
+        _sidebarNav.AddItem("viral_3d", "Viral 3D Model Avcısı", "🚀", "Araştırma & Analiz", "YENİ");
         _sidebarNav.AddItem("competitor_spy", "Rakip & Trend Casusu", "🕵️", "Araştırma & Analiz", "YENİ");
         _sidebarNav.AddItem("external", "Dış Pazar Yeri Bulucu", "🌐", "Araştırma & Analiz");
         _sidebarNav.AddItem("ai_audit", "Mağaza AI Analizi", "🤖", "Araştırma & Analiz", "YENİ");
@@ -1258,6 +1259,7 @@ internal sealed class DashboardForm : Form
             "automation" => new AutomationReportingForm(_automationSettingsStore, _automationScheduler, _windowsTaskScheduler),
             "batch" => new BatchQueueForm(_batchQueueProcessorService, _abTestService),
             "shop_vault" => new ShopVaultForm(),
+            "viral_3d" => new Trending3DModelHunterForm(),
             "profit" => new ProfitCalculatorForm(),
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),

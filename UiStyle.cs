@@ -343,6 +343,7 @@ internal static class UiStyle
         sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
         sidebarNav.AddItem("research", "Pazar Araştırması", "🔍", "Araştırma & Analiz");
+        sidebarNav.AddItem("viral_3d", "Viral 3D Model Avcısı", "🚀", "Araştırma & Analiz", "YENİ");
         sidebarNav.AddItem("health_score", "Listing Sağlık Skoru", "🩺", "Araştırma & Analiz", "YENİ");
         sidebarNav.AddItem("external", "Dış Pazar Yeri Bulucu", "🌐", "Araştırma & Analiz");
         sidebarNav.AddItem("ai_audit", "Mağaza AI Analizi", "🤖", "Araştırma & Analiz", "YENİ");
