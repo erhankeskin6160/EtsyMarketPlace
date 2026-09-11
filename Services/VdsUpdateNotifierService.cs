@@ -104,7 +104,7 @@ internal sealed class VdsUpdateNotifierService
         return new UpdateCheckResult(false, string.Empty, DateTimeOffset.MinValue, string.Empty);
     }
 
-    public static void TriggerVdsUpdateAndRestart()
+    public static bool TriggerVdsUpdateAndRestart()
     {
         try
         {
@@ -120,6 +120,7 @@ internal sealed class VdsUpdateNotifierService
                     WorkingDirectory = Path.GetDirectoryName(updaterBat),
                     UseShellExecute = true
                 });
+                return true;
             }
             else if (File.Exists(updaterPs1))
             {
@@ -130,20 +131,18 @@ internal sealed class VdsUpdateNotifierService
                     WorkingDirectory = Path.GetDirectoryName(updaterPs1),
                     UseShellExecute = true
                 });
+                return true;
             }
             else
             {
-                // Doğrudan GitHub releases sayfasını aç
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = "https://github.com/erhankeskin6160/EtsyMarketPlace/releases/tag/dev-latest",
-                    UseShellExecute = true
-                });
+                // Updater betiği bulunamazsa programı kapatma
+                return false;
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"Update trigger error: {ex.Message}");
+            return false;
         }
     }
 
@@ -178,17 +177,23 @@ internal sealed class VdsUpdateNotifierService
                     {
                         _isUpdating = true;
                         var pubTimeStr = result.PublishedAt.LocalDateTime.ToString("HH:mm:ss");
-                        onStatusChanged?.Invoke($"⚡ Yeni publish algılandı ({pubTimeStr})! 3 saniye içinde güncelleniyor...");
+                        onStatusChanged?.Invoke($"⚡ Yeni publish algılandı ({pubTimeStr})! Güncelleme başlatılıyor...");
 
-                        // Devam eden işlemlerin temiz kapanması için 3 saniye bekle
-                        await Task.Delay(TimeSpan.FromSeconds(3), ct);
+                        // Devam eden işlemlerin temiz kapanması için 2 saniye bekle
+                        await Task.Delay(TimeSpan.FromSeconds(2), ct);
 
-                        TriggerVdsUpdateAndRestart();
-
-                        // Güncelleyicinin başlaması için 1 saniye bekle ve temiz şekilde kapan
-                        await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None);
-                        Environment.Exit(0);
-                        return;
+                        bool started = TriggerVdsUpdateAndRestart();
+                        if (started)
+                        {
+                            await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None);
+                            Environment.Exit(0);
+                            return;
+                        }
+                        else
+                        {
+                            _isUpdating = false;
+                            onStatusChanged?.Invoke($"ℹ️ Yeni sürüm mevcut ({pubTimeStr}) - 'deploy/Guncelle_Ve_Baslat.bat' çalıştırabilirsiniz.");
+                        }
                     }
                 }
                 catch (OperationCanceledException)
