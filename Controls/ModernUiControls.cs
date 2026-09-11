@@ -959,38 +959,29 @@ public class ModernGridScrollAdapter : IDisposable
 
 /// <summary>
 /// Smooth scrollable container with a sleek ModernVScrollBar and zero native white scrollbars.
+/// Uses WinForms native ScrollableControl architecture with a viewport-clipped native scrollbar
+/// to guarantee zero visual tearing, zero ghosting, and full RDP hardware-accelerated scrolling.
 /// </summary>
 public class ModernScrollPanel : Panel, IMessageFilter
 {
-    [DllImport("user32.dll")]
-    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
-    private const uint RDW_INVALIDATE = 0x0001;
-    private const uint RDW_ALLCHILDREN = 0x0080;
-    private const uint RDW_UPDATENOW = 0x0100;
-    private const uint RDW_ERASE = 0x0004;
-
     private sealed class ModernScrollViewport : Panel
     {
         public ModernScrollViewport()
         {
-            SetStyle(
-                ControlStyles.UserPaint |
-                ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.ResizeRedraw,
-                true);
-            DoubleBuffered = true;
-            AutoScroll = false;
+            AutoScroll = true;
+            DoubleBuffered = false;
             Margin = Padding.Empty;
             Padding = Padding.Empty;
             BackColor = UiStyle.CardBackground;
         }
 
-        protected override void OnPaintBackground(PaintEventArgs e)
+        protected override void OnScroll(ScrollEventArgs se)
         {
-            Color bg = Parent is ModernScrollPanel p ? p.GetEffectiveParentBackColor() : UiStyle.CardBackground;
-            using var b = new SolidBrush(bg);
-            e.Graphics.FillRectangle(b, ClientRectangle);
+            base.OnScroll(se);
+            if (Parent is ModernScrollPanel p)
+            {
+                p.SyncScrollBarFromViewport();
+            }
         }
     }
 
@@ -998,34 +989,41 @@ public class ModernScrollPanel : Panel, IMessageFilter
     private readonly ModernVScrollBar _scrollBar;
     private Control? _content;
     private bool _isFilterRegistered;
+    private bool _isSyncing;
 
     public Panel Viewport => _viewport;
     public ModernVScrollBar ScrollBar => _scrollBar;
 
     public ModernScrollPanel()
     {
-        SetStyle(
-            ControlStyles.UserPaint |
-            ControlStyles.AllPaintingInWmPaint |
-            ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw,
-            true);
-        DoubleBuffered = true;
         AutoScroll = false;
-
-        _scrollBar = new ModernVScrollBar
-        {
-            Dock = DockStyle.Right,
-            Width = 8,
-            Visible = false
-        };
-        _scrollBar.ValueChanged += (_, _) => UpdateContentPosition();
+        Margin = Padding.Empty;
+        Padding = Padding.Empty;
 
         _viewport = new ModernScrollViewport
         {
-            Dock = DockStyle.Fill
+            Location = new Point(0, 0)
         };
         _viewport.Resize += (_, _) => RecalculateScroll();
+
+        _scrollBar = new ModernVScrollBar
+        {
+            Width = 8,
+            Visible = false
+        };
+        _scrollBar.ValueChanged += (_, _) =>
+        {
+            if (_isSyncing || _content == null) return;
+            _isSyncing = true;
+            try
+            {
+                _viewport.AutoScrollPosition = new Point(0, _scrollBar.Value);
+            }
+            finally
+            {
+                _isSyncing = false;
+            }
+        };
 
         Controls.Add(_viewport);
         Controls.Add(_scrollBar);
@@ -1059,12 +1057,43 @@ public class ModernScrollPanel : Panel, IMessageFilter
         return UiStyle.CardBackground;
     }
 
-    protected override void OnPaint(PaintEventArgs e)
+    protected override void OnResize(EventArgs eventargs)
     {
-        var g = e.Graphics;
-        Color parentBg = GetEffectiveParentBackColor();
-        using var clearBrush = new SolidBrush(parentBg);
-        g.FillRectangle(clearBrush, ClientRectangle);
+        base.OnResize(eventargs);
+        UpdateLayout();
+    }
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        base.OnLayout(levent);
+        UpdateLayout();
+    }
+
+    private void UpdateLayout()
+    {
+        if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+
+        int scrollBarW = 8;
+        bool needBar = _scrollBar.Visible;
+        int visibleContentW = needBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
+
+        // Position native scrollbar off-screen by expanding viewport width past the visible content width
+        int nativeBarW = SystemInformation.VerticalScrollBarWidth;
+        int vpW = visibleContentW + nativeBarW + 6;
+
+        _viewport.SetBounds(0, 0, vpW, ClientSize.Height);
+
+        if (_content != null)
+        {
+            if (_content is FlowLayoutPanel)
+            {
+                _content.MaximumSize = new Size(visibleContentW, 0);
+            }
+            _content.Width = visibleContentW;
+        }
+
+        _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height);
+        _scrollBar.BringToFront();
     }
 
     public void SetContent(Control content)
@@ -1074,61 +1103,56 @@ public class ModernScrollPanel : Panel, IMessageFilter
         _viewport.Controls.Add(content);
 
         content.Dock = DockStyle.None;
+        content.Anchor = AnchorStyles.Top | AnchorStyles.Left;
         content.Location = new Point(0, 0);
 
         Color effectiveBg = GetEffectiveParentBackColor();
-        content.BackColor = effectiveBg;
-        EnableDoubleBufferingAndSolidBackground(content, effectiveBg);
-
-        if (content is FlowLayoutPanel)
+        _viewport.BackColor = effectiveBg;
+        if (content.BackColor == Color.Transparent || content.BackColor == SystemColors.Control)
         {
-            content.MaximumSize = new Size(_viewport.ClientSize.Width, 0);
+            content.BackColor = effectiveBg;
         }
-        content.Width = _viewport.ClientSize.Width;
+
         content.SizeChanged += (_, _) => RecalculateScroll();
         content.Layout += (_, _) => RecalculateScroll();
         RecalculateScroll();
     }
 
-    private static void EnableDoubleBufferingAndSolidBackground(Control control, Color solidBg)
+    public void SyncScrollBarFromViewport()
     {
+        if (_isSyncing) return;
+        _isSyncing = true;
         try
         {
-            typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-                ?.SetValue(control, true, null);
-        }
-        catch { }
-
-        if (control is TableLayoutPanel or FlowLayoutPanel or Panel or GroupBox)
-        {
-            if (control.BackColor == Color.Transparent || control.BackColor == SystemColors.Control)
+            int currentY = Math.Abs(_viewport.AutoScrollPosition.Y);
+            if (_scrollBar.Value != currentY)
             {
-                control.BackColor = solidBg;
+                _scrollBar.Value = currentY;
             }
         }
-
-        foreach (Control child in control.Controls)
+        finally
         {
-            EnableDoubleBufferingAndSolidBackground(child, solidBg);
+            _isSyncing = false;
         }
     }
 
     public void RecalculateScroll()
     {
-        if (_content == null || _viewport.ClientSize.Height <= 0) return;
-
-        int targetW = _viewport.ClientSize.Width;
-        if (targetW <= 0) return;
+        if (_content == null || ClientSize.Height <= 0) return;
 
         Color effectiveBg = GetEffectiveParentBackColor();
-        if (_content.BackColor != effectiveBg) _content.BackColor = effectiveBg;
-        EnableDoubleBufferingAndSolidBackground(_content, effectiveBg);
+        if (_viewport.BackColor != effectiveBg) _viewport.BackColor = effectiveBg;
+        if (_content.BackColor == Color.Transparent || _content.BackColor == SystemColors.Control)
+        {
+            _content.BackColor = effectiveBg;
+        }
 
+        int visibleContentW = Math.Max(0, ClientSize.Width - 8);
         if (_content is FlowLayoutPanel)
         {
-            _content.MaximumSize = new Size(targetW, 0);
+            _content.MaximumSize = new Size(visibleContentW, 0);
         }
-        _content.Width = targetW;
+        _content.Width = visibleContentW;
         _content.PerformLayout();
 
         int contentH = _content.PreferredSize.Height;
@@ -1146,40 +1170,31 @@ public class ModernScrollPanel : Panel, IMessageFilter
             contentH = _content.Height;
         }
 
-        _content.Size = new Size(targetW, contentH);
+        _content.Size = new Size(visibleContentW, contentH);
+        _viewport.AutoScrollMinSize = new Size(0, contentH);
 
-        int max = Math.Max(0, contentH - _viewport.ClientSize.Height);
+        int max = Math.Max(0, contentH - ClientSize.Height);
         _scrollBar.Maximum = max;
-        _scrollBar.LargeChange = Math.Max(1, _viewport.ClientSize.Height);
+        _scrollBar.LargeChange = Math.Max(1, ClientSize.Height);
         _scrollBar.Visible = max > 0;
 
         if (_scrollBar.Value > max)
         {
             _scrollBar.Value = max;
         }
-        UpdateContentPosition();
-    }
 
-    private void UpdateContentPosition()
-    {
-        if (_content == null) return;
+        UpdateLayout();
 
-        int targetTop = -_scrollBar.Value;
-        if (_content.Top != targetTop)
+        if (!_isSyncing)
         {
-            _content.SuspendLayout();
-            _content.Location = new Point(0, targetTop);
-            _content.ResumeLayout(false);
-
-            if (_viewport.IsHandleCreated)
+            _isSyncing = true;
+            try
             {
-                RedrawWindow(_viewport.Handle, IntPtr.Zero, IntPtr.Zero,
-                    RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_ERASE);
+                _viewport.AutoScrollPosition = new Point(0, _scrollBar.Value);
             }
-            else
+            finally
             {
-                _viewport.Invalidate(true);
-                _viewport.Update();
+                _isSyncing = false;
             }
         }
     }

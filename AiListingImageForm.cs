@@ -401,7 +401,6 @@ internal sealed class AiListingImageForm : Form
 
         var stack = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
@@ -657,7 +656,6 @@ internal sealed class AiListingImageForm : Form
 
         var stack = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
