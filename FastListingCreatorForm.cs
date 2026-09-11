@@ -81,7 +81,7 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Dictionary<string, (decimal Price, int Quantity, bool IsEnabled)> _customVariationPrices = new(StringComparer.OrdinalIgnoreCase);
     private bool _isUpdatingVariationGrid;
 
-    private readonly CheckBox _chkMakeActive = new() { Text = "🚀 Hemen Canlı Yayına Al (Aktif Yap)", AutoSize = true, Checked = false };
+    private readonly ModernPublishToggleCard _chkMakeActive = new();
     private readonly ModernButtonControl _btnPublish = new();
     private readonly Button _btnPreviewSecondary = new();
     private readonly Label _statusLabel = new() { AutoSize = true };
@@ -1141,19 +1141,19 @@ internal sealed class FastListingCreatorForm : Form
         pubTable.Controls.Add(_chkItemDesc);
         pubTable.Controls.Add(_chkItemTags);
 
-        // Checkbox Active
-        _chkMakeActive.Margin = new Padding(0, 10, 0, 6);
+        // Modern Publish Mode Toggle Card
+        _chkMakeActive.Dock = DockStyle.Top;
+        _chkMakeActive.Margin = new Padding(0, 8, 0, 10);
+        _chkMakeActive.CheckedChanged += (_, _) => UpdatePublishButtonVisuals();
         pubTable.Controls.Add(_chkMakeActive);
 
         // Secondary Publish Button
         _btnPublish.Dock = DockStyle.Top;
         _btnPublish.Height = 40;
-        _btnPublish.Text = "🚀 Etsy'ye Gönder (Yayınla)";
-        _btnPublish.NormalColor = UiStyle.SuccessColor;
-        _btnPublish.HoverColor = Color.FromArgb(5, 150, 105);
         _btnPublish.ForeColor = Color.White;
         _btnPublish.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
         _btnPublish.Click += async (_, _) => await PublishListingToEtsyAsync();
+        UpdatePublishButtonVisuals();
         pubTable.Controls.Add(_btnPublish);
 
         // Secondary Preview Button
@@ -1175,7 +1175,7 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             Font = new Font("Segoe UI", 8F),
             ForeColor = UiStyle.TextMuted,
-            Text = "İpucu: 'Canlı Yayına Al' işaretlenmezse listeleme güvenli şekilde TASLAK (Draft) olarak açılır.",
+            Text = "💡 Güvenli Gönderim: Taslak listelemeler mağazanızda alıcılara görünmez, Etsy panelinizden dilediğinizde inceleyebilirsiniz.",
             AutoSize = true,
             Margin = new Padding(0, 4, 0, 4)
         };
@@ -1187,6 +1187,23 @@ internal sealed class FastListingCreatorForm : Form
         scrollContainer.SetContent(stack);
         grp.Controls.Add(scrollContainer);
         return grp;
+    }
+
+    private void UpdatePublishButtonVisuals()
+    {
+        if (_chkMakeActive.Checked)
+        {
+            _btnPublish.Text = "🚀 Etsy'ye Gönder (Canlı Yayınla)";
+            _btnPublish.NormalColor = UiStyle.SuccessColor;
+            _btnPublish.HoverColor = Color.FromArgb(5, 150, 105);
+        }
+        else
+        {
+            _btnPublish.Text = "💾 Etsy'ye Gönder (Taslak Olarak)";
+            _btnPublish.NormalColor = Color.FromArgb(79, 70, 229);
+            _btnPublish.HoverColor = Color.FromArgb(67, 56, 202);
+        }
+        _btnPublish.Invalidate();
     }
 
     private Control BuildVariationPricingPanel()
@@ -2779,6 +2796,7 @@ internal sealed class FastListingCreatorForm : Form
         RefreshGalleryCards();
         UpdateTagStatus();
         UpdateChecklist();
+        _chkMakeActive.Checked = false;
         _statusLabel.Text = "Form temizlendi.";
     }
 
