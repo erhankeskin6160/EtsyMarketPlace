@@ -3,6 +3,7 @@ namespace SimilarProductsWinForms.Controls;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,19 +29,20 @@ internal sealed class ShopVaultMigrationControl : UserControl
     private readonly Label _lblShopStatus = new()
     {
         AutoSize = true,
-        Text = "⏳ Hedef mağaza API bağlantısı test ediliyor...",
+        Text = "● Hedef mağaza API bağlantısı test ediliyor...",
         ForeColor = UiStyle.WarningColor,
-        Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
-        Margin = new Padding(8, 6, 12, 0)
+        Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+        Margin = new Padding(4, 7, 16, 0)
     };
 
     private readonly ModernButtonControl _btnVerifyShop = new()
     {
-        Text = "🔍 Bağlantıyı Doğrula",
+        Text = "🔍 Bağlantıyı Test Et",
         Width = 150,
         Height = 34,
-        BackColor = UiStyle.CardBackground,
-        ForeColor = UiStyle.TextDark,
+        NormalColor = Color.FromArgb(51, 65, 85),
+        HoverColor = Color.FromArgb(71, 85, 105),
+        ForeColor = Color.White,
         Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
         Cursor = Cursors.Hand
     };
@@ -50,8 +52,9 @@ internal sealed class ShopVaultMigrationControl : UserControl
         Text = "⚙️ API Ayarlarını Aç",
         Width = 150,
         Height = 34,
-        BackColor = UiStyle.CardBackground,
-        ForeColor = UiStyle.TextDark,
+        NormalColor = Color.FromArgb(51, 65, 85),
+        HoverColor = Color.FromArgb(71, 85, 105),
+        ForeColor = Color.White,
         Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
         Cursor = Cursors.Hand
     };
@@ -59,79 +62,150 @@ internal sealed class ShopVaultMigrationControl : UserControl
     private long _targetShopId = 0;
     private string _targetShopName = "";
 
-    // Security & Anti-ban Presets
-    private readonly ModernButtonControl _btnPresetHigh = new()
-    {
-        Text = "🛡️ Maksimum Güvenlik (Önerilen)",
-        Width = 240,
-        Height = 36,
-        BackColor = UiStyle.PrimaryColor,
-        ForeColor = Color.White,
-        Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
-        Cursor = Cursors.Hand
-    };
+    // Security & Anti-ban 3 Tier Cards
+    private SecurityTierCardControl _cardTierHigh = null!;
+    private SecurityTierCardControl _cardTierStandard = null!;
+    private SecurityTierCardControl _cardTierClone = null!;
 
-    private readonly ModernButtonControl _btnPresetStandard = new()
+    // Anti-ban Checkboxes
+    private readonly CheckBox _chkStripExif = new()
     {
-        Text = "⚡ Hızlı Standart",
-        Width = 150,
-        Height = 36,
-        BackColor = UiStyle.CardBackground,
+        Text = "EXIF, GPS & Seri No Temizle",
+        Checked = true,
+        AutoSize = true,
         ForeColor = UiStyle.TextDark,
-        Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
-        Cursor = Cursors.Hand
+        Font = new Font("Segoe UI", 9F),
+        Margin = new Padding(0, 3, 8, 3)
     };
 
-    private readonly ModernButtonControl _btnPresetClone = new()
+    private readonly CheckBox _chkPermutateImageHash = new()
     {
-        Text = "📋 Ayna Klon (Anti-Bansız)",
-        Width = 200,
-        Height = 36,
-        BackColor = UiStyle.CardBackground,
+        Text = "pHash Kırıcı (1-2px Micro-crop)",
+        Checked = true,
+        AutoSize = true,
         ForeColor = UiStyle.TextDark,
-        Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
-        Cursor = Cursors.Hand
+        Font = new Font("Segoe UI", 9F),
+        Margin = new Padding(0, 3, 8, 3)
     };
 
-    private readonly CheckBox _chkStripExif = new() { Text = "EXIF, GPS & Kamera Seri Numaralarını Temizle", Checked = true, AutoSize = true, ForeColor = UiStyle.TextDark, Font = new Font("Segoe UI", 9F) };
-    private readonly CheckBox _chkPermutateImageHash = new() { Text = "pHash Parmak İzi Kırıcı (1-2px Micro-crop & Yeniden Kodlama)", Checked = true, AutoSize = true, ForeColor = UiStyle.TextDark, Font = new Font("Segoe UI", 9F) };
-    private readonly CheckBox _chkAiRewriteTitle = new() { Text = "Yapay Zeka ile Başlığı Özgünleştir (AI Title Rewrite)", Checked = true, AutoSize = true, ForeColor = UiStyle.TextDark, Font = new Font("Segoe UI", 9F) };
-    private readonly CheckBox _chkAiRewriteDesc = new() { Text = "Yapay Zeka ile Açıklamayı Özgünleştir (AI Desc Rewrite)", Checked = true, AutoSize = true, ForeColor = UiStyle.TextDark, Font = new Font("Segoe UI", 9F) };
-    private readonly CheckBox _chkDraftFirst = new() { Text = "Güvenli Taslak Olarak Yükle (Draft Mode)", Checked = true, AutoSize = true, ForeColor = UiStyle.TextDark, Font = new Font("Segoe UI", 9F) };
-    private readonly NumericUpDown _numThrottle = new() { Minimum = 1, Maximum = 30, Value = 4, Width = 70, Font = new Font("Segoe UI", 9F) };
-    private readonly NumericUpDown _numPriceAdj = new() { Minimum = -50, Maximum = 100, Value = 0, Width = 70, Font = new Font("Segoe UI", 9F) };
-    private readonly TextBox _txtSkuPrefix = new() { Text = "NEW_", Width = 90, Font = new Font("Segoe UI", 9F) };
+    private readonly CheckBox _chkAiRewriteTitle = new()
+    {
+        Text = "AI ile Başlığı Özgünleştir",
+        Checked = true,
+        AutoSize = true,
+        ForeColor = UiStyle.TextDark,
+        Font = new Font("Segoe UI", 9F),
+        Margin = new Padding(0, 3, 8, 3)
+    };
+
+    private readonly CheckBox _chkAiRewriteDesc = new()
+    {
+        Text = "AI ile Açıklamayı Özgünleştir",
+        Checked = true,
+        AutoSize = true,
+        ForeColor = UiStyle.TextDark,
+        Font = new Font("Segoe UI", 9F),
+        Margin = new Padding(0, 3, 8, 3)
+    };
+
+    private readonly CheckBox _chkDraftFirst = new()
+    {
+        Text = "Taslak Olarak Yükle (Draft Mode)",
+        Checked = true,
+        AutoSize = true,
+        ForeColor = UiStyle.TextDark,
+        Font = new Font("Segoe UI", 9F),
+        Margin = new Padding(0, 3, 8, 3)
+    };
+
+    private readonly NumericUpDown _numThrottle = new()
+    {
+        Minimum = 1,
+        Maximum = 30,
+        Value = 5,
+        Width = 60,
+        Height = 26,
+        Font = new Font("Segoe UI", 9F),
+        BackColor = Color.FromArgb(30, 41, 59),
+        ForeColor = UiStyle.TextDark
+    };
+
+    private readonly NumericUpDown _numPriceAdj = new()
+    {
+        Minimum = -50,
+        Maximum = 100,
+        Value = 0,
+        Width = 85,
+        Height = 26,
+        Font = new Font("Segoe UI", 9F),
+        BackColor = Color.FromArgb(30, 41, 59),
+        ForeColor = UiStyle.TextDark
+    };
+
+    private readonly TextBox _txtSkuPrefix = new()
+    {
+        Text = "NEW_",
+        Width = 95,
+        Height = 26,
+        Font = new Font("Segoe UI", 9F),
+        BackColor = Color.FromArgb(30, 41, 59),
+        ForeColor = UiStyle.TextDark,
+        BorderStyle = BorderStyle.FixedSingle
+    };
 
     // Mapping inputs
-    private readonly TextBox _txtDefaultShippingId = new() { Width = 150, PlaceholderText = "Örn: 123456789", Font = new Font("Segoe UI", 9F) };
-    private readonly TextBox _txtDefaultReturnId = new() { Width = 150, PlaceholderText = "Örn: 987654321", Font = new Font("Segoe UI", 9F) };
+    private readonly TextBox _txtDefaultShippingId = new()
+    {
+        Width = 160,
+        Height = 26,
+        PlaceholderText = "Örn: 123456789",
+        Font = new Font("Segoe UI", 9F),
+        BackColor = Color.FromArgb(30, 41, 59),
+        ForeColor = UiStyle.TextDark,
+        BorderStyle = BorderStyle.FixedSingle
+    };
+
+    private readonly TextBox _txtDefaultReturnId = new()
+    {
+        Width = 160,
+        Height = 26,
+        PlaceholderText = "Örn: 987654321",
+        Font = new Font("Segoe UI", 9F),
+        BackColor = Color.FromArgb(30, 41, 59),
+        ForeColor = UiStyle.TextDark,
+        BorderStyle = BorderStyle.FixedSingle
+    };
 
     // Deployment controls
     private readonly Label _lblQueueSummary = new()
     {
         AutoSize = true,
-        Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
-        ForeColor = UiStyle.AccentColor,
-        Text = "Kuyrukta: 0 ürün seçili"
+        Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+        ForeColor = Color.FromArgb(52, 211, 153),
+        BackColor = Color.FromArgb(6, 78, 59),
+        Text = "📦 Kuyruk: 0 Ürün Seçili",
+        Padding = new Padding(8, 4, 8, 4)
     };
 
     private readonly ModernButtonControl _btnStart = new()
     {
         Text = "🚀 1-TIKLA GÜVENLİ GÖÇÜ BAŞLAT",
-        Height = 46,
-        Width = 330,
-        BackColor = UiStyle.PrimaryColor,
+        Height = 42,
+        Width = 340,
+        NormalColor = UiStyle.PrimaryColor,
+        HoverColor = UiStyle.PrimaryHover,
         ForeColor = Color.White,
-        Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
+        Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
         Cursor = Cursors.Hand
     };
 
     private readonly ModernButtonControl _btnCancel = new()
     {
         Text = "⏹️ Durdur",
-        Height = 46,
+        Height = 42,
         Width = 110,
-        BackColor = UiStyle.DangerColor,
+        NormalColor = UiStyle.DangerColor,
+        HoverColor = Color.FromArgb(220, 38, 38),
         ForeColor = Color.White,
         Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
         Enabled = false,
@@ -141,26 +215,69 @@ internal sealed class ShopVaultMigrationControl : UserControl
     private readonly ModernButtonControl _btnRetryFailed = new()
     {
         Text = "🔄 Başarısızları Yeniden Dene",
-        Height = 46,
-        Width = 230,
-        BackColor = UiStyle.WarningColor,
+        Height = 42,
+        Width = 240,
+        NormalColor = UiStyle.WarningColor,
+        HoverColor = Color.FromArgb(217, 119, 6),
         ForeColor = Color.Black,
         Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
         Visible = false,
         Cursor = Cursors.Hand
     };
 
-    private readonly ProgressBar _progressBar = new() { Dock = DockStyle.Fill, Height = 22, Minimum = 0, Maximum = 100, Value = 0 };
-    private readonly Label _lblProgressStatus = new() { AutoSize = true, ForeColor = UiStyle.TextDark, Font = UiStyle.BaseFont, Text = "Hazır." };
+    private readonly ProgressBar _progressBar = new()
+    {
+        Dock = DockStyle.Fill,
+        Height = 16,
+        Minimum = 0,
+        Maximum = 100,
+        Value = 0
+    };
+
+    private readonly Label _lblProgressStatus = new()
+    {
+        AutoSize = true,
+        ForeColor = UiStyle.TextDark,
+        Font = UiStyle.BaseFont,
+        Text = "0/0 Ürün • Hazır.",
+        Margin = new Padding(12, 5, 0, 0)
+    };
+
+    // Terminal controls
+    private readonly ModernButtonControl _btnCopyLog = new()
+    {
+        Text = "📋 Kopyala",
+        Width = 85,
+        Height = 24,
+        NormalColor = Color.FromArgb(30, 41, 59),
+        HoverColor = Color.FromArgb(51, 65, 85),
+        ForeColor = Color.FromArgb(203, 213, 225),
+        Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+        Cursor = Cursors.Hand
+    };
+
+    private readonly ModernButtonControl _btnClearLog = new()
+    {
+        Text = "🧹 Temizle",
+        Width = 85,
+        Height = 24,
+        NormalColor = Color.FromArgb(30, 41, 59),
+        HoverColor = Color.FromArgb(51, 65, 85),
+        ForeColor = Color.FromArgb(203, 213, 225),
+        Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+        Cursor = Cursors.Hand
+    };
+
     private readonly TextBox _txtLog = new()
     {
         Multiline = true,
         ReadOnly = true,
         Dock = DockStyle.Fill,
         ScrollBars = ScrollBars.Vertical,
-        BackColor = Color.FromArgb(15, 23, 42),
+        BackColor = Color.FromArgb(11, 15, 25),
         ForeColor = Color.FromArgb(226, 232, 240),
-        Font = new Font("Consolas", 9.2F)
+        Font = new Font("Consolas", 9.2F),
+        BorderStyle = BorderStyle.None
     };
 
     public ShopVaultMigrationControl(
@@ -180,9 +297,9 @@ internal sealed class ShopVaultMigrationControl : UserControl
     public void SetListingsToMigrate(IReadOnlyList<VaultListing> listings)
     {
         _queuedListings = listings ?? [];
-        _lblQueueSummary.Text = $"Kuyrukta: {_queuedListings.Count} adet ürün transfer edilmeye hazır";
+        _lblQueueSummary.Text = $"📦 Kuyruk: {_queuedListings.Count} Ürün Seçili";
         _progressBar.Value = 0;
-        _lblProgressStatus.Text = $"{_queuedListings.Count} ürün transfer edilmek üzere bekliyor.";
+        _lblProgressStatus.Text = $"{_queuedListings.Count} ürün aktarılmak üzere bekliyor.";
         _btnStart.Enabled = _queuedListings.Count > 0;
         _btnStart.Text = $"🚀 1-TIKLA GÜVENLİ GÖÇÜ BAŞLAT ({_queuedListings.Count} ÜRÜN)";
         _btnRetryFailed.Visible = false;
@@ -191,148 +308,399 @@ internal sealed class ShopVaultMigrationControl : UserControl
 
     private void BuildLayout()
     {
-        var mainLayout = new TableLayoutPanel
+        var split = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            RowCount = 4,
-            Padding = new Padding(8),
+            Orientation = Orientation.Horizontal,
+            SplitterWidth = 6,
+            BackColor = UiStyle.BackgroundColor,
+            Panel1MinSize = 340,
+            Panel2MinSize = 130
+        };
+
+        // Panel 1: Top Scrollable Form Content (Never clips or crunches controls)
+        var scrollPanel = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(10, 8, 10, 8),
             BackColor = UiStyle.BackgroundColor
         };
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));  // Shop & Account Card
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 180)); // Anti-Ban Settings Card
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 116)); // Deployment Actions & Progress
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Live Log Console
 
-        // 1. SHOP VERIFICATION CARD
-        var shopCard = CreateCardPanel("🎯 Hedef Etsy Mağazası (Aktarım / Yeni Mağaza Hesabı)", 66);
-        var shopFlow = new FlowLayoutPanel
+        var contentTable = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            AutoScroll = true,
-            WrapContents = false,
-            Padding = new Padding(8, 4, 8, 4)
-        };
-        shopFlow.Controls.Add(_lblShopStatus);
-        shopFlow.Controls.Add(_btnVerifyShop);
-        shopFlow.Controls.Add(_btnOpenApiSettings);
-        shopCard.Controls.Add(shopFlow);
-        mainLayout.Controls.Add(shopCard, 0, 0);
-
-        // 2. ANTI-BAN & MAPPING CARD
-        var antiBanCard = CreateCardPanel("🛡️ Anti-Ban Koruma Profili, Yapay Zeka Özgünleştirme & Kargo Eşleştirme", 170);
-        var settingsTable = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
             RowCount = 4,
-            Padding = new Padding(8, 4, 8, 4)
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            BackColor = UiStyle.BackgroundColor
         };
-        settingsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
-        settingsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 34));
-        settingsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+        contentTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        // Preset selector bar (Row 0 across columns)
-        var pnlPresets = new FlowLayoutPanel
+        // 1. Shop Card
+        var shopCard = BuildShopVerificationCard();
+        contentTable.Controls.Add(shopCard, 0, 0);
+
+        // 2. Strategy Card (3 Tier comparison cards)
+        var strategyCard = BuildStrategyTierCard();
+        contentTable.Controls.Add(strategyCard, 0, 1);
+
+        // 3. Settings & Mapping Card
+        var settingsCard = BuildSettingsAndMappingCard();
+        contentTable.Controls.Add(settingsCard, 0, 2);
+
+        // 4. Action & Progress Card
+        var actionCard = BuildActionAndProgressCard();
+        contentTable.Controls.Add(actionCard, 0, 3);
+
+        scrollPanel.Controls.Add(contentTable);
+        split.Panel1.Controls.Add(scrollPanel);
+
+        // Panel 2: Bottom Terminal Console
+        var terminalCard = BuildTerminalCard();
+        split.Panel2.Controls.Add(terminalCard);
+
+        Controls.Add(split);
+
+        // Set initial splitter distance based on height safely
+        split.Resize += (_, _) =>
+        {
+            try
+            {
+                if (split.Height > split.Panel1MinSize + split.Panel2MinSize)
+                {
+                    split.SplitterDistance = Math.Clamp(split.Height - 220, split.Panel1MinSize, split.Height - split.Panel2MinSize);
+                }
+            }
+            catch { }
+        };
+    }
+
+    private Control BuildShopVerificationCard()
+    {
+        var card = CreateCardPanel("🎯 Hedef Etsy Mağazası (Aktarım / Yeni Mağaza Hesabı)");
+        
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = true,
+            Padding = new Padding(4, 2, 4, 4)
+        };
+        flow.Controls.Add(_lblShopStatus);
+        flow.Controls.Add(_btnVerifyShop);
+        flow.Controls.Add(_btnOpenApiSettings);
+
+        card.Controls.Add(flow);
+        return card;
+    }
+
+    private Control BuildStrategyTierCard()
+    {
+        var card = CreateCardPanel("🛡️ Anti-Ban Güvenlik Stratejisi (Bir Profil Seçin)");
+
+        var tierTable = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 224,
+            ColumnCount = 3,
+            RowCount = 1,
+            Margin = new Padding(0, 4, 0, 0)
+        };
+        tierTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+        tierTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+        tierTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34f));
+
+        _cardTierHigh = new SecurityTierCardControl(
+            tierIndex: 0,
+            title: "🛡️ Maksimum Güvenlik",
+            badgeText: "EN ÇOK TERCİH EDİLEN",
+            badgeBg: Color.FromArgb(49, 46, 129),
+            badgeFg: Color.FromArgb(165, 180, 252),
+            subtitle: "Sıfır ban riski için tam izolasyon",
+            features:
+            [
+                ("EXIF, GPS & Kamera Seri No Silinir", true),
+                ("pHash Parmak İzi Kırıcı (Micro-crop)", true),
+                ("AI ile Başlık & Açıklama Yenilenir", true),
+                ("5 sn İnsan Davranış Gecikmesi & Taslak", true)
+            ])
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = new Padding(4)
         };
-        pnlPresets.Controls.Add(new Label { Text = "Güvenlik Seviyesi:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 8, 6, 0), Font = new Font("Segoe UI Semibold", 9F) });
-        pnlPresets.Controls.Add(_btnPresetHigh);
-        pnlPresets.Controls.Add(_btnPresetStandard);
-        pnlPresets.Controls.Add(_btnPresetClone);
-        settingsTable.SetColumnSpan(pnlPresets, 3);
-        settingsTable.Controls.Add(pnlPresets, 0, 0);
 
-        // Column 1: Core Protection Checkboxes
-        settingsTable.Controls.Add(_chkStripExif, 0, 1);
-        settingsTable.Controls.Add(_chkPermutateImageHash, 0, 2);
-        settingsTable.Controls.Add(_chkDraftFirst, 0, 3);
+        _cardTierStandard = new SecurityTierCardControl(
+            tierIndex: 1,
+            title: "⚡ Hızlı Standart",
+            badgeText: "HIZLI & GÜVENLİ",
+            badgeBg: Color.FromArgb(30, 58, 95),
+            badgeFg: Color.FromArgb(56, 189, 248),
+            subtitle: "Görsel korumalı, orijinal metinler",
+            features:
+            [
+                ("EXIF, GPS & Kamera Seri No Silinir", true),
+                ("pHash Parmak İzi Kırıcı (Micro-crop)", true),
+                ("Orijinal Metinler Korunur (AI Yok)", false),
+                ("4 sn İnsan Davranış Gecikmesi & Taslak", true)
+            ])
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4)
+        };
 
-        // Column 2: AI Rewriting & Delays
-        settingsTable.Controls.Add(_chkAiRewriteTitle, 1, 1);
-        settingsTable.Controls.Add(_chkAiRewriteDesc, 1, 2);
+        _cardTierClone = new SecurityTierCardControl(
+            tierIndex: 2,
+            title: "📋 Ayna Klon",
+            badgeText: "TAM KOPYA",
+            badgeBg: Color.FromArgb(55, 65, 81),
+            badgeFg: Color.FromArgb(156, 163, 175),
+            subtitle: "Doğrudan veri replikasyonu (Yüksek risk)",
+            features:
+            [
+                ("Temel EXIF Temizleme", true),
+                ("Orijinal Görseller (pHash Yok)", false),
+                ("Orijinal Başlık & Açıklama", false),
+                ("3 sn İnsan Gecikmesi & Taslak Modu", true)
+            ])
+        {
+            Dock = DockStyle.Fill,
+            Margin = new Padding(4)
+        };
 
-        var pnlThrottle = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
-        pnlThrottle.Controls.Add(new Label { Text = "İnsan Gecikmesi (sn):", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 2, 0) });
-        pnlThrottle.Controls.Add(_numThrottle);
-        pnlThrottle.Controls.Add(new Label { Text = "Fiyat Farkı (%):", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(6, 4, 2, 0) });
-        pnlThrottle.Controls.Add(_numPriceAdj);
-        settingsTable.Controls.Add(pnlThrottle, 1, 3);
+        _cardTierHigh.IsSelected = true;
 
-        // Column 3: Mapping & SKU
-        var pnlShipping = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
-        pnlShipping.Controls.Add(new Label { Text = "Kargo Profili ID:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 2, 0) });
-        pnlShipping.Controls.Add(_txtDefaultShippingId);
-        settingsTable.Controls.Add(pnlShipping, 2, 1);
+        tierTable.Controls.Add(_cardTierHigh, 0, 0);
+        tierTable.Controls.Add(_cardTierStandard, 1, 0);
+        tierTable.Controls.Add(_cardTierClone, 2, 0);
 
-        var pnlReturn = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
-        pnlReturn.Controls.Add(new Label { Text = "İade Şablonu ID:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 2, 0) });
-        pnlReturn.Controls.Add(_txtDefaultReturnId);
-        settingsTable.Controls.Add(pnlReturn, 2, 2);
+        card.Controls.Add(tierTable);
+        return card;
+    }
 
-        var pnlSku = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight };
-        pnlSku.Controls.Add(new Label { Text = "SKU Ön Eki:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 2, 0) });
+    private Control BuildSettingsAndMappingCard()
+    {
+        var card = CreateCardPanel("⚙️ Gelişmiş Parametreler, Fiyatlandırma & Kargo Eşleştirme");
+
+        var mainGrid = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = new Padding(0, 4, 0, 0)
+        };
+        mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46f));
+        mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54f));
+
+        // Left Col: Mapping & Price
+        var pnlLeft = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 12, 0)
+        };
+
+        pnlLeft.Controls.Add(new Label
+        {
+            Text = "Kargo Profili ID (Varsayılan):",
+            AutoSize = true,
+            ForeColor = UiStyle.TextMuted,
+            Font = new Font("Segoe UI Semibold", 8.5F),
+            Margin = new Padding(0, 2, 0, 2)
+        });
+        pnlLeft.Controls.Add(_txtDefaultShippingId);
+
+        pnlLeft.Controls.Add(new Label
+        {
+            Text = "İade Şablonu ID (Varsayılan):",
+            AutoSize = true,
+            ForeColor = UiStyle.TextMuted,
+            Font = new Font("Segoe UI Semibold", 8.5F),
+            Margin = new Padding(0, 6, 0, 2)
+        });
+        pnlLeft.Controls.Add(_txtDefaultReturnId);
+
+        var pnlPricing = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 8, 0, 0)
+        };
+
+        var pnlPrice = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown, Margin = new Padding(0, 0, 12, 0) };
+        pnlPrice.Controls.Add(new Label { Text = "Fiyat Farkı (%):", AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI Semibold", 8.5F), Margin = new Padding(0, 0, 0, 2) });
+        pnlPrice.Controls.Add(_numPriceAdj);
+        pnlPricing.Controls.Add(pnlPrice);
+
+        var pnlSku = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.TopDown };
+        pnlSku.Controls.Add(new Label { Text = "SKU Ön Eki:", AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI Semibold", 8.5F), Margin = new Padding(0, 0, 0, 2) });
         pnlSku.Controls.Add(_txtSkuPrefix);
-        settingsTable.Controls.Add(pnlSku, 2, 3);
+        pnlPricing.Controls.Add(pnlSku);
 
-        antiBanCard.Controls.Add(settingsTable);
-        mainLayout.Controls.Add(antiBanCard, 0, 1);
+        pnlLeft.Controls.Add(pnlPricing);
+        mainGrid.Controls.Add(pnlLeft, 0, 0);
 
-        // 3. ACTIONS & PROGRESS CARD
-        var actionCard = CreateCardPanel("🚀 1-Tıkla Dağıtım & İlerleme Motoru", 110);
-        var actionLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(8, 4, 8, 4) };
-        actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
-        actionLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        // Right Col: Checkboxes & Throttle
+        var pnlRight = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            RowCount = 3
+        };
+        pnlRight.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        pnlRight.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
 
-        var statusFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
+        pnlRight.Controls.Add(_chkStripExif, 0, 0);
+        pnlRight.Controls.Add(_chkAiRewriteTitle, 1, 0);
+
+        pnlRight.Controls.Add(_chkPermutateImageHash, 0, 1);
+        pnlRight.Controls.Add(_chkAiRewriteDesc, 1, 1);
+
+        pnlRight.Controls.Add(_chkDraftFirst, 0, 2);
+
+        var pnlThrottle = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Margin = new Padding(0, 4, 0, 0) };
+        pnlThrottle.Controls.Add(new Label { Text = "İnsan Gecikmesi:", AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 9F), Margin = new Padding(0, 4, 4, 0) });
+        pnlThrottle.Controls.Add(_numThrottle);
+        pnlThrottle.Controls.Add(new Label { Text = "sn", AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 9F), Margin = new Padding(4, 4, 0, 0) });
+        pnlRight.Controls.Add(pnlThrottle, 1, 2);
+
+        mainGrid.Controls.Add(pnlRight, 1, 0);
+
+        card.Controls.Add(mainGrid);
+        return card;
+    }
+
+    private Control BuildActionAndProgressCard()
+    {
+        var card = CreateCardPanel("🚀 1-Tıkla Dağıtım Motoru & İlerleme Konsolu");
+
+        var statusFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 2, 0, 6)
+        };
         statusFlow.Controls.Add(_lblQueueSummary);
-        statusFlow.Controls.Add(new Label { Text = "  |  ", ForeColor = UiStyle.BorderColor, AutoSize = true });
         statusFlow.Controls.Add(_lblProgressStatus);
-        actionLayout.Controls.Add(statusFlow, 0, 0);
+        card.Controls.Add(statusFlow);
 
-        var btnFlow = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
+        var btnFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 6, 0, 8)
+        };
         btnFlow.Controls.Add(_btnStart);
         btnFlow.Controls.Add(_btnCancel);
         btnFlow.Controls.Add(_btnRetryFailed);
-        actionLayout.Controls.Add(btnFlow, 0, 1);
+        card.Controls.Add(btnFlow);
 
-        actionLayout.Controls.Add(_progressBar, 0, 2);
-        actionCard.Controls.Add(actionLayout);
-        mainLayout.Controls.Add(actionCard, 0, 2);
+        var progressPanel = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 18,
+            Margin = new Padding(0, 4, 0, 2)
+        };
+        progressPanel.Controls.Add(_progressBar);
+        card.Controls.Add(progressPanel);
 
-        // 4. LIVE LOG CONSOLE
-        var logCard = CreateCardPanel("📜 Canlı Dağıtım Terminali & Hata Teşhis Konsolu", 100);
-        logCard.Controls.Add(_txtLog);
-        mainLayout.Controls.Add(logCard, 0, 3);
-
-        Controls.Add(mainLayout);
+        return card;
     }
 
-    private Panel CreateCardPanel(string title, int minHeight)
+    private Control BuildTerminalCard()
+    {
+        var card = new ModernCardPanel
+        {
+            Dock = DockStyle.Fill,
+            CardColor = Color.FromArgb(11, 15, 25),
+            BorderColor = UiStyle.BorderColor,
+            CornerRadius = 10,
+            Padding = new Padding(0),
+            Margin = new Padding(10, 0, 10, 8)
+        };
+
+        // Terminal Header Bar
+        var pnlHeader = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 36,
+            BackColor = Color.FromArgb(18, 24, 38)
+        };
+
+        pnlHeader.Paint += (_, e) =>
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            // 3 macOS style dots
+            using var redBrush = new SolidBrush(Color.FromArgb(239, 68, 68));
+            using var yellowBrush = new SolidBrush(Color.FromArgb(245, 158, 11));
+            using var greenBrush = new SolidBrush(Color.FromArgb(16, 185, 129));
+
+            g.FillEllipse(redBrush, 12, 12, 10, 10);
+            g.FillEllipse(yellowBrush, 28, 12, 10, 10);
+            g.FillEllipse(greenBrush, 44, 12, 10, 10);
+        };
+
+        var lblTerminalTitle = new Label
+        {
+            Text = "bash — etsy-migration.log  (Canlı Dağıtım Konsolu)",
+            AutoSize = true,
+            Location = new Point(64, 9),
+            Font = new Font("Consolas", 9F, FontStyle.Regular),
+            ForeColor = Color.FromArgb(148, 163, 184)
+        };
+        pnlHeader.Controls.Add(lblTerminalTitle);
+
+        var pnlHeaderBtns = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Padding = new Padding(0, 6, 8, 0)
+        };
+        pnlHeaderBtns.Controls.Add(_btnCopyLog);
+        pnlHeaderBtns.Controls.Add(_btnClearLog);
+        pnlHeader.Controls.Add(pnlHeaderBtns);
+
+        card.Controls.Add(_txtLog);
+        card.Controls.Add(pnlHeader);
+
+        return card;
+    }
+
+    private ModernCardPanel CreateCardPanel(string title)
     {
         var panel = new ModernCardPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
-            Padding = new Padding(6),
-            Margin = new Padding(0, 0, 0, 8),
-            MinimumSize = new Size(0, minHeight)
+            CornerRadius = 10,
+            Padding = new Padding(12, 10, 12, 12),
+            Margin = new Padding(0, 0, 0, 10)
         };
 
         var lblTitle = new Label
         {
             Text = title,
             Dock = DockStyle.Top,
-            Height = 22,
-            Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
-            ForeColor = UiStyle.PrimaryColor,
-            Padding = new Padding(4, 2, 0, 0)
+            Height = 24,
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(129, 140, 248),
+            Padding = new Padding(2, 0, 0, 4)
         };
         panel.Controls.Add(lblTitle);
         return panel;
@@ -340,9 +708,9 @@ internal sealed class ShopVaultMigrationControl : UserControl
 
     private void HookEvents()
     {
-        _btnPresetHigh.Click += (_, _) => ApplyPreset(0);
-        _btnPresetStandard.Click += (_, _) => ApplyPreset(1);
-        _btnPresetClone.Click += (_, _) => ApplyPreset(2);
+        _cardTierHigh.Selected += (_, _) => ApplyPreset(0);
+        _cardTierStandard.Selected += (_, _) => ApplyPreset(1);
+        _cardTierClone.Selected += (_, _) => ApplyPreset(2);
 
         _btnVerifyShop.Click += async (_, _) => await LoadAndVerifyTargetShopAsync();
         _btnOpenApiSettings.Click += (_, _) =>
@@ -367,18 +735,28 @@ internal sealed class ShopVaultMigrationControl : UserControl
             _cts?.Cancel();
             AppendLog("[İPTAL TALEBİ] Kullanıcı transferi durdurdu.");
         };
+
+        _btnCopyLog.Click += (_, _) =>
+        {
+            if (!string.IsNullOrEmpty(_txtLog.Text))
+            {
+                Clipboard.SetText(_txtLog.Text);
+                AppendLog("[KONSOL] Konsol logları panoya kopyalandı.");
+            }
+        };
+
+        _btnClearLog.Click += (_, _) =>
+        {
+            _txtLog.Clear();
+            AppendLog("[KONSOL] Konsol temizlendi.");
+        };
     }
 
     private void ApplyPreset(int presetIndex)
     {
-        _btnPresetHigh.BackColor = presetIndex == 0 ? UiStyle.PrimaryColor : UiStyle.CardBackground;
-        _btnPresetHigh.ForeColor = presetIndex == 0 ? Color.White : UiStyle.TextDark;
-
-        _btnPresetStandard.BackColor = presetIndex == 1 ? UiStyle.PrimaryColor : UiStyle.CardBackground;
-        _btnPresetStandard.ForeColor = presetIndex == 1 ? Color.White : UiStyle.TextDark;
-
-        _btnPresetClone.BackColor = presetIndex == 2 ? UiStyle.PrimaryColor : UiStyle.CardBackground;
-        _btnPresetClone.ForeColor = presetIndex == 2 ? Color.White : UiStyle.TextDark;
+        _cardTierHigh.IsSelected = presetIndex == 0;
+        _cardTierStandard.IsSelected = presetIndex == 1;
+        _cardTierClone.IsSelected = presetIndex == 2;
 
         if (presetIndex == 0) // High Security
         {
@@ -432,7 +810,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
             _targetShopId = shopInfo.ShopId;
             _targetShopName = shopInfo.ShopName;
 
-            _lblShopStatus.Text = $"✅ Bağlandı: {shopInfo.ShopName} (ID: {shopInfo.ShopId}) - Aktarıma Hazır";
+            _lblShopStatus.Text = $"● Bağlandı: {shopInfo.ShopName} (#{shopInfo.ShopId}) — Aktarıma Hazır";
             _lblShopStatus.ForeColor = UiStyle.SuccessColor;
             AppendLog($"[HEDEF MAĞAZA DOĞRULANDI] {shopInfo.ShopName} (#{shopInfo.ShopId}) - URL: {shopInfo.ShopUrl}");
         }
@@ -605,5 +983,162 @@ internal sealed class ShopVaultMigrationControl : UserControl
         _txtLog.AppendText($"[{timestamp}] {message}{Environment.NewLine}");
         _txtLog.SelectionStart = _txtLog.TextLength;
         _txtLog.ScrollToCaret();
+    }
+
+    /// <summary>
+    /// Interactive, responsive Security Tier Card with glowing border and feature checklist.
+    /// </summary>
+    private sealed class SecurityTierCardControl : ModernCardPanel
+    {
+        private bool _isSelected;
+        private bool _isHovered;
+        private readonly Label _lblBadge = new();
+        private readonly Label _lblTitle = new();
+        private readonly Label _lblSubtitle = new();
+        private readonly Label _lblSelectButton = new();
+        private readonly FlowLayoutPanel _featuresFlow = new();
+
+        public int TierIndex { get; }
+        public event EventHandler? Selected;
+
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                _isSelected = value;
+                UpdateVisualState();
+            }
+        }
+
+        public SecurityTierCardControl(
+            int tierIndex,
+            string title,
+            string badgeText,
+            Color badgeBg,
+            Color badgeFg,
+            string subtitle,
+            (string Text, bool Included)[] features)
+        {
+            TierIndex = tierIndex;
+            CornerRadius = 12;
+            Padding = new Padding(12);
+            Cursor = Cursors.Hand;
+            DoubleBuffered = true;
+
+            _lblBadge.Text = badgeText.ToUpperInvariant();
+            _lblBadge.AutoSize = true;
+            _lblBadge.Font = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold);
+            _lblBadge.BackColor = badgeBg;
+            _lblBadge.ForeColor = badgeFg;
+            _lblBadge.Padding = new Padding(6, 2, 6, 2);
+            _lblBadge.Margin = new Padding(0, 0, 0, 4);
+
+            _lblTitle.Text = title;
+            _lblTitle.AutoSize = true;
+            _lblTitle.Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold);
+            _lblTitle.ForeColor = Color.White;
+            _lblTitle.Margin = new Padding(0, 2, 0, 2);
+
+            _lblSubtitle.Text = subtitle;
+            _lblSubtitle.AutoSize = true;
+            _lblSubtitle.Font = new Font("Segoe UI", 8.2F);
+            _lblSubtitle.ForeColor = UiStyle.TextMuted;
+            _lblSubtitle.Margin = new Padding(0, 0, 0, 8);
+
+            _featuresFlow.FlowDirection = FlowDirection.TopDown;
+            _featuresFlow.WrapContents = false;
+            _featuresFlow.AutoSize = true;
+            _featuresFlow.Margin = new Padding(0, 0, 0, 6);
+
+            foreach (var (featText, included) in features)
+            {
+                var lblFeat = new Label
+                {
+                    Text = $"{(included ? "✓" : "•")} {featText}",
+                    AutoSize = true,
+                    Font = new Font("Segoe UI", 8.2F),
+                    ForeColor = included ? Color.FromArgb(226, 232, 240) : Color.FromArgb(100, 116, 139),
+                    Margin = new Padding(0, 1, 0, 2)
+                };
+                _featuresFlow.Controls.Add(lblFeat);
+            }
+
+            _lblSelectButton.AutoSize = false;
+            _lblSelectButton.Dock = DockStyle.Bottom;
+            _lblSelectButton.Height = 28;
+            _lblSelectButton.TextAlign = ContentAlignment.MiddleCenter;
+            _lblSelectButton.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+            _lblSelectButton.Cursor = Cursors.Hand;
+
+            var contentFlow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.TopDown,
+                WrapContents = false,
+                AutoSize = true
+            };
+            contentFlow.Controls.Add(_lblBadge);
+            contentFlow.Controls.Add(_lblTitle);
+            contentFlow.Controls.Add(_lblSubtitle);
+            contentFlow.Controls.Add(_featuresFlow);
+
+            Controls.Add(contentFlow);
+            Controls.Add(_lblSelectButton);
+
+            BindEventsRecursively(this);
+            UpdateVisualState();
+        }
+
+        private void BindEventsRecursively(Control control)
+        {
+            control.Click += (_, _) => Selected?.Invoke(this, EventArgs.Empty);
+            control.MouseEnter += (_, _) => { _isHovered = true; UpdateVisualState(); };
+            control.MouseLeave += (_, _) => { _isHovered = false; UpdateVisualState(); };
+
+            foreach (Control child in control.Controls)
+            {
+                BindEventsRecursively(child);
+            }
+        }
+
+        private void UpdateVisualState()
+        {
+            if (_isSelected)
+            {
+                BorderColor = UiStyle.PrimaryColor;
+                CardColor = Color.FromArgb(30, 41, 59);
+                _lblSelectButton.Text = "✓ Seçili Profil";
+                _lblSelectButton.BackColor = UiStyle.PrimaryColor;
+                _lblSelectButton.ForeColor = Color.White;
+            }
+            else
+            {
+                BorderColor = _isHovered ? Color.FromArgb(99, 102, 241) : UiStyle.BorderColor;
+                CardColor = _isHovered ? Color.FromArgb(24, 32, 47) : Color.FromArgb(18, 24, 38);
+                _lblSelectButton.Text = "Bu Profili Seç";
+                _lblSelectButton.BackColor = Color.FromArgb(33, 45, 66);
+                _lblSelectButton.ForeColor = UiStyle.TextMuted;
+            }
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+            using var path = CreateRoundedRectanglePath(rect, CornerRadius);
+
+            using var fillBrush = new SolidBrush(CardColor);
+            g.FillPath(fillBrush, path);
+
+            float penWidth = _isSelected ? 2.2f : 1.2f;
+            using var borderPen = new Pen(BorderColor, penWidth);
+            g.DrawPath(borderPen, path);
+
+            base.OnPaint(e);
+        }
     }
 }
