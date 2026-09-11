@@ -38,9 +38,30 @@ try {
     Write-Host "[1/5] GitHub 'dev-latest' surumu indiriliyor..." -ForegroundColor Yellow
     if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force }
 
-    $webClient = New-Object System.Net.WebClient
-    $webClient.Headers.Add("User-Agent", "EtsyMarketPlace-VDS-Updater")
-    $webClient.DownloadFile($downloadUrl, $tempDownload)
+    $maxRetries = 4
+    $retryDelaySeconds = 8
+    $downloadSuccess = $false
+
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        try {
+            if ($attempt -gt 1) {
+                Write-Host "      [Deneme $attempt/$maxRetries] Yeniden deneniyor..." -ForegroundColor Yellow
+            }
+            $webClient = New-Object System.Net.WebClient
+            $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EtsyMarketPlace-VDS-Updater")
+            $webClient.DownloadFile($downloadUrl, $tempDownload)
+            $downloadSuccess = $true
+            break
+        } catch {
+            if ($attempt -lt $maxRetries) {
+                Write-Host "      [404/Bekleme] GitHub yeni surumu hazirliyor olabilir. $retryDelaySeconds sn bekleniyor..." -ForegroundColor DarkYellow
+                Start-Sleep -Seconds $retryDelaySeconds
+                $retryDelaySeconds += 5
+            } else {
+                throw $_
+            }
+        }
+    }
 
     $downloadedItem = Get-Item $tempDownload
     $fileSizeMb = [math]::Round($downloadedItem.Length / 1MB, 2)
