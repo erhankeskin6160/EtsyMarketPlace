@@ -41,6 +41,11 @@ public class Trending3DModel
     public int OpportunityScore { get; set; } = 50;     // 0 - 100
     public DateTime DiscoveredAtUtc { get; set; } = DateTime.UtcNow;
 
+    // Store Niche Fit & AI Matching
+    public int ShopFitScore { get; set; } = 50;          // 0 - 100%
+    public string ShopFitReason { get; set; } = string.Empty;
+    public bool IsShopNicheMatch => ShopFitScore >= 70;
+
     public bool IsGoldenOpportunity => OpportunityScore >= 80 && (EtsyCompetitionCount is >= 0 and <= 5);
 
     public string SafeModelUrl

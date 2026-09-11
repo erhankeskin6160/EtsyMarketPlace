@@ -240,5 +240,50 @@ public class Viral3DModelHunterTests
             Assert.False(string.IsNullOrWhiteSpace(m.ExternalId));
         }
     }
+
+    [Fact]
+    public void HeuristicShopNicheClassifier_ClassifiesFigureAndToyStore_Accurately()
+    {
+        var sampleListings = new List<ShopListingItem>
+        {
+            new() { Title = "Articulated Dragon 3D Print Toy Jointed Desk Pet", Category = "Toys & Games", Tags = ["dragon", "articulated", "toy", "fidget", "figure"] },
+            new() { Title = "DUMMY 13 Movable Action Figure Robot Companion", Category = "Toys & Games", Tags = ["dummy 13", "action figure", "robot", "jointed"] }
+        };
+
+        var profile = HeuristicShopNicheClassifier.Classify("3DActionStore", sampleListings);
+
+        Assert.Contains("Figür", profile.PrimaryNiche);
+        Assert.True(profile.AffinityKeywords.Contains("figure") || profile.AffinityKeywords.Contains("dragon"));
+        Assert.True(profile.ConfidenceScore >= 75);
+    }
+
+    [Fact]
+    public void CalculateShopFitScore_FigureStore_AwardsHighFitToArticulatedDragonAndDummy13()
+    {
+        var profile = ShopNicheProfile.CreateDefaultFigureAndToy("3DActionStore");
+
+        var dragonModel = new Trending3DModel
+        {
+            Title = "Articulated Dragon Flexible Print-in-Place Display Figure",
+            Category = "Toys & Figures",
+            Tags = ["Articulated Dragon", "Print in Place", "Fidget", "Toy"]
+        };
+
+        var planterModel = new Trending3DModel
+        {
+            Title = "Vortex Spiral Anti-Spill Mechanical Planter & Water Basin",
+            Category = "Home & Planters",
+            Tags = ["Planter", "Succulent", "Vase"]
+        };
+
+        var (dragonScore, dragonReason) = Viral3DModelHunterService.CalculateShopFitScore(dragonModel, profile);
+        var (planterScore, planterReason) = Viral3DModelHunterService.CalculateShopFitScore(planterModel, profile);
+
+        Assert.True(dragonScore >= 90, $"Dragon score should be >= 90, got {dragonScore}");
+        Assert.Contains("Mükemmel Uyum", dragonReason);
+
+        Assert.True(planterScore < 60, $"Planter score should be < 60, got {planterScore}");
+        Assert.Contains("Farklı Kategori", planterReason);
+    }
 }
 

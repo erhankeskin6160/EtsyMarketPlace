@@ -9,6 +9,7 @@ using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
 using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
+using EtsyMarketPlace.Infrastructure.Viral3DModels.Services;
 
 public sealed class ThingiverseTrendingScraper : I3DModelPlatformScraper
 {
@@ -55,9 +56,9 @@ public sealed class ThingiverseTrendingScraper : I3DModelPlatformScraper
                     string thingId = link.Substring(link.LastIndexOf("thing:", StringComparison.OrdinalIgnoreCase) + 6).Trim();
 
                     string enclosureUrl = item.Element("enclosure")?.Attribute("url")?.Value ?? "";
-                    string coverUrl = !string.IsNullOrWhiteSpace(enclosureUrl)
+                    string coverUrl = (!string.IsNullOrWhiteSpace(enclosureUrl) && !enclosureUrl.Contains("download:", StringComparison.OrdinalIgnoreCase) && !enclosureUrl.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
                         ? enclosureUrl
-                        : $"https://picsum.photos/seed/tv_{thingId}/600/450";
+                        : Viral3DModelAssetManager.GetAssetForModel(title);
 
                     int totalDl = 15000 + (index * 2400);
                     int dl24h = (int)Math.Round(totalDl * 0.12);
@@ -121,8 +122,8 @@ public sealed class ThingiverseTrendingScraper : I3DModelPlatformScraper
                 Description = "The iconic 3D printing benchmark and torture test boat. Designed by CreativeTools.se to test overhangs, bridging, and extrusion accuracy.",
                 AuthorName = "CreativeTools",
                 ModelPageUrl = "https://www.thingiverse.com/thing:763622",
-                PrimaryImageUrl = "https://picsum.photos/seed/tv763622/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/tv763622_2/600/450"],
+                PrimaryImageUrl = "asset://benchy.jpg",
+                GalleryImageUrls = ["asset://benchy.jpg"],
                 Tags = ["Benchy", "3DBenchy", "Calibration", "Torture Test", "Print Quality"],
                 Category = "Calibration & Tools",
                 Downloads24h = 4200,
@@ -147,8 +148,8 @@ public sealed class ThingiverseTrendingScraper : I3DModelPlatformScraper
                 Description = "Adorable print-in-place articulated mini octopus with moving tentacles. No assembly and no support material required.",
                 AuthorName = "McGybeer",
                 ModelPageUrl = "https://www.thingiverse.com/thing:3495390",
-                PrimaryImageUrl = "https://picsum.photos/seed/tv3495390/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/tv3495390_2/600/450"],
+                PrimaryImageUrl = "asset://octopus.jpg",
+                GalleryImageUrls = ["asset://octopus.jpg"],
                 Tags = ["Articulated Octopus", "Desk Toy", "Fidget", "Print in Place", "Desk Pet"],
                 Category = "Toys & Figures",
                 Downloads24h = 3600,
@@ -173,8 +174,8 @@ public sealed class ThingiverseTrendingScraper : I3DModelPlatformScraper
                 Description = "High-precision print-in-place dragon with fluid articulated segments. Perfect for silk and rainbow filament display decor.",
                 AuthorName = "FlexiFactory",
                 ModelPageUrl = "https://www.thingiverse.com/thing:4927236",
-                PrimaryImageUrl = "https://picsum.photos/seed/tv4927236/600/450",
-                GalleryImageUrls = ["https://picsum.photos/seed/tv4927236_2/600/450"],
+                PrimaryImageUrl = "asset://dragon.jpg",
+                GalleryImageUrls = ["asset://dragon.jpg"],
                 Tags = ["Flexi Dragon", "Articulated Dragon", "Print in Place", "Desk Decor", "Fidget"],
                 Category = "Toys & Figures",
                 Downloads24h = 2850,

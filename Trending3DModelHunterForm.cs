@@ -10,22 +10,69 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using EtsyMarketPlace.Application.Viral3DModels.Interfaces;
 using EtsyMarketPlace.Application.Viral3DModels.Services;
 using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
+using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Scrapers;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Services;
 using SimilarProductsWinForms.Controls;
+using SimilarProductsWinForms.Services;
 
 public sealed class Trending3DModelHunterForm : Form
 {
     private readonly Viral3DModelHunterService _hunterService;
+    private readonly IShopNicheAnalyzer _nicheAnalyzer = new ActiveAiShopNicheAnalyzer();
     private readonly HttpClient _imageHttpClient = new();
 
+    private ShopNicheProfile _activeShopProfile = ShopNicheProfile.CreateDefaultFigureAndToy();
     private List<Trending3DModel> _allModels = [];
     private Trending3DModel? _selectedModel;
     private CancellationTokenSource? _scanCts;
+
+    // Store Niche AI Ribbon
+    private readonly Panel _panelStoreNicheBanner = new()
+    {
+        Dock = DockStyle.Fill,
+        Height = 44,
+        BackColor = Color.FromArgb(17, 24, 39),
+        Padding = new Padding(12, 6, 12, 6),
+        Margin = new Padding(0, 0, 0, 6)
+    };
+
+    private readonly Label _lblStoreNicheText = new()
+    {
+        AutoSize = true,
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
+        Text = "🏪 Aktif Mağaza Nişi: 🎮 Eklemli Figür, Oyuncak & Fidget Modeller (%96 AI Güveni)",
+        Margin = new Padding(0, 5, 10, 0)
+    };
+
+    private readonly Label _lblStoreAiBadge = new()
+    {
+        AutoSize = true,
+        ForeColor = Color.FromArgb(167, 139, 250),
+        BackColor = Color.FromArgb(30, 27, 75),
+        Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+        Padding = new Padding(6, 4, 6, 4),
+        Margin = new Padding(0, 4, 10, 0),
+        Text = "🤖 Yapay Zeka Radarı"
+    };
+
+    private readonly ModernButtonControl _btnReanalyzeNiche = new()
+    {
+        Text = "⚡ AI ile Mağazamı Tara",
+        Width = 175,
+        Height = 30,
+        NormalColor = Color.FromArgb(79, 70, 229),
+        HoverColor = Color.FromArgb(99, 102, 241),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+        Cursor = Cursors.Hand
+    };
 
     // KPI Tiles
     private readonly ModernKpiTile _kpiPlatforms = new() { Title = "AKTİF PLATFORMLAR", Value = "5", TrendText = "Bambu/Creality/Prusa", IsPositive = true, Width = 230 };
@@ -49,7 +96,17 @@ public sealed class Trending3DModelHunterForm : Form
         AutoSize = true,
         ForeColor = UiStyle.TextDark,
         Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-        Margin = new Padding(12, 6, 12, 0)
+        Margin = new Padding(10, 6, 8, 0)
+    };
+
+    private readonly CheckBox _chkShopNicheOnly = new()
+    {
+        Text = "🎯 Yalnızca Mağazama Uygun (%70+ Uyum)",
+        Checked = false,
+        AutoSize = true,
+        ForeColor = Color.FromArgb(251, 191, 36),
+        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+        Margin = new Padding(8, 6, 12, 0)
     };
 
     private readonly TextBox _txtSearch = new()
@@ -140,6 +197,26 @@ public sealed class Trending3DModelHunterForm : Form
         BackColor = Color.FromArgb(20, 35, 55),
         Padding = new Padding(8, 6, 8, 6),
         MaximumSize = new Size(310, 0),
+        Margin = new Padding(0, 0, 0, 8)
+    };
+
+    private readonly Label _lblAiAdviceHeader = new()
+    {
+        Text = "🤖 AI MAĞAZA TAVSİYESİ",
+        AutoSize = true,
+        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+        ForeColor = Color.FromArgb(167, 139, 250),
+        Margin = new Padding(0, 4, 0, 2)
+    };
+
+    private readonly Label _lblAiAdviceBody = new()
+    {
+        AutoSize = true,
+        Font = new Font("Segoe UI", 8.8F),
+        ForeColor = Color.FromArgb(226, 232, 240),
+        BackColor = Color.FromArgb(24, 30, 52),
+        Padding = new Padding(8, 8, 8, 8),
+        MaximumSize = new Size(310, 0),
         Margin = new Padding(0, 0, 0, 10)
     };
 
@@ -223,12 +300,13 @@ public sealed class Trending3DModelHunterForm : Form
         var mainLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 3,
+            RowCount = 4,
             ColumnCount = 1,
             Padding = new Padding(12),
             BackColor = UiStyle.BackgroundColor
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 106)); // KPI strip
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));  // Store Niche AI Ribbon
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));  // Toolbar
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Master-Detail Split
 
@@ -246,7 +324,20 @@ public sealed class Trending3DModelHunterForm : Form
         kpiFlow.Controls.Add(_kpiCommercial);
         mainLayout.Controls.Add(kpiFlow, 0, 0);
 
-        // 2. TOOLBAR
+        // 2. STORE NICHE AI BANNER
+        var bannerFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false
+        };
+        bannerFlow.Controls.Add(_lblStoreNicheText);
+        bannerFlow.Controls.Add(_lblStoreAiBadge);
+        bannerFlow.Controls.Add(_btnReanalyzeNiche);
+        _panelStoreNicheBanner.Controls.Add(bannerFlow);
+        mainLayout.Controls.Add(_panelStoreNicheBanner, 0, 1);
+
+        // 3. TOOLBAR
         var toolbar = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -257,10 +348,11 @@ public sealed class Trending3DModelHunterForm : Form
         toolbar.Controls.Add(new Label { Text = "Platform:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 6, 4, 0), Font = new Font("Segoe UI Semibold", 9F) });
         toolbar.Controls.Add(_cboPlatform);
         toolbar.Controls.Add(_chkCommercialOnly);
+        toolbar.Controls.Add(_chkShopNicheOnly);
         toolbar.Controls.Add(_txtSearch);
         toolbar.Controls.Add(_btnScan);
         toolbar.Controls.Add(_lblEngineBadge);
-        mainLayout.Controls.Add(toolbar, 0, 1);
+        mainLayout.Controls.Add(toolbar, 0, 2);
 
         // Populate Platform combo
         _cboPlatform.Items.Add("Tüm Platformlar (Hepsi)");
@@ -271,7 +363,7 @@ public sealed class Trending3DModelHunterForm : Form
         _cboPlatform.Items.Add("⚙️ Thingiverse");
         _cboPlatform.SelectedIndex = 0;
 
-        // 3. MASTER-DETAIL SPLIT
+        // 4. MASTER-DETAIL SPLIT
         var split = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -319,12 +411,15 @@ public sealed class Trending3DModelHunterForm : Form
         drawerStack.Controls.Add(_lblModelTitle);
         drawerStack.Controls.Add(_lblAuthor);
 
+        drawerStack.Controls.Add(_lblAiAdviceHeader);
+        drawerStack.Controls.Add(_lblAiAdviceBody);
+
         drawerStack.Controls.Add(new Label
         {
             Text = "🖨️ 3D Baskı & Dilimleme Profili:",
             Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
             ForeColor = UiStyle.AccentColor,
-            Margin = new Padding(0, 6, 0, 2)
+            Margin = new Padding(0, 4, 0, 2)
         });
         drawerStack.Controls.Add(_lblPrintSpecs);
 
@@ -333,7 +428,7 @@ public sealed class Trending3DModelHunterForm : Form
             Text = "💎 Etsy Pazar Fırsatı & Kâr Analizi:",
             Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
             ForeColor = Color.FromArgb(52, 211, 153),
-            Margin = new Padding(0, 6, 0, 2)
+            Margin = new Padding(0, 4, 0, 2)
         });
         drawerStack.Controls.Add(_lblEtsyArbitrage);
 
@@ -344,7 +439,7 @@ public sealed class Trending3DModelHunterForm : Form
         drawer.Controls.Add(drawerStack);
         split.Controls.Add(drawer, 1, 0);
 
-        mainLayout.Controls.Add(split, 0, 2);
+        mainLayout.Controls.Add(split, 0, 3);
         Controls.Add(mainLayout);
     }
 
@@ -380,6 +475,7 @@ public sealed class Trending3DModelHunterForm : Form
             new object[] { true });
 
         _grid.Columns.Add("colPlatform", "Platform");
+        _grid.Columns.Add("colShopFit", "🎯 Mağaza Uyumu");
         _grid.Columns.Add("colTitle", "Model Başlığı & Tasarım");
         _grid.Columns.Add("colVelocity", "24s İndirme");
         _grid.Columns.Add("colDelta", "📈 İvme / 24s Büyüme");
@@ -388,15 +484,16 @@ public sealed class Trending3DModelHunterForm : Form
         _grid.Columns.Add("colCompetition", "Etsy Rekabeti");
         _grid.Columns.Add("colScore", "Fırsat Skoru");
 
-        _grid.Columns["colPlatform"]!.Width = 120;
+        _grid.Columns["colPlatform"]!.Width = 115;
+        _grid.Columns["colShopFit"]!.Width = 135;
         _grid.Columns["colTitle"]!.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         _grid.Columns["colTitle"]!.MinimumWidth = 230;
         _grid.Columns["colVelocity"]!.Width = 100;
         _grid.Columns["colDelta"]!.Width = 145;
         _grid.Columns["colPrints"]!.Width = 105;
-        _grid.Columns["colLicense"]!.Width = 140;
-        _grid.Columns["colCompetition"]!.Width = 130;
-        _grid.Columns["colScore"]!.Width = 110;
+        _grid.Columns["colLicense"]!.Width = 135;
+        _grid.Columns["colCompetition"]!.Width = 125;
+        _grid.Columns["colScore"]!.Width = 105;
 
         _grid.SelectionChanged += (_, _) => OnGridRowSelected();
     }
@@ -405,9 +502,11 @@ public sealed class Trending3DModelHunterForm : Form
     {
         _cboPlatform.SelectedIndexChanged += (_, _) => FilterModels();
         _chkCommercialOnly.CheckedChanged += (_, _) => FilterModels();
+        _chkShopNicheOnly.CheckedChanged += (_, _) => FilterModels();
         _txtSearch.TextChanged += (_, _) => FilterModels();
 
         _btnScan.Click += async (_, _) => await RunScanAsync();
+        _btnReanalyzeNiche.Click += async (_, _) => await ReanalyzeShopNicheAsync();
 
         _btnOpenSourcePage.Click += (_, _) =>
         {
@@ -452,6 +551,7 @@ public sealed class Trending3DModelHunterForm : Form
                              $"Kaynak: {_selectedModel.Platform} - {_selectedModel.ModelPageUrl}\n" +
                              $"Lisans: {_selectedModel.License.LicenseName} (Ticari: {_selectedModel.License.IsCommercialAllowed})\n" +
                              $"Filament: {_selectedModel.PrintSpecs.FilamentGrams}g PLA (~{_selectedModel.PrintSpecs.FormattedPrintTime})\n" +
+                             $"Mağaza Uyumu: %{_selectedModel.ShopFitScore} ({_selectedModel.ShopFitReason})\n" +
                              $"Tavsiye Fiyat: $29.90 USD (Kâr: ~$21.40)\n" +
                              $"Etiketler: {string.Join(", ", _selectedModel.Tags)}";
 
@@ -459,6 +559,7 @@ public sealed class Trending3DModelHunterForm : Form
             MessageBox.Show(
                 this,
                 $"'{_selectedModel.Title}' modeli için Etsy listeleme şablonu hazırlandı ve panoya kopyalandı!\n\n" +
+                $"• Mağaza Uyumu: %{_selectedModel.ShopFitScore}\n" +
                 $"• Tavsiye Fiyat: $29.90 USD\n" +
                 $"• Tahmini Baskı Süresi: {_selectedModel.PrintSpecs.FormattedPrintTime}\n" +
                 $"• Filament: {_selectedModel.PrintSpecs.FilamentGrams}g\n\n" +
@@ -504,7 +605,10 @@ public sealed class Trending3DModelHunterForm : Form
             _scanCts?.Cancel();
             _scanCts = new CancellationTokenSource();
 
-            _allModels = (await _hunterService.ScanTrendingModelsAsync(ct: _scanCts.Token)).ToList();
+            _allModels = (await _hunterService.ScanTrendingModelsAsync(
+                shopProfile: _activeShopProfile,
+                shopNicheOnly: _chkShopNicheOnly.Checked,
+                ct: _scanCts.Token)).ToList();
 
             UpdateKpis();
             FilterModels();
@@ -518,6 +622,59 @@ public sealed class Trending3DModelHunterForm : Form
             _btnScan.Enabled = true;
             _btnScan.Text = "🔄 Platformları Şimdi Tara";
         }
+    }
+
+    private async Task ReanalyzeShopNicheAsync()
+    {
+        try
+        {
+            _btnReanalyzeNiche.Enabled = false;
+            _btnReanalyzeNiche.Text = "⏳ AI İnceliyor...";
+
+            // Representative active shop inventory to analyze
+            var sampleListings = new List<ShopListingItem>
+            {
+                new() { Title = "Articulated Dragon 3D Print Toy Jointed Desk Pet", Category = "Toys & Games", Tags = ["dragon", "articulated", "toy", "fidget", "3d print", "figure"] },
+                new() { Title = "DUMMY 13 Movable Action Figure Robot Desk Companion", Category = "Toys & Games", Tags = ["dummy 13", "action figure", "robot", "jointed", "desk toy"] },
+                new() { Title = "Cute Articulated Mini Octopus Print in Place Desk Toy", Category = "Toys & Games", Tags = ["octopus", "fidget", "desk toy", "cute toy", "articulated"] },
+                new() { Title = "Custom Flexi Animal Figurine 3D Printed Desk Decor", Category = "Art & Collectibles", Tags = ["figurine", "collectible", "flexi", "pet", "toy"] },
+                new() { Title = "Fantasy Warrior Tabletop RPG Mini Figure Unpainted", Category = "Toys & Games", Tags = ["miniature", "rpg", "figure", "tabletop", "dnd"] }
+            };
+
+            var profile = await _nicheAnalyzer.AnalyzeShopNicheAsync("3DArtDesignsStore", sampleListings);
+            _activeShopProfile = profile;
+
+            UpdateStoreNicheBanner();
+            await RunScanAsync();
+
+            MessageBox.Show(
+                this,
+                $"Mağaza DNA'nız başarıyla analiz edildi!\n\n" +
+                $"• Tespit Edilen Niş: {profile.PrimaryNiche}\n" +
+                $"• Yapay Zeka: {profile.ActiveAiProviderName}\n" +
+                $"• Güven Oranı: %{profile.ConfidenceScore}\n" +
+                $"• Hedef Kitle: {profile.TargetAudience}\n\n" +
+                $"3D Modeller mağazanızın bu profiline göre yeniden puanlandı!",
+                "Mağaza Niş Analizi Tamamlandı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Mağaza niş analizi sırasında uyarı: {ex.Message}", "AI Analiz Uyarısı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _btnReanalyzeNiche.Enabled = true;
+            _btnReanalyzeNiche.Text = "⚡ AI ile Mağazamı Tara";
+        }
+    }
+
+    private void UpdateStoreNicheBanner()
+    {
+        if (_activeShopProfile == null) return;
+        _lblStoreNicheText.Text = $"🏪 Aktif Mağaza Nişi: {_activeShopProfile.PrimaryNiche} (%{_activeShopProfile.ConfidenceScore} AI Güveni)";
+        _lblStoreAiBadge.Text = $"🤖 {_activeShopProfile.ActiveAiProviderName}";
     }
 
     private void UpdateKpis()
@@ -557,6 +714,11 @@ public sealed class Trending3DModelHunterForm : Form
             query = query.Where(m => m.License.IsCommercialAllowed);
         }
 
+        if (_chkShopNicheOnly.Checked)
+        {
+            query = query.Where(m => m.IsShopNicheMatch);
+        }
+
         string term = _txtSearch.Text.Trim();
         if (!string.IsNullOrWhiteSpace(term))
         {
@@ -584,6 +746,10 @@ public sealed class Trending3DModelHunterForm : Form
                 _ => m.Platform.ToString()
             };
 
+            string fitText = m.ShopFitScore >= 90
+                ? $"⭐ %{m.ShopFitScore} (Mükemmel)"
+                : (m.ShopFitScore >= 70 ? $"⚡ %{m.ShopFitScore} (Yüksek)" : $"⚪ %{m.ShopFitScore} (Düşük)");
+
             string compText = m.EtsyCompetitionCount == 0
                 ? "💎 0 Satıcı (Boş Pazar!)"
                 : (m.EtsyCompetitionCount <= 3 ? $"🔥 {m.EtsyCompetitionCount} Satıcı (Düşük)" : $"⚠️ {m.EtsyCompetitionCount} Satıcı");
@@ -596,6 +762,7 @@ public sealed class Trending3DModelHunterForm : Form
 
             int rowIdx = _grid.Rows.Add(
                 platformText,
+                fitText,
                 m.Title,
                 $"+{m.Downloads24h:N0}",
                 deltaText,
@@ -604,6 +771,22 @@ public sealed class Trending3DModelHunterForm : Form
                 compText,
                 $"⭐ {m.OpportunityScore} / 100"
             );
+
+            // Color code store fit column
+            var fitCell = _grid.Rows[rowIdx].Cells["colShopFit"];
+            if (m.ShopFitScore >= 90)
+            {
+                fitCell.Style.ForeColor = Color.FromArgb(52, 211, 153); // Emerald Green
+            }
+            else if (m.ShopFitScore >= 70)
+            {
+                fitCell.Style.ForeColor = Color.FromArgb(56, 189, 248); // Sky Blue
+            }
+            else
+            {
+                fitCell.Style.ForeColor = Color.FromArgb(148, 163, 184); // Slate Muted
+            }
+
             _grid.Rows[rowIdx].Tag = m;
         }
 
@@ -635,6 +818,11 @@ public sealed class Trending3DModelHunterForm : Form
             _lblLicenseBadge.ForeColor = Color.FromArgb(245, 158, 11);
         }
 
+        _lblAiAdviceHeader.Text = $"🤖 AI MAĞAZA TAVSİYESİ (%{m.ShopFitScore} Uyum)";
+        _lblAiAdviceBody.Text = $"{m.ShopFitReason}\n\n" +
+                                $"🎯 Mağaza Nişiniz: {_activeShopProfile.PrimaryNiche}\n" +
+                                $"👥 Hedef Kitle: {_activeShopProfile.TargetAudience}";
+
         string velocityStatus = m.IsDeltaAccelerating ? "🔥 HIZLI İVME (Viral Yükselişte)" : "Dengeli Talep";
         _lblPrintSpecs.Text = $"• 📈 Zaman Serisi İvmesi: +{m.HourlyVelocity:N1} indirme/saat (%{m.GrowthRatePercentage:N1} büyüme)\n" +
                               $"• ⚡ Trend Durumu: {velocityStatus}\n" +
@@ -661,20 +849,92 @@ public sealed class Trending3DModelHunterForm : Form
         {
             if (string.IsNullOrWhiteSpace(imageUrl))
             {
-                _picHero.Image = null;
+                _picHero.Image = CreateFallbackMeshBitmap(310, 200, _selectedModel?.Title ?? "3D Model");
                 return;
             }
 
-            var bytes = await _imageHttpClient.GetByteArrayAsync(imageUrl);
-            using var ms = new MemoryStream(bytes);
-            var img = Image.FromStream(ms);
-            var oldImg = _picHero.Image;
-            _picHero.Image = img;
-            oldImg?.Dispose();
+            // 1. Resolve via Viral3DModelAssetManager (Local Bundled High-Res 3D Render)
+            string? localAsset = Viral3DModelAssetManager.ResolveLocalAssetPath(imageUrl);
+            if (localAsset != null && File.Exists(localAsset))
+            {
+                var fileBytes = await File.ReadAllBytesAsync(localAsset);
+                using var msLocal = new MemoryStream(fileBytes);
+                var img = Image.FromStream(msLocal);
+                var oldImg = _picHero.Image;
+                _picHero.Image = (Image)img.Clone();
+                oldImg?.Dispose();
+                return;
+            }
+
+            // 2. If it's a direct web URL (and not picsum)
+            if ((imageUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                 imageUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
+                !imageUrl.Contains("picsum", StringComparison.OrdinalIgnoreCase))
+            {
+                var bytes = await _imageHttpClient.GetByteArrayAsync(imageUrl);
+                using var ms = new MemoryStream(bytes);
+                var img = Image.FromStream(ms);
+                var oldImg = _picHero.Image;
+                _picHero.Image = (Image)img.Clone();
+                oldImg?.Dispose();
+                return;
+            }
+
+            // 3. Fallback to model-matched asset from catalog
+            string matchedAsset = Viral3DModelAssetManager.GetAssetForModel(_selectedModel?.Title ?? "");
+            string? fallbackPath = Viral3DModelAssetManager.ResolveLocalAssetPath(matchedAsset);
+            if (fallbackPath != null && File.Exists(fallbackPath))
+            {
+                var fileBytes = await File.ReadAllBytesAsync(fallbackPath);
+                using var msLocal = new MemoryStream(fileBytes);
+                var img = Image.FromStream(msLocal);
+                var oldImg = _picHero.Image;
+                _picHero.Image = (Image)img.Clone();
+                oldImg?.Dispose();
+                return;
+            }
+
+            // 4. Safe procedural 3D wireframe mesh canvas
+            _picHero.Image = CreateFallbackMeshBitmap(310, 200, _selectedModel?.Title ?? "3D Model");
         }
         catch
         {
-            _picHero.Image = null;
+            _picHero.Image = CreateFallbackMeshBitmap(310, 200, _selectedModel?.Title ?? "3D Model");
         }
+    }
+
+    private static Bitmap CreateFallbackMeshBitmap(int width, int height, string title)
+    {
+        var bmp = new Bitmap(width, height);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.Clear(Color.FromArgb(15, 23, 42));
+
+        using var pen = new Pen(Color.FromArgb(99, 102, 241), 2);
+        using var fillBrush = new SolidBrush(Color.FromArgb(30, 41, 75));
+        using var textBrush = new SolidBrush(Color.FromArgb(203, 213, 225));
+        using var font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+
+        int cx = width / 2;
+        int cy = height / 2 - 14;
+        int s = 42;
+
+        Point[] topFace = [new(cx, cy - s), new(cx + s, cy - s / 2), new(cx, cy), new(cx - s, cy - s / 2)];
+        Point[] leftFace = [new(cx - s, cy - s / 2), new(cx, cy), new(cx, cy + s), new(cx - s, cy + s / 2)];
+        Point[] rightFace = [new(cx, cy), new(cx + s, cy - s / 2), new(cx + s, cy + s / 2), new(cx, cy + s)];
+
+        g.FillPolygon(fillBrush, topFace);
+        g.FillPolygon(new SolidBrush(Color.FromArgb(24, 30, 60)), leftFace);
+        g.FillPolygon(new SolidBrush(Color.FromArgb(20, 25, 50)), rightFace);
+
+        g.DrawPolygon(pen, topFace);
+        g.DrawPolygon(pen, leftFace);
+        g.DrawPolygon(pen, rightFace);
+
+        var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+        string displayTitle = title.Length > 28 ? title.Substring(0, 25) + "..." : title;
+        g.DrawString($"3D Model Preview\n{displayTitle}", font, textBrush, new RectangleF(10, height - 42, width - 20, 36), sf);
+
+        return bmp;
     }
 }

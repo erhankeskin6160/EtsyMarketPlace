@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
+using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
 
 public sealed class Viral3DModelHunterService
 {
@@ -27,12 +28,14 @@ public sealed class Viral3DModelHunterService
 
     /// <summary>
     /// Scans all active 3D printing platforms in parallel, calculates delta-velocity from SQLite snapshots,
-    /// checks Etsy competition with anti-bot throttling, and ranks models by opportunity score.
+    /// checks Etsy competition with anti-bot throttling, calculates store niche compatibility, and ranks models.
     /// </summary>
     public async Task<IReadOnlyList<Trending3DModel>> ScanTrendingModelsAsync(
         ModelPlatformType? platformFilter = null,
         bool commercialOnly = false,
         int minOpportunityScore = 0,
+        ShopNicheProfile? shopProfile = null,
+        bool shopNicheOnly = false,
         CancellationToken ct = default)
     {
         var targetScrapers = platformFilter.HasValue
@@ -73,8 +76,7 @@ public sealed class Viral3DModelHunterService
             }
         }
 
-        // 2. Intelligent Etsy Competition Verification:
-        // Prioritize commercial models & models with high velocity to prevent triggering Datadome rate limits
+        // 2. Intelligent Etsy Competition Verification & Opportunity Calculation
         foreach (var model in allModels)
         {
             if (model.EtsyCompetitionCount < 0 && _competitionChecker != null)
@@ -92,9 +94,17 @@ public sealed class Viral3DModelHunterService
             }
 
             model.OpportunityScore = CalculateOpportunityScore(model);
+
+            // 3. Store Niche Matching (if shop profile is provided)
+            if (shopProfile != null)
+            {
+                var (fitScore, fitReason) = CalculateShopFitScore(model, shopProfile);
+                model.ShopFitScore = fitScore;
+                model.ShopFitReason = fitReason;
+            }
         }
 
-        // 3. Apply filters
+        // 4. Apply filters
         var query = allModels.AsEnumerable();
 
         if (commercialOnly)
@@ -105,6 +115,19 @@ public sealed class Viral3DModelHunterService
         if (minOpportunityScore > 0)
         {
             query = query.Where(m => m.OpportunityScore >= minOpportunityScore);
+        }
+
+        if (shopNicheOnly)
+        {
+            query = query.Where(m => m.IsShopNicheMatch);
+        }
+
+        if (shopProfile != null)
+        {
+            return query.OrderByDescending(m => m.ShopFitScore)
+                        .ThenByDescending(m => m.OpportunityScore)
+                        .ThenByDescending(m => m.Downloads24h)
+                        .ToList();
         }
 
         return query.OrderByDescending(m => m.OpportunityScore)
@@ -172,5 +195,82 @@ public sealed class Viral3DModelHunterService
         }
 
         return Math.Clamp((int)Math.Round(score), 5, 99);
+    }
+
+    /// <summary>
+    /// Calculates the compatibility percentage (0 - 100%) and AI strategic justification
+    /// between a 3D model and the active Etsy store's niche profile.
+    /// </summary>
+    public static (int Score, string Reason) CalculateShopFitScore(Trending3DModel model, ShopNicheProfile profile)
+    {
+        if (profile == null || profile.AffinityKeywords.Count == 0)
+        {
+            return (50, "Genel 3D model.");
+        }
+
+        var modelWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string textSource = $"{model.Title} {model.Category} {model.Description}";
+        foreach (var w in textSource.Split([' ', ',', '-', '/', '|', '(', ')', '.', ':', ';'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (w.Length >= 3) modelWords.Add(w);
+        }
+        foreach (var tag in model.Tags)
+        {
+            modelWords.Add(tag);
+        }
+
+        int matchCount = 0;
+        var matchedKeywords = new List<string>();
+
+        foreach (var kw in profile.AffinityKeywords)
+        {
+            if (modelWords.Contains(kw) || model.Title.Contains(kw, StringComparison.OrdinalIgnoreCase))
+            {
+                matchCount++;
+                matchedKeywords.Add(kw);
+            }
+        }
+
+        int fitScore;
+        string reason;
+
+        if (matchCount >= 3)
+        {
+            fitScore = Math.Min(99, 88 + (matchCount * 3));
+            reason = $"✅ Mükemmel Uyum: Mağazanızın nişiyle ({string.Join(", ", matchedKeywords.Take(3))}) tam örtüşüyor! Mevcut müşterileriniz için ideal.";
+        }
+        else if (matchCount >= 1)
+        {
+            fitScore = 75 + (matchCount * 5);
+            reason = $"⚡ Yüksek Uyum: Mağazanızdaki '{string.Join(", ", matchedKeywords)}' temasıyla son derece uyumlu tamamlayıcı ürün.";
+        }
+        else
+        {
+            string catLower = (model.Category ?? "").ToLowerInvariant();
+            string nicheLower = (profile.PrimaryNiche ?? "").ToLowerInvariant();
+
+            if (nicheLower.Contains("figür") && (catLower.Contains("toy") || catLower.Contains("figure") || catLower.Contains("props")))
+            {
+                fitScore = 72;
+                reason = "💡 Kategori Uyumu: Mağazanızın oyuncak/figür kitle profiline sunulabilir.";
+            }
+            else if (nicheLower.Contains("saksı") && catLower.Contains("planter"))
+            {
+                fitScore = 80;
+                reason = "💡 Kategori Uyumu: Ev & saksı koleksiyonunuza uygun.";
+            }
+            else if (nicheLower.Contains("düzenleyici") && (catLower.Contains("organization") || catLower.Contains("desk")))
+            {
+                fitScore = 80;
+                reason = "💡 Kategori Uyumu: Düzenleyici ve masaüstü koleksiyonunuza uygun.";
+            }
+            else
+            {
+                fitScore = Math.Max(25, 45 - (Math.Abs(model.Title.GetHashCode()) % 15));
+                reason = $"⚠️ Farklı Kategori: Mağazanız '{profile.PrimaryNiche}' odaklıyken, bu model '{model.Category}' sınıfındadır.";
+            }
+        }
+
+        return (fitScore, reason);
     }
 }
