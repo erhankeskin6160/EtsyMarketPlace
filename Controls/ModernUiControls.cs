@@ -996,6 +996,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
     public ModernScrollPanel()
     {
+        SuspendLayout();
         AutoScroll = false;
         Margin = Padding.Empty;
         Padding = Padding.Empty;
@@ -1013,7 +1014,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
         };
         _scrollBar.ValueChanged += (_, _) =>
         {
-            if (_isSyncing || _content == null) return;
+            if (_isSyncing || _content == null || _viewport == null) return;
             _isSyncing = true;
             try
             {
@@ -1035,6 +1036,8 @@ public class ModernScrollPanel : Panel, IMessageFilter
             _isFilterRegistered = true;
         }
         catch { }
+
+        ResumeLayout(false);
     }
 
     public override Color BackColor
@@ -1071,7 +1074,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
     private void UpdateLayout()
     {
-        if (ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
+        if (_viewport == null || _scrollBar == null || ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
 
         int scrollBarW = 8;
         bool needBar = _scrollBar.Visible;
@@ -1098,6 +1101,8 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
     public void SetContent(Control content)
     {
+        if (_viewport == null || _scrollBar == null) return;
+
         _content = content;
         _viewport.Controls.Clear();
         _viewport.Controls.Add(content);
@@ -1120,7 +1125,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
     public void SyncScrollBarFromViewport()
     {
-        if (_isSyncing) return;
+        if (_isSyncing || _viewport == null || _scrollBar == null) return;
         _isSyncing = true;
         try
         {
@@ -1138,7 +1143,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
     public void RecalculateScroll()
     {
-        if (_content == null || ClientSize.Height <= 0) return;
+        if (_content == null || _viewport == null || _scrollBar == null || ClientSize.Height <= 0) return;
 
         Color effectiveBg = GetEffectiveParentBackColor();
         if (_viewport.BackColor != effectiveBg) _viewport.BackColor = effectiveBg;
