@@ -3,6 +3,7 @@ namespace SimilarProductsWinForms.Controls;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 /// <summary>
@@ -961,7 +962,39 @@ public class ModernGridScrollAdapter : IDisposable
 /// </summary>
 public class ModernScrollPanel : Panel, IMessageFilter
 {
-    private readonly Panel _viewport;
+    [DllImport("user32.dll")]
+    private static extern bool RedrawWindow(IntPtr hWnd, IntPtr lprcUpdate, IntPtr hrgnUpdate, uint flags);
+    private const uint RDW_INVALIDATE = 0x0001;
+    private const uint RDW_ALLCHILDREN = 0x0080;
+    private const uint RDW_UPDATENOW = 0x0100;
+    private const uint RDW_ERASE = 0x0004;
+
+    private sealed class ModernScrollViewport : Panel
+    {
+        public ModernScrollViewport()
+        {
+            SetStyle(
+                ControlStyles.UserPaint |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.ResizeRedraw,
+                true);
+            DoubleBuffered = true;
+            AutoScroll = false;
+            Margin = Padding.Empty;
+            Padding = Padding.Empty;
+            BackColor = UiStyle.CardBackground;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            Color bg = Parent is ModernScrollPanel p ? p.GetEffectiveParentBackColor() : UiStyle.CardBackground;
+            using var b = new SolidBrush(bg);
+            e.Graphics.FillRectangle(b, ClientRectangle);
+        }
+    }
+
+    private readonly ModernScrollViewport _viewport;
     private readonly ModernVScrollBar _scrollBar;
     private Control? _content;
     private bool _isFilterRegistered;
@@ -975,8 +1008,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw |
-            ControlStyles.SupportsTransparentBackColor,
+            ControlStyles.ResizeRedraw,
             true);
         DoubleBuffered = true;
         AutoScroll = false;
@@ -989,12 +1021,9 @@ public class ModernScrollPanel : Panel, IMessageFilter
         };
         _scrollBar.ValueChanged += (_, _) => UpdateContentPosition();
 
-        _viewport = new Panel
+        _viewport = new ModernScrollViewport
         {
-            Dock = DockStyle.Fill,
-            AutoScroll = false,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
+            Dock = DockStyle.Fill
         };
         _viewport.Resize += (_, _) => RecalculateScroll();
 
@@ -1016,7 +1045,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
         set { }
     }
 
-    private Color GetEffectiveParentBackColor()
+    public Color GetEffectiveParentBackColor()
     {
         Control? p = Parent;
         while (p != null)
@@ -1046,6 +1075,11 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
         content.Dock = DockStyle.None;
         content.Location = new Point(0, 0);
+
+        Color effectiveBg = GetEffectiveParentBackColor();
+        content.BackColor = effectiveBg;
+        EnableDoubleBufferingAndSolidBackground(content, effectiveBg);
+
         if (content is FlowLayoutPanel)
         {
             content.MaximumSize = new Size(_viewport.ClientSize.Width, 0);
@@ -1056,12 +1090,39 @@ public class ModernScrollPanel : Panel, IMessageFilter
         RecalculateScroll();
     }
 
+    private static void EnableDoubleBufferingAndSolidBackground(Control control, Color solidBg)
+    {
+        try
+        {
+            typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+                ?.SetValue(control, true, null);
+        }
+        catch { }
+
+        if (control is TableLayoutPanel or FlowLayoutPanel or Panel or GroupBox)
+        {
+            if (control.BackColor == Color.Transparent || control.BackColor == SystemColors.Control)
+            {
+                control.BackColor = solidBg;
+            }
+        }
+
+        foreach (Control child in control.Controls)
+        {
+            EnableDoubleBufferingAndSolidBackground(child, solidBg);
+        }
+    }
+
     public void RecalculateScroll()
     {
         if (_content == null || _viewport.ClientSize.Height <= 0) return;
 
         int targetW = _viewport.ClientSize.Width;
         if (targetW <= 0) return;
+
+        Color effectiveBg = GetEffectiveParentBackColor();
+        if (_content.BackColor != effectiveBg) _content.BackColor = effectiveBg;
+        EnableDoubleBufferingAndSolidBackground(_content, effectiveBg);
 
         if (_content is FlowLayoutPanel)
         {
@@ -1071,6 +1132,15 @@ public class ModernScrollPanel : Panel, IMessageFilter
         _content.PerformLayout();
 
         int contentH = _content.PreferredSize.Height;
+        foreach (Control c in _content.Controls)
+        {
+            if (c.Visible)
+            {
+                int bottom = c.Bottom + c.Margin.Bottom;
+                if (bottom > contentH) contentH = bottom;
+            }
+        }
+
         if (contentH <= 0 || contentH < _content.Height)
         {
             contentH = _content.Height;
@@ -1092,9 +1162,25 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
     private void UpdateContentPosition()
     {
-        if (_content != null)
+        if (_content == null) return;
+
+        int targetTop = -_scrollBar.Value;
+        if (_content.Top != targetTop)
         {
-            _content.Location = new Point(0, -_scrollBar.Value);
+            _content.SuspendLayout();
+            _content.Location = new Point(0, targetTop);
+            _content.ResumeLayout(false);
+
+            if (_viewport.IsHandleCreated)
+            {
+                RedrawWindow(_viewport.Handle, IntPtr.Zero, IntPtr.Zero,
+                    RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_ERASE);
+            }
+            else
+            {
+                _viewport.Invalidate(true);
+                _viewport.Update();
+            }
         }
     }
 

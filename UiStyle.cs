@@ -125,7 +125,10 @@ internal static class UiStyle
     {
         if (ctrl is Panel pnl && pnl.GetType() == typeof(Panel))
         {
-            pnl.BackColor = Color.Transparent;
+            if (pnl.BackColor == SystemColors.Control || pnl.BackColor == Color.Empty)
+            {
+                pnl.BackColor = Color.Transparent;
+            }
         }
         else if (ctrl is SimilarProductsWinForms.Controls.ModernCardPanel card)
         {
@@ -136,7 +139,10 @@ internal static class UiStyle
         {
             gb.Font = SemiboldBaseFont;
             gb.ForeColor = TextDark;
-            gb.BackColor = Color.Transparent;
+            if (gb.BackColor == SystemColors.Control || gb.BackColor == Color.Empty)
+            {
+                gb.BackColor = Color.Transparent;
+            }
             ApplyToControls(gb.Controls);
         }
         else if (ctrl is Label lbl)

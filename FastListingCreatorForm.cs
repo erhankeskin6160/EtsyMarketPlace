@@ -74,7 +74,7 @@ internal sealed class FastListingCreatorForm : Form
 
     // Custom Variation Pricing Controls
     private readonly CheckBox _chkCustomVariationPricing = new() { Text = "💲 Her varyasyona özel farklı fiyat & stok belirle", AutoSize = true };
-    private readonly TableLayoutPanel _pnlVariationPricing = new() { Dock = DockStyle.Top, Height = 230, Visible = false };
+    private readonly TableLayoutPanel _pnlVariationPricing = new() { Dock = DockStyle.Top, Height = 180, Visible = false };
     private readonly DataGridView _gridVariationPricing = new();
     private readonly Label _lblPriceRangeBadge = new() { AutoSize = true };
     private readonly Button _btnSyncBasePrice = new();
@@ -440,12 +440,13 @@ internal sealed class FastListingCreatorForm : Form
 
         var stack = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = new Padding(0)
         };
+        stack.ColumnStyles.Clear();
+        stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
         // --- SECTION 1: Temel Satış Bilgileri (Ürün Tipi, Fiyat, Stok) ---
         stack.Controls.Add(CreateSectionHeaderLabel("🏷️ Temel Satış Bilgileri"));
@@ -849,11 +850,12 @@ internal sealed class FastListingCreatorForm : Form
 
         var aiStack = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink
         };
+        aiStack.ColumnStyles.Clear();
+        aiStack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
         // Preset Chips
         var chipsPanel = new FlowLayoutPanel
