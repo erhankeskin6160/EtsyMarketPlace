@@ -107,6 +107,78 @@ public sealed class Hermes3DScoutAgent : IModelVerificationAgent
         return result;
     }
 
+    private readonly VisualBrowserAgentService _visualAgent = new();
+
+    public async Task<VerifiedModelResult> VerifyWithVisualBrowserAsync(
+        Trending3DModel model,
+        Action<string>? statusCallback = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        var result = new VerifiedModelResult
+        {
+            OriginalUrl = model.ModelPageUrl ?? string.Empty,
+            VerifiedUrl = model.ModelPageUrl ?? string.Empty,
+            VerifiedTitle = model.Title,
+            VerifiedAuthor = model.AuthorName,
+            VerifiedImageUrl = model.PrimaryImageUrl
+        };
+
+        // 1. IP & Trademark Copyright Risk Screening
+        CheckIpCopyrightRisk(model, result);
+
+        // 2. Visual Browser Autonomous Session
+        statusCallback?.Invoke("🚀 Canlı Chrome Ajanı başlatılıyor...");
+        var browserResult = await _visualAgent.SearchAndVerifyLiveAsync(model, statusCallback, ct);
+
+        result.IsVerified = browserResult.IsVerified;
+        if (!string.IsNullOrWhiteSpace(browserResult.VerifiedUrl))
+        {
+            result.VerifiedUrl = browserResult.VerifiedUrl;
+        }
+        if (!string.IsNullOrWhiteSpace(browserResult.VerifiedTitle))
+        {
+            result.VerifiedTitle = browserResult.VerifiedTitle;
+        }
+        if (!string.IsNullOrWhiteSpace(browserResult.VerifiedImageUrl))
+        {
+            result.VerifiedImageUrl = browserResult.VerifiedImageUrl;
+        }
+        result.AgentDiagnosticNotes = browserResult.AgentDiagnosticNotes;
+
+        // 3. Fallback to asset image if empty
+        if (string.IsNullOrWhiteSpace(result.VerifiedImageUrl) || result.VerifiedImageUrl.Contains("picsum", StringComparison.OrdinalIgnoreCase))
+        {
+            result.VerifiedImageUrl = Viral3DModelAssetManager.GetAssetForModel(model.Title);
+        }
+
+        // 4. Sync to Lake database
+        if (_lakeRepo != null && result.IsVerified)
+        {
+            model.ModelPageUrl = result.VerifiedUrl;
+            if (!string.IsNullOrWhiteSpace(result.VerifiedImageUrl))
+            {
+                model.PrimaryImageUrl = result.VerifiedImageUrl;
+            }
+            if (!string.IsNullOrWhiteSpace(result.VerifiedAuthor))
+            {
+                model.AuthorName = result.VerifiedAuthor;
+            }
+
+            try
+            {
+                await _lakeRepo.SaveOrUpdateModelsAsync([model], ct);
+            }
+            catch
+            {
+                // Non-critical database sync failure
+            }
+        }
+
+        return result;
+    }
+
     public Task<IReadOnlyList<Trending3DModel>> ScoutTrendingModelsAsync(string query, ModelPlatformType? platform = null, CancellationToken ct = default)
     {
         // Scouts and filters models from Atlas repository, applying agent live verification

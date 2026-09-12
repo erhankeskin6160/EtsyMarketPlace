@@ -681,23 +681,48 @@ public sealed class Trending3DModelHunterForm : Form
             try
             {
                 _btnVerifyWithAgent.Enabled = false;
-                _btnVerifyWithAgent.Text = "⏳ Ajan Doğruluyor...";
+                _btnVerifyWithAgent.Text = "⏳ Ajan Başlatılıyor...";
 
-                var verified = await _verificationAgent.VerifyAndHealModelAsync(_selectedModel);
+                _lblAgentStatusBadge.Visible = true;
+                _lblAgentStatusBadge.Text = "🤖 Canlı Tarayıcı Ajanı başlatılıyor (Chrome)...";
+                _lblAgentStatusBadge.BackColor = Color.FromArgb(30, 41, 59);
+                _lblAgentStatusBadge.ForeColor = Color.FromArgb(147, 197, 253);
 
-                _selectedModel.ModelPageUrl = verified.VerifiedUrl;
-                if (!string.IsNullOrWhiteSpace(verified.VerifiedImageUrl))
+                var verified = await _verificationAgent.VerifyWithVisualBrowserAsync(
+                    _selectedModel,
+                    status =>
+                    {
+                        if (InvokeRequired)
+                        {
+                            Invoke(() =>
+                            {
+                                _btnVerifyWithAgent.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
+                                _lblAgentStatusBadge.Text = status;
+                            });
+                        }
+                        else
+                        {
+                            _btnVerifyWithAgent.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
+                            _lblAgentStatusBadge.Text = status;
+                        }
+                    });
+
+                if (verified != null && !string.IsNullOrWhiteSpace(verified.VerifiedUrl))
+                {
+                    _selectedModel.ModelPageUrl = verified.VerifiedUrl;
+                }
+                if (verified != null && !string.IsNullOrWhiteSpace(verified.VerifiedImageUrl))
                 {
                     _selectedModel.PrimaryImageUrl = verified.VerifiedImageUrl;
                 }
-                if (!string.IsNullOrWhiteSpace(verified.VerifiedAuthor))
+                if (verified != null && !string.IsNullOrWhiteSpace(verified.VerifiedAuthor))
                 {
                     _selectedModel.AuthorName = verified.VerifiedAuthor;
                     _lblAuthor.Text = $"Tasarımcı: {_selectedModel.AuthorName} • {_selectedModel.Category}";
                 }
 
                 _lblAgentStatusBadge.Visible = true;
-                if (verified.HasIpCopyrightRisk)
+                if (verified?.HasIpCopyrightRisk == true)
                 {
                     _lblAgentStatusBadge.Text = verified.IpRiskWarning ?? "⚠️ Telif Uyarısı: Tescilli marka tespit edildi!";
                     _lblAgentStatusBadge.BackColor = Color.FromArgb(120, 53, 15);
@@ -705,7 +730,7 @@ public sealed class Trending3DModelHunterForm : Form
                 }
                 else
                 {
-                    _lblAgentStatusBadge.Text = $"✅ AI Ajanı Doğruladı:\n{verified.AgentDiagnosticNotes.Trim()}";
+                    _lblAgentStatusBadge.Text = $"✅ Canlı Ajan Doğruladı:\n{verified?.AgentDiagnosticNotes?.Trim()}";
                     _lblAgentStatusBadge.BackColor = Color.FromArgb(6, 78, 59);
                     _lblAgentStatusBadge.ForeColor = Color.FromArgb(52, 211, 153);
                 }
@@ -716,6 +741,8 @@ public sealed class Trending3DModelHunterForm : Form
             {
                 _lblAgentStatusBadge.Visible = true;
                 _lblAgentStatusBadge.Text = $"⚠️ Ajan Doğrulama Hatası: {ex.Message}";
+                _lblAgentStatusBadge.BackColor = Color.FromArgb(127, 29, 29);
+                _lblAgentStatusBadge.ForeColor = Color.FromArgb(254, 202, 202);
             }
             finally
             {

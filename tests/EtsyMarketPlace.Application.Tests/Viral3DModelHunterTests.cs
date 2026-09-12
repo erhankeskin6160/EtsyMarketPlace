@@ -584,7 +584,21 @@ public class Viral3DModelHunterTests
         Assert.Contains("Tescilli Marka Tespiti", result.IpRiskWarning);
         Assert.Contains("POKEMON", result.IpRiskWarning);
     }
+
+    [Fact]
+    public void VisualBrowserAgentService_DetectsInstalledBrowser_OrReturnsSafeFallback()
+    {
+        string? browser = EtsyMarketPlace.Infrastructure.Viral3DModels.Services.VisualBrowserAgentService.ResolveInstalledBrowserPath();
+        // Machine has Chrome installed as verified earlier
+        Assert.True(EtsyMarketPlace.Infrastructure.Viral3DModels.Services.VisualBrowserAgentService.IsBrowserAvailable);
+        Assert.NotNull(browser);
+        Assert.True(System.IO.File.Exists(browser));
+    }
+
+    [Fact]
+    public async Task HermesAgent_VerifyWithVisualBrowserAsync_ThrowsOnNullModel()
+    {
+        var agent = new EtsyMarketPlace.Infrastructure.Viral3DModels.Services.Hermes3DScoutAgent();
+        await Assert.ThrowsAsync<System.ArgumentNullException>(() => agent.VerifyWithVisualBrowserAsync(null!));
+    }
 }
-
-
-
