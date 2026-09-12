@@ -2,15 +2,15 @@ namespace EtsyMarketPlace.Infrastructure.Viral3DModels.Scrapers;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
-using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
-
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Protocols;
+using EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories;
 
 public sealed class MakerOnlineTrendingScraper : I3DModelPlatformScraper
 {
@@ -27,35 +27,14 @@ public sealed class MakerOnlineTrendingScraper : I3DModelPlatformScraper
 
     public Task<IReadOnlyList<Trending3DModel>> GetTrendingModelsAsync(int page = 1, CancellationToken ct = default)
     {
-        var models = new List<Trending3DModel>
-        {
-            new()
-            {
-                ExternalId = "mo-3104",
-                Platform = ModelPlatformType.MakerOnline,
-                Title = "Bioluminescent Crystal Cave LED Lamp with Diffuser Shroud",
-                Description = "Crystal geode lamp shell with internal hollow channel for USB LED fairy lights. Exquisite light dispersion with translucent PETG or resin.",
-                AuthorName = "AuraSculpts",
-                ModelPageUrl = "https://makeronline.com/en/search/model?keyword=Crystal+Cave+LED+Lamp",
-                PrimaryImageUrl = "asset://crystal_lamp.jpg",
-                GalleryImageUrls = ["asset://crystal_lamp.jpg"],
-                Tags = ["Crystal Lamp", "LED Night Light", "Geode Decor", "Gothic Room Decor", "Lithophane"],
-                Category = "Lighting & Lamps",
-                Downloads24h = 1890,
-                TotalDownloads = 8700,
-                PrintsCount = 1850,
-                LikesCount = 1320,
-                License = ModelLicenseInfo.Commercial("Anycubic MakerOnline Commercial"),
-                PrintSpecs = new PrintEstimation
-                {
-                    EstimatedPrintTimeMinutes = 310,
-                    FilamentGrams = 135.0
-                },
-                EtsyCompetitionCount = 1,
-                OpportunityScore = 97
-            }
-        };
-
+        var models = Viral3DModelAtlasRepository.GetByPlatform(ModelPlatformType.MakerOnline);
         return Task.FromResult<IReadOnlyList<Trending3DModel>>(models);
+    }
+
+    public Task<IReadOnlyList<Trending3DModel>> SearchModelsAsync(string query, int page = 1, int pageSize = 30, CancellationToken ct = default)
+    {
+        var results = Viral3DModelAtlasRepository.Search(query, ModelPlatformType.MakerOnline);
+        var pageItems = results.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return Task.FromResult<IReadOnlyList<Trending3DModel>>(pageItems);
     }
 }

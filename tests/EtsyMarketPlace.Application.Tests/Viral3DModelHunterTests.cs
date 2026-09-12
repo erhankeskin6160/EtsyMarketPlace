@@ -4,8 +4,10 @@ using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Viral3DModels.Services;
 using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
+using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
 using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Scrapers;
+using EtsyMarketPlace.Infrastructure.Viral3DModels.Services;
 using Xunit;
 
 public class Viral3DModelHunterTests
@@ -284,6 +286,77 @@ public class Viral3DModelHunterTests
 
         Assert.True(planterScore < 60, $"Planter score should be < 60, got {planterScore}");
         Assert.Contains("Farklı Kategori", planterReason);
+    }
+
+    [Fact]
+    public void Viral3DModelAtlasRepository_ContainsRichCatalogAcrossCategories()
+    {
+        var all = EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.Viral3DModelAtlasRepository.GetAllModels();
+        Assert.True(all.Count >= 25, $"Atlas should contain at least 25 models, got {all.Count}");
+
+        var dragons = EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.Viral3DModelAtlasRepository.Search("dragon");
+        Assert.NotEmpty(dragons);
+
+        var dice = EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.Viral3DModelAtlasRepository.Search("dice");
+        Assert.NotEmpty(dice);
+
+        var planters = EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.Viral3DModelAtlasRepository.Search("planter");
+        Assert.NotEmpty(planters);
+    }
+
+    [Fact]
+    public async Task SearchModelsAcrossPlatformsAsync_ReturnsFilteredResults()
+    {
+        var scrapers = new List<I3DModelPlatformScraper>
+        {
+            new MakerWorldTrendingScraper(),
+            new PrintablesTrendingScraper(),
+            new ThingiverseTrendingScraper()
+        };
+        var hunter = new Viral3DModelHunterService(scrapers);
+
+        var results = await hunter.SearchModelsAcrossPlatformsAsync("dragon", commercialOnly: true);
+
+        Assert.NotEmpty(results);
+        foreach (var m in results)
+        {
+            Assert.True(m.License.IsCommercialAllowed);
+            Assert.True(m.Title.Contains("dragon", System.StringComparison.OrdinalIgnoreCase) ||
+                        m.Tags.Any(t => t.Contains("dragon", System.StringComparison.OrdinalIgnoreCase)));
+        }
+    }
+
+    [Fact]
+    public async Task DeepScanByShopNicheAsync_PrioritizesMatchingShopModels()
+    {
+        var scrapers = new List<I3DModelPlatformScraper>
+        {
+            new MakerWorldTrendingScraper(),
+            new PrintablesTrendingScraper()
+        };
+        var hunter = new Viral3DModelHunterService(scrapers);
+        var profile = ShopNicheProfile.CreateDefaultFigureAndToy("MyToyShop");
+
+        var results = await hunter.DeepScanByShopNicheAsync(profile, commercialOnly: true);
+
+        Assert.NotEmpty(results);
+        Assert.True(results[0].ShopFitScore >= 80, $"Top result should have high shop fit score, got {results[0].ShopFitScore}");
+    }
+
+    [Fact]
+    public void Viral3DModelAssetManager_GetAssetForModel_ResolvesIntelligently()
+    {
+        string dummyAsset = Viral3DModelAssetManager.GetAssetForModel("DUMMY 13 Movable Robot");
+        Assert.Equal("asset://dummy13.jpg", dummyAsset);
+
+        string dragonAsset = Viral3DModelAssetManager.GetAssetForModel("Articulated Crystal Dragon");
+        Assert.Equal("asset://dragon.jpg", dragonAsset);
+
+        string diceAsset = Viral3DModelAssetManager.GetAssetForModel("Medieval Castle Dice Tower");
+        Assert.Equal("asset://dicetower.jpg", diceAsset);
+
+        string planterAsset = Viral3DModelAssetManager.GetAssetForModel("Vortex Spiral Planter");
+        Assert.Equal("asset://planter.jpg", planterAsset);
     }
 }
 

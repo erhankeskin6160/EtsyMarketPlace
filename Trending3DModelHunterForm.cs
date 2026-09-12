@@ -14,6 +14,7 @@ using EtsyMarketPlace.Application.Viral3DModels.Interfaces;
 using EtsyMarketPlace.Application.Viral3DModels.Services;
 using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
+using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
 using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Scrapers;
@@ -29,8 +30,10 @@ public sealed class Trending3DModelHunterForm : Form
 
     private ShopNicheProfile _activeShopProfile = ShopNicheProfile.CreateDefaultFigureAndToy();
     private List<Trending3DModel> _allModels = [];
+    private List<Trending3DModel> _filteredModels = [];
     private Trending3DModel? _selectedModel;
     private CancellationTokenSource? _scanCts;
+    private int _displayedLimit = 35;
 
     // Store Niche AI Ribbon
     private readonly Panel _panelStoreNicheBanner = new()
@@ -75,74 +78,123 @@ public sealed class Trending3DModelHunterForm : Form
     };
 
     // KPI Tiles
-    private readonly ModernKpiTile _kpiPlatforms = new() { Title = "AKTİF PLATFORMLAR", Value = "5", TrendText = "Bambu/Creality/Prusa", IsPositive = true, Width = 230 };
-    private readonly ModernKpiTile _kpiViralCount = new() { Title = "VİRAL MODELLER", Value = "0", TrendText = "Son 24-48 Saat", IsPositive = true, Width = 230 };
+    private readonly ModernKpiTile _kpiPlatforms = new() { Title = "AKTİF PLATFORMLAR", Value = "5", TrendText = "Bambu/Creality/Prusa/Anycubic/TV", IsPositive = true, Width = 230 };
+    private readonly ModernKpiTile _kpiViralCount = new() { Title = "TARANAN MODELLER", Value = "0", TrendText = "Canlı Platform Kataloğu", IsPositive = true, Width = 230 };
     private readonly ModernKpiTile _kpiGoldenOpps = new() { Title = "ALTIN FIRSATLAR", Value = "0", TrendText = "Etsy Rekabet < 3", IsPositive = true, Width = 230 };
-    private readonly ModernKpiTile _kpiCommercial = new() { Title = "TİCARİ LİSANSLI", Value = "0", TrendText = "Satılabilir", IsPositive = true, Width = 230 };
+    private readonly ModernKpiTile _kpiCommercial = new() { Title = "TİCARİ LİSANSLI", Value = "0", TrendText = "Satışa Uygun (CC-BY)", IsPositive = true, Width = 230 };
 
     // Toolbar controls
     private readonly ModernComboBox _cboPlatform = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 210,
+        Width = 190,
         Height = 32,
-        Font = new Font("Segoe UI", 9.2F)
+        Font = new Font("Segoe UI", 9F)
+    };
+
+    private readonly ComboBox _cboCategory = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 180,
+        Height = 32,
+        Font = new Font("Segoe UI", 9F)
+    };
+
+    private readonly ComboBox _cboSort = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 190,
+        Height = 32,
+        Font = new Font("Segoe UI", 9F)
     };
 
     private readonly ModernCheckBox _chkCommercialOnly = new()
     {
-        Text = "Yalnızca Ticari Satışa Uygun (Commercial Use) Modeller",
+        Text = "Ticari Lisanslı (CC-BY)",
         Checked = true,
         AutoSize = true,
         ForeColor = UiStyle.TextDark,
-        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-        Margin = new Padding(10, 6, 8, 0)
+        Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+        Margin = new Padding(8, 7, 6, 0)
     };
 
     private readonly ModernCheckBox _chkShopNicheOnly = new()
     {
-        Text = "🎯 Yalnızca Mağazama Uygun (%70+ Uyum)",
+        Text = "🎯 Mağazama Uygun (%70+)",
         Checked = false,
         AutoSize = true,
         ForeColor = Color.FromArgb(251, 191, 36),
-        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-        Margin = new Padding(8, 6, 12, 0)
+        Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+        Margin = new Padding(6, 7, 8, 0)
     };
 
     private readonly TextBox _txtSearch = new()
     {
-        Width = 220,
+        Width = 200,
         Height = 32,
         PlaceholderText = "🔍 Model, etiket ara...",
-        Font = new Font("Segoe UI", 9.2F),
-        Margin = new Padding(6, 2, 6, 0)
+        Font = new Font("Segoe UI", 9F),
+        Margin = new Padding(4, 2, 4, 0)
+    };
+
+    private readonly ModernButtonControl _btnSearch = new()
+    {
+        Text = "🔍 Ara",
+        Width = 65,
+        Height = 32,
+        NormalColor = Color.FromArgb(79, 70, 229),
+        HoverColor = Color.FromArgb(99, 102, 241),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+        Cursor = Cursors.Hand,
+        Margin = new Padding(0, 2, 6, 0)
     };
 
     private readonly ModernButtonControl _btnScan = new()
     {
-        Text = "🔄 Platformları Şimdi Tara",
-        Width = 190,
-        Height = 34,
+        Text = "🔄 Platformları Tara",
+        Width = 160,
+        Height = 32,
         NormalColor = UiStyle.PrimaryColor,
         HoverColor = UiStyle.PrimaryHover,
         ForeColor = Color.White,
-        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-        Cursor = Cursors.Hand
+        Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+        Cursor = Cursors.Hand,
+        Margin = new Padding(2, 2, 6, 0)
     };
 
     private readonly Label _lblEngineBadge = new()
     {
-        Text = "🛡️ Anti-Bot & Throttled | 💾 SQLite Delta Radarı Aktif",
+        Text = "🛡️ Anti-Bot | 💾 SQLite Delta | 100+ Model Kataloğu",
         AutoSize = true,
         ForeColor = Color.FromArgb(52, 211, 153),
         BackColor = Color.FromArgb(6, 78, 59),
         Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
         Padding = new Padding(6, 6, 6, 6),
-        Margin = new Padding(8, 4, 0, 0)
+        Margin = new Padding(4, 4, 0, 0)
     };
 
-    // Grid
+    // Grid & Pagination controls
     private readonly DataGridView _grid = new();
+    private readonly ModernButtonControl _btnLoadMore = new()
+    {
+        Text = "⬇️ Daha Fazla Model Gör (+30 Model)",
+        Width = 290,
+        Height = 34,
+        NormalColor = Color.FromArgb(30, 41, 75),
+        HoverColor = Color.FromArgb(51, 65, 110),
+        ForeColor = Color.FromArgb(167, 139, 250),
+        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+        Cursor = Cursors.Hand
+    };
+
+    private readonly Label _lblPageStatus = new()
+    {
+        AutoSize = true,
+        ForeColor = UiStyle.TextMuted,
+        Font = new Font("Segoe UI", 8.8F),
+        Margin = new Padding(12, 8, 0, 0)
+    };
 
     // Right Preview Drawer
     private readonly PictureBox _picHero = new()
@@ -272,12 +324,12 @@ public sealed class Trending3DModelHunterForm : Form
     public Trending3DModelHunterForm()
     {
         Text = "Viral 3D Model Avcısı & Etsy Pazar Boşluğu Radarı";
-        Size = new Size(1360, 860);
+        Size = new Size(1380, 880);
         MinimumSize = new Size(1100, 720);
         BackColor = UiStyle.BackgroundColor;
         Font = UiStyle.BaseFont;
 
-        var scrapers = new List<EtsyMarketPlace.Domain.Viral3DModels.Interfaces.I3DModelPlatformScraper>
+        var scrapers = new List<I3DModelPlatformScraper>
         {
             new MakerWorldTrendingScraper(),
             new CrealityCloudTrendingScraper(),
@@ -307,7 +359,7 @@ public sealed class Trending3DModelHunterForm : Form
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 106)); // KPI strip
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));  // Store Niche AI Ribbon
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));  // Toolbar
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));  // Toolbar
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Master-Detail Split
 
         // 1. KPI STRIP
@@ -342,26 +394,48 @@ public sealed class Trending3DModelHunterForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
             Padding = new Padding(0, 4, 0, 4)
         };
-        toolbar.Controls.Add(new Label { Text = "Platform:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 6, 4, 0), Font = new Font("Segoe UI Semibold", 9F) });
         toolbar.Controls.Add(_cboPlatform);
+        toolbar.Controls.Add(_cboCategory);
+        toolbar.Controls.Add(_cboSort);
         toolbar.Controls.Add(_chkCommercialOnly);
         toolbar.Controls.Add(_chkShopNicheOnly);
         toolbar.Controls.Add(_txtSearch);
+        toolbar.Controls.Add(_btnSearch);
         toolbar.Controls.Add(_btnScan);
         toolbar.Controls.Add(_lblEngineBadge);
         mainLayout.Controls.Add(toolbar, 0, 2);
 
-        // Populate Platform combo
-        _cboPlatform.Items.Add("Tüm Platformlar (Hepsi)");
-        _cboPlatform.Items.Add("🐼 MakerWorld (Bambu Lab)");
-        _cboPlatform.Items.Add("🐉 CrealityCloud");
-        _cboPlatform.Items.Add("🧡 Printables (Prusa)");
-        _cboPlatform.Items.Add("⚡ MakerOnline (Anycubic)");
-        _cboPlatform.Items.Add("⚙️ Thingiverse");
+        // Populate Combos
+        _cboPlatform.Items.AddRange([
+            "Tüm Platformlar (Hepsi)",
+            "🐼 MakerWorld (Bambu Lab)",
+            "🐉 CrealityCloud",
+            "🧡 Printables (Prusa)",
+            "⚡ MakerOnline (Anycubic)",
+            "⚙️ Thingiverse"
+        ]);
         _cboPlatform.SelectedIndex = 0;
+
+        _cboCategory.Items.AddRange([
+            "Tüm Kategoriler",
+            "🎮 Figür & Oyuncak",
+            "🎲 Kutu Oyunu & RPG",
+            "💡 Aydınlatma & Lightbox",
+            "🌿 Ev & Botanik",
+            "🗄️ Atölye & Düzenleme"
+        ]);
+        _cboCategory.SelectedIndex = 0;
+
+        _cboSort.Items.AddRange([
+            "💎 En Yüksek Fırsat Skoru",
+            "⭐ En Yüksek Mağaza Uyumu",
+            "🚀 En Çok İndirilenler (24s)",
+            "🔥 En Az Etsy Rekabeti"
+        ]);
+        _cboSort.SelectedIndex = 0;
 
         // 4. MASTER-DETAIL SPLIT
         var split = new TableLayoutPanel
@@ -374,8 +448,33 @@ public sealed class Trending3DModelHunterForm : Form
         split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         split.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340));
 
+        // Left Table Layout: Grid + Pagination Bar
+        var leftPane = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            ColumnCount = 1,
+            Margin = new Padding(0)
+        };
+        leftPane.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        leftPane.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+
         ConfigureGrid();
-        split.Controls.Add(_grid, 0, 0);
+        leftPane.Controls.Add(_grid, 0, 0);
+
+        var paginationBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Padding = new Padding(4, 4, 4, 4),
+            BackColor = Color.FromArgb(17, 24, 39)
+        };
+        paginationBar.Controls.Add(_btnLoadMore);
+        paginationBar.Controls.Add(_lblPageStatus);
+        leftPane.Controls.Add(paginationBar, 0, 1);
+
+        split.Controls.Add(leftPane, 0, 0);
 
         // Right Preview Drawer
         var drawer = new ModernCardPanel
@@ -449,30 +548,36 @@ public sealed class Trending3DModelHunterForm : Form
         _grid.BackgroundColor = Color.FromArgb(20, 27, 45);
         _grid.BorderStyle = BorderStyle.None;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-        _grid.GridColor = Color.FromArgb(45, 55, 75);
+        _grid.GridColor = Color.FromArgb(30, 41, 59);
         _grid.RowHeadersVisible = false;
         _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         _grid.MultiSelect = false;
         _grid.AllowUserToAddRows = false;
         _grid.AllowUserToDeleteRows = false;
-        _grid.RowTemplate.Height = 46;
-        _grid.DefaultCellStyle.BackColor = Color.FromArgb(20, 27, 45);
-        _grid.DefaultCellStyle.ForeColor = Color.White;
-        _grid.DefaultCellStyle.Font = new Font("Segoe UI", 9.2F);
-        _grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(79, 70, 229);
-        _grid.DefaultCellStyle.SelectionForeColor = Color.White;
-        _grid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 41, 59);
-        _grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(148, 163, 184);
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
-        _grid.ColumnHeadersHeight = 38;
+        _grid.ReadOnly = true;
+        _grid.RowTemplate.Height = 44;
+        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        _grid.ColumnHeadersHeight = 36;
         _grid.EnableHeadersVisualStyles = false;
 
-        typeof(DataGridView).InvokeMember(
-            "DoubleBuffered",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
-            null,
-            _grid,
-            new object[] { true });
+        _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = Color.FromArgb(15, 23, 42),
+            ForeColor = Color.FromArgb(148, 163, 184),
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+            Alignment = DataGridViewContentAlignment.MiddleLeft,
+            Padding = new Padding(6, 0, 0, 0)
+        };
+
+        _grid.DefaultCellStyle = new DataGridViewCellStyle
+        {
+            BackColor = Color.FromArgb(20, 27, 45),
+            ForeColor = Color.FromArgb(241, 245, 249),
+            SelectionBackColor = Color.FromArgb(49, 46, 129),
+            SelectionForeColor = Color.White,
+            Font = new Font("Segoe UI", 9F),
+            Padding = new Padding(6, 0, 0, 0)
+        };
 
         _grid.Columns.Add("colPlatform", "Platform");
         _grid.Columns.Add("colShopFit", "🎯 Mağaza Uyumu");
@@ -501,9 +606,27 @@ public sealed class Trending3DModelHunterForm : Form
     private void HookEvents()
     {
         _cboPlatform.SelectedIndexChanged += (_, _) => FilterModels();
+        _cboCategory.SelectedIndexChanged += (_, _) => FilterModels();
+        _cboSort.SelectedIndexChanged += (_, _) => FilterModels();
         _chkCommercialOnly.CheckedChanged += (_, _) => FilterModels();
         _chkShopNicheOnly.CheckedChanged += (_, _) => FilterModels();
-        _txtSearch.TextChanged += (_, _) => FilterModels();
+
+        // Search trigger
+        _btnSearch.Click += async (_, _) => await ExecuteSearchAsync();
+        _txtSearch.KeyDown += async (_, e) =>
+        {
+            if (e.KeyCode == Keys.Enter)
+            {
+                e.SuppressKeyPress = true;
+                await ExecuteSearchAsync();
+            }
+        };
+
+        _btnLoadMore.Click += (_, _) =>
+        {
+            _displayedLimit += 30;
+            PopulateGrid(_filteredModels);
+        };
 
         _btnScan.Click += async (_, _) => await RunScanAsync();
         _btnReanalyzeNiche.Click += async (_, _) => await ReanalyzeShopNicheAsync();
@@ -605,11 +728,18 @@ public sealed class Trending3DModelHunterForm : Form
             _scanCts?.Cancel();
             _scanCts = new CancellationTokenSource();
 
+            var platform = GetSelectedPlatformFilter();
+            string? category = GetSelectedCategoryFilter();
+
             _allModels = (await _hunterService.ScanTrendingModelsAsync(
+                platformFilter: platform,
+                categoryFilter: category,
+                commercialOnly: _chkCommercialOnly.Checked,
                 shopProfile: _activeShopProfile,
                 shopNicheOnly: _chkShopNicheOnly.Checked,
                 ct: _scanCts.Token)).ToList();
 
+            _displayedLimit = 35;
             UpdateKpis();
             FilterModels();
         }
@@ -620,7 +750,52 @@ public sealed class Trending3DModelHunterForm : Form
         finally
         {
             _btnScan.Enabled = true;
-            _btnScan.Text = "🔄 Platformları Şimdi Tara";
+            _btnScan.Text = "🔄 Platformları Tara";
+        }
+    }
+
+    private async Task ExecuteSearchAsync()
+    {
+        string term = _txtSearch.Text.Trim();
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            await RunScanAsync();
+            return;
+        }
+
+        try
+        {
+            _btnSearch.Enabled = false;
+            _btnSearch.Text = "⏳";
+            _scanCts?.Cancel();
+            _scanCts = new CancellationTokenSource();
+
+            var platform = GetSelectedPlatformFilter();
+            string? category = GetSelectedCategoryFilter();
+
+            _allModels = (await _hunterService.SearchModelsAcrossPlatformsAsync(
+                query: term,
+                platformFilter: platform,
+                categoryFilter: category,
+                commercialOnly: _chkCommercialOnly.Checked,
+                shopProfile: _activeShopProfile,
+                shopNicheOnly: _chkShopNicheOnly.Checked,
+                page: 1,
+                pageSize: 60,
+                ct: _scanCts.Token)).ToList();
+
+            _displayedLimit = 35;
+            UpdateKpis();
+            FilterModels();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Arama sırasında hata: {ex.Message}", "Arama Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _btnSearch.Enabled = true;
+            _btnSearch.Text = "🔍 Ara";
         }
     }
 
@@ -645,7 +820,16 @@ public sealed class Trending3DModelHunterForm : Form
             _activeShopProfile = profile;
 
             UpdateStoreNicheBanner();
-            await RunScanAsync();
+
+            // Deep automated multi-keyword sweep targeting shop DNA
+            _allModels = (await _hunterService.DeepScanByShopNicheAsync(
+                shopProfile: _activeShopProfile,
+                commercialOnly: _chkCommercialOnly.Checked,
+                ct: CancellationToken.None)).ToList();
+
+            _displayedLimit = 35;
+            UpdateKpis();
+            FilterModels();
 
             MessageBox.Show(
                 this,
@@ -654,7 +838,7 @@ public sealed class Trending3DModelHunterForm : Form
                 $"• Yapay Zeka: {profile.ActiveAiProviderName}\n" +
                 $"• Güven Oranı: %{profile.ConfidenceScore}\n" +
                 $"• Hedef Kitle: {profile.TargetAudience}\n\n" +
-                $"3D Modeller mağazanızın bu profiline göre yeniden puanlandı!",
+                $"3D Modeller mağazanızın niş anahtar kelimeleriyle ({string.Join(", ", profile.AffinityKeywords.Take(4))}) derinlemesine tarandı ve puanlandı!",
                 "Mağaza Niş Analizi Tamamlandı",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information);
@@ -686,27 +870,46 @@ public sealed class Trending3DModelHunterForm : Form
         _kpiCommercial.Value = commercialCount.ToString();
     }
 
+    private ModelPlatformType? GetSelectedPlatformFilter()
+    {
+        return _cboPlatform.SelectedIndex switch
+        {
+            1 => ModelPlatformType.MakerWorld,
+            2 => ModelPlatformType.CrealityCloud,
+            3 => ModelPlatformType.Printables,
+            4 => ModelPlatformType.MakerOnline,
+            5 => ModelPlatformType.Thingiverse,
+            _ => null
+        };
+    }
+
+    private string? GetSelectedCategoryFilter()
+    {
+        return _cboCategory.SelectedIndex switch
+        {
+            1 => "Toys & Figures",
+            2 => "Tabletop & RPG",
+            3 => "LED Lighting & Art",
+            4 => "Home & Garden",
+            5 => "Workshop & Organization",
+            _ => null
+        };
+    }
+
     private void FilterModels()
     {
         var query = _allModels.AsEnumerable();
 
-        int selectedPlatformIdx = _cboPlatform.SelectedIndex;
-        if (selectedPlatformIdx > 0)
+        var targetPlatform = GetSelectedPlatformFilter();
+        if (targetPlatform.HasValue)
         {
-            var targetPlatform = (selectedPlatformIdx - 1) switch
-            {
-                0 => ModelPlatformType.MakerWorld,
-                1 => ModelPlatformType.CrealityCloud,
-                2 => ModelPlatformType.Printables,
-                3 => ModelPlatformType.MakerOnline,
-                4 => ModelPlatformType.Thingiverse,
-                _ => (ModelPlatformType?)null
-            };
+            query = query.Where(m => m.Platform == targetPlatform.Value);
+        }
 
-            if (targetPlatform.HasValue)
-            {
-                query = query.Where(m => m.Platform == targetPlatform.Value);
-            }
+        string? targetCategory = GetSelectedCategoryFilter();
+        if (!string.IsNullOrWhiteSpace(targetCategory))
+        {
+            query = query.Where(m => m.Category.Contains(targetCategory, StringComparison.OrdinalIgnoreCase));
         }
 
         if (_chkCommercialOnly.Checked)
@@ -727,14 +930,26 @@ public sealed class Trending3DModelHunterForm : Form
                                      m.Tags.Any(t => t.Contains(term, StringComparison.OrdinalIgnoreCase)));
         }
 
-        var filtered = query.ToList();
-        PopulateGrid(filtered);
+        // Apply Sorting
+        query = _cboSort.SelectedIndex switch
+        {
+            1 => query.OrderByDescending(m => m.ShopFitScore).ThenByDescending(m => m.OpportunityScore),
+            2 => query.OrderByDescending(m => m.Downloads24h).ThenByDescending(m => m.HourlyVelocity),
+            3 => query.OrderBy(m => m.EtsyCompetitionCount).ThenByDescending(m => m.OpportunityScore),
+            _ => query.OrderByDescending(m => m.OpportunityScore).ThenByDescending(m => m.Downloads24h)
+        };
+
+        _filteredModels = query.ToList();
+        PopulateGrid(_filteredModels);
     }
 
     private void PopulateGrid(List<Trending3DModel> models)
     {
         _grid.Rows.Clear();
-        foreach (var m in models)
+
+        var displayItems = models.Take(_displayedLimit).ToList();
+
+        foreach (var m in displayItems)
         {
             string platformText = m.Platform switch
             {
@@ -758,7 +973,7 @@ public sealed class Trending3DModelHunterForm : Form
 
             string deltaText = m.HourlyVelocity > 0
                 ? (m.IsDeltaAccelerating ? $"🔥 +{m.HourlyVelocity:N1}/s (%{m.GrowthRatePercentage:N0})" : $"+{m.HourlyVelocity:N1}/s (%{m.GrowthRatePercentage:N0})")
-                : $"+{m.Downloads24h:N0} (24s)";
+                : (m.Downloads24h > 0 ? $"+{m.Downloads24h:N0} (24s)" : "0 (Yeni)");
 
             int rowIdx = _grid.Rows.Add(
                 platformText,
@@ -769,28 +984,35 @@ public sealed class Trending3DModelHunterForm : Form
                 $"{m.PrintsCount:N0} Baskı",
                 licenseText,
                 compText,
-                $"⭐ {m.OpportunityScore} / 100"
+                $"★ {m.OpportunityScore} / 100"
             );
 
-            // Color code store fit column
-            var fitCell = _grid.Rows[rowIdx].Cells["colShopFit"];
+            _grid.Rows[rowIdx].Tag = m;
+
+            // Highlight golden opportunity
+            if (m.IsGoldenOpportunity)
+            {
+                _grid.Rows[rowIdx].Cells["colScore"].Style.ForeColor = Color.FromArgb(251, 191, 36);
+                _grid.Rows[rowIdx].Cells["colScore"].Style.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
+            }
+
+            // Color code shop fit
             if (m.ShopFitScore >= 90)
             {
-                fitCell.Style.ForeColor = Color.FromArgb(52, 211, 153); // Emerald Green
+                _grid.Rows[rowIdx].Cells["colShopFit"].Style.ForeColor = Color.FromArgb(52, 211, 153);
+                _grid.Rows[rowIdx].Cells["colShopFit"].Style.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
             }
             else if (m.ShopFitScore >= 70)
             {
-                fitCell.Style.ForeColor = Color.FromArgb(56, 189, 248); // Sky Blue
+                _grid.Rows[rowIdx].Cells["colShopFit"].Style.ForeColor = Color.FromArgb(167, 139, 250);
             }
-            else
-            {
-                fitCell.Style.ForeColor = Color.FromArgb(148, 163, 184); // Slate Muted
-            }
-
-            _grid.Rows[rowIdx].Tag = m;
         }
 
-        if (_grid.Rows.Count > 0)
+        // Update Pagination Status
+        _lblPageStatus.Text = $"Gösterilen: {displayItems.Count} / {models.Count} Model | Toplam Taranan: {_allModels.Count}";
+        _btnLoadMore.Visible = models.Count > _displayedLimit;
+
+        if (_grid.Rows.Count > 0 && _grid.CurrentRow == null)
         {
             _grid.Rows[0].Selected = true;
             OnGridRowSelected();
@@ -847,26 +1069,21 @@ public sealed class Trending3DModelHunterForm : Form
     {
         try
         {
-            if (string.IsNullOrWhiteSpace(imageUrl))
+            // 1. First priority: Load from disk OR embedded application resources (100% reliable on VDS)
+            using (var stream = Viral3DModelAssetManager.OpenAssetStream(imageUrl)
+                             ?? Viral3DModelAssetManager.OpenAssetStream(Viral3DModelAssetManager.GetAssetForModel(_selectedModel?.Title ?? "")))
             {
-                _picHero.Image = CreateFallbackMeshBitmap(310, 200, _selectedModel?.Title ?? "3D Model");
-                return;
+                if (stream != null)
+                {
+                    var img = Image.FromStream(stream);
+                    var oldImg = _picHero.Image;
+                    _picHero.Image = (Image)img.Clone();
+                    oldImg?.Dispose();
+                    return;
+                }
             }
 
-            // 1. Resolve via Viral3DModelAssetManager (Local Bundled High-Res 3D Render)
-            string? localAsset = Viral3DModelAssetManager.ResolveLocalAssetPath(imageUrl);
-            if (localAsset != null && File.Exists(localAsset))
-            {
-                var fileBytes = await File.ReadAllBytesAsync(localAsset);
-                using var msLocal = new MemoryStream(fileBytes);
-                var img = Image.FromStream(msLocal);
-                var oldImg = _picHero.Image;
-                _picHero.Image = (Image)img.Clone();
-                oldImg?.Dispose();
-                return;
-            }
-
-            // 2. If it's a direct web URL (and not picsum)
+            // 2. Direct web URL download if online and not a fake generator
             if ((imageUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                  imageUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
                 !imageUrl.Contains("picsum", StringComparison.OrdinalIgnoreCase))
@@ -880,21 +1097,20 @@ public sealed class Trending3DModelHunterForm : Form
                 return;
             }
 
-            // 3. Fallback to model-matched asset from catalog
-            string matchedAsset = Viral3DModelAssetManager.GetAssetForModel(_selectedModel?.Title ?? "");
-            string? fallbackPath = Viral3DModelAssetManager.ResolveLocalAssetPath(matchedAsset);
-            if (fallbackPath != null && File.Exists(fallbackPath))
+            // 3. Fallback to default high-res render
+            using (var fallbackStream = Viral3DModelAssetManager.OpenAssetStream("dummy13.jpg"))
             {
-                var fileBytes = await File.ReadAllBytesAsync(fallbackPath);
-                using var msLocal = new MemoryStream(fileBytes);
-                var img = Image.FromStream(msLocal);
-                var oldImg = _picHero.Image;
-                _picHero.Image = (Image)img.Clone();
-                oldImg?.Dispose();
-                return;
+                if (fallbackStream != null)
+                {
+                    var img = Image.FromStream(fallbackStream);
+                    var oldImg = _picHero.Image;
+                    _picHero.Image = (Image)img.Clone();
+                    oldImg?.Dispose();
+                    return;
+                }
             }
 
-            // 4. Safe procedural 3D wireframe mesh canvas
+            // 4. Procedural fallback only if absolutely no image stream could be found
             _picHero.Image = CreateFallbackMeshBitmap(310, 200, _selectedModel?.Title ?? "3D Model");
         }
         catch

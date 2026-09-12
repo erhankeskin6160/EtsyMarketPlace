@@ -32,6 +32,7 @@ public sealed class Viral3DModelHunterService
     /// </summary>
     public async Task<IReadOnlyList<Trending3DModel>> ScanTrendingModelsAsync(
         ModelPlatformType? platformFilter = null,
+        string? categoryFilter = null,
         bool commercialOnly = false,
         int minOpportunityScore = 0,
         ShopNicheProfile? shopProfile = null,
@@ -45,8 +46,100 @@ public sealed class Viral3DModelHunterService
         var tasks = targetScrapers.Select(s => s.GetTrendingModelsAsync(1, ct));
         var results = await Task.WhenAll(tasks);
 
-        var allModels = results.SelectMany(r => r).ToList();
+        var allModels = results.SelectMany(r => r).DistinctBy(m => m.ExternalId).ToList();
 
+        await EnrichAndScoreModelsAsync(allModels, shopProfile, ct);
+
+        return ApplyFiltersAndSort(allModels, categoryFilter, commercialOnly, minOpportunityScore, shopNicheOnly, shopProfile);
+    }
+
+    /// <summary>
+    /// Actively searches across all platforms in parallel with real keyword queries, category filtering,
+    /// and dynamic scoring.
+    /// </summary>
+    public async Task<IReadOnlyList<Trending3DModel>> SearchModelsAcrossPlatformsAsync(
+        string query,
+        ModelPlatformType? platformFilter = null,
+        string? categoryFilter = null,
+        bool commercialOnly = false,
+        int minOpportunityScore = 0,
+        ShopNicheProfile? shopProfile = null,
+        bool shopNicheOnly = false,
+        int page = 1,
+        int pageSize = 40,
+        CancellationToken ct = default)
+    {
+        var targetScrapers = platformFilter.HasValue
+            ? _scrapers.Where(s => s.PlatformType == platformFilter.Value).ToList()
+            : _scrapers;
+
+        var tasks = targetScrapers.Select(s => s.SearchModelsAsync(query, page, pageSize, ct));
+        var results = await Task.WhenAll(tasks);
+
+        var allModels = results.SelectMany(r => r).DistinctBy(m => m.ExternalId).ToList();
+
+        await EnrichAndScoreModelsAsync(allModels, shopProfile, ct);
+
+        return ApplyFiltersAndSort(allModels, categoryFilter, commercialOnly, minOpportunityScore, shopNicheOnly, shopProfile);
+    }
+
+    /// <summary>
+    /// Performs an automated deep multi-keyword sweep tailored specifically to the Etsy store's AI-analyzed niche.
+    /// </summary>
+    public async Task<IReadOnlyList<Trending3DModel>> DeepScanByShopNicheAsync(
+        ShopNicheProfile shopProfile,
+        ModelPlatformType? platformFilter = null,
+        bool commercialOnly = false,
+        int minOpportunityScore = 0,
+        CancellationToken ct = default)
+    {
+        if (shopProfile == null)
+        {
+            return await ScanTrendingModelsAsync(platformFilter, null, commercialOnly, minOpportunityScore, null, false, ct);
+        }
+
+        var aggregatedModels = new Dictionary<string, Trending3DModel>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Initial base trending scan
+        var baseModels = await ScanTrendingModelsAsync(platformFilter, null, commercialOnly, minOpportunityScore, shopProfile, false, ct);
+        foreach (var m in baseModels)
+        {
+            aggregatedModels[m.ExternalId] = m;
+        }
+
+        // 2. Multi-keyword deep sweep across affinity keywords
+        var topKeywords = shopProfile.AffinityKeywords.Take(4).ToList();
+        foreach (var kw in topKeywords)
+        {
+            if (ct.IsCancellationRequested) break;
+            var kwResults = await SearchModelsAcrossPlatformsAsync(
+                query: kw,
+                platformFilter: platformFilter,
+                commercialOnly: commercialOnly,
+                minOpportunityScore: minOpportunityScore,
+                shopProfile: shopProfile,
+                shopNicheOnly: false,
+                pageSize: 20,
+                ct: ct);
+
+            foreach (var m in kwResults)
+            {
+                if (!aggregatedModels.ContainsKey(m.ExternalId))
+                {
+                    aggregatedModels[m.ExternalId] = m;
+                }
+            }
+        }
+
+        var list = aggregatedModels.Values.ToList();
+        return ApplyFiltersAndSort(list, null, commercialOnly, minOpportunityScore, false, shopProfile);
+    }
+
+    private async Task EnrichAndScoreModelsAsync(
+        List<Trending3DModel> allModels,
+        ShopNicheProfile? shopProfile,
+        CancellationToken ct)
+    {
         // 1. Compute Time-Series Delta Velocity from SQLite snapshots (if available)
         if (_snapshotRepository != null)
         {
@@ -81,14 +174,12 @@ public sealed class Viral3DModelHunterService
         {
             if (model.EtsyCompetitionCount < 0 && _competitionChecker != null)
             {
-                // If model has commercial license or strong velocity, check Etsy
                 if (model.License.IsCommercialAllowed || model.Downloads24h >= 1000)
                 {
                     model.EtsyCompetitionCount = await _competitionChecker.CheckEtsyCompetitionCountAsync(model.Title, ct);
                 }
                 else
                 {
-                    // Non-commercial or low velocity: default to estimated
                     model.EtsyCompetitionCount = Math.Abs(model.Title.GetHashCode()) % 5;
                 }
             }
@@ -103,9 +194,24 @@ public sealed class Viral3DModelHunterService
                 model.ShopFitReason = fitReason;
             }
         }
+    }
 
-        // 4. Apply filters
-        var query = allModels.AsEnumerable();
+    private static IReadOnlyList<Trending3DModel> ApplyFiltersAndSort(
+        IEnumerable<Trending3DModel> source,
+        string? categoryFilter,
+        bool commercialOnly,
+        int minOpportunityScore,
+        bool shopNicheOnly,
+        ShopNicheProfile? shopProfile)
+    {
+        var query = source.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(categoryFilter) &&
+            !categoryFilter.Equals("Tümü", StringComparison.OrdinalIgnoreCase) &&
+            !categoryFilter.Equals("Tüm Kategoriler", StringComparison.OrdinalIgnoreCase))
+        {
+            query = query.Where(m => m.Category.Contains(categoryFilter, StringComparison.OrdinalIgnoreCase));
+        }
 
         if (commercialOnly)
         {
