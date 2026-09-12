@@ -21,7 +21,7 @@ internal sealed class OwnShopListingAiAuditForm(
     private readonly ModernMultilineTextBox _suggestionTextBox = new();
     private readonly TextBox _searchTextBox = new();
     private readonly Label _statusLabel = new();
-    private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
+    private readonly ModernNumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
     
     // Pagination Fields
     private int _currentPage = 1;

@@ -34,10 +34,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private readonly TextBox _imagePathTextBox = new();
     private readonly ModernMultilineTextBox _notesTextBox = new();
     private readonly ListingQualityReportControl _qualityReportControl = new();
-    private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 30 };
-    private readonly NumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
-    private readonly NumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
-    private readonly NumericUpDown _imageCountInput = new() { Minimum = 1, Maximum = 10, Value = 1 };
+    private readonly ModernNumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 30 };
+    private readonly ModernNumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
+    private readonly ModernNumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
+    private readonly ModernNumericUpDown _imageCountInput = new() { Minimum = 1, Maximum = 10, Value = 1 };
     private readonly TextBox _taxonomyInput = new();
     private readonly TextBox _categoryTextBox = new() { ReadOnly = true };
     private readonly ComboBox _listingTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };

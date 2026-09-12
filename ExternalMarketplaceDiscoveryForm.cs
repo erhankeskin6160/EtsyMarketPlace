@@ -36,8 +36,8 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly Label _priceScoreLabel = new();
     private readonly Label _riskScoreLabel = new();
     private readonly ModernMultilineTextBox _scoreStrategyTextBox = new();
-    private readonly NumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
-    private readonly NumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
+    private readonly ModernNumericUpDown _priceInput = new() { Minimum = 1, Maximum = 100000, DecimalPlaces = 2, Value = 35 };
+    private readonly ModernNumericUpDown _quantityInput = new() { Minimum = 1, Maximum = 999, Value = 1 };
     private readonly TextBox _taxonomyInput = new();
     private readonly ComboBox _listingTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
     private readonly ComboBox _shippingProfileComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };

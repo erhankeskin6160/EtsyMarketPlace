@@ -24,25 +24,25 @@ internal sealed class ProfitCalculatorForm : Form
 
     // Input Controls
     private readonly TextBox _productNameTextBox = new();
-    private readonly NumericUpDown _salePriceInput = CreateMoneyInput(183.00m);
+    private readonly ModernNumericUpDown _salePriceInput = CreateMoneyInput(183.00m);
     private readonly Label _salePriceTryLabel = new();
 
-    private readonly NumericUpDown _buyerShippingInput = CreateMoneyInput(0m);
-    private readonly NumericUpDown _giftWrapInput = CreateMoneyInput(0m);
+    private readonly ModernNumericUpDown _buyerShippingInput = CreateMoneyInput(0m);
+    private readonly ModernNumericUpDown _giftWrapInput = CreateMoneyInput(0m);
 
-    private readonly NumericUpDown _materialCostInput = CreateMoneyInput(34.00m);
+    private readonly ModernNumericUpDown _materialCostInput = CreateMoneyInput(34.00m);
     private readonly Label _materialCostTryLabel = new();
 
-    private readonly NumericUpDown _sellerShippingCostInput = CreateMoneyInput(25.00m);
+    private readonly ModernNumericUpDown _sellerShippingCostInput = CreateMoneyInput(25.00m);
     private readonly Label _sellerShippingCostTryLabel = new();
 
-    private readonly NumericUpDown _packagingCostInput = CreateMoneyInput(0.00m);
-    private readonly NumericUpDown _adCostInput = CreateMoneyInput(0.00m);
+    private readonly ModernNumericUpDown _packagingCostInput = CreateMoneyInput(0.00m);
+    private readonly ModernNumericUpDown _adCostInput = CreateMoneyInput(0.00m);
 
     private readonly ComboBox _countryComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ComboBox _offsiteAdsComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernCheckBox _currencyConversionCheckBox = new() { Text = "Para birimi dönüştürme (%2.5)", AutoSize = true };
-    private readonly NumericUpDown _targetMarginInput = CreatePercentInput(30.0m);
+    private readonly ModernNumericUpDown _targetMarginInput = CreatePercentInput(30.0m);
 
     // KPI Cards Controls
     private readonly Label _netProfitUsdLabel = new();
@@ -841,7 +841,7 @@ internal sealed class ProfitCalculatorForm : Form
         };
         dialog.Controls.Add(lbl);
 
-        var num = new NumericUpDown
+        var num = new ModernNumericUpDown
         {
             Location = new Point(20, 55),
             Size = new Size(200, 30),
@@ -885,7 +885,7 @@ internal sealed class ProfitCalculatorForm : Form
         }
     }
 
-    private static NumericUpDown CreateMoneyInput(decimal defaultValue) => new()
+    private static ModernNumericUpDown CreateMoneyInput(decimal defaultValue) => new()
     {
         Minimum = 0,
         Maximum = 100000,
@@ -896,7 +896,7 @@ internal sealed class ProfitCalculatorForm : Form
         ForeColor = Color.White,
     };
 
-    private static NumericUpDown CreatePercentInput(decimal defaultValue = 30.0m) => new()
+    private static ModernNumericUpDown CreatePercentInput(decimal defaultValue = 30.0m) => new()
     {
         Minimum = 1,
         Maximum = 90,

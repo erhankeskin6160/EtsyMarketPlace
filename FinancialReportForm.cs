@@ -44,7 +44,7 @@ internal sealed class FinancialReportForm : Form
     private readonly DateTimePicker _dtpFrom    = new();
     private readonly DateTimePicker _dtpTo      = new();
     private readonly ModernCheckBox _chkUseTry        = new();
-    private readonly NumericUpDown _numExchangeRate = new();
+    private readonly ModernNumericUpDown _numExchangeRate = new();
     private readonly Label _lblMode             = new();
 
     // ── UI: Charts & Grids ─────────────────────────────────────────────────────

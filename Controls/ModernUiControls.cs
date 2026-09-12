@@ -2025,11 +2025,15 @@ public class ModernComboBox : ComboBox
 }
 
 /// <summary>
-/// Modern dark-theme NumericUpDown with custom-painted dark spinner buttons, sleek chevrons, and themed border.
+/// Modern dark-theme NumericUpDown with custom-painted dark spinner buttons, sleek vector chevrons, and themed glowing border.
 /// </summary>
 public class ModernNumericUpDown : NumericUpDown
 {
     private readonly UpDownButtonsPainter _buttonsPainter;
+    private bool _isHovered;
+
+    public bool IsControlFocused => Focused || _buttonsPainter.IsEditBoxFocused;
+    public bool IsControlHovered => _isHovered || _buttonsPainter.IsHovered;
 
     public ModernNumericUpDown()
     {
@@ -2045,6 +2049,20 @@ public class ModernNumericUpDown : NumericUpDown
         _buttonsPainter = new UpDownButtonsPainter(this);
     }
 
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _isHovered = true;
+        Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _isHovered = false;
+        Invalidate();
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
@@ -2054,7 +2072,7 @@ public class ModernNumericUpDown : NumericUpDown
     protected override void WndProc(ref Message m)
     {
         base.WndProc(ref m);
-        if (m.Msg == 0x000F) // WM_PAINT
+        if (m.Msg == 0x000F || m.Msg == 0x0085) // WM_PAINT or WM_NCPAINT
         {
             using var g = Graphics.FromHwnd(Handle);
             DrawOuterBorder(g);
@@ -2063,7 +2081,9 @@ public class ModernNumericUpDown : NumericUpDown
 
     private void DrawOuterBorder(Graphics g)
     {
-        Color borderColor = Focused ? UiStyle.PrimaryColor : UiStyle.BorderColor;
+        Color borderColor = IsControlFocused
+            ? UiStyle.PrimaryColor
+            : (IsControlHovered ? Color.FromArgb(129, 140, 248) : UiStyle.BorderColor);
         using var borderPen = new Pen(borderColor, 1f);
         g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
     }
@@ -2072,15 +2092,20 @@ public class ModernNumericUpDown : NumericUpDown
     {
         private readonly ModernNumericUpDown _owner;
         private Control? _buttonsControl;
+        private Control? _editBox;
         private bool _upHover;
         private bool _downHover;
         private bool _upPressed;
         private bool _downPressed;
 
+        public bool IsEditBoxFocused => _editBox != null && _editBox.Focused;
+        public bool IsHovered => _upHover || _downHover;
+
         public UpDownButtonsPainter(ModernNumericUpDown owner)
         {
             _owner = owner;
             _owner.HandleCreated += (_, _) => Attach();
+            _owner.Layout += (_, _) => Attach();
             if (_owner.IsHandleCreated) Attach();
         }
 
@@ -2099,34 +2124,52 @@ public class ModernNumericUpDown : NumericUpDown
                 }
 
                 _buttonsControl.HandleDestroyed += (_, _) => ReleaseHandle();
-                _buttonsControl.Paint += (_, e) => DrawButtons(e.Graphics);
                 _buttonsControl.Resize += (_, _) => _buttonsControl.Invalidate();
             }
 
-            if (_owner.Controls.Count > 1)
+            if (_owner.Controls.Count > 1 && _editBox == null)
             {
-                var editBox = _owner.Controls[1];
-                editBox.BackColor = UiStyle.InputBackground;
-                editBox.ForeColor = UiStyle.TextDark;
-                editBox.Enter += (_, _) => _owner.Invalidate();
-                editBox.Leave += (_, _) => _owner.Invalidate();
+                _editBox = _owner.Controls[1];
+                _editBox.BackColor = UiStyle.InputBackground;
+                _editBox.ForeColor = UiStyle.TextDark;
+                _editBox.Enter += (_, _) => _owner.Invalidate();
+                _editBox.Leave += (_, _) => _owner.Invalidate();
+                _editBox.MouseEnter += (_, _) => _owner.Invalidate();
+                _editBox.MouseLeave += (_, _) => _owner.Invalidate();
             }
         }
 
         protected override void WndProc(ref Message m)
         {
-            base.WndProc(ref m);
-
-            if (_buttonsControl == null || !_buttonsControl.IsHandleCreated) return;
+            if (_buttonsControl == null || !_buttonsControl.IsHandleCreated)
+            {
+                base.WndProc(ref m);
+                return;
+            }
 
             switch (m.Msg)
             {
+                case 0x0014: // WM_ERASEBKGND
+                    m.Result = (IntPtr)1;
+                    return;
+
                 case 0x000F: // WM_PAINT
-                    using (var g = Graphics.FromHwnd(_buttonsControl.Handle))
+                    base.WndProc(ref m);
+                    PaintButtonsDoubleBuffered();
+                    return;
+
+                case 0x0318: // WM_PRINTCLIENT
+                    using (var g = Graphics.FromHdc(m.WParam))
                     {
-                        DrawButtons(g);
+                        DrawButtons(g, _buttonsControl.Width, _buttonsControl.Height);
                     }
-                    break;
+                    m.Result = IntPtr.Zero;
+                    return;
+
+                case 0x0020: // WM_SETCURSOR
+                    Cursor.Current = Cursors.Hand;
+                    m.Result = (IntPtr)1;
+                    return;
 
                 case 0x0200: // WM_MOUSEMOVE
                     int y = (int)(m.LParam.ToInt64() >> 16) & 0xFFFF;
@@ -2138,7 +2181,9 @@ public class ModernNumericUpDown : NumericUpDown
                         _upHover = newUp;
                         _downHover = newDown;
                         _buttonsControl.Invalidate();
+                        _owner.Invalidate();
                     }
+                    base.WndProc(ref m);
                     break;
 
                 case 0x02A3: // WM_MOUSELEAVE
@@ -2147,7 +2192,9 @@ public class ModernNumericUpDown : NumericUpDown
                         _upHover = false;
                         _downHover = false;
                         _buttonsControl.Invalidate();
+                        _owner.Invalidate();
                     }
+                    base.WndProc(ref m);
                     break;
 
                 case 0x0201: // WM_LBUTTONDOWN
@@ -2155,66 +2202,268 @@ public class ModernNumericUpDown : NumericUpDown
                     int halfDown = _buttonsControl.Height / 2;
                     if (yDown < halfDown) _upPressed = true; else _downPressed = true;
                     _buttonsControl.Invalidate();
+                    base.WndProc(ref m);
+                    PaintButtonsDoubleBuffered();
                     break;
 
                 case 0x0202: // WM_LBUTTONUP
                     _upPressed = false;
                     _downPressed = false;
                     _buttonsControl.Invalidate();
+                    base.WndProc(ref m);
+                    PaintButtonsDoubleBuffered();
+                    break;
+
+                default:
+                    base.WndProc(ref m);
                     break;
             }
         }
 
-        private void DrawButtons(Graphics g)
+        private void PaintButtonsDoubleBuffered()
         {
-            if (_buttonsControl == null) return;
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-
+            if (_buttonsControl == null || !_buttonsControl.IsHandleCreated) return;
             int w = _buttonsControl.Width;
             int h = _buttonsControl.Height;
             if (w <= 0 || h <= 0) return;
 
-            int half = h / 2;
+            using var bmp = new Bitmap(w, h);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                DrawButtons(g, w, h);
+            }
+            using (var dc = Graphics.FromHwnd(_buttonsControl.Handle))
+            {
+                dc.DrawImageUnscaled(bmp, 0, 0);
+            }
+        }
 
-            // 1. Up Button
+        private void DrawButtons(Graphics g, int w, int h)
+        {
+            if (_buttonsControl == null) return;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+            int half = h / 2;
+            bool isEnabled = _owner.Enabled;
+
+            Color bgBase = UiStyle.CardBackground;
+            Color bgHover = Color.FromArgb(49, 46, 129); // Modern Indigo Tint hover
+            Color bgPressed = UiStyle.PrimaryColor;
+            Color chevronMuted = UiStyle.TextMuted;
+            Color chevronActive = Color.White;
+            Color borderColor = UiStyle.BorderColor;
+
+            // 1. Up Button Box
             var upRect = new Rectangle(0, 0, w, half);
-            Color upColor = _upPressed ? UiStyle.PrimaryColor : (_upHover ? UiStyle.SecondaryHover : UiStyle.SecondaryColor);
-            using (var brush = new SolidBrush(upColor))
+            Color upBg = !isEnabled
+                ? Color.FromArgb(20, 27, 45)
+                : (_upPressed ? bgPressed : (_upHover ? bgHover : bgBase));
+
+            using (var brush = new SolidBrush(upBg))
             {
                 g.FillRectangle(brush, upRect);
             }
 
+            // Up Chevron
             int cx = w / 2;
             int cyUp = half / 2;
-            Color upArrowColor = (_upHover || _upPressed) ? Color.White : UiStyle.TextMuted;
-            using (var pen = new Pen(upArrowColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            Color upChevronColor = !isEnabled
+                ? Color.FromArgb(71, 85, 105)
+                : ((_upHover || _upPressed) ? chevronActive : chevronMuted);
+
+            float arrowHalfW = Math.Clamp(w * 0.22f, 3.5f, 5.5f);
+            float arrowH = Math.Clamp(half * 0.28f, 2.5f, 4.5f);
+
+            using (var path = new GraphicsPath())
             {
-                g.DrawLine(pen, cx - 3, cyUp + 1, cx, cyUp - 2);
-                g.DrawLine(pen, cx, cyUp - 2, cx + 3, cyUp + 1);
+                path.AddLine(cx - arrowHalfW, cyUp + (arrowH / 2f), cx, cyUp - (arrowH / 2f));
+                path.AddLine(cx, cyUp - (arrowH / 2f), cx + arrowHalfW, cyUp + (arrowH / 2f));
+                using var pen = new Pen(upChevronColor, 2f)
+                {
+                    StartCap = LineCap.Round,
+                    EndCap = LineCap.Round,
+                    LineJoin = LineJoin.Round
+                };
+                g.DrawPath(pen, path);
             }
 
-            // 2. Down Button
+            // 2. Down Button Box
             var downRect = new Rectangle(0, half, w, h - half);
-            Color downColor = _downPressed ? UiStyle.PrimaryColor : (_downHover ? UiStyle.SecondaryHover : UiStyle.SecondaryColor);
-            using (var brush = new SolidBrush(downColor))
+            Color downBg = !isEnabled
+                ? Color.FromArgb(20, 27, 45)
+                : (_downPressed ? bgPressed : (_downHover ? bgHover : bgBase));
+
+            using (var brush = new SolidBrush(downBg))
             {
                 g.FillRectangle(brush, downRect);
             }
 
+            // Down Chevron
             int cyDown = half + ((h - half) / 2);
-            Color downArrowColor = (_downHover || _downPressed) ? Color.White : UiStyle.TextMuted;
-            using (var pen = new Pen(downArrowColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
+            Color downChevronColor = !isEnabled
+                ? Color.FromArgb(71, 85, 105)
+                : ((_downHover || _downPressed) ? chevronActive : chevronMuted);
+
+            using (var path = new GraphicsPath())
             {
-                g.DrawLine(pen, cx - 3, cyDown - 2, cx, cyDown + 1);
-                g.DrawLine(pen, cx, cyDown + 1, cx + 3, cyDown - 2);
+                path.AddLine(cx - arrowHalfW, cyDown - (arrowH / 2f), cx, cyDown + (arrowH / 2f));
+                path.AddLine(cx, cyDown + (arrowH / 2f), cx + arrowHalfW, cyDown - (arrowH / 2f));
+                using var pen = new Pen(downChevronColor, 2f)
+                {
+                    StartCap = LineCap.Round,
+                    EndCap = LineCap.Round,
+                    LineJoin = LineJoin.Round
+                };
+                g.DrawPath(pen, path);
             }
 
             // 3. Dividers
-            using (var divPen = new Pen(UiStyle.BorderColor, 1f))
+            using (var divPen = new Pen(borderColor, 1f))
             {
-                g.DrawLine(divPen, 0, half, w, half);
+                // Left vertical separator
                 g.DrawLine(divPen, 0, 0, 0, h);
+                // Middle horizontal separator
+                g.DrawLine(divPen, 0, half, w, half);
             }
         }
+    }
+}
+
+/// <summary>
+/// Modern horizontal stepper control with sleek [-] and [+] action buttons, dark theme, and smooth value adjustments.
+/// </summary>
+public class ModernStepperControl : Panel
+{
+    private readonly ModernButtonControl _btnMinus = new();
+    private readonly ModernButtonControl _btnPlus = new();
+    private readonly TextBox _txtValue = new();
+    private decimal _value = 0m;
+    private decimal _minimum = 0m;
+    private decimal _maximum = 100m;
+    private decimal _increment = 1m;
+    private int _decimalPlaces = 0;
+    private bool _isUpdating = false;
+
+    public event EventHandler? ValueChanged;
+
+    public decimal Value
+    {
+        get => _value;
+        set
+        {
+            var clamped = Math.Clamp(value, _minimum, _maximum);
+            if (_value != clamped)
+            {
+                _value = clamped;
+                UpdateDisplay();
+                ValueChanged?.Invoke(this, EventArgs.Empty);
+            }
+        }
+    }
+
+    public decimal Minimum
+    {
+        get => _minimum;
+        set { _minimum = value; if (_value < _minimum) Value = _minimum; }
+    }
+
+    public decimal Maximum
+    {
+        get => _maximum;
+        set { _maximum = value; if (_value > _maximum) Value = _maximum; }
+    }
+
+    public decimal Increment
+    {
+        get => _increment;
+        set => _increment = value > 0 ? value : 1m;
+    }
+
+    public int DecimalPlaces
+    {
+        get => _decimalPlaces;
+        set { _decimalPlaces = Math.Max(0, value); UpdateDisplay(); }
+    }
+
+    public string Suffix { get; set; } = string.Empty;
+
+    public ModernStepperControl()
+    {
+        Size = new Size(160, 36);
+        BackColor = UiStyle.InputBackground;
+        ForeColor = UiStyle.TextDark;
+        DoubleBuffered = true;
+
+        BuildLayout();
+    }
+
+    private void BuildLayout()
+    {
+        Controls.Clear();
+
+        _btnMinus.Text = "−";
+        _btnMinus.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold);
+        _btnMinus.Width = 34;
+        _btnMinus.Dock = DockStyle.Left;
+        _btnMinus.BackColor = UiStyle.CardBackground;
+        _btnMinus.ForeColor = UiStyle.TextMuted;
+        _btnMinus.Click += (_, _) => Value -= _increment;
+
+        _btnPlus.Text = "+";
+        _btnPlus.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold);
+        _btnPlus.Width = 34;
+        _btnPlus.Dock = DockStyle.Right;
+        _btnPlus.BackColor = UiStyle.CardBackground;
+        _btnPlus.ForeColor = UiStyle.TextMuted;
+        _btnPlus.Click += (_, _) => Value += _increment;
+
+        _txtValue.Dock = DockStyle.Fill;
+        _txtValue.BorderStyle = BorderStyle.None;
+        _txtValue.TextAlign = HorizontalAlignment.Center;
+        _txtValue.Font = new Font("Segoe UI Semibold", 10F);
+        _txtValue.BackColor = UiStyle.InputBackground;
+        _txtValue.ForeColor = Color.White;
+        _txtValue.TextChanged += (_, _) =>
+        {
+            if (_isUpdating) return;
+            var clean = _txtValue.Text.Replace(Suffix, "").Trim();
+            if (decimal.TryParse(clean, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v) ||
+                decimal.TryParse(clean, out v))
+            {
+                _value = Math.Clamp(v, _minimum, _maximum);
+                ValueChanged?.Invoke(this, EventArgs.Empty);
+            }
+        };
+        _txtValue.Leave += (_, _) => UpdateDisplay();
+
+        Controls.Add(_txtValue);
+        Controls.Add(_btnMinus);
+        Controls.Add(_btnPlus);
+
+        UpdateDisplay();
+    }
+
+    private void UpdateDisplay()
+    {
+        _isUpdating = true;
+        try
+        {
+            string fmt = _decimalPlaces > 0 ? $"N{_decimalPlaces}" : "0";
+            _txtValue.Text = string.IsNullOrEmpty(Suffix)
+                ? _value.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture)
+                : $"{_value.ToString(fmt, System.Globalization.CultureInfo.InvariantCulture)} {Suffix}";
+        }
+        finally
+        {
+            _isUpdating = false;
+        }
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var pen = new Pen(UiStyle.BorderColor, 1f);
+        e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
     }
 }

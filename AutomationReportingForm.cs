@@ -16,15 +16,15 @@ internal sealed class AutomationReportingForm(
     WindowsTaskSchedulerService taskScheduler) : Form
 {
     private readonly ModernCheckBox _enabledCheckBox = new() { Text = "Otomatik yenilemeyi etkinlestir", AutoSize = true };
-    private readonly NumericUpDown _intervalInput = new() { Minimum = 1, Maximum = 720 };
-    private readonly NumericUpDown _lookbackInput = new() { Minimum = 1, Maximum = 365 };
-    private readonly NumericUpDown _revenueAlertInput = new() { Minimum = 1, Maximum = 100, DecimalPlaces = 1 };
-    private readonly NumericUpDown _orderAlertInput = new() { Minimum = 1, Maximum = 100, DecimalPlaces = 1 };
+    private readonly ModernNumericUpDown _intervalInput = new() { Minimum = 1, Maximum = 720 };
+    private readonly ModernNumericUpDown _lookbackInput = new() { Minimum = 1, Maximum = 365 };
+    private readonly ModernNumericUpDown _revenueAlertInput = new() { Minimum = 1, Maximum = 100, DecimalPlaces = 1 };
+    private readonly ModernNumericUpDown _orderAlertInput = new() { Minimum = 1, Maximum = 100, DecimalPlaces = 1 };
     private readonly TextBox _outputTextBox = new();
     private readonly TextBox _statusTextBox = new();
     private readonly TextBox _queueShopTypeTextBox = new();
     private readonly TextBox _queueKeywordTextBox = new();
-    private readonly NumericUpDown _queueLimitInput = new() { Minimum = 5, Maximum = 100, Value = 30 };
+    private readonly ModernNumericUpDown _queueLimitInput = new() { Minimum = 5, Maximum = 100, Value = 30 };
     private readonly Label _queueSummaryLabel = new();
     private readonly BindingSource _queueBindingSource = new();
     private readonly DataGridView _queueGrid = new();
@@ -633,7 +633,7 @@ internal sealed class AutomationReportingForm(
     private void AppendStatus(string status) =>
         _statusTextBox.AppendText($"{DateTime.Now:HH:mm:ss} - {status}{Environment.NewLine}");
 
-    private static void AddNumericRow(TableLayoutPanel root, int row, string label, NumericUpDown input)
+    private static void AddNumericRow(TableLayoutPanel root, int row, string label, ModernNumericUpDown input)
     {
         root.Controls.Add(LabelFor(label), 0, row);
         input.Dock = DockStyle.Left;

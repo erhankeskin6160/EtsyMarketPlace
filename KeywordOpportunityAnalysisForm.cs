@@ -6,6 +6,7 @@ using EtsyMarketPlace.Application.KeywordResearch;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Domain.KeywordResearch;
 using EtsyMarketPlace.Domain.Tracking;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class KeywordOpportunityAnalysisForm : Form
 {
@@ -13,7 +14,7 @@ internal sealed class KeywordOpportunityAnalysisForm : Form
     private readonly TrackingService _trackingService;
     private readonly HttpClient _imageClient = new();
     private readonly TextBox _keywordTextBox = new();
-    private readonly NumericUpDown _limitInput = new();
+    private readonly ModernNumericUpDown _limitInput = new();
     private readonly Button _analyzeButton = new();
     private readonly Label _statusLabel = new();
     private readonly TextBox _summaryTextBox = new();

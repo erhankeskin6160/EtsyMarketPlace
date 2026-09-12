@@ -30,7 +30,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
     private readonly TextBox _shopInput = new();
     private readonly ComboBox _watchlistComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Button _saveWatchlistBtn = new();
-    private readonly NumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
+    private readonly ModernNumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
     private readonly Button _spyShopBtn = new();
     private readonly Button _openEtsyShopBtn = new();
     private readonly Button _exportCsvBtn = new();

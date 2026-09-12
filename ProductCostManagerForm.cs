@@ -11,8 +11,8 @@ internal sealed class ProductCostManagerForm : Form
     private readonly DataGridView _grid = new();
     private readonly TextBox _txtListingId = new();
     private readonly TextBox _txtTitle = new();
-    private readonly NumericUpDown _numUnitCost = new();
-    private readonly NumericUpDown _numShippingCost = new();
+    private readonly ModernNumericUpDown _numUnitCost = new();
+    private readonly ModernNumericUpDown _numShippingCost = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnDelete = new();
 

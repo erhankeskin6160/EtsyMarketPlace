@@ -74,6 +74,8 @@ static class Program
             _ = new SimilarProductsWinForms.Controls.ModernMultilineTextBox();
             _ = new SimilarProductsWinForms.Controls.ModernScrollPanel();
             _ = new SimilarProductsWinForms.Controls.ModernButtonControl();
+            _ = new SimilarProductsWinForms.Controls.ModernNumericUpDown();
+            _ = new SimilarProductsWinForms.Controls.ModernStepperControl();
             using var testGrid = new DataGridView();
             _ = SimilarProductsWinForms.Controls.ModernGridScrollAdapter.Attach(testGrid);
             using var f1 = new FastListingCreatorForm(null!);

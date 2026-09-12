@@ -1043,9 +1043,9 @@ internal sealed class ListingAbTestForm : Form
         for (var i = 0; i < 6; i++) table.RowStyles.Add(new RowStyle(SizeType.Absolute, i % 2 == 0 ? 22 : 36));
         table.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
 
-        var viewsInput = new NumericUpDown { Dock = DockStyle.Fill, Maximum = 1000000, Value = Math.Max(exp.AfterViews, exp.BeforeViews + 25) };
-        var favsInput = new NumericUpDown { Dock = DockStyle.Fill, Maximum = 100000, Value = Math.Max(exp.AfterFavorites, exp.BeforeFavorites + 5) };
-        var salesInput = new NumericUpDown { Dock = DockStyle.Fill, Maximum = 10000, Value = Math.Max(exp.AfterSales, exp.BeforeSales + 1) };
+        var viewsInput = new ModernNumericUpDown { Dock = DockStyle.Fill, Maximum = 1000000, Value = Math.Max(exp.AfterViews, exp.BeforeViews + 25) };
+        var favsInput = new ModernNumericUpDown { Dock = DockStyle.Fill, Maximum = 100000, Value = Math.Max(exp.AfterFavorites, exp.BeforeFavorites + 5) };
+        var salesInput = new ModernNumericUpDown { Dock = DockStyle.Fill, Maximum = 10000, Value = Math.Max(exp.AfterSales, exp.BeforeSales + 1) };
 
         table.Controls.Add(new Label { Text = "Güncel Görüntülenme Sayısı:", Dock = DockStyle.Fill }, 0, 0);
         table.Controls.Add(viewsInput, 0, 1);

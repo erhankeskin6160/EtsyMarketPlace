@@ -10,9 +10,9 @@ using SimilarProductsWinForms.Services;
 
 internal sealed class CostDetailsPopupForm : Form
 {
-    private readonly NumericUpDown _numProduction = new();
-    private readonly NumericUpDown _numShipping = new();
-    private readonly NumericUpDown _numPackaging = new();
+    private readonly ModernNumericUpDown _numProduction = new();
+    private readonly ModernNumericUpDown _numShipping = new();
+    private readonly ModernNumericUpDown _numPackaging = new();
     private readonly ModernCheckBox _chkApplyToAll = new();
 
     private readonly Label _lblInvoiceStatus = new();
@@ -379,7 +379,7 @@ internal sealed class CostDetailsPopupForm : Form
         }
     }
 
-    private void AddRow(TableLayoutPanel panel, string labelText, NumericUpDown num, int row)
+    private void AddRow(TableLayoutPanel panel, string labelText, ModernNumericUpDown num, int row)
     {
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 

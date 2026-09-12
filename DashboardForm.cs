@@ -358,7 +358,7 @@ internal sealed class DashboardForm : Form
         };
         promptForm.Controls.Add(lblInfo);
 
-        var numRate = new NumericUpDown
+        var numRate = new ModernNumericUpDown
         {
             DecimalPlaces = 2,
             Minimum = 1m,

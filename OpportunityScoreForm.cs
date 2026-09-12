@@ -6,14 +6,14 @@ using SimilarProductsWinForms.Controls;
 internal sealed class OpportunityScoreForm : Form
 {
     private readonly TextBox _productTextBox = new();
-    private readonly NumericUpDown _demandInput = CreateScoreInput();
-    private readonly NumericUpDown _shopFitInput = CreateScoreInput();
-    private readonly NumericUpDown _productionEaseInput = CreateScoreInput();
-    private readonly NumericUpDown _profitInput = CreateScoreInput();
-    private readonly NumericUpDown _visualInput = CreateScoreInput();
-    private readonly NumericUpDown _competitionRiskInput = CreateScoreInput();
-    private readonly NumericUpDown _shippingRiskInput = CreateScoreInput();
-    private readonly NumericUpDown _ipRiskInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _demandInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _shopFitInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _productionEaseInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _profitInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _visualInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _competitionRiskInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _shippingRiskInput = CreateScoreInput();
+    private readonly ModernNumericUpDown _ipRiskInput = CreateScoreInput();
     private readonly ModernMultilineTextBox _resultTextBox = new();
 
     public OpportunityScoreForm(ProductCandidate? product)
@@ -128,7 +128,7 @@ internal sealed class OpportunityScoreForm : Form
         root.Controls.Add(textBox, 1, row);
     }
 
-    private static void AddInputRow(TableLayoutPanel root, int row, string label, NumericUpDown input)
+    private static void AddInputRow(TableLayoutPanel root, int row, string label, ModernNumericUpDown input)
     {
         input.Dock = DockStyle.Fill;
         input.ValueChanged += (_, _) =>
@@ -149,7 +149,7 @@ internal sealed class OpportunityScoreForm : Form
         TextAlign = ContentAlignment.MiddleLeft,
     };
 
-    private static NumericUpDown CreateScoreInput() => new()
+    private static ModernNumericUpDown CreateScoreInput() => new()
     {
         Minimum = 0,
         Maximum = 100,

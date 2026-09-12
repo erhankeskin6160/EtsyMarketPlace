@@ -118,7 +118,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
         Margin = new Padding(0, 3, 8, 3)
     };
 
-    private readonly NumericUpDown _numThrottle = new()
+    private readonly ModernNumericUpDown _numThrottle = new()
     {
         Minimum = 1,
         Maximum = 30,
@@ -130,7 +130,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
         ForeColor = UiStyle.TextDark
     };
 
-    private readonly NumericUpDown _numPriceAdj = new()
+    private readonly ModernNumericUpDown _numPriceAdj = new()
     {
         Minimum = -50,
         Maximum = 100,

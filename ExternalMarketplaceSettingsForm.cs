@@ -2,13 +2,14 @@ namespace SimilarProductsWinForms;
 
 using EtsyMarketPlace.Infrastructure.ExternalMarketplaces;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class ExternalMarketplaceSettingsForm : Form
 {
     private readonly TextBox _clientIdTextBox = new();
     private readonly TextBox _clientSecretTextBox = new();
     private readonly ComboBox _marketplaceComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly NumericUpDown _limitInput = new() { Minimum = 1, Maximum = 50, Value = 20 };
+    private readonly ModernNumericUpDown _limitInput = new() { Minimum = 1, Maximum = 50, Value = 20 };
     private readonly TextBox _settingsPathTextBox = new();
     private readonly TextBox _statusTextBox = new();
     private readonly EbayApiClient _ebayClient = new();

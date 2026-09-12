@@ -34,7 +34,7 @@ internal sealed class MarketResearchForm : Form
     private MarketAnalysisService.MarketSummaryKpis _currentKpis = new();
 
     private readonly TextBox _keywordTextBox = new();
-    private readonly NumericUpDown _limitInput = new();
+    private readonly ModernNumericUpDown _limitInput = new();
     private readonly ComboBox _sortComboBox = new();
     private readonly Button _searchButton = new();
     private readonly Button _btnAiMarketReport = new();

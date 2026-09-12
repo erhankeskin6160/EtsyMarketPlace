@@ -166,6 +166,11 @@ internal static class UiStyle
             txt.BackColor = InputBackground;
             txt.ForeColor = TextDark;
         }
+        else if (ctrl is SimilarProductsWinForms.Controls.ModernNumericUpDown mnum)
+        {
+            mnum.BackColor = InputBackground;
+            mnum.ForeColor = TextDark;
+        }
         else if (ctrl is NumericUpDown num)
         {
             num.Font = BaseFont;
