@@ -399,16 +399,27 @@ internal sealed class OwnShopPerformanceForm : Form
 
     private Control BuildContentTabs()
     {
-        var tabs = new TabControl { Dock = DockStyle.Fill };
-        var comparisonTab = new TabPage("📊 Dönem Karşılaştırması") { BackColor = Color.White, Padding = new Padding(4) };
+        var tabs = new ModernTabControl
+        {
+            Dock = DockStyle.Fill,
+            HeaderBackgroundColor = UiStyle.BackgroundColor,
+            ActiveTabColor = UiStyle.PrimaryColor,
+            InactiveTabColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+            ActiveTextColor = Color.White,
+            InactiveTextColor = UiStyle.TextMuted,
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold)
+        };
+
+        var comparisonTab = new TabPage("📊 Dönem Karşılaştırması") { BackColor = UiStyle.BackgroundColor, Padding = Padding.Empty };
         comparisonTab.Controls.Add(_productsGrid);
         tabs.TabPages.Add(comparisonTab);
 
-        var paretoTab = new TabPage("⭐ ABC / Pareto Segmentasyonu") { BackColor = Color.White, Padding = new Padding(4) };
+        var paretoTab = new TabPage("★ ABC / Pareto Segmentasyonu") { BackColor = UiStyle.BackgroundColor, Padding = Padding.Empty };
         paretoTab.Controls.Add(_paretoGrid);
         tabs.TabPages.Add(paretoTab);
 
-        var historyTab = new TabPage("🕒 Kayıt & Snapshot Geçmişi") { BackColor = Color.White, Padding = new Padding(4) };
+        var historyTab = new TabPage("🕒 Kayıt & Snapshot Geçmişi") { BackColor = UiStyle.BackgroundColor, Padding = Padding.Empty };
         historyTab.Controls.Add(_historyGrid);
         tabs.TabPages.Add(historyTab);
         return tabs;

@@ -1803,9 +1803,9 @@ public class ModernMultilineTextBox : Panel
 /// </summary>
 public class ModernTabControl : TabControl
 {
-    public Color HeaderBackgroundColor { get; set; } = Color.FromArgb(15, 23, 42); // Slate 900
+    public Color HeaderBackgroundColor { get; set; } = Color.FromArgb(15, 23, 42); // Slate 950 #0F172A
     public Color ActiveTabColor { get; set; } = Color.FromArgb(99, 102, 241); // Indigo 500
-    public Color InactiveTabColor { get; set; } = Color.FromArgb(30, 41, 59); // Slate 800
+    public Color InactiveTabColor { get; set; } = Color.FromArgb(30, 41, 59); // Slate 800 #1E293B
     public Color ActiveTextColor { get; set; } = Color.White;
     public Color InactiveTextColor { get; set; } = Color.FromArgb(148, 163, 184); // Slate 400
     public Color BorderColor { get; set; } = Color.FromArgb(51, 65, 85); // Slate 700
@@ -1824,9 +1824,9 @@ public class ModernTabControl : TabControl
         DoubleBuffered = true;
         DrawMode = TabDrawMode.OwnerDrawFixed;
         SizeMode = TabSizeMode.Normal;
-        ItemSize = new Size(165, 36);
-        Padding = new Point(16, 6);
-        Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        ItemSize = new Size(0, 40);
+        Padding = new Point(22, 8);
+        Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -1842,12 +1842,14 @@ public class ModernTabControl : TabControl
                 break;
             }
         }
+        Cursor = _hoveredIndex != -1 ? Cursors.Hand : Cursors.Default;
         if (oldHover != _hoveredIndex) Invalidate();
     }
 
     protected override void OnMouseLeave(EventArgs e)
     {
         base.OnMouseLeave(e);
+        Cursor = Cursors.Default;
         if (_hoveredIndex != -1)
         {
             _hoveredIndex = -1;
@@ -1860,41 +1862,64 @@ public class ModernTabControl : TabControl
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
 
-        // 1. Arka planı koyu temaya boya
+        int headerHeight = TabCount > 0 ? GetTabRect(0).Bottom + 2 : 40;
+
+        // 1. Fill entire control background with HeaderBackgroundColor to eliminate any white flicker
         using (var bgBrush = new SolidBrush(HeaderBackgroundColor))
         {
             g.FillRectangle(bgBrush, ClientRectangle);
         }
 
-        // 2. Tab başlıklarını çiz
+        // 2. Draw modern pill tabs
         for (int i = 0; i < TabCount; i++)
         {
             var tabRect = GetTabRect(i);
             var isSelected = (SelectedIndex == i);
             var isHovered = (_hoveredIndex == i && !isSelected);
 
-            // Tab hap (pill) alanı
-            var pillRect = new Rectangle(tabRect.X + 2, tabRect.Y + 2, tabRect.Width - 4, tabRect.Height - 4);
+            // Tab pill bounding box
+            var pillRect = new Rectangle(tabRect.X + 2, tabRect.Y + 4, tabRect.Width - 4, tabRect.Height - 8);
             if (pillRect.Width <= 0 || pillRect.Height <= 0) continue;
 
             using var path = ModernCardPanel.CreateRoundedRectanglePath(pillRect, 8);
 
-            Color bg = isSelected ? ActiveTabColor : (isHovered ? Color.FromArgb(45, 55, 75) : InactiveTabColor);
-            Color fg = isSelected ? ActiveTextColor : InactiveTextColor;
-
-            using (var brush = new SolidBrush(bg))
+            if (isSelected)
             {
-                g.FillPath(brush, path);
+                // Active pill with rich Indigo vertical gradient and subtle sheen
+                using var selBrush = new LinearGradientBrush(
+                    pillRect,
+                    ActiveTabColor,
+                    Color.FromArgb(79, 70, 229), // Indigo 600
+                    LinearGradientMode.Vertical);
+                g.FillPath(selBrush, path);
+
+                // Subtle active glowing border
+                using var glowPen = new Pen(Color.FromArgb(165, 180, 252), 1.2f);
+                g.DrawPath(glowPen, path);
             }
-
-            if (!isSelected)
+            else if (isHovered)
             {
+                // Hovered inactive pill
+                using var hoverBrush = new SolidBrush(UiStyle.CardHoverBackground);
+                g.FillPath(hoverBrush, path);
+
+                using var hoverPen = new Pen(Color.FromArgb(99, 102, 241), 1f);
+                g.DrawPath(hoverPen, path);
+            }
+            else
+            {
+                // Inactive normal pill
+                using var inactBrush = new SolidBrush(InactiveTabColor);
+                g.FillPath(inactBrush, path);
+
                 using var borderPen = new Pen(BorderColor, 1f);
                 g.DrawPath(borderPen, path);
             }
 
-            // Metni çiz
+            // Draw formatted text with ClearType
+            Color fg = isSelected ? ActiveTextColor : (isHovered ? UiStyle.TextDark : InactiveTextColor);
             var tabText = TabPages[i].Text;
             TextRenderer.DrawText(
                 g,
@@ -1902,16 +1927,21 @@ public class ModernTabControl : TabControl
                 Font,
                 pillRect,
                 fg,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.WordEllipsis);
         }
 
-        // 3. TabPage içerik alanının etrafına şık çerçeve çiz
+        // 3. Subtle dividing line along bottom of tab header strip
+        using (var sepPen = new Pen(BorderColor, 1f))
+        {
+            g.DrawLine(sepPen, 0, headerHeight - 1, Width, headerHeight - 1);
+        }
+
+        // 4. Content area background
         if (SelectedTab != null)
         {
-            var displayRect = DisplayRectangle;
-            var borderRect = new Rectangle(displayRect.X - 1, displayRect.Y - 1, displayRect.Width + 1, displayRect.Height + 1);
-            using var pageBorderPen = new Pen(BorderColor, 1.5f);
-            g.DrawRectangle(pageBorderPen, borderRect);
+            var contentRect = new Rectangle(0, headerHeight, Width, Math.Max(0, Height - headerHeight));
+            using var contentBrush = new SolidBrush(SelectedTab.BackColor);
+            g.FillRectangle(contentBrush, contentRect);
         }
     }
 }

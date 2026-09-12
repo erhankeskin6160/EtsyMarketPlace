@@ -240,12 +240,27 @@ internal static class UiStyle
             rb.Font = BaseFont;
             rb.ForeColor = TextDark;
         }
+        else if (ctrl is SimilarProductsWinForms.Controls.ModernTabControl mtc)
+        {
+            mtc.HeaderBackgroundColor = BackgroundColor;
+            mtc.ActiveTabColor = PrimaryColor;
+            mtc.InactiveTabColor = CardBackground;
+            mtc.ActiveTextColor = Color.White;
+            mtc.InactiveTextColor = TextMuted;
+            mtc.BorderColor = BorderColor;
+            mtc.Font = SemiboldBaseFont;
+            foreach (TabPage tp in mtc.TabPages)
+            {
+                tp.BackColor = BackgroundColor;
+                ApplyToControls(tp.Controls);
+            }
+        }
         else if (ctrl is TabControl tc)
         {
             tc.Font = SemiboldBaseFont;
             foreach (TabPage tp in tc.TabPages)
             {
-                tp.BackColor = CardBackground;
+                tp.BackColor = BackgroundColor;
                 ApplyToControls(tp.Controls);
             }
         }
