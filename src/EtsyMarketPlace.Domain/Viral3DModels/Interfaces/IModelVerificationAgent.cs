@@ -28,4 +28,10 @@ public interface IModelVerificationAgent
     Task<VerifiedModelResult> VerifyAndHealModelAsync(Trending3DModel model, CancellationToken ct = default);
     Task<VerifiedModelResult> VerifyWithVisualBrowserAsync(Trending3DModel model, System.Action<string>? statusCallback = null, CancellationToken ct = default);
     Task<IReadOnlyList<Trending3DModel>> ScoutTrendingModelsAsync(string query, ModelPlatformType? platform = null, CancellationToken ct = default);
+    Task<IReadOnlyList<Trending3DModel>> ScoutAndHarvestForShopAsync(
+        EtsyMarketPlace.Domain.Viral3DModels.ValueObjects.ShopNicheProfile shopProfile,
+        ModelPlatformType platform = ModelPlatformType.Printables,
+        int maxModels = 20,
+        System.Action<string>? statusCallback = null,
+        CancellationToken ct = default);
 }

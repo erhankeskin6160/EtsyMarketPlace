@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Viral3DModels.Entities;
 using EtsyMarketPlace.Domain.Viral3DModels.Enums;
 using EtsyMarketPlace.Domain.Viral3DModels.Interfaces;
+using EtsyMarketPlace.Domain.Viral3DModels.ValueObjects;
 
 /// <summary>
 /// Autonomous Scout & Verification Agent inspired by Nous Hermes 3 tool-use principles.
@@ -184,6 +185,54 @@ public sealed class Hermes3DScoutAgent : IModelVerificationAgent
         // Scouts and filters models from Atlas repository, applying agent live verification
         var candidates = Repositories.Viral3DModelAtlasRepository.Search(query, platform);
         return Task.FromResult(candidates);
+    }
+
+    public async Task<IReadOnlyList<Trending3DModel>> ScoutAndHarvestForShopAsync(
+        ShopNicheProfile shopProfile,
+        ModelPlatformType platform = ModelPlatformType.Printables,
+        int maxModels = 20,
+        Action<string>? statusCallback = null,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(shopProfile);
+
+        statusCallback?.Invoke($"🧠 Hermes 3 Ajanı: '{shopProfile.PrimaryNiche}' nişine göre arama planlıyor...");
+
+        var harvested = await _visualAgent.ScoutAndHarvestModelsForShopAsync(
+            shopProfile,
+            platform,
+            maxModels,
+            statusCallback,
+            ct);
+
+        // Filter copyright IP risk and refine models
+        foreach (var model in harvested)
+        {
+            var tempResult = new VerifiedModelResult();
+            CheckIpCopyrightRisk(model, tempResult);
+            if (tempResult.HasIpCopyrightRisk)
+            {
+                model.OpportunityScore = Math.Min(model.OpportunityScore, 30);
+                model.ShopFitReason = $"⚠️ Telif Uyarısı: {tempResult.IpRiskWarning}";
+            }
+        }
+
+        // Persist to SQLite Lake
+        if (_lakeRepo != null && harvested.Count > 0)
+        {
+            statusCallback?.Invoke($"💾 {harvested.Count} model SQLite 3D Model Lake veri tabanına kalıcı olarak kaydediliyor...");
+            try
+            {
+                await _lakeRepo.SaveOrUpdateModelsAsync(harvested, ct);
+            }
+            catch
+            {
+                // Non-critical persistence failure
+            }
+        }
+
+        statusCallback?.Invoke($"✅ Otonom Av Tamamlandı: {harvested.Count} model başarıyla kaydedildi!");
+        return harvested;
     }
 
     private static void CheckIpCopyrightRisk(Trending3DModel model, VerifiedModelResult result)

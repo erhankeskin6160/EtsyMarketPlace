@@ -86,6 +86,19 @@ public sealed class Trending3DModelHunterForm : Form
         Cursor = Cursors.Hand
     };
 
+    private readonly ModernButtonControl _btnAgentScoutForShop = new()
+    {
+        Text = "🌐 Ajan ile Mağazama Model Avla (Canlı Chrome)",
+        Width = 310,
+        Height = 30,
+        NormalColor = Color.FromArgb(16, 185, 129),
+        HoverColor = Color.FromArgb(5, 150, 105),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+        Cursor = Cursors.Hand,
+        Margin = new Padding(8, 0, 0, 0)
+    };
+
     // KPI Tiles
     private readonly ModernKpiTile _kpiPlatforms = new() { Title = "AKTİF PLATFORMLAR", Value = "5", TrendText = "Bambu/Creality/Prusa/Anycubic/TV", IsPositive = true, Width = 230 };
     private readonly ModernKpiTile _kpiViralCount = new() { Title = "TARANAN MODELLER", Value = "0", TrendText = "Canlı Platform Kataloğu", IsPositive = true, Width = 230 };
@@ -425,6 +438,7 @@ public sealed class Trending3DModelHunterForm : Form
         bannerFlow.Controls.Add(_lblStoreNicheText);
         bannerFlow.Controls.Add(_lblStoreAiBadge);
         bannerFlow.Controls.Add(_btnReanalyzeNiche);
+        bannerFlow.Controls.Add(_btnAgentScoutForShop);
         _panelStoreNicheBanner.Controls.Add(bannerFlow);
         mainLayout.Controls.Add(_panelStoreNicheBanner, 0, 1);
 
@@ -674,6 +688,7 @@ public sealed class Trending3DModelHunterForm : Form
 
         _btnScan.Click += async (_, _) => await RunScanAsync();
         _btnReanalyzeNiche.Click += async (_, _) => await ReanalyzeShopNicheAsync();
+        _btnAgentScoutForShop.Click += async (_, _) => await RunAgentScoutForShopAsync();
 
         _btnVerifyWithAgent.Click += async (_, _) =>
         {
@@ -995,6 +1010,99 @@ public sealed class Trending3DModelHunterForm : Form
         {
             _btnReanalyzeNiche.Enabled = true;
             _btnReanalyzeNiche.Text = "⚡ AI ile Mağazamı Tara";
+        }
+    }
+
+    private async Task RunAgentScoutForShopAsync()
+    {
+        try
+        {
+            _btnAgentScoutForShop.Enabled = false;
+            _btnAgentScoutForShop.Text = "⏳ Ajan Avlıyor...";
+
+            if (_activeShopProfile == null)
+            {
+                _activeShopProfile = EtsyMarketPlace.Domain.Viral3DModels.ValueObjects.ShopNicheProfile.CreateDefaultFigureAndToy();
+                UpdateStoreNicheBanner();
+            }
+
+            _lblStoreNicheText.Text = $"🤖 Canlı Ajan Printables üzerinde '{_activeShopProfile.PrimaryNiche}' modellerini avlıyor...";
+            _lblStoreAiBadge.Text = "🚀 Canlı Tarayıcı Aktif";
+
+            var harvested = await _verificationAgent.ScoutAndHarvestForShopAsync(
+                _activeShopProfile,
+                EtsyMarketPlace.Domain.Viral3DModels.Enums.ModelPlatformType.Printables,
+                maxModels: 20,
+                statusCallback: status =>
+                {
+                    if (InvokeRequired)
+                    {
+                        Invoke(() =>
+                        {
+                            _btnAgentScoutForShop.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
+                            _lblStoreNicheText.Text = status;
+                        });
+                    }
+                    else
+                    {
+                        _btnAgentScoutForShop.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
+                        _lblStoreNicheText.Text = status;
+                    }
+                });
+
+            if (harvested.Count > 0)
+            {
+                // Merge discovered models into _allModels, avoiding duplicates
+                var existingUrls = new HashSet<string>(_allModels.Select(m => m.ModelPageUrl ?? m.SafeModelUrl), StringComparer.OrdinalIgnoreCase);
+                var newModels = harvested.Where(m => !existingUrls.Contains(m.ModelPageUrl ?? m.SafeModelUrl)).ToList();
+
+                if (newModels.Count > 0)
+                {
+                    _allModels.InsertRange(0, newModels);
+                }
+
+                _displayedLimit = Math.Max(_displayedLimit, _allModels.Count);
+                UpdateKpis();
+                FilterModels();
+
+                // Select top match
+                if (_grid.Rows.Count > 0)
+                {
+                    _grid.Rows[0].Selected = true;
+                    OnGridRowSelected();
+                }
+
+                MessageBox.Show(
+                    this,
+                    $"🎉 Otonom Model Avı Başarıyla Tamamlandı!\n\n" +
+                    $"• Mağaza Nişi: {_activeShopProfile.PrimaryNiche}\n" +
+                    $"• Canlı Keşfedilen Model: {harvested.Count} adet\n" +
+                    $"• SQLite Gölüne Kaydedilen: {newModels.Count} yeni model\n" +
+                    $"• En Yüksek Uyum Skoru: %{harvested.Max(m => m.ShopFitScore)}\n\n" +
+                    $"Modeller listenin en üstüne eklenmiş ve mağaza uyumluluk puanlarıyla etiketlenmiştir!",
+                    "Otonom Ajan Model Avı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            else
+            {
+                MessageBox.Show(
+                    this,
+                    "Ajan oturumu tamamlandı fakat yeni model tespit edilemedi. Lütfen internet bağlantınızı kontrol edip tekrar deneyiniz.",
+                    "Model Avı Bilgisi",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Otonom model avı sırasında uyarı: {ex.Message}", "Ajan Hatası", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _btnAgentScoutForShop.Enabled = true;
+            _btnAgentScoutForShop.Text = "🌐 Ajan ile Mağazama Model Avla (Canlı Chrome)";
+            UpdateStoreNicheBanner();
         }
     }
 

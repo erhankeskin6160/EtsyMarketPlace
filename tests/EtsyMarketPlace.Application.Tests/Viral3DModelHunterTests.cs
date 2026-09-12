@@ -601,4 +601,42 @@ public class Viral3DModelHunterTests
         var agent = new EtsyMarketPlace.Infrastructure.Viral3DModels.Services.Hermes3DScoutAgent();
         await Assert.ThrowsAsync<System.ArgumentNullException>(() => agent.VerifyWithVisualBrowserAsync(null!));
     }
+
+    [Fact]
+    public async Task HermesAgent_ScoutAndHarvestForShopAsync_ThrowsOnNullProfile()
+    {
+        var agent = new EtsyMarketPlace.Infrastructure.Viral3DModels.Services.Hermes3DScoutAgent();
+        await Assert.ThrowsAsync<System.ArgumentNullException>(() => agent.ScoutAndHarvestForShopAsync(null!));
+    }
+
+    [Fact]
+    public async Task HermesAgent_ScoutAndHarvestForShopAsync_PersistsModelsIntoLake()
+    {
+        string tempDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"scout_lake_{System.Guid.NewGuid():N}.db");
+        try
+        {
+            var lake = new EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.SqliteViral3DModelLakeRepository(tempDb);
+            var agent = new EtsyMarketPlace.Infrastructure.Viral3DModels.Services.Hermes3DScoutAgent(lake);
+            var profile = EtsyMarketPlace.Domain.Viral3DModels.ValueObjects.ShopNicheProfile.CreateDefaultFigureAndToy();
+
+            var results = await agent.ScoutAndHarvestForShopAsync(profile, ModelPlatformType.Printables, maxModels: 5);
+
+            Assert.NotEmpty(results);
+            Assert.All(results, m =>
+            {
+                Assert.True(m.ShopFitScore >= 50);
+                Assert.NotEmpty(m.ShopFitReason);
+            });
+
+            int totalInLake = await lake.GetTotalCountAsync();
+            Assert.True(totalInLake > 0, "Scouted models should be saved into SQLite 3D Model Lake repository");
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempDb))
+            {
+                try { System.IO.File.Delete(tempDb); } catch { }
+            }
+        }
+    }
 }
