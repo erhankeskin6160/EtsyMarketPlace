@@ -339,7 +339,9 @@ public sealed class Trending3DModelHunterForm : Form
         };
         var competitionChecker = new EtsyCompetitionCheckerService();
         var snapshotRepository = new Sqlite3DModelSnapshotRepository();
-        _hunterService = new Viral3DModelHunterService(scrapers, competitionChecker, snapshotRepository);
+        var searchExpander = new AiModelSearchExpander();
+        var lakeRepository = new SqliteViral3DModelLakeRepository();
+        _hunterService = new Viral3DModelHunterService(scrapers, competitionChecker, snapshotRepository, searchExpander, lakeRepository);
 
         BuildLayout();
         HookEvents();
@@ -784,6 +786,16 @@ public sealed class Trending3DModelHunterForm : Form
                 pageSize: 60,
                 ct: _scanCts.Token)).ToList();
 
+            if (_hunterService.LastQueryExpansion != null && _hunterService.LastQueryExpansion.ExpandedKeywords.Count > 0)
+            {
+                string expTags = string.Join(", ", _hunterService.LastQueryExpansion.ExpandedKeywords.Take(3));
+                _lblEngineBadge.Text = $"🤖 AI Genişletildi: {expTags} | 💾 SQLite Lake: {_allModels.Count} Model";
+            }
+            else
+            {
+                _lblEngineBadge.Text = $"🛡️ Anti-Bot | 💾 SQLite Lake: {_allModels.Count} Model Aktif";
+            }
+
             _displayedLimit = 35;
             UpdateKpis();
             FilterModels();
@@ -868,6 +880,28 @@ public sealed class Trending3DModelHunterForm : Form
         _kpiGoldenOpps.Value = goldenCount.ToString();
         int commercialCount = _allModels.Count(m => m.License.IsCommercialAllowed);
         _kpiCommercial.Value = commercialCount.ToString();
+
+        if (_hunterService.LakeRepository != null)
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    int lakeCount = await _hunterService.LakeRepository.GetTotalCountAsync();
+                    if (IsHandleCreated && !IsDisposed)
+                    {
+                        BeginInvoke(() =>
+                        {
+                            _kpiViralCount.TrendText = $"💾 Model Lake: {lakeCount:N0} Model";
+                        });
+                    }
+                }
+                catch
+                {
+                    // Ignore background counter errors
+                }
+            });
+        }
     }
 
     private ModelPlatformType? GetSelectedPlatformFilter()

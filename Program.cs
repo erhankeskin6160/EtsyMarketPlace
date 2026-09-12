@@ -146,6 +146,7 @@ static class Program
             using var f17 = new PhotoChecklistForm(null);
             using var f18 = new WeeklyReportForm([]);
             using var f19 = new ListingOptimizationForm(null!, null!);
+            using var f20 = new Trending3DModelHunterForm();
             Console.WriteLine("CONTROLS_VERIFIED_OK");
             return;
         }

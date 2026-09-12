@@ -358,5 +358,111 @@ public class Viral3DModelHunterTests
         string planterAsset = Viral3DModelAssetManager.GetAssetForModel("Vortex Spiral Planter");
         Assert.Equal("asset://planter.jpg", planterAsset);
     }
+
+    [Fact]
+    public async Task AiModelSearchExpander_ExpandsTurkishQuery_To_Technical3DTerms()
+    {
+        var expander = new AiModelSearchExpander();
+
+        // 1. Test Turkish dragon expansion
+        var dragonExp = await expander.ExpandQueryAsync("ejderha");
+        Assert.Contains("dragon", dragonExp.PrimaryEnglishTerm, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("articulated dragon", dragonExp.ExpandedKeywords);
+        Assert.Contains("print-in-place", dragonExp.Technical3DTags);
+
+        // 2. Test Turkish planter expansion
+        var planterExp = await expander.ExpandQueryAsync("saksı");
+        Assert.Contains("planter", planterExp.PrimaryEnglishTerm, System.StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("spiral planter", planterExp.ExpandedKeywords);
+
+        // 3. Test Turkish fidget expansion
+        var fidgetExp = await expander.ExpandQueryAsync("fidget");
+        Assert.Contains("fidget toy", fidgetExp.ExpandedKeywords);
+    }
+
+    [Fact]
+    public async Task SqliteViral3DModelLakeRepository_SeedsAndQueriesModelsSuccessfully()
+    {
+        string tempDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"test_lake_{System.Guid.NewGuid():N}.db");
+        try
+        {
+            var repo = new EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.SqliteViral3DModelLakeRepository(tempDb);
+
+            // 1. Verify auto-seeding
+            int total = await repo.GetTotalCountAsync();
+            Assert.True(total >= 10, $"Auto-seed should populate at least 10 models, got {total}");
+
+            // 2. Query search
+            var dragons = await repo.SearchModelsAsync("dragon");
+            Assert.NotEmpty(dragons);
+            Assert.All(dragons, d => Assert.Contains("dragon", d.Title, System.StringComparison.OrdinalIgnoreCase));
+
+            // 3. Test Upsert
+            var newModel = new Trending3DModel
+            {
+                ExternalId = "test_lake_model_1",
+                Platform = ModelPlatformType.MakerWorld,
+                Title = "Test Custom Lake Model",
+                Description = "High-speed 3d model for test",
+                Category = "Toys & Figures",
+                Downloads24h = 500,
+                TotalDownloads = 1500,
+                PrintsCount = 300,
+                LikesCount = 200,
+                License = ModelLicenseInfo.Commercial("CC-BY 4.0"),
+                PrintSpecs = new PrintEstimation { FilamentGrams = 45, EstimatedPrintTimeMinutes = 90 }
+            };
+
+            int saved = await repo.SaveOrUpdateModelsAsync([newModel]);
+            Assert.Equal(1, saved);
+
+            int newTotal = await repo.GetTotalCountAsync();
+            Assert.Equal(total + 1, newTotal);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempDb))
+            {
+                try { System.IO.File.Delete(tempDb); } catch { }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Viral3DModelHunterService_WithLakeAndExpander_IntegratesEndToEnd()
+    {
+        string tempDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"test_lake_svc_{System.Guid.NewGuid():N}.db");
+        try
+        {
+            var scrapers = new List<I3DModelPlatformScraper>
+            {
+                new MakerWorldTrendingScraper(),
+                new PrintablesTrendingScraper()
+            };
+            var expander = new AiModelSearchExpander();
+            var lake = new EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.SqliteViral3DModelLakeRepository(tempDb);
+            var hunter = new Viral3DModelHunterService(scrapers, null, null, expander, lake);
+
+            // Search with Turkish term: 'ejderha'
+            var results = await hunter.SearchModelsAcrossPlatformsAsync("ejderha", commercialOnly: true);
+
+            Assert.NotEmpty(results);
+            Assert.NotNull(hunter.LastQueryExpansion);
+            Assert.Contains("dragon", hunter.LastQueryExpansion.PrimaryEnglishTerm, System.StringComparison.OrdinalIgnoreCase);
+            Assert.True(results.Any(m => m.Title.Contains("dragon", System.StringComparison.OrdinalIgnoreCase)));
+
+            // Verify models were saved to the Lake
+            int lakeCount = await lake.GetTotalCountAsync();
+            Assert.True(lakeCount > 0, "Discovered models should be persisted into SQLite Lake");
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempDb))
+            {
+                try { System.IO.File.Delete(tempDb); } catch { }
+            }
+        }
+    }
 }
+
 

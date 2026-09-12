@@ -15,20 +15,29 @@ public sealed class Viral3DModelHunterService
     private readonly List<I3DModelPlatformScraper> _scrapers;
     private readonly IEtsyCompetitionChecker? _competitionChecker;
     private readonly I3DModelSnapshotRepository? _snapshotRepository;
+    private readonly IModelSearchExpander? _searchExpander;
+    private readonly IViral3DModelLakeRepository? _lakeRepository;
+
+    public ModelSearchQueryExpansion? LastQueryExpansion { get; private set; }
+    public IViral3DModelLakeRepository? LakeRepository => _lakeRepository;
 
     public Viral3DModelHunterService(
         IEnumerable<I3DModelPlatformScraper> scrapers,
         IEtsyCompetitionChecker? competitionChecker = null,
-        I3DModelSnapshotRepository? snapshotRepository = null)
+        I3DModelSnapshotRepository? snapshotRepository = null,
+        IModelSearchExpander? searchExpander = null,
+        IViral3DModelLakeRepository? lakeRepository = null)
     {
         _scrapers = scrapers?.ToList() ?? [];
         _competitionChecker = competitionChecker;
         _snapshotRepository = snapshotRepository;
+        _searchExpander = searchExpander;
+        _lakeRepository = lakeRepository;
     }
 
     /// <summary>
-    /// Scans all active 3D printing platforms in parallel, calculates delta-velocity from SQLite snapshots,
-    /// checks Etsy competition with anti-bot throttling, calculates store niche compatibility, and ranks models.
+    /// Scans all active 3D printing platforms in parallel, updates SQLite model lake,
+    /// calculates delta-velocity from SQLite snapshots, checks Etsy competition, and ranks models.
     /// </summary>
     public async Task<IReadOnlyList<Trending3DModel>> ScanTrendingModelsAsync(
         ModelPlatformType? platformFilter = null,
@@ -46,7 +55,49 @@ public sealed class Viral3DModelHunterService
         var tasks = targetScrapers.Select(s => s.GetTrendingModelsAsync(1, ct));
         var results = await Task.WhenAll(tasks);
 
-        var allModels = results.SelectMany(r => r).DistinctBy(m => m.ExternalId).ToList();
+        var allModelsDict = new Dictionary<string, Trending3DModel>(StringComparer.OrdinalIgnoreCase);
+
+        // 1. Ingest Scraper Results
+        foreach (var m in results.SelectMany(r => r))
+        {
+            allModelsDict[m.ExternalId] = m;
+        }
+
+        // 2. Ingest Persistent Lake Models (Historical + Cross-Platform Discovered)
+        if (_lakeRepository != null)
+        {
+            try
+            {
+                var lakeModels = await _lakeRepository.GetModelsAsync(100, 0, ct);
+                foreach (var lm in lakeModels)
+                {
+                    if (platformFilter.HasValue && lm.Platform != platformFilter.Value) continue;
+                    if (!allModelsDict.ContainsKey(lm.ExternalId))
+                    {
+                        allModelsDict[lm.ExternalId] = lm;
+                    }
+                }
+            }
+            catch
+            {
+                // Non-fatal if lake read fails
+            }
+        }
+
+        var allModels = allModelsDict.Values.ToList();
+
+        // 3. Persist all discovered models to SQLite Model Lake
+        if (_lakeRepository != null && allModels.Count > 0)
+        {
+            try
+            {
+                await _lakeRepository.SaveOrUpdateModelsAsync(allModels, ct);
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
 
         await EnrichAndScoreModelsAsync(allModels, shopProfile, ct);
 
@@ -54,8 +105,7 @@ public sealed class Viral3DModelHunterService
     }
 
     /// <summary>
-    /// Actively searches across all platforms in parallel with real keyword queries, category filtering,
-    /// and dynamic scoring.
+    /// Performs AI semantic query expansion and searches across platforms and SQLite Model Lake.
     /// </summary>
     public async Task<IReadOnlyList<Trending3DModel>> SearchModelsAcrossPlatformsAsync(
         string query,
@@ -73,10 +123,98 @@ public sealed class Viral3DModelHunterService
             ? _scrapers.Where(s => s.PlatformType == platformFilter.Value).ToList()
             : _scrapers;
 
-        var tasks = targetScrapers.Select(s => s.SearchModelsAsync(query, page, pageSize, ct));
-        var results = await Task.WhenAll(tasks);
+        var searchQueries = new List<string>();
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            searchQueries.Add(query.Trim());
 
-        var allModels = results.SelectMany(r => r).DistinctBy(m => m.ExternalId).ToList();
+            // 1. AI Semantic Query Expansion (Turkish/Colloquial -> 3D Technical Variations)
+            if (_searchExpander != null)
+            {
+                try
+                {
+                    var expansion = await _searchExpander.ExpandQueryAsync(query, shopProfile, ct);
+                    LastQueryExpansion = expansion;
+
+                    foreach (var kw in expansion.ExpandedKeywords)
+                    {
+                        if (!searchQueries.Contains(kw, StringComparer.OrdinalIgnoreCase))
+                        {
+                            searchQueries.Add(kw);
+                        }
+                        if (searchQueries.Count >= 3) break; // Limit fan-out to 3 semantic variations for performance
+                    }
+                }
+                catch
+                {
+                    // Non-fatal if AI expansion fails
+                }
+            }
+        }
+
+        var allModelsDict = new Dictionary<string, Trending3DModel>(StringComparer.OrdinalIgnoreCase);
+
+        // 2. Parallel Scraper Queries across Expanded Keywords
+        var scraperTasks = new List<Task<IReadOnlyList<Trending3DModel>>>();
+        foreach (var q in searchQueries)
+        {
+            foreach (var scraper in targetScrapers)
+            {
+                scraperTasks.Add(scraper.SearchModelsAsync(q, page, pageSize, ct));
+            }
+        }
+
+        if (scraperTasks.Count > 0)
+        {
+            var scraperResults = await Task.WhenAll(scraperTasks);
+            foreach (var m in scraperResults.SelectMany(r => r))
+            {
+                allModelsDict[m.ExternalId] = m;
+            }
+        }
+
+        // 3. Search SQLite Persistent Model Lake
+        if (_lakeRepository != null)
+        {
+            try
+            {
+                var lakeMatches = await _lakeRepository.SearchModelsAsync(
+                    query: query,
+                    category: categoryFilter,
+                    platform: platformFilter,
+                    commercialOnly: commercialOnly,
+                    limit: pageSize,
+                    offset: (page - 1) * pageSize,
+                    ct: ct);
+
+                foreach (var lm in lakeMatches)
+                {
+                    if (!allModelsDict.ContainsKey(lm.ExternalId))
+                    {
+                        allModelsDict[lm.ExternalId] = lm;
+                    }
+                }
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
+
+        var allModels = allModelsDict.Values.ToList();
+
+        // 4. Save/Update discovered models into SQLite Lake
+        if (_lakeRepository != null && allModels.Count > 0)
+        {
+            try
+            {
+                await _lakeRepository.SaveOrUpdateModelsAsync(allModels, ct);
+            }
+            catch
+            {
+                // Non-fatal
+            }
+        }
 
         await EnrichAndScoreModelsAsync(allModels, shopProfile, ct);
 
