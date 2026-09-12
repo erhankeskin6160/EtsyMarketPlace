@@ -463,6 +463,54 @@ public class Viral3DModelHunterTests
             }
         }
     }
+
+    [Fact]
+    public void AtlasRepository_DragonModel_HasVerifiedRealUrlAndImageAsset()
+    {
+        var models = EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.Viral3DModelAtlasRepository.GetAllModels();
+
+        // 1. Must NOT contain legacy buggy ID
+        Assert.DoesNotContain(models, m => m.ExternalId == "tv-5197816");
+        Assert.DoesNotContain(models, m => (m.ModelPageUrl ?? "").Contains("5197816"));
+
+        // 2. Must contain verified real Thingiverse Articulated Dragon
+        var dragon = models.FirstOrDefault(m => m.ExternalId == "tv-3505006");
+        Assert.NotNull(dragon);
+        Assert.Equal("https://www.thingiverse.com/thing:3505006", dragon.ModelPageUrl);
+        Assert.Equal("https://www.thingiverse.com/thing:3505006", dragon.SafeModelUrl);
+        Assert.Equal("7Fish / McGybeer", dragon.AuthorName);
+        Assert.False(string.IsNullOrWhiteSpace(dragon.PrimaryImageUrl));
+        Assert.Contains("dragon", dragon.PrimaryImageUrl, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SqliteLakeRepository_AutomaticallyPurgesBuggy5197816_AndSyncsRealDragon()
+    {
+        string tempDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"test_lake_purge_{System.Guid.NewGuid():N}.db");
+        try
+        {
+            var lake = new EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.SqliteViral3DModelLakeRepository(tempDb);
+
+            var models = await lake.GetModelsAsync(limit: 100);
+            Assert.NotEmpty(models);
+
+            // Buggy 5197816 must NOT exist in the lake
+            Assert.DoesNotContain(models, m => m.ExternalId == "tv-5197816");
+            Assert.DoesNotContain(models, m => (m.ModelPageUrl ?? "").Contains("5197816"));
+
+            // Real dragon 3505006 must exist
+            var dragon = models.FirstOrDefault(m => m.ExternalId == "tv-3505006");
+            Assert.NotNull(dragon);
+            Assert.Equal("https://www.thingiverse.com/thing:3505006", dragon.ModelPageUrl);
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempDb))
+            {
+                try { System.IO.File.Delete(tempDb); } catch { }
+            }
+        }
+    }
 }
 
 

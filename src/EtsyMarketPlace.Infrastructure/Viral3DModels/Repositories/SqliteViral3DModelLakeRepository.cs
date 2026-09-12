@@ -81,18 +81,17 @@ public sealed class SqliteViral3DModelLakeRepository : IViral3DModelLakeReposito
             ";
             cmd.ExecuteNonQuery();
 
-            cmd.CommandText = "SELECT COUNT(*) FROM discovered_models;";
-            long count = (long)(cmd.ExecuteScalar() ?? 0L);
-            if (count == 0)
-            {
-                SeedFromAtlas(conn);
-            }
+            // Always purge legacy misconfigured entries
+            cmd.CommandText = "DELETE FROM discovered_models WHERE external_id = 'tv-5197816' OR model_url LIKE '%5197816%';";
+            cmd.ExecuteNonQuery();
+
+            SyncAtlasCatalog(conn);
 
             _isInitialized = true;
         }
     }
 
-    private static void SeedFromAtlas(SqliteConnection conn)
+    private static void SyncAtlasCatalog(SqliteConnection conn)
     {
         var seedModels = Viral3DModelAtlasRepository.GetAllModels();
         if (seedModels.Count == 0) return;
@@ -111,7 +110,13 @@ public sealed class SqliteViral3DModelLakeRepository : IViral3DModelLakeReposito
                 @cat, @tags, @dl24, @totdl, @prints, @likes,
                 @lic, @comm, @grams, @mins, @multi,
                 @colors, @comp, @score, @seen, @seen
-            );";
+            )
+            ON CONFLICT(external_id) DO UPDATE SET
+                model_url = excluded.model_url,
+                primary_image_url = excluded.primary_image_url,
+                author = excluded.author,
+                title = excluded.title;
+        ";
 
         var pId = cmd.Parameters.Add("@id", SqliteType.Text);
         var pPlat = cmd.Parameters.Add("@plat", SqliteType.Text);

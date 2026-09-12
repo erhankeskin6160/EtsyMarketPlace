@@ -100,17 +100,18 @@ public static class Viral3DModelAtlasRepository
                 printMin: 340, grams: 140, multiColor: false, colors: 1, comp: 4, opp: 94),
 
             Create(
-                id: "tv-5197816",
+                id: "tv-3505006",
                 platform: ModelPlatformType.Thingiverse,
                 title: "Articulated Flexi Dragon Jointed Desk Figure",
                 desc: "Beloved print-in-place dragon with flowing articulated wings and serpentine body. Sells consistently well as sensory desk pet.",
-                author: "Benchy3D",
-                url: "https://www.thingiverse.com/thing:5197816",
+                author: "7Fish / McGybeer",
+                url: "https://www.thingiverse.com/thing:3505006",
                 category: "Toys & Figures",
                 tags: ["Dragon", "Flexi Dragon", "Print in Place", "Fidget Toy", "Articulated"],
                 dl24h: 4600, totalDl: 380000, prints: 41000, likes: 32000,
                 license: "CC-BY 4.0 Commercial Rights", commercial: true,
-                printMin: 310, grams: 130, multiColor: false, colors: 1, comp: 3, opp: 95),
+                printMin: 310, grams: 130, multiColor: false, colors: 1, comp: 3, opp: 95,
+                imageUrl: "asset://dragon.jpg"),
 
             Create(
                 id: "tv-3158244",
@@ -520,9 +521,12 @@ public static class Viral3DModelAtlasRepository
         bool multiColor,
         int colors,
         int comp,
-        int opp)
+        int opp,
+        string? imageUrl = null)
     {
-        string asset = Viral3DModelAssetManager.GetAssetForModel(title);
+        string asset = !string.IsNullOrWhiteSpace(imageUrl)
+            ? imageUrl
+            : Viral3DModelAssetManager.GetAssetForModel(title);
 
         return new Trending3DModel
         {

@@ -52,7 +52,9 @@ public class Trending3DModel
     {
         get
         {
-            if (!string.IsNullOrWhiteSpace(ModelPageUrl) && ModelPageUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrWhiteSpace(ModelPageUrl) && 
+                ModelPageUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) &&
+                !ModelPageUrl.Contains("5197816", StringComparison.OrdinalIgnoreCase))
             {
                 return ModelPageUrl;
             }
@@ -62,7 +64,8 @@ public class Trending3DModel
 
     public string GetPlatformSearchUrl()
     {
-        string encoded = Uri.EscapeDataString(Title);
+        string clean = CleanTitleForSearch(Title);
+        string encoded = Uri.EscapeDataString(clean);
         return Platform switch
         {
             ModelPlatformType.MakerWorld => $"https://makerworld.com/en/search/models?keyword={encoded}",
@@ -72,5 +75,15 @@ public class Trending3DModel
             ModelPlatformType.MakerOnline => $"https://makeronline.com/search?keyword={encoded}",
             _ => $"https://www.google.com/search?q={encoded}+3d+model"
         };
+    }
+
+    private static string CleanTitleForSearch(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return "3d print";
+        int parenIdx = title.IndexOf('(');
+        string s = parenIdx > 0 ? title.Substring(0, parenIdx) : title;
+        int dashIdx = s.IndexOf(" - ", StringComparison.Ordinal);
+        if (dashIdx > 0) s = s.Substring(0, dashIdx);
+        return s.Trim();
     }
 }

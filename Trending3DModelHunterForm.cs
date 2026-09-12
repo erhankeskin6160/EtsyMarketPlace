@@ -26,7 +26,15 @@ public sealed class Trending3DModelHunterForm : Form
 {
     private readonly Viral3DModelHunterService _hunterService;
     private readonly IShopNicheAnalyzer _nicheAnalyzer = new ActiveAiShopNicheAnalyzer();
-    private readonly HttpClient _imageHttpClient = new();
+    private static readonly HttpClient _imageHttpClient = CreateImageHttpClient();
+
+    private static HttpClient CreateImageHttpClient()
+    {
+        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+        client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");
+        client.DefaultRequestHeaders.Add("Accept", "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8");
+        return client;
+    }
 
     private ShopNicheProfile _activeShopProfile = ShopNicheProfile.CreateDefaultFigureAndToy();
     private List<Trending3DModel> _allModels = [];
@@ -1107,58 +1115,137 @@ public sealed class Trending3DModelHunterForm : Form
         _ = LoadHeroImageAsync(m.PrimaryImageUrl);
     }
 
+    private static readonly string ModelImageCacheDir = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "EtsyMarketPlace", "3d_model_images");
+
     private async Task LoadHeroImageAsync(string imageUrl)
     {
+        var targetModel = _selectedModel;
+        if (targetModel == null) return;
+
         try
         {
-            // 1. First priority: Load from disk OR embedded application resources (100% reliable on VDS)
-            using (var stream = Viral3DModelAssetManager.OpenAssetStream(imageUrl)
-                             ?? Viral3DModelAssetManager.OpenAssetStream(Viral3DModelAssetManager.GetAssetForModel(_selectedModel?.Title ?? "")))
+            // 1. If imageUrl is an asset:// URI or local file, load from disk or embedded resource
+            if (!string.IsNullOrWhiteSpace(imageUrl) &&
+                (imageUrl.StartsWith("asset://", StringComparison.OrdinalIgnoreCase) ||
+                 imageUrl.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ||
+                 imageUrl.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) &&
+                !imageUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
             {
+                using var stream = Viral3DModelAssetManager.OpenAssetStream(imageUrl);
                 if (stream != null)
                 {
                     var img = Image.FromStream(stream);
-                    var oldImg = _picHero.Image;
-                    _picHero.Image = (Image)img.Clone();
-                    oldImg?.Dispose();
+                    SetHeroImage(img, targetModel);
                     return;
                 }
             }
 
-            // 2. Direct web URL download if online and not a fake generator
-            if ((imageUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            // 2. If imageUrl is a web URL, check local persistent disk cache first
+            if (!string.IsNullOrWhiteSpace(imageUrl) &&
+                (imageUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                  imageUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) &&
                 !imageUrl.Contains("picsum", StringComparison.OrdinalIgnoreCase))
             {
-                var bytes = await _imageHttpClient.GetByteArrayAsync(imageUrl);
-                using var ms = new MemoryStream(bytes);
-                var img = Image.FromStream(ms);
-                var oldImg = _picHero.Image;
-                _picHero.Image = (Image)img.Clone();
-                oldImg?.Dispose();
-                return;
+                try
+                {
+                    if (!Directory.Exists(ModelImageCacheDir))
+                    {
+                        Directory.CreateDirectory(ModelImageCacheDir);
+                    }
+
+                    string safeId = string.Concat(targetModel.ExternalId.Split(Path.GetInvalidFileNameChars()));
+                    string cacheFilePath = Path.Combine(ModelImageCacheDir, $"{safeId}.jpg");
+
+                    // Check if already cached on disk
+                    if (File.Exists(cacheFilePath) && new FileInfo(cacheFilePath).Length > 500)
+                    {
+                        using var fileStream = File.OpenRead(cacheFilePath);
+                        var img = Image.FromStream(fileStream);
+                        SetHeroImage(img, targetModel);
+                        return;
+                    }
+
+                    // Download image asynchronously
+                    var bytes = await _imageHttpClient.GetByteArrayAsync(imageUrl);
+                    if (bytes != null && bytes.Length > 500)
+                    {
+                        // Save to disk cache for instantaneous future loads
+                        try
+                        {
+                            await File.WriteAllBytesAsync(cacheFilePath, bytes);
+                        }
+                        catch
+                        {
+                            // Non-critical cache write failure
+                        }
+
+                        using var ms = new MemoryStream(bytes);
+                        var img = Image.FromStream(ms);
+                        SetHeroImage(img, targetModel);
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Fall back to category-matched asset if web download fails or times out
+                }
             }
 
-            // 3. Fallback to default high-res render
+            // 3. High-resolution matched category visual asset (dragon.jpg, dummy13.jpg, benchy.jpg, etc.)
+            string matchedAsset = Viral3DModelAssetManager.GetAssetForModel(targetModel.Title);
+            using (var categoryStream = Viral3DModelAssetManager.OpenAssetStream(matchedAsset))
+            {
+                if (categoryStream != null)
+                {
+                    var img = Image.FromStream(categoryStream);
+                    SetHeroImage(img, targetModel);
+                    return;
+                }
+            }
+
+            // 4. Default high-res render fallback
             using (var fallbackStream = Viral3DModelAssetManager.OpenAssetStream("dummy13.jpg"))
             {
                 if (fallbackStream != null)
                 {
                     var img = Image.FromStream(fallbackStream);
-                    var oldImg = _picHero.Image;
-                    _picHero.Image = (Image)img.Clone();
-                    oldImg?.Dispose();
+                    SetHeroImage(img, targetModel);
                     return;
                 }
             }
 
-            // 4. Procedural fallback only if absolutely no image stream could be found
-            _picHero.Image = CreateFallbackMeshBitmap(310, 200, _selectedModel?.Title ?? "3D Model");
+            // 5. Procedural fallback
+            var meshBmp = CreateFallbackMeshBitmap(310, 200, targetModel.Title);
+            SetHeroImage(meshBmp, targetModel);
         }
         catch
         {
-            _picHero.Image = CreateFallbackMeshBitmap(310, 200, _selectedModel?.Title ?? "3D Model");
+            var meshBmp = CreateFallbackMeshBitmap(310, 200, targetModel.Title);
+            SetHeroImage(meshBmp, targetModel);
         }
+    }
+
+    private void SetHeroImage(Image newImage, Trending3DModel model)
+    {
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() => SetHeroImage(newImage, model)));
+            return;
+        }
+
+        // Avoid race condition if user navigated to another model during async load
+        if (_selectedModel?.ExternalId != model.ExternalId)
+        {
+            newImage.Dispose();
+            return;
+        }
+
+        var old = _picHero.Image;
+        _picHero.Image = (Image)newImage.Clone();
+        newImage.Dispose();
+        old?.Dispose();
     }
 
     private static Bitmap CreateFallbackMeshBitmap(int width, int height, string title)
