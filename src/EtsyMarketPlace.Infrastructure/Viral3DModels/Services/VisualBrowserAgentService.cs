@@ -36,6 +36,153 @@ public sealed class VisualBrowserAgentService
 
     public static bool IsBrowserAvailable => ResolveInstalledBrowserPath() != null;
 
+    public static string GetPersistentProfilePath()
+    {
+        string profileDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EtsyMarketPlace",
+            "HermesBrowserProfile");
+        try
+        {
+            if (!Directory.Exists(profileDir))
+            {
+                Directory.CreateDirectory(profileDir);
+            }
+        }
+        catch
+        {
+            // Fallback to temp if permissions are restricted
+            profileDir = Path.Combine(Path.GetTempPath(), "HermesBrowserProfile");
+        }
+        return profileDir;
+    }
+
+    private static LaunchOptions CreateStealthLaunchOptions(string browserPath)
+    {
+        return new LaunchOptions
+        {
+            Headless = false,
+            ExecutablePath = browserPath,
+            UserDataDir = GetPersistentProfilePath(),
+            IgnoredDefaultArgs = new[] { "--enable-automation" },
+            Args = new[]
+            {
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--window-size=1260,860",
+                "--lang=en-US,en"
+            },
+            DefaultViewport = new ViewPortOptions { Width = 1240, Height = 810 }
+        };
+    }
+
+    private static async Task SetupStealthAndEvasionAsync(IPage page)
+    {
+        try
+        {
+            await page.EvaluateFunctionOnNewDocumentAsync(@"() => {
+                // 1. Remove automation driver signature
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+
+                // 2. Mock chrome runtime
+                window.chrome = {
+                    runtime: {},
+                    loadTimes: function() {},
+                    csi: function() {},
+                    app: {}
+                };
+
+                // 3. Languages
+                Object.defineProperty(navigator, 'languages', { get: () => ['tr-TR', 'tr', 'en-US', 'en'] });
+
+                // 4. Mock plugins
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+            }");
+        }
+        catch
+        {
+            // Non-fatal if page already created
+        }
+    }
+
+    private static async Task CheckAndWaitForAntiBotChallengeAsync(IPage page, Action<string>? statusCallback, CancellationToken ct)
+    {
+        try
+        {
+            bool isChallenge = await page.EvaluateFunctionAsync<bool>(@"() => {
+                const title = (document.title || '').toLowerCase();
+                const text = (document.body ? document.body.innerText : '').toLowerCase();
+                return title.includes('just a moment') ||
+                       title.includes('checking your browser') ||
+                       text.includes('güvenlik doğrulaması') ||
+                       text.includes('verify you are human') ||
+                       document.querySelector('#challenge-running, #challenge-stage, .cf-turnstile') !== null;
+            }");
+
+            if (isChallenge)
+            {
+                statusCallback?.Invoke("🛡️ Cloudflare Turnstile bot doğrulaması tespit edildi. Stealth profil ile otomatik aşılıyor...");
+                for (int i = 0; i < 8 && !ct.IsCancellationRequested; i++)
+                {
+                    await Task.Delay(1000, ct);
+                    bool stillChallenge = await page.EvaluateFunctionAsync<bool>(@"() => {
+                        const title = (document.title || '').toLowerCase();
+                        const text = (document.body ? document.body.innerText : '').toLowerCase();
+                        return title.includes('just a moment') || text.includes('güvenlik doğrulaması');
+                    }");
+                    if (!stillChallenge)
+                    {
+                        statusCallback?.Invoke("🔓 Cloudflare başarıyla aşıldı! Model arama işlemine devam ediliyor...");
+                        break;
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Non-critical check failure
+        }
+    }
+
+    /// <summary>
+    /// Simulates smooth human scrolling rather than abrupt jumping.
+    /// </summary>
+    public static async Task SimulateHumanScrollAsync(IPage page, int totalDistance, CancellationToken ct = default)
+    {
+        int scrolled = 0;
+        var rand = new Random();
+        while (scrolled < totalDistance && !ct.IsCancellationRequested)
+        {
+            int chunk = rand.Next(100, 220);
+            await page.EvaluateExpressionAsync($"window.scrollBy(0, {chunk});");
+            scrolled += chunk;
+            await Task.Delay(rand.Next(70, 150), ct);
+        }
+    }
+
+    /// <summary>
+    /// Simulates genuine human mouse movement across the viewport with bezier steps.
+    /// </summary>
+    public static async Task SimulateHumanMouseMoveAsync(IPage page, decimal targetX, decimal targetY, int steps = 15)
+    {
+        try
+        {
+            for (int i = 1; i <= steps; i++)
+            {
+                decimal curX = (targetX * i) / steps;
+                decimal curY = (targetY * i) / steps;
+                await page.Mouse.MoveAsync(curX, curY);
+                await Task.Delay(15);
+            }
+        }
+        catch
+        {
+            // Ignore mouse boundary errors
+        }
+    }
+
     /// <summary>
     /// Executes a visible, autonomous browser search session for the target 3D model.
     /// The user watches the browser open, navigate, search, and extract verified data live on screen.
@@ -59,21 +206,9 @@ public sealed class VisualBrowserAgentService
             };
         }
 
-        statusCallback?.Invoke("🚀 Gerçek Chrome penceresi başlatılıyor...");
+        statusCallback?.Invoke("🚀 Gerçek Chrome penceresi başlatılıyor (Stealth & Profil modu)...");
 
-        var launchOptions = new LaunchOptions
-        {
-            Headless = false,
-            ExecutablePath = browserPath,
-            Args = new[]
-            {
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--window-size=1200,800"
-            },
-            DefaultViewport = new ViewPortOptions { Width = 1180, Height = 750 }
-        };
+        var launchOptions = CreateStealthLaunchOptions(browserPath);
 
         IBrowser? browser = null;
         try
@@ -81,6 +216,8 @@ public sealed class VisualBrowserAgentService
             browser = await Puppeteer.LaunchAsync(launchOptions);
             var pages = await browser.PagesAsync();
             var page = pages.Length > 0 ? pages[0] : await browser.NewPageAsync();
+
+            await SetupStealthAndEvasionAsync(page);
 
             string cleanSearch = CleanTitleForSearch(model.Title);
             string searchUrl = GetPlatformLiveSearchUrl(model.Platform, cleanSearch);
@@ -92,8 +229,12 @@ public sealed class VisualBrowserAgentService
                 Timeout = 25000
             });
 
-            // Wait a brief moment for dynamic client-side SPA rendering & Cloudflare check
-            await Task.Delay(2500, ct);
+            // Anti-bot check & wait gate
+            await CheckAndWaitForAntiBotChallengeAsync(page, statusCallback, ct);
+
+            // Natural mouse movement across page
+            await SimulateHumanMouseMoveAsync(page, 480, 260, steps: 12);
+            await Task.Delay(1200, ct);
 
             statusCallback?.Invoke("👁️ Sayfa sonuçları inceleniyor ve en popüler model seçiliyor...");
 
@@ -278,21 +419,9 @@ public sealed class VisualBrowserAgentService
             return Repositories.Viral3DModelAtlasRepository.Search(shopProfile.PrimaryNiche, platform);
         }
 
-        statusCallback?.Invoke("🚀 Gerçek Chrome penceresi başlatılıyor...");
+        statusCallback?.Invoke("🚀 Gerçek Chrome penceresi başlatılıyor (Stealth & Profil modu)...");
 
-        var launchOptions = new LaunchOptions
-        {
-            Headless = false,
-            ExecutablePath = browserPath,
-            Args = new[]
-            {
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-blink-features=AutomationControlled",
-                "--window-size=1200,850"
-            },
-            DefaultViewport = new ViewPortOptions { Width = 1180, Height = 800 }
-        };
+        var launchOptions = CreateStealthLaunchOptions(browserPath);
 
         var harvestedModels = new List<Trending3DModel>();
         IBrowser? browser = null;
@@ -302,6 +431,8 @@ public sealed class VisualBrowserAgentService
             browser = await Puppeteer.LaunchAsync(launchOptions);
             var pages = await browser.PagesAsync();
             var page = pages.Length > 0 ? pages[0] : await browser.NewPageAsync();
+
+            await SetupStealthAndEvasionAsync(page);
 
             // Select 2 focused keywords from shop niche affinity
             var targetKeywords = shopProfile.AffinityKeywords
@@ -331,15 +462,18 @@ public sealed class VisualBrowserAgentService
                         Timeout = 25000
                     });
 
-                    // Wait for SPA rendering
-                    await Task.Delay(2500, ct);
+                    // Anti-bot check & wait gate
+                    await CheckAndWaitForAntiBotChallengeAsync(page, statusCallback, ct);
 
-                    // Scroll down to load more cards
-                    statusCallback?.Invoke($"📜 Sayfa aşağı kaydırılarak daha fazla {keyword} modeli yükleniyor...");
-                    await page.EvaluateExpressionAsync("window.scrollBy(0, 900);");
-                    await Task.Delay(2000, ct);
-                    await page.EvaluateExpressionAsync("window.scrollBy(0, 900);");
+                    // Human mouse exploration
+                    await SimulateHumanMouseMoveAsync(page, 520, 320, steps: 14);
                     await Task.Delay(1500, ct);
+
+                    // Human-like smooth scroll down to load more cards
+                    statusCallback?.Invoke($"📜 Sayfa doğal fare/kaydırma ile inceleniyor ({keyword})...");
+                    await SimulateHumanScrollAsync(page, 950, ct);
+                    await Task.Delay(1000, ct);
+                    await SimulateHumanScrollAsync(page, 850, ct);
 
                     // DOM Scraping
                     string jsonCards = await page.EvaluateFunctionAsync<string>(@"() => {
