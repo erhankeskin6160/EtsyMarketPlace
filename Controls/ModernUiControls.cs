@@ -1799,6 +1799,199 @@ public class ModernMultilineTextBox : Panel
 }
 
 /// <summary>
+/// Modern dark-theme single-line TextBox with rounded corners, placeholder support,
+/// sleek slate border, glowing focus outline, and inner padding.
+/// </summary>
+public class ModernTextBox : Panel
+{
+    private readonly TextBox _inner;
+    private bool _isHovered;
+    private bool _isFocused;
+    private int _cornerRadius = 7;
+    private Color _borderColor = Color.FromArgb(51, 65, 85);       // Slate 700
+    private Color _borderHoverColor = Color.FromArgb(100, 116, 139); // Slate 500
+    private Color _borderFocusColor = Color.FromArgb(99, 102, 241);  // Indigo 500
+
+    public TextBox InnerTextBox => _inner;
+
+    [System.Diagnostics.CodeAnalysis.AllowNull]
+    public override string Text
+    {
+        get => _inner.Text;
+        set => _inner.Text = value ?? string.Empty;
+    }
+
+    public string PlaceholderText
+    {
+        get => _inner.PlaceholderText;
+        set => _inner.PlaceholderText = value;
+    }
+
+    public int CornerRadius
+    {
+        get => _cornerRadius;
+        set { _cornerRadius = value; Invalidate(); }
+    }
+
+    public Color BorderColor
+    {
+        get => _borderColor;
+        set { _borderColor = value; Invalidate(); }
+    }
+
+    public Color BorderHoverColor
+    {
+        get => _borderHoverColor;
+        set { _borderHoverColor = value; Invalidate(); }
+    }
+
+    public Color BorderFocusColor
+    {
+        get => _borderFocusColor;
+        set { _borderFocusColor = value; Invalidate(); }
+    }
+
+    public bool ReadOnly
+    {
+        get => _inner.ReadOnly;
+        set => _inner.ReadOnly = value;
+    }
+
+    public int MaxLength
+    {
+        get => _inner.MaxLength;
+        set => _inner.MaxLength = value;
+    }
+
+    [System.Diagnostics.CodeAnalysis.AllowNull]
+    public override Font Font
+    {
+        get => _inner.Font;
+        set
+        {
+            base.Font = value!;
+            if (value != null) _inner.Font = value;
+            PositionInner();
+        }
+    }
+
+    public new event EventHandler? TextChanged
+    {
+        add => _inner.TextChanged += value;
+        remove => _inner.TextChanged -= value;
+    }
+
+    public new event KeyEventHandler? KeyDown
+    {
+        add => _inner.KeyDown += value;
+        remove => _inner.KeyDown -= value;
+    }
+
+    public new event KeyPressEventHandler? KeyPress
+    {
+        add => _inner.KeyPress += value;
+        remove => _inner.KeyPress -= value;
+    }
+
+    public new event KeyEventHandler? KeyUp
+    {
+        add => _inner.KeyUp += value;
+        remove => _inner.KeyUp -= value;
+    }
+
+    public void Select(int start, int length) => _inner.Select(start, length);
+    public void SelectAll() => _inner.SelectAll();
+    public void Clear() => _inner.Clear();
+    public new void Focus() => _inner.Focus();
+
+    public ModernTextBox()
+    {
+        SetStyle(
+            ControlStyles.UserPaint |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw |
+            ControlStyles.SupportsTransparentBackColor,
+            true);
+        DoubleBuffered = true;
+        BackColor = Color.FromArgb(30, 41, 59); // Slate 900
+        ForeColor = Color.FromArgb(248, 250, 252); // Slate 50
+        Height = 32;
+
+        _inner = new TextBox
+        {
+            BorderStyle = BorderStyle.None,
+            BackColor = Color.FromArgb(30, 41, 59),
+            ForeColor = Color.FromArgb(248, 250, 252),
+            Font = new Font("Segoe UI", 9F)
+        };
+
+        _inner.GotFocus += (_, _) => { _isFocused = true; Invalidate(); };
+        _inner.LostFocus += (_, _) => { _isFocused = false; Invalidate(); };
+        _inner.MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+        _inner.MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+
+        MouseEnter += (_, _) => { _isHovered = true; Invalidate(); };
+        MouseLeave += (_, _) => { _isHovered = false; Invalidate(); };
+        Click += (_, _) => _inner.Focus();
+
+        Controls.Add(_inner);
+        PositionInner();
+    }
+
+    protected override void OnBackColorChanged(EventArgs e)
+    {
+        base.OnBackColorChanged(e);
+        if (_inner != null) _inner.BackColor = BackColor;
+    }
+
+    protected override void OnForeColorChanged(EventArgs e)
+    {
+        base.OnForeColorChanged(e);
+        if (_inner != null) _inner.ForeColor = ForeColor;
+    }
+
+    protected override void OnResize(EventArgs eventargs)
+    {
+        base.OnResize(eventargs);
+        PositionInner();
+    }
+
+    private void PositionInner()
+    {
+        if (_inner == null) return;
+        int innerH = _inner.PreferredHeight;
+        int innerY = Math.Max(2, (Height - innerH) / 2);
+        int innerX = 10;
+        int innerW = Math.Max(10, Width - (innerX * 2));
+        _inner.SetBounds(innerX, innerY, innerW, innerH);
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
+        using (var bgBrush = new SolidBrush(BackColor))
+        {
+            using var bgPath = ModernCardPanel.CreateRoundedRectanglePath(rect, _cornerRadius);
+            g.FillPath(bgBrush, bgPath);
+        }
+
+        Color borderClr = _isFocused ? _borderFocusColor : (_isHovered ? _borderHoverColor : _borderColor);
+        float borderWidth = _isFocused ? 1.5f : 1f;
+        using (var pen = new Pen(borderClr, borderWidth))
+        {
+            using var path = ModernCardPanel.CreateRoundedRectanglePath(rect, _cornerRadius);
+            g.DrawPath(pen, path);
+        }
+    }
+}
+
+/// <summary>
 /// Modern dark-theme TabControl with pill-style tab headers, smooth antialiasing, and zero white borders.
 /// </summary>
 public class ModernTabControl : TabControl

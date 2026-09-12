@@ -87,23 +87,23 @@ public sealed class Trending3DModelHunterForm : Form
     private readonly ModernComboBox _cboPlatform = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 190,
+        Width = 175,
         Height = 32,
         Font = new Font("Segoe UI", 9F)
     };
 
-    private readonly ComboBox _cboCategory = new()
+    private readonly ModernComboBox _cboCategory = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 180,
+        Width = 165,
         Height = 32,
         Font = new Font("Segoe UI", 9F)
     };
 
-    private readonly ComboBox _cboSort = new()
+    private readonly ModernComboBox _cboSort = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
-        Width = 190,
+        Width = 195,
         Height = 32,
         Font = new Font("Segoe UI", 9F)
     };
@@ -128,13 +128,13 @@ public sealed class Trending3DModelHunterForm : Form
         Margin = new Padding(6, 7, 8, 0)
     };
 
-    private readonly TextBox _txtSearch = new()
+    private readonly ModernTextBox _txtSearch = new()
     {
-        Width = 200,
+        Width = 190,
         Height = 32,
         PlaceholderText = "🔍 Model, etiket ara...",
         Font = new Font("Segoe UI", 9F),
-        Margin = new Padding(4, 2, 4, 0)
+        Margin = new Padding(4, 0, 4, 0)
     };
 
     private readonly ModernButtonControl _btnSearch = new()
@@ -147,7 +147,7 @@ public sealed class Trending3DModelHunterForm : Form
         ForeColor = Color.White,
         Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
         Cursor = Cursors.Hand,
-        Margin = new Padding(0, 2, 6, 0)
+        Margin = new Padding(0, 0, 6, 0)
     };
 
     private readonly ModernButtonControl _btnScan = new()
@@ -160,7 +160,7 @@ public sealed class Trending3DModelHunterForm : Form
         ForeColor = Color.White,
         Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
         Cursor = Cursors.Hand,
-        Margin = new Padding(2, 2, 6, 0)
+        Margin = new Padding(2, 0, 6, 0)
     };
 
     private readonly Label _lblEngineBadge = new()
@@ -346,6 +346,8 @@ public sealed class Trending3DModelHunterForm : Form
         BuildLayout();
         HookEvents();
 
+        UiStyle.ApplyResponsiveTheme(this, new Size(1100, 720));
+
         Shown += async (_, _) => await RunScanAsync();
     }
 
@@ -396,8 +398,9 @@ public sealed class Trending3DModelHunterForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
-            Padding = new Padding(0, 4, 0, 4)
+            WrapContents = false,
+            AutoScroll = false,
+            Padding = new Padding(0, 8, 0, 4)
         };
         toolbar.Controls.Add(_cboPlatform);
         toolbar.Controls.Add(_cboCategory);
@@ -592,15 +595,18 @@ public sealed class Trending3DModelHunterForm : Form
         _grid.Columns.Add("colScore", "Fırsat Skoru");
 
         _grid.Columns["colPlatform"]!.Width = 115;
-        _grid.Columns["colShopFit"]!.Width = 135;
+        _grid.Columns["colShopFit"]!.Width = 150;
         _grid.Columns["colTitle"]!.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
         _grid.Columns["colTitle"]!.MinimumWidth = 230;
-        _grid.Columns["colVelocity"]!.Width = 100;
-        _grid.Columns["colDelta"]!.Width = 145;
-        _grid.Columns["colPrints"]!.Width = 105;
+        _grid.Columns["colVelocity"]!.Width = 110;
+        _grid.Columns["colDelta"]!.Width = 165;
+        _grid.Columns["colPrints"]!.Width = 115;
         _grid.Columns["colLicense"]!.Width = 135;
         _grid.Columns["colCompetition"]!.Width = 125;
         _grid.Columns["colScore"]!.Width = 105;
+
+        // Attach modern scrollbars (eliminates default Windows 95/XP vertical scrollbar)
+        ModernGridScrollAdapter.Attach(_grid);
 
         _grid.SelectionChanged += (_, _) => OnGridRowSelected();
     }
@@ -1045,6 +1051,8 @@ public sealed class Trending3DModelHunterForm : Form
         // Update Pagination Status
         _lblPageStatus.Text = $"Gösterilen: {displayItems.Count} / {models.Count} Model | Toplam Taranan: {_allModels.Count}";
         _btnLoadMore.Visible = models.Count > _displayedLimit;
+
+        ModernGridScrollAdapter.Attach(_grid).RecalculateScroll();
 
         if (_grid.Rows.Count > 0 && _grid.CurrentRow == null)
         {

@@ -145,6 +145,21 @@ internal static class UiStyle
         {
             if (pnl.BackColor == SystemColors.Control || pnl.BackColor == Color.Empty)
                 pnl.BackColor = BackgroundColor;
+
+            if (ctrl is not SimilarProductsWinForms.Controls.ModernTextBox &&
+                ctrl is not SimilarProductsWinForms.Controls.ModernMultilineTextBox &&
+                ctrl is not SimilarProductsWinForms.Controls.ModernStepperControl)
+            {
+                ApplyToControls(pnl.Controls);
+            }
+        }
+        else if (ctrl is SimilarProductsWinForms.Controls.ModernTextBox mtb)
+        {
+            mtb.BackColor = InputBackground;
+            mtb.ForeColor = TextDark;
+            mtb.BorderColor = BorderColor;
+            mtb.BorderFocusColor = PrimaryColor;
+            mtb.BorderHoverColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(100, 116, 139) : Color.FromArgb(148, 163, 184);
         }
         else if (ctrl is SimilarProductsWinForms.Controls.ModernCardPanel card)
         {

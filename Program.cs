@@ -147,6 +147,12 @@ static class Program
             using var f18 = new WeeklyReportForm([]);
             using var f19 = new ListingOptimizationForm(null!, null!);
             using var f20 = new Trending3DModelHunterForm();
+            using var testMtb = new SimilarProductsWinForms.Controls.ModernTextBox { PlaceholderText = "Search...", Width = 180 };
+            using var bmpMtb = new Bitmap(180, 32);
+            using (var gMtb = Graphics.FromImage(bmpMtb))
+            {
+                testMtb.DrawToBitmap(bmpMtb, new Rectangle(0, 0, 180, 32));
+            }
             Console.WriteLine("CONTROLS_VERIFIED_OK");
             return;
         }
