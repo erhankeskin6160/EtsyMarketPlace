@@ -54,7 +54,8 @@ public class Trending3DModel
         {
             if (!string.IsNullOrWhiteSpace(ModelPageUrl) && 
                 ModelPageUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) &&
-                !ModelPageUrl.Contains("5197816", StringComparison.OrdinalIgnoreCase))
+                !ModelPageUrl.Contains("5197816", StringComparison.OrdinalIgnoreCase) &&
+                !ModelPageUrl.Contains("577943", StringComparison.OrdinalIgnoreCase))
             {
                 return ModelPageUrl;
             }

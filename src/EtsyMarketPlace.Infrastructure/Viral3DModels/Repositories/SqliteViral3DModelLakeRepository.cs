@@ -82,7 +82,7 @@ public sealed class SqliteViral3DModelLakeRepository : IViral3DModelLakeReposito
             cmd.ExecuteNonQuery();
 
             // Always purge legacy misconfigured entries
-            cmd.CommandText = "DELETE FROM discovered_models WHERE external_id = 'tv-5197816' OR model_url LIKE '%5197816%';";
+            cmd.CommandText = "DELETE FROM discovered_models WHERE external_id IN ('tv-5197816', 'pr-577943') OR model_url LIKE '%5197816%' OR model_url LIKE '%577943%';";
             cmd.ExecuteNonQuery();
 
             SyncAtlasCatalog(conn);

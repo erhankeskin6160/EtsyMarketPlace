@@ -61,17 +61,18 @@ public static class Viral3DModelAtlasRepository
         // =========================================================================
         models.AddRange([
             Create(
-                id: "pr-577943",
+                id: "pr-981111",
                 platform: ModelPlatformType.Printables,
                 title: "DUMMY 13 Printable Articulated Jointed Action Figure",
                 desc: "World-famous jointed action figure with snap-together skeleton and customizable armor plating. Extremely popular seller on Etsy.",
                 author: "soozafone",
-                url: "https://www.printables.com/model/577943-dummy-13-printable-jointed-figure-beta-files",
+                url: "https://www.printables.com/model/981111-dummy-13-version-10",
                 category: "Toys & Figures",
                 tags: ["Dummy 13", "Action Figure", "Articulated Toy", "Print in Place", "Desk Figure", "Jointed", "Robot"],
                 dl24h: 5800, totalDl: 580000, prints: 68000, likes: 45000,
                 license: "CC-BY 4.0 Commercial OK", commercial: true,
-                printMin: 190, grams: 85, multiColor: true, colors: 2, comp: 2, opp: 97),
+                printMin: 190, grams: 85, multiColor: true, colors: 2, comp: 2, opp: 97,
+                imageUrl: "asset://dummy13.jpg"),
 
             Create(
                 id: "mw-182390",

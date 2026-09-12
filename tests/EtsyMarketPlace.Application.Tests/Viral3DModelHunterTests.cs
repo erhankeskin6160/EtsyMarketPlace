@@ -511,6 +511,80 @@ public class Viral3DModelHunterTests
             }
         }
     }
+
+    [Fact]
+    public void AtlasRepository_Dummy13Model_HasVerifiedRealUrl_981111()
+    {
+        var models = EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.Viral3DModelAtlasRepository.GetAllModels();
+
+        // 1. Must NOT contain legacy buggy attic stairs ID
+        Assert.DoesNotContain(models, m => m.ExternalId == "pr-577943");
+        Assert.DoesNotContain(models, m => (m.ModelPageUrl ?? "").Contains("577943"));
+
+        // 2. Must contain verified real official DUMMY 13 v1.0
+        var dummy = models.FirstOrDefault(m => m.ExternalId == "pr-981111");
+        Assert.NotNull(dummy);
+        Assert.Equal("https://www.printables.com/model/981111-dummy-13-version-10", dummy.ModelPageUrl);
+        Assert.Equal("https://www.printables.com/model/981111-dummy-13-version-10", dummy.SafeModelUrl);
+        Assert.Equal("soozafone", dummy.AuthorName);
+        Assert.False(string.IsNullOrWhiteSpace(dummy.PrimaryImageUrl));
+        Assert.Contains("dummy13", dummy.PrimaryImageUrl, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SafeModelUrl_WhenPrintablesModelIsAtticStairs_FallsBackToSearch()
+    {
+        var model = new Trending3DModel
+        {
+            Title = "DUMMY 13 Printable Jointed Action Figure",
+            Platform = ModelPlatformType.Printables,
+            ModelPageUrl = "https://www.printables.com/model/577943-revision-set-attic-stairs"
+        };
+
+        // Must NOT open attic stairs 577943; must fall back to platform search
+        Assert.DoesNotContain("577943", model.SafeModelUrl);
+        Assert.Contains("search", model.SafeModelUrl, System.StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HermesAgent_DetectsKnownDrift_AndHealsToOfficialDummy13Url()
+    {
+        var agent = new EtsyMarketPlace.Infrastructure.Viral3DModels.Services.Hermes3DScoutAgent();
+        var model = new Trending3DModel
+        {
+            Title = "DUMMY 13 Printable Articulated Jointed Action Figure",
+            Platform = ModelPlatformType.Printables,
+            ModelPageUrl = "https://www.printables.com/model/577943-attic-stairs"
+        };
+
+        var result = await agent.VerifyAndHealModelAsync(model);
+
+        Assert.True(result.IsVerified);
+        Assert.Equal("https://www.printables.com/model/981111-dummy-13-version-10", result.VerifiedUrl);
+        Assert.Equal("soozafone", result.VerifiedAuthor);
+        Assert.False(result.HasIpCopyrightRisk);
+    }
+
+    [Fact]
+    public async Task HermesAgent_DetectsIpTrademarkRisk_AndRaisesWarning()
+    {
+        var agent = new EtsyMarketPlace.Infrastructure.Viral3DModels.Services.Hermes3DScoutAgent();
+        var model = new Trending3DModel
+        {
+            Title = "Cute Articulated Pikachu Pokemon Desk Figure",
+            Platform = ModelPlatformType.Printables,
+            Tags = ["pokemon", "pikachu", "nintendo"],
+            ModelPageUrl = "https://www.printables.com/model/123456-pikachu"
+        };
+
+        var result = await agent.VerifyAndHealModelAsync(model);
+
+        Assert.True(result.HasIpCopyrightRisk);
+        Assert.NotNull(result.IpRiskWarning);
+        Assert.Contains("Tescilli Marka Tespiti", result.IpRiskWarning);
+        Assert.Contains("POKEMON", result.IpRiskWarning);
+    }
 }
+
 
 
