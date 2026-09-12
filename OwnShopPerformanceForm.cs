@@ -14,6 +14,7 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.ShopPerformance;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
+using SimilarProductsWinForms.Controls;
 
 internal sealed class OwnShopPerformanceForm : Form
 {
@@ -22,8 +23,8 @@ internal sealed class OwnShopPerformanceForm : Form
     private readonly IAiListingOptimizer _aiListingOptimizer;
     private readonly ListingOptimizationHistoryService _optimizationHistoryService;
 
-    private readonly DateTimePicker _startPicker = new();
-    private readonly DateTimePicker _endPicker = new();
+    private readonly ModernDateTimePicker _startPicker = new();
+    private readonly ModernDateTimePicker _endPicker = new();
     private readonly Label _titleLabel = new();
     private readonly Label _statusLabel = new();
     private readonly Label _lblAiBadge = new();
@@ -745,11 +746,11 @@ internal sealed class OwnShopPerformanceForm : Form
         button.Cursor = Cursors.Hand;
     }
 
-    private static void ConfigurePicker(DateTimePicker picker)
+    private static void ConfigurePicker(ModernDateTimePicker picker)
     {
         picker.Format = DateTimePickerFormat.Short;
         picker.Font = UiStyle.BaseFont;
-        picker.Width = 110;
+        picker.Width = 125;
         picker.Margin = new Padding(2, 4, 4, 4);
     }
 }

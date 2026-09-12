@@ -33,6 +33,7 @@ internal static class UiStyle
     public static Color SecondaryHover => CurrentTheme == AppTheme.Dark ? Color.FromArgb(71, 85, 105) : Color.FromArgb(203, 213, 225);   // Slate 600 / Slate 300
     public static Color BackgroundColor => CurrentTheme == AppTheme.Dark ? Color.FromArgb(15, 23, 42) : Color.FromArgb(248, 250, 252); // Slate 950 #0F172A / Slate 50 #F8FAFC
     public static Color CardBackground => CurrentTheme == AppTheme.Dark ? Color.FromArgb(30, 41, 59) : Color.White;                    // Slate 900 #1E293B / White
+    public static Color CardHoverBackground => CurrentTheme == AppTheme.Dark ? Color.FromArgb(51, 65, 85) : Color.FromArgb(241, 245, 249); // Slate 700 #334155 / Slate 100
     public static Color InputBackground => CurrentTheme == AppTheme.Dark ? Color.FromArgb(30, 41, 59) : Color.White;                   // Slate 900 #1E293B / White
     public static Color TextDark => CurrentTheme == AppTheme.Dark ? Color.FromArgb(248, 250, 252) : Color.FromArgb(15, 23, 42);          // Slate 50 #F8FAFC (Ultra Crisp White) / Slate 900
     public static Color TextMuted => CurrentTheme == AppTheme.Dark ? Color.FromArgb(148, 163, 184) : Color.FromArgb(71, 85, 105);        // Slate 400 #94A3B8 (Clear Label Gray) / Slate 600
@@ -193,12 +194,33 @@ internal static class UiStyle
             lb.BackColor = InputBackground;
             lb.ForeColor = TextDark;
         }
+        else if (ctrl is SimilarProductsWinForms.Controls.ModernCheckedListBox mclb)
+        {
+            mclb.BackColor = InputBackground;
+            mclb.ForeColor = TextDark;
+            mclb.Font = BaseFont;
+        }
         else if (ctrl is CheckedListBox clb)
         {
             clb.BorderStyle = BorderStyle.FixedSingle;
             clb.Font = BaseFont;
             clb.BackColor = InputBackground;
             clb.ForeColor = TextDark;
+        }
+        else if (ctrl is SimilarProductsWinForms.Controls.ModernDateTimePicker mdtp)
+        {
+            mdtp.BackColor = InputBackground;
+            mdtp.ForeColor = TextDark;
+            mdtp.Font = BaseFont;
+            mdtp.BorderColor = BorderColor;
+            mdtp.BorderFocusColor = PrimaryColor;
+            mdtp.AccentColor = PrimaryColor;
+            mdtp.ButtonHoverColor = CardHoverBackground;
+            mdtp.BorderHoverColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(100, 116, 139) : Color.FromArgb(148, 163, 184);
+        }
+        else if (ctrl is DateTimePicker dtp)
+        {
+            ConfigureDateTimePicker(dtp);
         }
         else if (ctrl is ComboBox cb)
         {
@@ -502,6 +524,17 @@ internal static class UiStyle
                 }
             }
         }
+    }
+
+    public static void ConfigureDateTimePicker(DateTimePicker dtp)
+    {
+        if (dtp == null || dtp.IsDisposed) return;
+        dtp.Font = BaseFont;
+        dtp.CalendarMonthBackground = CardBackground;
+        dtp.CalendarTitleBackColor = PrimaryColor;
+        dtp.CalendarTitleForeColor = Color.White;
+        dtp.CalendarTrailingForeColor = TextMuted;
+        dtp.CalendarForeColor = TextDark;
     }
 
     public static void ConfigureComboBox(ComboBox cb)

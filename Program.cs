@@ -77,6 +77,33 @@ static class Program
             _ = new SimilarProductsWinForms.Controls.ModernNumericUpDown();
             _ = new SimilarProductsWinForms.Controls.ModernStepperControl();
             _ = new SimilarProductsWinForms.Controls.ModernComboBox();
+
+            using var testClb = new SimilarProductsWinForms.Controls.ModernCheckedListBox();
+            testClb.Items.Add("Google Shopping", true);
+            testClb.Items.Add("eBay", true);
+            testClb.Items.Add("Trendyol", false);
+            var checkedList = testClb.CheckedItems.Cast<string>().ToList();
+            if (checkedList.Count != 2) throw new InvalidOperationException("ModernCheckedListBox checked count mismatch");
+
+            using var testDtp = new SimilarProductsWinForms.Controls.ModernDateTimePicker();
+            testDtp.Value = DateTime.Today.AddDays(-7);
+            testDtp.Format = DateTimePickerFormat.Short;
+            UiStyle.ApplyToSingleControl(testDtp);
+
+            // Test render compact mode (105px) and regular mode (140px)
+            using var bmpDtp1 = new Bitmap(105, 32);
+            testDtp.Size = new Size(105, 32);
+            testDtp.DrawToBitmap(bmpDtp1, new Rectangle(0, 0, 105, 32));
+
+            using var bmpDtp2 = new Bitmap(140, 32);
+            testDtp.Size = new Size(140, 32);
+            testDtp.DrawToBitmap(bmpDtp2, new Rectangle(0, 0, 140, 32));
+
+            // Test render ModernCalendarView in all view modes
+            using var calView = new SimilarProductsWinForms.Controls.ModernCalendarView(testDtp);
+            using var bmpCal = new Bitmap(calView.Width, calView.Height);
+            calView.DrawToBitmap(bmpCal, new Rectangle(0, 0, calView.Width, calView.Height));
+
             using var testCb = new ComboBox();
             testCb.Items.Add("Seçenek 1");
             testCb.Items.Add("Seçenek 2");

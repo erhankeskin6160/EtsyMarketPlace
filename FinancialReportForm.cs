@@ -41,8 +41,8 @@ internal sealed class FinancialReportForm : Form
 
     // ── UI: Filters & Currency ────────────────────────────────────────────────
     private readonly ModernComboBox _cboDateRange     = new();
-    private readonly DateTimePicker _dtpFrom    = new();
-    private readonly DateTimePicker _dtpTo      = new();
+    private readonly ModernDateTimePicker _dtpFrom    = new();
+    private readonly ModernDateTimePicker _dtpTo      = new();
     private readonly ModernCheckBox _chkUseTry        = new();
     private readonly ModernNumericUpDown _numExchangeRate = new();
     private readonly Label _lblMode             = new();
@@ -306,8 +306,8 @@ internal sealed class FinancialReportForm : Form
             Padding = new Padding(0, 2, 0, 2),
         };
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // ComboBox
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); // DtpFrom
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); // DtpTo
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // DtpFrom
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // DtpTo
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // Yenile
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160)); // Maliyet Yönetimi
         bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // API Ayarları

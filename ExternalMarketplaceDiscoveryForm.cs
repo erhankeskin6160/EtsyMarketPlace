@@ -15,7 +15,7 @@ internal sealed class ExternalMarketplaceDiscoveryForm(IAiListingOptimizer aiOpt
     private readonly BindingSource _bindingSource = new();
     private readonly List<ExternalProductIdea> _allIdeas = [];
     private readonly DataGridView _grid = new();
-    private readonly CheckedListBox _sourcesList = new();
+    private readonly ModernCheckedListBox _sourcesList = new();
     private readonly TextBox _shopTypeTextBox = new();
     private readonly TextBox _keywordTextBox = new();
     private readonly TextBox _externalTitleTextBox = new();
