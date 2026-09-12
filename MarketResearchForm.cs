@@ -35,7 +35,7 @@ internal sealed class MarketResearchForm : Form
 
     private readonly TextBox _keywordTextBox = new();
     private readonly ModernNumericUpDown _limitInput = new();
-    private readonly ComboBox _sortComboBox = new();
+    private readonly ModernComboBox _sortComboBox = new();
     private readonly Button _searchButton = new();
     private readonly Button _btnAiMarketReport = new();
     private readonly Button _btnTop13Tags = new();

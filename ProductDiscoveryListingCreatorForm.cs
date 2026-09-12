@@ -40,9 +40,9 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private readonly ModernNumericUpDown _imageCountInput = new() { Minimum = 1, Maximum = 10, Value = 1 };
     private readonly TextBox _taxonomyInput = new();
     private readonly TextBox _categoryTextBox = new() { ReadOnly = true };
-    private readonly ComboBox _listingTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
-    private readonly ComboBox _shippingProfileComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
-    private readonly ComboBox _readinessStateComboBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
+    private readonly ModernComboBox _listingTypeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ModernComboBox _shippingProfileComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Fill };
+    private readonly ModernComboBox _readinessStateComboBox = new() { DropDownStyle = ComboBoxStyle.DropDown, Dock = DockStyle.Fill };
     private readonly PictureBox _previewPictureBox = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
     private readonly Label _imageCounterLabel = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
     private readonly Panel _busyOverlay = new() { Dock = DockStyle.Fill, Visible = false, BackColor = Color.FromArgb(235, 247, 248, 250) };

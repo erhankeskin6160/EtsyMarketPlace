@@ -1918,6 +1918,7 @@ public class ModernTabControl : TabControl
 public class ModernComboBox : ComboBox
 {
     private const int WM_PAINT = 0x000F;
+    private const int WM_ERASEBKGND = 0x0014;
     private bool _isHovered;
 
     public ModernComboBox()
@@ -1932,7 +1933,7 @@ public class ModernComboBox : ComboBox
         FlatStyle = FlatStyle.Flat;
         BackColor = UiStyle.InputBackground;
         ForeColor = UiStyle.TextDark;
-        ItemHeight = 24;
+        ItemHeight = 26;
         Font = UiStyle.BaseFont;
     }
 
@@ -1950,76 +1951,108 @@ public class ModernComboBox : ComboBox
         Invalidate();
     }
 
+    protected override void OnGotFocus(EventArgs e)
+    {
+        base.OnGotFocus(e);
+        Invalidate();
+    }
+
+    protected override void OnLostFocus(EventArgs e)
+    {
+        base.OnLostFocus(e);
+        Invalidate();
+    }
+
+    protected override void OnDropDown(EventArgs e)
+    {
+        base.OnDropDown(e);
+        Invalidate();
+    }
+
+    protected override void OnDropDownClosed(EventArgs e)
+    {
+        base.OnDropDownClosed(e);
+        Invalidate();
+    }
+
     protected override void OnDrawItem(DrawItemEventArgs e)
     {
-        if (e.Index < 0) return;
-
-        bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
-        bool isClosedArea = (e.State & DrawItemState.ComboBoxEdit) == DrawItemState.ComboBoxEdit;
-
-        Color bg = isSelected ? UiStyle.PrimaryColor : UiStyle.InputBackground;
-        Color fg = isSelected ? Color.White : UiStyle.TextDark;
-
-        using (var bgBrush = new SolidBrush(bg))
-        {
-            e.Graphics.FillRectangle(bgBrush, e.Bounds);
-        }
-
-        string text = GetItemText(Items[e.Index]) ?? string.Empty;
-        int btnWidth = 26;
-        var textRect = new Rectangle(
-            e.Bounds.X + 8,
-            e.Bounds.Y,
-            Math.Max(0, e.Bounds.Width - (isClosedArea ? btnWidth + 6 : 16)),
-            e.Bounds.Height);
-
-        TextRenderer.DrawText(
-            e.Graphics,
-            text,
-            Font,
-            textRect,
-            fg,
-            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+        UiStyle.DrawComboBoxItem(this, e);
     }
 
     protected override void WndProc(ref Message m)
     {
+        if (m.Msg == WM_ERASEBKGND)
+        {
+            m.Result = (IntPtr)1;
+            return;
+        }
+
         base.WndProc(ref m);
 
         if (m.Msg == WM_PAINT && DropDownStyle != ComboBoxStyle.Simple)
         {
-            using var g = Graphics.FromHwnd(Handle);
-            g.SmoothingMode = SmoothingMode.AntiAlias;
+            PaintComboBoxOverlay();
+        }
+    }
 
-            int btnWidth = 26;
-            var btnRect = new Rectangle(Width - btnWidth, 1, btnWidth - 1, Height - 2);
-            Color btnBg = _isHovered ? UiStyle.SecondaryHover : UiStyle.SecondaryColor;
+    private void PaintComboBoxOverlay()
+    {
+        if (!IsHandleCreated || Width <= 0 || Height <= 0) return;
 
-            using (var brush = new SolidBrush(btnBg))
+        using var g = Graphics.FromHwnd(Handle);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        int btnWidth = 26;
+        var btnRect = new Rectangle(Width - btnWidth, 1, btnWidth - 1, Height - 2);
+        bool isActive = _isHovered || DroppedDown;
+        Color btnBg = !Enabled
+            ? UiStyle.InputBackground
+            : (isActive ? UiStyle.SecondaryHover : UiStyle.SecondaryColor);
+
+        using (var brush = new SolidBrush(btnBg))
+        {
+            g.FillRectangle(brush, btnRect);
+        }
+
+        using (var sepPen = new Pen(UiStyle.BorderColor, 1f))
+        {
+            g.DrawLine(sepPen, btnRect.X, 2, btnRect.X, Height - 3);
+        }
+
+        int centerX = btnRect.X + (btnRect.Width / 2);
+        int centerY = btnRect.Y + (btnRect.Height / 2);
+        Color arrowColor = !Enabled
+            ? UiStyle.TextMuted
+            : (isActive ? Color.White : UiStyle.TextMuted);
+
+        using (var arrowPen = new Pen(arrowColor, 1.8f)
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round,
+            LineJoin = LineJoin.Round
+        })
+        {
+            using var path = new GraphicsPath();
+            if (DroppedDown)
             {
-                g.FillRectangle(brush, btnRect);
+                path.AddLine(centerX - 4, centerY + 2, centerX, centerY - 2);
+                path.AddLine(centerX, centerY - 2, centerX + 4, centerY + 2);
             }
-
-            using (var sepPen = new Pen(UiStyle.BorderColor, 1f))
+            else
             {
-                g.DrawLine(sepPen, btnRect.X, 1, btnRect.X, Height - 2);
+                path.AddLine(centerX - 4, centerY - 2, centerX, centerY + 2);
+                path.AddLine(centerX, centerY + 2, centerX + 4, centerY - 2);
             }
+            g.DrawPath(arrowPen, path);
+        }
 
-            int centerX = btnRect.X + (btnRect.Width / 2);
-            int centerY = btnRect.Y + (btnRect.Height / 2);
-            Color arrowColor = _isHovered ? Color.White : UiStyle.TextMuted;
-
-            using (var arrowPen = new Pen(arrowColor, 1.8f) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-            {
-                g.DrawLine(arrowPen, centerX - 4, centerY - 2, centerX, centerY + 2);
-                g.DrawLine(arrowPen, centerX, centerY + 2, centerX + 4, centerY - 2);
-            }
-
-            Color borderColor = (_isHovered || DroppedDown) ? UiStyle.PrimaryColor : UiStyle.BorderColor;
-            using (var borderPen = new Pen(borderColor, 1f))
-            {
-                g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
-            }
+        Color borderColor = !Enabled
+            ? UiStyle.BorderColor
+            : ((Focused || _isHovered || DroppedDown) ? UiStyle.PrimaryColor : UiStyle.BorderColor);
+        using (var borderPen = new Pen(borderColor, 1f))
+        {
+            g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
         }
     }
 }

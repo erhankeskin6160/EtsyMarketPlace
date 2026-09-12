@@ -39,8 +39,8 @@ internal sealed class ProfitCalculatorForm : Form
     private readonly ModernNumericUpDown _packagingCostInput = CreateMoneyInput(0.00m);
     private readonly ModernNumericUpDown _adCostInput = CreateMoneyInput(0.00m);
 
-    private readonly ComboBox _countryComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _offsiteAdsComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _countryComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _offsiteAdsComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernCheckBox _currencyConversionCheckBox = new() { Text = "Para birimi dönüştürme (%2.5)", AutoSize = true };
     private readonly ModernNumericUpDown _targetMarginInput = CreatePercentInput(30.0m);
 

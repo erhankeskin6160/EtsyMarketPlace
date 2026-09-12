@@ -21,7 +21,7 @@ internal sealed class ProductOpportunityEngineForm(IAiListingOptimizer aiListing
     private readonly TextBox _includeTextBox = new();
     private readonly TextBox _excludeTextBox = new();
     private readonly ModernNumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
-    private readonly ComboBox _sortComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _sortComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly PictureBox _pictureBox = new() { Dock = DockStyle.Fill, SizeMode = PictureBoxSizeMode.Zoom, BackColor = Color.White };
     private readonly ModernMultilineTextBox _detailTextBox = new();
     private readonly ModernMultilineTextBox _aiTextBox = new();

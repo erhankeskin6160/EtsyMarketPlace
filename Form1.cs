@@ -100,12 +100,12 @@ public partial class Form1 : Form
         filterPanel.Controls.Add(_searchTextBox, 1, 0);
 
         filterPanel.Controls.Add(CreateLabel("Kategori"), 2, 0);
-        _categoryComboBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _categoryComboBox = new SimilarProductsWinForms.Controls.ModernComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         _categoryComboBox.SelectedIndexChanged += (_, _) => ApplyFilters();
         filterPanel.Controls.Add(_categoryComboBox, 3, 0);
 
         filterPanel.Controls.Add(CreateLabel("Sirala"), 4, 0);
-        _sortComboBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _sortComboBox = new SimilarProductsWinForms.Controls.ModernComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         _sortComboBox.Items.AddRange(["Oncelik", "Dusuk fiyat", "Yuksek fiyat", "Kategori"]);
         _sortComboBox.SelectedIndexChanged += (_, _) => ApplyFilters();
         filterPanel.Controls.Add(_sortComboBox, 5, 0);
@@ -210,7 +210,7 @@ public partial class Form1 : Form
         };
         detailPanel.Controls.Add(_detailTextBox, 0, 0);
 
-        _statusComboBox = new ComboBox
+        _statusComboBox = new SimilarProductsWinForms.Controls.ModernComboBox
         {
             Dock = DockStyle.Fill,
             DropDownStyle = ComboBoxStyle.DropDownList,

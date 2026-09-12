@@ -28,7 +28,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
     // Tab 1: Competitor Spy Controls
     private readonly Panel _competitorPanel = new();
     private readonly TextBox _shopInput = new();
-    private readonly ComboBox _watchlistComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _watchlistComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Button _saveWatchlistBtn = new();
     private readonly ModernNumericUpDown _limitInput = new() { Minimum = 10, Maximum = 100, Increment = 10, Value = 50 };
     private readonly Button _spyShopBtn = new();
@@ -38,8 +38,8 @@ internal sealed class CompetitorAndTrendSpyForm : Form
 
     // Listings Grid & Filter Controls
     private readonly TextBox _searchListingTextBox = new();
-    private readonly ComboBox _sortComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _priceFilterComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _sortComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _priceFilterComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Label _listingCountLabel = new();
     private readonly DataGridView _competitorGrid = new();
 

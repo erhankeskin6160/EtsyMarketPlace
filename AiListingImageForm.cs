@@ -47,7 +47,7 @@ internal sealed class AiListingImageForm : Form
     private readonly Button _btnModeAfterOnly = UiStyle.CreateButton("🖼️ Sadece Sonuç", isSecondary: true);
 
     // UI: Left Panel Inputs & Presets
-    private readonly ComboBox _cboEngine = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _cboEngine = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernImageDropZone _dropZone = new();
     private readonly TextBox _productTitleTxt = new();
     private readonly PresetChipSelector _presetChips = new();
@@ -56,17 +56,17 @@ internal sealed class AiListingImageForm : Form
     private readonly StudioLightingSelectorControl _lightingSelector = new();
     private readonly Panel _engineOptionsContainer = new() { AutoSize = true, Dock = DockStyle.Top };
     private readonly FlowLayoutPanel _engineOptionsPanel = new() { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoSize = true };
-    private readonly ComboBox _photoRoomModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _shadowComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _paddingComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _openAiModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _openAiModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _photoRoomModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _shadowComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _paddingComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _openAiModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _openAiModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernCheckBox _chkOpenAiTransparentBg = new() { Text = "Şeffaf Arka Plan (Transparent PNG)", AutoSize = true, ForeColor = Color.White };
-    private readonly ComboBox _bflModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _bflModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly TextBox _txtIdeogramTypography = new();
-    private readonly ComboBox _ideogramStyleComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _geminiModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _geminiEditModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _ideogramStyleComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _geminiModelComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _geminiEditModeComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernButtonControl _btnProcess = new();
     private readonly ModernButtonControl _btnBatchProcess = new();
 
@@ -76,10 +76,10 @@ internal sealed class AiListingImageForm : Form
 
     // UI: Right Panel Marketing & Export
     private readonly ModernCheckBox _chkEnableBadge = new() { Text = "Pazarlama Rozeti Ekle", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold), ForeColor = Color.White };
-    private readonly ComboBox _cboBadgeText = new() { DropDownStyle = ComboBoxStyle.DropDown };
-    private readonly ComboBox _cboBadgePosition = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _formatComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _cboEtsyImageSlot = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _cboBadgeText = new() { DropDownStyle = ComboBoxStyle.DropDown };
+    private readonly ModernComboBox _cboBadgePosition = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _formatComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
+    private readonly ModernComboBox _cboEtsyImageSlot = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly Label _lblTargetListingInfo = new() { AutoSize = true, ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 8.5F) };
 
     // Unified Studio Tabs & Containers

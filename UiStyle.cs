@@ -2,11 +2,22 @@ namespace SimilarProductsWinForms;
 
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Runtime.CompilerServices;
 using System.Windows.Forms;
 using System.Collections.Generic;
 
 internal static class UiStyle
 {
+    static UiStyle()
+    {
+        try
+        {
+            ToolStripManager.Renderer = new ModernDarkMenuRenderer();
+        }
+        catch { }
+    }
+
     public enum AppTheme
     {
         Light,
@@ -55,6 +66,12 @@ internal static class UiStyle
             {
                 form.Icon = new Icon("app.ico");
             }
+        }
+        catch { }
+
+        try
+        {
+            ToolStripManager.Renderer = new ModernDarkMenuRenderer();
         }
         catch { }
 
@@ -123,12 +140,10 @@ internal static class UiStyle
 
     public static void ApplyToSingleControl(Control ctrl)
     {
-        if (ctrl is Panel pnl && pnl.GetType() == typeof(Panel))
+        if (ctrl is Panel pnl)
         {
             if (pnl.BackColor == SystemColors.Control || pnl.BackColor == Color.Empty)
-            {
-                pnl.BackColor = Color.Transparent;
-            }
+                pnl.BackColor = BackgroundColor;
         }
         else if (ctrl is SimilarProductsWinForms.Controls.ModernCardPanel card)
         {
@@ -137,26 +152,20 @@ internal static class UiStyle
         }
         else if (ctrl is GroupBox gb)
         {
+            gb.BackColor = BackgroundColor;
+            gb.ForeColor = PrimaryColor;
             gb.Font = SemiboldBaseFont;
-            gb.ForeColor = TextDark;
-            if (gb.BackColor == SystemColors.Control || gb.BackColor == Color.Empty)
-            {
-                gb.BackColor = Color.Transparent;
-            }
             ApplyToControls(gb.Controls);
         }
         else if (ctrl is Label lbl)
         {
-            // Dark hardcoded colors should be fixed to TextDark or TextMuted
-            if (lbl.ForeColor == SystemColors.ControlText ||
-                lbl.ForeColor == Color.Black ||
-                lbl.ForeColor == Color.FromArgb(15, 23, 42) ||
-                lbl.ForeColor == Color.FromArgb(23, 32, 49) ||
-                lbl.ForeColor == Color.FromArgb(24, 31, 42) ||
-                lbl.ForeColor == Color.FromArgb(49, 59, 73) ||
-                lbl.ForeColor == Color.FromArgb(82, 93, 110))
+            if (lbl.ForeColor == SystemColors.ControlText || lbl.ForeColor == Color.Black || lbl.ForeColor == Color.Empty)
             {
-                lbl.ForeColor = lbl.Font.Size < 9.2F ? TextMuted : TextDark;
+                lbl.ForeColor = TextDark;
+            }
+            if (lbl.Font.Size <= 9F && lbl.Font.Style == FontStyle.Regular)
+            {
+                lbl.Font = BaseFont;
             }
         }
         else if (ctrl is TextBox txt)
@@ -193,10 +202,7 @@ internal static class UiStyle
         }
         else if (ctrl is ComboBox cb)
         {
-            cb.Font = BaseFont;
-            cb.FlatStyle = FlatStyle.Flat;
-            cb.BackColor = InputBackground;
-            cb.ForeColor = TextDark;
+            ConfigureComboBox(cb);
         }
         else if (ctrl is SimilarProductsWinForms.Controls.ModernCheckBox mchk)
         {
@@ -225,6 +231,13 @@ internal static class UiStyle
         {
             ConfigureBaseGrid(grid);
         }
+
+        if (ctrl.ContextMenuStrip != null)
+        {
+            ApplyContextMenuTheme(ctrl.ContextMenuStrip);
+        }
+        ctrl.ContextMenuStripChanged -= OnControlContextMenuStripChanged;
+        ctrl.ContextMenuStripChanged += OnControlContextMenuStripChanged;
 
         if (ctrl.HasChildren && !(ctrl is GroupBox))
         {
@@ -366,6 +379,13 @@ internal static class UiStyle
                 e.Handled = true;
             }
         };
+
+        if (grid.ContextMenuStrip != null)
+        {
+            ApplyContextMenuTheme(grid.ContextMenuStrip);
+        }
+        grid.ContextMenuStripChanged -= OnControlContextMenuStripChanged;
+        grid.ContextMenuStripChanged += OnControlContextMenuStripChanged;
     }
 
     public static SimilarProductsWinForms.Controls.ModernSidebarNav? AttachSidebarNav(Form form, string activeItemId, Action<string>? onNavigate = null)
@@ -402,6 +422,448 @@ internal static class UiStyle
 
         sidebarNav.SelectedItemId = activeItemId;
     }
+
+    private static void OnControlContextMenuStripChanged(object? sender, EventArgs e)
+    {
+        if (sender is Control c && c.ContextMenuStrip != null)
+        {
+            ApplyContextMenuTheme(c.ContextMenuStrip);
+        }
+    }
+
+    public static GraphicsPath CreateRoundedRectanglePath(Rectangle bounds, int radius)
+    {
+        var path = new GraphicsPath();
+        if (bounds.Width <= 0 || bounds.Height <= 0) return path;
+
+        int diameter = Math.Min(radius * 2, Math.Min(bounds.Width, bounds.Height));
+        if (diameter <= 0)
+        {
+            path.AddRectangle(bounds);
+            return path;
+        }
+
+        var arc = new Rectangle(bounds.Location, new Size(diameter, diameter));
+
+        // Top left
+        path.AddArc(arc, 180, 90);
+
+        // Top right
+        arc.X = bounds.Right - diameter;
+        path.AddArc(arc, 270, 90);
+
+        // Bottom right
+        arc.Y = bounds.Bottom - diameter;
+        path.AddArc(arc, 0, 90);
+
+        // Bottom left
+        arc.X = bounds.Left;
+        path.AddArc(arc, 90, 90);
+
+        path.CloseFigure();
+        return path;
+    }
+
+    public static void ApplyContextMenuTheme(ContextMenuStrip? cms)
+    {
+        if (cms == null) return;
+
+        cms.Renderer = new ModernDarkMenuRenderer();
+        cms.BackColor = CardBackground;
+        cms.ForeColor = TextDark;
+        cms.Font = BaseFont;
+
+        bool hasImages = false;
+        foreach (ToolStripItem item in cms.Items)
+        {
+            if (item.Image != null)
+            {
+                hasImages = true;
+                break;
+            }
+        }
+        cms.ShowImageMargin = hasImages;
+
+        foreach (ToolStripItem item in cms.Items)
+        {
+            item.Font = BaseFont;
+            item.ForeColor = TextDark;
+            if (item is ToolStripMenuItem menuItem)
+            {
+                menuItem.Padding = new Padding(4, 5, 4, 5);
+                foreach (ToolStripItem dropItem in menuItem.DropDownItems)
+                {
+                    dropItem.Font = BaseFont;
+                    dropItem.ForeColor = TextDark;
+                    if (dropItem is ToolStripMenuItem subItem)
+                    {
+                        subItem.Padding = new Padding(4, 5, 4, 5);
+                    }
+                }
+            }
+        }
+    }
+
+    public static void ConfigureComboBox(ComboBox cb)
+    {
+        if (cb == null || cb.IsDisposed) return;
+
+        cb.Font = BaseFont;
+        cb.FlatStyle = FlatStyle.Flat;
+        cb.BackColor = InputBackground;
+        cb.ForeColor = TextDark;
+
+        if (cb.DrawMode != DrawMode.OwnerDrawFixed && cb.DrawMode != DrawMode.OwnerDrawVariable)
+        {
+            cb.DrawMode = DrawMode.OwnerDrawFixed;
+        }
+        cb.ItemHeight = Math.Max(cb.ItemHeight, 26);
+
+        cb.DrawItem -= ComboBox_DrawItem;
+        cb.DrawItem += ComboBox_DrawItem;
+
+        if (cb is not SimilarProductsWinForms.Controls.ModernComboBox)
+        {
+            ModernComboBoxPainter.Attach(cb);
+        }
+    }
+
+    private static void ComboBox_DrawItem(object? sender, DrawItemEventArgs e)
+    {
+        if (sender is ComboBox cb)
+        {
+            DrawComboBoxItem(cb, e);
+        }
+    }
+
+    public static void DrawComboBoxItem(ComboBox cb, DrawItemEventArgs e)
+    {
+        if (e.Index < 0)
+        {
+            using var emptyBrush = new SolidBrush(InputBackground);
+            e.Graphics.FillRectangle(emptyBrush, e.Bounds);
+            return;
+        }
+
+        bool isClosedArea = (e.State & DrawItemState.ComboBoxEdit) == DrawItemState.ComboBoxEdit;
+        bool isSelected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+
+        if (isClosedArea)
+        {
+            using (var bgBrush = new SolidBrush(InputBackground))
+            {
+                e.Graphics.FillRectangle(bgBrush, e.Bounds);
+            }
+
+            string text = cb.GetItemText(cb.Items[e.Index]) ?? string.Empty;
+            int btnWidth = 26;
+            var textRect = new Rectangle(
+                e.Bounds.X + 8,
+                e.Bounds.Y,
+                Math.Max(0, e.Bounds.Width - (btnWidth + 10)),
+                e.Bounds.Height);
+
+            Color fg = cb.Enabled ? TextDark : TextMuted;
+            TextRenderer.DrawText(
+                e.Graphics,
+                text,
+                cb.Font,
+                textRect,
+                fg,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            return;
+        }
+
+        using (var bgBrush = new SolidBrush(CardBackground))
+        {
+            e.Graphics.FillRectangle(bgBrush, e.Bounds);
+        }
+
+        if (isSelected)
+        {
+            var itemRect = new Rectangle(e.Bounds.X + 4, e.Bounds.Y + 2, e.Bounds.Width - 8, e.Bounds.Height - 4);
+            using var selPath = CreateRoundedRectanglePath(itemRect, 4);
+            using var selBrush = new SolidBrush(PrimaryColor);
+            var oldSmoothing = e.Graphics.SmoothingMode;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.FillPath(selBrush, selPath);
+            e.Graphics.SmoothingMode = oldSmoothing;
+        }
+
+        string itemText = cb.GetItemText(cb.Items[e.Index]) ?? string.Empty;
+        var itemTextRect = new Rectangle(
+            e.Bounds.X + 12,
+            e.Bounds.Y,
+            Math.Max(0, e.Bounds.Width - 24),
+            e.Bounds.Height);
+
+        Color itemFg = isSelected ? Color.White : (cb.Enabled ? TextDark : TextMuted);
+        TextRenderer.DrawText(
+            e.Graphics,
+            itemText,
+            cb.Font,
+            itemTextRect,
+            itemFg,
+            TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+    }
+
+    private sealed class ModernComboBoxPainter : NativeWindow
+    {
+        private static readonly ConditionalWeakTable<ComboBox, ModernComboBoxPainter> _painters = new();
+        private readonly ComboBox _cb;
+        private bool _isHovered;
+
+        public static void Attach(ComboBox cb)
+        {
+            if (cb == null || cb.IsDisposed) return;
+            if (_painters.TryGetValue(cb, out _)) return;
+
+            var painter = new ModernComboBoxPainter(cb);
+            _painters.Add(cb, painter);
+        }
+
+        private ModernComboBoxPainter(ComboBox cb)
+        {
+            _cb = cb;
+            _cb.HandleCreated += (_, _) => AssignHandle(_cb.Handle);
+            _cb.HandleDestroyed += (_, _) => ReleaseHandle();
+            _cb.Disposed += (_, _) => ReleaseHandle();
+
+            _cb.MouseEnter += (_, _) => { _isHovered = true; _cb.Invalidate(); };
+            _cb.MouseLeave += (_, _) => { _isHovered = false; _cb.Invalidate(); };
+            _cb.GotFocus += (_, _) => _cb.Invalidate();
+            _cb.LostFocus += (_, _) => _cb.Invalidate();
+            _cb.DropDown += (_, _) => _cb.Invalidate();
+            _cb.DropDownClosed += (_, _) => _cb.Invalidate();
+            _cb.Resize += (_, _) => _cb.Invalidate();
+            _cb.SelectedIndexChanged += (_, _) => _cb.Invalidate();
+
+            if (_cb.IsHandleCreated)
+            {
+                AssignHandle(_cb.Handle);
+            }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x0014) // WM_ERASEBKGND
+            {
+                m.Result = (IntPtr)1;
+                return;
+            }
+
+            base.WndProc(ref m);
+
+            if (m.Msg == 0x000F && _cb.DropDownStyle != ComboBoxStyle.Simple) // WM_PAINT
+            {
+                PaintOverlay();
+            }
+        }
+
+        private void PaintOverlay()
+        {
+            if (!_cb.IsHandleCreated || _cb.Width <= 0 || _cb.Height <= 0) return;
+
+            using var g = Graphics.FromHwnd(_cb.Handle);
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+
+            int btnWidth = 26;
+            var btnRect = new Rectangle(_cb.Width - btnWidth, 1, btnWidth - 1, _cb.Height - 2);
+            bool isActive = _isHovered || _cb.DroppedDown;
+            Color btnBg = !_cb.Enabled
+                ? InputBackground
+                : (isActive ? SecondaryHover : SecondaryColor);
+
+            using (var brush = new SolidBrush(btnBg))
+            {
+                g.FillRectangle(brush, btnRect);
+            }
+
+            using (var sepPen = new Pen(BorderColor, 1f))
+            {
+                g.DrawLine(sepPen, btnRect.X, 2, btnRect.X, _cb.Height - 3);
+            }
+
+            int centerX = btnRect.X + (btnRect.Width / 2);
+            int centerY = btnRect.Y + (btnRect.Height / 2);
+            Color arrowColor = !_cb.Enabled
+                ? TextMuted
+                : (isActive ? Color.White : TextMuted);
+
+            using (var arrowPen = new Pen(arrowColor, 1.8f)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+                LineJoin = LineJoin.Round
+            })
+            {
+                using var path = new GraphicsPath();
+                if (_cb.DroppedDown)
+                {
+                    path.AddLine(centerX - 4, centerY + 2, centerX, centerY - 2);
+                    path.AddLine(centerX, centerY - 2, centerX + 4, centerY + 2);
+                }
+                else
+                {
+                    path.AddLine(centerX - 4, centerY - 2, centerX, centerY + 2);
+                    path.AddLine(centerX, centerY + 2, centerX + 4, centerY - 2);
+                }
+                g.DrawPath(arrowPen, path);
+            }
+
+            Color borderColor = !_cb.Enabled
+                ? BorderColor
+                : ((_cb.Focused || _isHovered || _cb.DroppedDown) ? PrimaryColor : BorderColor);
+
+            using (var borderPen = new Pen(borderColor, 1f))
+            {
+                g.DrawRectangle(borderPen, 0, 0, _cb.Width - 1, _cb.Height - 1);
+            }
+        }
+    }
 }
+
+public class ModernDarkMenuColorTable : ProfessionalColorTable
+{
+    public override Color ToolStripDropDownBackground => UiStyle.CardBackground;
+    public override Color MenuBorder => UiStyle.BorderColor;
+    public override Color MenuItemBorder => Color.Transparent;
+    public override Color MenuItemSelected => UiStyle.PrimaryColor;
+    public override Color MenuItemSelectedGradientBegin => UiStyle.PrimaryColor;
+    public override Color MenuItemSelectedGradientEnd => UiStyle.PrimaryColor;
+    public override Color MenuItemPressedGradientBegin => UiStyle.PrimaryHover;
+    public override Color MenuItemPressedGradientMiddle => UiStyle.PrimaryHover;
+    public override Color MenuItemPressedGradientEnd => UiStyle.PrimaryHover;
+    public override Color MenuStripGradientBegin => UiStyle.CardBackground;
+    public override Color MenuStripGradientEnd => UiStyle.CardBackground;
+    public override Color CheckBackground => UiStyle.PrimaryColor;
+    public override Color CheckSelectedBackground => UiStyle.PrimaryHover;
+    public override Color CheckPressedBackground => UiStyle.PrimaryHover;
+    public override Color ImageMarginGradientBegin => UiStyle.CardBackground;
+    public override Color ImageMarginGradientMiddle => UiStyle.CardBackground;
+    public override Color ImageMarginGradientEnd => UiStyle.CardBackground;
+    public override Color ImageMarginRevealedGradientBegin => UiStyle.CardBackground;
+    public override Color ImageMarginRevealedGradientMiddle => UiStyle.CardBackground;
+    public override Color ImageMarginRevealedGradientEnd => UiStyle.CardBackground;
+    public override Color SeparatorDark => UiStyle.BorderColor;
+    public override Color SeparatorLight => Color.Transparent;
+    public override Color ButtonSelectedHighlight => UiStyle.PrimaryColor;
+    public override Color ButtonSelectedHighlightBorder => UiStyle.PrimaryColor;
+    public override Color ButtonPressedHighlight => UiStyle.PrimaryHover;
+    public override Color ButtonPressedHighlightBorder => UiStyle.PrimaryHover;
+    public override Color ButtonCheckedHighlight => UiStyle.PrimaryColor;
+    public override Color ButtonCheckedHighlightBorder => UiStyle.PrimaryColor;
+    public override Color GripDark => UiStyle.BorderColor;
+    public override Color GripLight => Color.Transparent;
+}
+
+public class ModernDarkMenuRenderer : ToolStripProfessionalRenderer
+{
+    public ModernDarkMenuRenderer() : base(new ModernDarkMenuColorTable())
+    {
+        RoundedEdges = false;
+    }
+
+    protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+    {
+        using var brush = new SolidBrush(UiStyle.CardBackground);
+        e.Graphics.FillRectangle(brush, e.AffectedBounds);
+    }
+
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+    {
+        using var pen = new Pen(UiStyle.BorderColor, 1f);
+        e.Graphics.DrawRectangle(pen, 0, 0, e.ToolStrip.Width - 1, e.ToolStrip.Height - 1);
+    }
+
+    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e)
+    {
+        using var brush = new SolidBrush(UiStyle.CardBackground);
+        e.Graphics.FillRectangle(brush, e.AffectedBounds);
+    }
+
+    protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+    {
+        if (e.Item == null) return;
+        if (e.Item.Selected || e.Item.Pressed)
+        {
+            var rect = new Rectangle(3, 1, e.Item.Width - 6, e.Item.Height - 2);
+            using var path = UiStyle.CreateRoundedRectanglePath(rect, 4);
+            using var brush = new SolidBrush(e.Item.Pressed ? UiStyle.PrimaryHover : UiStyle.PrimaryColor);
+            var oldMode = e.Graphics.SmoothingMode;
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.FillPath(brush, path);
+            e.Graphics.SmoothingMode = oldMode;
+        }
+        else
+        {
+            using var brush = new SolidBrush(UiStyle.CardBackground);
+            e.Graphics.FillRectangle(brush, 0, 0, e.Item.Width, e.Item.Height);
+        }
+    }
+
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+    {
+        if (e.Item != null)
+        {
+            e.TextColor = (e.Item.Selected || e.Item.Pressed)
+                ? Color.White
+                : (e.Item.Enabled ? UiStyle.TextDark : UiStyle.TextMuted);
+            e.TextFont = UiStyle.BaseFont;
+        }
+        base.OnRenderItemText(e);
+    }
+
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        if (e.Item == null) return;
+        int y = e.Item.Height / 2;
+        using var pen = new Pen(UiStyle.BorderColor, 1f);
+        e.Graphics.DrawLine(pen, 8, y, e.Item.Width - 8, y);
+    }
+
+    protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+    {
+        int cx = e.ArrowRectangle.X + e.ArrowRectangle.Width / 2;
+        int cy = e.ArrowRectangle.Y + e.ArrowRectangle.Height / 2;
+        Color arrowCol = (e.Item?.Selected ?? false) ? Color.White : UiStyle.TextMuted;
+        using var arrowPen = new Pen(arrowCol, 1.8f)
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round,
+            LineJoin = LineJoin.Round
+        };
+        using var path = new GraphicsPath();
+        path.AddLine(cx - 2, cy - 4, cx + 2, cy);
+        path.AddLine(cx + 2, cy, cx - 2, cy + 4);
+        var oldMode = e.Graphics.SmoothingMode;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        e.Graphics.DrawPath(arrowPen, path);
+        e.Graphics.SmoothingMode = oldMode;
+    }
+
+    protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e)
+    {
+        var checkRect = new Rectangle(e.ImageRectangle.X + 1, e.ImageRectangle.Y + 1, 14, 14);
+        using var path = UiStyle.CreateRoundedRectanglePath(checkRect, 3);
+        using var brush = new SolidBrush(UiStyle.PrimaryColor);
+        var oldMode = e.Graphics.SmoothingMode;
+        e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        e.Graphics.FillPath(brush, path);
+
+        using var pen = new Pen(Color.White, 1.6f)
+        {
+            StartCap = LineCap.Round,
+            EndCap = LineCap.Round,
+            LineJoin = LineJoin.Round
+        };
+        using var checkPath = new GraphicsPath();
+        checkPath.AddLine(checkRect.X + 3, checkRect.Y + 7, checkRect.X + 6, checkRect.Y + 10);
+        checkPath.AddLine(checkRect.X + 6, checkRect.Y + 10, checkRect.X + 11, checkRect.Y + 4);
+        e.Graphics.DrawPath(pen, checkPath);
+        e.Graphics.SmoothingMode = oldMode;
+    }
+}
+
 
 

@@ -33,7 +33,7 @@ internal sealed class OwnShopListingAiAuditForm(
     private readonly Button _btnPrevPage = new();
     private readonly Button _btnNextPage = new();
     private readonly Button _btnLastPage = new();
-    private readonly ComboBox _cboPageSize = new();
+    private readonly ModernComboBox _cboPageSize = new();
 
     // KPI Labels
     private readonly Label _lblKpiTotal = new() { Text = "0 Ürün", Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold), ForeColor = Color.White, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };

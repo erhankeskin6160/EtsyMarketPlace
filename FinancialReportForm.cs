@@ -40,7 +40,7 @@ internal sealed class FinancialReportForm : Form
     private ToolTipDataPayload? _realProfitTooltipPayload = null;
 
     // ── UI: Filters & Currency ────────────────────────────────────────────────
-    private readonly ComboBox _cboDateRange     = new();
+    private readonly ModernComboBox _cboDateRange     = new();
     private readonly DateTimePicker _dtpFrom    = new();
     private readonly DateTimePicker _dtpTo      = new();
     private readonly ModernCheckBox _chkUseTry        = new();
@@ -88,10 +88,10 @@ internal sealed class FinancialReportForm : Form
     private readonly DataGridView _gridPeriod  = new();
     private readonly DataGridView _gridEntries = new();
     private readonly DataGridView _gridOrders  = new();
-    private readonly ComboBox _cboPeriodType   = new();
+    private readonly ModernComboBox _cboPeriodType   = new();
 
     private readonly TextBox _txtOrderSearch   = new();
-    private readonly ComboBox _cboCostFilter   = new();
+    private readonly ModernComboBox _cboCostFilter   = new();
     private readonly Label _lblOrderSummary    = new();
 
     private string _periodSortColumn = "Period";
@@ -630,6 +630,7 @@ internal sealed class FinancialReportForm : Form
 
         var cms = new ContextMenuStrip();
         cms.Items.Add("📋 Değeri Kopyala", null, (s, e) => copyAction());
+        UiStyle.ApplyContextMenuTheme(cms);
         card.ContextMenuStrip = cms;
         layout.ContextMenuStrip = cms;
         titleLabel.ContextMenuStrip = cms;
@@ -1254,6 +1255,7 @@ internal sealed class FinancialReportForm : Form
         ctxMenu.Items.Add(mnuCopyCustomer);
         ctxMenu.Items.Add(mnuCopyCell);
         ctxMenu.Items.Add(mnuCopyRow);
+        UiStyle.ApplyContextMenuTheme(ctxMenu);
         _gridOrders.ContextMenuStrip = ctxMenu;
         _gridOrders.ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableWithoutHeaderText;
 

@@ -76,6 +76,28 @@ static class Program
             _ = new SimilarProductsWinForms.Controls.ModernButtonControl();
             _ = new SimilarProductsWinForms.Controls.ModernNumericUpDown();
             _ = new SimilarProductsWinForms.Controls.ModernStepperControl();
+            _ = new SimilarProductsWinForms.Controls.ModernComboBox();
+            using var testCb = new ComboBox();
+            testCb.Items.Add("Seçenek 1");
+            testCb.Items.Add("Seçenek 2");
+            testCb.SelectedIndex = 0;
+            UiStyle.ConfigureComboBox(testCb);
+
+            using var bmp = new Bitmap(200, 32);
+            using var g = Graphics.FromImage(bmp);
+            var closedArgs = new DrawItemEventArgs(g, testCb.Font, new Rectangle(0, 0, 200, 32), 0, DrawItemState.ComboBoxEdit);
+            UiStyle.DrawComboBoxItem(testCb, closedArgs);
+            var popupArgs1 = new DrawItemEventArgs(g, testCb.Font, new Rectangle(0, 0, 200, 26), 0, DrawItemState.Default);
+            UiStyle.DrawComboBoxItem(testCb, popupArgs1);
+            var popupArgs2 = new DrawItemEventArgs(g, testCb.Font, new Rectangle(0, 0, 200, 26), 1, DrawItemState.Selected);
+            UiStyle.DrawComboBoxItem(testCb, popupArgs2);
+
+            using var testCms = new ContextMenuStrip();
+            var item1 = new ToolStripMenuItem("📋 Siparişi Kopyala");
+            var item2 = new ToolStripMenuItem("⚡ Otomatik Fatura");
+            var sep = new ToolStripSeparator();
+            testCms.Items.AddRange([item1, sep, item2]);
+            UiStyle.ApplyContextMenuTheme(testCms);
             using var testGrid = new DataGridView();
             _ = SimilarProductsWinForms.Controls.ModernGridScrollAdapter.Attach(testGrid);
             using var f1 = new FastListingCreatorForm(null!);

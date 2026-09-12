@@ -81,7 +81,7 @@ public sealed class Trending3DModelHunterForm : Form
     private readonly ModernKpiTile _kpiCommercial = new() { Title = "TİCARİ LİSANSLI", Value = "0", TrendText = "Satılabilir", IsPositive = true, Width = 230 };
 
     // Toolbar controls
-    private readonly ComboBox _cboPlatform = new()
+    private readonly ModernComboBox _cboPlatform = new()
     {
         DropDownStyle = ComboBoxStyle.DropDownList,
         Width = 210,
