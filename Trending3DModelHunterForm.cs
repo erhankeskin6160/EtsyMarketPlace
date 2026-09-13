@@ -1026,13 +1026,17 @@ public sealed class Trending3DModelHunterForm : Form
                 UpdateStoreNicheBanner();
             }
 
-            _lblStoreNicheText.Text = $"🤖 Canlı Ajan Printables üzerinde '{_activeShopProfile.PrimaryNiche}' modellerini avlıyor...";
+            var platform = GetSelectedPlatformFilter() ?? EtsyMarketPlace.Domain.Viral3DModels.Enums.ModelPlatformType.Thingiverse;
+            string userQuery = _txtSearch.Text.Trim();
+            string searchLabel = !string.IsNullOrWhiteSpace(userQuery) ? userQuery : _activeShopProfile.PrimaryNiche;
+
+            _lblStoreNicheText.Text = $"🤖 Canlı Ajan {platform} üzerinde '{searchLabel}' modellerini avlıyor...";
             _lblStoreAiBadge.Text = "🚀 Canlı Tarayıcı Aktif";
 
             var harvested = await _verificationAgent.ScoutAndHarvestForShopAsync(
                 _activeShopProfile,
-                EtsyMarketPlace.Domain.Viral3DModels.Enums.ModelPlatformType.Printables,
-                maxModels: 20,
+                platform,
+                maxModels: 25,
                 statusCallback: status =>
                 {
                     if (InvokeRequired)
@@ -1048,7 +1052,8 @@ public sealed class Trending3DModelHunterForm : Form
                         _btnAgentScoutForShop.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
                         _lblStoreNicheText.Text = status;
                     }
-                });
+                },
+                customQuery: !string.IsNullOrWhiteSpace(userQuery) ? userQuery : null);
 
             if (harvested.Count > 0)
             {
@@ -1077,7 +1082,7 @@ public sealed class Trending3DModelHunterForm : Form
                     $"🎉 Otonom Model Avı Başarıyla Tamamlandı!\n\n" +
                     $"• Mağaza Nişi: {_activeShopProfile.PrimaryNiche}\n" +
                     $"• Canlı Keşfedilen Model: {harvested.Count} adet\n" +
-                    $"• SQLite Gölüne Kaydedilen: {newModels.Count} yeni model\n" +
+                    $"• SQLite Gölüne Eklenen/Güncellenen: {(newModels.Count > 0 ? newModels.Count : harvested.Count)} model\n" +
                     $"• En Yüksek Uyum Skoru: %{harvested.Max(m => m.ShopFitScore)}\n\n" +
                     $"Modeller listenin en üstüne eklenmiş ve mağaza uyumluluk puanlarıyla etiketlenmiştir!",
                     "Otonom Ajan Model Avı",

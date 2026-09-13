@@ -192,17 +192,20 @@ public sealed class Hermes3DScoutAgent : IModelVerificationAgent
         ModelPlatformType platform = ModelPlatformType.Printables,
         int maxModels = 20,
         Action<string>? statusCallback = null,
+        string? customQuery = null,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(shopProfile);
 
-        statusCallback?.Invoke($"🧠 Hermes 3 Ajanı: '{shopProfile.PrimaryNiche}' nişine göre arama planlıyor...");
+        string searchTopic = !string.IsNullOrWhiteSpace(customQuery) ? customQuery : shopProfile.PrimaryNiche;
+        statusCallback?.Invoke($"🧠 Hermes 3 Ajanı: '{searchTopic}' konusu ve '{shopProfile.PrimaryNiche}' nişine göre arama planlıyor...");
 
         var harvested = await _visualAgent.ScoutAndHarvestModelsForShopAsync(
             shopProfile,
             platform,
             maxModels,
             statusCallback,
+            customQuery,
             ct);
 
         // Filter copyright IP risk and refine models

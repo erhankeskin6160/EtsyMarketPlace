@@ -33,5 +33,6 @@ public interface IModelVerificationAgent
         ModelPlatformType platform = ModelPlatformType.Printables,
         int maxModels = 20,
         System.Action<string>? statusCallback = null,
+        string? customQuery = null,
         CancellationToken ct = default);
 }
