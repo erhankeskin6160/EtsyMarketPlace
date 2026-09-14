@@ -836,27 +836,39 @@ internal sealed class DashboardForm : Form
             var from = new DateTimeOffset(new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc));
             var to = DateTimeOffset.UtcNow;
             var settings = EtsyApiSettingsStore.Load();
+            bool hasApi = settings.HasApiCredentials && (!string.IsNullOrWhiteSpace(settings.AccessToken) || !string.IsNullOrWhiteSpace(settings.RefreshToken));
 
-            _liveReport = await _financialService.GetReportAsync(settings, from, to, _liveExchangeRate, _cts.Token);
-
-            if (_liveReport.IsFallbackMode)
+            if (hasApi)
             {
-                _lblApiStatus.Text = "🎮 Demo / Sipariş Modu";
-                _lblApiStatus.ForeColor = UiStyle.WarningColor;
+                _liveReport = await _financialService.GetReportAsync(settings, from, to, _liveExchangeRate, _cts.Token);
+
+                if (_liveReport.IsFallbackMode)
+                {
+                    _lblApiStatus.Text = "⚠️ Tahmini Sipariş Modu";
+                    _lblApiStatus.ForeColor = UiStyle.WarningColor;
+                }
+                else
+                {
+                    string shopInfo = !string.IsNullOrWhiteSpace(settings.ShopId) ? $" (#{settings.ShopId})" : string.Empty;
+                    _lblApiStatus.Text = $"🟢 Canlı Etsy API{shopInfo}";
+                    _lblApiStatus.ForeColor = UiStyle.SuccessColor;
+                }
+
+                int activeListings = _liveReport.OrderSummaries.Select(o => o.ListingId).Distinct().Count();
+                _lblKpiListings.Text = activeListings > 0 ? $"{activeListings} Aktif Ürün" : "0 Aktif Ürün";
             }
             else
             {
-                _lblApiStatus.Text = "🟢 Canlı Etsy API";
-                _lblApiStatus.ForeColor = UiStyle.SuccessColor;
+                _liveReport = FinancialReport.Empty;
+                _lblApiStatus.Text = "⚪ Mağaza Bağlı Değil";
+                _lblApiStatus.ForeColor = UiStyle.TextMuted;
+                _lblKpiListings.Text = "0 Ürün (Bağlantı Yok)";
             }
 
             _lblKpiGross.Text = $"{FormatUSD(_liveReport.TotalGross)}  ({FormatTRY(_liveReport.TotalGrossTRY)})";
             _lblKpiNetProfit.Text = $"{FormatUSD(_liveReport.RealNetProfitUSD)}  ({FormatTRY(_liveReport.RealNetProfitTRY)})";
             _lblKpiNetProfit.ForeColor = _liveReport.RealNetProfitUSD >= 0 ? UiStyle.SuccessColor : UiStyle.DangerColor;
             _lblKpiOrders.Text = $"{_liveReport.OrderSummaries.Count} Sipariş";
-            
-            int activeListings = _liveReport.OrderSummaries.Select(o => o.ListingId).Distinct().Count();
-            _lblKpiListings.Text = activeListings > 0 ? $"{activeListings} Aktif Ürün" : "12 Ürün";
             
             decimal totalDeductionsUSD = -Math.Abs(_liveReport.TotalDeductionsUSD);
             decimal totalDeductionsTRY = -Math.Abs(_liveReport.TotalDeductionsTRY);
@@ -921,6 +933,23 @@ internal sealed class DashboardForm : Form
         if (targetWidth < 260 && _dashboardRootPanel.Width > 0)
         {
             targetWidth = Math.Max(260, (int)(_dashboardRootPanel.Width * 0.40f) - 30);
+        }
+
+        if (_liveReport.OrderSummaries.Count == 0)
+        {
+            var settings = EtsyApiSettingsStore.Load();
+            bool hasApi = settings.HasApiCredentials && (!string.IsNullOrWhiteSpace(settings.AccessToken) || !string.IsNullOrWhiteSpace(settings.RefreshToken));
+            if (!hasApi)
+            {
+                _pnlAiCopilot.Controls.Add(CreateInsightCard(
+                    "🔌 Etsy Mağazası Bağlantısı",
+                    "Canlı siparişlerinizi, ciroyu ve kârınızı görmek için Etsy mağazanızı API ayarlarından bağlayabilirsiniz.",
+                    UiStyle.AccentColor,
+                    targetWidth,
+                    "⚙️ API Ayarları",
+                    () => { using var dlg = new EtsyApiSettingsForm(); dlg.ShowDialog(this); _ = LoadLiveDashboardAsync(); }
+                ));
+            }
         }
 
         int missingCostCount = _liveReport.OrderSummaries.Count(o => !o.HasCostData);

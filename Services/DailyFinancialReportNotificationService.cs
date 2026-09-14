@@ -46,7 +46,7 @@ internal static class DailyFinancialReportNotificationService
             }
             else
             {
-                report = await FinancialReportService.GenerateMockReportAsync(from, to, rate);
+                return (false, "Etsy API veya mağaza token'ı tanımlanmadığı için finansal rapor oluşturulamadı.");
             }
 
             // 3. Mesajı Formatla
