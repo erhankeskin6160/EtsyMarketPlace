@@ -678,4 +678,26 @@ public class Viral3DModelHunterTests
             }
         }
     }
+
+    [Theory]
+    [InlineData("https://www.etsy.com/shop/3DArtDesignsStore", "3DArtDesignsStore")]
+    [InlineData("https://www.etsy.com/shop/3DArtDesignsStore?ref=seller-platform-mcnav", "3DArtDesignsStore")]
+    [InlineData("3DArtDesignsStore", "3DArtDesignsStore")]
+    [InlineData("@3DArtDesignsStore", "3DArtDesignsStore")]
+    public void EtsyPublicShopScraperService_ExtractCleanShopName_ParsesCorrectly(string input, string expected)
+    {
+        string actual = EtsyMarketPlace.Infrastructure.Viral3DModels.Services.EtsyPublicShopScraperService.ExtractCleanShopName(input);
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public async Task EtsyPublicShopScraperService_ScrapeShopListingsAsync_Returns3DArtDesignsStoreInventory()
+    {
+        var scraper = new EtsyMarketPlace.Infrastructure.Viral3DModels.Services.EtsyPublicShopScraperService();
+        var listings = await scraper.ScrapeShopListingsAsync("https://www.etsy.com/shop/3DArtDesignsStore");
+
+        Assert.NotEmpty(listings);
+        Assert.Contains(listings, l => l.Title.Contains("Controller", StringComparison.OrdinalIgnoreCase) ||
+                                       l.Title.Contains("Mask", StringComparison.OrdinalIgnoreCase));
+    }
 }
