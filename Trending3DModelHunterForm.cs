@@ -172,17 +172,59 @@ public sealed class Trending3DModelHunterForm : Form
         Margin = new Padding(0, 0, 6, 0)
     };
 
+    private readonly ModernComboBox _cboHuntMode = new()
+    {
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        Width = 205,
+        Height = 32,
+        Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold)
+    };
+
     private readonly ModernButtonControl _btnScan = new()
     {
-        Text = "🔄 Platformları Tara",
-        Width = 160,
+        Text = "🚀 Ajan Avını Başlat",
+        Width = 175,
         Height = 32,
         NormalColor = UiStyle.PrimaryColor,
         HoverColor = UiStyle.PrimaryHover,
         ForeColor = Color.White,
         Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
         Cursor = Cursors.Hand,
+        Margin = new Padding(2, 0, 4, 0)
+    };
+
+    private readonly ModernButtonControl _btnCancelHunt = new()
+    {
+        Text = "⏹️ Durdur",
+        Width = 85,
+        Height = 32,
+        NormalColor = Color.FromArgb(220, 38, 38),
+        HoverColor = Color.FromArgb(185, 28, 28),
+        ForeColor = Color.White,
+        Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+        Cursor = Cursors.Hand,
+        Visible = false,
         Margin = new Padding(2, 0, 6, 0)
+    };
+
+    // Ajan Canlı Düşünce Akışı Konsolu
+    private readonly Panel _pnlAgentConsole = new()
+    {
+        Dock = DockStyle.Fill,
+        BackColor = Color.FromArgb(11, 15, 25),
+        Padding = new Padding(8, 4, 8, 4),
+        Margin = new Padding(0, 2, 0, 2)
+    };
+
+    private readonly RichTextBox _rtbAgentLogs = new()
+    {
+        Dock = DockStyle.Fill,
+        BackColor = Color.FromArgb(11, 15, 25),
+        ForeColor = Color.FromArgb(52, 211, 153),
+        Font = new Font("Consolas", 8.8F),
+        BorderStyle = BorderStyle.None,
+        ReadOnly = true,
+        ScrollBars = RichTextBoxScrollBars.Vertical
     };
 
     private readonly Label _lblEngineBadge = new()
@@ -451,6 +493,9 @@ public sealed class Trending3DModelHunterForm : Form
             AutoScroll = false,
             Padding = new Padding(0, 8, 0, 4)
         };
+        toolbar.Controls.Add(_cboHuntMode);
+        toolbar.Controls.Add(_btnScan);
+        toolbar.Controls.Add(_btnCancelHunt);
         toolbar.Controls.Add(_cboPlatform);
         toolbar.Controls.Add(_cboCategory);
         toolbar.Controls.Add(_cboSort);
@@ -458,11 +503,16 @@ public sealed class Trending3DModelHunterForm : Form
         toolbar.Controls.Add(_chkShopNicheOnly);
         toolbar.Controls.Add(_txtSearch);
         toolbar.Controls.Add(_btnSearch);
-        toolbar.Controls.Add(_btnScan);
         toolbar.Controls.Add(_lblEngineBadge);
         mainLayout.Controls.Add(toolbar, 0, 2);
 
         // Populate Combos
+        _cboHuntMode.Items.AddRange([
+            "🕵️ Derin Otonom Ajan Avı",
+            "⚡ Hızlı Yüzeysel Tarama"
+        ]);
+        _cboHuntMode.SelectedIndex = 0;
+
         _cboPlatform.Items.AddRange([
             "Tüm Platformlar (Hepsi)",
             "🐼 MakerWorld (Bambu Lab)",
@@ -502,19 +552,55 @@ public sealed class Trending3DModelHunterForm : Form
         split.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         split.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340));
 
-        // Left Table Layout: Grid + Pagination Bar
+        // Left Table Layout: Grid + Live Agent Console + Pagination Bar
         var leftPane = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 2,
+            RowCount = 3,
             ColumnCount = 1,
             Margin = new Padding(0)
         };
         leftPane.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        leftPane.RowStyles.Add(new RowStyle(SizeType.Absolute, 115));
         leftPane.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
 
         ConfigureGrid();
         leftPane.Controls.Add(_grid, 0, 0);
+
+        // Agent Live Console Assembly
+        var consoleHeader = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 24,
+            BackColor = Color.FromArgb(17, 24, 39)
+        };
+        var lblConsoleTitle = new Label
+        {
+            Text = "🤖 Hermes Otonom Ajan Konsolu (Canlı Düşünce Akışı)",
+            ForeColor = Color.FromArgb(167, 139, 250),
+            Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
+            Dock = DockStyle.Left,
+            AutoSize = true,
+            Padding = new Padding(6, 3, 0, 0)
+        };
+        var btnClearConsole = new ModernButtonControl
+        {
+            Text = "🧹 Temizle",
+            Width = 65,
+            Height = 20,
+            Dock = DockStyle.Right,
+            NormalColor = Color.FromArgb(30, 41, 59),
+            HoverColor = Color.FromArgb(51, 65, 85),
+            ForeColor = Color.FromArgb(148, 163, 184),
+            Font = new Font("Segoe UI", 7.5F)
+        };
+        btnClearConsole.Click += (_, _) => _rtbAgentLogs.Clear();
+        consoleHeader.Controls.Add(lblConsoleTitle);
+        consoleHeader.Controls.Add(btnClearConsole);
+
+        _pnlAgentConsole.Controls.Add(_rtbAgentLogs);
+        _pnlAgentConsole.Controls.Add(consoleHeader);
+        leftPane.Controls.Add(_pnlAgentConsole, 0, 1);
 
         var paginationBar = new FlowLayoutPanel
         {
@@ -526,7 +612,7 @@ public sealed class Trending3DModelHunterForm : Form
         };
         paginationBar.Controls.Add(_btnLoadMore);
         paginationBar.Controls.Add(_lblPageStatus);
-        leftPane.Controls.Add(paginationBar, 0, 1);
+        leftPane.Controls.Add(paginationBar, 0, 2);
 
         split.Controls.Add(leftPane, 0, 0);
 
@@ -687,6 +773,11 @@ public sealed class Trending3DModelHunterForm : Form
         };
 
         _btnScan.Click += async (_, _) => await RunScanAsync();
+        _btnCancelHunt.Click += (_, _) =>
+        {
+            _scanCts?.Cancel();
+            LogAgentThought("⏹️ Kullanıcı ajan avını durdurdu. Mevcut modeller listeleniyor...", Color.FromArgb(239, 68, 68));
+        };
         _btnReanalyzeNiche.Click += async (_, _) => await ReanalyzeShopNicheAsync();
         _btnAgentScoutForShop.Click += async (_, _) => await RunAgentScoutForShopAsync();
 
@@ -868,38 +959,95 @@ public sealed class Trending3DModelHunterForm : Form
         }
     }
 
+    private void LogAgentThought(string message, Color? color = null)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        string timestamp = DateTime.Now.ToString("HH:mm:ss");
+        string fullLine = $"[{timestamp}] {message}\r\n";
+
+        if (InvokeRequired)
+        {
+            Invoke(() => LogAgentThought(message, color));
+            return;
+        }
+
+        _rtbAgentLogs.SelectionStart = _rtbAgentLogs.TextLength;
+        _rtbAgentLogs.SelectionLength = 0;
+        _rtbAgentLogs.SelectionColor = color ?? (message.Contains("⚠️") ? Color.FromArgb(251, 191, 36) :
+                                                message.Contains("🎉") || message.Contains("✅") ? Color.FromArgb(52, 211, 153) :
+                                                message.Contains("💰") || message.Contains("📊") ? Color.FromArgb(96, 165, 250) :
+                                                Color.FromArgb(192, 132, 252));
+        _rtbAgentLogs.AppendText(fullLine);
+        _rtbAgentLogs.ScrollToCaret();
+    }
+
     private async Task RunScanAsync()
     {
         try
         {
             _btnScan.Enabled = false;
-            _btnScan.Text = "⏳ Taranıyor...";
+            _btnScan.Text = "⏳ Ajan Avlıyor...";
+            _btnCancelHunt.Visible = true;
             _scanCts?.Cancel();
             _scanCts = new CancellationTokenSource();
 
             var platform = GetSelectedPlatformFilter();
             string? category = GetSelectedCategoryFilter();
+            bool isDeepHunt = _cboHuntMode.SelectedIndex == 0;
 
-            _allModels = (await _hunterService.ScanTrendingModelsAsync(
-                platformFilter: platform,
-                categoryFilter: category,
-                commercialOnly: _chkCommercialOnly.Checked,
-                shopProfile: _activeShopProfile,
-                shopNicheOnly: _chkShopNicheOnly.Checked,
-                ct: _scanCts.Token)).ToList();
+            if (isDeepHunt)
+            {
+                LogAgentThought("🚀 Hermes Otonom Ajan Avı Başlatıldı...");
+                _allModels = (await _hunterService.RunAutonomousAgentHuntAsync(
+                    platformFilter: platform,
+                    categoryFilter: category,
+                    commercialOnly: _chkCommercialOnly.Checked,
+                    shopProfile: _activeShopProfile,
+                    shopNicheOnly: _chkShopNicheOnly.Checked,
+                    statusCallback: msg =>
+                    {
+                        if (InvokeRequired)
+                        {
+                            Invoke(() => LogAgentThought(msg));
+                        }
+                        else
+                        {
+                            LogAgentThought(msg);
+                        }
+                    },
+                    ct: _scanCts.Token)).ToList();
+            }
+            else
+            {
+                LogAgentThought("⚡ Hızlı yüzeysel tarama yapılıyor...");
+                _allModels = (await _hunterService.ScanTrendingModelsAsync(
+                    platformFilter: platform,
+                    categoryFilter: category,
+                    commercialOnly: _chkCommercialOnly.Checked,
+                    shopProfile: _activeShopProfile,
+                    shopNicheOnly: _chkShopNicheOnly.Checked,
+                    ct: _scanCts.Token)).ToList();
+                LogAgentThought($"✅ {_allModels.Count} model listelendi.");
+            }
 
             _displayedLimit = 35;
             UpdateKpis();
             FilterModels();
         }
+        catch (OperationCanceledException)
+        {
+            LogAgentThought("⏹️ Ajan avı durduruldu.");
+        }
         catch (Exception ex)
         {
-            MessageBox.Show(this, $"Tarama sırasında hata oluştu: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            LogAgentThought($"❌ Hata: {ex.Message}", Color.FromArgb(239, 68, 68));
+            MessageBox.Show(this, $"Ajan avı sırasında hata oluştu: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
             _btnScan.Enabled = true;
-            _btnScan.Text = "🔄 Platformları Tara";
+            _btnScan.Text = "🚀 Ajan Avını Başlat";
+            _btnCancelHunt.Visible = false;
         }
     }
 

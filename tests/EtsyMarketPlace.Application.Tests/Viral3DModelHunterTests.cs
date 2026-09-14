@@ -639,4 +639,43 @@ public class Viral3DModelHunterTests
             }
         }
     }
+
+    [Fact]
+    public async Task Viral3DModelHunterService_RunAutonomousAgentHuntAsync_ExecutesMultiPhaseHuntAndPersistsToLake()
+    {
+        string tempDb = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"agent_hunt_{System.Guid.NewGuid():N}.db");
+        try
+        {
+            var lake = new EtsyMarketPlace.Infrastructure.Viral3DModels.Repositories.SqliteViral3DModelLakeRepository(tempDb);
+            var scrapers = new List<I3DModelPlatformScraper>
+            {
+                new MakerWorldTrendingScraper(),
+                new PrintablesTrendingScraper()
+            };
+            var hunter = new Viral3DModelHunterService(scrapers, lakeRepository: lake);
+            var profile = ShopNicheProfile.CreateDefaultFigureAndToy("AgentTestShop");
+
+            var statusLogs = new List<string>();
+            var results = await hunter.RunAutonomousAgentHuntAsync(
+                commercialOnly: true,
+                shopProfile: profile,
+                statusCallback: statusLogs.Add);
+
+            Assert.NotEmpty(results);
+            Assert.NotEmpty(statusLogs);
+            Assert.Contains(statusLogs, s => s.Contains("Hermes Ajanı"));
+            Assert.Contains(statusLogs, s => s.Contains("Faz 1/5"));
+            Assert.Contains(statusLogs, s => s.Contains("Tamamlandı"));
+
+            int totalInLake = await lake.GetTotalCountAsync();
+            Assert.True(totalInLake > 0, "Autonomous agent hunt should persist models to SQLite Lake");
+        }
+        finally
+        {
+            if (System.IO.File.Exists(tempDb))
+            {
+                try { System.IO.File.Delete(tempDb); } catch { }
+            }
+        }
+    }
 }

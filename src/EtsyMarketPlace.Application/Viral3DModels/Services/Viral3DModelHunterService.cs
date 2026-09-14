@@ -105,6 +105,188 @@ public sealed class Viral3DModelHunterService
     }
 
     /// <summary>
+    /// Executes an autonomous multi-step agent hunt across 3D platforms, multi-page deep browsing,
+    /// trademark/copyright IP filtering, Etsy competitor saturation checks, and SQLite lake persistence.
+    /// </summary>
+    public async Task<IReadOnlyList<Trending3DModel>> RunAutonomousAgentHuntAsync(
+        ModelPlatformType? platformFilter = null,
+        string? categoryFilter = null,
+        bool commercialOnly = false,
+        int minOpportunityScore = 0,
+        ShopNicheProfile? shopProfile = null,
+        bool shopNicheOnly = false,
+        Action<string>? statusCallback = null,
+        CancellationToken ct = default)
+    {
+        // ─── FAZ 1: Niş & Stratejik Arama Haritası ──────────────────────────────────────
+        statusCallback?.Invoke("🧠 [Faz 1/5] Hermes Ajanı: Hedef mağaza nişi ve trend anahtar kelimeleri planlıyor...");
+        await Task.Delay(350, ct);
+
+        var searchKeywords = new List<string>();
+        if (shopProfile != null && shopProfile.AffinityKeywords.Count > 0)
+        {
+            searchKeywords.AddRange(shopProfile.AffinityKeywords.Take(4));
+        }
+
+        if (!string.IsNullOrWhiteSpace(categoryFilter) && categoryFilter != "Tüm Kategoriler")
+        {
+            searchKeywords.Add(categoryFilter);
+        }
+
+        if (searchKeywords.Count == 0)
+        {
+            searchKeywords.AddRange(["fidget toy", "desk organizer", "dice tower", "spiral planter", "articulated dragon"]);
+        }
+
+        // AI Semantic Expansion
+        if (_searchExpander != null && searchKeywords.Count > 0)
+        {
+            try
+            {
+                var expansion = await _searchExpander.ExpandQueryAsync(searchKeywords[0], shopProfile, ct);
+                foreach (var ek in expansion.ExpandedKeywords.Take(2))
+                {
+                    if (!searchKeywords.Contains(ek, StringComparer.OrdinalIgnoreCase))
+                    {
+                        searchKeywords.Add(ek);
+                    }
+                }
+            }
+            catch { }
+        }
+
+        statusCallback?.Invoke($"🎯 [Faz 1/5] {searchKeywords.Count} stratejik alt arama terimi belirlendi: {string.Join(", ", searchKeywords.Take(4))}...");
+
+        // ─── FAZ 2: Çoklu Platform & Çoklu Sayfa Canlı Avı ──────────────────────────────
+        var targetScrapers = platformFilter.HasValue
+            ? _scrapers.Where(s => s.PlatformType == platformFilter.Value).ToList()
+            : _scrapers;
+
+        statusCallback?.Invoke($"🔍 [Faz 2/5] Platformlarda çok sayfalı canlı av başlatılıyor ({targetScrapers.Count} platform)...");
+        var allModelsDict = new Dictionary<string, Trending3DModel>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var scraper in targetScrapers)
+        {
+            if (ct.IsCancellationRequested) break;
+            try
+            {
+                statusCallback?.Invoke($"🌐 {scraper.PlatformDisplayName} taranıyor (Trendler Sayfa 1-2)...");
+                var p1 = await scraper.GetTrendingModelsAsync(1, ct);
+                foreach (var m in p1) allModelsDict[m.ExternalId] = m;
+
+                var p2 = await scraper.GetTrendingModelsAsync(2, ct);
+                foreach (var m in p2) allModelsDict[m.ExternalId] = m;
+
+                // Niche keyword search on platform
+                foreach (var kw in searchKeywords.Take(2))
+                {
+                    if (ct.IsCancellationRequested) break;
+                    var results = await scraper.SearchModelsAsync(kw, 1, 20, ct);
+                    foreach (var m in results) allModelsDict[m.ExternalId] = m;
+                    statusCallback?.Invoke($"📥 {scraper.PlatformDisplayName}: '{kw}' aramasından {results.Count} model çekildi.");
+                }
+            }
+            catch (Exception ex)
+            {
+                statusCallback?.Invoke($"⚠️ {scraper.PlatformDisplayName} taranırken atlandı: {ex.Message}");
+            }
+        }
+
+        // Ingest SQLite Lake historical models
+        if (_lakeRepository != null)
+        {
+            try
+            {
+                var lakeModels = await _lakeRepository.GetModelsAsync(100, 0, ct);
+                foreach (var lm in lakeModels)
+                {
+                    if (platformFilter.HasValue && lm.Platform != platformFilter.Value) continue;
+                    if (!allModelsDict.ContainsKey(lm.ExternalId))
+                    {
+                        allModelsDict[lm.ExternalId] = lm;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        statusCallback?.Invoke($"📦 [Faz 2/5] Toplam {allModelsDict.Count} ham aday model toplandı.");
+
+        // ─── FAZ 3: Lisans & Telif Kalkanı (Anti-Ban Guard) ─────────────────────────────
+        statusCallback?.Invoke("🛡️ [Faz 3/5] Lisans ve Marka Telif Kalkanı çalıştırılıyor (DMCA Blacklist)...");
+        await Task.Delay(250, ct);
+
+        var safeCandidates = new List<Trending3DModel>();
+        int excludedCount = 0;
+
+        string[] ipBlacklist = ["pokemon", "pikachu", "charizard", "mario", "zelda", "disney", "mickey", "marvel", "spider-man", "batman", "star wars", "darth vader", "harry potter", "lego", "nike"];
+
+        foreach (var model in allModelsDict.Values)
+        {
+            if (commercialOnly && !model.License.IsCommercialAllowed)
+            {
+                excludedCount++;
+                continue;
+            }
+
+            string combinedText = $"{model.Title} {string.Join(" ", model.Tags)} {model.Description}".ToLowerInvariant();
+            bool hasIpRisk = ipBlacklist.Any(ip => combinedText.Contains(ip, StringComparison.OrdinalIgnoreCase));
+
+            if (hasIpRisk)
+            {
+                model.OpportunityScore = Math.Min(model.OpportunityScore, 30);
+                model.ShopFitReason = "⚠️ Telif Uyarısı: Tescilli marka tespiti (DMCA riski nedeniyle elendi).";
+                excludedCount++;
+                continue;
+            }
+
+            safeCandidates.Add(model);
+        }
+
+        statusCallback?.Invoke($"🛡️ [Faz 3/5] Telif kalkanı tamamlandı. {excludedCount} riskli/ticari olmayan model elendi, {safeCandidates.Count} güvenli model inceleniyor.");
+
+        // ─── FAZ 4: Etsy Canlı Rekabet & Kâr Analizi ─────────────────────────────────────
+        statusCallback?.Invoke("💰 [Faz 4/5] Etsy pazar rekabeti ve kâr marjları hesaplanıyor...");
+
+        if (_competitionChecker != null)
+        {
+            int checkedCount = 0;
+            var topPicks = safeCandidates.OrderByDescending(m => m.Downloads24h).Take(12).ToList();
+            foreach (var model in topPicks)
+            {
+                if (ct.IsCancellationRequested) break;
+                try
+                {
+                    int comp = await _competitionChecker.CheckEtsyCompetitionCountAsync(model.Title, ct);
+                    model.EtsyCompetitionCount = comp;
+                    checkedCount++;
+                    string titleShort = model.Title.Length > 24 ? model.Title.Substring(0, 22) + ".." : model.Title;
+                    statusCallback?.Invoke($"📊 [{checkedCount}/{topPicks.Count}] '{titleShort}' -> Etsy'de {comp} rakip bulundu.");
+                    await Task.Delay(180, ct);
+                }
+                catch { }
+            }
+        }
+
+        await EnrichAndScoreModelsAsync(safeCandidates, shopProfile, ct);
+
+        // ─── FAZ 5: SQLite Model Gölüne Kayıt & Sıralama ─────────────────────────────────
+        statusCallback?.Invoke($"💾 [Faz 5/5] {safeCandidates.Count} altın fırsat SQLite Model Gölüne kalıcı olarak işleniyor...");
+        if (_lakeRepository != null && safeCandidates.Count > 0)
+        {
+            try
+            {
+                await _lakeRepository.SaveOrUpdateModelsAsync(safeCandidates, ct);
+            }
+            catch { }
+        }
+
+        var finalResults = ApplyFiltersAndSort(safeCandidates, categoryFilter, commercialOnly, minOpportunityScore, shopNicheOnly, shopProfile);
+        statusCallback?.Invoke($"🎉 [Tamamlandı] Otonom Ajan Avı Başarıyla Tamamlandı! {finalResults.Count} model listelendi.");
+        return finalResults;
+    }
+
+    /// <summary>
     /// Performs AI semantic query expansion and searches across platforms and SQLite Model Lake.
     /// </summary>
     public async Task<IReadOnlyList<Trending3DModel>> SearchModelsAcrossPlatformsAsync(
