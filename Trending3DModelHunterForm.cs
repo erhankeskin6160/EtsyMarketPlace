@@ -1174,34 +1174,60 @@ public sealed class Trending3DModelHunterForm : Form
                 UpdateStoreNicheBanner();
             }
 
-            var platform = GetSelectedPlatformFilter() ?? EtsyMarketPlace.Domain.Viral3DModels.Enums.ModelPlatformType.Thingiverse;
+            var selectedPlatform = GetSelectedPlatformFilter();
             string userQuery = _txtSearch.Text.Trim();
             string searchLabel = !string.IsNullOrWhiteSpace(userQuery) ? userQuery : _activeShopProfile.PrimaryNiche;
 
-            _lblStoreNicheText.Text = $"🤖 Canlı Ajan {platform} üzerinde '{searchLabel}' modellerini avlıyor...";
-            _lblStoreAiBadge.Text = "🚀 Canlı Tarayıcı Aktif";
-
-            var harvested = await _verificationAgent.ScoutAndHarvestForShopAsync(
-                _activeShopProfile,
-                platform,
-                maxModels: 25,
-                statusCallback: status =>
+            var platformsToSearch = selectedPlatform.HasValue
+                ? new[] { selectedPlatform.Value }
+                : new[]
                 {
-                    if (InvokeRequired)
+                    ModelPlatformType.MakerWorld,
+                    ModelPlatformType.Printables,
+                    ModelPlatformType.Thingiverse,
+                    ModelPlatformType.CrealityCloud,
+                    ModelPlatformType.MakerOnline
+                };
+
+            _lblStoreNicheText.Text = selectedPlatform.HasValue
+                ? $"🤖 Canlı Ajan {selectedPlatform.Value} üzerinde '{searchLabel}' modellerini avlıyor..."
+                : $"🤖 Canlı Ajan TÜM platformlarda ({platformsToSearch.Length} platform) '{searchLabel}' modellerini avlıyor...";
+            _lblStoreAiBadge.Text = "🚀 Canlı Tarayıcı Aktif";
+            LogAgentThought($"🚀 Canlı Model Avı Başlatıldı: {platformsToSearch.Length} platform taranacak (Hedef: '{searchLabel}')...");
+
+            var harvested = new List<Trending3DModel>();
+
+            foreach (var platform in platformsToSearch)
+            {
+                _lblStoreNicheText.Text = $"🤖 Canlı Ajan [{platform}] taranıyor (Toplam: {harvested.Count} model)...";
+                LogAgentThought($"🌐 [{platform}] taranıyor...");
+
+                var found = await _verificationAgent.ScoutAndHarvestForShopAsync(
+                    _activeShopProfile,
+                    platform,
+                    maxModels: selectedPlatform.HasValue ? 25 : 8,
+                    statusCallback: status =>
                     {
-                        Invoke(() =>
+                        if (InvokeRequired)
+                        {
+                            Invoke(() =>
+                            {
+                                _btnAgentScoutForShop.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
+                                _lblStoreNicheText.Text = status;
+                                LogAgentThought(status);
+                            });
+                        }
+                        else
                         {
                             _btnAgentScoutForShop.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
                             _lblStoreNicheText.Text = status;
-                        });
-                    }
-                    else
-                    {
-                        _btnAgentScoutForShop.Text = status.Length > 28 ? status.Substring(0, 25) + "..." : status;
-                        _lblStoreNicheText.Text = status;
-                    }
-                },
-                customQuery: !string.IsNullOrWhiteSpace(userQuery) ? userQuery : null);
+                            LogAgentThought(status);
+                        }
+                    },
+                    customQuery: !string.IsNullOrWhiteSpace(userQuery) ? userQuery : null);
+
+                harvested.AddRange(found);
+            }
 
             if (harvested.Count > 0)
             {

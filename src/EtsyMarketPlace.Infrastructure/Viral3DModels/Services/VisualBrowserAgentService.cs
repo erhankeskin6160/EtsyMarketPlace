@@ -572,6 +572,46 @@ public sealed class VisualBrowserAgentService
                             }
                         }
 
+                        // 4. CrealityCloud
+                        const ccLinks = Array.from(document.querySelectorAll('a[href*=""/model-detail/""], a[href*=""/model/""]'));
+                        for (const a of ccLinks) {
+                            const href = a.href || '';
+                            if ((!href.includes('/model-detail/') && !href.includes('/model/')) || seen.has(href)) continue;
+                            seen.add(href);
+                            const card = a.closest('[class*=""Card""], [class*=""card""], [class*=""item""]') || a.parentElement;
+                            const img = card ? card.querySelector('img') : a.querySelector('img');
+                            let title = (a.innerText || (img ? img.alt : '') || a.getAttribute('title') || '').trim();
+                            const imgSrc = img ? (img.src || img.getAttribute('data-src') || '') : '';
+                            if (title.length > 2) {
+                                items.push({
+                                    url: href,
+                                    title: title.split('\n')[0].trim(),
+                                    author: 'Creality Designer',
+                                    imageUrl: imgSrc
+                                });
+                            }
+                        }
+
+                        // 5. MakerOnline
+                        const moLinks = Array.from(document.querySelectorAll('a[href*=""/model/""]'));
+                        for (const a of moLinks) {
+                            const href = a.href || '';
+                            if (!href.includes('/model/') || seen.has(href)) continue;
+                            seen.add(href);
+                            const card = a.closest('[class*=""Card""], [class*=""card""], [class*=""item""]') || a.parentElement;
+                            const img = card ? card.querySelector('img') : a.querySelector('img');
+                            let title = (a.innerText || (img ? img.alt : '') || a.getAttribute('title') || '').trim();
+                            const imgSrc = img ? (img.src || img.getAttribute('data-src') || '') : '';
+                            if (title.length > 2) {
+                                items.push({
+                                    url: href,
+                                    title: title.split('\n')[0].trim(),
+                                    author: 'MakerOnline Designer',
+                                    imageUrl: imgSrc
+                                });
+                            }
+                        }
+
                         return JSON.stringify(items.slice(0, 35));
                     }");
 
