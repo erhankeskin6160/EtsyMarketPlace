@@ -16,8 +16,6 @@ internal sealed class EtsyApiSettingsForm : Form
     private readonly TextBox _authorizationUrlTextBox = new();
     private readonly TextBox _authorizationCodeTextBox = new();
     private readonly TextBox _statusTextBox = new();
-    private readonly CheckBox _hasReserveCheckBox = new();
-    private readonly NumericUpDown _reservePercentNumeric = new();
 
     public EtsyApiSettingsForm()
     {
@@ -38,7 +36,7 @@ internal sealed class EtsyApiSettingsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 9,
+            RowCount = 8,
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -68,39 +66,6 @@ internal sealed class EtsyApiSettingsForm : Form
 
         AddRow(root, 4, "Auth code", _authorizationCodeTextBox);
 
-        // Rezerv Paneli (Satır 5)
-        var reservePanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            AutoSize = true,
-            Margin = new Padding(0)
-        };
-        _hasReserveCheckBox.Text = "Mağazamda Ödeme Rezervi (Payment Reserve) Var";
-        _hasReserveCheckBox.AutoSize = true;
-        _hasReserveCheckBox.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
-        _hasReserveCheckBox.Padding = new Padding(0, 6, 12, 0);
-
-        var lblReservePct = new Label { Text = "Rezerv Oranı (%):", AutoSize = true, Font = new Font("Segoe UI", 9F), Padding = new Padding(0, 8, 4, 0) };
-        _reservePercentNumeric.Minimum = 1;
-        _reservePercentNumeric.Maximum = 100;
-        _reservePercentNumeric.Value = 30;
-        _reservePercentNumeric.Width = 70;
-        _reservePercentNumeric.Font = new Font("Segoe UI", 9F);
-        _reservePercentNumeric.Enabled = false;
-
-        _hasReserveCheckBox.CheckedChanged += (_, _) =>
-        {
-            _reservePercentNumeric.Enabled = _hasReserveCheckBox.Checked;
-        };
-
-        reservePanel.Controls.Add(_hasReserveCheckBox);
-        reservePanel.Controls.Add(lblReservePct);
-        reservePanel.Controls.Add(_reservePercentNumeric);
-        root.Controls.Add(CreateLabel("🔒 Mağaza Rezervi"), 0, 5);
-        root.Controls.Add(reservePanel, 1, 5);
-
         var buttonPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -128,15 +93,15 @@ internal sealed class EtsyApiSettingsForm : Form
         testButton.Click += async (_, _) => await TestConnectionAsync();
         buttonPanel.Controls.Add(testButton);
 
-        root.Controls.Add(new Label(), 0, 6);
-        root.Controls.Add(buttonPanel, 1, 6);
+        root.Controls.Add(new Label(), 0, 5);
+        root.Controls.Add(buttonPanel, 1, 5);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(CreateLabel("Durum"), 0, 7);
-        root.Controls.Add(_statusTextBox, 1, 7);
+        root.Controls.Add(CreateLabel("Durum"), 0, 6);
+        root.Controls.Add(_statusTextBox, 1, 6);
 
         var infoLabel = new Label
         {
@@ -144,18 +109,17 @@ internal sealed class EtsyApiSettingsForm : Form
             Text = "Not: Magaza raporu shops_r, listings_r ve transactions_r izinlerini ister. AI onerisiyle listing guncellemek icin listings_w izni gerekir. Eski token bu izinleri icermiyorsa OAuth baglantisini yeniden kurun.",
             ForeColor = Color.FromArgb(75, 85, 99),
         };
-        root.Controls.Add(new Label(), 0, 8);
-        root.Controls.Add(infoLabel, 1, 8);
+        root.Controls.Add(new Label(), 0, 7);
+        root.Controls.Add(infoLabel, 1, 7);
 
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); // Rezerv
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90)); // Butonlar
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Durum
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58)); // Bilgi
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
 
         Controls.Add(root);
     }
@@ -187,9 +151,6 @@ internal sealed class EtsyApiSettingsForm : Form
         _keystringTextBox.Text = _settings.Keystring;
         _sharedSecretTextBox.Text = _settings.SharedSecret;
         _redirectUriTextBox.Text = _settings.RedirectUri;
-        _hasReserveCheckBox.Checked = _settings.HasPaymentReserve;
-        _reservePercentNumeric.Value = _settings.PaymentReservePercent > 0 ? _settings.PaymentReservePercent : 30;
-        _reservePercentNumeric.Enabled = _settings.HasPaymentReserve;
         WriteStatus($"Ayar dosyasi: {EtsyApiSettingsStore.SettingsPath}");
     }
 
@@ -198,8 +159,6 @@ internal sealed class EtsyApiSettingsForm : Form
         _settings.Keystring = _keystringTextBox.Text.Trim();
         _settings.SharedSecret = _sharedSecretTextBox.Text.Trim();
         _settings.RedirectUri = _redirectUriTextBox.Text.Trim();
-        _settings.HasPaymentReserve = _hasReserveCheckBox.Checked;
-        _settings.PaymentReservePercent = _reservePercentNumeric.Value;
         EtsyApiSettingsStore.Save(_settings);
         WriteStatus("Ayarlar kaydedildi.");
     }

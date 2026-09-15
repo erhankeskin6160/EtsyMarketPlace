@@ -29,8 +29,4 @@ internal sealed class EtsyApiSettings
         AccessTokenExpiresAtUtc > DateTimeOffset.UtcNow.AddMinutes(2);
 
     public string ApiKeyHeader => $"{Keystring.Trim()}:{SharedSecret.Trim()}";
-
-    public bool HasPaymentReserve { get; set; } = false;
-
-    public decimal PaymentReservePercent { get; set; } = 30m;
 }
