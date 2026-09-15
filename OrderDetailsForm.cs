@@ -156,19 +156,148 @@ internal sealed class OrderDetailsForm : Form
         AddRow(layout, "Vergi Öncesi Ara Toplam", $"${calcSubtotal:N2}", row++, false, UiStyle.TextDark);
         AddRow(layout, "Müşterinin Ödediği Vergi", $"${_order.TaxPaidByBuyer:N2}", row++, false, UiStyle.TextMuted);
 
-        // Total Earned Label at top basically
+        decimal netUsd = _order.GrandTotal - _order.EtsyFees - _order.OffsiteAdFee;
+        decimal netTry = Math.Round(netUsd * _order.ExchangeRate, 2);
+
+        // Check if shop has payment reserve
+        var settings = EtsyApiSettingsStore.Load();
+        if (settings.HasPaymentReserve && settings.PaymentReservePercent > 0)
+        {
+            var pnlReserve = BuildReservePanel(netUsd, settings.PaymentReservePercent);
+            container.Controls.Add(pnlReserve);
+        }
+
+        // Total Earned Label at bottom
         var lblEarned = new Label
         {
-            Text = $"Etsy Net Geliri: ${(_order.GrandTotal - _order.EtsyFees - _order.OffsiteAdFee):N2}",
-            Font = new Font("Segoe UI Semibold", 12F),
+            Text = $"Etsy Net Geliri: ${netUsd:N2}  (₺{netTry:N2})",
+            Font = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold),
             ForeColor = UiStyle.SuccessColor,
             Dock = DockStyle.Bottom,
             AutoSize = true,
-            Padding = new Padding(0, 10, 0, 0)
+            Padding = new Padding(0, 8, 0, 4)
         };
         container.Controls.Add(lblEarned);
         container.Controls.Add(layout);
         layout.BringToFront();
+    }
+
+    private Control BuildReservePanel(decimal netUsd, decimal reservePct)
+    {
+        decimal releasedPct = Math.Max(0, 100m - reservePct);
+        decimal netTry = Math.Round(netUsd * _order.ExchangeRate, 2);
+        decimal lockedUsd = Math.Round(netUsd * (reservePct / 100m), 2);
+        decimal releasedUsd = netUsd - lockedUsd;
+        decimal lockedTry = Math.Round(lockedUsd * _order.ExchangeRate, 2);
+        decimal releasedTry = netTry - lockedTry;
+
+        var card = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            AutoSize = true,
+            BackColor = Color.FromArgb(20, 27, 45),
+            Padding = new Padding(12, 8, 12, 8),
+            Margin = new Padding(0, 4, 0, 0)
+        };
+
+        card.Paint += (s, e) =>
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var pen = new Pen(Color.FromArgb(51, 65, 85), 1f);
+            var rect = card.ClientRectangle;
+            rect.Width -= 1;
+            rect.Height -= 1;
+            e.Graphics.DrawRectangle(pen, rect);
+        };
+
+        var flow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            AutoSize = true,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0)
+        };
+
+        // Title Header
+        var lblTitle = new Label
+        {
+            Text = $"🔒 ETSY ÖDEME REZERVİ  (%{reservePct:N0} BLOKE)",
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            ForeColor = UiStyle.WarningColor,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 4)
+        };
+        flow.Controls.Add(lblTitle);
+
+        // Progress Bar showing proportion
+        var bar = new Panel
+        {
+            Height = 5,
+            Width = 320,
+            BackColor = Color.FromArgb(30, 41, 59),
+            Margin = new Padding(0, 0, 0, 5)
+        };
+        bar.Paint += (s, e) =>
+        {
+            int w = bar.Width;
+            int h = bar.Height;
+            float relRatio = (float)releasedPct / 100f;
+            int relWidth = Math.Max(0, Math.Min(w, (int)(w * relRatio)));
+
+            using var relBrush = new SolidBrush(UiStyle.SuccessColor);
+            e.Graphics.FillRectangle(relBrush, 0, 0, relWidth, h);
+
+            using var lockBrush = new SolidBrush(UiStyle.WarningColor);
+            e.Graphics.FillRectangle(lockBrush, relWidth, 0, w - relWidth, h);
+        };
+        card.Layout += (s, e) =>
+        {
+            int targetW = Math.Max(100, card.ClientSize.Width - card.Padding.Horizontal);
+            if (bar.Width != targetW)
+            {
+                bar.Width = targetW;
+                bar.Invalidate();
+            }
+        };
+        flow.Controls.Add(bar);
+
+        // Released label
+        var lblReleased = new Label
+        {
+            Text = $"🔓 Serbest Bırakılan (%{releasedPct:N0}):  ${releasedUsd:N2}  (₺{releasedTry:N2})",
+            Font = new Font("Segoe UI Semibold", 8.5F),
+            ForeColor = UiStyle.SuccessColor,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 2)
+        };
+        flow.Controls.Add(lblReleased);
+
+        // Locked label
+        var lblLocked = new Label
+        {
+            Text = $"🔒 Rezervde Tutulan (%{reservePct:N0}):  ${lockedUsd:N2}  (₺{lockedTry:N2})",
+            Font = new Font("Segoe UI Semibold", 8.5F),
+            ForeColor = UiStyle.WarningColor,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 3)
+        };
+        flow.Controls.Add(lblLocked);
+
+        // Footnote
+        var lblNote = new Label
+        {
+            Text = "* Takip no girilene veya 45 güne kadar Etsy tarafında tutulur.",
+            Font = new Font("Segoe UI", 7.5F),
+            ForeColor = UiStyle.TextMuted,
+            AutoSize = true,
+            Margin = new Padding(0, 1, 0, 0)
+        };
+        flow.Controls.Add(lblNote);
+
+        card.Controls.Add(flow);
+        return card;
     }
 
     private void BuildFeesPanel(Panel container)
