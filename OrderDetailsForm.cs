@@ -200,10 +200,7 @@ internal sealed class OrderDetailsForm : Form
             AddRow(layout, "Dış Reklam (Offsite Ads)", $"-${_order.OffsiteAdFee:N2}", row++, false, UiStyle.TextMuted);
 
         if (_order.ListingFee > 0)
-            AddRow(layout, "İlan Yenileme (Aylık Fatura)", $"-${_order.ListingFee:N2}", row++, false, UiStyle.TextMuted);
-
-        if (_order.VatOnFees > 0)
-            AddRow(layout, "Bilgi: TR 2 No'lu KDV (%20)", $"${_order.VatOnFees:N2}", row++, false, UiStyle.TextMuted);
+            AddRow(layout, "İlan Yenileme", $"-${_order.ListingFee:N2}", row++, false, UiStyle.TextMuted);
 
         container.Controls.Add(layout);
     }
