@@ -492,7 +492,7 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(0, 2, 0, 4)
         };
 
-        var lblTitleSec = CreateSectionHeaderLabel("✍️ Ürün Başlığı (Etsy SEO)");
+        var lblTitleSec = CreateSectionHeaderLabel("✍️ Ürün Başlığı (SEO)");
         lblTitleSec.Dock = DockStyle.Left;
         lblTitleSec.Margin = Padding.Empty;
         lblTitleSec.TextAlign = ContentAlignment.MiddleLeft;
@@ -503,7 +503,7 @@ internal sealed class FastListingCreatorForm : Form
         _lblTitleCounter.AutoSize = true;
         _lblTitleCounter.Dock = DockStyle.Left;
         _lblTitleCounter.Margin = Padding.Empty;
-        _lblTitleCounter.Padding = new Padding(6, 0, 0, 0);
+        _lblTitleCounter.Padding = new Padding(4, 0, 0, 0);
         _lblTitleCounter.TextAlign = ContentAlignment.MiddleLeft;
 
         var titleBtnFlow = new FlowLayoutPanel
@@ -519,9 +519,9 @@ internal sealed class FastListingCreatorForm : Form
         btnAiTitle.Click += async (_, _) => await SuggestAiTitleAsync();
         titleBtnFlow.Controls.Add(btnAiTitle);
 
-        titleHeader.Controls.Add(lblTitleSec);
-        titleHeader.Controls.Add(_lblTitleCounter);
         titleHeader.Controls.Add(titleBtnFlow);
+        titleHeader.Controls.Add(_lblTitleCounter);
+        titleHeader.Controls.Add(lblTitleSec);
         stack.Controls.Add(titleHeader);
 
         _txtTitle.Multiline = true;
@@ -552,7 +552,7 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(0, 2, 0, 4)
         };
 
-        var lblSec3 = CreateSectionHeaderLabel("📂 Kategori & Kargo Ayarları");
+        var lblSec3 = CreateSectionHeaderLabel("📂 Kategori & Kargo");
         lblSec3.Dock = DockStyle.Left;
         lblSec3.Margin = Padding.Empty;
         lblSec3.TextAlign = ContentAlignment.MiddleLeft;
@@ -571,8 +571,8 @@ internal sealed class FastListingCreatorForm : Form
         _galleryToolTip.SetToolTip(btnAiCategory, "Başlık ve ürün görsellerini yapay zeka ile analiz ederek en uygun Etsy kategorisini ve Taxonomy ID'sini belirler.");
         sec3BtnFlow.Controls.Add(btnAiCategory);
 
-        sec3Header.Controls.Add(lblSec3);
         sec3Header.Controls.Add(sec3BtnFlow);
+        sec3Header.Controls.Add(lblSec3);
         stack.Controls.Add(sec3Header);
 
         var catRow = new TableLayoutPanel
@@ -653,7 +653,7 @@ internal sealed class FastListingCreatorForm : Form
         _lblTagCounter.AutoSize = true;
         _lblTagCounter.Dock = DockStyle.Left;
         _lblTagCounter.Margin = Padding.Empty;
-        _lblTagCounter.Padding = new Padding(6, 0, 0, 0);
+        _lblTagCounter.Padding = new Padding(4, 0, 0, 0);
         _lblTagCounter.TextAlign = ContentAlignment.MiddleLeft;
 
         var tagBtnFlow = new FlowLayoutPanel
@@ -676,9 +676,9 @@ internal sealed class FastListingCreatorForm : Form
         btnAiTags.Click += async (_, _) => await SuggestAiTagsAsync();
         tagBtnFlow.Controls.Add(btnAiTags);
 
-        tagHeader.Controls.Add(lblTagSec);
-        tagHeader.Controls.Add(_lblTagCounter);
         tagHeader.Controls.Add(tagBtnFlow);
+        tagHeader.Controls.Add(_lblTagCounter);
+        tagHeader.Controls.Add(lblTagSec);
         stack.Controls.Add(tagHeader);
 
         _txtTags.Dock = DockStyle.Top;
@@ -723,7 +723,7 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(0, 2, 0, 4)
         };
 
-        var lblDescSec = CreateSectionHeaderLabel("📄 Ürün Açıklaması (Description)");
+        var lblDescSec = CreateSectionHeaderLabel("📄 Ürün Açıklaması");
         lblDescSec.Dock = DockStyle.Left;
         lblDescSec.Margin = Padding.Empty;
         lblDescSec.TextAlign = ContentAlignment.MiddleLeft;
@@ -741,8 +741,8 @@ internal sealed class FastListingCreatorForm : Form
         btnAiDesc.Click += async (_, _) => await SuggestAiDescriptionAsync();
         descBtnFlow.Controls.Add(btnAiDesc);
 
-        descHeader.Controls.Add(lblDescSec);
         descHeader.Controls.Add(descBtnFlow);
+        descHeader.Controls.Add(lblDescSec);
         stack.Controls.Add(descHeader);
 
         _txtDescription.Dock = DockStyle.Top;

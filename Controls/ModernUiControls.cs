@@ -1576,7 +1576,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
             int visibleContentW = needVBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
             int visibleContentH = needHBar ? Math.Max(0, ClientSize.Height - scrollBarH) : ClientSize.Height;
 
-            int effectiveContentW = Math.Max(visibleContentW, contentW);
+            int effectiveContentW = HorizontalScrollEnabled ? Math.Max(visibleContentW, contentW) : visibleContentW;
             int effectiveContentH = Math.Max(visibleContentH, contentH);
 
             var targetContentSize = new Size(effectiveContentW, effectiveContentH);
