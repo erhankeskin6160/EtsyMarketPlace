@@ -96,16 +96,6 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Label _chkItemDesc = new() { AutoSize = true };
     private readonly Label _chkItemTags = new() { AutoSize = true };
 
-    protected override CreateParams CreateParams
-    {
-        get
-        {
-            var cp = base.CreateParams;
-            cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED (Prevents flickering and white boxes during load)
-            return cp;
-        }
-    }
-
     public FastListingCreatorForm(IAiListingOptimizer aiOptimizer, IAiCategorySuggester? categorySuggester = null)
     {
         SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
@@ -476,7 +466,8 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0)
+            Margin = new Padding(0, 0, 8, 0),
+            Padding = new Padding(0, 0, 8, 0)
         };
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
@@ -484,7 +475,7 @@ internal sealed class FastListingCreatorForm : Form
         {
             if (scrollContainer.ClientSize.Width > 0)
             {
-                stack.Width = Math.Max(240, scrollContainer.ClientSize.Width - 16);
+                stack.Width = Math.Max(240, scrollContainer.ClientSize.Width - 28);
             }
         };
 
@@ -1137,7 +1128,7 @@ internal sealed class FastListingCreatorForm : Form
         {
             if (aiContainer.ClientSize.Width > 0)
             {
-                aiStack.Width = Math.Max(200, aiContainer.ClientSize.Width - 16);
+                aiStack.Width = Math.Max(200, aiContainer.ClientSize.Width - 28);
             }
         };
         aiBox.Controls.Add(aiContainer);
@@ -1212,7 +1203,8 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0)
+            Margin = new Padding(0, 0, 8, 0),
+            Padding = new Padding(0, 0, 8, 0)
         };
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
@@ -1220,7 +1212,7 @@ internal sealed class FastListingCreatorForm : Form
         {
             if (_rightScroll.ClientSize.Width > 0)
             {
-                stack.Width = Math.Max(240, _rightScroll.ClientSize.Width - 16);
+                stack.Width = Math.Max(240, _rightScroll.ClientSize.Width - 28);
             }
         };
 

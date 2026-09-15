@@ -1256,7 +1256,8 @@ public class ModernScrollPanel : Panel, IMessageFilter
         public ModernScrollViewport()
         {
             AutoScroll = true;
-            DoubleBuffered = false;
+            DoubleBuffered = true;
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
             Margin = Padding.Empty;
             Padding = Padding.Empty;
             BackColor = UiStyle.CardBackground;
@@ -1265,6 +1266,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
         protected override void OnScroll(ScrollEventArgs se)
         {
             base.OnScroll(se);
+            Invalidate(true);
             if (Parent is ModernScrollPanel p)
             {
                 p.SyncScrollBarFromViewport();
@@ -1314,6 +1316,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
             try
             {
                 _viewport.AutoScrollPosition = new Point(_hScrollBar.Value, _scrollBar.Value);
+                _viewport.Invalidate(true);
             }
             catch { }
             finally
@@ -1329,6 +1332,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
             try
             {
                 _viewport.AutoScrollPosition = new Point(_hScrollBar.Value, _scrollBar.Value);
+                _viewport.Invalidate(true);
             }
             catch { }
             finally
