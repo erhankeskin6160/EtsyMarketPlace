@@ -820,14 +820,16 @@ internal sealed class FinancialReportService
             var innerAds = periodEntries.Where(e => e.Type == "ad_fee").Sum(e => e.Amount);
             var offsiteAds = periodEntries.Where(e => e.Type == "offsite_ads").Sum(e => e.Amount);
             var deposits = periodEntries.Where(e => e.Type == "deposit").Sum(e => e.Amount);
-            var fees = periodEntries.Where(e => e.Type is "listing_fee" or "transaction_fee" or "payment_processing" or "regulatory_operating_fee" or "etsy_tax_fee").Sum(e => e.Amount);
+            var fees = periodEntries.Where(e => e.Type is "listing_fee" or "transaction_fee" or "payment_processing" or "regulatory_operating_fee" or "etsy_tax_fee"
+                || (e.Type is not ("sale" or "refund" or "ad_fee" or "offsite_ads" or "deposit" or "shipping") && (e.Amount < 0 || e.NetAmount < 0))).Sum(e => e.Amount);
 
             // Kuruş Kuruşuna Kesin TRY Toplamları
             var grossTRY = periodEntries.Where(e => e.Type == "sale").Sum(e => e.AmountTRY);
             var refundsTRY = periodEntries.Where(e => e.Type == "refund").Sum(e => e.AmountTRY);
             var innerAdsTRY = periodEntries.Where(e => e.Type == "ad_fee").Sum(e => e.AmountTRY);
             var offsiteAdsTRY = periodEntries.Where(e => e.Type == "offsite_ads").Sum(e => e.AmountTRY);
-            var feesTRY = periodEntries.Where(e => e.Type is "listing_fee" or "transaction_fee" or "payment_processing" or "regulatory_operating_fee" or "etsy_tax_fee").Sum(e => e.AmountTRY);
+            var feesTRY = periodEntries.Where(e => e.Type is "listing_fee" or "transaction_fee" or "payment_processing" or "regulatory_operating_fee" or "etsy_tax_fee"
+                || (e.Type is not ("sale" or "refund" or "ad_fee" or "offsite_ads" or "deposit" or "shipping") && (e.Amount < 0 || e.NetAmount < 0))).Sum(e => e.AmountTRY);
 
             decimal productCosts = periodOrders.Sum(o => o.ProductCost);
             decimal productCostsTRY = periodOrders.Sum(o => Math.Round(o.ProductCost * o.ExchangeRate, 2));

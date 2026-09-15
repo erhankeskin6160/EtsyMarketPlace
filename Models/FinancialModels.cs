@@ -199,24 +199,46 @@ internal sealed record FinancialReport(
     public decimal TotalGrossTRY => DailySummaries.Count > 0 
         ? DailySummaries.Sum(d => d.GrossSales * d.AverageExchangeRate) 
         : (OrderSummaries.Count > 0 ? OrderSummaries.Sum(o => Math.Round(o.GrandTotal * o.ExchangeRate, 2)) : Math.Round(TotalGross * ExchangeRate, 2));
+    public decimal TotalFeesUSD => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.EtsyFees) 
+        : TotalFees;
     public decimal TotalFeesTRY => DailySummaries.Count > 0 
         ? DailySummaries.Sum(d => d.EtsyFeesTRY) 
         : Math.Round(TotalFees * ExchangeRate, 2);
+
+    public decimal TotalInnerAdsUSD => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.InnerAdFees) 
+        : TotalInnerAdFees;
     public decimal TotalInnerAdsTRY => DailySummaries.Count > 0 
         ? DailySummaries.Sum(d => d.InnerAdFeesTRY) 
         : Math.Round(TotalInnerAdFees * ExchangeRate, 2);
+
+    public decimal TotalOffsiteAdsUSD => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.OffsiteAdFees) 
+        : TotalOffsiteAdFees;
     public decimal TotalOffsiteAdsTRY => DailySummaries.Count > 0 
         ? DailySummaries.Sum(d => d.OffsiteAdFeesTRY) 
         : Math.Round(TotalOffsiteAdFees * ExchangeRate, 2);
+
+    public decimal TotalRefundsUSD => DailySummaries.Count > 0 
+        ? DailySummaries.Sum(d => d.Refunds) 
+        : TotalRefunds;
     public decimal TotalRefundsTRY => DailySummaries.Count > 0 
         ? DailySummaries.Sum(d => d.RefundsTRY) 
         : Math.Round(TotalRefunds * ExchangeRate, 2);
-    public decimal TotalDeductionsUSD => TotalFees + TotalInnerAdFees + TotalOffsiteAdFees + TotalRefunds;
+
+    public decimal TotalDeductionsUSD => TotalFeesUSD + TotalInnerAdsUSD + TotalOffsiteAdsUSD + TotalRefundsUSD;
     public decimal TotalDeductionsTRY => TotalFeesTRY + TotalInnerAdsTRY + TotalOffsiteAdsTRY + TotalRefundsTRY;
 
-    public decimal FeeRatePct => TotalGross == 0 ? 0 : Math.Round(TotalFees / TotalGross * 100, 1);
-    public decimal RefundRatePct => TotalGross == 0 ? 0 : Math.Round(TotalRefunds / TotalGross * 100, 1);
-    public decimal AdSpendPct => TotalGross == 0 ? 0 : Math.Round(TotalAdFees / TotalGross * 100, 1);
+    public decimal TotalAdsOnlyUSD => TotalInnerAdsUSD + TotalOffsiteAdsUSD;
+    public decimal TotalAdsOnlyTRY => TotalInnerAdsTRY + TotalOffsiteAdsTRY;
+
+    public decimal TotalFeesOnlyUSD => TotalFeesUSD;
+    public decimal TotalFeesOnlyTRY => TotalFeesTRY;
+
+    public decimal FeeRatePct => TotalGross == 0 ? 0 : Math.Round(Math.Abs(TotalFeesUSD) / TotalGross * 100, 1);
+    public decimal RefundRatePct => TotalGross == 0 ? 0 : Math.Round(Math.Abs(TotalRefundsUSD) / TotalGross * 100, 1);
+    public decimal AdSpendPct => TotalGross == 0 ? 0 : Math.Round(Math.Abs(TotalAdsOnlyUSD) / TotalGross * 100, 1);
     public int TransactionCount => Entries.Count(e => e.Type == "sale");
     public decimal AverageOrderValue => TransactionCount == 0 ? 0 : Math.Round(TotalGross / TransactionCount, 2);
     public decimal ProfitMarginPct => TotalGross == 0 ? 0 : Math.Round(RealNetProfitUSD / TotalGross * 100, 1);

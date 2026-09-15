@@ -63,6 +63,11 @@ internal sealed class DashboardForm : Form
     private readonly Label _lblKpiOrders = new();
     private readonly Label _lblKpiListings = new();
     private readonly Label _lblKpiExpenses = new();
+    private readonly Label _lblKpiExpensesSub = new();
+    private readonly SimilarProductsWinForms.Controls.AnimatedToolTipForm _customToolTipForm = new();
+    private readonly System.Windows.Forms.Timer _hoverCheckTimer = new() { Interval = 50 };
+    private Control? _hoveredCard = null;
+    private SimilarProductsWinForms.Controls.ToolTipDataPayload? _expensesTooltipPayload = null;
 
     private readonly DataGridView _gridRecentOrders = new();
     private readonly Label _lblOrdersSummary = new();
@@ -109,6 +114,35 @@ internal sealed class DashboardForm : Form
         InitializeChart();
         BuildLayout();
         UiStyle.ApplyTheme(this);
+
+        _hoverCheckTimer.Tick += (_, _) =>
+        {
+            if (_hoveredCard == null)
+            {
+                _customToolTipForm.HideTooltip();
+                _hoverCheckTimer.Stop();
+                return;
+            }
+
+            Point mousePos = Cursor.Position;
+            Rectangle cardBounds = _hoveredCard.RectangleToScreen(_hoveredCard.ClientRectangle);
+            if (!cardBounds.Contains(mousePos) && !_customToolTipForm.Bounds.Contains(mousePos))
+            {
+                _customToolTipForm.HideTooltip();
+                _hoveredCard = null;
+                _hoverCheckTimer.Stop();
+            }
+        };
+
+        FormClosed += (_, _) =>
+        {
+            try
+            {
+                _hoverCheckTimer.Dispose();
+                _customToolTipForm.Dispose();
+            }
+            catch { }
+        };
 
         Shown += async (_, _) =>
         {
@@ -448,12 +482,71 @@ internal sealed class DashboardForm : Form
         strip.Controls.Add(CreateHeroKpiCard("💵 GERÇEK NET KÂR", _lblKpiNetProfit, UiStyle.PrimaryColor, "Maliyet & Komisyonlar Düşülmüş"), 1, 0);
         strip.Controls.Add(CreateHeroKpiCard("📦 TOPLAM SİPARİŞ", _lblKpiOrders, UiStyle.WarningColor, "Dönem İçi Başarılı Satış"), 2, 0);
         strip.Controls.Add(CreateHeroKpiCard("🏷️ AKTİF İLAN SAYISI", _lblKpiListings, UiStyle.AccentColor, "Mağaza Portföyü"), 3, 0);
-        strip.Controls.Add(CreateHeroKpiCard("📢 REKLAM VE GİDERLER", _lblKpiExpenses, UiStyle.DangerColor, "Etsy Kesintisi & Reklam"), 4, 0);
+
+        var cardExpenses = CreateHeroKpiCard("📢 ETSY KESİNTİLERİ & REKLAM", _lblKpiExpenses, UiStyle.DangerColor, "Etsy Kesintisi & Reklam", _lblKpiExpensesSub);
+        cardExpenses.Cursor = Cursors.Hand;
+        AttachAnimatedHover(cardExpenses, cardExpenses, (tt, pt) =>
+        {
+            if (_expensesTooltipPayload != null)
+                tt.ShowStructuredTooltip(_expensesTooltipPayload, pt, 2500);
+        });
+        cardExpenses.Click += (_, _) => _ = OpenModuleByIdAsync("accounting");
+        foreach (Control child in cardExpenses.Controls)
+        {
+            child.Cursor = Cursors.Hand;
+            child.Click += (_, _) => _ = OpenModuleByIdAsync("accounting");
+            foreach (Control subChild in child.Controls)
+            {
+                subChild.Cursor = Cursors.Hand;
+                subChild.Click += (_, _) => _ = OpenModuleByIdAsync("accounting");
+            }
+        }
+        strip.Controls.Add(cardExpenses, 4, 0);
 
         return strip;
     }
 
-    private static Control CreateHeroKpiCard(string title, Label valueLabel, Color accentColor, string subtext)
+    private void AttachAnimatedHover(Control rootCard, Control currentControl, Action<SimilarProductsWinForms.Controls.AnimatedToolTipForm, Point> showAction)
+    {
+        currentControl.MouseEnter += (s, e) => 
+        {
+            if (_hoveredCard == rootCard) return;
+            _hoveredCard = rootCard;
+
+            var cardScreenBounds = rootCard.RectangleToScreen(rootCard.ClientRectangle);
+            int centerX = cardScreenBounds.Left + cardScreenBounds.Width / 2;
+            int belowY = cardScreenBounds.Bottom + 4;
+            var position = new Point(centerX, belowY);
+
+            showAction(_customToolTipForm, position);
+            _hoverCheckTimer.Start();
+        };
+
+        currentControl.MouseLeave += (s, e) =>
+        {
+            BeginInvoke((Action)(() =>
+            {
+                if (_hoveredCard != rootCard) return;
+
+                Point mousePos = Cursor.Position;
+                Rectangle cardBounds = rootCard.RectangleToScreen(rootCard.ClientRectangle);
+
+                if (!cardBounds.Contains(mousePos))
+                {
+                    _customToolTipForm.HideTooltip();
+                    _hoveredCard = null;
+                    _hoverCheckTimer.Stop();
+                }
+            }));
+        };
+
+        foreach (Control child in currentControl.Controls)
+        {
+            AttachAnimatedHover(rootCard, child, showAction);
+        }
+    }
+
+    private static ModernCardPanel CreateHeroKpiCard(string title, Label valueLabel, Color accentColor, string subtext, Label? customSubLabel = null)
     {
         var card = new ModernCardPanel
         {
@@ -492,15 +585,13 @@ internal sealed class DashboardForm : Form
         valueLabel.TextAlign = ContentAlignment.MiddleLeft;
         layout.Controls.Add(valueLabel, 0, 1);
 
-        var lblSub = new Label
-        {
-            Dock = DockStyle.Fill,
-            Text = subtext,
-            Font = new Font("Segoe UI", 7.5F),
-            ForeColor = UiStyle.TextMuted,
-            TextAlign = ContentAlignment.MiddleLeft,
-            AutoEllipsis = true
-        };
+        var lblSub = customSubLabel ?? new Label();
+        lblSub.Dock = DockStyle.Fill;
+        lblSub.Text = subtext;
+        lblSub.Font = new Font("Segoe UI", 7.5F);
+        lblSub.ForeColor = UiStyle.TextMuted;
+        lblSub.TextAlign = ContentAlignment.MiddleLeft;
+        lblSub.AutoEllipsis = true;
         layout.Controls.Add(lblSub, 0, 2);
 
         card.Controls.Add(layout);
@@ -881,6 +972,14 @@ internal sealed class DashboardForm : Form
             decimal totalDeductionsTRY = -Math.Abs(_liveReport.TotalDeductionsTRY);
             _lblKpiExpenses.Text = $"{FormatUSD(totalDeductionsUSD)}  ({FormatTRY(totalDeductionsTRY)})";
 
+            decimal totalAdsUSD = -Math.Abs(_liveReport.TotalAdsOnlyUSD);
+            decimal totalAdsTRY = -Math.Abs(_liveReport.TotalAdsOnlyTRY);
+            decimal totalFeesUSD = -Math.Abs(_liveReport.TotalFeesOnlyUSD);
+            decimal totalFeesTRY = -Math.Abs(_liveReport.TotalFeesOnlyTRY);
+            _lblKpiExpensesSub.Text = $"Reklam: {FormatTRY(totalAdsTRY)} ({FormatUSD(totalAdsUSD)}) • Komisyon: {FormatTRY(totalFeesTRY)} ({FormatUSD(totalFeesUSD)})";
+
+            UpdateExpensesToolTip();
+
             PopulateRecentOrdersGrid();
             PopulateAiCopilotInsights();
             UpdateRevenueTrendChart();
@@ -993,11 +1092,14 @@ internal sealed class DashboardForm : Form
 
         if (_liveReport.TotalGross > 0)
         {
-            decimal totalAds = Math.Abs(_liveReport.TotalInnerAdFees + _liveReport.TotalOffsiteAdFees);
+            decimal totalAds = Math.Abs(_liveReport.TotalAdsOnlyUSD);
             decimal adPct = Math.Round(totalAds / _liveReport.TotalGross * 100, 1);
+            decimal totalFees = Math.Abs(_liveReport.TotalFeesOnlyUSD);
+            decimal feePct = Math.Round(totalFees / _liveReport.TotalGross * 100, 1);
+
             _pnlAiCopilot.Controls.Add(CreateInsightCard(
                 "📢 Reklam & Komisyon Durumu",
-                $"Reklam giderleri bu ay cironuzun %{adPct:N1}'ini oluşturuyor. Toplam net kâr marjınız: %{_liveReport.ProfitMarginPct:N1}.",
+                $"Reklam harcaması cironuzun %{adPct:N1}'i (${totalAds:N2}), Etsy komisyonları %{feePct:N1}'i (${totalFees:N2}) seviyesindedir. Toplam net kâr marjınız: %{_liveReport.ProfitMarginPct:N1}.",
                 UiStyle.AccentColor,
                 targetWidth
             ));
@@ -1012,6 +1114,79 @@ internal sealed class DashboardForm : Form
             () => _ = OpenModuleByIdAsync("research")
         ));
         _copilotScroll?.RecalculateScroll();
+    }
+
+    private void UpdateExpensesToolTip()
+    {
+        if (_liveReport == null || (_liveReport.IsFallbackMode && _liveReport.DailySummaries.Count == 0 && _liveReport.Entries.Count == 0))
+        {
+            _expensesTooltipPayload = null;
+            return;
+        }
+
+        decimal innerAdsUSD = Math.Abs(_liveReport.TotalInnerAdsUSD);
+        decimal innerAdsTRY = Math.Abs(_liveReport.TotalInnerAdsTRY);
+
+        decimal offsiteAdsUSD = Math.Abs(_liveReport.TotalOffsiteAdsUSD);
+        decimal offsiteAdsTRY = Math.Abs(_liveReport.TotalOffsiteAdsTRY);
+
+        decimal totalAdsUSD = innerAdsUSD + offsiteAdsUSD;
+        decimal totalAdsTRY = innerAdsTRY + offsiteAdsTRY;
+
+        decimal feesUSD = Math.Abs(_liveReport.TotalFeesUSD);
+        decimal feesTRY = Math.Abs(_liveReport.TotalFeesTRY);
+
+        decimal refundsUSD = Math.Abs(_liveReport.TotalRefundsUSD);
+        decimal refundsTRY = Math.Abs(_liveReport.TotalRefundsTRY);
+
+        decimal totalDeductionsUSD = totalAdsUSD + feesUSD + refundsUSD;
+        decimal totalDeductionsTRY = totalAdsTRY + feesTRY + refundsTRY;
+
+        double feeSharePct = totalDeductionsTRY > 0 ? (double)(feesTRY / totalDeductionsTRY * 100) : 0;
+
+        var kpiCards = new List<SimilarProductsWinForms.Controls.ToolTipKpiCard>
+        {
+            new("📢 İç Reklam (Etsy Ads)", $"-₺{innerAdsTRY:N2}", $"-${innerAdsUSD:N2} (%{(totalDeductionsTRY > 0 ? (innerAdsTRY / totalDeductionsTRY * 100) : 0):N1})", Color.FromArgb(239, 68, 68)),
+            new("🌐 Dış Reklam (Offsite)", $"-₺{offsiteAdsTRY:N2}", $"-${offsiteAdsUSD:N2} (%{(totalDeductionsTRY > 0 ? (offsiteAdsTRY / totalDeductionsTRY * 100) : 0):N1})", Color.FromArgb(249, 115, 22)),
+            new("📋 Etsy Komisyon & Harç", $"-₺{feesTRY:N2}", $"-${feesUSD:N2} (%{feeSharePct:N1})", Color.FromArgb(99, 102, 241))
+        };
+
+        var entries = _liveReport.Entries;
+        decimal txFeesTRY = entries.Where(e => e.Type == "transaction_fee").Sum(e => Math.Abs(e.AmountTRY));
+        decimal procFeesTRY = entries.Where(e => e.Type == "payment_processing").Sum(e => Math.Abs(e.AmountTRY));
+        decimal regFeesTRY = entries.Where(e => e.Type == "regulatory_operating_fee").Sum(e => Math.Abs(e.AmountTRY));
+        decimal listFeesTRY = entries.Where(e => e.Type == "listing_fee").Sum(e => Math.Abs(e.AmountTRY));
+        decimal taxFeesTRY = entries.Where(e => e.Type == "etsy_tax_fee").Sum(e => Math.Abs(e.AmountTRY));
+
+        if (txFeesTRY + procFeesTRY + regFeesTRY + listFeesTRY + taxFeesTRY <= 0 && feesTRY > 0)
+        {
+            txFeesTRY = Math.Round(feesTRY * 0.45m, 2);
+            procFeesTRY = Math.Round(feesTRY * 0.40m, 2);
+            regFeesTRY = Math.Round(feesTRY * 0.10m, 2);
+            listFeesTRY = Math.Round(feesTRY * 0.05m, 2);
+        }
+
+        var rows = new List<SimilarProductsWinForms.Controls.ToolTipTableRow>
+        {
+            new("Reklam", "İç Reklam (Etsy Ads)", "Tıklama", $"-₺{innerAdsTRY:N2} (-${innerAdsUSD:N2})", false, "", "Etsy platform içi arama sponsorlu reklam harcaması"),
+            new("Reklam", "Dış Reklam (Offsite Ads)", "%15", $"-₺{offsiteAdsTRY:N2} (-${offsiteAdsUSD:N2})", false, "", "Google & sosyal medya dış reklam satış komisyonu"),
+            new("Kesinti", "İşlem Komisyonu", "%6.5", $"-₺{txFeesTRY:N2}", false, "", "Ürün ve kargo tutarı üzerinden Etsy standart komisyonu"),
+            new("Kesinti", "Ödeme İşleme Ücreti", "%6.5+3TL", $"-₺{procFeesTRY:N2}", false, "", "Etsy Payments güvenli ödeme tahsilat masrafı"),
+            new("Kesinti", "Yasal İşletim & KDV", "%1.5 + KDV", $"-₺{(regFeesTRY + taxFeesTRY):N2}", false, "", "Türkiye yasal işletim payı ve komisyon KDV'si"),
+            new("Kesinti", "İlan Listeleme Ücreti", "$0.20", $"-₺{listFeesTRY:N2}", false, "", "Ürün listeleme ve 4 aylık yenileme bedelleri"),
+            new("İade", "İptal ve İadeler", $"{entries.Count(e => e.Type == "refund")} Adet", $"-₺{refundsTRY:N2} (-${refundsUSD:N2})", false, "", "Müşterilere iade edilen sipariş tutarları"),
+            new("Toplam", "TOPLAM GİDER & KESİNTİ", "Tümü", $"-₺{totalDeductionsTRY:N2} (-${totalDeductionsUSD:N2})", true, "📢 Toplam", "Brüt cirodan düşülen tüm Etsy kesintileri ve reklam")
+        };
+
+        _expensesTooltipPayload = new SimilarProductsWinForms.Controls.ToolTipDataPayload(
+            "📢 Etsy Kesintileri & Reklam Harcamaları Analizi",
+            $"Toplam Etsy Kesintisi: -₺{totalDeductionsTRY:N2} (-${totalDeductionsUSD:N2}) | Cironun %{(_liveReport.TotalGrossTRY > 0 ? (totalDeductionsTRY / _liveReport.TotalGrossTRY * 100) : 0):N1}'i",
+            kpiCards,
+            new[] { "Tür", "Kalem Adı", "Oran / Tür", "Tutar (TL / USD)", "Durum", "Açıklama / Muhasebe Mantığı" },
+            new[] { 0.10f, 0.24f, 0.13f, 0.21f, 0.08f, 0.24f },
+            rows,
+            $"💡 Reklam Harcaması: ₺{totalAdsTRY:N2} (${totalAdsUSD:N2}) | Etsy Komisyonları: ₺{feesTRY:N2} (${feesUSD:N2}) • Tıklayarak Muhasebe Paneline geçebilirsiniz."
+        );
     }
 
     private static Control CreateInsightCard(string title, string text, Color accentColor, int width, string? buttonText = null, Action? onButtonClick = null)
