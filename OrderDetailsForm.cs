@@ -196,14 +196,14 @@ internal sealed class OrderDetailsForm : Form
         if (_order.RegulatoryOperatingFee > 0)
             AddRow(layout, "Yasal İşlem Ücreti (%1.67)", $"-${_order.RegulatoryOperatingFee:N2}", row++, false, UiStyle.TextMuted);
             
-        if (_order.VatOnFees > 0)
-            AddRow(layout, "Hizmet KDV'si (%20)", $"-${_order.VatOnFees:N2}", row++, false, UiStyle.TextMuted);
-            
-        if (_order.ListingFee > 0)
-            AddRow(layout, "İlan Yenileme", $"-${_order.ListingFee:N2}", row++, false, UiStyle.TextMuted);
-            
         if (_order.OffsiteAdFee > 0)
             AddRow(layout, "Dış Reklam (Offsite Ads)", $"-${_order.OffsiteAdFee:N2}", row++, false, UiStyle.TextMuted);
+
+        if (_order.ListingFee > 0)
+            AddRow(layout, "İlan Yenileme (Aylık Fatura)", $"-${_order.ListingFee:N2}", row++, false, UiStyle.TextMuted);
+
+        if (_order.VatOnFees > 0)
+            AddRow(layout, "Bilgi: TR 2 No'lu KDV (%20)", $"${_order.VatOnFees:N2}", row++, false, UiStyle.TextMuted);
 
         container.Controls.Add(layout);
     }

@@ -659,7 +659,7 @@ internal sealed class FinancialReportService
             decimal transactionFee = 0m;
             decimal paymentFee = 0m;
             decimal regulatoryFee = 0m;
-            decimal listingFee = 0.20m;
+            decimal listingFee = 0m; // İlan yenileme sipariş fişinde değil, aylık mağaza faturasında yer alır
             decimal offsiteAdFee = 0m;
             decimal vatOnFees = 0m;
             decimal etsyFees = 0m;
@@ -711,12 +711,12 @@ internal sealed class FinancialReportService
                 // 5. Dış Reklam (Offsite Ads) Kesimi (%15)
                 offsiteAdFee = r.IsFromOffsiteAds ? Math.Round(grandTotal * 0.15m, 2) : 0m;
 
-                // 6. KDV (%20) - Etsy tüm komisyon ve ilan ücretlerinden %20 KDV keser
-                decimal totalFeesToTax = transactionFee + paymentFee + regulatoryFee + listingFee + offsiteAdFee;
+                // 6. Bilgilendirme KDV'si (Etsy sipariş anında KDV kesmez; TR 2 No'lu KDV beyannamesi için bilgilendirme amacıyla hesaplanır)
+                decimal totalFeesToTax = transactionFee + paymentFee + regulatoryFee + offsiteAdFee;
                 vatOnFees = Math.Round(totalFeesToTax * 0.20m, 2);
 
-                // Toplam Etsy Kesintileri
-                etsyFees = transactionFee + paymentFee + regulatoryFee + listingFee + vatOnFees + tax;
+                // Toplam Etsy Kesintileri (Doğrudan sipariş fişinden kesilen tutar: İşlem + Ödeme + Yasal + Varsa Vergi)
+                etsyFees = transactionFee + paymentFee + regulatoryFee + tax;
 
                 // Maliyet: 1. Öncelik doğrudan Sipariş Numarasına (ReceiptId) ait kayıt, 2. Öncelik ürün varsayılanı
                 string receiptIdStr = r.ReceiptId.ToString(CultureInfo.InvariantCulture);
