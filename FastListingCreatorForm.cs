@@ -96,28 +96,46 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Label _chkItemDesc = new() { AutoSize = true };
     private readonly Label _chkItemTags = new() { AutoSize = true };
 
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED (Prevents flickering and white boxes during load)
+            return cp;
+        }
+    }
+
     public FastListingCreatorForm(IAiListingOptimizer aiOptimizer, IAiCategorySuggester? categorySuggester = null)
     {
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
+        DoubleBuffered = true;
+
         _aiOptimizer = aiOptimizer;
         _categorySuggester = categorySuggester ?? new AiCategorySuggester();
         Text = "🛍️ Hızlı Ürün Ekle & AI Stüdyosu";
         WindowState = FormWindowState.Maximized;
         MinimumSize = new Size(1180, 740);
-        UiStyle.ApplyTheme(this);
 
+        SuspendLayout();
         BuildLayout();
+        LoadTemplatesCombo();
         WireEvents();
+        ResumeLayout(false);
+        PerformLayout();
 
         Shown += async (_, _) => await InitializeFormDataAsync();
     }
 
     private void BuildLayout()
     {
+        SuspendLayout();
+
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             RowCount = 4,
-            Padding = new Padding(14, 10, 14, 10),
+            Padding = new Padding(16, 10, 22, 12),
             BackColor = UiStyle.BackgroundColor
         };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));  // Row 0: Modern Command Header
@@ -154,6 +172,8 @@ internal sealed class FastListingCreatorForm : Form
         _statusLabel.ForeColor = UiStyle.TextMuted;
         _statusLabel.Text = "Hazır.";
         root.Controls.Add(_statusLabel, 0, 3);
+
+        ResumeLayout(false);
     }
 
     private Control BuildTopHeader()
@@ -386,7 +406,7 @@ internal sealed class FastListingCreatorForm : Form
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
             Padding = new Padding(12, 10, 12, 10),
-            Margin = new Padding(0, 0, 5, 0)
+            Margin = new Padding(0, 0, 6, 0)
         };
 
         var cardLayout = new TableLayoutPanel
@@ -789,7 +809,7 @@ internal sealed class FastListingCreatorForm : Form
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
             Padding = new Padding(12, 10, 12, 10),
-            Margin = new Padding(4, 0, 4, 0)
+            Margin = new Padding(6, 0, 6, 0)
         };
 
         var cardLayout = new TableLayoutPanel
@@ -1117,7 +1137,7 @@ internal sealed class FastListingCreatorForm : Form
         {
             if (aiContainer.ClientSize.Width > 0)
             {
-                aiStack.Width = Math.Max(200, aiContainer.ClientSize.Width - 6);
+                aiStack.Width = Math.Max(200, aiContainer.ClientSize.Width - 16);
             }
         };
         aiBox.Controls.Add(aiContainer);
@@ -1130,50 +1150,89 @@ internal sealed class FastListingCreatorForm : Form
 
     private Control BuildRightColumn()
     {
-        var grp = new GroupBox
+        var card = new ModernCardPanel
         {
-            Text = "3. Varyasyonlar & Kontrol Listesi",
-            Font = new Font("Segoe UI Semibold", 9.5F),
+            Dock = DockStyle.Fill,
+            CornerRadius = 12,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+            Padding = new Padding(12, 10, 12, 10),
+            Margin = new Padding(6, 0, 0, 0)
+        };
+
+        var cardLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 3
+        };
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Header Bar
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 6));  // Divider Space
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Scrollable Form Content
+
+        // 1. Header Bar with Title
+        var headerBar = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            Margin = new Padding(0)
+        };
+        headerBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        var lblTitle = new Label
+        {
+            Text = "⚙️ 3. Varyasyonlar & Kontrol Listesi",
+            Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
-            Padding = new Padding(8, 6, 8, 8),
-            Margin = new Padding(5, 0, 0, 0)
+            TextAlign = ContentAlignment.MiddleLeft,
+            UseMnemonic = false
         };
+        headerBar.Controls.Add(lblTitle, 0, 0);
+        cardLayout.Controls.Add(headerBar, 0, 0);
+
+        // Subtle Divider Line
+        var divider = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 1,
+            BackColor = UiStyle.BorderColor,
+            Margin = new Padding(0, 2, 0, 3)
+        };
+        cardLayout.Controls.Add(divider, 0, 1);
 
         _rightScroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 2, 0)
+            Padding = new Padding(0, 2, 2, 0)
         };
 
         var stack = new TableLayoutPanel
         {
             ColumnCount = 1,
             AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowOnly,
-            MinimumSize = new Size(240, 0)
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Margin = new Padding(0)
         };
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-
-        // 1. Variations Box
-        var varBox = new GroupBox
+        _rightScroll.Resize += (_, _) =>
         {
-            Text = "Ürün Varyasyonları (Seçenekler)",
-            Font = new Font("Segoe UI Semibold", 9F),
-            ForeColor = UiStyle.TextDark,
-            Dock = DockStyle.Top,
-            Padding = new Padding(8),
-            Margin = new Padding(0, 0, 0, 8),
-            AutoSize = true,
-            MinimumSize = new Size(240, 0)
+            if (_rightScroll.ClientSize.Width > 0)
+            {
+                stack.Width = Math.Max(240, _rightScroll.ClientSize.Width - 16);
+            }
         };
+
+        // 1. Variations Section
+        stack.Controls.Add(CreateSectionHeaderLabel("🧩 Varyasyonlar (Seçenekler)"));
+
         var varTable = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 1,
-            AutoSize = true
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 8)
         };
         varTable.ColumnStyles.Clear();
         varTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
@@ -1185,6 +1244,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblVar1 = new Label { Text = "1. Varyasyon Tipi:", AutoSize = true, Font = new Font("Segoe UI Semibold", 8.5F), Margin = new Padding(0, 6, 0, 2) };
         varTable.Controls.Add(lblVar1);
 
+        _cboVarType1.Items.Clear();
         _cboVarType1.Items.AddRange([
             "📏 Boyut / Size",
             "🎨 Renk / Color",
@@ -1204,6 +1264,7 @@ internal sealed class FastListingCreatorForm : Form
         _chkEnableVar2.Margin = new Padding(0, 6, 0, 6);
         varTable.Controls.Add(_chkEnableVar2);
 
+        _cboVarType2.Items.Clear();
         _cboVarType2.Items.AddRange([
             "🎨 Renk / Color",
             "📏 Boyut / Size",
@@ -1234,26 +1295,17 @@ internal sealed class FastListingCreatorForm : Form
         varTable.Controls.Add(_chkCustomVariationPricing);
         varTable.Controls.Add(BuildVariationPricingPanel());
 
-        varBox.Controls.Add(varTable);
-        stack.Controls.Add(varBox);
+        stack.Controls.Add(varTable);
 
         // 2. Canlı Hazırlık Kontrol Listesi & Yayınlama Kutusu
-        var pubBox = new GroupBox
-        {
-            Text = "Listeleme Hazırlık & Dağıtım",
-            Font = new Font("Segoe UI Semibold", 9F),
-            ForeColor = UiStyle.TextDark,
-            Dock = DockStyle.Top,
-            Padding = new Padding(8),
-            AutoSize = true,
-            MinimumSize = new Size(240, 0)
-        };
+        stack.Controls.Add(CreateSectionHeaderLabel("🚀 Listeleme Hazırlık & Dağıtım"));
 
         var pubTable = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             ColumnCount = 1,
-            AutoSize = true
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 6)
         };
         pubTable.ColumnStyles.Clear();
         pubTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
@@ -1265,7 +1317,7 @@ internal sealed class FastListingCreatorForm : Form
             Font = new Font("Segoe UI Semibold", 8.5F),
             ForeColor = UiStyle.TextDark,
             AutoSize = true,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = new Padding(0, 2, 0, 4)
         };
         pubTable.Controls.Add(chkHeader);
 
@@ -1327,12 +1379,12 @@ internal sealed class FastListingCreatorForm : Form
         };
         pubTable.Controls.Add(lblNote);
 
-        pubBox.Controls.Add(pubTable);
-        stack.Controls.Add(pubBox);
+        stack.Controls.Add(pubTable);
 
         _rightScroll.SetContent(stack);
-        grp.Controls.Add(_rightScroll);
-        return grp;
+        cardLayout.Controls.Add(_rightScroll, 0, 2);
+        card.Controls.Add(cardLayout);
+        return card;
     }
 
     private void UpdatePublishButtonVisuals()
