@@ -447,6 +447,13 @@ internal sealed class FastListingCreatorForm : Form
         };
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        scrollContainer.Resize += (_, _) =>
+        {
+            if (scrollContainer.ClientSize.Width > 0)
+            {
+                stack.Width = Math.Max(240, scrollContainer.ClientSize.Width - 6);
+            }
+        };
 
         // --- SECTION 1: Temel Satış Bilgileri (Ürün Tipi, Fiyat, Stok) ---
         stack.Controls.Add(CreateSectionHeaderLabel("🏷️ Temel Satış Bilgileri"));
@@ -478,31 +485,43 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(topRow);
 
         // --- SECTION 2: Etsy SEO Başlığı ---
-        var titleHeader = new TableLayoutPanel
+        var titleHeader = new Panel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 3,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 30,
+            Margin = new Padding(0, 2, 0, 4)
         };
-        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblTitleSec = CreateSectionHeaderLabel("✍️ Ürün Başlığı (Etsy SEO)");
-        lblTitleSec.Margin = new Padding(0, 4, 0, 0);
-        titleHeader.Controls.Add(lblTitleSec, 0, 0);
+        lblTitleSec.Dock = DockStyle.Left;
+        lblTitleSec.Margin = Padding.Empty;
+        lblTitleSec.TextAlign = ContentAlignment.MiddleLeft;
 
         _lblTitleCounter.Text = "0 / 140";
-        _lblTitleCounter.Font = new Font("Segoe UI Semibold", 8F);
+        _lblTitleCounter.Font = new Font("Segoe UI Semibold", 8.5F);
         _lblTitleCounter.ForeColor = UiStyle.TextMuted;
         _lblTitleCounter.AutoSize = true;
-        _lblTitleCounter.Margin = new Padding(0, 6, 6, 0);
-        titleHeader.Controls.Add(_lblTitleCounter, 1, 0);
+        _lblTitleCounter.Dock = DockStyle.Left;
+        _lblTitleCounter.Margin = Padding.Empty;
+        _lblTitleCounter.Padding = new Padding(6, 0, 0, 0);
+        _lblTitleCounter.TextAlign = ContentAlignment.MiddleLeft;
 
-        var btnAiTitle = CreateModernActionButton("✨ AI Başlık Öner", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        var titleBtnFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        var btnAiTitle = CreateModernActionButton("✨ AI Başlık Öner", UiStyle.AiColor, UiStyle.AiHover, Color.White, 28);
         btnAiTitle.Click += async (_, _) => await SuggestAiTitleAsync();
-        titleHeader.Controls.Add(btnAiTitle, 2, 0);
+        titleBtnFlow.Controls.Add(btnAiTitle);
+
+        titleHeader.Controls.Add(lblTitleSec);
+        titleHeader.Controls.Add(_lblTitleCounter);
+        titleHeader.Controls.Add(titleBtnFlow);
         stack.Controls.Add(titleHeader);
 
         _txtTitle.Multiline = true;
@@ -526,24 +545,34 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(lblTitleHint);
 
         // --- SECTION 3: Kategori & Kargo Ayarları ---
-        var sec3Header = new TableLayoutPanel
+        var sec3Header = new Panel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 2,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 30,
+            Margin = new Padding(0, 2, 0, 4)
         };
-        sec3Header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        sec3Header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblSec3 = CreateSectionHeaderLabel("📂 Kategori & Kargo Ayarları");
-        lblSec3.Margin = new Padding(0, 4, 0, 0);
-        sec3Header.Controls.Add(lblSec3, 0, 0);
+        lblSec3.Dock = DockStyle.Left;
+        lblSec3.Margin = Padding.Empty;
+        lblSec3.TextAlign = ContentAlignment.MiddleLeft;
 
-        var btnAiCategory = CreateModernActionButton("✨ AI Kategori Belirle", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        var sec3BtnFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        var btnAiCategory = CreateModernActionButton("✨ AI Kategori Belirle", UiStyle.AiColor, UiStyle.AiHover, Color.White, 28);
         btnAiCategory.Click += async (_, _) => await SuggestAiCategoryAsync();
         _galleryToolTip.SetToolTip(btnAiCategory, "Başlık ve ürün görsellerini yapay zeka ile analiz ederek en uygun Etsy kategorisini ve Taxonomy ID'sini belirler.");
-        sec3Header.Controls.Add(btnAiCategory, 1, 0);
+        sec3BtnFlow.Controls.Add(btnAiCategory);
+
+        sec3Header.Controls.Add(lblSec3);
+        sec3Header.Controls.Add(sec3BtnFlow);
         stack.Controls.Add(sec3Header);
 
         var catRow = new TableLayoutPanel
@@ -606,38 +635,50 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(shipRow);
 
         // --- SECTION 4: Arama Etiketleri (Tags - Maks 13) ---
-        var tagHeader = new TableLayoutPanel
+        var tagHeader = new Panel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 4,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 30,
+            Margin = new Padding(0, 2, 0, 4)
         };
-        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblTagSec = CreateSectionHeaderLabel("🏷️ Etiketler (Tags)");
-        lblTagSec.Margin = new Padding(0, 4, 0, 0);
-        tagHeader.Controls.Add(lblTagSec, 0, 0);
+        lblTagSec.Dock = DockStyle.Left;
+        lblTagSec.Margin = Padding.Empty;
+        lblTagSec.TextAlign = ContentAlignment.MiddleLeft;
 
         _lblTagCounter.Text = "0 / 13";
-        _lblTagCounter.Font = new Font("Segoe UI Semibold", 8F);
+        _lblTagCounter.Font = new Font("Segoe UI Semibold", 8.5F);
         _lblTagCounter.ForeColor = UiStyle.TextMuted;
         _lblTagCounter.AutoSize = true;
-        _lblTagCounter.Margin = new Padding(0, 6, 6, 0);
-        tagHeader.Controls.Add(_lblTagCounter, 1, 0);
+        _lblTagCounter.Dock = DockStyle.Left;
+        _lblTagCounter.Margin = Padding.Empty;
+        _lblTagCounter.Padding = new Padding(6, 0, 0, 0);
+        _lblTagCounter.TextAlign = ContentAlignment.MiddleLeft;
 
-        var btnAiTags = CreateModernActionButton("✨ 13 AI Tag", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
-        btnAiTags.Click += async (_, _) => await SuggestAiTagsAsync();
-        tagHeader.Controls.Add(btnAiTags, 2, 0);
+        var tagBtnFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
 
-        var btnCleanTags = CreateModernActionButton("🧹 Kırp & Düzelt", UiStyle.SecondaryColor, UiStyle.SecondaryHover, UiStyle.TextDark, 26);
+        var btnCleanTags = CreateModernActionButton("🧹 Kırp & Düzelt", UiStyle.SecondaryColor, UiStyle.SecondaryHover, UiStyle.TextDark, 28);
         btnCleanTags.FlatAppearance.BorderSize = 1;
         btnCleanTags.FlatAppearance.BorderColor = UiStyle.BorderColor;
         btnCleanTags.Click += (_, _) => CleanAndFormatTags();
-        tagHeader.Controls.Add(btnCleanTags, 3, 0);
+        tagBtnFlow.Controls.Add(btnCleanTags);
+
+        var btnAiTags = CreateModernActionButton("✨ 13 AI Tag", UiStyle.AiColor, UiStyle.AiHover, Color.White, 28);
+        btnAiTags.Click += async (_, _) => await SuggestAiTagsAsync();
+        tagBtnFlow.Controls.Add(btnAiTags);
+
+        tagHeader.Controls.Add(lblTagSec);
+        tagHeader.Controls.Add(_lblTagCounter);
+        tagHeader.Controls.Add(tagBtnFlow);
         stack.Controls.Add(tagHeader);
 
         _txtTags.Dock = DockStyle.Top;
@@ -675,23 +716,33 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(lblTagHint);
 
         // --- SECTION 5: Ürün Açıklaması ---
-        var descHeader = new TableLayoutPanel
+        var descHeader = new Panel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 2,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 30,
+            Margin = new Padding(0, 2, 0, 4)
         };
-        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblDescSec = CreateSectionHeaderLabel("📄 Ürün Açıklaması (Description)");
-        lblDescSec.Margin = new Padding(0, 4, 0, 0);
-        descHeader.Controls.Add(lblDescSec, 0, 0);
+        lblDescSec.Dock = DockStyle.Left;
+        lblDescSec.Margin = Padding.Empty;
+        lblDescSec.TextAlign = ContentAlignment.MiddleLeft;
 
-        var btnAiDesc = CreateModernActionButton("✨ AI Açıklama Üret", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        var descBtnFlow = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        var btnAiDesc = CreateModernActionButton("✨ AI Açıklama Üret", UiStyle.AiColor, UiStyle.AiHover, Color.White, 28);
         btnAiDesc.Click += async (_, _) => await SuggestAiDescriptionAsync();
-        descHeader.Controls.Add(btnAiDesc, 1, 0);
+        descBtnFlow.Controls.Add(btnAiDesc);
+
+        descHeader.Controls.Add(lblDescSec);
+        descHeader.Controls.Add(descBtnFlow);
         stack.Controls.Add(descHeader);
 
         _txtDescription.Dock = DockStyle.Top;
@@ -1508,12 +1559,12 @@ internal sealed class FastListingCreatorForm : Form
         };
     }
 
-    private static Button CreateModernActionButton(string text, Color backColor, Color hoverColor, Color foreColor, int height = 26)
+    private static Button CreateModernActionButton(string text, Color backColor, Color hoverColor, Color foreColor, int height = 28)
     {
         var btn = new Button
         {
             Text = text,
-            Font = new Font("Segoe UI Semibold", 8F),
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
             Height = height,
             AutoSize = true,
             BackColor = backColor,
