@@ -176,7 +176,7 @@ internal sealed class AiListingImageForm : Form
         Text = "🎨 AI Görsel & Arka Plan Stüdyosu (GPT-Image-2.5 • Gemini • PhotoRoom)";
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
-        MinimumSize = new Size(1280, 820);
+        MinimumSize = new Size(980, 640);
         UiStyle.ApplyTheme(this);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 3, Padding = new Padding(14, 10, 14, 10) };

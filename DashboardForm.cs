@@ -204,34 +204,36 @@ internal sealed class DashboardForm : Form
 
         _sidebarNav.CollapsedChanged += (_, _) =>
         {
+            int sidebarW = _sidebarNav.IsCollapsed ? 64 : 260;
+            _sidebarNav.Width = sidebarW;
             formGrid.SuspendLayout();
-            _mainContainer.SuspendLayout();
-            formGrid.ColumnStyles[0].Width = _sidebarNav.IsCollapsed ? 64 : 260;
+            formGrid.ColumnStyles[0].Width = sidebarW;
             formGrid.ResumeLayout(true);
-            _mainContainer.ResumeLayout(true);
             formGrid.PerformLayout();
-            _mainContainer.PerformLayout();
-            if (_currentEmbeddedForm != null)
-            {
-                _currentEmbeddedForm.Dock = DockStyle.None;
-                _currentEmbeddedForm.Size = _mainContainer.ClientSize;
-                _currentEmbeddedForm.Dock = DockStyle.Fill;
-                _currentEmbeddedForm.PerformLayout();
-                _currentEmbeddedForm.Invalidate(true);
-            }
+            UpdateActiveViewLayout();
+            BeginInvoke(new Action(UpdateActiveViewLayout));
         };
 
         _mainContainer = new Panel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(0),
-            AutoScroll = true,
+            AutoScroll = false,
             BackColor = UiStyle.BackgroundColor
         };
+
+        _mainContainer.Resize += (_, _) => UpdateActiveViewLayout();
+        _mainContainer.Layout += (_, _) => UpdateActiveViewLayout();
 
         formGrid.Controls.Add(_sidebarNav, 0, 0);
         formGrid.Controls.Add(_mainContainer, 1, 0);
         Controls.Add(formGrid);
+
+        Resize += (_, _) =>
+        {
+            UpdateActiveViewLayout();
+            BeginInvoke(new Action(UpdateActiveViewLayout));
+        };
 
         UiStyle.MakeResponsive(this, _sidebarNav);
 
@@ -1395,9 +1397,16 @@ internal sealed class DashboardForm : Form
 
         moduleForm.TopLevel = false;
         moduleForm.FormBorderStyle = FormBorderStyle.None;
+        moduleForm.MinimumSize = Size.Empty;
+        moduleForm.MaximumSize = Size.Empty;
+        moduleForm.Bounds = _mainContainer.ClientRectangle;
         moduleForm.Dock = DockStyle.Fill;
         _mainContainer.Controls.Add(moduleForm);
         moduleForm.Show();
+        moduleForm.BringToFront();
+
+        UpdateActiveViewLayout();
+        BeginInvoke(new Action(UpdateActiveViewLayout));
 
         UseWaitCursor = false;
         Cursor = Cursors.Default;
@@ -1427,11 +1436,56 @@ internal sealed class DashboardForm : Form
 
         _mainContainer.Controls.Clear();
         _mainContainer.Padding = new Padding(16, 12, 16, 12);
+        _dashboardRootPanel.Bounds = _mainContainer.ClientRectangle;
+        _dashboardRootPanel.Dock = DockStyle.Fill;
         _mainContainer.Controls.Add(_dashboardRootPanel);
+
+        UpdateActiveViewLayout();
+        BeginInvoke(new Action(UpdateActiveViewLayout));
 
         UseWaitCursor = false;
         Cursor = Cursors.Default;
         Cursor.Current = Cursors.Default;
+    }
+
+    private void UpdateActiveViewLayout()
+    {
+        if (IsDisposed || _mainContainer == null || _mainContainer.IsDisposed) return;
+        var clientRect = _mainContainer.ClientRectangle;
+        if (clientRect.Width <= 0 || clientRect.Height <= 0) return;
+
+        if (_currentEmbeddedForm != null && !_currentEmbeddedForm.IsDisposed)
+        {
+            _currentEmbeddedForm.SuspendLayout();
+            _currentEmbeddedForm.MinimumSize = Size.Empty;
+            _currentEmbeddedForm.MaximumSize = Size.Empty;
+            if (_currentEmbeddedForm.Bounds != clientRect)
+            {
+                _currentEmbeddedForm.Bounds = clientRect;
+            }
+            if (_currentEmbeddedForm.Dock != DockStyle.Fill)
+            {
+                _currentEmbeddedForm.Dock = DockStyle.Fill;
+            }
+            _currentEmbeddedForm.ResumeLayout(true);
+            _currentEmbeddedForm.PerformLayout();
+            _currentEmbeddedForm.Invalidate(true);
+        }
+        else if (_dashboardRootPanel != null && !_dashboardRootPanel.IsDisposed && _dashboardRootPanel.Parent == _mainContainer)
+        {
+            _dashboardRootPanel.SuspendLayout();
+            if (_dashboardRootPanel.Bounds != clientRect)
+            {
+                _dashboardRootPanel.Bounds = clientRect;
+            }
+            if (_dashboardRootPanel.Dock != DockStyle.Fill)
+            {
+                _dashboardRootPanel.Dock = DockStyle.Fill;
+            }
+            _dashboardRootPanel.ResumeLayout(true);
+            _dashboardRootPanel.PerformLayout();
+            _dashboardRootPanel.Invalidate(true);
+        }
     }
 
     public async Task OpenModuleByIdAsync(string targetModule)
