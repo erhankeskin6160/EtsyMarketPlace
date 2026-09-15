@@ -191,7 +191,7 @@ internal sealed class OrderDetailsForm : Form
             AddRow(layout, "İşlem Komisyonu (%6.5)", $"-${_order.TransactionFee:N2}", row++, false, UiStyle.TextMuted);
             
         if (_order.PaymentProcessingFee > 0)
-            AddRow(layout, "Ödeme İşleme (%6.5 + 3 TL)", $"-${_order.PaymentProcessingFee:N2}", row++, false, UiStyle.TextMuted);
+            AddRow(layout, "Ödeme İşleme (%6.5 + Sabit Pay)", $"-${_order.PaymentProcessingFee:N2}", row++, false, UiStyle.TextMuted);
             
         if (_order.RegulatoryOperatingFee > 0)
             AddRow(layout, "Yasal İşlem Ücreti (%1.67)", $"-${_order.RegulatoryOperatingFee:N2}", row++, false, UiStyle.TextMuted);

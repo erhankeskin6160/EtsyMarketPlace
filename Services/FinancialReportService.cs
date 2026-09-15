@@ -699,8 +699,10 @@ internal sealed class FinancialReportService
                 decimal subtotalAndShipping = Math.Max(grandTotal, subtotal + shippingCost);
                 transactionFee = Math.Round(subtotalAndShipping * 0.065m, 2);
 
-                // 3. Ödeme İşleme Komisyonu (TR için %6.5 + 3 TL sabit)
-                decimal trPaymentFixedUsd = Math.Round(3m / rate, 2);
+                // 3. Ödeme İşleme Komisyonu (TR için %6.5 + Sabit İşlem Ücreti: USD hesaplar için $0.14 sabit / TRY için 3 TL)
+                decimal trPaymentFixedUsd = r.CurrencyCode.Equals("USD", StringComparison.OrdinalIgnoreCase) || grandTotal > 0
+                    ? 0.14m
+                    : Math.Round(3m / rate, 2);
                 paymentFee = Math.Round(grandTotal * 0.065m, 2) + trPaymentFixedUsd;
 
                 // 4. Yasal İşlem Ücreti (TR için %1.67)
