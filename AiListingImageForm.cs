@@ -574,7 +574,7 @@ internal sealed class AiListingImageForm : Form
     {
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6, 0, 6, 0) };
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
 
         // 1. Interactive Slider Control
         panel.Controls.Add(_sliderControl, 0, 0);
@@ -584,14 +584,14 @@ internal sealed class AiListingImageForm : Form
         {
             Dock = DockStyle.Fill,
             CornerRadius = 10,
-            Padding = new Padding(12, 8, 12, 8),
-            Margin = new Padding(0, 8, 0, 0),
+            Padding = new Padding(14, 10, 14, 10),
+            Margin = new Padding(0, 10, 0, 0),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
 
         var historyLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         historyLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var headerRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
@@ -602,7 +602,7 @@ internal sealed class AiListingImageForm : Form
         {
             Text = "🎞️ Oturum Varyasyon Geçmişi (Tek tıkla geri dön):",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
             ForeColor = Color.FromArgb(226, 232, 240),
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft
@@ -612,7 +612,7 @@ internal sealed class AiListingImageForm : Form
         {
             Text = "📚 Kalıcı Galeriyi Aç (50+) ↗",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
             ForeColor = Color.FromArgb(129, 140, 248),
             Cursor = Cursors.Hand,
             Dock = DockStyle.Right,
@@ -623,15 +623,15 @@ internal sealed class AiListingImageForm : Form
         headerRow.Controls.Add(btnOpenGallery, 1, 0);
         historyLayout.Controls.Add(headerRow, 0, 0);
 
-        _filmstripPanel.Margin = new Padding(0, 6, 0, 0);
+        _filmstripPanel.Margin = new Padding(0, 10, 0, 0);
         _filmstripPanel.Controls.Clear();
         _filmstripPanel.Controls.Add(new Label
         {
             Text = "Henüz üretilen varyasyon yok. AI ile görsel işlediğinizde burada listelenecektir.",
             AutoSize = true,
             ForeColor = UiStyle.TextMuted,
-            Font = new Font("Segoe UI", 8.5F),
-            Padding = new Padding(2, 4, 0, 0)
+            Font = new Font("Segoe UI", 8.8F),
+            Padding = new Padding(4, 6, 0, 0)
         });
         historyLayout.Controls.Add(_filmstripPanel, 0, 1);
         historyCard.Controls.Add(historyLayout);
