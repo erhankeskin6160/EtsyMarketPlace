@@ -191,20 +191,14 @@ internal sealed class AiListingImageForm : Form
         // 2. View Container (Hosts Single Design Grid & Batch Studio Panel)
         _viewContainer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
 
-        _singleDesignContainer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(0, 4, 0, 4) };
+        _singleDesignContainer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(0, 4, 0, 4) };
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 395));
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
-        _singleDesignContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        _singleDesignContainer.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
 
         _singleDesignContainer.Controls.Add(BuildLeftControlsPanel(), 0, 0);
         _singleDesignContainer.Controls.Add(BuildCenterCanvasPanel(), 1, 0);
         _singleDesignContainer.Controls.Add(BuildRightActionsPanel(), 2, 0);
-
-        var historyCard = BuildGenerationHistoryCard();
-        _singleDesignContainer.Controls.Add(historyCard, 0, 1);
-        _singleDesignContainer.SetColumnSpan(historyCard, 3);
 
         _batchStudioControl = new BatchStudioPanelControl(_apiClient, _aiSettings) { Dock = DockStyle.Fill, Visible = false };
         _batchStudioControl.OpenInSingleStudioRequested += bmp =>
@@ -578,37 +572,38 @@ internal sealed class AiListingImageForm : Form
 
     private Control BuildCenterCanvasPanel()
     {
-        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(6, 0, 6, 0) };
-        panel.Controls.Add(_sliderControl);
-        return panel;
-    }
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6, 0, 6, 0) };
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 110));
 
-    private Control BuildGenerationHistoryCard()
-    {
+        // 1. Interactive Slider Control
+        panel.Controls.Add(_sliderControl, 0, 0);
+
+        // 2. Generation History Filmstrip Card
         var historyCard = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
             CornerRadius = 10,
-            Padding = new Padding(10, 4, 10, 4),
-            Margin = new Padding(0, 6, 0, 0),
+            Padding = new Padding(12, 8, 12, 8),
+            Margin = new Padding(0, 8, 0, 0),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
 
         var historyLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
         historyLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var headerRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
 
         headerRow.Controls.Add(new Label
         {
             Text = "🎞️ Oturum Varyasyon Geçmişi (Tek tıkla geri dön):",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 8.2F),
-            ForeColor = UiStyle.TextMuted,
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(226, 232, 240),
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft
         }, 0, 0);
@@ -616,28 +611,33 @@ internal sealed class AiListingImageForm : Form
         var btnOpenGallery = new Label
         {
             Text = "📚 Kalıcı Galeriyi Aç (50+) ↗",
-            Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
             ForeColor = Color.FromArgb(129, 140, 248),
             Cursor = Cursors.Hand,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleRight
+            Dock = DockStyle.Right,
+            TextAlign = ContentAlignment.MiddleRight,
+            Padding = new Padding(0, 0, 4, 0)
         };
         btnOpenGallery.Click += (_, _) => OpenPersistentGalleryViewer();
         headerRow.Controls.Add(btnOpenGallery, 1, 0);
         historyLayout.Controls.Add(headerRow, 0, 0);
 
+        _filmstripPanel.Margin = new Padding(0, 6, 0, 0);
+        _filmstripPanel.Controls.Clear();
         _filmstripPanel.Controls.Add(new Label
         {
             Text = "Henüz üretilen varyasyon yok. AI ile görsel işlediğinizde burada listelenecektir.",
             AutoSize = true,
             ForeColor = UiStyle.TextMuted,
-            Font = new Font("Segoe UI", 8.2F),
-            Padding = new Padding(4, 14, 0, 0)
+            Font = new Font("Segoe UI", 8.5F),
+            Padding = new Padding(2, 4, 0, 0)
         });
         historyLayout.Controls.Add(_filmstripPanel, 0, 1);
         historyCard.Controls.Add(historyLayout);
 
-        return historyCard;
+        panel.Controls.Add(historyCard, 0, 1);
+        return panel;
     }
 
     private Control BuildRightActionsPanel()
