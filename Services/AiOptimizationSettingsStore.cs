@@ -28,11 +28,8 @@ internal static class AiOptimizationSettingsStore
             var settings = JsonSerializer.Deserialize<AiOptimizationSettings>(json) ?? new AiOptimizationSettings();
 
             bool needsSave = false;
-            // Gemini model adı doğrulama / 404 önleme
-            if (string.IsNullOrWhiteSpace(settings.GeminiModel) ||
-                settings.GeminiModel.Contains("3.7") ||
-                settings.GeminiModel.Contains("3.8") ||
-                settings.GeminiModel.Contains("3.5"))
+            // Gemini model adı varsayılan atama
+            if (string.IsNullOrWhiteSpace(settings.GeminiModel))
             {
                 settings.GeminiModel = "gemini-2.5-flash";
                 needsSave = true;

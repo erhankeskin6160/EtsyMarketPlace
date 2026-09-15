@@ -16,6 +16,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly ComboBox _imageModelComboBox = new();
     private readonly TextBox _secondaryKeyTextBox = new();
     private readonly ComboBox _secondaryModelComboBox = new();
+    private readonly TextBox _customModelTextBox = new();
     private readonly ComboBox _secondaryImageModelComboBox = new();
     private readonly TextBox _bflKeyTextBox = new();
     private readonly TextBox _ideogramKeyTextBox = new();
@@ -101,19 +102,63 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(LabelFor("Diğer Sağlayıcı Key:"), 0, 4);
         root.Controls.Add(_secondaryKeyTextBox, 1, 4);
 
-        _secondaryModelComboBox.Dock = DockStyle.Left;
+        var modelPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+
         _secondaryModelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
-        _secondaryModelComboBox.Width = 340;
+        _secondaryModelComboBox.Width = 240;
         _secondaryModelComboBox.Items.AddRange([
+            "gemini-3.8-flash",
             "gemini-2.5-flash",
             "gemini-2.5-pro",
             "gemini-2.0-flash",
             "gemini-2.0-flash-thinking-exp",
             "gemini-1.5-pro",
-            "gemini-1.5-flash"
+            "gemini-1.5-flash",
+            "[Özel Model Girin...]"
         ]);
+
+        _customModelTextBox.Width = 320;
+        _customModelTextBox.PlaceholderText = "Yeni çıkan model adı (örn: gemini-3.8-flash)";
+
+        var lblCustomModel = new Label
+        {
+            Text = "veya Boş Kutu (Özel Model):",
+            AutoSize = true,
+            Margin = new Padding(8, 6, 4, 0),
+            ForeColor = UiStyle.TextMuted,
+            Font = new Font("Segoe UI Semibold", 8.5F)
+        };
+
+        _secondaryModelComboBox.SelectedIndexChanged += (_, _) =>
+        {
+            if (_secondaryModelComboBox.SelectedItem?.ToString() == "[Özel Model Girin...]")
+            {
+                _customModelTextBox.Focus();
+                _customModelTextBox.SelectAll();
+            }
+        };
+
+        _customModelTextBox.TextChanged += (_, _) =>
+        {
+            if (!string.IsNullOrWhiteSpace(_customModelTextBox.Text))
+            {
+                _secondaryModelComboBox.Text = _customModelTextBox.Text.Trim();
+            }
+        };
+
+        modelPanel.Controls.Add(_secondaryModelComboBox);
+        modelPanel.Controls.Add(lblCustomModel);
+        modelPanel.Controls.Add(_customModelTextBox);
+
         root.Controls.Add(LabelFor("Seçili Sağlayıcı Modeli:"), 0, 5);
-        root.Controls.Add(_secondaryModelComboBox, 1, 5);
+        root.Controls.Add(modelPanel, 1, 5);
 
         _secondaryImageModelComboBox.Dock = DockStyle.Left;
         _secondaryImageModelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
@@ -206,7 +251,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             _ => !string.IsNullOrWhiteSpace(_settings.GeminiApiKey) ? _settings.GeminiApiKey : "",
         };
 
-        _secondaryModelComboBox.Text = _settings.Provider switch
+        string loadedModel = _settings.Provider switch
         {
             "Gemini" => AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel),
             "Claude" => AiModelNormalizer.NormalizeClaudeTextModel(_settings.ClaudeModel),
@@ -214,6 +259,16 @@ internal sealed class AiOptimizationSettingsForm : Form
             "Grok" => AiModelNormalizer.NormalizeGrokModel(_settings.GrokModel),
             _ => AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel),
         };
+
+        _secondaryModelComboBox.Text = loadedModel;
+        if (!_secondaryModelComboBox.Items.Contains(loadedModel) || loadedModel == "gemini-3.8-flash")
+        {
+            _customModelTextBox.Text = loadedModel;
+        }
+        else
+        {
+            _customModelTextBox.Text = "";
+        }
 
         _secondaryImageModelComboBox.Text = AiModelNormalizer.NormalizeGeminiImageModel(_settings.GeminiImageModel);
         _bflKeyTextBox.Text = _settings.BflApiKey;
@@ -232,26 +287,33 @@ internal sealed class AiOptimizationSettingsForm : Form
         _settings.OpenAiModel = AiModelNormalizer.NormalizeOpenAiTextModel(_modelComboBox.Text);
         _settings.OpenAiImageModel = AiModelNormalizer.NormalizeOpenAiImageModel(_imageModelComboBox.Text);
 
+        string rawEffectiveModel = !string.IsNullOrWhiteSpace(_customModelTextBox.Text)
+            ? _customModelTextBox.Text.Trim()
+            : _secondaryModelComboBox.Text.Trim();
+
+        if (rawEffectiveModel == "[Özel Model Girin...]")
+            rawEffectiveModel = _customModelTextBox.Text.Trim();
+
         if (_settings.Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
         {
             _settings.GeminiApiKey = _secondaryKeyTextBox.Text.Trim();
-            _settings.GeminiModel = AiModelNormalizer.NormalizeGeminiTextModel(_secondaryModelComboBox.Text);
+            _settings.GeminiModel = AiModelNormalizer.NormalizeGeminiTextModel(rawEffectiveModel);
             _settings.GeminiImageModel = AiModelNormalizer.NormalizeGeminiImageModel(_secondaryImageModelComboBox.Text);
         }
         else if (_settings.Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))
         {
             _settings.ClaudeApiKey = _secondaryKeyTextBox.Text.Trim();
-            _settings.ClaudeModel = AiModelNormalizer.NormalizeClaudeTextModel(_secondaryModelComboBox.Text);
+            _settings.ClaudeModel = AiModelNormalizer.NormalizeClaudeTextModel(rawEffectiveModel);
         }
         else if (_settings.Provider.Equals("DeepSeek", StringComparison.OrdinalIgnoreCase))
         {
             _settings.DeepSeekApiKey = _secondaryKeyTextBox.Text.Trim();
-            _settings.DeepSeekModel = AiModelNormalizer.NormalizeDeepSeekModel(_secondaryModelComboBox.Text);
+            _settings.DeepSeekModel = AiModelNormalizer.NormalizeDeepSeekModel(rawEffectiveModel);
         }
         else if (_settings.Provider.Equals("Grok", StringComparison.OrdinalIgnoreCase))
         {
             _settings.GrokApiKey = _secondaryKeyTextBox.Text.Trim();
-            _settings.GrokModel = AiModelNormalizer.NormalizeGrokModel(_secondaryModelComboBox.Text);
+            _settings.GrokModel = AiModelNormalizer.NormalizeGrokModel(rawEffectiveModel);
         }
         else if (_settings.Provider.Equals("Platform Token", StringComparison.OrdinalIgnoreCase))
         {
@@ -325,36 +387,69 @@ internal sealed class AiOptimizationSettingsForm : Form
         _imageModelComboBox.Enabled = provider is "OpenAI" or "Offline";
         _secondaryKeyTextBox.Enabled = provider is "Gemini" or "Claude" or "DeepSeek" or "Grok" or "Platform Token";
         _secondaryModelComboBox.Enabled = provider is "Gemini" or "Claude" or "DeepSeek" or "Grok";
+        _customModelTextBox.Enabled = provider is "Gemini" or "Claude" or "DeepSeek" or "Grok";
         _secondaryImageModelComboBox.Enabled = provider is "Gemini";
 
         _secondaryModelComboBox.Items.Clear();
         if (provider == "Gemini")
         {
-            _secondaryModelComboBox.Items.AddRange(["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-thinking-exp", "gemini-1.5-pro", "gemini-1.5-flash"]);
+            _secondaryModelComboBox.Items.AddRange([
+                "gemini-3.8-flash",
+                "gemini-2.5-flash",
+                "gemini-2.5-pro",
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-thinking-exp",
+                "gemini-1.5-pro",
+                "gemini-1.5-flash",
+                "[Özel Model Girin...]"
+            ]);
             if (!string.IsNullOrWhiteSpace(_settings.GeminiApiKey)) _secondaryKeyTextBox.Text = _settings.GeminiApiKey;
-            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel);
+            var geminiModel = AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel);
+            _secondaryModelComboBox.Text = geminiModel;
+            _customModelTextBox.Text = (!_secondaryModelComboBox.Items.Contains(geminiModel) || geminiModel == "gemini-3.8-flash") ? geminiModel : "";
         }
         else if (provider == "Claude")
         {
-            _secondaryModelComboBox.Items.AddRange(["claude-3-7-sonnet-20250219", "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"]);
+            _secondaryModelComboBox.Items.AddRange([
+                "claude-3-7-sonnet-20250219",
+                "claude-3-5-sonnet-20241022",
+                "claude-3-5-haiku-20241022",
+                "claude-3-opus-20240229",
+                "[Özel Model Girin...]"
+            ]);
             if (!string.IsNullOrWhiteSpace(_settings.ClaudeApiKey)) _secondaryKeyTextBox.Text = _settings.ClaudeApiKey;
-            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeClaudeTextModel(_settings.ClaudeModel);
+            var claudeModel = AiModelNormalizer.NormalizeClaudeTextModel(_settings.ClaudeModel);
+            _secondaryModelComboBox.Text = claudeModel;
+            _customModelTextBox.Text = !_secondaryModelComboBox.Items.Contains(claudeModel) ? claudeModel : "";
         }
         else if (provider == "DeepSeek")
         {
-            _secondaryModelComboBox.Items.AddRange(["deepseek-reasoner", "deepseek-chat"]);
+            _secondaryModelComboBox.Items.AddRange([
+                "deepseek-reasoner",
+                "deepseek-chat",
+                "[Özel Model Girin...]"
+            ]);
             if (!string.IsNullOrWhiteSpace(_settings.DeepSeekApiKey)) _secondaryKeyTextBox.Text = _settings.DeepSeekApiKey;
-            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeDeepSeekModel(_settings.DeepSeekModel);
+            var deepSeekModel = AiModelNormalizer.NormalizeDeepSeekModel(_settings.DeepSeekModel);
+            _secondaryModelComboBox.Text = deepSeekModel;
+            _customModelTextBox.Text = !_secondaryModelComboBox.Items.Contains(deepSeekModel) ? deepSeekModel : "";
         }
         else if (provider == "Grok")
         {
-            _secondaryModelComboBox.Items.AddRange(["grok-3", "grok-2-latest"]);
+            _secondaryModelComboBox.Items.AddRange([
+                "grok-3",
+                "grok-2-latest",
+                "[Özel Model Girin...]"
+            ]);
             if (!string.IsNullOrWhiteSpace(_settings.GrokApiKey)) _secondaryKeyTextBox.Text = _settings.GrokApiKey;
-            _secondaryModelComboBox.Text = AiModelNormalizer.NormalizeGrokModel(_settings.GrokModel);
+            var grokModel = AiModelNormalizer.NormalizeGrokModel(_settings.GrokModel);
+            _secondaryModelComboBox.Text = grokModel;
+            _customModelTextBox.Text = !_secondaryModelComboBox.Items.Contains(grokModel) ? grokModel : "";
         }
         else if (provider == "Platform Token")
         {
             _secondaryKeyTextBox.Text = _settings.PlatformToken;
+            _customModelTextBox.Text = "";
         }
     }
 

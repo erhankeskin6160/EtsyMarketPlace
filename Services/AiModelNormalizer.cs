@@ -10,11 +10,10 @@ internal static class AiModelNormalizer
 
         var clean = model.Trim().ToLowerInvariant();
 
-        // 3.x Series migration (Gemini has no 3.x public API; map to 2.5 flash to prevent 404)
-        if (clean.Contains("3.8") || clean.Contains("3-8") ||
-            clean.Contains("3.7") || clean.Contains("3-7") ||
-            clean.Contains("3.5") || clean.Contains("3-5"))
-            return "gemini-2.5-flash";
+        // 3.8 Series support
+        if (clean.Contains("3.8-flash") || clean.Contains("3.8 flash") || clean.Contains("3-8-flash") || clean == "gemini-3.8-flash") return "gemini-3.8-flash";
+        if (clean.Contains("3.8-pro") || clean.Contains("3.8 pro") || clean.Contains("3-8-pro")) return "gemini-3.8-pro";
+        if (clean.Contains("3.8") || clean.Contains("3-8")) return "gemini-3.8-flash";
 
         // 2.5 Series (Official Google AI Studio models)
         if (clean.Contains("2.5-pro") || clean.Contains("2.5 pro")) return "gemini-2.5-pro";
@@ -31,9 +30,10 @@ internal static class AiModelNormalizer
         if (clean.Contains("8b")) return "gemini-1.5-flash-8b";
         if (clean.Contains("1.5-flash") || clean.Contains("1.5 flash") || clean.Contains("1.5")) return "gemini-1.5-flash";
 
-        if (clean.StartsWith("gemini-")) return clean;
+        // If user typed any custom model name (e.g. gemini-4.0, gpt-5 or any experimental name), preserve it!
+        if (clean.StartsWith("gemini-") || !string.IsNullOrWhiteSpace(model)) return model.Trim();
 
-        return "gemini-2.5-flash";
+        return "gemini-3.8-flash";
     }
 
     public static string NormalizeGeminiImageModel(string? model)
