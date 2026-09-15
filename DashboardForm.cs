@@ -186,33 +186,11 @@ internal sealed class DashboardForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         WindowState = FormWindowState.Maximized;
 
-        var formGrid = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Padding = new Padding(0),
-            Margin = new Padding(0),
-        };
         _sidebarNav = new ModernSidebarNav();
-        _sidebarNav.Dock = DockStyle.Fill;
+        _sidebarNav.Dock = DockStyle.Left;
+        _sidebarNav.Width = _sidebarNav.IsCollapsed ? 64 : 260;
         PopulateSidebarItems();
         _sidebarNav.ItemSelected += OnSidebarItemSelected;
-
-        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, _sidebarNav.IsCollapsed ? 64 : 260));
-        formGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        _sidebarNav.CollapsedChanged += (_, _) =>
-        {
-            int sidebarW = _sidebarNav.IsCollapsed ? 64 : 260;
-            _sidebarNav.Width = sidebarW;
-            formGrid.SuspendLayout();
-            formGrid.ColumnStyles[0].Width = sidebarW;
-            formGrid.ResumeLayout(true);
-            formGrid.PerformLayout();
-            UpdateActiveViewLayout();
-            SafeBeginInvoke(UpdateActiveViewLayout);
-        };
 
         _mainContainer = new Panel
         {
@@ -222,12 +200,19 @@ internal sealed class DashboardForm : Form
             BackColor = UiStyle.BackgroundColor
         };
 
+        _sidebarNav.CollapsedChanged += (_, _) =>
+        {
+            _sidebarNav.Width = _sidebarNav.IsCollapsed ? 64 : 260;
+            UpdateActiveViewLayout();
+            SafeBeginInvoke(UpdateActiveViewLayout);
+        };
+
         _mainContainer.Resize += (_, _) => UpdateActiveViewLayout();
         _mainContainer.Layout += (_, _) => UpdateActiveViewLayout();
 
-        formGrid.Controls.Add(_sidebarNav, 0, 0);
-        formGrid.Controls.Add(_mainContainer, 1, 0);
-        Controls.Add(formGrid);
+        Controls.Add(_mainContainer);
+        Controls.Add(_sidebarNav);
+        _mainContainer.BringToFront();
 
         Resize += (_, _) =>
         {
@@ -1395,6 +1380,7 @@ internal sealed class DashboardForm : Form
         _mainContainer.Padding = new Padding(0);
         _currentEmbeddedForm = moduleForm;
 
+        moduleForm.WindowState = FormWindowState.Normal;
         moduleForm.TopLevel = false;
         moduleForm.FormBorderStyle = FormBorderStyle.None;
         moduleForm.MinimumSize = Size.Empty;
@@ -1473,6 +1459,10 @@ internal sealed class DashboardForm : Form
         if (_currentEmbeddedForm != null && !_currentEmbeddedForm.IsDisposed)
         {
             _currentEmbeddedForm.SuspendLayout();
+            if (_currentEmbeddedForm.WindowState != FormWindowState.Normal)
+            {
+                _currentEmbeddedForm.WindowState = FormWindowState.Normal;
+            }
             _currentEmbeddedForm.MinimumSize = Size.Empty;
             _currentEmbeddedForm.MaximumSize = Size.Empty;
             if (_currentEmbeddedForm.Bounds != clientRect)
