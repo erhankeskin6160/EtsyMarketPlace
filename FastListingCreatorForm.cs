@@ -466,18 +466,11 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0, 0, 8, 0),
-            Padding = new Padding(0, 0, 8, 0)
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 10, 0)
         };
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        scrollContainer.Resize += (_, _) =>
-        {
-            if (scrollContainer.ClientSize.Width > 0)
-            {
-                stack.Width = Math.Max(240, scrollContainer.ClientSize.Width - 28);
-            }
-        };
 
         // --- SECTION 1: Temel Satış Bilgileri (Ürün Tipi, Fiyat, Stok) ---
         stack.Controls.Add(CreateSectionHeaderLabel("🏷️ Temel Satış Bilgileri"));
@@ -1203,18 +1196,11 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 1,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = new Padding(0, 0, 8, 0),
-            Padding = new Padding(0, 0, 8, 0)
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 10, 0)
         };
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        _rightScroll.Resize += (_, _) =>
-        {
-            if (_rightScroll.ClientSize.Width > 0)
-            {
-                stack.Width = Math.Max(240, _rightScroll.ClientSize.Width - 28);
-            }
-        };
 
         // 1. Variations Section
         stack.Controls.Add(CreateSectionHeaderLabel("🧩 Varyasyonlar (Seçenekler)"));

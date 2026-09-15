@@ -1239,47 +1239,26 @@ public class ModernGridScrollAdapter : IDisposable
 
 /// <summary>
 /// Smooth scrollable container with sleek ModernVScrollBar and ModernHScrollBar, zero native white scrollbars.
-/// Uses WinForms native ScrollableControl architecture with viewport-clipped native scrollbars
-/// to guarantee zero visual tearing, zero ghosting, and full RDP hardware-accelerated scrolling.
+/// Uses a double-buffered viewport clipping panel with direct coordinate translation
+/// to guarantee zero visual tearing, zero ghosting, and instant smooth scrolling.
 /// </summary>
 public class ModernScrollPanel : Panel, IMessageFilter
 {
     private sealed class ModernScrollViewport : Panel
     {
-        [System.Runtime.InteropServices.DllImport("user32.dll")]
-        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
-        private static extern bool ShowScrollBar(IntPtr hWnd, int wBar, [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)] bool bShow);
-        private const int SB_HORZ = 0;
-        private const int SB_VERT = 1;
-        private const int SB_BOTH = 3;
-
         public ModernScrollViewport()
         {
-            AutoScroll = true;
+            AutoScroll = false;
             DoubleBuffered = true;
-            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
+            SetStyle(
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.UserPaint |
+                ControlStyles.ResizeRedraw,
+                true);
             Margin = Padding.Empty;
             Padding = Padding.Empty;
             BackColor = UiStyle.CardBackground;
-        }
-
-        protected override void OnScroll(ScrollEventArgs se)
-        {
-            base.OnScroll(se);
-            Invalidate(true);
-            if (Parent is ModernScrollPanel p)
-            {
-                p.SyncScrollBarFromViewport();
-            }
-        }
-
-        protected override void WndProc(ref Message m)
-        {
-            base.WndProc(ref m);
-            if (IsHandleCreated && (m.Msg == 0x0085 || m.Msg == 0x0083 || m.Msg == 0x000F))
-            {
-                try { ShowScrollBar(Handle, SB_BOTH, false); } catch { }
-            }
         }
     }
 
@@ -1295,50 +1274,29 @@ public class ModernScrollPanel : Panel, IMessageFilter
     public Panel Viewport => _viewport;
     public ModernVScrollBar ScrollBar => _scrollBar;
     public ModernHScrollBar HScrollBar => _hScrollBar;
-    public bool HorizontalScrollEnabled { get; set; } = true;
+    public bool HorizontalScrollEnabled { get; set; } = false;
 
     public ModernScrollPanel()
     {
         SuspendLayout();
         AutoScroll = false;
+        DoubleBuffered = true;
+        SetStyle(
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.UserPaint,
+            true);
         Margin = Padding.Empty;
         Padding = Padding.Empty;
 
-        _viewport.Resize += (_, _) =>
-        {
-            if (!_isUpdating) RecalculateScroll();
-        };
-
         _scrollBar.ValueChanged += (_, _) =>
         {
-            if (_isSyncing || _content == null || _viewport == null) return;
-            _isSyncing = true;
-            try
-            {
-                _viewport.AutoScrollPosition = new Point(_hScrollBar.Value, _scrollBar.Value);
-                _viewport.Invalidate(true);
-            }
-            catch { }
-            finally
-            {
-                _isSyncing = false;
-            }
+            ApplyScrollPosition();
         };
 
         _hScrollBar.ValueChanged += (_, _) =>
         {
-            if (_isSyncing || _content == null || _viewport == null) return;
-            _isSyncing = true;
-            try
-            {
-                _viewport.AutoScrollPosition = new Point(_hScrollBar.Value, _scrollBar.Value);
-                _viewport.Invalidate(true);
-            }
-            catch { }
-            finally
-            {
-                _isSyncing = false;
-            }
+            ApplyScrollPosition();
         };
 
         Controls.Add(_viewport);
@@ -1379,6 +1337,32 @@ public class ModernScrollPanel : Panel, IMessageFilter
         return UiStyle.CardBackground;
     }
 
+    private void ApplyScrollPosition()
+    {
+        if (_content == null || _isSyncing) return;
+        _isSyncing = true;
+        try
+        {
+            var newLoc = new Point(-_hScrollBar.Value, -_scrollBar.Value);
+            if (_content.Location != newLoc)
+            {
+                _content.Location = newLoc;
+            }
+            _content.Invalidate(true);
+            _content.Update();
+        }
+        catch { }
+        finally
+        {
+            _isSyncing = false;
+        }
+    }
+
+    public void SyncScrollBarFromViewport()
+    {
+        ApplyScrollPosition();
+    }
+
     protected override void OnResize(EventArgs eventargs)
     {
         base.OnResize(eventargs);
@@ -1402,73 +1386,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
     private void UpdateLayout()
     {
         if (_isUpdating || IsDisposed) return;
-        _isUpdating = true;
-        try
-        {
-            UpdateLayoutCore();
-        }
-        catch { }
-        finally
-        {
-            _isUpdating = false;
-        }
-    }
-
-    private void UpdateLayoutCore()
-    {
-        if (_viewport == null || _scrollBar == null || _hScrollBar == null || ClientSize.Width <= 0 || ClientSize.Height <= 0) return;
-
-        int scrollBarW = 8;
-        int scrollBarH = 8;
-        bool needVBar = _scrollBar.Visible;
-        bool needHBar = _hScrollBar.Visible;
-
-        int visibleContentW = needVBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
-        int visibleContentH = needHBar ? Math.Max(0, ClientSize.Height - scrollBarH) : ClientSize.Height;
-
-        // Position native scrollbars off-screen by expanding viewport width & height past visible area
-        int nativeBarW = SystemInformation.VerticalScrollBarWidth;
-        int nativeBarH = SystemInformation.HorizontalScrollBarHeight;
-        int vpW = visibleContentW + nativeBarW + 12;
-        int vpH = visibleContentH + nativeBarH + 12;
-
-        var targetVpBounds = new Rectangle(0, 0, vpW, vpH);
-        if (_viewport.Bounds != targetVpBounds)
-        {
-            _viewport.SetBounds(0, 0, vpW, vpH);
-        }
-
-        // Layout scrollbars and corner panel
-        if (needVBar && needHBar)
-        {
-            _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height - scrollBarH);
-            _hScrollBar.SetBounds(0, ClientSize.Height - scrollBarH, ClientSize.Width - scrollBarW, scrollBarH);
-            _corner.SetBounds(ClientSize.Width - scrollBarW, ClientSize.Height - scrollBarH, scrollBarW, scrollBarH);
-            _corner.Visible = true;
-            _corner.BackColor = GetEffectiveParentBackColor();
-        }
-        else if (needVBar)
-        {
-            _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height);
-            _hScrollBar.Visible = false;
-            _corner.Visible = false;
-        }
-        else if (needHBar)
-        {
-            _hScrollBar.SetBounds(0, ClientSize.Height - scrollBarH, ClientSize.Width, scrollBarH);
-            _scrollBar.Visible = false;
-            _corner.Visible = false;
-        }
-        else
-        {
-            _scrollBar.Visible = false;
-            _hScrollBar.Visible = false;
-            _corner.Visible = false;
-        }
-
-        _scrollBar.BringToFront();
-        _hScrollBar.BringToFront();
-        if (_corner.Visible) _corner.BringToFront();
+        RecalculateScroll();
     }
 
     public void SetContent(Control content)
@@ -1501,30 +1419,6 @@ public class ModernScrollPanel : Panel, IMessageFilter
         catch { }
     }
 
-    public void SyncScrollBarFromViewport()
-    {
-        if (_isSyncing || _viewport == null || _scrollBar == null || _hScrollBar == null) return;
-        _isSyncing = true;
-        try
-        {
-            int currentY = Math.Abs(_viewport.AutoScrollPosition.Y);
-            if (_scrollBar.Value != currentY)
-            {
-                _scrollBar.Value = Math.Clamp(currentY, 0, _scrollBar.Maximum);
-            }
-            int currentX = Math.Abs(_viewport.AutoScrollPosition.X);
-            if (_hScrollBar.Value != currentX)
-            {
-                _hScrollBar.Value = Math.Clamp(currentX, 0, _hScrollBar.Maximum);
-            }
-        }
-        catch { }
-        finally
-        {
-            _isSyncing = false;
-        }
-    }
-
     public void RecalculateScroll()
     {
         if (_isUpdating || IsDisposed) return;
@@ -1543,6 +1437,10 @@ public class ModernScrollPanel : Panel, IMessageFilter
             int scrollBarW = 8;
             int scrollBarH = 8;
 
+            int availW = ClientSize.Width;
+            int availH = ClientSize.Height;
+
+            // Content preferred measurement
             int contentW = _content.PreferredSize.Width;
             int contentH = _content.PreferredSize.Height;
             foreach (Control c in _content.Controls)
@@ -1556,6 +1454,10 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 }
             }
 
+            int testW = HorizontalScrollEnabled ? contentW : Math.Max(100, availW - scrollBarW);
+            int prefH = _content.GetPreferredSize(new Size(testW, 0)).Height;
+            if (prefH > contentH) contentH = prefH;
+
             if (contentH <= 0 || contentH < _content.Height)
             {
                 contentH = _content.Height;
@@ -1565,34 +1467,31 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 contentW = _content.Width;
             }
 
-            // Determine visibility iteratively (since adding one bar affects the other's available space)
-            bool needVBar = contentH > ClientSize.Height;
-            int availW = needVBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
-            bool needHBar = HorizontalScrollEnabled && (contentW > availW);
-            int availH = needHBar ? Math.Max(0, ClientSize.Height - scrollBarH) : ClientSize.Height;
-            if (!needVBar && contentH > availH)
+            bool needVBar = contentH > availH;
+            int visibleContentW = needVBar ? Math.Max(0, availW - scrollBarW) : availW;
+            bool needHBar = HorizontalScrollEnabled && (contentW > visibleContentW);
+            int visibleContentH = needHBar ? Math.Max(0, availH - scrollBarH) : availH;
+            if (!needVBar && contentH > visibleContentH)
             {
                 needVBar = true;
-                availW = Math.Max(0, ClientSize.Width - scrollBarW);
-                needHBar = HorizontalScrollEnabled && (contentW > availW);
+                visibleContentW = Math.Max(0, availW - scrollBarW);
+                needHBar = HorizontalScrollEnabled && (contentW > visibleContentW);
+                visibleContentH = needHBar ? Math.Max(0, availH - scrollBarH) : availH;
             }
-
-            int visibleContentW = needVBar ? Math.Max(0, ClientSize.Width - scrollBarW) : ClientSize.Width;
-            int visibleContentH = needHBar ? Math.Max(0, ClientSize.Height - scrollBarH) : ClientSize.Height;
 
             int effectiveContentW = HorizontalScrollEnabled ? Math.Max(visibleContentW, contentW) : visibleContentW;
             int effectiveContentH = Math.Max(visibleContentH, contentH);
+
+            var targetVpBounds = new Rectangle(0, 0, visibleContentW, visibleContentH);
+            if (_viewport.Bounds != targetVpBounds)
+            {
+                _viewport.SetBounds(0, 0, visibleContentW, visibleContentH);
+            }
 
             var targetContentSize = new Size(effectiveContentW, effectiveContentH);
             if (_content.Size != targetContentSize)
             {
                 _content.Size = targetContentSize;
-            }
-
-            var targetMinSize = new Size(effectiveContentW, effectiveContentH);
-            if (_viewport.AutoScrollMinSize != targetMinSize)
-            {
-                _viewport.AutoScrollMinSize = targetMinSize;
             }
 
             int maxV = Math.Max(0, effectiveContentH - visibleContentH);
@@ -1609,21 +1508,39 @@ public class ModernScrollPanel : Panel, IMessageFilter
             _hScrollBar.Visible = needHBar && maxH > 0;
             if (_hScrollBar.Value > maxH) _hScrollBar.Value = maxH;
 
-            UpdateLayoutCore();
-
-            if (!_isSyncing)
+            // Layout scrollbars and corner panel
+            if (needVBar && needHBar)
             {
-                _isSyncing = true;
-                try
-                {
-                    _viewport.AutoScrollPosition = new Point(_hScrollBar.Value, _scrollBar.Value);
-                }
-                catch { }
-                finally
-                {
-                    _isSyncing = false;
-                }
+                _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height - scrollBarH);
+                _hScrollBar.SetBounds(0, ClientSize.Height - scrollBarH, ClientSize.Width - scrollBarW, scrollBarH);
+                _corner.SetBounds(ClientSize.Width - scrollBarW, ClientSize.Height - scrollBarH, scrollBarW, scrollBarH);
+                _corner.Visible = true;
+                _corner.BackColor = effectiveBg;
             }
+            else if (needVBar)
+            {
+                _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height);
+                _hScrollBar.Visible = false;
+                _corner.Visible = false;
+            }
+            else if (needHBar)
+            {
+                _hScrollBar.SetBounds(0, ClientSize.Height - scrollBarH, ClientSize.Width, scrollBarH);
+                _scrollBar.Visible = false;
+                _corner.Visible = false;
+            }
+            else
+            {
+                _scrollBar.Visible = false;
+                _hScrollBar.Visible = false;
+                _corner.Visible = false;
+            }
+
+            _scrollBar.BringToFront();
+            _hScrollBar.BringToFront();
+            if (_corner.Visible) _corner.BringToFront();
+
+            ApplyScrollPosition();
         }
         catch { }
         finally
