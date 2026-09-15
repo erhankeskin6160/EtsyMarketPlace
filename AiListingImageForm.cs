@@ -175,7 +175,7 @@ internal sealed class AiListingImageForm : Form
     {
         Text = "🎨 AI Görsel & Arka Plan Stüdyosu (GPT-Image-2.5 • Gemini • PhotoRoom)";
         StartPosition = FormStartPosition.CenterScreen;
-        WindowState = FormWindowState.Maximized;
+        WindowState = FormWindowState.Normal;
         MinimumSize = new Size(980, 640);
         UiStyle.ApplyTheme(this);
 
