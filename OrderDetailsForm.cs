@@ -32,7 +32,7 @@ internal sealed class OrderDetailsForm : Form
         Load += OrderDetailsForm_Load;
 
         BuildLayout();
-        UiStyle.ApplyTheme(this);
+        UiStyle.ApplyResponsiveTheme(this, new Size(840, 620));
     }
 
     private async void OrderDetailsForm_Load(object? sender, EventArgs e)
@@ -71,7 +71,7 @@ internal sealed class OrderDetailsForm : Form
             RowCount = 2,
             ColumnCount = 1,
             Padding = new Padding(20),
-            BackColor = Color.White
+            BackColor = UiStyle.BackgroundColor
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Main cards
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize)); // Bottom profit/cost section
@@ -82,7 +82,8 @@ internal sealed class OrderDetailsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 1
+            RowCount = 1,
+            BackColor = Color.Transparent
         };
         topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         topLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -95,7 +96,7 @@ internal sealed class OrderDetailsForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(20),
             Margin = new Padding(0, 0, 10, 0),
-            CardColor = Color.White,
+            CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
         BuildEarningsPanel(pnlEarnings);
@@ -107,7 +108,7 @@ internal sealed class OrderDetailsForm : Form
             Dock = DockStyle.Fill,
             Padding = new Padding(20),
             Margin = new Padding(10, 0, 0, 0),
-            CardColor = Color.White,
+            CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
         BuildFeesPanel(pnlFees);
