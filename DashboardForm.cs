@@ -211,7 +211,7 @@ internal sealed class DashboardForm : Form
             formGrid.ResumeLayout(true);
             formGrid.PerformLayout();
             UpdateActiveViewLayout();
-            BeginInvoke(new Action(UpdateActiveViewLayout));
+            SafeBeginInvoke(UpdateActiveViewLayout);
         };
 
         _mainContainer = new Panel
@@ -232,7 +232,7 @@ internal sealed class DashboardForm : Form
         Resize += (_, _) =>
         {
             UpdateActiveViewLayout();
-            BeginInvoke(new Action(UpdateActiveViewLayout));
+            SafeBeginInvoke(UpdateActiveViewLayout);
         };
 
         UiStyle.MakeResponsive(this, _sidebarNav);
@@ -1002,7 +1002,7 @@ internal sealed class DashboardForm : Form
             var update = await VdsUpdateNotifierService.CheckForUpdateAsync(_cts.Token);
             if (update.IsUpdateAvailable && !IsDisposed)
             {
-                BeginInvoke(() =>
+                SafeBeginInvoke(() =>
                 {
                     _btnVdsUpdate.Visible = true;
                     _btnVdsUpdate.Text = $"⚡ Yeni Sürüm ({update.PublishedAt.LocalDateTime:HH:mm})";
@@ -1406,7 +1406,7 @@ internal sealed class DashboardForm : Form
         moduleForm.BringToFront();
 
         UpdateActiveViewLayout();
-        BeginInvoke(new Action(UpdateActiveViewLayout));
+        SafeBeginInvoke(UpdateActiveViewLayout);
 
         UseWaitCursor = false;
         Cursor = Cursors.Default;
@@ -1441,11 +1441,27 @@ internal sealed class DashboardForm : Form
         _mainContainer.Controls.Add(_dashboardRootPanel);
 
         UpdateActiveViewLayout();
-        BeginInvoke(new Action(UpdateActiveViewLayout));
+        SafeBeginInvoke(UpdateActiveViewLayout);
 
         UseWaitCursor = false;
         Cursor = Cursors.Default;
         Cursor.Current = Cursors.Default;
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        UpdateActiveViewLayout();
+    }
+
+    private void SafeBeginInvoke(Action action)
+    {
+        if (IsDisposed || !IsHandleCreated) return;
+        try
+        {
+            BeginInvoke(action);
+        }
+        catch { }
     }
 
     private void UpdateActiveViewLayout()
