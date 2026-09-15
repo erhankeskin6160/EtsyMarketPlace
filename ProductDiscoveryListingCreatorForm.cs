@@ -409,7 +409,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
         var titleHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260));
         titleHeader.Controls.Add(LabelFor("Etsy SEO Başlığı (Maks. 140 Karakter):"), 0, 0);
         _lblTitleCounter.Text = "0 / 140 Karakter";
         _lblTitleCounter.TextAlign = ContentAlignment.MiddleRight;
@@ -418,19 +418,28 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
         _titleTextBox.Dock = DockStyle.Fill;
         _titleTextBox.Multiline = true;
+        _titleTextBox.TextChanged += (_, _) => UpdateTitleCounter();
         panel.Controls.Add(_titleTextBox, 0, 1);
 
-        var descHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        var descHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
         descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175));
+        descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155));
         descHeader.Controls.Add(LabelFor("Satış Odaklı Açıklama (Biçimlendirilmiş):"), 0, 0);
+
+        var btnFormatTemplate = CreateButton("📐 Şablonla Paragrafla");
+        btnFormatTemplate.BackColor = Color.FromArgb(79, 70, 229);
+        btnFormatTemplate.ForeColor = Color.White;
+        btnFormatTemplate.Font = UiStyle.SemiboldBaseFont;
+        btnFormatTemplate.Click += (_, _) => ApplyTemplateToDescription();
+        descHeader.Controls.Add(btnFormatTemplate, 1, 0);
 
         var btnAiDesc = CreateButton("✨ AI Açıklama Yenile");
         btnAiDesc.BackColor = UiStyle.AiColor;
         btnAiDesc.ForeColor = Color.White;
         btnAiDesc.Font = UiStyle.SemiboldBaseFont;
         btnAiDesc.Click += async (_, _) => await GenerateDescriptionWithAiAsync();
-        descHeader.Controls.Add(btnAiDesc, 1, 0);
+        descHeader.Controls.Add(btnAiDesc, 2, 0);
         panel.Controls.Add(descHeader, 0, 2);
 
         ConfigureMultiline(_descriptionTextBox);
@@ -1331,7 +1340,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
         if (!string.IsNullOrWhiteSpace(listing.Description))
         {
-            _descriptionTextBox.Text = listing.Description;
+            _descriptionTextBox.Text = EtsyDescriptionFormatter.NormalizeForEtsy(listing.Description);
         }
         else
         {
@@ -1388,7 +1397,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
                         {
                             if (string.IsNullOrWhiteSpace(_descriptionTextBox.Text))
                             {
-                                _descriptionTextBox.Text = listing.Description;
+                                _descriptionTextBox.Text = EtsyDescriptionFormatter.NormalizeForEtsy(listing.Description);
                             }
                         });
                     }
@@ -1430,8 +1439,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
             if (!string.IsNullOrWhiteSpace(generatedDesc))
             {
-                _descriptionTextBox.Text = generatedDesc;
-                _statusLabel.Text = "Yapay zeka ile yeni aciklama olusturuldu";
+                _descriptionTextBox.Text = EtsyDescriptionFormatter.NormalizeForEtsy(generatedDesc);
+                _statusLabel.Text = "Yapay zeka ile yeni ferah açıklama oluşturuldu";
             }
             else
             {
@@ -1446,6 +1455,53 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         finally
         {
             StopBusy();
+        }
+    }
+
+    private void ApplyTemplateToDescription()
+    {
+        var title = string.IsNullOrWhiteSpace(_titleTextBox.Text)
+            ? (SelectedRow?.Title ?? "Handcrafted Item")
+            : _titleTextBox.Text.Trim();
+
+        var currentDesc = _descriptionTextBox.Text;
+        var tags = SplitCommaList(_tagsTextBox.Text);
+        var materials = SplitCommaList(_materialsTextBox.Text);
+        var targetKeyword = PrimaryKeyword();
+
+        var formatted = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            currentDesc,
+            title,
+            tags,
+            materials,
+            targetKeyword);
+
+        _descriptionTextBox.Text = EtsyDescriptionFormatter.NormalizeForEtsy(formatted);
+        _statusLabel.Text = "Açıklama standart Etsy ferah paragraf şablonuna dönüştürüldü! (Çift satır sonu garantilendi)";
+    }
+
+    private void UpdateTitleCounter()
+    {
+        var count = _titleTextBox.Text.Length;
+        if (count == 0)
+        {
+            _lblTitleCounter.Text = "0 / 140 Karakter";
+            _lblTitleCounter.ForeColor = UiStyle.TextMuted;
+        }
+        else if (count <= 54)
+        {
+            _lblTitleCounter.Text = $"{count} / 140 (Mobil Vitrin: İlk 54 krk)";
+            _lblTitleCounter.ForeColor = Color.FromArgb(245, 158, 11);
+        }
+        else if (count <= 140)
+        {
+            _lblTitleCounter.Text = $"{count} / 140 (SEO İdeal: 120-140)";
+            _lblTitleCounter.ForeColor = Color.FromArgb(16, 185, 129);
+        }
+        else
+        {
+            _lblTitleCounter.Text = $"{count} / 140 (Limit Aşıldı!)";
+            _lblTitleCounter.ForeColor = Color.FromArgb(239, 68, 68);
         }
     }
 
@@ -1913,7 +1969,16 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             var title = SanitizeTitle(suggestion);
             if (title.Length == 0) continue;
             if (LooksLikePromptLeak(title)) continue;
-            if (requiredTerms.Count == 0 || requiredTerms.Any(term => title.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            if (title.Length >= 75 && (requiredTerms.Count == 0 || requiredTerms.Any(term => title.Contains(term, StringComparison.OrdinalIgnoreCase))))
+            {
+                return title.Length <= 140 ? title : title[..140].TrimEnd();
+            }
+        }
+
+        foreach (var suggestion in suggestions)
+        {
+            var title = SanitizeTitle(suggestion);
+            if (title.Length >= 60 && !LooksLikePromptLeak(title))
             {
                 return title.Length <= 140 ? title : title[..140].TrimEnd();
             }
@@ -1955,12 +2020,50 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private string BuildSafeTitle(MarketListingResult listing)
     {
-        var primaryPart = listing.Title.Split(['|', '-', ',', '–', '—', '/'], StringSplitOptions.RemoveEmptyEntries)
-            .FirstOrDefault()?.Trim() ?? listing.Title.Trim();
+        var rawBase = SanitizeTitle(listing.Title);
+        var primaryPart = rawBase.Split(['|', '-', ',', '–', '—', '/'], StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault()?.Trim();
+        if (string.IsNullOrWhiteSpace(primaryPart) || primaryPart.Length < 4)
+        {
+            primaryPart = rawBase.Length > 0 ? rawBase : PrimaryKeyword();
+        }
+
         var keyword = PrimaryKeyword();
-        var tag = listing.Tags.FirstOrDefault() ?? "Handcrafted Gift";
-        var candidate = $"{primaryPart} | {keyword} | {tag}";
-        return candidate.Length <= 140 ? candidate : candidate[..140].TrimEnd();
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(keyword) && !primaryPart.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+        {
+            parts.Add(keyword);
+        }
+
+        foreach (var tag in listing.Tags)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) continue;
+            var cleanTag = tag.Trim();
+            if (cleanTag.Length < 3) continue;
+            if (primaryPart.Contains(cleanTag, StringComparison.OrdinalIgnoreCase)) continue;
+            if (parts.Any(p => p.Contains(cleanTag, StringComparison.OrdinalIgnoreCase))) continue;
+
+            parts.Add(cleanTag);
+            if (parts.Count >= 6) break;
+        }
+
+        parts.Add("Handcrafted Collectible");
+        parts.Add("Unique Gift Idea");
+        parts.Add("Display Prop & Decor");
+
+        var result = primaryPart;
+        foreach (var part in parts)
+        {
+            if (result.Contains(part, StringComparison.OrdinalIgnoreCase)) continue;
+            var candidate = $"{result} | {part}";
+            if (candidate.Length <= 138)
+            {
+                result = candidate;
+            }
+        }
+
+        return result.Length <= 140 ? result : result[..140].TrimEnd();
     }
 
     private string SelectEnglishDescription(
@@ -1971,10 +2074,10 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         var cleanDescription = SanitizeDescription(description);
         if (cleanDescription.Length > 50 && !LooksLikeTurkish(cleanDescription))
         {
-            return cleanDescription;
+            return EtsyDescriptionFormatter.NormalizeForEtsy(cleanDescription);
         }
 
-        return BuildDynamicEnglishDescription(listing, materialSuggestions);
+        return EtsyDescriptionFormatter.NormalizeForEtsy(BuildDynamicEnglishDescription(listing, materialSuggestions));
     }
 
     private static string SanitizeDescription(string raw)

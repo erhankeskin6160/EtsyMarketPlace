@@ -49,6 +49,10 @@ public static class EtsyDescriptionFormatter
         // 4. Madde işaretlerini standart '• ' ile değiştir
         cleaned = BulletRegex.Replace(cleaned, "• ");
 
+        // 4.5. Yan yana sıkışmış olabilecek emoji başlıkları ve madde imlerini yeni satıra taşı
+        cleaned = Regex.Replace(cleaned, @"(?<=[^\r\n])\s*(✨|📏|🎁|📦|💬|🧼)\s*", "\r\n\r\n$1 ");
+        cleaned = Regex.Replace(cleaned, @"(?<=[^\r\n])\s+(•\s+)", "\r\n$1");
+
         // 5. Satır sonlarını ayrıştır ve temiz bloklar oluştur
         var rawLines = cleaned.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
         var blocks = new List<string>();
@@ -90,11 +94,10 @@ public static class EtsyDescriptionFormatter
 
             if (currentBlock.Length > 0)
             {
-                // Eğer mevcut blok madde işareti içeriyorsa her madde yeni satırda olmalı
+                // Eğer satır veya mevcut blok madde işareti içeriyorsa her madde yeni satırda olmalı
                 if (trimmed.StartsWith("• ") || currentBlock.ToString().Contains("• "))
                 {
-                    currentBlock.AppendLine();
-                    currentBlock.Append(trimmed);
+                    currentBlock.Append("\r\n").Append(trimmed);
                 }
                 else
                 {
@@ -153,7 +156,7 @@ public static class EtsyDescriptionFormatter
         var sb = new StringBuilder();
 
         // BÖLÜM 1: Google Meta Hook & Giriş Paragrafı
-        sb.AppendLine($"Elevate your space with this unique {cleanTitle}! Tailored for shoppers looking for {target}, this handcrafted piece brings outstanding quality and distinct character to any collection or setup.");
+        sb.AppendLine($"Elevate your space with this unique {cleanTitle}! Tailored for shoppers searching for {target}, this handcrafted piece brings outstanding quality and distinct character to any collection or setup.");
         sb.AppendLine();
 
         // BÖLÜM 2: Öne Çıkan Özellikler
@@ -197,7 +200,7 @@ public static class EtsyDescriptionFormatter
         sb.AppendLine("💬 CUSTOM REQUESTS & QUESTIONS:");
         sb.AppendLine("• Looking for a custom color, size, or special personalization? Feel free to reach out anytime—we are happy to help!");
 
-        return sb.ToString().Trim();
+        return NormalizeForEtsy(sb.ToString());
     }
 
     private static bool IsSectionHeader(string line)
@@ -246,6 +249,29 @@ public static class EtsyDescriptionFormatter
         foreach (var l in lines)
         {
             var line = l.Trim();
+            if (line.Contains("Elevate your space", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Tailored for shoppers", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Premium Craftsmanship", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Eye-Catching Display", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Collector & Fan Approved", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Carefully wrapped in", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Looking for a custom", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("WHY YOU'LL LOVE IT", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("SPECIFICATIONS & DETAILS", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("PERFECT FOR", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("PACKAGING & SHIPPING", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("CUSTOM REQUESTS", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("• Overview:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("Overview:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("• Materials:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("• Craftsmanship:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("• Dimensions:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("• Finish:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("• Note:", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             if (line.Contains("cm", StringComparison.OrdinalIgnoreCase) ||
                 line.Contains("inch", StringComparison.OrdinalIgnoreCase) ||
                 line.Contains("dimension", StringComparison.OrdinalIgnoreCase) ||

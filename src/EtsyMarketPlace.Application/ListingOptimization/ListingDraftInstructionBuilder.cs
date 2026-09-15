@@ -107,9 +107,9 @@ public static class ListingDraftInstructionBuilder
           * When the seller provides Turkish title, description, or tags, understand the product intent completely and translate/adapt it into high-search-volume English terminology used by global Etsy buyers.
         - title_suggestions: exactly 3 items. All in English.
           * GOLDEN ETSY SEO TITLE FORMULA: Format every title with 2-3 readable segments separated by " | " or " - ":
-            [Core Product Name (First 30-40 characters, Front-loaded)] | [Key Features, Style, Materials or Use-Case] | [Target Audience, Room Decor, Cosplay or Gift Long-Tail]
-          * FRONT-LOADING: Put the exact core product name in the very first 3 to 5 words so mobile shoppers immediately understand the item.
-          * LENGTH: Each title must be between 115 and 138 characters (maximizing Etsy's 140 character limit).
+            [Core Product Name & Standout Feature (First 40-54 characters, Front-loaded for Mobile SERP)] | [Key Features, Style, Materials or Craftsmanship] | [Target Audience, Room Decor, Cosplay or Gift Long-Tail]
+          * FRONT-LOADING (FIRST 40-54 CHARS): Mobile shoppers and Etsy SERP cards only display the first 40-54 characters before cutting off with '...'. Put the exact core product name and most critical standout feature right in this opening window.
+          * FULL LENGTH (120-138 CHARACTERS): Do NOT stop at 54 characters! You MUST utilize Etsy's full title capacity. Fill the remaining space up to 120-138 characters with high-search-volume keywords, materials, and gift/decor occasions so Etsy's search algorithm indexes the maximum search traffic. Never produce a title shorter than 100 characters.
           * NO KEYWORD STUFFING: Do NOT produce raw comma-separated lists of tags (e.g. NEVER output "Title - tag1, tag2, tag3"). Titles must read like natural, premium human-written product titles.
           * NO SYSTEM PROMPT LEAKS: NEVER include instructions, metadata, or phrases like "OUTPUT LANGUAGE", "English only", "Do not write Turkish", "Title 1:", etc. in any title.
         - tag_suggestions: exactly 13 items. All in English.

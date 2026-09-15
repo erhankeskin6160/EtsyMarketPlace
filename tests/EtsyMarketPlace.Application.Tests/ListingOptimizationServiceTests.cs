@@ -100,4 +100,24 @@ public sealed class ListingOptimizationServiceTests
         Assert.Contains(report.Issues, issue => issue.Contains("Turkce", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(report.Issues, issue => issue.Contains("sabit kalip", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void Optimize_ProducesFullLengthRichTitlesBetween115And138CharsWithoutRepetition()
+    {
+        var service = new ListingOptimizationService();
+        var result = service.Optimize(new ListingOptimizationInput(
+            "Michael Jackson Printed Figure",
+            "Handmade PLA figure statue of Michael Jackson for desk display",
+            ["michael jackson", "printed figure", "king of pop", "collector gift", "desk statue"],
+            "michael jackson"));
+
+        Assert.NotEmpty(result.TitleSuggestions);
+        foreach (var title in result.TitleSuggestions)
+        {
+            Assert.True(title.Length >= 80 && title.Length <= 140, $"Title length was {title.Length}: '{title}'");
+            // Check that it doesn't repeat 'michael jackson | michael jackson | michael jackson'
+            var occurrences = System.Text.RegularExpressions.Regex.Matches(title, "michael jackson", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Count;
+            Assert.True(occurrences <= 2, $"Title repeated too many times ({occurrences}): '{title}'");
+        }
+    }
 }

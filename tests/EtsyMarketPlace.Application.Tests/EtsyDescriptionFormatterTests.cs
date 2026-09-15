@@ -58,4 +58,18 @@ public sealed class EtsyDescriptionFormatterTests
         Assert.Contains("15cm", result);
         Assert.Contains("\r\n\r\n", result);
     }
+
+    [Fact]
+    public void NormalizeForEtsy_UnmergesCrampedEmojiHeadersAndBullets()
+    {
+        var cramped = "Elevate your space with this unique figure! Tailored for fans. ✨ WHY YOU'LL LOVE IT: • Premium Craftsmanship: Smooth finish. • Eye-Catching Display: Great look. 📏 SPECIFICATIONS & DETAILS: • Materials: Resin";
+        var result = EtsyDescriptionFormatter.NormalizeForEtsy(cramped);
+
+        Assert.Contains("✨ WHY YOU'LL LOVE IT:", result);
+        Assert.Contains("\r\n• Premium Craftsmanship: Smooth finish.", result);
+        Assert.Contains("\r\n• Eye-Catching Display: Great look.", result);
+        Assert.Contains("📏 SPECIFICATIONS & DETAILS:", result);
+        Assert.Contains("\r\n• Materials: Resin", result);
+        Assert.Contains("\r\n\r\n", result);
+    }
 }

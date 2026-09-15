@@ -244,4 +244,14 @@ public sealed class ListingDraftInstructionBuilderTests
         Assert.Contains("MULTILINGUAL INPUT & ENGLISH OUTPUT", rules);
         Assert.Contains("All in English", rules);
     }
+
+    [Fact]
+    public void BuildFieldRules_EnforcesMobileFrontLoadingAndFullLengthTitleRules()
+    {
+        var rules = ListingDraftInstructionBuilder.BuildFieldRules();
+
+        Assert.Contains("FRONT-LOADING (FIRST 40-54 CHARS)", rules);
+        Assert.Contains("FULL LENGTH (120-138 CHARACTERS)", rules);
+        Assert.Contains("Never produce a title shorter than 100 characters", rules);
+    }
 }
