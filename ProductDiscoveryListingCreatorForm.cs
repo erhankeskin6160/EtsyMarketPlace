@@ -418,7 +418,6 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
         _titleTextBox.Dock = DockStyle.Fill;
         _titleTextBox.Multiline = true;
-        _titleTextBox.TextChanged += (_, _) => UpdateTitleCounter();
         panel.Controls.Add(_titleTextBox, 0, 1);
 
         var descHeader = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
@@ -615,8 +614,26 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private void UpdateTitleCounter()
     {
         int len = _titleTextBox.Text.Length;
-        _lblTitleCounter.Text = $"{len} / 140 Karakter";
-        _lblTitleCounter.ForeColor = len > 140 ? UiStyle.DangerColor : (len >= 100 ? UiStyle.SuccessColor : UiStyle.TextMuted);
+        if (len == 0)
+        {
+            _lblTitleCounter.Text = "0 / 140 Karakter";
+            _lblTitleCounter.ForeColor = UiStyle.TextMuted;
+        }
+        else if (len <= 54)
+        {
+            _lblTitleCounter.Text = $"{len} / 140 (Mobil Vitrin: İlk 54 krk)";
+            _lblTitleCounter.ForeColor = Color.FromArgb(245, 158, 11);
+        }
+        else if (len <= 140)
+        {
+            _lblTitleCounter.Text = $"{len} / 140 (SEO İdeal: 120-140)";
+            _lblTitleCounter.ForeColor = Color.FromArgb(16, 185, 129);
+        }
+        else
+        {
+            _lblTitleCounter.Text = $"{len} / 140 (Limit Aşıldı!)";
+            _lblTitleCounter.ForeColor = Color.FromArgb(239, 68, 68);
+        }
     }
 
     private void UpdateTagCounter()
@@ -1478,31 +1495,6 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
         _descriptionTextBox.Text = EtsyDescriptionFormatter.NormalizeForEtsy(formatted);
         _statusLabel.Text = "Açıklama standart Etsy ferah paragraf şablonuna dönüştürüldü! (Çift satır sonu garantilendi)";
-    }
-
-    private void UpdateTitleCounter()
-    {
-        var count = _titleTextBox.Text.Length;
-        if (count == 0)
-        {
-            _lblTitleCounter.Text = "0 / 140 Karakter";
-            _lblTitleCounter.ForeColor = UiStyle.TextMuted;
-        }
-        else if (count <= 54)
-        {
-            _lblTitleCounter.Text = $"{count} / 140 (Mobil Vitrin: İlk 54 krk)";
-            _lblTitleCounter.ForeColor = Color.FromArgb(245, 158, 11);
-        }
-        else if (count <= 140)
-        {
-            _lblTitleCounter.Text = $"{count} / 140 (SEO İdeal: 120-140)";
-            _lblTitleCounter.ForeColor = Color.FromArgb(16, 185, 129);
-        }
-        else
-        {
-            _lblTitleCounter.Text = $"{count} / 140 (Limit Aşıldı!)";
-            _lblTitleCounter.ForeColor = Color.FromArgb(239, 68, 68);
-        }
     }
 
     private void StartBusy(string message)
