@@ -175,7 +175,7 @@ internal sealed class AiListingImageForm : Form
     {
         Text = "🎨 AI Görsel & Arka Plan Stüdyosu (GPT-Image-2.5 • Gemini • PhotoRoom)";
         StartPosition = FormStartPosition.CenterScreen;
-        WindowState = FormWindowState.Maximized;
+        WindowState = FormWindowState.Normal;
         MinimumSize = new Size(980, 640);
         UiStyle.ApplyTheme(this);
 
@@ -574,7 +574,7 @@ internal sealed class AiListingImageForm : Form
     {
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6, 0, 6, 0) };
         panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
 
         // 1. Interactive Slider Control
         panel.Controls.Add(_sliderControl, 0, 0);
@@ -584,26 +584,26 @@ internal sealed class AiListingImageForm : Form
         {
             Dock = DockStyle.Fill,
             CornerRadius = 10,
-            Padding = new Padding(8, 4, 8, 4),
-            Margin = new Padding(0, 6, 0, 0),
+            Padding = new Padding(14, 10, 14, 10),
+            Margin = new Padding(0, 10, 0, 0),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
 
         var historyLayout = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2 };
-        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        historyLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         historyLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var headerRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
-        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 70));
-        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 30));
+        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
+        headerRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
 
         headerRow.Controls.Add(new Label
         {
             Text = "🎞️ Oturum Varyasyon Geçmişi (Tek tıkla geri dön):",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 8.2F),
-            ForeColor = UiStyle.TextMuted,
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(226, 232, 240),
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft
         }, 0, 0);
@@ -611,23 +611,27 @@ internal sealed class AiListingImageForm : Form
         var btnOpenGallery = new Label
         {
             Text = "📚 Kalıcı Galeriyi Aç (50+) ↗",
-            Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
             ForeColor = Color.FromArgb(129, 140, 248),
             Cursor = Cursors.Hand,
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleRight
+            Dock = DockStyle.Right,
+            TextAlign = ContentAlignment.MiddleRight,
+            Padding = new Padding(0, 0, 4, 0)
         };
         btnOpenGallery.Click += (_, _) => OpenPersistentGalleryViewer();
         headerRow.Controls.Add(btnOpenGallery, 1, 0);
         historyLayout.Controls.Add(headerRow, 0, 0);
 
+        _filmstripPanel.Margin = new Padding(0, 10, 0, 0);
+        _filmstripPanel.Controls.Clear();
         _filmstripPanel.Controls.Add(new Label
         {
             Text = "Henüz üretilen varyasyon yok. AI ile görsel işlediğinizde burada listelenecektir.",
             AutoSize = true,
             ForeColor = UiStyle.TextMuted,
-            Font = new Font("Segoe UI", 8.2F),
-            Padding = new Padding(4, 14, 0, 0)
+            Font = new Font("Segoe UI", 8.8F),
+            Padding = new Padding(4, 6, 0, 0)
         });
         historyLayout.Controls.Add(_filmstripPanel, 0, 1);
         historyCard.Controls.Add(historyLayout);
