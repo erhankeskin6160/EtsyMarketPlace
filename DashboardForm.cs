@@ -719,7 +719,10 @@ internal sealed class DashboardForm : Form
         _pnlAiCopilot.Padding = new Padding(2, 2, 6, 2);
         _pnlAiCopilot.Resize += (_, _) =>
         {
-            int targetWidth = Math.Max(260, _pnlAiCopilot.ClientSize.Width - 14);
+            int availWidth = _copilotScroll != null && _copilotScroll.ClientSize.Width > 40
+                ? _copilotScroll.ClientSize.Width - (_copilotScroll.ScrollBar.Visible ? 12 : 4) - 10
+                : _pnlAiCopilot.ClientSize.Width - 14;
+            int targetWidth = Math.Max(200, availWidth);
             foreach (Control c in _pnlAiCopilot.Controls)
             {
                 if (c is ModernCardPanel card)
@@ -933,11 +936,14 @@ internal sealed class DashboardForm : Form
     private void PopulateAiCopilotInsights()
     {
         _pnlAiCopilot.Controls.Clear();
-        int targetWidth = Math.Max(260, _pnlAiCopilot.ClientSize.Width - 14);
-        if (targetWidth < 260 && _dashboardRootPanel.Width > 0)
+        int availWidth = _copilotScroll != null && _copilotScroll.ClientSize.Width > 40
+            ? _copilotScroll.ClientSize.Width - (_copilotScroll.ScrollBar.Visible ? 12 : 4) - 10
+            : _pnlAiCopilot.ClientSize.Width - 14;
+        if (availWidth < 200 && _dashboardRootPanel.Width > 0)
         {
-            targetWidth = Math.Max(260, (int)(_dashboardRootPanel.Width * 0.40f) - 30);
+            availWidth = (int)(_dashboardRootPanel.Width * 0.40f) - 30;
         }
+        int targetWidth = Math.Max(200, availWidth);
 
         if (_liveReport.OrderSummaries.Count == 0)
         {
@@ -1010,7 +1016,7 @@ internal sealed class DashboardForm : Form
 
     private static Control CreateInsightCard(string title, string text, Color accentColor, int width, string? buttonText = null, Action? onButtonClick = null)
     {
-        int cardWidth = Math.Max(260, width);
+        int cardWidth = Math.Max(200, width);
         var card = new ModernCardPanel
         {
             Width = cardWidth,
