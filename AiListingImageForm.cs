@@ -191,14 +191,20 @@ internal sealed class AiListingImageForm : Form
         // 2. View Container (Hosts Single Design Grid & Batch Studio Panel)
         _viewContainer = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0) };
 
-        _singleDesignContainer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(0, 4, 0, 4) };
+        _singleDesignContainer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 2, Padding = new Padding(0, 4, 0, 4) };
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 395));
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 300));
+        _singleDesignContainer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        _singleDesignContainer.RowStyles.Add(new RowStyle(SizeType.Absolute, 100));
 
         _singleDesignContainer.Controls.Add(BuildLeftControlsPanel(), 0, 0);
         _singleDesignContainer.Controls.Add(BuildCenterCanvasPanel(), 1, 0);
         _singleDesignContainer.Controls.Add(BuildRightActionsPanel(), 2, 0);
+
+        var historyCard = BuildGenerationHistoryCard();
+        _singleDesignContainer.Controls.Add(historyCard, 0, 1);
+        _singleDesignContainer.SetColumnSpan(historyCard, 3);
 
         _batchStudioControl = new BatchStudioPanelControl(_apiClient, _aiSettings) { Dock = DockStyle.Fill, Visible = false };
         _batchStudioControl.OpenInSingleStudioRequested += bmp =>
@@ -572,19 +578,18 @@ internal sealed class AiListingImageForm : Form
 
     private Control BuildCenterCanvasPanel()
     {
-        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6, 0, 6, 0) };
-        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 95));
+        var panel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(6, 0, 6, 0) };
+        panel.Controls.Add(_sliderControl);
+        return panel;
+    }
 
-        // 1. Interactive Slider Control
-        panel.Controls.Add(_sliderControl, 0, 0);
-
-        // 2. Generation History Filmstrip Card
+    private Control BuildGenerationHistoryCard()
+    {
         var historyCard = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
             CornerRadius = 10,
-            Padding = new Padding(8, 4, 8, 4),
+            Padding = new Padding(10, 4, 10, 4),
             Margin = new Padding(0, 6, 0, 0),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
@@ -632,8 +637,7 @@ internal sealed class AiListingImageForm : Form
         historyLayout.Controls.Add(_filmstripPanel, 0, 1);
         historyCard.Controls.Add(historyLayout);
 
-        panel.Controls.Add(historyCard, 0, 1);
-        return panel;
+        return historyCard;
     }
 
     private Control BuildRightActionsPanel()
