@@ -703,8 +703,8 @@ internal sealed class FinancialReportService
                 decimal trPaymentFixedUsd = Math.Round(3m / rate, 2);
                 paymentFee = Math.Round(grandTotal * 0.065m, 2) + trPaymentFixedUsd;
 
-                // 4. Yasal İşlem Ücreti (TR için %1.5)
-                regulatoryFee = Math.Round(subtotalAndShipping * 0.015m, 2);
+                // 4. Yasal İşlem Ücreti (TR için %1.67)
+                regulatoryFee = Math.Round(subtotalAndShipping * 0.0167m, 2);
 
                 // 5. Dış Reklam (Offsite Ads) Kesimi (%15)
                 offsiteAdFee = r.IsFromOffsiteAds ? Math.Round(grandTotal * 0.15m, 2) : 0m;

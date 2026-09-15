@@ -140,15 +140,19 @@ internal sealed class OrderDetailsForm : Form
         AddRow(layout, "Müşteri Ödemesi", $"${_order.GrandTotal:N2}", row++, true, UiStyle.TextDark);
         
         // Items
-        AddRow(layout, "Ürün Fiyatı", $"${_order.Subtotal:N2}", row++, false, UiStyle.TextMuted);
-        AddRow(layout, "Kargo Ücreti", $"${_order.ShippingPrice:N2}", row++, false, UiStyle.TextMuted);
+        // Etsy API'deki Subtotal indirim düşülmüş tutardır. Ham ürün fiyatı = Subtotal + DiscountAmt
+        decimal originalItemPrice = _order.Subtotal + _order.DiscountAmt;
+        AddRow(layout, "Ürün Fiyatı", $"${originalItemPrice:N2}", row++, false, UiStyle.TextMuted);
+        
         if (_order.DiscountAmt > 0)
         {
             AddRow(layout, "Mağaza İndirimi", $"-${_order.DiscountAmt:N2}", row++, false, UiStyle.TextMuted);
         }
+
+        AddRow(layout, "Kargo Ücreti", $"${_order.ShippingPrice:N2}", row++, false, UiStyle.TextMuted);
         
-        // Subtotal (Subtotal + Shipping - Discount)
-        decimal calcSubtotal = _order.Subtotal + _order.ShippingPrice - _order.DiscountAmt;
+        // Vergi Öncesi Ara Toplam = Ürün Fiyatı - İndirim + Kargo (Etsy Fişiyle tam eşleşen Subtotal + Shipping)
+        decimal calcSubtotal = _order.Subtotal + _order.ShippingPrice;
         AddRow(layout, "Vergi Öncesi Ara Toplam", $"${calcSubtotal:N2}", row++, false, UiStyle.TextDark);
         AddRow(layout, "Müşterinin Ödediği Vergi", $"${_order.TaxPaidByBuyer:N2}", row++, false, UiStyle.TextMuted);
 
@@ -190,7 +194,7 @@ internal sealed class OrderDetailsForm : Form
             AddRow(layout, "Ödeme İşleme (%6.5 + 3 TL)", $"-${_order.PaymentProcessingFee:N2}", row++, false, UiStyle.TextMuted);
             
         if (_order.RegulatoryOperatingFee > 0)
-            AddRow(layout, "Yasal İşlem Ücreti (%1.5)", $"-${_order.RegulatoryOperatingFee:N2}", row++, false, UiStyle.TextMuted);
+            AddRow(layout, "Yasal İşlem Ücreti (%1.67)", $"-${_order.RegulatoryOperatingFee:N2}", row++, false, UiStyle.TextMuted);
             
         if (_order.VatOnFees > 0)
             AddRow(layout, "Hizmet KDV'si (%20)", $"-${_order.VatOnFees:N2}", row++, false, UiStyle.TextMuted);

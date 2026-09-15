@@ -95,7 +95,7 @@ internal sealed record OrderFinancialSummary(
     decimal TaxPaidByBuyer,     // Vergi
     decimal TransactionFee,     // %6.5 İşlem
     decimal PaymentProcessingFee, // %6.5 + 3TL Ödeme İşleme
-    decimal RegulatoryOperatingFee, // %1.5 Yasal
+    decimal RegulatoryOperatingFee, // %1.67 Yasal
     decimal ListingFee,         // $0.20 İlan
     decimal VatOnFees,          // %20 KDV
     decimal EtsyFees,           // Toplam kesintiler (vergi hariç/dahil)
