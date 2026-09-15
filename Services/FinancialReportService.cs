@@ -64,6 +64,21 @@ internal sealed class FinancialReportService
         }
     }
 
+    /// <summary>
+    /// Etsy mağazasındaki gerçek aktif ilan (listing) sayısını çeker.
+    /// </summary>
+    public async Task<int> GetActiveListingCountAsync(EtsyApiSettings settings, CancellationToken ct = default)
+    {
+        try
+        {
+            return await _apiClient.GetOwnShopActiveListingCountAsync(settings, ct);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     private async Task<FinancialReport> GetReportFromLedgerAsync(
         EtsyApiSettings settings,
         DateTimeOffset from,

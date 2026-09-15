@@ -571,6 +571,60 @@ internal sealed class EtsyApiClient
         return new OwnShopProfile(shopId, shopName, BuildShopUrl(shopName));
     }
 
+    public async Task<int> GetOwnShopActiveListingCountAsync(
+        EtsyApiSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        if (shopId <= 0)
+        {
+            return 0;
+        }
+
+        // 1. GET /v3/application/shops/{shop_id}/listings/active?limit=1 -> "count"
+        try
+        {
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?limit=1", useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("count", out var countEl) && countEl.TryGetInt32(out var count))
+                {
+                    return count;
+                }
+            }
+        }
+        catch
+        {
+            // Fallback
+        }
+
+        // 2. Fallback: GET /v3/application/shops/{shop_id} -> listing_active_count
+        try
+        {
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}", useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var doc = JsonDocument.Parse(body);
+                var shop = FirstResultOrRoot(doc.RootElement);
+                return GetInt(shop, "listing_active_count");
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return 0;
+    }
+
     public async Task<MarketListingResult> GetOwnShopListingAsync(
         EtsyApiSettings settings,
         long listingId,

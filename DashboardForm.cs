@@ -854,15 +854,19 @@ internal sealed class DashboardForm : Form
                     _lblApiStatus.ForeColor = UiStyle.SuccessColor;
                 }
 
-                int activeListings = _liveReport.OrderSummaries.Select(o => o.ListingId).Distinct().Count();
-                _lblKpiListings.Text = activeListings > 0 ? $"{activeListings} Aktif Ürün" : "0 Aktif Ürün";
+                int activeListings = await _financialService.GetActiveListingCountAsync(settings, _cts.Token);
+                if (activeListings == 0 && _liveReport.OrderSummaries.Count > 0)
+                {
+                    activeListings = _liveReport.OrderSummaries.Select(o => o.ListingId).Distinct().Count();
+                }
+                _lblKpiListings.Text = activeListings > 0 ? $"{activeListings} Aktif İlan" : "0 Aktif İlan";
             }
             else
             {
                 _liveReport = FinancialReport.Empty;
                 _lblApiStatus.Text = "⚪ Mağaza Bağlı Değil";
                 _lblApiStatus.ForeColor = UiStyle.TextMuted;
-                _lblKpiListings.Text = "0 Ürün (Bağlantı Yok)";
+                _lblKpiListings.Text = "0 İlan (Bağlantı Yok)";
             }
 
             _lblKpiGross.Text = $"{FormatUSD(_liveReport.TotalGross)}  ({FormatTRY(_liveReport.TotalGrossTRY)})";
