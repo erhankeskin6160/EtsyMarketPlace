@@ -20,6 +20,10 @@ public sealed class ListingOptimizationService
 
     public ListingOptimizationResult Optimize(ListingOptimizationInput input)
     {
+        var sanitizedTitle = SanitizeSourceTitle(input.Title);
+        var sanitizedDescription = SanitizeSourceDescription(input.Description);
+        input = input with { Title = sanitizedTitle, Description = sanitizedDescription };
+
         var targetTerms = Tokenize(input.TargetKeyword).ToList();
         var titleTerms = Tokenize(input.Title).ToList();
         var descriptionTerms = Tokenize(input.Description).ToList();
@@ -504,9 +508,13 @@ public sealed class ListingOptimizationService
             "OUTPUT LANGUAGE: English only.",
             "OUTPUT LANGUAGE:",
             "English only.",
+            "English only",
             "Do not write Turkish.",
+            "Do not write Turkish",
             "Selected marketplace listing:",
+            "Competitor description:",
             "Etsy search keyword:",
+            "Target keyword:",
             "Use the selected listing as the product reference",
             "Infer the best Etsy product category",
         };
@@ -519,7 +527,7 @@ public sealed class ListingOptimizationService
             }
         }
 
-        clean = clean.Trim().TrimStart('|', '-', ':', ' ').TrimEnd('|', '-', ':', ' ');
+        clean = clean.Trim().TrimStart('|', '-', ':', ' ', '.').TrimEnd('|', '-', ':', ' ', '.');
         return clean.Length > 0 ? clean : "Etsy Handmade Product";
     }
 
@@ -601,19 +609,29 @@ public sealed class ListingOptimizationService
             var trimmed = line.Trim();
             if (trimmed.StartsWith("Selected listing title:", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.StartsWith("Etsy search keyword:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Target keyword:", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.StartsWith("Current competitor category:", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.StartsWith("Competitor description:", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.StartsWith("OUTPUT LANGUAGE:", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.StartsWith("Do not write Turkish", StringComparison.OrdinalIgnoreCase) ||
                 trimmed.StartsWith("Publishing review:", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            clean.Add(line);
+            var cleanedLine = trimmed
+                .Replace("Selected marketplace listing:", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("Competitor description:", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("OUTPUT LANGUAGE: English only. Do not write Turkish.", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("OUTPUT LANGUAGE:", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("English only", "", StringComparison.OrdinalIgnoreCase)
+                .Replace("Do not write Turkish", "", StringComparison.OrdinalIgnoreCase)
+                .Trim();
+
+            if (!string.IsNullOrWhiteSpace(cleanedLine))
+            {
+                clean.Add(cleanedLine);
+            }
         }
 
-        return string.Join(" ", clean).Trim();
+        return string.Join(Environment.NewLine, clean).Trim();
     }
 
     private static IReadOnlyList<string> BuildRiskWarnings(ListingOptimizationInput input)

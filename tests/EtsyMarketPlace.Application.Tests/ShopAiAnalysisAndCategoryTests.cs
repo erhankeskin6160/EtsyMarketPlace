@@ -393,4 +393,150 @@ public sealed class ShopAiAnalysisAndCategoryTests
         // 5. Özelliklerde devrilmeyi önleyen taban / kablo kanalı var mı?
         Assert.Contains("ağırlıklı taban", result.DescriptionDraft);
     }
+
+    // =========================================================================
+    // 6. TEST: SEO DOLANDIRICILIĞI VE KALİTE KONTROLLERİ (Anti-Spam & Policy)
+    // "Seo dolandırıcılığı yapıyormu bunları kontrol et"
+    // =========================================================================
+    [Fact]
+    public void SEO_Quality_Check_DoesNotDoKeywordStuffing_InTitleOrTags()
+    {
+        var optimizer = new ListingOptimizationService();
+        var input = new ListingOptimizationInput(
+            Title: "Astronaut Lamp LED Space Glow",
+            Description: "Astronaut night light for room decor.",
+            Tags: ["astronaut", "lamp", "night light"],
+            TargetKeyword: "astronaut night light"
+        );
+
+        var result = optimizer.Optimize(input);
+        var title = result.TitleSuggestions.First();
+
+        // 1. Başlıkta hiçbir kelime 2 defadan fazla arka arkaya veya gereksiz yere tekrar edilmemeli
+        var titleWords = title.Split([' ', '-', ',', '|'], StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => w.Length > 3)
+            .ToList();
+        var titleWordCounts = titleWords.GroupBy(w => w, StringComparer.OrdinalIgnoreCase);
+        foreach (var group in titleWordCounts)
+        {
+            Assert.True(group.Count() <= 2, $"Başlıkta '{group.Key}' kelimesi {group.Count()} kez tekrarlanmış (Keyword Stuffing ihlali)!");
+        }
+
+        // 2. Başlık bot tarzı boru karakterleri (| | |) zinciri olmamalı
+        Assert.DoesNotContain("|", title);
+
+        // 3. 13 Tag arasında hiçbir kök kelime 3 defadan fazla tekrarlanmamalı
+        var allTagWords = result.TagSuggestions
+            .SelectMany(t => t.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(w => w.Length > 3)
+            .ToList();
+        var tagWordCounts = allTagWords.GroupBy(w => w, StringComparer.OrdinalIgnoreCase);
+        foreach (var group in tagWordCounts)
+        {
+            Assert.True(group.Count() <= 3, $"Etiketlerde '{group.Key}' kelimesi {group.Count()} kez tekrarlanmış (Tag Spam ihlali)!");
+        }
+    }
+
+    [Fact]
+    public void SEO_Quality_Check_DetectsAndFlagsTrademarkFraud()
+    {
+        var optimizer = new ListingOptimizationService();
+
+        // Kullanıcı telifli/markalı yanıltıcı bir başlık girmeye kalkarsa:
+        var input = new ListingOptimizationInput(
+            Title: "Disney Marvel Spiderman 3D Night Light with Pokemon Pikachu Base",
+            Description: "Handmade night light with superhero design.",
+            Tags: ["disney", "marvel", "spiderman", "pokemon"],
+            TargetKeyword: "spiderman lamp"
+        );
+
+        var result = optimizer.Optimize(input);
+
+        // AI dolandırıcılık veya marka taklidine ortak olmamalı, satıcıyı RiskWarnings ile uyarmalı!
+        Assert.NotEmpty(result.RiskWarnings);
+        Assert.Contains(result.RiskWarnings, w => w.Contains("disney", StringComparison.OrdinalIgnoreCase) ||
+                                                 w.Contains("marvel", StringComparison.OrdinalIgnoreCase) ||
+                                                 w.Contains("spiderman", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void SEO_Quality_Check_DoesNotDumpRawTagsInDescription()
+    {
+        var optimizer = new ListingOptimizationService();
+        var input = new ListingOptimizationInput(
+            Title: "Handmade Ceramic Mug",
+            Description: "12oz ceramic coffee cup.",
+            Tags: ["mug", "coffee", "cup"],
+            TargetKeyword: "ceramic coffee mug"
+        );
+
+        var result = optimizer.Optimize(input);
+        var desc = result.DescriptionDraft;
+
+        // Etsy'nin yasakladığı 'Açıklama altına toplu tag yığma' (Tag Dump / Hidden Spam) yapılmamalı!
+        Assert.DoesNotContain("Tags:", desc, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Keywords:", desc, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Anahtar Kelimeler:", desc, StringComparison.OrdinalIgnoreCase);
+
+        // Metin Etsy alıcısına hitap eden 6 temiz bölümlü paragraf yapısında olmalı
+        Assert.Contains("WHY YOU'LL LOVE IT", desc);
+        Assert.Contains("SPECIFICATIONS & DETAILS", desc);
+        Assert.Contains("PACKAGING & SHIPPING", desc);
+    }
+
+    [Fact]
+    public void SEO_Quality_Check_NeverLeaksSystemPromptsOrBotInstructions()
+    {
+        var optimizer = new ListingOptimizationService();
+        var input = new ListingOptimizationInput(
+            Title: "OUTPUT LANGUAGE: English only. Do not write Turkish. Astronaut Lamp",
+            Description: "Selected marketplace listing: Competitor description: Bedside lamp.",
+            Tags: ["lamp"],
+            TargetKeyword: "astronaut lamp"
+        );
+
+        var result = optimizer.Optimize(input);
+
+        // Başlıkta veya açıklamada prompt sızıntısı veya yapay zeka meta komutları ASLA yer almamalı!
+        var title = result.TitleSuggestions.First();
+        Assert.DoesNotContain("OUTPUT LANGUAGE", title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("English only", title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Do not write Turkish", title, StringComparison.OrdinalIgnoreCase);
+
+        var desc = result.DescriptionDraft;
+        Assert.DoesNotContain("Selected marketplace listing", desc, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Competitor description", desc, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FastListingCreator_ClassifiesTenDifferentProductTypes_Accurately()
+    {
+        var diverseProducts = new (string Title, long ExpectedTaxonomyId, string ExpectedCategory)[]
+        {
+            ("Astronaut LED Night Light Nursery Lamp", 1042, "Night Lights"),
+            ("Handmade Speckled Ceramic Coffee Mug 12oz", 943, "Mugs"),
+            ("Full Grain Leather Bifold Mens Wallet", 142, "Wallets"),
+            ("3D Printed Dragon Headphone Stand Audio Holder", 2079, "Headphone"),
+            ("Modern Geometric Wooden Wall Art Sign", 1054, "Wall Decor"),
+            ("Hand Poured Soy Candle Nordic Candleholder", 1063, "Candleholders"),
+            ("Lord of the Rings Gollum 3D Statue Bust", 1239, "Sculptures"),
+            ("Dainty Sterling Silver Choker Necklace", 204, "Necklaces"),
+            ("Personalized Leather Dog Collar with Name Tag", 982, "Pet Collars"),
+            ("Handcrafted Wooden Chess Set Board Game", 1381, "Board Games")
+        };
+
+        foreach (var p in diverseProducts)
+        {
+            var cat = LocalCategoryHeuristics.SuggestFromText(p.Title);
+            Assert.Equal(p.ExpectedTaxonomyId, cat.TaxonomyId);
+            Assert.Contains(p.ExpectedCategory, cat.CategoryPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // 10 farklı ürünün 10'u da benzersiz kategori taxonomy ID'si üretmeli!
+        var uniqueCount = diverseProducts
+            .Select(p => LocalCategoryHeuristics.SuggestFromText(p.Title).TaxonomyId)
+            .Distinct()
+            .Count();
+        Assert.Equal(10, uniqueCount);
+    }
 }

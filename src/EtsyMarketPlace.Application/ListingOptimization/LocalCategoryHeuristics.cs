@@ -34,12 +34,12 @@ public static class LocalCategoryHeuristics
 
         // Candle Holders & Candles
         new(1063, "Home & Living > Home Decor > Candleholders",
-            ["candle holder", "mumluk", "candlestick", "tealight", "samdan", "candle stand"],
+            ["candleholder", "candle holder", "candlestick", "tealight", "candle stand", "mumluk", "samdan", "candle", "mum"],
             Priority: 3),
 
         // Wall Decor & Signs
         new(1054, "Home & Living > Home Decor > Wall Decor",
-            ["wall decor", "duvar dekoru", "wall hanging", "wall sign", "duvar panosu", "metal wall art", "wood wall art"],
+            ["wall decor", "duvar dekoru", "wall hanging", "wall sign", "duvar panosu", "metal wall art", "wood wall art", "wooden wall art", "wall art"],
             Priority: 3),
 
         // Bags, Purses & Wallets
@@ -61,6 +61,16 @@ public static class LocalCategoryHeuristics
         new(992, "Home & Living > Outdoor & Gardening > Planters & Pots",
             ["planter", "pot", "saksi", "flower pot", "succulent planter", "vase", "vazo"],
             Priority: 2),
+
+        // Pet Supplies - Collars & Leashes
+        new(982, "Pet Supplies > Pet Collars & Leashes",
+            ["dog collar", "kopek tasmasi", "cat collar", "kedi tasmasi", "pet collar", "tasma", "dog leash", "leash", "pet harness"],
+            Priority: 3),
+
+        // Toys & Games - Board Games & Chess
+        new(1381, "Toys & Games > Games & Puzzles > Board Games",
+            ["chess set", "satranc takimi", "chess board", "satranc", "board game", "tabletop game", "dice set", "wooden chess"],
+            Priority: 3),
 
         // Jewelry - Necklaces
         new(204, "Jewelry > Necklaces",
@@ -84,7 +94,7 @@ public static class LocalCategoryHeuristics
 
         // Digital Art & Prints
         new(1251, "Art & Collectibles > Prints > Digital Prints",
-            ["digital print", "digital download", "printable", "dijital baski", "poster", "wall art"],
+            ["digital print", "digital download", "printable", "dijital baski", "poster print", "instant download"],
             Priority: 2),
 
         // Desk Accessories & Organization (Medium/Generic)
