@@ -44,6 +44,7 @@ public sealed class AiUsageDashboardForm : Form
     private AiProviderBalanceInfo? _deepSeekBalance;
     private AiProviderBalanceInfo? _openAiStatus;
     private AiProviderBalanceInfo? _geminiStatus;
+    private OpenAiOfficialUsageReport? _officialOpenAiReport;
 
     public AiUsageDashboardForm()
     {
@@ -279,14 +280,14 @@ public sealed class AiUsageDashboardForm : Form
             var settings = AiOptimizationSettingsStore.Load();
             var selectedProvider = _cboProvider.SelectedItem?.ToString() ?? "Tümü (Genel Bakış)";
 
-            // 1. Canlı Bakiye Sorgusu
+            // 1. Canlı Bakiye Sorguları
             if (queryLiveBalance || _deepSeekBalance == null)
             {
                 if (!string.IsNullOrWhiteSpace(settings.DeepSeekApiKey))
                 {
                     _deepSeekBalance = await AiBalanceCheckerService.CheckDeepSeekBalanceAsync(settings.DeepSeekApiKey);
                 }
-                if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey))
+                if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey) || !string.IsNullOrWhiteSpace(settings.OpenAiAdminApiKey))
                 {
                     _openAiStatus = await AiBalanceCheckerService.CheckOpenAiStatusAsync(settings.OpenAiApiKey, settings.OpenAiAdminApiKey);
                 }
@@ -296,7 +297,39 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            // 2. Zaman Filtresi
+            // 2. OpenAI Resmi Kullanım & Fatura Verilerini Otomatik Olarak Çek
+            string? effectiveAdminKey = !string.IsNullOrWhiteSpace(settings.OpenAiAdminApiKey)
+                ? settings.OpenAiAdminApiKey.Trim()
+                : (settings.OpenAiApiKey?.Trim().StartsWith("sk-admin-", StringComparison.OrdinalIgnoreCase) == true ? settings.OpenAiApiKey.Trim() : null);
+
+            int? targetDays = _cboPeriod.SelectedIndex switch
+            {
+                0 => 1,  // Bugün
+                1 => 7,  // Son 7 Gün
+                2 => 30, // Bu Ay (30 Gün)
+                _ => 90  // Tüm Zamanlar
+            };
+
+            if (!string.IsNullOrWhiteSpace(effectiveAdminKey) && (selectedProvider.Contains("OpenAI") || selectedProvider.StartsWith("Tümü")))
+            {
+                try
+                {
+                    _officialOpenAiReport = await OpenAiUsageFetcherService.FetchOfficialUsageReportAsync(
+                        settings.OpenAiApiKey ?? "",
+                        settings.OpenAiAdminApiKey,
+                        lastDays: targetDays);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"OpenAI canlı fatura çekme hatası: {ex.Message}");
+                }
+            }
+            else if (!selectedProvider.Contains("OpenAI") && !selectedProvider.StartsWith("Tümü"))
+            {
+                _officialOpenAiReport = null;
+            }
+
+            // 3. Zaman Filtresi (SQLite Yerel Veritabanı)
             DateTimeOffset? since = _cboPeriod.SelectedIndex switch
             {
                 0 => DateTimeOffset.Now.Date, // Bugün
@@ -310,14 +343,38 @@ public sealed class AiUsageDashboardForm : Form
             var stats = await repo.GetSummaryStatsAsync(filterArg, since);
             var records = await repo.GetHistoryAsync(filterArg, since, limit: 300);
 
-            // 3. Kartları Dinamik Güncelle (Kullanıcının seçtiği sağlayıcıya göre)
+            // 4. Kartları Dinamik Güncelle (Kullanıcının seçtiği sağlayıcıya ve resmi verilere göre)
             UpdateKpiCards(selectedProvider, stats);
 
-            // 4. Model Dağılım Rozetleri
-            UpdateModelBreakdown(stats);
+            // 5. Model Dağılım Rozetleri
+            UpdateModelBreakdown(stats, selectedProvider);
 
-            // 5. Grid Tablosunu Doldur
+            // 6. Grid Tablosunu Doldur
             _grid.Rows.Clear();
+
+            // 6a. OpenAI Resmi Dökümü (Otomatik olarak grid'e eklenir)
+            if (_officialOpenAiReport != null && _officialOpenAiReport.DailyItems.Count > 0 && (selectedProvider.Contains("OpenAI") || selectedProvider.StartsWith("Tümü")))
+            {
+                foreach (var item in _officialOpenAiReport.DailyItems.OrderByDescending(x => x.Date))
+                {
+                    var idx = _grid.Rows.Add(
+                        item.Date.ToString("yyyy-MM-dd"),
+                        "OpenAI Platform",
+                        "OpenAI",
+                        item.ServiceOrModel,
+                        item.InputTokens.ToString("N0"),
+                        item.OutputTokens.ToString("N0"),
+                        item.TotalTokens.ToString("N0"),
+                        $"${item.CostUsd:F4}",
+                        $"{item.CostTry:F2} ₺",
+                        "Başarılı (Resmi)",
+                        $"OpenAI resmi kullanım ({item.RequestCount} çağrı)"
+                    );
+                    _grid.Rows[idx].DefaultCellStyle.ForeColor = Color.FromArgb(200, 225, 255);
+                }
+            }
+
+            // 6b. Yerel SQLite Kayıtları
             foreach (var r in records)
             {
                 var idx = _grid.Rows.Add(
@@ -340,7 +397,9 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            _lblStatus.Text = $"Son güncelleme: {DateTime.Now:HH:mm:ss} | Toplam {records.Count} işlem listelendi.";
+            int totalRows = _grid.Rows.Count;
+            string officialNotice = (_officialOpenAiReport?.DailyItems.Count > 0) ? " | OpenAI resmi canlı verileri dahil edildi" : "";
+            _lblStatus.Text = $"Son güncelleme: {DateTime.Now:HH:mm:ss} | Toplam {totalRows} işlem/gün listelendi{officialNotice}.";
         }
         catch (Exception ex)
         {
@@ -368,30 +427,92 @@ public sealed class AiUsageDashboardForm : Form
                 _lblCard1Value.Text = "Bakiye Alınamadı";
                 _lblCard1Sub.Text = _deepSeekBalance?.StatusMessage ?? "API anahtarı kontrol edin";
             }
+
+            _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
+            _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
+            _lblCard2Sub.Text = $"Giriş: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
+
+            _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
+            _lblCard3Value.Text = $"${stats.TotalCostUsd:N3} USD";
+            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL";
+
+            _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
+            _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
+            _lblCard4Sub.Text = stats.Blocked429Requests > 0
+                ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
+                : "Tüm istekler başarıyla tamamlandı";
         }
         else if (selectedProvider.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
         {
             _lblCard1Title.Text = "🔵 GEMINI KOTA & DURUM";
             _lblCard1Value.Text = _geminiStatus?.IsAvailable == true ? "API Aktif (Hazır)" : "Hata / Kota";
             _lblCard1Sub.Text = _geminiStatus?.StatusMessage ?? "Ücretsiz planda günlük 20 istek sınırı";
+
+            _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
+            _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
+            _lblCard2Sub.Text = $"Giriş: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
+
+            _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
+            _lblCard3Value.Text = $"${stats.TotalCostUsd:N3} USD";
+            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL";
+
+            _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
+            _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
+            _lblCard4Sub.Text = stats.Blocked429Requests > 0
+                ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
+                : "Tüm istekler başarıyla tamamlandı";
         }
         else if (selectedProvider.Contains("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
-            _lblCard1Title.Text = "🔑 OPENAI API ANAHTARI";
-            _lblCard1Value.Text = _openAiStatus?.IsAvailable == true
-                ? (!string.IsNullOrWhiteSpace(_openAiStatus.MaskedApiKey) ? _openAiStatus.MaskedApiKey : "Bağlantı Aktif")
-                : "API Anahtarı Geçersiz";
-            _lblCard1Sub.Text = _openAiStatus?.StatusMessage ?? "gpt-5.6-luna / gpt-4o modelleri hazır";
+            _lblCard1Title.Text = "🔑 OPENAI RESMİ HESAP";
+            string keyText = _officialOpenAiReport != null && !string.IsNullOrWhiteSpace(_officialOpenAiReport.MaskedKey)
+                ? _officialOpenAiReport.MaskedKey
+                : (_openAiStatus?.MaskedApiKey ?? "sk-admin-...");
+            _lblCard1Value.Text = keyText;
+            _lblCard1Sub.Text = _officialOpenAiReport?.HasAdminKey == true
+                ? $"Canlı Bağlantı Aktif ({_officialOpenAiReport.DailyItems.Count} gün dökümü)"
+                : (_openAiStatus?.StatusMessage ?? "OpenAI API Aktif");
 
-            if (_openAiStatus?.OfficialMonthlyCostUsd != null)
-            {
-                _lblCard3Title.Text = "💰 OPENAI RESMİ FATURA (CANLI)";
-                _lblCard3Value.Text = $"${_openAiStatus.OfficialMonthlyCostUsd.Value:N2} USD";
-                _lblCard3Sub.Text = $"Yaklaşık {_openAiStatus.OfficialMonthlyCostUsd.Value * 40m:N2} TL (OpenAI Admin API)";
-            }
+            // Kart 2: Tüketilen Token (Girdi ve Çıktı Token Verileri)
+            long inTokens = _officialOpenAiReport != null && _officialOpenAiReport.TotalTokens > 0
+                ? _officialOpenAiReport.TotalInputTokens
+                : stats.TotalPromptTokens;
+            long outTokens = _officialOpenAiReport != null && _officialOpenAiReport.TotalTokens > 0
+                ? _officialOpenAiReport.TotalOutputTokens
+                : stats.TotalCompletionTokens;
+            long totTokens = _officialOpenAiReport != null && _officialOpenAiReport.TotalTokens > 0
+                ? _officialOpenAiReport.TotalTokens
+                : stats.TotalTokens;
+
+            _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
+            _lblCard2Value.Text = totTokens.ToString("N0");
+            _lblCard2Sub.Text = $"Girdi: {inTokens:N0} | Çıkış: {outTokens:N0}";
+
+            // Kart 3: Maliyet
+            decimal costUsd = _officialOpenAiReport != null && _officialOpenAiReport.TotalCostUsd > 0
+                ? _officialOpenAiReport.TotalCostUsd
+                : stats.TotalCostUsd;
+            decimal costTry = _officialOpenAiReport != null && _officialOpenAiReport.TotalCostUsd > 0
+                ? _officialOpenAiReport.TotalCostTry
+                : stats.TotalCostTry;
+
+            _lblCard3Title.Text = "💰 OPENAI RESMİ FATURA (CANLI)";
+            _lblCard3Value.Text = $"${costUsd:N2} USD";
+            _lblCard3Sub.Text = $"Yaklaşık {costTry:N2} TL (OpenAI Canlı Platform)";
+
+            // Kart 4: İşlem Sayısı
+            int reqCount = _officialOpenAiReport != null && _officialOpenAiReport.TotalRequests > 0
+                ? _officialOpenAiReport.TotalRequests
+                : stats.SuccessfulRequests;
+            _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
+            _lblCard4Value.Text = $"{reqCount} Başarılı Çağrı";
+            _lblCard4Sub.Text = _officialOpenAiReport?.HasAdminKey == true
+                ? "OpenAI organizasyon resmi verileri başarıyla çekildi"
+                : "Tüm istekler başarıyla tamamlandı";
         }
         else
         {
+            // Tümü (Genel Bakış)
             _lblCard1Title.Text = "💳 CANLI BAKİYE (DEEPSEEK)";
             if (_deepSeekBalance != null && _deepSeekBalance.IsAvailable)
             {
@@ -403,27 +524,35 @@ public sealed class AiUsageDashboardForm : Form
                 _lblCard1Value.Text = "Aktif";
                 _lblCard1Sub.Text = "DeepSeek API hazır";
             }
+
+            // Kart 2: Tüketilen Token (Yerel + OpenAI Resmi)
+            long inTokens = stats.TotalPromptTokens + (_officialOpenAiReport?.TotalInputTokens ?? 0);
+            long outTokens = stats.TotalCompletionTokens + (_officialOpenAiReport?.TotalOutputTokens ?? 0);
+            long totTokens = stats.TotalTokens + (_officialOpenAiReport?.TotalTokens ?? 0);
+
+            _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
+            _lblCard2Value.Text = totTokens.ToString("N0");
+            _lblCard2Sub.Text = $"Girdi: {inTokens:N0} | Çıkış: {outTokens:N0}";
+
+            // Kart 3: Toplam Maliyet (Yerel + OpenAI Resmi)
+            decimal totCostUsd = stats.TotalCostUsd + (_officialOpenAiReport?.TotalCostUsd ?? 0);
+            decimal totCostTry = stats.TotalCostTry + (_officialOpenAiReport?.TotalCostTry ?? 0);
+
+            _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
+            _lblCard3Value.Text = $"${totCostUsd:N2} USD";
+            _lblCard3Sub.Text = $"Yaklaşık {totCostTry:N2} TL (Tüm Sağlayıcılar)";
+
+            // Kart 4: İşlem Sayısı
+            int totReqs = stats.SuccessfulRequests + (_officialOpenAiReport?.TotalRequests ?? 0);
+            _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
+            _lblCard4Value.Text = $"{totReqs} Başarılı İşlem";
+            _lblCard4Sub.Text = stats.Blocked429Requests > 0
+                ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
+                : "Tüm sistemler sorunsuz çalışıyor";
         }
-
-        // Kart 2: Tüketilen Token
-        _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
-        _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
-        _lblCard2Sub.Text = $"Giriş: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
-
-        // Kart 3: Toplam Maliyet
-        _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
-        _lblCard3Value.Text = $"${stats.TotalCostUsd:N3} USD";
-        _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL";
-
-        // Kart 4: Engellenen & Başarılı
-        _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
-        _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
-        _lblCard4Sub.Text = stats.Blocked429Requests > 0
-            ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
-            : "Tüm istekler başarıyla tamamlandı";
     }
 
-    private void UpdateModelBreakdown(AiUsageSummaryStats stats)
+    private void UpdateModelBreakdown(AiUsageSummaryStats stats, string selectedProvider)
     {
         _pnlModelBreakdown.Controls.Clear();
         var lbl = new Label
@@ -436,6 +565,38 @@ public sealed class AiUsageDashboardForm : Form
         };
         _pnlModelBreakdown.Controls.Add(lbl);
 
+        // OpenAI Resmi Verileri varsa rozetleri oluştur
+        if (_officialOpenAiReport != null && _officialOpenAiReport.DailyItems.Count > 0 && (selectedProvider.Contains("OpenAI") || selectedProvider.StartsWith("Tümü")))
+        {
+            var officialGroups = _officialOpenAiReport.DailyItems
+                .GroupBy(x => x.ServiceOrModel)
+                .Select(g => new
+                {
+                    Model = g.Key,
+                    Cost = g.Sum(x => x.CostUsd),
+                    Input = g.Sum(x => x.InputTokens),
+                    Output = g.Sum(x => x.OutputTokens),
+                    Total = g.Sum(x => x.TotalTokens)
+                })
+                .OrderByDescending(x => x.Cost);
+
+            foreach (var og in officialGroups)
+            {
+                var badge = new Label
+                {
+                    Text = $"{og.Model}: ${og.Cost:F2} USD (~{og.Cost * 40m:F2} ₺) [Girdi: {og.Input:N0} • Çıkış: {og.Output:N0}]",
+                    AutoSize = true,
+                    BackColor = Color.FromArgb(25, 45, 75),
+                    ForeColor = Color.FromArgb(210, 230, 255),
+                    Padding = new Padding(8, 4, 8, 4),
+                    Margin = new Padding(0, 2, 8, 2),
+                    Font = new Font("Segoe UI", 8F, FontStyle.Bold)
+                };
+                _pnlModelBreakdown.Controls.Add(badge);
+            }
+        }
+
+        // Yerel SQLite modelleri
         foreach (var (model, cost) in stats.CostByModel.OrderByDescending(x => x.Value))
         {
             var badge = new Label
@@ -483,10 +644,69 @@ public sealed class AiUsageDashboardForm : Form
         }
     }
 
+    private void ShowAdminKeyDialog()
+    {
+        var settings = AiOptimizationSettingsStore.Load();
+
+        using var promptForm = new Form
+        {
+            Text = "OpenAI Admin API Key Tanımla (Canlı Fatura)",
+            Size = new Size(520, 240),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = UiStyle.BackgroundColor,
+            ForeColor = Color.White
+        };
+
+        var lblInfo = new Label
+        {
+            Text = "OpenAI Platform (platform.openai.com/settings/organization/admin-keys)\nhesabınızdan 'Read' yetkili bir Admin Key alarak buraya kaydedin:\n(Örnek: sk-admin-abcdef...)",
+            Location = new Point(20, 15),
+            Size = new Size(465, 55),
+            Font = new Font("Segoe UI", 9F)
+        };
+
+        var txtKey = new TextBox
+        {
+            Text = settings.OpenAiAdminApiKey,
+            Location = new Point(20, 80),
+            Width = 460,
+            BackColor = Color.FromArgb(30, 41, 59),
+            ForeColor = Color.White,
+            Font = new Font("Consolas", 10F)
+        };
+
+        var btnSave = new Button
+        {
+            Text = "💾 Kaydet ve Otomatik Getir",
+            DialogResult = DialogResult.OK,
+            Location = new Point(260, 130),
+            Size = new Size(220, 34),
+            BackColor = UiStyle.AiColor,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+
+        promptForm.Controls.Add(lblInfo);
+        promptForm.Controls.Add(txtKey);
+        promptForm.Controls.Add(btnSave);
+        promptForm.AcceptButton = btnSave;
+
+        if (promptForm.ShowDialog(this) == DialogResult.OK)
+        {
+            settings.OpenAiAdminApiKey = txtKey.Text.Trim();
+            AiOptimizationSettingsStore.Save(settings);
+            _ = RefreshDataAsync(queryLiveBalance: true);
+        }
+    }
+
     private void ShowApiKeysMenu(Button anchor)
     {
         var menu = new ContextMenuStrip();
-        var itemOpenAiUsage = new ToolStripMenuItem("📊 OpenAI Canlı Kullanım & Fatura Verilerini Çek (Uygulama İçi)");
+        var itemOpenAiUsage = new ToolStripMenuItem("📊 OpenAI Canlı Kullanım & Fatura Verilerini Çek (Pencere)");
         itemOpenAiUsage.Font = new Font(menu.Font, FontStyle.Bold);
         itemOpenAiUsage.Click += async (_, _) =>
         {
@@ -494,6 +714,9 @@ public sealed class AiUsageDashboardForm : Form
             dlg.ShowDialog(this);
             await RefreshDataAsync(queryLiveBalance: true);
         };
+
+        var itemAdminKey = new ToolStripMenuItem("🔑 OpenAI Admin Key Tanımla / Düzenle (Canlı Fatura İçin)");
+        itemAdminKey.Click += (_, _) => ShowAdminKeyDialog();
 
         var itemOpenAiKeys = new ToolStripMenuItem("🔑 OpenAI API Anahtarları Sayfası (platform.openai.com/api-keys)");
         itemOpenAiKeys.Click += (_, _) => OpenUrl("https://platform.openai.com/api-keys");
@@ -515,6 +738,7 @@ public sealed class AiUsageDashboardForm : Form
         };
 
         menu.Items.Add(itemOpenAiUsage);
+        menu.Items.Add(itemAdminKey);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(itemOpenAiKeys);
         menu.Items.Add(itemOpenAiWeb);

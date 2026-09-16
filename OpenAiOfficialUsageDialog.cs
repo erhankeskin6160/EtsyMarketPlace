@@ -304,7 +304,7 @@ public sealed class OpenAiOfficialUsageDialog : Form
                 : "0,00 $ (Kişisel / Kredi Bakiyesi: -0.79 $)";
 
             _lblCard2Value.Text = report.TotalTokens.ToString("N0");
-            _lblCard2Sub.Text = "Toplam Token";
+            _lblCard2Sub.Text = $"Girdi: {report.TotalInputTokens:N0} | Çıktı: {report.TotalOutputTokens:N0}";
 
             _lblCard3Value.Text = $"{report.TotalRequests:N0} İstek";
             _lblCard3Sub.Text = "Tamamlanan Çağrı";

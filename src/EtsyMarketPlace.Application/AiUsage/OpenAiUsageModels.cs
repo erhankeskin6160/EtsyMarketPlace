@@ -2,6 +2,7 @@ namespace EtsyMarketPlace.Application.AiUsage;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public sealed class OpenAiDailyUsageItem
 {
@@ -23,6 +24,8 @@ public sealed class OpenAiOfficialUsageReport
     public decimal TotalCostUsd { get; set; }
     public decimal TotalCostTry => Math.Round(TotalCostUsd * 40.0m, 2);
     public long TotalTokens { get; set; }
+    public long TotalInputTokens => DailyItems.Sum(x => x.InputTokens);
+    public long TotalOutputTokens => DailyItems.Sum(x => x.OutputTokens);
     public int TotalRequests { get; set; }
     public bool HasAdminKey { get; set; }
     public string MaskedKey { get; set; } = string.Empty;

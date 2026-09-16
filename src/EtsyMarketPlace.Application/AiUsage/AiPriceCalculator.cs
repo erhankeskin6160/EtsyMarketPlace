@@ -1,7 +1,9 @@
 namespace EtsyMarketPlace.Application.AiUsage;
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 
 public static class AiPriceCalculator
@@ -197,5 +199,187 @@ public static class AiPriceCalculator
         {
             return 0m;
         }
+    }
+
+    /// <summary>
+    /// OpenAI /v1/organization/costs JSON çıktısını gün bazında detaylı liste olarak ayrıştırır.
+    /// </summary>
+    public static (List<OpenAiDailyUsageItem> Items, string? NextCursor) ParseOpenAiCostsDetailsJson(string json)
+    {
+        var items = new List<OpenAiDailyUsageItem>();
+        string? nextCursor = null;
+        if (string.IsNullOrWhiteSpace(json)) return (items, nextCursor);
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("next_page", out var npEl) && npEl.ValueKind == JsonValueKind.String)
+            {
+                nextCursor = npEl.GetString();
+            }
+
+            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var bucket in dataEl.EnumerateArray())
+                {
+                    DateTime bucketDate = DateTime.UtcNow.Date;
+                    if (bucket.TryGetProperty("start_time", out var stEl) && stEl.TryGetInt64(out long st))
+                    {
+                        bucketDate = DateTimeOffset.FromUnixTimeSeconds(st).UtcDateTime.Date;
+                    }
+                    else if (bucket.TryGetProperty("timestamp", out var tsEl) && tsEl.TryGetInt64(out long ts))
+                    {
+                        bucketDate = DateTimeOffset.FromUnixTimeSeconds(ts).UtcDateTime.Date;
+                    }
+
+                    if (bucket.TryGetProperty("results", out var resArr) && resArr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var sub in resArr.EnumerateArray())
+                        {
+                            var daily = new OpenAiDailyUsageItem { Date = bucketDate };
+                            if (sub.TryGetProperty("line_item", out var lineEl))
+                                daily.ServiceOrModel = lineEl.GetString() ?? "Genel";
+
+                            if (sub.TryGetProperty("amount", out var amtEl) && amtEl.TryGetProperty("value", out var valEl))
+                            {
+                                if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
+                                    daily.CostUsd = val;
+                                else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var dVal))
+                                    daily.CostUsd = dVal;
+                            }
+                            items.Add(daily);
+                        }
+                    }
+                    else if (bucket.TryGetProperty("amount", out var amtEl) && amtEl.TryGetProperty("value", out var valEl))
+                    {
+                        var daily = new OpenAiDailyUsageItem { Date = bucketDate };
+                        if (bucket.TryGetProperty("line_item", out var lineEl))
+                            daily.ServiceOrModel = lineEl.GetString() ?? "Genel";
+
+                        if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
+                            daily.CostUsd = val;
+                        else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var dVal))
+                            daily.CostUsd = dVal;
+
+                        items.Add(daily);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return (items, nextCursor);
+    }
+
+    /// <summary>
+    /// OpenAI /v1/organization/usage/completions (veya embeddings) JSON çıktısını rapora birleştirir.
+    /// Girdi token, çıktı token ve istek sayılarını gün ve model bazında eşleştirir.
+    /// </summary>
+    public static string? MergeOpenAiUsageJson(OpenAiOfficialUsageReport report, string json, string defaultModel = "gpt-4o")
+    {
+        if (string.IsNullOrWhiteSpace(json) || report == null) return null;
+        string? nextCursor = null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("next_page", out var npEl) && npEl.ValueKind == JsonValueKind.String)
+            {
+                nextCursor = npEl.GetString();
+            }
+
+            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var bucket in dataEl.EnumerateArray())
+                {
+                    DateTime bucketDate = DateTime.UtcNow.Date;
+                    if (bucket.TryGetProperty("start_time", out var stEl) && stEl.TryGetInt64(out long st))
+                    {
+                        bucketDate = DateTimeOffset.FromUnixTimeSeconds(st).UtcDateTime.Date;
+                    }
+                    else if (bucket.TryGetProperty("timestamp", out var tsEl) && tsEl.TryGetInt64(out long ts))
+                    {
+                        bucketDate = DateTimeOffset.FromUnixTimeSeconds(ts).UtcDateTime.Date;
+                    }
+
+                    if (bucket.TryGetProperty("results", out var resArr) && resArr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var r in resArr.EnumerateArray())
+                        {
+                            long inTokens = r.TryGetProperty("input_tokens", out var inEl) ? inEl.GetInt64() : 0;
+                            long outTokens = r.TryGetProperty("output_tokens", out var outEl) ? outEl.GetInt64() : 0;
+                            int reqs = r.TryGetProperty("num_model_requests", out var reqEl) ? reqEl.GetInt32() : 0;
+                            string? modelProp = r.TryGetProperty("model", out var mEl) ? mEl.GetString() : null;
+                            string model = !string.IsNullOrWhiteSpace(modelProp) ? modelProp : defaultModel;
+
+                            if (inTokens > 0 || outTokens > 0 || reqs > 0)
+                            {
+                                var existing = report.DailyItems.FirstOrDefault(x => x.Date.Date == bucketDate.Date && (x.ServiceOrModel == model || x.ServiceOrModel == "Genel" || string.IsNullOrWhiteSpace(x.ServiceOrModel)));
+                                if (existing != null)
+                                {
+                                    if (existing.ServiceOrModel == "Genel" && !string.IsNullOrWhiteSpace(model))
+                                        existing.ServiceOrModel = model;
+                                    existing.InputTokens += inTokens;
+                                    existing.OutputTokens += outTokens;
+                                    existing.RequestCount += reqs;
+                                }
+                                else
+                                {
+                                    report.DailyItems.Add(new OpenAiDailyUsageItem
+                                    {
+                                        Date = bucketDate,
+                                        ServiceOrModel = model,
+                                        InputTokens = inTokens,
+                                        OutputTokens = outTokens,
+                                        RequestCount = reqs
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Fallback flat properties
+                        long inTokens = bucket.TryGetProperty("input_tokens", out var inEl) ? inEl.GetInt64() : 0;
+                        long outTokens = bucket.TryGetProperty("output_tokens", out var outEl) ? outEl.GetInt64() : 0;
+                        int reqs = bucket.TryGetProperty("num_model_requests", out var reqEl) ? reqEl.GetInt32() : 0;
+
+                        if (inTokens > 0 || outTokens > 0 || reqs > 0)
+                        {
+                            var existing = report.DailyItems.FirstOrDefault(x => x.Date.Date == bucketDate.Date);
+                            if (existing != null)
+                            {
+                                existing.InputTokens += inTokens;
+                                existing.OutputTokens += outTokens;
+                                existing.RequestCount += reqs;
+                            }
+                            else
+                            {
+                                report.DailyItems.Add(new OpenAiDailyUsageItem
+                                {
+                                    Date = bucketDate,
+                                    ServiceOrModel = defaultModel,
+                                    InputTokens = inTokens,
+                                    OutputTokens = outTokens,
+                                    RequestCount = reqs
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Toplamları eşitle
+            report.TotalTokens = report.DailyItems.Sum(x => x.TotalTokens);
+            report.TotalRequests = report.DailyItems.Sum(x => x.RequestCount);
+            report.TotalCostUsd = report.DailyItems.Sum(x => x.CostUsd);
+        }
+        catch { }
+
+        return nextCursor;
     }
 }

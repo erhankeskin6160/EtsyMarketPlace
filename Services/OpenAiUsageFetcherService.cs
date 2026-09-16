@@ -66,34 +66,79 @@ public static class OpenAiUsageFetcherService
                 report.HasAdminKey = true;
                 report.MaskedKey = AiPriceCalculator.MaskApiKey(effectiveAdminKey);
 
-                // Costs API (limit=100 ile ayın tüm günlerini çek)
-                string costsUrl = $"https://api.openai.com/v1/organization/costs?start_time={startUnix}&end_time={endUnix}&bucket_width=1d&limit=100";
-                using var costReq = new HttpRequestMessage(HttpMethod.Get, costsUrl);
-                costReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveAdminKey);
-
-                using var costResp = await HttpClient.SendAsync(costReq, ct);
-                if (costResp.IsSuccessStatusCode)
+                // Costs API (bucket_width=1d ve limit=31 ile ayın günlerini çek, next_page sayfalamasını takip et)
+                string? nextCostPage = null;
+                int costPages = 0;
+                do
                 {
-                    string costBody = await costResp.Content.ReadAsStringAsync(ct);
-                    var costItems = ParseCostsJson(costBody);
-                    foreach (var item in costItems)
+                    string costsUrl = $"https://api.openai.com/v1/organization/costs?start_time={startUnix}&end_time={endUnix}&bucket_width=1d&limit=31"
+                        + (!string.IsNullOrEmpty(nextCostPage) ? $"&next_page={Uri.EscapeDataString(nextCostPage)}" : "");
+
+                    using var costReq = new HttpRequestMessage(HttpMethod.Get, costsUrl);
+                    costReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveAdminKey);
+
+                    using var costResp = await HttpClient.SendAsync(costReq, ct);
+                    if (costResp.IsSuccessStatusCode)
                     {
-                        report.DailyItems.Add(item);
-                        report.TotalCostUsd += item.CostUsd;
+                        string costBody = await costResp.Content.ReadAsStringAsync(ct);
+                        var (costItems, nextCursor) = AiPriceCalculator.ParseOpenAiCostsDetailsJson(costBody);
+                        foreach (var item in costItems)
+                        {
+                            report.DailyItems.Add(item);
+                            report.TotalCostUsd += item.CostUsd;
+                        }
+                        nextCostPage = nextCursor;
+                    }
+                    else
+                    {
+                        string err = await costResp.Content.ReadAsStringAsync(ct);
+                        report.ErrorMessage = $"Costs API Hatası ({costResp.StatusCode}): {err}";
+                        break;
+                    }
+                    costPages++;
+                } while (!string.IsNullOrEmpty(nextCostPage) && costPages < 10);
+
+                // Completions Usage API (bucket_width=1d ve limit=31 ile token ve istek sayılarını çek)
+                string? nextUsagePage = null;
+                int usagePages = 0;
+                do
+                {
+                    string usageUrl = $"https://api.openai.com/v1/organization/usage/completions?start_time={startUnix}&end_time={endUnix}&bucket_width=1d&limit=31"
+                        + (!string.IsNullOrEmpty(nextUsagePage) ? $"&next_page={Uri.EscapeDataString(nextUsagePage)}" : "");
+
+                    using var usageReq = new HttpRequestMessage(HttpMethod.Get, usageUrl);
+                    usageReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveAdminKey);
+
+                    using var usageResp = await HttpClient.SendAsync(usageReq, ct);
+                    if (usageResp.IsSuccessStatusCode)
+                    {
+                        string usageBody = await usageResp.Content.ReadAsStringAsync(ct);
+                        nextUsagePage = AiPriceCalculator.MergeOpenAiUsageJson(report, usageBody, "gpt-4o");
+                    }
+                    else
+                    {
+                        string err = await usageResp.Content.ReadAsStringAsync(ct);
+                        report.ErrorMessage = (report.ErrorMessage == null ? "" : report.ErrorMessage + " | ") + $"Usage API Hatası ({usageResp.StatusCode}): {err}";
+                        break;
+                    }
+                    usagePages++;
+                } while (!string.IsNullOrEmpty(nextUsagePage) && usagePages < 10);
+
+                // Embeddings Usage API (Embeddings varsa girdi tokenlarını rapora ekle)
+                try
+                {
+                    string embUrl = $"https://api.openai.com/v1/organization/usage/embeddings?start_time={startUnix}&end_time={endUnix}&bucket_width=1d&limit=31";
+                    using var embReq = new HttpRequestMessage(HttpMethod.Get, embUrl);
+                    embReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveAdminKey);
+
+                    using var embResp = await HttpClient.SendAsync(embReq, ct);
+                    if (embResp.IsSuccessStatusCode)
+                    {
+                        string embBody = await embResp.Content.ReadAsStringAsync(ct);
+                        AiPriceCalculator.MergeOpenAiUsageJson(report, embBody, "Embeddings");
                     }
                 }
-
-                // Completions Usage API (limit=100 ile tüm günlerin token ve istek sayılarını çek)
-                string usageUrl = $"https://api.openai.com/v1/organization/usage/completions?start_time={startUnix}&end_time={endUnix}&limit=100";
-                using var usageReq = new HttpRequestMessage(HttpMethod.Get, usageUrl);
-                usageReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveAdminKey);
-
-                using var usageResp = await HttpClient.SendAsync(usageReq, ct);
-                if (usageResp.IsSuccessStatusCode)
-                {
-                    string usageBody = await usageResp.Content.ReadAsStringAsync(ct);
-                    MergeUsageJson(report, usageBody);
-                }
+                catch { }
 
                 report.DataSource = "OpenAI Admin API (Canlı Resmi Fatura)";
                 return report;
@@ -147,156 +192,11 @@ public static class OpenAiUsageFetcherService
 
     public static List<OpenAiDailyUsageItem> ParseCostsJson(string json)
     {
-        var items = new List<OpenAiDailyUsageItem>();
-        if (string.IsNullOrWhiteSpace(json)) return items;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var bucket in dataEl.EnumerateArray())
-                {
-                    DateTime bucketDate = DateTime.UtcNow.Date;
-                    if (bucket.TryGetProperty("start_time", out var stEl) && stEl.TryGetInt64(out long st))
-                    {
-                        bucketDate = DateTimeOffset.FromUnixTimeSeconds(st).UtcDateTime.Date;
-                    }
-                    else if (bucket.TryGetProperty("timestamp", out var tsEl) && tsEl.TryGetInt64(out long ts))
-                    {
-                        bucketDate = DateTimeOffset.FromUnixTimeSeconds(ts).UtcDateTime.Date;
-                    }
-
-                    // OpenAI official schema: bucket contains 'results' array
-                    if (bucket.TryGetProperty("results", out var resArr) && resArr.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var sub in resArr.EnumerateArray())
-                        {
-                            var daily = new OpenAiDailyUsageItem { Date = bucketDate };
-                            if (sub.TryGetProperty("line_item", out var lineEl))
-                                daily.ServiceOrModel = lineEl.GetString() ?? "Genel";
-
-                            if (sub.TryGetProperty("amount", out var amtEl) && amtEl.TryGetProperty("value", out var valEl))
-                            {
-                                if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
-                                    daily.CostUsd = val;
-                                else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var dVal))
-                                    daily.CostUsd = dVal;
-                            }
-                            items.Add(daily);
-                        }
-                    }
-                    else if (bucket.TryGetProperty("amount", out var amtEl) && amtEl.TryGetProperty("value", out var valEl))
-                    {
-                        var daily = new OpenAiDailyUsageItem { Date = bucketDate };
-                        if (bucket.TryGetProperty("line_item", out var lineEl))
-                            daily.ServiceOrModel = lineEl.GetString() ?? "Genel";
-
-                        if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
-                            daily.CostUsd = val;
-                        else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var dVal))
-                            daily.CostUsd = dVal;
-
-                        items.Add(daily);
-                    }
-                }
-            }
-        }
-        catch { }
-
-        return items;
+        return AiPriceCalculator.ParseOpenAiCostsDetailsJson(json).Items;
     }
 
     public static void MergeUsageJson(OpenAiOfficialUsageReport report, string json)
     {
-        if (string.IsNullOrWhiteSpace(json)) return;
-
-        try
-        {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-
-            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var bucket in dataEl.EnumerateArray())
-                {
-                    DateTime bucketDate = DateTime.UtcNow.Date;
-                    if (bucket.TryGetProperty("start_time", out var stEl) && stEl.TryGetInt64(out long st))
-                    {
-                        bucketDate = DateTimeOffset.FromUnixTimeSeconds(st).UtcDateTime.Date;
-                    }
-
-                    // OpenAI official schema: bucket contains 'results' array
-                    if (bucket.TryGetProperty("results", out var resArr) && resArr.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var r in resArr.EnumerateArray())
-                        {
-                            long inTokens = r.TryGetProperty("input_tokens", out var inEl) ? inEl.GetInt64() : 0;
-                            long outTokens = r.TryGetProperty("output_tokens", out var outEl) ? outEl.GetInt64() : 0;
-                            int reqs = r.TryGetProperty("num_model_requests", out var reqEl) ? reqEl.GetInt32() : 0;
-                            string model = r.TryGetProperty("model", out var mEl) ? mEl.GetString() ?? "gpt-4o" : "gpt-4o";
-
-                            report.TotalTokens += (inTokens + outTokens);
-                            report.TotalRequests += reqs;
-
-                            var existing = report.DailyItems.FirstOrDefault(x => x.Date == bucketDate && (x.ServiceOrModel == model || x.ServiceOrModel == "Genel"));
-                            if (existing != null)
-                            {
-                                existing.ServiceOrModel = model;
-                                existing.InputTokens += inTokens;
-                                existing.OutputTokens += outTokens;
-                                existing.RequestCount += reqs;
-                            }
-                            else
-                            {
-                                report.DailyItems.Add(new OpenAiDailyUsageItem
-                                {
-                                    Date = bucketDate,
-                                    ServiceOrModel = model,
-                                    InputTokens = inTokens,
-                                    OutputTokens = outTokens,
-                                    RequestCount = reqs
-                                });
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Fallback flat properties
-                        long inTokens = bucket.TryGetProperty("input_tokens", out var inEl) ? inEl.GetInt64() : 0;
-                        long outTokens = bucket.TryGetProperty("output_tokens", out var outEl) ? outEl.GetInt64() : 0;
-                        int reqs = bucket.TryGetProperty("num_model_requests", out var reqEl) ? reqEl.GetInt32() : 0;
-
-                        if (inTokens > 0 || outTokens > 0 || reqs > 0)
-                        {
-                            report.TotalTokens += (inTokens + outTokens);
-                            report.TotalRequests += reqs;
-
-                            var existing = report.DailyItems.FirstOrDefault(x => x.Date == bucketDate);
-                            if (existing != null)
-                            {
-                                existing.InputTokens += inTokens;
-                                existing.OutputTokens += outTokens;
-                                existing.RequestCount += reqs;
-                            }
-                            else
-                            {
-                                report.DailyItems.Add(new OpenAiDailyUsageItem
-                                {
-                                    Date = bucketDate,
-                                    ServiceOrModel = "Completions",
-                                    InputTokens = inTokens,
-                                    OutputTokens = outTokens,
-                                    RequestCount = reqs
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch { }
+        AiPriceCalculator.MergeOpenAiUsageJson(report, json);
     }
 }

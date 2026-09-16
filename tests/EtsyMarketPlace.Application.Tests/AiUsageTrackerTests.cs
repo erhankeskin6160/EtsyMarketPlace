@@ -234,4 +234,125 @@ public sealed class AiUsageTrackerTests
         decimal total = AiPriceCalculator.ParseOpenAiCostsJson(officialOpenAiCostsJson);
         Assert.Equal(0.1808m, total);
     }
+
+    [Fact]
+    public void TestParseOpenAiCostsDetailsJson_And_MergeOpenAiUsageJson_AccuratelyPopulatesTokens()
+    {
+        // 1. Costs JSON
+        string costsJson = """
+        {
+            "object": "page",
+            "next_page": "cursor_cost_page_2",
+            "data": [
+                {
+                    "object": "bucket",
+                    "start_time": 1724630400,
+                    "end_time": 1724716800,
+                    "results": [
+                        {
+                            "object": "organization.costs.result",
+                            "amount": { "value": 2.5282, "currency": "usd" },
+                            "line_item": "Genel"
+                        }
+                    ]
+                },
+                {
+                    "object": "bucket",
+                    "start_time": 1724284800,
+                    "end_time": 1724371200,
+                    "results": [
+                        {
+                            "object": "organization.costs.result",
+                            "amount": { "value": 0.0447, "currency": "usd" },
+                            "line_item": "Genel"
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
+
+        var (costItems, nextCostCursor) = AiPriceCalculator.ParseOpenAiCostsDetailsJson(costsJson);
+        Assert.Equal(2, costItems.Count);
+        Assert.Equal("cursor_cost_page_2", nextCostCursor);
+
+        var report = new OpenAiOfficialUsageReport
+        {
+            HasAdminKey = true,
+            MaskedKey = "sk-admin-...fcQA"
+        };
+        foreach (var c in costItems)
+        {
+            report.DailyItems.Add(c);
+            report.TotalCostUsd += c.CostUsd;
+        }
+
+        Assert.Equal(2.5729m, report.TotalCostUsd);
+        Assert.Equal(0, report.TotalTokens);
+        Assert.Equal(0, report.TotalInputTokens);
+        Assert.Equal(0, report.TotalOutputTokens);
+
+        // 2. Usage Completions JSON with actual input_tokens and output_tokens
+        string usageJson = """
+        {
+            "object": "page",
+            "next_page": null,
+            "data": [
+                {
+                    "object": "bucket",
+                    "start_time": 1724630400,
+                    "end_time": 1724716800,
+                    "results": [
+                        {
+                            "object": "organization.usage.completions.result",
+                            "model": "gpt-4o",
+                            "input_tokens": 54200,
+                            "output_tokens": 15932,
+                            "num_model_requests": 48
+                        }
+                    ]
+                },
+                {
+                    "object": "bucket",
+                    "start_time": 1724284800,
+                    "end_time": 1724371200,
+                    "results": [
+                        {
+                            "object": "organization.usage.completions.result",
+                            "model": "gpt-4o-mini",
+                            "input_tokens": 1200,
+                            "output_tokens": 800,
+                            "num_model_requests": 3
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
+
+        var nextUsageCursor = AiPriceCalculator.MergeOpenAiUsageJson(report, usageJson);
+        Assert.Null(nextUsageCursor);
+
+        // Verify tokens are populated into report and items!
+        Assert.Equal(72132, report.TotalTokens);
+        Assert.Equal(55400, report.TotalInputTokens);
+        Assert.Equal(16732, report.TotalOutputTokens);
+        Assert.Equal(51, report.TotalRequests);
+
+        // Verify first daily item
+        var item1 = report.DailyItems.First(x => x.ServiceOrModel == "gpt-4o");
+        Assert.Equal(54200, item1.InputTokens);
+        Assert.Equal(15932, item1.OutputTokens);
+        Assert.Equal(70132, item1.TotalTokens);
+        Assert.Equal(48, item1.RequestCount);
+        Assert.Equal(2.5282m, item1.CostUsd);
+
+        // Verify second daily item
+        var item2 = report.DailyItems.First(x => x.ServiceOrModel == "gpt-4o-mini");
+        Assert.Equal(1200, item2.InputTokens);
+        Assert.Equal(800, item2.OutputTokens);
+        Assert.Equal(2000, item2.TotalTokens);
+        Assert.Equal(3, item2.RequestCount);
+        Assert.Equal(0.0447m, item2.CostUsd);
+    }
 }
