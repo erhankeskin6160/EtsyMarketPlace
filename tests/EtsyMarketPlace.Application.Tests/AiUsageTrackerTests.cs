@@ -195,4 +195,43 @@ public sealed class AiUsageTrackerTests
         Assert.Equal(2000, item.TotalTokens);
         Assert.Equal(2.00m, item.CostTry);
     }
+
+    [Fact]
+    public void TestParseOpenAiCostsJson_NestedBuckets_CalculatesCorrectly()
+    {
+        string officialOpenAiCostsJson = """
+        {
+            "object": "page",
+            "data": [
+                {
+                    "object": "bucket",
+                    "start_time": 1725148800,
+                    "end_time": 1725235200,
+                    "results": [
+                        {
+                            "object": "organization.costs.result",
+                            "amount": { "value": 0.1308, "currency": "usd" },
+                            "line_item": "gpt-4o"
+                        }
+                    ]
+                },
+                {
+                    "object": "bucket",
+                    "start_time": 1725235200,
+                    "end_time": 1725321600,
+                    "results": [
+                        {
+                            "object": "organization.costs.result",
+                            "amount": { "value": 0.05, "currency": "usd" },
+                            "line_item": "gpt-5.6-luna"
+                        }
+                    ]
+                }
+            ]
+        }
+        """;
+
+        decimal total = AiPriceCalculator.ParseOpenAiCostsJson(officialOpenAiCostsJson);
+        Assert.Equal(0.1808m, total);
+    }
 }

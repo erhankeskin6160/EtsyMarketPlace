@@ -163,15 +163,25 @@ public static class AiPriceCalculator
             {
                 foreach (var item in dataEl.EnumerateArray())
                 {
-                    if (item.TryGetProperty("amount", out var amtEl))
+                    if (item.TryGetProperty("results", out var resArr) && resArr.ValueKind == JsonValueKind.Array)
                     {
-                        if (amtEl.TryGetProperty("value", out var valEl))
+                        foreach (var sub in resArr.EnumerateArray())
                         {
-                            if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
-                                totalCost += val;
-                            else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
-                                totalCost += parsed;
+                            if (sub.TryGetProperty("amount", out var amtEl) && amtEl.TryGetProperty("value", out var valEl))
+                            {
+                                if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
+                                    totalCost += val;
+                                else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+                                    totalCost += parsed;
+                            }
                         }
+                    }
+                    else if (item.TryGetProperty("amount", out var amtEl) && amtEl.TryGetProperty("value", out var valEl))
+                    {
+                        if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
+                            totalCost += val;
+                        else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+                            totalCost += parsed;
                     }
                 }
             }

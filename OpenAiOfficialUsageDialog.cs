@@ -94,14 +94,15 @@ public sealed class OpenAiOfficialUsageDialog : Form
         _cboMonth.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboMonth.Width = 160;
 
-        // Popüle et (Son 6 ay)
-        var now = DateTime.UtcNow;
-        for (int i = 0; i < 6; i++)
-        {
-            var dt = now.AddMonths(-i);
-            _cboMonth.Items.Add($"{dt:MMMM yyyy}");
-        }
-        _cboMonth.SelectedIndex = 0;
+        // Popüle et (Önce 30 Gün ve 7 Gün, ardından aylar)
+        _cboMonth.Items.Add("Son 30 Gün (Canlı Platform)");
+        _cboMonth.Items.Add($"Bu Ay ({DateTime.UtcNow:MMMM yyyy})");
+        _cboMonth.Items.Add($"Geçen Ay ({DateTime.UtcNow.AddMonths(-1):MMMM yyyy})");
+        _cboMonth.Items.Add("Son 7 Gün");
+        _cboMonth.Items.Add($"{DateTime.UtcNow.AddMonths(-2):MMMM yyyy}");
+        _cboMonth.Items.Add($"{DateTime.UtcNow.AddMonths(-3):MMMM yyyy}");
+
+        _cboMonth.SelectedIndex = 0; // Varsayılan Son 30 Gün
         _cboMonth.SelectedIndexChanged += async (_, _) => await LoadDataAsync();
 
         _btnQuery.Text = "🔄 Verileri Çek";
@@ -257,19 +258,50 @@ public sealed class OpenAiOfficialUsageDialog : Form
         try
         {
             var settings = AiOptimizationSettingsStore.Load();
-            var dt = DateTime.UtcNow.AddMonths(-_cboMonth.SelectedIndex);
+            int? lastDays = null;
+            int? year = null;
+            int? month = null;
+
+            if (_cboMonth.SelectedIndex == 0) // Son 30 Gün
+            {
+                lastDays = 30;
+            }
+            else if (_cboMonth.SelectedIndex == 1) // Bu Ay
+            {
+                year = DateTime.UtcNow.Year;
+                month = DateTime.UtcNow.Month;
+            }
+            else if (_cboMonth.SelectedIndex == 2) // Geçen Ay
+            {
+                var lm = DateTime.UtcNow.AddMonths(-1);
+                year = lm.Year;
+                month = lm.Month;
+            }
+            else if (_cboMonth.SelectedIndex == 3) // Son 7 Gün
+            {
+                lastDays = 7;
+            }
+            else
+            {
+                var dtTarget = DateTime.UtcNow.AddMonths(-(_cboMonth.SelectedIndex - 1));
+                year = dtTarget.Year;
+                month = dtTarget.Month;
+            }
 
             var report = await OpenAiUsageFetcherService.FetchOfficialUsageReportAsync(
                 settings.OpenAiApiKey,
                 settings.OpenAiAdminApiKey,
-                dt.Year,
-                dt.Month);
+                year,
+                month,
+                lastDays);
 
             _currentReport = report;
 
             // KPI Kartlarını güncelle
             _lblCard1Value.Text = $"${report.TotalCostUsd:N2} USD";
-            _lblCard1Sub.Text = $"Yaklaşık {report.TotalCostTry:N2} TL";
+            _lblCard1Sub.Text = report.TotalCostUsd > 0
+                ? $"Yaklaşık {report.TotalCostTry:N2} TL"
+                : "0,00 $ (Kişisel / Kredi Bakiyesi: -0.79 $)";
 
             _lblCard2Value.Text = report.TotalTokens.ToString("N0");
             _lblCard2Sub.Text = "Toplam Token";
@@ -285,7 +317,7 @@ public sealed class OpenAiOfficialUsageDialog : Form
             if (report.DailyItems.Count == 0)
             {
                 _grid.Rows.Add(
-                    dt.ToString("yyyy-MM-dd"),
+                    DateTime.UtcNow.ToString("yyyy-MM-dd"),
                     "Kullanım Verisi Yok",
                     "0",
                     "0",
