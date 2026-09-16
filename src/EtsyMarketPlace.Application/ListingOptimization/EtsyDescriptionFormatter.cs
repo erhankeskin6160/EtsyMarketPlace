@@ -456,7 +456,7 @@ public static class EtsyDescriptionFormatter
         string extraNotes = "";
         var features = new List<string>();
 
-        var lines = rawDesc.Split(['\r', '\n', '.', ';'], StringSplitOptions.RemoveEmptyEntries);
+        var lines = rawDesc.Split(['\r', '\n', ';'], StringSplitOptions.RemoveEmptyEntries);
         foreach (var l in lines)
         {
             var line = l.Trim();
@@ -487,32 +487,32 @@ public static class EtsyDescriptionFormatter
 
             var cleanItem = line.TrimStart('•', '-', '*', ' ').Trim();
             if (cleanItem.Length < 6) continue;
+            var normLine = NormalizeForMatching(cleanItem);
 
-            // Boyut ayıklama
-            if (string.IsNullOrEmpty(dimensions) &&
-                (line.Contains("cm", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("inch", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("\"") ||
-                 line.Contains("dimension", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("height:", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("width:", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("size:", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("scale:", StringComparison.OrdinalIgnoreCase)))
+            // 1. Özel Not (Öncelikli)
+            if ((normLine.StartsWith("not:") ||
+                 normLine.StartsWith("ozel not") ||
+                 normLine.StartsWith("note:") ||
+                 normLine.StartsWith("dikkat:") ||
+                 normLine.StartsWith("onemli:")) && cleanItem.Length < 180)
             {
-                if (cleanItem.Length < 140)
-                {
-                    dimensions = cleanItem;
-                    continue;
-                }
+                extraNotes = cleanItem;
+                continue;
             }
 
-            // Kutu içeriği
+            // 2. Kutu içeriği (İngilizce ve Türkçe destekli)
             if (string.IsNullOrEmpty(included) &&
-                (line.Contains("includes:", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("package includes", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("comes with", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("box includes", StringComparison.OrdinalIgnoreCase) ||
-                 line.Contains("set of", StringComparison.OrdinalIgnoreCase)))
+                (normLine.Contains("includes:") ||
+                 normLine.Contains("package includes") ||
+                 normLine.Contains("comes with") ||
+                 normLine.Contains("box includes") ||
+                 normLine.Contains("set of") ||
+                 normLine.Contains("kutu icerigi") ||
+                 normLine.Contains("paket icerigi") ||
+                 normLine.Contains("hediye kutusunda") ||
+                 normLine.Contains("pakette") ||
+                 normLine.Contains("icerik:") ||
+                 normLine.Contains("kutuda")))
             {
                 if (cleanItem.Length < 140)
                 {
@@ -521,21 +521,61 @@ public static class EtsyDescriptionFormatter
                 }
             }
 
-            // Önemli ürün nitelikleri (el boyaması, LED, özel kaplama vb.)
-            if (features.Count < 3 && cleanItem.Length is >= 15 and <= 120 &&
-                (cleanItem.Contains("hand-painted", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("hand painted", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("handcrafted", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("high detail", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("articulated", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("magnetic", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("custom", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("textured", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("durable", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("led", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("smooth finish", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("resin", StringComparison.OrdinalIgnoreCase) ||
-                 cleanItem.Contains("wood", StringComparison.OrdinalIgnoreCase)))
+            // 3. Boyut ayıklama (İngilizce ve Türkçe destekli)
+            if (string.IsNullOrEmpty(dimensions) &&
+                (normLine.Contains("cm") ||
+                 normLine.Contains("mm") ||
+                 normLine.Contains("inch") ||
+                 normLine.Contains("\"") ||
+                 normLine.Contains("dimension") ||
+                 normLine.Contains("height") ||
+                 normLine.Contains("width") ||
+                 normLine.Contains("length") ||
+                 normLine.Contains("depth") ||
+                 normLine.Contains("size:") ||
+                 normLine.Contains("scale:") ||
+                 normLine.Contains("boyut") ||
+                 normLine.Contains("olcu") ||
+                 normLine.Contains("ebat") ||
+                 normLine.Contains("yukseklik") ||
+                 normLine.Contains("genislik") ||
+                 normLine.Contains("derinlik") ||
+                 normLine.Contains("agirlik") ||
+                 normLine.Contains("weight") ||
+                 normLine.Contains("gram")))
+            {
+                if (cleanItem.Length < 140)
+                {
+                    dimensions = cleanItem;
+                    continue;
+                }
+            }
+
+            // 4. Önemli ürün nitelikleri (el boyaması, LED, özel kaplama, RGB, dokunmatik vb.)
+            if (features.Count < 3 && cleanItem.Length is >= 10 and <= 120 &&
+                (normLine.Contains("hand-painted") ||
+                 normLine.Contains("handcrafted") ||
+                 normLine.Contains("high detail") ||
+                 normLine.Contains("articulated") ||
+                 normLine.Contains("magnetic") ||
+                 normLine.Contains("custom") ||
+                 normLine.Contains("textured") ||
+                 normLine.Contains("durable") ||
+                 normLine.Contains("led") ||
+                 normLine.Contains("smooth finish") ||
+                 normLine.Contains("resin") ||
+                 normLine.Contains("wood") ||
+                 normLine.Contains("el yapimi") ||
+                 normLine.Contains("el boyamasi") ||
+                 normLine.Contains("ozel tasarim") ||
+                 normLine.Contains("rgb") ||
+                 normLine.Contains("dokunmatik") ||
+                 normLine.Contains("sarjli") ||
+                 normLine.Contains("kablosuz") ||
+                 normLine.Contains("ozellik") ||
+                 normLine.Contains("taban") ||
+                 normLine.Contains("silikon") ||
+                 normLine.Contains("ayaklar")))
             {
                 if (!IsSectionHeader(cleanItem) && !features.Contains(cleanItem))
                 {
@@ -544,13 +584,26 @@ public static class EtsyDescriptionFormatter
                 }
             }
 
-            // Genel ekstra not
-            if (string.IsNullOrEmpty(extraNotes) && cleanItem.Length is >= 25 and <= 180 && !IsSectionHeader(cleanItem))
+            // 5. Genel ekstra not (eğer başka bir alana girmediyse)
+            if (string.IsNullOrEmpty(extraNotes) && cleanItem.Length is >= 15 and <= 180 && !IsSectionHeader(cleanItem))
             {
                 extraNotes = cleanItem;
             }
         }
 
         return new ExtractedDetails(dimensions, features, included, extraNotes);
+    }
+
+    private static string NormalizeForMatching(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        return text.ToLowerInvariant()
+            .Replace('ı', 'i')
+            .Replace('ğ', 'g')
+            .Replace('ü', 'u')
+            .Replace('ş', 's')
+            .Replace('ö', 'o')
+            .Replace('ç', 'c')
+            .Replace('İ', 'i');
     }
 }

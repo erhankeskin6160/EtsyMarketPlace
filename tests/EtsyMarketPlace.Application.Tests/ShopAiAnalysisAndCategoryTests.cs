@@ -267,4 +267,130 @@ public sealed class ShopAiAnalysisAndCategoryTests
         System.IO.File.WriteAllText("ai_audit_test_report.txt", sb.ToString());
         Assert.True(System.IO.File.Exists("ai_audit_test_report.txt"));
     }
+
+    // =========================================================================
+    // 5. TEST: Kullanıcının Girdiği Boyut, Kutu İçeriği ve Ekstra Bilgileri İşleme
+    // "kullanıcı açıklamaya uygun ek bilgi yazınca ai destekle butonuna basınca o bilgileri ışığında açıklama üretiyormu"
+    // =========================================================================
+    [Fact]
+    public void FastListingCreator_ProcessesUserProvidedDimensionsAndNotes_ForAstronautLamp()
+    {
+        var optimizer = new ListingOptimizationService();
+
+        // Kullanıcı arayüzde taslak başlık ve kutucuğa kendi ölçü/özellik notlarını girdi:
+        var userRawNotes = """
+            Ölçüler: 18cm x 12cm x 6cm yükseklik
+            Paket İçeriği: 1 adet Astronot Lamba ve 1 adet Type-C USB Şarj Kablosu
+            Özellikler: 16 farklı RGB renk modu ve dokunmatik sensör kontrolü
+            Özel Not: Tabanında kaymaz silikon ayaklar yer almaktadır.
+            """;
+
+        var input = new ListingOptimizationInput(
+            Title: "Astronot Figür Gece Lambası",
+            Description: userRawNotes,
+            Tags: ["gece lambasi", "astronot lamba"],
+            TargetKeyword: "astronaut night light"
+        );
+
+        // Act: Kategori tespiti ve AI Açıklama desteği
+        var category = LocalCategoryHeuristics.SuggestFromText(input.Title, input.Description, string.Join(' ', input.Tags));
+        var result = optimizer.Optimize(input);
+
+        // 1. Kategori: Gece lambası tespit edilmeli
+        Assert.Equal(1042, category.TaxonomyId);
+        Assert.Contains("Night Lights", category.CategoryPath);
+
+        // 2. Kullanıcının girdiği boyutlar BÖLÜM 3'e (SPECIFICATIONS) işlenmiş mi?
+        Assert.Contains("18cm x 12cm x 6cm", result.DescriptionDraft);
+
+        // 3. Kullanıcının girdiği paket içeriği işlenmiş mi?
+        Assert.Contains("Type-C USB", result.DescriptionDraft);
+
+        // 4. Kullanıcının belirttiği RGB / dokunmatik özelliği öne çıkanlara (WHY YOU'LL LOVE IT) alınmış mı?
+        Assert.Contains("RGB", result.DescriptionDraft);
+
+        // 5. Kullanıcının özel notu eklenmiş mi?
+        Assert.Contains("silikon ayaklar", result.DescriptionDraft);
+
+        // 6. Alakasız gaming/anime klişesi ASLA olmamalı
+        Assert.DoesNotContain("Gamers, anime lovers", result.DescriptionDraft);
+    }
+
+    [Fact]
+    public void FastListingCreator_ProcessesUserProvidedSpecs_ForLeatherWallet()
+    {
+        var optimizer = new ListingOptimizationService();
+
+        var userRawNotes = """
+            Boyut: 11.5 cm x 9 cm kapalı ebat
+            Malzeme: Hakiki dana derisi, el dikişi
+            Kutu İçeriği: Özel hediye kutusunda kraft kağıt sarılı teslim edilir
+            Özel Not: 8 kart bölmesi ve 2 nakit para gözü mevcuttur.
+            """;
+
+        var input = new ListingOptimizationInput(
+            Title: "El Yapımı Deri Erkek Cüzdanı",
+            Description: userRawNotes,
+            Tags: ["deri cuzdan", "kartlik"],
+            TargetKeyword: "leather bifold wallet"
+        );
+
+        var category = LocalCategoryHeuristics.SuggestFromText(input.Title, input.Description, string.Join(' ', input.Tags));
+        var result = optimizer.Optimize(input);
+
+        // 1. Kategori: Cüzdan kategorisi bulunmalı
+        Assert.Equal(142, category.TaxonomyId);
+        Assert.Contains("Wallets", category.CategoryPath);
+
+        // 2. Kullanıcı boyutu (11.5 cm x 9 cm) açıklamada yer almalı
+        Assert.Contains("11.5 cm x 9 cm", result.DescriptionDraft);
+
+        // 3. Kutu içeriği işlenmiş mi?
+        Assert.Contains("hediye kutusunda", result.DescriptionDraft);
+
+        // 4. Malzeme deri (leather) olarak belirlenmiş mi?
+        Assert.Contains("leather", result.MaterialSuggestions);
+
+        // 5. Açıklamada 8 kart bölmesi notu korunmuş mu?
+        Assert.Contains("8 kart bölmesi", result.DescriptionDraft);
+    }
+
+    [Fact]
+    public void FastListingCreator_ProcessesUserProvidedSpecs_ForHeadphoneStand()
+    {
+        var optimizer = new ListingOptimizationService();
+
+        var userRawNotes = """
+            Yükseklik: 24 cm, Taban Genişliği: 14 cm
+            Malzeme: PLA+ filament, ağırlık 320 gram
+            Özellik: Kablo sarma kanalı ve devrilmeyi önleyen ağırlıklı taban
+            Paket İçeriği: 1 adet demonte ejderha gövde ve 1 adet kilitli taban
+            """;
+
+        var input = new ListingOptimizationInput(
+            Title: "3D Baskı Ejderha Kulaklık Tutucu Stand",
+            Description: userRawNotes,
+            Tags: ["kulaklik standi", "kulaklik tutucu"],
+            TargetKeyword: "dragon headphone stand"
+        );
+
+        var category = LocalCategoryHeuristics.SuggestFromText(input.Title, input.Description, string.Join(' ', input.Tags));
+        var result = optimizer.Optimize(input);
+
+        // 1. Kategori: Kulaklık Standı (2079) bulunmalı
+        Assert.Equal(2079, category.TaxonomyId);
+        Assert.Contains("Headphone", category.CategoryPath);
+
+        // 2. Kullanıcı ölçüsü (24 cm) korunmuş mu?
+        Assert.Contains("24 cm", result.DescriptionDraft);
+
+        // 3. Paket içeriği (kilitli taban) korunmuş mu?
+        Assert.Contains("kilitli taban", result.DescriptionDraft);
+
+        // 4. Malzeme listesinde pla plastic var mı?
+        Assert.Contains(result.MaterialSuggestions, m => m.Contains("pla", StringComparison.OrdinalIgnoreCase));
+
+        // 5. Özelliklerde devrilmeyi önleyen taban / kablo kanalı var mı?
+        Assert.Contains("ağırlıklı taban", result.DescriptionDraft);
+    }
 }
