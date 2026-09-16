@@ -309,18 +309,8 @@ internal sealed class DashboardForm : Form
         _btnVdsUpdate.Margin = new Padding(6, 0, 0, 0);
         _btnVdsUpdate.Click += (_, _) =>
         {
-            var res = MessageBox.Show(
-                this,
-                "GitHub üzerinde yeni bir VDS geliştirme sürümü (dev-latest) tespit edildi!\n\nUygulama otomatik güncellenip yeniden başlatılsın mı?",
-                "VDS Otomatik Güncelleme",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-
-            if (res == DialogResult.Yes)
-            {
-                VdsUpdateNotifierService.TriggerVdsUpdateAndRestart();
-                Application.Exit();
-            }
+            using var dlg = new ClientUpdateDialog();
+            dlg.ShowDialog(this);
         };
         rightPanel.Controls.Add(_btnVdsUpdate);
 
@@ -1343,6 +1333,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("notifications", "Bildirim & Bot Ayarları", "🔔", "Sistem");
         _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
         _sidebarNav.AddItem("api", "Etsy API Ayarları", "⚙️", "Sistem");
+        _sidebarNav.AddItem("update", "Sürüm Güncelle (Client)", "🚀", "Sistem", "YENİ");
     }
 
     private async void OnSidebarItemSelected(object? sender, SidebarItemSelectedEventArgs e)
@@ -1514,6 +1505,12 @@ internal sealed class DashboardForm : Form
         if (targetModule is "notifications")
         {
             using var form = new NotificationSettingsForm();
+            form.ShowDialog(this);
+            return;
+        }
+        if (targetModule is "update")
+        {
+            using var form = new ClientUpdateDialog();
             form.ShowDialog(this);
             return;
         }
