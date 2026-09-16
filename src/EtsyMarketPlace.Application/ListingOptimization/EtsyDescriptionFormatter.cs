@@ -133,7 +133,22 @@ public static class EtsyDescriptionFormatter
     }
 
     /// <summary>
+    /// Checks whether the text is already a well-formed 6-section Etsy description.
+    /// </summary>
+    public static bool IsAlreadyStructuredEtsyDescription(string? desc)
+    {
+        if (string.IsNullOrWhiteSpace(desc)) return false;
+        int sectionCount = 0;
+        if (desc.Contains("WHY YOU'LL LOVE IT", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+        if (desc.Contains("SPECIFICATIONS", StringComparison.OrdinalIgnoreCase) || desc.Contains("DETAILS", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+        if (desc.Contains("PERFECT FOR", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+        if (desc.Contains("PACKAGING", StringComparison.OrdinalIgnoreCase) || desc.Contains("SHIPPING", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+        return sectionCount >= 2;
+    }
+
+    /// <summary>
     /// Herhangi bir ham metni, ürün başlığı ve etiketlerini kullanarak 6 bölümlü Altın Etsy Paragraf Şablonuna dönüştürür.
+    /// Eğer metin zaten AI veya formatlayıcı tarafından yapılandırılmışsa, özgün metni korur ve sadece satır sonlarını normalize eder.
     /// </summary>
     public static string FormatToStandardTemplate(
         string? rawDesc,
@@ -142,6 +157,11 @@ public static class EtsyDescriptionFormatter
         IReadOnlyList<string>? materials = null,
         string? targetKeyword = null)
     {
+        if (IsAlreadyStructuredEtsyDescription(rawDesc))
+        {
+            return NormalizeForEtsy(rawDesc);
+        }
+
         var cleanTitle = SanitizeTitle(title);
         var target = !string.IsNullOrWhiteSpace(targetKeyword) 
             ? targetKeyword.Trim() 
@@ -220,10 +240,20 @@ public static class EtsyDescriptionFormatter
 
     private static string BuildDynamicHook(ProductTheme theme, string title, string target) => theme switch
     {
+        ProductTheme.SpaceAndAstronomy =>
+            $"Embark on a cosmic journey with this captivating {title}! Perfect for shoppers searching for {target}, this artisan creation brings celestial wonder, imaginative discovery, and starry ambiance to any room.",
+        ProductTheme.KidsAndNursery =>
+            $"Delight little dreamers with this adorable {title}! Handcrafted for shoppers searching for {target}, this charming creation brings comforting warmth, playful imagination, and cheerful style to any nursery or child's bedroom.",
         ProductTheme.MusicOrCelebrity =>
             $"Celebrate the legendary icon with this stunning {title}! Tailored for shoppers searching for {target}, this handcrafted tribute brings extraordinary detail, charisma, and presence to your space.",
         ProductTheme.LampOrLighting =>
             $"Transform your space with the ambient glow of this {title}! Perfect for shoppers searching for {target}, this artisan creation seamlessly blends cozy atmosphere, captivating lighting, and modern decor.",
+        ProductTheme.KitchenAndDining =>
+            $"Brighten your daily rituals with this beautifully crafted {title}! Thoughtfully designed for shoppers searching for {target}, this piece combines everyday practicality with timeless artisan charm.",
+        ProductTheme.ApparelAndFashion =>
+            $"Express your unique style with this comfortable, premium {title}! Designed for shoppers searching for {target}, this piece brings standout personality, everyday comfort, and high-quality craftsmanship to your wardrobe.",
+        ProductTheme.WallArtAndPrints =>
+            $"Make a striking visual statement with this stunning {title}! Created for shoppers searching for {target}, this artisan wall art brings character, vibrant texture, and conversation-starting beauty to any wall.",
         ProductTheme.CosplayOrProp =>
             $"Complete your setup with this show-stopping {title}! Specially designed for shoppers searching for {target}, this piece delivers authentic presence, fine craftsmanship, and durable detail.",
         ProductTheme.JewelryOrWearable =>
@@ -233,24 +263,39 @@ public static class EtsyDescriptionFormatter
         ProductTheme.HomeDecorOrArt =>
             $"Elevate your interior aesthetics with this handcrafted {title}! Designed for shoppers searching for {target}, this distinct showpiece brings warmth, style, and conversation-starting artistry to any room.",
         _ =>
-            $"Elevate your space with this unique {title}! Tailored for shoppers searching for {target}, this handcrafted piece brings outstanding quality and distinct character to any collection or setup."
+            $"Discover the exceptional craftsmanship of this unique {title}! Carefully designed for shoppers searching for {target}, this artisan piece brings authentic quality, thoughtful design, and distinctive charm to your home."
     };
 
     private static string BuildThemeDisplayHighlight(ProductTheme theme) => theme switch
     {
+        ProductTheme.SpaceAndAstronomy => "• Celestial Ambience: Creates an inspiring cosmic focal point for desks, nightstands, bedrooms, or bookshelves.",
+        ProductTheme.KidsAndNursery => "• Comforting Companion: Adds a cheerful, comforting presence that makes bedtime and playtime feel magical.",
         ProductTheme.MusicOrCelebrity => "• Iconic Tribute: A must-have centerpiece for music studios, vinyl shelves, entertainment rooms, or display cabinets.",
         ProductTheme.LampOrLighting => "• Atmospheric Ambiance: Creates a soothing, aesthetic lighting effect for desks, nightstands, and living rooms.",
+        ProductTheme.KitchenAndDining => "• Everyday Delight: Built for daily enjoyment, elevating your morning routine with artisan charm.",
+        ProductTheme.ApparelAndFashion => "• Premium Feel: Soft, breathable, and designed for lasting wear through everyday adventures.",
+        ProductTheme.WallArtAndPrints => "• Gallery-Worthy Presentation: Crisp detailing and rich contrast that immediately draws the eye in any room.",
         ProductTheme.CosplayOrProp => "• Display & Cosplay Ready: Perfectly weighted and proportioned for photo shoots, cosplay events, or premium wall display.",
         ProductTheme.GamingOrAnime => "• Battlestation Ready: Designed to sit proudly next to your PC setup, gaming console, or collector bookcase.",
-        _ => "• Eye-Catching Display: Designed to stand out on your desk, shelf, studio, or living space."
+        _ => "• Handcrafted Excellence: Thoughtfully finished with attention to detail and long-lasting durability."
     };
 
     private static string BuildThemeAudience(ProductTheme theme) => theme switch
     {
+        ProductTheme.SpaceAndAstronomy =>
+            "• Space enthusiasts, aspiring astronauts, stargazers, kids' rooms, and celestial decor lovers.",
+        ProductTheme.KidsAndNursery =>
+            "• Kids, toddlers, parents designing nursery spaces, and thoughtful baby shower or birthday gift shoppers.",
         ProductTheme.MusicOrCelebrity =>
             "• Dedicated music fans, pop culture enthusiasts, vinyl collectors, and tribute art lovers.",
         ProductTheme.LampOrLighting =>
             "• Home decor lovers, night owls, bedroom aesthetics, and cozy workspace setups.",
+        ProductTheme.KitchenAndDining =>
+            "• Coffee lovers, tea drinkers, home cooks, and thoughtful housewarming gift shoppers.",
+        ProductTheme.ApparelAndFashion =>
+            "• Fashion-forward trendsetters, style enthusiasts, and anyone who appreciates comfortable bespoke apparel.",
+        ProductTheme.WallArtAndPrints =>
+            "• Art lovers, interior decorators, gallery wall enthusiasts, and modern home stylists.",
         ProductTheme.CosplayOrProp =>
             "• Cosplayers, convention goers, fantasy fans, and theatrical prop collectors.",
         ProductTheme.JewelryOrWearable =>
@@ -260,23 +305,42 @@ public static class EtsyDescriptionFormatter
         ProductTheme.HomeDecorOrArt =>
             "• Interior design lovers, aesthetic home stylists, art enthusiasts, and modern decor collectors.",
         _ =>
-            "• Discerning collectors, home decor enthusiasts, and fans of unique handcrafted goods."
+            "• Discerning collectors, home decor enthusiasts, and anyone looking for a memorable, one-of-a-kind handcrafted gift."
     };
 
-    private enum ProductTheme
+    public enum ProductTheme
     {
         General,
         MusicOrCelebrity,
+        SpaceAndAstronomy,
+        KidsAndNursery,
         LampOrLighting,
+        KitchenAndDining,
+        ApparelAndFashion,
+        WallArtAndPrints,
         CosplayOrProp,
         GamingOrAnime,
         JewelryOrWearable,
         HomeDecorOrArt
     }
 
-    private static ProductTheme DetectProductTheme(string title, string? desc, IReadOnlyList<string>? tags)
+    public static ProductTheme DetectProductTheme(string title, string? desc, IReadOnlyList<string>? tags)
     {
         var blob = $"{title} {desc} {string.Join(' ', tags ?? [])}".ToLowerInvariant();
+
+        if (blob.Contains("astronaut") || blob.Contains("space") || blob.Contains("galaxy") ||
+            blob.Contains("nasa") || blob.Contains("planet") || blob.Contains("cosmic") ||
+            blob.Contains("moon") || blob.Contains("stargazer") || blob.Contains("astronomy") ||
+            blob.Contains("rocket") || blob.Contains("nebula"))
+        {
+            return ProductTheme.SpaceAndAstronomy;
+        }
+
+        if (blob.Contains("nursery") || blob.Contains("baby") || blob.Contains("toddler") ||
+            blob.Contains("kids") || blob.Contains("children") || blob.Contains("playroom"))
+        {
+            return ProductTheme.KidsAndNursery;
+        }
 
         if (blob.Contains("michael jackson") || blob.Contains("singer") || blob.Contains("musician") ||
             blob.Contains("king of pop") || blob.Contains("music legend") || blob.Contains("rock star") ||
@@ -290,6 +354,26 @@ public static class EtsyDescriptionFormatter
             blob.Contains("desk lamp") || blob.Contains("moon lamp") || blob.Contains("table lamp"))
         {
             return ProductTheme.LampOrLighting;
+        }
+
+        if (blob.Contains("mug") || blob.Contains("cup") || blob.Contains("coaster") ||
+            blob.Contains("kitchen") || blob.Contains("coffee") || blob.Contains("tea") ||
+            blob.Contains("tumbler") || blob.Contains("cutting board"))
+        {
+            return ProductTheme.KitchenAndDining;
+        }
+
+        if (blob.Contains("t-shirt") || blob.Contains("shirt") || blob.Contains("hoodie") ||
+            blob.Contains("sweatshirt") || blob.Contains("apparel") || blob.Contains("clothing") ||
+            blob.Contains("tote bag"))
+        {
+            return ProductTheme.ApparelAndFashion;
+        }
+
+        if (blob.Contains("poster") || blob.Contains("canvas") || blob.Contains("wall art") ||
+            blob.Contains("print") || blob.Contains("painting"))
+        {
+            return ProductTheme.WallArtAndPrints;
         }
 
         if (blob.Contains("cosplay") || blob.Contains("prop replica") || blob.Contains("helmet") ||
@@ -312,9 +396,9 @@ public static class EtsyDescriptionFormatter
             return ProductTheme.GamingOrAnime;
         }
 
-        if (blob.Contains("vase") || blob.Contains("planter") || blob.Contains("wall art") ||
-            blob.Contains("shelf decor") || blob.Contains("home decor") || blob.Contains("candle holder") ||
-            blob.Contains("sculpture") || blob.Contains("clock"))
+        if (blob.Contains("vase") || blob.Contains("planter") || blob.Contains("shelf decor") ||
+            blob.Contains("home decor") || blob.Contains("candle holder") || blob.Contains("sculpture") ||
+            blob.Contains("clock"))
         {
             return ProductTheme.HomeDecorOrArt;
         }

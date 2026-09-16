@@ -100,15 +100,15 @@ public sealed class ListingOptimizationService
             candidateList.Add(targetNorm);
         }
 
-        // 2. Kullanıcının/rakibin mevcut 2+ kelimelik uygun tagleri
-        foreach (var tag in input.Tags)
-        {
-            var norm = NormalizeTag(tag);
-            if (norm.Length is >= 4 and <= 20 && norm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
-            {
-                candidateList.Add(norm);
-            }
-        }
+        // 2. Mevcut etiketlerden sadece en güçlü/alakalı en fazla 2 tanesini tohum (seed) olarak koru.
+        // Asla 13 etiketin tamamını kopyalama! Kalan boşlukları taze, yüksek aranma potansiyelli varyasyonlarla doldur.
+        var seedTags = input.Tags
+            .Select(NormalizeTag)
+            .Where(norm => norm.Length is >= 4 and <= 20 && norm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
+            .Where(norm => !norm.Equals(targetNorm, StringComparison.OrdinalIgnoreCase))
+            .Take(2)
+            .ToList();
+        candidateList.AddRange(seedTags);
 
         // 3. Başlıktan 2'li ve 3'lü ardışık kelime öbekleri (N-gram)
         for (int i = 0; i < titleTerms.Count; i++)
@@ -125,7 +125,7 @@ public sealed class ListingOptimizationService
             }
         }
 
-        // 4. Ürün Temasına Özel Zengin Facet Tagleri (Müzik, Lamba, Cosplay, Takı, Dekor vb.)
+        // 4. Ürün Temasına Özel Zengin Facet Tagleri (Uzay, Lamba, Çocuk Odası, Müzik, Mutfak, Takı, Dekor vb.)
         var themeTags = GetThemeSpecificTags(blob);
         candidateList.AddRange(themeTags);
 
@@ -159,6 +159,16 @@ public sealed class ListingOptimizationService
             {
                 var pair = $"{strongTerms[i]} {strongTerms[j]}";
                 if (pair.Length is >= 5 and <= 20) candidateList.Add(pair);
+            }
+        }
+
+        // 9. Kalan mevcut etiketleri en sona yedek olarak ekle (eğer başka alternatif bulunamazsa devreye girer)
+        foreach (var tag in input.Tags.Skip(2))
+        {
+            var norm = NormalizeTag(tag);
+            if (norm.Length is >= 4 and <= 20 && norm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
+            {
+                candidateList.Add(norm);
             }
         }
 
@@ -238,7 +248,26 @@ public sealed class ListingOptimizationService
     {
         var list = new List<string>();
 
-        if (blob.Contains("michael jackson") || blob.Contains("singer") || blob.Contains("musician") ||
+        if (blob.Contains("astronaut") || blob.Contains("space") || blob.Contains("galaxy") ||
+            blob.Contains("nasa") || blob.Contains("planet") || blob.Contains("cosmic") ||
+            blob.Contains("moon") || blob.Contains("stargazer") || blob.Contains("astronomy"))
+        {
+            list.AddRange([
+                "astronaut night light",
+                "space nursery lamp",
+                "galaxy desk decor",
+                "outer space gift",
+                "cosmic room accent",
+                "astronomy fan gift",
+                "sci fi night light",
+                "stargazer room art",
+                "lunar bedside glow",
+                "spaceman table light",
+                "kids space decor",
+                "space bedtime lamp"
+            ]);
+        }
+        else if (blob.Contains("michael jackson") || blob.Contains("singer") || blob.Contains("musician") ||
             blob.Contains("king of pop") || blob.Contains("music legend") || blob.Contains("guitar") ||
             blob.Contains("vinyl") || blob.Contains("pop star") || blob.Contains("concert"))
         {
@@ -255,6 +284,18 @@ public sealed class ListingOptimizationService
                 "iconic singer art"
             ]);
         }
+        else if (blob.Contains("nursery") || blob.Contains("baby") || blob.Contains("toddler") || blob.Contains("kids"))
+        {
+            list.AddRange([
+                "nursery room decor",
+                "baby shower gift",
+                "kids bedroom accent",
+                "comforting night lamp",
+                "toddler bedtime light",
+                "playroom shelf decor",
+                "newborn nursery gift"
+            ]);
+        }
         else if (blob.Contains("lamp") || blob.Contains("light") || blob.Contains("lantern") || blob.Contains("glow"))
         {
             list.AddRange([
@@ -266,6 +307,18 @@ public sealed class ListingOptimizationService
                 "mood lighting lamp",
                 "warm ambient glow",
                 "housewarming lamp"
+            ]);
+        }
+        else if (blob.Contains("mug") || blob.Contains("cup") || blob.Contains("kitchen") || blob.Contains("coaster") || blob.Contains("coffee") || blob.Contains("tea"))
+        {
+            list.AddRange([
+                "artisan coffee mug",
+                "ceramic tea cup",
+                "kitchen counter art",
+                "coffee lover present",
+                "housewarming mug",
+                "handmade drinkware",
+                "cozy morning mug"
             ]);
         }
         else if (blob.Contains("cosplay") || blob.Contains("prop") || blob.Contains("helmet") || blob.Contains("sword"))
@@ -382,16 +435,19 @@ public sealed class ListingOptimizationService
     private static string AssembleFluidTitle(string hook, IReadOnlyList<string> segments, int maxLen = 138)
     {
         var result = hook.Trim();
+        bool firstSeparator = true;
         foreach (var seg in segments)
         {
             if (string.IsNullOrWhiteSpace(seg)) continue;
             var trimmed = seg.Trim();
             if (result.Contains(trimmed, StringComparison.OrdinalIgnoreCase)) continue;
 
-            var test = $"{result} | {trimmed}";
+            var sep = firstSeparator && !result.Contains(" - ") ? " - " : ", ";
+            var test = $"{result}{sep}{trimmed}";
             if (test.Length <= maxLen)
             {
                 result = test;
+                firstSeparator = false;
             }
         }
         return LimitTitle(result);

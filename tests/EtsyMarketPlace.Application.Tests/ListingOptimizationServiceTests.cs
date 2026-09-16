@@ -150,4 +150,66 @@ public sealed class ListingOptimizationServiceTests
             Assert.True(statueCount <= 2, $"Word 'statue' appeared {statueCount} times across tags: {string.Join(", ", result.TagSuggestions)}");
         }
     }
+
+    [Fact]
+    public void Optimize_WhenInputHas13Tags_RefreshesTagsAndAvoidsFullEcho()
+    {
+        var service = new ListingOptimizationService();
+        var existing13Tags = new List<string>
+        {
+            "led light astronaut", "space decor", "3d printed lamp", "astronaut night light",
+            "kids room decor", "space gift", "astronaut lamp", "nursery night light",
+            "space themed decor", "unique home decor", "whimsical lamp", "astronaut figurine", "moon lamp"
+        };
+
+        var result = service.Optimize(new ListingOptimizationInput(
+            "LED Light Up Astronaut Figurine - 3D Printed Space Decor Night Light",
+            "Handcrafted 3D printed astronaut night lamp with soft LED light for kids room and nursery.",
+            existing13Tags,
+            "astronaut night light"));
+
+        Assert.Equal(13, result.TagSuggestions.Count);
+
+        // It must NOT simply echo back all 13 existing tags
+        var identicalCount = result.TagSuggestions.Count(t => existing13Tags.Contains(t, StringComparer.OrdinalIgnoreCase));
+        Assert.True(identicalCount <= 5, $"Too many existing tags echoed ({identicalCount}/13). Output tags: {string.Join(", ", result.TagSuggestions)}");
+
+        // Fresh tags must be at least 8
+        var freshCount = result.TagSuggestions.Count(t => !existing13Tags.Contains(t, StringComparer.OrdinalIgnoreCase));
+        Assert.True(freshCount >= 8, $"Expected at least 8 fresh tags, but only got {freshCount}: {string.Join(", ", result.TagSuggestions)}");
+
+        // Frequency cap check
+        var words = result.TagSuggestions
+            .SelectMany(t => t.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(w => w.Length > 3 && !new[] { "gift", "idea", "with", "from", "for" }.Contains(w, StringComparer.OrdinalIgnoreCase))
+            .GroupBy(w => w, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        if (words.TryGetValue("astronaut", out var astronautCount))
+        {
+            Assert.True(astronautCount <= 2, $"Word 'astronaut' appeared {astronautCount} times: {string.Join(", ", result.TagSuggestions)}");
+        }
+        if (words.TryGetValue("lamp", out var lampCount))
+        {
+            Assert.True(lampCount <= 2, $"Word 'lamp' appeared {lampCount} times: {string.Join(", ", result.TagSuggestions)}");
+        }
+    }
+
+    [Fact]
+    public void Optimize_GeneratesNaturalHumanTitlesWithoutPipeDelimiters()
+    {
+        var service = new ListingOptimizationService();
+        var result = service.Optimize(new ListingOptimizationInput(
+            "LED Light Up Astronaut Figurine - 3D Printed Space Decor Night Light",
+            "Handcrafted 3D printed astronaut night lamp with soft LED light for kids room and nursery.",
+            ["astronaut lamp", "space decor", "night light"],
+            "astronaut night light"));
+
+        Assert.NotEmpty(result.TitleSuggestions);
+        foreach (var title in result.TitleSuggestions)
+        {
+            Assert.DoesNotContain("|", title);
+            Assert.True(title.Length >= 80 && title.Length <= 140, $"Title length was {title.Length}: '{title}'");
+        }
+    }
 }

@@ -1080,8 +1080,15 @@ internal sealed class OwnShopListingAiAuditForm(
         return Math.Clamp(tagScore + titleScore + imageScore + descriptionScore + signalScore, 0, 100);
     }
 
-    private static ListingOptimizationInput ToOptimizationInput(MarketListingResult listing) =>
-        new(listing.Title, listing.Description, listing.Tags, PrimaryKeyword(listing));
+    private static ListingOptimizationInput ToOptimizationInput(MarketListingResult listing)
+    {
+        var desc = listing.Description;
+        if (listing.Materials.Count > 0 && !desc.Contains("[EXTRACTED PRODUCT SPECIFICATIONS]", StringComparison.OrdinalIgnoreCase))
+        {
+            desc = $"{desc}\n\n[EXTRACTED PRODUCT SPECIFICATIONS]\n• Materials: {string.Join(", ", listing.Materials)}";
+        }
+        return new(listing.Title, desc, listing.Tags, PrimaryKeyword(listing));
+    }
 
     private static string PrimaryKeyword(MarketListingResult listing)
     {

@@ -94,16 +94,70 @@ public sealed class EtsyDescriptionFormatterTests
     [Fact]
     public void FormatToStandardTemplate_AdaptsHookAndAudienceForLightingTheme()
     {
-        var raw = "Astronaut night light 3d printed lamp with USB power cable and warm glow for bedroom.";
+        var raw = "Desk reading light 3d printed lamp with USB power cable and warm glow for bedroom.";
         var result = EtsyDescriptionFormatter.FormatToStandardTemplate(
             raw,
-            "LED Astronaut Night Light Lamp",
-            ["astronaut lamp", "night light", "space decor"],
+            "LED Desk Reading Light Lamp",
+            ["desk lamp", "reading light", "ambient lamp"],
             ["PLA", "LED"],
-            "astronaut lamp");
+            "desk lamp");
 
         Assert.Contains("ambient glow", result, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Home decor lovers", result);
         Assert.DoesNotContain("anime lovers", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FormatToStandardTemplate_AdaptsHookAndAudienceForSpaceTheme()
+    {
+        var raw = "Astronaut figurine night light with gentle glow for kids bedroom or nursery.";
+        var result = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            raw,
+            "LED Light Up Astronaut Figurine Night Light",
+            ["astronaut lamp", "night light", "space decor"],
+            ["PLA", "LED"],
+            "astronaut night light");
+
+        Assert.Contains("cosmic journey", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Space enthusiasts", result);
+        Assert.DoesNotContain("anime lovers", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("cosplay enthusiasts", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FormatToStandardTemplate_PreservesAlreadyStructuredEtsyDescription()
+    {
+        var structured = """
+            Embark on a celestial adventure with this stunning LED Astronaut Night Light!
+            
+            ✨ WHY YOU'LL LOVE IT:
+            • Gentle Eye-Safe Glow: Perfect for restful bedtime.
+            • Hand-Finished Lunar Surface: Detailed helmet visor.
+            
+            📏 SPECIFICATIONS & DETAILS:
+            • Materials: PLA Plastic, LED
+            • Dimensions: 15cm x 8cm
+            
+            🎁 PERFECT FOR:
+            • Kids, toddlers, and aspiring space explorers.
+            
+            📦 PACKAGING & SHIPPING:
+            • Multi-layer foam protection.
+            
+            💬 CUSTOM REQUESTS & QUESTIONS:
+            • Contact us anytime for custom visor colors!
+            """;
+
+        var result = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            structured,
+            "LED Astronaut Night Light",
+            ["astronaut lamp"],
+            ["PLA"],
+            "astronaut lamp");
+
+        Assert.Contains("Hand-Finished Lunar Surface: Detailed helmet visor.", result);
+        Assert.Contains("Gentle Eye-Safe Glow: Perfect for restful bedtime.", result);
+        Assert.Contains("Kids, toddlers, and aspiring space explorers.", result);
+        Assert.DoesNotContain("Collector & Fan Approved:", result);
     }
 }

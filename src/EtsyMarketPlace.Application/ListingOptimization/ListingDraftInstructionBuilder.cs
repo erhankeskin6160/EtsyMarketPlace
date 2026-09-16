@@ -103,6 +103,10 @@ public static class ListingDraftInstructionBuilder
     public static string BuildFieldRules() =>
         """
         Field constraints:
+        - PRODUCT COMPREHENSION MANDATE (UNDERSTAND BEFORE WRITING):
+          * FIRST, deeply diagnose the exact physical reality and purpose of this product: What is it? How is it used? In which room or setting does it belong? Who is the genuine buyer?
+          * NEVER use mismatched boilerplate! For example, an astronaut LED lamp is an ambient night light and cosmic room decor for children, nurseries, astronomy lovers, and space fans; NEVER call it anime or cosplay gear. A coffee mug is kitchenware; a ring is jewelry; a wall art print is living room decor.
+          * Reflect the product's authentic attributes, materials, and benefits in EVERY output field.
         - MULTILINGUAL INPUT & ENGLISH OUTPUT:
           * When the seller provides Turkish title, description, or tags, understand the product intent completely and translate/adapt it into high-search-volume English terminology used by global Etsy buyers.
         - title_suggestions: exactly 3 items. All in English. Max 140 characters limit (ideal: 115-138 characters).
@@ -115,25 +119,26 @@ public static class ListingDraftInstructionBuilder
             3. Title 3 (Gift & Fan Occasion): [Memorable Product Name - Thoughtful Gift for Enthusiasts] | [Fine Craft Details & Occasion Keepsake]
           * NO SYSTEM PROMPT LEAKS: NEVER include instructions, metadata, or phrases like "OUTPUT LANGUAGE", "English only", "Do not write Turkish", "Title 1:", etc. in any title.
         - tag_suggestions: exactly 13 items. All in English.
-          * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase (e.g. "pop legend tribute", "80s music icon", "studio desk display", "hand poured resin", "gift for music lover").
+          * TAG REFRESH & NO ECHO RULE: When input listing already has tags, DO NOT simply echo or repeat them back! Keep at most 2-3 high-relevance terms if critical, and replace at least 10 tags with FRESH, high-intent search terms across gift, audience, style, placement, and materials.
+          * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase (e.g. "astronaut night light", "space nursery lamp", "kids bedtime glow", "3d printed decor", "astronomy fan gift").
           * STRICTLY FORBIDDEN: NEVER generate single-word tags (such as "gift", "hand", "statue", "music", "decor").
-          * DIVERSITY & NO REPETITION (FREQUENCY CAP): Do NOT repeat the same root keyword (e.g. "michael", "statue", "lamp", "decor") across more than 2 tags! Etsy indexes all words collectively; repeating root words wastes valuable tag slots.
+          * DIVERSITY & NO REPETITION (FREQUENCY CAP): Do NOT repeat the same root keyword (e.g. "astronaut", "lamp", "space", "decor") across more than 2 tags! Etsy indexes all words collectively; repeating root words wastes valuable tag slots.
           * Spread all 13 tags across 6 distinct search angles:
-            1. Core Identity & Sub-category (e.g. "pop music statue", "celebrity tribute bust")
-            2. Material & Craft Technique (e.g. "detailed resin cast", "hand painted finish")
-            3. Recipient & Gift Occasion (e.g. "gift for music lover", "80s fan birthday gift")
-            4. Room & Placement (e.g. "studio desk display", "vinyl shelf decor")
-            5. Theme, Era & Style (e.g. "retro pop culture", "vintage music icon")
-            6. Niche Alias & Long-Tail (e.g. "king of pop tribute", "moonwalk collectible")
+            1. Core Identity & Sub-category (e.g. "astronaut night light", "lunar desk lamp")
+            2. Material & Craft Technique (e.g. "3d printed lamp", "hand detailed resin")
+            3. Recipient & Gift Occasion (e.g. "space gift for kids", "astronomy lover gift")
+            4. Room & Placement (e.g. "space nursery decor", "ambient bedside glow")
+            5. Theme, Era & Style (e.g. "cosmic bedroom art", "sci fi night light")
+            6. Niche Alias & Long-Tail (e.g. "spaceman table lamp", "moon walking light")
           * Each tag must be 20 characters or less in length. Every tag must be in English.
         - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text (in English, e.g. "Wood", "PLA Plastic", "Resin", "Cotton"). Up to 13 items, each 45 characters or less. Never invent materials.
         - description_draft: write a bespoke, high-converting, buyer-facing English Etsy description structured in 6 clean sections with emojis:
           * FORMATTING: ALWAYS separate every section and paragraph with a blank line (\n\n). Use bullet points ("• ") for list items so text renders in clean, distinct paragraphs on Etsy mobile and web.
-          * BESPOKE NICHE COPYWRITING: Tailor tone, vocabulary, and audience to the EXACT product! NEVER output generic gaming or anime copy unless the product is genuinely a video game or anime item. For music legends, write for music enthusiasts; for lamps, write for home ambiance; for jewelry, write for elegant accessorizing.
+          * BESPOKE NICHE COPYWRITING: Tailor tone, vocabulary, and audience to the EXACT product! NEVER output generic gaming or anime copy unless the product is genuinely a video game or anime item. For space/lamps, write for bedtime ambiance and cosmic wonder; for music legends, write for music enthusiasts; for jewelry, write for elegant accessorizing.
           * SECTION 1 (Google Meta Hook): 2-3 engaging opening sentences naturally featuring the target keyword in the first sentence. State what makes this specific item an extraordinary must-have.
           * SECTION 2 (✨ WHY YOU'LL LOVE IT): 3-4 bullet points highlighting key benefits, design quality, and display/practical use based on the real product features.
           * SECTION 3 (📏 SPECIFICATIONS & DETAILS): Extract and preserve ALL real dimensions (cm/inches), scale, materials, finishes, package contents, and included components from the source description. Never omit real measurements.
-          * SECTION 4 (🎁 PERFECT FOR): Who this specific item is actually for (tailored directly to the theme, such as dedicated music fans, retro art collectors, cozy home aesthetics, or meaningful birthday/holiday gifting).
+          * SECTION 4 (🎁 PERFECT FOR): Who this specific item is actually for (tailored directly to the theme, such as dedicated space lovers, nursery decor, stargazers, or meaningful birthday/holiday gifting).
           * SECTION 5 (📦 PACKAGING & SHIPPING): Protective packaging guarantee for 100% safe worldwide delivery with tracking.
           * SECTION 6 (💬 CUSTOM REQUESTS & QUESTIONS): Friendly call to action for custom colors, sizing, or inquiries.
           * STRICTLY FORBIDDEN: NEVER include debug labels (such as "Selected listing title:", "Competitor description:", "Etsy search keyword:", "Target keyword:"), prompt words, or generic filler like "This item is prepared as an Etsy-ready product listing". Write directly to the customer.
