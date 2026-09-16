@@ -21,6 +21,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly TextBox _bflKeyTextBox = new();
     private readonly TextBox _ideogramKeyTextBox = new();
     private readonly TextBox _photoRoomKeyTextBox = new();
+    private readonly CheckBox _chkStrictLiveAi = new();
     private readonly TextBox _statusTextBox = new();
 
     public AiOptimizationSettingsForm()
@@ -186,6 +187,14 @@ internal sealed class AiOptimizationSettingsForm : Form
         root.Controls.Add(LabelFor("PhotoRoom API Key:"), 0, 9);
         root.Controls.Add(_photoRoomKeyTextBox, 1, 9);
 
+        _chkStrictLiveAi.Text = "🛡️ Canlı AI modeli yanıt vermezse sessizce offline motora düşme (Beni açıkça uyar ve hata bildir)";
+        _chkStrictLiveAi.AutoSize = true;
+        _chkStrictLiveAi.Font = new Font("Segoe UI Semibold", 9F);
+        _chkStrictLiveAi.ForeColor = UiStyle.PrimaryColor;
+        _chkStrictLiveAi.Cursor = Cursors.Hand;
+        root.Controls.Add(LabelFor("Fallback Politikası:"), 0, 10);
+        root.Controls.Add(_chkStrictLiveAi, 1, 10);
+
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, 4, 0, 0) };
         var save = CreateButton("💾 Kaydet");
         save.BackColor = Color.FromArgb(16, 140, 90);
@@ -213,23 +222,23 @@ internal sealed class AiOptimizationSettingsForm : Form
         close.Click += (_, _) => Close();
         buttons.Controls.Add(close);
 
-        root.Controls.Add(new Label(), 0, 10);
-        root.Controls.Add(buttons, 1, 10);
+        root.Controls.Add(new Label(), 0, 11);
+        root.Controls.Add(buttons, 1, 11);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(LabelFor("Durum:"), 0, 11);
-        root.Controls.Add(_statusTextBox, 1, 11);
+        root.Controls.Add(LabelFor("Durum:"), 0, 12);
+        root.Controls.Add(_statusTextBox, 1, 12);
 
-        root.Controls.Add(new Label(), 0, 12);
+        root.Controls.Add(new Label(), 0, 13);
         root.Controls.Add(new Label
         {
             Dock = DockStyle.Fill,
             Text = "💡 Önerilen En Güncel Görsel Modelleri: PhotoRoom (Arka Plan Silme), OpenAI 'dall-e-3', Google 'gemini-2.5-flash-image', BFL 'flux-pro-1.1' ve 'ideogram-v4'.",
             ForeColor = Color.FromArgb(75, 85, 99),
-        }, 1, 12);
+        }, 1, 13);
     }
 
     private void LoadValues()
@@ -277,6 +286,8 @@ internal sealed class AiOptimizationSettingsForm : Form
             ? _settings.PhotoRoomApiKey
             : PhotoRoomSettingsStore.Load().ApiKey;
 
+        _chkStrictLiveAi.Checked = !_settings.AllowSilentOfflineFallback;
+
         WriteStatus($"Ayar dosyası yüklendi: {AiOptimizationSettingsStore.SettingsPath}");
     }
 
@@ -323,6 +334,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         _settings.BflApiKey = _bflKeyTextBox.Text.Trim();
         _settings.IdeogramApiKey = _ideogramKeyTextBox.Text.Trim();
         _settings.PhotoRoomApiKey = _photoRoomKeyTextBox.Text.Trim();
+        _settings.AllowSilentOfflineFallback = !_chkStrictLiveAi.Checked;
 
         PhotoRoomSettingsStore.Save(new PhotoRoomSettings { ApiKey = _settings.PhotoRoomApiKey });
         AiOptimizationSettingsStore.Save(_settings);

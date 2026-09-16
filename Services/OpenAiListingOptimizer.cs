@@ -21,7 +21,12 @@ internal sealed class OpenAiListingOptimizer(
         var settings = loadSettings();
         if (settings.IsOffline)
         {
-            return localOptimizer.Optimize(input);
+            var res = localOptimizer.Optimize(input);
+            return res with
+            {
+                ExecutedProvider = "Offline",
+                ExecutedModel = "Kural Tabanlı"
+            };
         }
 
         if (settings.UseGemini)
@@ -47,7 +52,7 @@ internal sealed class OpenAiListingOptimizer(
         if (settings.UseClaude)
         {
             return await OptimizeWithProviderAsync(
-                "Claude", input,
+                "Claude", settings.ClaudeModel, settings.AllowSilentOfflineFallback, input,
                 (sys, usr, ct) => AiProviderCaller.CallClaudeAsync(sys, usr, settings.ClaudeApiKey, settings.ClaudeModel, 4096, 0.4, ct),
                 cancellationToken);
         }
@@ -60,7 +65,7 @@ internal sealed class OpenAiListingOptimizer(
         if (settings.UseDeepSeek)
         {
             return await OptimizeWithProviderAsync(
-                "DeepSeek", input,
+                "DeepSeek", settings.DeepSeekModel, settings.AllowSilentOfflineFallback, input,
                 (sys, usr, ct) => AiProviderCaller.CallDeepSeekAsync(sys, usr, settings.DeepSeekApiKey, settings.DeepSeekModel, 4096, 0.3, ct),
                 cancellationToken);
         }
@@ -73,7 +78,7 @@ internal sealed class OpenAiListingOptimizer(
         if (settings.UseGrok)
         {
             return await OptimizeWithProviderAsync(
-                "Grok", input,
+                "Grok", settings.GrokModel, settings.AllowSilentOfflineFallback, input,
                 (sys, usr, ct) => AiProviderCaller.CallGrokAsync(sys, usr, settings.GrokApiKey, settings.GrokModel, 4096, 0.4, ct),
                 cancellationToken);
         }
@@ -83,7 +88,12 @@ internal sealed class OpenAiListingOptimizer(
             throw new InvalidOperationException("Grok API key girilmemis. AI Ayarlari ekraninda Grok key alanini doldurun.");
         }
 
-        return localOptimizer.Optimize(input);
+        var fallbackLocal = localOptimizer.Optimize(input);
+        return fallbackLocal with
+        {
+            ExecutedProvider = "Offline",
+            ExecutedModel = "Kural Tabanlı"
+        };
     }
 
     private async Task<ListingOptimizationResult> OptimizeWithOpenAiAsync(
@@ -92,36 +102,50 @@ internal sealed class OpenAiListingOptimizer(
         CancellationToken cancellationToken)
     {
         var local = localOptimizer.Optimize(input);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(CreateOpenAiPayload(settings.OpenAiModel, input)),
-            Encoding.UTF8,
-            "application/json");
-
-        using var response = await HttpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            throw new InvalidOperationException($"OpenAI istegi basarisiz. HTTP {(int)response.StatusCode}: {body}");
+            using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/responses");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.OpenAiApiKey.Trim());
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(CreateOpenAiPayload(settings.OpenAiModel, input)),
+                Encoding.UTF8,
+                "application/json");
+
+            using var response = await HttpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"OpenAI istegi basarisiz. HTTP {(int)response.StatusCode}: {body}");
+            }
+
+            var outputText = StripJsonFences(ExtractOutputText(body));
+            var ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
+                outputText,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? throw new InvalidOperationException("OpenAI yaniti JSON olarak okunamadi.");
+
+            return new ListingOptimizationResult(
+                local.CurrentSeoScore,
+                Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
+                NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
+                NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
+                NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
+                string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
+                local.MissingTerms,
+                NormalizeList(ai.RiskWarnings, local.RiskWarnings),
+                local.ActionChecklist.Concat(["AI onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList(),
+                ExecutedProvider: "OpenAI",
+                ExecutedModel: settings.OpenAiModel,
+                IsFallback: false);
         }
-
-        var outputText = StripJsonFences(ExtractOutputText(body));
-        var ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
-            outputText,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-            ?? throw new InvalidOperationException("OpenAI yaniti okunamadi.");
-
-        return new ListingOptimizationResult(
-            local.CurrentSeoScore,
-            Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
-            NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
-            NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
-            NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
-            string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
-            local.MissingTerms,
-            NormalizeList(ai.RiskWarnings, local.RiskWarnings),
-            local.ActionChecklist.Concat(["AI onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList());
+        catch (Exception ex)
+        {
+            if (!settings.AllowSilentOfflineFallback)
+            {
+                throw new InvalidOperationException($"Seçtiğiniz OpenAI modeli ({settings.OpenAiModel}) yanıt veremedi: {ex.Message}\n\nLütfen tekrar deneyin veya AI Ayarları ekranından farklı bir model seçin.");
+            }
+            return CreateLocalFallbackResult(local, ex.Message, "OpenAI", settings.OpenAiModel);
+        }
     }
 
     private async Task<ListingOptimizationResult> OptimizeWithGeminiAsync(
@@ -141,12 +165,20 @@ internal sealed class OpenAiListingOptimizer(
         }
         catch (Exception ex)
         {
-            return CreateLocalFallbackResult(local, ex.Message);
+            if (!settings.AllowSilentOfflineFallback)
+            {
+                throw new InvalidOperationException($"Seçtiğiniz Gemini modeli ({settings.GeminiModel}) yanıt veremedi: {ex.Message}\n\nLütfen biraz sonra tekrar deneyin veya AI Ayarları ekranından farklı bir model seçin.");
+            }
+            return CreateLocalFallbackResult(local, ex.Message, "Gemini", settings.GeminiModel);
         }
 
         if (ai is null)
         {
-            return CreateLocalFallbackResult(local, "Gemini yaniti JSON olarak okunamadi.");
+            if (!settings.AllowSilentOfflineFallback)
+            {
+                throw new InvalidOperationException($"Gemini ({settings.GeminiModel}) yanıtı JSON olarak okunamadı. Lütfen tekrar deneyin.");
+            }
+            return CreateLocalFallbackResult(local, "Gemini yaniti JSON olarak okunamadi.", "Gemini", settings.GeminiModel);
         }
 
         return new ListingOptimizationResult(
@@ -158,11 +190,16 @@ internal sealed class OpenAiListingOptimizer(
             string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
             local.MissingTerms,
             NormalizeList(ai.RiskWarnings, local.RiskWarnings),
-            local.ActionChecklist.Concat(["Gemini onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList());
+            local.ActionChecklist.Concat(["Gemini onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList(),
+            ExecutedProvider: "Gemini",
+            ExecutedModel: settings.GeminiModel,
+            IsFallback: false);
     }
 
     private async Task<ListingOptimizationResult> OptimizeWithProviderAsync(
         string providerName,
+        string modelName,
+        bool allowSilentFallback,
         ListingOptimizationInput input,
         Func<string, string, CancellationToken, Task<string>> callApi,
         CancellationToken cancellationToken)
@@ -176,7 +213,12 @@ internal sealed class OpenAiListingOptimizer(
 
             if (string.IsNullOrWhiteSpace(rawText) || rawText.StartsWith("⚠️"))
             {
-                return CreateLocalFallbackResult(local, rawText ?? $"{providerName} yanıt döndürmedi.", providerName);
+                var err = rawText ?? $"{providerName} ({modelName}) yanıt döndürmedi.";
+                if (!allowSilentFallback)
+                {
+                    throw new InvalidOperationException(err);
+                }
+                return CreateLocalFallbackResult(local, err, providerName, modelName);
             }
 
             var outputText = StripJsonFences(rawText);
@@ -186,7 +228,12 @@ internal sealed class OpenAiListingOptimizer(
 
             if (ai is null)
             {
-                return CreateLocalFallbackResult(local, $"{providerName} yanıtı JSON olarak okunamadı.", providerName);
+                var err = $"{providerName} ({modelName}) yanıtı JSON olarak okunamadı.";
+                if (!allowSilentFallback)
+                {
+                    throw new InvalidOperationException(err);
+                }
+                return CreateLocalFallbackResult(local, err, providerName, modelName);
             }
 
             return new ListingOptimizationResult(
@@ -198,27 +245,40 @@ internal sealed class OpenAiListingOptimizer(
                 string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
                 local.MissingTerms,
                 NormalizeList(ai.RiskWarnings, local.RiskWarnings),
-                local.ActionChecklist.Concat([$"{providerName} önerisi yayınlanmadan önce marka/telif ve Etsy politika kontrolünden geçir."]).Distinct().ToList());
+                local.ActionChecklist.Concat([$"{providerName} önerisi yayınlanmadan önce marka/telif ve Etsy politika kontrolünden geçir."]).Distinct().ToList(),
+                ExecutedProvider: providerName,
+                ExecutedModel: modelName,
+                IsFallback: false);
         }
         catch (Exception ex)
         {
-            return CreateLocalFallbackResult(local, ex.Message, providerName);
+            if (!allowSilentFallback)
+            {
+                throw new InvalidOperationException($"Seçtiğiniz {providerName} modeli ({modelName}) yanıt veremedi: {ex.Message}\n\nLütfen tekrar deneyin veya başka bir model seçin.");
+            }
+            return CreateLocalFallbackResult(local, ex.Message, providerName, modelName);
         }
     }
 
     private static ListingOptimizationResult CreateLocalFallbackResult(
         ListingOptimizationResult local,
         string reason,
-        string providerName = "Gemini")
+        string providerName = "Gemini",
+        string modelName = "")
     {
-        var warning = $"{providerName} kullanilamadi; offline oneriler gosterildi. Neden: {reason}";
+        var modelInfo = string.IsNullOrWhiteSpace(modelName) ? providerName : $"{providerName} ({modelName})";
+        var warning = $"{modelInfo} kullanilamadi; offline kural motoru onerileri gosterildi. Neden: {reason}";
         return local with
         {
             RiskWarnings = local.RiskWarnings.Concat([warning]).Distinct().ToList(),
             ActionChecklist = local.ActionChecklist.Concat([
-                $"{providerName} gecici olarak yanit veremedigi icin sonuc offline kural motorundan aninda uretildi.",
+                $"{modelInfo} gecici olarak yanit veremedigi icin sonuc offline kural motorundan aninda uretildi.",
                 "AI Ayarlari ekraninda baska bir model (ornegin gemini-1.5-flash veya gpt-4o) secebilirsiniz.",
             ]).Distinct().ToList(),
+            ExecutedProvider = "Offline",
+            ExecutedModel = "Kural Tabanlı (Fallback)",
+            IsFallback = true,
+            FallbackReason = $"{modelInfo} yanıt veremedi: {reason}"
         };
     }
 

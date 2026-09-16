@@ -15,7 +15,11 @@ public sealed record ListingOptimizationResult(
     string DescriptionDraft,
     IReadOnlyList<string> MissingTerms,
     IReadOnlyList<string> RiskWarnings,
-    IReadOnlyList<string> ActionChecklist);
+    IReadOnlyList<string> ActionChecklist,
+    string ExecutedProvider = "Offline",
+    string ExecutedModel = "RuleBased",
+    bool IsFallback = false,
+    string? FallbackReason = null);
 
 public sealed record ListingOptimizationHistoryEntry(
     long Id,

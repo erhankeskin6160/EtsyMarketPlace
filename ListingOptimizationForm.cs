@@ -243,7 +243,11 @@ internal sealed class ListingOptimizationForm : Form
     private void ApplyResult(ListingOptimizationResult result)
     {
         _lastResult = result;
-        _scoreLabel.Text = $"SEO: {result.CurrentSeoScore}/100 -> {result.OptimizedSeoScore}/100";
+        var modelBadge = result.IsFallback
+            ? $"⚠️ Çevrimdışı ({result.FallbackReason})"
+            : $"🤖 {result.ExecutedProvider} ({result.ExecutedModel})";
+        _scoreLabel.Text = $"SEO: {result.CurrentSeoScore}/100 -> {result.OptimizedSeoScore}/100 | {modelBadge}";
+        _scoreLabel.ForeColor = result.IsFallback ? UiStyle.DangerColor : Color.FromArgb(82, 93, 110);
         _titleSuggestionsTextBox.Text = string.Join(Environment.NewLine, result.TitleSuggestions);
         _tagSuggestionsTextBox.Text = string.Join(", ", result.TagSuggestions);
         _descriptionDraftTextBox.Text = result.DescriptionDraft;

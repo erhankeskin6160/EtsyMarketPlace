@@ -27,6 +27,13 @@ internal sealed class AiOptimizationSettings
     public string PhotoRoomApiKey { get; set; } = "";
     public string PlatformToken { get; set; } = "";
 
+    /// <summary>
+    /// Canlı AI modeli hata verdiğinde (503, timeout vb.) sessizce offline kural motoruna düşülsün mü?
+    /// false (varsayılan): Kullanıcıya açıkça hata bildirilir, kullanıcının haberi olmadan offline motor çalıştırılmaz.
+    /// true: Hata anında otomatik çevrimdışı fallback devreye alınır.
+    /// </summary>
+    public bool AllowSilentOfflineFallback { get; set; } = false;
+
     public bool UseOpenAi =>
         Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase) &&
         !string.IsNullOrWhiteSpace(OpenAiApiKey);

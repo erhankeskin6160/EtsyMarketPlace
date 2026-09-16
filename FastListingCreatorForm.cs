@@ -2786,7 +2786,16 @@ internal sealed class FastListingCreatorForm : Form
             if (res.TitleSuggestions.Count > 0)
             {
                 _txtTitle.Text = res.TitleSuggestions[0];
-                _statusLabel.Text = "Başlık AI tarafından optimize edildi.";
+                if (res.IsFallback)
+                {
+                    _statusLabel.Text = $"⚠️ Başlık Çevrimdışı Motor ile üretildi ({res.FallbackReason})";
+                    _statusLabel.ForeColor = UiStyle.DangerColor;
+                }
+                else
+                {
+                    _statusLabel.Text = $"✅ Başlık {res.ExecutedProvider} ({res.ExecutedModel}) ile optimize edildi.";
+                    _statusLabel.ForeColor = UiStyle.SuccessColor;
+                }
             }
         }
         catch (Exception ex)
@@ -2811,7 +2820,16 @@ internal sealed class FastListingCreatorForm : Form
             if (res.TagSuggestions.Count > 0)
             {
                 _txtTags.Text = string.Join(", ", res.TagSuggestions.Take(13));
-                _statusLabel.Text = $"{res.TagSuggestions.Count} adet SEO tagi oluşturuldu.";
+                if (res.IsFallback)
+                {
+                    _statusLabel.Text = $"⚠️ Taglar Çevrimdışı Motor ile üretildi ({res.FallbackReason})";
+                    _statusLabel.ForeColor = UiStyle.DangerColor;
+                }
+                else
+                {
+                    _statusLabel.Text = $"✅ {res.TagSuggestions.Count} adet tag {res.ExecutedProvider} ({res.ExecutedModel}) ile oluşturuldu.";
+                    _statusLabel.ForeColor = UiStyle.SuccessColor;
+                }
             }
         }
         catch (Exception ex)
@@ -2851,7 +2869,23 @@ internal sealed class FastListingCreatorForm : Form
             {
                 var finalDesc = EtsyDescriptionFormatter.NormalizeForEtsy(res.DescriptionDraft);
                 _txtDescription.Text = finalDesc;
-                _statusLabel.Text = "Açıklama AI tarafından oluşturuldu ve standart Etsy şablonuna uyarlandı.";
+
+                if (res.IsFallback)
+                {
+                    _statusLabel.Text = $"⚠️ DİKKAT: Çevrimdışı Kural Motoru kullanıldı ({res.FallbackReason})";
+                    _statusLabel.ForeColor = UiStyle.DangerColor;
+                    MessageBox.Show(
+                        this,
+                        $"Seçtiğiniz yapay zeka modeli yanıt veremedi!\n\nNeden: {res.FallbackReason}\n\nBu açıklama AI değil, Çevrimdışı Kural Motoru tarafından üretildi.",
+                        "AI Sunucu Hatası (Çevrimdışı Yedek Devrede)",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+                else
+                {
+                    _statusLabel.Text = $"✅ Açıklama {res.ExecutedProvider} ({res.ExecutedModel}) ile üretildi.";
+                    _statusLabel.ForeColor = UiStyle.SuccessColor;
+                }
 
                 if (string.IsNullOrWhiteSpace(_txtMaterials.Text) && res.MaterialSuggestions.Count > 0)
                 {

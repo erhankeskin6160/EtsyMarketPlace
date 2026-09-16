@@ -212,4 +212,44 @@ public sealed class ListingOptimizationServiceTests
             Assert.True(title.Length >= 80 && title.Length <= 140, $"Title length was {title.Length}: '{title}'");
         }
     }
+
+    [Fact]
+    public void Optimize_ResultIncludesModelTransparencyMetadata()
+    {
+        var service = new ListingOptimizationService();
+        var result = service.Optimize(new ListingOptimizationInput(
+            "Vintage Brass Candle Holder",
+            "Handmade antique brass decor",
+            ["brass decor", "candle holder"],
+            "brass candle holder"));
+
+        Assert.Equal("Offline", result.ExecutedProvider);
+        Assert.Equal("RuleBased", result.ExecutedModel);
+        Assert.False(result.IsFallback);
+        Assert.Null(result.FallbackReason);
+    }
+
+    [Fact]
+    public void ListingOptimizationResult_CustomFallbackMetadata_CorrectlyRetained()
+    {
+        var service = new ListingOptimizationService();
+        var initial = service.Optimize(new ListingOptimizationInput(
+            "Desk Organizer",
+            "Minimalist wooden organizer",
+            ["desk decor", "wood organizer"],
+            "wood desk organizer"));
+
+        var fallback = initial with
+        {
+            ExecutedProvider = "Offline",
+            ExecutedModel = "Kural Tabanlı (Fallback)",
+            IsFallback = true,
+            FallbackReason = "Gemini (gemini-3.8-flash) yanıt veremedi: HTTP 503 Capacity unavailable"
+        };
+
+        Assert.Equal("Offline", fallback.ExecutedProvider);
+        Assert.Equal("Kural Tabanlı (Fallback)", fallback.ExecutedModel);
+        Assert.True(fallback.IsFallback);
+        Assert.Contains("HTTP 503", fallback.FallbackReason);
+    }
 }
