@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -128,7 +129,7 @@ internal sealed class FastListingCreatorForm : Form
             Padding = new Padding(12, 8, 12, 8),
             BackColor = UiStyle.BackgroundColor
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));  // Row 0: Unified Top Command & Template Bar
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));  // Row 0: Unified Top Command & Template Bar
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 1: 3 Responsive Workspace Columns
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // Row 2: Status bar
         Controls.Add(root);
@@ -170,7 +171,7 @@ internal sealed class FastListingCreatorForm : Form
             CornerRadius = 10,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
-            Padding = new Padding(10, 4, 10, 4),
+            Padding = new Padding(12, 4, 12, 4),
             Margin = new Padding(0, 0, 0, 4)
         };
 
@@ -178,6 +179,7 @@ internal sealed class FastListingCreatorForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 3,
+            RowCount = 1,
             BackColor = Color.Transparent,
             Margin = Padding.Empty
         };
@@ -185,16 +187,19 @@ internal sealed class FastListingCreatorForm : Form
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f)); // Center: Template Strip
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Right: Action Buttons
 
-        // Left: Branding & Subtitle
-        var titleBox = new FlowLayoutPanel
+        // Left: Branding & Subtitle (Structured TableLayoutPanel to prevent vertical clipping)
+        var titleContainer = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            ColumnCount = 2,
+            RowCount = 1,
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
-            Padding = new Padding(2, 4, 16, 2)
+            Padding = new Padding(0, 0, 16, 0)
         };
+        titleContainer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        titleContainer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblBadge = new Label
         {
@@ -202,39 +207,45 @@ internal sealed class FastListingCreatorForm : Form
             Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
             ForeColor = Color.White,
             BackColor = UiStyle.AiColor,
-            Padding = new Padding(6, 3, 6, 3),
-            Margin = new Padding(0, 4, 8, 0),
-            AutoSize = true
+            Padding = new Padding(6, 4, 6, 4),
+            Margin = new Padding(0, 6, 10, 6),
+            AutoSize = true,
+            TextAlign = ContentAlignment.MiddleCenter
         };
-        titleBox.Controls.Add(lblBadge);
+        titleContainer.Controls.Add(lblBadge, 0, 0);
 
         var titleStack = new TableLayoutPanel
         {
             AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             RowCount = 2,
             ColumnCount = 1,
-            Margin = Padding.Empty
+            Margin = new Padding(0, 3, 0, 3),
+            Padding = Padding.Empty
         };
+        titleStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        titleStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
         var lblTitle = new Label
         {
             Text = "Hızlı Ürün Ekle",
-            Font = new Font("Segoe UI Semibold", 10.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             AutoSize = true,
-            Margin = Padding.Empty
+            Margin = new Padding(0, 0, 0, 1)
         };
         var lblSubtitle = new Label
         {
             Text = "Etsy Listeleme & AI Görsel Stüdyosu",
-            Font = new Font("Segoe UI", 7.5F),
+            Font = new Font("Segoe UI", 7.8F),
             ForeColor = UiStyle.TextMuted,
             AutoSize = true,
-            Margin = new Padding(0, 0, 0, 0)
+            Margin = Padding.Empty
         };
         titleStack.Controls.Add(lblTitle, 0, 0);
         titleStack.Controls.Add(lblSubtitle, 0, 1);
-        titleBox.Controls.Add(titleStack);
-        header.Controls.Add(titleBox, 0, 0);
+        titleContainer.Controls.Add(titleStack, 1, 0);
+        header.Controls.Add(titleContainer, 0, 0);
 
         // Center: Template Strip inside sleek capsule
         var templateCard = new ModernCardPanel
@@ -754,7 +765,7 @@ internal sealed class FastListingCreatorForm : Form
             CornerRadius = 12,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
-            Padding = new Padding(12, 10, 12, 10),
+            Padding = new Padding(10, 8, 10, 8),
             Margin = new Padding(4, 0, 4, 0)
         };
 
@@ -765,9 +776,9 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 1
         };
         cardLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // Header Bar
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); // Header Bar
         cardLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 4));  // Divider Space
-        cardLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Main Content
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Main Content (Splitter)
 
         // 1. Header Bar with Title and Gallery Count Badge
         var headerBar = new TableLayoutPanel
@@ -796,7 +807,7 @@ internal sealed class FastListingCreatorForm : Form
         _lblGalleryCount.BackColor = Color.FromArgb(46, 32, 70);
         _lblGalleryCount.AutoSize = true;
         _lblGalleryCount.Padding = new Padding(6, 2, 6, 2);
-        _lblGalleryCount.Margin = new Padding(0, 3, 0, 0);
+        _lblGalleryCount.Margin = new Padding(0, 2, 0, 0);
         _lblGalleryCount.TextAlign = ContentAlignment.MiddleCenter;
         headerBar.Controls.Add(_lblGalleryCount, 1, 0);
         cardLayout.Controls.Add(headerBar, 0, 0);
@@ -811,24 +822,36 @@ internal sealed class FastListingCreatorForm : Form
         };
         cardLayout.Controls.Add(divider, 0, 1);
 
-        // 2. Main Center Content Table
-        var rootTable = new TableLayoutPanel
+        // 2. Responsive Resizable Splitter between Gallery (Top) & AI Studio (Bottom)
+        var centerSplit = new SplitContainer
         {
             Dock = DockStyle.Fill,
-            RowCount = 3,
-            ColumnCount = 1
+            Orientation = Orientation.Horizontal,
+            SplitterWidth = 8,
+            BackColor = Color.Transparent,
+            Panel1MinSize = 120,
+            Panel2MinSize = 210,
+            SplitterDistance = 190,
+            Margin = Padding.Empty
         };
-        rootTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        rootTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));  // Add Image Buttons Toolbar
-        rootTable.RowStyles.Add(new RowStyle(SizeType.Percent, 38));  // Gallery List
-        rootTable.RowStyles.Add(new RowStyle(SizeType.Percent, 62));  // AI Generator Box
 
-        // 1. Add Image Toolbar
+        // --- Panel 1: Image Gallery & Upload Bar ---
+        var galleryWrapper = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 2,
+            ColumnCount = 1,
+            Margin = Padding.Empty
+        };
+        galleryWrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        galleryWrapper.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // Toolbar
+        galleryWrapper.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Gallery Box
+
         var topBar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = new Padding(0, 0, 0, 3)
         };
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -836,7 +859,7 @@ internal sealed class FastListingCreatorForm : Form
         var btnBrowse = new Button
         {
             Dock = DockStyle.Fill,
-            Height = 30,
+            Height = 29,
             Text = "📂 Bilgisayardan Seç",
             Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
             BackColor = UiStyle.PrimaryColor,
@@ -852,7 +875,7 @@ internal sealed class FastListingCreatorForm : Form
         var btnFromStudio = new Button
         {
             Dock = DockStyle.Fill,
-            Height = 30,
+            Height = 29,
             Text = "🎨 Stüdyo Galerisi",
             Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
             BackColor = UiStyle.AiColor,
@@ -864,9 +887,8 @@ internal sealed class FastListingCreatorForm : Form
         btnFromStudio.FlatAppearance.BorderSize = 0;
         btnFromStudio.Click += (_, _) => OpenStudioGalleryPicker();
         topBar.Controls.Add(btnFromStudio, 1, 0);
-        rootTable.Controls.Add(topBar, 0, 0);
+        galleryWrapper.Controls.Add(topBar, 0, 0);
 
-        // 2. Gallery Flow Panel
         var galleryBox = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
@@ -874,7 +896,7 @@ internal sealed class FastListingCreatorForm : Form
             CardColor = UiStyle.InputBackground,
             BorderColor = UiStyle.BorderColor,
             Padding = new Padding(4),
-            Margin = new Padding(0, 2, 0, 4)
+            Margin = new Padding(0, 1, 0, 1)
         };
 
         _galleryScroll = new ModernScrollPanel
@@ -896,12 +918,13 @@ internal sealed class FastListingCreatorForm : Form
             if (_galleryImagePaths.Count == 0) RefreshGalleryCards();
         };
         galleryBox.Controls.Add(_galleryScroll);
-        rootTable.Controls.Add(galleryBox, 0, 1);
+        galleryWrapper.Controls.Add(galleryBox, 0, 1);
+        centerSplit.Panel1.Controls.Add(galleryWrapper);
 
         // Initial render for empty gallery
         RefreshGalleryCards();
 
-        // 3. Redesigned AI Generator Studio
+        // --- Panel 2: AI Generator Studio ---
         var aiBox = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
@@ -909,32 +932,33 @@ internal sealed class FastListingCreatorForm : Form
             CardColor = UiStyle.InputBackground,
             BorderColor = UiStyle.BorderColor,
             Padding = new Padding(8, 6, 8, 6),
-            Margin = new Padding(0, 2, 0, 0)
+            Margin = new Padding(0, 1, 0, 0)
         };
 
         var aiLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 5,
+            RowCount = 6,
             Margin = Padding.Empty
         };
         aiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); // Row 0: Section Header & Badges
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22)); // Row 0: Header & Hint
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Row 1: Style Preset Chips
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); // Row 2: Prompt Box + Title Action
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Row 3: Action Buttons (Görseli Üret & Galeriye Ekle)
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Row 4: AI Preview Frame (Fills Remaining Space!)
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); // Row 2: Prompt Header Row + Başlıktan Al
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66)); // Row 3: Multiline Prompt Input (Spacious!)
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Row 4: Action Buttons (Görseli Üret & Galeriye Ekle)
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Row 5: AI Preview Frame (Dynamic remaining space)
 
         // Row 0: Section Header & Hint
-        var headerPanel = new TableLayoutPanel
+        var aiHeaderPanel = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             Margin = Padding.Empty
         };
-        headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        aiHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        aiHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblAiTitle = new Label
         {
@@ -945,7 +969,7 @@ internal sealed class FastListingCreatorForm : Form
             TextAlign = ContentAlignment.MiddleLeft,
             AutoSize = true
         };
-        headerPanel.Controls.Add(lblAiTitle, 0, 0);
+        aiHeaderPanel.Controls.Add(lblAiTitle, 0, 0);
 
         var lblAiHint = new Label
         {
@@ -956,10 +980,10 @@ internal sealed class FastListingCreatorForm : Form
             TextAlign = ContentAlignment.MiddleRight,
             AutoSize = true
         };
-        headerPanel.Controls.Add(lblAiHint, 1, 0);
-        aiLayout.Controls.Add(headerPanel, 0, 0);
+        aiHeaderPanel.Controls.Add(lblAiHint, 1, 0);
+        aiLayout.Controls.Add(aiHeaderPanel, 0, 0);
 
-        // Row 1: Style Preset Chips (Single line modern flow)
+        // Row 1: Style Preset Chips
         var chipsPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -1004,31 +1028,38 @@ internal sealed class FastListingCreatorForm : Form
         }
         aiLayout.Controls.Add(chipsPanel, 0, 1);
 
-        // Row 2: Prompt input and Quick Title Action
-        var promptRow = new TableLayoutPanel
+        // Row 2: Prompt Header Row + "⚡ Başlıktan Al" Button
+        var promptHeaderRow = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Margin = new Padding(0, 0, 0, 3)
+            Margin = new Padding(0, 1, 0, 2)
         };
-        promptRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72f));
-        promptRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28f));
+        promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        _txtAiPrompt.Dock = DockStyle.Fill;
-        _txtAiPrompt.Font = new Font("Segoe UI", 8.5F);
-        _galleryToolTip.SetToolTip(_txtAiPrompt, "AI görsel üretimi için açıklama yazın veya yukarıdaki hazır stillerden birini seçin.");
-        promptRow.Controls.Add(_txtAiPrompt, 0, 0);
+        var lblPromptLabel = new Label
+        {
+            Text = "✍️ Prompt / Görsel Açıklaması:",
+            Font = new Font("Segoe UI Semibold", 8.2F),
+            ForeColor = UiStyle.TextDark,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoSize = true
+        };
+        promptHeaderRow.Controls.Add(lblPromptLabel, 0, 0);
 
         var btnPromptFromTitle = new Button
         {
-            Text = "⚡ Başlıktan\nPrompt Al",
-            Dock = DockStyle.Fill,
+            Text = "⚡ Başlıktan Al",
             Font = new Font("Segoe UI Semibold", 7.5F),
+            Height = 22,
+            AutoSize = true,
             BackColor = UiStyle.SecondaryColor,
             ForeColor = UiStyle.TextDark,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Margin = new Padding(3, 0, 0, 0)
+            Margin = Padding.Empty
         };
         btnPromptFromTitle.FlatAppearance.BorderColor = UiStyle.BorderColor;
         btnPromptFromTitle.Click += (_, _) =>
@@ -1043,15 +1074,21 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
         _galleryToolTip.SetToolTip(btnPromptFromTitle, "Girdiğiniz ürün başlığını kullanarak otomatik profesyonel AI prompt oluşturur.");
-        promptRow.Controls.Add(btnPromptFromTitle, 1, 0);
-        aiLayout.Controls.Add(promptRow, 0, 2);
+        promptHeaderRow.Controls.Add(btnPromptFromTitle, 1, 0);
+        aiLayout.Controls.Add(promptHeaderRow, 0, 2);
 
-        // Row 3: Action Buttons (Görseli Üret & Galeriye Ekle)
+        // Row 3: Multiline Prompt Input (Full width, 66px height, spacious & scrollable)
+        _txtAiPrompt.Dock = DockStyle.Fill;
+        _txtAiPrompt.Font = new Font("Segoe UI", 8.8F);
+        _galleryToolTip.SetToolTip(_txtAiPrompt, "AI görsel üretimi için açıklama yazın veya yukarıdaki hazır stillerden birini seçin.");
+        aiLayout.Controls.Add(_txtAiPrompt, 0, 3);
+
+        // Row 4: Action Buttons (Görseli Üret & Galeriye Ekle)
         var aiActionRow = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = new Padding(0, 2, 0, 3)
         };
         aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54f));
         aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46f));
@@ -1083,9 +1120,9 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
         aiActionRow.Controls.Add(_btnAddToGallery, 1, 0);
-        aiLayout.Controls.Add(aiActionRow, 0, 3);
+        aiLayout.Controls.Add(aiActionRow, 0, 4);
 
-        // Row 4: AI Preview Container (DockStyle.Fill - Adapts automatically without overflow)
+        // Row 5: AI Preview Container (DockStyle.Fill - Adapts automatically without overflow)
         var previewContainer = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
@@ -1104,7 +1141,7 @@ internal sealed class FastListingCreatorForm : Form
         {
             if (_picAiPreview.Image == null)
             {
-                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
                 e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
                 using var titleFont = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
@@ -1124,12 +1161,12 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
         previewContainer.Controls.Add(_picAiPreview);
-        aiLayout.Controls.Add(previewContainer, 0, 4);
+        aiLayout.Controls.Add(previewContainer, 0, 5);
 
         aiBox.Controls.Add(aiLayout);
-        rootTable.Controls.Add(aiBox, 0, 2);
+        centerSplit.Panel2.Controls.Add(aiBox);
 
-        cardLayout.Controls.Add(rootTable, 0, 2);
+        cardLayout.Controls.Add(centerSplit, 0, 2);
         card.Controls.Add(cardLayout);
         return card;
     }
