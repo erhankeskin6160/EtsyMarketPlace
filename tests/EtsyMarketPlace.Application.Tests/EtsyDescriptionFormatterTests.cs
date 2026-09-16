@@ -72,4 +72,38 @@ public sealed class EtsyDescriptionFormatterTests
         Assert.Contains("\r\n• Materials: Resin", result);
         Assert.Contains("\r\n\r\n", result);
     }
+
+    [Fact]
+    public void FormatToStandardTemplate_AdaptsHookAndAudienceForMusicTheme()
+    {
+        var raw = "Michael Jackson 3D printed statue bust height 25cm. Hand painted resin for collectors.";
+        var result = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            raw,
+            "Michael Jackson Statue King of Pop Bust",
+            ["michael jackson", "king of pop", "statue", "music gift"],
+            ["Resin", "Paint"],
+            "michael jackson");
+
+        Assert.Contains("Celebrate the legendary icon", result);
+        Assert.Contains("Dedicated music fans", result);
+        Assert.DoesNotContain("anime lovers", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("25cm", result);
+        Assert.Contains("hand painted", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FormatToStandardTemplate_AdaptsHookAndAudienceForLightingTheme()
+    {
+        var raw = "Astronaut night light 3d printed lamp with USB power cable and warm glow for bedroom.";
+        var result = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            raw,
+            "LED Astronaut Night Light Lamp",
+            ["astronaut lamp", "night light", "space decor"],
+            ["PLA", "LED"],
+            "astronaut lamp");
+
+        Assert.Contains("ambient glow", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Home decor lovers", result);
+        Assert.DoesNotContain("anime lovers", result, StringComparison.OrdinalIgnoreCase);
+    }
 }

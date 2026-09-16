@@ -22,6 +22,7 @@ internal sealed class MarketListingResult
     public int ReviewCount { get; set; }
     public decimal ReviewAverage { get; set; }
     public List<string> Tags { get; init; } = [];
+    public List<string> Materials { get; set; } = [];
     public List<string> ImageUrls { get; set; } = [];
     public List<ListingVariationOption> VariationOptions { get; set; } = [];
     public System.Drawing.Image? ThumbnailImage { get; set; }

@@ -1544,6 +1544,7 @@ internal sealed class EtsyApiClient
             var title = GetString(item, "title");
             var description = GetString(item, "description");
             var tags = GetStringArray(item, "tags");
+            var materials = GetStringArray(item, "materials");
             var favorites = GetInt(item, "num_favorers");
             var views = GetInt(item, "views");
             var quantity = GetInt(item, "quantity");
@@ -1582,6 +1583,7 @@ internal sealed class EtsyApiClient
                 ReviewCount = reviewCount,
                 ReviewAverage = reviewAverage,
                 Tags = tags,
+                Materials = materials,
                 ImageUrls = imageUrls,
                 SeoScore = seo,
                 MarketScore = marketScore,

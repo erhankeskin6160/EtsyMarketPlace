@@ -1015,6 +1015,12 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             UseWaitCursor = true;
             _statusLabel.Text = "AI taslak hazirlaniyor...";
             var listing = SelectedRow.Listing;
+            if (string.IsNullOrWhiteSpace(listing.Description) || listing.Materials.Count == 0)
+            {
+                _statusLabel.Text = "Urun detaylari ve ozellikleri aliniyor...";
+                await EnsureListingDetailsLoadedAsync(listing);
+            }
+
             var settings = AiOptimizationSettingsStore.Load();
             var input = new ListingOptimizationInput(
                 BuildDraftSourceTitle(listing),
@@ -1396,6 +1402,11 @@ internal sealed class ProductDiscoveryListingCreatorForm(
 
     private async Task FetchAndSetDescriptionAsync(MarketListingResult listing)
     {
+        await EnsureListingDetailsLoadedAsync(listing);
+    }
+
+    private async Task EnsureListingDetailsLoadedAsync(MarketListingResult listing)
+    {
         if (listing.ListingId <= 0) return;
         try
         {
@@ -1406,18 +1417,35 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             if (!string.IsNullOrWhiteSpace(fullListing.Description))
             {
                 listing.Description = fullListing.Description;
-                if (SelectedRow?.Listing.ListingId == listing.ListingId)
+            }
+            if (fullListing.Materials.Count > 0)
+            {
+                listing.Materials = fullListing.Materials;
+            }
+            if (fullListing.VariationOptions.Count > 0)
+            {
+                listing.VariationOptions = fullListing.VariationOptions;
+            }
+
+            if (SelectedRow?.Listing.ListingId == listing.ListingId)
+            {
+                if (IsHandleCreated)
                 {
-                    if (IsHandleCreated)
+                    BeginInvoke(() =>
                     {
-                        BeginInvoke(() =>
+                        if (string.IsNullOrWhiteSpace(_descriptionTextBox.Text) && !string.IsNullOrWhiteSpace(listing.Description))
                         {
-                            if (string.IsNullOrWhiteSpace(_descriptionTextBox.Text))
-                            {
-                                _descriptionTextBox.Text = EtsyDescriptionFormatter.NormalizeForEtsy(listing.Description);
-                            }
-                        });
-                    }
+                            _descriptionTextBox.Text = EtsyDescriptionFormatter.NormalizeForEtsy(listing.Description);
+                        }
+                        if (string.IsNullOrWhiteSpace(_materialsTextBox.Text) && listing.Materials.Count > 0)
+                        {
+                            _materialsTextBox.Text = string.Join(", ", listing.Materials);
+                        }
+                        if (string.IsNullOrWhiteSpace(_variationsTextBox.Text) && listing.VariationOptions.Count > 0)
+                        {
+                            _variationsTextBox.Text = BuildVariationSuggestions(listing);
+                        }
+                    });
                 }
             }
         }
@@ -1441,8 +1469,16 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             StartBusy("AI ile aciklama uretiliyor");
             _statusLabel.Text = "Yapay zeka ile aciklama uretiliyor...";
 
+            if (listing != null && (string.IsNullOrWhiteSpace(listing.Description) || listing.Materials.Count == 0))
+            {
+                _statusLabel.Text = "Urun detaylari ve ozellikleri aliniyor...";
+                await EnsureListingDetailsLoadedAsync(listing);
+            }
+
             var title = string.IsNullOrWhiteSpace(_titleTextBox.Text) ? listing?.Title ?? "" : _titleTextBox.Text;
-            var currentDesc = string.IsNullOrWhiteSpace(_descriptionTextBox.Text) ? listing?.Description ?? "" : _descriptionTextBox.Text;
+            var currentDesc = !string.IsNullOrWhiteSpace(_descriptionTextBox.Text)
+                ? _descriptionTextBox.Text
+                : (listing != null ? BuildDraftSourceDescription(listing) : "");
             var tags = string.IsNullOrWhiteSpace(_tagsTextBox.Text)
                 ? (listing?.Tags ?? [])
                 : _tagsTextBox.Text.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(t => t.Trim()).ToList();
@@ -1944,8 +1980,33 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         return listing.Title.Trim();
     }
 
-    private static string BuildDraftSourceDescription(MarketListingResult listing) =>
-        listing.Description?.Trim() ?? "";
+    private string BuildDraftSourceDescription(MarketListingResult listing)
+    {
+        var baseDesc = !string.IsNullOrWhiteSpace(_descriptionTextBox.Text)
+            ? _descriptionTextBox.Text.Trim()
+            : listing.Description?.Trim() ?? "";
+
+        var extraDetails = new StringBuilder();
+        if (listing.Materials.Count > 0)
+        {
+            extraDetails.AppendLine($"Materials: {string.Join(", ", listing.Materials)}");
+        }
+        if (listing.VariationOptions.Count > 0)
+        {
+            extraDetails.AppendLine($"Variations: {string.Join(", ", listing.VariationOptions.Select(v => $"{v.Name} ({string.Join("/", v.Values.Take(4))})"))}");
+        }
+        if (!string.IsNullOrWhiteSpace(listing.TaxonomyDisplay))
+        {
+            extraDetails.AppendLine($"Category: {listing.TaxonomyDisplay}");
+        }
+
+        if (extraDetails.Length > 0 && !baseDesc.Contains("[EXTRACTED PRODUCT SPECIFICATIONS]", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{baseDesc}\r\n\r\n[EXTRACTED PRODUCT SPECIFICATIONS]\r\n{extraDetails}".Trim();
+        }
+
+        return baseDesc;
+    }
 
     private string SelectEnglishTitle(IReadOnlyList<string> suggestions, MarketListingResult listing)
     {
@@ -2102,56 +2163,17 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         MarketListingResult listing,
         IReadOnlyList<string> materialSuggestions)
     {
-        var title = SelectRelevantTitle([listing.Title], listing);
-        var productName = ShortProductName(title);
-        var searchIntent = PrimaryKeyword();
         var materials = materialSuggestions.Count > 0
             ? materialSuggestions
-                .Where(item => item.Length > 0)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Take(5)
-                .ToList()
-            : InferMaterials(listing);
-        var materialText = string.Join(", ", materials);
-        var useCases = BuildUseCases($"{title} {listing.Description} {string.Join(' ', listing.Tags)}");
+            : listing.Materials.Count > 0 ? listing.Materials : InferMaterials(listing);
 
-        var sb = new StringBuilder();
-
-        // 1. Google SEO Hook & Product Identity (First 160-200 chars)
-        sb.AppendLine($"Elevate your collection with this premium {productName}! Designed for enthusiasts searching for {searchIntent}, this handcrafted piece combines standout aesthetics with durable craftsmanship.");
-        sb.AppendLine();
-
-        // 2. Why You'll Love It
-        sb.AppendLine("✨ WHY YOU'LL LOVE IT:");
-        sb.AppendLine($"• Expertly crafted with high-grade {materialText} for a clean, premium finish.");
-        sb.AppendLine("• Ideal for enthusiasts, tabletop displays, cosplay setups, or daily fidget practice.");
-        sb.AppendLine("• Lightweight, durable, and balanced for effortless handling and display.");
-        sb.AppendLine();
-
-        // 3. Specifications & Materials
-        sb.AppendLine("📏 SPECIFICATIONS & DETAILS:");
-        sb.AppendLine($"• Material: {materialText}");
-        sb.AppendLine("• Production: Precision 3D printed & hand-inspected before dispatch");
-        sb.AppendLine("• Finish: Smooth, high-detail finish with rich color accuracy");
-        sb.AppendLine();
-
-        // 4. Perfect Gift & Audience
-        sb.AppendLine("🎁 PERFECT GIFT FOR:");
-        sb.AppendLine($"• Great for {string.Join(", ", useCases)}");
-        sb.AppendLine("• Unique gift idea for gamers, collectors, hobbyists, birthdays, and holidays.");
-        sb.AppendLine();
-
-        // 5. Packaging & Shipping
-        sb.AppendLine("📦 PACKAGING & SHIPPING:");
-        sb.AppendLine("• Securely wrapped in protective packaging to ensure 100% safe worldwide delivery.");
-        sb.AppendLine("• Tracking number provided immediately upon dispatch.");
-        sb.AppendLine();
-
-        // 6. Custom Requests
-        sb.AppendLine("💬 CUSTOM REQUESTS & QUESTIONS:");
-        sb.AppendLine("• Need custom colors, sizing, or have questions? Feel free to send us a message anytime!");
-
-        return sb.ToString().Trim();
+        var title = SelectRelevantTitle([listing.Title], listing);
+        return EtsyDescriptionFormatter.FormatToStandardTemplate(
+            listing.Description,
+            title,
+            listing.Tags,
+            materials,
+            PrimaryKeyword());
     }
 
     private static string DraftSourceLabel(AiOptimizationSettings settings)

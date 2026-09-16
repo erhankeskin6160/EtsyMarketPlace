@@ -120,4 +120,34 @@ public sealed class ListingOptimizationServiceTests
             Assert.True(occurrences <= 2, $"Title repeated too many times ({occurrences}): '{title}'");
         }
     }
+
+    [Fact]
+    public void Optimize_LimitsTagWordRepetitionWithFacetDiversity()
+    {
+        var service = new ListingOptimizationService();
+        var result = service.Optimize(new ListingOptimizationInput(
+            "Michael Jackson Printed Statue Bust",
+            "Handmade PLA figure statue of Michael Jackson for desk display",
+            ["michael jackson", "printed figure", "king of pop", "collector gift", "desk statue"],
+            "michael jackson"));
+
+        Assert.Equal(13, result.TagSuggestions.Count);
+
+        // Check frequency of main content words across all tags
+        var words = result.TagSuggestions
+            .SelectMany(t => t.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .Where(w => w.Length > 3 && !new[] { "gift", "idea", "with", "from", "for" }.Contains(w, StringComparer.OrdinalIgnoreCase))
+            .GroupBy(w => w, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        // No root word should dominate or exceed 2-3 occurrences
+        if (words.TryGetValue("michael", out var michaelCount))
+        {
+            Assert.True(michaelCount <= 2, $"Word 'michael' appeared {michaelCount} times across tags: {string.Join(", ", result.TagSuggestions)}");
+        }
+        if (words.TryGetValue("statue", out var statueCount))
+        {
+            Assert.True(statueCount <= 2, $"Word 'statue' appeared {statueCount} times across tags: {string.Join(", ", result.TagSuggestions)}");
+        }
+    }
 }

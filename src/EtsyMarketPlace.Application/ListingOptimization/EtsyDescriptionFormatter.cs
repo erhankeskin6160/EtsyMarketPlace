@@ -152,17 +152,28 @@ public static class EtsyDescriptionFormatter
             : "High-grade materials & precision craft";
 
         var cleanSource = ExtractSourceDetails(rawDesc);
+        var theme = DetectProductTheme(cleanTitle, rawDesc, tags);
 
         var sb = new StringBuilder();
 
-        // BÖLÜM 1: Google Meta Hook & Giriş Paragrafı
-        sb.AppendLine($"Elevate your space with this unique {cleanTitle}! Tailored for shoppers searching for {target}, this handcrafted piece brings outstanding quality and distinct character to any collection or setup.");
+        // BÖLÜM 1: Google Meta Hook & Giriş Paragrafı (Kategoriye & Ürüne Özel Canlı Kanca)
+        sb.AppendLine(BuildDynamicHook(theme, cleanTitle, target));
         sb.AppendLine();
 
-        // BÖLÜM 2: Öne Çıkan Özellikler
+        // BÖLÜM 2: Öne Çıkan Özellikler (Ürünün Gerçek Özellikleri)
         sb.AppendLine("✨ WHY YOU'LL LOVE IT:");
-        sb.AppendLine($"• Premium Craftsmanship: Expertly manufactured with durable {matList} for a smooth, high-detail finish.");
-        sb.AppendLine("• Eye-Catching Display: Designed to stand out on your desk, shelf, gaming room, or living space.");
+        if (cleanSource.KeyFeatures.Count > 0)
+        {
+            foreach (var feat in cleanSource.KeyFeatures.Take(3))
+            {
+                sb.AppendLine($"• {feat}");
+            }
+        }
+        else
+        {
+            sb.AppendLine($"• Premium Craftsmanship: Expertly manufactured with durable {matList} for a smooth, high-detail finish.");
+            sb.AppendLine(BuildThemeDisplayHighlight(theme));
+        }
         sb.AppendLine("• Collector & Fan Approved: Meticulously inspected and finished with exceptional attention to detail.");
         sb.AppendLine();
 
@@ -177,6 +188,10 @@ public static class EtsyDescriptionFormatter
         {
             sb.AppendLine("• Dimensions: Standard display size (detailed dimensions available upon request).");
         }
+        if (!string.IsNullOrWhiteSpace(cleanSource.IncludedItems))
+        {
+            sb.AppendLine($"• Package Includes: {cleanSource.IncludedItems}");
+        }
         sb.AppendLine("• Finish: Clean, hand-finished surface with vibrant, durable detailing.");
         if (!string.IsNullOrWhiteSpace(cleanSource.ExtraNotes))
         {
@@ -184,10 +199,10 @@ public static class EtsyDescriptionFormatter
         }
         sb.AppendLine();
 
-        // BÖLÜM 4: Kimler İçin Uygun / Hediye
+        // BÖLÜM 4: Kimler İçin Uygun / Hediye (Ürün Temasına Özel)
         sb.AppendLine("🎁 PERFECT FOR:");
-        sb.AppendLine("• Gamers, anime lovers, cosplay enthusiasts, and novelty decor collectors.");
-        sb.AppendLine("• An unforgettable birthday, anniversary, holiday, or housewarming gift.");
+        sb.AppendLine(BuildThemeAudience(theme));
+        sb.AppendLine("• An unforgettable birthday, anniversary, holiday, or special celebration gift.");
         sb.AppendLine();
 
         // BÖLÜM 5: Güvenli Paketleme & Kargo
@@ -201,6 +216,110 @@ public static class EtsyDescriptionFormatter
         sb.AppendLine("• Looking for a custom color, size, or special personalization? Feel free to reach out anytime—we are happy to help!");
 
         return NormalizeForEtsy(sb.ToString());
+    }
+
+    private static string BuildDynamicHook(ProductTheme theme, string title, string target) => theme switch
+    {
+        ProductTheme.MusicOrCelebrity =>
+            $"Celebrate the legendary icon with this stunning {title}! Tailored for shoppers searching for {target}, this handcrafted tribute brings extraordinary detail, charisma, and presence to your space.",
+        ProductTheme.LampOrLighting =>
+            $"Transform your space with the ambient glow of this {title}! Perfect for shoppers searching for {target}, this artisan creation seamlessly blends cozy atmosphere, captivating lighting, and modern decor.",
+        ProductTheme.CosplayOrProp =>
+            $"Complete your setup with this show-stopping {title}! Specially designed for shoppers searching for {target}, this piece delivers authentic presence, fine craftsmanship, and durable detail.",
+        ProductTheme.JewelryOrWearable =>
+            $"Add a touch of distinctive artisan charm with this elegant {title}! Handcrafted for shoppers searching for {target}, this piece combines refined beauty, comfort, and timeless character.",
+        ProductTheme.GamingOrAnime =>
+            $"Level up your sanctuary with this authentic {title}! Tailored for shoppers searching for {target}, this piece brings standout craftsmanship and unmistakable character to your setup.",
+        ProductTheme.HomeDecorOrArt =>
+            $"Elevate your interior aesthetics with this handcrafted {title}! Designed for shoppers searching for {target}, this distinct showpiece brings warmth, style, and conversation-starting artistry to any room.",
+        _ =>
+            $"Elevate your space with this unique {title}! Tailored for shoppers searching for {target}, this handcrafted piece brings outstanding quality and distinct character to any collection or setup."
+    };
+
+    private static string BuildThemeDisplayHighlight(ProductTheme theme) => theme switch
+    {
+        ProductTheme.MusicOrCelebrity => "• Iconic Tribute: A must-have centerpiece for music studios, vinyl shelves, entertainment rooms, or display cabinets.",
+        ProductTheme.LampOrLighting => "• Atmospheric Ambiance: Creates a soothing, aesthetic lighting effect for desks, nightstands, and living rooms.",
+        ProductTheme.CosplayOrProp => "• Display & Cosplay Ready: Perfectly weighted and proportioned for photo shoots, cosplay events, or premium wall display.",
+        ProductTheme.GamingOrAnime => "• Battlestation Ready: Designed to sit proudly next to your PC setup, gaming console, or collector bookcase.",
+        _ => "• Eye-Catching Display: Designed to stand out on your desk, shelf, studio, or living space."
+    };
+
+    private static string BuildThemeAudience(ProductTheme theme) => theme switch
+    {
+        ProductTheme.MusicOrCelebrity =>
+            "• Dedicated music fans, pop culture enthusiasts, vinyl collectors, and tribute art lovers.",
+        ProductTheme.LampOrLighting =>
+            "• Home decor lovers, night owls, bedroom aesthetics, and cozy workspace setups.",
+        ProductTheme.CosplayOrProp =>
+            "• Cosplayers, convention goers, fantasy fans, and theatrical prop collectors.",
+        ProductTheme.JewelryOrWearable =>
+            "• Style enthusiasts, vintage jewelry collectors, and anyone who appreciates bespoke handcrafted accessories.",
+        ProductTheme.GamingOrAnime =>
+            "• Gamers, anime lovers, cosplay enthusiasts, and tabletop/novelty decor collectors.",
+        ProductTheme.HomeDecorOrArt =>
+            "• Interior design lovers, aesthetic home stylists, art enthusiasts, and modern decor collectors.",
+        _ =>
+            "• Discerning collectors, home decor enthusiasts, and fans of unique handcrafted goods."
+    };
+
+    private enum ProductTheme
+    {
+        General,
+        MusicOrCelebrity,
+        LampOrLighting,
+        CosplayOrProp,
+        GamingOrAnime,
+        JewelryOrWearable,
+        HomeDecorOrArt
+    }
+
+    private static ProductTheme DetectProductTheme(string title, string? desc, IReadOnlyList<string>? tags)
+    {
+        var blob = $"{title} {desc} {string.Join(' ', tags ?? [])}".ToLowerInvariant();
+
+        if (blob.Contains("michael jackson") || blob.Contains("singer") || blob.Contains("musician") ||
+            blob.Contains("king of pop") || blob.Contains("music legend") || blob.Contains("rock star") ||
+            blob.Contains("guitar") || blob.Contains("vinyl") || blob.Contains("concert") || blob.Contains("pop star"))
+        {
+            return ProductTheme.MusicOrCelebrity;
+        }
+
+        if (blob.Contains("lamp") || blob.Contains("night light") || blob.Contains("nightlight") ||
+            blob.Contains("led light") || blob.Contains("lantern") || blob.Contains("ambient light") ||
+            blob.Contains("desk lamp") || blob.Contains("moon lamp") || blob.Contains("table lamp"))
+        {
+            return ProductTheme.LampOrLighting;
+        }
+
+        if (blob.Contains("cosplay") || blob.Contains("prop replica") || blob.Contains("helmet") ||
+            blob.Contains("sword") || blob.Contains("dagger") || blob.Contains("shield") ||
+            blob.Contains("wearable prop") || blob.Contains("costume prop"))
+        {
+            return ProductTheme.CosplayOrProp;
+        }
+
+        if (blob.Contains("necklace") || blob.Contains("bracelet") || blob.Contains("ring") ||
+            blob.Contains("earring") || blob.Contains("pendant") || blob.Contains("jewelry"))
+        {
+            return ProductTheme.JewelryOrWearable;
+        }
+
+        if (blob.Contains("gaming") || blob.Contains("gamer") || blob.Contains("anime") ||
+            blob.Contains("manga") || blob.Contains("video game") || blob.Contains("rpg") ||
+            blob.Contains("dnd") || blob.Contains("tabletop mini"))
+        {
+            return ProductTheme.GamingOrAnime;
+        }
+
+        if (blob.Contains("vase") || blob.Contains("planter") || blob.Contains("wall art") ||
+            blob.Contains("shelf decor") || blob.Contains("home decor") || blob.Contains("candle holder") ||
+            blob.Contains("sculpture") || blob.Contains("clock"))
+        {
+            return ProductTheme.HomeDecorOrArt;
+        }
+
+        return ProductTheme.General;
     }
 
     private static bool IsSectionHeader(string line)
@@ -238,18 +357,27 @@ public static class EtsyDescriptionFormatter
         return !string.IsNullOrWhiteSpace(first) && first.Length >= 4 ? first : title.Trim();
     }
 
-    private static (string Dimensions, string ExtraNotes) ExtractSourceDetails(string? rawDesc)
+    private sealed record ExtractedDetails(
+        string Dimensions,
+        List<string> KeyFeatures,
+        string IncludedItems,
+        string ExtraNotes);
+
+    private static ExtractedDetails ExtractSourceDetails(string? rawDesc)
     {
-        if (string.IsNullOrWhiteSpace(rawDesc)) return ("", "");
+        if (string.IsNullOrWhiteSpace(rawDesc)) return new("", [], "", "");
 
         string dimensions = "";
+        string included = "";
         string extraNotes = "";
+        var features = new List<string>();
 
-        var lines = rawDesc.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        var lines = rawDesc.Split(['\r', '\n', '.', ';'], StringSplitOptions.RemoveEmptyEntries);
         foreach (var l in lines)
         {
             var line = l.Trim();
             if (line.Contains("Elevate your space", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("Elevate your collection", StringComparison.OrdinalIgnoreCase) ||
                 line.Contains("Tailored for shoppers", StringComparison.OrdinalIgnoreCase) ||
                 line.Contains("Premium Craftsmanship", StringComparison.OrdinalIgnoreCase) ||
                 line.Contains("Eye-Catching Display", StringComparison.OrdinalIgnoreCase) ||
@@ -267,32 +395,78 @@ public static class EtsyDescriptionFormatter
                 line.StartsWith("• Craftsmanship:", StringComparison.OrdinalIgnoreCase) ||
                 line.StartsWith("• Dimensions:", StringComparison.OrdinalIgnoreCase) ||
                 line.StartsWith("• Finish:", StringComparison.OrdinalIgnoreCase) ||
-                line.StartsWith("• Note:", StringComparison.OrdinalIgnoreCase))
+                line.StartsWith("• Note:", StringComparison.OrdinalIgnoreCase) ||
+                line.StartsWith("• Package Includes:", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            if (line.Contains("cm", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("inch", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("dimension", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("size", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("height", StringComparison.OrdinalIgnoreCase) ||
-                line.Contains("width", StringComparison.OrdinalIgnoreCase))
+            var cleanItem = line.TrimStart('•', '-', '*', ' ').Trim();
+            if (cleanItem.Length < 6) continue;
+
+            // Boyut ayıklama
+            if (string.IsNullOrEmpty(dimensions) &&
+                (line.Contains("cm", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("inch", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("\"") ||
+                 line.Contains("dimension", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("height:", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("width:", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("size:", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("scale:", StringComparison.OrdinalIgnoreCase)))
             {
-                if (string.IsNullOrEmpty(dimensions) && line.Length < 120)
+                if (cleanItem.Length < 140)
                 {
-                    dimensions = line.TrimStart('•', '-', '*', ' ');
+                    dimensions = cleanItem;
+                    continue;
                 }
             }
-            else if (line.Length > 30 && line.Length < 180 && string.IsNullOrEmpty(extraNotes))
+
+            // Kutu içeriği
+            if (string.IsNullOrEmpty(included) &&
+                (line.Contains("includes:", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("package includes", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("comes with", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("box includes", StringComparison.OrdinalIgnoreCase) ||
+                 line.Contains("set of", StringComparison.OrdinalIgnoreCase)))
             {
-                if (!IsSectionHeader(line))
+                if (cleanItem.Length < 140)
                 {
-                    extraNotes = line.TrimStart('•', '-', '*', ' ');
+                    included = cleanItem;
+                    continue;
                 }
+            }
+
+            // Önemli ürün nitelikleri (el boyaması, LED, özel kaplama vb.)
+            if (features.Count < 3 && cleanItem.Length is >= 15 and <= 120 &&
+                (cleanItem.Contains("hand-painted", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("hand painted", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("handcrafted", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("high detail", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("articulated", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("magnetic", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("custom", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("textured", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("durable", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("led", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("smooth finish", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("resin", StringComparison.OrdinalIgnoreCase) ||
+                 cleanItem.Contains("wood", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (!IsSectionHeader(cleanItem) && !features.Contains(cleanItem))
+                {
+                    features.Add(cleanItem);
+                    continue;
+                }
+            }
+
+            // Genel ekstra not
+            if (string.IsNullOrEmpty(extraNotes) && cleanItem.Length is >= 25 and <= 180 && !IsSectionHeader(cleanItem))
+            {
+                extraNotes = cleanItem;
             }
         }
 
-        return (dimensions, extraNotes);
+        return new ExtractedDetails(dimensions, features, included, extraNotes);
     }
 }

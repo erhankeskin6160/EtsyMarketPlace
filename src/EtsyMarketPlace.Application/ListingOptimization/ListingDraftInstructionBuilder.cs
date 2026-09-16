@@ -105,27 +105,37 @@ public static class ListingDraftInstructionBuilder
         Field constraints:
         - MULTILINGUAL INPUT & ENGLISH OUTPUT:
           * When the seller provides Turkish title, description, or tags, understand the product intent completely and translate/adapt it into high-search-volume English terminology used by global Etsy buyers.
-        - title_suggestions: exactly 3 items. All in English.
-          * GOLDEN ETSY SEO TITLE FORMULA: Format every title with 2-3 readable segments separated by " | " or " - ":
-            [Core Product Name & Standout Feature (First 40-54 characters, Front-loaded for Mobile SERP)] | [Key Features, Style, Materials or Craftsmanship] | [Target Audience, Room Decor, Cosplay or Gift Long-Tail]
-          * FRONT-LOADING (FIRST 40-54 CHARS): Mobile shoppers and Etsy SERP cards only display the first 40-54 characters before cutting off with '...'. Put the exact core product name and most critical standout feature right in this opening window.
-          * FULL LENGTH (120-138 CHARACTERS): Do NOT stop at 54 characters! You MUST utilize Etsy's full title capacity. Fill the remaining space up to 120-138 characters with high-search-volume keywords, materials, and gift/decor occasions so Etsy's search algorithm indexes the maximum search traffic. Never produce a title shorter than 100 characters.
-          * NO KEYWORD STUFFING: Do NOT produce raw comma-separated lists of tags (e.g. NEVER output "Title - tag1, tag2, tag3"). Titles must read like natural, premium human-written product titles.
+        - title_suggestions: exactly 3 items. All in English. Max 140 characters limit (ideal: 115-138 characters).
+          * NO ROBOTIC TAG CHAINS: NEVER produce raw lists of short tags joined by pipes (e.g. NEVER output "Item | Tag1 | Tag2 | Tag3 | Tag4 | Tag5 | Tag6"). Titles must read like natural, premium human-written product titles that maximize click-through rate (CTR).
+          * FRONT-LOADING (FIRST 40-54 CHARS): Put the exact core product name and primary standout feature in the opening 40-54 characters for mobile SERP display before cards truncate.
+          * FULL LENGTH (120-138 CHARACTERS): Fill the title capacity up to 120-138 characters (max 140) with descriptive keywords and gift occasions. Never produce a title shorter than 100 characters.
+          * 3 DISTINCT CREATIVE STRATEGIES:
+            1. Title 1 (High-Converting Search Hook): [Core Product & Primary Feature (First 40-45 chars)] - [Artisan Craft & Material] | [Placement, Decor & Gift Long-Tail]
+            2. Title 2 (Artisan & Aesthetic Display): [Handcrafted / Custom Showpiece Identity] | [Atmospheric Vibe & Technique] | [Collector Showcase & Room Decor]
+            3. Title 3 (Gift & Fan Occasion): [Memorable Product Name - Thoughtful Gift for Enthusiasts] | [Fine Craft Details & Occasion Keepsake]
           * NO SYSTEM PROMPT LEAKS: NEVER include instructions, metadata, or phrases like "OUTPUT LANGUAGE", "English only", "Do not write Turkish", "Title 1:", etc. in any title.
         - tag_suggestions: exactly 13 items. All in English.
-          * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase (e.g. "sauron dark tower", "lotr collectible", "fantasy desk decor", "3d printed statue", "geeky boyfriend gift").
-          * STRICTLY FORBIDDEN: NEVER generate single-word tags (such as "gift", "hand", "lotr", "tower", "dark", "painted", "printed").
+          * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase (e.g. "pop legend tribute", "80s music icon", "studio desk display", "hand poured resin", "gift for music lover").
+          * STRICTLY FORBIDDEN: NEVER generate single-word tags (such as "gift", "hand", "statue", "music", "decor").
+          * DIVERSITY & NO REPETITION (FREQUENCY CAP): Do NOT repeat the same root keyword (e.g. "michael", "statue", "lamp", "decor") across more than 2 tags! Etsy indexes all words collectively; repeating root words wastes valuable tag slots.
+          * Spread all 13 tags across 6 distinct search angles:
+            1. Core Identity & Sub-category (e.g. "pop music statue", "celebrity tribute bust")
+            2. Material & Craft Technique (e.g. "detailed resin cast", "hand painted finish")
+            3. Recipient & Gift Occasion (e.g. "gift for music lover", "80s fan birthday gift")
+            4. Room & Placement (e.g. "studio desk display", "vinyl shelf decor")
+            5. Theme, Era & Style (e.g. "retro pop culture", "vintage music icon")
+            6. Niche Alias & Long-Tail (e.g. "king of pop tribute", "moonwalk collectible")
           * Each tag must be 20 characters or less in length. Every tag must be in English.
-          * Cover 6 search angles: (1) Product/Character Name, (2) Craft & Technique, (3) Recipient & Gift, (4) Room & Placement, (5) Theme & Universe, (6) Material & Style.
         - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text (in English, e.g. "Wood", "PLA Plastic", "Resin", "Cotton"). Up to 13 items, each 45 characters or less. Never invent materials.
-        - description_draft: write a high-converting, buyer-facing English Etsy description structured in 6 clean sections with emojis:
+        - description_draft: write a bespoke, high-converting, buyer-facing English Etsy description structured in 6 clean sections with emojis:
           * FORMATTING: ALWAYS separate every section and paragraph with a blank line (\n\n). Use bullet points ("• ") for list items so text renders in clean, distinct paragraphs on Etsy mobile and web.
-          * SECTION 1 (Google Meta Hook): 2-3 engaging opening sentences naturally featuring the target keyword in the first sentence. State what makes this item unique and must-have.
-          * SECTION 2 (✨ WHY YOU'LL LOVE IT): 3-4 bullet points highlighting key benefits, design quality, and display/practical use.
-          * SECTION 3 (📏 SPECIFICATIONS & DETAILS): Extract and preserve ALL real dimensions (cm/inches), 3D print material (PLA/Resin/Wood), finish, and colors from the source description.
-          * SECTION 4 (🎁 PERFECT FOR): Who this item is for (Gamers, Collectors, Cosplay, Desk Decor, Birthday/Holiday Gifts).
+          * BESPOKE NICHE COPYWRITING: Tailor tone, vocabulary, and audience to the EXACT product! NEVER output generic gaming or anime copy unless the product is genuinely a video game or anime item. For music legends, write for music enthusiasts; for lamps, write for home ambiance; for jewelry, write for elegant accessorizing.
+          * SECTION 1 (Google Meta Hook): 2-3 engaging opening sentences naturally featuring the target keyword in the first sentence. State what makes this specific item an extraordinary must-have.
+          * SECTION 2 (✨ WHY YOU'LL LOVE IT): 3-4 bullet points highlighting key benefits, design quality, and display/practical use based on the real product features.
+          * SECTION 3 (📏 SPECIFICATIONS & DETAILS): Extract and preserve ALL real dimensions (cm/inches), scale, materials, finishes, package contents, and included components from the source description. Never omit real measurements.
+          * SECTION 4 (🎁 PERFECT FOR): Who this specific item is actually for (tailored directly to the theme, such as dedicated music fans, retro art collectors, cozy home aesthetics, or meaningful birthday/holiday gifting).
           * SECTION 5 (📦 PACKAGING & SHIPPING): Protective packaging guarantee for 100% safe worldwide delivery with tracking.
-          * SECTION 6 (💬 CUSTOM REQUESTS & QUESTIONS): Friendly call to action for custom colors or sizing.
+          * SECTION 6 (💬 CUSTOM REQUESTS & QUESTIONS): Friendly call to action for custom colors, sizing, or inquiries.
           * STRICTLY FORBIDDEN: NEVER include debug labels (such as "Selected listing title:", "Competitor description:", "Etsy search keyword:", "Target keyword:"), prompt words, or generic filler like "This item is prepared as an Etsy-ready product listing". Write directly to the customer.
         - risk_warnings: Turkish language notes. Flag any brand, character, movie, game, or fan-art terms. Include Turkish explanations in parentheses. Example: "Ben 10 ve Omnitrix terimleri telif riski tasiyabilir (Cartoon Network markasi)."
         """;

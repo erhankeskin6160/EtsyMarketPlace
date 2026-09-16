@@ -89,26 +89,25 @@ public sealed class ListingOptimizationService
 
     private static IReadOnlyList<string> BuildTagSuggestions(ListingOptimizationInput input, IReadOnlyList<string> strongTerms)
     {
-        var rawText = $"{input.Title} {input.TargetKeyword} {string.Join(' ', input.Tags)} {input.Description}";
+        var blob = $"{input.Title} {input.TargetKeyword} {string.Join(' ', input.Tags)} {input.Description}".ToLowerInvariant();
         var titleTerms = Tokenize(input.Title).ToList();
+        var candidateList = new List<string>();
 
-        var multiWordCandidates = new List<string>();
+        // 1. Hedef anahtar kelime
+        var targetNorm = NormalizeTag(input.TargetKeyword);
+        if (targetNorm.Length is >= 4 and <= 20 && targetNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
+        {
+            candidateList.Add(targetNorm);
+        }
 
-        // 1. Kullanıcının mevcut 2+ kelimelik uygun tagleri
+        // 2. Kullanıcının/rakibin mevcut 2+ kelimelik uygun tagleri
         foreach (var tag in input.Tags)
         {
             var norm = NormalizeTag(tag);
             if (norm.Length is >= 4 and <= 20 && norm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
             {
-                multiWordCandidates.Add(norm);
+                candidateList.Add(norm);
             }
-        }
-
-        // 2. Hedef anahtar kelime
-        var targetNorm = NormalizeTag(input.TargetKeyword);
-        if (targetNorm.Length is >= 4 and <= 20 && targetNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
-        {
-            multiWordCandidates.Add(targetNorm);
         }
 
         // 3. Başlıktan 2'li ve 3'lü ardışık kelime öbekleri (N-gram)
@@ -117,60 +116,204 @@ public sealed class ListingOptimizationService
             if (i + 1 < titleTerms.Count)
             {
                 var twoWord = $"{titleTerms[i]} {titleTerms[i + 1]}";
-                if (twoWord.Length is >= 5 and <= 20) multiWordCandidates.Add(twoWord);
+                if (twoWord.Length is >= 5 and <= 20) candidateList.Add(twoWord);
             }
             if (i + 2 < titleTerms.Count)
             {
                 var threeWord = $"{titleTerms[i]} {titleTerms[i + 1]} {titleTerms[i + 2]}";
-                if (threeWord.Length is >= 8 and <= 20) multiWordCandidates.Add(threeWord);
+                if (threeWord.Length is >= 8 and <= 20) candidateList.Add(threeWord);
             }
         }
 
-        // 4. Güçlü kelimelerden 2'li ve 3'lü kombinasyonlar
+        // 4. Ürün Temasına Özel Zengin Facet Tagleri (Müzik, Lamba, Cosplay, Takı, Dekor vb.)
+        var themeTags = GetThemeSpecificTags(blob);
+        candidateList.AddRange(themeTags);
+
+        // 5. Malzeme & İşçilik Facet Tagleri
+        var materials = BuildMaterialSuggestions(input);
+        foreach (var mat in materials)
+        {
+            candidateList.Add($"handmade {mat}");
+            candidateList.Add($"{mat} art piece");
+            candidateList.Add($"custom {mat} craft");
+        }
+
+        // 6. Alıcı & Hediye Facet Tagleri
+        candidateList.Add("unique gift idea");
+        candidateList.Add("birthday gift idea");
+        candidateList.Add("collector gift idea");
+        candidateList.Add("gift for him or her");
+        candidateList.Add("thoughtful present");
+
+        // 7. Mekan & Sergileme Facet Tagleri
+        candidateList.Add("home shelf decor");
+        candidateList.Add("living room display");
+        candidateList.Add("studio desk accent");
+        candidateList.Add("aesthetic desk art");
+        candidateList.Add("modern tabletop art");
+
+        // 8. Güçlü kelimelerden ikili kombinasyonlar
         for (int i = 0; i < strongTerms.Count; i++)
         {
             for (int j = i + 1; j < strongTerms.Count; j++)
             {
-                var pair1 = $"{strongTerms[i]} {strongTerms[j]}";
-                if (pair1.Length is >= 6 and <= 20) multiWordCandidates.Add(pair1);
+                var pair = $"{strongTerms[i]} {strongTerms[j]}";
+                if (pair.Length is >= 5 and <= 20) candidateList.Add(pair);
+            }
+        }
 
-                if (j + 1 < strongTerms.Count)
+        // Frequency Cap & Diversity Algoritması (Tekrarları önleme)
+        return FilterByFrequencyCap(candidateList, 13);
+    }
+
+    private static IReadOnlyList<string> FilterByFrequencyCap(IEnumerable<string> candidates, int targetCount = 13)
+    {
+        var accepted = new List<string>();
+        var wordCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        var cleanedCandidates = candidates
+            .Select(c => c.Trim().ToLowerInvariant())
+            .Where(c => c.Length is >= 4 and <= 20 && c.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // 1. Geçiş: Her anlamlı kelimenin en fazla 2 kez geçmesine izin ver
+        foreach (var cand in cleanedCandidates)
+        {
+            var words = Tokenize(cand).ToList();
+            if (words.Any(w => wordCounts.TryGetValue(w, out var count) && count >= 2))
+            {
+                continue; // Kök kelime zaten 2 kez kullanılmış, çeşitlilik için atla!
+            }
+
+            accepted.Add(cand);
+            foreach (var w in words)
+            {
+                wordCounts[w] = wordCounts.GetValueOrDefault(w) + 1;
+            }
+
+            if (accepted.Count >= targetCount) break;
+        }
+
+        // 2. Geçiş: Eğer 13 tag dolmadıysa, sınırı 3'e esnet
+        if (accepted.Count < targetCount)
+        {
+            foreach (var cand in cleanedCandidates)
+            {
+                if (accepted.Contains(cand, StringComparer.OrdinalIgnoreCase)) continue;
+
+                var words = Tokenize(cand).ToList();
+                if (words.Any(w => wordCounts.TryGetValue(w, out var count) && count >= 3))
                 {
-                    var triple = $"{strongTerms[i]} {strongTerms[j]} {strongTerms[j + 1]}";
-                    if (triple.Length is >= 8 and <= 20) multiWordCandidates.Add(triple);
+                    continue;
+                }
+
+                accepted.Add(cand);
+                foreach (var w in words)
+                {
+                    wordCounts[w] = wordCounts.GetValueOrDefault(w) + 1;
+                }
+
+                if (accepted.Count >= targetCount) break;
+            }
+        }
+
+        // 3. Geçiş: Kalan boşlukları doldur
+        if (accepted.Count < targetCount)
+        {
+            foreach (var cand in cleanedCandidates)
+            {
+                if (!accepted.Contains(cand, StringComparer.OrdinalIgnoreCase))
+                {
+                    accepted.Add(cand);
+                    if (accepted.Count >= targetCount) break;
                 }
             }
         }
 
-        // 5. Niche ve Kategoriye Özel Zengin Long-Tail Havuzu
-        var fallbackPool = new List<string>
-        {
-            "fantasy desk decor",
-            "hand painted statue",
-            "3d printed model",
-            "collectible figure",
-            "geeky boyfriend gift",
-            "nerdy room decor",
-            "tabletop miniature",
-            "custom display prop",
-            "movie fan gift",
-            "fantasy home art",
-            "unique gamer gift",
-            "handmade collector",
-            "shelf decor prop"
-        };
+        return accepted.Take(targetCount).ToList();
+    }
 
-        foreach (var fallback in fallbackPool)
+    private static List<string> GetThemeSpecificTags(string blob)
+    {
+        var list = new List<string>();
+
+        if (blob.Contains("michael jackson") || blob.Contains("singer") || blob.Contains("musician") ||
+            blob.Contains("king of pop") || blob.Contains("music legend") || blob.Contains("guitar") ||
+            blob.Contains("vinyl") || blob.Contains("pop star") || blob.Contains("concert"))
         {
-            multiWordCandidates.Add(fallback);
+            list.AddRange([
+                "80s music icon",
+                "pop legend tribute",
+                "retro music art",
+                "vinyl lover gift",
+                "studio desk display",
+                "music room decor",
+                "vintage pop star",
+                "rock memorabilia",
+                "pop culture bust",
+                "iconic singer art"
+            ]);
+        }
+        else if (blob.Contains("lamp") || blob.Contains("light") || blob.Contains("lantern") || blob.Contains("glow"))
+        {
+            list.AddRange([
+                "ambient night light",
+                "aesthetic room lamp",
+                "cozy bedside light",
+                "modern table lamp",
+                "nursery night light",
+                "mood lighting lamp",
+                "warm ambient glow",
+                "housewarming lamp"
+            ]);
+        }
+        else if (blob.Contains("cosplay") || blob.Contains("prop") || blob.Contains("helmet") || blob.Contains("sword"))
+        {
+            list.AddRange([
+                "cosplay display prop",
+                "wearable prop replica",
+                "convention costume",
+                "theatrical prop art",
+                "detailed scale model",
+                "collector display prop"
+            ]);
+        }
+        else if (blob.Contains("necklace") || blob.Contains("jewelry") || blob.Contains("ring") || blob.Contains("pendant"))
+        {
+            list.AddRange([
+                "artisan jewelry",
+                "statement necklace",
+                "handcrafted pendant",
+                "delicate charm gift",
+                "everyday accessory",
+                "custom jewelry gift"
+            ]);
+        }
+        else if (blob.Contains("gaming") || blob.Contains("gamer") || blob.Contains("anime") || blob.Contains("manga"))
+        {
+            list.AddRange([
+                "battlestation decor",
+                "gamer room accessory",
+                "anime fan gift",
+                "geeky desk display",
+                "video game art prop",
+                "collector figure prop"
+            ]);
+        }
+        else
+        {
+            list.AddRange([
+                "handcrafted sculpture",
+                "artisan shelf accent",
+                "living room art",
+                "modern home decor",
+                "unique desk display",
+                "aesthetic showpiece"
+            ]);
         }
 
-        return multiWordCandidates
-            .Select(t => t.Trim().ToLowerInvariant())
-            .Where(t => t.Length is >= 4 and <= 20 && t.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length >= 2)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(13)
-            .ToList();
+        return list;
     }
 
     private static IReadOnlyList<string> BuildTitleSuggestions(
@@ -187,33 +330,47 @@ public sealed class ListingOptimizationService
             primaryPart = rawBaseTitle;
         }
 
-        var tagsTitleCased = suggestedTags
-            .Select(ToTitleCase)
-            .Where(t => !primaryPart.Contains(t, StringComparison.OrdinalIgnoreCase))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var tag1 = tagsTitleCased.ElementAtOrDefault(0) ?? "Handcrafted Design";
-        var tag2 = tagsTitleCased.ElementAtOrDefault(1) ?? "Unique Gift Idea";
-        var tag3 = tagsTitleCased.ElementAtOrDefault(2) ?? "Display Prop & Decor";
-        var tag4 = tagsTitleCased.ElementAtOrDefault(3) ?? "Collector Edition";
-        var tag5 = tagsTitleCased.ElementAtOrDefault(4) ?? "Premium Finish";
-
         var basePrimary = ToTitleCase(primaryPart);
         var targetTitle = ToTitleCase(input.TargetKeyword);
 
-        // 1. Altın Formül: [Ana Ürün Adı & Vurucu Özellik (İlk 40-54 Krk)] | [Özellik/Kullanım] | [Kitle/Hediye] (120-138 Karakter)
-        var title1 = AssembleRichTitle(basePrimary, [tag1, tag2, $"{tag3} & {tag4}", "Gift for Fans"]);
+        var nonPrimaryTags = suggestedTags
+            .Select(ToTitleCase)
+            .Where(t => !basePrimary.Contains(t, StringComparison.OrdinalIgnoreCase))
+            .ToList();
 
-        // 2. Arama & Anahtar Kelime Odaklı 2. Başlık
-        var baseWithKeyword = basePrimary.Contains(targetTitle, StringComparison.OrdinalIgnoreCase)
+        var tagCraft = nonPrimaryTags.FirstOrDefault(t => t.Contains("Resin", StringComparison.OrdinalIgnoreCase) || t.Contains("Wood", StringComparison.OrdinalIgnoreCase) || t.Contains("Print", StringComparison.OrdinalIgnoreCase) || t.Contains("Craft", StringComparison.OrdinalIgnoreCase) || t.Contains("Hand", StringComparison.OrdinalIgnoreCase))
+            ?? nonPrimaryTags.ElementAtOrDefault(0) ?? "Handcrafted Design";
+
+        var tagDisplay = nonPrimaryTags.FirstOrDefault(t => t != tagCraft && (t.Contains("Decor", StringComparison.OrdinalIgnoreCase) || t.Contains("Desk", StringComparison.OrdinalIgnoreCase) || t.Contains("Display", StringComparison.OrdinalIgnoreCase) || t.Contains("Art", StringComparison.OrdinalIgnoreCase) || t.Contains("Room", StringComparison.OrdinalIgnoreCase) || t.Contains("Lamp", StringComparison.OrdinalIgnoreCase)))
+            ?? nonPrimaryTags.ElementAtOrDefault(1) ?? "Display Art & Decor";
+
+        var tagGift = nonPrimaryTags.FirstOrDefault(t => t != tagCraft && t != tagDisplay && (t.Contains("Gift", StringComparison.OrdinalIgnoreCase) || t.Contains("Fan", StringComparison.OrdinalIgnoreCase) || t.Contains("Collector", StringComparison.OrdinalIgnoreCase) || t.Contains("Present", StringComparison.OrdinalIgnoreCase) || t.Contains("Tribute", StringComparison.OrdinalIgnoreCase)))
+            ?? nonPrimaryTags.ElementAtOrDefault(2) ?? "Unique Collector Gift";
+
+        var tagStyle = nonPrimaryTags.FirstOrDefault(t => t != tagCraft && t != tagDisplay && t != tagGift)
+            ?? nonPrimaryTags.ElementAtOrDefault(3) ?? "Premium Finish";
+
+        // BAŞLIK 1: Arama & Yüksek Dönüşüm Odaklı (Mobil Öncelikli Hook + Zengin Niteleyiciler)
+        var title1Hook = basePrimary.Length <= 45 && !basePrimary.Contains(tagCraft, StringComparison.OrdinalIgnoreCase)
+            ? $"{basePrimary} - {tagCraft}"
+            : basePrimary;
+        var title1Candidates = new List<string> { tagDisplay, tagGift, tagStyle, "Unique Fan Present", "Artisan Collectible" };
+        foreach (var t in nonPrimaryTags) if (!title1Candidates.Contains(t)) title1Candidates.Add(t);
+        var title1 = AssembleFluidTitle(title1Hook, title1Candidates, 138);
+
+        // BAŞLIK 2: Estetik, Tasarım & Sergileme Odaklı Akıcı Başlık
+        var title2Hook = basePrimary.StartsWith("Handcrafted", StringComparison.OrdinalIgnoreCase) || basePrimary.StartsWith("Custom", StringComparison.OrdinalIgnoreCase)
             ? basePrimary
-            : $"{basePrimary} - {targetTitle}";
-        var title2 = AssembleRichTitle(baseWithKeyword, [tag2, tag4, $"{tag1} Room Decor", "Unique Gift"]);
+            : $"Handcrafted {basePrimary}";
+        var title2Candidates = new List<string> { tagStyle, $"{tagDisplay} Accent", tagGift, "Detailed Craft Art", "Aesthetic Showpiece" };
+        foreach (var t in nonPrimaryTags) if (!title2Candidates.Contains(t)) title2Candidates.Add(t);
+        var title2 = AssembleFluidTitle(title2Hook, title2Candidates, 138);
 
-        // 3. Hediye & Niche Kullanım Odaklı 3. Başlık
-        var giftHook = $"{basePrimary} | {tag3}";
-        var title3 = AssembleRichTitle(giftHook, [tag1, "Perfect Gift for Collectors & Fans", tag5, tag2]);
+        // BAŞLIK 3: Hediye & Hayran/Koleksiyoncu Odaklı Başlık
+        var title3Hook = $"{basePrimary} - {tagGift}";
+        var title3Candidates = new List<string> { tagCraft, tagDisplay, "Limited Collector Edition", "Memorable Keepsake Gift" };
+        foreach (var t in nonPrimaryTags) if (!title3Candidates.Contains(t)) title3Candidates.Add(t);
+        var title3 = AssembleFluidTitle(title3Hook, title3Candidates, 138);
 
         return new[] { title1, title2, title3 }
             .Where(title => !string.IsNullOrWhiteSpace(title))
@@ -222,13 +379,13 @@ public sealed class ListingOptimizationService
             .ToList();
     }
 
-    private static string AssembleRichTitle(string primaryHook, IReadOnlyList<string> parts, int maxLen = 138)
+    private static string AssembleFluidTitle(string hook, IReadOnlyList<string> segments, int maxLen = 138)
     {
-        var result = primaryHook.Trim();
-        foreach (var part in parts)
+        var result = hook.Trim();
+        foreach (var seg in segments)
         {
-            if (string.IsNullOrWhiteSpace(part)) continue;
-            var trimmed = part.Trim();
+            if (string.IsNullOrWhiteSpace(seg)) continue;
+            var trimmed = seg.Trim();
             if (result.Contains(trimmed, StringComparison.OrdinalIgnoreCase)) continue;
 
             var test = $"{result} | {trimmed}";

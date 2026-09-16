@@ -34,12 +34,56 @@ internal sealed class OpenAiListingOptimizer(
             throw new InvalidOperationException("Gemini API key girilmemis. AI Ayarlari ekraninda Gemini key alanini doldurun.");
         }
 
-        if (!settings.UseOpenAi)
+        if (settings.UseOpenAi)
         {
-            throw new InvalidOperationException($"{settings.Provider} adapteri henuz aktif degil. Simdilik Offline veya OpenAI kullanin.");
+            return await OptimizeWithOpenAiAsync(settings, input, cancellationToken);
         }
 
-        return await OptimizeWithOpenAiAsync(settings, input, cancellationToken);
+        if (settings.Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("OpenAI API key girilmemis. AI Ayarlari ekraninda OpenAI key alanini doldurun.");
+        }
+
+        if (settings.UseClaude)
+        {
+            return await OptimizeWithProviderAsync(
+                "Claude", input,
+                (sys, usr, ct) => AiProviderCaller.CallClaudeAsync(sys, usr, settings.ClaudeApiKey, settings.ClaudeModel, 4096, 0.4, ct),
+                cancellationToken);
+        }
+
+        if (settings.Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Claude API key girilmemis. AI Ayarlari ekraninda Claude key alanini doldurun.");
+        }
+
+        if (settings.UseDeepSeek)
+        {
+            return await OptimizeWithProviderAsync(
+                "DeepSeek", input,
+                (sys, usr, ct) => AiProviderCaller.CallDeepSeekAsync(sys, usr, settings.DeepSeekApiKey, settings.DeepSeekModel, 4096, 0.3, ct),
+                cancellationToken);
+        }
+
+        if (settings.Provider.Equals("DeepSeek", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("DeepSeek API key girilmemis. AI Ayarlari ekraninda DeepSeek key alanini doldurun.");
+        }
+
+        if (settings.UseGrok)
+        {
+            return await OptimizeWithProviderAsync(
+                "Grok", input,
+                (sys, usr, ct) => AiProviderCaller.CallGrokAsync(sys, usr, settings.GrokApiKey, settings.GrokModel, 4096, 0.4, ct),
+                cancellationToken);
+        }
+
+        if (settings.Provider.Equals("Grok", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Grok API key girilmemis. AI Ayarlari ekraninda Grok key alanini doldurun.");
+        }
+
+        return localOptimizer.Optimize(input);
     }
 
     private async Task<ListingOptimizationResult> OptimizeWithOpenAiAsync(
@@ -117,16 +161,62 @@ internal sealed class OpenAiListingOptimizer(
             local.ActionChecklist.Concat(["Gemini onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList());
     }
 
+    private async Task<ListingOptimizationResult> OptimizeWithProviderAsync(
+        string providerName,
+        ListingOptimizationInput input,
+        Func<string, string, CancellationToken, Task<string>> callApi,
+        CancellationToken cancellationToken)
+    {
+        var local = localOptimizer.Optimize(input);
+        try
+        {
+            var system = ListingDraftInstructionBuilder.BuildSystemInstruction();
+            var prompt = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input);
+            var rawText = await callApi(system, prompt, cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(rawText) || rawText.StartsWith("⚠️"))
+            {
+                return CreateLocalFallbackResult(local, rawText ?? $"{providerName} yanıt döndürmedi.", providerName);
+            }
+
+            var outputText = StripJsonFences(rawText);
+            var ai = JsonSerializer.Deserialize<AiListingOptimizationResponse>(
+                outputText,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (ai is null)
+            {
+                return CreateLocalFallbackResult(local, $"{providerName} yanıtı JSON olarak okunamadı.", providerName);
+            }
+
+            return new ListingOptimizationResult(
+                local.CurrentSeoScore,
+                Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
+                NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
+                NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
+                NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
+                string.IsNullOrWhiteSpace(ai.DescriptionDraft) ? local.DescriptionDraft : ai.DescriptionDraft.Trim(),
+                local.MissingTerms,
+                NormalizeList(ai.RiskWarnings, local.RiskWarnings),
+                local.ActionChecklist.Concat([$"{providerName} önerisi yayınlanmadan önce marka/telif ve Etsy politika kontrolünden geçir."]).Distinct().ToList());
+        }
+        catch (Exception ex)
+        {
+            return CreateLocalFallbackResult(local, ex.Message, providerName);
+        }
+    }
+
     private static ListingOptimizationResult CreateLocalFallbackResult(
         ListingOptimizationResult local,
-        string reason)
+        string reason,
+        string providerName = "Gemini")
     {
-        var warning = $"Gemini kullanilamadi; offline oneriler gosterildi. Neden: {reason}";
+        var warning = $"{providerName} kullanilamadi; offline oneriler gosterildi. Neden: {reason}";
         return local with
         {
             RiskWarnings = local.RiskWarnings.Concat([warning]).Distinct().ToList(),
             ActionChecklist = local.ActionChecklist.Concat([
-                "Gemini gecici olarak yanit veremedigi icin sonuc offline kural motorundan aninda uretildi.",
+                $"{providerName} gecici olarak yanit veremedigi icin sonuc offline kural motorundan aninda uretildi.",
                 "AI Ayarlari ekraninda baska bir model (ornegin gemini-1.5-flash veya gpt-4o) secebilirsiniz.",
             ]).Distinct().ToList(),
         };
@@ -373,11 +463,22 @@ internal sealed class OpenAiListingOptimizer(
     private static string StripJsonFences(string value)
     {
         var text = value.Trim();
-        if (!text.StartsWith("```", StringComparison.Ordinal)) return text;
-        var firstLineEnd = text.IndexOf('\n');
-        if (firstLineEnd >= 0) text = text[(firstLineEnd + 1)..];
-        var fenceIndex = text.LastIndexOf("```", StringComparison.Ordinal);
-        return fenceIndex >= 0 ? text[..fenceIndex].Trim() : text.Trim();
+        if (text.StartsWith("```", StringComparison.Ordinal))
+        {
+            var firstLineEnd = text.IndexOf('\n');
+            if (firstLineEnd >= 0) text = text[(firstLineEnd + 1)..];
+            var fenceIndex = text.LastIndexOf("```", StringComparison.Ordinal);
+            if (fenceIndex >= 0) text = text[..fenceIndex].Trim();
+        }
+
+        var startIdx = text.IndexOf('{');
+        var endIdx = text.LastIndexOf('}');
+        if (startIdx >= 0 && endIdx > startIdx)
+        {
+            return text[startIdx..(endIdx + 1)].Trim();
+        }
+
+        return text;
     }
 
     private static IReadOnlyList<string> NormalizeTitles(
