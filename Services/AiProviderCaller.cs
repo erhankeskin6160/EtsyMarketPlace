@@ -22,7 +22,8 @@ internal static class AiProviderCaller
     public static async Task<string> CallOpenAiAsync(
         string system, string user, string apiKey, string model,
         int maxTokens = 4096, double temperature = 0.5,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string moduleName = "Genel AI")
     {
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.openai.com/v1/chat/completions");
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
@@ -44,11 +45,19 @@ internal static class AiProviderCaller
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
         {
+            AiTokenUsageTrackerService.TrackBlockedOrError(moduleName, "OpenAI", model, (int)resp.StatusCode, resp.ReasonPhrase);
             string err = ExtractErrorMessage(body, resp.ReasonPhrase ?? "İstek başarısız");
             return $"⚠️ OpenAI API Hatası (HTTP {(int)resp.StatusCode}): {err}";
         }
 
         using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("usage", out var uEl))
+        {
+            int pTokens = uEl.TryGetProperty("prompt_tokens", out var p) ? p.GetInt32() : 0;
+            int cTokens = uEl.TryGetProperty("completion_tokens", out var c) ? c.GetInt32() : 0;
+            AiTokenUsageTrackerService.TrackUsage(moduleName, "OpenAI", model, pTokens, cTokens);
+        }
+
         if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
             return choices[0].GetProperty("message").GetProperty("content").GetString() ?? "";
@@ -92,6 +101,13 @@ internal static class AiProviderCaller
         if (!resp.IsSuccessStatusCode) return "";
 
         using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("usage", out var uEl))
+        {
+            int pTokens = uEl.TryGetProperty("prompt_tokens", out var p) ? p.GetInt32() : 0;
+            int cTokens = uEl.TryGetProperty("completion_tokens", out var c) ? c.GetInt32() : 0;
+            AiTokenUsageTrackerService.TrackUsage("AI Vision", "OpenAI", model, pTokens, cTokens);
+        }
+
         if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
             return choices[0].GetProperty("message").GetProperty("content").GetString() ?? "";
@@ -105,7 +121,8 @@ internal static class AiProviderCaller
     public static async Task<string> CallGeminiAsync(
         string system, string user, string apiKey, string model,
         int maxTokens = 4096, double temperature = 0.5,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string moduleName = "Genel AI")
     {
         string normalizedModel = AiModelNormalizer.NormalizeGeminiTextModel(model);
         string url = $"https://generativelanguage.googleapis.com/v1beta/models/{normalizedModel}:generateContent?key={Uri.EscapeDataString(apiKey.Trim())}";
@@ -127,6 +144,8 @@ internal static class AiProviderCaller
 
         if (!resp.IsSuccessStatusCode)
         {
+            AiTokenUsageTrackerService.TrackBlockedOrError(moduleName, "Google Gemini", normalizedModel, (int)resp.StatusCode, resp.ReasonPhrase);
+
             // Model adı bulunamadıysa (404) veya geçersiz modelse gemini-2.5-flash ile fallback dene
             if (resp.StatusCode == System.Net.HttpStatusCode.NotFound && normalizedModel != "gemini-2.5-flash")
             {
@@ -142,6 +161,12 @@ internal static class AiProviderCaller
                     if (fbResp.IsSuccessStatusCode)
                     {
                         using var fbDoc = JsonDocument.Parse(fbBody);
+                        if (fbDoc.RootElement.TryGetProperty("usageMetadata", out var fbMeta))
+                        {
+                            int pTokens = fbMeta.TryGetProperty("promptTokenCount", out var p) ? p.GetInt32() : 0;
+                            int cTokens = fbMeta.TryGetProperty("candidatesTokenCount", out var c) ? c.GetInt32() : 0;
+                            AiTokenUsageTrackerService.TrackUsage(moduleName, "Google Gemini", "gemini-2.5-flash", pTokens, cTokens);
+                        }
                         if (fbDoc.RootElement.TryGetProperty("candidates", out var fbCands) && fbCands.GetArrayLength() > 0)
                         {
                             string fbText = ExtractGeminiCandidateText(fbCands[0], "gemini-2.5-flash");
@@ -157,6 +182,13 @@ internal static class AiProviderCaller
         }
 
         using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("usageMetadata", out var meta))
+        {
+            int pTokens = meta.TryGetProperty("promptTokenCount", out var p) ? p.GetInt32() : 0;
+            int cTokens = meta.TryGetProperty("candidatesTokenCount", out var c) ? c.GetInt32() : 0;
+            AiTokenUsageTrackerService.TrackUsage(moduleName, "Google Gemini", normalizedModel, pTokens, cTokens);
+        }
+
         if (doc.RootElement.TryGetProperty("candidates", out var candidates) && candidates.GetArrayLength() > 0)
         {
             string text = ExtractGeminiCandidateText(candidates[0], normalizedModel);
@@ -216,7 +248,8 @@ internal static class AiProviderCaller
     public static async Task<string> CallClaudeAsync(
         string system, string user, string apiKey, string model,
         int maxTokens = 4096, double temperature = 0.5,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string moduleName = "Genel AI")
     {
         string normalizedModel = AiModelNormalizer.NormalizeClaudeTextModel(model);
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.anthropic.com/v1/messages");
@@ -240,11 +273,19 @@ internal static class AiProviderCaller
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
         {
+            AiTokenUsageTrackerService.TrackBlockedOrError(moduleName, "Claude", normalizedModel, (int)resp.StatusCode, resp.ReasonPhrase);
             string err = ExtractErrorMessage(body, resp.ReasonPhrase ?? "İstek başarısız");
             return $"⚠️ Claude API Hatası (HTTP {(int)resp.StatusCode}): {err}";
         }
 
         using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("usage", out var uEl))
+        {
+            int pTokens = uEl.TryGetProperty("input_tokens", out var p) ? p.GetInt32() : 0;
+            int cTokens = uEl.TryGetProperty("output_tokens", out var c) ? c.GetInt32() : 0;
+            AiTokenUsageTrackerService.TrackUsage(moduleName, "Claude", normalizedModel, pTokens, cTokens);
+        }
+
         if (doc.RootElement.TryGetProperty("content", out var content) && content.GetArrayLength() > 0)
         {
             return content[0].GetProperty("text").GetString() ?? "";
@@ -319,6 +360,13 @@ internal static class AiProviderCaller
         if (!resp.IsSuccessStatusCode) return "";
 
         using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("usage", out var uEl))
+        {
+            int pTokens = uEl.TryGetProperty("input_tokens", out var p) ? p.GetInt32() : 0;
+            int cTokens = uEl.TryGetProperty("output_tokens", out var c) ? c.GetInt32() : 0;
+            AiTokenUsageTrackerService.TrackUsage("AI Vision", "Claude", normalizedModel, pTokens, cTokens);
+        }
+
         if (doc.RootElement.TryGetProperty("content", out var content) && content.GetArrayLength() > 0)
         {
             return content[0].GetProperty("text").GetString() ?? "";
@@ -332,7 +380,8 @@ internal static class AiProviderCaller
     public static async Task<string> CallDeepSeekAsync(
         string system, string user, string apiKey, string model,
         int maxTokens = 4096, double temperature = 0.6,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string moduleName = "Genel AI")
     {
         string normalizedModel = AiModelNormalizer.NormalizeDeepSeekModel(model);
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.deepseek.com/chat/completions");
@@ -355,11 +404,19 @@ internal static class AiProviderCaller
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
         {
+            AiTokenUsageTrackerService.TrackBlockedOrError(moduleName, "DeepSeek", normalizedModel, (int)resp.StatusCode, resp.ReasonPhrase);
             string err = ExtractErrorMessage(body, resp.ReasonPhrase ?? "İstek başarısız");
             return $"⚠️ DeepSeek API Hatası (HTTP {(int)resp.StatusCode}): {err}";
         }
 
         using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("usage", out var uEl))
+        {
+            int pTokens = uEl.TryGetProperty("prompt_tokens", out var p) ? p.GetInt32() : 0;
+            int cTokens = uEl.TryGetProperty("completion_tokens", out var c) ? c.GetInt32() : 0;
+            AiTokenUsageTrackerService.TrackUsage(moduleName, "DeepSeek", normalizedModel, pTokens, cTokens);
+        }
+
         if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
             var msg = choices[0].GetProperty("message");
@@ -381,7 +438,8 @@ internal static class AiProviderCaller
     public static async Task<string> CallGrokAsync(
         string system, string user, string apiKey, string model,
         int maxTokens = 4096, double temperature = 0.5,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string moduleName = "Genel AI")
     {
         string normalizedModel = AiModelNormalizer.NormalizeGrokModel(model);
         using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.x.ai/v1/chat/completions");
@@ -404,11 +462,19 @@ internal static class AiProviderCaller
         var body = await resp.Content.ReadAsStringAsync(ct);
         if (!resp.IsSuccessStatusCode)
         {
+            AiTokenUsageTrackerService.TrackBlockedOrError(moduleName, "xAI Grok", normalizedModel, (int)resp.StatusCode, resp.ReasonPhrase);
             string err = ExtractErrorMessage(body, resp.ReasonPhrase ?? "İstek başarısız");
             return $"⚠️ xAI Grok API Hatası (HTTP {(int)resp.StatusCode}): {err}";
         }
 
         using var doc = JsonDocument.Parse(body);
+        if (doc.RootElement.TryGetProperty("usage", out var uEl))
+        {
+            int pTokens = uEl.TryGetProperty("prompt_tokens", out var p) ? p.GetInt32() : 0;
+            int cTokens = uEl.TryGetProperty("completion_tokens", out var c) ? c.GetInt32() : 0;
+            AiTokenUsageTrackerService.TrackUsage(moduleName, "xAI Grok", normalizedModel, pTokens, cTokens);
+        }
+
         if (doc.RootElement.TryGetProperty("choices", out var choices) && choices.GetArrayLength() > 0)
         {
             return choices[0].GetProperty("message").GetProperty("content").GetString() ?? "";

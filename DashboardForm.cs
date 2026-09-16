@@ -1329,6 +1329,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("profit", "Kâr Simülatörü", "💰", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
+        _sidebarNav.AddItem("ai_usage", "AI Token & Bakiye Takip", "📊", "Otomasyon & Araçlar", "YENİ");
 
         _sidebarNav.AddItem("notifications", "Bildirim & Bot Ayarları", "🔔", "Sistem");
         _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
@@ -1534,6 +1535,7 @@ internal sealed class DashboardForm : Form
             "profit" => new ProfitCalculatorForm(),
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),
+            "ai_usage" => new AiUsageDashboardForm(),
             _ => null
         };
 
