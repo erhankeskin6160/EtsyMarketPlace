@@ -370,25 +370,40 @@ internal static class UiStyle
         grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         grid.BackgroundColor = CardBackground;
         grid.BorderStyle = BorderStyle.None;
-        grid.GridColor = BorderColor;
+        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        grid.GridColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(40, 52, 74) : Color.FromArgb(226, 232, 240);
         grid.EnableHeadersVisualStyles = false;
 
         // Header Styling
         grid.ColumnHeadersHeight = 38;
-        grid.ColumnHeadersDefaultCellStyle.BackColor = BackgroundColor;
+        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        grid.ColumnHeadersDefaultCellStyle.BackColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(15, 23, 42) : Color.FromArgb(241, 245, 249);
         grid.ColumnHeadersDefaultCellStyle.ForeColor = TextMuted;
-        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
-        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = BackgroundColor;
+        grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = grid.ColumnHeadersDefaultCellStyle.BackColor;
         grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = TextMuted;
-        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.Single;
+        grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 0, 8, 0);
+        grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
 
         // Row Styling
-        grid.RowTemplate.Height = 36;
+        grid.RowTemplate.Height = 38;
         grid.DefaultCellStyle.BackColor = CardBackground;
         grid.DefaultCellStyle.ForeColor = TextDark;
-        grid.DefaultCellStyle.SelectionBackColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(49, 46, 129) : Color.FromArgb(238, 242, 255); // Indigo 900/100 tint
-        grid.DefaultCellStyle.SelectionForeColor = Color.White;
+        grid.DefaultCellStyle.SelectionBackColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(49, 46, 129) : Color.FromArgb(224, 231, 255); // Indigo 900/100 tint
+        grid.DefaultCellStyle.SelectionForeColor = CurrentTheme == AppTheme.Dark ? Color.White : Color.FromArgb(15, 23, 42);
         grid.DefaultCellStyle.Font = BaseFont;
+        grid.DefaultCellStyle.Padding = new Padding(8, 2, 8, 2);
+        grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+
+        // Alternating row styling (subtle zebra striping)
+        grid.AlternatingRowsDefaultCellStyle.BackColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(24, 34, 53) : Color.FromArgb(248, 250, 252);
+        grid.AlternatingRowsDefaultCellStyle.ForeColor = TextDark;
+        grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = grid.DefaultCellStyle.SelectionBackColor;
+        grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = grid.DefaultCellStyle.SelectionForeColor;
+        grid.AlternatingRowsDefaultCellStyle.Font = BaseFont;
+        grid.AlternatingRowsDefaultCellStyle.Padding = new Padding(8, 2, 8, 2);
+        grid.AlternatingRowsDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
         try
         {

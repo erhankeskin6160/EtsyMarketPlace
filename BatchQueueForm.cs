@@ -306,16 +306,16 @@ internal sealed class BatchQueueForm : Form
         _grid.MultiSelect = true;
 
         _grid.Columns.Clear();
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "ID", DataPropertyName = nameof(BatchGridRow.Id), Width = 45 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Listing ID", DataPropertyName = nameof(BatchGridRow.ListingId), Width = 95 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Orijinal Başlık", DataPropertyName = nameof(BatchGridRow.OriginalTitle), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Anahtar Kelime", DataPropertyName = nameof(BatchGridRow.TargetKeyword), Width = 110 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Kuyruk", DataPropertyName = nameof(BatchGridRow.Status), Width = 95 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Etsy Durumu", DataPropertyName = nameof(BatchGridRow.SyncStatus), Width = 110 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "A/B Test", DataPropertyName = nameof(BatchGridRow.AbTestInfo), Width = 120 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Puan", DataPropertyName = nameof(BatchGridRow.Score), Width = 50 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Kayıt Tarihi", DataPropertyName = nameof(BatchGridRow.Created), Width = 100 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Canlı Senkron", DataPropertyName = nameof(BatchGridRow.SyncedAt), Width = 105 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "ID", DataPropertyName = nameof(BatchGridRow.Id), Width = 55 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Listing ID", DataPropertyName = nameof(BatchGridRow.ListingId), Width = 105 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Orijinal Başlık", DataPropertyName = nameof(BatchGridRow.OriginalTitle), AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, MinimumWidth = 180 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Anahtar Kelime", DataPropertyName = nameof(BatchGridRow.TargetKeyword), Width = 120 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Kuyruk", DataPropertyName = nameof(BatchGridRow.Status), Width = 105 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Etsy Durumu", DataPropertyName = nameof(BatchGridRow.SyncStatus), Width = 115 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "A/B Test", DataPropertyName = nameof(BatchGridRow.AbTestInfo), Width = 125 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Puan", DataPropertyName = nameof(BatchGridRow.Score), Width = 60 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Kayıt Tarihi", DataPropertyName = nameof(BatchGridRow.Created), Width = 115 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Canlı Senkron", DataPropertyName = nameof(BatchGridRow.SyncedAt), Width = 115 });
 
         _grid.DataSource = _bindingSource;
     }

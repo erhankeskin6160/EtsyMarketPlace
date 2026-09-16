@@ -539,27 +539,9 @@ internal sealed class CompetitorAndTrendSpyForm : Form
 
     private void ConfigureCompetitorGrid()
     {
-        _competitorGrid.Dock = DockStyle.Fill;
-        _competitorGrid.BackgroundColor = Color.FromArgb(20, 29, 47);
-        _competitorGrid.BorderStyle = BorderStyle.None;
-        _competitorGrid.RowHeadersVisible = false;
-        _competitorGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        UiStyle.ConfigureBaseGrid(_competitorGrid);
         _competitorGrid.MultiSelect = false;
-        _competitorGrid.ReadOnly = true;
-        _competitorGrid.AllowUserToAddRows = false;
-        _competitorGrid.EnableHeadersVisualStyles = false;
         _competitorGrid.RowTemplate.Height = 52;
-
-        _competitorGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 41, 59);
-        _competitorGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(226, 232, 240);
-        _competitorGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8.5F);
-        _competitorGrid.ColumnHeadersHeight = 30;
-
-        _competitorGrid.DefaultCellStyle.BackColor = Color.FromArgb(20, 29, 47);
-        _competitorGrid.DefaultCellStyle.ForeColor = Color.FromArgb(241, 245, 249);
-        _competitorGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(37, 99, 235);
-        _competitorGrid.DefaultCellStyle.SelectionForeColor = Color.White;
-        _competitorGrid.DefaultCellStyle.Font = new Font("Segoe UI", 8.5F);
 
         _competitorGrid.Columns.Clear();
 
@@ -567,26 +549,26 @@ internal sealed class CompetitorAndTrendSpyForm : Form
         _competitorGrid.Columns.Add(new DataGridViewImageColumn
         {
             HeaderText = "Görsel",
-            Width = 52,
+            Width = 56,
             ImageLayout = DataGridViewImageCellLayout.Zoom,
         });
 
         // 1: Rank (#)
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "#", Width = 32 });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "#", Width = 38 });
         // 2: Başlık
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ürün Başlığı", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Ürün Başlığı", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, MinimumWidth = 180 });
         // 3: Fiyat
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Fiyat", Width = 75 });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Fiyat", Width = 85 });
         // 4: EverBee Tahmini Aylık Satış
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Aylık Satış", Width = 85 });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Aylık Satış", Width = 95 });
         // 5: EverBee Tahmini Aylık Ciro
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Aylık Ciro", Width = 85 });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Aylık Ciro", Width = 95 });
         // 6: Favori
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Favori", Width = 60 });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Favori", Width = 75 });
         // 7: Görüntülenme
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Görüntüleme", Width = 75 });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Görüntüleme", Width = 95 });
         // 8: eRank LQS Notu
-        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "LQS", Width = 45 });
+        _competitorGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "LQS", Width = 55 });
 
         _competitorGrid.SelectionChanged += (_, _) => OnListingSelected();
         _competitorGrid.CellDoubleClick += (_, e) =>
@@ -906,31 +888,14 @@ internal sealed class CompetitorAndTrendSpyForm : Form
 
     private void ConfigureTagsGrid()
     {
-        _tagsGrid.Dock = DockStyle.Fill;
-        _tagsGrid.BackgroundColor = Color.FromArgb(20, 29, 47);
-        _tagsGrid.BorderStyle = BorderStyle.None;
-        _tagsGrid.RowHeadersVisible = false;
-        _tagsGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        UiStyle.ConfigureBaseGrid(_tagsGrid);
         _tagsGrid.MultiSelect = true;
-        _tagsGrid.ReadOnly = true;
-        _tagsGrid.AllowUserToAddRows = false;
-        _tagsGrid.EnableHeadersVisualStyles = false;
-        _tagsGrid.RowTemplate.Height = 24;
-
-        _tagsGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(30, 41, 59);
-        _tagsGrid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(226, 232, 240);
-        _tagsGrid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8F);
-        _tagsGrid.ColumnHeadersHeight = 26;
-
-        _tagsGrid.DefaultCellStyle.BackColor = Color.FromArgb(20, 29, 47);
-        _tagsGrid.DefaultCellStyle.ForeColor = Color.FromArgb(241, 245, 249);
-        _tagsGrid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(37, 99, 235);
-        _tagsGrid.DefaultCellStyle.Font = new Font("Segoe UI", 8F);
+        _tagsGrid.RowTemplate.Height = 28;
 
         _tagsGrid.Columns.Clear();
         _tagsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "🏷️ Kazandıran Tag", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _tagsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Adet", Width = 45 });
-        _tagsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Oran %", Width = 55 });
+        _tagsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Adet", Width = 55 });
+        _tagsGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Oran %", Width = 65 });
     }
 
     private void ResetCompetitorKpis()

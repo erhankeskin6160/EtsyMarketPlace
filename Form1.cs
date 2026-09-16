@@ -158,22 +158,10 @@ public partial class Form1 : Form
         commandPanel.Controls.Add(CreateCommandButton("Manuel Veri", (_, _) => OpenManualCompetitor()), 1, 2);
         root.Controls.Add(commandPanel, 0, 2);
 
-        _grid = new DataGridView
-        {
-            Dock = DockStyle.Fill,
-            AutoGenerateColumns = false,
-            AllowUserToAddRows = false,
-            AllowUserToDeleteRows = false,
-            AllowUserToResizeRows = false,
-            ReadOnly = true,
-            MultiSelect = false,
-            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-            RowHeadersVisible = false,
-            BackgroundColor = Color.White,
-            BorderStyle = BorderStyle.FixedSingle,
-            AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells,
-        };
-        _grid.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 9.5F);
+        _grid = new DataGridView();
+        UiStyle.ConfigureBaseGrid(_grid);
+        _grid.MultiSelect = false;
+        _grid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
         _grid.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         _grid.DataSource = _bindingSource;
         _grid.SelectionChanged += (_, _) => UpdateDetail();

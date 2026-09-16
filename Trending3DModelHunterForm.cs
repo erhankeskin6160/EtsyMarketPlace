@@ -717,35 +717,9 @@ public sealed class Trending3DModelHunterForm : Form
         _grid.BorderStyle = BorderStyle.None;
         _grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
         _grid.GridColor = Color.FromArgb(30, 41, 59);
-        _grid.RowHeadersVisible = false;
-        _grid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+        UiStyle.ConfigureBaseGrid(_grid);
         _grid.MultiSelect = false;
-        _grid.AllowUserToAddRows = false;
-        _grid.AllowUserToDeleteRows = false;
-        _grid.ReadOnly = true;
         _grid.RowTemplate.Height = 44;
-        _grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-        _grid.ColumnHeadersHeight = 36;
-        _grid.EnableHeadersVisualStyles = false;
-
-        _grid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
-        {
-            BackColor = Color.FromArgb(15, 23, 42),
-            ForeColor = Color.FromArgb(148, 163, 184),
-            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-            Alignment = DataGridViewContentAlignment.MiddleLeft,
-            Padding = new Padding(6, 0, 0, 0)
-        };
-
-        _grid.DefaultCellStyle = new DataGridViewCellStyle
-        {
-            BackColor = Color.FromArgb(20, 27, 45),
-            ForeColor = Color.FromArgb(241, 245, 249),
-            SelectionBackColor = Color.FromArgb(49, 46, 129),
-            SelectionForeColor = Color.White,
-            Font = new Font("Segoe UI", 9F),
-            Padding = new Padding(6, 0, 0, 0)
-        };
 
         _grid.Columns.Add("colPlatform", "Platform");
         _grid.Columns.Add("colShopFit", "🎯 Mağaza Uyumu");

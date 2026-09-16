@@ -221,14 +221,8 @@ internal sealed class AutomationReportingForm(
 
     private void ConfigureOpportunityQueueGrid()
     {
-        _queueGrid.Dock = DockStyle.Fill;
-        _queueGrid.AutoGenerateColumns = false;
-        _queueGrid.AllowUserToAddRows = false;
-        _queueGrid.AllowUserToDeleteRows = false;
+        UiStyle.ConfigureBaseGrid(_queueGrid);
         _queueGrid.ReadOnly = false;
-        _queueGrid.RowHeadersVisible = false;
-        _queueGrid.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-        _queueGrid.BackgroundColor = Color.White;
         _queueGrid.DataSource = _queueBindingSource;
         _queueGrid.CellDoubleClick += (_, _) => OpenSelectedQueueUrl();
         _queueGrid.Columns.Add(new DataGridViewCheckBoxColumn

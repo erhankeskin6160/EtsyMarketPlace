@@ -831,12 +831,12 @@ internal sealed class DashboardForm : Form
     private void ConfigureRecentOrdersGrid()
     {
         _gridRecentOrders.Columns.Clear();
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tarih", DataPropertyName = "DateStr", Width = 80 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sipariş No", DataPropertyName = "ReceiptIdStr", Width = 95 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Satılan Ürün", DataPropertyName = "ProductTitle", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Adet", DataPropertyName = "Quantity", Width = 50 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tutar ($)", DataPropertyName = "TotalUSDStr", Width = 85 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Net Kâr ($ / ₺)", DataPropertyName = "NetProfitCombinedStr", Width = 145 });
+        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tarih", DataPropertyName = "DateStr", Width = 95 });
+        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sipariş No", DataPropertyName = "ReceiptIdStr", Width = 105 });
+        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Satılan Ürün", DataPropertyName = "ProductTitle", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, MinimumWidth = 140 });
+        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Adet", DataPropertyName = "Quantity", Width = 60 });
+        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tutar ($)", DataPropertyName = "TotalUSDStr", Width = 95 });
+        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Net Kâr ($ / ₺)", DataPropertyName = "NetProfitCombinedStr", Width = 155 });
 
         _gridRecentOrders.Columns[0].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
         _gridRecentOrders.Columns[3].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;

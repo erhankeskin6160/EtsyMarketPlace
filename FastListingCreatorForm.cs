@@ -181,9 +181,9 @@ internal sealed class FastListingCreatorForm : Form
             BackColor = Color.Transparent,
             Margin = Padding.Empty
         };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36)); // Left: Branding
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 36)); // Center: Template Strip
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28)); // Right: Action Buttons
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Left: Branding
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f)); // Center: Template Strip
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Right: Action Buttons
 
         // Left: Branding & Subtitle
         var titleBox = new FlowLayoutPanel
@@ -193,7 +193,7 @@ internal sealed class FastListingCreatorForm : Form
             WrapContents = false,
             AutoSize = true,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 4, 0, 0)
+            Padding = new Padding(0, 4, 12, 0)
         };
 
         var lblBadge = new Label
@@ -244,7 +244,7 @@ internal sealed class FastListingCreatorForm : Form
             WrapContents = false,
             AutoSize = true,
             Margin = Padding.Empty,
-            Padding = new Padding(4, 5, 0, 0)
+            Padding = new Padding(8, 5, 0, 0)
         };
 
         templateFlow.Controls.Add(new Label
@@ -257,7 +257,8 @@ internal sealed class FastListingCreatorForm : Form
         });
 
         _cboTemplates.Font = new Font("Segoe UI", 8.5F);
-        _cboTemplates.Width = 160;
+        _cboTemplates.Width = 145;
+        _cboTemplates.DropDownWidth = 220;
         _cboTemplates.Margin = new Padding(0, 2, 4, 0);
         templateFlow.Controls.Add(_cboTemplates);
 
@@ -453,12 +454,12 @@ internal sealed class FastListingCreatorForm : Form
             Height = 52,
             Margin = new Padding(0, 0, 0, 6)
         };
-        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 38));
-        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 31));
-        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 31));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 29));
+        topRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 29));
 
         _cboListingType.Items.Clear();
-        _cboListingType.Items.AddRange(["Fiziksel Ürün", "Dijital Ürün"]);
+        _cboListingType.Items.AddRange(["📦 Fiziksel", "💻 Dijital"]);
         _cboListingType.SelectedIndex = 0;
         _cboListingType.Dock = DockStyle.Fill;
         topRow.Controls.Add(CreateLabeledControl("Ürün Tipi:", _cboListingType), 0, 0);
@@ -576,26 +577,27 @@ internal sealed class FastListingCreatorForm : Form
         _galleryToolTip.SetToolTip(_txtCustomTaxonomy, "Özel Etsy Taxonomy / Kategori ID numarası");
         stack.Controls.Add(_txtCustomTaxonomy);
 
-        var logisticsRow = new TableLayoutPanel
+        var logisticsStack = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
-            ColumnCount = 2,
-            Height = 52,
+            ColumnCount = 1,
+            AutoSize = true,
             Margin = new Padding(0, 0, 0, 6)
         };
-        logisticsRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        logisticsRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        logisticsStack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
-        _cboShippingProfile.Dock = DockStyle.Fill;
+        _cboShippingProfile.Dock = DockStyle.Top;
         _cboShippingProfile.Font = new Font("Segoe UI", 8.8F);
         _cboShippingProfile.DisplayMember = nameof(EtsyShippingProfileOption.DisplayName);
-        logisticsRow.Controls.Add(CreateLabeledControl("🚚 Kargo Profili:", _cboShippingProfile), 0, 0);
+        _cboShippingProfile.Margin = new Padding(0, 2, 0, 4);
+        logisticsStack.Controls.Add(CreateLabeledControl("🚚 Kargo Profili:", _cboShippingProfile));
 
-        _cboReadinessState.Dock = DockStyle.Fill;
+        _cboReadinessState.Dock = DockStyle.Top;
         _cboReadinessState.Font = new Font("Segoe UI", 8.8F);
         _cboReadinessState.DisplayMember = nameof(EtsyReadinessStateOption.DisplayName);
-        logisticsRow.Controls.Add(CreateLabeledControl("⏱️ Hazırlık Durumu:", _cboReadinessState), 1, 0);
-        stack.Controls.Add(logisticsRow);
+        _cboReadinessState.Margin = new Padding(0, 2, 0, 4);
+        logisticsStack.Controls.Add(CreateLabeledControl("⏱️ Hazırlık Durumu:", _cboReadinessState));
+        stack.Controls.Add(logisticsStack);
 
         // --- SECTION 4: Arama Etiketleri (Tags - Maks 13) ---
         var tagHeader = new TableLayoutPanel
@@ -1369,26 +1371,12 @@ internal sealed class FastListingCreatorForm : Form
         _pnlVariationPricing.Controls.Add(topFlow, 0, 0);
 
         // Grid setup
-        _gridVariationPricing.Dock = DockStyle.Fill;
-        _gridVariationPricing.BackgroundColor = UiStyle.CardBackground;
-        _gridVariationPricing.GridColor = UiStyle.BorderColor;
-        _gridVariationPricing.BorderStyle = BorderStyle.FixedSingle;
-        _gridVariationPricing.RowHeadersVisible = false;
-        _gridVariationPricing.AllowUserToAddRows = false;
-        _gridVariationPricing.AllowUserToDeleteRows = false;
-        _gridVariationPricing.AllowUserToResizeRows = false;
+        UiStyle.ConfigureBaseGrid(_gridVariationPricing);
+        _gridVariationPricing.ReadOnly = false;
         _gridVariationPricing.EditMode = DataGridViewEditMode.EditOnEnter;
         _gridVariationPricing.SelectionMode = DataGridViewSelectionMode.CellSelect;
         _gridVariationPricing.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        _gridVariationPricing.Font = new Font("Segoe UI", 8F);
-        _gridVariationPricing.EnableHeadersVisualStyles = false;
-        _gridVariationPricing.ColumnHeadersDefaultCellStyle.BackColor = UiStyle.SecondaryColor;
-        _gridVariationPricing.ColumnHeadersDefaultCellStyle.ForeColor = UiStyle.TextDark;
-        _gridVariationPricing.ColumnHeadersDefaultCellStyle.Font = new Font("Segoe UI Semibold", 8F);
-        _gridVariationPricing.DefaultCellStyle.BackColor = UiStyle.CardBackground;
-        _gridVariationPricing.DefaultCellStyle.ForeColor = UiStyle.TextDark;
-        _gridVariationPricing.DefaultCellStyle.SelectionBackColor = UiStyle.PrimaryColor;
-        _gridVariationPricing.DefaultCellStyle.SelectionForeColor = Color.White;
+        _gridVariationPricing.RowTemplate.Height = 32;
 
         _gridVariationPricing.Columns.Clear();
         var colKey = new DataGridViewTextBoxColumn
