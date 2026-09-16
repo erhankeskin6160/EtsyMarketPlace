@@ -204,11 +204,11 @@ internal sealed class FastListingCreatorForm : Form
         var lblBadge = new Label
         {
             Text = "⚡ AI STUDIO",
-            Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
             ForeColor = Color.White,
             BackColor = UiStyle.AiColor,
-            Padding = new Padding(6, 4, 6, 4),
-            Margin = new Padding(0, 6, 10, 6),
+            Padding = new Padding(8, 4, 8, 4),
+            Margin = new Padding(0, 6, 14, 6),
             AutoSize = true,
             TextAlign = ContentAlignment.MiddleCenter
         };
@@ -229,7 +229,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblTitle = new Label
         {
             Text = "Hızlı Ürün Ekle",
-            Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 12F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 1)
@@ -237,7 +237,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblSubtitle = new Label
         {
             Text = "Etsy Listeleme & AI Görsel Stüdyosu",
-            Font = new Font("Segoe UI", 7.8F),
+            Font = new Font("Segoe UI", 8.2F),
             ForeColor = UiStyle.TextMuted,
             AutoSize = true,
             Margin = Padding.Empty
@@ -418,7 +418,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblTitle = new Label
         {
             Text = "📝 1. Ürün & SEO Bilgileri",
-            Font = new Font("Segoe UI Semibold", 9.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
@@ -504,8 +504,8 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             ColumnCount = 2,
             RowCount = 1,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 32,
+            Margin = new Padding(0, 4, 0, 4)
         };
         titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         titleHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -519,17 +519,18 @@ internal sealed class FastListingCreatorForm : Form
             Margin = Padding.Empty
         };
         var lblTitleSec = CreateSectionHeaderLabel("✍️ Ürün Başlığı (SEO)");
-        lblTitleSec.Margin = new Padding(0, 2, 4, 0);
+        lblTitleSec.Margin = new Padding(0, 3, 4, 0);
         _lblTitleCounter.Text = "0 / 140";
-        _lblTitleCounter.Font = new Font("Segoe UI Semibold", 8F);
+        _lblTitleCounter.Font = new Font("Segoe UI Semibold", 8.2F);
         _lblTitleCounter.ForeColor = UiStyle.TextMuted;
         _lblTitleCounter.AutoSize = true;
-        _lblTitleCounter.Margin = new Padding(0, 4, 0, 0);
+        _lblTitleCounter.Margin = new Padding(0, 5, 0, 0);
         titleLeftFlow.Controls.Add(lblTitleSec);
         titleLeftFlow.Controls.Add(_lblTitleCounter);
         titleHeader.Controls.Add(titleLeftFlow, 0, 0);
 
-        var btnAiTitle = CreateModernActionButton("✨ AI Başlık Öner", UiStyle.AiColor, UiStyle.AiHover, Color.White, 25);
+        var btnAiTitle = CreateModernActionButton("✨ AI Başlık Öner", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        btnAiTitle.Margin = new Padding(8, 2, 2, 2);
         btnAiTitle.Click += async (_, _) => await SuggestAiTitleAsync();
         _galleryToolTip.SetToolTip(btnAiTitle, "Ürün için Etsy SEO algoritmasına uyumlu optimize edilmiş başlık önerir.");
         titleHeader.Controls.Add(btnAiTitle, 1, 0);
@@ -550,17 +551,18 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             ColumnCount = 2,
             RowCount = 1,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 32,
+            Margin = new Padding(0, 6, 0, 4)
         };
         sec3Header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         sec3Header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblSec3 = CreateSectionHeaderLabel("📂 Kategori & Lojistik");
-        lblSec3.Margin = new Padding(0, 2, 0, 0);
+        lblSec3.Margin = new Padding(0, 3, 0, 0);
         sec3Header.Controls.Add(lblSec3, 0, 0);
 
-        var btnAiCategory = CreateModernActionButton("✨ AI Kategori Belirle", UiStyle.AiColor, UiStyle.AiHover, Color.White, 25);
+        var btnAiCategory = CreateModernActionButton("✨ AI Kategori Belirle", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        btnAiCategory.Margin = new Padding(8, 2, 2, 2);
         btnAiCategory.Click += async (_, _) => await SuggestAiCategoryAsync();
         _galleryToolTip.SetToolTip(btnAiCategory, "Başlık ve ürün görsellerini analiz ederek en uygun Etsy kategorisini belirler.");
         sec3Header.Controls.Add(btnAiCategory, 1, 0);
@@ -630,8 +632,8 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             ColumnCount = 2,
             RowCount = 1,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 32,
+            Margin = new Padding(0, 6, 0, 4)
         };
         tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         tagHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -645,12 +647,12 @@ internal sealed class FastListingCreatorForm : Form
             Margin = Padding.Empty
         };
         var lblTagSec = CreateSectionHeaderLabel("🏷️ Etiketler (Tags)");
-        lblTagSec.Margin = new Padding(0, 2, 4, 0);
+        lblTagSec.Margin = new Padding(0, 3, 4, 0);
         _lblTagCounter.Text = "0 / 13";
-        _lblTagCounter.Font = new Font("Segoe UI Semibold", 8F);
+        _lblTagCounter.Font = new Font("Segoe UI Semibold", 8.2F);
         _lblTagCounter.ForeColor = UiStyle.TextMuted;
         _lblTagCounter.AutoSize = true;
-        _lblTagCounter.Margin = new Padding(0, 4, 0, 0);
+        _lblTagCounter.Margin = new Padding(0, 5, 0, 0);
         tagLeftFlow.Controls.Add(lblTagSec);
         tagLeftFlow.Controls.Add(_lblTagCounter);
         tagHeader.Controls.Add(tagLeftFlow, 0, 0);
@@ -665,11 +667,13 @@ internal sealed class FastListingCreatorForm : Form
             Padding = Padding.Empty
         };
 
-        var btnAiTags = CreateModernActionButton("✨ 13 AI Tag", UiStyle.AiColor, UiStyle.AiHover, Color.White, 25);
+        var btnAiTags = CreateModernActionButton("✨ 13 AI Tag", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        btnAiTags.Margin = new Padding(6, 2, 2, 2);
         btnAiTags.Click += async (_, _) => await SuggestAiTagsAsync();
         _galleryToolTip.SetToolTip(btnAiTags, "Ürününüz için en uygun 13 Etsy etiketini AI ile otomatik üretir.");
 
-        var btnCleanTags = CreateModernActionButton("🧹 Kırp", UiStyle.SecondaryColor, UiStyle.SecondaryHover, UiStyle.TextDark, 25);
+        var btnCleanTags = CreateModernActionButton("🧹 Kırp", UiStyle.SecondaryColor, UiStyle.SecondaryHover, UiStyle.TextDark, 26);
+        btnCleanTags.Margin = new Padding(2, 2, 6, 2);
         btnCleanTags.FlatAppearance.BorderSize = 1;
         btnCleanTags.FlatAppearance.BorderColor = UiStyle.BorderColor;
         btnCleanTags.Click += (_, _) => CleanAndFormatTags();
@@ -701,17 +705,18 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Top,
             ColumnCount = 2,
             RowCount = 1,
-            Height = 28,
-            Margin = new Padding(0, 2, 0, 2)
+            Height = 32,
+            Margin = new Padding(0, 6, 0, 4)
         };
         descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         descHeader.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         var lblDescSec = CreateSectionHeaderLabel("📄 Ürün Açıklaması");
-        lblDescSec.Margin = new Padding(0, 2, 0, 0);
+        lblDescSec.Margin = new Padding(0, 3, 0, 0);
         descHeader.Controls.Add(lblDescSec, 0, 0);
 
-        var btnAiDesc = CreateModernActionButton("✨ AI Açıklama Üret", UiStyle.AiColor, UiStyle.AiHover, Color.White, 25);
+        var btnAiDesc = CreateModernActionButton("✨ AI Açıklama Üret", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        btnAiDesc.Margin = new Padding(8, 2, 2, 2);
         btnAiDesc.Click += async (_, _) => await SuggestAiDescriptionAsync();
         _galleryToolTip.SetToolTip(btnAiDesc, "Etsy alıcılarını ikna eden profesyonel ürün açıklaması yazar.");
         descHeader.Controls.Add(btnAiDesc, 1, 0);
@@ -793,7 +798,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblTitle = new Label
         {
             Text = "🖼️ 2. Görseller & AI Motoru",
-            Font = new Font("Segoe UI Semibold", 9.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
@@ -861,14 +866,15 @@ internal sealed class FastListingCreatorForm : Form
             Margin = Padding.Empty
         };
         galleryWrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        galleryWrapper.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // Toolbar
+        galleryWrapper.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // Toolbar
         galleryWrapper.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Gallery Box
 
         var topBar = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            Height = 34,
             ColumnCount = 2,
-            Margin = new Padding(0, 0, 0, 3)
+            Margin = new Padding(0, 2, 0, 6)
         };
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -876,14 +882,14 @@ internal sealed class FastListingCreatorForm : Form
         var btnBrowse = new Button
         {
             Dock = DockStyle.Fill,
-            Height = 29,
+            Height = 30,
             Text = "📂 Bilgisayardan Seç",
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
             BackColor = UiStyle.PrimaryColor,
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Margin = new Padding(0, 0, 2, 0)
+            Margin = new Padding(0, 2, 4, 2)
         };
         btnBrowse.FlatAppearance.BorderSize = 0;
         btnBrowse.Click += (_, _) => BrowseLocalImages();
@@ -892,14 +898,14 @@ internal sealed class FastListingCreatorForm : Form
         var btnFromStudio = new Button
         {
             Dock = DockStyle.Fill,
-            Height = 29,
+            Height = 30,
             Text = "🎨 Stüdyo Galerisi",
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
             BackColor = UiStyle.AiColor,
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Margin = new Padding(2, 0, 0, 0)
+            Margin = new Padding(4, 2, 0, 2)
         };
         btnFromStudio.FlatAppearance.BorderSize = 0;
         btnFromStudio.Click += (_, _) => OpenStudioGalleryPicker();
@@ -960,11 +966,11 @@ internal sealed class FastListingCreatorForm : Form
             Margin = Padding.Empty
         };
         aiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22)); // Row 0: Header & Hint
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Row 1: Style Preset Chips
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); // Row 2: Prompt Header Row + Başlıktan Al
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66)); // Row 3: Multiline Prompt Input (Spacious!)
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Row 4: Action Buttons (Görseli Üret & Galeriye Ekle)
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26)); // Row 0: Header & Hint
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); // Row 1: Style Preset Chips
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // Row 2: Prompt Header Row + Başlıktan Al
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68)); // Row 3: Multiline Prompt Input (Spacious!)
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // Row 4: Action Buttons (Görseli Üret & Galeriye Ekle)
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Row 5: AI Preview Frame (Dynamic remaining space)
 
         // Row 0: Section Header & Hint
@@ -972,7 +978,7 @@ internal sealed class FastListingCreatorForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Margin = Padding.Empty
+            Margin = new Padding(0, 2, 0, 4)
         };
         aiHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         aiHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -980,7 +986,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblAiTitle = new Label
         {
             Text = "✨ AI Görsel Stüdyosu",
-            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 9.8F, FontStyle.Bold),
             ForeColor = UiStyle.AiColor,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
@@ -991,7 +997,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblAiHint = new Label
         {
             Text = "⚡ Hızlı Üretim",
-            Font = new Font("Segoe UI", 7.5F),
+            Font = new Font("Segoe UI", 8F),
             ForeColor = UiStyle.TextMuted,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleRight,
@@ -1039,18 +1045,19 @@ internal sealed class FastListingCreatorForm : Form
             btnChip.Click += (_, _) =>
             {
                 var prod = !string.IsNullOrWhiteSpace(_txtTitle.Text) ? _txtTitle.Text.Trim() : "Etsy product";
-                _txtAiPrompt.Text = $"High quality commercial product photography of {prod}, {pStyle}, professional 8k catalog shot, sharp details, realistic textures";
+                _txtAiPrompt.Text = $"Professional commercial product photography of {prod}, {pStyle}, high detail, studio lighting, 8k render, etsy showcase";
             };
             chipsPanel.Controls.Add(btnChip);
         }
         aiLayout.Controls.Add(chipsPanel, 0, 1);
 
-        // Row 2: Prompt Header Row + "⚡ Başlıktan Al" Button
+        // Row 2: Prompt Header Row + "✨ Başlıktan Al" Button
         var promptHeaderRow = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Margin = new Padding(0, 1, 0, 2)
+            RowCount = 1,
+            Margin = new Padding(0, 4, 0, 6)
         };
         promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -1058,7 +1065,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblPromptLabel = new Label
         {
             Text = "✍️ Prompt / Görsel Açıklaması:",
-            Font = new Font("Segoe UI Semibold", 8.2F),
+            Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
@@ -1066,19 +1073,8 @@ internal sealed class FastListingCreatorForm : Form
         };
         promptHeaderRow.Controls.Add(lblPromptLabel, 0, 0);
 
-        var btnPromptFromTitle = new Button
-        {
-            Text = "⚡ Başlıktan Al",
-            Font = new Font("Segoe UI Semibold", 7.5F),
-            Height = 22,
-            AutoSize = true,
-            BackColor = UiStyle.SecondaryColor,
-            ForeColor = UiStyle.TextDark,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Margin = Padding.Empty
-        };
-        btnPromptFromTitle.FlatAppearance.BorderColor = UiStyle.BorderColor;
+        var btnPromptFromTitle = CreateModernActionButton("✨ Başlıktan Al", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
+        btnPromptFromTitle.Margin = new Padding(8, 2, 2, 2);
         btnPromptFromTitle.Click += (_, _) =>
         {
             if (!string.IsNullOrWhiteSpace(_txtTitle.Text))
@@ -1094,9 +1090,10 @@ internal sealed class FastListingCreatorForm : Form
         promptHeaderRow.Controls.Add(btnPromptFromTitle, 1, 0);
         aiLayout.Controls.Add(promptHeaderRow, 0, 2);
 
-        // Row 3: Multiline Prompt Input (Full width, 66px height, spacious & scrollable)
+        // Row 3: Multiline Prompt Input (Full width, spacious & scrollable)
         _txtAiPrompt.Dock = DockStyle.Fill;
         _txtAiPrompt.Font = new Font("Segoe UI", 8.8F);
+        _txtAiPrompt.Margin = new Padding(0, 2, 0, 6);
         _galleryToolTip.SetToolTip(_txtAiPrompt, "AI görsel üretimi için açıklama yazın veya yukarıdaki hazır stillerden birini seçin.");
         aiLayout.Controls.Add(_txtAiPrompt, 0, 3);
 
@@ -1105,24 +1102,24 @@ internal sealed class FastListingCreatorForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Margin = new Padding(0, 2, 0, 3)
+            Margin = new Padding(0, 6, 0, 8)
         };
         aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54f));
         aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46f));
 
         _btnGenerateAi.Dock = DockStyle.Fill;
         _btnGenerateAi.Text = "🎨 Görseli Üret";
-        _btnGenerateAi.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
+        _btnGenerateAi.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
         _btnGenerateAi.NormalColor = UiStyle.AiColor;
         _btnGenerateAi.HoverColor = UiStyle.AiHover;
         _btnGenerateAi.ForeColor = Color.White;
-        _btnGenerateAi.Margin = new Padding(0, 0, 2, 0);
+        _btnGenerateAi.Margin = new Padding(0, 2, 6, 2);
         _btnGenerateAi.Click += async (_, _) => await GenerateAiImageAsync();
         aiActionRow.Controls.Add(_btnGenerateAi, 0, 0);
 
         _btnAddToGallery.Dock = DockStyle.Fill;
         _btnAddToGallery.Text = "➕ Galeriye Ekle";
-        _btnAddToGallery.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        _btnAddToGallery.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
         _btnAddToGallery.NormalColor = UiStyle.SuccessColor;
         _btnAddToGallery.HoverColor = Color.FromArgb(5, 150, 105);
         _btnAddToGallery.ForeColor = Color.White;
@@ -1221,7 +1218,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblTitle = new Label
         {
             Text = "⚙️ 3. Varyasyonlar & Kontrol",
-            Font = new Font("Segoe UI Semibold", 9.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
@@ -1352,10 +1349,10 @@ internal sealed class FastListingCreatorForm : Form
         var chkHeader = new Label
         {
             Text = "📋 Canlı Kontrol Listesi:",
-            Font = new Font("Segoe UI Semibold", 8.5F),
+            Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             AutoSize = true,
-            Margin = new Padding(0, 2, 0, 4)
+            Margin = new Padding(0, 4, 0, 4)
         };
         pubTable.Controls.Add(chkHeader);
 
@@ -1365,7 +1362,7 @@ internal sealed class FastListingCreatorForm : Form
         InitChecklistLabel(_chkItemShipping, "Kargo profili seçildi");
         InitChecklistLabel(_chkItemReadiness, "Hazırlık durumu seçildi");
         InitChecklistLabel(_chkItemDesc, "Açıklama dolduruldu");
-        InitChecklistLabel(_chkItemTags, "Etiketler (Tag) hazır");
+        InitChecklistLabel(_chkItemTags, "Etiketler (0/13)");
 
         pubTable.Controls.Add(_chkItemTitle);
         pubTable.Controls.Add(_chkItemPrice);
@@ -1383,10 +1380,10 @@ internal sealed class FastListingCreatorForm : Form
 
         // Secondary Publish Button
         _btnPublish.Dock = DockStyle.Top;
-        _btnPublish.Height = 36;
-        _btnPublish.Margin = new Padding(0, 2, 0, 4);
+        _btnPublish.Height = 40;
+        _btnPublish.Margin = new Padding(0, 8, 0, 8);
         _btnPublish.ForeColor = Color.White;
-        _btnPublish.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
+        _btnPublish.Font = new Font("Segoe UI Semibold", 9.8F, FontStyle.Bold);
         _btnPublish.Click += async (_, _) => await PublishListingToEtsyAsync();
         UpdatePublishButtonVisuals();
         pubTable.Controls.Add(_btnPublish);
@@ -1457,7 +1454,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblHeader = new Label
         {
             Text = "✨ Etsy Algoritma & Kalite Özeti",
-            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Top,
             AutoSize = true,
@@ -1682,13 +1679,13 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(2, 1, 2, 3)
         };
         panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
 
         panel.Controls.Add(new Label
         {
             Text = labelText,
-            Font = new Font("Segoe UI Semibold", 8.5F),
+            Font = new Font("Segoe UI Semibold", 9F),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
             UseMnemonic = false,
@@ -1705,12 +1702,12 @@ internal sealed class FastListingCreatorForm : Form
         return new Label
         {
             Text = text,
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 9.6F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Top,
             AutoSize = true,
             UseMnemonic = false,
-            Margin = new Padding(0, 6, 0, 3)
+            Margin = new Padding(0, 8, 0, 4)
         };
     }
 
@@ -1719,7 +1716,7 @@ internal sealed class FastListingCreatorForm : Form
         var btn = new Button
         {
             Text = text,
-            Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
             Height = height,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
@@ -1727,8 +1724,8 @@ internal sealed class FastListingCreatorForm : Form
             ForeColor = foreColor,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Margin = new Padding(3, 1, 0, 1),
-            Padding = new Padding(7, 0, 7, 0)
+            Margin = new Padding(8, 2, 2, 2),
+            Padding = new Padding(8, 2, 8, 2)
         };
         btn.FlatAppearance.BorderSize = 0;
         btn.MouseEnter += (_, _) => btn.BackColor = hoverColor;
