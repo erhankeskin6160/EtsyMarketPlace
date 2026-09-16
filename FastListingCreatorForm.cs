@@ -31,6 +31,7 @@ internal sealed class FastListingCreatorForm : Form
     private readonly ModernComboBox _cboListingType = new();
     private readonly ModernMultilineTextBox _txtTitle = new() { Height = 58, MaxLength = 140 };
     private readonly Label _lblTitleCounter = new() { AutoSize = true };
+    private readonly Label _lblMobileTitlePreview = new() { AutoSize = true };
     private readonly ModernNumericUpDown _numPrice = new() { Minimum = 0.20m, Maximum = 50000m, DecimalPlaces = 2, Value = 29.99m };
     private readonly ModernNumericUpDown _numQuantity = new() { Minimum = 1, Maximum = 9999, Value = 10 };
     private readonly ModernComboBox _cboTaxonomy = new();
@@ -542,6 +543,13 @@ internal sealed class FastListingCreatorForm : Form
         _txtTitle.Margin = new Padding(0, 0, 0, 6);
         _galleryToolTip.SetToolTip(_txtTitle, "80-140 karakter arası başlıklar Etsy SEO aramalarında en yüksek performansı verir.");
         stack.Controls.Add(_txtTitle);
+
+        _lblMobileTitlePreview.Font = new Font("Segoe UI", 7.6F);
+        _lblMobileTitlePreview.ForeColor = Color.FromArgb(148, 163, 184);
+        _lblMobileTitlePreview.Text = "📱 Mobilde İlk 55 Karakter: (Telefon arama sonuçlarında görünecek kısım)";
+        _lblMobileTitlePreview.Margin = new Padding(2, 0, 0, 8);
+        _lblMobileTitlePreview.Dock = DockStyle.Top;
+        stack.Controls.Add(_lblMobileTitlePreview);
 
         // --- SECTION 3: Kategori & Kargo Ayarları ---
         var sec3Header = new TableLayoutPanel
@@ -1767,9 +1775,50 @@ internal sealed class FastListingCreatorForm : Form
                 _txtTitle.SelectionStart = Math.Min(caret, _txtTitle.Text.Length);
             }
 
-            var len = _txtTitle.Text.Length;
-            _lblTitleCounter.Text = $"{len} / 140";
-            _lblTitleCounter.ForeColor = len >= 80 && len <= 140 ? UiStyle.SuccessColor : len > 140 ? UiStyle.DangerColor : UiStyle.TextMuted;
+            var text = _txtTitle.Text.Trim();
+            var len = text.Length;
+
+            if (len == 0)
+            {
+                _lblTitleCounter.Text = "0 / 140";
+                _lblTitleCounter.ForeColor = UiStyle.TextMuted;
+                _lblMobileTitlePreview.Text = "📱 Mobilde İlk 55 Karakter: (Telefon arama sonuçlarında görünecek kısım)";
+                _lblMobileTitlePreview.ForeColor = Color.FromArgb(148, 163, 184);
+            }
+            else if (len <= 55)
+            {
+                _lblTitleCounter.Text = $"{len} / 140";
+                _lblTitleCounter.ForeColor = UiStyle.TextMuted;
+                _lblMobileTitlePreview.Text = $"📱 Mobilde (Tamamı): \"{text}\"";
+                _lblMobileTitlePreview.ForeColor = UiStyle.SuccessColor;
+            }
+            else
+            {
+                var mobileSlice = text.Length > 55 ? text.Substring(0, 55) : text;
+                _lblMobileTitlePreview.Text = $"📱 Mobilde İlk 55 Karakter: \"{mobileSlice}...\"";
+                _lblMobileTitlePreview.ForeColor = Color.FromArgb(56, 189, 248);
+
+                if (len >= 125 && len <= 140)
+                {
+                    _lblTitleCounter.Text = $"{len} / 140 (Mükemmel Doluluk)";
+                    _lblTitleCounter.ForeColor = UiStyle.SuccessColor;
+                }
+                else if (len >= 80 && len < 125)
+                {
+                    _lblTitleCounter.Text = $"{len} / 140 (Doldurulabilir)";
+                    _lblTitleCounter.ForeColor = Color.FromArgb(245, 158, 11);
+                }
+                else if (len > 140)
+                {
+                    _lblTitleCounter.Text = $"{len} / 140 (140 Sınırı Aşıldı!)";
+                    _lblTitleCounter.ForeColor = UiStyle.DangerColor;
+                }
+                else
+                {
+                    _lblTitleCounter.Text = $"{len} / 140 (Kısa)";
+                    _lblTitleCounter.ForeColor = UiStyle.TextMuted;
+                }
+            }
             UpdateChecklist();
         };
 
@@ -2785,22 +2834,33 @@ internal sealed class FastListingCreatorForm : Form
 
     private async Task SuggestAiTitleAsync()
     {
-        if (string.IsNullOrWhiteSpace(_txtTitle.Text))
+        if (string.IsNullOrWhiteSpace(_txtTitle.Text) && string.IsNullOrWhiteSpace(_txtDescription.Text))
         {
-            MessageBox.Show(this, "Lütfen AI için taslak bir başlık veya anahtar kelime giriniz.", "AI Öneri", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Lütfen AI için başlık veya açıklama alanına ürünle ilgili temel bilgileri giriniz.", "AI Başlık Öneri", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
         try
         {
             UseWaitCursor = true;
-            _statusLabel.Text = "AI başlık optimize ediyor...";
-            var input = new ListingOptimizationInput(_txtTitle.Text.Trim(), _txtDescription.Text.Trim(), SplitTags(_txtTags.Text), "");
+            _statusLabel.Text = "AI başlık optimize ediyor (Mobil ilk 55 karakter + 140 karakter hedefi)...";
+            var targetKw = !string.IsNullOrWhiteSpace(_txtTitle.Text) ? _txtTitle.Text.Trim() : _txtDescription.Text.Trim();
+            var input = new ListingOptimizationInput(
+                _txtTitle.Text.Trim(),
+                _txtDescription.Text.Trim(),
+                SplitTags(_txtTags.Text),
+                targetKw);
             var res = await _aiOptimizer.OptimizeAsync(input);
 
             if (res.TitleSuggestions.Count > 0)
             {
-                _txtTitle.Text = res.TitleSuggestions[0];
+                // En yüksek SEO doluluğuna (125-140 karakter arası) sahip başlığı önceliklendir
+                var bestTitle = res.TitleSuggestions
+                    .OrderByDescending(t => t.Length <= 140 && t.Length >= 120 ? t.Length : (140 - Math.Abs(135 - t.Length)))
+                    .First();
+
+                _txtTitle.Text = bestTitle.Trim();
+
                 if (res.IsFallback)
                 {
                     _statusLabel.Text = $"⚠️ Başlık Çevrimdışı Motor ile üretildi ({res.FallbackReason})";
@@ -2808,7 +2868,7 @@ internal sealed class FastListingCreatorForm : Form
                 }
                 else
                 {
-                    _statusLabel.Text = $"✅ Başlık {res.ExecutedProvider} ({res.ExecutedModel}) ile optimize edildi.";
+                    _statusLabel.Text = $"✅ Başlık {res.ExecutedProvider} ({res.ExecutedModel}) ile optimize edildi ({_txtTitle.Text.Length}/140).";
                     _statusLabel.ForeColor = UiStyle.SuccessColor;
                 }
             }

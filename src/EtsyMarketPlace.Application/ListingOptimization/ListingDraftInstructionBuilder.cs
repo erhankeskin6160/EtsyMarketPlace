@@ -109,14 +109,23 @@ public static class ListingDraftInstructionBuilder
           * Reflect the product's authentic attributes, materials, and benefits in EVERY output field.
         - MULTILINGUAL INPUT & ENGLISH OUTPUT:
           * When the seller provides Turkish title, description, or tags, understand the product intent completely and translate/adapt it into high-search-volume English terminology used by global Etsy buyers.
-        - title_suggestions: exactly 3 items. All in English. Max 140 characters limit (ideal: 115-138 characters).
+        - title_suggestions: exactly 3 items. All in English. Max 140 characters limit (STRICT TARGET: 130-139 characters).
           * NO ROBOTIC TAG CHAINS: NEVER produce raw lists of short tags joined by pipes (e.g. NEVER output "Item | Tag1 | Tag2 | Tag3 | Tag4 | Tag5 | Tag6"). Titles must read like natural, premium human-written product titles that maximize click-through rate (CTR).
-          * FRONT-LOADING (FIRST 40-54 CHARS): Put the exact core product name and primary standout feature in the opening 40-54 characters for mobile SERP display before cards truncate.
-          * FULL LENGTH (120-138 CHARACTERS): Fill the title capacity up to 120-138 characters (max 140) with descriptive keywords and gift occasions. Never produce a title shorter than 100 characters.
+          * FRONT-LOADING (FIRST 40-55 CHARS) - CRITICAL MOBILE CUTOFF RULE:
+            - Etsy mobile apps and mobile browsers truncate listing titles at approximately 50-55 characters.
+            - The FIRST 40-55 CHARACTERS MUST clearly communicate the essential buying factors before truncation:
+              (1) Exact core item name (e.g. "Hand-Painted Hulk Figure 30cm"),
+              (2) Key standout attribute or theme (e.g. "Marvel Superhero Statue"),
+              (3) Size or key specification if critical.
+            - A mobile shopper looking at search cards must instantly recognize WHAT the item is in the first 50-55 characters.
+          * MAXIMUM CAPACITY & FULL LENGTH (STRICT TARGET: 130-139 CHARACTERS):
+            - PUSH THE LENGTH AS CLOSE TO 140 CHARACTERS AS POSSIBLE! Do NOT stop at 90-110 characters.
+            - Fill the remaining ~85 characters with high-intent search angles: gift occasions ("Gift for Comic Fans, Nerdy Birthday Present"), room placement ("Desk Display, Gaming Room Decor"), style/fan details, and craft materials.
+            - Never produce a title shorter than 120 characters, and NEVER exceed 140 characters.
           * 3 DISTINCT CREATIVE STRATEGIES:
-            1. Title 1 (High-Converting Search Hook): [Core Product & Primary Feature (First 40-45 chars)] - [Artisan Craft & Material] | [Placement, Decor & Gift Long-Tail]
-            2. Title 2 (Artisan & Aesthetic Display): [Handcrafted / Custom Showpiece Identity] | [Atmospheric Vibe & Technique] | [Collector Showcase & Room Decor]
-            3. Title 3 (Gift & Fan Occasion): [Memorable Product Name - Thoughtful Gift for Enthusiasts] | [Fine Craft Details & Occasion Keepsake]
+            1. Title 1 (High-Converting Mobile Hook): [Core Product & Standout Feature (First 50 chars)] - [Artisan Craft & Material] | [Room Placement & Gift Long-Tail]
+            2. Title 2 (Collector & Aesthetic Display): [Handcrafted Showcase Identity (First 50 chars)] | [Atmospheric Vibe & Material] | [Collector Niche & Room Decor]
+            3. Title 3 (Gift & Occasion Keepsake): [Memorable Product Name & Sizing (First 50 chars)] - [Gift for Him/Her & Enthusiasts] | [Fine Craft Details]
           * NO SYSTEM PROMPT LEAKS: NEVER include instructions, metadata, or phrases like "OUTPUT LANGUAGE", "English only", "Do not write Turkish", "Title 1:", etc. in any title.
         - tag_suggestions: exactly 13 items. All in English.
           * TAG REFRESH & NO ECHO RULE: When input listing already has tags, DO NOT simply echo or repeat them back! Keep at most 2-3 high-relevance terms if critical, and replace at least 10 tags with FRESH, high-intent search terms across gift, audience, style, placement, and materials.

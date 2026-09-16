@@ -250,9 +250,9 @@ public sealed class ListingDraftInstructionBuilderTests
     {
         var rules = ListingDraftInstructionBuilder.BuildFieldRules();
 
-        Assert.Contains("FRONT-LOADING (FIRST 40-54 CHARS)", rules);
-        Assert.Contains("FULL LENGTH (120-138 CHARACTERS)", rules);
-        Assert.Contains("Never produce a title shorter than 100 characters", rules);
+        Assert.Contains("FRONT-LOADING (FIRST 40-55 CHARS)", rules);
+        Assert.Contains("MAXIMUM CAPACITY & FULL LENGTH (STRICT TARGET: 130-139 CHARACTERS)", rules);
+        Assert.Contains("Never produce a title shorter than 120 characters", rules);
     }
 
     [Fact]
