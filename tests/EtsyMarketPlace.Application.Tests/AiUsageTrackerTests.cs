@@ -163,4 +163,36 @@ public sealed class AiUsageTrackerTests
         Assert.Equal(0m, AiPriceCalculator.ParseOpenAiCostsJson(""));
         Assert.Equal(0m, AiPriceCalculator.ParseOpenAiCostsJson("invalid json"));
     }
+
+    [Fact]
+    public void TestOpenAiOfficialUsageReport_Calculations()
+    {
+        var report = new OpenAiOfficialUsageReport
+        {
+            MonthName = "Eylül 2026",
+            Year = 2026,
+            Month = 9,
+            TotalCostUsd = 0.00m,
+            TotalTokens = 0,
+            TotalRequests = 0,
+            MaskedKey = "sk-proj-...8Abc"
+        };
+
+        Assert.Equal(0.00m, report.TotalCostTry);
+        Assert.Equal(0, report.TotalTokens);
+        Assert.Equal(0, report.TotalRequests);
+
+        var item = new OpenAiDailyUsageItem
+        {
+            Date = new DateTime(2026, 9, 1),
+            ServiceOrModel = "gpt-4o",
+            RequestCount = 5,
+            InputTokens = 1200,
+            OutputTokens = 800,
+            CostUsd = 0.05m
+        };
+
+        Assert.Equal(2000, item.TotalTokens);
+        Assert.Equal(2.00m, item.CostTry);
+    }
 }

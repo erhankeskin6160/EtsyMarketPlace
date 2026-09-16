@@ -486,11 +486,20 @@ public sealed class AiUsageDashboardForm : Form
     private void ShowApiKeysMenu(Button anchor)
     {
         var menu = new ContextMenuStrip();
-        var itemOpenAiKeys = new ToolStripMenuItem("🌐 OpenAI API Anahtarları (platform.openai.com/api-keys)");
+        var itemOpenAiUsage = new ToolStripMenuItem("📊 OpenAI Canlı Kullanım & Fatura Verilerini Çek (Uygulama İçi)");
+        itemOpenAiUsage.Font = new Font(menu.Font, FontStyle.Bold);
+        itemOpenAiUsage.Click += async (_, _) =>
+        {
+            using var dlg = new OpenAiOfficialUsageDialog();
+            dlg.ShowDialog(this);
+            await RefreshDataAsync(queryLiveBalance: true);
+        };
+
+        var itemOpenAiKeys = new ToolStripMenuItem("🔑 OpenAI API Anahtarları Sayfası (platform.openai.com/api-keys)");
         itemOpenAiKeys.Click += (_, _) => OpenUrl("https://platform.openai.com/api-keys");
 
-        var itemOpenAiUsage = new ToolStripMenuItem("📊 OpenAI Kullanım & Fatura (platform.openai.com/usage)");
-        itemOpenAiUsage.Click += (_, _) => OpenUrl("https://platform.openai.com/usage");
+        var itemOpenAiWeb = new ToolStripMenuItem("🌐 OpenAI Web Fatura Paneli (Tarayıcıda Aç)");
+        itemOpenAiWeb.Click += (_, _) => OpenUrl("https://platform.openai.com/usage");
 
         var itemDeepSeek = new ToolStripMenuItem("💳 DeepSeek Platform & Bakiye (platform.deepseek.com)");
         itemDeepSeek.Click += (_, _) => OpenUrl("https://platform.deepseek.com");
@@ -505,8 +514,10 @@ public sealed class AiUsageDashboardForm : Form
             }
         };
 
-        menu.Items.Add(itemOpenAiKeys);
         menu.Items.Add(itemOpenAiUsage);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(itemOpenAiKeys);
+        menu.Items.Add(itemOpenAiWeb);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(itemDeepSeek);
         menu.Items.Add(new ToolStripSeparator());
