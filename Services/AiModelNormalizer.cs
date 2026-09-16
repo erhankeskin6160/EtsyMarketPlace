@@ -15,15 +15,16 @@ internal static class AiModelNormalizer
         if (clean.Contains("3.8-pro") || clean.Contains("3.8 pro") || clean.Contains("3-8-pro")) return "gemini-3.8-pro";
         if (clean.Contains("3.8") || clean.Contains("3-8")) return "gemini-3.8-flash";
 
-        // 2.5 Series (Official Google AI Studio models)
+        // 3.6 & 3.7 Series
+        if (clean.Contains("3.7-flash") || clean.Contains("3.7") || clean.Contains("3-7")) return "gemini-3.7-flash";
+        if (clean.Contains("3.6-flash") || clean.Contains("3.6") || clean.Contains("3-6")) return "gemini-3.6-flash";
+
+        // 2.5 Series (Official Google AI Studio models - High Quota & Fast)
         if (clean.Contains("2.5-pro") || clean.Contains("2.5 pro")) return "gemini-2.5-pro";
         if (clean.Contains("2.5-flash") || clean.Contains("2.5 flash") || clean.Contains("2.5")) return "gemini-2.5-flash";
 
-        // 2.0 Series
-        if (clean.Contains("thinking")) return "gemini-2.0-flash-thinking-exp";
-        if (clean.Contains("2.0-pro") || clean.Contains("2.0 pro")) return "gemini-2.0-pro-exp-02-05";
-        if (clean.Contains("lite")) return "gemini-2.0-flash-lite";
-        if (clean.Contains("2.0") || clean.Contains("2-0")) return "gemini-2.0-flash";
+        // Deprecated 2.0 Series -> Google retired 2.0-flash (HTTP 404). Auto-upgrade to 2.5-flash
+        if (clean.Contains("2.0") || clean.Contains("2-0")) return "gemini-2.5-flash";
 
         // 1.5 Series
         if (clean.Contains("1.5-pro") || clean.Contains("1.5 pro")) return "gemini-1.5-pro";
@@ -33,7 +34,7 @@ internal static class AiModelNormalizer
         // If user typed any custom model name (e.g. gemini-4.0, gpt-5 or any experimental name), preserve it!
         if (clean.StartsWith("gemini-") || !string.IsNullOrWhiteSpace(model)) return model.Trim();
 
-        return "gemini-3.8-flash";
+        return "gemini-2.5-flash";
     }
 
     public static string NormalizeGeminiImageModel(string? model)

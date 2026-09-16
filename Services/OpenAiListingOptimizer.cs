@@ -314,9 +314,9 @@ internal sealed class OpenAiListingOptimizer(
                     return lastBody;
                 }
 
-                if (lastStatusCode == HttpStatusCode.NotFound && currentModel != "gemini-1.5-flash")
+                if ((lastStatusCode == HttpStatusCode.NotFound || lastStatusCode == (HttpStatusCode)429) && currentModel != "gemini-2.5-flash")
                 {
-                    currentModel = "gemini-1.5-flash";
+                    currentModel = "gemini-2.5-flash";
                     continue;
                 }
 
@@ -327,19 +327,19 @@ internal sealed class OpenAiListingOptimizer(
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
-                // Timeout on 3.7 -> instantly fallback to 1.5-flash
-                if (currentModel != "gemini-1.5-flash")
+                // Timeout -> fallback to 2.5-flash
+                if (currentModel != "gemini-2.5-flash")
                 {
-                    currentModel = "gemini-1.5-flash";
+                    currentModel = "gemini-2.5-flash";
                     continue;
                 }
                 break;
             }
             catch when (attempt < maxAttempts)
             {
-                if (currentModel != "gemini-1.5-flash")
+                if (currentModel != "gemini-2.5-flash")
                 {
-                    currentModel = "gemini-1.5-flash";
+                    currentModel = "gemini-2.5-flash";
                     continue;
                 }
             }

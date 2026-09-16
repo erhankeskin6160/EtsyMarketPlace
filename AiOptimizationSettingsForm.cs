@@ -115,13 +115,12 @@ internal sealed class AiOptimizationSettingsForm : Form
         _secondaryModelComboBox.DropDownStyle = ComboBoxStyle.DropDown;
         _secondaryModelComboBox.Width = 240;
         _secondaryModelComboBox.Items.AddRange([
-            "gemini-3.8-flash",
             "gemini-2.5-flash",
+            "gemini-3.6-flash",
             "gemini-2.5-pro",
-            "gemini-2.0-flash",
-            "gemini-2.0-flash-thinking-exp",
-            "gemini-1.5-pro",
+            "gemini-3.8-flash",
             "gemini-1.5-flash",
+            "gemini-1.5-pro",
             "[Özel Model Girin...]"
         ]);
 
@@ -406,13 +405,12 @@ internal sealed class AiOptimizationSettingsForm : Form
         if (provider == "Gemini")
         {
             _secondaryModelComboBox.Items.AddRange([
-                "gemini-3.8-flash",
                 "gemini-2.5-flash",
+                "gemini-3.6-flash",
                 "gemini-2.5-pro",
-                "gemini-2.0-flash",
-                "gemini-2.0-flash-thinking-exp",
-                "gemini-1.5-pro",
+                "gemini-3.8-flash",
                 "gemini-1.5-flash",
+                "gemini-1.5-pro",
                 "[Özel Model Girin...]"
             ]);
             if (!string.IsNullOrWhiteSpace(_settings.GeminiApiKey)) _secondaryKeyTextBox.Text = _settings.GeminiApiKey;

@@ -4,7 +4,8 @@ public sealed record ListingOptimizationInput(
     string Title,
     string Description,
     IReadOnlyList<string> Tags,
-    string TargetKeyword);
+    string TargetKeyword,
+    string DescriptionStyle = "Storytelling");
 
 public sealed record ListingOptimizationResult(
     int CurrentSeoScore,

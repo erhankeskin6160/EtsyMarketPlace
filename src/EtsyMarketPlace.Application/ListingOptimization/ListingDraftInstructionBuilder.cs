@@ -133,29 +133,20 @@ public static class ListingDraftInstructionBuilder
             6. Niche Alias & Long-Tail: Alternative buyer search phrases? (e.g. "king of pop gift", "celebrity fan statue")
           * Each tag must be 20 characters or less in length. Every tag must be in English.
         - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text (in English, e.g. "Wood", "PLA Plastic", "Resin", "Cotton"). Up to 13 items, each 45 characters or less. Never invent materials.
-        - description_draft: write a bespoke, high-converting, buyer-facing English Etsy description structured in 6 clean sections with emojis:
-          * FORMATTING: ALWAYS separate every section and paragraph with a blank line (\n\n). Use bullet points ("• ") for list items so text renders in clean, distinct paragraphs on Etsy mobile and web.
-          * BESPOKE NICHE COPYWRITING: Tailor tone, vocabulary, and audience to the EXACT product! NEVER output generic gaming or anime copy unless the product is genuinely a video game or anime item. For space/lamps, write for bedtime ambiance and cosmic wonder; for music legends, write for music enthusiasts; for jewelry, write for elegant accessorizing.
-          * SECTION 1 (Google Meta Hook): 2-3 engaging opening sentences naturally featuring the target keyword in the first sentence. State what makes this specific item an extraordinary must-have.
-          * SECTION 2 (Product-Tailored Key Features & Craftsmanship Header with relevant Emoji):
-            DO NOT use a robotic generic "WHY YOU'LL LOVE IT" header on every product! Adapt the header to fit the exact niche and product identity:
-            - Drinkware / Mugs: e.g. "☕ ARTISAN CRAFT & DAILY USE:"
-            - Wallets / Leather: e.g. "🐂 PREMIUM LEATHER & TIMELESS CRAFT:"
-            - Lamps / Lighting: e.g. "✨ COSMIC GLOW & BEDTIME AMBIANCE:" or "✨ AMBIENT LIGHTING & COZY GLOW:"
-            - Headphone Stands / Desk Gear: e.g. "🎧 BATTLESTATION STYLING & GEAR REST:"
-            - Board Games / Chess: e.g. "♟️ HAND-CARVED WOODWORK & STRATEGY:"
-            - Dog Collars / Pets: e.g. "🐾 PET COMFORT & DURABLE HARDWARE:"
-            - Wall Art: e.g. "🖼️ STATEMENT DESIGN & WALL ACCENT:"
-            - Collectibles / General: e.g. "✨ WHY YOU'LL LOVE IT:"
-            Then provide 3-5 bullet points highlighting the real product features, textures, and everyday use. If the seller provided raw features (in Turkish or English), translate and incorporate EVERY SINGLE ONE of them here!
-          * SECTION 3 (Product-Tailored Specifications & Sizing Header with 📏):
-            Adapt header to the product (e.g. "📏 CAPACITY, SIZING & MATERIALS:" for mugs, "📏 CARD SLOTS, CAPACITY & MEASUREMENTS:" for wallets, "📏 DIMENSIONS, POWER & LIGHTING SPECS:" for lamps, "📏 SPECIFICATIONS & DETAILS:" for collectibles).
-            Extract and preserve ALL real dimensions (cm/inches), capacities (oz/ml), scale, materials, finishes, package contents, and included components from the source description. NEVER omit, swallow, or replace real measurements with generic filler!
-          * SECTION 4 (Product-Tailored Audience & Gift Occasion Header with 🎁):
-            Adapt header to the product (e.g. "🎁 PERFECT FOR COFFEE & TEA LOVERS:" for mugs, "🎁 TIMELESS EVERYDAY CARRY & GIFTS:" for wallets, "🎁 NURSERY & CELESTIAL BEDROOM DECOR:" for lamps, "🎁 STREAMERS, GAMERS & AUDIOPHILES:" for headphone stands, "🎁 PERFECT FOR:" for general).
-            State who this specific item is actually for.
-          * SECTION 5 (📦 PACKAGING & SAFE SHIPPING): Protective packaging guarantee for 100% safe worldwide delivery with tracking.
-          * SECTION 6 (💬 CUSTOM REQUESTS & QUESTIONS): Friendly call to action for custom colors, sizing, or inquiries.
+        - description_draft: Craft a natural, authentic, and compelling English Etsy description tailored specifically to this product's character, style, and niche.
+          * COMPLETE CREATIVE FREEDOM & UNIQUE VOICE (NO REPETITIVE FORMULAS):
+            - STRICTLY FORBIDDEN: NEVER force products into a rigid, robotic copy-paste template (such as always using "WHY YOU'LL LOVE IT", "SPECIFICATIONS & DETAILS", "PERFECT FOR", "PACKAGING & SAFE SHIPPING", "CUSTOM REQUESTS & QUESTIONS").
+            - AS AN EXPERT COPYWRITER, DECIDE THE BEST STRUCTURE, TONE, AND FORMAT YOURSELF based on what makes THIS particular product sell:
+              • For collectibles, statues, and fan art: Focus on sculpting drama, shelf presence, character attitude, and collector prestige.
+              • For home decor, lighting, and ceramics: Write with warmth, atmosphere, cozy room mood, and artisan craft aesthetic.
+              • For jewelry, luxury goods, and keepsakes: Highlight emotional gifting sentiment, timeless beauty, and refined elegance.
+              • For everyday items, tech gear, and tools: Highlight practical durability, ergonomics, and seamless daily utility.
+              • You may use storytelling narrative, sleek minimalist layouts, engaging bullet points ("• "), or specialized custom sections — whichever presents THIS product most convincingly.
+          * PRESERVE ALL REAL SPECIFICATIONS & DETAILS:
+            - If the seller provided real measurements (cm, mm, inches), scale, materials, colors, package contents, or care instructions (even in Turkish), translate and weave EVERY SINGLE DETAIL seamlessly into the description. Never drop or omit user-provided technical specs!
+          * FORMATTING & SCAN-ABILITY:
+            - Always separate paragraphs and sections with clean blank lines (\n\n) so text renders with airy, readable spacing on both mobile apps and web browsers.
+            - Write directly to the buyer as a passionate artisan or boutique shop owner.
           * STRICTLY FORBIDDEN: NEVER include debug labels (such as "Selected listing title:", "Competitor description:", "Etsy search keyword:", "Target keyword:"), prompt words, or generic filler like "This item is prepared as an Etsy-ready product listing". Write directly to the customer.
           * ZERO TURKISH IN BUYER FIELDS: Ensure 100% of description_draft is in natural English. No Turkish words allowed in description_draft.
         - risk_warnings: Turkish language notes. Flag any brand, character, movie, game, or fan-art terms. Include Turkish explanations in parentheses. Example: "Ben 10 ve Omnitrix terimleri telif riski tasiyabilir (Cartoon Network markasi)."

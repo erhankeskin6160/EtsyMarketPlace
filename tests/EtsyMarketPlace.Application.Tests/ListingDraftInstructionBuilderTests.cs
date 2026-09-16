@@ -254,4 +254,23 @@ public sealed class ListingDraftInstructionBuilderTests
         Assert.Contains("FULL LENGTH (120-138 CHARACTERS)", rules);
         Assert.Contains("Never produce a title shorter than 100 characters", rules);
     }
+
+    [Fact]
+    public void BuildFieldRules_ForbidsRoboticBoilerplateTemplates_AndAllowsCreativeFreedom()
+    {
+        var rules = ListingDraftInstructionBuilder.BuildFieldRules();
+
+        Assert.Contains("COMPLETE CREATIVE FREEDOM & UNIQUE VOICE", rules);
+        Assert.Contains("NEVER force products into a rigid, robotic copy-paste template", rules);
+        Assert.Contains("AS AN EXPERT COPYWRITER, DECIDE THE BEST STRUCTURE, TONE, AND FORMAT YOURSELF", rules);
+    }
+
+    [Fact]
+    public void BuildFieldRules_MandatesPreservingAllRealSpecsAndDetails()
+    {
+        var rules = ListingDraftInstructionBuilder.BuildFieldRules();
+
+        Assert.Contains("PRESERVE ALL REAL SPECIFICATIONS & DETAILS", rules);
+        Assert.Contains("Never drop or omit user-provided technical specs", rules);
+    }
 }
