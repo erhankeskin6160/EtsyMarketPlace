@@ -129,7 +129,7 @@ internal sealed class FastListingCreatorForm : Form
             Padding = new Padding(12, 8, 12, 8),
             BackColor = UiStyle.BackgroundColor
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));  // Row 0: Unified Top Command & Template Bar
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));  // Row 0: Unified Top Command & Template Bar
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 1: 3 Responsive Workspace Columns
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // Row 2: Status bar
         Controls.Add(root);
@@ -171,7 +171,7 @@ internal sealed class FastListingCreatorForm : Form
             CornerRadius = 10,
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor,
-            Padding = new Padding(12, 4, 12, 4),
+            Padding = new Padding(12, 6, 12, 6),
             Margin = new Padding(0, 0, 0, 4)
         };
 
@@ -204,11 +204,11 @@ internal sealed class FastListingCreatorForm : Form
         var lblBadge = new Label
         {
             Text = "⚡ AI STUDIO",
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
             ForeColor = Color.White,
             BackColor = UiStyle.AiColor,
             Padding = new Padding(8, 4, 8, 4),
-            Margin = new Padding(0, 6, 14, 6),
+            Margin = new Padding(0, 4, 12, 4),
             AutoSize = true,
             TextAlign = ContentAlignment.MiddleCenter
         };
@@ -220,7 +220,7 @@ internal sealed class FastListingCreatorForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             RowCount = 2,
             ColumnCount = 1,
-            Margin = new Padding(0, 3, 0, 3),
+            Margin = new Padding(0, 2, 0, 2),
             Padding = Padding.Empty
         };
         titleStack.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -229,7 +229,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblTitle = new Label
         {
             Text = "Hızlı Ürün Ekle",
-            Font = new Font("Segoe UI Semibold", 12F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 1)
@@ -237,7 +237,7 @@ internal sealed class FastListingCreatorForm : Form
         var lblSubtitle = new Label
         {
             Text = "Etsy Listeleme & AI Görsel Stüdyosu",
-            Font = new Font("Segoe UI", 8.2F),
+            Font = new Font("Segoe UI", 8F),
             ForeColor = UiStyle.TextMuted,
             AutoSize = true,
             Margin = Padding.Empty
@@ -968,7 +968,7 @@ internal sealed class FastListingCreatorForm : Form
         aiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 26)); // Row 0: Header & Hint
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30)); // Row 1: Style Preset Chips
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); // Row 2: Prompt Header Row + Başlıktan Al
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // Row 2: Prompt Header Row + Başlıktan Al
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68)); // Row 3: Multiline Prompt Input (Spacious!)
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // Row 4: Action Buttons (Görseli Üret & Galeriye Ekle)
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Row 5: AI Preview Frame (Dynamic remaining space)
@@ -1057,24 +1057,41 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 2,
             RowCount = 1,
-            Margin = new Padding(0, 4, 0, 6)
+            Margin = new Padding(0, 2, 0, 4)
         };
         promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        promptHeaderRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
         var lblPromptLabel = new Label
         {
             Text = "✍️ Prompt / Görsel Açıklaması:",
-            Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
-            AutoSize = true
+            AutoSize = true,
+            Margin = new Padding(0, 1, 0, 1)
         };
         promptHeaderRow.Controls.Add(lblPromptLabel, 0, 0);
 
-        var btnPromptFromTitle = CreateModernActionButton("✨ Başlıktan Al", UiStyle.AiColor, UiStyle.AiHover, Color.White, 26);
-        btnPromptFromTitle.Margin = new Padding(8, 2, 2, 2);
+        var btnPromptFromTitle = new Button
+        {
+            Text = "✨ Başlıktan Al",
+            Font = new Font("Segoe UI Semibold", 7.8F, FontStyle.Bold),
+            Height = 24,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            BackColor = UiStyle.AiColor,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(6, 2, 0, 2),
+            Padding = new Padding(6, 1, 6, 1)
+        };
+        btnPromptFromTitle.FlatAppearance.BorderSize = 0;
+        btnPromptFromTitle.MouseEnter += (_, _) => btnPromptFromTitle.BackColor = UiStyle.AiHover;
+        btnPromptFromTitle.MouseLeave += (_, _) => btnPromptFromTitle.BackColor = UiStyle.AiColor;
         btnPromptFromTitle.Click += (_, _) =>
         {
             if (!string.IsNullOrWhiteSpace(_txtTitle.Text))
