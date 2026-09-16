@@ -186,6 +186,25 @@ public static class EtsyDescriptionFormatter
             desc.Contains("CAREFUL PACKAGING", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("REINFORCED PACKAGING", StringComparison.OrdinalIgnoreCase)) sectionCount++;
 
+        if (desc.Contains("CARE &", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CARE INSTRUCTIONS", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CARE GUIDE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CARE & MAINTENANCE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CARE & CLEANING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("LEATHER CARE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("WOOD CARE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("COLLAR CARE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("LIGHTING CARE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("JEWELRY CARE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("WASH & CARE", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+
+        if (desc.Contains("CUSTOM REQUESTS", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CUSTOM ORDERS", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CUSTOM INQUIRIES", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CUSTOM SIZING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CUSTOM ENGRAVING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CUSTOM FINISHES", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+
         return sectionCount >= 3;
     }
 
@@ -757,7 +776,25 @@ public static class EtsyDescriptionFormatter
         string extraNotes = "";
         var features = new List<string>();
 
-        var lines = rawDesc.Split(['\r', '\n', ';'], StringSplitOptions.RemoveEmptyEntries);
+        var rawChunks = rawDesc.Split(['\r', '\n', ';', '|'], StringSplitOptions.RemoveEmptyEntries);
+        var lines = new List<string>();
+        foreach (var chunk in rawChunks)
+        {
+            var trimmedChunk = chunk.Trim();
+            if (trimmedChunk.Length > 70 && trimmedChunk.Contains(". "))
+            {
+                var sentences = trimmedChunk.Split(new[] { ". " }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var s in sentences)
+                {
+                    if (!string.IsNullOrWhiteSpace(s)) lines.Add(s.Trim());
+                }
+            }
+            else
+            {
+                lines.Add(trimmedChunk);
+            }
+        }
+
         foreach (var l in lines)
         {
             var line = l.Trim();
@@ -860,7 +897,10 @@ public static class EtsyDescriptionFormatter
                 normLine.Contains("derinlik") ||
                 normLine.Contains("agirlik") ||
                 normLine.Contains("weight") ||
-                normLine.Contains("gram"))
+                normLine.Contains("gram") ||
+                normLine.Contains("slot") ||
+                normLine.Contains("compartment") ||
+                normLine.Contains("pocket"))
             {
                 if (cleanItem.Length < 140)
                 {
