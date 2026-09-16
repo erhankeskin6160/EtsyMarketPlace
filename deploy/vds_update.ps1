@@ -34,65 +34,110 @@ Write-Host "Indirme URL: $downloadUrl" -ForegroundColor Gray
 Write-Host ""
 
 try {
+    # 0. Akıllı Sürüm Kontrolü (Gereksiz 96 MB indirmeyi engeller)
+    Write-Host "[0/5] Surum kontrol ediliyor..." -ForegroundColor Cyan
+    $remoteBytes = 0
+    try {
+        $headReq = [System.Net.HttpWebRequest]::Create($downloadUrl)
+        $headReq.Method = "HEAD"
+        $headReq.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EtsyMarketPlace-VDS-Updater"
+        $headReq.Timeout = 12000
+        $headResp = $headReq.GetResponse()
+        $remoteBytes = $headResp.ContentLength
+        $headResp.Close()
+    } catch { }
+
+    if ((Test-Path $targetExe) -and ($remoteBytes -gt 10MB)) {
+        $localBytes = (Get-Item $targetExe).Length
+        if ($localBytes -eq $remoteBytes) {
+            Write-Host "   ✅ Programiniz zaten dev-latest son surumunde ($([math]::Round($localBytes/1MB, 2)) MB)!" -ForegroundColor Green
+            Write-Host "   ⚡ Yeniden indirme gerekmiyor, uygulama baslatiliyor..." -ForegroundColor Green
+            
+            $running = Get-Process -Name "SimilarProductsWinForms" -ErrorAction SilentlyContinue
+            if (-not $running) {
+                Start-Process -FilePath $targetExe -WorkingDirectory $appDir
+            } else {
+                Write-Host "   Uygulama zaten acik durumda." -ForegroundColor Yellow
+            }
+            Start-Sleep -Seconds 2
+            exit 0
+        }
+    }
+
     # 1. Yeni sürümü geçici dosyaya indir
     Write-Host "[1/5] GitHub 'dev-latest' surumu indiriliyor (~92 MB)..." -ForegroundColor Yellow
     if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force }
 
-    $maxRetries = 6
+    $maxRetries = 4
     $retryDelaySeconds = 5
     $downloadSuccess = $false
 
-    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
-        try {
-            if ($attempt -gt 1) {
-                Write-Host "      [Deneme $attempt/$maxRetries] Yeniden deneniyor..." -ForegroundColor Yellow
-            }
-
-            $req = [System.Net.HttpWebRequest]::Create($downloadUrl)
-            $req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EtsyMarketPlace-VDS-Updater"
-            $req.Timeout = 120000
-            $resp = $req.GetResponse()
-            $totalBytes = $resp.ContentLength
-            $stream = $resp.GetResponseStream()
-            $fileStream = [System.IO.File]::Create($tempDownload)
-
-            $buffer = New-Object byte[] 65536
-            $totalRead = 0
-            $sw = [System.Diagnostics.Stopwatch]::StartNew()
-            $lastReport = 0
-
-            while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-                $fileStream.Write($buffer, 0, $bytesRead)
-                $totalRead += $bytesRead
-
-                if ($sw.ElapsedMilliseconds - $lastReport -ge 300) {
-                    $lastReport = $sw.ElapsedMilliseconds
-                    $mb = [math]::Round($totalRead / 1MB, 1)
-                    $totalMb = if ($totalBytes -gt 0) { [math]::Round($totalBytes / 1MB, 1) } else { 92.0 }
-                    $pct = if ($totalBytes -gt 0) { [math]::Round(($totalRead / $totalBytes) * 100) } else { 0 }
-                    $speed = if ($sw.Elapsed.TotalSeconds -gt 0) { [math]::Round(($totalRead / 1MB) / $sw.Elapsed.TotalSeconds, 1) } else { 0 }
-                    Write-Host "`r      Indiriliyor: $mb MB / $totalMb MB (%$pct) - $speed MB/s   " -NoNewline -ForegroundColor Cyan
-                }
-            }
-
-            $fileStream.Flush()
-            $fileStream.Close()
-            $stream.Close()
-            $resp.Close()
-            $sw.Stop()
-            Write-Host ""
-
+    # Öncelik 1: Windows BITS Motoru (Genellikle 10-15 saniyede tamamlar)
+    try {
+        Import-Module BitsTransfer -ErrorAction SilentlyContinue
+        Write-Host "      [Motor: Windows BITS Hizlandirici] Indirme baslatildi..." -ForegroundColor Cyan
+        Start-BitsTransfer -Source $downloadUrl -Destination $tempDownload -DisplayName "EtsyMarketPlace-Update" -Priority Foreground
+        if ((Test-Path $tempDownload) -and ((Get-Item $tempDownload).Length -gt 10MB)) {
             $downloadSuccess = $true
-            break
-        } catch {
-            if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force -ErrorAction SilentlyContinue }
-            if ($attempt -lt $maxRetries) {
+        }
+    } catch {
+        Write-Host "      BITS motoru desteklenmedi, standart akisa geciliyor..." -ForegroundColor DarkYellow
+    }
+
+    # Öncelik 2: BITS başarısız olursa canlı akış ve hız göstergeli HttpWebRequest
+    if (-not $downloadSuccess) {
+        for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+            try {
+                if ($attempt -gt 1) {
+                    Write-Host "      [Deneme $attempt/$maxRetries] Yeniden deneniyor..." -ForegroundColor Yellow
+                }
+
+                $req = [System.Net.HttpWebRequest]::Create($downloadUrl)
+                $req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EtsyMarketPlace-VDS-Updater"
+                $req.Timeout = 120000
+                $resp = $req.GetResponse()
+                $totalBytes = $resp.ContentLength
+                $stream = $resp.GetResponseStream()
+                $fileStream = [System.IO.File]::Create($tempDownload)
+
+                $buffer = New-Object byte[] 65536
+                $totalRead = 0
+                $sw = [System.Diagnostics.Stopwatch]::StartNew()
+                $lastReport = 0
+
+                while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                    $fileStream.Write($buffer, 0, $bytesRead)
+                    $totalRead += $bytesRead
+
+                    if ($sw.ElapsedMilliseconds - $lastReport -ge 300) {
+                        $lastReport = $sw.ElapsedMilliseconds
+                        $mb = [math]::Round($totalRead / 1MB, 1)
+                        $totalMb = if ($totalBytes -gt 0) { [math]::Round($totalBytes / 1MB, 1) } else { 92.0 }
+                        $pct = if ($totalBytes -gt 0) { [math]::Round(($totalRead / $totalBytes) * 100) } else { 0 }
+                        $speed = if ($sw.Elapsed.TotalSeconds -gt 0) { [math]::Round(($totalRead / 1MB) / $sw.Elapsed.TotalSeconds, 1) } else { 0 }
+                        Write-Host "`r      Indiriliyor: $mb MB / $totalMb MB (%$pct) - $speed MB/s   " -NoNewline -ForegroundColor Cyan
+                    }
+                }
+
+                $fileStream.Flush()
+                $fileStream.Close()
+                $stream.Close()
+                $resp.Close()
+                $sw.Stop()
                 Write-Host ""
-                Write-Host "      [Bekleme] GitHub yeni surumu hazirliyor veya ag yavas. $retryDelaySeconds sn bekleniyor..." -ForegroundColor DarkYellow
-                Start-Sleep -Seconds $retryDelaySeconds
-                $retryDelaySeconds += 5
-            } else {
-                throw $_
+
+                $downloadSuccess = $true
+                break
+            } catch {
+                if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force -ErrorAction SilentlyContinue }
+                if ($attempt -lt $maxRetries) {
+                    Write-Host ""
+                    Write-Host "      [Bekleme] GitHub yeni surumu hazirliyor veya baglanti yavas. $retryDelaySeconds sn bekleniyor..." -ForegroundColor DarkYellow
+                    Start-Sleep -Seconds $retryDelaySeconds
+                    $retryDelaySeconds += 5
+                } else {
+                    throw $_
+                }
             }
         }
     }
