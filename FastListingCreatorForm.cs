@@ -829,10 +829,27 @@ internal sealed class FastListingCreatorForm : Form
             Orientation = Orientation.Horizontal,
             SplitterWidth = 8,
             BackColor = Color.Transparent,
-            Panel1MinSize = 120,
-            Panel2MinSize = 210,
-            SplitterDistance = 190,
             Margin = Padding.Empty
+        };
+
+        bool hasInitializedSplitter = false;
+        centerSplit.SizeChanged += (_, _) =>
+        {
+            if (centerSplit.Height > 240 && !hasInitializedSplitter)
+            {
+                try
+                {
+                    centerSplit.Panel1MinSize = 80;
+                    centerSplit.Panel2MinSize = 120;
+                    int target = (int)(centerSplit.Height * 0.36f);
+                    if (target >= centerSplit.Panel1MinSize && target <= centerSplit.Height - centerSplit.Panel2MinSize)
+                    {
+                        centerSplit.SplitterDistance = target;
+                        hasInitializedSplitter = true;
+                    }
+                }
+                catch { }
+            }
         };
 
         // --- Panel 1: Image Gallery & Upload Bar ---
