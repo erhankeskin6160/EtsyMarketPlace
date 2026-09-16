@@ -158,6 +158,10 @@ public static class EtsyDescriptionFormatter
             desc.Contains("MEASUREMENTS & STABILITY", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("BOARD & PIECE MEASUREMENTS", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("SIZING & COLLAR ADJUSTMENT", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("DIMENSIONS & MOUNTING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("DIMENSIONS, WEIGHT & METAL", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("SCALE, WEIGHT & MATERIAL", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("SIZING & CHILD-SAFE", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("SIZING GUIDE & FABRIC", StringComparison.OrdinalIgnoreCase)) sectionCount++;
 
         if (desc.Contains("PERFECT FOR", StringComparison.OrdinalIgnoreCase) ||
@@ -165,11 +169,20 @@ public static class EtsyDescriptionFormatter
             desc.Contains("LITTLE DREAMERS", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("STREAMERS, GAMERS", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("GAME NIGHT & HEIRLOOM", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("HOME STYLING & HOUSEWARMING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("MEMORABLE KEEPSAKE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("COSPLAYERS & DISPLAY", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("DOG PARENTS & PET LOVERS", StringComparison.OrdinalIgnoreCase)) sectionCount++;
 
         if (desc.Contains("PACKAGING & SHIPPING", StringComparison.OrdinalIgnoreCase) || 
             desc.Contains("PACKAGING & SAFE SHIPPING", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("PROTECTIVE PACKAGING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("PROTECTIVE CRATING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("GIFT BOX & SAFE DISPATCH", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("SAFE PACKAGING & DISPATCH", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("SAFE PACKAGING & SHIPPING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("FAST PACKAGING & SHIPPING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CAREFUL FOLDING", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("CAREFUL PACKAGING", StringComparison.OrdinalIgnoreCase) ||
             desc.Contains("REINFORCED PACKAGING", StringComparison.OrdinalIgnoreCase)) sectionCount++;
 
@@ -179,6 +192,8 @@ public static class EtsyDescriptionFormatter
     public sealed record SectionHeaders(
         string FeaturesHeader,
         string SpecsHeader,
+        string CareHeader,
+        string CareContent,
         string PerfectForHeader,
         string PackagingHeader,
         string CustomHeader);
@@ -188,6 +203,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.KitchenAndDining => new(
             FeaturesHeader: "☕ ARTISAN CRAFT & DAILY ENJOYMENT:",
             SpecsHeader: "📏 CAPACITY, SIZING & CARE:",
+            CareHeader: "🧼 CARE & CLEANING INSTRUCTIONS:",
+            CareContent: "• Dishwasher & microwave safe for hassle-free everyday cleaning.\r\n• Gentle hand washing is also recommended to preserve the artisan glaze lustre for years.",
             PerfectForHeader: "🎁 PERFECT FOR COFFEE & TEA LOVERS:",
             PackagingHeader: "📦 PACKAGING & SAFE SHIPPING:",
             CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:"),
@@ -195,6 +212,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.LeatherAndAccessories => new(
             FeaturesHeader: "🐂 PREMIUM LEATHER & TIMELESS CRAFT:",
             SpecsHeader: "📏 CARD SLOTS, CAPACITY & MEASUREMENTS:",
+            CareHeader: "🧼 LEATHER CARE & PRESERVATION:",
+            CareContent: "• Wipe clean with a soft, slightly damp cloth.\r\n• Apply a natural leather balm periodically to keep the grain supple and weather-resistant.",
             PerfectForHeader: "🎁 TIMELESS EVERYDAY CARRY & GIFTS:",
             PackagingHeader: "📦 PACKAGING & SHIPPING:",
             CustomHeader: "💬 CUSTOM REQUESTS & PERSONALIZATION:"),
@@ -202,6 +221,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.SpaceAndAstronomy => new(
             FeaturesHeader: "✨ COSMIC GLOW & BEDTIME AMBIANCE:",
             SpecsHeader: "📏 DIMENSIONS, POWER & LIGHTING SPECS:",
+            CareHeader: "🧼 LIGHTING CARE & OPERATION:",
+            CareContent: "• Powered via standard USB for safe, cool-touch operation.\r\n• Clean gently with a dry microfiber cloth; keep away from extreme direct heat or open flame.",
             PerfectForHeader: "🎁 NURSERY, BEDROOM & CELESTIAL DECOR:",
             PackagingHeader: "📦 PROTECTIVE PACKAGING & SHIPPING:",
             CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:"),
@@ -209,6 +230,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.AudioAndHeadphoneStands => new(
             FeaturesHeader: "🎧 BATTLESTATION STYLING & GEAR REST:",
             SpecsHeader: "📏 MEASUREMENTS & STABILITY DETAILS:",
+            CareHeader: "🧼 CARE & DESK MAINTENANCE:",
+            CareContent: "• Clean with a soft, dry or lightly dampened microfiber cloth.\r\n• Avoid prolonged exposure to direct sunlight or high heat to maintain structural precision.",
             PerfectForHeader: "🎁 STREAMERS, GAMERS & AUDIOPHILES:",
             PackagingHeader: "📦 SAFE PACKAGING & DISPATCH:",
             CustomHeader: "💬 CUSTOM INQUIRIES & COLORS:"),
@@ -216,6 +239,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.BoardGamesAndToys => new(
             FeaturesHeader: "♟️ HAND-CARVED WOODWORK & STRATEGY:",
             SpecsHeader: "📏 BOARD & PIECE MEASUREMENTS:",
+            CareHeader: "🧼 WOOD CARE & HEIRLOOM PRESERVATION:",
+            CareContent: "• Dust regularly with a soft, dry lint-free cloth.\r\n• A light application of natural beeswax polish once a year will maintain the rich satin luster for generations.",
             PerfectForHeader: "🎁 GAME NIGHT & HEIRLOOM DISPLAY:",
             PackagingHeader: "📦 CAREFUL PACKAGING & SHIPPING:",
             CustomHeader: "💬 CUSTOM ORDERS & QUESTIONS:"),
@@ -223,6 +248,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.PetSupplies => new(
             FeaturesHeader: "🐾 PET COMFORT & DURABLE HARDWARE:",
             SpecsHeader: "📏 SIZING & COLLAR ADJUSTMENT:",
+            CareHeader: "🧼 COLLAR CARE & LONGEVITY:",
+            CareContent: "• Wipe clean with a damp cloth after outdoor walks and let air dry naturally.\r\n• Apply leather balm occasionally to keep the material supple and water-repellent.",
             PerfectForHeader: "🎁 DOG PARENTS & PET LOVERS:",
             PackagingHeader: "📦 FAST PACKAGING & SHIPPING:",
             CustomHeader: "💬 CUSTOM ENGRAVING & QUESTIONS:"),
@@ -230,6 +257,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.WallArtAndPrints => new(
             FeaturesHeader: "🖼️ STATEMENT DESIGN & WALL ACCENT:",
             SpecsHeader: "📏 DIMENSIONS & MOUNTING DETAILS:",
+            CareHeader: "🧼 HANGING & DISPLAY CARE:",
+            CareContent: "• Ready to hang on your wall with included mounting hardware.\r\n• For regular maintenance, simply dust lightly with a dry microfiber cloth or feather duster.",
             PerfectForHeader: "🎁 HOME STYLING & HOUSEWARMING:",
             PackagingHeader: "📦 PROTECTIVE CRATING & SHIPPING:",
             CustomHeader: "💬 CUSTOM SIZING & INQUIRIES:"),
@@ -237,6 +266,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.KidsAndNursery => new(
             FeaturesHeader: "🌙 GENTLE NURSERY COMFORT & GLOW:",
             SpecsHeader: "📏 SIZING & CHILD-SAFE MATERIALS:",
+            CareHeader: "🧼 NURSERY SAFETY & CLEANING:",
+            CareContent: "• Crafted from non-toxic, child-safe materials with smooth rounded edges.\r\n• Wipe clean using a damp cloth with mild baby-safe soap if needed.",
             PerfectForHeader: "🎁 PERFECT FOR LITTLE DREAMERS:",
             PackagingHeader: "📦 SAFE PACKAGING & SHIPPING:",
             CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:"),
@@ -244,6 +275,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.MusicOrCelebrity => new(
             FeaturesHeader: "🎸 ICONIC TRIBUTE & ARTISAN DETAIL:",
             SpecsHeader: "📏 SPECIFICATIONS & DISPLAY SPECS:",
+            CareHeader: "🧼 CARE & DISPLAY GUIDE:",
+            CareContent: "• Dust periodically with a soft lint-free cloth to maintain pristine showcase condition.\r\n• Avoid abrasive cleaners or direct moisture.",
             PerfectForHeader: "🎁 MUSIC ENTHUSIASTS & COLLECTORS:",
             PackagingHeader: "📦 PROTECTIVE PACKAGING & SHIPPING:",
             CustomHeader: "💬 CUSTOM INQUIRIES:"),
@@ -251,6 +284,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.ApparelAndFashion => new(
             FeaturesHeader: "👕 PREMIUM COMFORT & BESPOKE STYLE:",
             SpecsHeader: "📏 SIZING GUIDE & FABRIC DETAILS:",
+            CareHeader: "🧼 WASH & CARE GUIDE:",
+            CareContent: "• Machine wash cold inside out with similar colors.\r\n• Tumble dry low or hang dry to preserve print vibrance and fabric softness.",
             PerfectForHeader: "🎁 PERFECT FOR EVERYDAY WEAR:",
             PackagingHeader: "📦 CAREFUL FOLDING & PROMPT SHIPPING:",
             CustomHeader: "💬 CUSTOM SIZING & REQUESTS:"),
@@ -258,6 +293,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.JewelryOrWearable => new(
             FeaturesHeader: "💎 ARTISAN ELEGANCE & WEARABLE CHARM:",
             SpecsHeader: "📏 DIMENSIONS, WEIGHT & METAL FINISH:",
+            CareHeader: "🧼 JEWELRY CARE & POLISHING:",
+            CareContent: "• Store in a jewelry pouch or dry box when not in use.\r\n• Avoid exposure to perfumes, lotions, and chlorine. Gently polish with a microfiber jewelry cloth.",
             PerfectForHeader: "🎁 MEMORABLE KEEPSAKE & GIFTS:",
             PackagingHeader: "📦 GIFT BOX & SAFE DISPATCH:",
             CustomHeader: "💬 CUSTOM ORDERS & QUESTIONS:"),
@@ -265,6 +302,8 @@ public static class EtsyDescriptionFormatter
         ProductTheme.CosplayOrProp => new(
             FeaturesHeader: "⚔️ REPLICA AUTHENTICITY & PRESENCE:",
             SpecsHeader: "📏 SCALE, WEIGHT & MATERIAL SPECS:",
+            CareHeader: "🧼 PROP CARE & DISPLAY:",
+            CareContent: "• Wipe clean with a soft dry cloth.\r\n• Store on a secure display shelf away from direct heat and heavy impacts.",
             PerfectForHeader: "🎁 COSPLAYERS & DISPLAY SHELVES:",
             PackagingHeader: "📦 REINFORCED PACKAGING & DELIVERY:",
             CustomHeader: "💬 CUSTOM FINISHES & QUESTIONS:"),
@@ -272,6 +311,8 @@ public static class EtsyDescriptionFormatter
         _ => new(
             FeaturesHeader: "✨ WHY YOU'LL LOVE IT:",
             SpecsHeader: "📏 SPECIFICATIONS & DETAILS:",
+            CareHeader: "🧼 CARE INSTRUCTIONS:",
+            CareContent: "• Gently wipe clean with a soft cloth to maintain quality and artisan detail over time.",
             PerfectForHeader: "🎁 PERFECT FOR:",
             PackagingHeader: "📦 PACKAGING & SHIPPING:",
             CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:")
@@ -351,13 +392,18 @@ public static class EtsyDescriptionFormatter
         }
         sb.AppendLine();
 
-        // BÖLÜM 4: Kimler İçin Uygun / Hediye (Ürün Temasına Özel)
+        // BÖLÜM 4: Bakım ve Kullanım Kılavuzu (Ürüne ve Kategoriye Özel)
+        sb.AppendLine(headers.CareHeader);
+        sb.AppendLine(headers.CareContent);
+        sb.AppendLine();
+
+        // BÖLÜM 5: Kimler İçin Uygun / Hediye (Ürün Temasına Özel)
         sb.AppendLine(headers.PerfectForHeader);
         sb.AppendLine(BuildThemeAudience(theme));
         sb.AppendLine(BuildThemeGiftOccasion(theme));
         sb.AppendLine();
 
-        // BÖLÜM 5: Güvenli Paketleme & Kargo
+        // BÖLÜM 6: Güvenli Paketleme & Kargo
         sb.AppendLine(headers.PackagingHeader);
         sb.AppendLine("• Carefully wrapped in multi-layer protective packaging to guarantee 100% safe worldwide arrival.");
         sb.AppendLine("• Every order includes tracked dispatch sent directly to your email upon shipment.");
@@ -651,6 +697,16 @@ public static class EtsyDescriptionFormatter
                upper.Contains("CAPACITY") ||
                upper.Contains("MEASUREMENTS") ||
                upper.Contains("CARD SLOTS") ||
+               upper.Contains("CARE &") ||
+               upper.Contains("CARE GUIDE") ||
+               upper.Contains("WASH & CARE") ||
+               upper.Contains("PROP CARE") ||
+               upper.Contains("JEWELRY CARE") ||
+               upper.Contains("COLLAR CARE") ||
+               upper.Contains("WOOD CARE") ||
+               upper.Contains("LIGHTING CARE") ||
+               upper.Contains("LEATHER CARE") ||
+               upper.Contains("HANGING & DISPLAY") ||
                upper.Contains("SIZING GUIDE");
     }
 

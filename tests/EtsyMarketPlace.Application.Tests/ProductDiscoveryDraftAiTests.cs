@@ -475,5 +475,64 @@ public sealed class ProductDiscoveryDraftAiTests
             _output?.WriteLine($"================================================================================\n");
         }
     }
+
+    [Fact]
+    public void FullTikAi_DescriptionLengthAndSeoComplianceAnalysis()
+    {
+        // "Açıklamalar kısa mı? SEO'ya uygun açıklama yapıyor mu?" analizi ve testi
+        var analyses = new List<(string Product, int CharCount, int WordCount, bool HasHookKeyword, bool HasSections, bool NoSpam)>();
+
+        foreach (var mock in DiverseSampleListings)
+        {
+            var input = new ListingOptimizationInput(
+                mock.Title,
+                mock.Description,
+                mock.Tags,
+                mock.TargetKeyword
+            );
+
+            var result = _optimizer.Optimize(input);
+            var desc = result.DescriptionDraft;
+
+            var charCount = desc.Length;
+            var words = desc.Split([' ', '\r', '\n', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            var wordCount = words.Length;
+
+            // 1. SEO Kuralı: İlk 160 karakterde hedef anahtar kelime veya ürün özü geçmeli (Google Snippet & Etsy preview)
+            var first160 = desc.Length >= 160 ? desc.Substring(0, 160) : desc;
+            var hasHookKeyword = first160.Contains(mock.TargetKeyword, StringComparison.OrdinalIgnoreCase) ||
+                                 mock.TargetKeyword.Split(' ').All(part => first160.Contains(part, StringComparison.OrdinalIgnoreCase));
+
+            // 2. Yapı Kuralı: En az 4 yapısal bölüm içermeli
+            var hasSections = EtsyDescriptionFormatter.IsAlreadyStructuredEtsyDescription(desc);
+
+            // 3. Spam / Dolandırıcılık Denetimi: "Tags:" veya bot leakage olmamalı
+            var noSpam = !desc.Contains("Tags:", StringComparison.OrdinalIgnoreCase) &&
+                         !desc.Contains("OUTPUT LANGUAGE", StringComparison.OrdinalIgnoreCase) &&
+                         !desc.Contains("Selected listing title:", StringComparison.OrdinalIgnoreCase);
+
+            analyses.Add((mock.Title, charCount, wordCount, hasHookKeyword, hasSections, noSpam));
+
+            _output?.WriteLine($"[SEO ANALİZİ] {mock.Title}");
+            _output?.WriteLine($"  - Karakter Sayısı: {charCount} | Kelime Sayısı: {wordCount}");
+            _output?.WriteLine($"  - İlk 160 Karakter SEO Kancası: {(hasHookKeyword ? "BAŞARILI" : "UYARI")}");
+            _output?.WriteLine($"  - Yapısal Bölümler: {(hasSections ? "TAM" : "EKSİK")}");
+            _output?.WriteLine($"  - Spam / Sızıntı Yokluğu: {(noSpam ? "TEMİZ" : "ŞÜPHELİ")}\n");
+
+            // Doğrulamalar:
+            // Açıklama asla çok kısa veya boş olmamalı (en az 600 karakter, ideal: 1000 - 2500)
+            Assert.True(charCount >= 600, $"Açıklama aşırı kısa ({charCount} karakter): {mock.Title}");
+            Assert.True(wordCount >= 90, $"Açıklama kelime sayısı yetersiz ({wordCount} kelime): {mock.Title}");
+            Assert.True(hasHookKeyword, $"İlk 160 karakterde hedef kelime kancası eksik: {mock.Title}");
+            Assert.True(hasSections, $"Yapılandırılmış Etsy bölümleri eksik: {mock.Title}");
+            Assert.True(noSpam, $"Açıklamada spam/sızıntı tespit edildi: {mock.Title}");
+        }
+
+        var avgChars = analyses.Average(a => a.CharCount);
+        var avgWords = analyses.Average(a => a.WordCount);
+        _output?.WriteLine($"=== GENEL ÖZET ===");
+        _output?.WriteLine($"Ortalama Karakter Sayısı: {avgChars:F0} karakter");
+        _output?.WriteLine($"Ortalama Kelime Sayısı: {avgWords:F0} kelime");
+    }
 }
 
