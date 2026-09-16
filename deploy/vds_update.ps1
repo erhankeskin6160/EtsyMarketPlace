@@ -35,11 +35,11 @@ Write-Host ""
 
 try {
     # 1. Yeni sürümü geçici dosyaya indir
-    Write-Host "[1/5] GitHub 'dev-latest' surumu indiriliyor..." -ForegroundColor Yellow
+    Write-Host "[1/5] GitHub 'dev-latest' surumu indiriliyor (~92 MB)..." -ForegroundColor Yellow
     if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force }
 
-    $maxRetries = 4
-    $retryDelaySeconds = 8
+    $maxRetries = 6
+    $retryDelaySeconds = 5
     $downloadSuccess = $false
 
     for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
@@ -47,14 +47,48 @@ try {
             if ($attempt -gt 1) {
                 Write-Host "      [Deneme $attempt/$maxRetries] Yeniden deneniyor..." -ForegroundColor Yellow
             }
-            $webClient = New-Object System.Net.WebClient
-            $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EtsyMarketPlace-VDS-Updater")
-            $webClient.DownloadFile($downloadUrl, $tempDownload)
+
+            $req = [System.Net.HttpWebRequest]::Create($downloadUrl)
+            $req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EtsyMarketPlace-VDS-Updater"
+            $req.Timeout = 120000
+            $resp = $req.GetResponse()
+            $totalBytes = $resp.ContentLength
+            $stream = $resp.GetResponseStream()
+            $fileStream = [System.IO.File]::Create($tempDownload)
+
+            $buffer = New-Object byte[] 65536
+            $totalRead = 0
+            $sw = [System.Diagnostics.Stopwatch]::StartNew()
+            $lastReport = 0
+
+            while (($bytesRead = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                $fileStream.Write($buffer, 0, $bytesRead)
+                $totalRead += $bytesRead
+
+                if ($sw.ElapsedMilliseconds - $lastReport -ge 300) {
+                    $lastReport = $sw.ElapsedMilliseconds
+                    $mb = [math]::Round($totalRead / 1MB, 1)
+                    $totalMb = if ($totalBytes -gt 0) { [math]::Round($totalBytes / 1MB, 1) } else { 92.0 }
+                    $pct = if ($totalBytes -gt 0) { [math]::Round(($totalRead / $totalBytes) * 100) } else { 0 }
+                    $speed = if ($sw.Elapsed.TotalSeconds -gt 0) { [math]::Round(($totalRead / 1MB) / $sw.Elapsed.TotalSeconds, 1) } else { 0 }
+                    Write-Host "`r      Indiriliyor: $mb MB / $totalMb MB (%$pct) - $speed MB/s   " -NoNewline -ForegroundColor Cyan
+                }
+            }
+
+            $fileStream.Flush()
+            $fileStream.Close()
+            $stream.Close()
+            $resp.Close()
+            $sw.Stop()
+            Write-Host ""
+
             $downloadSuccess = $true
             break
         } catch {
+            if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force -ErrorAction SilentlyContinue }
             if ($attempt -lt $maxRetries) {
-                Write-Host "      [404/Bekleme] GitHub yeni surumu hazirliyor olabilir. $retryDelaySeconds sn bekleniyor..." -ForegroundColor DarkYellow
+                Write-Host ""
+                Write-Host "      [Bekleme] GitHub yeni surumu hazirliyor veya ag yavas. $retryDelaySeconds sn bekleniyor..." -ForegroundColor DarkYellow
                 Start-Sleep -Seconds $retryDelaySeconds
                 $retryDelaySeconds += 5
             } else {
