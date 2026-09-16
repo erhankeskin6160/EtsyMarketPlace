@@ -127,12 +127,12 @@ internal static class AiProviderCaller
 
         if (!resp.IsSuccessStatusCode)
         {
-            // Model adı bulunamadıysa (404) veya geçersiz modelse gemini-2.0-flash ile fallback dene
-            if (resp.StatusCode == System.Net.HttpStatusCode.NotFound && normalizedModel != "gemini-2.0-flash")
+            // Model adı bulunamadıysa (404) veya geçersiz modelse gemini-2.5-flash ile fallback dene
+            if (resp.StatusCode == System.Net.HttpStatusCode.NotFound && normalizedModel != "gemini-2.5-flash")
             {
                 try
                 {
-                    string fallbackUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={Uri.EscapeDataString(apiKey.Trim())}";
+                    string fallbackUrl = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={Uri.EscapeDataString(apiKey.Trim())}";
                     using var fbReq = new HttpRequestMessage(HttpMethod.Post, fallbackUrl)
                     {
                         Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
@@ -144,7 +144,7 @@ internal static class AiProviderCaller
                         using var fbDoc = JsonDocument.Parse(fbBody);
                         if (fbDoc.RootElement.TryGetProperty("candidates", out var fbCands) && fbCands.GetArrayLength() > 0)
                         {
-                            string fbText = ExtractGeminiCandidateText(fbCands[0], "gemini-2.0-flash");
+                            string fbText = ExtractGeminiCandidateText(fbCands[0], "gemini-2.5-flash");
                             if (!string.IsNullOrWhiteSpace(fbText)) return fbText;
                         }
                     }

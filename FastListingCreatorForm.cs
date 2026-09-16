@@ -579,7 +579,10 @@ internal sealed class FastListingCreatorForm : Form
         _cboTaxonomy.Margin = new Padding(0, 0, 0, 4);
         _cboTaxonomy.Items.Clear();
         _cboTaxonomy.Items.AddRange([
-            "1239 - Art & Collectibles / 3D Printed",
+            "1239 - Art & Collectibles / 3D Printed & Sculptures",
+            "132 - Bags & Purses / Handbags & Shoulder Bags",
+            "134 - Bags & Purses / Tote Bags",
+            "142 - Bags & Purses / Wallets & Money Clips",
             "1053 - Home & Living / Home Decor",
             "204 - Jewelry / Rings & Necklaces",
             "502 - Clothing / Unisex Adult",
@@ -2815,7 +2818,18 @@ internal sealed class FastListingCreatorForm : Form
 
                 UpdateChecklist();
                 var reasoningShort = string.IsNullOrWhiteSpace(result.Reasoning) ? "" : $" ({result.Reasoning})";
-                _statusLabel.Text = $"✨ Kategori belirlendi: {result.CategoryPath} [Taxonomy ID: {result.TaxonomyId}]{reasoningShort}";
+                bool isLocalEngine = result.ProviderUsed.Contains("Yerel", StringComparison.OrdinalIgnoreCase) ||
+                                     result.ProviderUsed.Contains("Heuristic", StringComparison.OrdinalIgnoreCase);
+
+                if (isLocalEngine)
+                {
+                    _statusLabel.Text = $"⚠️ [Yerel Kural Motoru Tarafından Belirlendi] {result.CategoryPath} [Taxonomy ID: {result.TaxonomyId}]{reasoningShort}";
+                }
+                else
+                {
+                    var providerTag = string.IsNullOrWhiteSpace(result.ProviderUsed) ? "Yapay Zeka" : result.ProviderUsed;
+                    _statusLabel.Text = $"✨ [{providerTag} Tarafından Belirlendi] {result.CategoryPath} [Taxonomy ID: {result.TaxonomyId}]{reasoningShort}";
+                }
             }
             else
             {

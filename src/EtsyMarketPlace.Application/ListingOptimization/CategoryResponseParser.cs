@@ -64,21 +64,41 @@ public static class CategoryResponseParser
 
     public static string StripJsonFences(string text)
     {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
         var trimmed = text.Trim();
-        if (trimmed.StartsWith("```json", StringComparison.OrdinalIgnoreCase))
+
+        // 1. Markdown json code fence check
+        int codeBlockStart = trimmed.IndexOf("```json", StringComparison.OrdinalIgnoreCase);
+        if (codeBlockStart >= 0)
         {
-            trimmed = trimmed.Substring(7);
-        }
-        else if (trimmed.StartsWith("```", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed.Substring(3);
+            int jsonStart = codeBlockStart + 7;
+            int codeBlockEnd = trimmed.IndexOf("```", jsonStart, StringComparison.Ordinal);
+            if (codeBlockEnd > jsonStart)
+            {
+                return trimmed.Substring(jsonStart, codeBlockEnd - jsonStart).Trim();
+            }
         }
 
-        if (trimmed.EndsWith("```", StringComparison.OrdinalIgnoreCase))
+        // 2. Generic code fence check
+        codeBlockStart = trimmed.IndexOf("```", StringComparison.Ordinal);
+        if (codeBlockStart >= 0)
         {
-            trimmed = trimmed.Substring(0, trimmed.Length - 3);
+            int contentStart = codeBlockStart + 3;
+            int codeBlockEnd = trimmed.IndexOf("```", contentStart, StringComparison.Ordinal);
+            if (codeBlockEnd > contentStart)
+            {
+                return trimmed.Substring(contentStart, codeBlockEnd - contentStart).Trim();
+            }
         }
 
-        return trimmed.Trim();
+        // 3. Fallback: extract substring between first '{' and last '}'
+        int firstBrace = trimmed.IndexOf('{');
+        int lastBrace = trimmed.LastIndexOf('}');
+        if (firstBrace >= 0 && lastBrace > firstBrace)
+        {
+            return trimmed.Substring(firstBrace, lastBrace - firstBrace + 1).Trim();
+        }
+
+        return trimmed;
     }
 }

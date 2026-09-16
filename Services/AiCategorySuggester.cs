@@ -45,24 +45,53 @@ internal sealed class AiCategorySuggester : IAiCategorySuggester
 
             if (settings.UseGemini)
             {
-                providerUsed = "Gemini";
+                var modelName = AiModelNormalizer.NormalizeGeminiTextModel(settings.GeminiModel);
+                providerUsed = $"Google Gemini ({modelName})";
                 rawJson = validImages.Count > 0
                     ? await CallGeminiVisionAsync(settings, title, validImages[0], description, tags, cancellationToken)
                     : await CallGeminiTextAsync(settings, title, description, tags, cancellationToken);
             }
             else if (settings.UseOpenAi)
             {
-                providerUsed = "OpenAI";
+                var modelName = AiModelNormalizer.NormalizeOpenAiTextModel(settings.OpenAiModel);
+                providerUsed = $"OpenAI ({modelName})";
                 rawJson = validImages.Count > 0
                     ? await CallOpenAiVisionAsync(settings, title, validImages[0], description, tags, cancellationToken)
                     : await CallOpenAiTextAsync(settings, title, description, tags, cancellationToken);
             }
             else if (settings.UseClaude)
             {
-                providerUsed = "Claude";
+                var modelName = AiModelNormalizer.NormalizeClaudeTextModel(settings.ClaudeModel);
+                providerUsed = $"Claude ({modelName})";
                 rawJson = validImages.Count > 0
                     ? await CallClaudeVisionAsync(settings, title, validImages[0], description, tags, cancellationToken)
                     : await CallClaudeTextAsync(settings, title, description, tags, cancellationToken);
+            }
+            else if (settings.UseDeepSeek)
+            {
+                var modelName = AiModelNormalizer.NormalizeDeepSeekModel(settings.DeepSeekModel);
+                providerUsed = $"DeepSeek ({modelName})";
+                rawJson = await AiProviderCaller.CallDeepSeekAsync(
+                    BuildSystemPrompt(),
+                    BuildUserPrompt(title, description, tags, hasImage: false),
+                    settings.DeepSeekApiKey,
+                    modelName,
+                    maxTokens: 500,
+                    temperature: 0.2,
+                    ct: cancellationToken);
+            }
+            else if (settings.UseGrok)
+            {
+                var modelName = AiModelNormalizer.NormalizeGrokModel(settings.GrokModel);
+                providerUsed = $"xAI Grok ({modelName})";
+                rawJson = await AiProviderCaller.CallGrokAsync(
+                    BuildSystemPrompt(),
+                    BuildUserPrompt(title, description, tags, hasImage: false),
+                    settings.GrokApiKey,
+                    modelName,
+                    maxTokens: 500,
+                    temperature: 0.2,
+                    ct: cancellationToken);
             }
 
             if (!string.IsNullOrWhiteSpace(rawJson))
@@ -70,39 +99,50 @@ internal sealed class AiCategorySuggester : IAiCategorySuggester
                 var parsed = ParseCategoryResponse(rawJson, providerUsed);
                 if (parsed != null && parsed.TaxonomyId > 0)
                 {
+                    parsed.ProviderUsed = providerUsed;
                     return parsed;
                 }
             }
         }
         catch
         {
-            // Servis veya bağlantı hatasında çevrimdışı motor devreye girer
+            // Servis veya bağlantı hatasında çevrimdışı fallback motor devreye girer
         }
 
-        // AI yanıt veremezse güvenilir kural tabanlı yerel motor ile dön
-        return LocalCategoryHeuristics.SuggestFromText(title, description, tags);
+        // AI yanıt veremezse güvenilir kural tabanlı yerel motor ile dön ve açıkça belirt
+        var fallback = LocalCategoryHeuristics.SuggestFromText(title, description, tags);
+        fallback.ProviderUsed = "Yerel Kural Motoru (Çevrimdışı Fallback)";
+        return fallback;
     }
 
     private static string BuildSystemPrompt() =>
-        "You are an expert Etsy Taxonomy and Category Specialist. Your task is to analyze the product title and visual image, " +
-        "then determine the exact Etsy Category (Taxonomy ID and Category Path) where this product will get the best SEO visibility and conversion. " +
-        "You MUST respond ONLY with a valid raw JSON object (no markdown, no backticks, no extra text) with this exact schema:\n" +
+        "You are an expert Etsy Taxonomy and Category Specialist with deep knowledge of the entire Etsy taxonomy tree across ALL departments " +
+        "(Bags & Purses, Clothing & Shoes, Home & Living, Jewelry & Accessories, Art & Collectibles, Craft Supplies, Electronics & Accessories, etc.).\n\n" +
+        "CRITICAL INSTRUCTIONS:\n" +
+        "1. Never restrict yourself to any specific niche or material. You have full freedom to select ANY category on Etsy that best matches the item.\n" +
+        "2. Analyze the product title, image (if provided), description, and tags to understand what the item ACTUALLY is physically and functionally.\n" +
+        "   - E.g. If the title/image is a women's handbag, shoulder bag, or purse ('El yapımı kadın çantası'), categorize it under 'Bags & Purses > Handbags > Shoulder Bags' (Taxonomy ID: 132) or the most specific bag category.\n" +
+        "   - E.g. If it is clothing, jewelry, home decor, or digital art, choose the exact leaf category corresponding to that item.\n" +
+        "3. Select the most specific leaf category that provides maximum SEO visibility, organic discovery, and conversion rate for Etsy shoppers.\n" +
+        "4. In the 'reasoning' field, explain your decision referencing the title, image features, or description details.\n\n" +
+        "You MUST respond ONLY with a single valid raw JSON object (no markdown, no backticks, no text before or after) matching this schema:\n" +
         "{\n" +
-        "  \"taxonomy_id\": 2079,\n" +
-        "  \"category_path\": \"Electronics & Accessories > Audio > Headphone & Headset Stands\",\n" +
-        "  \"confidence_score\": 95,\n" +
-        "  \"reasoning\": \"Resimde kulaklık tutucu stand olarak tasarlanmış 3D figür görülüyor.\",\n" +
+        "  \"taxonomy_id\": <number>,\n" +
+        "  \"category_path\": \"<Department > Subcategory > Specific Leaf>\",\n" +
+        "  \"confidence_score\": <number between 1 and 100>,\n" +
+        "  \"reasoning\": \"<Detailed reasoning referencing title, image, and description>\",\n" +
         "  \"alternatives\": [\n" +
-        "    {\"taxonomy_id\": 1239, \"category_path\": \"Art & Collectibles > Sculptures > Busts & Statues\", \"confidence_score\": 85},\n" +
-        "    {\"taxonomy_id\": 6701, \"category_path\": \"Home & Living > Office & School Supplies > Desk Accessories\", \"confidence_score\": 75}\n" +
+        "    {\"taxonomy_id\": <number>, \"category_path\": \"<Path>\", \"confidence_score\": <number>}\n" +
         "  ]\n" +
         "}";
 
     private static string BuildUserPrompt(string title, string? desc, string? tags, bool hasImage) =>
         $"Product Title: {title}\n" +
-        (string.IsNullOrWhiteSpace(desc) ? "" : $"Description snippet: {desc.Substring(0, Math.Min(desc.Length, 200))}\n") +
+        (string.IsNullOrWhiteSpace(desc) ? "" : $"Product Description: {desc.Substring(0, Math.Min(desc.Length, 600))}\n") +
         (string.IsNullOrWhiteSpace(tags) ? "" : $"Tags: {tags}\n") +
-        (hasImage ? "A commercial photo of the physical item is attached. Pay close attention to what the item actually is physically (e.g. headphone stand, statue, mug, jewelry, decor)." : "Analyze the title and context to determine the best Etsy category.");
+        (hasImage
+            ? "A commercial photo of the physical product is provided. Inspect the visual shape, material, and purpose together with the title and description to select the most accurate Etsy taxonomy category."
+            : "Analyze the product title, description, and keywords to determine the exact Etsy category and taxonomy ID.");
 
     // --- OpenAI ---
 

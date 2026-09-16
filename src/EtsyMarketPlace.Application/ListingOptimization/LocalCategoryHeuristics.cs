@@ -42,7 +42,25 @@ public static class LocalCategoryHeuristics
             ["wall decor", "duvar dekoru", "wall hanging", "wall sign", "duvar panosu", "metal wall art", "wood wall art", "wooden wall art", "wall art"],
             Priority: 3),
 
-        // Bags, Purses & Wallets
+        // Bags, Purses & Wallets (Comprehensive)
+        new(132, "Bags & Purses > Handbags > Shoulder Bags",
+            ["shoulder bag", "omuz cantasi", "kadin cantasi", "kol cantasi", "womens bag", "purse", "leather purse", "handbag", "el cantasi", "deri canta", "deri kadin cantasi", "bayan cantasi", "el yapimi canta"],
+            Priority: 4),
+        new(134, "Bags & Purses > Handbags > Tote Bags",
+            ["tote bag", "bez canta", "kanvas canta", "shopper bag", "market bag", "cotton tote", "canvas tote", "alisveris cantasi", "tote"],
+            Priority: 4),
+        new(133, "Bags & Purses > Handbags > Crossbody Bags",
+            ["crossbody", "cross body", "crossbody bag", "capraz canta", "postaci cantasi", "messenger bag", "body bag"],
+            Priority: 4),
+        new(138, "Bags & Purses > Handbags > Clutches & Evening Bags",
+            ["clutch", "portfoy canta", "abiye canta", "evening bag", "gece cantasi", "party purse"],
+            Priority: 4),
+        new(140, "Bags & Purses > Backpacks",
+            ["backpack", "sirt cantasi", "rucksack", "bookbag", "school backpack", "travel backpack", "okul cantasi"],
+            Priority: 3),
+        new(131, "Bags & Purses > Handbags",
+            ["canta", "bag", "bags", "purses", "handbags"],
+            Priority: 2),
         new(142, "Bags & Purses > Wallets & Money Clips",
             ["wallet", "cuzdan", "card holder", "kartlik", "money clip", "bifold wallet", "leather wallet"],
             Priority: 3),
@@ -125,10 +143,10 @@ public static class LocalCategoryHeuristics
         {
             return new CategorySuggestionResult(
                 1239,
-                "Art & Collectibles > 3D Printed / Sculptures",
+                "Art & Collectibles > Sculptures > Busts & Statues",
                 50,
                 "Varsayılan kategori seçildi (Başlık boş).",
-                "Heuristic-Default");
+                "Yerel Kural Motoru (Varsayılan)");
         }
 
         var scored = Rules
@@ -159,9 +177,9 @@ public static class LocalCategoryHeuristics
             return new CategorySuggestionResult(
                 1239,
                 "Art & Collectibles > Sculptures > Busts & Statues",
-                55,
-                "Belirgin anahtar kelime bulunamadı; en genel 3D sanat kategorisi seçildi.",
-                "Heuristic-Fallback");
+                50,
+                "Belirgin kategori anahtar kelimesi tespit edilemedi; genel sanat/koleksiyon kategorisi seçildi.",
+                "Yerel Kural Motoru (Varsayılan)");
         }
 
         var top = scored[0];
@@ -176,7 +194,7 @@ public static class LocalCategoryHeuristics
             top.Rule.CategoryPath,
             top.Score,
             $"'{string.Join(", ", top.Rule.Keywords.Where(kw => normalizedText.Contains(NormalizeForMatching(kw), StringComparison.OrdinalIgnoreCase)).Take(2))}' ifadeleri tespit edildi.",
-            "Heuristic-Rules",
+            "Yerel Kural Motoru (Kural Eşleşti)",
             alternatives);
     }
 
