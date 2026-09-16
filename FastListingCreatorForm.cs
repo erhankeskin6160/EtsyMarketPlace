@@ -806,8 +806,8 @@ internal sealed class FastListingCreatorForm : Form
         };
         rootTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         rootTable.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));  // Add Image Buttons Toolbar
-        rootTable.RowStyles.Add(new RowStyle(SizeType.Percent, 40));  // Gallery List
-        rootTable.RowStyles.Add(new RowStyle(SizeType.Percent, 60));  // AI Generator Box
+        rootTable.RowStyles.Add(new RowStyle(SizeType.Percent, 38));  // Gallery List
+        rootTable.RowStyles.Add(new RowStyle(SizeType.Percent, 62));  // AI Generator Box
 
         // 1. Add Image Toolbar
         var topBar = new TableLayoutPanel
@@ -887,64 +887,82 @@ internal sealed class FastListingCreatorForm : Form
         // Initial render for empty gallery
         RefreshGalleryCards();
 
-        // 3. AI Generator Box
+        // 3. Redesigned AI Generator Studio
         var aiBox = new ModernCardPanel
         {
             Dock = DockStyle.Fill,
-            CornerRadius = 8,
+            CornerRadius = 10,
             CardColor = UiStyle.InputBackground,
             BorderColor = UiStyle.BorderColor,
             Padding = new Padding(8, 6, 8, 6),
             Margin = new Padding(0, 2, 0, 0)
         };
 
-        var aiContainer = new ModernScrollPanel
+        var aiLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 2, 0)
-        };
-
-        var aiStack = new TableLayoutPanel
-        {
-            Dock = DockStyle.Top,
             ColumnCount = 1,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            RowCount = 5,
             Margin = Padding.Empty
         };
-        aiStack.ColumnStyles.Clear();
-        aiStack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        aiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); // Row 0: Section Header & Badges
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Row 1: Style Preset Chips
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); // Row 2: Prompt Box + Title Action
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Row 3: Action Buttons (Görseli Üret & Galeriye Ekle)
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Row 4: AI Preview Frame (Fills Remaining Space!)
 
-        // Header Label for AI Studio
-        var lblAiSection = new Label
+        // Row 0: Section Header & Hint
+        var headerPanel = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
-            Text = "✨ AI Görsel Stüdyosu (Doğrudan Üret & Ekle)",
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
-            ForeColor = UiStyle.AiColor,
-            AutoSize = true,
-            Margin = new Padding(0, 0, 0, 3)
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            Margin = Padding.Empty
         };
-        aiStack.Controls.Add(lblAiSection);
+        headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        // Preset Chips
+        var lblAiTitle = new Label
+        {
+            Text = "✨ AI Görsel Stüdyosu",
+            Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold),
+            ForeColor = UiStyle.AiColor,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft,
+            AutoSize = true
+        };
+        headerPanel.Controls.Add(lblAiTitle, 0, 0);
+
+        var lblAiHint = new Label
+        {
+            Text = "⚡ Hızlı Üretim",
+            Font = new Font("Segoe UI", 7.5F),
+            ForeColor = UiStyle.TextMuted,
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            AutoSize = true
+        };
+        headerPanel.Controls.Add(lblAiHint, 1, 0);
+        aiLayout.Controls.Add(headerPanel, 0, 0);
+
+        // Row 1: Style Preset Chips (Single line modern flow)
         var chipsPanel = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = true,
-            AutoSize = true,
-            Margin = new Padding(0, 0, 0, 4)
+            WrapContents = false,
+            AutoScroll = false,
+            Margin = new Padding(0, 0, 0, 2),
+            Padding = Padding.Empty
         };
 
         var promptPresets = new (string Label, string StyleKeyword)[]
         {
-            ("☕ Masa/Kafe", "on a warm cozy wooden cafe table with morning sunlight, subtle steam, aesthetic atmosphere"),
+            ("☕ Masa", "on a warm cozy wooden cafe table with morning sunlight, subtle steam, aesthetic atmosphere"),
             ("🛋️ Salon", "displayed in a stylish Scandinavian modern living room, neutral aesthetic, architectural interior"),
-            ("📸 Stüdyo Beyaz", "isolated on a seamless pure white studio background, commercial softbox lighting, clean catalog"),
-            ("🌿 Bohem Ahşap", "on rustic reclaimed wood with lush green indoor potted plants and bohemian vibes"),
-            ("🎁 Hediye Paketi", "with luxury artisan kraft gift wrapping, elegant satin ribbon, greeting card")
+            ("📸 Stüdyo", "isolated on a seamless pure white studio background, commercial softbox lighting, clean catalog"),
+            ("🌿 Bohem", "on rustic reclaimed wood with lush green indoor potted plants and bohemian vibes"),
+            ("🎁 Hediye", "with luxury artisan kraft gift wrapping, elegant satin ribbon, greeting card")
         };
 
         foreach (var (pLabel, pStyle) in promptPresets)
@@ -959,8 +977,9 @@ internal sealed class FastListingCreatorForm : Form
                 ForeColor = UiStyle.TextDark,
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand,
-                Margin = new Padding(1, 1, 3, 1)
+                Margin = new Padding(0, 1, 3, 1)
             };
+            btnChip.FlatAppearance.BorderSize = 1;
             btnChip.FlatAppearance.BorderColor = UiStyle.BorderColor;
             btnChip.Click += (_, _) =>
             {
@@ -969,26 +988,26 @@ internal sealed class FastListingCreatorForm : Form
             };
             chipsPanel.Controls.Add(btnChip);
         }
-        aiStack.Controls.Add(chipsPanel);
+        aiLayout.Controls.Add(chipsPanel, 0, 1);
 
-        // Prompt input row
+        // Row 2: Prompt input and Quick Title Action
         var promptRow = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Height = 48,
-            Margin = new Padding(0, 0, 0, 4)
+            Margin = new Padding(0, 0, 0, 3)
         };
-        promptRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 75));
-        promptRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+        promptRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72f));
+        promptRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28f));
 
         _txtAiPrompt.Dock = DockStyle.Fill;
         _txtAiPrompt.Font = new Font("Segoe UI", 8.5F);
+        _galleryToolTip.SetToolTip(_txtAiPrompt, "AI görsel üretimi için açıklama yazın veya yukarıdaki hazır stillerden birini seçin.");
         promptRow.Controls.Add(_txtAiPrompt, 0, 0);
 
         var btnPromptFromTitle = new Button
         {
-            Text = "⚡ Başlıktan\nPrompt",
+            Text = "⚡ Başlıktan\nPrompt Al",
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI Semibold", 7.5F),
             BackColor = UiStyle.SecondaryColor,
@@ -1004,42 +1023,28 @@ internal sealed class FastListingCreatorForm : Form
             {
                 _txtAiPrompt.Text = $"Professional commercial product photography of {_txtTitle.Text.Trim()}, isolated on clean studio lighting, high detail, 8k render, etsy showcase";
             }
-        };
-        promptRow.Controls.Add(btnPromptFromTitle, 1, 0);
-        aiStack.Controls.Add(promptRow);
-
-        // AI Preview Box
-        _picAiPreview.Dock = DockStyle.Top;
-        _picAiPreview.Height = 160;
-        _picAiPreview.BackColor = UiStyle.BackgroundColor;
-        _picAiPreview.BorderStyle = BorderStyle.FixedSingle;
-        _picAiPreview.Paint += (s, e) =>
-        {
-            if (_picAiPreview.Image == null)
+            else
             {
-                using var font = new Font("Segoe UI Semibold", 8.5F);
-                using var brush = new SolidBrush(UiStyle.TextMuted);
-                var text = "🎨 AI Görsel Önizleme\nPrompt yazıp 'Görseli Üret' butonuna basın.";
-                var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                e.Graphics.DrawString(text, font, brush, _picAiPreview.ClientRectangle, sf);
+                MessageBox.Show(this, "Önce sol panelden bir ürün başlığı girin.", "Başlık Gerekli", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         };
-        aiStack.Controls.Add(_picAiPreview);
+        _galleryToolTip.SetToolTip(btnPromptFromTitle, "Girdiğiniz ürün başlığını kullanarak otomatik profesyonel AI prompt oluşturur.");
+        promptRow.Controls.Add(btnPromptFromTitle, 1, 0);
+        aiLayout.Controls.Add(promptRow, 0, 2);
 
-        // AI Buttons
+        // Row 3: Action Buttons (Görseli Üret & Galeriye Ekle)
         var aiActionRow = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Height = 32,
-            Margin = new Padding(0, 4, 0, 0)
+            Margin = new Padding(0, 0, 0, 4)
         };
-        aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+        aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 54f));
+        aiActionRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 46f));
 
         _btnGenerateAi.Dock = DockStyle.Fill;
         _btnGenerateAi.Text = "🎨 Görseli Üret";
-        _btnGenerateAi.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        _btnGenerateAi.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
         _btnGenerateAi.NormalColor = UiStyle.AiColor;
         _btnGenerateAi.HoverColor = UiStyle.AiHover;
         _btnGenerateAi.ForeColor = Color.White;
@@ -1048,7 +1053,7 @@ internal sealed class FastListingCreatorForm : Form
         aiActionRow.Controls.Add(_btnGenerateAi, 0, 0);
 
         _btnAddToGallery.Dock = DockStyle.Fill;
-        _btnAddToGallery.Text = "➕ Listeye Ekle";
+        _btnAddToGallery.Text = "➕ Galeriye Ekle";
         _btnAddToGallery.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
         _btnAddToGallery.NormalColor = UiStyle.SuccessColor;
         _btnAddToGallery.HoverColor = Color.FromArgb(5, 150, 105);
@@ -1064,26 +1069,50 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
         aiActionRow.Controls.Add(_btnAddToGallery, 1, 0);
-        aiStack.Controls.Add(aiActionRow);
+        aiLayout.Controls.Add(aiActionRow, 0, 3);
 
-        aiContainer.SetContent(aiStack);
-        aiContainer.Resize += (_, _) =>
+        // Row 4: AI Preview Container (DockStyle.Fill - Adapts automatically without overflow)
+        var previewContainer = new ModernCardPanel
         {
-            if (aiContainer.ClientSize.Width > 0)
+            Dock = DockStyle.Fill,
+            CornerRadius = 8,
+            CardColor = UiStyle.CardBackground,
+            BorderColor = UiStyle.BorderColor,
+            Padding = new Padding(4),
+            Margin = new Padding(0, 2, 0, 0)
+        };
+
+        _picAiPreview.Dock = DockStyle.Fill;
+        _picAiPreview.BackColor = Color.FromArgb(18, 20, 29);
+        _picAiPreview.BorderStyle = BorderStyle.None;
+        _picAiPreview.SizeMode = PictureBoxSizeMode.Zoom;
+        _picAiPreview.Paint += (s, e) =>
+        {
+            if (_picAiPreview.Image == null)
             {
-                aiStack.Width = Math.Max(180, aiContainer.ClientSize.Width - 14);
-            }
-            if (aiContainer.ClientSize.Height > 0)
-            {
-                int targetPicHeight = Math.Max(140, aiContainer.ClientSize.Height - 165);
-                if (_picAiPreview.Height != targetPicHeight)
-                {
-                    _picAiPreview.Height = targetPicHeight;
-                    aiContainer.RecalculateScroll();
-                }
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+                using var titleFont = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
+                using var hintFont = new Font("Segoe UI", 7.8F);
+                using var titleBrush = new SolidBrush(Color.FromArgb(200, 210, 230));
+                using var hintBrush = new SolidBrush(UiStyle.TextMuted);
+
+                var rect = _picAiPreview.ClientRectangle;
+                var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+
+                int cy = rect.Height / 2;
+                var topRect = new Rectangle(0, Math.Max(0, cy - 22), rect.Width, 22);
+                var botRect = new Rectangle(0, cy + 2, rect.Width, 20);
+
+                e.Graphics.DrawString("✨ AI Görsel Önizleme Alanı", titleFont, titleBrush, topRect, sf);
+                e.Graphics.DrawString("Prompt yazıp 'Görseli Üret' butonuna basın", hintFont, hintBrush, botRect, sf);
             }
         };
-        aiBox.Controls.Add(aiContainer);
+        previewContainer.Controls.Add(_picAiPreview);
+        aiLayout.Controls.Add(previewContainer, 0, 4);
+
+        aiBox.Controls.Add(aiLayout);
         rootTable.Controls.Add(aiBox, 0, 2);
 
         cardLayout.Controls.Add(rootTable, 0, 2);
