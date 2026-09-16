@@ -483,7 +483,7 @@ internal static class UiStyle
         sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
         sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
 
-        sidebarNav.AddItem("notifications", "Bildirim & Bot Ayarları", "🔔", "Sistem");
+        // sidebarNav.AddItem("notifications", "Bildirim & Bot Ayarları", "🔔", "Sistem");
         sidebarNav.AddItem("theme", CurrentTheme == AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", CurrentTheme == AppTheme.Dark ? "☀️" : "🌙", "Sistem");
         sidebarNav.AddItem("api", "Etsy API Ayarları", "⚙️", "Sistem");
 
