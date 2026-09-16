@@ -181,9 +181,9 @@ internal sealed class FastListingCreatorForm : Form
             BackColor = Color.Transparent,
             Margin = Padding.Empty
         };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Left: Branding
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 310)); // Left: Branding
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f)); // Center: Template Strip
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Right: Action Buttons
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340)); // Right: Action Buttons
 
         // Left: Branding & Subtitle
         var titleBox = new FlowLayoutPanel
@@ -511,7 +511,7 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(titleHeader);
 
         _txtTitle.Multiline = true;
-        _txtTitle.Height = 44;
+        _txtTitle.Height = 58;
         _txtTitle.Font = new Font("Segoe UI", 8.8F);
         _txtTitle.ScrollBars = ScrollBars.None;
         _txtTitle.Dock = DockStyle.Top;
@@ -656,7 +656,7 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(tagHeader);
 
         _txtTags.Dock = DockStyle.Top;
-        _txtTags.Height = 56;
+        _txtTags.Height = 72;
         _txtTags.Font = new Font("Segoe UI", 8.8F);
         _txtTags.Margin = new Padding(0, 0, 0, 2);
         _galleryToolTip.SetToolTip(_txtTags, "Her etiket maksimum 20 karakterdir. Virgülle veya yeni satırla ayırabilirsiniz.");
@@ -693,7 +693,7 @@ internal sealed class FastListingCreatorForm : Form
         stack.Controls.Add(descHeader);
 
         _txtDescription.Dock = DockStyle.Top;
-        _txtDescription.Height = 115;
+        _txtDescription.Height = 240;
         _txtDescription.Font = new Font("Segoe UI", 8.8F);
         _txtDescription.Margin = new Padding(0, 0, 0, 6);
         stack.Controls.Add(_txtDescription);
@@ -705,6 +705,7 @@ internal sealed class FastListingCreatorForm : Form
 
         _txtMaterials.Dock = DockStyle.Top;
         _txtMaterials.Font = new Font("Segoe UI", 8.8F);
+        _txtMaterials.Height = 30;
         _txtMaterials.Margin = new Padding(0, 0, 0, 8);
         _galleryToolTip.SetToolTip(_txtMaterials, "Etsy filtreleri için virgülle ayırarak yazın (ör: Ahşap, PLA, Seramik, Deri).");
         stack.Controls.Add(_txtMaterials);
@@ -991,9 +992,9 @@ internal sealed class FastListingCreatorForm : Form
         promptRow.Controls.Add(btnPromptFromTitle, 1, 0);
         aiStack.Controls.Add(promptRow);
 
-        // Guaranteed Height AI Preview Box
+        // AI Preview Box
         _picAiPreview.Dock = DockStyle.Top;
-        _picAiPreview.Height = 135;
+        _picAiPreview.Height = 160;
         _picAiPreview.BackColor = UiStyle.BackgroundColor;
         _picAiPreview.BorderStyle = BorderStyle.FixedSingle;
         _picAiPreview.Paint += (s, e) =>
@@ -1229,10 +1230,10 @@ internal sealed class FastListingCreatorForm : Form
         var chkHeader = new Label
         {
             Text = "📋 Canlı Kontrol Listesi:",
-            Font = new Font("Segoe UI Semibold", 8.2F),
+            Font = new Font("Segoe UI Semibold", 8.5F),
             ForeColor = UiStyle.TextDark,
             AutoSize = true,
-            Margin = new Padding(0, 2, 0, 3)
+            Margin = new Padding(0, 2, 0, 4)
         };
         pubTable.Controls.Add(chkHeader);
 
@@ -1254,43 +1255,43 @@ internal sealed class FastListingCreatorForm : Form
 
         // Modern Publish Mode Toggle Card
         _chkMakeActive.Dock = DockStyle.Top;
-        _chkMakeActive.Margin = new Padding(0, 4, 0, 4);
+        _chkMakeActive.Margin = new Padding(0, 6, 0, 5);
         _chkMakeActive.CheckedChanged += (_, _) => UpdatePublishButtonVisuals();
         pubTable.Controls.Add(_chkMakeActive);
 
         // Secondary Publish Button
         _btnPublish.Dock = DockStyle.Top;
-        _btnPublish.Height = 34;
-        _btnPublish.Margin = new Padding(0, 2, 0, 3);
+        _btnPublish.Height = 36;
+        _btnPublish.Margin = new Padding(0, 2, 0, 4);
         _btnPublish.ForeColor = Color.White;
-        _btnPublish.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        _btnPublish.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
         _btnPublish.Click += async (_, _) => await PublishListingToEtsyAsync();
         UpdatePublishButtonVisuals();
         pubTable.Controls.Add(_btnPublish);
 
         // Secondary Preview Button
         _btnPreviewSecondary.Dock = DockStyle.Top;
-        _btnPreviewSecondary.Height = 26;
+        _btnPreviewSecondary.Height = 28;
         _btnPreviewSecondary.Text = "👁️ Canlı Önizleme";
-        _btnPreviewSecondary.Font = new Font("Segoe UI", 8F);
+        _btnPreviewSecondary.Font = new Font("Segoe UI", 8.2F);
         _btnPreviewSecondary.BackColor = UiStyle.SecondaryColor;
         _btnPreviewSecondary.ForeColor = UiStyle.TextDark;
         _btnPreviewSecondary.FlatStyle = FlatStyle.Flat;
         _btnPreviewSecondary.FlatAppearance.BorderColor = UiStyle.BorderColor;
         _btnPreviewSecondary.Cursor = Cursors.Hand;
-        _btnPreviewSecondary.Margin = new Padding(0, 0, 0, 3);
+        _btnPreviewSecondary.Margin = new Padding(0, 0, 0, 4);
         _btnPreviewSecondary.Click += (_, _) => OpenEtsyListingPreview();
         pubTable.Controls.Add(_btnPreviewSecondary);
 
         var lblNote = new Label
         {
             Dock = DockStyle.Top,
-            Font = new Font("Segoe UI", 7.2F),
+            Font = new Font("Segoe UI", 7.6F),
             ForeColor = UiStyle.TextMuted,
             Text = "💡 Güvenli Gönderim: Taslak listelemeler mağazanızda doğrudan görünmez, Etsy panelinizden onaylayabilirsiniz.",
             AutoSize = false,
-            Height = 28,
-            Margin = new Padding(0, 1, 0, 1)
+            Height = 36,
+            Margin = new Padding(0, 2, 0, 2)
         };
         pubTable.Controls.Add(lblNote);
 
