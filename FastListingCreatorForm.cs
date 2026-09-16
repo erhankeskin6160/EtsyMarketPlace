@@ -962,8 +962,8 @@ internal sealed class FastListingCreatorForm : Form
         aiLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 22)); // Row 0: Header & Hint
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Row 1: Style Preset Chips
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); // Row 2: Prompt Header Row + Başlıktan Al
-        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 66)); // Row 3: Multiline Prompt Input (Spacious!)
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); // Row 2: Prompt Header Row + Başlıktan Al
+        aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68)); // Row 3: Multiline Prompt Input (Spacious!)
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Row 4: Action Buttons (Görseli Üret & Galeriye Ekle)
         aiLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100f)); // Row 5: AI Preview Frame (Dynamic remaining space)
 
@@ -1045,12 +1045,13 @@ internal sealed class FastListingCreatorForm : Form
         }
         aiLayout.Controls.Add(chipsPanel, 0, 1);
 
-        // Row 2: Prompt Header Row + "⚡ Başlıktan Al" Button
+        // Row 2: Prompt Header Row + "✨ Başlıktan Al" Button
         var promptHeaderRow = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            Margin = new Padding(0, 1, 0, 2)
+            RowCount = 1,
+            Margin = new Padding(0, 2, 0, 4)
         };
         promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
         promptHeaderRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -1066,19 +1067,8 @@ internal sealed class FastListingCreatorForm : Form
         };
         promptHeaderRow.Controls.Add(lblPromptLabel, 0, 0);
 
-        var btnPromptFromTitle = new Button
-        {
-            Text = "⚡ Başlıktan Al",
-            Font = new Font("Segoe UI Semibold", 7.5F),
-            Height = 22,
-            AutoSize = true,
-            BackColor = UiStyle.SecondaryColor,
-            ForeColor = UiStyle.TextDark,
-            FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand,
-            Margin = Padding.Empty
-        };
-        btnPromptFromTitle.FlatAppearance.BorderColor = UiStyle.BorderColor;
+        var btnPromptFromTitle = CreateModernActionButton("✨ Başlıktan Al", UiStyle.AiColor, UiStyle.AiHover, Color.White, 25);
+        btnPromptFromTitle.Margin = new Padding(0, 0, 0, 2);
         btnPromptFromTitle.Click += (_, _) =>
         {
             if (!string.IsNullOrWhiteSpace(_txtTitle.Text))
@@ -1094,9 +1084,10 @@ internal sealed class FastListingCreatorForm : Form
         promptHeaderRow.Controls.Add(btnPromptFromTitle, 1, 0);
         aiLayout.Controls.Add(promptHeaderRow, 0, 2);
 
-        // Row 3: Multiline Prompt Input (Full width, 66px height, spacious & scrollable)
+        // Row 3: Multiline Prompt Input (Full width, spacious & scrollable)
         _txtAiPrompt.Dock = DockStyle.Fill;
         _txtAiPrompt.Font = new Font("Segoe UI", 8.8F);
+        _txtAiPrompt.Margin = new Padding(0, 2, 0, 6);
         _galleryToolTip.SetToolTip(_txtAiPrompt, "AI görsel üretimi için açıklama yazın veya yukarıdaki hazır stillerden birini seçin.");
         aiLayout.Controls.Add(_txtAiPrompt, 0, 3);
 
