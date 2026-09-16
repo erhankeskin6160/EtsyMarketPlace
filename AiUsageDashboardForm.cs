@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
@@ -140,11 +141,26 @@ public sealed class AiUsageDashboardForm : Form
         _btnExport.Cursor = Cursors.Hand;
         _btnExport.Click += ExportCsv;
 
+        var btnApiKeys = new Button
+        {
+            Text = "🔑 API Anahtarları ▼",
+            BackColor = Color.FromArgb(30, 41, 59),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Height = 32,
+            Width = 155,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(10, 2, 0, 0)
+        };
+        btnApiKeys.FlatAppearance.BorderColor = Color.FromArgb(70, 80, 100);
+        btnApiKeys.Click += (s, _) => ShowApiKeysMenu(btnApiKeys);
+
         pnlFilters.Controls.Add(lblProv);
         pnlFilters.Controls.Add(_cboProvider);
         pnlFilters.Controls.Add(lblPer);
         pnlFilters.Controls.Add(_cboPeriod);
         pnlFilters.Controls.Add(_btnRefresh);
+        pnlFilters.Controls.Add(btnApiKeys);
         pnlFilters.Controls.Add(_btnExport);
         mainLayout.Controls.Add(pnlFilters, 0, 1);
 
@@ -272,7 +288,7 @@ public sealed class AiUsageDashboardForm : Form
                 }
                 if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey))
                 {
-                    _openAiStatus = await AiBalanceCheckerService.CheckOpenAiStatusAsync(settings.OpenAiApiKey);
+                    _openAiStatus = await AiBalanceCheckerService.CheckOpenAiStatusAsync(settings.OpenAiApiKey, settings.OpenAiAdminApiKey);
                 }
                 if (!string.IsNullOrWhiteSpace(settings.GeminiApiKey))
                 {
@@ -361,9 +377,18 @@ public sealed class AiUsageDashboardForm : Form
         }
         else if (selectedProvider.Contains("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
-            _lblCard1Title.Text = "🟢 OPENAI BAĞLANTI DURUMU";
-            _lblCard1Value.Text = _openAiStatus?.IsAvailable == true ? "Bağlantı Aktif" : "API Anahtarı Kontrol Edin";
+            _lblCard1Title.Text = "🔑 OPENAI API ANAHTARI";
+            _lblCard1Value.Text = _openAiStatus?.IsAvailable == true
+                ? (!string.IsNullOrWhiteSpace(_openAiStatus.MaskedApiKey) ? _openAiStatus.MaskedApiKey : "Bağlantı Aktif")
+                : "API Anahtarı Geçersiz";
             _lblCard1Sub.Text = _openAiStatus?.StatusMessage ?? "gpt-5.6-luna / gpt-4o modelleri hazır";
+
+            if (_openAiStatus?.OfficialMonthlyCostUsd != null)
+            {
+                _lblCard3Title.Text = "💰 OPENAI RESMİ FATURA (CANLI)";
+                _lblCard3Value.Text = $"${_openAiStatus.OfficialMonthlyCostUsd.Value:N2} USD";
+                _lblCard3Sub.Text = $"Yaklaşık {_openAiStatus.OfficialMonthlyCostUsd.Value * 40m:N2} TL (OpenAI Admin API)";
+            }
         }
         else
         {
@@ -455,6 +480,54 @@ public sealed class AiUsageDashboardForm : Form
         catch (Exception ex)
         {
             MessageBox.Show(this, $"CSV oluşturma hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void ShowApiKeysMenu(Button anchor)
+    {
+        var menu = new ContextMenuStrip();
+        var itemOpenAiKeys = new ToolStripMenuItem("🌐 OpenAI API Anahtarları (platform.openai.com/api-keys)");
+        itemOpenAiKeys.Click += (_, _) => OpenUrl("https://platform.openai.com/api-keys");
+
+        var itemOpenAiUsage = new ToolStripMenuItem("📊 OpenAI Kullanım & Fatura (platform.openai.com/usage)");
+        itemOpenAiUsage.Click += (_, _) => OpenUrl("https://platform.openai.com/usage");
+
+        var itemDeepSeek = new ToolStripMenuItem("💳 DeepSeek Platform & Bakiye (platform.deepseek.com)");
+        itemDeepSeek.Click += (_, _) => OpenUrl("https://platform.deepseek.com");
+
+        var itemEditKeys = new ToolStripMenuItem("⚙️ Program İçi Yapay Zeka Ayarları (Anahtarları Düzenle)");
+        itemEditKeys.Click += async (_, _) =>
+        {
+            using var dlg = new AiOptimizationSettingsForm();
+            if (dlg.ShowDialog(this) == DialogResult.OK)
+            {
+                await RefreshDataAsync(queryLiveBalance: true);
+            }
+        };
+
+        menu.Items.Add(itemOpenAiKeys);
+        menu.Items.Add(itemOpenAiUsage);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(itemDeepSeek);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(itemEditKeys);
+
+        menu.Show(anchor, new Point(0, anchor.Height));
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Web sayfası açılamadı: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 }

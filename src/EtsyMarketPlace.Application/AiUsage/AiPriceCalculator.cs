@@ -1,6 +1,8 @@
 namespace EtsyMarketPlace.Application.AiUsage;
 
 using System;
+using System.Globalization;
+using System.Text.Json;
 
 public static class AiPriceCalculator
 {
@@ -117,5 +119,73 @@ public static class AiPriceCalculator
     public static decimal CalculateCostTry(decimal costUsd, decimal exchangeRate = DefaultExchangeRateUsdTry)
     {
         return Math.Round(costUsd * exchangeRate, 4);
+    }
+
+    /// <summary>
+    /// API anahtarını güvenli şekilde maskeler (örn: sk-proj-...8Abc)
+    /// </summary>
+    public static string MaskApiKey(string? apiKey)
+    {
+        if (string.IsNullOrWhiteSpace(apiKey)) return "Tanımlanmadı";
+        string trimmed = apiKey.Trim();
+        if (trimmed.Length <= 8) return new string('*', trimmed.Length);
+
+        if (trimmed.StartsWith("sk-proj-", StringComparison.OrdinalIgnoreCase))
+        {
+            string suffix = trimmed.Length > 12 ? trimmed[^4..] : trimmed[^2..];
+            return $"sk-proj-...{suffix}";
+        }
+        if (trimmed.StartsWith("sk-admin-", StringComparison.OrdinalIgnoreCase))
+        {
+            string suffix = trimmed.Length > 13 ? trimmed[^4..] : trimmed[^2..];
+            return $"sk-admin-...{suffix}";
+        }
+        if (trimmed.Length > 10)
+        {
+            return $"{trimmed[..4]}...{trimmed[^4..]}";
+        }
+        return $"{trimmed[..2]}...{trimmed[^2..]}";
+    }
+
+    /// <summary>
+    /// OpenAI /v1/organization/costs JSON çıktısını ayrıştırır ve toplam harcanan doları hesaplar
+    /// </summary>
+    public static decimal ParseOpenAiCostsJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return 0m;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            decimal totalCost = 0m;
+
+            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in dataEl.EnumerateArray())
+                {
+                    if (item.TryGetProperty("amount", out var amtEl))
+                    {
+                        if (amtEl.TryGetProperty("value", out var valEl))
+                        {
+                            if (valEl.ValueKind == JsonValueKind.Number && valEl.TryGetDecimal(out var val))
+                                totalCost += val;
+                            else if (valEl.ValueKind == JsonValueKind.String && decimal.TryParse(valEl.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed))
+                                totalCost += parsed;
+                        }
+                    }
+                }
+            }
+            else if (root.TryGetProperty("amount", out var singleAmt) && singleAmt.TryGetProperty("value", out var valProp))
+            {
+                if (valProp.ValueKind == JsonValueKind.Number && valProp.TryGetDecimal(out var val))
+                    totalCost = val;
+            }
+
+            return Math.Round(totalCost, 4);
+        }
+        catch
+        {
+            return 0m;
+        }
     }
 }

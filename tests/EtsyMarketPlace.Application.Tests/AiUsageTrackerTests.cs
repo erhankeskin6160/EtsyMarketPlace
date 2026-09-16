@@ -127,4 +127,40 @@ public sealed class AiUsageTrackerTests
             }
         }
     }
+
+    [Fact]
+    public void TestMaskApiKey_MasksAppropriately()
+    {
+        Assert.Equal("Tanımlanmadı", AiPriceCalculator.MaskApiKey(null));
+        Assert.Equal("Tanımlanmadı", AiPriceCalculator.MaskApiKey(""));
+        Assert.Equal("sk-proj-...8Abc", AiPriceCalculator.MaskApiKey("sk-proj-1234567890abcdef128Abc"));
+        Assert.Equal("sk-admin-...mnop", AiPriceCalculator.MaskApiKey("sk-admin-1234567890abcdefmnop"));
+        Assert.Equal("sk-1...mnop", AiPriceCalculator.MaskApiKey("sk-1234567890abcdefmnop"));
+    }
+
+    [Fact]
+    public void TestParseOpenAiCostsJson_CalculatesTotal()
+    {
+        string sampleJson = """
+        {
+            "object": "page",
+            "data": [
+                {
+                    "object": "organization.costs.result",
+                    "amount": { "value": 0.25, "currency": "usd" }
+                },
+                {
+                    "object": "organization.costs.result",
+                    "amount": { "value": 0.35, "currency": "usd" }
+                }
+            ]
+        }
+        """;
+
+        decimal total = AiPriceCalculator.ParseOpenAiCostsJson(sampleJson);
+        Assert.Equal(0.60m, total);
+
+        Assert.Equal(0m, AiPriceCalculator.ParseOpenAiCostsJson(""));
+        Assert.Equal(0m, AiPriceCalculator.ParseOpenAiCostsJson("invalid json"));
+    }
 }

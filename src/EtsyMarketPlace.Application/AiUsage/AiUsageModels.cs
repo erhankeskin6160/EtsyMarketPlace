@@ -30,6 +30,9 @@ public sealed class AiProviderBalanceInfo
     public string StatusMessage { get; set; } = string.Empty;
     public int DailyRequestsUsed { get; set; }
     public int DailyQuotaLimit { get; set; }
+    public string MaskedApiKey { get; set; } = string.Empty;
+    public decimal? OfficialMonthlyCostUsd { get; set; }
+    public bool HasAdminKey { get; set; }
     public DateTimeOffset CheckedAt { get; set; } = DateTimeOffset.Now;
 
     public decimal TotalBalanceTry(decimal exchangeRate = 40.0m) =>
