@@ -376,17 +376,22 @@ public static class EtsyDescriptionFormatter
         sb.AppendLine(headers.FeaturesHeader);
         if (cleanSource.KeyFeatures.Count > 0)
         {
-            foreach (var feat in cleanSource.KeyFeatures.Take(3))
+            foreach (var feat in cleanSource.KeyFeatures.Take(6))
             {
-                sb.AppendLine($"• {feat}");
+                var formattedFeat = feat.StartsWith("• ") ? feat : $"• {feat}";
+                sb.AppendLine(formattedFeat);
+            }
+            if (cleanSource.KeyFeatures.Count < 2)
+            {
+                sb.AppendLine(BuildThemeFeatureBullet(theme));
             }
         }
         else
         {
             sb.AppendLine($"• Premium Craftsmanship: Expertly manufactured with durable {matList} for a smooth, high-detail finish.");
             sb.AppendLine(BuildThemeDisplayHighlight(theme));
+            sb.AppendLine(BuildThemeFeatureBullet(theme));
         }
-        sb.AppendLine(BuildThemeFeatureBullet(theme));
         sb.AppendLine();
 
         // BÖLÜM 3: Boyut ve Teknik Özellikler
@@ -394,7 +399,12 @@ public static class EtsyDescriptionFormatter
         sb.AppendLine($"• Materials: {matList}");
         if (!string.IsNullOrWhiteSpace(cleanSource.Dimensions))
         {
-            sb.AppendLine($"• Dimensions: {cleanSource.Dimensions}");
+            var dimClean = cleanSource.Dimensions;
+            if (dimClean.StartsWith("Dimensions:", StringComparison.OrdinalIgnoreCase))
+            {
+                dimClean = dimClean["Dimensions:".Length..].Trim();
+            }
+            sb.AppendLine($"• Dimensions: {dimClean}");
         }
         else
         {
@@ -402,12 +412,22 @@ public static class EtsyDescriptionFormatter
         }
         if (!string.IsNullOrWhiteSpace(cleanSource.IncludedItems))
         {
-            sb.AppendLine($"• Package Includes: {cleanSource.IncludedItems}");
+            var incClean = cleanSource.IncludedItems;
+            if (incClean.StartsWith("Package Includes:", StringComparison.OrdinalIgnoreCase))
+            {
+                incClean = incClean["Package Includes:".Length..].Trim();
+            }
+            sb.AppendLine($"• Package Includes: {incClean}");
         }
         sb.AppendLine("• Finish: Clean, hand-finished surface with vibrant, durable detailing.");
         if (!string.IsNullOrWhiteSpace(cleanSource.ExtraNotes))
         {
-            sb.AppendLine($"• Note: {cleanSource.ExtraNotes}");
+            var noteClean = cleanSource.ExtraNotes;
+            if (noteClean.StartsWith("Note:", StringComparison.OrdinalIgnoreCase))
+            {
+                noteClean = noteClean["Note:".Length..].Trim();
+            }
+            sb.AppendLine($"• Note: {noteClean}");
         }
         sb.AppendLine();
 
@@ -825,6 +845,7 @@ public static class EtsyDescriptionFormatter
 
             var cleanItem = line.TrimStart('•', '-', '*', ' ').Trim();
             if (cleanItem.Length < 6) continue;
+            var translated = TranslateTurkishToEnglish(cleanItem);
             var normLine = NormalizeForMatching(cleanItem);
 
             // 1. Özel Not (Öncelikli)
@@ -834,11 +855,13 @@ public static class EtsyDescriptionFormatter
                  normLine.StartsWith("dikkat:") ||
                  normLine.StartsWith("onemli:")) && cleanItem.Length < 180)
             {
-                extraNotes = cleanItem;
+                extraNotes = translated.StartsWith("Note:", StringComparison.OrdinalIgnoreCase)
+                    ? translated["Note:".Length..].Trim()
+                    : translated;
                 continue;
             }
 
-            // 2. Kutu içeriği (İngilizce ve Türkçe destekli)
+            // 2. Kutu / Paket içeriği (İngilizce ve Türkçe destekli)
             if (string.IsNullOrEmpty(included) &&
                 (normLine.Contains("includes:") ||
                  normLine.StartsWith("package:") ||
@@ -856,17 +879,13 @@ public static class EtsyDescriptionFormatter
                  normLine.Contains("icerik:") ||
                  normLine.Contains("kutuda")))
             {
-                if (cleanItem.Length < 140)
+                if (cleanItem.Length < 160)
                 {
-                    var inc = cleanItem;
-                    if (inc.StartsWith("Package:", StringComparison.OrdinalIgnoreCase))
+                    var inc = translated;
+                    if (inc.StartsWith("Package Includes:", StringComparison.OrdinalIgnoreCase))
+                        inc = inc["Package Includes:".Length..].Trim();
+                    else if (inc.StartsWith("Package:", StringComparison.OrdinalIgnoreCase))
                         inc = inc["Package:".Length..].Trim();
-                    else if (inc.StartsWith("Paket:", StringComparison.OrdinalIgnoreCase))
-                        inc = inc["Paket:".Length..].Trim();
-                    else if (inc.StartsWith("Includes:", StringComparison.OrdinalIgnoreCase))
-                        inc = inc["Includes:".Length..].Trim();
-                    else if (inc.StartsWith("Kutu Icerigi:", StringComparison.OrdinalIgnoreCase))
-                        inc = inc["Kutu Icerigi:".Length..].Trim();
                     included = inc;
                     continue;
                 }
@@ -902,57 +921,34 @@ public static class EtsyDescriptionFormatter
                 normLine.Contains("compartment") ||
                 normLine.Contains("pocket"))
             {
-                if (cleanItem.Length < 140)
+                if (cleanItem.Length < 160)
                 {
+                    var dim = translated;
+                    if (dim.StartsWith("Dimensions:", StringComparison.OrdinalIgnoreCase))
+                        dim = dim["Dimensions:".Length..].Trim();
+
                     if (string.IsNullOrEmpty(dimensions))
                     {
-                        dimensions = cleanItem;
+                        dimensions = dim;
                     }
-                    else if (!dimensions.Contains(cleanItem, StringComparison.OrdinalIgnoreCase) && dimensions.Length + cleanItem.Length < 160)
+                    else if (!dimensions.Contains(dim, StringComparison.OrdinalIgnoreCase) && dimensions.Length + dim.Length < 180)
                     {
-                        dimensions = $"{dimensions} | {cleanItem}";
+                        dimensions = $"{dimensions} | {dim}";
                     }
                     continue;
                 }
             }
 
-            // 4. Önemli ürün nitelikleri (el boyaması, LED, özel kaplama, RGB, dokunmatik vb.)
-            if (features.Count < 3 && cleanItem.Length is >= 10 and <= 120 &&
-                (normLine.Contains("hand-painted") ||
-                 normLine.Contains("handcrafted") ||
-                 normLine.Contains("high detail") ||
-                 normLine.Contains("articulated") ||
-                 normLine.Contains("magnetic") ||
-                 normLine.Contains("custom") ||
-                 normLine.Contains("textured") ||
-                 normLine.Contains("durable") ||
-                 normLine.Contains("led") ||
-                 normLine.Contains("smooth finish") ||
-                 normLine.Contains("resin") ||
-                 normLine.Contains("wood") ||
-                 normLine.Contains("silicone") ||
-                 normLine.Contains("anti-slip") ||
-                 normLine.Contains("non-slip") ||
-                 normLine.Contains("feet") ||
-                 normLine.Contains("feature") ||
-                 normLine.Contains("food-safe") ||
-                 normLine.Contains("dishwasher") ||
-                 normLine.Contains("microwave") ||
-                 normLine.Contains("el yapimi") ||
-                 normLine.Contains("el boyamasi") ||
-                 normLine.Contains("ozel tasarim") ||
-                 normLine.Contains("rgb") ||
-                 normLine.Contains("dokunmatik") ||
-                 normLine.Contains("sarjli") ||
-                 normLine.Contains("kablosuz") ||
-                 normLine.Contains("ozellik") ||
-                 normLine.Contains("taban") ||
-                 normLine.Contains("silikon") ||
-                 normLine.Contains("ayaklar")))
+            // 4. Kullanıcının girdiği her türlü ürün niteliği ve özelliğini ASLA yutmadan koru
+            if (!IsSectionHeader(cleanItem) && features.Count < 6)
             {
-                if (!IsSectionHeader(cleanItem) && !features.Contains(cleanItem))
+                var featText = translated;
+                if (featText.StartsWith("Key Features:", StringComparison.OrdinalIgnoreCase))
+                    featText = featText["Key Features:".Length..].Trim();
+
+                if (!string.IsNullOrWhiteSpace(featText) && !features.Contains(featText, StringComparer.OrdinalIgnoreCase))
                 {
-                    features.Add(cleanItem);
+                    features.Add(featText);
                     continue;
                 }
             }
@@ -960,11 +956,63 @@ public static class EtsyDescriptionFormatter
             // 5. Genel ekstra not (eğer başka bir alana girmediyse)
             if (string.IsNullOrEmpty(extraNotes) && cleanItem.Length is >= 15 and <= 180 && !IsSectionHeader(cleanItem))
             {
-                extraNotes = cleanItem;
+                extraNotes = translated;
             }
         }
 
         return new ExtractedDetails(dimensions, features, included, extraNotes);
+    }
+
+    /// <summary>
+    /// Satıcının girdiği Türkçe başlık, etiket ve ürün özelliklerini Etsy'ye uygun İngilizce terimlere dönüştürür.
+    /// </summary>
+    public static string TranslateTurkishToEnglish(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+
+        var res = text;
+        // Başlık / Nitelik etiketleri
+        res = Regex.Replace(res, @"^(Ölçüler|Ölçü|Boyutlar|Boyut|Ebatlar|Ebat)\s*:\s*", "Dimensions: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Malzemeler|Malzeme|Materyal)\s*:\s*", "Materials: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Paket\s*İçeriği|Kutu\s*İçeriği|İçerik|Paket|Kutu)\s*:\s*", "Package Includes: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Özellikler|Özellik|Ürün\s*Özellikleri|Öne\s*Çıkan\s*Özellikler)\s*:\s*", "Key Features: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Özel\s*Not|Önemli\s*Not|Dikkat|Not)\s*:\s*", "Note: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Ağırlık)\s*:\s*", "Weight: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Kapasite|Hacim)\s*:\s*", "Capacity: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Yükseklik)\s*:\s*", "Height: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Genişlik)\s*:\s*", "Width: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Derinlik)\s*:\s*", "Depth: ", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"^(Renk|Renkler)\s*:\s*", "Color: ", RegexOptions.IgnoreCase);
+
+        // Yaygın Türkçe ürün ifadeleri ve malzeme çevirileri
+        res = Regex.Replace(res, @"\bel\s*yapımı\b", "Handcrafted", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bel\s*boyaması\b", "Hand-painted", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bdoğal\s*ahşap\b", "Natural wood", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bmasif\s*ahşap\b", "Solid wood", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bmeşe\s*ağacı\b", "Oak wood", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bceviz\s*ağacı\b", "Walnut wood", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bçam\s*ağacı\b", "Pine wood", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bgerçek\s*deri|hakiki\s*deri\b", "Genuine leather", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bpaslanmaz\s*çelik\b", "Stainless steel", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bsessiz\s*(akar\s*)?mekanizma\b", "Silent quartz sweep mechanism", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bpil\s*dahil\s*değildir\b", "Battery not included", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bpil\s*dahildir\b", "Battery included", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bçizilmeye\s*dayanıklı\b", "Scratch-resistant protective coating", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bsuya\s*dayanıklı|su\s*geçirmez\b", "Water-resistant", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bkolay\s*temizlenir|kolay\s*temizleme\b", "Easy to clean", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bözeltasarım|özel\s*tasarım\b", "Custom artisanal design", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bçevre\s*dostu\b", "Eco-friendly", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bpürüzsüz\s*yüzey\b", "Smooth finish", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bvernikli\b", "Varnished finish", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\byüksek\s*kalite(li)?\b", "Premium high quality", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bkullanıma\s*hazır\b", "Ready to use", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bşarjlı\b", "Rechargeable", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bkablosuz\b", "Wireless", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\bdokunmatik\b", "Touch-sensitive control", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\b1\s*adet\b", "1x", RegexOptions.IgnoreCase);
+        res = Regex.Replace(res, @"\b2\s*adet\b", "2x", RegexOptions.IgnoreCase);
+
+        return res.Trim();
     }
 
     private static string NormalizeForMatching(string text)

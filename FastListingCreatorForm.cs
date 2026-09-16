@@ -2833,13 +2833,33 @@ internal sealed class FastListingCreatorForm : Form
         {
             UseWaitCursor = true;
             _statusLabel.Text = "AI ürün açıklaması yazıyor...";
-            var input = new ListingOptimizationInput(_txtTitle.Text.Trim(), _txtDescription.Text.Trim(), SplitTags(_txtTags.Text), "");
+            var title = _txtTitle.Text.Trim();
+            var desc = _txtDescription.Text.Trim();
+            var mats = _txtMaterials.Text.Trim();
+
+            var combinedDesc = desc;
+            if (!string.IsNullOrWhiteSpace(mats) && !combinedDesc.Contains(mats, StringComparison.OrdinalIgnoreCase))
+            {
+                combinedDesc = string.IsNullOrWhiteSpace(combinedDesc)
+                    ? $"Materials: {mats}"
+                    : $"{combinedDesc}\r\nMaterials: {mats}";
+            }
+
+            var tags = SplitTags(_txtTags.Text);
+            var keyword = tags.Count > 0 ? tags[0] : title;
+            var input = new ListingOptimizationInput(title, combinedDesc, tags, keyword);
             var res = await _aiOptimizer.OptimizeAsync(input);
 
             if (!string.IsNullOrWhiteSpace(res.DescriptionDraft))
             {
-                _txtDescription.Text = res.DescriptionDraft;
-                _statusLabel.Text = "Açıklama AI tarafından oluşturuldu.";
+                var finalDesc = EtsyDescriptionFormatter.NormalizeForEtsy(res.DescriptionDraft);
+                _txtDescription.Text = finalDesc;
+                _statusLabel.Text = "Açıklama AI tarafından oluşturuldu ve standart Etsy şablonuna uyarlandı.";
+
+                if (string.IsNullOrWhiteSpace(_txtMaterials.Text) && res.MaterialSuggestions.Count > 0)
+                {
+                    _txtMaterials.Text = string.Join(", ", res.MaterialSuggestions.Take(8));
+                }
             }
         }
         catch (Exception ex)

@@ -147,16 +147,17 @@ public static class ListingDraftInstructionBuilder
             - Dog Collars / Pets: e.g. "🐾 PET COMFORT & DURABLE HARDWARE:"
             - Wall Art: e.g. "🖼️ STATEMENT DESIGN & WALL ACCENT:"
             - Collectibles / General: e.g. "✨ WHY YOU'LL LOVE IT:"
-            Then provide 3-4 bullet points highlighting the real product features, textures, and everyday use.
+            Then provide 3-5 bullet points highlighting the real product features, textures, and everyday use. If the seller provided raw features (in Turkish or English), translate and incorporate EVERY SINGLE ONE of them here!
           * SECTION 3 (Product-Tailored Specifications & Sizing Header with 📏):
             Adapt header to the product (e.g. "📏 CAPACITY, SIZING & MATERIALS:" for mugs, "📏 CARD SLOTS, CAPACITY & MEASUREMENTS:" for wallets, "📏 DIMENSIONS, POWER & LIGHTING SPECS:" for lamps, "📏 SPECIFICATIONS & DETAILS:" for collectibles).
-            Extract and preserve ALL real dimensions (cm/inches), capacities (oz/ml), scale, materials, finishes, package contents, and included components from the source description. Never omit real measurements.
+            Extract and preserve ALL real dimensions (cm/inches), capacities (oz/ml), scale, materials, finishes, package contents, and included components from the source description. NEVER omit, swallow, or replace real measurements with generic filler!
           * SECTION 4 (Product-Tailored Audience & Gift Occasion Header with 🎁):
             Adapt header to the product (e.g. "🎁 PERFECT FOR COFFEE & TEA LOVERS:" for mugs, "🎁 TIMELESS EVERYDAY CARRY & GIFTS:" for wallets, "🎁 NURSERY & CELESTIAL BEDROOM DECOR:" for lamps, "🎁 STREAMERS, GAMERS & AUDIOPHILES:" for headphone stands, "🎁 PERFECT FOR:" for general).
             State who this specific item is actually for.
           * SECTION 5 (📦 PACKAGING & SAFE SHIPPING): Protective packaging guarantee for 100% safe worldwide delivery with tracking.
           * SECTION 6 (💬 CUSTOM REQUESTS & QUESTIONS): Friendly call to action for custom colors, sizing, or inquiries.
           * STRICTLY FORBIDDEN: NEVER include debug labels (such as "Selected listing title:", "Competitor description:", "Etsy search keyword:", "Target keyword:"), prompt words, or generic filler like "This item is prepared as an Etsy-ready product listing". Write directly to the customer.
+          * ZERO TURKISH IN BUYER FIELDS: Ensure 100% of description_draft is in natural English. No Turkish words allowed in description_draft.
         - risk_warnings: Turkish language notes. Flag any brand, character, movie, game, or fan-art terms. Include Turkish explanations in parentheses. Example: "Ben 10 ve Omnitrix terimleri telif riski tasiyabilir (Cartoon Network markasi)."
         """;
 
@@ -173,6 +174,13 @@ public static class ListingDraftInstructionBuilder
         Target keyword: {targetKeyword}
         Current title: {title}
         Current tags: {string.Join(", ", tags)}
-        Current description: {description}
+        Current description & seller specifications:
+        {description}
+
+        CRITICAL SELLER SPECIFICATIONS MANDATE:
+        The text above may contain raw product notes, dimensions, materials, and features written in TURKISH or informal shorthand.
+        You MUST preserve EVERY single specification, dimension (cm/mm/inches), material, package item, and functional feature!
+        Translate all Turkish terms into 100% natural, fluent American English.
+        Under NO circumstances should any seller-provided measurement or feature be dropped or swallowed!
         """;
 }

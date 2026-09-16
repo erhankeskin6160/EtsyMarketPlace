@@ -71,6 +71,8 @@ jobs:
             *VDS üzerindeki `Guncelle_Ve_Baslat.bat` bu dosyayı otomatik indirip çalıştırır.*
           prerelease: true
           make_latest: false
-          files: publish_vds_standalone/SimilarProductsWinForms.exe
+          files: |
+            publish_vds_standalone/SimilarProductsWinForms.exe
+            deploy/Client_Guncelle.bat
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -160,4 +160,39 @@ public sealed class EtsyDescriptionFormatterTests
         Assert.Contains("Kids, toddlers, and aspiring space explorers.", result);
         Assert.DoesNotContain("Collector & Fan Approved:", result);
     }
+
+    [Fact]
+    public void FormatToStandardTemplate_TranslatesTurkishAttributesAndPreservesAllFeatures()
+    {
+        var turkishRaw = """
+            El yapımı doğal meşe ağacı masa saati.
+            Ölçüler: 25cm x 15cm x 5cm
+            Malzeme: Masif ceviz ağacı, pirinç detaylar
+            Özellikler: Sessiz akar mekanizma, çizilmeye dayanıklı vernikli kaplama
+            Paket İçeriği: 1 adet masa saati, montaj kılavuzu
+            Not: Pil dahil değildir (1x AA pil ile çalışır).
+            """;
+
+        var result = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            turkishRaw,
+            "Handmade Wooden Desk Clock",
+            ["desk clock", "wooden clock"],
+            ["Oak Wood", "Brass"],
+            "desk clock");
+
+        // 1. Türkçe boyut ve özellikler asla yutulmamalı
+        Assert.Contains("25cm x 15cm x 5cm", result);
+        Assert.Contains("Dimensions:", result);
+        Assert.DoesNotContain("Ölçüler:", result);
+
+        // 2. Türkçe niteleme etiketleri İngilizceye çevrilmeli
+        Assert.Contains("Package Includes:", result);
+        Assert.DoesNotContain("Paket İçeriği:", result);
+        Assert.Contains("Note:", result);
+
+        // 3. Kullanıcının girdiği özellikler korunmalı
+        Assert.Contains("Silent quartz sweep mechanism", result);
+        Assert.Contains("Battery not included", result);
+    }
 }
+
