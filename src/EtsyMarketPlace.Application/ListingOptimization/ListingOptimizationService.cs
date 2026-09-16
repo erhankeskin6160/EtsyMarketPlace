@@ -138,21 +138,7 @@ public sealed class ListingOptimizationService
             candidateList.Add($"custom {mat} craft");
         }
 
-        // 6. Alıcı & Hediye Facet Tagleri
-        candidateList.Add("unique gift idea");
-        candidateList.Add("birthday gift idea");
-        candidateList.Add("collector gift idea");
-        candidateList.Add("gift for him or her");
-        candidateList.Add("thoughtful present");
-
-        // 7. Mekan & Sergileme Facet Tagleri
-        candidateList.Add("home shelf decor");
-        candidateList.Add("living room display");
-        candidateList.Add("studio desk accent");
-        candidateList.Add("aesthetic desk art");
-        candidateList.Add("modern tabletop art");
-
-        // 8. Güçlü kelimelerden ikili kombinasyonlar
+        // 6. Ürünün kendi güçlü kelimelerinden 2'li kombinasyonlar (Ürüne %100 özgün SEO tagleri)
         for (int i = 0; i < strongTerms.Count; i++)
         {
             for (int j = i + 1; j < strongTerms.Count; j++)
@@ -161,6 +147,13 @@ public sealed class ListingOptimizationService
                 if (pair.Length is >= 5 and <= 20) candidateList.Add(pair);
             }
         }
+
+        // 7. Ürüne Özel Alıcı, Hediye ve Sergileme Facet Tagleri
+        var primaryKey = strongTerms.FirstOrDefault() ?? "artisan";
+        candidateList.Add($"{primaryKey} gift idea");
+        candidateList.Add($"{primaryKey} collector");
+        candidateList.Add($"{primaryKey} display");
+        candidateList.Add($"unique {primaryKey}");
 
         // 9. Kalan mevcut etiketleri en sona yedek olarak ekle (eğer başka alternatif bulunamazsa devreye girer)
         foreach (var tag in input.Tags.Skip(2))
@@ -352,6 +345,54 @@ public sealed class ListingOptimizationService
                 "geeky desk display",
                 "video game art prop",
                 "collector figure prop"
+            ]);
+        }
+        else if (blob.Contains("wallet") || blob.Contains("leather") || blob.Contains("cardholder") || blob.Contains("card holder") || blob.Contains("bifold") || blob.Contains("cuzdan") || blob.Contains("kartlik"))
+        {
+            list.AddRange([
+                "leather card wallet",
+                "slim bifold wallet",
+                "edc leather gear",
+                "minimalist cardholder",
+                "full grain accessory",
+                "mens pocket wallet",
+                "handmade leather craft",
+                "personalized wallet",
+                "classic leather gift"
+            ]);
+        }
+        else if (blob.Contains("headphone") || blob.Contains("headset") || blob.Contains("kulaklik"))
+        {
+            list.AddRange([
+                "headphone desk stand",
+                "gaming headset holder",
+                "audio gear display",
+                "battlestation stand",
+                "desktop headphone rest",
+                "audio cable organizer",
+                "streamer desk accent"
+            ]);
+        }
+        else if (blob.Contains("candle") || blob.Contains("mumluk") || blob.Contains("tealight") || blob.Contains("candlestick"))
+        {
+            list.AddRange([
+                "nordic candle holder",
+                "tealight candle stand",
+                "ambient candle decor",
+                "concrete candle stand",
+                "cozy home candleholder",
+                "tabletop candle accent"
+            ]);
+        }
+        else if (blob.Contains("wall art") || blob.Contains("wall decor") || blob.Contains("wall sign") || blob.Contains("hanging") || blob.Contains("duvar"))
+        {
+            list.AddRange([
+                "modern wall decor",
+                "wooden wall sign",
+                "geometric wall art",
+                "statement wall hanging",
+                "living room wall accent",
+                "minimalist wall piece"
             ]);
         }
         else

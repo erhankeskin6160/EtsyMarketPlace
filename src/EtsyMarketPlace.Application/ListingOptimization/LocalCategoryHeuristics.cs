@@ -14,19 +14,47 @@ public static class LocalCategoryHeuristics
 
     private static readonly Rule[] Rules =
     [
+        // Lighting - Night Lights (Specialized Sub-category - Priority 4)
+        new(1042, "Home & Living > Lighting > Night Lights",
+            ["night light", "gece lambasi", "nightlight", "led night light", "bedside night light", "kids night light", "bedside lamp", "ambient lamp", "astronaut lamp", "moon lamp", "nursery lamp", "sleeping light", "ambient light"],
+            Priority: 4),
+        new(1041, "Home & Living > Lighting > Lamps",
+            ["lamp", "lamba", "desk lamp", "table lamp", "chandelier", "abajur", "lighting", "aydinlatma", "led light"],
+            Priority: 2),
+
         // Headphone & Headset Stands (Specialized audio/desk accessory - High Priority)
         new(2079, "Electronics & Accessories > Audio > Headphone & Headset Stands",
             ["headphone stand", "kulaklik standi", "headset stand", "headphone holder", "kulaklik tutucu", "kulaklik askisi", "audio stand", "kulaklik"],
             Priority: 3),
 
-        // 3D Printed Sculptures, Busts & Statues (High Priority)
-        new(1239, "Art & Collectibles > Sculptures > Busts & Statues",
-            ["bust", "bustu", "statue", "heykel", "figurine", "figur", "sculpture", "3d printed bust", "gollum", "smeagol", "character statue", "anime figure", "miniature"],
-            Priority: 2),
-
         // Drinkware & Mugs
         new(943, "Home & Living > Kitchen & Dining > Drinkware > Mugs",
-            ["mug", "kupa", "coffee mug", "kahve kupasi", "cup", "fincan", "ceramic mug", "tumbler"],
+            ["mug", "kupa", "coffee mug", "kahve kupasi", "cup", "fincan", "ceramic mug", "tumbler", "coaster", "bardak"],
+            Priority: 3),
+
+        // Candle Holders & Candles
+        new(1063, "Home & Living > Home Decor > Candleholders",
+            ["candle holder", "mumluk", "candlestick", "tealight", "samdan", "candle stand"],
+            Priority: 3),
+
+        // Wall Decor & Signs
+        new(1054, "Home & Living > Home Decor > Wall Decor",
+            ["wall decor", "duvar dekoru", "wall hanging", "wall sign", "duvar panosu", "metal wall art", "wood wall art"],
+            Priority: 3),
+
+        // Bags, Purses & Wallets
+        new(142, "Bags & Purses > Wallets & Money Clips",
+            ["wallet", "cuzdan", "card holder", "kartlik", "money clip", "bifold wallet", "leather wallet"],
+            Priority: 3),
+
+        // Cosplay & Costume Props
+        new(108, "Accessories > Costume Accessories",
+            ["cosplay", "helmet", "kask", "mask", "maske", "prop replica", "sword", "dagger", "armor"],
+            Priority: 3),
+
+        // 3D Printed Sculptures, Busts & Statues
+        new(1239, "Art & Collectibles > Sculptures > Busts & Statues",
+            ["bust", "bustu", "statue", "heykel", "figurine", "figur", "sculpture", "3d printed bust", "gollum", "smeagol", "character statue", "anime figure", "miniature"],
             Priority: 2),
 
         // Planters & Pots
