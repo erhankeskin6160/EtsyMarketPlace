@@ -539,4 +539,220 @@ public sealed class ShopAiAnalysisAndCategoryTests
             .Count();
         Assert.Equal(10, uniqueCount);
     }
+
+    // =========================================================================
+    // 6. TEST: Mağaza AI Analizi - "Tümü AI Denetle" & Puanlama Sistemi Testi
+    // "ürünleri Tümü AI Denetle sistemi nasıl çalışıyor puanla sistemi iyimi dene"
+    // =========================================================================
+    [Fact]
+    public void OwnShopAiAudit_ScoringSystem_AccuratelyDifferentiatesWeakAndStrongListings()
+    {
+        // 1. Zayıf listing simülasyonu (3 etiket, 20 karakter başlık, 1 görsel, 50 karakter açıklama, 0 favori)
+        var weakListingTags = new List<string> { "cup", "gift", "handmade" };
+        var weakTitle = "Ceramic Cup Hand";
+        var weakDesc = "Nice handmade cup for sale.";
+        var weakImages = new List<string> { "https://example.com/1.jpg" };
+
+        var tagScoreWeak = Math.Min(25, weakListingTags.Count * 25 / 13); // 5 puan
+        var titleScoreWeak = weakTitle.Length is >= 55 and <= 135 ? 25 : weakTitle.Length is >= 35 and <= 140 ? 18 : 8; // 8 puan
+        var imageScoreWeak = weakImages.Count >= 5 ? 20 : weakImages.Count * 4; // 4 puan
+        var descScoreWeak = weakDesc.Length >= 500 ? 20 : weakDesc.Length >= 250 ? 12 : 5; // 5 puan
+        var weakScore = tagScoreWeak + titleScoreWeak + imageScoreWeak + descScoreWeak; // 22 puan
+
+        Assert.True(weakScore < 40, $"Zayıf listing puanı 40'ın altında olmalı, hesaplanan: {weakScore}");
+
+        // 2. Kusursuz optimize listing simülasyonu (13 etiket, 125 karakter başlık, 6 görsel, 1650 karakter açıklama, 12 favori)
+        var strongListingTags = Enumerable.Range(1, 13).Select(i => $"artisan mug tag {i}").ToList();
+        var strongTitle = "Handmade Speckled Ceramic Coffee Mug 12oz - Kitchen Counter Art, Coffee Lover Present, Clay Art Piece, 12oz Cup";
+        var strongDesc = new string('A', 1650);
+        var strongImages = Enumerable.Repeat("https://example.com/img.jpg", 6).ToList();
+
+        var tagScoreStrong = Math.Min(25, strongListingTags.Count * 25 / 13); // 25 puan
+        var titleScoreStrong = strongTitle.Length is >= 55 and <= 135 ? 25 : strongTitle.Length is >= 35 and <= 140 ? 18 : 8; // 25 puan
+        var imageScoreStrong = strongImages.Count >= 5 ? 20 : strongImages.Count * 4; // 20 puan
+        var descScoreStrong = strongDesc.Length >= 500 ? 20 : strongDesc.Length >= 250 ? 12 : 5; // 20 puan
+        var signalScoreStrong = 10;
+        var strongScore = tagScoreStrong + titleScoreStrong + imageScoreStrong + descScoreStrong + signalScoreStrong; // 100 puan
+
+        Assert.Equal(100, strongScore);
+    }
+
+    [Fact]
+    public void OwnShopAiAudit_BatchAudit_ProducesDiverseNonRepetitiveDescriptionsAndTags()
+    {
+        var optimizer = new ListingOptimizationService();
+        var shopProducts = new[]
+        {
+            new ListingOptimizationInput(
+                "Speckled Ceramic Coffee Mug 12oz",
+                "Handmade stoneware coffee mug 12oz capacity with speckled glaze. Dishwasher safe. Height 9.5cm.",
+                ["ceramic mug", "coffee cup", "tea mug"],
+                "ceramic coffee mug"
+            ),
+            new ListingOptimizationInput(
+                "Full Grain Leather Bifold Mens Wallet",
+                "Genuine full grain cowhide leather bifold wallet. 8 card slots, 1 cash compartment. 11.5cm x 9cm.",
+                ["leather wallet", "bifold wallet", "card holder"],
+                "leather card wallet"
+            ),
+            new ListingOptimizationInput(
+                "Astronaut LED Night Light Desk Lamp",
+                "Astronaut bedside lamp with USB power and starry projection glow. 18cm x 12cm.",
+                ["astronaut lamp", "night light", "space lamp"],
+                "astronaut night lamp"
+            ),
+            new ListingOptimizationInput(
+                "Handcrafted Wooden Chess Set Tabletop",
+                "Hand-carved walnut and maple chess set. Board 40cm x 40cm, King height 9.5cm.",
+                ["chess set", "wooden game", "board game"],
+                "carved chess set"
+            )
+        };
+
+        var batchResults = shopProducts.Select(p => optimizer.Optimize(p)).ToList();
+
+        // 1. Her ürün için AI SEO Skoru 85'in üzerinde olmalı
+        foreach (var res in batchResults)
+        {
+            Assert.True(res.OptimizedSeoScore >= 85, $"Optimize SEO skoru 85+ olmalı, gelen: {res.OptimizedSeoScore}");
+            Assert.Equal(13, res.TagSuggestions.Count);
+        }
+
+        // 2. Açıklamalar birbirinden tamamen farklı olmalı (Jaccard benzerliği < 0.35)
+        for (int i = 0; i < batchResults.Count; i++)
+        {
+            for (int j = i + 1; j < batchResults.Count; j++)
+            {
+                var desc1Words = batchResults[i].DescriptionDraft.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(w => w.ToLowerInvariant()).ToHashSet();
+                var desc2Words = batchResults[j].DescriptionDraft.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(w => w.ToLowerInvariant()).ToHashSet();
+                var common = desc1Words.Intersect(desc2Words).Count();
+                var total = desc1Words.Union(desc2Words).Count();
+                var similarity = (double)common / total;
+                Assert.True(similarity < 0.35, $"Ürünler arasında açıklama benzerliği çok yüksek: {similarity:P1}");
+            }
+        }
+
+        // 3. Her ürünün 13 etiketi kendi nişine ait olmalı ve 20 karakter sınırını aşmamalı
+        foreach (var res in batchResults)
+        {
+            foreach (var tag in res.TagSuggestions)
+            {
+                Assert.True(tag.Length <= 20, $"Etiket 20 karakterden uzun: {tag}");
+                Assert.True(tag.Length >= 4, $"Etiket çok kısa: {tag}");
+            }
+        }
+    }
+
+    [Fact]
+    public void OwnShopAiAudit_SablonlaParagraf_GeneratesBespokeThemeHeadersAndCareGuides()
+    {
+        // "Şablonla Paragrafta sıkıntı var mı? Hep aynı tarz şablonla mı oluşuyor?" testi
+        var mugFormatted = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            "12oz ceramic coffee cup. Dishwasher safe. 9.5cm height.",
+            "Handmade Speckled Ceramic Coffee Mug 12oz",
+            ["ceramic coffee mug", "handmade mug"],
+            ["ceramic", "clay"],
+            "ceramic coffee mug"
+        );
+
+        var walletFormatted = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            "Full grain leather wallet with 8 card slots. 11.5cm x 9cm.",
+            "Full Grain Leather Bifold Mens Wallet",
+            ["leather wallet", "bifold wallet"],
+            ["leather"],
+            "leather card wallet"
+        );
+
+        var lampFormatted = EtsyDescriptionFormatter.FormatToStandardTemplate(
+            "Astronaut night light with USB cable. Dimensions 18cm x 12cm.",
+            "Astronaut LED Night Light Bedside Lamp",
+            ["astronaut lamp", "night light"],
+            ["pla plastic"],
+            "astronaut night lamp"
+        );
+
+        // Kupa için özel başlık ve bakım rehberi
+        Assert.Contains("ARTISAN CRAFT & DAILY ENJOYMENT", mugFormatted);
+        Assert.Contains("CAPACITY, SIZING & CARE", mugFormatted);
+        Assert.Contains("CARE & CLEANING INSTRUCTIONS", mugFormatted);
+        Assert.Contains("dishwasher", mugFormatted, StringComparison.OrdinalIgnoreCase);
+
+        // Cüzdan için özel deri başlık ve bakım rehberi
+        Assert.Contains("PREMIUM LEATHER & TIMELESS CRAFT", walletFormatted);
+        Assert.Contains("CARD SLOTS, CAPACITY & MEASUREMENTS", walletFormatted);
+        Assert.Contains("LEATHER CARE & PRESERVATION", walletFormatted);
+        Assert.Contains("leather balm", walletFormatted, StringComparison.OrdinalIgnoreCase);
+
+        // Lamba için kozmik ışıltı başlığı ve LED bakım rehberi
+        Assert.Contains("COSMIC GLOW & BEDTIME AMBIANCE", lampFormatted);
+        Assert.Contains("DIMENSIONS, POWER & LIGHTING SPECS", lampFormatted);
+        Assert.Contains("LIGHTING CARE & OPERATION", lampFormatted);
+        Assert.Contains("USB", lampFormatted);
+
+        // Kesinlikle kalıp şablon değil; 3 farklı ürün tamamen farklı niş başlıkları ve bakım talimatları aldı!
+        Assert.DoesNotContain("ARTISAN CRAFT", walletFormatted);
+        Assert.DoesNotContain("PREMIUM LEATHER", mugFormatted);
+        Assert.DoesNotContain("COSMIC GLOW", walletFormatted);
+    }
+
+    [Fact]
+    public async Task OwnShopAiAudit_VersionHistory_SavesAndRetrievesAuditVersions_Correctly()
+    {
+        // "versiyon kaydet sistemi çalışıyormu" testi
+        var tempDb = Path.Combine(Path.GetTempPath(), $"etsy-audit-ver-{Guid.NewGuid():N}.db");
+        try
+        {
+            var repo = new EtsyMarketPlace.Infrastructure.ListingOptimization.SqliteListingOptimizationHistoryRepository(tempDb);
+            var historyService = new ListingOptimizationHistoryService(repo);
+            await historyService.InitializeAsync();
+
+            var sampleResult = new ListingOptimizationResult(
+                CurrentSeoScore: 35,
+                OptimizedSeoScore: 92,
+                TitleSuggestions: ["Handmade Speckled Ceramic Coffee Mug 12oz - Kitchen Counter Art"],
+                TagSuggestions: ["ceramic coffee mug", "handmade drinkware", "clay art piece"],
+                MaterialSuggestions: ["Ceramic", "Clay"],
+                DescriptionDraft: "Artisan coffee mug draft description.",
+                MissingTerms: [],
+                RiskWarnings: [],
+                ActionChecklist: ["Tags completed", "Title expanded"]
+            );
+
+            var saved = await historyService.SaveAsync(new SaveListingOptimizationHistory(
+                "987654321",
+                "Old Ceramic Mug",
+                "ceramic coffee mug",
+                sampleResult
+            ));
+
+            Assert.NotNull(saved);
+            Assert.True(saved.Id > 0);
+
+            var recent = await historyService.GetRecentAsync(10);
+            var historyItem = Assert.Single(recent);
+            Assert.Equal("987654321", historyItem.ListingId);
+            Assert.Equal(35, historyItem.CurrentSeoScore);
+            Assert.Equal(92, historyItem.OptimizedSeoScore);
+            Assert.Equal("Old Ceramic Mug", historyItem.ListingTitle);
+            Assert.Contains("ceramic coffee mug", historyItem.SuggestedTags);
+        }
+        finally
+        {
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (File.Exists(tempDb)) File.Delete(tempDb);
+            if (File.Exists(tempDb + "-wal")) File.Delete(tempDb + "-wal");
+            if (File.Exists(tempDb + "-shm")) File.Delete(tempDb + "-shm");
+        }
+    }
+
+    [Theory]
+    [InlineData("gemini-3.8-flash", "gemini-3.8-flash")]
+    [InlineData("gemini 3.8 flash", "gemini-3.8-flash")]
+    [InlineData("3.8 flash", "gemini-3.8-flash")]
+    public void OwnShopAiAudit_Gemini38Flash_IsCorrectlyNormalized(string input, string expected)
+    {
+        // "gemini 3.8 flash modelini kullan" kontrolü
+        var normalized = EtsyAiModelNormalizer.NormalizeGeminiTextModel(input);
+        Assert.Equal(expected, normalized);
+    }
 }

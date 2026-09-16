@@ -663,6 +663,7 @@ internal sealed class OwnShopListingAiAuditForm(
                 {
                     var input = ToOptimizationInput(row.Listing);
                     var result = await aiOptimizer.OptimizeAsync(input);
+                    row.OptimizationResult = result;
                     row.AiScore = result.OptimizedSeoScore;
                     row.Status = result.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
                     
@@ -877,6 +878,7 @@ internal sealed class OwnShopListingAiAuditForm(
             var input = ToOptimizationInput(row.Listing);
             _lastResult = await aiOptimizer.OptimizeAsync(input);
             _lastResultListingId = row.Listing.ListingId;
+            row.OptimizationResult = _lastResult;
             row.AiScore = _lastResult.OptimizedSeoScore;
             row.Status = _lastResult.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
             _grid.Refresh();
@@ -896,13 +898,23 @@ internal sealed class OwnShopListingAiAuditForm(
 
     private async Task SaveVersionAsync()
     {
-        if (SelectedRow is null || _lastResult is null) return;
+        if (SelectedRow is null) return;
         var row = SelectedRow;
+        var targetResult = (_lastResult != null && _lastResultListingId == row.Listing.ListingId)
+            ? _lastResult
+            : row.OptimizationResult;
+
+        if (targetResult is null)
+        {
+            MessageBox.Show(this, "Önce bu ürün için AI ile Puanla veya Şablonla Paragrafla çalıştırın.", "Versiyon Kaydı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
         await historyService.SaveAsync(new SaveListingOptimizationHistory(
             row.Listing.ListingId.ToString(CultureInfo.InvariantCulture),
             row.Title,
             PrimaryKeyword(row.Listing),
-            _lastResult));
+            targetResult));
         _statusLabel.Text = "Optimizasyon versiyonu geçmişe kaydedildi";
         MessageBox.Show(this, "Optimizasyon versiyonu başarıyla kaydedildi!", "Versiyon Kaydı", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
@@ -929,9 +941,15 @@ internal sealed class OwnShopListingAiAuditForm(
             $"[PUAN & METRİKLER]{Environment.NewLine}SEO Puanı: {row.SeoScore}/100 | Fiyat: {row.Price} | Favori: {row.Favorites:N0} | Stok: {row.Quantity}{Environment.NewLine}{Environment.NewLine}" +
             $"[TESPİT EDİLEN EKSİKLER]{Environment.NewLine}{row.SeoNeeds}";
 
-        if (_lastResult != null && _lastResultListingId == row.Listing.ListingId)
+        var activeResult = (_lastResult != null && _lastResultListingId == row.Listing.ListingId)
+            ? _lastResult
+            : row.OptimizationResult;
+
+        if (activeResult != null)
         {
-            RenderSuggestion(row, _lastResult);
+            _lastResult = activeResult;
+            _lastResultListingId = row.Listing.ListingId;
+            RenderSuggestion(row, activeResult);
         }
         else
         {
@@ -1038,8 +1056,12 @@ internal sealed class OwnShopListingAiAuditForm(
         }
 
         var row = SelectedRow;
-        string sourceDesc = _lastResult?.DescriptionDraft ?? row.Listing.Description;
-        var materials = _lastResult?.MaterialSuggestions ?? [];
+        var existingResult = (_lastResult != null && _lastResultListingId == row.Listing.ListingId)
+            ? _lastResult
+            : row.OptimizationResult;
+
+        string sourceDesc = existingResult?.DescriptionDraft ?? row.Listing.Description;
+        var materials = existingResult?.MaterialSuggestions ?? [];
         var formatted = EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.FormatToStandardTemplate(
             sourceDesc,
             row.Title,
@@ -1047,7 +1069,7 @@ internal sealed class OwnShopListingAiAuditForm(
             materials,
             PrimaryKeyword(row.Listing));
 
-        if (_lastResult is null || _lastResultListingId != row.Listing.ListingId)
+        if (existingResult is null)
         {
             _lastResult = new ListingOptimizationResult(
                 row.SeoScore,
@@ -1063,9 +1085,11 @@ internal sealed class OwnShopListingAiAuditForm(
         }
         else
         {
-            _lastResult = _lastResult with { DescriptionDraft = formatted };
+            _lastResult = existingResult with { DescriptionDraft = formatted };
+            _lastResultListingId = row.Listing.ListingId;
         }
 
+        row.OptimizationResult = _lastResult;
         RenderSuggestion(row, _lastResult);
         _statusLabel.Text = $"'{row.Title}' açıklaması standart Etsy paragraf şablonuna dönüştürüldü!";
     }
@@ -1352,6 +1376,7 @@ internal sealed class OwnShopListingAiAuditForm(
         public int SeoScore { get; } = seoScore;
         public int AiScore { get; set; } = seoScore;
         public string Status { get; set; } = status;
+        public ListingOptimizationResult? OptimizationResult { get; set; }
         public string SeoNeeds => BuildSeoNeeds(Listing);
         public string SeoStrengths => BuildSeoStrengths(Listing);
 
