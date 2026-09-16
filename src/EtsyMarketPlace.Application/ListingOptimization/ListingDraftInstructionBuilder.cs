@@ -120,16 +120,17 @@ public static class ListingDraftInstructionBuilder
           * NO SYSTEM PROMPT LEAKS: NEVER include instructions, metadata, or phrases like "OUTPUT LANGUAGE", "English only", "Do not write Turkish", "Title 1:", etc. in any title.
         - tag_suggestions: exactly 13 items. All in English.
           * TAG REFRESH & NO ECHO RULE: When input listing already has tags, DO NOT simply echo or repeat them back! Keep at most 2-3 high-relevance terms if critical, and replace at least 10 tags with FRESH, high-intent search terms across gift, audience, style, placement, and materials.
-          * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase (e.g. "astronaut night light", "space nursery lamp", "kids bedtime glow", "3d printed decor", "astronomy fan gift").
+          * CRITICAL ETSY RULE: Every single tag must be a 2 to 3 word long-tail search phrase that is 100% specific to THIS EXACT product being listed. NEVER borrow examples from these instructions — generate tags exclusively from the product's own identity, materials, audience, and use case.
           * STRICTLY FORBIDDEN: NEVER generate single-word tags (such as "gift", "hand", "statue", "music", "decor").
-          * DIVERSITY & NO REPETITION (FREQUENCY CAP): Do NOT repeat the same root keyword (e.g. "astronaut", "lamp", "space", "decor") across more than 2 tags! Etsy indexes all words collectively; repeating root words wastes valuable tag slots.
-          * Spread all 13 tags across 6 distinct search angles:
-            1. Core Identity & Sub-category (e.g. "astronaut night light", "lunar desk lamp")
-            2. Material & Craft Technique (e.g. "3d printed lamp", "hand detailed resin")
-            3. Recipient & Gift Occasion (e.g. "space gift for kids", "astronomy lover gift")
-            4. Room & Placement (e.g. "space nursery decor", "ambient bedside glow")
-            5. Theme, Era & Style (e.g. "cosmic bedroom art", "sci fi night light")
-            6. Niche Alias & Long-Tail (e.g. "spaceman table lamp", "moon walking light")
+          * STRICTLY FORBIDDEN: NEVER use tags that belong to a DIFFERENT product category or niche (e.g. do NOT use lamp/space/nursery tags for a collectible figure; do NOT use anime/gaming tags for kitchenware; do NOT use food tags for wall art).
+          * DIVERSITY & NO REPETITION (FREQUENCY CAP): Do NOT repeat the same root keyword across more than 2 tags! Etsy indexes all words collectively; repeating root words wastes valuable tag slots.
+          * Spread all 13 tags across 6 distinct search angles derived exclusively from THIS PRODUCT's actual attributes:
+            1. Core Identity & Sub-category: What IS this product? (e.g. for a music legend figure → "michael jackson figure", "printed pop statue")
+            2. Material & Craft Technique: How is it made? (e.g. for a 3D printed item → "3d printed figure", "pla plastic model")
+            3. Recipient & Gift Occasion: Who buys it as a gift and when? (e.g. "music fan gift", "birthday collector gift")
+            4. Room & Placement: Where is it displayed or used? (e.g. "music room decor", "shelf display piece")
+            5. Theme, Era & Style: What theme/era/style does it evoke? (e.g. "pop music legend", "80s music icon")
+            6. Niche Alias & Long-Tail: Alternative buyer search phrases? (e.g. "king of pop gift", "celebrity fan statue")
           * Each tag must be 20 characters or less in length. Every tag must be in English.
         - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text (in English, e.g. "Wood", "PLA Plastic", "Resin", "Cotton"). Up to 13 items, each 45 characters or less. Never invent materials.
         - description_draft: write a bespoke, high-converting, buyer-facing English Etsy description structured in 6 clean sections with emojis:

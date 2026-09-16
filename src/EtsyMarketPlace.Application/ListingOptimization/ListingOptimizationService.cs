@@ -93,7 +93,11 @@ public sealed class ListingOptimizationService
 
     private static IReadOnlyList<string> BuildTagSuggestions(ListingOptimizationInput input, IReadOnlyList<string> strongTerms)
     {
-        var blob = $"{input.Title} {input.TargetKeyword} {string.Join(' ', input.Tags)} {input.Description}".ToLowerInvariant();
+        // CRITICAL: Use ONLY title+keyword for theme detection — NOT the full blob including old tags/description.
+        // Old tags from Etsy may contain completely unrelated product keywords (e.g. "space", "astronaut", "gaming")
+        // from a previous mis-categorized listing, which would incorrectly trigger wrong theme buckets.
+        var fullBlob = $"{input.Title} {input.TargetKeyword} {string.Join(' ', input.Tags)} {input.Description}".ToLowerInvariant();
+        var themeBlob = $"{input.Title} {input.TargetKeyword}".ToLowerInvariant(); // Theme matching: title+keyword only
         var titleTerms = Tokenize(input.Title).ToList();
         var candidateList = new List<string>();
 
@@ -130,7 +134,9 @@ public sealed class ListingOptimizationService
         }
 
         // 4. Ürün Temasına Özel Zengin Facet Tagleri (Uzay, Lamba, Çocuk Odası, Müzik, Mutfak, Takı, Dekor vb.)
-        var themeTags = GetThemeSpecificTags(blob);
+        // IMPORTANT: Uses themeBlob (title+keyword only) — not fullBlob — to avoid false positive theme matches
+        // from irrelevant words in old Etsy tags/description of unrelated products.
+        var themeTags = GetThemeSpecificTags(themeBlob);
         candidateList.AddRange(themeTags);
 
         // 5. Malzeme & İşçilik Facet Tagleri
@@ -241,13 +247,13 @@ public sealed class ListingOptimizationService
         return accepted.Take(targetCount).ToList();
     }
 
-    private static List<string> GetThemeSpecificTags(string blob)
+    private static List<string> GetThemeSpecificTags(string themeBlob)
     {
         var list = new List<string>();
 
-        if (blob.Contains("astronaut") || blob.Contains("space") || blob.Contains("galaxy") ||
-            blob.Contains("nasa") || blob.Contains("planet") || blob.Contains("cosmic") ||
-            blob.Contains("moon") || blob.Contains("stargazer") || blob.Contains("astronomy"))
+        if (themeBlob.Contains("astronaut") || themeBlob.Contains("space") || themeBlob.Contains("galaxy") ||
+            themeBlob.Contains("nasa") || themeBlob.Contains("planet") || themeBlob.Contains("cosmic") ||
+            themeBlob.Contains("moon") || themeBlob.Contains("stargazer") || themeBlob.Contains("astronomy"))
         {
             list.AddRange([
                 "astronaut night lamp",
@@ -265,9 +271,9 @@ public sealed class ListingOptimizationService
                 "space bedtime lamp"
             ]);
         }
-        else if (blob.Contains("michael jackson") || blob.Contains("singer") || blob.Contains("musician") ||
-            blob.Contains("king of pop") || blob.Contains("music legend") || blob.Contains("guitar") ||
-            blob.Contains("vinyl") || blob.Contains("pop star") || blob.Contains("concert"))
+        else if (themeBlob.Contains("michael jackson") || themeBlob.Contains("singer") || themeBlob.Contains("musician") ||
+            themeBlob.Contains("king of pop") || themeBlob.Contains("music legend") || themeBlob.Contains("guitar") ||
+            themeBlob.Contains("vinyl") || themeBlob.Contains("pop star") || themeBlob.Contains("concert"))
         {
             list.AddRange([
                 "80s music icon",
@@ -282,7 +288,7 @@ public sealed class ListingOptimizationService
                 "iconic singer art"
             ]);
         }
-        else if (blob.Contains("nursery") || blob.Contains("baby") || blob.Contains("toddler") || blob.Contains("kids"))
+        else if (themeBlob.Contains("nursery") || themeBlob.Contains("baby") || themeBlob.Contains("toddler") || themeBlob.Contains("kids"))
         {
             list.AddRange([
                 "nursery room decor",
@@ -294,7 +300,7 @@ public sealed class ListingOptimizationService
                 "newborn nursery gift"
             ]);
         }
-        else if (blob.Contains("lamp") || blob.Contains("light") || blob.Contains("lantern") || blob.Contains("glow"))
+        else if (themeBlob.Contains("lamp") || themeBlob.Contains("light") || themeBlob.Contains("lantern") || themeBlob.Contains("glow"))
         {
             list.AddRange([
                 "ambient night light",
@@ -307,7 +313,7 @@ public sealed class ListingOptimizationService
                 "housewarming lamp"
             ]);
         }
-        else if (blob.Contains("mug") || blob.Contains("cup") || blob.Contains("kitchen") || blob.Contains("coaster") || blob.Contains("coffee") || blob.Contains("tea"))
+        else if (themeBlob.Contains("mug") || themeBlob.Contains("cup") || themeBlob.Contains("kitchen") || themeBlob.Contains("coaster") || themeBlob.Contains("coffee") || themeBlob.Contains("tea"))
         {
             list.AddRange([
                 "artisan coffee mug",
@@ -319,7 +325,7 @@ public sealed class ListingOptimizationService
                 "cozy morning mug"
             ]);
         }
-        else if (blob.Contains("cosplay") || blob.Contains("prop") || blob.Contains("helmet") || blob.Contains("sword"))
+        else if (themeBlob.Contains("cosplay") || themeBlob.Contains("prop") || themeBlob.Contains("helmet") || themeBlob.Contains("sword"))
         {
             list.AddRange([
                 "cosplay display prop",
@@ -330,7 +336,7 @@ public sealed class ListingOptimizationService
                 "collector display prop"
             ]);
         }
-        else if (blob.Contains("necklace") || blob.Contains("jewelry") || blob.Contains("ring") || blob.Contains("pendant"))
+        else if (themeBlob.Contains("necklace") || themeBlob.Contains("jewelry") || themeBlob.Contains("ring") || themeBlob.Contains("pendant"))
         {
             list.AddRange([
                 "artisan jewelry",
@@ -341,7 +347,7 @@ public sealed class ListingOptimizationService
                 "custom jewelry gift"
             ]);
         }
-        else if (blob.Contains("gaming") || blob.Contains("gamer") || blob.Contains("anime") || blob.Contains("manga"))
+        else if (themeBlob.Contains("gaming") || themeBlob.Contains("gamer") || themeBlob.Contains("anime") || themeBlob.Contains("manga"))
         {
             list.AddRange([
                 "battlestation decor",
@@ -352,7 +358,7 @@ public sealed class ListingOptimizationService
                 "collector figure prop"
             ]);
         }
-        else if (blob.Contains("dog collar") || blob.Contains("cat collar") || blob.Contains("pet collar") || blob.Contains("tasma") || blob.Contains("leash") || blob.Contains("pet harness"))
+        else if (themeBlob.Contains("dog collar") || themeBlob.Contains("cat collar") || themeBlob.Contains("pet collar") || themeBlob.Contains("tasma") || themeBlob.Contains("leash") || themeBlob.Contains("pet harness"))
         {
             list.AddRange([
                 "custom dog collar",
@@ -364,7 +370,7 @@ public sealed class ListingOptimizationService
                 "durable pet collar"
             ]);
         }
-        else if (blob.Contains("wallet") || blob.Contains("cardholder") || blob.Contains("card holder") || blob.Contains("bifold") || blob.Contains("cuzdan") || blob.Contains("kartlik") || blob.Contains("leather wallet") || blob.Contains("leather card"))
+        else if (themeBlob.Contains("wallet") || themeBlob.Contains("cardholder") || themeBlob.Contains("card holder") || themeBlob.Contains("bifold") || themeBlob.Contains("cuzdan") || themeBlob.Contains("kartlik") || themeBlob.Contains("leather wallet") || themeBlob.Contains("leather card"))
         {
             list.AddRange([
                 "leather card wallet",
@@ -378,7 +384,7 @@ public sealed class ListingOptimizationService
                 "classic leather gift"
             ]);
         }
-        else if (blob.Contains("headphone") || blob.Contains("headset") || blob.Contains("kulaklik"))
+        else if (themeBlob.Contains("headphone") || themeBlob.Contains("headset") || themeBlob.Contains("kulaklik"))
         {
             list.AddRange([
                 "headphone desk stand",
@@ -390,7 +396,7 @@ public sealed class ListingOptimizationService
                 "streamer desk accent"
             ]);
         }
-        else if (blob.Contains("candle") || blob.Contains("mumluk") || blob.Contains("tealight") || blob.Contains("candlestick"))
+        else if (themeBlob.Contains("candle") || themeBlob.Contains("mumluk") || themeBlob.Contains("tealight") || themeBlob.Contains("candlestick"))
         {
             list.AddRange([
                 "nordic candle holder",
@@ -401,7 +407,7 @@ public sealed class ListingOptimizationService
                 "tabletop candle rest"
             ]);
         }
-        else if (blob.Contains("chess") || blob.Contains("board game") || blob.Contains("puzzle") || blob.Contains("satranc"))
+        else if (themeBlob.Contains("chess") || themeBlob.Contains("board game") || themeBlob.Contains("puzzle") || themeBlob.Contains("satranc"))
         {
             list.AddRange([
                 "handcrafted chess",
@@ -414,7 +420,7 @@ public sealed class ListingOptimizationService
                 "custom board game"
             ]);
         }
-        else if (blob.Contains("wall art") || blob.Contains("wall decor") || blob.Contains("wall sign") || blob.Contains("hanging") || blob.Contains("duvar"))
+        else if (themeBlob.Contains("wall art") || themeBlob.Contains("wall decor") || themeBlob.Contains("wall sign") || themeBlob.Contains("hanging") || themeBlob.Contains("duvar"))
         {
             list.AddRange([
                 "modern wall decor",
