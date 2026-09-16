@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using EtsyMarketPlace.Application.ListingOptimization;
 using Xunit;
+using Xunit.Abstractions;
 
 /// <summary>
 /// "Ürün Bul - Taslak Hazırla" (Product Discovery Listing Creator / Full Tık AI)
@@ -14,6 +15,12 @@ using Xunit;
 public sealed class ProductDiscoveryDraftAiTests
 {
     private readonly ListingOptimizationService _optimizer = new();
+    private readonly ITestOutputHelper? _output;
+
+    public ProductDiscoveryDraftAiTests(ITestOutputHelper? output = null)
+    {
+        _output = output;
+    }
 
     private sealed record PulledListingMock(
         string Title,
@@ -334,4 +341,118 @@ public sealed class ProductDiscoveryDraftAiTests
                                                  w.Contains("spiderman", StringComparison.OrdinalIgnoreCase) ||
                                                  w.Contains("disney", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Theory]
+    [InlineData("https://www.etsy.com/listing/1789552748/handmade-ceramic-coffee-mug", 1789552748, true)]
+    [InlineData("https://www.etsy.com/listing/189234567/astronaut-lamp?click_key=abc123xyz&click_sum=987654", 189234567, true)]
+    [InlineData("https://www.etsy.com/uk/listing/162345678/leather-wallet?ref=cart", 162345678, true)]
+    [InlineData("https://www.etsy.com/your/shops/me/tools/listings/copy/1456789012", 1456789012, true)]
+    [InlineData("https://openapi.etsy.com/v3/application/listings?listing_id=123456789", 123456789, true)]
+    [InlineData("1789552748", 1789552748, true)]
+    [InlineData("   https://www.etsy.com/listing/1789552748/mug   ", 1789552748, true)]
+    [InlineData("https://www.etsy.com/shop/MyAwesomeShop", 0, false)]
+    [InlineData("random-non-etsy-link", 0, false)]
+    [InlineData("", 0, false)]
+    public void LinktenAl_ExtractsListingId_FromVariousEtsyLinkFormats(string inputUrl, long expectedId, bool expectedSuccess)
+    {
+        // "detaylı linkten al tarafı çalışıyor mu etsyden bir ürün linkten almayı dene" kontrolü
+        var success = EtsyListingUrlParser.TryExtractListingId(inputUrl, out var extractedId);
+
+        Assert.Equal(expectedSuccess, success);
+        if (expectedSuccess)
+        {
+            Assert.Equal(expectedId, extractedId);
+            var canonicalUrl = EtsyListingUrlParser.BuildListingUrl(extractedId);
+            Assert.Equal($"https://www.etsy.com/listing/{expectedId}", canonicalUrl);
+        }
+    }
+
+    [Fact]
+    public void LinktenAl_EndToEnd_FromListingLinkToFullTikDraft_GeneratesCompleteUniqueListing()
+    {
+        // 1. Kullanıcı "Linkten Al" kutusuna gerçekçi bir Etsy ürün linki yapıştırır
+        const string pastedEtsyLink = "https://www.etsy.com/listing/1789552748/handmade-speckled-ceramic-coffee-mug-12oz?ref=shop_home_active_1";
+        
+        var parsed = EtsyListingUrlParser.TryExtractListingId(pastedEtsyLink, out var listingId);
+        Assert.True(parsed);
+        Assert.Equal(1789552748, listingId);
+
+        // 2. Etsy API'den çekilen ürün verisi (İzole Mock nesne - Mağazanın gerçek listinglerine ASLA dokunmaz)
+        var pulledProduct = new
+        {
+            ListingId = listingId,
+            Title = "Handmade Speckled Ceramic Coffee Mug 12oz Artisanal Clay Cup",
+            Description = "Artisan stoneware mug crafted for everyday coffee rituals.\nCapacity: 12 oz (350 ml)\nDimensions: Height 9.5 cm, diameter 8.5 cm\nMaterials: Stoneware clay, ceramic food-safe glaze\nDishwasher and microwave safe.\nPackage: 1x Handcrafted Mug, Care Guide Card.",
+            Tags = new[] { "coffee mug", "ceramic mug", "tea cup", "clay mug", "pottery gift" },
+            Materials = new[] { "Ceramic", "Clay", "Food Safe Glaze" },
+            TargetKeyword = "ceramic coffee mug"
+        };
+
+        // 3. "1-Tık Full AI" (Full Tık AI) motoru tetiklenir
+        var input = new ListingOptimizationInput(
+            pulledProduct.Title,
+            pulledProduct.Description,
+            pulledProduct.Tags,
+            pulledProduct.TargetKeyword
+        );
+
+        var result = _optimizer.Optimize(input);
+
+        // Doğrulamalar:
+        // A) Başlık kontrolleri
+        Assert.NotEmpty(result.TitleSuggestions);
+        var chosenTitle = result.TitleSuggestions.First();
+        Assert.True(chosenTitle.Length <= 140, "Başlık Etsy 140 karakter sınırını aşmamalı");
+        Assert.Contains("Ceramic Coffee Mug", chosenTitle, StringComparison.OrdinalIgnoreCase);
+
+        // B) Etiket kontrolleri (13 adet, hepsi 20 karakter veya daha az)
+        Assert.True(result.TagSuggestions.Count >= 10);
+        foreach (var tag in result.TagSuggestions)
+        {
+            Assert.True(tag.Length <= 20, $"Etiket 20 karakter sınırını aştı: {tag}");
+            Assert.True(tag.Length >= 4, $"Etiket çok kısa: {tag}");
+        }
+
+        // C) Malzeme kontrolleri
+        Assert.Contains(result.MaterialSuggestions, m => m.Contains("Ceramic", StringComparison.OrdinalIgnoreCase) ||
+                                                        m.Contains("Clay", StringComparison.OrdinalIgnoreCase) ||
+                                                        m.Contains("Stoneware", StringComparison.OrdinalIgnoreCase));
+
+        // D) Açıklama ve Sadakat kontrolleri (Boyutlar, kapasite, bakım korundu mu?)
+        Assert.Contains("12 oz", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("9.5 cm", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dishwasher", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+
+        // E) SEO dolandırıcılığı ve bot sızıntısı yokluğu
+        Assert.DoesNotContain("Tags:", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("OUTPUT LANGUAGE", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Competitor description", result.DescriptionDraft, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FullTikAi_GenerateAndPrintSampleOutputs()
+    {
+        // Kullanıcının talep ettiği örnek ürün çıktılarını üreten ve raporlayan test
+        foreach (var mock in DiverseSampleListings.Take(4))
+        {
+            var input = new ListingOptimizationInput(
+                mock.Title,
+                mock.Description,
+                mock.Tags,
+                mock.TargetKeyword
+            );
+
+            var result = _optimizer.Optimize(input);
+
+            _output?.WriteLine($"================================================================================");
+            _output?.WriteLine($"ÜRÜN: {mock.Title}");
+            _output?.WriteLine($"HEDEF KELİME: {mock.TargetKeyword}");
+            _output?.WriteLine($"ÖNERİLEN BAŞLIK ({result.TitleSuggestions.First().Length} karakter): {result.TitleSuggestions.First()}");
+            _output?.WriteLine($"ÖNERİLEN MALZEMELER: {string.Join(", ", result.MaterialSuggestions)}");
+            _output?.WriteLine($"ÖNERİLEN 13 ETİKET: {string.Join(", ", result.TagSuggestions.Take(13).Select(t => $"'{t}' ({t.Length}k)"))}");
+            _output?.WriteLine($"AÇIKLAMA TASLAĞI:\n{result.DescriptionDraft}");
+            _output?.WriteLine($"================================================================================\n");
+        }
+    }
 }
+

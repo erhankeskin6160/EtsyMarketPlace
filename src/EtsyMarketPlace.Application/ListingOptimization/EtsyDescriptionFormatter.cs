@@ -618,32 +618,43 @@ public static class EtsyDescriptionFormatter
                 }
             }
 
-            // 3. Boyut ayıklama (İngilizce ve Türkçe destekli)
-            if (string.IsNullOrEmpty(dimensions) &&
-                (normLine.Contains("cm") ||
-                 normLine.Contains("mm") ||
-                 normLine.Contains("inch") ||
-                 normLine.Contains("\"") ||
-                 normLine.Contains("dimension") ||
-                 normLine.Contains("height") ||
-                 normLine.Contains("width") ||
-                 normLine.Contains("length") ||
-                 normLine.Contains("depth") ||
-                 normLine.Contains("size:") ||
-                 normLine.Contains("scale:") ||
-                 normLine.Contains("boyut") ||
-                 normLine.Contains("olcu") ||
-                 normLine.Contains("ebat") ||
-                 normLine.Contains("yukseklik") ||
-                 normLine.Contains("genislik") ||
-                 normLine.Contains("derinlik") ||
-                 normLine.Contains("agirlik") ||
-                 normLine.Contains("weight") ||
-                 normLine.Contains("gram")))
+            // 3. Boyut ve Kapasite ayıklama (İngilizce ve Türkçe destekli)
+            if (normLine.Contains("cm") ||
+                normLine.Contains("mm") ||
+                normLine.Contains("inch") ||
+                normLine.Contains("\"") ||
+                normLine.Contains("dimension") ||
+                normLine.Contains("capacity") ||
+                normLine.Contains("kapasite") ||
+                normLine.Contains("hacim") ||
+                normLine.Contains("oz") ||
+                normLine.Contains("ml") ||
+                normLine.Contains("height") ||
+                normLine.Contains("width") ||
+                normLine.Contains("length") ||
+                normLine.Contains("depth") ||
+                normLine.Contains("size:") ||
+                normLine.Contains("scale:") ||
+                normLine.Contains("boyut") ||
+                normLine.Contains("olcu") ||
+                normLine.Contains("ebat") ||
+                normLine.Contains("yukseklik") ||
+                normLine.Contains("genislik") ||
+                normLine.Contains("derinlik") ||
+                normLine.Contains("agirlik") ||
+                normLine.Contains("weight") ||
+                normLine.Contains("gram"))
             {
                 if (cleanItem.Length < 140)
                 {
-                    dimensions = cleanItem;
+                    if (string.IsNullOrEmpty(dimensions))
+                    {
+                        dimensions = cleanItem;
+                    }
+                    else if (!dimensions.Contains(cleanItem, StringComparison.OrdinalIgnoreCase) && dimensions.Length + cleanItem.Length < 160)
+                    {
+                        dimensions = $"{dimensions} | {cleanItem}";
+                    }
                     continue;
                 }
             }

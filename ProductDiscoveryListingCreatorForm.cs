@@ -949,30 +949,8 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         }
     }
 
-    private static bool TryExtractListingId(string value, out long listingId)
-    {
-        listingId = 0;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var match = Regex.Match(value, @"/listing/(?<id>\d{6,})", RegexOptions.IgnoreCase);
-        if (!match.Success)
-        {
-            match = Regex.Match(value, @"(?:listing|copy)/(?<id>\d{6,})", RegexOptions.IgnoreCase);
-        }
-        if (!match.Success)
-        {
-            match = Regex.Match(value, @"listing_id=(?<id>\d{6,})", RegexOptions.IgnoreCase);
-        }
-        if (!match.Success)
-        {
-            match = Regex.Match(value, @"(?<id>\d{8,})");
-        }
-
-        return match.Success && long.TryParse(match.Groups["id"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out listingId);
-    }
+    private static bool TryExtractListingId(string value, out long listingId) =>
+        EtsyListingUrlParser.TryExtractListingId(value, out listingId);
 
     private void ClearDraftFields()
     {

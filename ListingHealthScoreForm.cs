@@ -418,16 +418,8 @@ internal sealed class ListingHealthScoreForm : Form
         _ => Color.FromArgb(239, 68, 68)
     };
 
-    private static bool TryExtractListingId(string value, out long listingId)
-    {
-        listingId = 0;
-        if (string.IsNullOrWhiteSpace(value)) return false;
-
-        var match = Regex.Match(value, @"(?:listing|copy)/(?<id>\d{6,})", RegexOptions.IgnoreCase);
-        if (!match.Success) match = Regex.Match(value, @"(?<id>\d{8,})");
-
-        return match.Success && long.TryParse(match.Groups["id"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out listingId);
-    }
+    private static bool TryExtractListingId(string value, out long listingId) =>
+        EtsyListingUrlParser.TryExtractListingId(value, out listingId);
 
     private static void ConfigureTabBox(ModernMultilineTextBox tb)
     {
