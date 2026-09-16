@@ -1671,6 +1671,36 @@ public class ModernMultilineTextBox : Panel
         set => _innerBox.MaxLength = value;
     }
 
+    public int SelectionStart
+    {
+        get => _innerBox.SelectionStart;
+        set => _innerBox.SelectionStart = value;
+    }
+
+    public int SelectionLength
+    {
+        get => _innerBox.SelectionLength;
+        set => _innerBox.SelectionLength = value;
+    }
+
+    public new event KeyEventHandler? KeyDown
+    {
+        add => _innerBox.KeyDown += value;
+        remove => _innerBox.KeyDown -= value;
+    }
+
+    public new event KeyEventHandler? KeyUp
+    {
+        add => _innerBox.KeyUp += value;
+        remove => _innerBox.KeyUp -= value;
+    }
+
+    public new event KeyPressEventHandler? KeyPress
+    {
+        add => _innerBox.KeyPress += value;
+        remove => _innerBox.KeyPress -= value;
+    }
+
     public void Clear()
     {
         _innerBox.Clear();

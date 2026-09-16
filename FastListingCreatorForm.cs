@@ -29,19 +29,19 @@ internal sealed class FastListingCreatorForm : Form
 
     // Left Column Controls (Product & SEO)
     private readonly ModernComboBox _cboListingType = new();
-    private readonly TextBox _txtTitle = new() { MaxLength = 140, Multiline = true };
+    private readonly ModernMultilineTextBox _txtTitle = new() { Height = 58, MaxLength = 140 };
     private readonly Label _lblTitleCounter = new() { AutoSize = true };
     private readonly ModernNumericUpDown _numPrice = new() { Minimum = 0.20m, Maximum = 50000m, DecimalPlaces = 2, Value = 29.99m };
     private readonly ModernNumericUpDown _numQuantity = new() { Minimum = 1, Maximum = 9999, Value = 10 };
     private readonly ModernComboBox _cboTaxonomy = new();
-    private readonly TextBox _txtCustomTaxonomy = new() { Text = "1239" };
+    private readonly ModernTextBox _txtCustomTaxonomy = new() { Text = "1239" };
     private readonly ModernComboBox _cboShippingProfile = new();
     private readonly ModernComboBox _cboReadinessState = new();
     private readonly ModernMultilineTextBox _txtTags = new() { Height = 68 };
     private readonly Label _lblTagCounter = new() { AutoSize = true };
     private readonly Label _lblTagStatus = new() { AutoSize = true };
     private readonly ModernMultilineTextBox _txtDescription = new() { Height = 175 };
-    private readonly TextBox _txtMaterials = new() { Height = 26 };
+    private readonly ModernTextBox _txtMaterials = new() { Height = 30 };
 
     // Template Toolbar Controls
     private readonly ModernComboBox _cboTemplates = new() { Width = 260 };
@@ -67,10 +67,10 @@ internal sealed class FastListingCreatorForm : Form
     // Right Column Controls (Variations & Publish)
     private readonly ModernCheckBox _chkEnableVariations = new() { Text = "🎨 Bu ürüne varyasyon ekle (Boyut, Renk vb.)", AutoSize = true };
     private readonly ModernComboBox _cboVarType1 = new();
-    private readonly TextBox _txtVarValues1 = new() { Text = "Small, Medium, Large" };
+    private readonly ModernTextBox _txtVarValues1 = new() { Height = 30, Text = "Small, Medium, Large" };
     private readonly ModernCheckBox _chkEnableVar2 = new() { Text = "➕ İkinci varyasyon grubu ekle", AutoSize = true };
     private readonly ModernComboBox _cboVarType2 = new();
-    private readonly TextBox _txtVarValues2 = new() { Text = "Siyah, Beyaz, Altın" };
+    private readonly ModernTextBox _txtVarValues2 = new() { Height = 30, Text = "Siyah, Beyaz, Altın" };
     private readonly Label _lblVarCombinations = new() { AutoSize = true };
 
     // Custom Variation Pricing Controls
@@ -536,10 +536,8 @@ internal sealed class FastListingCreatorForm : Form
         titleHeader.Controls.Add(btnAiTitle, 1, 0);
         stack.Controls.Add(titleHeader);
 
-        _txtTitle.Multiline = true;
         _txtTitle.Height = 58;
         _txtTitle.Font = new Font("Segoe UI", 8.8F);
-        _txtTitle.ScrollBars = ScrollBars.None;
         _txtTitle.Dock = DockStyle.Top;
         _txtTitle.Margin = new Padding(0, 0, 0, 6);
         _galleryToolTip.SetToolTip(_txtTitle, "80-140 karakter arası başlıklar Etsy SEO aramalarında en yüksek performansı verir.");
