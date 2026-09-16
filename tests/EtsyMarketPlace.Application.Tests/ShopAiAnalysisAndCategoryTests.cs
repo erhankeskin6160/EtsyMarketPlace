@@ -478,10 +478,10 @@ public sealed class ShopAiAnalysisAndCategoryTests
         Assert.DoesNotContain("Keywords:", desc, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Anahtar Kelimeler:", desc, StringComparison.OrdinalIgnoreCase);
 
-        // Metin Etsy alıcısına hitap eden 6 temiz bölümlü paragraf yapısında olmalı
-        Assert.Contains("WHY YOU'LL LOVE IT", desc);
-        Assert.Contains("SPECIFICATIONS & DETAILS", desc);
-        Assert.Contains("PACKAGING & SHIPPING", desc);
+        // Metin Etsy alıcısına hitap eden, ürüne özel (kahve kupası için zanaat ve kapasite odaklı) temiz bölümlü paragraf yapısında olmalı
+        Assert.True(desc.Contains("ARTISAN CRAFT", StringComparison.OrdinalIgnoreCase) || desc.Contains("WHY YOU'LL LOVE", StringComparison.OrdinalIgnoreCase));
+        Assert.True(desc.Contains("CAPACITY", StringComparison.OrdinalIgnoreCase) || desc.Contains("SPECIFICATIONS", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("PACKAGING", desc, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

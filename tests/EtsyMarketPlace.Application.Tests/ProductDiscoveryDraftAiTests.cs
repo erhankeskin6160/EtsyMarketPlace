@@ -159,6 +159,27 @@ public sealed class ProductDiscoveryDraftAiTests
 
         var petDesc = results.First(r => r.Mock.TargetKeyword.Contains("dog")).Result.DescriptionDraft;
         Assert.Contains("companion", petDesc, StringComparison.OrdinalIgnoreCase);
+
+        // 3. Bölüm başlıkları (Headings) her ürüne özel olmalı, tek bir kalıp robotik olarak tekrarlanmamalı
+        var mugDesc = results.First(r => r.Mock.TargetKeyword.Contains("ceramic")).Result.DescriptionDraft;
+        Assert.Contains("ARTISAN CRAFT & DAILY ENJOYMENT", mugDesc);
+        Assert.Contains("CAPACITY, SIZING & CARE", mugDesc);
+
+        Assert.Contains("PREMIUM LEATHER & TIMELESS CRAFT", walletDesc);
+        Assert.Contains("CARD SLOTS, CAPACITY & MEASUREMENTS", walletDesc);
+
+        Assert.Contains("COSMIC GLOW & BEDTIME AMBIANCE", astronautDesc);
+        Assert.Contains("DIMENSIONS, POWER & LIGHTING SPECS", astronautDesc);
+
+        var standDesc = results.First(r => r.Mock.TargetKeyword.Contains("headphone")).Result.DescriptionDraft;
+        Assert.Contains("BATTLESTATION STYLING & GEAR REST", standDesc);
+        Assert.Contains("MEASUREMENTS & STABILITY DETAILS", standDesc);
+
+        Assert.Contains("HAND-CARVED WOODWORK & STRATEGY", chessDesc);
+        Assert.Contains("BOARD & PIECE MEASUREMENTS", chessDesc);
+
+        Assert.Contains("PET COMFORT & DURABLE HARDWARE", petDesc);
+        Assert.Contains("SIZING & COLLAR ADJUSTMENT", petDesc);
     }
 
     [Fact]

@@ -136,10 +136,24 @@ public static class ListingDraftInstructionBuilder
           * FORMATTING: ALWAYS separate every section and paragraph with a blank line (\n\n). Use bullet points ("• ") for list items so text renders in clean, distinct paragraphs on Etsy mobile and web.
           * BESPOKE NICHE COPYWRITING: Tailor tone, vocabulary, and audience to the EXACT product! NEVER output generic gaming or anime copy unless the product is genuinely a video game or anime item. For space/lamps, write for bedtime ambiance and cosmic wonder; for music legends, write for music enthusiasts; for jewelry, write for elegant accessorizing.
           * SECTION 1 (Google Meta Hook): 2-3 engaging opening sentences naturally featuring the target keyword in the first sentence. State what makes this specific item an extraordinary must-have.
-          * SECTION 2 (✨ WHY YOU'LL LOVE IT): 3-4 bullet points highlighting key benefits, design quality, and display/practical use based on the real product features.
-          * SECTION 3 (📏 SPECIFICATIONS & DETAILS): Extract and preserve ALL real dimensions (cm/inches), scale, materials, finishes, package contents, and included components from the source description. Never omit real measurements.
-          * SECTION 4 (🎁 PERFECT FOR): Who this specific item is actually for (tailored directly to the theme, such as dedicated space lovers, nursery decor, stargazers, or meaningful birthday/holiday gifting).
-          * SECTION 5 (📦 PACKAGING & SHIPPING): Protective packaging guarantee for 100% safe worldwide delivery with tracking.
+          * SECTION 2 (Product-Tailored Key Features & Craftsmanship Header with relevant Emoji):
+            DO NOT use a robotic generic "WHY YOU'LL LOVE IT" header on every product! Adapt the header to fit the exact niche and product identity:
+            - Drinkware / Mugs: e.g. "☕ ARTISAN CRAFT & DAILY USE:"
+            - Wallets / Leather: e.g. "🐂 PREMIUM LEATHER & TIMELESS CRAFT:"
+            - Lamps / Lighting: e.g. "✨ COSMIC GLOW & BEDTIME AMBIANCE:" or "✨ AMBIENT LIGHTING & COZY GLOW:"
+            - Headphone Stands / Desk Gear: e.g. "🎧 BATTLESTATION STYLING & GEAR REST:"
+            - Board Games / Chess: e.g. "♟️ HAND-CARVED WOODWORK & STRATEGY:"
+            - Dog Collars / Pets: e.g. "🐾 PET COMFORT & DURABLE HARDWARE:"
+            - Wall Art: e.g. "🖼️ STATEMENT DESIGN & WALL ACCENT:"
+            - Collectibles / General: e.g. "✨ WHY YOU'LL LOVE IT:"
+            Then provide 3-4 bullet points highlighting the real product features, textures, and everyday use.
+          * SECTION 3 (Product-Tailored Specifications & Sizing Header with 📏):
+            Adapt header to the product (e.g. "📏 CAPACITY, SIZING & MATERIALS:" for mugs, "📏 CARD SLOTS, CAPACITY & MEASUREMENTS:" for wallets, "📏 DIMENSIONS, POWER & LIGHTING SPECS:" for lamps, "📏 SPECIFICATIONS & DETAILS:" for collectibles).
+            Extract and preserve ALL real dimensions (cm/inches), capacities (oz/ml), scale, materials, finishes, package contents, and included components from the source description. Never omit real measurements.
+          * SECTION 4 (Product-Tailored Audience & Gift Occasion Header with 🎁):
+            Adapt header to the product (e.g. "🎁 PERFECT FOR COFFEE & TEA LOVERS:" for mugs, "🎁 TIMELESS EVERYDAY CARRY & GIFTS:" for wallets, "🎁 NURSERY & CELESTIAL BEDROOM DECOR:" for lamps, "🎁 STREAMERS, GAMERS & AUDIOPHILES:" for headphone stands, "🎁 PERFECT FOR:" for general).
+            State who this specific item is actually for.
+          * SECTION 5 (📦 PACKAGING & SAFE SHIPPING): Protective packaging guarantee for 100% safe worldwide delivery with tracking.
           * SECTION 6 (💬 CUSTOM REQUESTS & QUESTIONS): Friendly call to action for custom colors, sizing, or inquiries.
           * STRICTLY FORBIDDEN: NEVER include debug labels (such as "Selected listing title:", "Competitor description:", "Etsy search keyword:", "Target keyword:"), prompt words, or generic filler like "This item is prepared as an Etsy-ready product listing". Write directly to the customer.
         - risk_warnings: Turkish language notes. Flag any brand, character, movie, game, or fan-art terms. Include Turkish explanations in parentheses. Example: "Ben 10 ve Omnitrix terimleri telif riski tasiyabilir (Cartoon Network markasi)."

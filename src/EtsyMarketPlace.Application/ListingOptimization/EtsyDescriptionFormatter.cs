@@ -133,18 +133,149 @@ public static class EtsyDescriptionFormatter
     }
 
     /// <summary>
-    /// Checks whether the text is already a well-formed 6-section Etsy description.
+    /// Checks whether the text is already a well-formed 5-6 section Etsy description.
     /// </summary>
     public static bool IsAlreadyStructuredEtsyDescription(string? desc)
     {
         if (string.IsNullOrWhiteSpace(desc)) return false;
         int sectionCount = 0;
-        if (desc.Contains("WHY YOU'LL LOVE IT", StringComparison.OrdinalIgnoreCase)) sectionCount++;
-        if (desc.Contains("SPECIFICATIONS", StringComparison.OrdinalIgnoreCase) || desc.Contains("DETAILS", StringComparison.OrdinalIgnoreCase)) sectionCount++;
-        if (desc.Contains("PERFECT FOR", StringComparison.OrdinalIgnoreCase)) sectionCount++;
-        if (desc.Contains("PACKAGING", StringComparison.OrdinalIgnoreCase) || desc.Contains("SHIPPING", StringComparison.OrdinalIgnoreCase)) sectionCount++;
-        return sectionCount >= 2;
+        if (desc.Contains("WHY YOU'LL LOVE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("ARTISAN CRAFT &", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("PREMIUM LEATHER &", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("COSMIC GLOW &", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("BATTLESTATION STYLING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("HAND-CARVED WOODWORK", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("PET COMFORT &", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("STATEMENT DESIGN &", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("ICONIC TRIBUTE &", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("GENTLE NURSERY COMFORT", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("REPLICA AUTHENTICITY", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+
+        if (desc.Contains("SPECIFICATIONS & DETAILS", StringComparison.OrdinalIgnoreCase) || 
+            desc.Contains("CAPACITY, SIZING & CARE", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CARD SLOTS, CAPACITY", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("DIMENSIONS, POWER & LIGHTING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("MEASUREMENTS & STABILITY", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("BOARD & PIECE MEASUREMENTS", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("SIZING & COLLAR ADJUSTMENT", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("SIZING GUIDE & FABRIC", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+
+        if (desc.Contains("PERFECT FOR", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("TIMELESS EVERYDAY CARRY", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("LITTLE DREAMERS", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("STREAMERS, GAMERS", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("GAME NIGHT & HEIRLOOM", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("DOG PARENTS & PET LOVERS", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+
+        if (desc.Contains("PACKAGING & SHIPPING", StringComparison.OrdinalIgnoreCase) || 
+            desc.Contains("PACKAGING & SAFE SHIPPING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("PROTECTIVE PACKAGING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("CAREFUL PACKAGING", StringComparison.OrdinalIgnoreCase) ||
+            desc.Contains("REINFORCED PACKAGING", StringComparison.OrdinalIgnoreCase)) sectionCount++;
+
+        return sectionCount >= 3;
     }
+
+    public sealed record SectionHeaders(
+        string FeaturesHeader,
+        string SpecsHeader,
+        string PerfectForHeader,
+        string PackagingHeader,
+        string CustomHeader);
+
+    public static SectionHeaders BuildThemeSectionHeaders(ProductTheme theme) => theme switch
+    {
+        ProductTheme.KitchenAndDining => new(
+            FeaturesHeader: "☕ ARTISAN CRAFT & DAILY ENJOYMENT:",
+            SpecsHeader: "📏 CAPACITY, SIZING & CARE:",
+            PerfectForHeader: "🎁 PERFECT FOR COFFEE & TEA LOVERS:",
+            PackagingHeader: "📦 PACKAGING & SAFE SHIPPING:",
+            CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:"),
+
+        ProductTheme.LeatherAndAccessories => new(
+            FeaturesHeader: "🐂 PREMIUM LEATHER & TIMELESS CRAFT:",
+            SpecsHeader: "📏 CARD SLOTS, CAPACITY & MEASUREMENTS:",
+            PerfectForHeader: "🎁 TIMELESS EVERYDAY CARRY & GIFTS:",
+            PackagingHeader: "📦 PACKAGING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM REQUESTS & PERSONALIZATION:"),
+
+        ProductTheme.SpaceAndAstronomy => new(
+            FeaturesHeader: "✨ COSMIC GLOW & BEDTIME AMBIANCE:",
+            SpecsHeader: "📏 DIMENSIONS, POWER & LIGHTING SPECS:",
+            PerfectForHeader: "🎁 NURSERY, BEDROOM & CELESTIAL DECOR:",
+            PackagingHeader: "📦 PROTECTIVE PACKAGING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:"),
+
+        ProductTheme.AudioAndHeadphoneStands => new(
+            FeaturesHeader: "🎧 BATTLESTATION STYLING & GEAR REST:",
+            SpecsHeader: "📏 MEASUREMENTS & STABILITY DETAILS:",
+            PerfectForHeader: "🎁 STREAMERS, GAMERS & AUDIOPHILES:",
+            PackagingHeader: "📦 SAFE PACKAGING & DISPATCH:",
+            CustomHeader: "💬 CUSTOM INQUIRIES & COLORS:"),
+
+        ProductTheme.BoardGamesAndToys => new(
+            FeaturesHeader: "♟️ HAND-CARVED WOODWORK & STRATEGY:",
+            SpecsHeader: "📏 BOARD & PIECE MEASUREMENTS:",
+            PerfectForHeader: "🎁 GAME NIGHT & HEIRLOOM DISPLAY:",
+            PackagingHeader: "📦 CAREFUL PACKAGING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM ORDERS & QUESTIONS:"),
+
+        ProductTheme.PetSupplies => new(
+            FeaturesHeader: "🐾 PET COMFORT & DURABLE HARDWARE:",
+            SpecsHeader: "📏 SIZING & COLLAR ADJUSTMENT:",
+            PerfectForHeader: "🎁 DOG PARENTS & PET LOVERS:",
+            PackagingHeader: "📦 FAST PACKAGING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM ENGRAVING & QUESTIONS:"),
+
+        ProductTheme.WallArtAndPrints => new(
+            FeaturesHeader: "🖼️ STATEMENT DESIGN & WALL ACCENT:",
+            SpecsHeader: "📏 DIMENSIONS & MOUNTING DETAILS:",
+            PerfectForHeader: "🎁 HOME STYLING & HOUSEWARMING:",
+            PackagingHeader: "📦 PROTECTIVE CRATING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM SIZING & INQUIRIES:"),
+
+        ProductTheme.KidsAndNursery => new(
+            FeaturesHeader: "🌙 GENTLE NURSERY COMFORT & GLOW:",
+            SpecsHeader: "📏 SIZING & CHILD-SAFE MATERIALS:",
+            PerfectForHeader: "🎁 PERFECT FOR LITTLE DREAMERS:",
+            PackagingHeader: "📦 SAFE PACKAGING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:"),
+
+        ProductTheme.MusicOrCelebrity => new(
+            FeaturesHeader: "🎸 ICONIC TRIBUTE & ARTISAN DETAIL:",
+            SpecsHeader: "📏 SPECIFICATIONS & DISPLAY SPECS:",
+            PerfectForHeader: "🎁 MUSIC ENTHUSIASTS & COLLECTORS:",
+            PackagingHeader: "📦 PROTECTIVE PACKAGING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM INQUIRIES:"),
+
+        ProductTheme.ApparelAndFashion => new(
+            FeaturesHeader: "👕 PREMIUM COMFORT & BESPOKE STYLE:",
+            SpecsHeader: "📏 SIZING GUIDE & FABRIC DETAILS:",
+            PerfectForHeader: "🎁 PERFECT FOR EVERYDAY WEAR:",
+            PackagingHeader: "📦 CAREFUL FOLDING & PROMPT SHIPPING:",
+            CustomHeader: "💬 CUSTOM SIZING & REQUESTS:"),
+
+        ProductTheme.JewelryOrWearable => new(
+            FeaturesHeader: "💎 ARTISAN ELEGANCE & WEARABLE CHARM:",
+            SpecsHeader: "📏 DIMENSIONS, WEIGHT & METAL FINISH:",
+            PerfectForHeader: "🎁 MEMORABLE KEEPSAKE & GIFTS:",
+            PackagingHeader: "📦 GIFT BOX & SAFE DISPATCH:",
+            CustomHeader: "💬 CUSTOM ORDERS & QUESTIONS:"),
+
+        ProductTheme.CosplayOrProp => new(
+            FeaturesHeader: "⚔️ REPLICA AUTHENTICITY & PRESENCE:",
+            SpecsHeader: "📏 SCALE, WEIGHT & MATERIAL SPECS:",
+            PerfectForHeader: "🎁 COSPLAYERS & DISPLAY SHELVES:",
+            PackagingHeader: "📦 REINFORCED PACKAGING & DELIVERY:",
+            CustomHeader: "💬 CUSTOM FINISHES & QUESTIONS:"),
+
+        _ => new(
+            FeaturesHeader: "✨ WHY YOU'LL LOVE IT:",
+            SpecsHeader: "📏 SPECIFICATIONS & DETAILS:",
+            PerfectForHeader: "🎁 PERFECT FOR:",
+            PackagingHeader: "📦 PACKAGING & SHIPPING:",
+            CustomHeader: "💬 CUSTOM REQUESTS & QUESTIONS:")
+    };
 
     /// <summary>
     /// Herhangi bir ham metni, ürün başlığı ve etiketlerini kullanarak 6 bölümlü Altın Etsy Paragraf Şablonuna dönüştürür.
@@ -173,6 +304,7 @@ public static class EtsyDescriptionFormatter
 
         var cleanSource = ExtractSourceDetails(rawDesc);
         var theme = DetectProductTheme(cleanTitle, rawDesc, tags);
+        var headers = BuildThemeSectionHeaders(theme);
 
         var sb = new StringBuilder();
 
@@ -181,7 +313,7 @@ public static class EtsyDescriptionFormatter
         sb.AppendLine();
 
         // BÖLÜM 2: Öne Çıkan Özellikler (Ürünün Gerçek Özellikleri)
-        sb.AppendLine("✨ WHY YOU'LL LOVE IT:");
+        sb.AppendLine(headers.FeaturesHeader);
         if (cleanSource.KeyFeatures.Count > 0)
         {
             foreach (var feat in cleanSource.KeyFeatures.Take(3))
@@ -198,7 +330,7 @@ public static class EtsyDescriptionFormatter
         sb.AppendLine();
 
         // BÖLÜM 3: Boyut ve Teknik Özellikler
-        sb.AppendLine("📏 SPECIFICATIONS & DETAILS:");
+        sb.AppendLine(headers.SpecsHeader);
         sb.AppendLine($"• Materials: {matList}");
         if (!string.IsNullOrWhiteSpace(cleanSource.Dimensions))
         {
@@ -220,19 +352,19 @@ public static class EtsyDescriptionFormatter
         sb.AppendLine();
 
         // BÖLÜM 4: Kimler İçin Uygun / Hediye (Ürün Temasına Özel)
-        sb.AppendLine("🎁 PERFECT FOR:");
+        sb.AppendLine(headers.PerfectForHeader);
         sb.AppendLine(BuildThemeAudience(theme));
         sb.AppendLine(BuildThemeGiftOccasion(theme));
         sb.AppendLine();
 
         // BÖLÜM 5: Güvenli Paketleme & Kargo
-        sb.AppendLine("📦 PACKAGING & SHIPPING:");
+        sb.AppendLine(headers.PackagingHeader);
         sb.AppendLine("• Carefully wrapped in multi-layer protective packaging to guarantee 100% safe worldwide arrival.");
         sb.AppendLine("• Every order includes tracked dispatch sent directly to your email upon shipment.");
         sb.AppendLine();
 
         // BÖLÜM 6: Özel İstekler & İletişim
-        sb.AppendLine("💬 CUSTOM REQUESTS & QUESTIONS:");
+        sb.AppendLine(headers.CustomHeader);
         sb.AppendLine("• Looking for a custom color, size, or special personalization? Feel free to reach out anytime—we are happy to help!");
 
         return NormalizeForEtsy(sb.ToString());
@@ -492,6 +624,12 @@ public static class EtsyDescriptionFormatter
 
     private static bool IsSectionHeader(string line)
     {
+        var trimmed = line.TrimStart();
+        if (trimmed.StartsWith("•") || trimmed.StartsWith("-") || trimmed.StartsWith("*"))
+        {
+            return false;
+        }
+
         var upper = line.ToUpperInvariant();
         return upper.Contains("WHY YOU'LL LOVE IT") ||
                upper.Contains("SPECIFICATIONS") ||
@@ -502,19 +640,42 @@ public static class EtsyDescriptionFormatter
                upper.Contains("CUSTOM REQUESTS") ||
                upper.Contains("CARE INSTRUCTIONS") ||
                upper.Contains("HOW TO ORDER") ||
-               upper.Contains("OVERVIEW");
+               upper.Contains("OVERVIEW") ||
+               upper.Contains("ARTISAN CRAFT") ||
+               upper.Contains("PREMIUM LEATHER") ||
+               upper.Contains("COSMIC GLOW") ||
+               upper.Contains("BATTLESTATION") ||
+               upper.Contains("HAND-CARVED") ||
+               upper.Contains("PET COMFORT") ||
+               upper.Contains("STATEMENT DESIGN") ||
+               upper.Contains("CAPACITY") ||
+               upper.Contains("MEASUREMENTS") ||
+               upper.Contains("CARD SLOTS") ||
+               upper.Contains("SIZING GUIDE");
     }
 
     private static string EnsureSectionHeaderEmoji(string text)
     {
+        var trimmed = text.Trim();
+        if (char.IsSurrogate(trimmed.FirstOrDefault()) || 
+            trimmed.StartsWith("✨") || trimmed.StartsWith("📏") || trimmed.StartsWith("🎁") || 
+            trimmed.StartsWith("📦") || trimmed.StartsWith("💬") || trimmed.StartsWith("☕") ||
+            trimmed.StartsWith("🐂") || trimmed.StartsWith("🎧") || trimmed.StartsWith("♟️") ||
+            trimmed.StartsWith("🐾") || trimmed.StartsWith("🖼️") || trimmed.StartsWith("🌙") ||
+            trimmed.StartsWith("🎸") || trimmed.StartsWith("👕") || trimmed.StartsWith("💎") ||
+            trimmed.StartsWith("⚔️") || trimmed.StartsWith("🧼"))
+        {
+            return trimmed;
+        }
+
         var upper = text.ToUpperInvariant();
-        if (upper.Contains("WHY YOU'LL LOVE IT") && !text.Contains("✨")) return "✨ " + text.Trim();
-        if (upper.Contains("SPECIFICATIONS") && !text.Contains("📏")) return "📏 " + text.Trim();
-        if (upper.Contains("PERFECT FOR") && !text.Contains("🎁")) return "🎁 " + text.Trim();
-        if (upper.Contains("PACKAGING") && !text.Contains("📦")) return "📦 " + text.Trim();
-        if (upper.Contains("CUSTOM REQUESTS") && !text.Contains("💬")) return "💬 " + text.Trim();
-        if (upper.Contains("CARE") && !text.Contains("🧼")) return "🧼 " + text.Trim();
-        return text;
+        if (upper.Contains("WHY YOU'LL LOVE") || upper.Contains("GLOW") || upper.Contains("CRAFT")) return "✨ " + trimmed;
+        if (upper.Contains("SPECIFICATIONS") || upper.Contains("CAPACITY") || upper.Contains("MEASUREMENT") || upper.Contains("DIMENSION") || upper.Contains("SIZING")) return "📏 " + trimmed;
+        if (upper.Contains("PERFECT FOR") || upper.Contains("GIFTS") || upper.Contains("OCCASION")) return "🎁 " + trimmed;
+        if (upper.Contains("PACKAGING") || upper.Contains("SHIPPING") || upper.Contains("DELIVERY")) return "📦 " + trimmed;
+        if (upper.Contains("CUSTOM") || upper.Contains("QUESTION") || upper.Contains("INQUIR")) return "💬 " + trimmed;
+        if (upper.Contains("CARE")) return "🧼 " + trimmed;
+        return trimmed;
     }
 
     private static string SanitizeTitle(string title)
