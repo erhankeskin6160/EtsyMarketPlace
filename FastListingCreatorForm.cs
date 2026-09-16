@@ -128,7 +128,7 @@ internal sealed class FastListingCreatorForm : Form
             Padding = new Padding(12, 8, 12, 8),
             BackColor = UiStyle.BackgroundColor
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));  // Row 0: Unified Top Command & Template Bar
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));  // Row 0: Unified Top Command & Template Bar
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 1: 3 Responsive Workspace Columns
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // Row 2: Status bar
         Controls.Add(root);
@@ -181,9 +181,9 @@ internal sealed class FastListingCreatorForm : Form
             BackColor = Color.Transparent,
             Margin = Padding.Empty
         };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 310)); // Left: Branding
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Left: Branding & Subtitle
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f)); // Center: Template Strip
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 340)); // Right: Action Buttons
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Right: Action Buttons
 
         // Left: Branding & Subtitle
         var titleBox = new FlowLayoutPanel
@@ -193,7 +193,7 @@ internal sealed class FastListingCreatorForm : Form
             WrapContents = false,
             AutoSize = true,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 4, 12, 0)
+            Padding = new Padding(2, 4, 16, 2)
         };
 
         var lblBadge = new Label
@@ -202,8 +202,8 @@ internal sealed class FastListingCreatorForm : Form
             Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
             ForeColor = Color.White,
             BackColor = UiStyle.AiColor,
-            Padding = new Padding(6, 2, 6, 2),
-            Margin = new Padding(0, 3, 8, 0),
+            Padding = new Padding(6, 3, 6, 3),
+            Margin = new Padding(0, 4, 8, 0),
             AutoSize = true
         };
         titleBox.Controls.Add(lblBadge);
@@ -217,15 +217,15 @@ internal sealed class FastListingCreatorForm : Form
         };
         var lblTitle = new Label
         {
-            Text = "Hızlı Ürün Ekleme & AI Stüdyosu",
-            Font = new Font("Segoe UI Semibold", 11.5F, FontStyle.Bold),
+            Text = "Hızlı Ürün Ekle",
+            Font = new Font("Segoe UI Semibold", 10.8F, FontStyle.Bold),
             ForeColor = UiStyle.TextDark,
             AutoSize = true,
             Margin = Padding.Empty
         };
         var lblSubtitle = new Label
         {
-            Text = "Yapay zeka ile listeleme ve görsel oluşturun, tek tıkla Etsy'ye aktarın.",
+            Text = "Etsy Listeleme & AI Görsel Stüdyosu",
             Font = new Font("Segoe UI", 7.5F),
             ForeColor = UiStyle.TextMuted,
             AutoSize = true,
@@ -236,15 +236,27 @@ internal sealed class FastListingCreatorForm : Form
         titleBox.Controls.Add(titleStack);
         header.Controls.Add(titleBox, 0, 0);
 
-        // Center: Template Strip
+        // Center: Template Strip inside sleek capsule
+        var templateCard = new ModernCardPanel
+        {
+            Dock = DockStyle.Left,
+            AutoSize = true,
+            CornerRadius = 8,
+            CardColor = Color.FromArgb(28, 30, 42),
+            BorderColor = UiStyle.BorderColor,
+            Padding = new Padding(8, 2, 8, 2),
+            Margin = new Padding(8, 2, 8, 2)
+        };
+
         var templateFlow = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             AutoSize = true,
+            BackColor = Color.Transparent,
             Margin = Padding.Empty,
-            Padding = new Padding(8, 5, 0, 0)
+            Padding = new Padding(0, 2, 0, 0)
         };
 
         templateFlow.Controls.Add(new Label
@@ -257,51 +269,52 @@ internal sealed class FastListingCreatorForm : Form
         });
 
         _cboTemplates.Font = new Font("Segoe UI", 8.5F);
-        _cboTemplates.Width = 145;
+        _cboTemplates.Width = 150;
         _cboTemplates.DropDownWidth = 220;
-        _cboTemplates.Margin = new Padding(0, 2, 4, 0);
+        _cboTemplates.Margin = new Padding(0, 2, 6, 0);
         templateFlow.Controls.Add(_cboTemplates);
 
         _btnApplyTemplate.Text = "⚡ Uygula";
         _btnApplyTemplate.Font = new Font("Segoe UI Semibold", 8F);
-        _btnApplyTemplate.Height = 26;
+        _btnApplyTemplate.Height = 28;
         _btnApplyTemplate.AutoSize = true;
         _btnApplyTemplate.BackColor = UiStyle.PrimaryColor;
         _btnApplyTemplate.ForeColor = Color.White;
         _btnApplyTemplate.FlatStyle = FlatStyle.Flat;
         _btnApplyTemplate.FlatAppearance.BorderSize = 0;
         _btnApplyTemplate.Cursor = Cursors.Hand;
-        _btnApplyTemplate.Margin = new Padding(0, 2, 3, 0);
+        _btnApplyTemplate.Margin = new Padding(0, 1, 4, 0);
         _btnApplyTemplate.Click += (_, _) => ApplySelectedTemplate();
         templateFlow.Controls.Add(_btnApplyTemplate);
 
         _btnSaveTemplate.Text = "💾 Kaydet";
         _btnSaveTemplate.Font = new Font("Segoe UI", 8F);
-        _btnSaveTemplate.Height = 26;
+        _btnSaveTemplate.Height = 28;
         _btnSaveTemplate.AutoSize = true;
         _btnSaveTemplate.BackColor = UiStyle.SecondaryColor;
         _btnSaveTemplate.ForeColor = UiStyle.TextDark;
         _btnSaveTemplate.FlatStyle = FlatStyle.Flat;
         _btnSaveTemplate.FlatAppearance.BorderColor = UiStyle.BorderColor;
         _btnSaveTemplate.Cursor = Cursors.Hand;
-        _btnSaveTemplate.Margin = new Padding(0, 2, 3, 0);
+        _btnSaveTemplate.Margin = new Padding(0, 1, 4, 0);
         _btnSaveTemplate.Click += (_, _) => SaveCurrentAsTemplate();
         templateFlow.Controls.Add(_btnSaveTemplate);
 
         _btnDeleteTemplate.Text = "🗑️";
         _btnDeleteTemplate.Font = new Font("Segoe UI", 8F);
-        _btnDeleteTemplate.Height = 26;
+        _btnDeleteTemplate.Height = 28;
         _btnDeleteTemplate.Width = 28;
         _btnDeleteTemplate.BackColor = UiStyle.SecondaryColor;
         _btnDeleteTemplate.ForeColor = UiStyle.DangerColor;
         _btnDeleteTemplate.FlatStyle = FlatStyle.Flat;
         _btnDeleteTemplate.FlatAppearance.BorderColor = UiStyle.BorderColor;
         _btnDeleteTemplate.Cursor = Cursors.Hand;
-        _btnDeleteTemplate.Margin = new Padding(0, 2, 0, 0);
+        _btnDeleteTemplate.Margin = new Padding(0, 1, 0, 0);
         _btnDeleteTemplate.Click += (_, _) => DeleteSelectedTemplate();
         templateFlow.Controls.Add(_btnDeleteTemplate);
 
-        header.Controls.Add(templateFlow, 1, 0);
+        templateCard.Controls.Add(templateFlow);
+        header.Controls.Add(templateCard, 1, 0);
 
         // Right: Primary Actions Cluster
         var actionCluster = new FlowLayoutPanel
@@ -309,28 +322,29 @@ internal sealed class FastListingCreatorForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.RightToLeft,
             WrapContents = false,
+            AutoSize = true,
             BackColor = Color.Transparent,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 4, 0, 0)
+            Padding = new Padding(0, 2, 0, 0)
         };
 
         // 1. Etsy'ye Gönder
         _btnHeaderPublish.Text = "🚀 Etsy'ye Gönder";
         _btnHeaderPublish.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
-        _btnHeaderPublish.Height = 30;
-        _btnHeaderPublish.Width = 135;
+        _btnHeaderPublish.Height = 32;
+        _btnHeaderPublish.Width = 140;
         _btnHeaderPublish.NormalColor = UiStyle.SuccessColor;
         _btnHeaderPublish.HoverColor = Color.FromArgb(5, 150, 105);
         _btnHeaderPublish.ForeColor = Color.White;
         _btnHeaderPublish.Cursor = Cursors.Hand;
-        _btnHeaderPublish.Margin = new Padding(4, 1, 0, 0);
+        _btnHeaderPublish.Margin = new Padding(6, 1, 0, 0);
         _btnHeaderPublish.Click += async (_, _) => await PublishListingToEtsyAsync();
         actionCluster.Controls.Add(_btnHeaderPublish);
 
         // 2. Canlı Önizleme
         _btnHeaderPreview.Text = "👁️ Önizleme";
         _btnHeaderPreview.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
-        _btnHeaderPreview.Height = 30;
+        _btnHeaderPreview.Height = 32;
         _btnHeaderPreview.Width = 105;
         _btnHeaderPreview.NormalColor = UiStyle.PrimaryColor;
         _btnHeaderPreview.HoverColor = UiStyle.PrimaryHover;
@@ -342,8 +356,8 @@ internal sealed class FastListingCreatorForm : Form
 
         // 3. Formu Temizle
         _btnClearAll.Text = "🔄 Temizle";
-        _btnClearAll.Font = new Font("Segoe UI", 8F);
-        _btnClearAll.Height = 30;
+        _btnClearAll.Font = new Font("Segoe UI", 8.2F);
+        _btnClearAll.Height = 32;
         _btnClearAll.AutoSize = true;
         _btnClearAll.BackColor = UiStyle.SecondaryColor;
         _btnClearAll.ForeColor = UiStyle.TextDark;
