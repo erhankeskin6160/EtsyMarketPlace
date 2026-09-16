@@ -250,8 +250,9 @@ public sealed class ListingOptimizationService
             blob.Contains("moon") || blob.Contains("stargazer") || blob.Contains("astronomy"))
         {
             list.AddRange([
-                "astronaut night light",
+                "astronaut night lamp",
                 "space nursery lamp",
+                "spaceman night light",
                 "galaxy desk decor",
                 "outer space gift",
                 "cosmic room accent",
@@ -259,7 +260,7 @@ public sealed class ListingOptimizationService
                 "sci fi night light",
                 "stargazer room art",
                 "lunar bedside glow",
-                "spaceman table light",
+                "spaceman desk lamp",
                 "kids space decor",
                 "space bedtime lamp"
             ]);
@@ -351,17 +352,29 @@ public sealed class ListingOptimizationService
                 "collector figure prop"
             ]);
         }
-        else if (blob.Contains("wallet") || blob.Contains("leather") || blob.Contains("cardholder") || blob.Contains("card holder") || blob.Contains("bifold") || blob.Contains("cuzdan") || blob.Contains("kartlik"))
+        else if (blob.Contains("dog collar") || blob.Contains("cat collar") || blob.Contains("pet collar") || blob.Contains("tasma") || blob.Contains("leash") || blob.Contains("pet harness"))
+        {
+            list.AddRange([
+                "custom dog collar",
+                "leather dog collar",
+                "personalized collar",
+                "engraved pet collar",
+                "handmade dog leash",
+                "puppy adoption gift",
+                "durable pet collar"
+            ]);
+        }
+        else if (blob.Contains("wallet") || blob.Contains("cardholder") || blob.Contains("card holder") || blob.Contains("bifold") || blob.Contains("cuzdan") || blob.Contains("kartlik") || blob.Contains("leather wallet") || blob.Contains("leather card"))
         {
             list.AddRange([
                 "leather card wallet",
                 "slim bifold wallet",
                 "edc leather gear",
-                "minimalist cardholder",
+                "minimalist card case",
                 "full grain accessory",
                 "mens pocket wallet",
-                "handmade leather craft",
                 "personalized wallet",
+                "artisan leather gift",
                 "classic leather gift"
             ]);
         }
@@ -369,11 +382,11 @@ public sealed class ListingOptimizationService
         {
             list.AddRange([
                 "headphone desk stand",
-                "gaming headset holder",
+                "gaming headset stand",
                 "audio gear display",
                 "battlestation stand",
-                "desktop headphone rest",
-                "audio cable organizer",
+                "headphone desk rest",
+                "desktop audio stand",
                 "streamer desk accent"
             ]);
         }
@@ -381,11 +394,24 @@ public sealed class ListingOptimizationService
         {
             list.AddRange([
                 "nordic candle holder",
-                "tealight candle stand",
+                "tealight candle base",
                 "ambient candle decor",
-                "concrete candle stand",
-                "cozy home candleholder",
-                "tabletop candle accent"
+                "concrete candle base",
+                "cozy candle stand",
+                "tabletop candle rest"
+            ]);
+        }
+        else if (blob.Contains("chess") || blob.Contains("board game") || blob.Contains("puzzle") || blob.Contains("satranc"))
+        {
+            list.AddRange([
+                "handcrafted chess",
+                "wooden chess set",
+                "artisan board game",
+                "tabletop game set",
+                "strategy board game",
+                "heirloom chess set",
+                "carved chess set",
+                "custom board game"
             ]);
         }
         else if (blob.Contains("wall art") || blob.Contains("wall decor") || blob.Contains("wall sign") || blob.Contains("hanging") || blob.Contains("duvar"))
@@ -394,8 +420,8 @@ public sealed class ListingOptimizationService
                 "modern wall decor",
                 "wooden wall sign",
                 "geometric wall art",
-                "statement wall hanging",
-                "living room wall accent",
+                "statement wall piece",
+                "living room wall art",
                 "minimalist wall piece"
             ]);
         }
@@ -448,8 +474,12 @@ public sealed class ListingOptimizationService
         var tagStyle = nonPrimaryTags.FirstOrDefault(t => t != tagCraft && t != tagDisplay && t != tagGift)
             ?? nonPrimaryTags.ElementAtOrDefault(3) ?? "Premium Finish";
 
+        var title1Words = Tokenize(basePrimary).Where(w => w.Length > 3).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var tagCraftWords = Tokenize(tagCraft).Where(w => w.Length > 3).ToList();
+        bool craftOverlaps = tagCraftWords.Any(w => title1Words.Contains(w));
+
         // BAŞLIK 1: Arama & Yüksek Dönüşüm Odaklı (Mobil Öncelikli Hook + Zengin Niteleyiciler)
-        var title1Hook = basePrimary.Length <= 45 && !basePrimary.Contains(tagCraft, StringComparison.OrdinalIgnoreCase)
+        var title1Hook = basePrimary.Length <= 45 && !craftOverlaps
             ? $"{basePrimary} - {tagCraft}"
             : basePrimary;
         var title1Candidates = new List<string> { tagDisplay, tagGift, tagStyle, "Unique Fan Present", "Artisan Collectible" };
@@ -465,7 +495,11 @@ public sealed class ListingOptimizationService
         var title2 = AssembleFluidTitle(title2Hook, title2Candidates, 138);
 
         // BAŞLIK 3: Hediye & Hayran/Koleksiyoncu Odaklı Başlık
-        var title3Hook = $"{basePrimary} - {tagGift}";
+        var tagGiftWords = Tokenize(tagGift).Where(w => w.Length > 3).ToList();
+        bool giftOverlaps = tagGiftWords.Any(w => title1Words.Contains(w));
+        var title3Hook = !giftOverlaps && basePrimary.Length <= 60
+            ? $"{basePrimary} - {tagGift}"
+            : basePrimary;
         var title3Candidates = new List<string> { tagCraft, tagDisplay, "Limited Collector Edition", "Memorable Keepsake Gift" };
         foreach (var t in nonPrimaryTags) if (!title3Candidates.Contains(t)) title3Candidates.Add(t);
         var title3 = AssembleFluidTitle(title3Hook, title3Candidates, 138);
@@ -480,6 +514,11 @@ public sealed class ListingOptimizationService
     private static string AssembleFluidTitle(string hook, IReadOnlyList<string> segments, int maxLen = 138)
     {
         var result = hook.Trim();
+        var wordCounts = Tokenize(result)
+            .Where(w => w.Length > 3)
+            .GroupBy(w => w, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
         bool firstSeparator = true;
         foreach (var seg in segments)
         {
@@ -487,12 +526,22 @@ public sealed class ListingOptimizationService
             var trimmed = seg.Trim();
             if (result.Contains(trimmed, StringComparison.OrdinalIgnoreCase)) continue;
 
+            var segWords = Tokenize(trimmed).Where(w => w.Length > 3).ToList();
+            if (segWords.Any(w => wordCounts.TryGetValue(w, out var c) && c >= 2))
+            {
+                continue;
+            }
+
             var sep = firstSeparator && !result.Contains(" - ") ? " - " : ", ";
             var test = $"{result}{sep}{trimmed}";
             if (test.Length <= maxLen)
             {
                 result = test;
                 firstSeparator = false;
+                foreach (var w in segWords)
+                {
+                    wordCounts[w] = wordCounts.GetValueOrDefault(w) + 1;
+                }
             }
         }
         return LimitTitle(result);
@@ -684,8 +733,15 @@ public sealed class ListingOptimizationService
     private static string NormalizeTag(string value)
     {
         var words = Tokenize(value).Take(4).ToList();
-        var tag = string.Join(' ', words);
-        return tag.Length <= 20 ? tag : string.Join(' ', words.Take(3));
+        while (words.Count > 1)
+        {
+            var candidate = string.Join(' ', words);
+            if (candidate.Length <= 20) return candidate;
+            words.RemoveAt(words.Count - 1);
+        }
+        if (words.Count == 1 && words[0].Length <= 20) return words[0];
+        var text = string.Join(' ', Tokenize(value));
+        return text.Length <= 20 ? text : (text.Length > 20 ? text[..20].TrimEnd() : text);
     }
 
     private static string CleanPhrase(string value)

@@ -194,7 +194,7 @@ public static class EtsyDescriptionFormatter
             sb.AppendLine($"• Premium Craftsmanship: Expertly manufactured with durable {matList} for a smooth, high-detail finish.");
             sb.AppendLine(BuildThemeDisplayHighlight(theme));
         }
-        sb.AppendLine("• Collector & Fan Approved: Meticulously inspected and finished with exceptional attention to detail.");
+        sb.AppendLine(BuildThemeFeatureBullet(theme));
         sb.AppendLine();
 
         // BÖLÜM 3: Boyut ve Teknik Özellikler
@@ -222,7 +222,7 @@ public static class EtsyDescriptionFormatter
         // BÖLÜM 4: Kimler İçin Uygun / Hediye (Ürün Temasına Özel)
         sb.AppendLine("🎁 PERFECT FOR:");
         sb.AppendLine(BuildThemeAudience(theme));
-        sb.AppendLine("• An unforgettable birthday, anniversary, holiday, or special celebration gift.");
+        sb.AppendLine(BuildThemeGiftOccasion(theme));
         sb.AppendLine();
 
         // BÖLÜM 5: Güvenli Paketleme & Kargo
@@ -262,6 +262,14 @@ public static class EtsyDescriptionFormatter
             $"Level up your sanctuary with this authentic {title}! Tailored for shoppers searching for {target}, this piece brings standout craftsmanship and unmistakable character to your setup.",
         ProductTheme.HomeDecorOrArt =>
             $"Elevate your interior aesthetics with this handcrafted {title}! Designed for shoppers searching for {target}, this distinct showpiece brings warmth, style, and conversation-starting artistry to any room.",
+        ProductTheme.LeatherAndAccessories =>
+            $"Upgrade your everyday essentials with this impeccably crafted {title}! Designed for shoppers searching for {target}, this piece pairs timeless style, premium durability, and minimalist elegance for your daily carry.",
+        ProductTheme.BoardGamesAndToys =>
+            $"Elevate game night and display elegance with this masterfully crafted {title}! Crafted for shoppers searching for {target}, this piece combines strategic fun, heirloom-quality craftsmanship, and conversation-starting artistry.",
+        ProductTheme.PetSupplies =>
+            $"Pamper your beloved companion with this bespoke, high-quality {title}! Handcrafted for shoppers searching for {target}, this piece combines comfort, reliable strength, and charming personalized style for every walk.",
+        ProductTheme.AudioAndHeadphoneStands =>
+            $"Showcase your favorite gear in style with this distinctive {title}! Engineered for shoppers searching for {target}, this artisan stand combines desktop organization, rock-solid stability, and eye-catching desk aesthetics.",
         _ =>
             $"Discover the exceptional craftsmanship of this unique {title}! Carefully designed for shoppers searching for {target}, this artisan piece brings authentic quality, thoughtful design, and distinctive charm to your home."
     };
@@ -277,6 +285,10 @@ public static class EtsyDescriptionFormatter
         ProductTheme.WallArtAndPrints => "• Gallery-Worthy Presentation: Crisp detailing and rich contrast that immediately draws the eye in any room.",
         ProductTheme.CosplayOrProp => "• Display & Cosplay Ready: Perfectly weighted and proportioned for photo shoots, cosplay events, or premium wall display.",
         ProductTheme.GamingOrAnime => "• Battlestation Ready: Designed to sit proudly next to your PC setup, gaming console, or collector bookcase.",
+        ProductTheme.LeatherAndAccessories => "• Everyday Durability: Designed for practical daily carry, developing a rich, unique patina over years of use.",
+        ProductTheme.BoardGamesAndToys => "• Heirloom Craftsmanship: Smooth hand-finished surfaces and weighted pieces designed for both intense gameplay and distinguished tabletop display.",
+        ProductTheme.PetSupplies => "• Pet-Safe & Durable: Sturdy construction and smooth hardware engineered for everyday walks, active adventures, and pet comfort.",
+        ProductTheme.AudioAndHeadphoneStands => "• Battlestation & Studio Ready: Keeps premium headphones safe, organized, and beautifully displayed with a stable, weighted base.",
         _ => "• Handcrafted Excellence: Thoughtfully finished with attention to detail and long-lasting durability."
     };
 
@@ -304,8 +316,47 @@ public static class EtsyDescriptionFormatter
             "• Gamers, anime lovers, cosplay enthusiasts, and tabletop/novelty decor collectors.",
         ProductTheme.HomeDecorOrArt =>
             "• Interior design lovers, aesthetic home stylists, art enthusiasts, and modern decor collectors.",
+        ProductTheme.LeatherAndAccessories =>
+            "• Everyday carry (EDC) enthusiasts, discerning professionals, travelers, and thoughtful gift shoppers seeking a timeless classic.",
+        ProductTheme.BoardGamesAndToys =>
+            "• Chess players, tabletop gaming enthusiasts, strategy fans, and collectors searching for an unforgettable heirloom gift.",
+        ProductTheme.PetSupplies =>
+            "• Dedicated pet parents, dog and cat lovers, new puppy owners, and thoughtful pet adoption gift shoppers.",
+        ProductTheme.AudioAndHeadphoneStands =>
+            "• Audiophiles, music producers, PC gamers, streamers, and tech enthusiasts upgrading their desk setup.",
         _ =>
             "• Discerning collectors, home decor enthusiasts, and anyone looking for a memorable, one-of-a-kind handcrafted gift."
+    };
+
+    private static string BuildThemeFeatureBullet(ProductTheme theme) => theme switch
+    {
+        ProductTheme.SpaceAndAstronomy => "• Starry Dreamer Delight: Gentle illumination designed to comfort little stargazers and inspire wonder.",
+        ProductTheme.KitchenAndDining => "• Food-Safe & Daily Functional: Crafted with durable, food-safe glazes for everyday hot and cold beverage enjoyment.",
+        ProductTheme.LeatherAndAccessories => "• Timeless EDC Classic: Slim, pocket-friendly profile that organizes your essentials without unnecessary bulk.",
+        ProductTheme.BoardGamesAndToys => "• Tabletop Heirloom Quality: Beautifully weighted and detailed for memorable game nights with family and friends.",
+        ProductTheme.PetSupplies => "• Pet Comfort & Security: Smooth edges and heavy-duty hardware built for safe, happy daily walks.",
+        ProductTheme.AudioAndHeadphoneStands => "• Safe Gear Rest: Ergonomically curved to protect headphone headbands from indentation and wear.",
+        ProductTheme.WallArtAndPrints => "• Ready to Hang: Designed to add instant warmth and character to gallery walls, living rooms, and offices.",
+        ProductTheme.KidsAndNursery => "• Safe for Nurseries: Soft, calming glow with child-friendly materials to help toddlers drift into sweet dreams.",
+        ProductTheme.MusicOrCelebrity => "• Collector & Fan Approved: Meticulously inspected and finished with exceptional attention to detail.",
+        ProductTheme.CosplayOrProp => "• Convention & Stage Ready: Built to withstand active costume use while looking cinematic on display.",
+        ProductTheme.GamingOrAnime => "• Battlestation Approved: Crafted with gamer aesthetics to elevate your streaming and desk setup.",
+        ProductTheme.JewelryOrWearable => "• Hypoallergenic & Lightweight: Designed for comfortable all-day wear with premium skin-safe finishes.",
+        _ => "• Artisan Quality Guaranteed: Individually inspected to ensure clean lines, durable construction, and lasting beauty."
+    };
+
+    private static string BuildThemeGiftOccasion(ProductTheme theme) => theme switch
+    {
+        ProductTheme.SpaceAndAstronomy => "• A magical birthday, Christmas, or baby shower gift for space fans and curious explorers.",
+        ProductTheme.KitchenAndDining => "• A heartwarming housewarming, birthday, or holiday gift for coffee lovers and tea enthusiasts.",
+        ProductTheme.LeatherAndAccessories => "• An elegant birthday, Father's Day, anniversary, or groomsmen gift for someone who values classic style.",
+        ProductTheme.BoardGamesAndToys => "• A distinguished gift for chess champions, board game fans, fathers, and strategy enthusiasts.",
+        ProductTheme.PetSupplies => "• The ultimate gift for new pet adoptions, dog birthdays, or passionate pet owners.",
+        ProductTheme.AudioAndHeadphoneStands => "• A sleek battlestation upgrade gift for streamers, PC gamers, sound engineers, and music fans.",
+        ProductTheme.KidsAndNursery => "• A thoughtful baby shower, toddler birthday, or nursery room welcoming keepsake.",
+        ProductTheme.MusicOrCelebrity => "• An unforgettable tribute gift for concert goers, music lovers, and collectors.",
+        ProductTheme.WallArtAndPrints => "• A stylish housewarming or holiday gift to transform any modern living or working space.",
+        _ => "• An unforgettable birthday, anniversary, holiday, or special celebration gift."
     };
 
     public enum ProductTheme
@@ -321,7 +372,11 @@ public static class EtsyDescriptionFormatter
         CosplayOrProp,
         GamingOrAnime,
         JewelryOrWearable,
-        HomeDecorOrArt
+        HomeDecorOrArt,
+        LeatherAndAccessories,
+        BoardGamesAndToys,
+        PetSupplies,
+        AudioAndHeadphoneStands
     }
 
     public static ProductTheme DetectProductTheme(string title, string? desc, IReadOnlyList<string>? tags)
@@ -370,8 +425,37 @@ public static class EtsyDescriptionFormatter
             return ProductTheme.ApparelAndFashion;
         }
 
+        if (blob.Contains("headphone") || blob.Contains("headset") || blob.Contains("audio gear") ||
+            blob.Contains("kulaklik"))
+        {
+            return ProductTheme.AudioAndHeadphoneStands;
+        }
+
+        if (blob.Contains("dog collar") || blob.Contains("cat collar") || blob.Contains("pet collar") ||
+            blob.Contains("tasma") || blob.Contains("pet harness") || blob.Contains("dog leash") ||
+            blob.Contains("leash") || blob.Contains("pet tag"))
+        {
+            return ProductTheme.PetSupplies;
+        }
+
+        if (blob.Contains("chess") || blob.Contains("board game") || blob.Contains("puzzle") ||
+            blob.Contains("satranc") || blob.Contains("dice"))
+        {
+            return ProductTheme.BoardGamesAndToys;
+        }
+
+        if (blob.Contains("wallet") || blob.Contains("card holder") ||
+            blob.Contains("cardholder") || blob.Contains("bifold") || blob.Contains("purse") ||
+            blob.Contains("cuzdan") || blob.Contains("kartlik") ||
+            blob.Contains("leather wallet") || blob.Contains("leather card"))
+        {
+            return ProductTheme.LeatherAndAccessories;
+        }
+
         if (blob.Contains("poster") || blob.Contains("canvas") || blob.Contains("wall art") ||
-            blob.Contains("print") || blob.Contains("painting"))
+            blob.Contains("wall sign") || blob.Contains("wall hanging") ||
+            ((blob.Contains("print") || blob.Contains("art print")) && !blob.Contains("3d print") && !blob.Contains("printed")) ||
+            blob.Contains("painting"))
         {
             return ProductTheme.WallArtAndPrints;
         }
@@ -503,12 +587,16 @@ public static class EtsyDescriptionFormatter
             // 2. Kutu içeriği (İngilizce ve Türkçe destekli)
             if (string.IsNullOrEmpty(included) &&
                 (normLine.Contains("includes:") ||
+                 normLine.StartsWith("package:") ||
+                 normLine.StartsWith("package ") ||
                  normLine.Contains("package includes") ||
                  normLine.Contains("comes with") ||
                  normLine.Contains("box includes") ||
                  normLine.Contains("set of") ||
                  normLine.Contains("kutu icerigi") ||
                  normLine.Contains("paket icerigi") ||
+                 normLine.StartsWith("paket:") ||
+                 normLine.StartsWith("paket ") ||
                  normLine.Contains("hediye kutusunda") ||
                  normLine.Contains("pakette") ||
                  normLine.Contains("icerik:") ||
@@ -516,7 +604,16 @@ public static class EtsyDescriptionFormatter
             {
                 if (cleanItem.Length < 140)
                 {
-                    included = cleanItem;
+                    var inc = cleanItem;
+                    if (inc.StartsWith("Package:", StringComparison.OrdinalIgnoreCase))
+                        inc = inc["Package:".Length..].Trim();
+                    else if (inc.StartsWith("Paket:", StringComparison.OrdinalIgnoreCase))
+                        inc = inc["Paket:".Length..].Trim();
+                    else if (inc.StartsWith("Includes:", StringComparison.OrdinalIgnoreCase))
+                        inc = inc["Includes:".Length..].Trim();
+                    else if (inc.StartsWith("Kutu Icerigi:", StringComparison.OrdinalIgnoreCase))
+                        inc = inc["Kutu Icerigi:".Length..].Trim();
+                    included = inc;
                     continue;
                 }
             }
@@ -565,6 +662,14 @@ public static class EtsyDescriptionFormatter
                  normLine.Contains("smooth finish") ||
                  normLine.Contains("resin") ||
                  normLine.Contains("wood") ||
+                 normLine.Contains("silicone") ||
+                 normLine.Contains("anti-slip") ||
+                 normLine.Contains("non-slip") ||
+                 normLine.Contains("feet") ||
+                 normLine.Contains("feature") ||
+                 normLine.Contains("food-safe") ||
+                 normLine.Contains("dishwasher") ||
+                 normLine.Contains("microwave") ||
                  normLine.Contains("el yapimi") ||
                  normLine.Contains("el boyamasi") ||
                  normLine.Contains("ozel tasarim") ||
