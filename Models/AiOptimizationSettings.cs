@@ -7,6 +7,7 @@ internal sealed class AiOptimizationSettings
 {
     public string Provider { get; set; } = "Offline";
     public string OpenAiApiKey { get; set; } = "";
+    public string OpenAiAdminApiKey { get; set; } = "";
     public string OpenAiModel { get; set; } = "gpt-4o";
     public string OpenAiImageModel { get; set; } = "gpt-image-2.5-flare";
     public string OpenAiImageEditModel { get; set; } = "gpt-image-2.5-flare";

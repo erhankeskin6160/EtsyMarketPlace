@@ -76,12 +76,21 @@ public static class AiBalanceCheckerService
         }
     }
 
+    public static string MaskApiKey(string? apiKey) => AiPriceCalculator.MaskApiKey(apiKey);
+
+    public static decimal ParseOpenAiCosts(string json) => AiPriceCalculator.ParseOpenAiCostsJson(json);
+
     /// <summary>
-    /// OpenAI API bağlantı ve durum kontrolü
+    /// OpenAI API bağlantı ve durum kontrolü (ve varsa Admin API üzerinden resmi fatura sorgulama)
     /// </summary>
-    public static async Task<AiProviderBalanceInfo> CheckOpenAiStatusAsync(string apiKey, CancellationToken ct = default)
+    public static async Task<AiProviderBalanceInfo> CheckOpenAiStatusAsync(string apiKey, string? adminApiKey = null, CancellationToken ct = default)
     {
-        var info = new AiProviderBalanceInfo { Provider = "OpenAI", CheckedAt = DateTimeOffset.Now };
+        var info = new AiProviderBalanceInfo
+        {
+            Provider = "OpenAI",
+            MaskedApiKey = MaskApiKey(apiKey),
+            CheckedAt = DateTimeOffset.Now
+        };
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -91,6 +100,7 @@ public static class AiBalanceCheckerService
 
         try
         {
+            // 1. Standart model listesi ile doğrulama
             using var req = new HttpRequestMessage(HttpMethod.Get, "https://api.openai.com/v1/models");
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
 
@@ -105,6 +115,38 @@ public static class AiBalanceCheckerService
                 info.StatusMessage = resp.StatusCode == System.Net.HttpStatusCode.Unauthorized
                     ? "❌ Geçersiz API Anahtarı"
                     : $"⚠️ Yanıt Kodu: {(int)resp.StatusCode}";
+                return info;
+            }
+
+            // 2. Admin API anahtarı veya kullanım yetkisi varsa resmi /v1/organization/costs sorgula
+            string? effectiveAdminKey = !string.IsNullOrWhiteSpace(adminApiKey)
+                ? adminApiKey.Trim()
+                : (apiKey.Trim().StartsWith("sk-admin-", StringComparison.OrdinalIgnoreCase) ? apiKey.Trim() : null);
+
+            if (!string.IsNullOrWhiteSpace(effectiveAdminKey))
+            {
+                try
+                {
+                    var startOfMonth = new DateTimeOffset(new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1, 0, 0, 0, DateTimeKind.Utc)).ToUnixTimeSeconds();
+                    string costsUrl = $"https://api.openai.com/v1/organization/costs?start_time={startOfMonth}";
+
+                    using var costReq = new HttpRequestMessage(HttpMethod.Get, costsUrl);
+                    costReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", effectiveAdminKey);
+
+                    using var costResp = await HttpClient.SendAsync(costReq, ct);
+                    if (costResp.IsSuccessStatusCode)
+                    {
+                        var costBody = await costResp.Content.ReadAsStringAsync(ct);
+                        decimal officialCost = ParseOpenAiCosts(costBody);
+                        info.OfficialMonthlyCostUsd = officialCost;
+                        info.HasAdminKey = true;
+                        info.StatusMessage = $"✅ OpenAI Aktif | Bu Ayki Fatura: ${officialCost:N2} USD";
+                    }
+                }
+                catch
+                {
+                    // Admin endpoint hatası ana bağlantıyı engellemez
+                }
             }
         }
         catch (Exception ex)
