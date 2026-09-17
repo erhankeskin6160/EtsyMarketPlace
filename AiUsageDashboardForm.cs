@@ -144,26 +144,31 @@ public sealed class AiUsageDashboardForm : Form
         _btnExport.Cursor = Cursors.Hand;
         _btnExport.Click += ExportCsv;
 
-        var btnApiKeys = new Button
+        var btnApiHub = new Button
         {
-            Text = "🔑 API Anahtarları ▼",
+            Text = "⚡ AI Sağlayıcı & API Merkezi",
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Height = 32,
-            Width = 155,
+            Width = 220,
             Cursor = Cursors.Hand,
             Margin = new Padding(10, 2, 0, 0)
         };
-        btnApiKeys.FlatAppearance.BorderColor = Color.FromArgb(70, 80, 100);
-        btnApiKeys.Click += (s, _) => ShowApiKeysMenu(btnApiKeys);
+        btnApiHub.FlatAppearance.BorderColor = Color.FromArgb(70, 80, 100);
+        btnApiHub.Click += async (_, _) =>
+        {
+            using var hub = new AiProviderHubDialog();
+            hub.ShowDialog(this);
+            await RefreshDataAsync(queryLiveBalance: true);
+        };
 
         pnlFilters.Controls.Add(lblProv);
         pnlFilters.Controls.Add(_cboProvider);
         pnlFilters.Controls.Add(lblPer);
         pnlFilters.Controls.Add(_cboPeriod);
         pnlFilters.Controls.Add(_btnRefresh);
-        pnlFilters.Controls.Add(btnApiKeys);
+        pnlFilters.Controls.Add(btnApiHub);
         pnlFilters.Controls.Add(_btnExport);
         mainLayout.Controls.Add(pnlFilters, 0, 1);
 
@@ -889,83 +894,11 @@ public sealed class AiUsageDashboardForm : Form
         }
     }
 
-    private void ShowApiKeysMenu(Button anchor)
+    private void ShowApiKeysMenu(Button? anchor = null)
     {
-        var menu = new ContextMenuStrip();
-        var itemOpenAiUsage = new ToolStripMenuItem("📊 OpenAI Canlı Kullanım & Fatura Verilerini Çek (Pencere)");
-        itemOpenAiUsage.Font = new Font(menu.Font, FontStyle.Bold);
-        itemOpenAiUsage.Click += async (_, _) =>
-        {
-            using var dlg = new OpenAiOfficialUsageDialog();
-            dlg.ShowDialog(this);
-            await RefreshDataAsync(queryLiveBalance: true);
-        };
-
-        var itemAdminKey = new ToolStripMenuItem("🔑 OpenAI Admin Key Tanımla / Düzenle (Canlı Fatura İçin)");
-        itemAdminKey.Click += (_, _) => ShowAdminKeyDialog();
-
-        var itemOpenAiKeys = new ToolStripMenuItem("🔑 OpenAI API Anahtarları Sayfası (platform.openai.com/api-keys)");
-        itemOpenAiKeys.Click += (_, _) => OpenUrl("https://platform.openai.com/api-keys");
-
-        var itemOpenAiWeb = new ToolStripMenuItem("🌐 OpenAI Web Fatura Paneli (Tarayıcıda Aç)");
-        itemOpenAiWeb.Click += (_, _) => OpenUrl("https://platform.openai.com/usage");
-
-        var itemDeepSeekUsage = new ToolStripMenuItem("📊 DeepSeek Canlı Bakiye & Model Raporu (Pencere)");
-        itemDeepSeekUsage.Font = new Font(menu.Font, FontStyle.Bold);
-        itemDeepSeekUsage.Click += async (_, _) =>
-        {
-            using var dlg = new DeepSeekOfficialBalanceDialog();
-            dlg.ShowDialog(this);
-            await RefreshDataAsync(queryLiveBalance: true);
-        };
-
-        var itemDeepSeekKey = new ToolStripMenuItem("🔑 DeepSeek API Anahtarı Tanımla / Düzenle");
-        itemDeepSeekKey.Click += (_, _) => ShowDeepSeekKeyDialog();
-
-        var itemDeepSeek = new ToolStripMenuItem("💳 DeepSeek Platform & Bakiye (platform.deepseek.com)");
-        itemDeepSeek.Click += (_, _) => OpenUrl("https://platform.deepseek.com");
-
-        var itemGeminiUsage = new ToolStripMenuItem("📊 Google Gemini Canlı Durum & Model Raporu (Pencere)");
-        itemGeminiUsage.Font = new Font(menu.Font, FontStyle.Bold);
-        itemGeminiUsage.Click += async (_, _) =>
-        {
-            using var dlg = new GeminiOfficialStatusDialog();
-            dlg.ShowDialog(this);
-            await RefreshDataAsync(queryLiveBalance: true);
-        };
-
-        var itemGeminiKey = new ToolStripMenuItem("🔑 Google Gemini API Anahtarı Tanımla / Düzenle");
-        itemGeminiKey.Click += (_, _) => ShowGeminiKeyDialog();
-
-        var itemGeminiWeb = new ToolStripMenuItem("🌐 Google AI Studio API Sayfası (aistudio.google.com)");
-        itemGeminiWeb.Click += (_, _) => OpenUrl("https://aistudio.google.com/app/apikey");
-
-        var itemEditKeys = new ToolStripMenuItem("⚙️ Program İçi Yapay Zeka Ayarları (Tüm Anahtarları Düzenle)");
-        itemEditKeys.Click += async (_, _) =>
-        {
-            using var dlg = new AiOptimizationSettingsForm();
-            if (dlg.ShowDialog(this) == DialogResult.OK)
-            {
-                await RefreshDataAsync(queryLiveBalance: true);
-            }
-        };
-
-        menu.Items.Add(itemOpenAiUsage);
-        menu.Items.Add(itemAdminKey);
-        menu.Items.Add(itemOpenAiKeys);
-        menu.Items.Add(itemOpenAiWeb);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(itemDeepSeekUsage);
-        menu.Items.Add(itemDeepSeekKey);
-        menu.Items.Add(itemDeepSeek);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(itemGeminiUsage);
-        menu.Items.Add(itemGeminiKey);
-        menu.Items.Add(itemGeminiWeb);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(itemEditKeys);
-
-        menu.Show(anchor, new Point(0, anchor.Height));
+        using var hub = new AiProviderHubDialog();
+        hub.ShowDialog(this);
+        _ = RefreshDataAsync(queryLiveBalance: true);
     }
 
     private static void OpenUrl(string url)

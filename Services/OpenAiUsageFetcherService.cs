@@ -195,8 +195,11 @@ public static class OpenAiUsageFetcherService
         return AiPriceCalculator.ParseOpenAiCostsDetailsJson(json).Items;
     }
 
-    public static void MergeUsageJson(OpenAiOfficialUsageReport report, string json)
+    public static Task<OpenAiOfficialUsageReport> FetchCurrentMonthUsageAsync(
+        string apiKey,
+        string? adminApiKey = null,
+        CancellationToken ct = default)
     {
-        AiPriceCalculator.MergeOpenAiUsageJson(report, json);
+        return FetchOfficialUsageReportAsync(apiKey, adminApiKey, ct: ct);
     }
 }
