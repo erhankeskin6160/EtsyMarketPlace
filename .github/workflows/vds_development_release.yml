@@ -54,25 +54,31 @@ jobs:
           retention-days: 14
 
       - name: Publish or Update 'dev-latest' GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: dev-latest
-          name: "VDS Development Build (Son Geliştirme Sürümü)"
-          body: |
-            ## 🚀 Otomatik VDS Geliştirme Sürümü (development)
-            
-            Bu sürüm `development` dalına yapılan son push ile GitHub Actions tarafından otomatik derlenmiştir.
-            
-            - **Commit:** `${{ github.sha }}`
-            - **Tarih:** `${{ github.event.head_commit.timestamp }}`
-            - **Platform:** Windows x64 (Standalone - .NET Runtime GEREKTİRMEZ)
-            - **Hedef:** VDS Sunucusu Otomatik Güncelleme
-            
-            *VDS üzerindeki `Guncelle_Ve_Baslat.bat` bu dosyayı otomatik indirip çalıştırır.*
-          prerelease: true
-          make_latest: false
-          files: |
-            publish_vds_standalone/SimilarProductsWinForms.exe
-            deploy/Client_Guncelle.bat
+        shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $notes = @"
+          ## 🚀 Otomatik VDS Geliştirme Sürümü (development)
+          
+          Bu sürüm development dalına yapılan son push ile GitHub Actions tarafından otomatik derlenmiştir.
+          
+          - **Commit:** ${{ github.sha }}
+          - **Tarih:** ${{ github.event.head_commit.timestamp }}
+          - **Platform:** Windows x64 (Standalone - .NET Runtime GEREKTİRMEZ)
+          - **Hedef:** VDS Sunucusu Otomatik Güncelleme
+          
+          *VDS üzerindeki Guncelle_Ve_Baslat.bat bu dosyayı otomatik indirip çalıştırır.*
+          "@
+          
+          $rel = gh release view dev-latest 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "Creating 'dev-latest' release..."
+            gh release create dev-latest publish_vds_standalone\SimilarProductsWinForms.exe deploy\Client_Guncelle.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes $notes --prerelease
+          } else {
+            Write-Host "Uploading assets to existing 'dev-latest' release..."
+            gh release upload dev-latest publish_vds_standalone\SimilarProductsWinForms.exe deploy\Client_Guncelle.bat --clobber
+            gh release edit dev-latest --title "VDS Development Build (Son Geliştirme Sürümü)" --notes $notes
+          }
+          Write-Host "VDS release successfully published!"
+
