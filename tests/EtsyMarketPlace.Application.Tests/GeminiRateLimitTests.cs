@@ -36,28 +36,30 @@ public sealed class GeminiRateLimitTests
         var models = new List<string> { "gemini-3.7-flash" };
         var records = new List<AiUsageRecord>();
 
-        var now = DateTimeOffset.UtcNow;
-        // 7 requests within the exact same minute to exceed 5 RPM limit
+        // Use a fixed timestamp exactly at the start of a minute (e.g. 12:00:00 UTC today)
+        var todayNoon = new DateTimeOffset(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.UtcNow.Day, 12, 0, 0, TimeSpan.Zero);
+
+        // 7 requests within the exact same minute (12:00:01 to 12:00:13) to safely exceed 5 RPM limit
         for (int i = 0; i < 7; i++)
         {
             records.Add(new AiUsageRecord
             {
                 Provider = "Google Gemini",
                 ModelName = "gemini-3.7-flash",
-                Timestamp = now.AddSeconds(i * 5),
+                Timestamp = todayNoon.AddSeconds(i * 2),
                 TotalTokens = 1500,
                 Status = "Başarılı"
             });
         }
 
-        // Add 25 total requests today to exceed 20 RPD limit
+        // Add 18 more requests today in distinct minutes to reach 25 total requests today (exceeds 20 RPD)
         for (int i = 0; i < 18; i++)
         {
             records.Add(new AiUsageRecord
             {
                 Provider = "Google Gemini",
                 ModelName = "gemini-3.7-flash",
-                Timestamp = now.AddHours(-1).AddMinutes(i),
+                Timestamp = todayNoon.AddMinutes(i + 1),
                 TotalTokens = 800,
                 Status = "Başarılı"
             });
@@ -82,11 +84,13 @@ public sealed class GeminiRateLimitTests
         var models = new List<string> { "gemini-2.5-flash" };
         var records = new List<AiUsageRecord>();
 
-        var now = DateTimeOffset.UtcNow;
-        // 3 requests in the same minute with total 30,000 tokens
-        records.Add(new AiUsageRecord { Provider = "Google Gemini", ModelName = "gemini-2.5-flash", Timestamp = now, TotalTokens = 10_000 });
-        records.Add(new AiUsageRecord { Provider = "Google Gemini", ModelName = "gemini-2.5-flash", Timestamp = now.AddSeconds(10), TotalTokens = 12_000 });
-        records.Add(new AiUsageRecord { Provider = "Google Gemini", ModelName = "gemini-2.5-flash", Timestamp = now.AddSeconds(20), TotalTokens = 8_000 });
+        // Fixed minute start at 12:00:00 UTC
+        var todayNoon = new DateTimeOffset(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.UtcNow.Day, 12, 0, 0, TimeSpan.Zero);
+
+        // 3 requests strictly inside 12:00:00 - 12:00:20 with total 30,000 tokens
+        records.Add(new AiUsageRecord { Provider = "Google Gemini", ModelName = "gemini-2.5-flash", Timestamp = todayNoon.AddSeconds(1), TotalTokens = 10_000 });
+        records.Add(new AiUsageRecord { Provider = "Google Gemini", ModelName = "gemini-2.5-flash", Timestamp = todayNoon.AddSeconds(5), TotalTokens = 12_000 });
+        records.Add(new AiUsageRecord { Provider = "Google Gemini", ModelName = "gemini-2.5-flash", Timestamp = todayNoon.AddSeconds(10), TotalTokens = 8_000 });
 
         var report = GeminiRateLimitReport.BuildFromHistory(models, records, days: 28);
 
