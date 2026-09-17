@@ -32,6 +32,8 @@ public sealed class AiProviderBalanceInfo
     public int DailyQuotaLimit { get; set; }
     public string MaskedApiKey { get; set; } = string.Empty;
     public decimal? OfficialMonthlyCostUsd { get; set; }
+    public decimal? BalanceCny { get; set; }
+    public List<string> AvailableModels { get; set; } = [];
     public bool HasAdminKey { get; set; }
     public DateTimeOffset CheckedAt { get; set; } = DateTimeOffset.Now;
 

@@ -419,28 +419,47 @@ public sealed class AiUsageDashboardForm : Form
             _lblCard1Title.Text = "💳 DEEPSEEK CANLI BAKİYE";
             if (_deepSeekBalance != null && _deepSeekBalance.IsAvailable)
             {
-                _lblCard1Value.Text = $"${_deepSeekBalance.TotalBalanceUsd:N2} USD";
-                _lblCard1Sub.Text = $"~{_deepSeekBalance.TotalBalanceTry():N0} TL (Yüklenen: ${_deepSeekBalance.ToppedUpBalanceUsd:N2})";
+                if (_deepSeekBalance.BalanceCny.HasValue && _deepSeekBalance.Currency == "CNY")
+                {
+                    _lblCard1Value.Text = $"¥{_deepSeekBalance.BalanceCny.Value:N2} CNY";
+                    _lblCard1Sub.Text = $"~${_deepSeekBalance.TotalBalanceUsd:N2} USD (~{_deepSeekBalance.TotalBalanceTry():N0} TL)";
+                }
+                else
+                {
+                    _lblCard1Value.Text = $"${_deepSeekBalance.TotalBalanceUsd:N2} USD";
+                    _lblCard1Sub.Text = $"~{_deepSeekBalance.TotalBalanceTry():N0} TL (Yüklenen: ${_deepSeekBalance.ToppedUpBalanceUsd:N2})";
+                }
             }
             else
             {
-                _lblCard1Value.Text = "Bakiye Alınamadı";
-                _lblCard1Sub.Text = _deepSeekBalance?.StatusMessage ?? "API anahtarı kontrol edin";
+                var settings = AiOptimizationSettingsStore.Load();
+                if (string.IsNullOrWhiteSpace(settings.DeepSeekApiKey))
+                {
+                    _lblCard1Value.Text = "Tanımlanmadı";
+                    _lblCard1Sub.Text = "🔑 'API Anahtarları' menüsünden tanımlayın";
+                }
+                else
+                {
+                    _lblCard1Value.Text = "Bakiye Alınamadı";
+                    _lblCard1Sub.Text = _deepSeekBalance?.StatusMessage ?? "API anahtarı kontrol edin";
+                }
             }
 
             _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
             _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
-            _lblCard2Sub.Text = $"Giriş: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
+            _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
 
             _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
             _lblCard3Value.Text = $"${stats.TotalCostUsd:N3} USD";
-            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL";
+            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (DeepSeek Tarifesi)";
 
             _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
-            _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
+            _lblCard4Value.Text = _deepSeekBalance?.IsAvailable == true
+                ? $"{stats.SuccessfulRequests} Başarılı (API Aktif)"
+                : $"{stats.SuccessfulRequests} Başarılı";
             _lblCard4Sub.Text = stats.Blocked429Requests > 0
                 ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
-                : "Tüm istekler başarıyla tamamlandı";
+                : "Tüm DeepSeek istekleri sorunsuz tamamlandı";
         }
         else if (selectedProvider.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
         {
@@ -703,6 +722,65 @@ public sealed class AiUsageDashboardForm : Form
         }
     }
 
+    private void ShowDeepSeekKeyDialog()
+    {
+        var settings = AiOptimizationSettingsStore.Load();
+
+        using var promptForm = new Form
+        {
+            Text = "DeepSeek API Anahtarı Tanımla",
+            Size = new Size(520, 240),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = UiStyle.BackgroundColor,
+            ForeColor = Color.White
+        };
+
+        var lblInfo = new Label
+        {
+            Text = "DeepSeek Platform (platform.deepseek.com/api_keys) hesabınızdan\naldığınız API anahtarını buraya girin (Örn: sk-...):\nCanlı bakiye ve aktif model doğrulaması anında yapılacaktır.",
+            Location = new Point(20, 15),
+            Size = new Size(465, 55),
+            Font = new Font("Segoe UI", 9F)
+        };
+
+        var txtKey = new TextBox
+        {
+            Text = settings.DeepSeekApiKey,
+            Location = new Point(20, 80),
+            Width = 460,
+            BackColor = Color.FromArgb(30, 41, 59),
+            ForeColor = Color.White,
+            Font = new Font("Consolas", 10F)
+        };
+
+        var btnSave = new Button
+        {
+            Text = "💾 Kaydet ve Doğrula",
+            DialogResult = DialogResult.OK,
+            Location = new Point(260, 130),
+            Size = new Size(220, 34),
+            BackColor = Color.FromArgb(59, 130, 246),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+
+        promptForm.Controls.Add(lblInfo);
+        promptForm.Controls.Add(txtKey);
+        promptForm.Controls.Add(btnSave);
+        promptForm.AcceptButton = btnSave;
+
+        if (promptForm.ShowDialog(this) == DialogResult.OK)
+        {
+            settings.DeepSeekApiKey = txtKey.Text.Trim();
+            AiOptimizationSettingsStore.Save(settings);
+            _ = RefreshDataAsync(queryLiveBalance: true);
+        }
+    }
+
     private void ShowApiKeysMenu(Button anchor)
     {
         var menu = new ContextMenuStrip();
@@ -724,10 +802,22 @@ public sealed class AiUsageDashboardForm : Form
         var itemOpenAiWeb = new ToolStripMenuItem("🌐 OpenAI Web Fatura Paneli (Tarayıcıda Aç)");
         itemOpenAiWeb.Click += (_, _) => OpenUrl("https://platform.openai.com/usage");
 
+        var itemDeepSeekUsage = new ToolStripMenuItem("📊 DeepSeek Canlı Bakiye & Model Raporu (Pencere)");
+        itemDeepSeekUsage.Font = new Font(menu.Font, FontStyle.Bold);
+        itemDeepSeekUsage.Click += async (_, _) =>
+        {
+            using var dlg = new DeepSeekOfficialBalanceDialog();
+            dlg.ShowDialog(this);
+            await RefreshDataAsync(queryLiveBalance: true);
+        };
+
+        var itemDeepSeekKey = new ToolStripMenuItem("🔑 DeepSeek API Anahtarı Tanımla / Düzenle");
+        itemDeepSeekKey.Click += (_, _) => ShowDeepSeekKeyDialog();
+
         var itemDeepSeek = new ToolStripMenuItem("💳 DeepSeek Platform & Bakiye (platform.deepseek.com)");
         itemDeepSeek.Click += (_, _) => OpenUrl("https://platform.deepseek.com");
 
-        var itemEditKeys = new ToolStripMenuItem("⚙️ Program İçi Yapay Zeka Ayarları (Anahtarları Düzenle)");
+        var itemEditKeys = new ToolStripMenuItem("⚙️ Program İçi Yapay Zeka Ayarları (Tüm Anahtarları Düzenle)");
         itemEditKeys.Click += async (_, _) =>
         {
             using var dlg = new AiOptimizationSettingsForm();
@@ -739,10 +829,11 @@ public sealed class AiUsageDashboardForm : Form
 
         menu.Items.Add(itemOpenAiUsage);
         menu.Items.Add(itemAdminKey);
-        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(itemOpenAiKeys);
         menu.Items.Add(itemOpenAiWeb);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(itemDeepSeekUsage);
+        menu.Items.Add(itemDeepSeekKey);
         menu.Items.Add(itemDeepSeek);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(itemEditKeys);

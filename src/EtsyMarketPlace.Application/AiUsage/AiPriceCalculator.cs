@@ -382,4 +382,146 @@ public static class AiPriceCalculator
 
         return nextCursor;
     }
+
+    /// <summary>
+    /// DeepSeek GET https://api.deepseek.com/user/balance JSON çıktısını ayrıştırır.
+    /// USD ve CNY para birimlerini doğru şekilde okur ve döviz dönüşümlerini yapar.
+    /// </summary>
+    public static AiProviderBalanceInfo ParseDeepSeekBalanceJson(string json, string? apiKey = null)
+    {
+        var info = new AiProviderBalanceInfo
+        {
+            Provider = "DeepSeek",
+            CheckedAt = DateTimeOffset.Now,
+            MaskedApiKey = MaskApiKey(apiKey)
+        };
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            info.StatusMessage = "Boş yanıt alındı.";
+            return info;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            bool isAvailable = root.TryGetProperty("is_available", out var availProp) && availProp.GetBoolean();
+            info.IsAvailable = isAvailable;
+
+            if (root.TryGetProperty("balance_infos", out var infosArr) && infosArr.ValueKind == JsonValueKind.Array)
+            {
+                JsonElement? usdEl = null;
+                JsonElement? cnyEl = null;
+                JsonElement? firstEl = null;
+
+                foreach (var item in infosArr.EnumerateArray())
+                {
+                    firstEl ??= item;
+                    if (item.TryGetProperty("currency", out var cProp))
+                    {
+                        var curr = cProp.GetString()?.ToUpperInvariant();
+                        if (curr == "USD") usdEl = item;
+                        else if (curr == "CNY") cnyEl = item;
+                    }
+                }
+
+                if (cnyEl.HasValue)
+                {
+                    var cEl = cnyEl.Value;
+                    info.BalanceCny = cEl.TryGetProperty("total_balance", out var cTot) ? ParseDecimal(cTot.GetString()) : 0m;
+                }
+
+                var targetEl = usdEl ?? cnyEl ?? firstEl;
+                if (targetEl.HasValue)
+                {
+                    var el = targetEl.Value;
+                    string curr = el.TryGetProperty("currency", out var cProp) ? cProp.GetString() ?? "USD" : "USD";
+                    info.Currency = curr;
+
+                    decimal total = el.TryGetProperty("total_balance", out var totProp) ? ParseDecimal(totProp.GetString()) : 0m;
+                    decimal granted = el.TryGetProperty("granted_balance", out var grProp) ? ParseDecimal(grProp.GetString()) : 0m;
+                    decimal topped = el.TryGetProperty("topped_up_balance", out var topProp) ? ParseDecimal(topProp.GetString()) : 0m;
+
+                    if (curr.Equals("USD", StringComparison.OrdinalIgnoreCase))
+                    {
+                        info.TotalBalanceUsd = total;
+                        info.GrantedBalanceUsd = granted;
+                        info.ToppedUpBalanceUsd = topped;
+                    }
+                    else if (curr.Equals("CNY", StringComparison.OrdinalIgnoreCase))
+                    {
+                        info.BalanceCny = total;
+                        info.TotalBalanceUsd = Math.Round(total / 7.2m, 2);
+                        info.GrantedBalanceUsd = Math.Round(granted / 7.2m, 2);
+                        info.ToppedUpBalanceUsd = Math.Round(topped / 7.2m, 2);
+                    }
+                    else
+                    {
+                        info.TotalBalanceUsd = total;
+                        info.GrantedBalanceUsd = granted;
+                        info.ToppedUpBalanceUsd = topped;
+                    }
+                }
+            }
+
+            if (info.IsAvailable)
+            {
+                if (info.BalanceCny.HasValue && info.Currency == "CNY")
+                {
+                    info.StatusMessage = $"✅ Aktif Bakiye: ¥{info.BalanceCny.Value:N2} CNY (~${info.TotalBalanceUsd:N2} USD / ~{info.TotalBalanceTry():N0} ₺)";
+                }
+                else
+                {
+                    info.StatusMessage = $"✅ Aktif Bakiye: ${info.TotalBalanceUsd:N2} USD (~{info.TotalBalanceTry():N0} ₺)";
+                }
+            }
+            else
+            {
+                info.StatusMessage = "⚠️ Bakiye Yetersiz veya Hesap Askıda";
+            }
+
+            return info;
+        }
+        catch (Exception ex)
+        {
+            info.StatusMessage = $"Ayrıştırma Hatası: {ex.Message}";
+            return info;
+        }
+    }
+
+    /// <summary>
+    /// DeepSeek GET https://api.deepseek.com/models JSON çıktısını ayrıştırır ve model listesini döndürür.
+    /// </summary>
+    public static List<string> ParseDeepSeekModelsJson(string json)
+    {
+        var list = new List<string>();
+        if (string.IsNullOrWhiteSpace(json)) return list;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("data", out var dataEl) && dataEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in dataEl.EnumerateArray())
+                {
+                    if (item.TryGetProperty("id", out var idEl) && !string.IsNullOrWhiteSpace(idEl.GetString()))
+                    {
+                        list.Add(idEl.GetString()!);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return list;
+    }
+
+    private static decimal ParseDecimal(string? str)
+    {
+        if (string.IsNullOrWhiteSpace(str)) return 0m;
+        return decimal.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out var val) ? val : 0m;
+    }
 }

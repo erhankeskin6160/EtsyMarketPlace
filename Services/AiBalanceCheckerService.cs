@@ -15,16 +15,18 @@ public static class AiBalanceCheckerService
     private static readonly HttpClient HttpClient = new() { Timeout = TimeSpan.FromSeconds(15) };
 
     /// <summary>
-    /// DeepSeek API resmi bakiye uç noktasını çağırır: GET https://api.deepseek.com/user/balance
+    /// DeepSeek API resmi bakiye ve model uç noktalarını çağırır: GET https://api.deepseek.com/user/balance
     /// </summary>
     public static async Task<AiProviderBalanceInfo> CheckDeepSeekBalanceAsync(string apiKey, CancellationToken ct = default)
     {
-        var info = new AiProviderBalanceInfo { Provider = "DeepSeek", CheckedAt = DateTimeOffset.Now };
-
         if (string.IsNullOrWhiteSpace(apiKey))
         {
-            info.StatusMessage = "API Anahtarı eksik veya tanımlanmamış.";
-            return info;
+            return new AiProviderBalanceInfo
+            {
+                Provider = "DeepSeek",
+                CheckedAt = DateTimeOffset.Now,
+                StatusMessage = "API Anahtarı eksik veya tanımlanmamış."
+            };
         }
 
         try
@@ -37,42 +39,42 @@ public static class AiBalanceCheckerService
 
             if (!resp.IsSuccessStatusCode)
             {
-                info.StatusMessage = $"Hata (HTTP {(int)resp.StatusCode}): {resp.ReasonPhrase}";
-                return info;
+                return new AiProviderBalanceInfo
+                {
+                    Provider = "DeepSeek",
+                    CheckedAt = DateTimeOffset.Now,
+                    MaskedApiKey = AiPriceCalculator.MaskApiKey(apiKey),
+                    StatusMessage = $"Hata (HTTP {(int)resp.StatusCode}): {resp.ReasonPhrase}"
+                };
             }
 
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
+            var info = AiPriceCalculator.ParseDeepSeekBalanceJson(body, apiKey);
 
-            bool isAvailable = root.TryGetProperty("is_available", out var availProp) && availProp.GetBoolean();
-            info.IsAvailable = isAvailable;
-
-            if (root.TryGetProperty("balance_infos", out var infosArr) && infosArr.GetArrayLength() > 0)
+            // Modelleri doğrula
+            try
             {
-                var first = infosArr[0];
-                if (first.TryGetProperty("currency", out var currProp))
-                    info.Currency = currProp.GetString() ?? "USD";
-
-                if (first.TryGetProperty("total_balance", out var totProp))
-                    info.TotalBalanceUsd = ParseDecimal(totProp.GetString());
-
-                if (first.TryGetProperty("granted_balance", out var grProp))
-                    info.GrantedBalanceUsd = ParseDecimal(grProp.GetString());
-
-                if (first.TryGetProperty("topped_up_balance", out var topProp))
-                    info.ToppedUpBalanceUsd = ParseDecimal(topProp.GetString());
+                using var modelReq = new HttpRequestMessage(HttpMethod.Get, "https://api.deepseek.com/models");
+                modelReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey.Trim());
+                using var modelResp = await HttpClient.SendAsync(modelReq, ct);
+                if (modelResp.IsSuccessStatusCode)
+                {
+                    string modelBody = await modelResp.Content.ReadAsStringAsync(ct);
+                    info.AvailableModels = AiPriceCalculator.ParseDeepSeekModelsJson(modelBody);
+                }
             }
-
-            info.StatusMessage = isAvailable
-                ? $"✅ Aktif Bakiye: ${info.TotalBalanceUsd:N2} USD (~{info.TotalBalanceTry():N0} ₺)"
-                : "⚠️ Bakiye Yetersiz veya Hesap Askıda";
+            catch { }
 
             return info;
         }
         catch (Exception ex)
         {
-            info.StatusMessage = $"Bağlantı Hatası: {ex.Message}";
-            return info;
+            return new AiProviderBalanceInfo
+            {
+                Provider = "DeepSeek",
+                CheckedAt = DateTimeOffset.Now,
+                MaskedApiKey = AiPriceCalculator.MaskApiKey(apiKey),
+                StatusMessage = $"Bağlantı Hatası: {ex.Message}"
+            };
         }
     }
 

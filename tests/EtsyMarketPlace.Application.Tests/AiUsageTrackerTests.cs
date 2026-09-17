@@ -355,4 +355,77 @@ public sealed class AiUsageTrackerTests
         Assert.Equal(3, item2.RequestCount);
         Assert.Equal(0.0447m, item2.CostUsd);
     }
+
+    [Fact]
+    public void TestParseDeepSeekBalanceJson_HandlesUsdAndCnyAccurately()
+    {
+        // Scenario 1: Multi-currency response with USD and CNY
+        string jsonWithBoth = """
+        {
+            "is_available": true,
+            "balance_infos": [
+                {
+                    "currency": "CNY",
+                    "total_balance": "100.50",
+                    "granted_balance": "20.00",
+                    "topped_up_balance": "80.50"
+                },
+                {
+                    "currency": "USD",
+                    "total_balance": "14.25",
+                    "granted_balance": "0.00",
+                    "topped_up_balance": "14.25"
+                }
+            ]
+        }
+        """;
+
+        var info1 = AiPriceCalculator.ParseDeepSeekBalanceJson(jsonWithBoth);
+        Assert.True(info1.IsAvailable);
+        Assert.Equal("USD", info1.Currency);
+        Assert.Equal(14.25m, info1.TotalBalanceUsd);
+        Assert.Equal(14.25m, info1.ToppedUpBalanceUsd);
+        Assert.Equal(0m, info1.GrantedBalanceUsd);
+        Assert.Equal(100.50m, info1.BalanceCny);
+
+        // Scenario 2: CNY only response (converted to USD via 7.2 rate)
+        string jsonCnyOnly = """
+        {
+            "is_available": true,
+            "balance_infos": [
+                {
+                    "currency": "CNY",
+                    "total_balance": "72.00",
+                    "granted_balance": "0.00",
+                    "topped_up_balance": "72.00"
+                }
+            ]
+        }
+        """;
+
+        var info2 = AiPriceCalculator.ParseDeepSeekBalanceJson(jsonCnyOnly);
+        Assert.True(info2.IsAvailable);
+        Assert.Equal("CNY", info2.Currency);
+        Assert.Equal(72.00m, info2.BalanceCny);
+        Assert.Equal(10.00m, info2.TotalBalanceUsd); // 72 / 7.2 = 10.00
+    }
+
+    [Fact]
+    public void TestParseDeepSeekModelsJson_ExtractsModelIds()
+    {
+        string modelsJson = """
+        {
+            "object": "list",
+            "data": [
+                { "id": "deepseek-chat", "object": "model", "owned_by": "deepseek" },
+                { "id": "deepseek-reasoner", "object": "model", "owned_by": "deepseek" }
+            ]
+        }
+        """;
+
+        var models = AiPriceCalculator.ParseDeepSeekModelsJson(modelsJson);
+        Assert.Equal(2, models.Count);
+        Assert.Contains("deepseek-chat", models);
+        Assert.Contains("deepseek-reasoner", models);
+    }
 }
