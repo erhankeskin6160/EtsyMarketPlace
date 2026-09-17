@@ -140,6 +140,24 @@ public sealed class GeminiOfficialStatusDialog : Form
         _btnBilling.Cursor = Cursors.Hand;
         _btnBilling.Click += (_, _) => OpenUrl("https://console.cloud.google.com/billing");
 
+        var btnRateLimit = new Button
+        {
+            Text = "⚡ Hız Sınırları & Kota Takip (Rate Limit)",
+            BackColor = Color.FromArgb(139, 92, 246),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Margin = new Padding(8, 0, 0, 0),
+            Height = 32,
+            Width = 260,
+            Cursor = Cursors.Hand
+        };
+        btnRateLimit.FlatAppearance.BorderSize = 0;
+        btnRateLimit.Click += (_, _) =>
+        {
+            using var dlg = new GeminiRateLimitDialog();
+            dlg.ShowDialog(this);
+        };
+
         _btnExport.Text = "📥 CSV İndir";
         _btnExport.BackColor = Color.FromArgb(35, 45, 65);
         _btnExport.ForeColor = Color.White;
@@ -155,6 +173,7 @@ public sealed class GeminiOfficialStatusDialog : Form
         pnlButtons.Controls.Add(_btnKey);
         pnlButtons.Controls.Add(_btnWeb);
         pnlButtons.Controls.Add(_btnBilling);
+        pnlButtons.Controls.Add(btnRateLimit);
         pnlButtons.Controls.Add(_btnExport);
         mainLayout.Controls.Add(pnlButtons, 0, 1);
 

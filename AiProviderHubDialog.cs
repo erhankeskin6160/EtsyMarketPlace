@@ -467,7 +467,7 @@ public sealed class AiProviderHubDialog : Form
             await LoadAllProvidersAsync();
         };
 
-        _btnGeminiReport.Text = "📊 Canlı Durum & Kota Raporu";
+        _btnGeminiReport.Text = "📊 Hız Sınırları & Kota Raporu (Rate Limits)";
         _btnGeminiReport.Location = new Point(16, 215);
         _btnGeminiReport.Size = new Size(294, 34);
         _btnGeminiReport.BackColor = Color.FromArgb(139, 92, 246); // Violet
@@ -478,12 +478,12 @@ public sealed class AiProviderHubDialog : Form
         _btnGeminiReport.Cursor = Cursors.Hand;
         _btnGeminiReport.Click += async (_, _) =>
         {
-            using var dlg = new GeminiOfficialStatusDialog();
+            using var dlg = new GeminiRateLimitDialog();
             dlg.ShowDialog(this);
             await LoadAllProvidersAsync();
         };
 
-        _btnGeminiWeb.Text = "↗ Google AI Studio (Web)";
+        _btnGeminiWeb.Text = "↗ Google AI Studio Rate Limit (Web)";
         _btnGeminiWeb.Location = new Point(16, 258);
         _btnGeminiWeb.Size = new Size(294, 32);
         _btnGeminiWeb.BackColor = Color.FromArgb(35, 30, 60);
@@ -492,7 +492,7 @@ public sealed class AiProviderHubDialog : Form
         _btnGeminiWeb.FlatAppearance.BorderColor = Color.FromArgb(65, 55, 100);
         _btnGeminiWeb.Font = new Font("Segoe UI", 8.5F);
         _btnGeminiWeb.Cursor = Cursors.Hand;
-        _btnGeminiWeb.Click += (_, _) => OpenUrl("https://aistudio.google.com/app/apikey");
+        _btnGeminiWeb.Click += (_, _) => OpenUrl("https://aistudio.google.com/app/rate-limit?timeRange=last-28-days");
 
         card.Controls.Add(lblHeader);
         card.Controls.Add(_lblGeminiPill);
