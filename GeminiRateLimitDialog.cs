@@ -126,17 +126,17 @@ public sealed class GeminiRateLimitDialog : Form
             Text = "Project",
             ForeColor = Color.FromArgb(148, 163, 184),
             Font = new Font("Segoe UI", 8.5F),
-            Location = new Point(660, 4),
+            Location = new Point(620, 4),
             AutoSize = true
         };
 
-        _cboProject.Location = new Point(660, 24);
-        _cboProject.Width = 120;
+        _cboProject.Location = new Point(620, 24);
+        _cboProject.Width = 200;
         _cboProject.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboProject.BackColor = Color.FromArgb(30, 41, 59);
         _cboProject.ForeColor = Color.White;
         _cboProject.FlatStyle = FlatStyle.Flat;
-        _cboProject.Items.AddRange(["ffff", "default-project"]);
+        _cboProject.Items.AddRange(["gen-lang-client-0458130432", "ffff", "default-project"]);
         _cboProject.SelectedIndex = 0;
 
         var lblDateRange = new Label
@@ -144,11 +144,11 @@ public sealed class GeminiRateLimitDialog : Form
             Text = "Date range",
             ForeColor = Color.FromArgb(148, 163, 184),
             Font = new Font("Segoe UI", 8.5F),
-            Location = new Point(795, 4),
+            Location = new Point(835, 4),
             AutoSize = true
         };
 
-        _cboTimeRange.Location = new Point(795, 24);
+        _cboTimeRange.Location = new Point(835, 24);
         _cboTimeRange.Width = 140;
         _cboTimeRange.DropDownStyle = ComboBoxStyle.DropDownList;
         _cboTimeRange.BackColor = Color.FromArgb(30, 41, 59);
@@ -475,9 +475,10 @@ public sealed class GeminiRateLimitDialog : Form
     {
         try
         {
+            string proj = _cboProject.SelectedItem?.ToString() ?? "gen-lang-client-0458130432";
             Process.Start(new ProcessStartInfo
             {
-                FileName = "https://aistudio.google.com/app/rate-limit?timeRange=last-28-days",
+                FileName = $"https://aistudio.google.com/app/rate-limit?timeRange=last-28-days&project={Uri.EscapeDataString(proj)}",
                 UseShellExecute = true
             });
         }

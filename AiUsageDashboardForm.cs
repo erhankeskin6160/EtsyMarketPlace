@@ -163,12 +163,31 @@ public sealed class AiUsageDashboardForm : Form
             await RefreshDataAsync(queryLiveBalance: true);
         };
 
+        var btnGeminiRateLimit = new Button
+        {
+            Text = "📊 Gemini Hız Sınırları & Kotalar",
+            BackColor = Color.FromArgb(139, 92, 246),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Height = 32,
+            Width = 235,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(10, 2, 0, 0)
+        };
+        btnGeminiRateLimit.FlatAppearance.BorderSize = 0;
+        btnGeminiRateLimit.Click += (_, _) =>
+        {
+            using var dlg = new GeminiRateLimitDialog();
+            dlg.ShowDialog(this);
+        };
+
         pnlFilters.Controls.Add(lblProv);
         pnlFilters.Controls.Add(_cboProvider);
         pnlFilters.Controls.Add(lblPer);
         pnlFilters.Controls.Add(_cboPeriod);
         pnlFilters.Controls.Add(_btnRefresh);
         pnlFilters.Controls.Add(btnApiHub);
+        pnlFilters.Controls.Add(btnGeminiRateLimit);
         pnlFilters.Controls.Add(_btnExport);
         mainLayout.Controls.Add(pnlFilters, 0, 1);
 
@@ -181,10 +200,24 @@ public sealed class AiUsageDashboardForm : Form
         };
         for (int i = 0; i < 4; i++) pnlCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
 
-        pnlCards.Controls.Add(CreateKpiCard(_lblCard1Title, _lblCard1Value, _lblCard1Sub, Color.FromArgb(20, 35, 60)), 0, 0);
+        Action onGeminiCardClick = () =>
+        {
+            if (_cboProvider.SelectedItem?.ToString() == "Google Gemini")
+            {
+                using var dlg = new GeminiRateLimitDialog();
+                dlg.ShowDialog(this);
+            }
+            else
+            {
+                using var hub = new AiProviderHubDialog();
+                hub.ShowDialog(this);
+            }
+        };
+
+        pnlCards.Controls.Add(CreateKpiCard(_lblCard1Title, _lblCard1Value, _lblCard1Sub, Color.FromArgb(20, 35, 60), onGeminiCardClick), 0, 0);
         pnlCards.Controls.Add(CreateKpiCard(_lblCard2Title, _lblCard2Value, _lblCard2Sub, Color.FromArgb(25, 30, 50)), 1, 0);
         pnlCards.Controls.Add(CreateKpiCard(_lblCard3Title, _lblCard3Value, _lblCard3Sub, Color.FromArgb(30, 25, 45)), 2, 0);
-        pnlCards.Controls.Add(CreateKpiCard(_lblCard4Title, _lblCard4Value, _lblCard4Sub, Color.FromArgb(40, 25, 30)), 3, 0);
+        pnlCards.Controls.Add(CreateKpiCard(_lblCard4Title, _lblCard4Value, _lblCard4Sub, Color.FromArgb(40, 25, 30), onGeminiCardClick), 3, 0);
         mainLayout.Controls.Add(pnlCards, 0, 2);
 
         // 4. Model Breakdown Bar
@@ -247,7 +280,7 @@ public sealed class AiUsageDashboardForm : Form
         mainLayout.Controls.Add(_lblStatus, 0, 5);
     }
 
-    private Control CreateKpiCard(Label lblTitle, Label lblValue, Label lblSub, Color bg)
+    private Control CreateKpiCard(Label lblTitle, Label lblValue, Label lblSub, Color bg, Action? onClick = null)
     {
         var pnl = new Panel
         {
@@ -256,6 +289,15 @@ public sealed class AiUsageDashboardForm : Form
             Padding = new Padding(12, 10, 12, 8),
             Margin = new Padding(5)
         };
+
+        if (onClick != null)
+        {
+            pnl.Cursor = Cursors.Hand;
+            pnl.Click += (_, _) => onClick();
+            lblTitle.Click += (_, _) => onClick();
+            lblValue.Click += (_, _) => onClick();
+            lblSub.Click += (_, _) => onClick();
+        }
 
         lblTitle.UseMnemonic = false;
         lblTitle.Dock = DockStyle.Top;
@@ -413,7 +455,7 @@ public sealed class AiUsageDashboardForm : Form
             if (_grid.Rows.Count == 0)
             {
                 string infoMsg = selectedProvider.Contains("Gemini")
-                    ? "Henüz Gemini ile bir işlem (Ürün Optimizasyonu veya Kategori Analizi) yapılmadı. İşlem yapıldığında tüketilen gerçek tokenlar burada listelenecektir."
+                    ? "Henüz Gemini ile bir işlem yapılmadı. 📊 Canlı Hız Sınırları & Kotaları (RPM/TPM/RPD ve 28 Günlük Grafiği) görmek için yukarıdaki [📊 Gemini Hız Sınırları] butonuna tıklayın."
                     : "Seçilen tarih aralığında ve filtrede henüz yapay zeka işlem kaydı bulunmuyor.";
 
                 var idx = _grid.Rows.Add(
