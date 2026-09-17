@@ -183,6 +183,27 @@ public class ModernButtonControl : Button
         Cursor = Cursors.Hand;
     }
 
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        if (string.IsNullOrEmpty(Text))
+        {
+            return base.GetPreferredSize(proposedSize);
+        }
+
+        var textSize = TextRenderer.MeasureText(
+            Text,
+            Font,
+            new Size(int.MaxValue, int.MaxValue),
+            TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+
+        int padX = Padding.Horizontal > 0 ? Padding.Horizontal : 22;
+        int padY = Padding.Vertical > 0 ? Padding.Vertical : 8;
+        int width = textSize.Width + padX;
+        int height = Height > 0 ? Height : (textSize.Height + padY);
+
+        return new Size(width, height);
+    }
+
     public override Color BackColor
     {
         get => GetEffectiveParentBackColor();
