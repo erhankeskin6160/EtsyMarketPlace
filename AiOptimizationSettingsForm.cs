@@ -34,6 +34,7 @@ internal sealed class AiOptimizationSettingsForm : Form
 
     // Sistem Güvenliği & Fallback
     private readonly CheckBox _chkStrictLiveAi = new();
+    private readonly CheckBox _chkStrictNeverOffline = new();
 
     // Terminal & Aksiyonlar
     private readonly TextBox _statusTextBox = new();
@@ -442,26 +443,62 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     private Control BuildCard3_SecurityFallback()
     {
-        var content = new Panel
+        var content = new TableLayoutPanel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            Padding = new Padding(0, 6, 0, 6)
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            RowCount = 3,
+            Padding = new Padding(0, 4, 0, 4)
         };
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         _chkStrictLiveAi.Text = "☑️ Canlı AI modeli yanıt vermezse sessizce kalitesiz offline motora düşme (Beni açıkça uyar ve hata bildir)";
         _chkStrictLiveAi.AutoSize = true;
         _chkStrictLiveAi.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _chkStrictLiveAi.ForeColor = Color.FromArgb(52, 211, 153); // Emerald/Green accent
         _chkStrictLiveAi.Cursor = Cursors.Hand;
-        _chkStrictLiveAi.Location = new Point(0, 2);
+        _chkStrictLiveAi.Margin = new Padding(0, 2, 0, 6);
 
-        content.Controls.Add(_chkStrictLiveAi);
+        _chkStrictNeverOffline.Text = "🛡️ Asla offline motoru kullanma (Ne olursa olsun offline motoru çalıştırma, kesinlikle canlı AI zorunlu olsun)";
+        _chkStrictNeverOffline.AutoSize = true;
+        _chkStrictNeverOffline.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        _chkStrictNeverOffline.ForeColor = Color.FromArgb(248, 113, 113); // Coral/Alert red accent
+        _chkStrictNeverOffline.Cursor = Cursors.Hand;
+        _chkStrictNeverOffline.Margin = new Padding(0, 4, 0, 2);
+
+        _chkStrictNeverOffline.CheckedChanged += (_, _) =>
+        {
+            if (_chkStrictNeverOffline.Checked)
+            {
+                _chkStrictLiveAi.Checked = true;
+                _chkStrictLiveAi.Enabled = false;
+            }
+            else
+            {
+                _chkStrictLiveAi.Enabled = true;
+            }
+        };
+
+        var lblRuleNote = new Label
+        {
+            Text = "Not: 'Asla offline motoru kullanma' seçeneği aktifken, API anahtarı eksik olsa veya canlı AI yanıt vermese dahi yerel kural motoru devreye sokulmaz; işlem kesin olarak durdurulur ve açıkça hata bildirilir.",
+            UseMnemonic = false,
+            Font = new Font("Segoe UI", 7.8F),
+            ForeColor = Color.FromArgb(148, 163, 184),
+            AutoSize = true,
+            Margin = new Padding(22, 0, 0, 4)
+        };
+
+        content.Controls.Add(_chkStrictLiveAi, 0, 0);
+        content.Controls.Add(_chkStrictNeverOffline, 0, 1);
+        content.Controls.Add(lblRuleNote, 0, 2);
 
         return CreateCardContainer(
             "Sistem Güvenliği & Kesintisiz Çalışma",
             content,
-            "Bu seçenek aktif olduğunda, yapay zeka kotası bittiğinde veya bağlantı koptuğunda kalitesiz yerel başlıklar üretilmez; sizi uyararak API hatası bildirir.");
+            "Yapay zeka modellerinin kesintisiz çalışması ve offline motor izinlerinin yönetildiği güvenlik kontrol merkezi.");
     }
 
     // ==========================================
@@ -469,6 +506,19 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     private void SelectProvider(string providerKey)
     {
+        if (providerKey.Equals("Offline", StringComparison.OrdinalIgnoreCase) && _chkStrictNeverOffline.Checked)
+        {
+            MessageBox.Show(
+                this,
+                "🛡️ 'Asla Offline Motoru Kullanma' kuralı devrede!\n\n" +
+                "Bu güvenlik kuralı aktifken Çevrimdışı (Offline) Mod seçilemez.\n\n" +
+                "Offline moda geçebilmek için lütfen aşağıdaki Sistem Güvenliği bölümünden bu kuralı kaldırın.",
+                "Offline Mod Engellendi",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
         if (!_isInitializing)
         {
             SaveCurrentKeyToSettingsMemory();
@@ -683,7 +733,17 @@ internal sealed class AiOptimizationSettingsForm : Form
                 ? _settings.PhotoRoomApiKey
                 : PhotoRoomSettingsStore.Load().ApiKey;
 
-            _chkStrictLiveAi.Checked = !_settings.AllowSilentOfflineFallback;
+            _chkStrictNeverOffline.Checked = _settings.StrictNeverOffline;
+            if (_settings.StrictNeverOffline)
+            {
+                _chkStrictLiveAi.Checked = true;
+                _chkStrictLiveAi.Enabled = false;
+            }
+            else
+            {
+                _chkStrictLiveAi.Checked = !_settings.AllowSilentOfflineFallback;
+                _chkStrictLiveAi.Enabled = true;
+            }
 
             WriteStatus($"Ayar dosyası başarıyla yüklendi: {AiOptimizationSettingsStore.SettingsPath}");
         }
@@ -698,6 +758,9 @@ internal sealed class AiOptimizationSettingsForm : Form
         SaveCurrentKeyToSettingsMemory();
 
         _settings.Provider = _currentProvider;
+        _settings.StrictNeverOffline = _chkStrictNeverOffline.Checked;
+        _settings.AllowSilentOfflineFallback = !_chkStrictLiveAi.Checked && !_chkStrictNeverOffline.Checked;
+
         string rawEffectiveModel = !string.IsNullOrWhiteSpace(_customModelTextBox.Text)
             ? _customModelTextBox.Text.Trim()
             : _modelComboBox.Text.Trim();
@@ -728,7 +791,6 @@ internal sealed class AiOptimizationSettingsForm : Form
         _settings.PhotoRoomApiKey = _photoRoomKeyTextBox.Text.Trim();
         _settings.BflApiKey = _bflKeyTextBox.Text.Trim();
         _settings.IdeogramApiKey = _ideogramKeyTextBox.Text.Trim();
-        _settings.AllowSilentOfflineFallback = !_chkStrictLiveAi.Checked;
 
         PhotoRoomSettingsStore.Save(new PhotoRoomSettings { ApiKey = _settings.PhotoRoomApiKey });
         AiOptimizationSettingsStore.Save(_settings);

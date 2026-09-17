@@ -41,6 +41,10 @@ internal sealed class PromptChainExecutor
 
         if (routing.Provider == "Offline")
         {
+            if (aiSettings.StrictNeverOffline)
+            {
+                throw new InvalidOperationException("🚨 'Asla Offline Motoru Kullanma' kuralı devrede! Canlı AI bağlantısı ve geçerli API anahtarı olmadan işlem yapılamaz.");
+            }
             return new ChainResult("", "", "", "", "Offline mod — sezgisel analiz kullanılıyor.", 0, sw.Elapsed, "local-heuristic");
         }
 

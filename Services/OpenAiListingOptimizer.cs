@@ -19,6 +19,26 @@ internal sealed class OpenAiListingOptimizer(
         CancellationToken cancellationToken = default)
     {
         var settings = loadSettings();
+
+        // STRICT NEVER OFFLINE KURALI: Ne olursa olsun offline motorun çalışmasını engelle
+        if (settings.StrictNeverOffline)
+        {
+            if (settings.IsOffline)
+            {
+                throw new InvalidOperationException(
+                    "🚨 'Asla Offline Motoru Kullanma' kuralı devrede!\n\n" +
+                    "Offline kural motorunun çalıştırılması kesin olarak engellendi.\n" +
+                    "İşleme devam edebilmek için lütfen AI Ayarları ekranından canlı bir AI sağlayıcısı (Gemini, OpenAI vb.) ve geçerli bir API anahtarı belirleyin.");
+            }
+            if (!settings.HasAnyAiProvider)
+            {
+                throw new InvalidOperationException(
+                    $"🚨 'Asla Offline Motoru Kullanma' kuralı devrede!\n\n" +
+                    $"{settings.Provider} için geçerli bir API anahtarı girilmediğinden ve offline fallback tamamen yasaklandığından işlem durduruldu.\n" +
+                    "Lütfen AI Ayarları ekranından geçerli bir API anahtarı girin.");
+            }
+        }
+
         if (settings.IsOffline)
         {
             var res = localOptimizer.Optimize(input);
@@ -49,10 +69,12 @@ internal sealed class OpenAiListingOptimizer(
             throw new InvalidOperationException("OpenAI API key girilmemis. AI Ayarlari ekraninda OpenAI key alanini doldurun.");
         }
 
+        bool canFallbackToOffline = settings.AllowSilentOfflineFallback && !settings.StrictNeverOffline;
+
         if (settings.UseClaude)
         {
             return await OptimizeWithProviderAsync(
-                "Claude", settings.ClaudeModel, settings.AllowSilentOfflineFallback, input,
+                "Claude", settings.ClaudeModel, canFallbackToOffline, input,
                 (sys, usr, ct) => AiProviderCaller.CallClaudeAsync(sys, usr, settings.ClaudeApiKey, settings.ClaudeModel, 4096, 0.4, ct),
                 cancellationToken);
         }
@@ -65,7 +87,7 @@ internal sealed class OpenAiListingOptimizer(
         if (settings.UseDeepSeek)
         {
             return await OptimizeWithProviderAsync(
-                "DeepSeek", settings.DeepSeekModel, settings.AllowSilentOfflineFallback, input,
+                "DeepSeek", settings.DeepSeekModel, canFallbackToOffline, input,
                 (sys, usr, ct) => AiProviderCaller.CallDeepSeekAsync(sys, usr, settings.DeepSeekApiKey, settings.DeepSeekModel, 4096, 0.3, ct),
                 cancellationToken);
         }
@@ -78,7 +100,7 @@ internal sealed class OpenAiListingOptimizer(
         if (settings.UseGrok)
         {
             return await OptimizeWithProviderAsync(
-                "Grok", settings.GrokModel, settings.AllowSilentOfflineFallback, input,
+                "Grok", settings.GrokModel, canFallbackToOffline, input,
                 (sys, usr, ct) => AiProviderCaller.CallGrokAsync(sys, usr, settings.GrokApiKey, settings.GrokModel, 4096, 0.4, ct),
                 cancellationToken);
         }
@@ -86,6 +108,13 @@ internal sealed class OpenAiListingOptimizer(
         if (settings.Provider.Equals("Grok", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("Grok API key girilmemis. AI Ayarlari ekraninda Grok key alanini doldurun.");
+        }
+
+        if (settings.StrictNeverOffline)
+        {
+            throw new InvalidOperationException(
+                "🚨 'Asla Offline Motoru Kullanma' kuralı devrede!\n\n" +
+                "Canlı AI sağlayıcısından yanıt alınamadı ve offline motorun çalıştırılması kesin olarak engellendi.");
         }
 
         var fallbackLocal = localOptimizer.Optimize(input);
@@ -140,9 +169,9 @@ internal sealed class OpenAiListingOptimizer(
         }
         catch (Exception ex)
         {
-            if (!settings.AllowSilentOfflineFallback)
+            if (settings.StrictNeverOffline || !settings.AllowSilentOfflineFallback)
             {
-                throw new InvalidOperationException($"Seçtiğiniz OpenAI modeli ({settings.OpenAiModel}) yanıt veremedi: {ex.Message}\n\nLütfen tekrar deneyin veya AI Ayarları ekranından farklı bir model seçin.");
+                throw new InvalidOperationException($"🚨 Seçtiğiniz OpenAI modeli ({settings.OpenAiModel}) yanıt veremedi: {ex.Message}\n\n'Asla Offline Motoru Kullanma' kuralı devrede olduğu için işlem durduruldu.");
             }
             return CreateLocalFallbackResult(local, ex.Message, "OpenAI", settings.OpenAiModel);
         }
@@ -165,18 +194,18 @@ internal sealed class OpenAiListingOptimizer(
         }
         catch (Exception ex)
         {
-            if (!settings.AllowSilentOfflineFallback)
+            if (settings.StrictNeverOffline || !settings.AllowSilentOfflineFallback)
             {
-                throw new InvalidOperationException($"Seçtiğiniz Gemini modeli ({settings.GeminiModel}) yanıt veremedi: {ex.Message}\n\nLütfen biraz sonra tekrar deneyin veya AI Ayarları ekranından farklı bir model seçin.");
+                throw new InvalidOperationException($"🚨 Seçtiğiniz Gemini modeli ({settings.GeminiModel}) yanıt veremedi: {ex.Message}\n\n'Asla Offline Motoru Kullanma' kuralı devrede olduğu için işlem durduruldu.");
             }
             return CreateLocalFallbackResult(local, ex.Message, "Gemini", settings.GeminiModel);
         }
 
         if (ai is null)
         {
-            if (!settings.AllowSilentOfflineFallback)
+            if (settings.StrictNeverOffline || !settings.AllowSilentOfflineFallback)
             {
-                throw new InvalidOperationException($"Gemini ({settings.GeminiModel}) yanıtı JSON olarak okunamadı. Lütfen tekrar deneyin.");
+                throw new InvalidOperationException($"🚨 Gemini ({settings.GeminiModel}) yanıtı JSON olarak okunamadı. 'Asla Offline Motoru Kullanma' kuralı devrede olduğu için işlem durduruldu.");
             }
             return CreateLocalFallbackResult(local, "Gemini yaniti JSON olarak okunamadi.", "Gemini", settings.GeminiModel);
         }
