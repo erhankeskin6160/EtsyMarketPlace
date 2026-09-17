@@ -299,8 +299,10 @@ internal sealed class AiListingImageForm : Form
             Margin = new Padding(0, 8, 12, 0)
         };
 
+        _btnTabSingleStudio.Dock = DockStyle.None;
         _btnTabSingleStudio.Text = "🎯 Tekli Tasarım Stüdyosu";
         _btnTabSingleStudio.Height = 32;
+        _btnTabSingleStudio.MinimumSize = new Size(180, 32);
         _btnTabSingleStudio.AutoSize = true;
         _btnTabSingleStudio.Padding = new Padding(12, 0, 12, 0);
         _btnTabSingleStudio.FlatStyle = FlatStyle.Flat;
@@ -310,8 +312,10 @@ internal sealed class AiListingImageForm : Form
         _btnTabSingleStudio.Click += (_, _) => SwitchToTab(0);
         tabStack.Controls.Add(_btnTabSingleStudio);
 
+        _btnTabBatchStudio.Dock = DockStyle.None;
         _btnTabBatchStudio.Text = "⚡ Toplu Arka Plan Fabrikası";
         _btnTabBatchStudio.Height = 32;
+        _btnTabBatchStudio.MinimumSize = new Size(185, 32);
         _btnTabBatchStudio.AutoSize = true;
         _btnTabBatchStudio.Padding = new Padding(12, 0, 12, 0);
         _btnTabBatchStudio.FlatStyle = FlatStyle.Flat;
@@ -333,22 +337,24 @@ internal sealed class AiListingImageForm : Form
             Margin = new Padding(0, 8, 10, 0)
         };
 
-        ConfigureModeButton(_btnModeSlider, "↔️ Split Perde");
+        ConfigureModeButton(_btnModeSlider, "↔️ Split Perde", 115);
         _btnModeSlider.Click += (_, _) => SetComparisonMode(ImageComparisonMode.SplitSlider);
         modeStack.Controls.Add(_btnModeSlider);
 
-        ConfigureModeButton(_btnModeSideBySide, "⫴ Yan Yana");
+        ConfigureModeButton(_btnModeSideBySide, "⫴ Yan Yana", 100);
         _btnModeSideBySide.Click += (_, _) => SetComparisonMode(ImageComparisonMode.SideBySide);
         modeStack.Controls.Add(_btnModeSideBySide);
 
-        ConfigureModeButton(_btnModeAfterOnly, "🖼️ Sadece Sonuç");
+        ConfigureModeButton(_btnModeAfterOnly, "🖼️ Sadece Sonuç", 125);
         _btnModeAfterOnly.Click += (_, _) => SetComparisonMode(ImageComparisonMode.AfterOnly);
         modeStack.Controls.Add(_btnModeAfterOnly);
 
         var btnConfigureKeys = new Button
         {
+            Dock = DockStyle.None,
             Text = "🔑 API Key Yapılandır",
             Height = 32,
+            MinimumSize = new Size(155, 32),
             AutoSize = true,
             Padding = new Padding(10, 0, 10, 0),
             FlatStyle = FlatStyle.Flat,
@@ -388,7 +394,7 @@ internal sealed class AiListingImageForm : Form
         _statusLabel.Text = "Hazır. Görsel yükleyebilir veya bir sahne seçebilirsiniz.";
         header.Controls.Add(_statusLabel, 3, 0);
 
-        // AI Engine Status Badge (guaranteed full visibility with AutoSize)
+        // AI Engine Status Badge (guaranteed full visibility with AutoSize and MinimumSize)
         var badgePanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -397,6 +403,7 @@ internal sealed class AiListingImageForm : Form
             AutoSize = true,
             Margin = new Padding(0, 8, 2, 0)
         };
+        _lblAiBadge.MinimumSize = new Size(190, 30);
         _lblAiBadge.Click += (_, _) => OpenAiSettingsDialog();
         UpdateAiBadge();
         badgePanel.Controls.Add(_lblAiBadge);
@@ -406,10 +413,12 @@ internal sealed class AiListingImageForm : Form
         return header;
     }
 
-    private static void ConfigureModeButton(Button btn, string text)
+    private static void ConfigureModeButton(Button btn, string text, int minWidth = 0)
     {
+        btn.Dock = DockStyle.None;
         btn.Text = text;
         btn.Height = 32;
+        if (minWidth > 0) btn.MinimumSize = new Size(minWidth, 32);
         btn.AutoSize = true;
         btn.Padding = new Padding(12, 0, 12, 0);
         btn.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
