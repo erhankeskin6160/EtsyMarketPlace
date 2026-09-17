@@ -121,7 +121,7 @@ internal static class UiStyle
         }
     }
 
-    private static void SetDoubleBuffered(Control control)
+    public static void SetDoubleBuffered(Control control)
     {
         try
         {

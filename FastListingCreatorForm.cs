@@ -107,9 +107,15 @@ internal sealed class FastListingCreatorForm : Form
         get
         {
             var cp = base.CreateParams;
-            cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Complete double-buffering of all child controls to eliminate flickering
+            cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Prevents parent form from erasing/repainting child controls
+            cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
             return cp;
         }
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        // Suppress background erasing to eliminate flicker over RDP/DWM
     }
 
     public FastListingCreatorForm(IAiListingOptimizer aiOptimizer, IAiCategorySuggester? categorySuggester = null)
@@ -145,6 +151,7 @@ internal sealed class FastListingCreatorForm : Form
             Padding = new Padding(12, 8, 12, 8),
             BackColor = UiStyle.BackgroundColor
         };
+        UiStyle.SetDoubleBuffered(root);
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));  // Row 0: Unified Top Command & Template Bar
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 1: 3 Responsive Workspace Columns
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // Row 2: Status bar
@@ -160,6 +167,7 @@ internal sealed class FastListingCreatorForm : Form
             ColumnCount = 3,
             Margin = new Padding(0, 4, 0, 4)
         };
+        UiStyle.SetDoubleBuffered(contentGrid);
         contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37)); // Col 1: SEO & Details
         contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35)); // Col 2: Gallery & AI
         contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28)); // Col 3: Variations & Checklist
@@ -482,6 +490,7 @@ internal sealed class FastListingCreatorForm : Form
             Margin = Padding.Empty,
             Padding = new Padding(0, 0, 8, 0)
         };
+        UiStyle.SetDoubleBuffered(stack);
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 
@@ -960,6 +969,7 @@ internal sealed class FastListingCreatorForm : Form
         _galleryFlow.BackColor = Color.Transparent;
         _galleryFlow.BorderStyle = BorderStyle.None;
         _galleryFlow.Padding = new Padding(2);
+        UiStyle.SetDoubleBuffered(_galleryFlow);
         _galleryScroll.SetContent(_galleryFlow);
         _galleryScroll.Resize += (_, _) =>
         {
@@ -1294,6 +1304,7 @@ internal sealed class FastListingCreatorForm : Form
             Margin = Padding.Empty,
             Padding = new Padding(0, 0, 8, 0)
         };
+        UiStyle.SetDoubleBuffered(stack);
         stack.ColumnStyles.Clear();
         stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
 

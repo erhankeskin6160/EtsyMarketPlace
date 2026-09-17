@@ -19,6 +19,17 @@ public class ModernCardPanel : Panel
     public Color BorderColor { get; set; } = Color.FromArgb(226, 232, 240);
     public Color CardColor { get; set; } = Color.White;
 
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Prevents parent from drawing over child controls
+            cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
+            return cp;
+        }
+    }
+
     public ModernCardPanel()
     {
         SetStyle(
@@ -30,6 +41,11 @@ public class ModernCardPanel : Panel
         DoubleBuffered = true;
         BackColor = Color.Transparent;
         Padding = new Padding(12);
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        // Do not erase background to prevent flickering over RDP/DWM
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -1252,19 +1268,34 @@ public class ModernScrollPanel : Panel, IMessageFilter
 {
     private sealed class ModernScrollViewport : Panel
     {
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                var cp = base.CreateParams;
+                cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Prevents viewport background from painting over controls
+                cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
+                return cp;
+            }
+        }
+
         public ModernScrollViewport()
         {
             AutoScroll = false;
             DoubleBuffered = true;
             SetStyle(
                 ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.UserPaint |
-                ControlStyles.ResizeRedraw,
+                ControlStyles.AllPaintingInWmPaint,
                 true);
+            SetStyle(ControlStyles.UserPaint, false);
             Margin = Padding.Empty;
             Padding = Padding.Empty;
             BackColor = UiStyle.CardBackground;
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            // Do not paint default background to eliminate tearing/flickering
         }
     }
 
@@ -1282,6 +1313,17 @@ public class ModernScrollPanel : Panel, IMessageFilter
     public ModernHScrollBar HScrollBar => _hScrollBar;
     public bool HorizontalScrollEnabled { get; set; } = false;
 
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.Style |= 0x02000000; // WS_CLIPCHILDREN
+            cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
+            return cp;
+        }
+    }
+
     public ModernScrollPanel()
     {
         SuspendLayout();
@@ -1289,9 +1331,9 @@ public class ModernScrollPanel : Panel, IMessageFilter
         DoubleBuffered = true;
         SetStyle(
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.AllPaintingInWmPaint |
-            ControlStyles.UserPaint,
+            ControlStyles.AllPaintingInWmPaint,
             true);
+        SetStyle(ControlStyles.UserPaint, false);
         Margin = Padding.Empty;
         Padding = Padding.Empty;
 
@@ -1341,16 +1383,6 @@ public class ModernScrollPanel : Panel, IMessageFilter
             p = p.Parent;
         }
         return UiStyle.CardBackground;
-    }
-
-    protected override CreateParams CreateParams
-    {
-        get
-        {
-            var cp = base.CreateParams;
-            cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Double buffered composition for container and children
-            return cp;
-        }
     }
 
     private void ApplyScrollPosition()
@@ -1733,15 +1765,31 @@ public class ModernMultilineTextBox : Panel
         _innerBox.Select(start, length);
     }
 
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Prevents parent from painting over _innerBox
+            cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
+            return cp;
+        }
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        // Suppress background erasing to avoid flicker while typing
+    }
+
     public ModernMultilineTextBox()
     {
         SetStyle(
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw |
-            ControlStyles.SupportsTransparentBackColor,
+            ControlStyles.ResizeRedraw,
             true);
+        SetStyle(ControlStyles.SupportsTransparentBackColor, false);
         DoubleBuffered = true;
         Padding = new Padding(6, 6, 2, 6);
         BackColor = UiStyle.InputBackground;
@@ -1954,15 +2002,31 @@ public class ModernTextBox : Panel
     public void Clear() => _inner.Clear();
     public new void Focus() => _inner.Focus();
 
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Prevents parent from painting over _inner
+            cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
+            return cp;
+        }
+    }
+
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+        // Suppress background erasing to avoid flicker while typing
+    }
+
     public ModernTextBox()
     {
         SetStyle(
             ControlStyles.UserPaint |
             ControlStyles.AllPaintingInWmPaint |
             ControlStyles.OptimizedDoubleBuffer |
-            ControlStyles.ResizeRedraw |
-            ControlStyles.SupportsTransparentBackColor,
+            ControlStyles.ResizeRedraw,
             true);
+        SetStyle(ControlStyles.SupportsTransparentBackColor, false);
         DoubleBuffered = true;
         BackColor = Color.FromArgb(30, 41, 59); // Slate 900
         ForeColor = Color.FromArgb(248, 250, 252); // Slate 50
