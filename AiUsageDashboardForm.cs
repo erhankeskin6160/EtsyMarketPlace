@@ -792,7 +792,7 @@ public sealed class AiUsageDashboardForm : Form
     {
         try
         {
-            // 1. Günlük Token Tüketim Verilerini Birleştir (SQLite + Varsa OpenAI Resmi Raporu)
+            // 1. Seçili zaman aralığındaki tüm günleri oluştur (0 token olan günler dahil)
             var dailyMap = new Dictionary<DateTime, (long Prompt, long Comp)>();
 
             foreach (var r in records)
@@ -819,20 +819,30 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            var dayPoints = new List<AiTokenAreaTrendChart.DayTokenPoint>();
-            foreach (var (date, (prompt, comp)) in dailyMap.OrderBy(x => x.Key))
+            DateTime startDate = _cboPeriod.SelectedIndex switch
             {
+                0 => DateTime.Today,
+                1 => DateTime.Today.AddDays(-6),
+                2 => new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1),
+                _ => DateTime.Today.AddDays(-29)
+            };
+            DateTime endDate = DateTime.Today;
+
+            var dayPoints = new List<AiTokenAreaTrendChart.DayTokenPoint>();
+            for (var dt = startDate; dt <= endDate; dt = dt.AddDays(1))
+            {
+                dailyMap.TryGetValue(dt.Date, out var tokenTuple);
                 dayPoints.Add(new AiTokenAreaTrendChart.DayTokenPoint
                 {
-                    Date = date,
-                    PromptTokens = prompt,
-                    CompletionTokens = comp
+                    Date = dt.Date,
+                    PromptTokens = tokenTuple.Prompt,
+                    CompletionTokens = tokenTuple.Comp
                 });
             }
 
             _areaTrendChart.SetData(dayPoints);
 
-            // 2. Model Maliyet Dağılımı (Donut Chart)
+            // 2. Model Maliyet Dağılımı (Donut Chart - Programda girilen gerçek API'leri bağla)
             var modelCosts = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var (model, cost) in stats.CostByModel)
@@ -857,9 +867,33 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            _donutChart.SetData(modelCosts);
+            var settings = AiOptimizationSettingsStore.Load();
+            var configuredModels = new List<string>();
 
-            // 3. Modül Bazlı Harcama ve Çağrı Oranları (Bar Chart)
+            if (selectedProvider.StartsWith("Tümü") || selectedProvider.Contains("Gemini"))
+            {
+                if (!string.IsNullOrWhiteSpace(settings.GeminiApiKey))
+                    configuredModels.Add($"Google Gemini ({settings.GeminiModel ?? "gemini-2.5-flash"})");
+            }
+            if (selectedProvider.StartsWith("Tümü") || selectedProvider.Contains("DeepSeek"))
+            {
+                if (!string.IsNullOrWhiteSpace(settings.DeepSeekApiKey))
+                    configuredModels.Add("DeepSeek (deepseek-chat)");
+            }
+            if (selectedProvider.StartsWith("Tümü") || selectedProvider.Contains("OpenAI"))
+            {
+                if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey) || !string.IsNullOrWhiteSpace(settings.OpenAiAdminApiKey))
+                    configuredModels.Add($"OpenAI ({settings.OpenAiModel ?? "gpt-4o"})");
+            }
+            if (selectedProvider.StartsWith("Tümü") || selectedProvider.Contains("Claude"))
+            {
+                if (!string.IsNullOrWhiteSpace(settings.ClaudeApiKey))
+                    configuredModels.Add("Claude (claude-3.5-sonnet)");
+            }
+
+            _donutChart.SetData(modelCosts, configuredModels);
+
+            // 3. Modül Bazlı Harcama ve Çağrı Oranları (Bar Chart - Gerçek modüller)
             var moduleMap = new Dictionary<string, (decimal Cost, int Count)>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var r in records)
@@ -886,7 +920,7 @@ public sealed class AiUsageDashboardForm : Form
             var moduleList = moduleMap.Select(x => Tuple.Create(x.Key, x.Value.Cost, x.Value.Count)).ToList();
             _moduleBarChart.SetData(moduleList);
 
-            // 4. Sparkline Mikro Dalgaları
+            // 4. Sparkline Mikro Dalgaları (Sadece gerçek veri)
             UpdateSparklines(dayPoints, stats);
 
             // 5. Mini Son İşlem Kayıtları
@@ -905,42 +939,48 @@ public sealed class AiUsageDashboardForm : Form
         if (_deepSeekBalance != null && _deepSeekBalance.IsAvailable && _deepSeekBalance.TotalBalanceUsd > 0)
         {
             float b = (float)_deepSeekBalance.TotalBalanceUsd;
-            spark1Data = [b * 1.08f, b * 1.05f, b * 1.03f, b * 1.02f, b * 1.01f, b];
+            spark1Data = [b, b, b];
         }
         else
         {
-            spark1Data = [10f, 15f, 12f, 20f, 18f, 25f, 22f, 30f];
+            spark1Data = [0f];
         }
         _sparkline1.SetData(spark1Data, Color.FromArgb(56, 189, 248));
 
         // Sparkline 2 (Tüketilen Token Dalgası - Neon Purple)
         var spark2Data = new List<float>();
-        if (dayPoints.Count >= 2)
+        if (dayPoints.Count >= 2 && dayPoints.Any(x => x.TotalTokens > 0))
         {
             spark2Data = dayPoints.Select(x => (float)x.TotalTokens).ToList();
         }
         else
         {
-            spark2Data = [120f, 250f, 180f, 320f, 290f, 450f, 380f, 520f];
+            spark2Data = [0f];
         }
         _sparkline2.SetData(spark2Data, Color.FromArgb(168, 85, 247));
 
         // Sparkline 3 (Maliyet Hacmi - Amber Gold)
         var spark3Data = new List<float>();
-        if (dayPoints.Count >= 2)
+        if (stats.TotalCostUsd > 0 && dayPoints.Count >= 2)
         {
             spark3Data = dayPoints.Select(x => (float)(x.PromptTokens * 0.000002 + x.CompletionTokens * 0.000005)).ToList();
         }
         else
         {
-            spark3Data = [0.02f, 0.05f, 0.04f, 0.08f, 0.06f, 0.12f, 0.09f, 0.15f];
+            spark3Data = [0f];
         }
         _sparkline3.SetData(spark3Data, Color.FromArgb(245, 158, 11));
 
         // Sparkline 4 (Başarı & Sağlık - Emerald Green)
-        var spark4Data = stats.Blocked429Requests > 0
-            ? new List<float> { 20f, 18f, 15f, 8f, 5f }
-            : new List<float> { 15f, 18f, 22f, 28f, 32f, 36f, 40f };
+        var spark4Data = new List<float>();
+        if (stats.SuccessfulRequests > 0)
+        {
+            spark4Data = [stats.SuccessfulRequests, stats.SuccessfulRequests];
+        }
+        else
+        {
+            spark4Data = [0f];
+        }
         _sparkline4.SetData(spark4Data, Color.FromArgb(16, 185, 129));
     }
 

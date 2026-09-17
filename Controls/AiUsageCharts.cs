@@ -8,7 +8,7 @@ using System.Linq;
 using System.Windows.Forms;
 
 /// <summary>
-/// KPI kartlarının içine gömülen neon mikro trend dalgası
+/// KPI kartlarının içine gömülen gerçek veriye duyarlı mikro trend dalgası
 /// </summary>
 public sealed class AiCardSparkline : Control
 {
@@ -60,10 +60,15 @@ public sealed class AiCardSparkline : Control
             g.FillRectangle(bgBrush, ClientRectangle);
         }
 
-        if (_points.Count < 2)
+        // Eğer veri yoksa veya tüm değerler 0 ise uydurma dalga çizme; sakin sıfır çizgisi çiz
+        if (_points.Count < 2 || _points.All(p => p <= 0.0001f))
         {
-            // Default graceful aesthetic sine wave if empty
-            _points = [10, 14, 12, 19, 15, 24, 20, 28, 26, 35, 30, 42];
+            float baseY = Height - 5;
+            using var baseGlowPen = new Pen(Color.FromArgb(20, _lineColor), 3f);
+            g.DrawLine(baseGlowPen, 2, baseY, Width - 2, baseY);
+            using var basePen = new Pen(Color.FromArgb(70, _lineColor), 1.2f) { DashStyle = DashStyle.Dash };
+            g.DrawLine(basePen, 2, baseY, Width - 2, baseY);
+            return;
         }
 
         float max = Math.Max(1f, _points.Max());
@@ -80,7 +85,7 @@ public sealed class AiCardSparkline : Control
             pts[i] = new PointF(i * stepX, y);
         }
 
-        // Fill subtle gradient area under curve
+        // Dolgu gradienti
         using (var path = new GraphicsPath())
         {
             path.AddCurve(pts, 0.4f);
@@ -95,7 +100,7 @@ public sealed class AiCardSparkline : Control
             g.FillPath(brush, path);
         }
 
-        // Draw glowing line
+        // Parlama çizgisi
         using (var glowPen = new Pen(Color.FromArgb(50, _lineColor), 4f))
         {
             glowPen.StartCap = LineCap.Round;
@@ -113,7 +118,7 @@ public sealed class AiCardSparkline : Control
 }
 
 /// <summary>
-/// Günlük Token Tüketimini gösteren çift renkli (Prompt / Completion) yumuşak gradient alan dalga grafiği
+/// Günlük Token Tüketimini gösteren çift renkli (Prompt / Completion) yumuşak gradient alan grafiği
 /// </summary>
 public sealed class AiTokenAreaTrendChart : Control
 {
@@ -196,7 +201,7 @@ public sealed class AiTokenAreaTrendChart : Control
 
         if (chartW <= 20 || chartH <= 20) return;
 
-        // Card container background and rounded border
+        // Kart kapsayıcısı
         using (var cardPath = RoundedRect(new Rectangle(1, 1, Width - 2, Height - 2), 10))
         {
             using var cardBrush = new SolidBrush(Color.FromArgb(17, 24, 39));
@@ -205,14 +210,14 @@ public sealed class AiTokenAreaTrendChart : Control
             g.DrawPath(borderPen, cardPath);
         }
 
-        // Header and Legend
+        // Başlık
         using (var fontTitle = new Font("Segoe UI", 10.5F, FontStyle.Bold))
         using (var brushTitle = new SolidBrush(Color.White))
         {
             g.DrawString("Günlük Token Tüketimi (Giriş vs Çıkış)", fontTitle, brushTitle, 16, 14);
         }
 
-        // Legend dots
+        // Lejant
         float legendX = Width - 240;
         using (var pBrush = new SolidBrush(PromptColor))
         using (var cBrush = new SolidBrush(CompletionColor))
@@ -226,14 +231,12 @@ public sealed class AiTokenAreaTrendChart : Control
             g.DrawString("Çıkış (Completion)", lFont, textBrush, legendX + 129, 13);
         }
 
-        // If no data, display mock aesthetic wave or informative placeholder
-        var displayData = _data.Count >= 2 ? _data : GenerateMockData();
+        bool isAllZero = _data.Count == 0 || _data.All(d => d.PromptTokens == 0 && d.CompletionTokens == 0);
 
-        long maxTokens = Math.Max(1000, displayData.Max(d => Math.Max(d.PromptTokens, d.CompletionTokens)));
-        // Round maxTokens to nice number
-        maxTokens = (long)(Math.Ceiling(maxTokens / 500.0) * 500);
+        long maxTokens = isAllZero ? 1000 : Math.Max(500, _data.Max(d => Math.Max(d.PromptTokens, d.CompletionTokens)));
+        maxTokens = (long)(Math.Ceiling(maxTokens / 250.0) * 250);
 
-        // Draw horizontal grid lines
+        // Yatay ızgara çizgileri
         int gridSteps = 4;
         using (var gridPen = new Pen(Color.FromArgb(30, 41, 59), 1f) { DashStyle = DashStyle.Dash })
         using (var axisFont = new Font("Segoe UI", 7.5F))
@@ -251,34 +254,86 @@ public sealed class AiTokenAreaTrendChart : Control
             }
         }
 
-        // Calculate points
-        float stepX = chartW / (displayData.Count - 1);
-        var promptPts = new PointF[displayData.Count];
-        var compPts = new PointF[displayData.Count];
-
-        for (int i = 0; i < displayData.Count; i++)
+        if (isAllZero)
         {
-            float x = padLeft + (i * stepX);
-            float yP = padTop + chartH - ((float)displayData[i].PromptTokens / maxTokens * chartH);
-            float yC = padTop + chartH - ((float)displayData[i].CompletionTokens / maxTokens * chartH);
+            // Gerçek sıfır taban çizgisi
+            using (var basePen = new Pen(Color.FromArgb(60, 148, 163, 184), 1.2f) { DashStyle = DashStyle.Dash })
+            {
+                g.DrawLine(basePen, padLeft, padTop + chartH, padLeft + chartW, padTop + chartH);
+            }
+
+            // X Ekseninde gerçek tarihleri göster
+            if (_data.Count >= 2)
+            {
+                float stepX = chartW / (_data.Count - 1);
+                using var dateFont = new Font("Segoe UI", 7.5F);
+                using var dateBrush = new SolidBrush(Color.FromArgb(148, 163, 184));
+                int labelStep = Math.Max(1, _data.Count / 6);
+                for (int i = 0; i < _data.Count; i += labelStep)
+                {
+                    string dtStr = _data[i].Date.ToString("dd MMM");
+                    var sz = g.MeasureString(dtStr, dateFont);
+                    g.DrawString(dtStr, dateFont, dateBrush, padLeft + (i * stepX) - (sz.Width / 2), padTop + chartH + 8);
+                }
+            }
+
+            // Ortada şık, dürüst bilgilendirme kutusu
+            string msgTitle = "📊 Seçilen Dönemde Henüz Token Harcaması Yok";
+            string msgSub = "Program içinde yapay zeka araçları (Pazar Araştırması, SEO, Taslak) kullanıldıkça gerçek veriler anlık grafiğe dökülecektir.";
+            using var fontMsg1 = new Font("Segoe UI", 9F, FontStyle.Bold);
+            using var fontMsg2 = new Font("Segoe UI", 8F);
+            using var brushMsg1 = new SolidBrush(Color.FromArgb(226, 232, 240));
+            using var brushMsg2 = new SolidBrush(Color.FromArgb(148, 163, 184));
+
+            var sz1 = g.MeasureString(msgTitle, fontMsg1);
+            var sz2 = g.MeasureString(msgSub, fontMsg2);
+
+            float boxW = Math.Max(sz1.Width, sz2.Width) + 36;
+            float boxH = 54;
+            float boxX = padLeft + (chartW - boxW) / 2;
+            float boxY = padTop + (chartH - boxH) / 2;
+
+            using (var boxPath = RoundedRect(new Rectangle((int)boxX, (int)boxY, (int)boxW, (int)boxH), 8))
+            {
+                using var boxBg = new SolidBrush(Color.FromArgb(220, 20, 27, 45));
+                g.FillPath(boxBg, boxPath);
+                using var boxBorder = new Pen(Color.FromArgb(50, 75, 115), 1.2f);
+                g.DrawPath(boxBorder, boxPath);
+            }
+
+            g.DrawString(msgTitle, fontMsg1, brushMsg1, boxX + 18, boxY + 9);
+            g.DrawString(msgSub, fontMsg2, brushMsg2, boxX + 18, boxY + 30);
+            return;
+        }
+
+        // Gerçek Veri Çizimi
+        float pointStepX = chartW / (_data.Count - 1);
+        var promptPts = new PointF[_data.Count];
+        var compPts = new PointF[_data.Count];
+
+        for (int i = 0; i < _data.Count; i++)
+        {
+            float x = padLeft + (i * pointStepX);
+            float yP = padTop + chartH - ((float)_data[i].PromptTokens / maxTokens * chartH);
+            float yC = padTop + chartH - ((float)_data[i].CompletionTokens / maxTokens * chartH);
 
             promptPts[i] = new PointF(x, Math.Max(padTop, Math.Min(padTop + chartH, yP)));
             compPts[i] = new PointF(x, Math.Max(padTop, Math.Min(padTop + chartH, yC)));
         }
 
-        // 1. Draw Prompt Wave (Neon Purple Area + Glowing Line)
+        // 1. Prompt Dalgası
         DrawGradientArea(g, promptPts, padTop + chartH, PromptColor, 70);
-        // 2. Draw Completion Wave (Electric Cyan Area + Glowing Line)
+        // 2. Completion Dalgası
         DrawGradientArea(g, compPts, padTop + chartH, CompletionColor, 75);
 
-        // Draw Date Labels on X Axis
+        // Tarih etiketleri
         using (var dateFont = new Font("Segoe UI", 7.5F))
         using (var dateBrush = new SolidBrush(Color.FromArgb(148, 163, 184)))
         {
-            int labelStep = Math.Max(1, displayData.Count / 6);
-            for (int i = 0; i < displayData.Count; i += labelStep)
+            int labelStep = Math.Max(1, _data.Count / 6);
+            for (int i = 0; i < _data.Count; i += labelStep)
             {
-                string dtStr = displayData[i].Date.ToString("dd MMM");
+                string dtStr = _data[i].Date.ToString("dd MMM");
                 var sz = g.MeasureString(dtStr, dateFont);
                 g.DrawString(dtStr, dateFont, dateBrush, promptPts[i].X - (sz.Width / 2), padTop + chartH + 8);
             }
@@ -331,34 +386,15 @@ public sealed class AiTokenAreaTrendChart : Control
             g.FillPath(brush, path);
         }
 
-        // Glow pen
         using (var glowPen = new Pen(Color.FromArgb(40, baseColor), 5f))
         {
             g.DrawCurve(glowPen, pts, 0.45f);
         }
 
-        // Sharp curve line
         using (var linePen = new Pen(baseColor, 2.2f))
         {
             g.DrawCurve(linePen, pts, 0.45f);
         }
-    }
-
-    private static List<DayTokenPoint> GenerateMockData()
-    {
-        var list = new List<DayTokenPoint>();
-        var now = DateTime.UtcNow.Date;
-        for (int i = 14; i >= 0; i--)
-        {
-            var dt = now.AddDays(-i);
-            list.Add(new DayTokenPoint
-            {
-                Date = dt,
-                PromptTokens = 1200 + (long)(Math.Sin(i * 0.8) * 800 + 800),
-                CompletionTokens = 800 + (long)(Math.Cos(i * 0.9) * 600 + 600)
-            });
-        }
-        return list;
     }
 
     private static string FormatTokens(long val)
@@ -394,7 +430,7 @@ public sealed class AiTokenAreaTrendChart : Control
 }
 
 /// <summary>
-/// AI Model & Sağlayıcı Maliyet Dağılımını gösteren modern Donut (Simit) Pasta Grafiği
+/// AI Model Maliyet Dağılımını gösteren gerçek veriye dayalı Donut Pasta Grafiği
 /// </summary>
 public sealed class AiModelCostDonutChart : Control
 {
@@ -405,7 +441,8 @@ public sealed class AiModelCostDonutChart : Control
         public Color SliceColor { get; set; }
     }
 
-    private List<ModelSlice> _slices = [];
+    private readonly List<ModelSlice> _slices = [];
+    private readonly List<string> _configuredApiModels = [];
     private decimal _totalCost;
 
     private static readonly Color[] Palette =
@@ -424,11 +461,17 @@ public sealed class AiModelCostDonutChart : Control
         BackColor = Color.FromArgb(15, 23, 42);
     }
 
-    public void SetData(IEnumerable<KeyValuePair<string, decimal>> data)
+    public void SetData(IEnumerable<KeyValuePair<string, decimal>> data, IEnumerable<string>? configuredApiModels = null)
     {
         _slices.Clear();
-        int colorIdx = 0;
+        _configuredApiModels.Clear();
 
+        if (configuredApiModels != null)
+        {
+            _configuredApiModels.AddRange(configuredApiModels);
+        }
+
+        int colorIdx = 0;
         var items = data?.Where(x => x.Value > 0).OrderByDescending(x => x.Value).ToList() ?? [];
         _totalCost = items.Sum(x => x.Value);
 
@@ -441,18 +484,6 @@ public sealed class AiModelCostDonutChart : Control
                 SliceColor = Palette[colorIdx % Palette.Length]
             });
             colorIdx++;
-        }
-
-        if (_slices.Count == 0)
-        {
-            // Default elegant representation
-            _slices =
-            [
-                new ModelSlice { ModelName = "gpt-4o", CostUsd = 1.65m, SliceColor = Palette[0] },
-                new ModelSlice { ModelName = "deepseek-chat", CostUsd = 0.85m, SliceColor = Palette[1] },
-                new ModelSlice { ModelName = "claude-3.5-sonnet", CostUsd = 0.45m, SliceColor = Palette[2] }
-            ];
-            _totalCost = _slices.Sum(x => x.CostUsd);
         }
 
         Invalidate();
@@ -495,75 +526,139 @@ public sealed class AiModelCostDonutChart : Control
             holeSize,
             holeSize);
 
-        // Draw slices
-        float startAngle = -90f;
-        foreach (var slice in _slices)
+        if (_totalCost > 0 && _slices.Count > 0)
         {
-            float sweepAngle = _totalCost > 0 ? (float)(slice.CostUsd / _totalCost) * 360f : 0f;
-            if (sweepAngle <= 0) continue;
-
-            using (var path = new GraphicsPath())
+            // Gerçek Harcama Dilimlerini Çiz
+            float startAngle = -90f;
+            foreach (var slice in _slices)
             {
-                path.AddArc(donutRect, startAngle, sweepAngle);
-                path.AddArc(holeRect, startAngle + sweepAngle, -sweepAngle);
-                path.CloseFigure();
+                float sweepAngle = (float)(slice.CostUsd / _totalCost) * 360f;
+                if (sweepAngle <= 0) continue;
 
-                using var brush = new SolidBrush(slice.SliceColor);
-                g.FillPath(brush, path);
+                using (var path = new GraphicsPath())
+                {
+                    path.AddArc(donutRect, startAngle, sweepAngle);
+                    path.AddArc(holeRect, startAngle + sweepAngle, -sweepAngle);
+                    path.CloseFigure();
 
-                using var pen = new Pen(Color.FromArgb(17, 24, 39), 2f);
-                g.DrawPath(pen, path);
+                    using var brush = new SolidBrush(slice.SliceColor);
+                    g.FillPath(brush, path);
+
+                    using var pen = new Pen(Color.FromArgb(17, 24, 39), 2f);
+                    g.DrawPath(pen, path);
+                }
+
+                startAngle += sweepAngle;
             }
 
-            startAngle += sweepAngle;
-        }
-
-        // Center Total text inside Donut
-        string totalStr = $"${_totalCost:F2}";
-        using (var fCenter = new Font("Segoe UI", 11F, FontStyle.Bold))
-        using (var fSub = new Font("Segoe UI", 7.5F))
-        using (var bCenter = new SolidBrush(Color.White))
-        using (var bSub = new SolidBrush(Color.FromArgb(148, 163, 184)))
-        {
+            // Ortadaki toplam tutar
+            string totalStr = $"${_totalCost:F2}";
+            using var fCenter = new Font("Segoe UI", 11F, FontStyle.Bold);
+            using var fSub = new Font("Segoe UI", 7.5F);
+            using var bCenter = new SolidBrush(Color.White);
+            using var bSub = new SolidBrush(Color.FromArgb(148, 163, 184));
             var szTotal = g.MeasureString(totalStr, fCenter);
             var szSub = g.MeasureString("Toplam", fSub);
 
             float cx = donutX + (donutSize / 2);
             float cy = donutY + (donutSize / 2);
-
             g.DrawString(totalStr, fCenter, bCenter, cx - (szTotal.Width / 2), cy - 11);
             g.DrawString("Toplam", fSub, bSub, cx - (szSub.Width / 2), cy + 7);
         }
+        else
+        {
+            // Sıfır harcama durumunda boş şık halka
+            using (var emptyRingPath = new GraphicsPath())
+            {
+                emptyRingPath.AddEllipse(donutRect);
+                emptyRingPath.AddEllipse(holeRect);
+                using var ringBrush = new SolidBrush(Color.FromArgb(28, 36, 50));
+                g.FillPath(ringBrush, emptyRingPath);
+                using var ringPen = new Pen(Color.FromArgb(45, 55, 75), 1.2f);
+                g.DrawPath(ringPen, emptyRingPath);
+            }
 
-        // Legend on right side
+            // Ortadaki $0.00
+            using var fCenter = new Font("Segoe UI", 11.5F, FontStyle.Bold);
+            using var fSub = new Font("Segoe UI", 7.5F);
+            using var bCenter = new SolidBrush(Color.FromArgb(148, 163, 184));
+            using var bSub = new SolidBrush(Color.FromArgb(100, 115, 140));
+
+            var szTotal = g.MeasureString("$0.00", fCenter);
+            var szSub = g.MeasureString("0 İşlem", fSub);
+            float cx = donutX + (donutSize / 2);
+            float cy = donutY + (donutSize / 2);
+            g.DrawString("$0.00", fCenter, bCenter, cx - (szTotal.Width / 2), cy - 11);
+            g.DrawString("0 İşlem", fSub, bSub, cx - (szSub.Width / 2), cy + 7);
+        }
+
+        // Sağdaki Lejant (Kullanıcının Programdaki Gerçek API Tanımları)
         float legendX = donutX + donutSize + 20;
         float legendY = 48;
         using var legFont = new Font("Segoe UI", 8F);
         using var legFontBold = new Font("Segoe UI", 8F, FontStyle.Bold);
 
-        foreach (var slice in _slices.Take(5))
+        if (_slices.Count > 0)
         {
-            float pct = _totalCost > 0 ? (float)(slice.CostUsd / _totalCost * 100m) : 0f;
-
-            using (var dotBrush = new SolidBrush(slice.SliceColor))
+            foreach (var slice in _slices.Take(5))
             {
-                g.FillEllipse(dotBrush, legendX, legendY + 3, 10, 10);
-            }
+                float pct = _totalCost > 0 ? (float)(slice.CostUsd / _totalCost * 100m) : 0f;
+                using (var dotBrush = new SolidBrush(slice.SliceColor))
+                {
+                    g.FillEllipse(dotBrush, legendX, legendY + 3, 10, 10);
+                }
 
-            using (var nameBrush = new SolidBrush(Color.FromArgb(226, 232, 240)))
+                using (var nameBrush = new SolidBrush(Color.FromArgb(226, 232, 240)))
+                {
+                    string displayName = slice.ModelName.Length > 18 ? slice.ModelName[..16] + ".." : slice.ModelName;
+                    g.DrawString(displayName, legFont, nameBrush, legendX + 16, legendY);
+                }
+
+                using (var valBrush = new SolidBrush(Color.FromArgb(148, 163, 184)))
+                {
+                    string valStr = $"{pct:F0}% (${slice.CostUsd:F2})";
+                    g.DrawString(valStr, legFontBold, valBrush, legendX + 16, legendY + 15);
+                }
+
+                legendY += 36;
+                if (legendY + 25 > Height) break;
+            }
+        }
+        else if (_configuredApiModels.Count > 0)
+        {
+            // Kullanıcının ayarlarda girdiği gerçek API'lerin listesi
+            int cIdx = 0;
+            foreach (var apiModel in _configuredApiModels.Take(5))
             {
-                string displayName = slice.ModelName.Length > 16 ? slice.ModelName[..14] + ".." : slice.ModelName;
-                g.DrawString(displayName, legFont, nameBrush, legendX + 16, legendY);
-            }
+                var color = Palette[cIdx % Palette.Length];
+                using (var dotBrush = new SolidBrush(color))
+                {
+                    g.FillEllipse(dotBrush, legendX, legendY + 3, 10, 10);
+                }
 
-            using (var valBrush = new SolidBrush(Color.FromArgb(148, 163, 184)))
-            {
-                string valStr = $"{pct:F0}% (${slice.CostUsd:F2})";
-                g.DrawString(valStr, legFontBold, valBrush, legendX + 16, legendY + 15);
-            }
+                using (var nameBrush = new SolidBrush(Color.FromArgb(226, 232, 240)))
+                {
+                    string displayName = apiModel.Length > 20 ? apiModel[..18] + ".." : apiModel;
+                    g.DrawString(displayName, legFont, nameBrush, legendX + 16, legendY);
+                }
 
-            legendY += 36;
-            if (legendY + 25 > Height) break;
+                using (var valBrush = new SolidBrush(Color.FromArgb(52, 211, 153))) // Soft Green
+                {
+                    g.DrawString("$0.00 (Hazır / 0 Çağrı)", legFontBold, valBrush, legendX + 16, legendY + 15);
+                }
+
+                legendY += 36;
+                cIdx++;
+                if (legendY + 25 > Height) break;
+            }
+        }
+        else
+        {
+            // Hiç API anahtarı tanımlanmamış durumu
+            using var textBrush = new SolidBrush(Color.FromArgb(148, 163, 184));
+            g.DrawString("🔑 API Anahtarı Tanımlı Değil", legFontBold, textBrush, legendX, legendY);
+            using var subBrush = new SolidBrush(Color.FromArgb(100, 115, 140));
+            g.DrawString("Yukarıdaki 'AI Sağlayıcı & API Merkezi'nden\nanahtarlarınızı ekleyebilirsiniz.", legFont, subBrush, legendX, legendY + 18);
         }
     }
 
@@ -593,7 +688,7 @@ public sealed class AiModelCostDonutChart : Control
 }
 
 /// <summary>
-/// Modül Bazlı Kullanım ve Maliyet Çubuk Grafiği (Horizontal Progress Bars)
+/// Programın 3 ana modülünün gerçek harcama ve çağrı sayılarını gösteren Bar Grafiği
 /// </summary>
 public sealed class AiModuleUsageBarChart : Control
 {
@@ -605,7 +700,7 @@ public sealed class AiModuleUsageBarChart : Control
         public Color BarColor { get; set; }
     }
 
-    private List<ModuleUsageItem> _items = [];
+    private readonly List<ModuleUsageItem> _items = [];
 
     private static readonly Color[] BarColors =
     [
@@ -638,14 +733,12 @@ public sealed class AiModuleUsageBarChart : Control
             idx++;
         }
 
+        // Eğer modüllerde henüz harcama yoksa programın 3 ana modülünü sıfır değerlerle göster (Uydurma veri yok)
         if (_items.Count == 0)
         {
-            _items =
-            [
-                new ModuleUsageItem { ModuleName = "Pazar Araştırması", CostUsd = 1.45m, RequestCount = 24, BarColor = BarColors[0] },
-                new ModuleUsageItem { ModuleName = "SEO Başlık & Etiket", CostUsd = 0.85m, RequestCount = 18, BarColor = BarColors[1] },
-                new ModuleUsageItem { ModuleName = "Ürün Açıklama Stüdyosu", CostUsd = 0.65m, RequestCount = 12, BarColor = BarColors[2] }
-            ];
+            _items.Add(new ModuleUsageItem { ModuleName = "Pazar Araştırması", CostUsd = 0.00m, RequestCount = 0, BarColor = BarColors[0] });
+            _items.Add(new ModuleUsageItem { ModuleName = "SEO Başlık & Etiket", CostUsd = 0.00m, RequestCount = 0, BarColor = BarColors[1] });
+            _items.Add(new ModuleUsageItem { ModuleName = "Ürün Açıklama Stüdyosu", CostUsd = 0.00m, RequestCount = 0, BarColor = BarColors[2] });
         }
 
         Invalidate();
@@ -665,15 +758,14 @@ public sealed class AiModuleUsageBarChart : Control
             g.DrawPath(borderPen, cardPath);
         }
 
-        // Header
+        // Başlık
         using (var fontTitle = new Font("Segoe UI", 9.5F, FontStyle.Bold))
         using (var brushTitle = new SolidBrush(Color.White))
         {
             g.DrawString("Modül Bazlı Kullanım & Harcama Oranları", fontTitle, brushTitle, 16, 10);
         }
 
-        decimal maxCost = Math.Max(0.01m, _items.Count > 0 ? _items.Max(x => x.CostUsd) : 1m);
-
+        decimal maxCost = _items.Any(x => x.CostUsd > 0) ? _items.Max(x => x.CostUsd) : 0m;
         int colCount = Math.Min(3, _items.Count);
         if (colCount == 0) return;
 
@@ -689,13 +781,13 @@ public sealed class AiModuleUsageBarChart : Control
             float x = 16 + (i * colW);
             float y = 34;
 
-            // Module name and cost
+            // Modül adı ve maliyeti
             g.DrawString(item.ModuleName, nameFont, textBrush, x, y);
             string costStr = $"${item.CostUsd:F2} ({item.RequestCount} çağrı)";
             var szCost = g.MeasureString(costStr, valFont);
             g.DrawString(costStr, valFont, subBrush, x + colW - szCost.Width - 16, y);
 
-            // Bar background
+            // Çubuk arkaplanı
             float barW = colW - 20;
             float barH = 10;
             float barY = y + 20;
@@ -706,12 +798,13 @@ public sealed class AiModuleUsageBarChart : Control
                 g.FillPath(bgBrush, bgPath);
             }
 
-            // Fill Bar with gradient
-            float fillRatio = (float)(item.CostUsd / maxCost);
-            float fillW = Math.Max(8, barW * fillRatio);
-
-            using (var fillPath = RoundedRect(new Rectangle((int)x, (int)barY, (int)fillW, (int)barH), 4))
+            // Gerçek harcama varsa çubuğu doldur; yoksa boş kalsın (0% doluluk)
+            if (maxCost > 0 && item.CostUsd > 0)
             {
+                float fillRatio = (float)(item.CostUsd / maxCost);
+                float fillW = Math.Max(8, barW * fillRatio);
+
+                using var fillPath = RoundedRect(new Rectangle((int)x, (int)barY, (int)fillW, (int)barH), 4);
                 using var fillBrush = new LinearGradientBrush(
                     new Point((int)x, (int)barY),
                     new Point((int)(x + fillW), (int)barY),
