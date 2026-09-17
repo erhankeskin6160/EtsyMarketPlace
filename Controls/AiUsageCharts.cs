@@ -18,9 +18,24 @@ public sealed class AiCardSparkline : Control
 
     public AiCardSparkline()
     {
-        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
-        BackColor = Color.Transparent;
+        SetStyle(
+            ControlStyles.SupportsTransparentBackColor |
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.UserPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
+        DoubleBuffered = true;
         Height = 32;
+    }
+
+    protected override void OnParentChanged(EventArgs e)
+    {
+        base.OnParentChanged(e);
+        if (Parent != null && Parent.BackColor != Color.Empty)
+        {
+            BackColor = Parent.BackColor;
+        }
     }
 
     public void SetData(IEnumerable<float> data, Color lineColor)
@@ -36,6 +51,14 @@ public sealed class AiCardSparkline : Control
         base.OnPaint(e);
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
+
+        Color bg = BackColor != Color.Transparent && BackColor != Color.Empty
+            ? BackColor
+            : (Parent?.BackColor ?? Color.FromArgb(20, 35, 60));
+        using (var bgBrush = new SolidBrush(bg))
+        {
+            g.FillRectangle(bgBrush, ClientRectangle);
+        }
 
         if (_points.Count < 2)
         {
@@ -68,7 +91,7 @@ public sealed class AiCardSparkline : Control
                 new Point(0, 0),
                 new Point(0, Height),
                 _glowColor,
-                Color.Transparent);
+                Color.FromArgb(0, _lineColor));
             g.FillPath(brush, path);
         }
 

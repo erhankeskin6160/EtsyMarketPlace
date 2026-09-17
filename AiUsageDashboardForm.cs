@@ -245,7 +245,7 @@ public sealed class AiUsageDashboardForm : Form
         _pnlChartsView.Dock = DockStyle.Fill;
         _pnlChartsView.ColumnCount = 2;
         _pnlChartsView.RowCount = 2;
-        _pnlChartsView.BackColor = Color.Transparent;
+        _pnlChartsView.BackColor = UiStyle.BackgroundColor;
         _pnlChartsView.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 63f)); // Left: Area Chart + Module Bar
         _pnlChartsView.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37f)); // Right: Donut Chart + Mini Logs
         _pnlChartsView.RowStyles.Add(new RowStyle(SizeType.Percent, 72f));       // Top Row
@@ -374,6 +374,7 @@ public sealed class AiUsageDashboardForm : Form
         pnl.Controls.Add(lblSub);
         if (sparkline != null)
         {
+            sparkline.BackColor = bg;
             sparkline.Dock = DockStyle.Bottom;
             sparkline.Height = 28;
             pnl.Controls.Add(sparkline);
