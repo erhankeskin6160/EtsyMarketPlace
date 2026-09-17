@@ -75,13 +75,18 @@ public sealed class GeminiRateLimitReport
             .Where(r => r.Provider.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        // 1. Determine key models to show
+        // 1. Determine key models to show (Matches Google AI Studio Rate limits by model list)
         var keyModelNames = new List<string>
         {
             "gemini-3.7-flash",
+            "gemini-3.8-flash",
             "gemini-2.5-flash",
-            "gemini-1.5-flash",
             "gemini-3.6-flash",
+            "antigravity",
+            "deep-research-pro-preview",
+            "gemini-2-flash",
+            "gemini-2-flash-lite",
+            "gemini-1.5-flash",
             "gemini-1.5-pro",
             "text-embedding-004"
         };
@@ -185,10 +190,24 @@ public sealed class GeminiRateLimitReport
         {
             ModelName = rawName,
             DisplayName = displayName,
-            Category = norm.Contains("agent") ? "Agents" : (norm.Contains("embed") ? "Embeddings" : "Text-out models")
+            Category = (norm.Contains("agent") || norm.Contains("antigravity") || norm.Contains("research"))
+                ? "Agents"
+                : (norm.Contains("embed") ? "Embeddings" : "Text-out models")
         };
 
-        if (norm.Contains("1.5-flash"))
+        if (norm.Contains("antigravity"))
+        {
+            item.LimitRpm = 60;
+            item.LimitTpm = 100_000;
+            item.LimitRpd = 100;
+        }
+        else if (norm.Contains("deep-research") || norm.Contains("gemini-2-flash"))
+        {
+            item.LimitRpm = 0;
+            item.LimitTpm = 0;
+            item.LimitRpd = 0;
+        }
+        else if (norm.Contains("1.5-flash"))
         {
             item.LimitRpm = 15;
             item.LimitTpm = 1_000_000;
@@ -225,23 +244,29 @@ public sealed class GeminiRateLimitReport
             item.PeakTpm = 9_380;
             item.PeakRpd = 27;
         }
-        else if (norm.Contains("2.5-flash"))
-        {
-            item.PeakRpm = 6;
-            item.PeakTpm = 8_680;
-            item.PeakRpd = 24;
-        }
-        else if (norm.Contains("1.5-flash"))
+        else if (norm.Contains("3.8-flash"))
         {
             item.PeakRpm = 6;
             item.PeakTpm = 10_100;
-            item.PeakRpd = 25;
+            item.PeakRpd = 32;
+        }
+        else if (norm.Contains("2.5-flash"))
+        {
+            item.PeakRpm = 3;
+            item.PeakTpm = 8_880;
+            item.PeakRpd = 24;
         }
         else if (norm.Contains("3.6-flash"))
         {
             item.PeakRpm = 1;
             item.PeakTpm = 13;
             item.PeakRpd = 1;
+        }
+        else if (norm.Contains("1.5-flash"))
+        {
+            item.PeakRpm = 6;
+            item.PeakTpm = 10_100;
+            item.PeakRpd = 25;
         }
     }
 
@@ -251,10 +276,15 @@ public sealed class GeminiRateLimitReport
         return name switch
         {
             "gemini-3.7-flash" => "Gemini 3.7 Flash",
+            "gemini-3.8-flash" => "Gemini 3.8 Flash",
             "gemini-2.5-flash" => "Gemini 2.5 Flash",
-            "gemini-1.5-flash" => "Gemini 1.5 Flash",
             "gemini-3.6-flash" => "Gemini 3.6 Flash",
+            "gemini-1.5-flash" => "Gemini 1.5 Flash",
             "gemini-1.5-pro" => "Gemini 1.5 Pro",
+            "antigravity" => "Antigravity",
+            "deep-research-pro-preview" => "Deep Research Pro Preview",
+            "gemini-2-flash" => "Gemini 2 Flash",
+            "gemini-2-flash-lite" => "Gemini 2 Flash Lite",
             "text-embedding-004" => "Text Embedding 004",
             _ => char.ToUpperInvariant(name[0]) + name.Substring(1)
         };

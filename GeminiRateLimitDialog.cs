@@ -136,8 +136,9 @@ public sealed class GeminiRateLimitDialog : Form
         _cboProject.BackColor = Color.FromArgb(30, 41, 59);
         _cboProject.ForeColor = Color.White;
         _cboProject.FlatStyle = FlatStyle.Flat;
-        _cboProject.Items.AddRange(["gen-lang-client-0458130432", "ffff", "default-project"]);
+        _cboProject.Items.AddRange(["ffff", "gen-lang-client-0458130432", "default-project"]);
         _cboProject.SelectedIndex = 0;
+        _cboProject.SelectedIndexChanged += async (_, _) => await LoadDataAsync();
 
         var lblDateRange = new Label
         {

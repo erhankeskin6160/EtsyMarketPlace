@@ -413,7 +413,7 @@ public sealed class AiUsageDashboardForm : Form
                     _geminiRateLimitReport = await GeminiRateLimitService.FetchRateLimitReportAsync(
                         settings.GeminiApiKey,
                         days: targetDays ?? 28,
-                        projectName: "gen-lang-client-0458130432",
+                        projectName: "ffff (gen-lang-client-0458130432)",
                         forceRefresh: queryLiveBalance);
                 }
                 catch (Exception ex)
