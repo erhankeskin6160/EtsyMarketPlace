@@ -1450,39 +1450,48 @@ internal sealed class DashboardForm : Form
 
         if (_currentEmbeddedForm != null && !_currentEmbeddedForm.IsDisposed)
         {
-            _currentEmbeddedForm.SuspendLayout();
-            if (_currentEmbeddedForm.WindowState != FormWindowState.Normal)
+            bool needsLayout = _currentEmbeddedForm.WindowState != FormWindowState.Normal ||
+                               _currentEmbeddedForm.Bounds != clientRect ||
+                               _currentEmbeddedForm.Dock != DockStyle.Fill;
+
+            if (needsLayout)
             {
-                _currentEmbeddedForm.WindowState = FormWindowState.Normal;
+                _currentEmbeddedForm.SuspendLayout();
+                if (_currentEmbeddedForm.WindowState != FormWindowState.Normal)
+                {
+                    _currentEmbeddedForm.WindowState = FormWindowState.Normal;
+                }
+                _currentEmbeddedForm.MinimumSize = Size.Empty;
+                _currentEmbeddedForm.MaximumSize = Size.Empty;
+                if (_currentEmbeddedForm.Bounds != clientRect)
+                {
+                    _currentEmbeddedForm.Bounds = clientRect;
+                }
+                if (_currentEmbeddedForm.Dock != DockStyle.Fill)
+                {
+                    _currentEmbeddedForm.Dock = DockStyle.Fill;
+                }
+                _currentEmbeddedForm.ResumeLayout(true);
+                _currentEmbeddedForm.PerformLayout();
             }
-            _currentEmbeddedForm.MinimumSize = Size.Empty;
-            _currentEmbeddedForm.MaximumSize = Size.Empty;
-            if (_currentEmbeddedForm.Bounds != clientRect)
-            {
-                _currentEmbeddedForm.Bounds = clientRect;
-            }
-            if (_currentEmbeddedForm.Dock != DockStyle.Fill)
-            {
-                _currentEmbeddedForm.Dock = DockStyle.Fill;
-            }
-            _currentEmbeddedForm.ResumeLayout(true);
-            _currentEmbeddedForm.PerformLayout();
-            _currentEmbeddedForm.Invalidate(true);
         }
         else if (_dashboardRootPanel != null && !_dashboardRootPanel.IsDisposed && _dashboardRootPanel.Parent == _mainContainer)
         {
-            _dashboardRootPanel.SuspendLayout();
-            if (_dashboardRootPanel.Bounds != clientRect)
+            bool needsLayout = _dashboardRootPanel.Bounds != clientRect || _dashboardRootPanel.Dock != DockStyle.Fill;
+            if (needsLayout)
             {
-                _dashboardRootPanel.Bounds = clientRect;
+                _dashboardRootPanel.SuspendLayout();
+                if (_dashboardRootPanel.Bounds != clientRect)
+                {
+                    _dashboardRootPanel.Bounds = clientRect;
+                }
+                if (_dashboardRootPanel.Dock != DockStyle.Fill)
+                {
+                    _dashboardRootPanel.Dock = DockStyle.Fill;
+                }
+                _dashboardRootPanel.ResumeLayout(true);
+                _dashboardRootPanel.PerformLayout();
             }
-            if (_dashboardRootPanel.Dock != DockStyle.Fill)
-            {
-                _dashboardRootPanel.Dock = DockStyle.Fill;
-            }
-            _dashboardRootPanel.ResumeLayout(true);
-            _dashboardRootPanel.PerformLayout();
-            _dashboardRootPanel.Invalidate(true);
         }
     }
 

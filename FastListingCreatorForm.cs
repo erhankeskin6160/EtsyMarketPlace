@@ -98,9 +98,23 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Label _chkItemDesc = new() { AutoSize = true };
     private readonly Label _chkItemTags = new() { AutoSize = true };
 
+    private static List<EtsyShippingProfileOption>? _cachedShippingProfiles;
+    private static List<EtsyReadinessStateOption>? _cachedReadinessStates;
+    private bool _isUpdatingChecklist;
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Complete double-buffering of all child controls to eliminate flickering
+            return cp;
+        }
+    }
+
     public FastListingCreatorForm(IAiListingOptimizer aiOptimizer, IAiCategorySuggester? categorySuggester = null)
     {
-        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true);
+        SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint, true);
         DoubleBuffered = true;
 
         _aiOptimizer = aiOptimizer;
@@ -113,6 +127,7 @@ internal sealed class FastListingCreatorForm : Form
         BuildLayout();
         LoadTemplatesCombo();
         WireEvents();
+        ApplyCachedShopProfilesIfAvailable();
         ResumeLayout(false);
         PerformLayout();
 
@@ -754,7 +769,8 @@ internal sealed class FastListingCreatorForm : Form
         {
             if (scrollContainer.ClientSize.Width > 0)
             {
-                stack.Width = Math.Max(200, scrollContainer.ClientSize.Width - 14);
+                int targetW = Math.Max(200, scrollContainer.ClientSize.Width - 14);
+                if (stack.Width != targetW) stack.Width = targetW;
             }
             if (scrollContainer.ClientSize.Height > 0)
             {
@@ -1448,7 +1464,8 @@ internal sealed class FastListingCreatorForm : Form
         {
             if (_rightScroll.ClientSize.Width > 0)
             {
-                stack.Width = Math.Max(180, _rightScroll.ClientSize.Width - 14);
+                int targetW = Math.Max(180, _rightScroll.ClientSize.Width - 14);
+                if (stack.Width != targetW) stack.Width = targetW;
             }
         };
         cardLayout.Controls.Add(_rightScroll, 0, 2);
@@ -1783,43 +1800,34 @@ internal sealed class FastListingCreatorForm : Form
 
             if (len == 0)
             {
-                _lblTitleCounter.Text = "0 / 140";
-                _lblTitleCounter.ForeColor = UiStyle.TextMuted;
-                _lblMobileTitlePreview.Text = "📱 Mobilde İlk 55 Karakter: (Telefon arama sonuçlarında görünecek kısım)";
-                _lblMobileTitlePreview.ForeColor = Color.FromArgb(148, 163, 184);
+                SetLabelTextAndColor(_lblTitleCounter, "0 / 140", UiStyle.TextMuted);
+                SetLabelTextAndColor(_lblMobileTitlePreview, "📱 Mobilde İlk 55 Karakter: (Telefon arama sonuçlarında görünecek kısım)", Color.FromArgb(148, 163, 184));
             }
             else if (len <= 55)
             {
-                _lblTitleCounter.Text = $"{len} / 140";
-                _lblTitleCounter.ForeColor = UiStyle.TextMuted;
-                _lblMobileTitlePreview.Text = $"📱 Mobilde (Tamamı): \"{text}\"";
-                _lblMobileTitlePreview.ForeColor = UiStyle.SuccessColor;
+                SetLabelTextAndColor(_lblTitleCounter, $"{len} / 140", UiStyle.TextMuted);
+                SetLabelTextAndColor(_lblMobileTitlePreview, $"📱 Mobilde (Tamamı): \"{text}\"", UiStyle.SuccessColor);
             }
             else
             {
                 var mobileSlice = text.Length > 55 ? text.Substring(0, 55) : text;
-                _lblMobileTitlePreview.Text = $"📱 Mobilde İlk 55 Karakter: \"{mobileSlice}...\"";
-                _lblMobileTitlePreview.ForeColor = Color.FromArgb(56, 189, 248);
+                SetLabelTextAndColor(_lblMobileTitlePreview, $"📱 Mobilde İlk 55 Karakter: \"{mobileSlice}...\"", Color.FromArgb(56, 189, 248));
 
                 if (len >= 125 && len <= 140)
                 {
-                    _lblTitleCounter.Text = $"{len} / 140 (Mükemmel Doluluk)";
-                    _lblTitleCounter.ForeColor = UiStyle.SuccessColor;
+                    SetLabelTextAndColor(_lblTitleCounter, $"{len} / 140 (Mükemmel Doluluk)", UiStyle.SuccessColor);
                 }
                 else if (len >= 80 && len < 125)
                 {
-                    _lblTitleCounter.Text = $"{len} / 140 (Doldurulabilir)";
-                    _lblTitleCounter.ForeColor = Color.FromArgb(245, 158, 11);
+                    SetLabelTextAndColor(_lblTitleCounter, $"{len} / 140 (Doldurulabilir)", Color.FromArgb(245, 158, 11));
                 }
                 else if (len > 140)
                 {
-                    _lblTitleCounter.Text = $"{len} / 140 (140 Sınırı Aşıldı!)";
-                    _lblTitleCounter.ForeColor = UiStyle.DangerColor;
+                    SetLabelTextAndColor(_lblTitleCounter, $"{len} / 140 (140 Sınırı Aşıldı!)", UiStyle.DangerColor);
                 }
                 else
                 {
-                    _lblTitleCounter.Text = $"{len} / 140 (Kısa)";
-                    _lblTitleCounter.ForeColor = UiStyle.TextMuted;
+                    SetLabelTextAndColor(_lblTitleCounter, $"{len} / 140 (Kısa)", UiStyle.TextMuted);
                 }
             }
             UpdateChecklist();
@@ -1954,51 +1962,62 @@ internal sealed class FastListingCreatorForm : Form
 
     private void UpdateChecklist()
     {
-        // 1. Title
-        bool titleOk = !string.IsNullOrWhiteSpace(_txtTitle.Text) && _txtTitle.Text.Length <= 140;
-        SetChecklistItem(_chkItemTitle, "Ürün başlığı hazır", titleOk);
-
-        // 2. Price & Stock
-        bool priceOk = _numPrice.Value > 0 && _numQuantity.Value >= 1;
-        string priceCheckText = $"Fiyat: ${_numPrice.Value:0.00} | Stok: {_numQuantity.Value}";
-        if (_chkEnableVariations.Checked && _chkCustomVariationPricing.Checked && _customVariationPrices.Count > 0)
+        if (_isUpdatingChecklist) return;
+        _isUpdatingChecklist = true;
+        try
         {
-            var activePrices = _customVariationPrices.Values.Where(p => p.IsEnabled).Select(p => p.Price).ToList();
-            if (activePrices.Count > 0)
+            // 1. Title
+            bool titleOk = !string.IsNullOrWhiteSpace(_txtTitle.Text) && _txtTitle.Text.Length <= 140;
+            SetChecklistItem(_chkItemTitle, "Ürün başlığı hazır", titleOk);
+
+            // 2. Price & Stock
+            bool priceOk = _numPrice.Value > 0 && _numQuantity.Value >= 1;
+            string priceCheckText = $"Fiyat: ${_numPrice.Value:0.00} | Stok: {_numQuantity.Value}";
+            if (_chkEnableVariations.Checked && _chkCustomVariationPricing.Checked && _customVariationPrices.Count > 0)
             {
-                var min = activePrices.Min();
-                var max = activePrices.Max();
-                priceCheckText = min != max ? $"Fiyatlar: ${min:0.00} - ${max:0.00}" : $"Fiyat: ${min:0.00}";
+                var activePrices = _customVariationPrices.Values.Where(p => p.IsEnabled).Select(p => p.Price).ToList();
+                if (activePrices.Count > 0)
+                {
+                    var min = activePrices.Min();
+                    var max = activePrices.Max();
+                    priceCheckText = min != max ? $"Fiyatlar: ${min:0.00} - ${max:0.00}" : $"Fiyat: ${min:0.00}";
+                }
             }
+            SetChecklistItem(_chkItemPrice, priceCheckText, priceOk);
+
+            // 3. Images
+            bool imageOk = _galleryImagePaths.Count > 0;
+            SetChecklistItem(_chkItemImage, $"Görseller: {_galleryImagePaths.Count}/10 adet", imageOk);
+
+            // 4. Shipping Profile & Readiness State
+            bool isDigital = _cboListingType.SelectedIndex == 1;
+            bool shippingOk = isDigital || _cboShippingProfile.SelectedItem != null;
+            SetChecklistItem(_chkItemShipping, isDigital ? "Dijital Ürün (Kargo gerekmez)" : "Kargo profili seçildi", shippingOk);
+
+            bool readinessOk = isDigital || SelectedReadinessStateId() > 0;
+            SetChecklistItem(_chkItemReadiness, isDigital ? "Dijital (Hazırlık durumu gerekmez)" : "Hazırlık durumu seçildi", readinessOk);
+
+            // 5. Description
+            bool descOk = !string.IsNullOrWhiteSpace(_txtDescription.Text);
+            SetChecklistItem(_chkItemDesc, "Açıklama dolduruldu", descOk);
+
+            // 6. Tags
+            var tags = SplitTags(_txtTags.Text);
+            bool tagsOk = tags.Count > 0;
+            SetChecklistItem(_chkItemTags, $"Etiketler ({tags.Count}/13)", tagsOk);
         }
-        SetChecklistItem(_chkItemPrice, priceCheckText, priceOk);
-
-        // 3. Images
-        bool imageOk = _galleryImagePaths.Count > 0;
-        SetChecklistItem(_chkItemImage, $"Görseller: {_galleryImagePaths.Count}/10 adet", imageOk);
-
-        // 4. Shipping Profile & Readiness State
-        bool isDigital = _cboListingType.SelectedIndex == 1;
-        bool shippingOk = isDigital || _cboShippingProfile.SelectedItem != null;
-        SetChecklistItem(_chkItemShipping, isDigital ? "Dijital Ürün (Kargo gerekmez)" : "Kargo profili seçildi", shippingOk);
-
-        bool readinessOk = isDigital || SelectedReadinessStateId() > 0;
-        SetChecklistItem(_chkItemReadiness, isDigital ? "Dijital (Hazırlık durumu gerekmez)" : "Hazırlık durumu seçildi", readinessOk);
-
-        // 5. Description
-        bool descOk = !string.IsNullOrWhiteSpace(_txtDescription.Text);
-        SetChecklistItem(_chkItemDesc, "Açıklama dolduruldu", descOk);
-
-        // 6. Tags
-        var tags = SplitTags(_txtTags.Text);
-        bool tagsOk = tags.Count > 0;
-        SetChecklistItem(_chkItemTags, $"Etiketler ({tags.Count}/13)", tagsOk);
+        finally
+        {
+            _isUpdatingChecklist = false;
+        }
     }
 
     private static void SetChecklistItem(Label lbl, string text, bool isValid)
     {
-        lbl.Text = isValid ? $"✅ {text}" : $"⚪ {text}";
-        lbl.ForeColor = isValid ? UiStyle.SuccessColor : UiStyle.TextMuted;
+        string targetText = isValid ? $"✅ {text}" : $"⚪ {text}";
+        Color targetColor = isValid ? UiStyle.SuccessColor : UiStyle.TextMuted;
+        if (lbl.Text != targetText) lbl.Text = targetText;
+        if (lbl.ForeColor != targetColor) lbl.ForeColor = targetColor;
     }
 
     private void UpdateVariationsDisplay()
@@ -2392,15 +2411,43 @@ internal sealed class FastListingCreatorForm : Form
         return 0;
     }
 
+    private void ApplyCachedShopProfilesIfAvailable()
+    {
+        if (_cachedShippingProfiles != null && _cachedShippingProfiles.Count > 0)
+        {
+            _cboShippingProfile.DataSource = _cachedShippingProfiles.ToList();
+            if (_cboShippingProfile.Items.Count > 0) _cboShippingProfile.SelectedIndex = 0;
+        }
+
+        if (_cachedReadinessStates != null && _cachedReadinessStates.Count > 0)
+        {
+            _cboReadinessState.DataSource = _cachedReadinessStates.ToList();
+            if (_cboReadinessState.Items.Count > 0) _cboReadinessState.SelectedIndex = 0;
+        }
+
+        if (_cachedShippingProfiles != null && _cachedReadinessStates != null)
+        {
+            _statusLabel.Text = $"{_cachedShippingProfiles.Count} kargo profili, {_cachedReadinessStates.Count} hazırlık durumu yüklendi.";
+        }
+    }
+
     private async Task InitializeFormDataAsync()
     {
-        try
+        bool hasCached = _cachedShippingProfiles != null && _cachedShippingProfiles.Count > 0;
+        if (!hasCached)
         {
             _statusLabel.Text = "Etsy mağaza kargo profilleri ve hazırlık durumları alınıyor...";
+        }
+
+        try
+        {
             var settings = EtsyApiSettingsStore.Load();
             if (!settings.HasApiCredentials)
             {
-                _statusLabel.Text = "Etsy API ayarları tanımlı değil. (Ayarlar menüsünden yapabilirsiniz)";
+                if (!hasCached)
+                {
+                    _statusLabel.Text = "Etsy API ayarları tanımlı değil. (Ayarlar menüsünden yapabilirsiniz)";
+                }
                 return;
             }
 
@@ -2411,28 +2458,42 @@ internal sealed class FastListingCreatorForm : Form
             EtsyApiSettingsStore.Save(settings);
 
             var profiles = await profilesTask;
-            _cboShippingProfile.DataSource = profiles;
-            if (profiles.Count > 0)
-            {
-                _cboShippingProfile.SelectedIndex = 0;
-            }
-
             var readinessStates = await readinessTask;
-            _cboReadinessState.DataSource = readinessStates;
-            if (readinessStates.Count > 0)
-            {
-                _cboReadinessState.SelectedIndex = 0;
-            }
 
-            _statusLabel.Text = $"{profiles.Count} kargo profili, {readinessStates.Count} hazırlık durumu yüklendi.";
+            _cachedShippingProfiles = profiles;
+            _cachedReadinessStates = readinessStates;
+
+            if (!IsDisposed && IsHandleCreated)
+            {
+                BeginInvoke(() =>
+                {
+                    if (IsDisposed) return;
+                    _cboShippingProfile.DataSource = profiles.ToList();
+                    if (profiles.Count > 0 && _cboShippingProfile.SelectedIndex < 0)
+                    {
+                        _cboShippingProfile.SelectedIndex = 0;
+                    }
+
+                    _cboReadinessState.DataSource = readinessStates.ToList();
+                    if (readinessStates.Count > 0 && _cboReadinessState.SelectedIndex < 0)
+                    {
+                        _cboReadinessState.SelectedIndex = 0;
+                    }
+
+                    _statusLabel.Text = $"{profiles.Count} kargo profili, {readinessStates.Count} hazırlık durumu yüklendi.";
+                    UpdateChecklist();
+                });
+            }
         }
         catch (Exception ex)
         {
-            _statusLabel.Text = $"Mağaza profilleri alınamadı: {ex.Message}";
+            if (!hasCached)
+            {
+                _statusLabel.Text = $"Mağaza profilleri alınamadı: {ex.Message}";
+            }
         }
         finally
         {
-            LoadTemplatesCombo();
             UpdateChecklist();
         }
     }
@@ -3465,34 +3526,34 @@ internal sealed class FastListingCreatorForm : Form
 
         if (rawTags.Count == 0)
         {
-            _lblTagCounter.Text = "0 / 13";
-            _lblTagCounter.ForeColor = UiStyle.TextMuted;
-            _lblTagStatus.Text = "Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.";
-            _lblTagStatus.ForeColor = UiStyle.TextMuted;
+            SetLabelTextAndColor(_lblTagCounter, "0 / 13", UiStyle.TextMuted);
+            SetLabelTextAndColor(_lblTagStatus, "Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.", UiStyle.TextMuted);
         }
         else if (longTags.Count > 0)
         {
-            _lblTagCounter.Text = $"{rawTags.Count} / 13";
-            _lblTagCounter.ForeColor = UiStyle.DangerColor;
-            _lblTagStatus.Text = $"⚠️ {longTags.Count} etiket 20 karakter sınırını aşıyor! ('{longTags[0]}')";
-            _lblTagStatus.ForeColor = UiStyle.DangerColor;
+            SetLabelTextAndColor(_lblTagCounter, $"{rawTags.Count} / 13", UiStyle.DangerColor);
+            SetLabelTextAndColor(_lblTagStatus, $"⚠️ {longTags.Count} etiket 20 karakter sınırını aşıyor! ('{longTags[0]}')", UiStyle.DangerColor);
         }
         else if (duplicates.Count > 0)
         {
-            _lblTagCounter.Text = $"{rawTags.Count} / 13";
-            _lblTagCounter.ForeColor = UiStyle.WarningColor;
-            _lblTagStatus.Text = $"⚠️ Yinelenen etiketler var: '{duplicates[0]}'";
-            _lblTagStatus.ForeColor = UiStyle.WarningColor;
+            SetLabelTextAndColor(_lblTagCounter, $"{rawTags.Count} / 13", UiStyle.WarningColor);
+            SetLabelTextAndColor(_lblTagStatus, $"⚠️ Yinelenen etiketler var: '{duplicates[0]}'", UiStyle.WarningColor);
         }
         else
         {
-            _lblTagCounter.Text = $"{rawTags.Count} / 13";
-            _lblTagCounter.ForeColor = rawTags.Count == 13 ? UiStyle.SuccessColor : UiStyle.PrimaryColor;
-            _lblTagStatus.Text = rawTags.Count == 13
+            SetLabelTextAndColor(_lblTagCounter, $"{rawTags.Count} / 13", rawTags.Count == 13 ? UiStyle.SuccessColor : UiStyle.PrimaryColor);
+            string statusText = rawTags.Count == 13
                 ? "Mükemmel! 13/13 etiket dolu ve Etsy kurallarına uygun ✅"
                 : $"{rawTags.Count}/13 etiket kurallara uygun (Önerilen: 13)";
-            _lblTagStatus.ForeColor = rawTags.Count == 13 ? UiStyle.SuccessColor : UiStyle.TextDark;
+            Color statusColor = rawTags.Count == 13 ? UiStyle.SuccessColor : UiStyle.TextDark;
+            SetLabelTextAndColor(_lblTagStatus, statusText, statusColor);
         }
+    }
+
+    private static void SetLabelTextAndColor(Label lbl, string text, Color color)
+    {
+        if (lbl.Text != text) lbl.Text = text;
+        if (lbl.ForeColor != color) lbl.ForeColor = color;
     }
 
     private void OpenEtsyListingPreview()

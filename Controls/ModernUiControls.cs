@@ -21,6 +21,12 @@ public class ModernCardPanel : Panel
 
     public ModernCardPanel()
     {
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw |
+            ControlStyles.UserPaint,
+            true);
         DoubleBuffered = true;
         BackColor = Color.Transparent;
         Padding = new Padding(12);
@@ -1337,6 +1343,16 @@ public class ModernScrollPanel : Panel, IMessageFilter
         return UiStyle.CardBackground;
     }
 
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ExStyle |= 0x02000000; // WS_EX_COMPOSITED: Double buffered composition for container and children
+            return cp;
+        }
+    }
+
     private void ApplyScrollPosition()
     {
         if (_content == null || _isSyncing) return;
@@ -1347,9 +1363,8 @@ public class ModernScrollPanel : Panel, IMessageFilter
             if (_content.Location != newLoc)
             {
                 _content.Location = newLoc;
+                _content.Invalidate();
             }
-            _content.Invalidate(true);
-            _content.Update();
         }
         catch { }
         finally
