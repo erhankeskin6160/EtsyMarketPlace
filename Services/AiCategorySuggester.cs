@@ -241,6 +241,21 @@ internal sealed class AiCategorySuggester : IAiCategorySuggester
         if (!resp.IsSuccessStatusCode) return string.Empty;
         var body = await resp.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(body);
+
+        try
+        {
+            if (doc.RootElement.TryGetProperty("usageMetadata", out var meta))
+            {
+                int pTokens = meta.TryGetProperty("promptTokenCount", out var p) ? p.GetInt32() : 0;
+                int cTokens = meta.TryGetProperty("candidatesTokenCount", out var c) ? c.GetInt32() : 0;
+                if (pTokens > 0 || cTokens > 0)
+                {
+                    AiTokenUsageTrackerService.TrackUsage("AI Kategori Analizi (Vision)", "Google Gemini", model, pTokens, cTokens);
+                }
+            }
+        }
+        catch { }
+
         if (doc.RootElement.TryGetProperty("candidates", out var cands) && cands.GetArrayLength() > 0)
         {
             var parts = cands[0].GetProperty("content").GetProperty("parts");

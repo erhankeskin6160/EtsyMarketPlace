@@ -59,8 +59,8 @@ public sealed class GeminiOfficialStatusDialog : Form
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 55));  // Header
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));  // Buttons bar
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 100)); // 4 KPI Cards
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));  // Model badges
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 115)); // 4 KPI Cards (DPI güvenli)
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 70));  // Model badges (2 satır güvenli)
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // DataGridView
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35));  // Bottom Notice
         Controls.Add(mainLayout);
@@ -73,6 +73,7 @@ public sealed class GeminiOfficialStatusDialog : Form
             Font = new Font("Segoe UI", 13.5F, FontStyle.Bold),
             ForeColor = Color.White,
             AutoSize = true,
+            UseMnemonic = false,
             Location = new Point(0, 0)
         };
         var lblSubtitle = new Label
@@ -81,6 +82,7 @@ public sealed class GeminiOfficialStatusDialog : Form
             Font = new Font("Segoe UI", 9F),
             ForeColor = Color.FromArgb(160, 175, 200),
             AutoSize = true,
+            UseMnemonic = false,
             Location = new Point(0, 26)
         };
         pnlHeader.Controls.Add(lblTitle);
@@ -116,25 +118,25 @@ public sealed class GeminiOfficialStatusDialog : Form
         _btnKey.Cursor = Cursors.Hand;
         _btnKey.Click += (_, _) => ShowKeyDialog();
 
-        _btnWeb.Text = "🌐 Google AI Studio";
+        _btnWeb.Text = "↗ Google AI Studio (Web)";
         _btnWeb.BackColor = Color.FromArgb(30, 41, 59);
         _btnWeb.ForeColor = Color.FromArgb(210, 225, 255);
         _btnWeb.FlatStyle = FlatStyle.Flat;
         _btnWeb.FlatAppearance.BorderColor = Color.FromArgb(60, 75, 100);
         _btnWeb.Margin = new Padding(8, 0, 0, 0);
         _btnWeb.Height = 32;
-        _btnWeb.Width = 160;
+        _btnWeb.Width = 180;
         _btnWeb.Cursor = Cursors.Hand;
         _btnWeb.Click += (_, _) => OpenUrl("https://aistudio.google.com/app/apikey");
 
-        _btnBilling.Text = "💳 GCP Billing";
+        _btnBilling.Text = "↗ GCP Billing (Web)";
         _btnBilling.BackColor = Color.FromArgb(30, 41, 59);
         _btnBilling.ForeColor = Color.FromArgb(210, 225, 255);
         _btnBilling.FlatStyle = FlatStyle.Flat;
         _btnBilling.FlatAppearance.BorderColor = Color.FromArgb(60, 75, 100);
         _btnBilling.Margin = new Padding(8, 0, 0, 0);
         _btnBilling.Height = 32;
-        _btnBilling.Width = 135;
+        _btnBilling.Width = 150;
         _btnBilling.Cursor = Cursors.Hand;
         _btnBilling.Click += (_, _) => OpenUrl("https://console.cloud.google.com/billing");
 
@@ -202,7 +204,7 @@ public sealed class GeminiOfficialStatusDialog : Form
         {
             Dock = DockStyle.Fill,
             BackColor = bg,
-            Padding = new Padding(12, 10, 12, 10),
+            Padding = new Padding(12, 10, 12, 8),
             Margin = new Padding(4)
         };
         var lblT = new Label
@@ -211,19 +213,22 @@ public sealed class GeminiOfficialStatusDialog : Form
             Font = new Font("Segoe UI", 7.5F, FontStyle.Bold),
             ForeColor = Color.FromArgb(170, 185, 215),
             AutoSize = true,
-            Location = new Point(12, 8)
+            UseMnemonic = false,
+            Location = new Point(10, 8)
         };
         lblVal.Text = "-";
         lblVal.Font = new Font("Segoe UI", 13.5F, FontStyle.Bold);
         lblVal.ForeColor = Color.White;
         lblVal.AutoSize = true;
-        lblVal.Location = new Point(10, 28);
+        lblVal.UseMnemonic = false;
+        lblVal.Location = new Point(10, 32);
 
         lblSub.Text = "-";
         lblSub.Font = new Font("Segoe UI", 8F);
         lblSub.ForeColor = Color.FromArgb(160, 175, 205);
         lblSub.AutoSize = true;
-        lblSub.Location = new Point(12, 58);
+        lblSub.UseMnemonic = false;
+        lblSub.Location = new Point(10, 68);
 
         panel.Controls.Add(lblT);
         panel.Controls.Add(lblVal);
@@ -266,6 +271,17 @@ public sealed class GeminiOfficialStatusDialog : Form
         _grid.Columns.Add("CostTry", "Maliyet (₺)");
         _grid.Columns.Add("Status", "Durum");
         _grid.Columns.Add("Note", "Detay");
+
+        _grid.Columns["Date"].Width = 145;
+        _grid.Columns["Module"].Width = 140;
+        _grid.Columns["Model"].Width = 135;
+        _grid.Columns["InputTokens"].Width = 95;
+        _grid.Columns["OutputTokens"].Width = 95;
+        _grid.Columns["TotalTokens"].Width = 100;
+        _grid.Columns["CostUsd"].Width = 85;
+        _grid.Columns["CostTry"].Width = 85;
+        _grid.Columns["Status"].Width = 90;
+        _grid.Columns["Note"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
     }
 
     public async Task LoadDataAsync()
@@ -301,9 +317,10 @@ public sealed class GeminiOfficialStatusDialog : Form
             var stats = await repo.GetSummaryStatsAsync(providerFilter: "Gemini");
 
             // Kart 1: API Durumu & Maskeli Anahtar
+            int modelCount = status.AvailableModels?.Count ?? 0;
             _lblCard1Value.Text = !string.IsNullOrWhiteSpace(status.MaskedApiKey) ? status.MaskedApiKey : "Aktif";
             _lblCard1Sub.Text = status.IsAvailable
-                ? $"✅ {status.StatusMessage}"
+                ? (modelCount > 0 ? $"✅ Google Gemini Aktif ({modelCount} Model)" : "✅ Google Gemini Aktif")
                 : $"⚠️ {status.StatusMessage}";
 
             // Kart 2: Tüketilen Token (Girdi & Çıktı)
@@ -311,7 +328,7 @@ public sealed class GeminiOfficialStatusDialog : Form
             _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
 
             // Kart 3: Tahmini Maliyet (USD & TL)
-            _lblCard3Value.Text = $"${stats.TotalCostUsd:N3} USD";
+            _lblCard3Value.Text = stats.TotalCostUsd == 0 ? "$0.00 USD" : $"${stats.TotalCostUsd:F4} USD";
             _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (Resmi Tarife)";
 
             // Kart 4: Kota & İşlem Sağlığı
@@ -386,15 +403,17 @@ public sealed class GeminiOfficialStatusDialog : Form
             {
                 _grid.Rows.Add(
                     DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
-                    "Genel",
-                    "gemini-2.0-flash",
+                    "Bilgilendirme",
+                    "Google Gemini",
                     "0",
                     "0",
                     "0",
                     "$0.00",
                     "0.00 ₺",
                     status.IsAvailable ? "Hazır" : "Tanımlanmadı",
-                    status.IsAvailable ? "API bağlantısı kuruldu, henüz işlem kaydı yok." : status.StatusMessage
+                    status.IsAvailable
+                        ? "API bağlantısı kuruldu. Optimizasyon veya kategori analizi yapıldığında tüketilen gerçek tokenlar burada listelenecektir."
+                        : status.StatusMessage
                 );
             }
             else
@@ -416,7 +435,6 @@ public sealed class GeminiOfficialStatusDialog : Form
                 }
             }
 
-            int modelCount = status.AvailableModels?.Count ?? 0;
             _lblNotice.Text = $"✅ Canlı API sorgusu başarılı ({DateTime.Now:HH:mm:ss}). Google üzerinde {modelCount} model aktif. Toplam {records.Count} yerel işlem listelendi.";
         }
         catch (Exception ex)

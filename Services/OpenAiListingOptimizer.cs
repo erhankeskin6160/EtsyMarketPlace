@@ -311,6 +311,7 @@ internal sealed class OpenAiListingOptimizer(
                 lastBody = await response.Content.ReadAsStringAsync(cancellationToken);
                 if (response.IsSuccessStatusCode)
                 {
+                    TrackGeminiUsage(lastBody, currentModel, "Listing Optimization");
                     return lastBody;
                 }
 
@@ -595,5 +596,24 @@ internal sealed class OpenAiListingOptimizer(
 
         [JsonPropertyName("risk_warnings")]
         public List<string> RiskWarnings { get; set; } = [];
+    }
+
+    private static void TrackGeminiUsage(string responseBody, string model, string moduleName)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(responseBody)) return;
+            using var doc = JsonDocument.Parse(responseBody);
+            if (doc.RootElement.TryGetProperty("usageMetadata", out var meta))
+            {
+                int pTokens = meta.TryGetProperty("promptTokenCount", out var p) ? p.GetInt32() : 0;
+                int cTokens = meta.TryGetProperty("candidatesTokenCount", out var c) ? c.GetInt32() : 0;
+                if (pTokens > 0 || cTokens > 0)
+                {
+                    AiTokenUsageTrackerService.TrackUsage(moduleName, "Google Gemini", model, pTokens, cTokens);
+                }
+            }
+        }
+        catch { }
     }
 }

@@ -70,7 +70,7 @@ public sealed class AiUsageDashboardForm : Form
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 55)); // Başlık
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50)); // Filtre çubuğu
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 110)); // 4 KPI Kartı
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 118)); // 4 KPI Kartı (DPI güvenli yükseklik)
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45)); // Model Dağılım Barı
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Tablo
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35)); // Alt durum çubuğu
@@ -84,6 +84,7 @@ public sealed class AiUsageDashboardForm : Form
             Font = new Font("Segoe UI", 14F, FontStyle.Bold),
             ForeColor = Color.White,
             AutoSize = true,
+            UseMnemonic = false,
             Location = new Point(0, 0)
         };
         var lblSub = new Label
@@ -92,6 +93,7 @@ public sealed class AiUsageDashboardForm : Form
             Font = new Font("Segoe UI", 9F),
             ForeColor = Color.FromArgb(160, 170, 190),
             AutoSize = true,
+            UseMnemonic = false,
             Location = new Point(0, 28)
         };
         pnlHeader.Controls.Add(lblTitle);
@@ -246,22 +248,28 @@ public sealed class AiUsageDashboardForm : Form
         {
             Dock = DockStyle.Fill,
             BackColor = bg,
-            Padding = new Padding(12),
+            Padding = new Padding(12, 10, 12, 8),
             Margin = new Padding(5)
         };
 
+        lblTitle.UseMnemonic = false;
         lblTitle.Dock = DockStyle.Top;
-        lblTitle.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+        lblTitle.Font = new Font("Segoe UI", 8F, FontStyle.Bold);
         lblTitle.ForeColor = Color.FromArgb(170, 185, 210);
+        lblTitle.Height = 18;
 
+        lblValue.UseMnemonic = false;
         lblValue.Dock = DockStyle.Top;
-        lblValue.Font = new Font("Segoe UI", 16F, FontStyle.Bold);
+        lblValue.Font = new Font("Segoe UI", 14.5F, FontStyle.Bold);
         lblValue.ForeColor = Color.White;
-        lblValue.Margin = new Padding(0, 4, 0, 2);
+        lblValue.Height = 36;
+        lblValue.Margin = new Padding(0, 3, 0, 2);
 
+        lblSub.UseMnemonic = false;
         lblSub.Dock = DockStyle.Bottom;
         lblSub.Font = new Font("Segoe UI", 8F);
-        lblSub.ForeColor = Color.FromArgb(130, 145, 170);
+        lblSub.ForeColor = Color.FromArgb(135, 150, 175);
+        lblSub.Height = 22;
 
         pnl.Controls.Add(lblSub);
         pnl.Controls.Add(lblValue);
@@ -397,6 +405,28 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
+            if (_grid.Rows.Count == 0)
+            {
+                string infoMsg = selectedProvider.Contains("Gemini")
+                    ? "Henüz Gemini ile bir işlem (Ürün Optimizasyonu veya Kategori Analizi) yapılmadı. İşlem yapıldığında tüketilen gerçek tokenlar burada listelenecektir."
+                    : "Seçilen tarih aralığında ve filtrede henüz yapay zeka işlem kaydı bulunmuyor.";
+
+                var idx = _grid.Rows.Add(
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
+                    "Bilgilendirme",
+                    selectedProvider.Contains("Gemini") ? "Google Gemini" : selectedProvider,
+                    "-",
+                    "0",
+                    "0",
+                    "0",
+                    "$0.00",
+                    "0.00 ₺",
+                    "Hazır",
+                    infoMsg
+                );
+                _grid.Rows[idx].DefaultCellStyle.ForeColor = Color.FromArgb(160, 175, 200);
+            }
+
             int totalRows = _grid.Rows.Count;
             string officialNotice = (_officialOpenAiReport?.DailyItems.Count > 0) ? " | OpenAI resmi canlı verileri dahil edildi" : "";
             _lblStatus.Text = $"Son güncelleme: {DateTime.Now:HH:mm:ss} | Toplam {totalRows} işlem/gün listelendi{officialNotice}.";
@@ -491,7 +521,7 @@ public sealed class AiUsageDashboardForm : Form
             _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
 
             _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
-            _lblCard3Value.Text = $"${stats.TotalCostUsd:N3} USD";
+            _lblCard3Value.Text = stats.TotalCostUsd == 0 ? "$0.00 USD" : $"${stats.TotalCostUsd:F4} USD";
             _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (Resmi Gemini Tarifesi)";
 
             _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
