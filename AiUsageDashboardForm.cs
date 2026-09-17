@@ -19,7 +19,6 @@ public sealed class AiUsageDashboardForm : Form
     private readonly ComboBox _cboPeriod = new();
     private readonly Button _btnRefresh = new();
     private readonly Button _btnExport = new();
-    private readonly Button _btnGeminiRateLimit = new();
 
     // KPI Cards
     private readonly Label _lblCard1Title = new();
@@ -46,7 +45,6 @@ public sealed class AiUsageDashboardForm : Form
     private AiProviderBalanceInfo? _openAiStatus;
     private AiProviderBalanceInfo? _geminiStatus;
     private OpenAiOfficialUsageReport? _officialOpenAiReport;
-    private GeminiRateLimitReport? _geminiRateLimitReport;
 
     public AiUsageDashboardForm()
     {
@@ -127,11 +125,7 @@ public sealed class AiUsageDashboardForm : Form
         _cboProvider.Items.AddRange(["Tümü (Genel Bakış)", "DeepSeek", "Google Gemini", "OpenAI", "Claude", "xAI Grok"]);
         _cboProvider.SelectedIndex = 0;
         _cboProvider.Width = 170;
-        _cboProvider.SelectedIndexChanged += async (_, _) =>
-        {
-            UpdateProviderSpecificControls();
-            await RefreshDataAsync();
-        };
+        _cboProvider.SelectedIndexChanged += async (_, _) => await RefreshDataAsync();
 
         var lblPer = new Label { Text = "Zaman:", AutoSize = true, Margin = new Padding(15, 8, 5, 0), Font = new Font("Segoe UI", 9.5F, FontStyle.Bold) };
         _cboPeriod.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -181,29 +175,12 @@ public sealed class AiUsageDashboardForm : Form
             await RefreshDataAsync(queryLiveBalance: true);
         };
 
-        _btnGeminiRateLimit.Text = "📊 Gemini Hız Sınırları & Kotalar";
-        _btnGeminiRateLimit.BackColor = Color.FromArgb(139, 92, 246);
-        _btnGeminiRateLimit.ForeColor = Color.White;
-        _btnGeminiRateLimit.FlatStyle = FlatStyle.Flat;
-        _btnGeminiRateLimit.Height = 32;
-        _btnGeminiRateLimit.Width = 235;
-        _btnGeminiRateLimit.Cursor = Cursors.Hand;
-        _btnGeminiRateLimit.Margin = new Padding(10, 2, 0, 0);
-        _btnGeminiRateLimit.Visible = false; // Sadece dropdown'da Google Gemini seçilirse gözükür
-        _btnGeminiRateLimit.FlatAppearance.BorderSize = 0;
-        _btnGeminiRateLimit.Click += (_, _) =>
-        {
-            using var dlg = new GeminiRateLimitDialog();
-            dlg.ShowDialog(this);
-        };
-
         pnlFilters.Controls.Add(lblProv);
         pnlFilters.Controls.Add(_cboProvider);
         pnlFilters.Controls.Add(lblPer);
         pnlFilters.Controls.Add(_cboPeriod);
         pnlFilters.Controls.Add(_btnRefresh);
         pnlFilters.Controls.Add(btnApiHub);
-        pnlFilters.Controls.Add(_btnGeminiRateLimit);
         pnlFilters.Controls.Add(_btnExport);
         mainLayout.Controls.Add(pnlFilters, 0, 1);
 
@@ -216,24 +193,16 @@ public sealed class AiUsageDashboardForm : Form
         };
         for (int i = 0; i < 4; i++) pnlCards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
 
-        Action onGeminiCardClick = () =>
+        Action onCardClick = () =>
         {
-            if (_cboProvider.SelectedItem?.ToString() == "Google Gemini")
-            {
-                using var dlg = new GeminiRateLimitDialog();
-                dlg.ShowDialog(this);
-            }
-            else
-            {
-                using var hub = new AiProviderHubDialog();
-                hub.ShowDialog(this);
-            }
+            using var hub = new AiProviderHubDialog();
+            hub.ShowDialog(this);
         };
 
-        pnlCards.Controls.Add(CreateKpiCard(_lblCard1Title, _lblCard1Value, _lblCard1Sub, Color.FromArgb(20, 35, 60), onGeminiCardClick), 0, 0);
+        pnlCards.Controls.Add(CreateKpiCard(_lblCard1Title, _lblCard1Value, _lblCard1Sub, Color.FromArgb(20, 35, 60), onCardClick), 0, 0);
         pnlCards.Controls.Add(CreateKpiCard(_lblCard2Title, _lblCard2Value, _lblCard2Sub, Color.FromArgb(25, 30, 50)), 1, 0);
         pnlCards.Controls.Add(CreateKpiCard(_lblCard3Title, _lblCard3Value, _lblCard3Sub, Color.FromArgb(30, 25, 45)), 2, 0);
-        pnlCards.Controls.Add(CreateKpiCard(_lblCard4Title, _lblCard4Value, _lblCard4Sub, Color.FromArgb(40, 25, 30), onGeminiCardClick), 3, 0);
+        pnlCards.Controls.Add(CreateKpiCard(_lblCard4Title, _lblCard4Value, _lblCard4Sub, Color.FromArgb(40, 25, 30), onCardClick), 3, 0);
         mainLayout.Controls.Add(pnlCards, 0, 2);
 
         // 4. Model Breakdown Bar
@@ -340,12 +309,6 @@ public sealed class AiUsageDashboardForm : Form
         return pnl;
     }
 
-    private void UpdateProviderSpecificControls()
-    {
-        string selected = _cboProvider.SelectedItem?.ToString() ?? "";
-        _btnGeminiRateLimit.Visible = selected.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
-    }
-
     private async Task RefreshDataAsync(bool queryLiveBalance = false)
     {
         UseWaitCursor = true;
@@ -356,7 +319,6 @@ public sealed class AiUsageDashboardForm : Form
         {
             var settings = AiOptimizationSettingsStore.Load();
             var selectedProvider = _cboProvider.SelectedItem?.ToString() ?? "Tümü (Genel Bakış)";
-            UpdateProviderSpecificControls();
 
             // 1. Canlı Bakiye ve Sağlayıcı Durum Sorguları (Önbellekli / Delta)
             if (!string.IsNullOrWhiteSpace(settings.DeepSeekApiKey))
@@ -405,27 +367,6 @@ public sealed class AiUsageDashboardForm : Form
                 _officialOpenAiReport = null;
             }
 
-            // 2b. Gemini Resmi Hız Sınırları & Kota Verilerini Otomatik Olarak Çek
-            if (selectedProvider.Contains("Gemini") && !string.IsNullOrWhiteSpace(settings.GeminiApiKey))
-            {
-                try
-                {
-                    _geminiRateLimitReport = await GeminiRateLimitService.FetchRateLimitReportAsync(
-                        settings.GeminiApiKey,
-                        days: targetDays ?? 28,
-                        projectName: !string.IsNullOrWhiteSpace(settings.GeminiApiKey) ? $"API: {AiPriceCalculator.MaskApiKey(settings.GeminiApiKey)}" : "Varsayılan Proje",
-                        forceRefresh: queryLiveBalance);
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Gemini rate limit çekme hatası: {ex.Message}");
-                }
-            }
-            else if (!selectedProvider.Contains("Gemini"))
-            {
-                _geminiRateLimitReport = null;
-            }
-
             // 3. Zaman Filtresi (SQLite Yerel Veritabanı)
             DateTimeOffset? since = _cboPeriod.SelectedIndex switch
             {
@@ -471,47 +412,6 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            // 6b. Gemini Resmi Hız Sınırları & Model Kotası Dökümü (Otomatik olarak grid'e eklenir)
-            if (_geminiRateLimitReport != null && _geminiRateLimitReport.Models.Count > 0 && selectedProvider.Contains("Gemini"))
-            {
-                foreach (var m in _geminiRateLimitReport.Models)
-                {
-                    string rpmVal = $"{m.PeakRpm} / {m.LimitRpm} RPM";
-                    string tpmVal = $"{FormatTokens(m.PeakTpm)} / {FormatTokens(m.LimitTpm)} TPM";
-                    string rpdVal = $"{m.PeakRpd} / {m.LimitRpd} RPD";
-                    string status = m.IsCritical ? "🚨 KOTA AŞILDI" : "✅ Normal";
-                    string note = m.IsExceededRpd
-                        ? $"Günlük RPD limiti aşıldı! ({m.PeakRpd}/{m.LimitRpd})"
-                        : (m.IsExceededRpm
-                            ? $"Dakikalık RPM limiti aşıldı! ({m.PeakRpm}/{m.LimitRpm})"
-                            : $"Free Tier Kota: {m.LimitRpm} RPM | {m.LimitRpd} RPD");
-
-                    var idx = _grid.Rows.Add(
-                        DateTime.Now.ToString("yyyy-MM-dd"),
-                        m.Category,
-                        "Google Gemini",
-                        m.DisplayName,
-                        rpmVal,
-                        tpmVal,
-                        rpdVal,
-                        "$0.00 (Free)",
-                        "0.00 ₺",
-                        status,
-                        note
-                    );
-
-                    if (m.IsCritical)
-                    {
-                        _grid.Rows[idx].DefaultCellStyle.ForeColor = Color.FromArgb(255, 110, 110);
-                        _grid.Rows[idx].DefaultCellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
-                    }
-                    else
-                    {
-                        _grid.Rows[idx].DefaultCellStyle.ForeColor = Color.FromArgb(180, 215, 255);
-                    }
-                }
-            }
-
             // 6c. Yerel SQLite Kayıtları
             foreach (var r in records)
             {
@@ -537,9 +437,7 @@ public sealed class AiUsageDashboardForm : Form
 
             if (_grid.Rows.Count == 0)
             {
-                string infoMsg = selectedProvider.Contains("Gemini")
-                    ? "Henüz Gemini ile bir işlem yapılmadı. 📊 Canlı Hız Sınırları & Kotaları (RPM/TPM/RPD ve 28 Günlük Grafiği) görmek için yukarıdaki [📊 Gemini Hız Sınırları] butonuna tıklayın."
-                    : "Seçilen tarih aralığında ve filtrede henüz yapay zeka işlem kaydı bulunmuyor.";
+                string infoMsg = "Seçilen tarih aralığında ve filtrede henüz yapay zeka işlem kaydı bulunmuyor.";
 
                 var idx = _grid.Rows.Add(
                     DateTime.Now.ToString("yyyy-MM-dd HH:mm"),
@@ -624,13 +522,8 @@ public sealed class AiUsageDashboardForm : Form
         }
         else if (selectedProvider.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
         {
-            _lblCard1Title.Text = "🔵 GEMINI KOTA & DURUM";
-            if (_geminiRateLimitReport != null)
-            {
-                _lblCard1Value.Text = $"{_geminiRateLimitReport.TotalAvailableModels} Model Aktif";
-                _lblCard1Sub.Text = $"Proje: {_geminiRateLimitReport.ProjectName} ({_geminiRateLimitReport.Tier})";
-            }
-            else if (_geminiStatus?.IsAvailable == true)
+            _lblCard1Title.Text = "🔵 GEMINI API DURUMU";
+            if (_geminiStatus?.IsAvailable == true)
             {
                 _lblCard1Value.Text = !string.IsNullOrWhiteSpace(_geminiStatus.MaskedApiKey)
                     ? _geminiStatus.MaskedApiKey
@@ -652,40 +545,19 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            if (_geminiRateLimitReport != null)
-            {
-                _lblCard2Title.Text = "⚡ TEPE HIZ YÜKÜ (RPM)";
-                _lblCard2Value.Text = $"{_geminiRateLimitReport.PeakActiveRpm} / {_geminiRateLimitReport.PeakRpmLimit} Tepe";
-                _lblCard2Sub.Text = $"Dakikalık İstek Yükü ({_geminiRateLimitReport.TimeRange})";
+            _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
+            _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
+            _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
 
-                _lblCard3Title.Text = "💎 TEPE TOKEN / DAKİKA (TPM)";
-                _lblCard3Value.Text = $"{FormatTokens(_geminiRateLimitReport.PeakTpm)} / {FormatTokens(_geminiRateLimitReport.PeakTpmLimit)}";
-                _lblCard3Sub.Text = "Resmi Free Tier Dakikalık Hacim";
+            _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
+            _lblCard3Value.Text = stats.TotalCostUsd == 0 ? "$0.00 USD" : $"${stats.TotalCostUsd:F4} USD";
+            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (Resmi Gemini Tarifesi)";
 
-                _lblCard4Title.Text = "🚨 GÜNLÜK İSTEK AŞIMI (RPD)";
-                _lblCard4Value.Text = _geminiRateLimitReport.TotalCriticalOverQuotaModels > 0
-                    ? $"{_geminiRateLimitReport.TotalCriticalOverQuotaModels} Model Kritik!"
-                    : "Tüm Kotalar Normal";
-                _lblCard4Sub.Text = _geminiRateLimitReport.TotalCriticalOverQuotaModels > 0
-                    ? "Günlük Free Tier RPD aşımı mevcut (Tıkla ve İncele)"
-                    : "Free Tier: 20 RPD ve 1.500 RPD Hazır";
-            }
-            else
-            {
-                _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
-                _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
-                _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
-
-                _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
-                _lblCard3Value.Text = stats.TotalCostUsd == 0 ? "$0.00 USD" : $"${stats.TotalCostUsd:F4} USD";
-                _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (Resmi Gemini Tarifesi)";
-
-                _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
-                _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
-                _lblCard4Sub.Text = stats.Blocked429Requests > 0
-                    ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
-                    : (_geminiStatus?.IsAvailable == true ? "Ücretsiz Plan: 15 RPM / 1,500 RPD Hazır" : "API bağlantı hatası");
-            }
+            _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
+            _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
+            _lblCard4Sub.Text = stats.Blocked429Requests > 0
+                ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
+                : (_geminiStatus?.IsAvailable == true ? "Google Gemini API Aktif & Hazır" : "API bağlantı hatası");
         }
         else if (selectedProvider.Contains("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
@@ -813,25 +685,6 @@ public sealed class AiUsageDashboardForm : Form
                     AutoSize = true,
                     BackColor = Color.FromArgb(25, 45, 75),
                     ForeColor = Color.FromArgb(210, 230, 255),
-                    Padding = new Padding(8, 4, 8, 4),
-                    Margin = new Padding(0, 2, 8, 2),
-                    Font = new Font("Segoe UI", 8F, FontStyle.Bold)
-                };
-                _pnlModelBreakdown.Controls.Add(badge);
-            }
-        }
-
-        // Gemini Resmi Hız Sınırları & Kota Rozetleri
-        if (_geminiRateLimitReport != null && _geminiRateLimitReport.Models.Count > 0 && selectedProvider.Contains("Gemini"))
-        {
-            foreach (var gm in _geminiRateLimitReport.Models)
-            {
-                var badge = new Label
-                {
-                    Text = $"{gm.DisplayName}: {gm.PeakRpd}/{gm.LimitRpd} RPD • {gm.PeakRpm}/{gm.LimitRpm} RPM • {FormatTokens(gm.PeakTpm)} TPM",
-                    AutoSize = true,
-                    BackColor = gm.IsCritical ? Color.FromArgb(60, 20, 30) : Color.FromArgb(30, 45, 70),
-                    ForeColor = gm.IsCritical ? Color.FromArgb(255, 120, 120) : Color.FromArgb(200, 225, 255),
                     Padding = new Padding(8, 4, 8, 4),
                     Margin = new Padding(0, 2, 8, 2),
                     Font = new Font("Segoe UI", 8F, FontStyle.Bold)

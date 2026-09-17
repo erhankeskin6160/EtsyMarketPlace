@@ -38,7 +38,6 @@ public sealed class AiProviderHubDialog : Form
     private readonly Label _lblGeminiQuota = new();
     private readonly TextBox _txtGeminiKey = new();
     private readonly Button _btnSaveGemini = new();
-    private readonly Button _btnGeminiReport = new();
     private readonly Button _btnGeminiWeb = new();
 
     public AiProviderHubDialog()
@@ -467,30 +466,14 @@ public sealed class AiProviderHubDialog : Form
             await LoadAllProvidersAsync();
         };
 
-        _btnGeminiReport.Text = "📊 Hız Sınırları & Kota Raporu (Rate Limits)";
-        _btnGeminiReport.Location = new Point(16, 215);
-        _btnGeminiReport.Size = new Size(294, 34);
-        _btnGeminiReport.BackColor = Color.FromArgb(139, 92, 246); // Violet
-        _btnGeminiReport.ForeColor = Color.White;
-        _btnGeminiReport.FlatStyle = FlatStyle.Flat;
-        _btnGeminiReport.FlatAppearance.BorderSize = 0;
-        _btnGeminiReport.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-        _btnGeminiReport.Cursor = Cursors.Hand;
-        _btnGeminiReport.Click += async (_, _) =>
-        {
-            using var dlg = new GeminiRateLimitDialog();
-            dlg.ShowDialog(this);
-            await LoadAllProvidersAsync();
-        };
-
-        _btnGeminiWeb.Text = "↗ Google AI Studio Rate Limit (Web)";
-        _btnGeminiWeb.Location = new Point(16, 258);
-        _btnGeminiWeb.Size = new Size(294, 32);
+        _btnGeminiWeb.Text = "↗ Google AI Studio (Web Paneli)";
+        _btnGeminiWeb.Location = new Point(16, 215);
+        _btnGeminiWeb.Size = new Size(294, 36);
         _btnGeminiWeb.BackColor = Color.FromArgb(35, 30, 60);
         _btnGeminiWeb.ForeColor = Color.FromArgb(220, 205, 255);
         _btnGeminiWeb.FlatStyle = FlatStyle.Flat;
         _btnGeminiWeb.FlatAppearance.BorderColor = Color.FromArgb(65, 55, 100);
-        _btnGeminiWeb.Font = new Font("Segoe UI", 8.5F);
+        _btnGeminiWeb.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _btnGeminiWeb.Cursor = Cursors.Hand;
         _btnGeminiWeb.Click += (_, _) => OpenUrl("https://aistudio.google.com/app/rate-limit?timeRange=last-28-days");
 
@@ -501,7 +484,6 @@ public sealed class AiProviderHubDialog : Form
         card.Controls.Add(lblKeyPrompt);
         card.Controls.Add(_txtGeminiKey);
         card.Controls.Add(_btnSaveGemini);
-        card.Controls.Add(_btnGeminiReport);
         card.Controls.Add(_btnGeminiWeb);
 
         return card;

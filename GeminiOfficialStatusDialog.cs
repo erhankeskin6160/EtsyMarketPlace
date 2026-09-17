@@ -142,21 +142,17 @@ public sealed class GeminiOfficialStatusDialog : Form
 
         var btnRateLimit = new Button
         {
-            Text = "⚡ Hız Sınırları & Kota Takip (Rate Limit)",
+            Text = "⚡ Hız Sınırları & Kota (AI Studio)",
             BackColor = Color.FromArgb(139, 92, 246),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Margin = new Padding(8, 0, 0, 0),
             Height = 32,
-            Width = 260,
+            Width = 240,
             Cursor = Cursors.Hand
         };
         btnRateLimit.FlatAppearance.BorderSize = 0;
-        btnRateLimit.Click += (_, _) =>
-        {
-            using var dlg = new GeminiRateLimitDialog();
-            dlg.ShowDialog(this);
-        };
+        btnRateLimit.Click += (_, _) => OpenUrl("https://aistudio.google.com/app/rate-limit?timeRange=last-28-days");
 
         _btnExport.Text = "📥 CSV İndir";
         _btnExport.BackColor = Color.FromArgb(35, 45, 65);
