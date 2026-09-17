@@ -467,17 +467,7 @@ internal sealed class FastListingCreatorForm : Form
             Padding = new Padding(0, 2, 2, 0)
         };
 
-        var stack = new TableLayoutPanel
-        {
-            ColumnCount = 1,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 8, 0)
-        };
-        UiStyle.SetDoubleBuffered(stack);
-        stack.ColumnStyles.Clear();
-        stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        var stack = new ModernVerticalStackPanel();
 
         // --- SECTION 1: Temel Satış Bilgileri (Ürün Tipi, Fiyat, Stok) ---
         stack.Controls.Add(CreateSectionHeaderLabel("🏷️ Temel Satış Bilgileri"));
@@ -1291,17 +1281,7 @@ internal sealed class FastListingCreatorForm : Form
             Padding = new Padding(0, 2, 2, 0)
         };
 
-        var stack = new TableLayoutPanel
-        {
-            ColumnCount = 1,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 8, 0)
-        };
-        UiStyle.SetDoubleBuffered(stack);
-        stack.ColumnStyles.Clear();
-        stack.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        var stack = new ModernVerticalStackPanel();
 
         // 1. Variations Section
         stack.Controls.Add(CreateSectionHeaderLabel("🧩 Varyasyonlar (Seçenekler)"));
