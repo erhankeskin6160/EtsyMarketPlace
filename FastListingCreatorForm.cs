@@ -30,8 +30,8 @@ internal sealed class FastListingCreatorForm : Form
     // Left Column Controls (Product & SEO)
     private readonly ModernComboBox _cboListingType = new();
     private readonly ModernMultilineTextBox _txtTitle = new() { Height = 58, MaxLength = 140 };
-    private readonly Label _lblTitleCounter = new() { AutoSize = true };
-    private readonly Label _lblMobileTitlePreview = new() { AutoSize = true };
+    private readonly Label _lblTitleCounter = new() { AutoSize = false, Size = new Size(160, 20), TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label _lblMobileTitlePreview = new() { AutoSize = false, Height = 18, AutoEllipsis = true };
     private readonly ModernNumericUpDown _numPrice = new() { Minimum = 0.20m, Maximum = 50000m, DecimalPlaces = 2, Value = 29.99m };
     private readonly ModernNumericUpDown _numQuantity = new() { Minimum = 1, Maximum = 9999, Value = 10 };
     private readonly ModernComboBox _cboTaxonomy = new();
@@ -39,8 +39,8 @@ internal sealed class FastListingCreatorForm : Form
     private readonly ModernComboBox _cboShippingProfile = new();
     private readonly ModernComboBox _cboReadinessState = new();
     private readonly ModernMultilineTextBox _txtTags = new() { Height = 68 };
-    private readonly Label _lblTagCounter = new() { AutoSize = true };
-    private readonly Label _lblTagStatus = new() { AutoSize = true };
+    private readonly Label _lblTagCounter = new() { AutoSize = false, Size = new Size(80, 20), TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label _lblTagStatus = new() { AutoSize = false, Height = 18, AutoEllipsis = true };
     private readonly ModernMultilineTextBox _txtDescription = new() { Height = 175 };
     private readonly ModernTextBox _txtMaterials = new() { Height = 30 };
 
@@ -102,21 +102,6 @@ internal sealed class FastListingCreatorForm : Form
     private static List<EtsyReadinessStateOption>? _cachedReadinessStates;
     private bool _isUpdatingChecklist;
 
-    protected override CreateParams CreateParams
-    {
-        get
-        {
-            var cp = base.CreateParams;
-            cp.Style |= 0x02000000; // WS_CLIPCHILDREN: Prevents parent form from erasing/repainting child controls
-            cp.Style |= 0x04000000; // WS_CLIPSIBLINGS
-            return cp;
-        }
-    }
-
-    protected override void OnPaintBackground(PaintEventArgs e)
-    {
-        // Suppress background erasing to eliminate flicker over RDP/DWM
-    }
 
     public FastListingCreatorForm(IAiListingOptimizer aiOptimizer, IAiCategorySuggester? categorySuggester = null)
     {
@@ -548,7 +533,9 @@ internal sealed class FastListingCreatorForm : Form
         _lblTitleCounter.Text = "0 / 140";
         _lblTitleCounter.Font = new Font("Segoe UI Semibold", 8.2F);
         _lblTitleCounter.ForeColor = UiStyle.TextMuted;
-        _lblTitleCounter.AutoSize = true;
+        _lblTitleCounter.AutoSize = false;
+        _lblTitleCounter.Size = new Size(160, 20);
+        _lblTitleCounter.TextAlign = ContentAlignment.MiddleLeft;
         _lblTitleCounter.Margin = new Padding(0, 5, 0, 0);
         titleLeftFlow.Controls.Add(lblTitleSec);
         titleLeftFlow.Controls.Add(_lblTitleCounter);
@@ -573,6 +560,9 @@ internal sealed class FastListingCreatorForm : Form
         _lblMobileTitlePreview.Text = "📱 Mobilde İlk 55 Karakter: (Telefon arama sonuçlarında görünecek kısım)";
         _lblMobileTitlePreview.Margin = new Padding(2, 0, 0, 8);
         _lblMobileTitlePreview.Dock = DockStyle.Top;
+        _lblMobileTitlePreview.AutoSize = false;
+        _lblMobileTitlePreview.Height = 18;
+        _lblMobileTitlePreview.AutoEllipsis = true;
         stack.Controls.Add(_lblMobileTitlePreview);
 
         // --- SECTION 3: Kategori & Kargo Ayarları ---
@@ -684,7 +674,9 @@ internal sealed class FastListingCreatorForm : Form
         _lblTagCounter.Text = "0 / 13";
         _lblTagCounter.Font = new Font("Segoe UI Semibold", 8.2F);
         _lblTagCounter.ForeColor = UiStyle.TextMuted;
-        _lblTagCounter.AutoSize = true;
+        _lblTagCounter.AutoSize = false;
+        _lblTagCounter.Size = new Size(80, 20);
+        _lblTagCounter.TextAlign = ContentAlignment.MiddleLeft;
         _lblTagCounter.Margin = new Padding(0, 5, 0, 0);
         tagLeftFlow.Controls.Add(lblTagSec);
         tagLeftFlow.Controls.Add(_lblTagCounter);
@@ -728,6 +720,9 @@ internal sealed class FastListingCreatorForm : Form
         _lblTagStatus.Font = new Font("Segoe UI", 7.8F);
         _lblTagStatus.ForeColor = UiStyle.TextMuted;
         _lblTagStatus.UseMnemonic = false;
+        _lblTagStatus.AutoSize = false;
+        _lblTagStatus.Height = 18;
+        _lblTagStatus.AutoEllipsis = true;
         _lblTagStatus.Text = "Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.";
         _lblTagStatus.Margin = new Padding(1, 0, 0, 6);
         stack.Controls.Add(_lblTagStatus);
@@ -1797,6 +1792,7 @@ internal sealed class FastListingCreatorForm : Form
             }
         };
 
+        bool lastTitleOk = false;
         _txtTitle.TextChanged += (_, _) =>
         {
             if (_txtTitle.Text.Contains('\n') || _txtTitle.Text.Contains('\r'))
@@ -1841,7 +1837,13 @@ internal sealed class FastListingCreatorForm : Form
                     SetLabelTextAndColor(_lblTitleCounter, $"{len} / 140 (Kısa)", UiStyle.TextMuted);
                 }
             }
-            UpdateChecklist();
+
+            bool currentTitleOk = len > 0 && len <= 140;
+            if (currentTitleOk != lastTitleOk)
+            {
+                lastTitleOk = currentTitleOk;
+                UpdateChecklist();
+            }
         };
 
         _numPrice.ValueChanged += (_, _) =>
@@ -1859,12 +1861,28 @@ internal sealed class FastListingCreatorForm : Form
             _cboReadinessState.Enabled = !isDig;
             UpdateChecklist();
         };
-        _txtDescription.TextChanged += (_, _) => UpdateChecklist();
 
+        bool lastDescOk = false;
+        _txtDescription.TextChanged += (_, _) =>
+        {
+            bool currentDescOk = !string.IsNullOrWhiteSpace(_txtDescription.Text);
+            if (currentDescOk != lastDescOk)
+            {
+                lastDescOk = currentDescOk;
+                UpdateChecklist();
+            }
+        };
+
+        int lastTagsCount = -1;
         _txtTags.TextChanged += (_, _) =>
         {
             UpdateTagStatus();
-            UpdateChecklist();
+            var tags = SplitTags(_txtTags.Text);
+            if (tags.Count != lastTagsCount)
+            {
+                lastTagsCount = tags.Count;
+                UpdateChecklist();
+            }
         };
 
         _chkEnableVariations.CheckedChanged += (_, _) =>
