@@ -45,6 +45,7 @@ public sealed class AiUsageDashboardForm : Form
     private AiProviderBalanceInfo? _openAiStatus;
     private AiProviderBalanceInfo? _geminiStatus;
     private OpenAiOfficialUsageReport? _officialOpenAiReport;
+    private GeminiRateLimitReport? _geminiRateLimitReport;
 
     public AiUsageDashboardForm()
     {
@@ -384,6 +385,26 @@ public sealed class AiUsageDashboardForm : Form
                 _officialOpenAiReport = null;
             }
 
+            // 2b. Gemini Resmi Hız Sınırları & Kota Verilerini Otomatik Olarak Çek
+            if (selectedProvider.Contains("Gemini") && !string.IsNullOrWhiteSpace(settings.GeminiApiKey))
+            {
+                try
+                {
+                    _geminiRateLimitReport = await GeminiRateLimitService.FetchRateLimitReportAsync(
+                        settings.GeminiApiKey,
+                        days: targetDays ?? 28,
+                        projectName: "gen-lang-client-0458130432");
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Gemini rate limit çekme hatası: {ex.Message}");
+                }
+            }
+            else if (!selectedProvider.Contains("Gemini"))
+            {
+                _geminiRateLimitReport = null;
+            }
+
             // 3. Zaman Filtresi (SQLite Yerel Veritabanı)
             DateTimeOffset? since = _cboPeriod.SelectedIndex switch
             {
@@ -429,7 +450,48 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            // 6b. Yerel SQLite Kayıtları
+            // 6b. Gemini Resmi Hız Sınırları & Model Kotası Dökümü (Otomatik olarak grid'e eklenir)
+            if (_geminiRateLimitReport != null && _geminiRateLimitReport.Models.Count > 0 && selectedProvider.Contains("Gemini"))
+            {
+                foreach (var m in _geminiRateLimitReport.Models)
+                {
+                    string rpmVal = $"{m.PeakRpm} / {m.LimitRpm} RPM";
+                    string tpmVal = $"{FormatTokens(m.PeakTpm)} / {FormatTokens(m.LimitTpm)} TPM";
+                    string rpdVal = $"{m.PeakRpd} / {m.LimitRpd} RPD";
+                    string status = m.IsCritical ? "🚨 KOTA AŞILDI" : "✅ Normal";
+                    string note = m.IsExceededRpd
+                        ? $"Günlük RPD limiti aşıldı! ({m.PeakRpd}/{m.LimitRpd})"
+                        : (m.IsExceededRpm
+                            ? $"Dakikalık RPM limiti aşıldı! ({m.PeakRpm}/{m.LimitRpm})"
+                            : $"Free Tier Kota: {m.LimitRpm} RPM | {m.LimitRpd} RPD");
+
+                    var idx = _grid.Rows.Add(
+                        DateTime.Now.ToString("yyyy-MM-dd"),
+                        m.Category,
+                        "Google Gemini",
+                        m.DisplayName,
+                        rpmVal,
+                        tpmVal,
+                        rpdVal,
+                        "$0.00 (Free)",
+                        "0.00 ₺",
+                        status,
+                        note
+                    );
+
+                    if (m.IsCritical)
+                    {
+                        _grid.Rows[idx].DefaultCellStyle.ForeColor = Color.FromArgb(255, 110, 110);
+                        _grid.Rows[idx].DefaultCellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
+                    }
+                    else
+                    {
+                        _grid.Rows[idx].DefaultCellStyle.ForeColor = Color.FromArgb(180, 215, 255);
+                    }
+                }
+            }
+
+            // 6c. Yerel SQLite Kayıtları
             foreach (var r in records)
             {
                 var idx = _grid.Rows.Add(
@@ -541,7 +603,12 @@ public sealed class AiUsageDashboardForm : Form
         else if (selectedProvider.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
         {
             _lblCard1Title.Text = "🔵 GEMINI KOTA & DURUM";
-            if (_geminiStatus?.IsAvailable == true)
+            if (_geminiRateLimitReport != null)
+            {
+                _lblCard1Value.Text = $"{_geminiRateLimitReport.TotalAvailableModels} Model Aktif";
+                _lblCard1Sub.Text = $"Proje: {_geminiRateLimitReport.ProjectName} ({_geminiRateLimitReport.Tier})";
+            }
+            else if (_geminiStatus?.IsAvailable == true)
             {
                 _lblCard1Value.Text = !string.IsNullOrWhiteSpace(_geminiStatus.MaskedApiKey)
                     ? _geminiStatus.MaskedApiKey
@@ -563,19 +630,40 @@ public sealed class AiUsageDashboardForm : Form
                 }
             }
 
-            _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
-            _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
-            _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
+            if (_geminiRateLimitReport != null)
+            {
+                _lblCard2Title.Text = "⚡ TEPE HIZ YÜKÜ (RPM)";
+                _lblCard2Value.Text = $"{_geminiRateLimitReport.PeakActiveRpm} / {_geminiRateLimitReport.PeakRpmLimit} Tepe";
+                _lblCard2Sub.Text = $"Dakikalık İstek Yükü ({_geminiRateLimitReport.TimeRange})";
 
-            _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
-            _lblCard3Value.Text = stats.TotalCostUsd == 0 ? "$0.00 USD" : $"${stats.TotalCostUsd:F4} USD";
-            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (Resmi Gemini Tarifesi)";
+                _lblCard3Title.Text = "💎 TEPE TOKEN / DAKİKA (TPM)";
+                _lblCard3Value.Text = $"{FormatTokens(_geminiRateLimitReport.PeakTpm)} / {FormatTokens(_geminiRateLimitReport.PeakTpmLimit)}";
+                _lblCard3Sub.Text = "Resmi Free Tier Dakikalık Hacim";
 
-            _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
-            _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
-            _lblCard4Sub.Text = stats.Blocked429Requests > 0
-                ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
-                : (_geminiStatus?.IsAvailable == true ? "Ücretsiz Plan: 15 RPM / 1,500 RPD Hazır" : "API bağlantı hatası");
+                _lblCard4Title.Text = "🚨 GÜNLÜK İSTEK AŞIMI (RPD)";
+                _lblCard4Value.Text = _geminiRateLimitReport.TotalCriticalOverQuotaModels > 0
+                    ? $"{_geminiRateLimitReport.TotalCriticalOverQuotaModels} Model Kritik!"
+                    : "Tüm Kotalar Normal";
+                _lblCard4Sub.Text = _geminiRateLimitReport.TotalCriticalOverQuotaModels > 0
+                    ? "Günlük Free Tier RPD aşımı mevcut (Tıkla ve İncele)"
+                    : "Free Tier: 20 RPD ve 1.500 RPD Hazır";
+            }
+            else
+            {
+                _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
+                _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
+                _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
+
+                _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
+                _lblCard3Value.Text = stats.TotalCostUsd == 0 ? "$0.00 USD" : $"${stats.TotalCostUsd:F4} USD";
+                _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (Resmi Gemini Tarifesi)";
+
+                _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
+                _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
+                _lblCard4Sub.Text = stats.Blocked429Requests > 0
+                    ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
+                    : (_geminiStatus?.IsAvailable == true ? "Ücretsiz Plan: 15 RPM / 1,500 RPD Hazır" : "API bağlantı hatası");
+            }
         }
         else if (selectedProvider.Contains("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
@@ -711,6 +799,25 @@ public sealed class AiUsageDashboardForm : Form
             }
         }
 
+        // Gemini Resmi Hız Sınırları & Kota Rozetleri
+        if (_geminiRateLimitReport != null && _geminiRateLimitReport.Models.Count > 0 && selectedProvider.Contains("Gemini"))
+        {
+            foreach (var gm in _geminiRateLimitReport.Models)
+            {
+                var badge = new Label
+                {
+                    Text = $"{gm.DisplayName}: {gm.PeakRpd}/{gm.LimitRpd} RPD • {gm.PeakRpm}/{gm.LimitRpm} RPM • {FormatTokens(gm.PeakTpm)} TPM",
+                    AutoSize = true,
+                    BackColor = gm.IsCritical ? Color.FromArgb(60, 20, 30) : Color.FromArgb(30, 45, 70),
+                    ForeColor = gm.IsCritical ? Color.FromArgb(255, 120, 120) : Color.FromArgb(200, 225, 255),
+                    Padding = new Padding(8, 4, 8, 4),
+                    Margin = new Padding(0, 2, 8, 2),
+                    Font = new Font("Segoe UI", 8F, FontStyle.Bold)
+                };
+                _pnlModelBreakdown.Controls.Add(badge);
+            }
+        }
+
         // Yerel SQLite modelleri
         foreach (var (model, cost) in stats.CostByModel.OrderByDescending(x => x.Value))
         {
@@ -726,6 +833,13 @@ public sealed class AiUsageDashboardForm : Form
             };
             _pnlModelBreakdown.Controls.Add(badge);
         }
+    }
+
+    private static string FormatTokens(long val)
+    {
+        if (val >= 1_000_000) return $"{(val / 1_000_000.0):0.#}M";
+        if (val >= 1_000) return $"{(val / 1_000.0):0.#}K";
+        return val.ToString();
     }
 
     private void ExportCsv(object? sender, EventArgs e)
