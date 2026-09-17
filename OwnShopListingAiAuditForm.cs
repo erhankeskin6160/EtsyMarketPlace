@@ -664,6 +664,10 @@ internal sealed class OwnShopListingAiAuditForm(
                     var input = ToOptimizationInput(row.Listing);
                     var result = await aiOptimizer.OptimizeAsync(input);
                     row.OptimizationResult = result;
+                    if (result.ExecutedProvider != "Offline")
+                    {
+                        row.SeoScore = result.CurrentSeoScore;
+                    }
                     row.AiScore = result.OptimizedSeoScore;
                     row.Status = result.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
                     
@@ -879,6 +883,10 @@ internal sealed class OwnShopListingAiAuditForm(
             _lastResult = await aiOptimizer.OptimizeAsync(input);
             _lastResultListingId = row.Listing.ListingId;
             row.OptimizationResult = _lastResult;
+            if (_lastResult.ExecutedProvider != "Offline")
+            {
+                row.SeoScore = _lastResult.CurrentSeoScore;
+            }
             row.AiScore = _lastResult.OptimizedSeoScore;
             row.Status = _lastResult.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
             _grid.Refresh();
@@ -932,7 +940,8 @@ internal sealed class OwnShopListingAiAuditForm(
         }
 
         var row = SelectedRow;
-        _lblBeforeScore.Text = $"SEO: {row.SeoScore}/100" + (row.SeoScore >= 75 ? " (İyi)" : (row.SeoScore >= 55 ? " (Orta)" : " (Kritik)"));
+        string aiBadge = (row.OptimizationResult != null && row.OptimizationResult.ExecutedProvider != "Offline") ? " 🤖(AI Puanladı)" : "";
+        _lblBeforeScore.Text = $"SEO: {row.SeoScore}/100" + (row.SeoScore >= 75 ? " (İyi)" : (row.SeoScore >= 55 ? " (Orta)" : " (Kritik)")) + aiBadge;
         _lblBeforeScore.ForeColor = row.SeoScore >= 75 ? UiStyle.SuccessColor : (row.SeoScore >= 55 ? UiStyle.WarningColor : UiStyle.DangerColor);
 
         _detailTextBox.Text =
@@ -1039,7 +1048,12 @@ internal sealed class OwnShopListingAiAuditForm(
         var optTags = result.TagSuggestions.Take(13).ToList();
         var normalizedDesc = EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(result.DescriptionDraft);
 
+        string critiqueSection = !string.IsNullOrWhiteSpace(result.SeoCritique)
+            ? $"[AI SEO KRİTİĞİ & PUAN DEĞERLENDİRMESİ] (Mevcut: {result.CurrentSeoScore}/100 ➔ Hedef: {optScore}/100){Environment.NewLine}{result.SeoCritique}{Environment.NewLine}{Environment.NewLine}"
+            : "";
+
         _suggestionTextBox.Text =
+            critiqueSection +
             $"[AI İLE OPTİMİZE EDİLMİŞ BAŞLIK - {optTitle.Length}/140 Karakter]  (Aktif Motor: {engineName}){Environment.NewLine}{optTitle}{Environment.NewLine}{Environment.NewLine}" +
             $"[ÖNERİLEN 13 LONG-TAIL TAG - {optTags.Count}/13 Tag]{Environment.NewLine}{string.Join(", ", optTags)}{Environment.NewLine}{Environment.NewLine}" +
             $"[ÖNERİLEN MATERYALLER]{Environment.NewLine}{string.Join(", ", result.MaterialSuggestions)}{Environment.NewLine}{Environment.NewLine}" +
@@ -1373,7 +1387,7 @@ internal sealed class OwnShopListingAiAuditForm(
         public int Favorites => Listing.Favorites;
         public int Quantity => Listing.Quantity;
         public int TagCount => Listing.Tags.Count;
-        public int SeoScore { get; } = seoScore;
+        public int SeoScore { get; set; } = seoScore;
         public int AiScore { get; set; } = seoScore;
         public string Status { get; set; } = status;
         public ListingOptimizationResult? OptimizationResult { get; set; }

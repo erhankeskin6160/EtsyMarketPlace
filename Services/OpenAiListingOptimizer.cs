@@ -153,9 +153,11 @@ internal sealed class OpenAiListingOptimizer(
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
                 ?? throw new InvalidOperationException("OpenAI yaniti JSON olarak okunamadi.");
 
+            var (currentScore, optimizedScore) = ResolveAiSeoScores(ai, local);
+
             return new ListingOptimizationResult(
-                local.CurrentSeoScore,
-                Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
+                currentScore,
+                optimizedScore,
                 NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
                 NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
                 NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
@@ -165,7 +167,9 @@ internal sealed class OpenAiListingOptimizer(
                 local.ActionChecklist.Concat(["AI onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList(),
                 ExecutedProvider: "OpenAI",
                 ExecutedModel: settings.OpenAiModel,
-                IsFallback: false);
+                IsFallback: false,
+                FallbackReason: null,
+                SeoCritique: ai.SeoCritique);
         }
         catch (Exception ex)
         {
@@ -210,9 +214,11 @@ internal sealed class OpenAiListingOptimizer(
             return CreateLocalFallbackResult(local, "Gemini yaniti JSON olarak okunamadi.", "Gemini", settings.GeminiModel);
         }
 
+        var (currentScore, optimizedScore) = ResolveAiSeoScores(ai, local);
+
         return new ListingOptimizationResult(
-            local.CurrentSeoScore,
-            Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
+            currentScore,
+            optimizedScore,
             NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
             NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
             NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
@@ -222,7 +228,9 @@ internal sealed class OpenAiListingOptimizer(
             local.ActionChecklist.Concat(["Gemini onerisi yayinlanmadan once marka/telif ve Etsy politika kontrolunden gecir."]).Distinct().ToList(),
             ExecutedProvider: "Gemini",
             ExecutedModel: settings.GeminiModel,
-            IsFallback: false);
+            IsFallback: false,
+            FallbackReason: null,
+            SeoCritique: ai.SeoCritique);
     }
 
     private async Task<ListingOptimizationResult> OptimizeWithProviderAsync(
@@ -265,9 +273,11 @@ internal sealed class OpenAiListingOptimizer(
                 return CreateLocalFallbackResult(local, err, providerName, modelName);
             }
 
+            var (currentScore, optimizedScore) = ResolveAiSeoScores(ai, local);
+
             return new ListingOptimizationResult(
-                local.CurrentSeoScore,
-                Math.Max(local.OptimizedSeoScore, Math.Min(100, local.CurrentSeoScore + 12)),
+                currentScore,
+                optimizedScore,
                 NormalizeTitles(ai.TitleSuggestions, local.TitleSuggestions),
                 NormalizeTags(ai.TagSuggestions, local.TagSuggestions),
                 NormalizeMaterials(ai.MaterialSuggestions, local.MaterialSuggestions),
@@ -277,7 +287,9 @@ internal sealed class OpenAiListingOptimizer(
                 local.ActionChecklist.Concat([$"{providerName} önerisi yayınlanmadan önce marka/telif ve Etsy politika kontrolünden geçir."]).Distinct().ToList(),
                 ExecutedProvider: providerName,
                 ExecutedModel: modelName,
-                IsFallback: false);
+                IsFallback: false,
+                FallbackReason: null,
+                SeoCritique: ai.SeoCritique);
         }
         catch (Exception ex)
         {
@@ -287,6 +299,23 @@ internal sealed class OpenAiListingOptimizer(
             }
             return CreateLocalFallbackResult(local, ex.Message, providerName, modelName);
         }
+    }
+
+    private static (int currentScore, int optimizedScore) ResolveAiSeoScores(
+        AiListingOptimizationResponse ai,
+        ListingOptimizationResult local)
+    {
+        int currentScore = (ai.CurrentSeoScore.HasValue && ai.CurrentSeoScore.Value is >= 1 and <= 100)
+            ? ai.CurrentSeoScore.Value
+            : local.CurrentSeoScore;
+
+        int optimizedScore = (ai.OptimizedSeoScore.HasValue && ai.OptimizedSeoScore.Value is >= 1 and <= 100)
+            ? ai.OptimizedSeoScore.Value
+            : Math.Max(local.OptimizedSeoScore, Math.Min(100, currentScore + 15));
+
+        // Optimized score must always be at least current score
+        optimizedScore = Math.Max(currentScore, optimizedScore);
+        return (currentScore, optimizedScore);
     }
 
     private static ListingOptimizationResult CreateLocalFallbackResult(
@@ -625,6 +654,15 @@ internal sealed class OpenAiListingOptimizer(
 
         [JsonPropertyName("risk_warnings")]
         public List<string> RiskWarnings { get; set; } = [];
+
+        [JsonPropertyName("current_seo_score")]
+        public int? CurrentSeoScore { get; set; }
+
+        [JsonPropertyName("optimized_seo_score")]
+        public int? OptimizedSeoScore { get; set; }
+
+        [JsonPropertyName("seo_critique")]
+        public string? SeoCritique { get; set; }
     }
 
     private static void TrackGeminiUsage(string responseBody, string model, string moduleName)

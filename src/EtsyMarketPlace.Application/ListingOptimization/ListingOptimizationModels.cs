@@ -20,7 +20,8 @@ public sealed record ListingOptimizationResult(
     string ExecutedProvider = "Offline",
     string ExecutedModel = "RuleBased",
     bool IsFallback = false,
-    string? FallbackReason = null);
+    string? FallbackReason = null,
+    string? SeoCritique = null);
 
 public sealed record ListingOptimizationHistoryEntry(
     long Id,

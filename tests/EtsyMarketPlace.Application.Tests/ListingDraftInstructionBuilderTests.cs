@@ -192,6 +192,9 @@ public sealed class ListingDraftInstructionBuilderTests
         Assert.Contains("material_suggestions", schema);
         Assert.Contains("description_draft", schema);
         Assert.Contains("risk_warnings", schema);
+        Assert.Contains("current_seo_score", schema);
+        Assert.Contains("optimized_seo_score", schema);
+        Assert.Contains("seo_critique", schema);
     }
 
     [Fact]
@@ -272,5 +275,14 @@ public sealed class ListingDraftInstructionBuilderTests
 
         Assert.Contains("PRESERVE ALL REAL SPECIFICATIONS & DETAILS", rules);
         Assert.Contains("Never drop or omit user-provided technical specs", rules);
+    }
+
+    [Fact]
+    public void BuildFieldRules_ContainsSeoScoreAndCritiqueRules()
+    {
+        var rules = ListingDraftInstructionBuilder.BuildFieldRules();
+
+        Assert.Contains("current_seo_score & optimized_seo_score", rules);
+        Assert.Contains("seo_critique", rules);
     }
 }

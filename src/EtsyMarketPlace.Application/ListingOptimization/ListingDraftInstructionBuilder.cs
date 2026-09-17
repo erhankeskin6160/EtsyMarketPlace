@@ -95,6 +95,9 @@ public static class ListingDraftInstructionBuilder
         - "material_suggestions": array of materials found in the product (in English)
         - "description_draft": string with buyer-facing English description
         - "risk_warnings": array of Turkish risk/policy warning strings
+        - "current_seo_score": integer from 0 to 100 representing your professional SEO rating of the seller's input listing
+        - "optimized_seo_score": integer from 0 to 100 representing the projected SEO rating of your new draft (typically 90-98)
+        - "seo_critique": Turkish string explaining why points were deducted from the current listing and how your draft improves it
         """;
 
     /// <summary>
@@ -159,6 +162,10 @@ public static class ListingDraftInstructionBuilder
           * STRICTLY FORBIDDEN: NEVER include debug labels (such as "Selected listing title:", "Competitor description:", "Etsy search keyword:", "Target keyword:"), prompt words, or generic filler like "This item is prepared as an Etsy-ready product listing". Write directly to the customer.
           * ZERO TURKISH IN BUYER FIELDS: Ensure 100% of description_draft is in natural English. No Turkish words allowed in description_draft.
         - risk_warnings: Turkish language notes. Flag any brand, character, movie, game, or fan-art terms. Include Turkish explanations in parentheses. Example: "Ben 10 ve Omnitrix terimleri telif riski tasiyabilir (Cartoon Network markasi)."
+        - current_seo_score & optimized_seo_score:
+          * current_seo_score: Integer (0-100). Honestly evaluate the input listing's real Etsy SEO strength based on title clarity, front-loading, keyword searchability, tag count/quality, and description depth.
+          * optimized_seo_score: Integer (0-100, typically 92-99). The projected SEO rating of your newly generated draft.
+        - seo_critique: Turkish explanation (1-3 concise sentences) detailing why points were deducted from the seller's current listing and how your optimized output fixes them.
         """;
 
     /// <summary>
