@@ -70,15 +70,23 @@ jobs:
           
           *VDS üzerindeki Guncelle_Ve_Baslat.bat bu dosyayı otomatik indirip çalıştırır.*
           "@
+          $notes | Out-File -FilePath release_notes.md -Encoding utf8
           
-          $rel = gh release view dev-latest 2>&1
-          if ($LASTEXITCODE -ne 0) {
+          $releaseExists = $false
+          try {
+            gh release view dev-latest --json tagName 2>$null
+            if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
+          } catch {
+            $releaseExists = $false
+          }
+          
+          if (-not $releaseExists) {
             Write-Host "Creating 'dev-latest' release..."
-            gh release create dev-latest publish_vds_standalone\SimilarProductsWinForms.exe deploy\Client_Guncelle.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes $notes --prerelease
+            gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
           } else {
             Write-Host "Uploading assets to existing 'dev-latest' release..."
-            gh release upload dev-latest publish_vds_standalone\SimilarProductsWinForms.exe deploy\Client_Guncelle.bat --clobber
-            gh release edit dev-latest --title "VDS Development Build (Son Geliştirme Sürümü)" --notes $notes
+            gh release upload dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat --clobber
+            gh release edit dev-latest --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --target ${{ github.sha }}
           }
           Write-Host "VDS release successfully published!"
 
