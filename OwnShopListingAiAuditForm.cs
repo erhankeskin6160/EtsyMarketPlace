@@ -621,8 +621,8 @@ internal sealed class OwnShopListingAiAuditForm(
         int critical = _rows.Count(r => r.SeoScore < 60 || r.TagCount < 13);
         _lblKpiCritical.Text = $"{critical} Ürün";
 
-        int optimized = _rows.Count(r => r.AiScore > 0 || r.Status == "Oneri hazir" || r.Status == "Etsy guncellendi");
-        _lblKpiOptimized.Text = $"{optimized} Ürün";
+        int optimized = _rows.Count(r => r.IsAiAudited || r.Status.Contains("Oneri hazir") || r.Status.Contains("Etsy guncellendi") || r.Status.Contains("Risk kontrol"));
+        _lblKpiOptimized.Text = $"{optimized} Ürün 🤖";
     }
 
     private void SetBusy(bool busy, string? statusText = null)
@@ -678,9 +678,27 @@ internal sealed class OwnShopListingAiAuditForm(
                     if (result.ExecutedProvider != "Offline")
                     {
                         row.SeoScore = result.CurrentSeoScore;
+                        row.IsAiAudited = true;
                     }
                     row.AiScore = result.OptimizedSeoScore;
                     row.Status = result.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
+
+                    if (row.IsAiAudited)
+                    {
+                        var auditData = new SavedListingAuditData(
+                            row.Listing.ListingId,
+                            row.Title,
+                            row.SeoScore,
+                            row.AiScore,
+                            row.Status,
+                            result.ExecutedProvider,
+                            result.ExecutedModel,
+                            DateTimeOffset.Now,
+                            result.SeoCritique ?? "",
+                            BuildDetailedNeeds(row, result),
+                            result);
+                        OwnShopListingAuditStore.Save(auditData);
+                    }
                     
                     if (ReferenceEquals(row, SelectedRow))
                     {
@@ -751,12 +769,55 @@ internal sealed class OwnShopListingAiAuditForm(
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0) return;
             var colName = _grid.Columns[e.ColumnIndex].DataPropertyName;
-            if (colName == nameof(AuditRow.SeoScore))
+            var rowObj = _grid.Rows[e.RowIndex].DataBoundItem as AuditRow;
+            var isAiAudited = rowObj?.IsAiAudited == true;
+
+            if (colName == nameof(AuditRow.Title))
+            {
+                if (isAiAudited && e.Value is string titleText && !titleText.StartsWith("🤖"))
+                {
+                    e.Value = $"🤖 {titleText}";
+                }
+            }
+            else if (colName == nameof(AuditRow.Status))
+            {
+                if (isAiAudited && rowObj != null)
+                {
+                    if (rowObj.Status.Contains("Risk", StringComparison.OrdinalIgnoreCase))
+                    {
+                        e.Value = "🚨 AI: Risk kontrol";
+                        if (e.CellStyle != null)
+                        {
+                            e.CellStyle.ForeColor = UiStyle.WarningColor;
+                            e.CellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
+                        }
+                    }
+                    else if (rowObj.Status.Contains("Etsy", StringComparison.OrdinalIgnoreCase))
+                    {
+                        e.Value = "🚀 Etsy güncellendi";
+                        if (e.CellStyle != null)
+                        {
+                            e.CellStyle.ForeColor = UiStyle.PrimaryHover;
+                            e.CellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
+                        }
+                    }
+                    else
+                    {
+                        e.Value = "✨ AI: Öneri hazır";
+                        if (e.CellStyle != null)
+                        {
+                            e.CellStyle.ForeColor = UiStyle.SuccessColor;
+                            e.CellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
+                        }
+                    }
+                }
+            }
+            else if (colName == nameof(AuditRow.SeoScore))
             {
                 if (e.CellStyle != null && e.Value is int score)
                 {
                     e.CellStyle.ForeColor = score >= 75 ? UiStyle.SuccessColor : (score >= 55 ? UiStyle.WarningColor : UiStyle.DangerColor);
-                    e.CellStyle.Font = new Font(_grid.Font, FontStyle.Bold);
+                    e.CellStyle.Font = new Font(_grid.Font, isAiAudited ? FontStyle.Bold : FontStyle.Regular);
                 }
             }
             else if (colName == nameof(AuditRow.AiScore))
@@ -803,15 +864,29 @@ internal sealed class OwnShopListingAiAuditForm(
             var settings = EtsyApiSettingsStore.Load();
             var listings = await _apiClient.GetOwnShopActiveListingsAsync(settings, (int)_limitInput.Value);
             EtsyApiSettingsStore.Save(settings);
+            var savedAudits = OwnShopListingAuditStore.LoadAll();
             _rows = listings
-                .Select((item, index) => new AuditRow(index + 1, item, ScoreListing(item), "Bekliyor"))
+                .Select((item, index) =>
+                {
+                    if (savedAudits.TryGetValue(item.ListingId, out var saved))
+                    {
+                        var row = new AuditRow(index + 1, item, saved.CurrentSeoScore, saved.Status);
+                        row.AiScore = saved.OptimizedSeoScore;
+                        row.OptimizationResult = saved.Result;
+                        row.IsAiAudited = true;
+                        return row;
+                    }
+                    return new AuditRow(index + 1, item, ScoreListing(item), "Bekliyor");
+                })
                 .OrderBy(row => row.SeoScore)
                 .ThenBy(row => row.Title)
                 .ToList();
             
             UpdateKpis();
             ApplyFilter();
-            _statusLabel.Text = $"{_rows.Count} listing yüklendi | Düşük SEO puanları üstte";
+            int auditedCount = _rows.Count(r => r.IsAiAudited);
+            string auditSummary = auditedCount > 0 ? $" | 🤖 {auditedCount} ürün AI ile denetlenmiş" : "";
+            _statusLabel.Text = $"{_rows.Count} listing yüklendi{auditSummary} | Düşük SEO puanları üstte";
         }
         catch (Exception ex)
         {
@@ -921,13 +996,39 @@ internal sealed class OwnShopListingAiAuditForm(
             if (_lastResult.ExecutedProvider != "Offline")
             {
                 row.SeoScore = _lastResult.CurrentSeoScore;
+                row.IsAiAudited = true;
             }
             row.AiScore = _lastResult.OptimizedSeoScore;
             row.Status = _lastResult.RiskWarnings.Count > 0 ? "Risk kontrol" : "Oneri hazir";
+
+            // Sonuçları diske kalıcı olarak kaydet
+            if (row.IsAiAudited)
+            {
+                var auditData = new SavedListingAuditData(
+                    row.Listing.ListingId,
+                    row.Title,
+                    row.SeoScore,
+                    row.AiScore,
+                    row.Status,
+                    _lastResult.ExecutedProvider,
+                    _lastResult.ExecutedModel,
+                    DateTimeOffset.Now,
+                    _lastResult.SeoCritique ?? "",
+                    BuildDetailedNeeds(row, _lastResult),
+                    _lastResult);
+                OwnShopListingAuditStore.Save(auditData);
+
+                _ = historyService.SaveAsync(new SaveListingOptimizationHistory(
+                    row.Listing.ListingId.ToString(CultureInfo.InvariantCulture),
+                    row.Title,
+                    PrimaryKeyword(row.Listing),
+                    _lastResult));
+            }
+
             _grid.Refresh();
             UpdateKpis();
             RenderSuggestion(row, _lastResult);
-            _statusLabel.Text = $"'{row.Title}' başarıyla analiz edildi";
+            _statusLabel.Text = $"'{row.Title}' başarıyla analiz edildi ve kaydedildi 💾";
         }
         catch (Exception ex)
         {
@@ -975,7 +1076,7 @@ internal sealed class OwnShopListingAiAuditForm(
         }
 
         var row = SelectedRow;
-        string aiBadge = (row.OptimizationResult != null && row.OptimizationResult.ExecutedProvider != "Offline") ? " 🤖(AI Puanladı)" : "";
+        string aiBadge = row.IsAiAudited ? " 🤖(AI Puanladı)" : "";
         _lblBeforeScore.Text = $"SEO: {row.SeoScore}/100" + (row.SeoScore >= 75 ? " (İyi)" : (row.SeoScore >= 55 ? " (Orta)" : " (Kritik)")) + aiBadge;
         _lblBeforeScore.ForeColor = row.SeoScore >= 75 ? UiStyle.SuccessColor : (row.SeoScore >= 55 ? UiStyle.WarningColor : UiStyle.DangerColor);
 
@@ -1471,6 +1572,7 @@ internal sealed class OwnShopListingAiAuditForm(
         public int SeoScore { get; set; } = seoScore;
         public int AiScore { get; set; } = seoScore;
         public string Status { get; set; } = status;
+        public bool IsAiAudited { get; set; }
         public ListingOptimizationResult? OptimizationResult { get; set; }
         public string SeoNeeds => BuildSeoNeeds(Listing);
         public string SeoStrengths => BuildSeoStrengths(Listing);
