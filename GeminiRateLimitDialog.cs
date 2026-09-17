@@ -136,8 +136,6 @@ public sealed class GeminiRateLimitDialog : Form
         _cboProject.BackColor = Color.FromArgb(30, 41, 59);
         _cboProject.ForeColor = Color.White;
         _cboProject.FlatStyle = FlatStyle.Flat;
-        _cboProject.Items.AddRange(["ffff", "gen-lang-client-0458130432", "default-project"]);
-        _cboProject.SelectedIndex = 0;
         _cboProject.SelectedIndexChanged += async (_, _) => await LoadDataAsync();
 
         var lblDateRange = new Label
@@ -411,6 +409,18 @@ public sealed class GeminiRateLimitDialog : Form
         try
         {
             var settings = AiOptimizationSettingsStore.Load();
+
+            string currentKeyDisplay = !string.IsNullOrWhiteSpace(settings.GeminiApiKey)
+                ? $"API: {AiPriceCalculator.MaskApiKey(settings.GeminiApiKey)}"
+                : "Varsayılan Proje";
+
+            if (_cboProject.Items.Count == 0 || !_cboProject.Items.Contains(currentKeyDisplay))
+            {
+                _cboProject.Items.Clear();
+                _cboProject.Items.Add(currentKeyDisplay);
+                _cboProject.SelectedIndex = 0;
+            }
+
             int days = _cboTimeRange.SelectedIndex switch
             {
                 1 => 7,
@@ -421,7 +431,7 @@ public sealed class GeminiRateLimitDialog : Form
             _report = await GeminiRateLimitService.FetchRateLimitReportAsync(
                 settings.GeminiApiKey,
                 days: days,
-                projectName: _cboProject.SelectedItem?.ToString() ?? "gen-lang-client-0458130432",
+                projectName: _cboProject.SelectedItem?.ToString(),
                 forceRefresh: forceRefresh);
 
             UpdateUi();
@@ -477,10 +487,16 @@ public sealed class GeminiRateLimitDialog : Form
     {
         try
         {
-            string proj = _cboProject.SelectedItem?.ToString() ?? "gen-lang-client-0458130432";
+            string proj = _cboProject.SelectedItem?.ToString() ?? string.Empty;
+            string targetUrl = "https://aistudio.google.com/app/rate-limit?timeRange=last-28-days";
+            if (!string.IsNullOrWhiteSpace(proj) && !proj.StartsWith("API:", StringComparison.OrdinalIgnoreCase) && !proj.Contains("Varsayılan"))
+            {
+                targetUrl += $"&project={Uri.EscapeDataString(proj)}";
+            }
+
             Process.Start(new ProcessStartInfo
             {
-                FileName = $"https://aistudio.google.com/app/rate-limit?timeRange=last-28-days&project={Uri.EscapeDataString(proj)}",
+                FileName = targetUrl,
                 UseShellExecute = true
             });
         }

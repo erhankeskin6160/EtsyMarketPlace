@@ -14,10 +14,14 @@ public static class GeminiRateLimitService
     public static async Task<GeminiRateLimitReport> FetchRateLimitReportAsync(
         string apiKey,
         int days = 28,
-        string projectName = "gen-lang-client-0458130432",
+        string? projectName = null,
         bool forceRefresh = false,
         CancellationToken ct = default)
     {
+        projectName = !string.IsNullOrWhiteSpace(projectName)
+            ? projectName
+            : (!string.IsNullOrWhiteSpace(apiKey) ? $"API: {AiPriceCalculator.MaskApiKey(apiKey)}" : "Varsayılan Proje");
+
         List<string> availableModels = [];
 
         if (!string.IsNullOrWhiteSpace(apiKey))

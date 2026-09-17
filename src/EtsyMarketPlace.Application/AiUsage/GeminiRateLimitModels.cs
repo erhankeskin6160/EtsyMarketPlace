@@ -41,7 +41,7 @@ public sealed class GeminiDailyUsageTrend
 
 public sealed class GeminiRateLimitReport
 {
-    public string ProjectName { get; set; } = "ffff";
+    public string ProjectName { get; set; } = "Varsayılan Proje";
     public string Tier { get; set; } = "Free Tier";
     public string TimeRange { get; set; } = "Son 28 Gün";
     public DateTime CheckedAt { get; set; } = DateTime.Now;
@@ -60,7 +60,7 @@ public sealed class GeminiRateLimitReport
         List<string> availableModels,
         IReadOnlyList<AiUsageRecord> records,
         int days = 28,
-        string projectName = "ffff")
+        string projectName = "Varsayılan Proje")
     {
         var report = new GeminiRateLimitReport
         {
@@ -134,8 +134,10 @@ public sealed class GeminiRateLimitReport
             }
             else
             {
-                // Realistic defaults matching AI Studio user state if no local requests yet for that specific model
-                ApplySimulatedBaseline(item, rawName);
+                item.PeakRpm = 0;
+                item.PeakTpm = 0;
+                item.PeakRpd = 0;
+                item.CurrentRpd = 0;
             }
 
             report.Models.Add(item);
@@ -146,7 +148,7 @@ public sealed class GeminiRateLimitReport
         report.PeakActiveRpm = report.Models.Count > 0 ? report.Models.Max(m => m.PeakRpm) : 0;
         report.PeakTpm = report.Models.Count > 0 ? report.Models.Max(m => m.PeakTpm) : 0;
 
-        // Build 28-day daily trend
+        // Build 28-day daily trend purely from user's actual calls
         var now = DateTime.UtcNow.Date;
         for (int i = days; i >= 1; i--)
         {
@@ -158,22 +160,11 @@ public sealed class GeminiRateLimitReport
                 DayIndex = days - i + 1,
                 Date = targetDate,
                 RequestCount = dayRecs.Count,
-                TokenCount = dayRecs.Sum(r => (long)r.TotalTokens)
+                TokenCount = dayRecs.Sum(r => (long)r.TotalTokens),
+                PeakRpm = dayRecs.Count > 0
+                    ? dayRecs.GroupBy(r => r.Timestamp.ToUniversalTime().ToString("yyyy-MM-dd HH:mm")).Max(g => g.Count())
+                    : 0
             };
-
-            // If empty, generate graceful aesthetic activity curve reflecting peak days (e.g. days 8, 9, 25, 26)
-            if (trend.RequestCount == 0 && days == 28)
-            {
-                int dayIdx = trend.DayIndex;
-                if (dayIdx == 8) { trend.RequestCount = 28; trend.TokenCount = 18_400; trend.PeakRpm = 6; }
-                else if (dayIdx == 9) { trend.RequestCount = 35; trend.TokenCount = 24_200; trend.PeakRpm = 6; }
-                else if (dayIdx == 10) { trend.RequestCount = 18; trend.TokenCount = 11_500; trend.PeakRpm = 4; }
-                else if (dayIdx == 15) { trend.RequestCount = 12; trend.TokenCount = 7_800; trend.PeakRpm = 3; }
-                else if (dayIdx == 25) { trend.RequestCount = 22; trend.TokenCount = 15_100; trend.PeakRpm = 5; }
-                else if (dayIdx == 26) { trend.RequestCount = 27; trend.TokenCount = 19_600; trend.PeakRpm = 6; }
-                else if (dayIdx == 27) { trend.RequestCount = 19; trend.TokenCount = 13_200; trend.PeakRpm = 4; }
-                else { trend.RequestCount = (dayIdx % 3) + 1; trend.TokenCount = 850; trend.PeakRpm = 1; }
-            }
 
             report.DailyTrends.Add(trend);
         }
@@ -233,41 +224,6 @@ public sealed class GeminiRateLimitReport
         }
 
         return item;
-    }
-
-    private static void ApplySimulatedBaseline(GeminiModelRateLimitItem item, string rawName)
-    {
-        string norm = rawName.ToLowerInvariant();
-        if (norm.Contains("3.7-flash"))
-        {
-            item.PeakRpm = 6;
-            item.PeakTpm = 9_380;
-            item.PeakRpd = 27;
-        }
-        else if (norm.Contains("3.8-flash"))
-        {
-            item.PeakRpm = 6;
-            item.PeakTpm = 10_100;
-            item.PeakRpd = 32;
-        }
-        else if (norm.Contains("2.5-flash"))
-        {
-            item.PeakRpm = 3;
-            item.PeakTpm = 8_880;
-            item.PeakRpd = 24;
-        }
-        else if (norm.Contains("3.6-flash"))
-        {
-            item.PeakRpm = 1;
-            item.PeakTpm = 13;
-            item.PeakRpd = 1;
-        }
-        else if (norm.Contains("1.5-flash"))
-        {
-            item.PeakRpm = 6;
-            item.PeakTpm = 10_100;
-            item.PeakRpd = 25;
-        }
     }
 
     private static string FormatDisplayName(string raw)

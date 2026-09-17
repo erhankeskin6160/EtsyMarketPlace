@@ -14,10 +14,10 @@ public sealed class GeminiRateLimitTests
         var models = new List<string> { "gemini-3.7-flash", "gemini-2.5-flash", "gemini-1.5-flash" };
         var records = new List<AiUsageRecord>();
 
-        var report = GeminiRateLimitReport.BuildFromHistory(models, records, days: 28, projectName: "ffff");
+        var report = GeminiRateLimitReport.BuildFromHistory(models, records, days: 28, projectName: "test-user-proj");
 
         Assert.NotNull(report);
-        Assert.Equal("ffff", report.ProjectName);
+        Assert.Equal("test-user-proj", report.ProjectName);
         Assert.Equal("Free Tier", report.Tier);
         Assert.Equal("Son 28 Gün", report.TimeRange);
         Assert.NotEmpty(report.Models);
@@ -28,6 +28,15 @@ public sealed class GeminiRateLimitTests
         Assert.Equal(5, model37.LimitRpm);
         Assert.Equal(250_000, model37.LimitTpm);
         Assert.Equal(20, model37.LimitRpd);
+
+        // Crucial: A user with empty records must have 0 peak usage, not simulated hardcoded numbers
+        Assert.Equal(0, model37.PeakRpm);
+        Assert.Equal(0, model37.PeakTpm);
+        Assert.Equal(0, model37.PeakRpd);
+        Assert.Equal(0, model37.CurrentRpd);
+        Assert.False(model37.IsCritical);
+        Assert.Equal(0, report.TotalCriticalOverQuotaModels);
+        Assert.All(report.DailyTrends, t => Assert.Equal(0, t.RequestCount));
     }
 
     [Fact]
