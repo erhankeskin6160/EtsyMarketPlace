@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using SimilarProductsWinForms.Controls;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 using SimilarProductsWinForms.Studio.Services;
@@ -13,6 +14,7 @@ using EtsyMarketPlace.Application.AiUsage;
 internal sealed class AiOptimizationSettingsForm : Form
 {
     private readonly AiOptimizationSettings _settings;
+    private bool _isInitializing = false;
 
     // Aktif sağlayıcı butonları
     private readonly Dictionary<string, Button> _providerButtons = new(StringComparer.OrdinalIgnoreCase);
@@ -54,8 +56,8 @@ internal sealed class AiOptimizationSettingsForm : Form
     {
         Text = "AI Optimizasyon Ayarları & Model Yapılandırması";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(880, 740);
-        MinimumSize = new Size(820, 680);
+        Size = new Size(900, 740);
+        MinimumSize = new Size(840, 680);
         Font = new Font("Segoe UI", 9F);
         BackColor = Color.FromArgb(15, 23, 42); // #0F172A
         ForeColor = Color.White;
@@ -79,6 +81,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         var lblTitle = new Label
         {
             Text = "⚡ Yapay Zeka Optimizasyon & Model Merkezi",
+            UseMnemonic = false,
             Font = new Font("Segoe UI", 13F, FontStyle.Bold),
             ForeColor = Color.White,
             AutoSize = true,
@@ -87,6 +90,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         var lblSub = new Label
         {
             Text = "Birincil LLM motoru, API anahtarları, görsel tasarım entegrasyonları ve kesintisiz çalışma politikaları.",
+            UseMnemonic = false,
             Font = new Font("Segoe UI", 8.5F),
             ForeColor = Color.FromArgb(148, 163, 184),
             AutoSize = true,
@@ -153,6 +157,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         };
 
         _btnSave.Text = "💾 Kaydet & Aktifleştir";
+        _btnSave.UseMnemonic = false;
         _btnSave.BackColor = Color.FromArgb(16, 185, 129); // Neon Emerald Green
         _btnSave.ForeColor = Color.White;
         _btnSave.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
@@ -164,17 +169,54 @@ internal sealed class AiOptimizationSettingsForm : Form
         _btnSave.Click += (_, _) =>
         {
             SaveValues();
-            MessageBox.Show(
-                this,
-                $"✅ En güncel AI modelleri doğrulandı ve kaydedildi!\n\nAktif Sağlayıcı: {_settings.GetActiveEngineName()}",
-                "AI Ayarları",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            string effectiveLlm = !string.IsNullOrWhiteSpace(_customModelTextBox.Text)
+                ? _customModelTextBox.Text.Trim()
+                : _modelComboBox.Text.Trim();
+            string currentKey = _apiKeyTextBox.Text.Trim();
+
+            if (_currentProvider.Equals("Offline", StringComparison.OrdinalIgnoreCase))
+            {
+                MessageBox.Show(
+                    this,
+                    "⚙️ Çevrimdışı (Offline) Yerel Kural Motoru aktifleştirildi.\n\n" +
+                    "Canlı API bağlantısı yapılmayacak, yerel şablon ve kurallar devrede olacaktır.",
+                    "AI Ayarları - Offline Mod",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            else if (string.IsNullOrWhiteSpace(currentKey))
+            {
+                MessageBox.Show(
+                    this,
+                    $"⚠️ {GetProviderDisplayName(_currentProvider)} seçildi!\n" +
+                    $"🎯 Model: {effectiveLlm}\n\n" +
+                    "DİKKAT: Bu sağlayıcı için henüz bir API Anahtarı (Key) girilmedi!\n\n" +
+                    "Canlı yapay zeka yanıtı alabilmek için lütfen bu ekrandaki \"API Anahtarı\" kutusuna geçerli anahtarınızı girin. " +
+                    "Anahtar girilene kadar canlı sorgularda hata almamak için sistem yerel offline kuralları çalıştıracaktır.",
+                    "AI Ayarları - API Anahtarı Gerekli",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            else
+            {
+                MessageBox.Show(
+                    this,
+                    $"✅ {GetProviderDisplayName(_currentProvider)} Başarıyla Aktifleştirildi!\n\n" +
+                    $"• Sağlayıcı: {GetProviderDisplayName(_currentProvider)}\n" +
+                    $"• LLM Modeli: {effectiveLlm}\n" +
+                    $"• Görsel Modeli: {(_imageModelComboBox.Enabled ? _imageModelComboBox.Text : "Harici / Devre Dışı")}\n" +
+                    $"• API Durumu: Canlı Anahtar Kaydedildi",
+                    "AI Ayarları - Başarılı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+
             DialogResult = DialogResult.OK;
             Close();
         };
 
         _btnTest.Text = "⚡ Hızlı API Testi";
+        _btnTest.UseMnemonic = false;
         _btnTest.BackColor = Color.FromArgb(30, 41, 59);
         _btnTest.ForeColor = Color.FromArgb(56, 189, 248); // Electric Cyan
         _btnTest.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
@@ -187,6 +229,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         _btnTest.Click += (_, _) => TestSettings();
 
         _btnClose.Text = "✕ Kapat";
+        _btnClose.UseMnemonic = false;
         _btnClose.BackColor = Color.FromArgb(30, 41, 59);
         _btnClose.ForeColor = Color.FromArgb(148, 163, 184);
         _btnClose.FlatStyle = FlatStyle.Flat;
@@ -261,34 +304,37 @@ internal sealed class AiOptimizationSettingsForm : Form
             Margin = new Padding(0)
         };
 
-        string[] providers = ["🔵 Google Gemini", "🟢 OpenAI (GPT)", "🟣 DeepSeek", "🟠 Claude", "⚪ xAI Grok", "⚙️ Offline"];
-        foreach (var p in providers)
+        (string Key, string DisplayText)[] providers = [
+            ("Gemini", "Google Gemini"),
+            ("OpenAI", "OpenAI (GPT)"),
+            ("DeepSeek", "DeepSeek"),
+            ("Claude", "Claude"),
+            ("Grok", "xAI Grok"),
+            ("Offline", "Offline Mod")
+        ];
+
+        foreach (var (key, text) in providers)
         {
             var btn = new Button
             {
-                Text = p,
-                Height = 33,
+                Text = "  " + text,
+                Image = AiProviderIconHelper.GetProviderIcon(key, 20),
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextAlign = ContentAlignment.MiddleRight,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                UseMnemonic = false,
+                Height = 35,
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
                 BackColor = Color.FromArgb(30, 41, 59),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Cursor = Cursors.Hand,
                 Font = new Font("Segoe UI", 8.5F),
-                Padding = new Padding(8, 0, 8, 0),
+                Padding = new Padding(8, 0, 10, 0),
                 Margin = new Padding(0, 4, 8, 4)
             };
             btn.FlatAppearance.BorderColor = Color.FromArgb(51, 65, 85);
             btn.FlatAppearance.BorderSize = 1;
-
-            string key = p switch
-            {
-                var s when s.Contains("Gemini") => "Gemini",
-                var s when s.Contains("OpenAI") => "OpenAI",
-                var s when s.Contains("DeepSeek") => "DeepSeek",
-                var s when s.Contains("Claude") => "Claude",
-                var s when s.Contains("Grok") => "Grok",
-                _ => "Offline"
-            };
 
             btn.Click += (_, _) => SelectProvider(key);
             _providerButtons[key] = btn;
@@ -423,8 +469,10 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     private void SelectProvider(string providerKey)
     {
-        // Önceki sağlayıcının yazdığı key'i hafızaya al
-        SaveCurrentKeyToSettingsMemory();
+        if (!_isInitializing)
+        {
+            SaveCurrentKeyToSettingsMemory();
+        }
 
         _currentProvider = providerKey;
 
@@ -476,6 +524,19 @@ internal sealed class AiOptimizationSettingsForm : Form
             ]);
             _imageModelComboBox.Text = AiModelNormalizer.NormalizeGeminiImageModel(_settings.GeminiImageModel);
 
+            // Studio config senkronizasyonu
+            if (string.IsNullOrWhiteSpace(_settings.GeminiApiKey))
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.GoogleGeminiApiKey))
+                    {
+                        _settings.GeminiApiKey = StudioConfigurationManager.Current.GoogleGeminiApiKey;
+                    }
+                }
+                catch { }
+            }
+
             _apiKeyTextBox.Text = _settings.GeminiApiKey ?? "";
             _apiKeyTextBox.Enabled = true;
         }
@@ -500,6 +561,19 @@ internal sealed class AiOptimizationSettingsForm : Form
                 "dall-e-2"
             ]);
             _imageModelComboBox.Text = AiModelNormalizer.NormalizeOpenAiImageModel(_settings.OpenAiImageModel);
+
+            // Studio config senkronizasyonu
+            if (string.IsNullOrWhiteSpace(_settings.OpenAiApiKey))
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.OpenAiApiKey))
+                    {
+                        _settings.OpenAiApiKey = StudioConfigurationManager.Current.OpenAiApiKey;
+                    }
+                }
+                catch { }
+            }
 
             _apiKeyTextBox.Text = _settings.OpenAiApiKey ?? "";
             _apiKeyTextBox.Enabled = true;
@@ -569,8 +643,18 @@ internal sealed class AiOptimizationSettingsForm : Form
             _apiKeyTextBox.Enabled = false;
         }
 
-        WriteStatus($"Sağlayıcı seçildi: {providerKey} (Model: {_modelComboBox.Text})");
+        WriteStatus($"Sağlayıcı seçildi: {GetProviderDisplayName(providerKey)} (Model: {_modelComboBox.Text})");
     }
+
+    private static string GetProviderDisplayName(string key) => key switch
+    {
+        "Gemini" => "Google Gemini",
+        "OpenAI" => "OpenAI (GPT)",
+        "DeepSeek" => "DeepSeek",
+        "Claude" => "Anthropic Claude",
+        "Grok" => "xAI Grok",
+        _ => "Offline Yerel Kural Motoru"
+    };
 
     private void SaveCurrentKeyToSettingsMemory()
     {
@@ -587,18 +671,26 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     private void LoadValues()
     {
-        string p = string.IsNullOrWhiteSpace(_settings.Provider) ? "Gemini" : _settings.Provider;
-        SelectProvider(p);
+        _isInitializing = true;
+        try
+        {
+            string p = string.IsNullOrWhiteSpace(_settings.Provider) ? "Gemini" : _settings.Provider;
+            SelectProvider(p);
 
-        _bflKeyTextBox.Text = _settings.BflApiKey ?? "";
-        _ideogramKeyTextBox.Text = _settings.IdeogramApiKey ?? "";
-        _photoRoomKeyTextBox.Text = !string.IsNullOrWhiteSpace(_settings.PhotoRoomApiKey)
-            ? _settings.PhotoRoomApiKey
-            : PhotoRoomSettingsStore.Load().ApiKey;
+            _bflKeyTextBox.Text = _settings.BflApiKey ?? "";
+            _ideogramKeyTextBox.Text = _settings.IdeogramApiKey ?? "";
+            _photoRoomKeyTextBox.Text = !string.IsNullOrWhiteSpace(_settings.PhotoRoomApiKey)
+                ? _settings.PhotoRoomApiKey
+                : PhotoRoomSettingsStore.Load().ApiKey;
 
-        _chkStrictLiveAi.Checked = !_settings.AllowSilentOfflineFallback;
+            _chkStrictLiveAi.Checked = !_settings.AllowSilentOfflineFallback;
 
-        WriteStatus($"Ayar dosyası başarıyla yüklendi: {AiOptimizationSettingsStore.SettingsPath}");
+            WriteStatus($"Ayar dosyası başarıyla yüklendi: {AiOptimizationSettingsStore.SettingsPath}");
+        }
+        finally
+        {
+            _isInitializing = false;
+        }
     }
 
     private void SaveValues()
@@ -735,6 +827,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         var lblTitle = new Label
         {
             Text = title,
+            UseMnemonic = false,
             Dock = DockStyle.Top,
             Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
             ForeColor = Color.White,
@@ -748,6 +841,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             var lblSub = new Label
             {
                 Text = subNote,
+                UseMnemonic = false,
                 Dock = DockStyle.Top,
                 Font = new Font("Segoe UI", 8F),
                 ForeColor = Color.FromArgb(148, 163, 184),
@@ -767,6 +861,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     private static Label CreateFieldLabel(string text) => new()
     {
         Text = text,
+        UseMnemonic = false,
         Dock = DockStyle.Fill,
         TextAlign = ContentAlignment.MiddleLeft,
         Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),

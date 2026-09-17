@@ -62,21 +62,63 @@ internal sealed class AiOptimizationSettings
 
     public string GetActiveBadgeText()
     {
-        if (UseOpenAi) return $"🟢 Aktif: OpenAI ({AiModelNormalizer.NormalizeOpenAiTextModel(OpenAiModel)})";
-        if (UseGemini) return $"🔵 Aktif: Gemini ({AiModelNormalizer.NormalizeGeminiTextModel(GeminiModel)})";
-        if (UseClaude) return $"🟣 Aktif: Claude ({AiModelNormalizer.NormalizeClaudeTextModel(ClaudeModel)})";
-        if (UseDeepSeek) return $"🔴 Aktif: DeepSeek ({AiModelNormalizer.NormalizeDeepSeekModel(DeepSeekModel)})";
-        if (UseGrok) return $"🟠 Aktif: Grok ({AiModelNormalizer.NormalizeGrokModel(GrokModel)})";
+        if (Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(OpenAiApiKey) ? " [Anahtar Yok]" : "";
+            return $"🟢 Aktif: OpenAI ({AiModelNormalizer.NormalizeOpenAiTextModel(OpenAiModel)}){keyWarn}";
+        }
+        if (Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(GeminiApiKey) ? " [Anahtar Yok]" : "";
+            return $"🔵 Aktif: Gemini ({AiModelNormalizer.NormalizeGeminiTextModel(GeminiModel)}){keyWarn}";
+        }
+        if (Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(ClaudeApiKey) ? " [Anahtar Yok]" : "";
+            return $"🟣 Aktif: Claude ({AiModelNormalizer.NormalizeClaudeTextModel(ClaudeModel)}){keyWarn}";
+        }
+        if (Provider.Equals("DeepSeek", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(DeepSeekApiKey) ? " [Anahtar Yok]" : "";
+            return $"🔴 Aktif: DeepSeek ({AiModelNormalizer.NormalizeDeepSeekModel(DeepSeekModel)}){keyWarn}";
+        }
+        if (Provider.Equals("Grok", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(GrokApiKey) ? " [Anahtar Yok]" : "";
+            return $"🟠 Aktif: Grok ({AiModelNormalizer.NormalizeGrokModel(GrokModel)}){keyWarn}";
+        }
+
         return "⚡ Aktif: Offline Kural Motoru";
     }
 
     public string GetActiveEngineName()
     {
-        if (UseOpenAi) return $"OpenAI ({AiModelNormalizer.NormalizeOpenAiTextModel(OpenAiModel)})";
-        if (UseGemini) return $"Google Gemini ({AiModelNormalizer.NormalizeGeminiTextModel(GeminiModel)})";
-        if (UseClaude) return $"Anthropic Claude ({AiModelNormalizer.NormalizeClaudeTextModel(ClaudeModel)})";
-        if (UseDeepSeek) return $"DeepSeek ({AiModelNormalizer.NormalizeDeepSeekModel(DeepSeekModel)})";
-        if (UseGrok) return $"xAI Grok ({AiModelNormalizer.NormalizeGrokModel(GrokModel)})";
+        if (Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(OpenAiApiKey) ? " [API Anahtarı Eksik!]" : "";
+            return $"OpenAI ({AiModelNormalizer.NormalizeOpenAiTextModel(OpenAiModel)}){keyWarn}";
+        }
+        if (Provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(GeminiApiKey) ? " [API Anahtarı Eksik!]" : "";
+            return $"Google Gemini ({AiModelNormalizer.NormalizeGeminiTextModel(GeminiModel)}){keyWarn}";
+        }
+        if (Provider.Equals("Claude", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(ClaudeApiKey) ? " [API Anahtarı Eksik!]" : "";
+            return $"Anthropic Claude ({AiModelNormalizer.NormalizeClaudeTextModel(ClaudeModel)}){keyWarn}";
+        }
+        if (Provider.Equals("DeepSeek", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(DeepSeekApiKey) ? " [API Anahtarı Eksik!]" : "";
+            return $"DeepSeek ({AiModelNormalizer.NormalizeDeepSeekModel(DeepSeekModel)}){keyWarn}";
+        }
+        if (Provider.Equals("Grok", StringComparison.OrdinalIgnoreCase))
+        {
+            string keyWarn = string.IsNullOrWhiteSpace(GrokApiKey) ? " [API Anahtarı Eksik!]" : "";
+            return $"xAI Grok ({AiModelNormalizer.NormalizeGrokModel(GrokModel)}){keyWarn}";
+        }
+
         return "Offline Yerel Kural Motoru";
     }
 }
