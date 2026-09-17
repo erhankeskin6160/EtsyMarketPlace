@@ -1258,18 +1258,12 @@ public class ModernScrollPanel : Panel, IMessageFilter
             DoubleBuffered = true;
             SetStyle(
                 ControlStyles.OptimizedDoubleBuffer |
-                ControlStyles.AllPaintingInWmPaint |
-                ControlStyles.UserPaint,
+                ControlStyles.AllPaintingInWmPaint,
                 true);
+            SetStyle(ControlStyles.UserPaint, false);
             Margin = Padding.Empty;
             Padding = Padding.Empty;
             BackColor = UiStyle.CardBackground;
-        }
-
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            e.Graphics.Clear(BackColor);
-            base.OnPaint(e);
         }
     }
 
@@ -1359,7 +1353,6 @@ public class ModernScrollPanel : Panel, IMessageFilter
             if (_content.Location != newLoc)
             {
                 _content.Location = newLoc;
-                _viewport.Invalidate(true);
             }
         }
         catch { }
@@ -1468,15 +1461,6 @@ public class ModernScrollPanel : Panel, IMessageFilter
             int testW = HorizontalScrollEnabled ? contentW : Math.Max(100, availW - scrollBarW);
             int prefH = _content.GetPreferredSize(new Size(testW, 0)).Height;
             if (prefH > contentH) contentH = prefH;
-
-            if (contentH <= 0 || contentH < _content.Height)
-            {
-                contentH = _content.Height;
-            }
-            if (contentW <= 0 || contentW < _content.Width)
-            {
-                contentW = _content.Width;
-            }
 
             bool needVBar = contentH > availH;
             int visibleContentW = needVBar ? Math.Max(0, availW - scrollBarW) : availW;
@@ -1609,6 +1593,68 @@ public class ModernScrollPanel : Panel, IMessageFilter
             catch { }
         }
         base.Dispose(disposing);
+    }
+}
+
+/// <summary>
+/// A high-performance, flicker-free vertical stack panel that sequentially stacks child controls top-to-bottom,
+/// preserving their explicit heights and stretching their widths, with zero TableLayoutPanel deformation/squashing.
+/// </summary>
+public class ModernVerticalStackPanel : Panel
+{
+    public ModernVerticalStackPanel()
+    {
+        DoubleBuffered = true;
+        SetStyle(
+            ControlStyles.AllPaintingInWmPaint |
+            ControlStyles.OptimizedDoubleBuffer |
+            ControlStyles.ResizeRedraw,
+            true);
+        AutoScroll = false;
+        Margin = Padding.Empty;
+        Padding = new Padding(0, 0, 8, 0);
+    }
+
+    protected override void OnLayout(LayoutEventArgs levent)
+    {
+        int y = Padding.Top;
+        int clientW = Math.Max(50, ClientSize.Width - Padding.Horizontal);
+
+        for (int i = 0; i < Controls.Count; i++)
+        {
+            var c = Controls[i];
+            if (!c.Visible) continue;
+
+            y += c.Margin.Top;
+            int h = c.AutoSize ? c.GetPreferredSize(new Size(clientW - c.Margin.Horizontal, 0)).Height : c.Height;
+            if (h <= 0) h = c.Height > 0 ? c.Height : 24;
+            int x = Padding.Left + c.Margin.Left;
+            int w = Math.Max(30, clientW - c.Margin.Horizontal);
+            c.SetBounds(x, y, w, h);
+            y += h + c.Margin.Bottom;
+        }
+        y += Padding.Bottom;
+
+        if (Height != y)
+        {
+            Height = y;
+        }
+    }
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        int y = Padding.Top;
+        int maxW = proposedSize.Width > 0 ? proposedSize.Width : (Width > 0 ? Width : 300);
+        for (int i = 0; i < Controls.Count; i++)
+        {
+            var c = Controls[i];
+            if (!c.Visible) continue;
+            int h = c.AutoSize ? c.GetPreferredSize(new Size(maxW - c.Margin.Horizontal, 0)).Height : c.Height;
+            if (h <= 0) h = c.Height > 0 ? c.Height : 24;
+            y += c.Margin.Top + h + c.Margin.Bottom;
+        }
+        y += Padding.Bottom;
+        return new Size(maxW, y);
     }
 }
 
@@ -1831,15 +1877,40 @@ public class ModernMultilineTextBox : Panel
         }
     }
 
+    protected override void OnBackColorChanged(EventArgs e)
+    {
+        base.OnBackColorChanged(e);
+        if (_innerBox != null) _innerBox.BackColor = BackColor;
+    }
+
+    protected override void OnForeColorChanged(EventArgs e)
+    {
+        base.OnForeColorChanged(e);
+        if (_innerBox != null) _innerBox.ForeColor = ForeColor;
+    }
+
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        int w = proposedSize.Width > 0 ? proposedSize.Width : Width;
+        return new Size(w, Height);
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
+        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
+        if (rect.Width <= 0 || rect.Height <= 0) return;
+
+        using (var bgBrush = new SolidBrush(BackColor))
+        {
+            using var bgPath = ModernCardPanel.CreateRoundedRectanglePath(rect, 6);
+            g.FillPath(bgBrush, bgPath);
+        }
+
         Color borderColor = _isFocused ? UiStyle.PrimaryColor : UiStyle.BorderColor;
         using var pen = new Pen(borderColor, _isFocused ? 1.5f : 1f);
-        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = ModernCardPanel.CreateRoundedRectanglePath(rect, 6);
         g.DrawPath(pen, path);
     }
