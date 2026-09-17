@@ -246,7 +246,7 @@ public sealed class GeminiRateLimitDialog : Form
         _btnRefresh.Size = new Size(100, 34);
         _btnRefresh.Location = new Point(300, 4);
         _btnRefresh.Cursor = Cursors.Hand;
-        _btnRefresh.Click += async (_, _) => await LoadDataAsync();
+        _btnRefresh.Click += async (_, _) => await LoadDataAsync(forceRefresh: true);
 
         _btnClose.Text = "Kapat";
         _btnClose.BackColor = Color.FromArgb(30, 41, 59);
@@ -402,7 +402,7 @@ public sealed class GeminiRateLimitDialog : Form
         }
     }
 
-    private async Task LoadDataAsync()
+    private async Task LoadDataAsync(bool forceRefresh = false)
     {
         _btnRefresh.Enabled = false;
         _btnRefresh.Text = "⏳ Yükleniyor...";
@@ -420,7 +420,8 @@ public sealed class GeminiRateLimitDialog : Form
             _report = await GeminiRateLimitService.FetchRateLimitReportAsync(
                 settings.GeminiApiKey,
                 days: days,
-                projectName: _cboProject.SelectedItem?.ToString() ?? "ffff");
+                projectName: _cboProject.SelectedItem?.ToString() ?? "gen-lang-client-0458130432",
+                forceRefresh: forceRefresh);
 
             UpdateUi();
         }

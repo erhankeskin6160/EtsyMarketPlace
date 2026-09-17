@@ -85,6 +85,7 @@ public static class AiTokenUsageTrackerService
                 };
 
                 await repo.SaveUsageAsync(record);
+                AiDataCacheService.InvalidateTodayAndBalance(provider);
             }
             catch { }
         });

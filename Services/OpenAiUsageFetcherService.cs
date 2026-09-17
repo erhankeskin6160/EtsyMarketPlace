@@ -21,6 +21,7 @@ public static class OpenAiUsageFetcherService
         int? year = null,
         int? month = null,
         int? lastDays = null,
+        bool forceRefresh = false,
         CancellationToken ct = default)
     {
         var cultureTr = new CultureInfo("tr-TR");
@@ -43,6 +44,32 @@ public static class OpenAiUsageFetcherService
             periodLabel = startDate.ToString("MMMM yyyy", cultureTr);
         }
 
+        string? effectiveAdminKey = !string.IsNullOrWhiteSpace(adminApiKey)
+            ? adminApiKey.Trim()
+            : (apiKey.Trim().StartsWith("sk-admin-", StringComparison.OrdinalIgnoreCase) ? apiKey.Trim() : null);
+
+        string cacheKey = $"report_{startDate:yyyyMMdd}_{endDate:yyyyMMdd}_{(effectiveAdminKey != null ? "admin" : "std")}";
+        bool isPastMonth = endDate <= DateTime.UtcNow.Date;
+
+        return await AiDataCacheService.GetOrFetchAsync<OpenAiOfficialUsageReport>(
+            provider: "OpenAI",
+            cacheKey: cacheKey,
+            category: "usage_report",
+            ttl: isPastMonth ? TimeSpan.FromDays(7) : TimeSpan.FromMinutes(10),
+            isFinalized: isPastMonth,
+            fetcher: () => FetchOfficialUsageReportInternalAsync(apiKey, effectiveAdminKey, startDate, endDate, periodLabel, ct),
+            forceRefresh: forceRefresh,
+            ct: ct);
+    }
+
+    private static async Task<OpenAiOfficialUsageReport> FetchOfficialUsageReportInternalAsync(
+        string apiKey,
+        string? effectiveAdminKey,
+        DateTime startDate,
+        DateTime endDate,
+        string periodLabel,
+        CancellationToken ct)
+    {
         var report = new OpenAiOfficialUsageReport
         {
             Year = startDate.Year,
@@ -53,10 +80,6 @@ public static class OpenAiUsageFetcherService
 
         long startUnix = new DateTimeOffset(startDate).ToUnixTimeSeconds();
         long endUnix = new DateTimeOffset(endDate).ToUnixTimeSeconds();
-
-        string? effectiveAdminKey = !string.IsNullOrWhiteSpace(adminApiKey)
-            ? adminApiKey.Trim()
-            : (apiKey.Trim().StartsWith("sk-admin-", StringComparison.OrdinalIgnoreCase) ? apiKey.Trim() : null);
 
         // 1. Admin Key ile OpenAI resmi organizasyon uç noktalarını çek
         if (!string.IsNullOrWhiteSpace(effectiveAdminKey))

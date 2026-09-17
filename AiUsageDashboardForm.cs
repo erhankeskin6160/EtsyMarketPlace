@@ -59,6 +59,18 @@ public sealed class AiUsageDashboardForm : Form
 
         BuildLayout();
         Load += async (_, _) => await RefreshDataAsync();
+
+        Action onUsage = () =>
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            try
+            {
+                BeginInvoke(async () => await RefreshDataAsync(queryLiveBalance: false));
+            }
+            catch { }
+        };
+        AiDataCacheService.OnUsageUpdated += onUsage;
+        FormClosed += (_, _) => AiDataCacheService.OnUsageUpdated -= onUsage;
     }
 
     private void BuildLayout()
@@ -346,21 +358,18 @@ public sealed class AiUsageDashboardForm : Form
             var selectedProvider = _cboProvider.SelectedItem?.ToString() ?? "Tümü (Genel Bakış)";
             UpdateProviderSpecificControls();
 
-            // 1. Canlı Bakiye Sorguları
-            if (queryLiveBalance || _deepSeekBalance == null)
+            // 1. Canlı Bakiye ve Sağlayıcı Durum Sorguları (Önbellekli / Delta)
+            if (!string.IsNullOrWhiteSpace(settings.DeepSeekApiKey))
             {
-                if (!string.IsNullOrWhiteSpace(settings.DeepSeekApiKey))
-                {
-                    _deepSeekBalance = await AiBalanceCheckerService.CheckDeepSeekBalanceAsync(settings.DeepSeekApiKey);
-                }
-                if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey) || !string.IsNullOrWhiteSpace(settings.OpenAiAdminApiKey))
-                {
-                    _openAiStatus = await AiBalanceCheckerService.CheckOpenAiStatusAsync(settings.OpenAiApiKey, settings.OpenAiAdminApiKey);
-                }
-                if (!string.IsNullOrWhiteSpace(settings.GeminiApiKey))
-                {
-                    _geminiStatus = await AiBalanceCheckerService.CheckGeminiStatusAsync(settings.GeminiApiKey);
-                }
+                _deepSeekBalance = await AiBalanceCheckerService.CheckDeepSeekBalanceAsync(settings.DeepSeekApiKey, forceRefresh: queryLiveBalance);
+            }
+            if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey) || !string.IsNullOrWhiteSpace(settings.OpenAiAdminApiKey))
+            {
+                _openAiStatus = await AiBalanceCheckerService.CheckOpenAiStatusAsync(settings.OpenAiApiKey, settings.OpenAiAdminApiKey, forceRefresh: queryLiveBalance);
+            }
+            if (!string.IsNullOrWhiteSpace(settings.GeminiApiKey))
+            {
+                _geminiStatus = await AiBalanceCheckerService.CheckGeminiStatusAsync(settings.GeminiApiKey, forceRefresh: queryLiveBalance);
             }
 
             // 2. OpenAI Resmi Kullanım & Fatura Verilerini Otomatik Olarak Çek
@@ -383,7 +392,8 @@ public sealed class AiUsageDashboardForm : Form
                     _officialOpenAiReport = await OpenAiUsageFetcherService.FetchOfficialUsageReportAsync(
                         settings.OpenAiApiKey ?? "",
                         settings.OpenAiAdminApiKey,
-                        lastDays: targetDays);
+                        lastDays: targetDays,
+                        forceRefresh: queryLiveBalance);
                 }
                 catch (Exception ex)
                 {
@@ -403,7 +413,8 @@ public sealed class AiUsageDashboardForm : Form
                     _geminiRateLimitReport = await GeminiRateLimitService.FetchRateLimitReportAsync(
                         settings.GeminiApiKey,
                         days: targetDays ?? 28,
-                        projectName: "gen-lang-client-0458130432");
+                        projectName: "gen-lang-client-0458130432",
+                        forceRefresh: queryLiveBalance);
                 }
                 catch (Exception ex)
                 {
@@ -547,8 +558,9 @@ public sealed class AiUsageDashboardForm : Form
             }
 
             int totalRows = _grid.Rows.Count;
-            string officialNotice = (_officialOpenAiReport?.DailyItems.Count > 0) ? " | OpenAI resmi canlı verileri dahil edildi" : "";
-            _lblStatus.Text = $"Son güncelleme: {DateTime.Now:HH:mm:ss} | Toplam {totalRows} işlem/gün listelendi{officialNotice}.";
+            string officialNotice = (_officialOpenAiReport?.DailyItems.Count > 0) ? " | OpenAI resmi verileri dahil edildi" : "";
+            string cacheNotice = queryLiveBalance ? " 🔄 (Canlı API Sorgulandı)" : " ⚡ (Akıllı Önbellek & 0ms)";
+            _lblStatus.Text = $"Son güncelleme: {DateTime.Now:HH:mm:ss} | Toplam {totalRows} işlem/gün listelendi{officialNotice}{cacheNotice}.";
         }
         catch (Exception ex)
         {

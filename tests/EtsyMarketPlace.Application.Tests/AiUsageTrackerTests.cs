@@ -499,5 +499,51 @@ public sealed class AiUsageTrackerTests
         string invalidKeyMsg = AiPriceCalculator.ParseGeminiErrorJson(invalidKeyJson, 400);
         Assert.Contains("Geçersiz API Anahtarı", invalidKeyMsg);
     }
+
+    [Fact]
+    public async Task SqliteAiUsageRepository_CacheAndDelta_WorksCorrectly()
+    {
+        var tempDbPath = Path.Combine(Path.GetTempPath(), $"test-ai-cache-{Guid.NewGuid():N}.db");
+        try
+        {
+            var repo = new SqliteAiUsageRepository(tempDbPath);
+            await repo.InitializeAsync();
+
+            // 1. Initially null
+            var initial = await repo.GetCachedPayloadAsync("Gemini", "models_list");
+            Assert.Null(initial);
+
+            // 2. Save payload (finalized)
+            string testJson = "[\"gemini-2.5-flash\",\"gemini-3.7-flash\"]";
+            await repo.SaveCachedPayloadAsync("Gemini", "models_list", "models", testJson, isFinalized: true);
+
+            // 3. Retrieve
+            var cached = await repo.GetCachedPayloadAsync("Gemini", "models_list");
+            Assert.Equal(testJson, cached);
+
+            // 4. Save daily finalized items
+            await repo.SaveCachedPayloadAsync("OpenAI", "2026-09-15", "daily_usage", "{\"tokens\":5000}", isFinalized: true);
+            await repo.SaveCachedPayloadAsync("OpenAI", "2026-09-16", "daily_usage", "{\"tokens\":8000}", isFinalized: true);
+            await repo.SaveCachedPayloadAsync("OpenAI", "2026-09-17", "daily_usage", "{\"tokens\":2000}", isFinalized: false); // Not finalized (today)
+
+            var finalized = await repo.GetFinalizedDailyItemsAsync("OpenAI", "daily_usage", DateTimeOffset.UtcNow.AddDays(-5));
+            Assert.Equal(2, finalized.Count);
+            Assert.True(finalized.ContainsKey("2026-09-15"));
+            Assert.True(finalized.ContainsKey("2026-09-16"));
+            Assert.False(finalized.ContainsKey("2026-09-17")); // Today should not be returned as finalized
+
+            // 5. Invalidate specific
+            await repo.InvalidateCacheAsync("Gemini", "models_list");
+            var afterInvalidate = await repo.GetCachedPayloadAsync("Gemini", "models_list");
+            Assert.Null(afterInvalidate);
+        }
+        finally
+        {
+            if (File.Exists(tempDbPath))
+            {
+                try { File.Delete(tempDbPath); } catch { }
+            }
+        }
+    }
 }
 

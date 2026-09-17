@@ -14,29 +14,39 @@ public static class GeminiRateLimitService
     public static async Task<GeminiRateLimitReport> FetchRateLimitReportAsync(
         string apiKey,
         int days = 28,
-        string projectName = "ffff",
+        string projectName = "gen-lang-client-0458130432",
+        bool forceRefresh = false,
         CancellationToken ct = default)
     {
-        var availableModels = new List<string>();
+        List<string> availableModels = [];
 
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
-            try
-            {
-                string url = $"https://generativelanguage.googleapis.com/v1beta/models?key={Uri.EscapeDataString(apiKey.Trim())}";
-                using var req = new HttpRequestMessage(HttpMethod.Get, url);
-                using var resp = await HttpClient.SendAsync(req, ct);
-
-                if (resp.IsSuccessStatusCode)
+            availableModels = await AiDataCacheService.GetOrFetchAsync<List<string>>(
+                provider: "Gemini",
+                cacheKey: "models_list",
+                category: "models",
+                ttl: AiDataCacheService.ModelsCacheTtl,
+                isFinalized: false,
+                fetcher: async () =>
                 {
-                    string body = await resp.Content.ReadAsStringAsync(ct);
-                    availableModels = AiPriceCalculator.ParseGeminiModelsJson(body);
-                }
-            }
-            catch
-            {
-                // Fallback to local default models
-            }
+                    try
+                    {
+                        string url = $"https://generativelanguage.googleapis.com/v1beta/models?key={Uri.EscapeDataString(apiKey.Trim())}";
+                        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+                        using var resp = await HttpClient.SendAsync(req, ct);
+
+                        if (resp.IsSuccessStatusCode)
+                        {
+                            string body = await resp.Content.ReadAsStringAsync(ct);
+                            return AiPriceCalculator.ParseGeminiModelsJson(body);
+                        }
+                    }
+                    catch { }
+                    return [];
+                },
+                forceRefresh: forceRefresh,
+                ct: ct) ?? [];
         }
 
         // Fetch local SQLite AI call records for Google Gemini
