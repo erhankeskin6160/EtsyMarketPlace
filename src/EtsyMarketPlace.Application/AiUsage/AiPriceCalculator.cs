@@ -519,9 +519,83 @@ public static class AiPriceCalculator
         return list;
     }
 
+    /// <summary>
+    /// Google Gemini GET https://generativelanguage.googleapis.com/v1beta/models JSON çıktısını ayrıştırır ve model listesini döndürür.
+    /// </summary>
+    public static List<string> ParseGeminiModelsJson(string json)
+    {
+        var list = new List<string>();
+        if (string.IsNullOrWhiteSpace(json)) return list;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("models", out var modelsEl) && modelsEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in modelsEl.EnumerateArray())
+                {
+                    if (item.TryGetProperty("name", out var nameEl) && !string.IsNullOrWhiteSpace(nameEl.GetString()))
+                    {
+                        string name = nameEl.GetString()!;
+                        string shortName = name.StartsWith("models/", StringComparison.OrdinalIgnoreCase)
+                            ? name.Substring(7)
+                            : name;
+
+                        // Yalnızca metin ve içerik üreten ana modelleri veya tüm modelleri dahil et
+                        list.Add(shortName);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return list;
+    }
+
+    /// <summary>
+    /// Google Gemini API hata JSON yanıtını kullanıcı dostu mesaja dönüştürür.
+    /// </summary>
+    public static string ParseGeminiErrorJson(string json, int httpStatusCode)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return httpStatusCode switch
+            {
+                400 => "❌ Geçersiz API Anahtarı (HTTP 400)",
+                403 => "❌ Yetkisiz Erişim / İzin Yok (HTTP 403)",
+                429 => "🚨 Günlük / Dakikalık Kota Aşıldı (HTTP 429)",
+                _ => $"⚠️ Sunucu Hatası (HTTP {httpStatusCode})"
+            };
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty("error", out var errEl))
+            {
+                string? status = errEl.TryGetProperty("status", out var stProp) ? stProp.GetString() : null;
+                string? message = errEl.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : null;
+
+                if (status == "RESOURCE_EXHAUSTED" || httpStatusCode == 429)
+                    return $"🚨 Kota Aşıldı (429 RESOURCE_EXHAUSTED): {message ?? "Kota limitine ulaşıldı"}";
+
+                if (status == "INVALID_ARGUMENT" && (message?.Contains("API key", StringComparison.OrdinalIgnoreCase) == true))
+                    return "❌ Geçersiz API Anahtarı. Lütfen geçerli bir Google AI Studio anahtarı girin.";
+
+                if (!string.IsNullOrWhiteSpace(message))
+                    return $"⚠️ Hata ({status ?? httpStatusCode.ToString()}): {message}";
+            }
+        }
+        catch { }
+
+        return $"⚠️ Yanıt Kodu: {httpStatusCode}";
+    }
+
     private static decimal ParseDecimal(string? str)
     {
         if (string.IsNullOrWhiteSpace(str)) return 0m;
         return decimal.TryParse(str, NumberStyles.Any, CultureInfo.InvariantCulture, out var val) ? val : 0m;
     }
 }
+

@@ -160,11 +160,16 @@ public static class AiBalanceCheckerService
     }
 
     /// <summary>
-    /// Google Gemini kota ve sağlık durumu kontrolü
+    /// Google Gemini kota ve sağlık durumu kontrolü (GET https://generativelanguage.googleapis.com/v1beta/models)
     /// </summary>
     public static async Task<AiProviderBalanceInfo> CheckGeminiStatusAsync(string apiKey, CancellationToken ct = default)
     {
-        var info = new AiProviderBalanceInfo { Provider = "Google Gemini", CheckedAt = DateTimeOffset.Now };
+        var info = new AiProviderBalanceInfo
+        {
+            Provider = "Google Gemini",
+            CheckedAt = DateTimeOffset.Now,
+            MaskedApiKey = MaskApiKey(apiKey)
+        };
 
         if (string.IsNullOrWhiteSpace(apiKey))
         {
@@ -178,16 +183,20 @@ public static class AiBalanceCheckerService
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
 
             using var resp = await HttpClient.SendAsync(req, ct);
+            var body = await resp.Content.ReadAsStringAsync(ct);
+
             if (resp.IsSuccessStatusCode)
             {
                 info.IsAvailable = true;
-                info.StatusMessage = "✅ Google Gemini API Bağlantısı Aktif";
+                var models = AiPriceCalculator.ParseGeminiModelsJson(body);
+                info.AvailableModels = models;
+                info.StatusMessage = models.Count > 0
+                    ? $"✅ Google Gemini Aktif ({models.Count} Model Hazır)"
+                    : "✅ Google Gemini API Bağlantısı Aktif";
             }
             else
             {
-                info.StatusMessage = resp.StatusCode == (System.Net.HttpStatusCode)429
-                    ? "🚨 Günlük Kota Aşıldı (HTTP 429)"
-                    : $"⚠️ Yanıt Kodu: {(int)resp.StatusCode}";
+                info.StatusMessage = AiPriceCalculator.ParseGeminiErrorJson(body, (int)resp.StatusCode);
             }
         }
         catch (Exception ex)

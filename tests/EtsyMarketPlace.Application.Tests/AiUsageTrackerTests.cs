@@ -428,4 +428,76 @@ public sealed class AiUsageTrackerTests
         Assert.Contains("deepseek-chat", models);
         Assert.Contains("deepseek-reasoner", models);
     }
+
+    [Fact]
+    public void TestParseGeminiModelsJson_ExtractsModelListAndLimits()
+    {
+        string geminiModelsJson = """
+        {
+            "models": [
+                {
+                    "name": "models/gemini-2.0-flash",
+                    "version": "001",
+                    "displayName": "Gemini 2.0 Flash",
+                    "description": "Next gen features",
+                    "inputTokenLimit": 1048576,
+                    "outputTokenLimit": 8192
+                },
+                {
+                    "name": "models/gemini-1.5-flash",
+                    "version": "001",
+                    "displayName": "Gemini 1.5 Flash",
+                    "inputTokenLimit": 1048576,
+                    "outputTokenLimit": 8192
+                },
+                {
+                    "name": "models/gemini-1.5-pro",
+                    "displayName": "Gemini 1.5 Pro",
+                    "inputTokenLimit": 2097152,
+                    "outputTokenLimit": 8192
+                }
+            ]
+        }
+        """;
+
+        var models = AiPriceCalculator.ParseGeminiModelsJson(geminiModelsJson);
+        Assert.Equal(3, models.Count);
+        Assert.Contains("gemini-2.0-flash", models);
+        Assert.Contains("gemini-1.5-flash", models);
+        Assert.Contains("gemini-1.5-pro", models);
+    }
+
+    [Fact]
+    public void TestParseGeminiErrorJson_HandlesQuotaAndInvalidKey()
+    {
+        // 1. Quota 429
+        string quotaExhaustedJson = """
+        {
+            "error": {
+                "code": 429,
+                "message": "Resource has been exhausted (check quota).",
+                "status": "RESOURCE_EXHAUSTED"
+            }
+        }
+        """;
+
+        string quotaMsg = AiPriceCalculator.ParseGeminiErrorJson(quotaExhaustedJson, 429);
+        Assert.Contains("Kota", quotaMsg);
+        Assert.Contains("RESOURCE_EXHAUSTED", quotaMsg);
+
+        // 2. Invalid API Key 400
+        string invalidKeyJson = """
+        {
+            "error": {
+                "code": 400,
+                "message": "API key not valid. Please pass a valid API key.",
+                "status": "INVALID_ARGUMENT"
+            }
+        }
+        """;
+
+        string invalidKeyMsg = AiPriceCalculator.ParseGeminiErrorJson(invalidKeyJson, 400);
+        Assert.Contains("Geçersiz API Anahtarı", invalidKeyMsg);
+    }
 }
+

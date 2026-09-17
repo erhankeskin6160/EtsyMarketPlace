@@ -464,22 +464,41 @@ public sealed class AiUsageDashboardForm : Form
         else if (selectedProvider.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
         {
             _lblCard1Title.Text = "🔵 GEMINI KOTA & DURUM";
-            _lblCard1Value.Text = _geminiStatus?.IsAvailable == true ? "API Aktif (Hazır)" : "Hata / Kota";
-            _lblCard1Sub.Text = _geminiStatus?.StatusMessage ?? "Ücretsiz planda günlük 20 istek sınırı";
+            if (_geminiStatus?.IsAvailable == true)
+            {
+                _lblCard1Value.Text = !string.IsNullOrWhiteSpace(_geminiStatus.MaskedApiKey)
+                    ? _geminiStatus.MaskedApiKey
+                    : "API Aktif (Hazır)";
+                _lblCard1Sub.Text = _geminiStatus.StatusMessage;
+            }
+            else
+            {
+                var settings = AiOptimizationSettingsStore.Load();
+                if (string.IsNullOrWhiteSpace(settings.GeminiApiKey))
+                {
+                    _lblCard1Value.Text = "Tanımlanmadı";
+                    _lblCard1Sub.Text = "🔑 'API Anahtarları' menüsünden tanımlayın";
+                }
+                else
+                {
+                    _lblCard1Value.Text = "Bağlantı Hatası";
+                    _lblCard1Sub.Text = _geminiStatus?.StatusMessage ?? "API anahtarını kontrol edin";
+                }
+            }
 
             _lblCard2Title.Text = "⚡ TÜKETİLEN TOPLAM TOKEN";
             _lblCard2Value.Text = stats.TotalTokens.ToString("N0");
-            _lblCard2Sub.Text = $"Giriş: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
+            _lblCard2Sub.Text = $"Girdi: {stats.TotalPromptTokens:N0} | Çıkış: {stats.TotalCompletionTokens:N0}";
 
             _lblCard3Title.Text = "💰 TAHMİNİ TOPLAM FATURA";
             _lblCard3Value.Text = $"${stats.TotalCostUsd:N3} USD";
-            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL";
+            _lblCard3Sub.Text = $"Yaklaşık {stats.TotalCostTry:N2} TL (Resmi Gemini Tarifesi)";
 
             _lblCard4Title.Text = "🚨 KOTA & İŞLEM SAĞLIĞI";
             _lblCard4Value.Text = $"{stats.SuccessfulRequests} Başarılı";
             _lblCard4Sub.Text = stats.Blocked429Requests > 0
                 ? $"⚠️ {stats.Blocked429Requests} İstek Kotaya Takıldı (429)!"
-                : "Tüm istekler başarıyla tamamlandı";
+                : (_geminiStatus?.IsAvailable == true ? "Ücretsiz Plan: 15 RPM / 1,500 RPD Hazır" : "API bağlantı hatası");
         }
         else if (selectedProvider.Contains("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
@@ -781,6 +800,65 @@ public sealed class AiUsageDashboardForm : Form
         }
     }
 
+    private void ShowGeminiKeyDialog()
+    {
+        var settings = AiOptimizationSettingsStore.Load();
+
+        using var promptForm = new Form
+        {
+            Text = "Google Gemini API Anahtarı Tanımla",
+            Size = new Size(520, 240),
+            StartPosition = FormStartPosition.CenterParent,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = UiStyle.BackgroundColor,
+            ForeColor = Color.White
+        };
+
+        var lblInfo = new Label
+        {
+            Text = "Google AI Studio (aistudio.google.com/app/apikey) sayfasından aldığınız\nGemini API anahtarını buraya girin (Örn: AIzaSy...):\nCanlı model doğrulaması ve kota kontrolü anında yapılacaktır.",
+            Location = new Point(20, 15),
+            Size = new Size(465, 55),
+            Font = new Font("Segoe UI", 9F)
+        };
+
+        var txtKey = new TextBox
+        {
+            Text = settings.GeminiApiKey,
+            Location = new Point(20, 80),
+            Width = 460,
+            BackColor = Color.FromArgb(30, 41, 59),
+            ForeColor = Color.White,
+            Font = new Font("Consolas", 10F)
+        };
+
+        var btnSave = new Button
+        {
+            Text = "💾 Kaydet ve Doğrula",
+            DialogResult = DialogResult.OK,
+            Location = new Point(260, 130),
+            Size = new Size(220, 34),
+            BackColor = Color.FromArgb(59, 130, 246),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+
+        promptForm.Controls.Add(lblInfo);
+        promptForm.Controls.Add(txtKey);
+        promptForm.Controls.Add(btnSave);
+        promptForm.AcceptButton = btnSave;
+
+        if (promptForm.ShowDialog(this) == DialogResult.OK)
+        {
+            settings.GeminiApiKey = txtKey.Text.Trim();
+            AiOptimizationSettingsStore.Save(settings);
+            _ = RefreshDataAsync(queryLiveBalance: true);
+        }
+    }
+
     private void ShowApiKeysMenu(Button anchor)
     {
         var menu = new ContextMenuStrip();
@@ -817,6 +895,21 @@ public sealed class AiUsageDashboardForm : Form
         var itemDeepSeek = new ToolStripMenuItem("💳 DeepSeek Platform & Bakiye (platform.deepseek.com)");
         itemDeepSeek.Click += (_, _) => OpenUrl("https://platform.deepseek.com");
 
+        var itemGeminiUsage = new ToolStripMenuItem("📊 Google Gemini Canlı Durum & Model Raporu (Pencere)");
+        itemGeminiUsage.Font = new Font(menu.Font, FontStyle.Bold);
+        itemGeminiUsage.Click += async (_, _) =>
+        {
+            using var dlg = new GeminiOfficialStatusDialog();
+            dlg.ShowDialog(this);
+            await RefreshDataAsync(queryLiveBalance: true);
+        };
+
+        var itemGeminiKey = new ToolStripMenuItem("🔑 Google Gemini API Anahtarı Tanımla / Düzenle");
+        itemGeminiKey.Click += (_, _) => ShowGeminiKeyDialog();
+
+        var itemGeminiWeb = new ToolStripMenuItem("🌐 Google AI Studio API Sayfası (aistudio.google.com)");
+        itemGeminiWeb.Click += (_, _) => OpenUrl("https://aistudio.google.com/app/apikey");
+
         var itemEditKeys = new ToolStripMenuItem("⚙️ Program İçi Yapay Zeka Ayarları (Tüm Anahtarları Düzenle)");
         itemEditKeys.Click += async (_, _) =>
         {
@@ -835,6 +928,10 @@ public sealed class AiUsageDashboardForm : Form
         menu.Items.Add(itemDeepSeekUsage);
         menu.Items.Add(itemDeepSeekKey);
         menu.Items.Add(itemDeepSeek);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(itemGeminiUsage);
+        menu.Items.Add(itemGeminiKey);
+        menu.Items.Add(itemGeminiWeb);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(itemEditKeys);
 
