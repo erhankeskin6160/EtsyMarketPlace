@@ -40,7 +40,7 @@ internal sealed class AiOptimizationSettings
     /// true: Canlı AI zorunludur. Canlı AI yanıt vermezse veya API anahtarı eksikse ASLA offline motor devreye girmez; hata fırlatılır.
     /// false: Normal fallback kuralları geçerlidir.
     /// </summary>
-    public bool StrictNeverOffline { get; set; } = false;
+    public bool StrictNeverOffline { get; set; } = true;
 
     public bool UseOpenAi =>
         Provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase) &&

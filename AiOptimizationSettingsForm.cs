@@ -165,7 +165,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         _btnSave.FlatStyle = FlatStyle.Flat;
         _btnSave.FlatAppearance.BorderSize = 0;
         _btnSave.Height = 36;
-        _btnSave.Width = 175;
+        _btnSave.Width = 195;
         _btnSave.Cursor = Cursors.Hand;
         _btnSave.Click += (_, _) =>
         {
@@ -439,7 +439,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     }
 
     // ==========================================
-    // KART 3: SİSTEM GÜVENLİĞİ & KESİNTİSİZ ÇALIŞMA (FALLBACK)
+    // KART 3: ÇEVRİMDİŞİ (OFFLINE) MOTOR VE HATA DAVRANIŞI
     // ==========================================
     private Control BuildCard3_SecurityFallback()
     {
@@ -449,24 +449,34 @@ internal sealed class AiOptimizationSettingsForm : Form
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(0, 4, 0, 4)
         };
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        _chkStrictLiveAi.Text = "☑️ Canlı AI modeli yanıt vermezse sessizce kalitesiz offline motora düşme (Beni açıkça uyar ve hata bildir)";
+        _chkStrictLiveAi.Text = "☑️ Canlı AI hata verirse haberim olmadan yerel motora geçme (Ekranda açıkça uyar)";
         _chkStrictLiveAi.AutoSize = true;
         _chkStrictLiveAi.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _chkStrictLiveAi.ForeColor = Color.FromArgb(52, 211, 153); // Emerald/Green accent
         _chkStrictLiveAi.Cursor = Cursors.Hand;
-        _chkStrictLiveAi.Margin = new Padding(0, 2, 0, 6);
+        _chkStrictLiveAi.Margin = new Padding(0, 2, 0, 1);
 
-        _chkStrictNeverOffline.Text = "🛡️ Asla offline motoru kullanma (Ne olursa olsun offline motoru çalıştırma, kesinlikle canlı AI zorunlu olsun)";
+        var lblLiveAiDetail = new Label
+        {
+            Text = "API kotası bittiğinde veya bağlantı koptuğunda, program sessizce basit yerel şablonlara geçmez; ekranda açık hata bildirir.",
+            UseMnemonic = false,
+            Font = new Font("Segoe UI", 8F),
+            ForeColor = Color.FromArgb(148, 163, 184),
+            AutoSize = true,
+            Margin = new Padding(22, 0, 0, 8)
+        };
+
+        _chkStrictNeverOffline.Text = "🚫 Çevrimdışı (Offline) motoru tamamen kapat (Sadece Gerçek Canlı AI Kullan)";
         _chkStrictNeverOffline.AutoSize = true;
         _chkStrictNeverOffline.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _chkStrictNeverOffline.ForeColor = Color.FromArgb(248, 113, 113); // Coral/Alert red accent
         _chkStrictNeverOffline.Cursor = Cursors.Hand;
-        _chkStrictNeverOffline.Margin = new Padding(0, 4, 0, 2);
+        _chkStrictNeverOffline.Margin = new Padding(0, 4, 0, 1);
 
         _chkStrictNeverOffline.CheckedChanged += (_, _) =>
         {
@@ -481,24 +491,25 @@ internal sealed class AiOptimizationSettingsForm : Form
             }
         };
 
-        var lblRuleNote = new Label
+        var lblNeverOfflineDetail = new Label
         {
-            Text = "Not: 'Asla offline motoru kullanma' seçeneği aktifken, API anahtarı eksik olsa veya canlı AI yanıt vermese dahi yerel kural motoru devreye sokulmaz; işlem kesin olarak durdurulur ve açıkça hata bildirilir.",
+            Text = "Ne olursa olsun programın yerel kurallarla başlık üretmesini engeller. Canlı AI çalışmıyorsa veya API anahtarı yoksa işlem kesinlikle durdurulur; yalnızca gerçek yapay zeka çıktısı garanti edilir.",
             UseMnemonic = false,
-            Font = new Font("Segoe UI", 7.8F),
+            Font = new Font("Segoe UI", 8F),
             ForeColor = Color.FromArgb(148, 163, 184),
             AutoSize = true,
             Margin = new Padding(22, 0, 0, 4)
         };
 
         content.Controls.Add(_chkStrictLiveAi, 0, 0);
-        content.Controls.Add(_chkStrictNeverOffline, 0, 1);
-        content.Controls.Add(lblRuleNote, 0, 2);
+        content.Controls.Add(lblLiveAiDetail, 0, 1);
+        content.Controls.Add(_chkStrictNeverOffline, 0, 2);
+        content.Controls.Add(lblNeverOfflineDetail, 0, 3);
 
         return CreateCardContainer(
-            "Sistem Güvenliği & Kesintisiz Çalışma",
+            "🛡️ Çevrimdışı (Offline) Motor ve Hata Davranışı",
             content,
-            "Yapay zeka modellerinin kesintisiz çalışması ve offline motor izinlerinin yönetildiği güvenlik kontrol merkezi.");
+            "Yapay zeka servislerinde kesinti veya hata olduğunda programın nasıl davranacağını belirleyin.");
     }
 
     // ==========================================
@@ -510,10 +521,10 @@ internal sealed class AiOptimizationSettingsForm : Form
         {
             MessageBox.Show(
                 this,
-                "🛡️ 'Asla Offline Motoru Kullanma' kuralı devrede!\n\n" +
-                "Bu güvenlik kuralı aktifken Çevrimdışı (Offline) Mod seçilemez.\n\n" +
-                "Offline moda geçebilmek için lütfen aşağıdaki Sistem Güvenliği bölümünden bu kuralı kaldırın.",
-                "Offline Mod Engellendi",
+                "🚫 Çevrimdışı (Offline) motor tamamen kapatıldı!\n\n" +
+                "Bu kural aktifken Offline Mod seçilemez.\n\n" +
+                "Offline moda geçmek istiyorsanız lütfen aşağıdaki Güvenlik bölümünden \"Çevrimdışı motoru tamamen kapat\" seçeneğini kaldırın.",
+                "Offline Mod Devre Dışı",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
             return;
