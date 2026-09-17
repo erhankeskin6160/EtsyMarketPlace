@@ -19,6 +19,7 @@ public sealed class AiUsageDashboardForm : Form
     private readonly ComboBox _cboPeriod = new();
     private readonly Button _btnRefresh = new();
     private readonly Button _btnExport = new();
+    private readonly Button _btnGeminiRateLimit = new();
 
     // KPI Cards
     private readonly Label _lblCard1Title = new();
@@ -114,7 +115,11 @@ public sealed class AiUsageDashboardForm : Form
         _cboProvider.Items.AddRange(["Tümü (Genel Bakış)", "DeepSeek", "Google Gemini", "OpenAI", "Claude", "xAI Grok"]);
         _cboProvider.SelectedIndex = 0;
         _cboProvider.Width = 170;
-        _cboProvider.SelectedIndexChanged += async (_, _) => await RefreshDataAsync();
+        _cboProvider.SelectedIndexChanged += async (_, _) =>
+        {
+            UpdateProviderSpecificControls();
+            await RefreshDataAsync();
+        };
 
         var lblPer = new Label { Text = "Zaman:", AutoSize = true, Margin = new Padding(15, 8, 5, 0), Font = new Font("Segoe UI", 9.5F, FontStyle.Bold) };
         _cboPeriod.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -164,19 +169,17 @@ public sealed class AiUsageDashboardForm : Form
             await RefreshDataAsync(queryLiveBalance: true);
         };
 
-        var btnGeminiRateLimit = new Button
-        {
-            Text = "📊 Gemini Hız Sınırları & Kotalar",
-            BackColor = Color.FromArgb(139, 92, 246),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Height = 32,
-            Width = 235,
-            Cursor = Cursors.Hand,
-            Margin = new Padding(10, 2, 0, 0)
-        };
-        btnGeminiRateLimit.FlatAppearance.BorderSize = 0;
-        btnGeminiRateLimit.Click += (_, _) =>
+        _btnGeminiRateLimit.Text = "📊 Gemini Hız Sınırları & Kotalar";
+        _btnGeminiRateLimit.BackColor = Color.FromArgb(139, 92, 246);
+        _btnGeminiRateLimit.ForeColor = Color.White;
+        _btnGeminiRateLimit.FlatStyle = FlatStyle.Flat;
+        _btnGeminiRateLimit.Height = 32;
+        _btnGeminiRateLimit.Width = 235;
+        _btnGeminiRateLimit.Cursor = Cursors.Hand;
+        _btnGeminiRateLimit.Margin = new Padding(10, 2, 0, 0);
+        _btnGeminiRateLimit.Visible = false; // Sadece dropdown'da Google Gemini seçilirse gözükür
+        _btnGeminiRateLimit.FlatAppearance.BorderSize = 0;
+        _btnGeminiRateLimit.Click += (_, _) =>
         {
             using var dlg = new GeminiRateLimitDialog();
             dlg.ShowDialog(this);
@@ -188,7 +191,7 @@ public sealed class AiUsageDashboardForm : Form
         pnlFilters.Controls.Add(_cboPeriod);
         pnlFilters.Controls.Add(_btnRefresh);
         pnlFilters.Controls.Add(btnApiHub);
-        pnlFilters.Controls.Add(btnGeminiRateLimit);
+        pnlFilters.Controls.Add(_btnGeminiRateLimit);
         pnlFilters.Controls.Add(_btnExport);
         mainLayout.Controls.Add(pnlFilters, 0, 1);
 
@@ -325,6 +328,12 @@ public sealed class AiUsageDashboardForm : Form
         return pnl;
     }
 
+    private void UpdateProviderSpecificControls()
+    {
+        string selected = _cboProvider.SelectedItem?.ToString() ?? "";
+        _btnGeminiRateLimit.Visible = selected.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task RefreshDataAsync(bool queryLiveBalance = false)
     {
         UseWaitCursor = true;
@@ -335,6 +344,7 @@ public sealed class AiUsageDashboardForm : Form
         {
             var settings = AiOptimizationSettingsStore.Load();
             var selectedProvider = _cboProvider.SelectedItem?.ToString() ?? "Tümü (Genel Bakış)";
+            UpdateProviderSpecificControls();
 
             // 1. Canlı Bakiye Sorguları
             if (queryLiveBalance || _deepSeekBalance == null)
