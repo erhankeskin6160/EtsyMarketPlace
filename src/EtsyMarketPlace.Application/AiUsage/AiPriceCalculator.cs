@@ -69,9 +69,9 @@ public static class AiPriceCalculator
             promptRatePerMillion = 0.15m;
             completionRatePerMillion = 0.60m;
         }
-        else if (model.Contains("gemini-2.5-flash-lite") || model.Contains("flash-lite"))
+        else if (model.Contains("gemini-3.5-flash-lite") || model.Contains("gemini-2.5-flash-lite") || model.Contains("flash-lite"))
         {
-            // Gemini 2.5 Flash-Lite: $0.10 / $0.40
+            // Gemini 3.5 / 2.5 Flash-Lite: $0.10 / $0.40
             promptRatePerMillion = 0.10m;
             completionRatePerMillion = 0.40m;
         }

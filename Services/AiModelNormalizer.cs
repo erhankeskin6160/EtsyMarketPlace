@@ -19,6 +19,12 @@ internal static class AiModelNormalizer
         if (clean.Contains("3.7-flash") || clean.Contains("3.7") || clean.Contains("3-7")) return "gemini-3.7-flash";
         if (clean.Contains("3.6-flash") || clean.Contains("3.6") || clean.Contains("3-6")) return "gemini-3.6-flash";
 
+        // 3.5 Series (High Quota Free Tier: 500 RPD)
+        if (clean.Contains("3.5-flash-lite") || clean.Contains("3.5 flash lite") || clean.Contains("3.5-lite") || clean.Contains("3.5 lite") || clean.Contains("3.5-flash") || clean.Contains("3.5 flash") || clean.Contains("3.5") || clean.Contains("3-5"))
+        {
+            return "gemini-3.5-flash-lite";
+        }
+
         // 2.5 Series (Official Google AI Studio models - High Quota & Fast)
         if (clean.Contains("2.5-pro") || clean.Contains("2.5 pro")) return "gemini-2.5-pro";
         if (clean.Contains("2.5-flash") || clean.Contains("2.5 flash") || clean.Contains("2.5")) return "gemini-2.5-flash";
@@ -31,10 +37,19 @@ internal static class AiModelNormalizer
         if (clean.Contains("8b")) return "gemini-1.5-flash-8b";
         if (clean.Contains("1.5-flash") || clean.Contains("1.5 flash") || clean.Contains("1.5")) return "gemini-1.5-flash";
 
-        // If user typed any custom model name (e.g. gemini-4.0, gpt-5 or any experimental name), preserve it!
-        if (clean.StartsWith("gemini-") || !string.IsNullOrWhiteSpace(model)) return model.Trim();
+        // If user typed any custom model name (e.g. Gemini 4.0 Pro), convert spaces to hyphens and make URL-safe slug!
+        var slug = System.Text.RegularExpressions.Regex.Replace(clean, @"\s+", "-");
+        slug = System.Text.RegularExpressions.Regex.Replace(slug, @"[^a-z0-9\-\.]", "");
+        if (!string.IsNullOrWhiteSpace(slug))
+        {
+            if (!slug.StartsWith("gemini-") && !slug.Contains("/"))
+            {
+                slug = "gemini-" + slug;
+            }
+            return slug;
+        }
 
-        return "gemini-2.5-flash";
+        return "gemini-3.5-flash-lite";
     }
 
     public static string NormalizeGeminiImageModel(string? model)

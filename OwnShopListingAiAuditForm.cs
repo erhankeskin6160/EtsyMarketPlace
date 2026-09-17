@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms;
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using EtsyMarketPlace.Application.ListingOptimization;
 using SimilarProductsWinForms.Controls;
 using SimilarProductsWinForms.Models;
@@ -340,6 +341,8 @@ internal sealed class OwnShopListingAiAuditForm(
         };
 
         var load = CreateButton("🔄 Listingleri Yükle");
+        load.Width = 140;
+        load.Height = 28;
         load.Margin = new Padding(0, 2, 4, 0);
         load.Click += async (_, _) => await LoadListingsAsync();
         rightFlow.Controls.Add(load);
@@ -351,7 +354,7 @@ internal sealed class OwnShopListingAiAuditForm(
             HoverColor = UiStyle.PrimaryHover,
             ForeColor = Color.White,
             Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
-            Width = 165,
+            Width = 160,
             Height = 28,
             Margin = new Padding(0, 2, 4, 0)
         };
@@ -359,17 +362,22 @@ internal sealed class OwnShopListingAiAuditForm(
         rightFlow.Controls.Add(btnBatchAi);
 
         var aiAnalyze = CreateButton("🎯 AI ile Puanla");
+        aiAnalyze.Width = 120;
+        aiAnalyze.Height = 28;
         aiAnalyze.Margin = new Padding(0, 2, 4, 0);
         aiAnalyze.Click += async (_, _) => await AnalyzeSelectedAsync();
         rightFlow.Controls.Add(aiAnalyze);
 
         var settings = CreateButton("⚙️ AI Ayarları", isSecondary: true);
+        settings.Width = 110;
+        settings.Height = 28;
         settings.Margin = new Padding(0, 2, 4, 0);
         settings.Click += (_, _) => { using var form = new AiOptimizationSettingsForm(); form.ShowDialog(this); UpdateAiBadge(); };
         rightFlow.Controls.Add(settings);
 
         var close = CreateButton("Kapat", isSecondary: true);
         close.Width = 60;
+        close.Height = 28;
         close.Margin = new Padding(0, 2, 0, 0);
         close.Click += (_, _) => Close();
         rightFlow.Controls.Add(close);
@@ -654,6 +662,9 @@ internal sealed class OwnShopListingAiAuditForm(
         try
         {
             SetBusy(true, $"Mağazadaki {_rows.Count} ürün sırayla AI ile denetleniyor...");
+            int successCount = 0;
+            int failCount = 0;
+            string lastErrorMessage = string.Empty;
 
             for (int i = 0; i < _rows.Count; i++)
             {
@@ -677,18 +688,42 @@ internal sealed class OwnShopListingAiAuditForm(
                         _lastResultListingId = row.Listing.ListingId;
                         RenderSuggestion(row, result);
                     }
+                    successCount++;
                 }
-                catch
+                catch (Exception ex)
                 {
-                    // Diğer ürünlerle devam et
+                    failCount++;
+                    lastErrorMessage = ex.Message;
+
+                    // Eğer ilk üründe doğrudan geçersiz model adı (400), yetkisiz (401), kota aşımı (429) veya API Key hatası varsa durdur:
+                    if (i == 0 && (lastErrorMessage.Contains("400") || lastErrorMessage.Contains("401") || lastErrorMessage.Contains("429") || lastErrorMessage.Contains("API key") || lastErrorMessage.Contains("Offline")))
+                    {
+                        _statusLabel.Text = $"❌ AI Hatası: {lastErrorMessage}";
+                        MessageBox.Show(this, $"İlk ürün analiz edilirken AI sağlayıcısından hata alındı:\n\n{lastErrorMessage}\n\nDiğer ürünlerin de aynı hatayı alıp kota tüketmemesi için toplu denetim durduruldu. Lütfen AI Ayarları ekranından model ve API anahtarınızı kontrol edin.", "Toplu AI Denetimi Durduruldu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
                 }
             }
 
             _grid.Refresh();
             UpdateKpis();
             RenderCurrentPage();
-            _statusLabel.Text = $"✅ Tüm mağaza ({_rows.Count} ürün) başarıyla denetlendi!";
-            MessageBox.Show(this, "Tüm mağaza ürünleriniz başarıyla analiz edildi! Önerileri inceleyip tek tıkla güncelleyebilirsiniz.", "Toplu AI Denetimi Tamamlandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+
+            if (failCount == 0)
+            {
+                _statusLabel.Text = $"✅ Tüm mağaza ({successCount} ürün) başarıyla denetlendi!";
+                MessageBox.Show(this, "Tüm mağaza ürünleriniz başarıyla analiz edildi! Önerileri inceleyip tek tıkla güncelleyebilirsiniz.", "Toplu AI Denetimi Tamamlandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (successCount > 0)
+            {
+                _statusLabel.Text = $"⚠️ Denetim tamamlandı: {successCount} başarılı, {failCount} hata.";
+                MessageBox.Show(this, $"{successCount} ürün başarıyla analiz edildi, ancak {failCount} üründe hata alındı.\n\nSon hata:\n{lastErrorMessage}", "Toplu Denetim Kısmen Tamamlandı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else
+            {
+                _statusLabel.Text = $"❌ AI Denetimi Başarısız ({failCount} ürün hata aldı)";
+                MessageBox.Show(this, $"Mağazadaki hiçbir ürün analiz edilemedi ({failCount} ürün hata aldı)!\n\nAlınan Hata:\n{lastErrorMessage}", "AI Analiz Başarısız", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
         finally
         {
@@ -944,15 +979,17 @@ internal sealed class OwnShopListingAiAuditForm(
         _lblBeforeScore.Text = $"SEO: {row.SeoScore}/100" + (row.SeoScore >= 75 ? " (İyi)" : (row.SeoScore >= 55 ? " (Orta)" : " (Kritik)")) + aiBadge;
         _lblBeforeScore.ForeColor = row.SeoScore >= 75 ? UiStyle.SuccessColor : (row.SeoScore >= 55 ? UiStyle.WarningColor : UiStyle.DangerColor);
 
+        var activeResult = (_lastResult != null && _lastResultListingId == row.Listing.ListingId)
+            ? _lastResult
+            : row.OptimizationResult;
+
+        string detailedNeeds = BuildDetailedNeeds(row, activeResult);
+
         _detailTextBox.Text =
             $"[MEVCUT BAŞLIK - {row.Title.Length}/140 Karakter]{Environment.NewLine}{row.Title}{Environment.NewLine}{Environment.NewLine}" +
             $"[MEVCUT TAGLER - {row.TagCount}/13 Tag]{Environment.NewLine}{string.Join(", ", row.Listing.Tags)}{Environment.NewLine}{Environment.NewLine}" +
             $"[PUAN & METRİKLER]{Environment.NewLine}SEO Puanı: {row.SeoScore}/100 | Fiyat: {row.Price} | Favori: {row.Favorites:N0} | Stok: {row.Quantity}{Environment.NewLine}{Environment.NewLine}" +
-            $"[TESPİT EDİLEN EKSİKLER]{Environment.NewLine}{row.SeoNeeds}";
-
-        var activeResult = (_lastResult != null && _lastResultListingId == row.Listing.ListingId)
-            ? _lastResult
-            : row.OptimizationResult;
+            $"[TESPİT EDİLEN EKSİKLER & ALGORİTMA ANALİZİ]{Environment.NewLine}{detailedNeeds}";
 
         if (activeResult != null)
         {
@@ -1377,6 +1414,50 @@ internal sealed class OwnShopListingAiAuditForm(
         form.ShowDialog(this);
     }
 
+    private static string BuildDetailedNeeds(AuditRow row, ListingOptimizationResult? activeResult)
+    {
+        var sb = new StringBuilder();
+
+        if (activeResult != null && activeResult.ExecutedProvider != "Offline")
+        {
+            if (!string.IsNullOrWhiteSpace(activeResult.SeoCritique))
+            {
+                sb.AppendLine("🤖 [YAPAY ZEKA SEO ELEŞTİRİSİ]");
+                sb.AppendLine(activeResult.SeoCritique);
+                sb.AppendLine();
+            }
+
+            var structural = row.SeoNeeds;
+            if (!string.IsNullOrWhiteSpace(structural) && !structural.Contains("Temel yapısal eksik yok"))
+            {
+                sb.AppendLine("📐 [YAPISAL TESPİTLER & İSRAFLAR]");
+                sb.AppendLine(structural);
+                sb.AppendLine();
+            }
+
+            if (activeResult.RiskWarnings.Count > 0)
+            {
+                sb.AppendLine("🚨 [TELİF VE POLİTİKA RİSKLERİ]");
+                foreach (var risk in activeResult.RiskWarnings)
+                {
+                    sb.AppendLine($"• {risk}");
+                }
+                sb.AppendLine();
+            }
+
+            if (activeResult.MissingTerms.Count > 0)
+            {
+                sb.AppendLine("💡 [TAVSİYE EDİLEN EKSİK TERİMLER]");
+                sb.AppendLine($"• {string.Join(", ", activeResult.MissingTerms.Take(10))}");
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        // AI henüz çalıştırılmadıysa:
+        return $"{row.SeoNeeds}{Environment.NewLine}{Environment.NewLine}► '🎯 AI ile Puanla' butonuna basarak yapay zekanın derin Etsy SEO ve telif analizi yapmasını sağlayabilirsiniz.";
+    }
+
     private sealed class AuditRow(int rank, MarketListingResult listing, int seoScore, string status)
     {
         public int Rank { get; } = rank;
@@ -1397,13 +1478,98 @@ internal sealed class OwnShopListingAiAuditForm(
         private static string BuildSeoNeeds(MarketListingResult listing)
         {
             var needs = new List<string>();
-            if (listing.Tags.Count < 13) needs.Add($"{13 - listing.Tags.Count} tag eksik");
-            if (listing.Title.Length < 55) needs.Add("baslik kisa");
-            if (listing.Title.Length > 140) needs.Add("baslik uzun");
-            if (listing.Description.Length < 500) needs.Add("aciklama kisa");
-            if (listing.ImageUrls.Count < 5) needs.Add("gorsel az");
-            return needs.Count == 0 ? "Temel eksik yok" : string.Join(", ", needs);
+
+            // 1. Tag Sayısı
+            if (listing.Tags.Count < 13)
+            {
+                needs.Add($"• Eksik Tag: {13 - listing.Tags.Count} tag eksik (13/13 etiket hakkının tümü kullanılmalı).");
+            }
+
+            // 2. Başlık Uzunluğu ve Karakter İsrafı
+            if (listing.Title.Length < 60)
+            {
+                needs.Add($"• Başlık Çok Kısa: {listing.Title.Length}/140 karakter ({140 - listing.Title.Length} karakter boş bırakılmış).");
+            }
+            else if (listing.Title.Length < 110)
+            {
+                needs.Add($"• Başlık Alanı İsrafı: {listing.Title.Length}/140 karakter ({140 - listing.Title.Length} karakter daha kullanılabilir).");
+            }
+            else if (listing.Title.Length > 140)
+            {
+                needs.Add($"• Başlık Çok Uzun: {listing.Title.Length}/140 karakter (Etsy 140 karakter sınırını aşıyor).");
+            }
+
+            // 3. Başlıkta Kelime Tekrarı (Keyword Stuffing)
+            var repeatedTitleWords = FindRepeatedTitleWords(listing.Title);
+            foreach (var rep in repeatedTitleWords)
+            {
+                needs.Add($"• Başlıkta Tekrar: '{rep.word}' kelimesi başlıkta {rep.count} kez geçiyor (alan israfı ve spam riski).");
+            }
+
+            // 4. Etiket Kök Kelime Tekrarları (Arama Açısı İsrafı)
+            var repeatedTagRoots = FindRepeatedTagRoots(listing.Tags);
+            foreach (var rep in repeatedTagRoots)
+            {
+                needs.Add($"• Etiket Tekrarı: '{rep.word}' ifadesi {rep.count}/13 etikette geçiyor (arama hacmi ve açı israfı).");
+            }
+
+            // 5. Açıklama & Görsel
+            if (listing.Description.Length < 500)
+            {
+                needs.Add($"• Açıklama Kısa: {listing.Description.Length} karakter (en az 500 karakter detaylı hikaye ve özellik önerilir).");
+            }
+
+            if (listing.ImageUrls.Count < 5)
+            {
+                needs.Add($"• Görsel Az: {listing.ImageUrls.Count} görsel (Etsy listelemesinde en az 5-10 görsel önerilir).");
+            }
+
+            return needs.Count == 0 ? "Temel yapısal eksik yok" : string.Join(Environment.NewLine, needs);
         }
+
+        private static List<(string word, int count)> FindRepeatedTagRoots(IReadOnlyList<string> tags)
+        {
+            var results = new List<(string word, int count)>();
+            if (tags.Count < 3) return results;
+
+            var words = tags
+                .SelectMany(t => t.ToLowerInvariant().Split([' ', '-', ',', '/'], StringSplitOptions.RemoveEmptyEntries))
+                .Where(w => w.Length >= 3 && !IsStopWord(w))
+                .GroupBy(w => w)
+                .Where(g => g.Count() >= 3)
+                .OrderByDescending(g => g.Count())
+                .Take(2);
+
+            foreach (var g in words)
+            {
+                results.Add((g.Key, g.Count()));
+            }
+
+            return results;
+        }
+
+        private static List<(string word, int count)> FindRepeatedTitleWords(string title)
+        {
+            var results = new List<(string word, int count)>();
+            if (string.IsNullOrWhiteSpace(title)) return results;
+
+            var words = title.ToLowerInvariant()
+                .Split([' ', '|', '-', ',', '–', '—', '/', '&'], StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length >= 4 && !IsStopWord(w))
+                .GroupBy(w => w)
+                .Where(g => g.Count() >= 2)
+                .OrderByDescending(g => g.Count())
+                .Take(2);
+
+            foreach (var g in words)
+            {
+                results.Add((g.Key, g.Count()));
+            }
+
+            return results;
+        }
+
+        private static bool IsStopWord(string word) => word is "for" or "and" or "the" or "with" or "from" or "item" or "custom" or "gift" or "free" or "shop";
 
         private static string BuildSeoStrengths(MarketListingResult listing)
         {
