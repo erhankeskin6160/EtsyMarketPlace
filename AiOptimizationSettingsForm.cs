@@ -103,18 +103,34 @@ internal sealed class AiOptimizationSettingsForm : Form
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
-            Padding = new Padding(0, 0, 6, 0)
+            Padding = new Padding(0, 0, 8, 0)
         };
         mainLayout.Controls.Add(scrollPanel, 0, 1);
 
-        // KART 1: Birincil Metin / Akıl Yürütme Motoru (LLM)
-        scrollPanel.Controls.Add(BuildCard1_PrimaryLlm());
+        var cardsTable = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            RowCount = 3,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+        cardsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        cardsTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        cardsTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        cardsTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        // KART 2: Görsel Üretim & Arka Plan AI Motorları (Vision Studio)
-        scrollPanel.Controls.Add(BuildCard2_VisionStudio());
+        // Sıralama Kesin ve Sabit:
+        // 1. Satır: Card 1 (Birincil LLM & Sağlayıcı Butonları)
+        // 2. Satır: Card 2 (Vision Studio)
+        // 3. Satır: Card 3 (Güvenlik / Fallback)
+        cardsTable.Controls.Add(BuildCard1_PrimaryLlm(), 0, 0);
+        cardsTable.Controls.Add(BuildCard2_VisionStudio(), 0, 1);
+        cardsTable.Controls.Add(BuildCard3_SecurityFallback(), 0, 2);
 
-        // KART 3: Sistem Güvenliği & Kesintisiz Çalışma (Fallback)
-        scrollPanel.Controls.Add(BuildCard3_SecurityFallback());
+        scrollPanel.Controls.Add(cardsTable);
 
         // ==========================================
         // 3. ALT BÖLÜM (FOOTER: EYLEMLER & TERMİNAL)
@@ -218,24 +234,24 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     private Control BuildCard1_PrimaryLlm()
     {
-        var card = CreateCardContainer("Birincil Metin / Akıl Yürütme Motoru (LLM)");
-
         var content = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 2,
             RowCount = 4,
-            Padding = new Padding(0, 8, 0, 4)
+            Padding = new Padding(0, 4, 0, 4)
         };
-        content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // Sağlayıcı Butonları
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // LLM Model
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // Görsel Modeli
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // API Key
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); // 1. Satır: Sağlayıcı Butonları
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // 2. Satır: LLM Model
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // 3. Satır: Görsel Modeli
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // 4. Satır: API Key
 
-        // 1. Satır: Yatay Sağlayıcı Butonları
-        content.Controls.Add(CreateFieldLabel("Sağlayıcı:"), 0, 0);
+        // 1. Satır: Yatay Sağlayıcı Butonları (En üstte)
+        content.Controls.Add(CreateFieldLabel("Aktif Sağlayıcı:"), 0, 0);
 
         var pnlProviderBtns = new FlowLayoutPanel
         {
@@ -245,30 +261,32 @@ internal sealed class AiOptimizationSettingsForm : Form
             Margin = new Padding(0)
         };
 
-        string[] providers = ["Google Gemini", "OpenAI (GPT)", "DeepSeek", "Claude", "xAI Grok", "Offline"];
+        string[] providers = ["🔵 Google Gemini", "🟢 OpenAI (GPT)", "🟣 DeepSeek", "🟠 Claude", "⚪ xAI Grok", "⚙️ Offline"];
         foreach (var p in providers)
         {
             var btn = new Button
             {
                 Text = p,
-                Height = 31,
+                Height = 33,
                 AutoSize = true,
                 FlatStyle = FlatStyle.Flat,
-                BackColor = Color.FromArgb(28, 38, 56),
-                ForeColor = Color.FromArgb(180, 195, 220),
+                BackColor = Color.FromArgb(30, 41, 59),
+                ForeColor = Color.FromArgb(148, 163, 184),
                 Cursor = Cursors.Hand,
                 Font = new Font("Segoe UI", 8.5F),
-                Margin = new Padding(0, 2, 8, 0)
+                Padding = new Padding(8, 0, 8, 0),
+                Margin = new Padding(0, 4, 8, 4)
             };
-            btn.FlatAppearance.BorderColor = Color.FromArgb(50, 65, 90);
+            btn.FlatAppearance.BorderColor = Color.FromArgb(51, 65, 85);
+            btn.FlatAppearance.BorderSize = 1;
 
             string key = p switch
             {
-                "Google Gemini" => "Gemini",
-                "OpenAI (GPT)" => "OpenAI",
-                "DeepSeek" => "DeepSeek",
-                "Claude" => "Claude",
-                "xAI Grok" => "Grok",
+                var s when s.Contains("Gemini") => "Gemini",
+                var s when s.Contains("OpenAI") => "OpenAI",
+                var s when s.Contains("DeepSeek") => "DeepSeek",
+                var s when s.Contains("Claude") => "Claude",
+                var s when s.Contains("Grok") => "Grok",
                 _ => "Offline"
             };
 
@@ -289,7 +307,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             Margin = new Padding(0)
         };
         pnlModelRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
-        pnlModelRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        pnlModelRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         pnlModelRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
 
         StyleComboBox(_modelComboBox);
@@ -324,16 +342,18 @@ internal sealed class AiOptimizationSettingsForm : Form
         content.Controls.Add(CreateFieldLabel("Görsel Modeli:"), 0, 2);
         StyleComboBox(_imageModelComboBox);
         _imageModelComboBox.Dock = DockStyle.Left;
-        _imageModelComboBox.Width = 360;
+        _imageModelComboBox.Width = 380;
         content.Controls.Add(_imageModelComboBox, 1, 2);
 
         // 4. Satır: API Key Kutusu (Maskeleme & Göz Düğmeli)
-        content.Controls.Add(CreateFieldLabel("API Key:"), 0, 3);
+        content.Controls.Add(CreateFieldLabel("API Anahtarı:"), 0, 3);
         var pnlKey = CreateKeyInputWithEye(_apiKeyTextBox);
         content.Controls.Add(pnlKey, 1, 3);
 
-        card.Controls.Add(content);
-        return card;
+        return CreateCardContainer(
+            "Birincil Metin / Akıl Yürütme Motoru (LLM)",
+            content,
+            "Etsy ürün başlığı, açıklaması ve anahtar kelime üretiminde kullanılan birincil zeka motoru.");
     }
 
     // ==========================================
@@ -341,22 +361,20 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     private Control BuildCard2_VisionStudio()
     {
-        var card = CreateCardContainer(
-            "Görsel Üretim & Arka Plan AI Motorları (Vision Studio)",
-            "Ürün fotoğraflarının arka planını şeffaflaştırmak (dekupe) veya 3D modelleri fotogerçekçi renderlamak için kullanılır.");
-
         var content = new TableLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 2,
             RowCount = 3,
-            Padding = new Padding(0, 8, 0, 4)
+            Padding = new Padding(0, 4, 0, 4)
         };
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220));
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // PhotoRoom
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // FLUX
-        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // Ideogram
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // PhotoRoom
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // FLUX
+        content.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); // Ideogram
 
         content.Controls.Add(CreateFieldLabel("PhotoRoom API Key:"), 0, 0);
         content.Controls.Add(CreateKeyInputWithEye(_photoRoomKeyTextBox), 1, 0);
@@ -367,8 +385,10 @@ internal sealed class AiOptimizationSettingsForm : Form
         content.Controls.Add(CreateFieldLabel("Ideogram v4 (Tipografi & Görsel):"), 0, 2);
         content.Controls.Add(CreateKeyInputWithEye(_ideogramKeyTextBox), 1, 2);
 
-        card.Controls.Add(content);
-        return card;
+        return CreateCardContainer(
+            "Görsel Üretim & Arka Plan AI Motorları (Vision Studio)",
+            content,
+            "Ürün fotoğraflarının arka planını şeffaflaştırmak (dekupe) veya 3D modelleri fotogerçekçi renderlamak için kullanılır.");
     }
 
     // ==========================================
@@ -376,14 +396,11 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     private Control BuildCard3_SecurityFallback()
     {
-        var card = CreateCardContainer(
-            "Sistem Güvenliği & Kesintisiz Çalışma",
-            "Bu seçenek aktif olduğunda, yapay zeka kotası bittiğinde veya bağlantı koptuğunda kalitesiz yerel başlıklar üretilmez; sizi uyararak API hatası bildirir.");
-
         var content = new Panel
         {
-            Dock = DockStyle.Fill,
-            Padding = new Padding(0, 8, 0, 0)
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            Padding = new Padding(0, 6, 0, 6)
         };
 
         _chkStrictLiveAi.Text = "☑️ Canlı AI modeli yanıt vermezse sessizce kalitesiz offline motora düşme (Beni açıkça uyar ve hata bildir)";
@@ -391,11 +408,14 @@ internal sealed class AiOptimizationSettingsForm : Form
         _chkStrictLiveAi.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _chkStrictLiveAi.ForeColor = Color.FromArgb(52, 211, 153); // Emerald/Green accent
         _chkStrictLiveAi.Cursor = Cursors.Hand;
-        _chkStrictLiveAi.Location = new Point(0, 6);
+        _chkStrictLiveAi.Location = new Point(0, 2);
 
         content.Controls.Add(_chkStrictLiveAi);
-        card.Controls.Add(content);
-        return card;
+
+        return CreateCardContainer(
+            "Sistem Güvenliği & Kesintisiz Çalışma",
+            content,
+            "Bu seçenek aktif olduğunda, yapay zeka kotası bittiğinde veya bağlantı koptuğunda kalitesiz yerel başlıklar üretilmez; sizi uyararak API hatası bildirir.");
     }
 
     // ==========================================
@@ -412,10 +432,22 @@ internal sealed class AiOptimizationSettingsForm : Form
         foreach (var (k, btn) in _providerButtons)
         {
             bool active = k.Equals(providerKey, StringComparison.OrdinalIgnoreCase);
-            btn.BackColor = active ? Color.FromArgb(16, 185, 129) : Color.FromArgb(28, 38, 56);
-            btn.ForeColor = active ? Color.White : Color.FromArgb(180, 195, 220);
-            btn.FlatAppearance.BorderColor = active ? Color.FromArgb(52, 211, 153) : Color.FromArgb(50, 65, 90);
-            btn.Font = new Font("Segoe UI", 8.5F, active ? FontStyle.Bold : FontStyle.Regular);
+            if (active)
+            {
+                btn.BackColor = Color.FromArgb(30, 58, 138); // Deep rich active blue (#1E3A8A)
+                btn.ForeColor = Color.White;
+                btn.FlatAppearance.BorderColor = Color.FromArgb(56, 189, 248); // Electric cyan (#38BDF8)
+                btn.FlatAppearance.BorderSize = 2;
+                btn.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
+            }
+            else
+            {
+                btn.BackColor = Color.FromArgb(30, 41, 59);
+                btn.ForeColor = Color.FromArgb(148, 163, 184);
+                btn.FlatAppearance.BorderColor = Color.FromArgb(51, 65, 85);
+                btn.FlatAppearance.BorderSize = 1;
+                btn.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
+            }
         }
 
         // Modelleri ve API Key'i sağlayıcıya göre yükle
@@ -670,7 +702,7 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     // ARAYÜZ YARDIMCILARI & KART KAPSAYICILARI
     // ==========================================
-    private static Panel CreateCardContainer(string title, string? subNote = null)
+    private static Panel CreateCardContainer(string title, Control content, string? subNote = null)
     {
         var pnl = new Panel
         {
@@ -678,8 +710,8 @@ internal sealed class AiOptimizationSettingsForm : Form
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             BackColor = Color.FromArgb(22, 30, 46),
-            Padding = new Padding(16, 12, 16, 14),
-            Margin = new Padding(0, 0, 0, 12)
+            Padding = new Padding(18, 14, 18, 16),
+            Margin = new Padding(0, 0, 0, 16)
         };
         pnl.Paint += (_, pe) =>
         {
@@ -687,29 +719,47 @@ internal sealed class AiOptimizationSettingsForm : Form
             pe.Graphics.DrawRectangle(borderPen, 0, 0, pnl.Width - 1, pnl.Height - 1);
         };
 
-        if (!string.IsNullOrWhiteSpace(subNote))
+        var cardLayout = new TableLayoutPanel
         {
-            var lblSub = new Label
-            {
-                Text = subNote,
-                Dock = DockStyle.Top,
-                Font = new Font("Segoe UI", 7.5F),
-                ForeColor = Color.FromArgb(140, 155, 180),
-                Height = 18,
-                Margin = new Padding(0, 0, 0, 4)
-            };
-            pnl.Controls.Add(lblSub);
-        }
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            ColumnCount = 1,
+            RowCount = string.IsNullOrWhiteSpace(subNote) ? 2 : 3,
+            Margin = new Padding(0),
+            Padding = new Padding(0)
+        };
+        cardLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
+        int r = 0;
         var lblTitle = new Label
         {
             Text = title,
             Dock = DockStyle.Top,
             Font = new Font("Segoe UI", 9.5F, FontStyle.Bold),
             ForeColor = Color.White,
-            Height = 22
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, string.IsNullOrWhiteSpace(subNote) ? 8 : 2)
         };
-        pnl.Controls.Add(lblTitle);
+        cardLayout.Controls.Add(lblTitle, 0, r++);
+
+        if (!string.IsNullOrWhiteSpace(subNote))
+        {
+            var lblSub = new Label
+            {
+                Text = subNote,
+                Dock = DockStyle.Top,
+                Font = new Font("Segoe UI", 8F),
+                ForeColor = Color.FromArgb(148, 163, 184),
+                AutoSize = true,
+                Margin = new Padding(0, 0, 0, 8)
+            };
+            cardLayout.Controls.Add(lblSub, 0, r++);
+        }
+
+        content.Dock = DockStyle.Top;
+        cardLayout.Controls.Add(content, 0, r);
+        pnl.Controls.Add(cardLayout);
 
         return pnl;
     }
