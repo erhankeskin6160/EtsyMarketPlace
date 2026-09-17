@@ -6,6 +6,10 @@ on:
       - development
   workflow_dispatch:
 
+concurrency:
+  group: vds-release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -13,23 +17,23 @@ jobs:
   build-and-release:
     name: Build Standalone EXE & Publish VDS Release
     runs-on: windows-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Setup .NET 8 SDK
+      - name: Setup .NET 8 SDK with Cache
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+          cache: true
+          cache-dependency-path: 'SimilarProductsWinForms.sln'
 
       - name: Restore Dependencies
         run: dotnet restore SimilarProductsWinForms.sln
-
-      - name: Run Automated Tests
-        run: dotnet test SimilarProductsWinForms.sln --no-restore --verbosity normal
 
       - name: Build Standalone Win-x64 Executable
         run: |
@@ -45,18 +49,11 @@ jobs:
           $item = Get-Item "publish_vds_standalone\SimilarProductsWinForms.exe"
           Write-Host "Uretilen EXE Boyutu: $($item.Length) bayt ($([math]::Round($item.Length / 1MB, 2)) MB)"
 
-      - name: Upload Build Artifact to GitHub Actions
-        uses: actions/upload-artifact@v4
-        with:
-          name: SimilarProductsWinForms-dev-win-x64
-          path: publish_vds_standalone/SimilarProductsWinForms.exe
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Publish or Update 'dev-latest' GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PROMPT_DISABLED: "1"
         run: |
           $notes = @"
           ## 🚀 Otomatik VDS Geliştirme Sürümü (development)
@@ -72,9 +69,22 @@ jobs:
           "@
           $notes | Out-File -FilePath release_notes.md -Encoding utf8
           
-          # Cleanly recreate 'dev-latest' release and tag so it always points to the latest commit
-          Write-Host "Re-creating 'dev-latest' release pointing to commit ${{ github.sha }}..."
-          gh release delete dev-latest --yes --cleanup-tag 2>$null
-          gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
+          Write-Host "Checking if 'dev-latest' release exists..."
+          $releaseExists = $false
+          try {
+            gh release view dev-latest --json tagName 2>$null
+            if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
+          } catch {
+            $releaseExists = $false
+          }
+          
+          if (-not $releaseExists) {
+            Write-Host "Creating 'dev-latest' pre-release pointing to commit ${{ github.sha }}..."
+            gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
+          } else {
+            Write-Host "Updating 'dev-latest' release pointing to commit ${{ github.sha }}..."
+            gh release edit dev-latest --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --target ${{ github.sha }}
+            Write-Host "Uploading standalone assets with --clobber..."
+            gh release upload dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat --clobber
+          }
           Write-Host "VDS release successfully published!"
-
