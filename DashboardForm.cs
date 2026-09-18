@@ -848,28 +848,81 @@ internal sealed class DashboardForm : Form
     private void ConfigureRecentOrdersGrid()
     {
         _gridRecentOrders.Columns.Clear();
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tarih", DataPropertyName = "DateStr", Width = 95 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Sipariş No", DataPropertyName = "ReceiptIdStr", Width = 105 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Satılan Ürün", DataPropertyName = "ProductTitle", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, MinimumWidth = 140 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Adet", DataPropertyName = "Quantity", Width = 65 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Tutar ($)", DataPropertyName = "TotalUSDStr", Width = 95 });
-        _gridRecentOrders.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Net Kâr ($ / ₺)", DataPropertyName = "NetProfitCombinedStr", Width = 155 });
 
-        _gridRecentOrders.Columns[0].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-        _gridRecentOrders.Columns[1].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-        _gridRecentOrders.Columns[2].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        var colDate = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "Tarih",
+            DataPropertyName = "DateStr",
+            Width = 95,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        };
+        colDate.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        colDate.HeaderCell.Style.Padding = new Padding(8, 0, 8, 0);
+        colDate.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        colDate.DefaultCellStyle.Padding = new Padding(8, 2, 8, 2);
 
-        // Adet: Hem başlık hem hücre tam ortalanır
-        _gridRecentOrders.Columns[3].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
-        _gridRecentOrders.Columns[3].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        var colReceipt = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "Sipariş No",
+            DataPropertyName = "ReceiptIdStr",
+            Width = 105,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        };
+        colReceipt.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        colReceipt.HeaderCell.Style.Padding = new Padding(8, 0, 8, 0);
+        colReceipt.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        colReceipt.DefaultCellStyle.Padding = new Padding(8, 2, 8, 2);
 
-        // Tutar ($): Hem başlık hem hücre sağa yaslanır
-        _gridRecentOrders.Columns[4].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
-        _gridRecentOrders.Columns[4].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        var colTitle = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "Satılan Ürün",
+            DataPropertyName = "ProductTitle",
+            AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+            MinimumWidth = 140,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        };
+        colTitle.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        colTitle.HeaderCell.Style.Padding = new Padding(8, 0, 8, 0);
+        colTitle.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        colTitle.DefaultCellStyle.Padding = new Padding(8, 2, 8, 2);
 
-        // Net Kâr: Hem başlık hem hücre sağa yaslanır
-        _gridRecentOrders.Columns[5].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
-        _gridRecentOrders.Columns[5].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        var colQty = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "Adet",
+            DataPropertyName = "Quantity",
+            Width = 70,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        };
+        colQty.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        colQty.HeaderCell.Style.Padding = new Padding(0, 0, 0, 0);
+        colQty.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        colQty.DefaultCellStyle.Padding = new Padding(0, 2, 0, 2);
+
+        var colTotal = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "Tutar ($)",
+            DataPropertyName = "TotalUSDStr",
+            Width = 100,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        };
+        colTotal.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+        colTotal.HeaderCell.Style.Padding = new Padding(0, 0, 10, 0);
+        colTotal.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        colTotal.DefaultCellStyle.Padding = new Padding(0, 2, 10, 2);
+
+        var colProfit = new DataGridViewTextBoxColumn
+        {
+            HeaderText = "Net Kâr ($ / ₺)",
+            DataPropertyName = "NetProfitCombinedStr",
+            Width = 160,
+            SortMode = DataGridViewColumnSortMode.NotSortable
+        };
+        colProfit.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
+        colProfit.HeaderCell.Style.Padding = new Padding(0, 0, 10, 0);
+        colProfit.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
+        colProfit.DefaultCellStyle.Padding = new Padding(0, 2, 10, 2);
+
+        _gridRecentOrders.Columns.AddRange(colDate, colReceipt, colTitle, colQty, colTotal, colProfit);
     }
 
     private void OnRecentOrderDoubleClick(object? sender, DataGridViewCellEventArgs e)
