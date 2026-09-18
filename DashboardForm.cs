@@ -188,7 +188,7 @@ internal sealed class DashboardForm : Form
 
         _sidebarNav = new ModernSidebarNav();
         _sidebarNav.Dock = DockStyle.Left;
-        _sidebarNav.Width = _sidebarNav.IsCollapsed ? 64 : 260;
+        _sidebarNav.Width = _sidebarNav.IsCollapsed ? ModernSidebarNav.CollapsedWidth : ModernSidebarNav.DefaultExpandedWidth;
         PopulateSidebarItems();
         _sidebarNav.ItemSelected += OnSidebarItemSelected;
 
@@ -202,7 +202,7 @@ internal sealed class DashboardForm : Form
 
         _sidebarNav.CollapsedChanged += (_, _) =>
         {
-            _sidebarNav.Width = _sidebarNav.IsCollapsed ? 64 : 260;
+            _sidebarNav.Width = _sidebarNav.IsCollapsed ? ModernSidebarNav.CollapsedWidth : ModernSidebarNav.DefaultExpandedWidth;
             UpdateActiveViewLayout();
             SafeBeginInvoke(UpdateActiveViewLayout);
         };
