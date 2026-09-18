@@ -1123,7 +1123,29 @@ internal sealed class FinancialReportForm : Form
                 }
                 else
                 {
-                    MessageBox.Show(this, "Bu sipariş için yüklenmiş bir fatura bulunamadı.\n'Otomatik Fatura Oluştur' seçeneğiyle tek tıkla resmi PDF fatura üretebilirsiniz.", "Fatura Bulunamadı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(this, "Bu sipariş için yüklenmiş bir fatura bulunamadı.\n'Otomatik Fatura Oluştur' veya 'Kargo Faturası Yükle' seçeneğiyle fatura ekleyebilirsiniz.", "Fatura Bulunamadı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        });
+
+        var mnuUploadInvoice = new ToolStripMenuItem("📎 Kargo Faturası Yükle...", null, async (s, e) =>
+        {
+            if (_gridOrders.SelectedRows.Count == 0) return;
+            var row = _gridOrders.SelectedRows[0];
+            if (row.Tag is OrderFinancialSummary order)
+            {
+                using var ofd = new OpenFileDialog
+                {
+                    Title = $"Sipariş #{order.ReceiptId} İçin Kargo Faturası Seçin",
+                    Filter = "Kargo Faturaları (*.pdf;*.png;*.jpg;*.jpeg;*.webp)|*.pdf;*.png;*.jpg;*.jpeg;*.webp|Tüm Dosyalar (*.*)|*.*"
+                };
+                if (ofd.ShowDialog(this) == DialogResult.OK)
+                {
+                    string? savedPath = InvoiceStorageService.SaveInvoiceFile(ofd.FileName, order.ReceiptId.ToString());
+                    var repo = new SqliteOrderCostRepository();
+                    await repo.SaveInvoicePathAsync(order.ReceiptId.ToString(), savedPath ?? ofd.FileName);
+                    _ = LoadReportAsync();
+                    SetStatus($"📎 Kargo faturası sipariş #{order.ReceiptId} ile eşleştirildi.", UiStyle.SuccessColor);
                 }
             }
         });
@@ -1246,6 +1268,7 @@ internal sealed class FinancialReportForm : Form
         
         ctxMenu.Items.Add(mnuAutoInvoice);
         ctxMenu.Items.Add(mnuOpenInvoice);
+        ctxMenu.Items.Add(mnuUploadInvoice);
         ctxMenu.Items.Add(new ToolStripSeparator());
         ctxMenu.Items.Add(mnuDetails);
         ctxMenu.Items.Add(mnuQuickCost);
@@ -1868,7 +1891,8 @@ internal sealed class FinancialReportForm : Form
         AddOrderCol("Net Kâr ($)", "OProfitUSD", 105);
         AddOrderCol("Kur (₺)", "ORate", 80);
         AddOrderCol("Net Kâr (₺)", "OProfitTRY", 110);
-        AddOrderCol("Maliyet", "OCostFlag", 70);
+        AddOrderCol("Maliyet", "OCostFlag", 65);
+        AddOrderCol("Kargo Faturası", "OInvoiceFlag", 95);
 
         void AddOrderCol(string headerText, string name, int width, bool fill = false)
         {
@@ -1970,6 +1994,7 @@ internal sealed class FinancialReportForm : Form
             "ORate" => _orderSortAscending ? orderList.OrderBy(o => o.ExchangeRate) : orderList.OrderByDescending(o => o.ExchangeRate),
             "OProfitTRY" => _orderSortAscending ? orderList.OrderBy(o => o.NetProfitTRY) : orderList.OrderByDescending(o => o.NetProfitTRY),
             "OCostFlag" => _orderSortAscending ? orderList.OrderBy(o => o.HasCostData) : orderList.OrderByDescending(o => o.HasCostData),
+            "OInvoiceFlag" => _orderSortAscending ? orderList.OrderBy(o => o.HasInvoice) : orderList.OrderByDescending(o => o.HasInvoice),
             _ => _orderSortAscending ? orderList.OrderBy(o => o.OrderDate) : orderList.OrderByDescending(o => o.OrderDate)
         };
 
@@ -1989,7 +2014,8 @@ internal sealed class FinancialReportForm : Form
                 o.IsCanceled ? "$0.00" : $"${o.NetProfitUSD:N2}",
                 $"₺{o.ExchangeRate:N2}",
                 o.IsCanceled ? "₺0.00" : $"₺{o.NetProfitTRY:N2}",
-                o.IsCanceled ? "🔴 İptal" : (o.HasCostData ? (o.HasInvoice ? "✅ 📎" : "✅") : "⚠️ Gir"));
+                o.IsCanceled ? "🔴 İptal" : (o.HasCostData ? "✅ Girildi" : "⚠️ Eksik"),
+                o.IsCanceled ? "—" : (o.HasInvoice ? "📄 Aç" : "📎 Yükle"));
 
             var row = _gridOrders.Rows[idx];
             row.Tag = o;
@@ -2017,6 +2043,16 @@ internal sealed class FinancialReportForm : Form
 
                 if (!o.HasCostData)
                     row.Cells["OCostFlag"].Style.ForeColor = UiStyle.WarningColor;
+
+                if (o.HasInvoice)
+                {
+                    row.Cells["OInvoiceFlag"].Style.ForeColor = Color.FromArgb(52, 211, 153); // Emerald
+                    row.Cells["OInvoiceFlag"].Style.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+                }
+                else
+                {
+                    row.Cells["OInvoiceFlag"].Style.ForeColor = Color.FromArgb(129, 140, 248); // Indigo/Blue
+                }
             }
         }
     }
@@ -2056,9 +2092,21 @@ internal sealed class FinancialReportForm : Form
         if (e.RowIndex < 0 || e.RowIndex >= _gridOrders.Rows.Count) return;
         if (_gridOrders.Rows[e.RowIndex].Tag is not OrderFinancialSummary order) return;
 
-        // Maliyet sütununa veya bayrağına tıklandıysa doğrudan Maliyet Giriş Penceresini aç
+        bool isInvoiceColumn = e.ColumnIndex >= 0 && _gridOrders.Columns[e.ColumnIndex].Name == "OInvoiceFlag";
+        if (isInvoiceColumn && order.HasInvoice)
+        {
+            if (!InvoiceStorageService.OpenInvoice(order.InvoiceFilePath))
+            {
+                MessageBox.Show(this, "Fatura dosyası açılamadı veya silinmiş.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            return;
+        }
+
+        // Maliyet sütununa veya fatura bayrağına tıklandıysa doğrudan Maliyet & Kargo Faturası Düzenleme Penceresini aç
         bool isCostColumn = e.ColumnIndex >= 0 && 
-            (_gridOrders.Columns[e.ColumnIndex].Name == "OCost" || _gridOrders.Columns[e.ColumnIndex].Name == "OCostFlag");
+            (_gridOrders.Columns[e.ColumnIndex].Name == "OCost" || 
+             _gridOrders.Columns[e.ColumnIndex].Name == "OCostFlag" ||
+             _gridOrders.Columns[e.ColumnIndex].Name == "OInvoiceFlag");
 
         if (isCostColumn || !order.HasCostData)
         {
