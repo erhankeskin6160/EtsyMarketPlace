@@ -84,7 +84,7 @@ internal sealed class AiListingImageForm : Form
     private readonly FlowLayoutPanel _filmstripPanel = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true };
 
     // UI: Right Panel Marketing & Export
-    private readonly ModernCheckBox _chkEnableBadge = new() { Text = "Aktif", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold), ForeColor = Color.White };
+    private readonly ModernCheckBox _chkEnableBadge = new() { Text = "Pazarlama Rozetini Etkinleştir", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.5F), ForeColor = Color.FromArgb(226, 232, 240) };
     private readonly ModernComboBox _cboBadgeText = new() { DropDownStyle = ComboBoxStyle.DropDown };
     private readonly ModernComboBox _cboBadgePosition = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernComboBox _formatComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -868,7 +868,7 @@ internal sealed class AiListingImageForm : Form
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             CornerRadius = 12,
-            Padding = new Padding(20, 18, 20, 18), // All-around padding inside card
+            Padding = new Padding(20, 18, 20, 18),
             Margin = new Padding(0, 0, 0, 18),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
@@ -885,92 +885,43 @@ internal sealed class AiListingImageForm : Form
             Padding = Padding.Empty
         };
 
-        // Modern Feature Toggle Banner
-        var toggleBanner = new ModernCardPanel
+        var badgeHeader = new Label
         {
-            Width = contentWidth,
-            Height = 52,
-            CornerRadius = 8,
-            Padding = new Padding(12, 6, 10, 6),
-            Margin = new Padding(0, 0, 0, 14),
-            CardColor = Color.FromArgb(24, 34, 56),
-            BorderColor = Color.FromArgb(51, 65, 85),
-            Cursor = Cursors.Hand
-        };
-
-        var toggleLayout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-        toggleLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
-        toggleLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
-
-        var textPanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.TopDown,
-            WrapContents = false,
-            Margin = Padding.Empty,
-            Padding = Padding.Empty
-        };
-
-        var titleLbl = new Label
-        {
-            Text = "🏷️ Pazarlama Rozeti",
+            Text = "🏷️ Pazarlama Rozeti (Overlay):",
             AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 9.6F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold),
             ForeColor = Color.White,
-            Margin = new Padding(0, 0, 0, 1)
+            Padding = new Padding(8, 8, 8, 8),
+            Margin = new Padding(0, 0, 0, 8)
         };
-        var descLbl = new Label
-        {
-            Text = "Görsele dikkat çekici etiket ekle",
-            AutoSize = true,
-            Font = new Font("Segoe UI", 7.8F),
-            ForeColor = UiStyle.TextMuted,
-            Margin = Padding.Empty
-        };
-        textPanel.Controls.Add(titleLbl);
-        textPanel.Controls.Add(descLbl);
-        toggleLayout.Controls.Add(textPanel, 0, 0);
+        badgeStack.Controls.Add(badgeHeader);
 
-        _chkEnableBadge.Text = "Aktif";
-        _chkEnableBadge.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
-        _chkEnableBadge.ForeColor = Color.FromArgb(129, 140, 248);
-        _chkEnableBadge.Dock = DockStyle.Right;
-        _chkEnableBadge.Margin = new Padding(0, 6, 0, 0);
-        toggleLayout.Controls.Add(_chkEnableBadge, 1, 0);
-
-        toggleBanner.Controls.Add(toggleLayout);
+        _chkEnableBadge.Text = "Pazarlama Rozetini Etkinleştir";
+        _chkEnableBadge.Font = new Font("Segoe UI Semibold", 9.5F);
+        _chkEnableBadge.ForeColor = Color.FromArgb(226, 232, 240);
+        _chkEnableBadge.Cursor = Cursors.Hand;
+        _chkEnableBadge.AutoSize = true;
+        _chkEnableBadge.Dock = DockStyle.None;
+        _chkEnableBadge.Padding = new Padding(8, 8, 8, 8);
+        _chkEnableBadge.Margin = new Padding(0, 0, 0, 12);
 
         void UpdateBadgeVisualState()
         {
             bool isChecked = _chkEnableBadge.Checked;
-            toggleBanner.CardColor = isChecked ? Color.FromArgb(30, 45, 76) : Color.FromArgb(24, 34, 56);
-            toggleBanner.BorderColor = isChecked ? Color.FromArgb(99, 102, 241) : Color.FromArgb(51, 65, 85);
-            _chkEnableBadge.ForeColor = isChecked ? Color.FromArgb(129, 140, 248) : Color.FromArgb(148, 163, 184);
             _cboBadgeText.Enabled = isChecked;
             _cboBadgePosition.Enabled = isChecked;
             UpdateBadgeOverlay();
         }
 
         _chkEnableBadge.CheckedChanged += (_, _) => UpdateBadgeVisualState();
-        toggleBanner.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
-        textPanel.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
-        titleLbl.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
-        descLbl.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
-
-        badgeStack.Controls.Add(toggleBanner);
+        badgeStack.Controls.Add(_chkEnableBadge);
 
         badgeStack.Controls.Add(new Label
         {
             Text = "Rozet Metni / İkonu:",
             AutoSize = true,
-            Margin = new Padding(0, 2, 0, 6),
+            Margin = new Padding(0, 4, 0, 6),
+            Padding = new Padding(8, 8, 8, 8),
             Font = new Font("Segoe UI Semibold", 9F),
             ForeColor = UiStyle.TextMuted
         });
@@ -995,6 +946,7 @@ internal sealed class AiListingImageForm : Form
             Text = "Rozet Konumu:",
             AutoSize = true,
             Margin = new Padding(0, 4, 0, 6),
+            Padding = new Padding(8, 8, 8, 8),
             Font = new Font("Segoe UI Semibold", 9F),
             ForeColor = UiStyle.TextMuted
         });
@@ -1040,7 +992,8 @@ internal sealed class AiListingImageForm : Form
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold),
             ForeColor = Color.White,
-            Margin = new Padding(0, 0, 0, 12)
+            Padding = new Padding(8, 8, 8, 8),
+            Margin = new Padding(0, 0, 0, 8)
         });
 
         exportStack.Controls.Add(new Label
@@ -1048,13 +1001,14 @@ internal sealed class AiListingImageForm : Form
             Text = "📐 Çıktı Oranı (Aspect Ratio):",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 9F),
-            Margin = new Padding(0, 2, 0, 6),
+            Padding = new Padding(8, 8, 8, 8),
+            Margin = new Padding(0, 4, 0, 6),
             ForeColor = UiStyle.TextMuted
         });
 
         _formatComboBox.Width = contentWidth;
         _formatComboBox.Font = new Font("Segoe UI", 9.5F);
-        _formatComboBox.Margin = new Padding(0, 0, 0, 16);
+        _formatComboBox.Margin = new Padding(0, 0, 0, 14);
         _formatComboBox.Items.Clear();
         _formatComboBox.Items.AddRange([
             "1:1 Kare (2000x2000 px - Etsy HD)",
@@ -1068,8 +1022,8 @@ internal sealed class AiListingImageForm : Form
         downloadBtn.Width = contentWidth;
         downloadBtn.Height = 44;
         downloadBtn.Font = new Font("Segoe UI Semibold", 9.6F, FontStyle.Bold);
-        downloadBtn.Padding = new Padding(12, 0, 12, 0);
-        downloadBtn.Margin = new Padding(0, 0, 0, 12);
+        downloadBtn.Padding = new Padding(8, 8, 8, 8);
+        downloadBtn.Margin = new Padding(0, 2, 0, 12);
         downloadBtn.Click += (_, _) => DownloadImage();
         exportStack.Controls.Add(downloadBtn);
 
@@ -1077,8 +1031,8 @@ internal sealed class AiListingImageForm : Form
         copyBtn.Width = contentWidth;
         copyBtn.Height = 40;
         copyBtn.Font = new Font("Segoe UI Semibold", 9.2F);
-        copyBtn.Padding = new Padding(12, 0, 12, 0);
-        copyBtn.Margin = new Padding(0, 0, 0, 12);
+        copyBtn.Padding = new Padding(8, 8, 8, 8);
+        copyBtn.Margin = new Padding(0, 2, 0, 12);
         copyBtn.Click += (_, _) => CopyToClipboard();
         exportStack.Controls.Add(copyBtn);
 
@@ -1086,8 +1040,8 @@ internal sealed class AiListingImageForm : Form
         sendToBatchBtn.Width = contentWidth;
         sendToBatchBtn.Height = 40;
         sendToBatchBtn.Font = new Font("Segoe UI Semibold", 9.2F);
-        sendToBatchBtn.Padding = new Padding(12, 0, 12, 0);
-        sendToBatchBtn.Margin = new Padding(0, 0, 0, 4);
+        sendToBatchBtn.Padding = new Padding(8, 8, 8, 8);
+        sendToBatchBtn.Margin = new Padding(0, 2, 0, 4);
         sendToBatchBtn.Click += (_, _) =>
         {
             var bmp = _sessionManager.GeneratedBitmap ?? _sessionManager.OriginalBitmap;
@@ -1144,12 +1098,14 @@ internal sealed class AiListingImageForm : Form
             Text = "🚀 Etsy Mağaza Senkronizasyonu:",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold),
-            Margin = new Padding(0, 0, 0, 12),
+            Padding = new Padding(8, 8, 8, 8),
+            Margin = new Padding(0, 0, 0, 8),
             ForeColor = Color.White
         });
 
         _lblTargetListingInfo.Font = new Font("Segoe UI Semibold", 9.2F);
-        _lblTargetListingInfo.Margin = new Padding(0, 0, 0, 14);
+        _lblTargetListingInfo.Padding = new Padding(8, 8, 8, 8);
+        _lblTargetListingInfo.Margin = new Padding(0, 0, 0, 10);
         if (_targetListingId == null)
         {
             _lblTargetListingInfo.Text = "🎯 Hedef: Genel Taslak Modu";
@@ -1160,13 +1116,14 @@ internal sealed class AiListingImageForm : Form
         {
             Text = "Etsy Görsel Sıra Numarası (Slot):",
             AutoSize = true,
+            Padding = new Padding(8, 8, 8, 8),
             Margin = new Padding(0, 4, 0, 6),
             ForeColor = UiStyle.TextMuted,
             Font = new Font("Segoe UI Semibold", 9F)
         });
         _cboEtsyImageSlot.Width = contentWidth;
         _cboEtsyImageSlot.Font = new Font("Segoe UI", 9.5F);
-        _cboEtsyImageSlot.Margin = new Padding(0, 0, 0, 16);
+        _cboEtsyImageSlot.Margin = new Padding(0, 0, 0, 14);
         _cboEtsyImageSlot.Items.Clear();
         _cboEtsyImageSlot.Items.AddRange([
             "1. Sıra (Ana Kapak Fotoğrafı - Primary)",
@@ -1182,8 +1139,8 @@ internal sealed class AiListingImageForm : Form
         exportEtsyBtn.Width = contentWidth;
         exportEtsyBtn.Height = 46;
         exportEtsyBtn.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
-        exportEtsyBtn.Padding = new Padding(12, 0, 12, 0);
-        exportEtsyBtn.Margin = new Padding(0, 0, 0, 4);
+        exportEtsyBtn.Padding = new Padding(8, 8, 8, 8);
+        exportEtsyBtn.Margin = new Padding(0, 2, 0, 4);
         exportEtsyBtn.BackColor = Color.FromArgb(16, 140, 90);
         exportEtsyBtn.Click += async (_, _) => await ExportToEtsyAsync();
         etsyStack.Controls.Add(exportEtsyBtn);
