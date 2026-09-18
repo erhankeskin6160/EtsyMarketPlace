@@ -84,7 +84,7 @@ internal sealed class AiListingImageForm : Form
     private readonly FlowLayoutPanel _filmstripPanel = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, AutoScroll = true };
 
     // UI: Right Panel Marketing & Export
-    private readonly ModernCheckBox _chkEnableBadge = new() { Text = "Pazarlama Rozeti Ekle", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold), ForeColor = Color.White };
+    private readonly ModernCheckBox _chkEnableBadge = new() { Text = "Aktif", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold), ForeColor = Color.White };
     private readonly ModernComboBox _cboBadgeText = new() { DropDownStyle = ComboBoxStyle.DropDown };
     private readonly ModernComboBox _cboBadgePosition = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernComboBox _formatComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -203,7 +203,7 @@ internal sealed class AiListingImageForm : Form
         _singleDesignContainer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Padding = new Padding(0, 12, 0, 8) };
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 395));
         _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 345));
+        _singleDesignContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 355));
 
         _singleDesignContainer.Controls.Add(BuildLeftControlsPanel(), 0, 0);
         _singleDesignContainer.Controls.Add(BuildCenterCanvasPanel(), 1, 0);
@@ -855,25 +855,28 @@ internal sealed class AiListingImageForm : Form
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             AutoScroll = false,
-            Padding = new Padding(6, 0, 6, 0)
+            Padding = new Padding(12, 10, 12, 18) // All-around padding outside cards
         };
+
+        const int cardWidth = 318;
+        const int contentWidth = 278; // 318 - (20 + 20)
 
         // 1. Marketing Overlay Badge Card
         var cardBadge = new ModernCardPanel
         {
-            Width = 320,
+            Width = cardWidth,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             CornerRadius = 12,
-            Padding = new Padding(18, 16, 18, 16),
-            Margin = new Padding(0, 0, 0, 18), // 18px gap!
+            Padding = new Padding(20, 18, 20, 18), // All-around padding inside card
+            Margin = new Padding(0, 0, 0, 18),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
 
         var badgeStack = new FlowLayoutPanel
         {
-            Width = 284,
+            Width = contentWidth,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
@@ -882,29 +885,96 @@ internal sealed class AiListingImageForm : Form
             Padding = Padding.Empty
         };
 
-        badgeStack.Controls.Add(new Label
+        // Modern Feature Toggle Banner
+        var toggleBanner = new ModernCardPanel
         {
-            Text = "🏷️ Pazarlama Rozeti (Overlay):",
-            AutoSize = true,
-            Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold),
-            ForeColor = Color.White,
-            Margin = new Padding(0, 0, 0, 12)
-        });
+            Width = contentWidth,
+            Height = 52,
+            CornerRadius = 8,
+            Padding = new Padding(12, 6, 10, 6),
+            Margin = new Padding(0, 0, 0, 14),
+            CardColor = Color.FromArgb(24, 34, 56),
+            BorderColor = Color.FromArgb(51, 65, 85),
+            Cursor = Cursors.Hand
+        };
 
-        _chkEnableBadge.Font = new Font("Segoe UI Semibold", 9.6F, FontStyle.Bold);
-        _chkEnableBadge.Margin = new Padding(0, 0, 0, 14);
-        _chkEnableBadge.CheckedChanged += (_, _) => UpdateBadgeOverlay();
-        badgeStack.Controls.Add(_chkEnableBadge);
+        var toggleLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+        toggleLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 72));
+        toggleLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28));
+
+        var textPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty
+        };
+
+        var titleLbl = new Label
+        {
+            Text = "🏷️ Pazarlama Rozeti",
+            AutoSize = true,
+            Font = new Font("Segoe UI Semibold", 9.6F, FontStyle.Bold),
+            ForeColor = Color.White,
+            Margin = new Padding(0, 0, 0, 1)
+        };
+        var descLbl = new Label
+        {
+            Text = "Görsele dikkat çekici etiket ekle",
+            AutoSize = true,
+            Font = new Font("Segoe UI", 7.8F),
+            ForeColor = UiStyle.TextMuted,
+            Margin = Padding.Empty
+        };
+        textPanel.Controls.Add(titleLbl);
+        textPanel.Controls.Add(descLbl);
+        toggleLayout.Controls.Add(textPanel, 0, 0);
+
+        _chkEnableBadge.Text = "Aktif";
+        _chkEnableBadge.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
+        _chkEnableBadge.ForeColor = Color.FromArgb(129, 140, 248);
+        _chkEnableBadge.Dock = DockStyle.Right;
+        _chkEnableBadge.Margin = new Padding(0, 6, 0, 0);
+        toggleLayout.Controls.Add(_chkEnableBadge, 1, 0);
+
+        toggleBanner.Controls.Add(toggleLayout);
+
+        void UpdateBadgeVisualState()
+        {
+            bool isChecked = _chkEnableBadge.Checked;
+            toggleBanner.CardColor = isChecked ? Color.FromArgb(30, 45, 76) : Color.FromArgb(24, 34, 56);
+            toggleBanner.BorderColor = isChecked ? Color.FromArgb(99, 102, 241) : Color.FromArgb(51, 65, 85);
+            _chkEnableBadge.ForeColor = isChecked ? Color.FromArgb(129, 140, 248) : Color.FromArgb(148, 163, 184);
+            _cboBadgeText.Enabled = isChecked;
+            _cboBadgePosition.Enabled = isChecked;
+            UpdateBadgeOverlay();
+        }
+
+        _chkEnableBadge.CheckedChanged += (_, _) => UpdateBadgeVisualState();
+        toggleBanner.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
+        textPanel.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
+        titleLbl.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
+        descLbl.Click += (_, _) => _chkEnableBadge.Checked = !_chkEnableBadge.Checked;
+
+        badgeStack.Controls.Add(toggleBanner);
 
         badgeStack.Controls.Add(new Label
         {
             Text = "Rozet Metni / İkonu:",
             AutoSize = true,
-            Margin = new Padding(0, 4, 0, 6),
+            Margin = new Padding(0, 2, 0, 6),
             Font = new Font("Segoe UI Semibold", 9F),
             ForeColor = UiStyle.TextMuted
         });
-        _cboBadgeText.Width = 284;
+        _cboBadgeText.Width = contentWidth;
         _cboBadgeText.Font = new Font("Segoe UI", 9.5F);
         _cboBadgeText.Margin = new Padding(0, 0, 0, 14);
         _cboBadgeText.Items.Clear();
@@ -928,7 +998,7 @@ internal sealed class AiListingImageForm : Form
             Font = new Font("Segoe UI Semibold", 9F),
             ForeColor = UiStyle.TextMuted
         });
-        _cboBadgePosition.Width = 284;
+        _cboBadgePosition.Width = contentWidth;
         _cboBadgePosition.Font = new Font("Segoe UI", 9.5F);
         _cboBadgePosition.Margin = new Padding(0, 0, 0, 4);
         _cboBadgePosition.Items.Clear();
@@ -943,19 +1013,19 @@ internal sealed class AiListingImageForm : Form
         // 2. Output & Export Card
         var cardExport = new ModernCardPanel
         {
-            Width = 320,
+            Width = cardWidth,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             CornerRadius = 12,
-            Padding = new Padding(18, 16, 18, 16),
-            Margin = new Padding(0, 0, 0, 18), // 18px gap!
+            Padding = new Padding(20, 18, 20, 18),
+            Margin = new Padding(0, 0, 0, 18),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
 
         var exportStack = new FlowLayoutPanel
         {
-            Width = 284,
+            Width = contentWidth,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
@@ -982,7 +1052,7 @@ internal sealed class AiListingImageForm : Form
             ForeColor = UiStyle.TextMuted
         });
 
-        _formatComboBox.Width = 284;
+        _formatComboBox.Width = contentWidth;
         _formatComboBox.Font = new Font("Segoe UI", 9.5F);
         _formatComboBox.Margin = new Padding(0, 0, 0, 16);
         _formatComboBox.Items.Clear();
@@ -995,7 +1065,7 @@ internal sealed class AiListingImageForm : Form
         exportStack.Controls.Add(_formatComboBox);
 
         var downloadBtn = UiStyle.CreateButton("💾 Bilgisayara İndir (HD PNG)");
-        downloadBtn.Width = 284;
+        downloadBtn.Width = contentWidth;
         downloadBtn.Height = 44;
         downloadBtn.Font = new Font("Segoe UI Semibold", 9.6F, FontStyle.Bold);
         downloadBtn.Padding = new Padding(12, 0, 12, 0);
@@ -1004,7 +1074,7 @@ internal sealed class AiListingImageForm : Form
         exportStack.Controls.Add(downloadBtn);
 
         var copyBtn = UiStyle.CreateButton("📋 Panoya Kopyala", isSecondary: true);
-        copyBtn.Width = 284;
+        copyBtn.Width = contentWidth;
         copyBtn.Height = 40;
         copyBtn.Font = new Font("Segoe UI Semibold", 9.2F);
         copyBtn.Padding = new Padding(12, 0, 12, 0);
@@ -1013,7 +1083,7 @@ internal sealed class AiListingImageForm : Form
         exportStack.Controls.Add(copyBtn);
 
         var sendToBatchBtn = UiStyle.CreateButton("⚡ Toplu Fabrika Kuyruğuna Aktar", isSecondary: true);
-        sendToBatchBtn.Width = 284;
+        sendToBatchBtn.Width = contentWidth;
         sendToBatchBtn.Height = 40;
         sendToBatchBtn.Font = new Font("Segoe UI Semibold", 9.2F);
         sendToBatchBtn.Padding = new Padding(12, 0, 12, 0);
@@ -1048,11 +1118,11 @@ internal sealed class AiListingImageForm : Form
         // 3. Etsy Direct Sync Section Card
         var cardEtsy = new ModernCardPanel
         {
-            Width = 320,
+            Width = cardWidth,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             CornerRadius = 12,
-            Padding = new Padding(18, 16, 18, 16),
+            Padding = new Padding(20, 18, 20, 18),
             Margin = new Padding(0, 0, 0, 18),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
@@ -1060,7 +1130,7 @@ internal sealed class AiListingImageForm : Form
 
         var etsyStack = new FlowLayoutPanel
         {
-            Width = 284,
+            Width = contentWidth,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
@@ -1094,7 +1164,7 @@ internal sealed class AiListingImageForm : Form
             ForeColor = UiStyle.TextMuted,
             Font = new Font("Segoe UI Semibold", 9F)
         });
-        _cboEtsyImageSlot.Width = 284;
+        _cboEtsyImageSlot.Width = contentWidth;
         _cboEtsyImageSlot.Font = new Font("Segoe UI", 9.5F);
         _cboEtsyImageSlot.Margin = new Padding(0, 0, 0, 16);
         _cboEtsyImageSlot.Items.Clear();
@@ -1109,7 +1179,7 @@ internal sealed class AiListingImageForm : Form
         etsyStack.Controls.Add(_cboEtsyImageSlot);
 
         var exportEtsyBtn = UiStyle.CreateButton("🚀 Etsy Listing'e Canlı Yükle");
-        exportEtsyBtn.Width = 284;
+        exportEtsyBtn.Width = contentWidth;
         exportEtsyBtn.Height = 46;
         exportEtsyBtn.Font = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
         exportEtsyBtn.Padding = new Padding(12, 0, 12, 0);
@@ -1120,6 +1190,9 @@ internal sealed class AiListingImageForm : Form
 
         cardEtsy.Controls.Add(etsyStack);
         stack.Controls.Add(cardEtsy);
+
+        // Initialize badge toggle initial state
+        UpdateBadgeVisualState();
 
         rightScroll.SetContent(stack);
         return rightScroll;
