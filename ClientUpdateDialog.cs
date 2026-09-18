@@ -274,6 +274,7 @@ internal sealed class ClientUpdateDialog : Form
 chcp 65001 >nul
 title EtsyMarketPlace Guncelleme
 echo Uygulama kapatiliyor (PID: {pid})...
+
 :waitloop
 tasklist /FI ""PID eq {pid}"" 2>NUL | find /I ""{pid}"" >NUL
 if not errorlevel 1 (
@@ -281,18 +282,29 @@ if not errorlevel 1 (
     goto waitloop
 )
 
-echo Yeni surum kuruluyor...
+echo Yeni surum devreye aliniyor...
+set retrycount=0
+
+:moveloop
 move /y ""{tempDownloaded}"" ""{targetExe}"" >nul
+if errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    set /a retrycount+=1
+    if %retrycount% lss 10 goto moveloop
+)
+
 if exist ""{targetExe}"" (
+    echo Uygulama yeniden baslatiliyor...
     start """" ""{targetExe}""
 ) else (
-    echo HATA: Uygulama baslatilamadi!
+    echo HATA: Yeni surum uygulanamadi veya baslatilamadi!
     pause
 )
 del ""%~f0"" & exit
 ";
 
-            File.WriteAllText(scriptPath, scriptContent, Encoding.GetEncoding(1254));
+            // UTF-8 (BOM'suz) formatında yazarak kod sayfası hatalarını ve Türkçe karakter bozulmalarını önle
+            File.WriteAllText(scriptPath, scriptContent, new UTF8Encoding(false));
 
             Process.Start(new ProcessStartInfo
             {

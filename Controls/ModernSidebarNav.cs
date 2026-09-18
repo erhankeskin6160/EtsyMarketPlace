@@ -37,6 +37,11 @@ public class ModernSidebarNav : UserControl, IMessageFilter
     private bool _isCollapsed = false;
     private bool _isHeaderToggleHovered = false;
 
+    // Update Notification & Jet Animation
+    private bool _hasUpdateNotification = false;
+    private bool _animPhase = false;
+    private readonly System.Windows.Forms.Timer _animTimer = new();
+
     // Scrolling & Dragging
     private int _scrollOffset = 0;
     private int _totalContentHeight = 0;
@@ -111,6 +116,16 @@ public class ModernSidebarNav : UserControl, IMessageFilter
         BackColor = NavBackColor;
         Font = new Font("Segoe UI", 9.5F);
 
+        _animTimer.Interval = 450;
+        _animTimer.Tick += (s, e) =>
+        {
+            if (_hasUpdateNotification)
+            {
+                _animPhase = !_animPhase;
+                Invalidate();
+            }
+        };
+
         try
         {
             Application.AddMessageFilter(this);
@@ -119,16 +134,43 @@ public class ModernSidebarNav : UserControl, IMessageFilter
         catch { }
     }
 
+    public bool HasUpdateNotification => _hasUpdateNotification;
+
+    public void SetUpdateNotification(bool hasUpdate)
+    {
+        if (_hasUpdateNotification != hasUpdate)
+        {
+            _hasUpdateNotification = hasUpdate;
+            if (hasUpdate)
+            {
+                _animPhase = true;
+                _animTimer.Start();
+            }
+            else
+            {
+                _animTimer.Stop();
+                _animPhase = false;
+            }
+            Invalidate();
+        }
+    }
+
     protected override void Dispose(bool disposing)
     {
-        if (disposing && _isFilterRegistered)
+        if (disposing)
         {
-            try
+            _animTimer.Stop();
+            _animTimer.Dispose();
+
+            if (_isFilterRegistered)
             {
-                Application.RemoveMessageFilter(this);
-                _isFilterRegistered = false;
+                try
+                {
+                    Application.RemoveMessageFilter(this);
+                    _isFilterRegistered = false;
+                }
+                catch { }
             }
-            catch { }
         }
         base.Dispose(disposing);
     }
@@ -392,6 +434,10 @@ public class ModernSidebarNav : UserControl, IMessageFilter
             if (index >= 0 && index < _items.Count)
             {
                 var item = _items[index];
+                if (item.Id == "update")
+                {
+                    SetUpdateNotification(false);
+                }
                 SelectedItemId = item.Id;
                 ItemSelected?.Invoke(this, new SidebarItemSelectedEventArgs(item));
             }
@@ -491,6 +537,8 @@ public class ModernSidebarNav : UserControl, IMessageFilter
             // Only draw if within visible viewport
             if (yOffset + 36 >= 55 && yOffset <= Height)
             {
+                bool isUpdateAlert = item.Id == "update" && _hasUpdateNotification;
+
                 // Item Background
                 if (isSelected)
                 {
@@ -504,6 +552,16 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                     using var barPath = ModernCardPanel.CreateRoundedRectanglePath(indicatorRect, 2);
                     g.FillPath(barBrush, barPath);
                 }
+                else if (isUpdateAlert && _animPhase)
+                {
+                    // Parlama efekti: Amber / Gold Glow
+                    using var glowBrush = new SolidBrush(Color.FromArgb(40, 245, 158, 11)); // Amber tint
+                    using var glowPath = ModernCardPanel.CreateRoundedRectanglePath(itemRect, 8);
+                    g.FillPath(glowBrush, glowPath);
+
+                    using var glowPen = new Pen(Color.FromArgb(180, 245, 158, 11), 1.2f);
+                    g.DrawPath(glowPen, glowPath);
+                }
                 else if (isHovered)
                 {
                     using var hoverBgBrush = new SolidBrush(ItemHoverColor);
@@ -511,30 +569,48 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                     g.FillPath(hoverBgBrush, hoverPath);
                 }
 
-                // Icon
-                using (var iconFont = new Font("Segoe UI Emoji", 10.5F))
-                using (var iconBrush = new SolidBrush(isSelected ? ItemActiveColor : (isHovered ? Color.White : TextMutedColor)))
+                // Icon (Jet / Roket 🚀 mikro-animasyonu)
+                float iconX = itemRect.X + (_isCollapsed ? 15 : 10);
+                float iconY = itemRect.Y + 7;
+                float iconFontSize = 10.5F;
+
+                if (isUpdateAlert && _animPhase)
                 {
-                    g.DrawString(item.IconSymbol, iconFont, iconBrush, new PointF(itemRect.X + (_isCollapsed ? 15 : 10), itemRect.Y + 7));
+                    iconY -= 2; // Roket kalkış / fırlama mikro-animasyonu
+                    iconFontSize = 12F; // Büyüme / parlama
+                }
+
+                using (var iconFont = new Font("Segoe UI Emoji", iconFontSize))
+                using (var iconBrush = new SolidBrush(
+                    isUpdateAlert && _animPhase 
+                        ? Color.FromArgb(251, 191, 36) // Parlak Altın Sarısı
+                        : (isSelected ? ItemActiveColor : (isHovered ? Color.White : TextMutedColor))))
+                {
+                    g.DrawString(item.IconSymbol, iconFont, iconBrush, new PointF(iconX, iconY));
                 }
 
                 // Title & Badge (when expanded)
                 if (!_isCollapsed)
                 {
                     float badgeReservedWidth = 0;
-                    if (!string.IsNullOrEmpty(item.BadgeText))
+                    string badgeText = isUpdateAlert ? "GÜNCELLE!" : item.BadgeText;
+                    Color badgeColor = isUpdateAlert 
+                        ? (_animPhase ? Color.FromArgb(239, 68, 68) : Color.FromArgb(245, 158, 11)) // Kırmızı / Amber flaş
+                        : item.BadgeColor;
+
+                    if (!string.IsNullOrEmpty(badgeText))
                     {
-                        using var badgeFont = new Font("Segoe UI Semibold", 7.5F);
-                        var badgeSize = g.MeasureString(item.BadgeText, badgeFont);
+                        using var badgeFont = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold);
+                        var badgeSize = g.MeasureString(badgeText, badgeFont);
                         badgeReservedWidth = badgeSize.Width + 14;
                         var badgeRect = new RectangleF(itemRect.Right - badgeSize.Width - 8, itemRect.Y + 9, badgeSize.Width + 8, 18);
 
-                        using var badgeBrush = new SolidBrush(item.BadgeColor);
+                        using var badgeBrush = new SolidBrush(badgeColor);
                         using var badgePath = ModernCardPanel.CreateRoundedRectanglePath(Rectangle.Round(badgeRect), 6);
                         g.FillPath(badgeBrush, badgePath);
 
                         using var badgeTextBrush = new SolidBrush(Color.White);
-                        g.DrawString(item.BadgeText, badgeFont, badgeTextBrush, badgeRect.X + 4, badgeRect.Y + 1);
+                        g.DrawString(badgeText, badgeFont, badgeTextBrush, badgeRect.X + 4, badgeRect.Y + 1);
                     }
 
                     float maxTitleWidth = Math.Max(40, itemRect.Width - 38 - badgeReservedWidth);

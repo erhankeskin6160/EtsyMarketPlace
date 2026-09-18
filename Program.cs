@@ -25,6 +25,13 @@ static class Program
     {
         try
         {
+            // .NET 8 üzerinde Windows-1254 ve tüm yerel kod sayfalarını etkinleştir
+            try
+            {
+                System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+            }
+            catch { }
+
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {

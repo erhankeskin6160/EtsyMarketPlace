@@ -309,6 +309,7 @@ internal sealed class DashboardForm : Form
         _btnVdsUpdate.Margin = new Padding(6, 0, 0, 0);
         _btnVdsUpdate.Click += (_, _) =>
         {
+            _sidebarNav.SetUpdateNotification(false);
             using var dlg = new ClientUpdateDialog();
             dlg.ShowDialog(this);
         };
@@ -981,6 +982,7 @@ internal sealed class DashboardForm : Form
                 {
                     _btnVdsUpdate.Visible = true;
                     _btnVdsUpdate.Text = $"⚡ Yeni Sürüm ({update.PublishedAt.LocalDateTime:HH:mm})";
+                    _sidebarNav.SetUpdateNotification(true);
                 });
             }
         }
