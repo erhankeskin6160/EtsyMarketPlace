@@ -66,6 +66,7 @@ internal sealed class DashboardForm : Form
     private readonly Label _lblKpiExpensesSub = new();
     private readonly SimilarProductsWinForms.Controls.AnimatedToolTipForm _customToolTipForm = new();
     private readonly System.Windows.Forms.Timer _hoverCheckTimer = new() { Interval = 50 };
+    private readonly System.Windows.Forms.Timer _updateCheckTimer = new() { Interval = 45_000 };
     private Control? _hoveredCard = null;
     private SimilarProductsWinForms.Controls.ToolTipDataPayload? _expensesTooltipPayload = null;
 
@@ -134,10 +135,27 @@ internal sealed class DashboardForm : Form
             }
         };
 
+        _updateCheckTimer.Tick += async (_, _) => await CheckVdsUpdateAsync();
+
+        VdsUpdateNotifierService.UpdateDetected += update =>
+        {
+            if (!IsDisposed)
+            {
+                SafeBeginInvoke(() =>
+                {
+                    _btnVdsUpdate.Visible = true;
+                    _btnVdsUpdate.Text = $"⚡ Yeni Sürüm ({update.PublishedAt.LocalDateTime:HH:mm})";
+                    _sidebarNav.SetUpdateNotification(true);
+                });
+            }
+        };
+
         FormClosed += (_, _) =>
         {
             try
             {
+                _updateCheckTimer.Stop();
+                _updateCheckTimer.Dispose();
                 _hoverCheckTimer.Dispose();
                 _customToolTipForm.Dispose();
             }
@@ -147,7 +165,8 @@ internal sealed class DashboardForm : Form
         Shown += async (_, _) =>
         {
             DailyFinancialReportScheduler.Instance.Start();
-            VdsUpdateNotifierService.StartPeriodicAutoUpdater(TimeSpan.FromSeconds(20), statusMsg =>
+            _updateCheckTimer.Start();
+            VdsUpdateNotifierService.StartPeriodicAutoUpdater(TimeSpan.FromSeconds(30), statusMsg =>
             {
                 if (!IsDisposed)
                 {
@@ -162,6 +181,13 @@ internal sealed class DashboardForm : Form
                     catch { }
                 }
             });
+
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(4000);
+                await CheckVdsUpdateAsync();
+            });
+
             await LoadLiveDashboardAsync();
         };
     }
@@ -976,13 +1002,21 @@ internal sealed class DashboardForm : Form
         try
         {
             var update = await VdsUpdateNotifierService.CheckForUpdateAsync(_cts.Token);
-            if (update.IsUpdateAvailable && !IsDisposed)
+            if (!IsDisposed)
             {
                 SafeBeginInvoke(() =>
                 {
-                    _btnVdsUpdate.Visible = true;
-                    _btnVdsUpdate.Text = $"⚡ Yeni Sürüm ({update.PublishedAt.LocalDateTime:HH:mm})";
-                    _sidebarNav.SetUpdateNotification(true);
+                    if (update.IsUpdateAvailable)
+                    {
+                        _btnVdsUpdate.Visible = true;
+                        _btnVdsUpdate.Text = $"⚡ Yeni Sürüm ({update.PublishedAt.LocalDateTime:HH:mm})";
+                        _sidebarNav.SetUpdateNotification(true);
+                    }
+                    else
+                    {
+                        _btnVdsUpdate.Visible = false;
+                        _sidebarNav.SetUpdateNotification(false);
+                    }
                 });
             }
         }

@@ -195,6 +195,8 @@ del ""%~f0"" & exit
     private static CancellationTokenSource? _autoUpdateCts;
     private static bool _isUpdating = false;
 
+    public static event Action<UpdateCheckResult>? UpdateDetected;
+
     public static void StartPeriodicAutoUpdater(TimeSpan checkInterval, Action<string>? onStatusChanged = null)
     {
         if (_autoUpdateCts != null) return; // Already running
@@ -219,26 +221,27 @@ del ""%~f0"" & exit
                 try
                 {
                     var result = await CheckForUpdateAsync(ct);
-                    if (result.IsUpdateAvailable && !_isUpdating)
+                    if (result.IsUpdateAvailable)
                     {
-                        _isUpdating = true;
-                        var pubTimeStr = result.PublishedAt.LocalDateTime.ToString("HH:mm:ss");
-                        onStatusChanged?.Invoke($"⚡ Yeni publish algılandı ({pubTimeStr})! Güncelleme başlatılıyor...");
+                        UpdateDetected?.Invoke(result);
 
-                        // Devam eden işlemlerin temiz kapanması için 2 saniye bekle
-                        await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                        var pubTimeStr = result.PublishedAt.LocalDateTime.ToString("HH:mm");
+                        onStatusChanged?.Invoke($"⚡ Yeni publish algılandı ({pubTimeStr})");
 
-                        bool started = TriggerVdsUpdateAndRestart();
-                        if (started)
+                        // Sadece sunucu ortamında (deploy/Guncelle_Ve_Baslat.bat varsa) unattended restart yap
+                        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                        var vdsBat = Path.Combine(baseDir, "deploy", "Guncelle_Ve_Baslat.bat");
+                        if (File.Exists(vdsBat) && !_isUpdating)
                         {
-                            await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None);
-                            Environment.Exit(0);
-                            return;
-                        }
-                        else
-                        {
-                            _isUpdating = false;
-                            onStatusChanged?.Invoke($"ℹ️ Yeni sürüm mevcut ({pubTimeStr}) - 'deploy/Guncelle_Ve_Baslat.bat' çalıştırabilirsiniz.");
+                            _isUpdating = true;
+                            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+                            bool started = TriggerVdsUpdateAndRestart();
+                            if (started)
+                            {
+                                await Task.Delay(TimeSpan.FromSeconds(1), CancellationToken.None);
+                                Environment.Exit(0);
+                                return;
+                            }
                         }
                     }
                 }
@@ -251,7 +254,7 @@ del ""%~f0"" & exit
                     Debug.WriteLine($"Auto-updater loop error: {ex.Message}");
                 }
 
-                // Belirtilen aralık kadar bekle (varsayılan 20 saniye)
+                // Belirtilen aralık kadar bekle
                 try
                 {
                     await Task.Delay(checkInterval, ct);
