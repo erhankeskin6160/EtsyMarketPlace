@@ -87,7 +87,8 @@ internal sealed class FastListingCreatorForm : Form
     private readonly ModernPublishToggleCard _chkMakeActive = new();
     private readonly ModernButtonControl _btnPublish = new();
     private readonly Button _btnPreviewSecondary = new();
-    private readonly Label _statusLabel = new() { AutoSize = true };
+    private readonly Label _statusLabel = new() { AutoSize = false, AutoEllipsis = true };
+    private readonly ToolTip _statusToolTip = new();
 
     // Live Readiness Checklist Labels
     private readonly Label _chkItemTitle = new() { AutoSize = true };
@@ -133,10 +134,12 @@ internal sealed class FastListingCreatorForm : Form
         {
             Dock = DockStyle.Fill,
             RowCount = 3,
+            ColumnCount = 1,
             Padding = new Padding(12, 8, 12, 8),
             BackColor = UiStyle.BackgroundColor
         };
         UiStyle.SetDoubleBuffered(root);
+        root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));  // Row 0: Unified Top Command & Template Bar
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // Row 1: 3 Responsive Workspace Columns
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // Row 2: Status bar
@@ -153,20 +156,23 @@ internal sealed class FastListingCreatorForm : Form
             Margin = new Padding(0, 4, 0, 4)
         };
         UiStyle.SetDoubleBuffered(contentGrid);
-        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37)); // Col 1: SEO & Details
-        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35)); // Col 2: Gallery & AI
-        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28)); // Col 3: Variations & Checklist
+        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 37f)); // Col 1: SEO & Details
+        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35f)); // Col 2: Gallery & AI
+        contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 28f)); // Col 3: Variations & Checklist
 
         contentGrid.Controls.Add(BuildLeftColumn(), 0, 0);
         contentGrid.Controls.Add(BuildCenterColumn(), 1, 0);
         contentGrid.Controls.Add(BuildRightColumn(), 2, 0);
         root.Controls.Add(contentGrid, 0, 1);
 
-        // Row 2: Modern Status bar
+        // Row 2: Modern Status bar (Responsive korumalı)
         _statusLabel.Dock = DockStyle.Fill;
         _statusLabel.Font = new Font("Segoe UI", 8.5F);
         _statusLabel.ForeColor = UiStyle.TextMuted;
         _statusLabel.Text = "Hazır.";
+        _statusLabel.Height = 22;
+        _statusLabel.MaximumSize = new Size(0, 24);
+        _statusLabel.TextChanged += (_, _) => _statusToolTip.SetToolTip(_statusLabel, _statusLabel.Text);
         root.Controls.Add(_statusLabel, 0, 2);
 
         ResumeLayout(false);
@@ -581,6 +587,7 @@ internal sealed class FastListingCreatorForm : Form
         _cboTaxonomy.Dock = DockStyle.Top;
         _cboTaxonomy.Font = new Font("Segoe UI", 8.8F);
         _cboTaxonomy.Margin = new Padding(0, 0, 0, 4);
+        _cboTaxonomy.DropDownWidth = 650;
         _cboTaxonomy.Items.Clear();
         _cboTaxonomy.Items.AddRange([
             "1239 - Art & Collectibles / 3D Printed & Sculptures",
@@ -1764,6 +1771,9 @@ internal sealed class FastListingCreatorForm : Form
 
     private void WireEvents()
     {
+        FormClosing += (_, _) => SaveCurrentDraft();
+        Deactivate += (_, _) => SaveCurrentDraft();
+
         _txtTitle.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Enter)
@@ -2504,6 +2514,7 @@ internal sealed class FastListingCreatorForm : Form
         finally
         {
             UpdateChecklist();
+            RestoreDraftIfAvailable();
         }
     }
 
@@ -3283,6 +3294,8 @@ internal sealed class FastListingCreatorForm : Form
                 }
             }
 
+            FastListingDraftStore.ClearDraft();
+
             _statusLabel.Text = isActuallyActive
                 ? $"Listeleme başarıyla oluşturuldu ve CANLI YAYINA ALINDI! (#{created.ListingId})"
                 : $"Listeleme başarıyla TASLAK olarak oluşturuldu! (#{created.ListingId})";
@@ -3366,6 +3379,7 @@ internal sealed class FastListingCreatorForm : Form
         UpdateTagStatus();
         UpdateChecklist();
         _chkMakeActive.Checked = false;
+        FastListingDraftStore.ClearDraft();
         _statusLabel.Text = "Form temizlendi.";
     }
 
@@ -3662,5 +3676,132 @@ internal sealed class FastListingCreatorForm : Form
         form.CancelButton = btnCancel;
 
         return form.ShowDialog(owner) == DialogResult.OK ? txt.Text.Trim() : null;
+    }
+
+    // --- Draft Persistence (Taslak Koruma) ---
+
+    private void SaveCurrentDraft()
+    {
+        try
+        {
+            var draft = new FastListingDraftModel
+            {
+                Title = _txtTitle.Text,
+                Description = _txtDescription.Text,
+                Tags = _txtTags.Text,
+                ProductType = _cboListingType.SelectedItem?.ToString() ?? "📦 Fiziksel",
+                Price = _numPrice.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Quantity = _numQuantity.Value,
+                SelectedTaxonomyText = _cboTaxonomy.SelectedItem?.ToString(),
+                SelectedShippingProfileId = (_cboShippingProfile.SelectedItem as EtsyShippingProfileOption)?.ShippingProfileId,
+                SelectedReadinessStateId = (_cboReadinessState.SelectedItem as EtsyReadinessStateOption)?.ReadinessStateId,
+                GalleryImagePaths = new List<string>(_galleryImagePaths),
+                HasVariations = _chkEnableVariations.Checked,
+                VariationType = _cboVarType1.SelectedItem?.ToString() ?? "Boyut / Size",
+                VariationOptionsText = _txtVarValues1.Text,
+                CustomPricePerVariation = _chkCustomVariationPricing.Checked,
+                PublishDirectly = _chkMakeActive.Checked
+            };
+
+            FastListingDraftStore.SaveDraft(draft);
+        }
+        catch { }
+    }
+
+    private void RestoreDraftIfAvailable()
+    {
+        try
+        {
+            var draft = FastListingDraftStore.LoadDraft();
+            if (draft == null || draft.IsEmpty) return;
+
+            if (!string.IsNullOrWhiteSpace(draft.Title)) _txtTitle.Text = draft.Title;
+            if (!string.IsNullOrWhiteSpace(draft.Description)) _txtDescription.Text = draft.Description;
+            if (!string.IsNullOrWhiteSpace(draft.Tags)) _txtTags.Text = draft.Tags;
+            if (!string.IsNullOrWhiteSpace(draft.Price) && decimal.TryParse(draft.Price, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsedPrice) && parsedPrice >= _numPrice.Minimum && parsedPrice <= _numPrice.Maximum)
+            {
+                _numPrice.Value = parsedPrice;
+            }
+            if (draft.Quantity >= _numQuantity.Minimum && draft.Quantity <= _numQuantity.Maximum)
+            {
+                _numQuantity.Value = draft.Quantity;
+            }
+
+            if (!string.IsNullOrWhiteSpace(draft.ProductType))
+            {
+                int ptIdx = _cboListingType.FindString(draft.ProductType);
+                if (ptIdx >= 0) _cboListingType.SelectedIndex = ptIdx;
+            }
+
+            if (!string.IsNullOrWhiteSpace(draft.SelectedTaxonomyText))
+            {
+                int taxIdx = _cboTaxonomy.FindString(draft.SelectedTaxonomyText);
+                if (taxIdx >= 0)
+                {
+                    _cboTaxonomy.SelectedIndex = taxIdx;
+                }
+                else
+                {
+                    _cboTaxonomy.Items.Insert(1, draft.SelectedTaxonomyText);
+                    _cboTaxonomy.SelectedIndex = 1;
+                }
+            }
+
+            if (draft.SelectedShippingProfileId.HasValue && draft.SelectedShippingProfileId.Value > 0)
+            {
+                for (int i = 0; i < _cboShippingProfile.Items.Count; i++)
+                {
+                    if (_cboShippingProfile.Items[i] is EtsyShippingProfileOption sp && sp.ShippingProfileId == draft.SelectedShippingProfileId.Value)
+                    {
+                        _cboShippingProfile.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (draft.SelectedReadinessStateId.HasValue && draft.SelectedReadinessStateId.Value > 0)
+            {
+                for (int i = 0; i < _cboReadinessState.Items.Count; i++)
+                {
+                    if (_cboReadinessState.Items[i] is EtsyReadinessStateOption rs && rs.ReadinessStateId == draft.SelectedReadinessStateId.Value)
+                    {
+                        _cboReadinessState.SelectedIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (draft.GalleryImagePaths != null && draft.GalleryImagePaths.Count > 0)
+            {
+                _galleryImagePaths.Clear();
+                foreach (var p in draft.GalleryImagePaths)
+                {
+                    if (File.Exists(p) && !_galleryImagePaths.Contains(p))
+                    {
+                        _galleryImagePaths.Add(p);
+                    }
+                }
+                RefreshGalleryCards();
+            }
+
+            _chkEnableVariations.Checked = draft.HasVariations;
+            if (!string.IsNullOrWhiteSpace(draft.VariationType))
+            {
+                int vtIdx = _cboVarType1.FindStringExact(draft.VariationType);
+                if (vtIdx >= 0) _cboVarType1.SelectedIndex = vtIdx;
+            }
+            if (!string.IsNullOrWhiteSpace(draft.VariationOptionsText))
+            {
+                _txtVarValues1.Text = draft.VariationOptionsText;
+            }
+            _chkCustomVariationPricing.Checked = draft.CustomPricePerVariation;
+            _chkMakeActive.Checked = draft.PublishDirectly;
+
+            UpdateTagStatus();
+            UpdateChecklist();
+            _statusLabel.Text = "ℹ️ Önceki çalışmanızdaki taslak otomatik olarak geri yüklendi.";
+            _statusLabel.ForeColor = UiStyle.AccentColor;
+        }
+        catch { }
     }
 }
