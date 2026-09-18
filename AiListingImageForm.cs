@@ -35,11 +35,12 @@ internal sealed class AiListingImageForm : Form
         AutoSize = true,
         Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
         ForeColor = Color.White,
-        BackColor = Color.FromArgb(30, 41, 59),
-        Padding = new Padding(10, 5, 10, 5),
-        Cursor = Cursors.Hand,
-        Anchor = AnchorStyles.Right,
-        Margin = new Padding(0, 0, 8, 0)
+        BackColor = Color.FromArgb(29, 78, 216),
+        Height = 32,
+        MinimumSize = new Size(145, 32),
+        Padding = new Padding(8, 0, 8, 0),
+        TextAlign = ContentAlignment.MiddleCenter,
+        Cursor = Cursors.Hand
     };
     private readonly Label _statusLabel = new() { UseMnemonic = false };
     private readonly Button _btnModeSlider = UiStyle.CreateButton("↔️ Split Perde", isSecondary: false);
@@ -258,9 +259,9 @@ internal sealed class AiListingImageForm : Form
         var header = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5 };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));        // 0: Title & Subtitle
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));        // 1: Studio Mode Tabs
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));        // 2: Mode Switch & Key Buttons
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));        // 2: Mode Switch Buttons (Single Studio)
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));    // 3: Flexible status text area
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));        // 4: AI Engine Status Badge
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));        // 4: Right Action Toolbar (API Key & AI Badge)
 
         // Title & Subtitle
         var titleStack = new FlowLayoutPanel
@@ -269,13 +270,13 @@ internal sealed class AiListingImageForm : Form
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             AutoSize = true,
-            Margin = new Padding(0, 2, 14, 0)
+            Margin = new Padding(0, 2, 10, 0)
         };
         titleStack.Controls.Add(new Label
         {
             AutoSize = true,
             Text = "🎨 AI Görsel & Arka Plan Stüdyosu",
-            Font = new Font("Segoe UI Semibold", 13F, FontStyle.Bold),
+            Font = new Font("Segoe UI Semibold", 12F, FontStyle.Bold),
             ForeColor = Color.White,
             UseMnemonic = false
         });
@@ -283,7 +284,7 @@ internal sealed class AiListingImageForm : Form
         {
             AutoSize = true,
             Text = "Gemini • OpenAI GPT-Image • PhotoRoom",
-            Font = new Font("Segoe UI", 8.2F),
+            Font = new Font("Segoe UI", 8F),
             ForeColor = UiStyle.TextMuted,
             UseMnemonic = false
         });
@@ -296,15 +297,15 @@ internal sealed class AiListingImageForm : Form
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             AutoSize = true,
-            Margin = new Padding(0, 8, 12, 0)
+            Margin = new Padding(0, 8, 8, 0)
         };
 
         _btnTabSingleStudio.Dock = DockStyle.None;
         _btnTabSingleStudio.Text = "🎯 Tekli Tasarım Stüdyosu";
         _btnTabSingleStudio.Height = 32;
-        _btnTabSingleStudio.MinimumSize = new Size(180, 32);
+        _btnTabSingleStudio.MinimumSize = new Size(130, 32);
         _btnTabSingleStudio.AutoSize = true;
-        _btnTabSingleStudio.Padding = new Padding(12, 0, 12, 0);
+        _btnTabSingleStudio.Padding = new Padding(8, 0, 8, 0);
         _btnTabSingleStudio.FlatStyle = FlatStyle.Flat;
         _btnTabSingleStudio.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
         _btnTabSingleStudio.Cursor = Cursors.Hand;
@@ -315,9 +316,9 @@ internal sealed class AiListingImageForm : Form
         _btnTabBatchStudio.Dock = DockStyle.None;
         _btnTabBatchStudio.Text = "⚡ Toplu Arka Plan Fabrikası";
         _btnTabBatchStudio.Height = 32;
-        _btnTabBatchStudio.MinimumSize = new Size(185, 32);
+        _btnTabBatchStudio.MinimumSize = new Size(135, 32);
         _btnTabBatchStudio.AutoSize = true;
-        _btnTabBatchStudio.Padding = new Padding(12, 0, 12, 0);
+        _btnTabBatchStudio.Padding = new Padding(8, 0, 8, 0);
         _btnTabBatchStudio.FlatStyle = FlatStyle.Flat;
         _btnTabBatchStudio.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
         _btnTabBatchStudio.Cursor = Cursors.Hand;
@@ -327,44 +328,68 @@ internal sealed class AiListingImageForm : Form
 
         header.Controls.Add(tabStack, 1, 0);
 
-        // Mode Switch Buttons
+        // Mode Switch Buttons (Single Studio Only)
         var modeStack = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
             WrapContents = false,
             AutoSize = true,
-            Margin = new Padding(0, 8, 10, 0)
+            Margin = new Padding(0, 8, 8, 0)
         };
 
-        ConfigureModeButton(_btnModeSlider, "↔️ Split Perde", 115);
+        ConfigureModeButton(_btnModeSlider, "↔️ Split Perde", 85);
         _btnModeSlider.Click += (_, _) => SetComparisonMode(ImageComparisonMode.SplitSlider);
         modeStack.Controls.Add(_btnModeSlider);
 
-        ConfigureModeButton(_btnModeSideBySide, "⫴ Yan Yana", 100);
+        ConfigureModeButton(_btnModeSideBySide, "⫴ Yan Yana", 75);
         _btnModeSideBySide.Click += (_, _) => SetComparisonMode(ImageComparisonMode.SideBySide);
         modeStack.Controls.Add(_btnModeSideBySide);
 
-        ConfigureModeButton(_btnModeAfterOnly, "🖼️ Sadece Sonuç", 125);
+        ConfigureModeButton(_btnModeAfterOnly, "🖼️ Sadece Sonuç", 90);
         _btnModeAfterOnly.Click += (_, _) => SetComparisonMode(ImageComparisonMode.AfterOnly);
         modeStack.Controls.Add(_btnModeAfterOnly);
+
+        header.Controls.Add(modeStack, 2, 0);
+
+        // Live Status Text (occupies flexible middle area)
+        _statusLabel.Dock = DockStyle.Fill;
+        _statusLabel.TextAlign = ContentAlignment.MiddleRight;
+        _statusLabel.Font = new Font("Segoe UI Semibold", 8.5F);
+        _statusLabel.ForeColor = UiStyle.TextMuted;
+        _statusLabel.AutoEllipsis = true;
+        _statusLabel.Margin = new Padding(4, 10, 8, 0);
+        _statusLabel.Text = "Hazır. Görsel yükleyebilir veya bir sahne seçebilirsiniz.";
+        header.Controls.Add(_statusLabel, 3, 0);
+
+        // Right Action Toolbar: Groups API Key Yapılandır & AI Badge side by side with zero overlapping
+        var rightStack = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            Margin = new Padding(0, 8, 2, 0)
+        };
 
         var btnConfigureKeys = new Button
         {
             Dock = DockStyle.None,
             Text = "🔑 API Key Yapılandır",
             Height = 32,
-            MinimumSize = new Size(155, 32),
+            MinimumSize = new Size(135, 32),
             AutoSize = true,
-            Padding = new Padding(10, 0, 10, 0),
+            Padding = new Padding(8, 0, 8, 0),
             FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(79, 70, 229),
+            BackColor = Color.FromArgb(79, 70, 229), // Indigo 600
             ForeColor = Color.White,
             Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
             Cursor = Cursors.Hand,
-            Margin = new Padding(6, 0, 0, 0)
+            Margin = new Padding(0, 0, 8, 0)
         };
         btnConfigureKeys.FlatAppearance.BorderSize = 0;
+        btnConfigureKeys.FlatAppearance.MouseOverBackColor = Color.FromArgb(99, 102, 241); // Indigo 500
+        btnConfigureKeys.FlatAppearance.MouseDownBackColor = Color.FromArgb(67, 56, 202); // Indigo 700
         btnConfigureKeys.Click += (_, _) =>
         {
             using var dlg = new StudioKeyConfigDialog();
@@ -380,35 +405,24 @@ internal sealed class AiListingImageForm : Form
                 UpdateAiBadge();
             }
         };
-        modeStack.Controls.Add(btnConfigureKeys);
+        rightStack.Controls.Add(btnConfigureKeys);
 
-        header.Controls.Add(modeStack, 2, 0);
-
-        // Live Status Text (occupies flexible middle area)
-        _statusLabel.Dock = DockStyle.Fill;
-        _statusLabel.TextAlign = ContentAlignment.MiddleRight;
-        _statusLabel.Font = new Font("Segoe UI Semibold", 8.8F);
-        _statusLabel.ForeColor = UiStyle.TextMuted;
-        _statusLabel.AutoEllipsis = true;
-        _statusLabel.Margin = new Padding(6, 10, 10, 0);
-        _statusLabel.Text = "Hazır. Görsel yükleyebilir veya bir sahne seçebilirsiniz.";
-        header.Controls.Add(_statusLabel, 3, 0);
-
-        // AI Engine Status Badge (guaranteed full visibility with AutoSize and MinimumSize)
-        var badgePanel = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            WrapContents = false,
-            AutoSize = true,
-            Margin = new Padding(0, 8, 2, 0)
-        };
-        _lblAiBadge.MinimumSize = new Size(190, 30);
+        _lblAiBadge.Dock = DockStyle.None;
+        _lblAiBadge.Height = 32;
+        _lblAiBadge.MinimumSize = new Size(145, 32);
+        _lblAiBadge.AutoSize = true;
+        _lblAiBadge.Padding = new Padding(8, 0, 8, 0);
+        _lblAiBadge.Margin = new Padding(0);
+        _lblAiBadge.TextAlign = ContentAlignment.MiddleCenter;
         _lblAiBadge.Click += (_, _) => OpenAiSettingsDialog();
         UpdateAiBadge();
-        badgePanel.Controls.Add(_lblAiBadge);
+        rightStack.Controls.Add(_lblAiBadge);
 
-        header.Controls.Add(badgePanel, 4, 0);
+        var toolTip = new ToolTip();
+        toolTip.SetToolTip(btnConfigureKeys, "PhotoRoom, Gemini ve OpenAI API anahtarlarını yapılandırın");
+        toolTip.SetToolTip(_lblAiBadge, "Aktif AI model ve sağlayıcı ayarlarını açmak için tıklayın");
+
+        header.Controls.Add(rightStack, 4, 0);
 
         return header;
     }
@@ -420,7 +434,7 @@ internal sealed class AiListingImageForm : Form
         btn.Height = 32;
         if (minWidth > 0) btn.MinimumSize = new Size(minWidth, 32);
         btn.AutoSize = true;
-        btn.Padding = new Padding(12, 0, 12, 0);
+        btn.Padding = new Padding(8, 0, 8, 0);
         btn.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
     }
 
@@ -1144,9 +1158,15 @@ internal sealed class AiListingImageForm : Form
     private void UpdateAiBadge()
     {
         _lblAiBadge.Text = _aiSettings.GetActiveBadgeText();
-        _lblAiBadge.BackColor = _aiSettings.UseOpenAi
-            ? Color.FromArgb(16, 80, 50)
-            : (_aiSettings.UseGemini ? Color.FromArgb(20, 60, 120) : Color.FromArgb(40, 50, 65));
+        _lblAiBadge.BackColor = (_aiSettings.Provider ?? "").Trim().ToLowerInvariant() switch
+        {
+            "gemini" => Color.FromArgb(29, 78, 216),    // Blue 700
+            "openai" => Color.FromArgb(16, 120, 75),   // Emerald 700
+            "claude" => Color.FromArgb(126, 34, 206),  // Purple 700
+            "deepseek" => Color.FromArgb(185, 28, 28), // Red 700
+            "grok" => Color.FromArgb(194, 65, 12),     // Orange 700
+            _ => Color.FromArgb(51, 65, 85)            // Slate 700
+        };
     }
 
     private void OpenAiSettingsDialog()
