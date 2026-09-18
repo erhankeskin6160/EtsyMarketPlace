@@ -397,13 +397,16 @@ internal static class UiStyle
         grid.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
         // Alternating row styling (subtle zebra striping)
+        // NOT: Alignment ve Padding satır düzeyinde zorlanmaz (NotSet / Empty bırakılır),
+        // böylece sütun düzeyindeki özel hizalamalar (ortalanmış adetler, sağa yaslı tutarlar)
+        // tek numaralı satırlarda da birebir geçerli kalır ve zigzag oluşmaz.
         grid.AlternatingRowsDefaultCellStyle.BackColor = CurrentTheme == AppTheme.Dark ? Color.FromArgb(24, 34, 53) : Color.FromArgb(248, 250, 252);
         grid.AlternatingRowsDefaultCellStyle.ForeColor = TextDark;
         grid.AlternatingRowsDefaultCellStyle.SelectionBackColor = grid.DefaultCellStyle.SelectionBackColor;
         grid.AlternatingRowsDefaultCellStyle.SelectionForeColor = grid.DefaultCellStyle.SelectionForeColor;
         grid.AlternatingRowsDefaultCellStyle.Font = BaseFont;
-        grid.AlternatingRowsDefaultCellStyle.Padding = new Padding(8, 2, 8, 2);
-        grid.AlternatingRowsDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        grid.AlternatingRowsDefaultCellStyle.Padding = Padding.Empty;
+        grid.AlternatingRowsDefaultCellStyle.Alignment = DataGridViewContentAlignment.NotSet;
 
         try
         {

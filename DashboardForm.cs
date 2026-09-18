@@ -848,6 +848,8 @@ internal sealed class DashboardForm : Form
     private void ConfigureRecentOrdersGrid()
     {
         _gridRecentOrders.Columns.Clear();
+        _gridRecentOrders.AlternatingRowsDefaultCellStyle.Alignment = DataGridViewContentAlignment.NotSet;
+        _gridRecentOrders.AlternatingRowsDefaultCellStyle.Padding = Padding.Empty;
 
         var colDate = new DataGridViewTextBoxColumn
         {
