@@ -15,10 +15,10 @@ public class StudioLightingSelectorControl : UserControl
     private readonly ComboBox _cboCamera = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernCheckBox _chkNegativeFilter = new()
     {
-        Text = "🛡️ AI Bozulma Önleyici (Anti-Distortion & Clean)",
+        Text = "🛡️ AI Bozulma Önleyici (Anti-Distortion)",
         Checked = true,
         AutoSize = true,
-        Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+        Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
         ForeColor = Color.FromArgb(129, 140, 248)
     };
 
