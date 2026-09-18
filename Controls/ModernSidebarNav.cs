@@ -435,10 +435,6 @@ public class ModernSidebarNav : UserControl, IMessageFilter
             if (index >= 0 && index < _items.Count)
             {
                 var item = _items[index];
-                if (item.Id == "update")
-                {
-                    SetUpdateNotification(false);
-                }
                 SelectedItemId = item.Id;
                 ItemSelected?.Invoke(this, new SidebarItemSelectedEventArgs(item));
             }
@@ -541,7 +537,30 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                 bool isUpdateAlert = item.Id == "update" && _hasUpdateNotification;
 
                 // Item Background
-                if (isSelected)
+                if (isUpdateAlert)
+                {
+                    if (_animPhase)
+                    {
+                        // Canlı Neon Turuncu/Kırmızı Flaş Fazı
+                        using var glowBrush = new SolidBrush(Color.FromArgb(90, 239, 68, 68)); // Canlı Kırmızı/Amber neon zemin
+                        using var glowPath = ModernCardPanel.CreateRoundedRectanglePath(itemRect, 8);
+                        g.FillPath(glowBrush, glowPath);
+
+                        using var glowPen = new Pen(Color.FromArgb(245, 158, 11), 2.0f); // Parlak 2px turuncu neon çerçeve
+                        g.DrawPath(glowPen, glowPath);
+                    }
+                    else
+                    {
+                        // İkinci faz: Hafif altın/turuncu tonu (nabız efekti)
+                        using var dimBrush = new SolidBrush(Color.FromArgb(45, 245, 158, 11));
+                        using var dimPath = ModernCardPanel.CreateRoundedRectanglePath(itemRect, 8);
+                        g.FillPath(dimBrush, dimPath);
+
+                        using var dimPen = new Pen(Color.FromArgb(160, 239, 68, 68), 1.2f);
+                        g.DrawPath(dimPen, dimPath);
+                    }
+                }
+                else if (isSelected)
                 {
                     using var activeBgBrush = new SolidBrush(ItemActiveBg);
                     using var activePath = ModernCardPanel.CreateRoundedRectanglePath(itemRect, 8);
@@ -552,16 +571,6 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                     using var barBrush = new SolidBrush(ItemActiveColor);
                     using var barPath = ModernCardPanel.CreateRoundedRectanglePath(indicatorRect, 2);
                     g.FillPath(barBrush, barPath);
-                }
-                else if (isUpdateAlert && _animPhase)
-                {
-                    // Parlama efekti: Amber / Gold Glow
-                    using var glowBrush = new SolidBrush(Color.FromArgb(40, 245, 158, 11)); // Amber tint
-                    using var glowPath = ModernCardPanel.CreateRoundedRectanglePath(itemRect, 8);
-                    g.FillPath(glowBrush, glowPath);
-
-                    using var glowPen = new Pen(Color.FromArgb(180, 245, 158, 11), 1.2f);
-                    g.DrawPath(glowPen, glowPath);
                 }
                 else if (isHovered)
                 {
@@ -575,16 +584,23 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                 float iconY = itemRect.Y + 7;
                 float iconFontSize = 10.5F;
 
-                if (isUpdateAlert && _animPhase)
+                if (isUpdateAlert)
                 {
-                    iconY -= 2; // Roket kalkış / fırlama mikro-animasyonu
-                    iconFontSize = 12F; // Büyüme / parlama
+                    if (_animPhase)
+                    {
+                        iconY -= 3; // Roket kalkış / fırlama mikro-animasyonu
+                        iconFontSize = 13F; // Büyüme / parlama
+                    }
+                    else
+                    {
+                        iconFontSize = 11.5F;
+                    }
                 }
 
                 using (var iconFont = new Font("Segoe UI Emoji", iconFontSize))
                 using (var iconBrush = new SolidBrush(
-                    isUpdateAlert && _animPhase 
-                        ? Color.FromArgb(251, 191, 36) // Parlak Altın Sarısı
+                    isUpdateAlert 
+                        ? (_animPhase ? Color.FromArgb(255, 220, 40) : Color.FromArgb(245, 158, 11)) // Parlak Altın Sarısı
                         : (isSelected ? ItemActiveColor : (isHovered ? Color.White : TextMutedColor))))
                 {
                     g.DrawString(item.IconSymbol, iconFont, iconBrush, new PointF(iconX, iconY));
@@ -596,7 +612,7 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                     float badgeReservedWidth = 0;
                     string badgeText = isUpdateAlert ? "GÜNCELLE!" : item.BadgeText;
                     Color badgeColor = isUpdateAlert 
-                        ? (_animPhase ? Color.FromArgb(239, 68, 68) : Color.FromArgb(245, 158, 11)) // Kırmızı / Amber flaş
+                        ? (_animPhase ? Color.FromArgb(239, 68, 68) : Color.FromArgb(245, 158, 11)) // Kırmızı / Canlı Turuncu flaş
                         : item.BadgeColor;
 
                     if (!string.IsNullOrEmpty(badgeText))
@@ -616,8 +632,11 @@ public class ModernSidebarNav : UserControl, IMessageFilter
 
                     float maxTitleWidth = Math.Max(40, itemRect.Width - 38 - badgeReservedWidth);
                     var titleBounds = new RectangleF(itemRect.X + 34, itemRect.Y + 8, maxTitleWidth, 20);
-                    using var titleFont = new Font(Font, isSelected ? FontStyle.Bold : FontStyle.Regular);
-                    using var titleBrush = new SolidBrush(isSelected ? Color.White : (isHovered ? Color.White : TextColor));
+                    using var titleFont = new Font(Font, (isSelected || isUpdateAlert) ? FontStyle.Bold : FontStyle.Regular);
+                    using var titleBrush = new SolidBrush(
+                        isUpdateAlert 
+                            ? (_animPhase ? Color.White : Color.FromArgb(254, 240, 138)) 
+                            : (isSelected ? Color.White : (isHovered ? Color.White : TextColor)));
                     using var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap, LineAlignment = StringAlignment.Center };
                     g.DrawString(item.Title, titleFont, titleBrush, titleBounds, sf);
                 }

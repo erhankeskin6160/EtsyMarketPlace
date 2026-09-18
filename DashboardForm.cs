@@ -134,6 +134,19 @@ internal sealed class DashboardForm : Form
             }
         };
 
+        KeyPreview = true;
+        KeyDown += (_, e) =>
+        {
+            // Ctrl + Shift + U: Canlı Güncelleme Bildirim Animasyonu Testi
+            if (e.Control && e.Shift && e.KeyCode == Keys.U)
+            {
+                bool newState = !_sidebarNav.HasUpdateNotification;
+                _sidebarNav.SetUpdateNotification(newState);
+                _btnVdsUpdate.Visible = newState;
+                if (newState) _btnVdsUpdate.Text = "⚡ Yeni Sürüm (Test)";
+            }
+        };
+
         VdsUpdateNotifierService.UpdateStatusChecked += update =>
         {
             if (!IsDisposed)
@@ -335,7 +348,6 @@ internal sealed class DashboardForm : Form
         _btnVdsUpdate.Margin = new Padding(6, 0, 0, 0);
         _btnVdsUpdate.Click += (_, _) =>
         {
-            _sidebarNav.SetUpdateNotification(false);
             using var dlg = new ClientUpdateDialog();
             dlg.ShowDialog(this);
         };
