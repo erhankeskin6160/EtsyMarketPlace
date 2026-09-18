@@ -1448,7 +1448,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("ai_usage", "AI Token & Bakiye Takip", "📊", "Otomasyon & Araçlar", "YENİ");
 
-        // _sidebarNav.AddItem("notifications", "Bildirim & Bot Ayarları", "🔔", "Sistem");
+        _sidebarNav.AddItem("notifications", "Telegram Bildirim Botu", "✈️", "Sistem", "YENİ");
         _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
         _sidebarNav.AddItem("api", "Etsy API Ayarları", "⚙️", "Sistem");
         _sidebarNav.AddItem("update", "Sürüm Güncelle (Client)", "🚀", "Sistem", "YENİ");
