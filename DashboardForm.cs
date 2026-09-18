@@ -1364,7 +1364,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("shop", "Mağazam Performansı", "🏬", "Genel");
 
         _sidebarNav.AddItem("research", "Pazar Araştırması", "🔍", "Araştırma & Analiz");
-        _sidebarNav.AddItem("viral_3d", "Viral 3D Model Avcısı", "🚀", "Araştırma & Analiz", "YENİ");
+        _sidebarNav.AddItem("viral_3d", "Viral 3D Model Avcısı", "🔥", "Araştırma & Analiz", "YENİ");
         _sidebarNav.AddItem("competitor_spy", "Rakip & Trend Casusu", "🕵️", "Araştırma & Analiz", "YENİ");
         _sidebarNav.AddItem("external", "Dış Pazar Yeri Bulucu", "🌐", "Araştırma & Analiz");
         _sidebarNav.AddItem("ai_audit", "Mağaza AI Analizi", "🤖", "Araştırma & Analiz", "YENİ");

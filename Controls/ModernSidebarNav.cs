@@ -145,6 +145,7 @@ public class ModernSidebarNav : UserControl, IMessageFilter
             {
                 _animPhase = true;
                 _animTimer.Start();
+                EnsureVisible("update");
             }
             else
             {
@@ -700,6 +701,13 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                 using var arrowFont = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
                 using var arrowBrush = new SolidBrush(_isHeaderToggleHovered ? Color.White : TextMutedColor);
                 g.DrawString("▶", arrowFont, arrowBrush, new PointF(34, 21));
+            }
+
+            if (_hasUpdateNotification)
+            {
+                var dotRect = new Rectangle(Width - 14, 12, 8, 8);
+                using var dotBrush = new SolidBrush(_animPhase ? Color.FromArgb(239, 68, 68) : Color.FromArgb(245, 158, 11));
+                g.FillEllipse(dotBrush, dotRect);
             }
         }
 
