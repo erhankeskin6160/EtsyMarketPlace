@@ -8,6 +8,9 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+using System.Net.Http.Headers;
+using System.Reflection;
+
 internal sealed class VdsUpdateNotifierService
 {
     private static readonly HttpClient HttpClient = new()
@@ -24,14 +27,47 @@ internal sealed class VdsUpdateNotifierService
         bool IsUpdateAvailable,
         string VersionTag,
         DateTimeOffset PublishedAt,
-        string DownloadUrl);
+        string DownloadUrl,
+        string RemoteCommitSha = "",
+        string LocalCommitSha = "");
+
+    public static string GetCurrentCommitHash()
+    {
+        try
+        {
+            var infoVer = typeof(VdsUpdateNotifierService).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion;
+
+            if (!string.IsNullOrEmpty(infoVer) && infoVer.Contains('+'))
+            {
+                var commit = infoVer.Split('+')[1].Trim();
+                if (commit.Length >= 7)
+                {
+                    return commit;
+                }
+            }
+        }
+        catch { }
+
+        return string.Empty;
+    }
 
     public static async Task<UpdateCheckResult> CheckForUpdateAsync(CancellationToken ct = default)
     {
         try
         {
-            const string apiUrl = "https://api.github.com/repos/erhankeskin6160/EtsyMarketPlace/releases/tags/dev-latest";
-            using var response = await HttpClient.GetAsync(apiUrl, ct);
+            var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var apiUrl = $"https://api.github.com/repos/erhankeskin6160/EtsyMarketPlace/releases/tags/dev-latest?t={timestamp}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            request.Headers.CacheControl = new CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true,
+                MustRevalidate = true
+            };
+
+            using var response = await HttpClient.SendAsync(request, ct);
             if (!response.IsSuccessStatusCode)
             {
                 return new UpdateCheckResult(false, string.Empty, DateTimeOffset.MinValue, string.Empty);
@@ -75,25 +111,56 @@ internal sealed class VdsUpdateNotifierService
                 }
             }
 
-            // Mevcut çalışan EXE'nin derlenme / yazılma zamanı ve dosya boyutu
-            var currentExePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
-            if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
+            string remoteCommit = string.Empty;
+            if (root.TryGetProperty("target_commitish", out var targetProp))
             {
-                return new UpdateCheckResult(false, string.Empty, DateTimeOffset.MinValue, string.Empty);
+                remoteCommit = targetProp.GetString()?.Trim() ?? string.Empty;
             }
 
-            var localFileInfo = new FileInfo(currentExePath);
-            var localWriteTime = new DateTimeOffset(localFileInfo.LastWriteTimeUtc, TimeSpan.Zero);
-            long localSize = localFileInfo.Length;
-
-            // Eğer GitHub'daki asset dosyası yerel exe'den daha yeniyse (veya boyutu farklıysa) güncelleme var demektir
-            bool isNewer = effectiveTime > localWriteTime.AddSeconds(10);
-            bool isDifferentSize = remoteAssetSize > 10_000_000 && Math.Abs(remoteAssetSize - localSize) > 4096;
-
-            if (isNewer || isDifferentSize)
+            if (string.IsNullOrEmpty(remoteCommit) && root.TryGetProperty("body", out var bodyProp))
             {
-                string downloadUrl = "https://github.com/erhankeskin6160/EtsyMarketPlace/releases/download/dev-latest/SimilarProductsWinForms.exe";
-                return new UpdateCheckResult(true, "dev-latest", effectiveTime, downloadUrl);
+                var body = bodyProp.GetString() ?? string.Empty;
+                var match = System.Text.RegularExpressions.Regex.Match(body, @"\*\*Commit:\*\*\s*([a-fA-F0-9]{7,40})");
+                if (match.Success)
+                {
+                    remoteCommit = match.Groups[1].Value.Trim();
+                }
+            }
+
+            var localCommit = GetCurrentCommitHash();
+            const string downloadUrl = "https://github.com/erhankeskin6160/EtsyMarketPlace/releases/download/dev-latest/SimilarProductsWinForms.exe";
+
+            // 1. ÖNCELİKLİ VE KESİN KONTROL: Git Commit Hash Karşılaştırması
+            if (!string.IsNullOrEmpty(localCommit) && !string.IsNullOrEmpty(remoteCommit))
+            {
+                bool isSameCommit = remoteCommit.StartsWith(localCommit, StringComparison.OrdinalIgnoreCase) ||
+                                     localCommit.StartsWith(remoteCommit, StringComparison.OrdinalIgnoreCase);
+
+                if (!isSameCommit)
+                {
+                    return new UpdateCheckResult(true, "dev-latest", effectiveTime, downloadUrl, remoteCommit, localCommit);
+                }
+                else
+                {
+                    return new UpdateCheckResult(false, "dev-latest", effectiveTime, string.Empty, remoteCommit, localCommit);
+                }
+            }
+
+            // 2. FALLBACK KONTROL: Dosya Yazılma Zamanı ve Boyut Karşılaştırması
+            var currentExePath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(currentExePath) && File.Exists(currentExePath))
+            {
+                var localFileInfo = new FileInfo(currentExePath);
+                var localWriteTime = new DateTimeOffset(localFileInfo.LastWriteTimeUtc, TimeSpan.Zero);
+                long localSize = localFileInfo.Length;
+
+                bool isNewer = effectiveTime > localWriteTime.AddSeconds(2);
+                bool isDifferentSize = remoteAssetSize > 10_000_000 && Math.Abs(remoteAssetSize - localSize) > 256;
+
+                if (isNewer || isDifferentSize)
+                {
+                    return new UpdateCheckResult(true, "dev-latest", effectiveTime, downloadUrl, remoteCommit, localCommit);
+                }
             }
         }
         catch
@@ -196,6 +263,18 @@ del ""%~f0"" & exit
     private static bool _isUpdating = false;
 
     public static event Action<UpdateCheckResult>? UpdateDetected;
+    public static event Action<UpdateCheckResult>? UpdateStatusChecked;
+
+    public static void StopPeriodicAutoUpdater()
+    {
+        try
+        {
+            _autoUpdateCts?.Cancel();
+            _autoUpdateCts?.Dispose();
+            _autoUpdateCts = null;
+        }
+        catch { }
+    }
 
     public static void StartPeriodicAutoUpdater(TimeSpan checkInterval, Action<string>? onStatusChanged = null)
     {
@@ -206,10 +285,10 @@ del ""%~f0"" & exit
 
         Task.Run(async () =>
         {
-            // İlk kontrolü program açıldıktan 5 saniye sonra yap
+            // İlk kontrolü program açıldıktan 4 saniye sonra yap
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(5), ct);
+                await Task.Delay(TimeSpan.FromSeconds(4), ct);
             }
             catch (OperationCanceledException)
             {
@@ -221,11 +300,15 @@ del ""%~f0"" & exit
                 try
                 {
                     var result = await CheckForUpdateAsync(ct);
+                    UpdateStatusChecked?.Invoke(result);
+
                     if (result.IsUpdateAvailable)
                     {
                         UpdateDetected?.Invoke(result);
 
-                        var pubTimeStr = result.PublishedAt.LocalDateTime.ToString("HH:mm");
+                        var pubTimeStr = result.PublishedAt != DateTimeOffset.MinValue 
+                            ? result.PublishedAt.LocalDateTime.ToString("HH:mm") 
+                            : "";
                         onStatusChanged?.Invoke($"⚡ Yeni publish algılandı ({pubTimeStr})");
 
                         // Sadece sunucu ortamında (deploy/Guncelle_Ve_Baslat.bat varsa) unattended restart yap

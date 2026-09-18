@@ -136,15 +136,21 @@ internal sealed class ClientUpdateDialog : Form
                 var pubTime = update.PublishedAt != DateTimeOffset.MinValue
                     ? update.PublishedAt.LocalDateTime.ToString("dd.MM.yyyy HH:mm")
                     : "En son sürüm";
-                _lblStatus.Text = $"🎉 Yeni sürüm tespit edildi! (Tarih: {pubTime})";
+                var commitInfo = !string.IsNullOrEmpty(update.RemoteCommitSha)
+                    ? $" [Commit: {update.RemoteCommitSha[..Math.Min(7, update.RemoteCommitSha.Length)]}]"
+                    : "";
+                _lblStatus.Text = $"🎉 Yeni sürüm tespit edildi! ({pubTime}){commitInfo}";
                 _lblStatus.ForeColor = UiStyle.SuccessColor;
-                _lblDetails.Text = "Güncellemek için 'Şimdi Güncelle' butonuna tıklayınız (~92 MB).";
+                _lblDetails.Text = "Güncellemek için 'Şimdi Güncelle' butonuna tıklayınız (~95 MB).";
                 _btnAction.Enabled = true;
                 _btnAction.Text = "⚡ Şimdi Güncelle";
             }
             else
             {
-                _lblStatus.Text = "✅ Programınız zaten en son sürümde.";
+                var commitInfo = !string.IsNullOrEmpty(update.LocalCommitSha)
+                    ? $" (Aktif Commit: {update.LocalCommitSha[..Math.Min(7, update.LocalCommitSha.Length)]})"
+                    : "";
+                _lblStatus.Text = $"✅ Programınız zaten en son sürümde.{commitInfo}";
                 _lblStatus.ForeColor = UiStyle.SuccessColor;
                 _lblDetails.Text = "Yine de dosyaları yeniden indirip tazelemek için butona tıklayabilirsiniz.";
                 _btnAction.Enabled = true;
