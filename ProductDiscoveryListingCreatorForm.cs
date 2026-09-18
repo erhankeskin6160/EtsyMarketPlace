@@ -619,14 +619,19 @@ internal sealed class ProductDiscoveryListingCreatorForm(
             _lblTitleCounter.Text = "0 / 140 Karakter";
             _lblTitleCounter.ForeColor = UiStyle.TextMuted;
         }
-        else if (len <= 54)
+        else if (len < 55)
         {
-            _lblTitleCounter.Text = $"{len} / 140 (Mobil Vitrin: İlk 54 krk)";
+            _lblTitleCounter.Text = $"{len} / 140 (Mobil Vitrin: İlk 54 krk - Eksik)";
             _lblTitleCounter.ForeColor = Color.FromArgb(245, 158, 11);
+        }
+        else if (len < 125)
+        {
+            _lblTitleCounter.Text = $"{len} / 140 (Orta - Hedef: 125-140)";
+            _lblTitleCounter.ForeColor = Color.FromArgb(59, 130, 246);
         }
         else if (len <= 140)
         {
-            _lblTitleCounter.Text = $"{len} / 140 (SEO İdeal: 120-140)";
+            _lblTitleCounter.Text = $"{len} / 140 (SEO İdeal: Mobil Vitrin + Doygun)";
             _lblTitleCounter.ForeColor = Color.FromArgb(16, 185, 129);
         }
         else
@@ -1989,33 +1994,143 @@ internal sealed class ProductDiscoveryListingCreatorForm(
     private string SelectEnglishTitle(IReadOnlyList<string> suggestions, MarketListingResult listing)
     {
         var title = SelectRelevantTitle(suggestions, listing);
-        return LooksLikeTurkish(title) ? BuildSafeTitle(listing) : title;
+        if (LooksLikeTurkish(title))
+        {
+            title = BuildSafeTitle(listing);
+        }
+
+        // If the selected title is shorter than 125 chars, enrich it intelligently up to 128-139 chars
+        // while strictly preserving the first 50-55 characters (mobile showcase zone)!
+        if (title.Length < 125)
+        {
+            title = EnrichTitleToTargetCapacity(title, listing);
+        }
+
+        return title.Length <= 140 ? title : title[..140].TrimEnd();
     }
 
     private string SelectRelevantTitle(IReadOnlyList<string> suggestions, MarketListingResult listing)
     {
         var requiredTerms = ImportantTerms($"{PrimaryKeyword()} {listing.Title}");
+        var scoredCandidates = new List<(string Title, int Score)>();
+
         foreach (var suggestion in suggestions)
         {
             var title = SanitizeTitle(suggestion);
             if (title.Length == 0) continue;
             if (LooksLikePromptLeak(title)) continue;
-            if (title.Length >= 75 && (requiredTerms.Count == 0 || requiredTerms.Any(term => title.Contains(term, StringComparison.OrdinalIgnoreCase))))
+            if (title.Length > 140) title = title[..140].TrimEnd();
+
+            int score = 0;
+
+            // 1. Length Sweet Spot (125-140 chars is optimal, <110 penalized)
+            if (title.Length is >= 125 and <= 140)
             {
-                return title.Length <= 140 ? title : title[..140].TrimEnd();
+                score += 60;
             }
+            else if (title.Length is >= 110 and < 125)
+            {
+                score += 35;
+            }
+            else if (title.Length is >= 75 and < 110)
+            {
+                score += 15;
+            }
+            else
+            {
+                score -= 20;
+            }
+
+            // 2. Mobile Zone (First 50-55 chars): Product identity front-loaded?
+            var mobileSnippet = title.Length > 55 ? title[..55] : title;
+            var mobileMatches = requiredTerms.Count(term => mobileSnippet.Contains(term, StringComparison.OrdinalIgnoreCase));
+            score += mobileMatches * 25;
+
+            // Penalize generic opening words in mobile zone
+            if (mobileSnippet.StartsWith("gift for", StringComparison.OrdinalIgnoreCase) ||
+                mobileSnippet.StartsWith("unique gift", StringComparison.OrdinalIgnoreCase) ||
+                mobileSnippet.StartsWith("personalized gift", StringComparison.OrdinalIgnoreCase))
+            {
+                score -= 30;
+            }
+
+            // 3. Overall keyword coverage across the full title
+            var fullMatches = requiredTerms.Count(term => title.Contains(term, StringComparison.OrdinalIgnoreCase));
+            score += fullMatches * 10;
+
+            scoredCandidates.Add((title, score));
         }
 
-        foreach (var suggestion in suggestions)
+        var best = scoredCandidates.OrderByDescending(c => c.Score).FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(best.Title))
         {
-            var title = SanitizeTitle(suggestion);
-            if (title.Length >= 60 && !LooksLikePromptLeak(title))
-            {
-                return title.Length <= 140 ? title : title[..140].TrimEnd();
-            }
+            return best.Title;
         }
 
         return BuildSafeTitle(listing);
+    }
+
+    private string EnrichTitleToTargetCapacity(string baseTitle, MarketListingResult listing)
+    {
+        if (string.IsNullOrWhiteSpace(baseTitle))
+            return BuildSafeTitle(listing);
+
+        var current = baseTitle.Trim();
+        if (current.Length >= 125)
+            return current.Length <= 140 ? current : current[..140].TrimEnd();
+
+        // Candidates to append that don't already exist in the base title
+        var candidates = new List<string>();
+
+        // 1. Tags from original listing
+        foreach (var tag in listing.Tags)
+        {
+            if (string.IsNullOrWhiteSpace(tag)) continue;
+            var clean = tag.Trim();
+            if (clean.Length < 3) continue;
+            if (current.Contains(clean, StringComparison.OrdinalIgnoreCase)) continue;
+            if (candidates.Any(c => c.Contains(clean, StringComparison.OrdinalIgnoreCase))) continue;
+            candidates.Add(System.Globalization.CultureInfo.InvariantCulture.TextInfo.ToTitleCase(clean));
+        }
+
+        // 2. High-converting contextual Etsy long-tails
+        candidates.Add("Handcrafted Collectible");
+        candidates.Add("Gaming Setup & Desk Display");
+        candidates.Add("Unique Gift for Him & Her");
+        candidates.Add("Shelf Prop & Home Decor");
+        candidates.Add("Fan Art Keepsake");
+
+        foreach (var candidate in candidates)
+        {
+            if (current.Contains(candidate, StringComparison.OrdinalIgnoreCase)) continue;
+
+            // Choose appropriate separator based on current ending
+            string test;
+            if (current.Contains('-') && !current.Contains('|'))
+            {
+                test = $"{current} | {candidate}";
+            }
+            else if (current.Contains('|'))
+            {
+                test = $"{current}, {candidate}";
+            }
+            else
+            {
+                test = $"{current} - {candidate}";
+            }
+
+            if (test.Length <= 139)
+            {
+                current = test;
+            }
+
+            if (current.Length >= 125)
+            {
+                break;
+            }
+        }
+
+        return current.Length <= 140 ? current : current[..140].TrimEnd();
     }
 
     private static string SanitizeTitle(string raw)
@@ -2060,41 +2175,17 @@ internal sealed class ProductDiscoveryListingCreatorForm(
         }
 
         var keyword = PrimaryKeyword();
-        var parts = new List<string>();
-
         if (!string.IsNullOrWhiteSpace(keyword) && !primaryPart.Contains(keyword, StringComparison.OrdinalIgnoreCase))
         {
-            parts.Add(keyword);
-        }
-
-        foreach (var tag in listing.Tags)
-        {
-            if (string.IsNullOrWhiteSpace(tag)) continue;
-            var cleanTag = tag.Trim();
-            if (cleanTag.Length < 3) continue;
-            if (primaryPart.Contains(cleanTag, StringComparison.OrdinalIgnoreCase)) continue;
-            if (parts.Any(p => p.Contains(cleanTag, StringComparison.OrdinalIgnoreCase))) continue;
-
-            parts.Add(cleanTag);
-            if (parts.Count >= 6) break;
-        }
-
-        parts.Add("Handcrafted Collectible");
-        parts.Add("Unique Gift Idea");
-        parts.Add("Display Prop & Decor");
-
-        var result = primaryPart;
-        foreach (var part in parts)
-        {
-            if (result.Contains(part, StringComparison.OrdinalIgnoreCase)) continue;
-            var candidate = $"{result} | {part}";
-            if (candidate.Length <= 138)
+            var combined = $"{primaryPart} {keyword}";
+            if (combined.Length <= 55)
             {
-                result = candidate;
+                primaryPart = combined;
             }
         }
 
-        return result.Length <= 140 ? result : result[..140].TrimEnd();
+        var result = primaryPart;
+        return EnrichTitleToTargetCapacity(result, listing);
     }
 
     private string SelectEnglishDescription(

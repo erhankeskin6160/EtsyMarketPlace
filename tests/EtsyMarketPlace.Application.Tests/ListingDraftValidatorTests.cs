@@ -76,6 +76,30 @@ public sealed class ListingDraftValidatorTests
     }
 
     [Fact]
+    public void Validate_TitleIn125To140Zone_AddsCapacityStrength()
+    {
+        var fullTitle = "Dragon Bust Hand Painted Resin Statue 15cm - Fantasy Tabletop Figure, Gamer Gift Idea | Desk Display & Gaming Room Decor Prop Piece";
+        var report = _validator.Validate(CreateInput(
+            title: fullTitle,
+            targetKeyword: "dragon bust"));
+
+        Assert.True(fullTitle.Length is >= 125 and <= 140, $"Title length was {fullTitle.Length}");
+        Assert.Contains(report.Title.Strengths, s => s.Contains("140 karakter kapasitesini yuksek verimle dolduruyor", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(report.Title.Strengths, s => s.Contains("mobil vitrin", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Validate_TitleUnder125Chars_AddsCapacityWarning()
+    {
+        var shortTitle = "Dragon Bust Resin Figure - Gamer Gift Idea, Tabletop Decor";
+        var report = _validator.Validate(CreateInput(
+            title: shortTitle,
+            targetKeyword: "dragon bust"));
+
+        Assert.Contains(report.Title.Issues, i => i.Contains("140 karakter kapasitesini tam kullanmiyor", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Validate_TitleWithSubjectiveClaims_DeductsPoints()
     {
         var report = _validator.Validate(CreateInput(

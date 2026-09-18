@@ -129,17 +129,25 @@ public sealed class ListingDraftValidator
             score -= 25;
             issues.Add($"Baslik 140 karakter limitini asiyor ({title.Length} karakter).");
         }
-        else if (title.Length is >= 45 and <= 135)
+        else if (title.Length >= 125 && title.Length <= 140)
         {
             strengths.Add("Baslik Etsy icin ideal uzunlukta.");
+            strengths.Add($"Baslik 140 karakter kapasitesini yuksek verimle dolduruyor ({title.Length}/140).");
         }
-        else if (title.Length < 30)
+        else if (title.Length >= 45 && title.Length < 125)
+        {
+            score -= 5;
+            strengths.Add("Baslik Etsy icin ideal uzunlukta.");
+            issues.Add($"Baslik 140 karakter kapasitesini tam kullanmiyor ({title.Length}/140). Etsy SEO icin 125-139 karakter hedeflenmelidir.");
+        }
+        else if (title.Length < 45)
         {
             score -= 10;
             issues.Add("Baslik cok kisa; urun kimligini daha iyi tanimla.");
+            issues.Add($"Baslik 140 karakter kapasitesini tam kullanmiyor ({title.Length}/140). Etsy SEO icin 125-139 karakter hedeflenmelidir.");
         }
 
-        // Keyword presence in first words
+        // Keyword presence in first words and mobile zone (first 50-55 chars)
         var titleWords = Tokenize(title).ToList();
         var keywordTerms = Tokenize(targetKeyword).Where(t => t.Length > 3).ToList();
         if (keywordTerms.Count > 0)
@@ -147,6 +155,12 @@ public sealed class ListingDraftValidator
             var firstFiveWords = titleWords.Take(5).ToList();
             var keywordInFirst5 = keywordTerms.Any(term =>
                 firstFiveWords.Any(w => w.Equals(term, StringComparison.OrdinalIgnoreCase)));
+
+            var firstFiftyChars = title.Length > 55 ? title[..55] : title;
+            var firstFiftyWords = Tokenize(firstFiftyChars).ToList();
+            var keywordInMobileZone = keywordTerms.Any(term =>
+                firstFiftyWords.Any(w => w.Equals(term, StringComparison.OrdinalIgnoreCase)) ||
+                firstFiftyChars.Contains(term, StringComparison.OrdinalIgnoreCase));
 
             if (keywordInFirst5)
             {
@@ -162,6 +176,16 @@ public sealed class ListingDraftValidator
             {
                 score -= 15;
                 issues.Add("Baslik ana anahtar kelimeyi icermiyor.");
+            }
+
+            if (keywordInMobileZone)
+            {
+                strengths.Add("Urunun ana ozellikleri mobil vitrin bolgesinde (ilk 50-55 karakter) yer aliyor.");
+            }
+            else
+            {
+                score -= 8;
+                issues.Add("Urun ana ozellikleri ilk 50-55 karakterde (mobil vitrin alani) belirginlestirilmelidir.");
             }
         }
 

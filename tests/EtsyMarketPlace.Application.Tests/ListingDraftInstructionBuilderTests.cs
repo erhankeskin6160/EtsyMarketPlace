@@ -285,4 +285,14 @@ public sealed class ListingDraftInstructionBuilderTests
         Assert.Contains("current_seo_score & optimized_seo_score", rules);
         Assert.Contains("seo_critique", rules);
     }
+
+    [Fact]
+    public void BuildFieldRules_EnforcesTwoZoneArchitectureMandateForTitles()
+    {
+        var rules = ListingDraftInstructionBuilder.BuildFieldRules();
+
+        Assert.Contains("TWO-ZONE ARCHITECTURE MANDATE", rules);
+        Assert.Contains("ZONE 1: FRONT-LOADING", rules);
+        Assert.Contains("ZONE 2: MAXIMUM CAPACITY", rules);
+    }
 }

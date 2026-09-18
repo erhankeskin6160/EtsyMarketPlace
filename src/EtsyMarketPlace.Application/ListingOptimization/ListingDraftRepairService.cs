@@ -92,6 +92,10 @@ public sealed class ListingDraftRepairService
                 builder.AppendLine($"  - {issue}");
             }
             builder.AppendLine("  Generate 3 new titles that fix these issues while keeping the product identity.");
+            builder.AppendLine("  MANDATORY TITLE STRUCTURE:");
+            builder.AppendLine("    * Zone 1 (Chars 0-52): Front-load exact product name, model/character, and critical specs for mobile shoppers.");
+            builder.AppendLine("    * Zone 2 (Chars 53-139): Add high-intent gift, placement, and niche decor keywords to reach 128-139 total characters.");
+            builder.AppendLine("    * Never produce titles shorter than 125 characters or exceeding 140 characters.");
             builder.AppendLine();
         }
 
