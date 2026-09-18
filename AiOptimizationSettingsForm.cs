@@ -319,7 +319,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             var btn = new Button
             {
                 Text = "  " + text,
-                Image = AiProviderIconHelper.GetProviderIcon(key, 20),
+                Image = AiProviderIconHelper.GetProviderIcon(key, 18, Color.FromArgb(148, 163, 184)),
                 ImageAlign = ContentAlignment.MiddleLeft,
                 TextAlign = ContentAlignment.MiddleRight,
                 TextImageRelation = TextImageRelation.ImageBeforeText,
@@ -545,6 +545,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             {
                 btn.BackColor = Color.FromArgb(30, 58, 138); // Deep rich active blue (#1E3A8A)
                 btn.ForeColor = Color.White;
+                btn.Image = AiProviderIconHelper.GetProviderIcon(k, 18, Color.White);
                 btn.FlatAppearance.BorderColor = Color.FromArgb(56, 189, 248); // Electric cyan (#38BDF8)
                 btn.FlatAppearance.BorderSize = 2;
                 btn.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
@@ -553,6 +554,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             {
                 btn.BackColor = Color.FromArgb(30, 41, 59);
                 btn.ForeColor = Color.FromArgb(148, 163, 184);
+                btn.Image = AiProviderIconHelper.GetProviderIcon(k, 18, Color.FromArgb(148, 163, 184));
                 btn.FlatAppearance.BorderColor = Color.FromArgb(51, 65, 85);
                 btn.FlatAppearance.BorderSize = 1;
                 btn.Font = new Font("Segoe UI", 8.5F, FontStyle.Regular);
