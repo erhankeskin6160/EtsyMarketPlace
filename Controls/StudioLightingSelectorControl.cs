@@ -57,7 +57,7 @@ public class StudioLightingSelectorControl : UserControl
             Margin = new Padding(0, 2, 0, 2)
         });
 
-        _cboLighting.Width = 330;
+        _cboLighting.Width = 348;
         _cboLighting.Font = new Font("Segoe UI", 9F);
         _cboLighting.Items.AddRange([
             "☀️ Doğal Sabah Işığı (Natural Morning Light)",
@@ -81,7 +81,7 @@ public class StudioLightingSelectorControl : UserControl
             Margin = new Padding(0, 6, 0, 2)
         });
 
-        _cboCamera.Width = 330;
+        _cboCamera.Width = 348;
         _cboCamera.Font = new Font("Segoe UI", 9F);
         _cboCamera.Items.AddRange([
             "📐 Göz Hizası (50mm Commercial Eye-Level)",

@@ -444,7 +444,8 @@ internal sealed class AiListingImageForm : Form
         {
             Dock = DockStyle.Fill,
             CornerRadius = 12,
-            Padding = new Padding(14),
+            Padding = new Padding(12),
+            Margin = new Padding(2, 0, 4, 0),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
@@ -453,7 +454,7 @@ internal sealed class AiListingImageForm : Form
         {
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 2, 0)
+            Padding = Padding.Empty
         };
 
         var stack = new FlowLayoutPanel
@@ -462,7 +463,8 @@ internal sealed class AiListingImageForm : Form
             WrapContents = false,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            AutoScroll = false
+            AutoScroll = false,
+            Padding = new Padding(6, 0, 6, 0)
         };
 
         // 1. AI Engine Selector
@@ -475,7 +477,7 @@ internal sealed class AiListingImageForm : Form
             Margin = new Padding(0, 0, 0, 4)
         });
 
-        _cboEngine.Width = 340;
+        _cboEngine.Width = 350;
         _cboEngine.Font = new Font("Segoe UI", 9.5F);
         _cboEngine.Items.AddRange([
             "🔵 Google Gemini (Görsel Düzenleme & Sahneleme - SOTA)",
@@ -498,7 +500,7 @@ internal sealed class AiListingImageForm : Form
             Margin = new Padding(0, 8, 0, 4)
         });
 
-        _dropZone.Width = 340;
+        _dropZone.Width = 350;
         _dropZone.ImageSelected += (_, args) =>
         {
             SetLoadedBitmap(args.Bitmap, args.FilePath != null ? Path.GetFileName(args.FilePath) : "Panodan Yapıştırılan Görsel");
@@ -506,7 +508,7 @@ internal sealed class AiListingImageForm : Form
         stack.Controls.Add(_dropZone);
 
         // Quick Browse / Shop buttons
-        var btnGrid = new TableLayoutPanel { Width = 340, Height = 34, Margin = new Padding(0, 6, 0, 6), ColumnCount = 2 };
+        var btnGrid = new TableLayoutPanel { Width = 350, Height = 34, Margin = new Padding(0, 6, 0, 6), ColumnCount = 2 };
         btnGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         btnGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
@@ -531,7 +533,7 @@ internal sealed class AiListingImageForm : Form
             Font = new Font("Segoe UI Semibold", 9F)
         });
 
-        _productTitleTxt.Width = 340;
+        _productTitleTxt.Width = 350;
         _productTitleTxt.Font = new Font("Segoe UI", 9.2F);
         _productTitleTxt.PlaceholderText = "Örn: Handcrafted Ceramic Coffee Mug";
         _productTitleTxt.TextChanged += (_, _) => OnScenePresetSelected(_presetChips.SelectedPreset);
@@ -547,7 +549,7 @@ internal sealed class AiListingImageForm : Form
             Font = new Font("Segoe UI Semibold", 9F)
         });
 
-        _presetChips.Width = 340;
+        _presetChips.Width = 350;
         _presetChips.SetPresets([
             ("rustic", "Ahşap Rustic", "🪵"),
             ("gamer", "RGB Gamer", "🎮"),
@@ -561,7 +563,7 @@ internal sealed class AiListingImageForm : Form
         stack.Controls.Add(_presetChips);
 
         // 5. Prompt Box with Smart Prompt AI Button
-        var promptHeader = new TableLayoutPanel { Width = 340, Height = 34, Margin = new Padding(0, 10, 0, 8), ColumnCount = 2 };
+        var promptHeader = new TableLayoutPanel { Width = 350, Height = 34, Margin = new Padding(0, 10, 0, 8), ColumnCount = 2 };
         promptHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
         promptHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
         promptHeader.Controls.Add(new Label
@@ -588,25 +590,25 @@ internal sealed class AiListingImageForm : Form
         promptHeader.Controls.Add(_btnSmartPrompt, 1, 0);
         stack.Controls.Add(promptHeader);
 
-        _promptTxt.Width = 340;
+        _promptTxt.Width = 350;
         _promptTxt.Font = new Font("Segoe UI", 9F);
         _promptTxt.Margin = new Padding(0, 0, 0, 8);
         stack.Controls.Add(_promptTxt);
 
         // 6. Phase 2: Studio Lighting & Camera Selector Control
-        _lightingSelector.Width = 340;
+        _lightingSelector.Width = 350;
         _lightingSelector.Margin = new Padding(0, 6, 0, 6);
         _lightingSelector.SettingsChanged += (_, _) => OnLightingSettingsChanged();
         stack.Controls.Add(_lightingSelector);
 
         // 7. Dynamic Engine Specific Controls Container
-        _engineOptionsContainer.Width = 340;
+        _engineOptionsContainer.Width = 350;
         _engineOptionsContainer.Controls.Add(_engineOptionsPanel);
         stack.Controls.Add(_engineOptionsContainer);
         BuildEngineSpecificControls();
 
         // 8. Action Buttons (Single & Phase 2 Batch)
-        _btnProcess.Width = 340;
+        _btnProcess.Width = 350;
         _btnProcess.Height = 42;
         _btnProcess.Text = "🚀 Seçili AI ile Görseli Üret / İşle";
         _btnProcess.NormalColor = UiStyle.PrimaryColor;
@@ -616,7 +618,7 @@ internal sealed class AiListingImageForm : Form
         _btnProcess.Click += async (_, _) => await ProcessImageWithSelectedEngineAsync();
         stack.Controls.Add(_btnProcess);
 
-        _btnBatchProcess.Width = 340;
+        _btnBatchProcess.Width = 350;
         _btnBatchProcess.Height = 38;
         _btnBatchProcess.Text = "🎯 4'lü Sahne Toplu Üret (Batch)";
         _btnBatchProcess.NormalColor = Color.FromArgb(30, 41, 59);
@@ -708,7 +710,7 @@ internal sealed class AiListingImageForm : Form
             Dock = DockStyle.Fill,
             CornerRadius = 12,
             Padding = new Padding(12),
-            Margin = new Padding(6, 0, 2, 0),
+            Margin = new Padding(4, 0, 4, 0),
             CardColor = UiStyle.CardBackground,
             BorderColor = UiStyle.BorderColor
         };
@@ -717,7 +719,7 @@ internal sealed class AiListingImageForm : Form
         {
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
-            Padding = new Padding(2, 0, 2, 0)
+            Padding = Padding.Empty
         };
 
         var stack = new FlowLayoutPanel
@@ -726,7 +728,8 @@ internal sealed class AiListingImageForm : Form
             WrapContents = false,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            AutoScroll = false
+            AutoScroll = false,
+            Padding = new Padding(6, 0, 6, 0)
         };
 
         // 1. Marketing Overlay Badge
@@ -736,16 +739,16 @@ internal sealed class AiListingImageForm : Form
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
             ForeColor = Color.White,
-            Margin = new Padding(6, 2, 6, 2)
+            Margin = new Padding(0, 2, 0, 2)
         });
 
-        _chkEnableBadge.Margin = new Padding(6, 4, 6, 6);
+        _chkEnableBadge.Margin = new Padding(0, 4, 0, 6);
         _chkEnableBadge.CheckedChanged += (_, _) => UpdateBadgeOverlay();
         stack.Controls.Add(_chkEnableBadge);
 
-        stack.Controls.Add(new Label { Text = "Rozet Metni / İkonu:", AutoSize = true, Margin = new Padding(6, 2, 6, 2), ForeColor = UiStyle.TextMuted });
-        _cboBadgeText.Width = 250;
-        _cboBadgeText.Margin = new Padding(6, 2, 6, 4);
+        stack.Controls.Add(new Label { Text = "Rozet Metni / İkonu:", AutoSize = true, Margin = new Padding(0, 2, 0, 2), ForeColor = UiStyle.TextMuted });
+        _cboBadgeText.Width = 262;
+        _cboBadgeText.Margin = new Padding(0, 2, 0, 4);
         _cboBadgeText.Items.AddRange([
             "🚚 Free Fast Shipping",
             "🖨️ 3D Printed / Hand-Painted",
@@ -758,9 +761,9 @@ internal sealed class AiListingImageForm : Form
         _cboBadgeText.TextChanged += (_, _) => UpdateBadgeOverlay();
         stack.Controls.Add(_cboBadgeText);
 
-        stack.Controls.Add(new Label { Text = "Rozet Konumu:", AutoSize = true, Margin = new Padding(6, 6, 6, 2), ForeColor = UiStyle.TextMuted });
-        _cboBadgePosition.Width = 250;
-        _cboBadgePosition.Margin = new Padding(6, 2, 6, 4);
+        stack.Controls.Add(new Label { Text = "Rozet Konumu:", AutoSize = true, Margin = new Padding(0, 6, 0, 2), ForeColor = UiStyle.TextMuted });
+        _cboBadgePosition.Width = 262;
+        _cboBadgePosition.Margin = new Padding(0, 2, 0, 4);
         _cboBadgePosition.Items.AddRange(["Sol Üst", "Sağ Üst", "Sol Alt", "Sağ Alt"]);
         _cboBadgePosition.SelectedIndex = 0;
         _cboBadgePosition.SelectedIndexChanged += (_, _) => UpdateBadgeOverlay();
@@ -772,12 +775,12 @@ internal sealed class AiListingImageForm : Form
             Text = "📐 Çıktı Oranı (Aspect Ratio):",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-            Margin = new Padding(6, 12, 6, 2),
+            Margin = new Padding(0, 12, 0, 2),
             ForeColor = Color.White
         });
 
-        _formatComboBox.Width = 250;
-        _formatComboBox.Margin = new Padding(6, 2, 6, 4);
+        _formatComboBox.Width = 262;
+        _formatComboBox.Margin = new Padding(0, 2, 0, 4);
         _formatComboBox.Items.AddRange([
             "1:1 Kare (2000x2000 px - Etsy HD)",
             "4:3 Etsy Standartı (2000x1500 px)",
@@ -786,25 +789,25 @@ internal sealed class AiListingImageForm : Form
         _formatComboBox.SelectedIndex = 0;
         stack.Controls.Add(_formatComboBox);
 
-        // 3. Export Buttons (with side margins for beautiful spacing)
+        // 3. Export Buttons (centered)
         var downloadBtn = UiStyle.CreateButton("💾 Bilgisayara İndir (HD PNG)");
-        downloadBtn.Width = 250;
+        downloadBtn.Width = 262;
         downloadBtn.Height = 38;
-        downloadBtn.Margin = new Padding(6, 12, 6, 4);
+        downloadBtn.Margin = new Padding(0, 12, 0, 4);
         downloadBtn.Click += (_, _) => DownloadImage();
         stack.Controls.Add(downloadBtn);
 
         var copyBtn = UiStyle.CreateButton("📋 Panoya Kopyala", isSecondary: true);
-        copyBtn.Width = 250;
+        copyBtn.Width = 262;
         copyBtn.Height = 34;
-        copyBtn.Margin = new Padding(6, 4, 6, 4);
+        copyBtn.Margin = new Padding(0, 4, 0, 4);
         copyBtn.Click += (_, _) => CopyToClipboard();
         stack.Controls.Add(copyBtn);
 
         var sendToBatchBtn = UiStyle.CreateButton("⚡ Toplu Fabrika Kuyruğuna Aktar", isSecondary: true);
-        sendToBatchBtn.Width = 250;
+        sendToBatchBtn.Width = 262;
         sendToBatchBtn.Height = 34;
-        sendToBatchBtn.Margin = new Padding(6, 4, 6, 12);
+        sendToBatchBtn.Margin = new Padding(0, 4, 0, 12);
         sendToBatchBtn.Click += (_, _) =>
         {
             var bmp = _sessionManager.GeneratedBitmap ?? _sessionManager.OriginalBitmap;
@@ -835,20 +838,20 @@ internal sealed class AiListingImageForm : Form
             Text = "🚀 Etsy Mağaza Senkronizasyonu:",
             AutoSize = true,
             Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-            Margin = new Padding(6, 8, 6, 2),
+            Margin = new Padding(0, 8, 0, 2),
             ForeColor = Color.White
         });
 
-        _lblTargetListingInfo.Margin = new Padding(6, 0, 6, 4);
+        _lblTargetListingInfo.Margin = new Padding(0, 0, 0, 4);
         if (_targetListingId == null)
         {
             _lblTargetListingInfo.Text = "🎯 Hedef: Genel Taslak Modu";
         }
         stack.Controls.Add(_lblTargetListingInfo);
 
-        stack.Controls.Add(new Label { Text = "Etsy Görsel Sıra Numarası (Slot):", AutoSize = true, Margin = new Padding(6, 2, 6, 2), ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 8.2F) });
-        _cboEtsyImageSlot.Width = 250;
-        _cboEtsyImageSlot.Margin = new Padding(6, 2, 6, 4);
+        stack.Controls.Add(new Label { Text = "Etsy Görsel Sıra Numarası (Slot):", AutoSize = true, Margin = new Padding(0, 2, 0, 2), ForeColor = UiStyle.TextMuted, Font = new Font("Segoe UI", 8.2F) });
+        _cboEtsyImageSlot.Width = 262;
+        _cboEtsyImageSlot.Margin = new Padding(0, 2, 0, 4);
         _cboEtsyImageSlot.Items.AddRange([
             "1. Sıra (Ana Kapak Fotoğrafı - Primary)",
             "2. Sıra (Detay Fotoğrafı)",
@@ -860,9 +863,9 @@ internal sealed class AiListingImageForm : Form
         stack.Controls.Add(_cboEtsyImageSlot);
 
         var exportEtsyBtn = UiStyle.CreateButton("🚀 Etsy Listing'e Canlı Yükle");
-        exportEtsyBtn.Width = 250;
+        exportEtsyBtn.Width = 262;
         exportEtsyBtn.Height = 40;
-        exportEtsyBtn.Margin = new Padding(6, 8, 6, 8);
+        exportEtsyBtn.Margin = new Padding(0, 8, 0, 8);
         exportEtsyBtn.BackColor = Color.FromArgb(16, 140, 90);
         exportEtsyBtn.Click += async (_, _) => await ExportToEtsyAsync();
         stack.Controls.Add(exportEtsyBtn);
@@ -925,7 +928,7 @@ internal sealed class AiListingImageForm : Form
         var (isConfigured, keyName) = AiImageEngineRegistry.GetConfigurationState(engineId);
 
         // Universal Engine Key Header Row
-        var keyRow = new TableLayoutPanel { Width = 340, Height = 34, Margin = new Padding(0, 4, 0, 6), ColumnCount = 2 };
+        var keyRow = new TableLayoutPanel { Width = 350, Height = 34, Margin = new Padding(0, 4, 0, 6), ColumnCount = 2 };
         keyRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
         keyRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45));
 
@@ -964,7 +967,7 @@ internal sealed class AiListingImageForm : Form
         if (_cboEngine.SelectedIndex == 0) // 🔵 Google Gemini (Primary Default Engine)
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "Google Gemini Görsel Modeli:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _geminiModelComboBox.Width = 340;
+            _geminiModelComboBox.Width = 350;
             _geminiModelComboBox.Items.Clear();
             _geminiModelComboBox.Items.AddRange([
                 "gemini-3.1-flash-image (Nano Banana 2 - SOTA)",
@@ -977,7 +980,7 @@ internal sealed class AiListingImageForm : Form
             _engineOptionsPanel.Controls.Add(_geminiModelComboBox);
 
             _engineOptionsPanel.Controls.Add(new Label { Text = "E-Ticaret Düzenleme Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _geminiEditModeComboBox.Width = 340;
+            _geminiEditModeComboBox.Width = 350;
             _geminiEditModeComboBox.Items.Clear();
             _geminiEditModeComboBox.Items.AddRange([
                 "🏛️ Lüks E-Ticaret Sahnesi (Mermer / Ahşap Kaide)",
@@ -993,7 +996,7 @@ internal sealed class AiListingImageForm : Form
                 Text = "✨ Visual Grounding: Yüklediğiniz ürünün şekli, dokusu ve renkleri piksel seviyesinde korunarak Gemini tarafından yeni sahneye giydirilir.",
                 ForeColor = Color.FromArgb(129, 140, 248),
                 Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
-                Width = 340,
+                Width = 350,
                 Margin = new Padding(0, 6, 0, 0)
             };
             _engineOptionsPanel.Controls.Add(groundingNotice);
@@ -1001,21 +1004,21 @@ internal sealed class AiListingImageForm : Form
         else if (_cboEngine.SelectedIndex == 1) // 🟣 PhotoRoom Native
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "İşlem Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _photoRoomModeComboBox.Width = 340;
+            _photoRoomModeComboBox.Width = 350;
             _photoRoomModeComboBox.Items.Clear();
             _photoRoomModeComboBox.Items.AddRange(["✂️ Şeffaf Arka Plan (Remove BG)", "⚪ Beyaz E-Ticaret Arka Planı", "🎨 AI Arka Plan Sahnesi"]);
             _photoRoomModeComboBox.SelectedIndex = 0;
             _engineOptionsPanel.Controls.Add(_photoRoomModeComboBox);
 
             _engineOptionsPanel.Controls.Add(new Label { Text = "AI Gölge Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _shadowComboBox.Width = 340;
+            _shadowComboBox.Width = 350;
             _shadowComboBox.Items.Clear();
             _shadowComboBox.Items.AddRange(["Yumuşak AI Gölgesi (ai_soft)", "Keskin Gölge (ai_hard)", "Gölgesiz (none)"]);
             _shadowComboBox.SelectedIndex = 0;
             _engineOptionsPanel.Controls.Add(_shadowComboBox);
 
             _engineOptionsPanel.Controls.Add(new Label { Text = "Kenar Hizalama (Padding):", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _paddingComboBox.Width = 340;
+            _paddingComboBox.Width = 350;
             _paddingComboBox.Items.Clear();
             _paddingComboBox.Items.AddRange(["%10 Kenar Boşluğu (Standart)", "%5 Sıkı", "%15 Geniş", "%0 Tam Sığdır"]);
             _paddingComboBox.SelectedIndex = 0;
@@ -1024,7 +1027,7 @@ internal sealed class AiListingImageForm : Form
         else if (_cboEngine.SelectedIndex == 2) // 🏆 OpenAI (GPT Image 2.5)
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "OpenAI İşlem Modu:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _openAiModeComboBox.Width = 340;
+            _openAiModeComboBox.Width = 350;
             _openAiModeComboBox.Items.Clear();
             _openAiModeComboBox.Items.AddRange([
                 "✂️ Arka Planı Değiştir (Inpainting / Ürünü Koru & AI Sahnesi)",
@@ -1035,7 +1038,7 @@ internal sealed class AiListingImageForm : Form
             _engineOptionsPanel.Controls.Add(_openAiModeComboBox);
 
             _engineOptionsPanel.Controls.Add(new Label { Text = "OpenAI Görsel Modeli:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _openAiModelComboBox.Width = 340;
+            _openAiModelComboBox.Width = 350;
             _openAiModelComboBox.Items.Clear();
             _openAiModelComboBox.Items.AddRange([
                 "gpt-image-2.5-flare (⚡ Hızlı & Arka Plan Düzenleme)",
@@ -1054,7 +1057,7 @@ internal sealed class AiListingImageForm : Form
                 Text = "💡 GPT-Image-2.5 Flare & Sunburst: Ürününüzün tüm piksellerini koruyarak Etsy'ye özel profesyonel arka plan üretir.",
                 ForeColor = Color.FromArgb(52, 211, 153),
                 Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold),
-                Width = 340,
+                Width = 350,
                 Margin = new Padding(0, 6, 0, 0)
             };
             _engineOptionsPanel.Controls.Add(infoNotice);
@@ -1062,7 +1065,7 @@ internal sealed class AiListingImageForm : Form
         else if (_cboEngine.SelectedIndex == 3) // ⚡ Black Forest Labs FLUX
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "BFL FLUX Modeli (api.bfl.ml):", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _bflModelComboBox.Width = 340;
+            _bflModelComboBox.Width = 350;
             _bflModelComboBox.Items.Clear();
             _bflModelComboBox.Items.AddRange([
                 "flux-pro-1.1 (Ultra Realism / ELO 1152)",
@@ -1077,20 +1080,20 @@ internal sealed class AiListingImageForm : Form
                 Text = "⚡ Black Forest Labs resmi API'si üzerinden fotogerçekçi doku, gerçek optik lens ve ışıklandırma simülasyonu sunar.",
                 ForeColor = UiStyle.TextMuted,
                 Font = new Font("Segoe UI", 8.2F),
-                Width = 340,
+                Width = 350,
                 Margin = new Padding(0, 6, 0, 0)
             });
         }
         else // 4: 🟡 Ideogram 4.0
         {
             _engineOptionsPanel.Controls.Add(new Label { Text = "Ürün Üzerine Basılacak Yazı (Tipografi):", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _txtIdeogramTypography.Width = 340;
+            _txtIdeogramTypography.Width = 350;
             _txtIdeogramTypography.Font = new Font("Segoe UI", 9F);
             _txtIdeogramTypography.PlaceholderText = "Örn: Best Dad Ever / Handmade 2026 / Vintage Coffee";
             _engineOptionsPanel.Controls.Add(_txtIdeogramTypography);
 
             _engineOptionsPanel.Controls.Add(new Label { Text = "Ideogram Stil Önayarı:", AutoSize = true, ForeColor = UiStyle.TextMuted, Margin = new Padding(0, 4, 0, 2) });
-            _ideogramStyleComboBox.Width = 340;
+            _ideogramStyleComboBox.Width = 350;
             _ideogramStyleComboBox.Items.Clear();
             _ideogramStyleComboBox.Items.AddRange(["REALISTIC (Gerçekçi Ürün)", "DESIGN (Grafik Tasarım)", "RENDER_3D (3D Render)", "ANIME (İllüstrasyon)", "GENERAL (Genel)"]);
             _ideogramStyleComboBox.SelectedIndex = 0;
@@ -1101,7 +1104,7 @@ internal sealed class AiListingImageForm : Form
                 Text = "🟡 Ideogram 4.0, kupa, tişört ve hediyelik ürünler üzerine sıfır harf hatasıyla kusursuz metin render eder.",
                 ForeColor = UiStyle.TextMuted,
                 Font = new Font("Segoe UI", 8.2F),
-                Width = 340,
+                Width = 350,
                 Margin = new Padding(0, 6, 0, 0)
             });
         }
