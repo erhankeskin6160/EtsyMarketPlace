@@ -101,8 +101,8 @@ internal sealed class NotificationSettingsForm : Form
     private Control BuildBotConfigPanel()
     {
         var grid = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(0, 0, 8, 0) };
-        grid.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
-        grid.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
+        grid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
+        grid.RowStyles.Add(new RowStyle(SizeType.Percent, 50));
 
         // Telegram GroupBox
         var tgGroup = new GroupBox
@@ -113,21 +113,71 @@ internal sealed class NotificationSettingsForm : Form
             ForeColor = UiStyle.TextDark,
             Padding = new Padding(12)
         };
-        var tgGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(6) };
-        tgGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        var tgGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 5, Padding = new Padding(6) };
+        tgGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
         tgGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        tgGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // Enabled Checkbox
+        tgGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // Token row
+        tgGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // Chat ID row
+        tgGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); // Test Button row
+        tgGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Remaining
 
         tgGrid.Controls.Add(_telegramEnabledChk, 0, 0);
         tgGrid.SetColumnSpan(_telegramEnabledChk, 2);
 
         tgGrid.Controls.Add(new Label { Text = "Bot Token:", Anchor = AnchorStyles.Left, AutoSize = true, ForeColor = UiStyle.TextDark, UseMnemonic = false }, 0, 1);
+        var tokenRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 };
+        tokenRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        tokenRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        tokenRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125));
         _telegramTokenTxt.Dock = DockStyle.Fill;
-        tgGrid.Controls.Add(_telegramTokenTxt, 1, 1);
+        _telegramTokenTxt.Font = new Font("Consolas", 9.5F);
+        var btnPaste = UiStyle.CreateButton("📋 Panodan Yapıştır");
+        btnPaste.Height = 32;
+        btnPaste.Click += (_, _) =>
+        {
+            try
+            {
+                var clip = Clipboard.GetText();
+                if (!string.IsNullOrWhiteSpace(clip))
+                {
+                    var clean = System.Text.RegularExpressions.Regex.Replace(clip, @"\s+", "");
+                    _telegramTokenTxt.Text = clean;
+                    _statusLabel.Text = "Token panodan temizlenerek yapıştırıldı.";
+                }
+            }
+            catch { }
+        };
+        var btnOpenFather = UiStyle.CreateButton("🤖 @BotFather", isSecondary: true);
+        btnOpenFather.Height = 32;
+        btnOpenFather.Click += (_, _) =>
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://t.me/BotFather") { UseShellExecute = true }); } catch { }
+        };
+        tokenRow.Controls.Add(_telegramTokenTxt, 0, 0);
+        tokenRow.Controls.Add(btnPaste, 1, 0);
+        tokenRow.Controls.Add(btnOpenFather, 2, 0);
+        tgGrid.Controls.Add(tokenRow, 1, 1);
 
         tgGrid.Controls.Add(new Label { Text = "Chat ID:", Anchor = AnchorStyles.Left, AutoSize = true, ForeColor = UiStyle.TextDark, UseMnemonic = false }, 0, 2);
+        var chatRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1 };
+        chatRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        chatRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         _telegramChatIdTxt.Dock = DockStyle.Fill;
-        tgGrid.Controls.Add(_telegramChatIdTxt, 1, 2);
+        _telegramChatIdTxt.Font = new Font("Consolas", 9.5F);
+        var btnOpenIdBot = UiStyle.CreateButton("🆔 Chat ID'mi Aç", isSecondary: true);
+        btnOpenIdBot.Height = 32;
+        btnOpenIdBot.Click += (_, _) =>
+        {
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://t.me/userinfobot") { UseShellExecute = true }); } catch { }
+        };
+        chatRow.Controls.Add(_telegramChatIdTxt, 0, 0);
+        chatRow.Controls.Add(btnOpenIdBot, 1, 0);
+        tgGrid.Controls.Add(chatRow, 1, 2);
 
+        _testTelegramBtn.Height = 36;
+        _testTelegramBtn.Width = 230;
+        _testTelegramBtn.Anchor = AnchorStyles.Left;
         _testTelegramBtn.Click += async (_, _) => await TestTelegramAsync();
         tgGrid.Controls.Add(_testTelegramBtn, 1, 3);
         tgGroup.Controls.Add(tgGrid);
@@ -141,11 +191,17 @@ internal sealed class NotificationSettingsForm : Form
             Font = new Font("Segoe UI Semibold", 9.5F),
             ForeColor = UiStyle.TextDark,
             Padding = new Padding(12),
-            Margin = new Padding(0, 12, 0, 0)
+            Margin = new Padding(0, 8, 0, 0)
         };
-        var waGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 5, Padding = new Padding(6) };
+        var waGrid = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, Padding = new Padding(6) };
         waGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         waGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        waGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        waGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        waGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        waGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        waGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
+        waGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         waGrid.Controls.Add(_whatsappEnabledChk, 0, 0);
         waGrid.SetColumnSpan(_whatsappEnabledChk, 2);
@@ -162,6 +218,9 @@ internal sealed class NotificationSettingsForm : Form
         _whatsappPhoneTxt.Dock = DockStyle.Fill;
         waGrid.Controls.Add(_whatsappPhoneTxt, 1, 3);
 
+        _testWhatsAppBtn.Height = 36;
+        _testWhatsAppBtn.Width = 230;
+        _testWhatsAppBtn.Anchor = AnchorStyles.Left;
         _testWhatsAppBtn.Click += async (_, _) => await TestWhatsAppAsync();
         waGrid.Controls.Add(_testWhatsAppBtn, 1, 4);
         waGroup.Controls.Add(waGrid);
@@ -175,13 +234,13 @@ internal sealed class NotificationSettingsForm : Form
         var group = new GroupBox
         {
             Dock = DockStyle.Fill,
-            Text = "📋 Anlık Bildirim Tetikleyicileri",
+            Text = "📋 Anlık Bildirim Tetikleyicileri & Gece Raporu",
             Font = new Font("Segoe UI Semibold", 9.5F),
             ForeColor = UiStyle.TextDark,
             Padding = new Padding(12),
             Margin = new Padding(8, 0, 0, 0)
         };
-        var scroll = new ModernScrollPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(0, 0, 2, 0) };
+        var scroll = new ModernScrollPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, Padding = new Padding(0, 0, 4, 0) };
         var stack = new FlowLayoutPanel { Dock = DockStyle.Top, FlowDirection = FlowDirection.TopDown, Padding = new Padding(12), WrapContents = false, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, AutoScroll = false };
 
         stack.Controls.Add(_notifyNewOrderChk);
@@ -192,15 +251,16 @@ internal sealed class NotificationSettingsForm : Form
         stack.Controls.Add(_notifyErrorChk);
 
         // ── 🌙 Gece Finans Raporu Paneli ──
-        var pnlNight = new Panel { AutoSize = true, Width = 460, Margin = new Padding(0, 10, 0, 0), Padding = new Padding(8), BackColor = UiStyle.CardBackground };
+        var pnlNight = new Panel { AutoSize = true, Width = 480, Margin = new Padding(0, 12, 0, 0), Padding = new Padding(10), BackColor = UiStyle.CardBackground };
         var nightLayout = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, FlowDirection = FlowDirection.TopDown };
         nightLayout.Controls.Add(_dailyNightReportChk);
 
-        var timeRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Margin = new Padding(20, 4, 0, 4) };
+        var timeRow = new FlowLayoutPanel { AutoSize = true, FlowDirection = FlowDirection.LeftToRight, Margin = new Padding(20, 6, 0, 6) };
         timeRow.Controls.Add(new Label { Text = "⏰ Gönderim Saati (SS:DD):", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 4, 0) });
         timeRow.Controls.Add(_dailyReportTimeTxt);
         nightLayout.Controls.Add(timeRow);
 
+        _testNightReportBtn.Height = 36;
         _testNightReportBtn.Click += async (_, _) => await TestNightReportAsync();
         nightLayout.Controls.Add(_testNightReportBtn);
         pnlNight.Controls.Add(nightLayout);
@@ -208,12 +268,12 @@ internal sealed class NotificationSettingsForm : Form
 
         var hintLabel = new Label
         {
-            Width = 460,
-            Height = 120,
-            Text = "💡 İpucu:\nTelegram Botunuzu kurmak için Telegram'da @BotFather kullanıcısına /newbot yazıp 30 saniyede ücretsiz token alabilirsiniz.\nChat ID'nizi öğrenmek için ise @userinfobot kullanabilirsiniz.\n\nSipariş, Fırsat ve Gece Finans bildirimleri VDS üzerinde 7/24 arka planda otomatik gönderilir.",
+            Width = 480,
+            Height = 110,
+            Text = "💡 Hızlı İpucu:\n• Telegram botunuzu 30 saniyede açmak için sol taraftaki '🤖 @BotFather' butonuna basabilirsiniz.\n• Chat ID'nizi öğrenmek için '🆔 Chat ID'mi Aç' butonunu kullanabilirsiniz.\n• Gece Finans Raporu ve sipariş bildirimleri VDS üzerinde 7/24 arka planda otomatik çalışır.",
             ForeColor = UiStyle.TextMuted,
             Font = new Font("Segoe UI", 9F, FontStyle.Italic),
-            Margin = new Padding(0, 10, 0, 0),
+            Margin = new Padding(0, 12, 0, 0),
             UseMnemonic = false
         };
         stack.Controls.Add(hintLabel);
@@ -248,9 +308,14 @@ internal sealed class NotificationSettingsForm : Form
 
     private void SaveValues()
     {
+        var cleanToken = System.Text.RegularExpressions.Regex.Replace(_telegramTokenTxt.Text ?? "", @"\s+", "");
+        var cleanChatId = System.Text.RegularExpressions.Regex.Replace(_telegramChatIdTxt.Text ?? "", @"\s+", "");
+        _telegramTokenTxt.Text = cleanToken;
+        _telegramChatIdTxt.Text = cleanChatId;
+
         _settings.TelegramEnabled = _telegramEnabledChk.Checked;
-        _settings.TelegramBotToken = _telegramTokenTxt.Text.Trim();
-        _settings.TelegramChatId = _telegramChatIdTxt.Text.Trim();
+        _settings.TelegramBotToken = cleanToken;
+        _settings.TelegramChatId = cleanChatId;
 
         _settings.WhatsAppEnabled = _whatsappEnabledChk.Checked;
         _settings.WhatsAppApiUrl = _whatsappUrlTxt.Text.Trim();
@@ -274,8 +339,10 @@ internal sealed class NotificationSettingsForm : Form
 
     private async Task TestTelegramAsync()
     {
-        var token = _telegramTokenTxt.Text.Trim();
-        var chatId = _telegramChatIdTxt.Text.Trim();
+        var token = System.Text.RegularExpressions.Regex.Replace(_telegramTokenTxt.Text ?? "", @"\s+", "");
+        var chatId = System.Text.RegularExpressions.Regex.Replace(_telegramChatIdTxt.Text ?? "", @"\s+", "");
+        _telegramTokenTxt.Text = token;
+        _telegramChatIdTxt.Text = chatId;
 
         if (string.IsNullOrWhiteSpace(token) || string.IsNullOrWhiteSpace(chatId))
         {

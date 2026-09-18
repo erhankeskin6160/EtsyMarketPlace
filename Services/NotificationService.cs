@@ -10,17 +10,25 @@ public sealed class NotificationService
 
     public static async Task<(bool Success, string Message)> SendTelegramMessageAsync(string botToken, string chatId, string text)
     {
-        if (string.IsNullOrWhiteSpace(botToken) || string.IsNullOrWhiteSpace(chatId))
+        var cleanToken = System.Text.RegularExpressions.Regex.Replace(botToken ?? "", @"\s+", "");
+        var cleanChatId = System.Text.RegularExpressions.Regex.Replace(chatId ?? "", @"\s+", "");
+
+        if (string.IsNullOrWhiteSpace(cleanToken) || string.IsNullOrWhiteSpace(cleanChatId))
         {
             return (false, "Bot Token veya Chat ID boş olamaz.");
         }
 
+        if (!cleanToken.Contains(':'))
+        {
+            return (false, "Geçersiz Telegram Bot Token formatı! Token '1234567890:ABC...' şeklinde iki nokta ':' içermelidir.");
+        }
+
         try
         {
-            var url = $"https://api.telegram.org/bot{botToken.Trim()}/sendMessage";
+            var url = $"https://api.telegram.org/bot{cleanToken}/sendMessage";
             var payload = new
             {
-                chat_id = chatId.Trim(),
+                chat_id = cleanChatId,
                 text = text,
                 parse_mode = "HTML"
             };
@@ -33,6 +41,19 @@ public sealed class NotificationService
             }
 
             var err = await response.Content.ReadAsStringAsync();
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                return (false, "Telegram Hatası (401 Unauthorized): Bot Token geçersiz veya bot bulunamadı. Lütfen @BotFather'dan aldığınız token kodunu tam ve eksiksiz kopyalayın.");
+            }
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return (false, "Telegram Hatası (404 Not Found): Bot API adresi bulunamadı. Lütfen Bot Token'ı kontrol edin.");
+            }
+            if (response.StatusCode == System.Net.HttpStatusCode.BadRequest && err.Contains("chat not found", StringComparison.OrdinalIgnoreCase))
+            {
+                return (false, "Telegram Hatası: Botu henüz başlatmadınız! Lütfen Telegram'da botunuzu açıp bir kez 'BAŞLAT / START' butonuna basın.");
+            }
+
             return (false, $"Telegram hatası ({response.StatusCode}): {err}");
         }
         catch (Exception ex)
