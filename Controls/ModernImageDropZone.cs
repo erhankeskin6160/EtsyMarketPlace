@@ -31,7 +31,7 @@ public class ModernImageDropZone : Control
             true);
         DoubleBuffered = true;
         AllowDrop = true;
-        Height = 110;
+        Height = 125;
         Cursor = Cursors.Hand;
         BackColor = Color.FromArgb(20, 28, 48);
     }
@@ -155,9 +155,9 @@ public class ModernImageDropZone : Control
 
         if (_previewThumbnail != null)
         {
-            // Draw thumbnail on the left
-            int thumbSize = Height - 20;
-            var thumbRect = new Rectangle(12, 10, thumbSize, thumbSize);
+            // Draw thumbnail on the left with comfortable padding
+            int thumbSize = Height - 24;
+            var thumbRect = new Rectangle(14, 12, thumbSize, thumbSize);
             g.DrawImage(_previewThumbnail, thumbRect);
 
             // Draw info text on right
@@ -166,24 +166,24 @@ public class ModernImageDropZone : Control
             using var textBrush = new SolidBrush(Color.White);
             using var mutedBrush = new SolidBrush(Color.FromArgb(148, 163, 184));
 
-            g.DrawString("✅ Seçilen Ürün Görseli", titleFont, textBrush, thumbSize + 22, 18);
+            g.DrawString("✅ Seçilen Ürün Görseli", titleFont, textBrush, thumbSize + 26, 26);
             using var accentBrush = new SolidBrush(Color.FromArgb(129, 140, 248));
-            g.DrawString("Değiştirmek için tıkla veya sürükle", subFont, accentBrush, thumbSize + 22, 58);
+            g.DrawString("Değiştirmek için tıkla veya sürükle", subFont, accentBrush, thumbSize + 26, 64);
         }
         else
         {
-            // Draw empty state
-            using var titleFont = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
-            using var subFont = new Font("Segoe UI", 8.2F);
+            // Draw empty state with generous breathing room
+            using var titleFont = new Font("Segoe UI Semibold", 9.8F, FontStyle.Bold);
+            using var subFont = new Font("Segoe UI", 8.4F);
             using var textBrush = new SolidBrush(_isDragOver ? Color.FromArgb(129, 140, 248) : Color.White);
             using var mutedBrush = new SolidBrush(Color.FromArgb(148, 163, 184));
 
             var tSize = g.MeasureString(TitleText, titleFont);
             var sSize = g.MeasureString(SubtitleText, subFont);
 
-            float startY = (Height - (tSize.Height + sSize.Height + 4)) / 2;
+            float startY = (Height - (tSize.Height + sSize.Height + 10)) / 2;
             g.DrawString(TitleText, titleFont, textBrush, (Width - tSize.Width) / 2, startY);
-            g.DrawString(SubtitleText, subFont, mutedBrush, (Width - sSize.Width) / 2, startY + tSize.Height + 4);
+            g.DrawString(SubtitleText, subFont, mutedBrush, (Width - sSize.Width) / 2, startY + tSize.Height + 10);
         }
     }
 
