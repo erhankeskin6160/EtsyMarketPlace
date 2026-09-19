@@ -719,6 +719,7 @@ internal static class UiStyle
             _cb.DropDown += (_, _) => _cb.Invalidate();
             _cb.DropDownClosed += (_, _) => _cb.Invalidate();
             _cb.Resize += (_, _) => _cb.Invalidate();
+            _cb.EnabledChanged += (_, _) => _cb.Invalidate();
             _cb.SelectedIndexChanged += (_, _) => _cb.Invalidate();
 
             if (_cb.IsHandleCreated)
@@ -751,11 +752,59 @@ internal static class UiStyle
             g.SmoothingMode = SmoothingMode.AntiAlias;
 
             int btnWidth = 26;
+
+            if (!_cb.Enabled)
+            {
+                Color disabledBg = Color.FromArgb(20, 27, 45);
+                Color disabledBorder = Color.FromArgb(45, 55, 75);
+                Color disabledText = Color.FromArgb(100, 116, 139);
+                Color disabledArrow = Color.FromArgb(71, 85, 105);
+
+                using (var brush = new SolidBrush(disabledBg))
+                {
+                    g.FillRectangle(brush, 0, 0, _cb.Width, _cb.Height);
+                }
+
+                string text = _cb.SelectedItem?.ToString() ?? _cb.Text;
+                var textRect = new Rectangle(8, 0, Math.Max(0, _cb.Width - btnWidth - 10), _cb.Height);
+                TextRenderer.DrawText(
+                    g,
+                    text,
+                    _cb.Font,
+                    textRect,
+                    disabledText,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+
+                using (var sepPen = new Pen(disabledBorder, 1f))
+                {
+                    g.DrawLine(sepPen, _cb.Width - btnWidth, 2, _cb.Width - btnWidth, _cb.Height - 3);
+                }
+
+                int disCenterX = _cb.Width - (btnWidth / 2);
+                int disCenterY = _cb.Height / 2;
+                using (var arrowPen = new Pen(disabledArrow, 1.8f)
+                {
+                    StartCap = LineCap.Round,
+                    EndCap = LineCap.Round,
+                    LineJoin = LineJoin.Round
+                })
+                {
+                    using var path = new GraphicsPath();
+                    path.AddLine(disCenterX - 4, disCenterY - 2, disCenterX, disCenterY + 2);
+                    path.AddLine(disCenterX, disCenterY + 2, disCenterX + 4, disCenterY - 2);
+                    g.DrawPath(arrowPen, path);
+                }
+
+                using (var borderPen = new Pen(disabledBorder, 1f))
+                {
+                    g.DrawRectangle(borderPen, 0, 0, _cb.Width - 1, _cb.Height - 1);
+                }
+                return;
+            }
+
             var btnRect = new Rectangle(_cb.Width - btnWidth, 1, btnWidth - 1, _cb.Height - 2);
             bool isActive = _isHovered || _cb.DroppedDown;
-            Color btnBg = !_cb.Enabled
-                ? InputBackground
-                : (isActive ? SecondaryHover : SecondaryColor);
+            Color btnBg = isActive ? SecondaryHover : SecondaryColor;
 
             using (var brush = new SolidBrush(btnBg))
             {
@@ -769,9 +818,7 @@ internal static class UiStyle
 
             int centerX = btnRect.X + (btnRect.Width / 2);
             int centerY = btnRect.Y + (btnRect.Height / 2);
-            Color arrowColor = !_cb.Enabled
-                ? TextMuted
-                : (isActive ? Color.White : TextMuted);
+            Color arrowColor = isActive ? Color.White : TextMuted;
 
             using (var arrowPen = new Pen(arrowColor, 1.8f)
             {
@@ -794,10 +841,7 @@ internal static class UiStyle
                 g.DrawPath(arrowPen, path);
             }
 
-            Color borderColor = !_cb.Enabled
-                ? BorderColor
-                : ((_cb.Focused || _isHovered || _cb.DroppedDown) ? PrimaryColor : BorderColor);
-
+            Color borderColor = (_cb.Focused || _isHovered || _cb.DroppedDown) ? PrimaryColor : BorderColor;
             using (var borderPen = new Pen(borderColor, 1f))
             {
                 g.DrawRectangle(borderPen, 0, 0, _cb.Width - 1, _cb.Height - 1);

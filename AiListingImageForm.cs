@@ -926,6 +926,8 @@ internal sealed class AiListingImageForm : Form
             bool isChecked = _chkEnableBadge.Checked;
             _cboBadgeText.Enabled = isChecked;
             _cboBadgePosition.Enabled = isChecked;
+            _cboBadgeText.Invalidate();
+            _cboBadgePosition.Invalidate();
             UpdateBadgeOverlay();
         }
 

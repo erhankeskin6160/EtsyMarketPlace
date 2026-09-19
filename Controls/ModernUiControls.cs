@@ -2302,6 +2302,7 @@ public class ModernComboBox : ComboBox
         ForeColor = UiStyle.TextDark;
         ItemHeight = 26;
         Font = UiStyle.BaseFont;
+        EnabledChanged += (_, _) => Invalidate();
     }
 
     protected override void OnMouseEnter(EventArgs e)
@@ -2371,11 +2372,60 @@ public class ModernComboBox : ComboBox
         g.SmoothingMode = SmoothingMode.AntiAlias;
 
         int btnWidth = 26;
+
+        if (!Enabled)
+        {
+            // Devre dışı (Disabled) durumunda Windows'un native beyaz/açık gri çerçevesini tamamen örtüp modern slate temaya alalım:
+            Color disabledBg = Color.FromArgb(20, 27, 45); // Koyu modern sönük arka plan
+            Color disabledBorder = Color.FromArgb(45, 55, 75); // Asla beyaz olmayan zarif koyu slate bordür
+            Color disabledText = Color.FromArgb(100, 116, 139); // Slate 500 (Okunabilir ancak inaktif)
+            Color disabledArrow = Color.FromArgb(71, 85, 105); // Slate 600
+
+            using (var brush = new SolidBrush(disabledBg))
+            {
+                g.FillRectangle(brush, 0, 0, Width, Height);
+            }
+
+            string text = SelectedItem?.ToString() ?? Text;
+            var textRect = new Rectangle(8, 0, Math.Max(0, Width - btnWidth - 10), Height);
+            TextRenderer.DrawText(
+                g,
+                text,
+                Font,
+                textRect,
+                disabledText,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+
+            using (var sepPen = new Pen(disabledBorder, 1f))
+            {
+                g.DrawLine(sepPen, Width - btnWidth, 2, Width - btnWidth, Height - 3);
+            }
+
+            int disCenterX = Width - (btnWidth / 2);
+            int disCenterY = Height / 2;
+            using (var arrowPen = new Pen(disabledArrow, 1.8f)
+            {
+                StartCap = LineCap.Round,
+                EndCap = LineCap.Round,
+                LineJoin = LineJoin.Round
+            })
+            {
+                using var path = new GraphicsPath();
+                path.AddLine(disCenterX - 4, disCenterY - 2, disCenterX, disCenterY + 2);
+                path.AddLine(disCenterX, disCenterY + 2, disCenterX + 4, disCenterY - 2);
+                g.DrawPath(arrowPen, path);
+            }
+
+            using (var borderPen = new Pen(disabledBorder, 1f))
+            {
+                g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
+            }
+            return;
+        }
+
         var btnRect = new Rectangle(Width - btnWidth, 1, btnWidth - 1, Height - 2);
         bool isActive = _isHovered || DroppedDown;
-        Color btnBg = !Enabled
-            ? UiStyle.InputBackground
-            : (isActive ? UiStyle.SecondaryHover : UiStyle.SecondaryColor);
+        Color btnBg = isActive ? UiStyle.SecondaryHover : UiStyle.SecondaryColor;
 
         using (var brush = new SolidBrush(btnBg))
         {
@@ -2389,9 +2439,7 @@ public class ModernComboBox : ComboBox
 
         int centerX = btnRect.X + (btnRect.Width / 2);
         int centerY = btnRect.Y + (btnRect.Height / 2);
-        Color arrowColor = !Enabled
-            ? UiStyle.TextMuted
-            : (isActive ? Color.White : UiStyle.TextMuted);
+        Color arrowColor = isActive ? Color.White : UiStyle.TextMuted;
 
         using (var arrowPen = new Pen(arrowColor, 1.8f)
         {
@@ -2414,9 +2462,7 @@ public class ModernComboBox : ComboBox
             g.DrawPath(arrowPen, path);
         }
 
-        Color borderColor = !Enabled
-            ? UiStyle.BorderColor
-            : ((Focused || _isHovered || DroppedDown) ? UiStyle.PrimaryColor : UiStyle.BorderColor);
+        Color borderColor = (Focused || _isHovered || DroppedDown) ? UiStyle.PrimaryColor : UiStyle.BorderColor;
         using (var borderPen = new Pen(borderColor, 1f))
         {
             g.DrawRectangle(borderPen, 0, 0, Width - 1, Height - 1);
