@@ -40,6 +40,9 @@
     <Content Include="Assets\3DModels\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="Assets\Shipping\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <EmbeddedResource Include="Assets\3DModels\**\*.*" />
   </ItemGroup>
 

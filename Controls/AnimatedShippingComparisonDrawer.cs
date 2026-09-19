@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -12,8 +13,8 @@ using EtsyMarketPlace.Domain.Shipping;
 using EtsyMarketPlace.Infrastructure.Shipping;
 
 /// <summary>
-/// Kâr Simülatörü içine entegre, aşağı doğru pürüzsüz animasyonla açılan
-/// Aras Global & ShipEntegra canlı kargo karşılaştırma ve seçim çekmecesi.
+/// Kâr Simülatörü içine entegre, aşağı doğru pürüzsüz animasyonla açılan,
+/// resmi logolu, ikonlu ve responsive Aras Global & ShipEntegra kargo karşılaştırma çekmecesi.
 /// </summary>
 public sealed class AnimatedShippingComparisonDrawer : Panel
 {
@@ -22,7 +23,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
     private readonly Timer _animTimer = new() { Interval = 16 };
     private int _targetHeight = 0;
-    private const int ExpandedHeight = 520;
+    private const int ExpandedHeight = 570;
     private bool _isExpanded = false;
 
     // Girdi alanları
@@ -45,6 +46,10 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     // Teklif Listesi Paneli
     private readonly FlowLayoutPanel _pnlOffersList = new();
 
+    // Logolar
+    private readonly Image? _arasLogo;
+    private readonly Image? _shipEntegraLogo;
+
     // Servisler
     private readonly ArasGlobalPricingService _arasService = new();
     private readonly ShipEntegraPricingService _shipEntegraService = new();
@@ -63,13 +68,45 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         Height = 0;
         Visible = false;
         BackColor = Color.FromArgb(17, 24, 39); // Gray 900
-        Padding = new Padding(16);
+        Padding = new Padding(16, 12, 16, 12);
         DoubleBuffered = true;
+
+        // Logoları yükle
+        _arasLogo = LoadLogoSafely("aras_global.png");
+        _shipEntegraLogo = LoadLogoSafely("shipentegra.jpg") ?? LoadLogoSafely("shipentegra.png");
 
         _animTimer.Tick += AnimTimer_Tick;
 
         BuildLayout();
         CalculateDesi();
+
+        _pnlOffersList.ClientSizeChanged += (_, _) => UpdateCardsWidth();
+    }
+
+    private static Image? LoadLogoSafely(string fileName)
+    {
+        try
+        {
+            string[] probePaths =
+            {
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Shipping", fileName),
+                Path.Combine(Application.StartupPath, "Assets", "Shipping", fileName),
+                Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Shipping", fileName),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Assets", "Shipping", fileName)
+            };
+
+            foreach (var p in probePaths)
+            {
+                if (File.Exists(p))
+                {
+                    using var stream = new MemoryStream(File.ReadAllBytes(p));
+                    return Image.FromStream(stream);
+                }
+            }
+        }
+        catch { }
+
+        return null;
     }
 
     private void AnimTimer_Tick(object? sender, EventArgs e)
@@ -94,14 +131,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
     public void ToggleDrawer()
     {
-        if (_isExpanded)
-        {
-            Collapse();
-        }
-        else
-        {
-            Expand();
-        }
+        if (_isExpanded) Collapse();
+        else Expand();
     }
 
     public void Expand()
@@ -129,31 +160,27 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 3,
             BackColor = Color.Transparent
         };
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // 0: Header
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 68)); // 1: Inputs
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // 2: Filter & Sort Bar
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 3: Offers List
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));  // 0: Header
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 118)); // 1: Responsive 2-Row Inputs Card
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // 2: Offers List
 
         // 0: Header
         mainLayout.Controls.Add(BuildHeaderRow(), 0, 0);
 
-        // 1: Inputs
-        mainLayout.Controls.Add(BuildInputsRow(), 0, 1);
+        // 1: Responsive 2-Row Inputs Card
+        mainLayout.Controls.Add(BuildResponsiveInputsCard(), 0, 1);
 
-        // 2: Filter & Sort Bar
-        mainLayout.Controls.Add(BuildFilterAndSortRow(), 0, 2);
-
-        // 3: Offers List Container
+        // 2: Offers List Container
         _pnlOffersList.Dock = DockStyle.Fill;
         _pnlOffersList.AutoScroll = true;
         _pnlOffersList.FlowDirection = FlowDirection.TopDown;
         _pnlOffersList.WrapContents = false;
         _pnlOffersList.BackColor = Color.FromArgb(15, 23, 42); // Slate 900
         _pnlOffersList.Padding = new Padding(8);
-        mainLayout.Controls.Add(_pnlOffersList, 0, 3);
+        mainLayout.Controls.Add(_pnlOffersList, 0, 2);
 
         Controls.Add(mainLayout);
     }
@@ -185,6 +212,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _lblStatus.Font = new Font("Segoe UI", 9F);
         _lblStatus.Dock = DockStyle.Fill;
         _lblStatus.TextAlign = ContentAlignment.MiddleRight;
+        _lblStatus.Margin = new Padding(0, 0, 10, 0);
         pnl.Controls.Add(_lblStatus, 1, 0);
 
         _btnClose.Text = "▲ Kapat";
@@ -201,64 +229,142 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         return pnl;
     }
 
-    private Control BuildInputsRow()
+    private Control BuildResponsiveInputsCard()
     {
-        var panel = new Panel
+        var card = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(30, 41, 59), // Slate 800
-            Padding = new Padding(10, 6, 10, 6),
-            Margin = new Padding(0, 0, 0, 6)
+            Padding = new Padding(12, 8, 12, 8),
+            Margin = new Padding(0, 0, 0, 8)
         };
 
-        var layout = new TableLayoutPanel
+        var grid = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 7,
-            RowCount = 1
+            ColumnCount = 4,
+            RowCount = 2
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160)); // Ülke
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));  // Ağırlık
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));  // En
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));  // Boy
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80));  // Yükseklik
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Desi Rozeti
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180)); // Teklif Butonu
+        // 1. Satır Sütunları
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25)); // Ülke
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18)); // Ağırlık
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 35)); // Ebatlar (En x Boy x Yükseklik)
+        grid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22)); // Desi Rozeti
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));     // Satır 0: Parametreler
+        grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));     // Satır 1: Filtreler & Aksiyon
 
+        // --- SATIR 0: PARAMETRELER ---
         // 1. Ülke
-        layout.Controls.Add(CreateFieldWrapper("Hedef Ülke:", _cbCountry), 0, 0);
+        grid.Controls.Add(CreateFieldWrapper("Hedef Ülke:", _cbCountry), 0, 0);
         PopulateCountries();
 
         // 2. Ağırlık
         ConfigureNumeric(_numWeight, 0.01m, 70m, 0.40m, 2);
-        layout.Controls.Add(CreateFieldWrapper("Ağırlık (kg):", _numWeight), 1, 0);
+        grid.Controls.Add(CreateFieldWrapper("Ağırlık (kg):", _numWeight), 1, 0);
 
-        // 3. En
+        // 3. Ebatlar (En x Boy x Yükseklik cm)
         ConfigureNumeric(_numWidth, 1m, 200m, 15m, 1);
-        layout.Controls.Add(CreateFieldWrapper("En (cm):", _numWidth), 2, 0);
-
-        // 4. Boy
         ConfigureNumeric(_numLength, 1m, 200m, 20m, 1);
-        layout.Controls.Add(CreateFieldWrapper("Boy (cm):", _numLength), 3, 0);
-
-        // 5. Yükseklik
         ConfigureNumeric(_numHeight, 1m, 200m, 10m, 1);
-        layout.Controls.Add(CreateFieldWrapper("Yükseklik (cm):", _numHeight), 4, 0);
 
-        // Değişiklik dinleyicileri
         _numWidth.ValueChanged += (_, _) => CalculateDesi();
         _numLength.ValueChanged += (_, _) => CalculateDesi();
         _numHeight.ValueChanged += (_, _) => CalculateDesi();
         _numWeight.ValueChanged += (_, _) => CalculateDesi();
 
-        // 6. Desi etiketi
-        _lblDesi.Dock = DockStyle.Fill;
-        _lblDesi.ForeColor = Color.FromArgb(52, 211, 153); // Emerald
-        _lblDesi.Font = new Font("Segoe UI Semibold", 8.5F);
-        _lblDesi.TextAlign = ContentAlignment.MiddleLeft;
-        layout.Controls.Add(_lblDesi, 5, 0);
+        var pnlDims = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = Color.Transparent
+        };
+        pnlDims.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.3f));
+        pnlDims.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.3f));
+        pnlDims.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.4f));
+        pnlDims.Controls.Add(CreateMiniInputWrapper("En (cm)", _numWidth), 0, 0);
+        pnlDims.Controls.Add(CreateMiniInputWrapper("Boy (cm)", _numLength), 1, 0);
+        pnlDims.Controls.Add(CreateMiniInputWrapper("Yük. (cm)", _numHeight), 2, 0);
 
-        // 7. Karşılaştır Butonu
+        grid.Controls.Add(CreateFieldWrapper("Paket Ebatları (En x Boy x Yükseklik):", pnlDims), 2, 0);
+
+        // 4. Canlı Desi Rozeti
+        var pnlDesiBox = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(15, 23, 42),
+            Padding = new Padding(8, 4, 8, 4),
+            Margin = new Padding(4, 18, 0, 2)
+        };
+        _lblDesi.Dock = DockStyle.Fill;
+        _lblDesi.ForeColor = Color.FromArgb(52, 211, 153); // Emerald 400
+        _lblDesi.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        _lblDesi.TextAlign = ContentAlignment.MiddleCenter;
+        pnlDesiBox.Controls.Add(_lblDesi);
+        grid.Controls.Add(pnlDesiBox, 3, 0);
+
+        // --- SATIR 1: FİLTRELEME, SIRALAMA & AKSİYON BUTONU ---
+        // Sol Filtreleme Segmentleri (Tümü, Aras, ShipEntegra)
+        var pnlFilters = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 6, 0, 0)
+        };
+
+        ConfigureRadio(_rbAll, "🔘 Tümü", true);
+        ConfigureRadio(_rbAras, "🚚 Aras Global", false);
+        ConfigureRadio(_rbShipEntegra, "📦 ShipEntegra", false);
+
+        _rbAll.CheckedChanged += (_, _) => RenderFilteredOffers();
+        _rbAras.CheckedChanged += (_, _) => RenderFilteredOffers();
+        _rbShipEntegra.CheckedChanged += (_, _) => RenderFilteredOffers();
+
+        pnlFilters.Controls.Add(_rbAll);
+        pnlFilters.Controls.Add(_rbAras);
+        pnlFilters.Controls.Add(_rbShipEntegra);
+        grid.Controls.Add(pnlFilters, 0, 1);
+        grid.SetColumnSpan(pnlFilters, 2);
+
+        // Orta Sıralama Dropdown
+        var pnlSort = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 6, 6, 0)
+        };
+        pnlSort.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55));
+        pnlSort.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        var lblSort = new Label
+        {
+            Text = "Sırala:",
+            ForeColor = Color.FromArgb(148, 163, 184),
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            Font = new Font("Segoe UI Semibold", 8.5F)
+        };
+        pnlSort.Controls.Add(lblSort, 0, 0);
+
+        _cbSort.DropDownStyle = ComboBoxStyle.DropDownList;
+        _cbSort.BackColor = Color.FromArgb(15, 23, 42);
+        _cbSort.ForeColor = Color.White;
+        _cbSort.Font = new Font("Segoe UI", 8.5F);
+        _cbSort.Dock = DockStyle.Fill;
+        _cbSort.Items.Add("🔽 En Ucuzdan Pahalıya (Fiyat: Artan)");
+        _cbSort.Items.Add("🔼 En Pahalıdan Ucuza (Fiyat: Azalan)");
+        _cbSort.Items.Add("⚡ En Hızlı Teslimat Süresi");
+        _cbSort.SelectedIndex = 0;
+        _cbSort.SelectedIndexChanged += (_, _) => RenderFilteredOffers();
+        pnlSort.Controls.Add(_cbSort, 1, 0);
+
+        grid.Controls.Add(pnlSort, 2, 1);
+
+        // Sağ Aksiyon Butonu ("⚡ Teklifleri Getir")
         _btnFetchQuotes.Text = "⚡ Teklifleri Getir";
         _btnFetchQuotes.Dock = DockStyle.Fill;
         _btnFetchQuotes.BackColor = Color.FromArgb(16, 185, 129); // Emerald 500
@@ -267,82 +373,12 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _btnFetchQuotes.Cursor = Cursors.Hand;
         _btnFetchQuotes.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
         _btnFetchQuotes.FlatAppearance.BorderSize = 0;
+        _btnFetchQuotes.Margin = new Padding(4, 6, 0, 0);
         _btnFetchQuotes.Click += async (_, _) => await FetchAllQuotesAsync();
-        layout.Controls.Add(_btnFetchQuotes, 6, 0);
+        grid.Controls.Add(_btnFetchQuotes, 3, 1);
 
-        panel.Controls.Add(layout);
-        return panel;
-    }
-
-    private Control BuildFilterAndSortRow()
-    {
-        var bar = new Panel
-        {
-            Dock = DockStyle.Fill,
-            BackColor = Color.Transparent,
-            Margin = new Padding(0, 0, 0, 4)
-        };
-
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 5,
-            RowCount = 1
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // Tümü
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); // Aras
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); // ShipEntegra
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); // Boşluk
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220)); // Sıralama Dropdown
-
-        ConfigureRadio(_rbAll, "Tümü (Karşılaştır)", true);
-        ConfigureRadio(_rbAras, "🚚 Sadece Aras Global", false);
-        ConfigureRadio(_rbShipEntegra, "📦 Sadece ShipEntegra", false);
-
-        _rbAll.CheckedChanged += (_, _) => RenderFilteredOffers();
-        _rbAras.CheckedChanged += (_, _) => RenderFilteredOffers();
-        _rbShipEntegra.CheckedChanged += (_, _) => RenderFilteredOffers();
-
-        layout.Controls.Add(_rbAll, 0, 0);
-        layout.Controls.Add(_rbAras, 1, 0);
-        layout.Controls.Add(_rbShipEntegra, 2, 0);
-
-        // Sıralama
-        _cbSort.DropDownStyle = ComboBoxStyle.DropDownList;
-        _cbSort.BackColor = Color.FromArgb(30, 41, 59);
-        _cbSort.ForeColor = Color.White;
-        _cbSort.Font = new Font("Segoe UI", 8.5F);
-        _cbSort.Dock = DockStyle.Fill;
-        _cbSort.Items.Add("🔽 En Ucuzdan Pahalıya (Fiyat Artan)");
-        _cbSort.Items.Add("🔼 En Pahalıdan Ucuza (Fiyat Azalan)");
-        _cbSort.Items.Add("⚡ En Hızlı Teslimat Süresi");
-        _cbSort.SelectedIndex = 0;
-        _cbSort.SelectedIndexChanged += (_, _) => RenderFilteredOffers();
-
-        var sortWrapper = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            RowCount = 1
-        };
-        sortWrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55));
-        sortWrapper.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-
-        var lblSort = new Label
-        {
-            Text = "Sırala:",
-            ForeColor = Color.FromArgb(148, 163, 184),
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleRight,
-            Font = new Font("Segoe UI", 8.5F)
-        };
-        sortWrapper.Controls.Add(lblSort, 0, 0);
-        sortWrapper.Controls.Add(_cbSort, 1, 0);
-
-        layout.Controls.Add(sortWrapper, 4, 0);
-
-        bar.Controls.Add(layout);
-        return bar;
+        card.Controls.Add(grid);
+        return card;
     }
 
     private static void ConfigureRadio(RadioButton rb, string text, bool isChecked)
@@ -351,7 +387,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         rb.Checked = isChecked;
         rb.ForeColor = Color.FromArgb(226, 232, 240);
         rb.Font = new Font("Segoe UI Semibold", 8.5F);
-        rb.Dock = DockStyle.Fill;
+        rb.AutoSize = true;
+        rb.Margin = new Padding(0, 4, 12, 0);
         rb.Cursor = Cursors.Hand;
     }
 
@@ -550,93 +587,160 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         decimal minPrice = _loadedQuotes.Min(q => q.PriceUsd);
 
+        int targetWidth = Math.Max(500, _pnlOffersList.ClientSize.Width - 24);
+
         foreach (var quote in list)
         {
             bool isCheapest = quote.PriceUsd == minPrice;
-            var card = CreateOfferCard(quote, isCheapest);
+            var card = CreateOfferCard(quote, isCheapest, targetWidth);
             _pnlOffersList.Controls.Add(card);
         }
     }
 
-    private Control CreateOfferCard(UnifiedShippingQuote quote, bool isCheapest)
+    private void UpdateCardsWidth()
+    {
+        int targetWidth = Math.Max(500, _pnlOffersList.ClientSize.Width - 24);
+        foreach (Control c in _pnlOffersList.Controls)
+        {
+            if (c is Panel p)
+            {
+                p.Width = targetWidth;
+            }
+        }
+    }
+
+    private Control CreateOfferCard(UnifiedShippingQuote quote, bool isCheapest, int cardWidth)
     {
         var card = new Panel
         {
-            Width = _pnlOffersList.ClientSize.Width - 28,
-            Height = 64,
+            Width = cardWidth,
+            Height = 74,
             BackColor = isCheapest ? Color.FromArgb(19, 42, 41) : Color.FromArgb(30, 41, 59),
             Margin = new Padding(0, 0, 0, 8),
-            Padding = new Padding(12, 8, 12, 8)
+            Padding = new Padding(10, 8, 10, 8)
+        };
+
+        // Border çizimi
+        card.Paint += (s, e) =>
+        {
+            using var pen = new Pen(isCheapest ? Color.FromArgb(16, 185, 129) : Color.FromArgb(51, 65, 85), isCheapest ? 1.5f : 1f);
+            e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
         };
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 6,
+            ColumnCount = 5,
             RowCount = 1,
             BackColor = Color.Transparent
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // Sağlayıcı Rozeti
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // Servis & Not
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // Teslimat Süresi
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // Rozet (En Uygun)
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // Fiyat ($ ve TL)
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); // Seç Butonu
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94));  // Logo Container
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // Servis, Hat & Detay Bilgisi
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // En Uygun Rozeti
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // Fiyat Bloğu ($ ve TL)
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150)); // Bu Teklifi Kullan Butonu
 
-        // 1. Sağlayıcı Rozeti
-        var pnlProvider = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
-        var lblProvider = new Label
+        // 1. SÜTUN: LOGO KUTUSU (RESMİ LOGO)
+        var pnlLogoBox = new Panel
         {
-            Text = quote.Provider == "Aras Global" ? "🚚 Aras Global" : "📦 ShipEntegra",
-            ForeColor = quote.Provider == "Aras Global" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(74, 222, 128),
-            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
-            AutoSize = true
+            Width = 84,
+            Height = 54,
+            BackColor = Color.FromArgb(248, 250, 252), // Temiz beyaz/açık zemin
+            Padding = new Padding(4),
+            Margin = new Padding(0, 2, 8, 2)
         };
-        var lblCarrier = new Label
-        {
-            Text = $"Hat: {quote.SubCarrier}",
-            ForeColor = Color.FromArgb(148, 163, 184),
-            Font = new Font("Segoe UI", 7.5F),
-            AutoSize = true
-        };
-        pnlProvider.Controls.Add(lblProvider);
-        pnlProvider.Controls.Add(lblCarrier);
-        layout.Controls.Add(pnlProvider, 0, 0);
 
-        // 2. Servis & Açıklama
-        var pnlService = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        var picLogo = new PictureBox
+        {
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            BackColor = Color.Transparent
+        };
+
+        if (quote.Provider == "Aras Global")
+        {
+            picLogo.Image = _arasLogo;
+        }
+        else
+        {
+            picLogo.Image = _shipEntegraLogo;
+        }
+
+        pnlLogoBox.Controls.Add(picLogo);
+        layout.Controls.Add(pnlLogoBox, 0, 0);
+
+        // 2. SÜTUN: SERVİS BİLGİLERİ & DETAYLAR
+        var pnlDetails = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent
+        };
+
+        // Servis Adı
         var lblService = new Label
         {
             Text = quote.ServiceName,
             ForeColor = Color.White,
-            Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold),
-            AutoSize = true
+            Font = new Font("Segoe UI Semibold", 10.5F, FontStyle.Bold),
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 2)
         };
-        var lblNote = new Label
-        {
-            Text = quote.Note,
-            ForeColor = Color.FromArgb(148, 163, 184),
-            Font = new Font("Segoe UI", 8F),
-            AutoSize = true
-        };
-        pnlService.Controls.Add(lblService);
-        pnlService.Controls.Add(lblNote);
-        layout.Controls.Add(pnlService, 1, 0);
+        pnlDetails.Controls.Add(lblService);
 
-        // 3. Teslimat Süresi
+        // Alt Rozetler Satırı (Taşıyıcı + Teslimat Süresi)
+        var pnlBadgesRow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, 2)
+        };
+
+        var lblCarrierBadge = new Label
+        {
+            Text = $"✈️ {quote.SubCarrier}",
+            ForeColor = quote.Provider == "Aras Global" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(74, 222, 128),
+            BackColor = Color.FromArgb(15, 23, 42),
+            Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+            Padding = new Padding(4, 2, 4, 2),
+            AutoSize = true,
+            Margin = new Padding(0, 0, 6, 0)
+        };
+        pnlBadgesRow.Controls.Add(lblCarrierBadge);
+
         var lblDelivery = new Label
         {
             Text = $"⏱ {quote.DeliveryText}",
-            ForeColor = Color.FromArgb(203, 213, 225),
-            Font = new Font("Segoe UI", 8.5F),
-            Dock = DockStyle.Fill,
-            TextAlign = ContentAlignment.MiddleLeft
+            ForeColor = Color.FromArgb(226, 232, 240),
+            BackColor = Color.FromArgb(30, 41, 59),
+            Font = new Font("Segoe UI Semibold", 8F),
+            Padding = new Padding(4, 2, 4, 2),
+            AutoSize = true
         };
-        layout.Controls.Add(lblDelivery, 2, 0);
+        pnlBadgesRow.Controls.Add(lblDelivery);
 
-        // 4. En Uygun Rozeti
+        if (!string.IsNullOrWhiteSpace(quote.Note))
+        {
+            var lblNote = new Label
+            {
+                Text = $"• {quote.Note}",
+                ForeColor = Color.FromArgb(148, 163, 184),
+                Font = new Font("Segoe UI", 7.5F),
+                AutoSize = true,
+                Margin = new Padding(6, 2, 0, 0)
+            };
+            pnlBadgesRow.Controls.Add(lblNote);
+        }
+
+        pnlDetails.Controls.Add(pnlBadgesRow);
+        layout.Controls.Add(pnlDetails, 1, 0);
+
+        // 3. SÜTUN: EN UYGUN ROZETİ
         if (isCheapest)
         {
+            var pnlBadgeContainer = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent };
             var badge = new Label
             {
                 Text = "🏆 EN UCUZ",
@@ -644,38 +748,45 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 ForeColor = Color.FromArgb(52, 211, 153),
                 Font = new Font("Segoe UI Black", 8F, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.None,
-                Size = new Size(95, 26),
-                Margin = new Padding(0, 10, 0, 0)
+                Size = new Size(100, 28),
+                Location = new Point(5, 14)
             };
-            layout.Controls.Add(badge, 3, 0);
+            pnlBadgeContainer.Controls.Add(badge);
+            layout.Controls.Add(pnlBadgeContainer, 2, 0);
         }
         else
         {
-            layout.Controls.Add(new Label(), 3, 0);
+            layout.Controls.Add(new Label(), 2, 0);
         }
 
-        // 5. Fiyat
-        var pnlPrice = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false };
+        // 4. SÜTUN: FİYAT BLOĞU
+        var pnlPrice = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent
+        };
         var lblPrice = new Label
         {
             Text = $"${quote.PriceUsd:0.00}",
             ForeColor = isCheapest ? Color.FromArgb(52, 211, 153) : Color.FromArgb(56, 189, 248),
-            Font = new Font("Segoe UI Black", 11.5F, FontStyle.Bold),
-            AutoSize = true
+            Font = new Font("Segoe UI Black", 12.5F, FontStyle.Bold),
+            AutoSize = true,
+            Margin = new Padding(0, 4, 0, 0)
         };
         var lblPriceTry = new Label
         {
             Text = $"≈ ₺{quote.PriceTry:N2}",
             ForeColor = Color.FromArgb(148, 163, 184),
-            Font = new Font("Segoe UI", 8F),
+            Font = new Font("Segoe UI Semibold", 8.5F),
             AutoSize = true
         };
         pnlPrice.Controls.Add(lblPrice);
         pnlPrice.Controls.Add(lblPriceTry);
-        layout.Controls.Add(pnlPrice, 4, 0);
+        layout.Controls.Add(pnlPrice, 3, 0);
 
-        // 6. Seç Butonu
+        // 5. SÜTUN: BU TEKLİFİ KULLAN BUTONU
         var btnSelect = new Button
         {
             Text = "✅ Bu Teklifi Kullan",
@@ -684,8 +795,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
-            Margin = new Padding(4, 8, 4, 8)
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
+            Margin = new Padding(4, 10, 4, 10)
         };
         btnSelect.FlatAppearance.BorderSize = 0;
         btnSelect.Click += (_, _) =>
@@ -693,7 +804,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             OnOfferSelected?.Invoke(quote.PriceUsd, $"{quote.Provider} - {quote.ServiceName}");
             Collapse();
         };
-        layout.Controls.Add(btnSelect, 5, 0);
+        layout.Controls.Add(btnSelect, 4, 0);
 
         card.Controls.Add(layout);
         return card;
@@ -701,14 +812,41 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
     private static Control CreateFieldWrapper(string labelText, Control inputControl)
     {
-        var box = new Panel { Dock = DockStyle.Fill, Padding = new Padding(2) };
+        var box = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(2),
+            BackColor = Color.Transparent
+        };
         var lbl = new Label
         {
             Text = labelText,
             ForeColor = Color.FromArgb(148, 163, 184),
-            Font = new Font("Segoe UI", 8F),
+            Font = new Font("Segoe UI Semibold", 8F),
             Dock = DockStyle.Top,
             Height = 16
+        };
+        inputControl.Dock = DockStyle.Top;
+        box.Controls.Add(inputControl);
+        box.Controls.Add(lbl);
+        return box;
+    }
+
+    private static Control CreateMiniInputWrapper(string labelText, Control inputControl)
+    {
+        var box = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(2),
+            BackColor = Color.Transparent
+        };
+        var lbl = new Label
+        {
+            Text = labelText,
+            ForeColor = Color.FromArgb(148, 163, 184),
+            Font = new Font("Segoe UI", 7.5F),
+            Dock = DockStyle.Top,
+            Height = 14
         };
         inputControl.Dock = DockStyle.Top;
         box.Controls.Add(inputControl);
