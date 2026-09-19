@@ -35,6 +35,9 @@ internal sealed class ProfitCalculatorForm : Form
 
     private readonly ModernNumericUpDown _sellerShippingCostInput = CreateMoneyInput(25.00m);
     private readonly Label _sellerShippingCostTryLabel = new();
+    private readonly AnimatedShippingComparisonDrawer _shippingDrawer = new();
+    private readonly Button _btnHeaderShippingPanel = new();
+    private readonly Label _lblSelectedShippingOffer = new();
 
     private readonly ModernNumericUpDown _packagingCostInput = CreateMoneyInput(0.00m);
     private readonly ModernNumericUpDown _adCostInput = CreateMoneyInput(0.00m);
@@ -93,6 +96,7 @@ internal sealed class ProfitCalculatorForm : Form
                 {
                     _liveExchangeRate = rate;
                     _rateBadge.Text = $"💱 1 USD = ₺{_liveExchangeRate:N2}";
+                    _shippingDrawer.UsdTryRate = rate;
                     Calculate();
                 });
             }
@@ -116,18 +120,35 @@ internal sealed class ProfitCalculatorForm : Form
         var root = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            RowCount = 2,
+            RowCount = 3,
             Padding = new Padding(20),
             BackColor = UiStyle.BackgroundColor,
         };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); // Header
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Main Body
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70)); // Row 0: Header
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));    // Row 1: Animated Shipping Drawer
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Row 2: Main Body
         Controls.Add(root);
 
         // 1. Header
         root.Controls.Add(BuildHeaderPanel(), 0, 0);
 
-        // 2. Main Body: Left Inputs (42%) and Right Results (58%)
+        // 2. Animated Shipping Comparison Drawer
+        _shippingDrawer.UsdTryRate = _liveExchangeRate;
+        _shippingDrawer.OnOfferSelected += (price, serviceName) =>
+        {
+            _sellerShippingCostInput.Value = price;
+            _lblSelectedShippingOffer.Text = $"✅ Seçilen: {serviceName} (${price:0.00})";
+            _lblSelectedShippingOffer.Visible = true;
+            Calculate();
+        };
+        _shippingDrawer.OnExpansionChanged += expanded =>
+        {
+            _btnHeaderShippingPanel.Text = expanded ? "📦 Kargo Paneli ▲" : "📦 Kargo Paneli ▼";
+            _btnHeaderShippingPanel.BackColor = expanded ? Color.FromArgb(16, 185, 129) : Color.FromArgb(30, 58, 138);
+        };
+        root.Controls.Add(_shippingDrawer, 0, 1);
+
+        // 3. Main Body: Left Inputs (42%) and Right Results (58%)
         var mainContent = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -140,7 +161,7 @@ internal sealed class ProfitCalculatorForm : Form
         mainContent.Controls.Add(BuildScrollableInputCard(), 0, 0);
         mainContent.Controls.Add(BuildOutputAnalyticsCard(), 1, 0);
 
-        root.Controls.Add(mainContent, 0, 1);
+        root.Controls.Add(mainContent, 0, 2);
     }
 
     private Control BuildHeaderPanel()
@@ -177,7 +198,7 @@ internal sealed class ProfitCalculatorForm : Form
         titleBox.Controls.Add(_headerSubtitle);
         header.Controls.Add(titleBox, 0, 0);
 
-        // Right Badges (Live FX & Health Pill)
+        // Right Badges (Live FX & Health Pill & Shipping Drawer Button)
         var rightBadges = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -185,6 +206,19 @@ internal sealed class ProfitCalculatorForm : Form
             WrapContents = false,
             Anchor = AnchorStyles.Right | AnchorStyles.Top,
         };
+
+        _btnHeaderShippingPanel.AutoSize = true;
+        _btnHeaderShippingPanel.Text = "📦 Kargo Paneli ▼";
+        _btnHeaderShippingPanel.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
+        _btnHeaderShippingPanel.ForeColor = Color.White;
+        _btnHeaderShippingPanel.BackColor = Color.FromArgb(30, 58, 138); // Royal Navy
+        _btnHeaderShippingPanel.FlatStyle = FlatStyle.Flat;
+        _btnHeaderShippingPanel.FlatAppearance.BorderSize = 0;
+        _btnHeaderShippingPanel.Cursor = Cursors.Hand;
+        _btnHeaderShippingPanel.Padding = new Padding(12, 8, 12, 8);
+        _btnHeaderShippingPanel.Margin = new Padding(0, 4, 10, 0);
+        _btnHeaderShippingPanel.Click += (_, _) => _shippingDrawer.ToggleDrawer();
+        rightBadges.Controls.Add(_btnHeaderShippingPanel);
 
         _rateBadge.AutoSize = true;
         _rateBadge.Text = $"💱 1 USD = ₺{_liveExchangeRate:N2}";
@@ -219,28 +253,16 @@ internal sealed class ProfitCalculatorForm : Form
             Dock = DockStyle.Fill,
             BackColor = UiStyle.CardBackground,
             Padding = new Padding(16),
-            Margin = new Padding(0, 0, 10, 0),
-        };
-        outerPanel.Paint += (s, e) =>
-        {
-            using var pen = new Pen(UiStyle.BorderColor, 1);
-            e.Graphics.DrawRectangle(pen, 0, 0, outerPanel.Width - 1, outerPanel.Height - 1);
         };
 
-        var scrollContainer = new ModernScrollPanel
-        {
-            Dock = DockStyle.Fill,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 2, 0)
-        };
-
+        var scrollContainer = new ModernScrollPanel { Dock = DockStyle.Fill };
         var flow = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            AutoSize = true,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Width = 460,
+            AutoSize = true,
+            Width = 350,
         };
 
         // Section 1: Gelirler
@@ -257,10 +279,36 @@ internal sealed class ProfitCalculatorForm : Form
 
         var pnlShippingButtons = new FlowLayoutPanel
         {
-            FlowDirection = FlowDirection.LeftToRight,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
             Width = 340,
-            Height = 36,
+            AutoSize = true,
             Margin = new Padding(4, 2, 4, 8)
+        };
+
+        var btnQuickShippingDrawer = new Button
+        {
+            Text = "📦 Canlı Kargo Karşılaştır & Seç ▼",
+            Height = 34,
+            Width = 332,
+            BackColor = Color.FromArgb(16, 185, 129), // Emerald
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+            Margin = new Padding(0, 0, 0, 6)
+        };
+        btnQuickShippingDrawer.FlatAppearance.BorderSize = 0;
+        btnQuickShippingDrawer.Click += (_, _) => _shippingDrawer.ToggleDrawer();
+        pnlShippingButtons.Controls.Add(btnQuickShippingDrawer);
+
+        var subButtonsFlow = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Width = 336,
+            Height = 32,
+            Margin = new Padding(0)
         };
 
         var btnArasShipping = new Button
@@ -283,6 +331,9 @@ internal sealed class ProfitCalculatorForm : Form
             if (arasForm.ShowDialog(this) == DialogResult.OK && arasForm.SelectedOffer != null)
             {
                 _sellerShippingCostInput.Value = arasForm.SelectedOffer.Price;
+                string sName = $"{arasForm.SelectedOffer.Cargo} {arasForm.SelectedOffer.ProviderServiceType}".Trim();
+                _lblSelectedShippingOffer.Text = $"✅ Seçilen: Aras Global - {sName} (${arasForm.SelectedOffer.Price:0.00})";
+                _lblSelectedShippingOffer.Visible = true;
             }
         };
 
@@ -306,11 +357,22 @@ internal sealed class ProfitCalculatorForm : Form
             if (seForm.ShowDialog(this) == DialogResult.OK && seForm.SelectedOffer != null)
             {
                 _sellerShippingCostInput.Value = seForm.SelectedOffer.TotalPrice;
+                _lblSelectedShippingOffer.Text = $"✅ Seçilen: ShipEntegra - {seForm.SelectedOffer.ServiceName} (${seForm.SelectedOffer.TotalPrice:0.00})";
+                _lblSelectedShippingOffer.Visible = true;
             }
         };
 
-        pnlShippingButtons.Controls.Add(btnArasShipping);
-        pnlShippingButtons.Controls.Add(btnShipEntegra);
+        subButtonsFlow.Controls.Add(btnArasShipping);
+        subButtonsFlow.Controls.Add(btnShipEntegra);
+        pnlShippingButtons.Controls.Add(subButtonsFlow);
+
+        _lblSelectedShippingOffer.ForeColor = Color.FromArgb(52, 211, 153);
+        _lblSelectedShippingOffer.Font = new Font("Segoe UI Semibold", 8F);
+        _lblSelectedShippingOffer.AutoSize = true;
+        _lblSelectedShippingOffer.Margin = new Padding(0, 4, 0, 0);
+        _lblSelectedShippingOffer.Visible = false;
+        pnlShippingButtons.Controls.Add(_lblSelectedShippingOffer);
+
         flow.Controls.Add(pnlShippingButtons);
         flow.Controls.Add(CreateInputFieldWithTry("Ambalaj & Paketleme Maliyeti ($)", _packagingCostInput, null));
         flow.Controls.Add(CreateInputFieldWithTry("Etsy İçi Reklam / İlan Başı ($)", _adCostInput, null));
