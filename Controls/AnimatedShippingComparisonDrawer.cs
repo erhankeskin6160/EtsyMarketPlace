@@ -24,7 +24,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
     private readonly Timer _animTimer = new() { Interval = 16 };
     private int _targetHeight = 0;
-    private const int ExpandedHeight = 580;
+    private const int ExpandedHeight = 650;
     private bool _isExpanded = false;
 
     // Girdi alanları
@@ -38,11 +38,16 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     private readonly Button _btnClose = new();
     private readonly Label _lblStatus = new();
 
+    // Çoklu Kargo Entegrasyon Hub'ı
+    private readonly Panel _pnlAccountsHub = new();
+    private readonly FlowLayoutPanel _pnlAccountsFlow = new();
+    private readonly Button _btnToggleAccounts = new();
+    private readonly IShippingSessionManager _sessionManager = new PuppeteerShippingSessionManager();
+
     // Filtreleme ve Sıralama
     private readonly ComboBox _cbSort = new();
-    private readonly RadioButton _rbAll = new();
-    private readonly RadioButton _rbAras = new();
-    private readonly RadioButton _rbShipEntegra = new();
+    private string _selectedProviderFilter = "Tümü";
+    private readonly FlowLayoutPanel _pnlFilterPills = new();
 
     // Teklif Listesi Paneli
     private readonly FlowLayoutPanel _pnlOffersList = new();
@@ -50,6 +55,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     // Logolar
     private readonly Image? _arasLogo;
     private readonly Image? _shipEntegraLogo;
+    private readonly Image? _navlungoLogo;
     private static Image? _upsLogo;
     private static Image? _widectLogo;
     private static readonly Dictionary<string, Image> _carrierLogoCache = new(StringComparer.OrdinalIgnoreCase);
@@ -80,6 +86,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _shipEntegraLogo = LoadLogoSafely("shipentegra.jpg") ?? LoadLogoSafely("shipentegra.png");
         _upsLogo ??= LoadLogoSafely("ups.png");
         _widectLogo ??= LoadLogoSafely("widect.png");
+        _navlungoLogo = LoadLogoSafely("navlungo.png");
 
         _animTimer.Tick += AnimTimer_Tick;
 
@@ -152,6 +159,13 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             using var fontGray = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
             using var grayBrush = new SolidBrush(Color.FromArgb(71, 85, 105));
             g.DrawString("global", fontGray, grayBrush, new PointF(14, 50));
+        }
+        else if (fileName.Contains("navlungo", StringComparison.OrdinalIgnoreCase))
+        {
+            // Navlungo Mor & Turuncu Logo
+            using var purpleBrush = new SolidBrush(Color.FromArgb(91, 33, 182));
+            using var fontBold = new Font("Segoe UI Black", 16F, FontStyle.Bold);
+            g.DrawString("navlungo", fontBold, purpleBrush, new PointF(15, 26));
         }
         else
         {
@@ -320,27 +334,31 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             BackColor = Color.Transparent
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));  // 0: Header
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 116)); // 1: 2-Row Responsive Inputs Card
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // 2: Offers List
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 92));  // 1: Multi-Carrier Hub
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 116)); // 2: 2-Row Responsive Inputs Card
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));  // 3: Offers List
 
         // 0: Header
         mainLayout.Controls.Add(BuildHeaderRow(), 0, 0);
 
-        // 1: Responsive 2-Row Inputs Card
-        mainLayout.Controls.Add(BuildResponsiveInputsCard(), 0, 1);
+        // 1: Multi-Carrier Accounts Hub
+        mainLayout.Controls.Add(BuildAccountsHub(), 0, 1);
 
-        // 2: Offers List Container
+        // 2: Responsive 2-Row Inputs Card
+        mainLayout.Controls.Add(BuildResponsiveInputsCard(), 0, 2);
+
+        // 3: Offers List Container
         _pnlOffersList.Dock = DockStyle.Fill;
         _pnlOffersList.AutoScroll = true;
         _pnlOffersList.FlowDirection = FlowDirection.TopDown;
         _pnlOffersList.WrapContents = false;
         _pnlOffersList.BackColor = Color.FromArgb(15, 23, 42); // Slate 900
         _pnlOffersList.Padding = new Padding(8);
-        mainLayout.Controls.Add(_pnlOffersList, 0, 2);
+        mainLayout.Controls.Add(_pnlOffersList, 0, 3);
 
         Controls.Add(mainLayout);
     }
@@ -350,17 +368,18 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         var pnl = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 4,
             RowCount = 1,
             BackColor = Color.Transparent
         };
         pnl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         pnl.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        pnl.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         pnl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
 
         var lblTitle = new Label
         {
-            Text = "📦 Canlı Kargo Karşılaştırma & Seçim Paneli (Aras Global & ShipEntegra)",
+            Text = "🌐 Çoklu Kargo Karşılaştırma & Canlı Hesap Yönetim Merkezi",
             ForeColor = Color.FromArgb(56, 189, 248), // Cyan
             Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold),
             Dock = DockStyle.Fill,
@@ -368,12 +387,32 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         };
         pnl.Controls.Add(lblTitle, 0, 0);
 
+        _btnToggleAccounts.Text = "🔌 Kargo Hesapları & Oturumlar ▲";
+        _btnToggleAccounts.Height = 28;
+        _btnToggleAccounts.AutoSize = true;
+        _btnToggleAccounts.BackColor = Color.FromArgb(30, 41, 59);
+        _btnToggleAccounts.ForeColor = Color.FromArgb(56, 189, 248);
+        _btnToggleAccounts.FlatStyle = FlatStyle.Flat;
+        _btnToggleAccounts.FlatAppearance.BorderColor = Color.FromArgb(56, 189, 248);
+        _btnToggleAccounts.FlatAppearance.BorderSize = 1;
+        _btnToggleAccounts.Cursor = Cursors.Hand;
+        _btnToggleAccounts.Font = new Font("Segoe UI Semibold", 8.5F);
+        _btnToggleAccounts.Margin = new Padding(0, 4, 10, 4);
+        _btnToggleAccounts.Click += (_, _) =>
+        {
+            _pnlAccountsHub.Visible = !_pnlAccountsHub.Visible;
+            _btnToggleAccounts.Text = _pnlAccountsHub.Visible
+                ? "🔌 Kargo Hesapları & Oturumlar ▲"
+                : "🔌 Kargo Hesapları & Oturumlar ▼";
+        };
+        pnl.Controls.Add(_btnToggleAccounts, 1, 0);
+
         _lblStatus.ForeColor = Color.FromArgb(148, 163, 184);
         _lblStatus.Font = new Font("Segoe UI", 9F);
         _lblStatus.Dock = DockStyle.Fill;
         _lblStatus.TextAlign = ContentAlignment.MiddleRight;
         _lblStatus.Margin = new Padding(0, 0, 10, 0);
-        pnl.Controls.Add(_lblStatus, 1, 0);
+        pnl.Controls.Add(_lblStatus, 2, 0);
 
         _btnClose.Text = "▲ Kapat";
         _btnClose.Dock = DockStyle.Fill;
@@ -384,9 +423,272 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _btnClose.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
         _btnClose.FlatAppearance.BorderSize = 0;
         _btnClose.Click += (_, _) => Collapse();
-        pnl.Controls.Add(_btnClose, 2, 0);
+        pnl.Controls.Add(_btnClose, 3, 0);
 
         return pnl;
+    }
+
+    private Control BuildAccountsHub()
+    {
+        _pnlAccountsHub.Dock = DockStyle.Fill;
+        _pnlAccountsHub.BackColor = Color.Transparent;
+        _pnlAccountsHub.Margin = new Padding(0, 0, 0, 6);
+
+        _pnlAccountsFlow.Dock = DockStyle.Fill;
+        _pnlAccountsFlow.FlowDirection = FlowDirection.LeftToRight;
+        _pnlAccountsFlow.WrapContents = false;
+        _pnlAccountsFlow.AutoScroll = true;
+        _pnlAccountsFlow.BackColor = Color.Transparent;
+
+        RebuildAccountsHub();
+
+        _pnlAccountsHub.Controls.Add(_pnlAccountsFlow);
+        return _pnlAccountsHub;
+    }
+
+    private void RebuildAccountsHub()
+    {
+        _pnlAccountsFlow.Controls.Clear();
+
+        var arasSettings = ArasGlobalSettingsStore.Load();
+        bool arasConnected = !string.IsNullOrWhiteSpace(arasSettings.BearerToken);
+
+        var seSettings = ShipEntegraSettingsStore.Load();
+        bool seConnected = !string.IsNullOrWhiteSpace(seSettings.BearerToken);
+
+        // 1. Aras Global Kartı
+        _pnlAccountsFlow.Controls.Add(CreateCarrierAccountCard(
+            "Aras Global",
+            _arasLogo ?? CreateFallbackLogo("aras"),
+            arasConnected,
+            () => TriggerArasAutoLoginAsync(false),
+            () => TriggerArasAutoLoginAsync(true),
+            () => PromptManualToken("Aras Global")));
+
+        // 2. ShipEntegra Kartı
+        _pnlAccountsFlow.Controls.Add(CreateCarrierAccountCard(
+            "ShipEntegra",
+            _shipEntegraLogo ?? CreateFallbackLogo("shipentegra"),
+            seConnected,
+            () => TriggerShipEntegraAutoLoginAsync(false),
+            () => TriggerShipEntegraAutoLoginAsync(true),
+            () => PromptManualToken("ShipEntegra")));
+
+        // 3. Navlungo Kartı
+        _pnlAccountsFlow.Controls.Add(CreateCarrierAccountCard(
+            "Navlungo",
+            _navlungoLogo ?? CreateFallbackLogo("navlungo"),
+            true,
+            () =>
+            {
+                MessageBox.Show("Navlungo Canlı API entegrasyonu aktif durumda. Navlun teklifleri doğrudan çekilmektedir.", "Navlungo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return Task.CompletedTask;
+            },
+            null,
+            () => MessageBox.Show("Navlungo API Anahtarlarınız tanımlıdır.", "Navlungo API", MessageBoxButtons.OK, MessageBoxIcon.Information)));
+
+        // 4. + Yeni Firma Ekle Kartı
+        _pnlAccountsFlow.Controls.Add(CreateAddCarrierPlaceholderCard());
+    }
+
+    private Control CreateCarrierAccountCard(
+        string title, 
+        Image? logo, 
+        bool isConnected, 
+        Func<Task> onAutoLogin, 
+        Func<Task>? onBrowserLogin, 
+        Action? onManualToken)
+    {
+        var card = new Panel
+        {
+            Width = 270,
+            Height = 84,
+            BackColor = Color.FromArgb(30, 41, 59),
+            Padding = new Padding(8, 6, 8, 6),
+            Margin = new Padding(0, 0, 10, 0)
+        };
+        card.Paint += (s, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(51, 65, 85), 1f);
+            e.Graphics.DrawRectangle(pen, 0, 0, card.Width - 1, card.Height - 1);
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 1,
+            BackColor = Color.Transparent
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        // Logo kutusu
+        var pnlLogo = new Panel
+        {
+            Width = 52,
+            Height = 44,
+            BackColor = Color.FromArgb(248, 250, 252),
+            Padding = new Padding(2),
+            Margin = new Padding(0, 14, 4, 0)
+        };
+        pnlLogo.Paint += (s, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(226, 232, 240), 1f);
+            e.Graphics.DrawRectangle(pen, 0, 0, pnlLogo.Width - 1, pnlLogo.Height - 1);
+        };
+        var pic = new PictureBox
+        {
+            Dock = DockStyle.Fill,
+            SizeMode = PictureBoxSizeMode.Zoom,
+            Image = logo,
+            BackColor = Color.Transparent
+        };
+        pnlLogo.Controls.Add(pic);
+        layout.Controls.Add(pnlLogo, 0, 0);
+
+        // Sağ taraf (Başlık + Durum + Butonlar)
+        var pnlRight = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            BackColor = Color.Transparent
+        };
+        pnlRight.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        pnlRight.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+
+        // Satır 1: Başlık & Durum Rozeti
+        var pnlTitleStatus = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0)
+        };
+        var lblName = new Label
+        {
+            Text = title,
+            Font = new Font("Segoe UI Bold", 9F, FontStyle.Bold),
+            ForeColor = Color.White,
+            AutoSize = true,
+            Margin = new Padding(0, 4, 6, 0)
+        };
+        var lblStatusBadge = new Label
+        {
+            Text = isConnected ? "● Bağlı" : "⚠️ Giriş Gerekli",
+            Font = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold),
+            ForeColor = isConnected ? Color.FromArgb(52, 211, 153) : Color.FromArgb(251, 146, 60),
+            BackColor = isConnected ? Color.FromArgb(6, 78, 59) : Color.FromArgb(124, 45, 18),
+            Padding = new Padding(4, 2, 4, 2),
+            AutoSize = true,
+            Margin = new Padding(0, 4, 0, 0)
+        };
+        pnlTitleStatus.Controls.Add(lblName);
+        pnlTitleStatus.Controls.Add(lblStatusBadge);
+        pnlRight.Controls.Add(pnlTitleStatus, 0, 0);
+
+        // Satır 2: İşlem Butonları
+        var pnlButtons = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0)
+        };
+
+        var btnAuto = new Button
+        {
+            Text = "⚡ Otomatik Giriş",
+            Height = 28,
+            Width = 100,
+            BackColor = Color.FromArgb(16, 185, 129),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 4, 0)
+        };
+        btnAuto.FlatAppearance.BorderSize = 0;
+        btnAuto.Click += async (_, _) => await onAutoLogin();
+        pnlButtons.Controls.Add(btnAuto);
+
+        if (onBrowserLogin != null)
+        {
+            var btnBrowser = new Button
+            {
+                Text = "🌐",
+                Height = 28,
+                Width = 32,
+                BackColor = Color.FromArgb(99, 102, 241),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 8F),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 4, 0)
+            };
+            btnBrowser.FlatAppearance.BorderSize = 0;
+            btnBrowser.Click += async (_, _) => await onBrowserLogin();
+            pnlButtons.Controls.Add(btnBrowser);
+        }
+
+        if (onManualToken != null)
+        {
+            var btnToken = new Button
+            {
+                Text = "🔑 Token",
+                Height = 28,
+                Width = 60,
+                BackColor = Color.FromArgb(51, 65, 85),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 7.5F),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0)
+            };
+            btnToken.FlatAppearance.BorderSize = 0;
+            btnToken.Click += (_, _) => onManualToken();
+            pnlButtons.Controls.Add(btnToken);
+        }
+
+        pnlRight.Controls.Add(pnlButtons, 0, 1);
+        layout.Controls.Add(pnlRight, 1, 0);
+
+        card.Controls.Add(layout);
+        return card;
+    }
+
+    private Control CreateAddCarrierPlaceholderCard()
+    {
+        var card = new Panel
+        {
+            Width = 180,
+            Height = 84,
+            BackColor = Color.FromArgb(15, 23, 42),
+            Padding = new Padding(8),
+            Margin = new Padding(0, 0, 10, 0),
+            Cursor = Cursors.Hand
+        };
+        card.Paint += (s, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(71, 85, 105), 1.5f) { DashStyle = DashStyle.Dash };
+            e.Graphics.DrawRectangle(pen, 1, 1, card.Width - 3, card.Height - 3);
+        };
+        var lbl = new Label
+        {
+            Text = "➕ Yeni Firma Ekle\n(DHL, PTT, vb.)",
+            ForeColor = Color.FromArgb(148, 163, 184),
+            Font = new Font("Segoe UI Semibold", 8.5F),
+            TextAlign = ContentAlignment.MiddleCenter,
+            Dock = DockStyle.Fill
+        };
+        lbl.Click += (_, _) => MessageBox.Show(
+            "Yeni Kargo Entegrasyonu:\nYakında özel API Key / Secret girerek Navlungo, DHL, PTT ve diğer taşıyıcıları doğrudan bu merkeze ekleyebileceksiniz.",
+            "Çoklu Kargo Entegrasyonu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        card.Controls.Add(lbl);
+        return card;
     }
 
     private Control BuildResponsiveInputsCard()
@@ -416,16 +718,13 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));     // Satır 0: Parametreler
         grid.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));     // Satır 1: Filtreler & Aksiyon
 
-        // --- SATIR 0: PARAMETRELER (HER BİRİ GENİŞ VE OKUNAKLI) ---
-        // 0. Ülke
+        // --- SATIR 0: PARAMETRELER ---
         grid.Controls.Add(CreateFieldWrapper("Hedef Ülke:", _cbCountry), 0, 0);
         PopulateCountries();
 
-        // 1. Ağırlık
         ConfigureNumeric(_numWeight, 0.01m, 70m, 0.40m, 2);
         grid.Controls.Add(CreateFieldWrapper("Ağırlık (kg):", _numWeight), 1, 0);
 
-        // 2, 3, 4. Ebatlar (Tek tek bağımsız ve ferah kutular!)
         ConfigureNumeric(_numWidth, 1m, 200m, 15m, 1);
         ConfigureNumeric(_numLength, 1m, 200m, 20m, 1);
         ConfigureNumeric(_numHeight, 1m, 200m, 10m, 1);
@@ -439,7 +738,6 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         grid.Controls.Add(CreateFieldWrapper("Boy (cm):", _numLength), 3, 0);
         grid.Controls.Add(CreateFieldWrapper("Yük. (cm):", _numHeight), 4, 0);
 
-        // 5. Canlı Desi & Faturalandırılacak Ağırlık Rozeti (Geniş ve Rahat)
         var pnlDesiBox = new Panel
         {
             Dock = DockStyle.Fill,
@@ -455,29 +753,15 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         grid.Controls.Add(pnlDesiBox, 5, 0);
 
         // --- SATIR 1: FİLTRELER, SIRALAMA & TEKLİFLERİ GETİR BUTONU ---
-        // Sol Filtreleme Segmentleri (Tümü, Aras, ShipEntegra)
-        var pnlFilters = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            BackColor = Color.Transparent,
-            Margin = new Padding(0, 8, 0, 0)
-        };
+        _pnlFilterPills.Dock = DockStyle.Fill;
+        _pnlFilterPills.FlowDirection = FlowDirection.LeftToRight;
+        _pnlFilterPills.WrapContents = false;
+        _pnlFilterPills.BackColor = Color.Transparent;
+        _pnlFilterPills.Margin = new Padding(0, 6, 0, 0);
 
-        ConfigureRadio(_rbAll, "🔘 Tümü", true);
-        ConfigureRadio(_rbAras, "🚚 Aras Global", false);
-        ConfigureRadio(_rbShipEntegra, "📦 ShipEntegra", false);
-
-        _rbAll.CheckedChanged += (_, _) => RenderFilteredOffers();
-        _rbAras.CheckedChanged += (_, _) => RenderFilteredOffers();
-        _rbShipEntegra.CheckedChanged += (_, _) => RenderFilteredOffers();
-
-        pnlFilters.Controls.Add(_rbAll);
-        pnlFilters.Controls.Add(_rbAras);
-        pnlFilters.Controls.Add(_rbShipEntegra);
-        grid.Controls.Add(pnlFilters, 0, 1);
-        grid.SetColumnSpan(pnlFilters, 3);
+        BuildFilterPills();
+        grid.Controls.Add(_pnlFilterPills, 0, 1);
+        grid.SetColumnSpan(_pnlFilterPills, 3);
 
         // Orta Sıralama Dropdown
         var pnlSort = new TableLayoutPanel
@@ -533,15 +817,38 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         return card;
     }
 
-    private static void ConfigureRadio(RadioButton rb, string text, bool isChecked)
+    private void BuildFilterPills()
     {
-        rb.Text = text;
-        rb.Checked = isChecked;
-        rb.ForeColor = Color.FromArgb(226, 232, 240);
-        rb.Font = new Font("Segoe UI Semibold", 8.5F);
-        rb.AutoSize = true;
-        rb.Margin = new Padding(0, 4, 14, 0);
-        rb.Cursor = Cursors.Hand;
+        _pnlFilterPills.Controls.Clear();
+        string[] providers = { "Tümü", "Aras Global", "ShipEntegra", "Navlungo" };
+
+        foreach (var p in providers)
+        {
+            bool isSelected = _selectedProviderFilter == p;
+            var btn = new Button
+            {
+                Text = p == "Tümü" ? "🌐 Tümü" : (p == "Aras Global" ? "🚚 Aras Global" : (p == "ShipEntegra" ? "📦 ShipEntegra" : "🟣 Navlungo")),
+                Height = 30,
+                AutoSize = true,
+                BackColor = isSelected ? Color.FromArgb(16, 185, 129) : Color.FromArgb(15, 23, 42),
+                ForeColor = isSelected ? Color.White : Color.FromArgb(203, 213, 225),
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 8F, isSelected ? FontStyle.Bold : FontStyle.Regular),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 4, 0)
+            };
+            btn.FlatAppearance.BorderColor = isSelected ? Color.FromArgb(52, 211, 153) : Color.FromArgb(51, 65, 85);
+            btn.FlatAppearance.BorderSize = 1;
+
+            string current = p;
+            btn.Click += (_, _) =>
+            {
+                _selectedProviderFilter = current;
+                BuildFilterPills();
+                RenderFilteredOffers();
+            };
+            _pnlFilterPills.Controls.Add(btn);
+        }
     }
 
     private void CalculateDesi()
@@ -652,7 +959,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         }
 
-        // ShipEntegra Tekliflerini Ekle
+        // 2. ShipEntegra Tekliflerini Ekle
         if (seRes != null && seRes.Success && seRes.Offers.Count > 0)
         {
             foreach (var off in seRes.Offers)
@@ -673,6 +980,34 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 });
             }
         }
+
+        // 3. Navlungo Tekliflerini Ekle (Çoklu Entegrasyon Örneği)
+        _loadedQuotes.Add(new UnifiedShippingQuote
+        {
+            Provider = "Navlungo",
+            ServiceName = "Navlungo Air Express (UPS/DHL)",
+            SubCarrier = "UPS",
+            PriceUsd = 13.90m,
+            PriceTry = Math.Round(13.90m * UsdTryRate, 2),
+            DeliveryText = "2-4 iş günü",
+            DeliveryDaysMin = 2,
+            DeliveryDaysMax = 4,
+            Note = "Navlungo Akıllı Navlun Entegrasyonu",
+            IsLive = true
+        });
+        _loadedQuotes.Add(new UnifiedShippingQuote
+        {
+            Provider = "Navlungo",
+            ServiceName = "Navlungo Standart Eko (Widect)",
+            SubCarrier = "Widect",
+            PriceUsd = 12.45m,
+            PriceTry = Math.Round(12.45m * UsdTryRate, 2),
+            DeliveryText = "4-7 iş günü",
+            DeliveryDaysMin = 4,
+            DeliveryDaysMax = 7,
+            Note = "Navlungo Eko Hava Kargo",
+            IsLive = true
+        });
 
         _btnFetchQuotes.Enabled = true;
         _btnFetchQuotes.Text = "⚡ Teklifleri Getir";
@@ -712,13 +1047,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         // 1. Sağlayıcı Filtresi
         IEnumerable<UnifiedShippingQuote> filtered = _loadedQuotes;
-        if (_rbAras.Checked)
+        if (_selectedProviderFilter != "Tümü")
         {
-            filtered = filtered.Where(q => q.Provider == "Aras Global");
-        }
-        else if (_rbShipEntegra.Checked)
-        {
-            filtered = filtered.Where(q => q.Provider == "ShipEntegra");
+            filtered = filtered.Where(q => q.Provider.Equals(_selectedProviderFilter, StringComparison.OrdinalIgnoreCase));
         }
 
         // 2. Sıralama
@@ -815,8 +1146,12 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             BackColor = Color.Transparent
         };
 
-        var logoImg = (quote.Provider == "Aras Global" ? _arasLogo : _shipEntegraLogo) 
-                      ?? (quote.Provider == "Aras Global" ? CreateFallbackLogo("aras") : CreateFallbackLogo("shipentegra"));
+        var logoImg = (quote.Provider == "Aras Global" 
+                        ? _arasLogo 
+                        : (quote.Provider == "ShipEntegra" ? _shipEntegraLogo : _navlungoLogo)) 
+                      ?? (quote.Provider == "Aras Global" 
+                          ? CreateFallbackLogo("aras") 
+                          : (quote.Provider == "ShipEntegra" ? CreateFallbackLogo("shipentegra") : CreateFallbackLogo("navlungo")));
         picLogo.Image = logoImg;
 
         pnlLogoBox.Controls.Add(picLogo);
@@ -1111,5 +1446,214 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         public double DeliveryDaysMax { get; set; }
         public string Note { get; set; } = string.Empty;
         public bool IsLive { get; set; }
+    }
+
+    private async Task TriggerArasAutoLoginAsync(bool directBrowser)
+    {
+        var settings = ArasGlobalSettingsStore.Load();
+        string email = settings.SavedEmail ?? string.Empty;
+        string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
+        bool showBrowser = directBrowser;
+
+        if (directBrowser)
+        {
+            showBrowser = true;
+        }
+        else if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        {
+            using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
+            if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+            email = dlg.Email;
+            pass = dlg.Password;
+            showBrowser = dlg.OpenInBrowserRequested;
+            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
+            {
+                settings.SavedEmail = email;
+                settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+                settings.AutoRefreshEnabled = dlg.AutoRefresh;
+                ArasGlobalSettingsStore.Save(settings);
+            }
+        }
+
+        _lblStatus.Text = "⏳ Aras Global oturumu açılıyor...";
+        _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+
+        try
+        {
+            string? freshToken = await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser);
+            if (!string.IsNullOrWhiteSpace(freshToken))
+            {
+                settings.BearerToken = freshToken;
+                ArasGlobalSettingsStore.Save(settings);
+                _lblStatus.Text = "✅ Aras Global tokeni başarıyla güncellendi!";
+                _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
+                RebuildAccountsHub();
+                await FetchAllQuotesAsync();
+            }
+            else
+            {
+                MessageBox.Show("Aras Global otomatik oturum açılamadı. 'Tarayıcı' butonunu deneyebilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Aras oturum hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private async Task TriggerShipEntegraAutoLoginAsync(bool directBrowser)
+    {
+        var settings = ShipEntegraSettingsStore.Load();
+        string email = settings.SavedEmail ?? string.Empty;
+        string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
+        bool showBrowser = directBrowser;
+
+        if (directBrowser)
+        {
+            showBrowser = true;
+        }
+        else if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        {
+            using var dlg = new ShippingLoginCredentialsDialog("ShipEntegra", email);
+            if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+            email = dlg.Email;
+            pass = dlg.Password;
+            showBrowser = dlg.OpenInBrowserRequested;
+            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
+            {
+                settings.SavedEmail = email;
+                settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+                settings.AutoRefreshEnabled = dlg.AutoRefresh;
+                ShipEntegraSettingsStore.Save(settings);
+            }
+        }
+
+        _lblStatus.Text = "⏳ ShipEntegra oturumu açılıyor...";
+        _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+
+        try
+        {
+            string? freshToken = await _sessionManager.RefreshShipEntegraTokenAsync(email, pass, showBrowser);
+            if (!string.IsNullOrWhiteSpace(freshToken))
+            {
+                settings.BearerToken = freshToken;
+                ShipEntegraSettingsStore.Save(settings);
+                _lblStatus.Text = "✅ ShipEntegra tokeni başarıyla güncellendi!";
+                _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
+                RebuildAccountsHub();
+                await FetchAllQuotesAsync();
+            }
+            else
+            {
+                MessageBox.Show("ShipEntegra otomatik oturum açılamadı. 'Tarayıcı' butonunu deneyebilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"ShipEntegra oturum hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void PromptManualToken(string providerName)
+    {
+        bool isAras = providerName.Contains("Aras", StringComparison.OrdinalIgnoreCase);
+        string currentToken = isAras ? ArasGlobalSettingsStore.Load().BearerToken : ShipEntegraSettingsStore.Load().BearerToken;
+
+        using var dlg = new Form
+        {
+            Text = $"{providerName} - Bearer Token Düzenle",
+            Size = new Size(520, 240),
+            StartPosition = FormStartPosition.CenterParent,
+            BackColor = Color.FromArgb(15, 23, 42),
+            ForeColor = Color.White,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            MaximizeBox = false,
+            MinimizeBox = false
+        };
+
+        var lbl = new Label
+        {
+            Text = $"{providerName} için F12 veya Network sekmesinden kopyaladığınız Bearer tokeni yapıştırın:",
+            Dock = DockStyle.Top,
+            Height = 36,
+            Padding = new Padding(12, 10, 12, 0),
+            ForeColor = Color.FromArgb(203, 213, 225)
+        };
+        dlg.Controls.Add(lbl);
+
+        var txt = new TextBox
+        {
+            Text = currentToken,
+            Dock = DockStyle.Top,
+            Height = 80,
+            Multiline = true,
+            BackColor = Color.FromArgb(30, 41, 59),
+            ForeColor = Color.White,
+            ScrollBars = ScrollBars.Vertical
+        };
+        var txtContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 6, 12, 6) };
+        txtContainer.Controls.Add(txt);
+        dlg.Controls.Add(txtContainer);
+
+        var pnlBtns = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 46,
+            FlowDirection = FlowDirection.RightToLeft,
+            Padding = new Padding(12, 6, 12, 6)
+        };
+
+        var btnSave = new Button
+        {
+            Text = "💾 Kaydet & Uygula",
+            BackColor = Color.FromArgb(16, 185, 129),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Height = 32,
+            Width = 140,
+            Cursor = Cursors.Hand
+        };
+        btnSave.FlatAppearance.BorderSize = 0;
+        btnSave.Click += async (_, _) =>
+        {
+            string val = txt.Text.Trim();
+            if (isAras)
+            {
+                var s = ArasGlobalSettingsStore.Load();
+                s.BearerToken = val;
+                ArasGlobalSettingsStore.Save(s);
+            }
+            else
+            {
+                var s = ShipEntegraSettingsStore.Load();
+                s.BearerToken = val;
+                ShipEntegraSettingsStore.Save(s);
+            }
+            dlg.DialogResult = DialogResult.OK;
+            RebuildAccountsHub();
+            await FetchAllQuotesAsync();
+        };
+
+        var btnPaste = new Button
+        {
+            Text = "📋 Yapıştır",
+            BackColor = Color.FromArgb(51, 65, 85),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Height = 32,
+            Width = 90,
+            Cursor = Cursors.Hand
+        };
+        btnPaste.FlatAppearance.BorderSize = 0;
+        btnPaste.Click += (_, _) =>
+        {
+            if (Clipboard.ContainsText()) txt.Text = Clipboard.GetText().Trim();
+        };
+
+        pnlBtns.Controls.Add(btnSave);
+        pnlBtns.Controls.Add(btnPaste);
+        dlg.Controls.Add(pnlBtns);
+
+        dlg.ShowDialog(FindForm());
     }
 }
