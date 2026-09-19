@@ -3,6 +3,10 @@ namespace EtsyMarketPlace.Application.Tests;
 using System;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Domain.Shipping;
 using EtsyMarketPlace.Infrastructure.Shipping;
@@ -88,5 +92,49 @@ public sealed class NavlungoShippingTests
         {
             if (File.Exists(tempPath)) File.Delete(tempPath);
         }
+    }
+
+    [Fact]
+    public async Task FetchLiveQuotesAsync_ThrowsWhenApiReturnsErrorInsteadOfUsingFallback()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(
+            new HttpResponseMessage(HttpStatusCode.Unauthorized)
+            {
+                Content = new StringContent("unauthorized")
+            }));
+        var client = new NavlungoApiClient(httpClient);
+
+        var ex = await Assert.ThrowsAsync<NavlungoApiException>(() =>
+            client.FetchLiveQuotesAsync(new NavlungoQuoteRequest()));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, ex.StatusCode);
+        Assert.Contains("unauthorized", ex.ResponseBody);
+    }
+
+    [Fact]
+    public async Task FetchLiveQuotesAsync_ThrowsWhenResponseCannotBeParsedInsteadOfUsingFallback()
+    {
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("not-a-navlungo-response")
+            }));
+        var client = new NavlungoApiClient(httpClient);
+
+        var ex = await Assert.ThrowsAsync<NavlungoApiException>(() =>
+            client.FetchLiveQuotesAsync(new NavlungoQuoteRequest()));
+
+        Assert.Contains("ayrıştırılamadı", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class StubHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly HttpResponseMessage _response;
+
+        public StubHttpMessageHandler(HttpResponseMessage response) => _response = response;
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) => Task.FromResult(_response);
     }
 }
