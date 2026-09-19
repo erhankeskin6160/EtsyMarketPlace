@@ -86,6 +86,11 @@ public sealed class ShipEntegraSettings
     public string DefaultCountry { get; set; } = "US";
     public string DefaultPostalCode { get; set; } = "8537";
 
+    // Otomatik Oturum & Token Yenileme (Kimlik Bilgileri)
+    public string SavedEmail { get; set; } = string.Empty;
+    public string EncryptedPassword { get; set; } = string.Empty;
+    public bool AutoRefreshEnabled { get; set; } = true;
+
     public string CleanToken
     {
         get

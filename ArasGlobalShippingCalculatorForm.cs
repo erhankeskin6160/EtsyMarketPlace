@@ -152,6 +152,9 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         return _alertBanner;
     }
 
+    private readonly IShippingSessionManager _sessionManager = new PuppeteerShippingSessionManager();
+    private readonly Button _btnAutoLogin = new();
+
     private Control BuildTokenBar()
     {
         var card = new Panel
@@ -165,13 +168,14 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 4,
+            ColumnCount = 5,
             RowCount = 2
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175));
 
         var lblToken = new Label
         {
@@ -187,7 +191,7 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         _txtBearerToken.BackColor = Color.FromArgb(15, 23, 42);
         _txtBearerToken.ForeColor = Color.FromArgb(56, 189, 248);
         _txtBearerToken.Font = new Font("Consolas", 8.5F);
-        _txtBearerToken.PlaceholderText = "panel.arasglobalcargo.com Network sekmesindeki Bearer eyJhbGciOiJSUzI1... anahtarınızı buraya yapıştırın";
+        _txtBearerToken.PlaceholderText = "panel.arasglobalcargo.com Bearer tokeni (veya sağdaki Otomatik Giriş ile çekin)";
         layout.Controls.Add(_txtBearerToken, 1, 0);
 
         var btnPaste = new Button
@@ -210,7 +214,7 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         };
         layout.Controls.Add(btnPaste, 2, 0);
 
-        _btnSaveToken.Text = "💾 Tokeni Kaydet";
+        _btnSaveToken.Text = "💾 Kaydet";
         _btnSaveToken.Dock = DockStyle.Fill;
         _btnSaveToken.BackColor = Color.FromArgb(37, 99, 235); // Royal Blue
         _btnSaveToken.ForeColor = Color.White;
@@ -221,19 +225,108 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         _btnSaveToken.Click += async (_, _) => await SaveAndTestTokenAsync();
         layout.Controls.Add(_btnSaveToken, 3, 0);
 
+        _btnAutoLogin.Text = "⚡ Otomatik Giriş Yap";
+        _btnAutoLogin.Dock = DockStyle.Fill;
+        _btnAutoLogin.BackColor = Color.FromArgb(16, 185, 129); // Emerald
+        _btnAutoLogin.ForeColor = Color.White;
+        _btnAutoLogin.FlatStyle = FlatStyle.Flat;
+        _btnAutoLogin.Cursor = Cursors.Hand;
+        _btnAutoLogin.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        _btnAutoLogin.FlatAppearance.BorderSize = 0;
+        _btnAutoLogin.Click += async (_, _) => await TriggerAutoSessionRefreshAsync(forceDialog: false);
+        layout.Controls.Add(_btnAutoLogin, 4, 0);
+
         var lblHelp = new Label
         {
-            Text = "💡 İpucu: panel.arasglobalcargo.com adresinde F12 (Network) -> Hızlı Fiyat Hesapla yaptığınızda Request Headers altındaki Authorization: Bearer kodudur.",
+            Text = "💡 Kolaylık: '⚡ Otomatik Giriş Yap' ile F12 açmadan arka planda oturum tazeleyebilir veya e-posta/şifrenizi kaydedebilirsiniz.",
             ForeColor = Color.FromArgb(148, 163, 184),
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Segoe UI", 8F)
         };
         layout.Controls.Add(lblHelp, 1, 1);
-        layout.SetColumnSpan(lblHelp, 3);
+        layout.SetColumnSpan(lblHelp, 4);
 
         card.Controls.Add(layout);
         return card;
+    }
+
+    private async Task TriggerAutoSessionRefreshAsync(bool forceDialog)
+    {
+        string email = _settings.SavedEmail ?? string.Empty;
+        string pass = ShippingCredentialEncryptor.Decrypt(_settings.EncryptedPassword);
+        bool showBrowser = false;
+
+        if (forceDialog || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        {
+            using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
+            if (dlg.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            email = dlg.Email;
+            pass = dlg.Password;
+            showBrowser = dlg.OpenInBrowserRequested;
+
+            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
+            {
+                _settings.SavedEmail = email;
+                _settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+                _settings.AutoRefreshEnabled = dlg.AutoRefresh;
+                ArasGlobalSettingsStore.Save(_settings);
+            }
+        }
+
+        _btnAutoLogin.Enabled = false;
+        _btnAutoLogin.Text = "⏳ Giriş Yapılıyor...";
+        _badgeStatus.Text = "⏳ Oturum Yenileniyor...";
+        _badgeStatus.BackColor = Color.FromArgb(30, 58, 138);
+        _badgeStatus.ForeColor = Color.FromArgb(147, 197, 253);
+
+        try
+        {
+            string? freshToken = await _sessionManager.RefreshArasGlobalTokenAsync(
+                email,
+                pass,
+                showBrowser,
+                msg =>
+                {
+                    if (InvokeRequired) Invoke(() => _lblSubtitle.Text = msg);
+                    else _lblSubtitle.Text = msg;
+                });
+
+            if (!string.IsNullOrWhiteSpace(freshToken))
+            {
+                _txtBearerToken.Text = freshToken;
+                _settings = ArasGlobalSettingsStore.Load();
+                MessageBox.Show(
+                    "Aras Global canlı oturumu başarıyla açıldı ve yeni token alındı!",
+                    "Oturum Açıldı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                await FetchQuotesAsync();
+            }
+            else
+            {
+                MessageBox.Show(
+                    "Otomatik oturum açılamadı. Dilerseniz 'Tarayıcıda Aç' diyerek bir kez manuel giriş yapabilirsiniz.",
+                    "Bilgi",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Oturum açma hatası:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _btnAutoLogin.Enabled = true;
+            _btnAutoLogin.Text = "⚡ Otomatik Giriş Yap";
+            _lblSubtitle.Text = "api.arasglobalcargo.com Canlı API: Widect, UPS, FedEx Anlık Navlun Teklifleri";
+        }
     }
 
     private Control BuildMainBody()
