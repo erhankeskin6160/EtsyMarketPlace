@@ -764,8 +764,9 @@ internal sealed class AiListingImageForm : Form
         _btnBatchProcess.Width = 348;
         _btnBatchProcess.Height = 32;
         _btnBatchProcess.Text = "🎯 4'lü Sahne Toplu Üret (Batch)";
-        _btnBatchProcess.NormalColor = Color.FromArgb(30, 41, 59);
-        _btnBatchProcess.HoverColor = Color.FromArgb(45, 55, 75);
+        _btnBatchProcess.NormalColor = UiStyle.SecondaryColor;
+        _btnBatchProcess.HoverColor = UiStyle.SecondaryHover;
+        _btnBatchProcess.ForeColor = UiStyle.TextDark;
         _btnBatchProcess.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
         _btnBatchProcess.Margin = new Padding(0, 0, 0, 2);
         _btnBatchProcess.Click += async (_, _) => await RunBatchSceneGenerationAsync();
