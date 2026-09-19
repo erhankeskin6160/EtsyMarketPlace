@@ -163,10 +163,10 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         }
         else if (fileName.Contains("navlungo", StringComparison.OrdinalIgnoreCase))
         {
-            // Navlungo Mor & Turuncu Logo
-            using var purpleBrush = new SolidBrush(Color.FromArgb(91, 33, 182));
+            // Navlungo Resmi Mavi Logo
+            using var blueBrush = new SolidBrush(Color.FromArgb(0, 0, 255));
             using var fontBold = new Font("Segoe UI Black", 16F, FontStyle.Bold);
-            g.DrawString("navlungo", fontBold, purpleBrush, new PointF(15, 26));
+            g.DrawString("Navlungo", fontBold, blueBrush, new PointF(15, 26));
         }
         else
         {
