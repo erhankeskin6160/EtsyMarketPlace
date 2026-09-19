@@ -87,6 +87,23 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     {
         try
         {
+            // 1. Önce doğrudan Assembly Manifest Resources (EmbeddedResource) içini tara
+            var asm = typeof(AnimatedShippingComparisonDrawer).Assembly;
+            var resNames = asm.GetManifestResourceNames();
+            var matchedRes = resNames.FirstOrDefault(r => r.EndsWith(fileName, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(matchedRes))
+            {
+                using var resStream = asm.GetManifestResourceStream(matchedRes);
+                if (resStream != null)
+                {
+                    using var ms = new MemoryStream();
+                    resStream.CopyTo(ms);
+                    ms.Position = 0;
+                    return Image.FromStream(ms);
+                }
+            }
+
+            // 2. Diskteki fiziksel yolları kontrol et
             string[] probePaths =
             {
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Shipping", fileName),
@@ -106,7 +123,42 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         }
         catch { }
 
-        return null;
+        // 3. Fallback: Dinamik Vektörel Kurumsal Logo Çiz
+        return CreateFallbackLogo(fileName);
+    }
+
+    private static Image CreateFallbackLogo(string fileName)
+    {
+        var bmp = new Bitmap(160, 90);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.Clear(Color.White);
+
+        if (fileName.Contains("aras", StringComparison.OrdinalIgnoreCase))
+        {
+            // Aras Global Kırmızı Logo
+            using var brush = new SolidBrush(Color.FromArgb(220, 38, 38)); // Red 600
+            Point[] triangle = { new(110, 15), new(150, 75), new(110, 75) };
+            g.FillPolygon(brush, triangle);
+
+            using var fontBold = new Font("Segoe UI Black", 18F, FontStyle.Bold);
+            g.DrawString("aras", fontBold, brush, new PointF(10, 18));
+            using var fontGray = new Font("Segoe UI Semibold", 10F, FontStyle.Bold);
+            using var grayBrush = new SolidBrush(Color.FromArgb(71, 85, 105));
+            g.DrawString("global", fontGray, grayBrush, new PointF(14, 50));
+        }
+        else
+        {
+            // ShipEntegra Zümrüt & Lacivert Logo
+            using var hexBrush = new LinearGradientBrush(new Rectangle(10, 15, 45, 60), Color.FromArgb(14, 165, 233), Color.FromArgb(16, 185, 129), 45f);
+            g.FillRectangle(hexBrush, 15, 20, 35, 50);
+
+            using var fontBold = new Font("Segoe UI Black", 12F, FontStyle.Bold);
+            using var darkBrush = new SolidBrush(Color.FromArgb(30, 41, 59));
+            g.DrawString("ShipEntegra", fontBold, darkBrush, new PointF(55, 30));
+        }
+
+        return bmp;
     }
 
     private void AnimTimer_Tick(object? sender, EventArgs e)
@@ -657,14 +709,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             BackColor = Color.Transparent
         };
 
-        if (quote.Provider == "Aras Global")
-        {
-            picLogo.Image = _arasLogo;
-        }
-        else
-        {
-            picLogo.Image = _shipEntegraLogo;
-        }
+        var logoImg = (quote.Provider == "Aras Global" ? _arasLogo : _shipEntegraLogo) 
+                      ?? (quote.Provider == "Aras Global" ? CreateFallbackLogo("aras") : CreateFallbackLogo("shipentegra"));
+        picLogo.Image = logoImg;
 
         pnlLogoBox.Controls.Add(picLogo);
         layout.Controls.Add(pnlLogoBox, 0, 0);
