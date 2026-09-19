@@ -254,6 +254,30 @@ internal sealed class ProfitCalculatorForm : Form
         flow.Controls.Add(CreateSectionHeader("📦 Ürün, Kargo & Reklam Maliyetleri"));
         flow.Controls.Add(CreateInputFieldWithTry("Ürün Üretim / Hammadde ($)", _materialCostInput, _materialCostTryLabel));
         flow.Controls.Add(CreateInputFieldWithTry("Satıcı Kargo Maliyeti ($)", _sellerShippingCostInput, _sellerShippingCostTryLabel));
+
+        var btnArasShipping = new Button
+        {
+            Text = "🚚 Aras Global'den Kargo Fiyatı Çek",
+            Height = 30,
+            Width = 330,
+            BackColor = Color.FromArgb(30, 58, 138),
+            ForeColor = Color.FromArgb(56, 189, 248),
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+            Margin = new Padding(4, 2, 4, 8)
+        };
+        btnArasShipping.FlatAppearance.BorderColor = Color.FromArgb(56, 189, 248);
+        btnArasShipping.FlatAppearance.BorderSize = 1;
+        btnArasShipping.Click += (_, _) =>
+        {
+            using var arasForm = new ArasGlobalShippingCalculatorForm();
+            if (arasForm.ShowDialog(this) == DialogResult.OK && arasForm.SelectedOffer != null)
+            {
+                _sellerShippingCostInput.Value = arasForm.SelectedOffer.Price;
+            }
+        };
+        flow.Controls.Add(btnArasShipping);
         flow.Controls.Add(CreateInputFieldWithTry("Ambalaj & Paketleme Maliyeti ($)", _packagingCostInput, null));
         flow.Controls.Add(CreateInputFieldWithTry("Etsy İçi Reklam / İlan Başı ($)", _adCostInput, null));
 

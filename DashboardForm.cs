@@ -1444,6 +1444,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("batch", "Toplu İşlem Kuyruğu", "📦", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("shop_vault", "Mağaza Yedek & Transfer", "🛡️", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("profit", "Kâr Simülatörü", "💰", "Otomasyon & Araçlar");
+        _sidebarNav.AddItem("aras_shipping", "Aras Global Kargo", "🚚", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("ai_usage", "AI Token & Bakiye Takip", "📊", "Otomasyon & Araçlar", "YENİ");
@@ -1659,6 +1660,7 @@ internal sealed class DashboardForm : Form
             "shop_vault" => new ShopVaultForm(),
             "viral_3d" => new Trending3DModelHunterForm(),
             "profit" => new ProfitCalculatorForm(),
+            "aras_shipping" => new ArasGlobalShippingCalculatorForm(),
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),
             "ai_usage" => new AiUsageDashboardForm(),
