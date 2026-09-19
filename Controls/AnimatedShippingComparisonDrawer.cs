@@ -50,6 +50,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     // Logolar
     private readonly Image? _arasLogo;
     private readonly Image? _shipEntegraLogo;
+    private static Image? _upsLogo;
+    private static Image? _widectLogo;
     private static readonly Dictionary<string, Image> _carrierLogoCache = new(StringComparer.OrdinalIgnoreCase);
 
     // Servisler
@@ -76,6 +78,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         // Logoları yükle
         _arasLogo = LoadLogoSafely("aras_global.png");
         _shipEntegraLogo = LoadLogoSafely("shipentegra.jpg") ?? LoadLogoSafely("shipentegra.png");
+        _upsLogo ??= LoadLogoSafely("ups.png");
+        _widectLogo ??= LoadLogoSafely("widect.png");
 
         _animTimer.Tick += AnimTimer_Tick;
 
@@ -164,29 +168,51 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     }
 
     /// <summary>
-    /// Taşıyıcı firmanın (UPS, FedEx, Widect, TNT vb.) yüksek kaliteli mini kurumsal logosunu üretir.
+    /// Taşıyıcı firmanın (UPS, Widect, FedEx, TNT vb.) yüksek kaliteli kurumsal logosunu döner veya üretir.
     /// </summary>
     private static Image GetCarrierMiniLogo(string subCarrier, string serviceName)
     {
         string key = $"{subCarrier}_{serviceName}".ToLowerInvariant();
         if (_carrierLogoCache.TryGetValue(key, out var cached)) return cached;
 
-        var bmp = new Bitmap(56, 28);
+        // 1. Widect Resmi Logosu
+        if (key.Contains("widect"))
+        {
+            _widectLogo ??= LoadLogoSafely("widect.png");
+            if (_widectLogo != null)
+            {
+                _carrierLogoCache[key] = _widectLogo;
+                return _widectLogo;
+            }
+        }
+
+        // 2. UPS Resmi Logosu
+        if (key.Contains("ups"))
+        {
+            _upsLogo ??= LoadLogoSafely("ups.png");
+            if (_upsLogo != null)
+            {
+                _carrierLogoCache[key] = _upsLogo;
+                return _upsLogo;
+            }
+        }
+
+        var bmp = new Bitmap(68, 36);
         using var g = Graphics.FromImage(bmp);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
         if (key.Contains("ups"))
         {
-            // UPS: Kahverengi kalkan ve altın sarısı "ups"
+            // UPS Fallback: Kahverengi kalkan ve altın sarısı "ups"
             g.Clear(Color.FromArgb(53, 26, 12)); // UPS Brown
             using var shieldBrush = new SolidBrush(Color.FromArgb(255, 181, 0)); // UPS Gold
-            Point[] shield = { new(28, 2), new(52, 6), new(46, 22), new(28, 26), new(10, 22), new(4, 6) };
+            Point[] shield = { new(34, 2), new(62, 7), new(54, 28), new(34, 34), new(14, 28), new(6, 7) };
             g.DrawPolygon(new Pen(Color.FromArgb(255, 181, 0), 1.5f), shield);
 
-            using var font = new Font("Segoe UI Black", 9F, FontStyle.Bold);
+            using var font = new Font("Segoe UI Black", 10F, FontStyle.Bold);
             using var textBrush = new SolidBrush(Color.FromArgb(255, 181, 0));
-            g.DrawString("ups", font, textBrush, new PointF(15, 6));
+            g.DrawString("ups", font, textBrush, new PointF(18, 8));
         }
         else if (key.Contains("fedex") || key.Contains("smart"))
         {
@@ -195,16 +221,16 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             using var borderPen = new Pen(Color.FromArgb(203, 213, 225), 1f);
             g.DrawRectangle(borderPen, 0, 0, bmp.Width - 1, bmp.Height - 1);
 
-            using var font = new Font("Segoe UI Black", 9.5F, FontStyle.Bold);
+            using var font = new Font("Segoe UI Black", 10.5F, FontStyle.Bold);
             using var purpleBrush = new SolidBrush(Color.FromArgb(77, 20, 140)); // FedEx Purple
             using var orangeBrush = new SolidBrush(Color.FromArgb(255, 102, 0)); // FedEx Orange
 
-            g.DrawString("Fed", font, purpleBrush, new PointF(4, 5));
-            g.DrawString("Ex", font, orangeBrush, new PointF(29, 5));
+            g.DrawString("Fed", font, purpleBrush, new PointF(6, 7));
+            g.DrawString("Ex", font, orangeBrush, new PointF(35, 7));
         }
         else if (key.Contains("widect"))
         {
-            // Widect: Koyu lacivert zemin, mavi/turuncu kanat
+            // Widect Fallback: Koyu zemin, mavi/turuncu kanat
             g.Clear(Color.FromArgb(15, 23, 42));
             using var pen = new Pen(Color.FromArgb(14, 165, 233), 1f);
             g.DrawRectangle(pen, 0, 0, bmp.Width - 1, bmp.Height - 1);
@@ -212,20 +238,20 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             using var cyanBrush = new SolidBrush(Color.FromArgb(56, 189, 248));
             using var orangeBrush = new SolidBrush(Color.FromArgb(251, 146, 60));
 
-            Point[] wing = { new(6, 6), new(18, 14), new(6, 22) };
+            Point[] wing = { new(6, 8), new(20, 18), new(6, 28) };
             g.FillPolygon(cyanBrush, wing);
 
-            using var font = new Font("Segoe UI Black", 8F, FontStyle.Bold);
-            g.DrawString("WID", font, cyanBrush, new PointF(18, 7));
-            g.DrawString("ECT", font, orangeBrush, new PointF(36, 7));
+            using var font = new Font("Segoe UI Black", 9F, FontStyle.Bold);
+            g.DrawString("WID", font, cyanBrush, new PointF(22, 10));
+            g.DrawString("ECT", font, orangeBrush, new PointF(42, 10));
         }
         else if (key.Contains("tnt"))
         {
             // TNT: Turuncu zemin, beyaz yazı
             g.Clear(Color.FromArgb(234, 88, 12));
-            using var font = new Font("Segoe UI Black", 9.5F, FontStyle.Bold);
+            using var font = new Font("Segoe UI Black", 10.5F, FontStyle.Bold);
             using var brush = new SolidBrush(Color.White);
-            g.DrawString("TNT", font, brush, new PointF(12, 5));
+            g.DrawString("TNT", font, brush, new PointF(15, 7));
         }
         else
         {
@@ -234,9 +260,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             using var pen = new Pen(Color.FromArgb(16, 185, 129), 1f);
             g.DrawRectangle(pen, 0, 0, bmp.Width - 1, bmp.Height - 1);
 
-            using var font = new Font("Segoe UI Black", 8F, FontStyle.Bold);
+            using var font = new Font("Segoe UI Black", 9F, FontStyle.Bold);
             using var brush = new SolidBrush(Color.FromArgb(52, 211, 153));
-            g.DrawString("⚡EKO", font, brush, new PointF(8, 7));
+            g.DrawString("⚡EKO", font, brush, new PointF(11, 9));
         }
 
         _carrierLogoCache[key] = bmp;
@@ -760,21 +786,26 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             RowCount = 1,
             BackColor = Color.Transparent
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 86));  // 0: Ana Sağlayıcı Logosu (Aras / ShipEntegra)
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 62));  // 1: Taşıyıcı Firma Resmi (UPS, FedEx, Widect vb.)
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));  // 0: Ana Sağlayıcı Logosu (Aras / ShipEntegra)
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 74));  // 1: Taşıyıcı Firma Resmi (UPS, Widect, FedEx vb.)
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // 2: Servis, Hat & Detay Bilgisi
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // 3: En Uygun Rozeti
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); // 3: En Uygun Rozeti
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125)); // 4: Fiyat Bloğu ($ ve TL)
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145)); // 5: Bu Teklifi Kullan Butonu
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); // 5: Bu Teklifi Kullan Butonu
 
         // 1. SÜTUN: ANA SAĞLAYICI LOGO KUTUSU
         var pnlLogoBox = new Panel
         {
-            Width = 78,
-            Height = 54,
+            Width = 76,
+            Height = 48,
             BackColor = Color.FromArgb(248, 250, 252), // Temiz beyaz/açık zemin
             Padding = new Padding(4),
-            Margin = new Padding(0, 2, 8, 2)
+            Margin = new Padding(0, 4, 6, 2)
+        };
+        pnlLogoBox.Paint += (s, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(226, 232, 240), 1f);
+            e.Graphics.DrawRectangle(pen, 0, 0, pnlLogoBox.Width - 1, pnlLogoBox.Height - 1);
         };
 
         var picLogo = new PictureBox
@@ -791,13 +822,19 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         pnlLogoBox.Controls.Add(picLogo);
         layout.Controls.Add(pnlLogoBox, 0, 0);
 
-        // 2. SÜTUN: TAŞIYICI FİRMA RESMİ / LOGOSU (UPS, FedEx, Widect, TNT vb.)
+        // 2. SÜTUN: TAŞIYICI FİRMA RESMİ / LOGOSU (UPS, Widect, FedEx, TNT vb.)
         var pnlCarrierLogoBox = new Panel
         {
-            Width = 56,
-            Height = 36,
-            BackColor = Color.Transparent,
-            Margin = new Padding(0, 10, 6, 2)
+            Width = 68,
+            Height = 44,
+            BackColor = Color.FromArgb(248, 250, 252), // Temiz beyaz/açık zemin (Widect siyah yazısı ve UPS kalkanı için ferah kontrast)
+            Padding = new Padding(3),
+            Margin = new Padding(0, 6, 6, 2)
+        };
+        pnlCarrierLogoBox.Paint += (s, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(226, 232, 240), 1f);
+            e.Graphics.DrawRectangle(pen, 0, 0, pnlCarrierLogoBox.Width - 1, pnlCarrierLogoBox.Height - 1);
         };
 
         var picCarrier = new PictureBox
