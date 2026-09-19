@@ -255,17 +255,25 @@ internal sealed class ProfitCalculatorForm : Form
         flow.Controls.Add(CreateInputFieldWithTry("Ürün Üretim / Hammadde ($)", _materialCostInput, _materialCostTryLabel));
         flow.Controls.Add(CreateInputFieldWithTry("Satıcı Kargo Maliyeti ($)", _sellerShippingCostInput, _sellerShippingCostTryLabel));
 
+        var pnlShippingButtons = new FlowLayoutPanel
+        {
+            FlowDirection = FlowDirection.LeftToRight,
+            Width = 340,
+            Height = 36,
+            Margin = new Padding(4, 2, 4, 8)
+        };
+
         var btnArasShipping = new Button
         {
-            Text = "🚚 Aras Global'den Kargo Fiyatı Çek",
+            Text = "🚚 Aras Global",
             Height = 30,
-            Width = 330,
+            Width = 162,
             BackColor = Color.FromArgb(30, 58, 138),
             ForeColor = Color.FromArgb(56, 189, 248),
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
             Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
-            Margin = new Padding(4, 2, 4, 8)
+            Margin = new Padding(0, 0, 8, 0)
         };
         btnArasShipping.FlatAppearance.BorderColor = Color.FromArgb(56, 189, 248);
         btnArasShipping.FlatAppearance.BorderSize = 1;
@@ -277,7 +285,33 @@ internal sealed class ProfitCalculatorForm : Form
                 _sellerShippingCostInput.Value = arasForm.SelectedOffer.Price;
             }
         };
-        flow.Controls.Add(btnArasShipping);
+
+        var btnShipEntegra = new Button
+        {
+            Text = "📦 ShipEntegra",
+            Height = 30,
+            Width = 162,
+            BackColor = Color.FromArgb(20, 83, 45), // Forest green
+            ForeColor = Color.FromArgb(74, 222, 128), // Light emerald
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI Semibold", 8F, FontStyle.Bold),
+            Margin = new Padding(0)
+        };
+        btnShipEntegra.FlatAppearance.BorderColor = Color.FromArgb(74, 222, 128);
+        btnShipEntegra.FlatAppearance.BorderSize = 1;
+        btnShipEntegra.Click += (_, _) =>
+        {
+            using var seForm = new ShipEntegraShippingCalculatorForm();
+            if (seForm.ShowDialog(this) == DialogResult.OK && seForm.SelectedOffer != null)
+            {
+                _sellerShippingCostInput.Value = seForm.SelectedOffer.TotalPrice;
+            }
+        };
+
+        pnlShippingButtons.Controls.Add(btnArasShipping);
+        pnlShippingButtons.Controls.Add(btnShipEntegra);
+        flow.Controls.Add(pnlShippingButtons);
         flow.Controls.Add(CreateInputFieldWithTry("Ambalaj & Paketleme Maliyeti ($)", _packagingCostInput, null));
         flow.Controls.Add(CreateInputFieldWithTry("Etsy İçi Reklam / İlan Başı ($)", _adCostInput, null));
 
