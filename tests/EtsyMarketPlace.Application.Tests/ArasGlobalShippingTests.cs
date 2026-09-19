@@ -66,8 +66,13 @@ public sealed class ArasGlobalShippingTests
         // Widect ve UPS tekliflerinin bulunması beklenir
         var widect = offers.FirstOrDefault(o => o.Cargo.Contains("Widect", StringComparison.OrdinalIgnoreCase));
         Assert.NotNull(widect);
-        Assert.True(widect.Price > 0);
+        Assert.Equal(13.13m, widect.Price);
         Assert.Equal("USD", widect.Currency);
+
+        var ups = offers.FirstOrDefault(o => o.Cargo.Contains("UPS", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(ups);
+        Assert.Equal(21.16m, ups.Price);
+        Assert.Equal("USD", ups.Currency);
     }
 
     [Fact]

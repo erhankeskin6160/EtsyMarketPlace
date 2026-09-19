@@ -411,6 +411,15 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
 
         try
         {
+            // Kullanıcı kutucuğa yeni token yapıştırdıysa otomatik olarak kaydet
+            string enteredToken = _txtBearerToken.Text.Trim();
+            if (!string.IsNullOrWhiteSpace(enteredToken) && _settings.BearerToken != enteredToken)
+            {
+                _settings.BearerToken = enteredToken;
+                _settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                ArasGlobalSettingsStore.Save(_settings);
+            }
+
             string countryCode = _cmbCountry.Text[..2].Trim();
             var req = new ArasGlobalQuoteRequest
             {
@@ -440,6 +449,8 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
                 _badgeStatus.ForeColor = Color.FromArgb(254, 202, 202);
 
                 _alertBanner.Visible = true;
+                _alertBanner.BackColor = Color.FromArgb(69, 26, 3);
+                _lblAlertMessage.ForeColor = Color.FromArgb(254, 215, 170);
                 _lblAlertMessage.Text = result.StatusMessage;
             }
             else
@@ -447,7 +458,18 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
                 _badgeStatus.Text = "🟡 Yedek Fiyat Listesi";
                 _badgeStatus.BackColor = Color.FromArgb(120, 53, 15);
                 _badgeStatus.ForeColor = Color.FromArgb(253, 230, 138);
-                _alertBanner.Visible = false;
+
+                if (!string.IsNullOrWhiteSpace(result.StatusMessage))
+                {
+                    _alertBanner.Visible = true;
+                    _alertBanner.BackColor = Color.FromArgb(40, 45, 60);
+                    _lblAlertMessage.ForeColor = Color.FromArgb(203, 213, 225);
+                    _lblAlertMessage.Text = result.StatusMessage;
+                }
+                else
+                {
+                    _alertBanner.Visible = false;
+                }
             }
 
             RenderOfferCards(result.Offers);

@@ -146,9 +146,9 @@ public sealed class ArasGlobalPricingService
     /// </summary>
     public static List<ArasGlobalQuoteOffer> GenerateFallbackOffers(double billableWeightKg, string countryCode)
     {
-        // ABD (US) için kullanıcının canlı test ettiği baz fiyatlar (0.4 kg: Widect $13.13, UPS $21.16)
-        double weightStep = Math.Max(0.5, Math.Ceiling(billableWeightKg * 2.0) / 2.0); // 0.5 kg kademeleri
-        double extraUnits = Math.Max(0, (weightStep - 0.5) / 0.5);
+        // ABD (US) için kullanıcının canlı test ettiği baz fiyatlar (1.0 kg/desiye kadar baz kademe: Widect $13.13, UPS $21.16)
+        double weightStep = Math.Max(1.0, Math.Ceiling(billableWeightKg * 2.0) / 2.0);
+        double extraUnits = Math.Max(0, (weightStep - 1.0) / 0.5);
 
         decimal widectBase = 13.13m + ((decimal)extraUnits * 2.40m);
         decimal upsBase = 21.16m + ((decimal)extraUnits * 3.80m);
