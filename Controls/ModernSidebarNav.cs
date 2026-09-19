@@ -114,7 +114,7 @@ public class ModernSidebarNav : UserControl, IMessageFilter
         Dock = DockStyle.Left;
         Width = DefaultExpandedWidth;
         BackColor = NavBackColor;
-        Font = new Font("Segoe UI", 9.5F);
+        Font = new Font("Verdana", 9F);
 
         _animTimer.Interval = 450;
         _animTimer.Tick += (s, e) =>
@@ -521,7 +521,7 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                 {
                     if (yOffset + 24 >= 55 && yOffset <= Height)
                     {
-                        using var catFont = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold);
+                        using var catFont = new Font("Verdana", 7.5F, FontStyle.Bold);
                         using var catBrush = new SolidBrush(TextMutedColor);
                         g.DrawString(item.Category.ToUpperInvariant(), catFont, catBrush, new PointF(14, yOffset + 3));
                     }
