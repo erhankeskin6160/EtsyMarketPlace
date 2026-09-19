@@ -934,6 +934,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         // 3. Navlungo Sorgusu
         var navSettings = NavlungoSettingsStore.Load();
+        string? navlungoError = null;
         var navlungoTask = Task.Run(async () =>
         {
             try
@@ -950,8 +951,16 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 };
                 return await _navlungoApiClient.FetchLiveQuotesAsync(req, navSettings);
             }
-            catch
+            catch (NavlungoApiException ex)
             {
+                navlungoError = ex.StatusCode is { } status
+                    ? $"HTTP {(int)status}: {ex.Message}"
+                    : ex.Message;
+                return new List<NavlungoQuoteOffer>();
+            }
+            catch (Exception ex)
+            {
+                navlungoError = ex.Message;
                 return new List<NavlungoQuoteOffer>();
             }
         });
@@ -1037,8 +1046,12 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         }
         else
         {
-            _lblStatus.Text = $"✅ {_loadedQuotes.Count} adet alternatif kargo teklifi bulundu.";
-            _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
+            _lblStatus.Text = navlungoError is null
+                ? $"✅ {_loadedQuotes.Count} adet alternatif kargo teklifi bulundu."
+                : $"✅ {_loadedQuotes.Count} adet alternatif kargo teklifi bulundu. ⚠️ Navlungo: {navlungoError}";
+            _lblStatus.ForeColor = navlungoError is null
+                ? Color.FromArgb(52, 211, 153)
+                : Color.FromArgb(251, 191, 36);
         }
 
         RenderFilteredOffers();

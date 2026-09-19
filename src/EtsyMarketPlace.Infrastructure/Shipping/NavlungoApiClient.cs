@@ -3,6 +3,7 @@ namespace EtsyMarketPlace.Infrastructure.Shipping;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -11,6 +12,22 @@ using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Domain.Shipping;
+
+/// <summary>
+/// Navlungo canlı fiyat isteğinin başarısız olduğunu, yedek fiyatla gizlemeden taşıyan hata.
+/// </summary>
+public sealed class NavlungoApiException : Exception
+{
+    public HttpStatusCode? StatusCode { get; }
+    public string ResponseBody { get; }
+
+    public NavlungoApiException(string message, HttpStatusCode? statusCode = null, string responseBody = "", Exception? innerException = null)
+        : base(message, innerException)
+    {
+        StatusCode = statusCode;
+        ResponseBody = responseBody;
+    }
+}
 
 /// <summary>
 /// Navlungo (quick-price-calculator.navlungo.com) canlı fiyat hesaplama istemcisi.
@@ -31,82 +48,98 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         NavlungoSettings? settings = null,
         CancellationToken cancellationToken = default)
     {
-        var offers = new List<NavlungoQuoteOffer>();
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseEndpoint);
 
+        httpRequest.Headers.TryAddWithoutValidation("Accept", "text/x-component");
+        httpRequest.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+        httpRequest.Headers.TryAddWithoutValidation("Origin", "https://ship.navlungo.com");
+        httpRequest.Headers.TryAddWithoutValidation("Referer", "https://ship.navlungo.com/");
+
+        var cookieBuilder = new StringBuilder();
+        if (settings != null)
+        {
+            if (!string.IsNullOrWhiteSpace(settings.IdToken))
+            {
+                cookieBuilder.Append($"id_token={settings.IdToken.Trim()}; ");
+            }
+            if (!string.IsNullOrWhiteSpace(settings.SessionCookie))
+            {
+                cookieBuilder.Append(settings.SessionCookie.Trim());
+            }
+        }
+
+        if (cookieBuilder.Length > 0)
+        {
+            httpRequest.Headers.TryAddWithoutValidation("Cookie", cookieBuilder.ToString());
+        }
+
+        var payload = new[]
+        {
+            new
+            {
+                fromCountry = string.IsNullOrWhiteSpace(request.FromCountry) ? "TR" : request.FromCountry.ToUpperInvariant(),
+                toCountry = string.IsNullOrWhiteSpace(request.ToCountry) ? "US" : request.ToCountry.ToUpperInvariant(),
+                packages = new[]
+                {
+                    new
+                    {
+                        weight = Math.Round(request.WeightKg, 2),
+                        length = Math.Round(request.LengthCm, 1),
+                        width = Math.Round(request.WidthCm, 1),
+                        height = Math.Round(request.HeightCm, 1)
+                    }
+                },
+                source = string.IsNullOrWhiteSpace(request.Source) ? "user" : request.Source
+            }
+        };
+
+        httpRequest.Content = new StringContent(
+            JsonSerializer.Serialize(payload),
+            Encoding.UTF8,
+            "text/plain");
+
+        HttpResponseMessage response;
         try
         {
-            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseEndpoint);
-            
-            // Navlungo DevTools başlıkları:
-            httpRequest.Headers.TryAddWithoutValidation("Accept", "text/x-component");
-            httpRequest.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
-            httpRequest.Headers.TryAddWithoutValidation("Origin", "https://ship.navlungo.com");
-            httpRequest.Headers.TryAddWithoutValidation("Referer", "https://ship.navlungo.com/");
-
-            // Varsa id_token veya oturum çerezlerini Cookie başlığına ekle
-            var cookieBuilder = new StringBuilder();
-            if (settings != null)
-            {
-                if (!string.IsNullOrWhiteSpace(settings.IdToken))
-                {
-                    cookieBuilder.Append($"id_token={settings.IdToken.Trim()}; ");
-                }
-                if (!string.IsNullOrWhiteSpace(settings.SessionCookie))
-                {
-                    cookieBuilder.Append(settings.SessionCookie.Trim());
-                }
-            }
-
-            if (cookieBuilder.Length > 0)
-            {
-                httpRequest.Headers.TryAddWithoutValidation("Cookie", cookieBuilder.ToString());
-            }
-
-            // DevTools Payload formatı:
-            // [{"fromCountry":"TR","toCountry":"US","packages":[{"weight":0.4,"length":15,"width":20,"height":10}],"source":"user"}]
-            var payload = new[]
-            {
-                new
-                {
-                    fromCountry = string.IsNullOrWhiteSpace(request.FromCountry) ? "TR" : request.FromCountry.ToUpperInvariant(),
-                    toCountry = string.IsNullOrWhiteSpace(request.ToCountry) ? "US" : request.ToCountry.ToUpperInvariant(),
-                    packages = new[]
-                    {
-                        new
-                        {
-                            weight = Math.Round(request.WeightKg, 2),
-                            length = Math.Round(request.LengthCm, 1),
-                            width = Math.Round(request.WidthCm, 1),
-                            height = Math.Round(request.HeightCm, 1)
-                        }
-                    },
-                    source = string.IsNullOrWhiteSpace(request.Source) ? "user" : request.Source
-                }
-            };
-
-            string jsonBody = JsonSerializer.Serialize(payload);
-            httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "text/plain");
-
-            using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-            if (response.IsSuccessStatusCode)
-            {
-                string content = await response.Content.ReadAsStringAsync(cancellationToken);
-                offers = ParseNavlungoResponse(content, request);
-            }
+            response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         }
-        catch
+        catch (OperationCanceledException)
         {
-            // Ağ hatası durumunda fallback mekanizmasına geç
+            throw;
         }
-
-        // Eğer canlı API yanıt vermezse (Cloudflare kısıtı vb.) kullanıcıyı yarı yolda bırakmamak için
-        // gerçekçi Navlungo piyasa tekliflerini türet:
-        if (offers.Count == 0)
+        catch (Exception ex)
         {
-            offers = GenerateRealisticFallbackQuotes(request);
+            throw new NavlungoApiException("Navlungo fiyat isteği gönderilemedi.", innerException: ex);
         }
 
-        return offers;
+        using (response)
+        {
+            string content = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new NavlungoApiException(
+                    $"Navlungo HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).",
+                    response.StatusCode,
+                    TruncateResponse(content));
+            }
+
+            var offers = ParseNavlungoResponse(content, request);
+            if (offers.Count == 0)
+            {
+                throw new NavlungoApiException(
+                    "Navlungo yanıtı alındı ancak teklif response içinden ayrıştırılamadı.",
+                    response.StatusCode,
+                    TruncateResponse(content));
+            }
+
+            return offers;
+        }
+    }
+
+    private static string TruncateResponse(string content)
+    {
+        const int maxLength = 4000;
+        return content.Length <= maxLength ? content : content[..maxLength];
     }
 
     /// <summary>
