@@ -480,9 +480,9 @@ internal sealed class AiListingImageForm : Form
 
     private static void UpdateLeftTabButtonStyle(Button btn, bool isActive)
     {
-        btn.BackColor = isActive ? Color.FromArgb(79, 70, 229) : Color.FromArgb(20, 28, 48);
+        btn.BackColor = isActive ? Color.FromArgb(79, 70, 229) : UiStyle.CardBackground;
         btn.ForeColor = isActive ? Color.White : Color.FromArgb(148, 163, 184);
-        btn.FlatAppearance.BorderColor = isActive ? Color.FromArgb(99, 102, 241) : Color.FromArgb(45, 55, 75);
+        btn.FlatAppearance.BorderColor = isActive ? Color.FromArgb(99, 102, 241) : UiStyle.BorderColor;
     }
 
     private Control BuildLeftControlsPanel()
@@ -503,7 +503,8 @@ internal sealed class AiListingImageForm : Form
             RowCount = 3,
             ColumnCount = 1,
             Margin = Padding.Empty,
-            Padding = Padding.Empty
+            Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // 0: Segmented Tab Bar
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 1: Scrollable Tab Content
@@ -516,7 +517,8 @@ internal sealed class AiListingImageForm : Form
             ColumnCount = 3,
             RowCount = 1,
             Margin = new Padding(0, 0, 0, 8),
-            Padding = Padding.Empty
+            Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground
         };
         tabBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
         tabBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
@@ -536,7 +538,8 @@ internal sealed class AiListingImageForm : Form
         {
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
-            Padding = Padding.Empty
+            Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground
         };
 
         var tabsContainer = new Panel
@@ -545,7 +548,8 @@ internal sealed class AiListingImageForm : Form
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
-            Padding = Padding.Empty
+            Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground
         };
 
         // Tab 1: Temel Ayarlar (Image Dropzone, Title, Engine)
@@ -557,7 +561,8 @@ internal sealed class AiListingImageForm : Form
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
-            Padding = Padding.Empty
+            Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground
         };
 
         _pnlFormTabBasic.Controls.Add(new Label
@@ -579,7 +584,7 @@ internal sealed class AiListingImageForm : Form
         _pnlFormTabBasic.Controls.Add(_dropZone);
 
         // Quick Browse / Shop buttons with generous height and spacing
-        var btnGrid = new TableLayoutPanel { Width = 348, Height = 38, Margin = new Padding(0, 0, 0, 16), ColumnCount = 2 };
+        var btnGrid = new TableLayoutPanel { Width = 348, Height = 38, Margin = new Padding(0, 0, 0, 16), ColumnCount = 2, BackColor = UiStyle.CardBackground };
         btnGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         btnGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
 
@@ -610,6 +615,8 @@ internal sealed class AiListingImageForm : Form
         _productTitleTxt.Width = 348;
         _productTitleTxt.Font = new Font("Segoe UI", 9.5F);
         _productTitleTxt.PlaceholderText = "Örn: Handcrafted Ceramic Coffee Mug";
+        _productTitleTxt.BackColor = UiStyle.InputBackground;
+        _productTitleTxt.ForeColor = UiStyle.TextDark;
         _productTitleTxt.Margin = new Padding(0, 0, 0, 16);
         _productTitleTxt.TextChanged += (_, _) => OnScenePresetSelected(_presetChips.SelectedPreset);
         _pnlFormTabBasic.Controls.Add(_productTitleTxt);
@@ -650,6 +657,7 @@ internal sealed class AiListingImageForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground,
             Visible = false
         };
 
@@ -676,7 +684,7 @@ internal sealed class AiListingImageForm : Form
         _presetChips.SelectedPresetChanged += (_, presetId) => OnScenePresetSelected(presetId);
         _pnlFormTabScene.Controls.Add(_presetChips);
 
-        var promptHeader = new TableLayoutPanel { Width = 348, Height = 34, Margin = new Padding(0, 0, 0, 8), ColumnCount = 2 };
+        var promptHeader = new TableLayoutPanel { Width = 348, Height = 34, Margin = new Padding(0, 0, 0, 8), ColumnCount = 2, BackColor = UiStyle.CardBackground };
         promptHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 42));
         promptHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 58));
         promptHeader.Controls.Add(new Label
@@ -726,10 +734,13 @@ internal sealed class AiListingImageForm : Form
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground,
             Visible = false
         };
 
         _engineOptionsContainer.Width = 348;
+        _engineOptionsContainer.BackColor = UiStyle.CardBackground;
+        _engineOptionsPanel.BackColor = UiStyle.CardBackground;
         _engineOptionsContainer.Controls.Clear();
         _engineOptionsContainer.Controls.Add(_engineOptionsPanel);
         _pnlFormTabEngine.Controls.Add(_engineOptionsContainer);

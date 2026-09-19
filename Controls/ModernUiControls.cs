@@ -1351,7 +1351,14 @@ public class ModernScrollPanel : Panel, IMessageFilter
     public override Color BackColor
     {
         get => GetEffectiveParentBackColor();
-        set { }
+        set
+        {
+            if (value != Color.Transparent && value != Color.Empty)
+            {
+                _viewport.BackColor = value;
+                if (_content != null) _content.BackColor = value;
+            }
+        }
     }
 
     public Color GetEffectiveParentBackColor()
@@ -1359,6 +1366,10 @@ public class ModernScrollPanel : Panel, IMessageFilter
         Control? p = Parent;
         while (p != null)
         {
+            if (p is ModernCardPanel cardPanel)
+            {
+                return cardPanel.CardColor;
+            }
             if (p.BackColor != Color.Transparent && p.BackColor.A == 255)
             {
                 return p.BackColor;
