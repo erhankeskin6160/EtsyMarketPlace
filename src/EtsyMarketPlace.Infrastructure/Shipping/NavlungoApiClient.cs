@@ -3,6 +3,7 @@ namespace EtsyMarketPlace.Infrastructure.Shipping;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -21,6 +22,9 @@ public sealed class NavlungoApiClient : INavlungoApiClient
     private readonly HttpClient _httpClient;
     private const string BaseEndpoint = "https://quick-price-calculator.navlungo.com/tr?source=user";
 
+    public const string AnonymousActionId = "407c7fce1b21c317e8f462a29fa67400476f149845";
+    public const string AuthenticatedActionId = "409666d23e69677ffd3313a55e305d6fe35c4d7b54";
+
     public NavlungoApiClient(HttpClient? httpClient = null)
     {
         _httpClient = httpClient ?? new HttpClient();
@@ -37,11 +41,15 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         {
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseEndpoint);
             
-            // Navlungo DevTools başlıkları:
+            bool hasSession = settings != null && (!string.IsNullOrWhiteSpace(settings.IdToken) || !string.IsNullOrWhiteSpace(settings.SessionCookie));
+            string actionId = hasSession ? AuthenticatedActionId : AnonymousActionId;
+
+            // Navlungo Next.js Server Action zorunlu başlıkları:
+            httpRequest.Headers.TryAddWithoutValidation("Next-Action", actionId);
             httpRequest.Headers.TryAddWithoutValidation("Accept", "text/x-component");
             httpRequest.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
-            httpRequest.Headers.TryAddWithoutValidation("Origin", "https://ship.navlungo.com");
-            httpRequest.Headers.TryAddWithoutValidation("Referer", "https://ship.navlungo.com/");
+            httpRequest.Headers.TryAddWithoutValidation("Origin", "https://quick-price-calculator.navlungo.com");
+            httpRequest.Headers.TryAddWithoutValidation("Referer", "https://quick-price-calculator.navlungo.com/tr?source=user");
 
             // Varsa id_token veya oturum çerezlerini Cookie başlığına ekle
             var cookieBuilder = new StringBuilder();
@@ -91,6 +99,15 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             if (response.IsSuccessStatusCode)
             {
                 string content = await response.Content.ReadAsStringAsync(cancellationToken);
+                
+                // Hata tespiti ve canlı izleme için son yanıtı kaydet
+                try
+                {
+                    string debugPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "navlungo_last_response.log");
+                    File.WriteAllText(debugPath, content);
+                }
+                catch { }
+
                 offers = ParseNavlungoResponse(content, request);
             }
         }
@@ -119,17 +136,26 @@ public sealed class NavlungoApiClient : INavlungoApiClient
 
         try
         {
-            // 1. JSON ayrıştırma denemesi (Eğer doğrudan JSON veya dizi döndüyse)
-            if (content.TrimStart().StartsWith("[") || content.TrimStart().StartsWith("{"))
+            // 1. Doğrudan JSON ayrıştırma denemesi (Eğer doğrudan JSON veya dizi döndüyse)
+            string trimmed = content.TrimStart();
+            if (trimmed.StartsWith("[") || trimmed.StartsWith("{"))
             {
-                using var doc = JsonDocument.Parse(content);
+                using var doc = JsonDocument.Parse(trimmed);
                 ExtractFromJsonElement(doc.RootElement, list);
                 if (list.Count > 0) return list;
             }
         }
         catch { }
 
-        // 2. RSC Streaming satır satır metin ayrıştırma
+        // 2. Next.js RSC streaming satırlarını ve chunk'larındaki JSON nesnelerini ayrıştır
+        try
+        {
+            ExtractFromRscJsonObjects(content, list);
+            if (list.Count > 0) return list;
+        }
+        catch { }
+
+        // 3. Metin/Regex tabanlı ayrıştırma (RSC string chunk'ları içerisindeki taşıyıcı ve fiyat kalıpları)
         // Örn: Widect USD 15.03, FedEx USD 20.75, UPS USD 32.96
         var carrierMatches = new[]
         {
@@ -191,6 +217,85 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         return list;
     }
 
+    private static void ExtractFromRscJsonObjects(string content, List<NavlungoQuoteOffer> list)
+    {
+        // 1. Metin içindeki ilk '[' ile son ']' arasındaki JSON dizisini ayrıştırmayı dene
+        int firstBracket = content.IndexOf('[');
+        int lastBracket = content.LastIndexOf(']');
+        if (firstBracket >= 0 && lastBracket > firstBracket)
+        {
+            string arrayCandidate = content.Substring(firstBracket, lastBracket - firstBracket + 1);
+            try
+            {
+                using var doc = JsonDocument.Parse(arrayCandidate);
+                ExtractFromJsonElement(doc.RootElement, list);
+                if (list.Count > 0) return;
+            }
+            catch { }
+        }
+
+        // 2. Standart RSC satır satır chunk ayrıştırma (id:[...] veya id:{...})
+        var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var line in lines)
+        {
+            int colonIdx = line.IndexOf(':');
+            string jsonCandidate = colonIdx >= 0 && colonIdx < 5 ? line.Substring(colonIdx + 1).Trim() : line.Trim();
+            if (jsonCandidate.StartsWith("[") || jsonCandidate.StartsWith("{"))
+            {
+                try
+                {
+                    using var doc = JsonDocument.Parse(jsonCandidate);
+                    ExtractFromJsonElement(doc.RootElement, list);
+                }
+                catch { }
+            }
+        }
+
+        if (list.Count > 0) return;
+
+        // 3. Dengeli süslü parantez { ... } bloklarını tarayarak JSON nesnelerini çıkar
+        int start = 0;
+        while ((start = content.IndexOf('{', start)) >= 0)
+        {
+            int braceCount = 0;
+            int end = -1;
+            for (int i = start; i < content.Length; i++)
+            {
+                if (content[i] == '{') braceCount++;
+                else if (content[i] == '}')
+                {
+                    braceCount--;
+                    if (braceCount == 0)
+                    {
+                        end = i;
+                        break;
+                    }
+                }
+            }
+
+            if (end > start)
+            {
+                string objStr = content.Substring(start, end - start + 1);
+                if (objStr.Contains("lastMile", StringComparison.OrdinalIgnoreCase) ||
+                    objStr.Contains("carrier", StringComparison.OrdinalIgnoreCase) ||
+                    objStr.Contains("price", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(objStr);
+                        ExtractFromJsonElement(doc.RootElement, list);
+                    }
+                    catch { }
+                }
+                start = end + 1;
+            }
+            else
+            {
+                start++;
+            }
+        }
+    }
+
     private static void ExtractFromJsonElement(JsonElement element, List<NavlungoQuoteOffer> list)
     {
         if (element.ValueKind == JsonValueKind.Array)
@@ -207,31 +312,89 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             string currency = "USD";
             string delivery = "1-4 iş günü";
             string serviceType = "Express";
+            bool isBestExpress = false;
+            bool isBestEconomy = false;
 
-            if (element.TryGetProperty("carrier", out var cProp)) carrier = cProp.GetString() ?? "";
+            // 1. lastMile kontrolü (Navlungo API standart yanıtı: thy -> Widect, fedex -> FedEx, ups -> UPS, dhl -> DHL)
+            if (element.TryGetProperty("lastMile", out var lmProp))
+            {
+                string rawLm = lmProp.GetString()?.ToLowerInvariant() ?? "";
+                carrier = rawLm switch
+                {
+                    "thy" => "Widect",
+                    "fedex" => "FedEx",
+                    "ups" => "UPS",
+                    "dhl" => "DHL",
+                    "yp" => "Navlungo",
+                    "navlungo" => "Navlungo",
+                    _ => rawLm.Length > 0 ? char.ToUpperInvariant(rawLm[0]) + rawLm.Substring(1) : "Navlungo"
+                };
+            }
+            else if (element.TryGetProperty("carrier", out var cProp)) carrier = cProp.GetString() ?? "";
             else if (element.TryGetProperty("name", out var nProp)) carrier = nProp.GetString() ?? "";
 
+            // 2. Fiyat kontrolü
             if (element.TryGetProperty("price", out var pProp))
             {
                 if (pProp.ValueKind == JsonValueKind.Number) price = pProp.GetDecimal();
                 else if (decimal.TryParse(pProp.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal p)) price = p;
             }
+            else if (element.TryGetProperty("amount", out var aProp))
+            {
+                if (aProp.ValueKind == JsonValueKind.Number) price = aProp.GetDecimal();
+                else if (decimal.TryParse(aProp.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal a)) price = a;
+            }
 
+            // 3. Para birimi
             if (element.TryGetProperty("currency", out var currProp)) currency = currProp.GetString() ?? "USD";
-            if (element.TryGetProperty("deliveryTime", out var dProp)) delivery = dProp.GetString() ?? delivery;
+
+            // 4. Servis tipi
+            if (element.TryGetProperty("serviceType", out var stProp))
+            {
+                string rawSt = stProp.GetString() ?? "";
+                if (rawSt.Equals("economy", StringComparison.OrdinalIgnoreCase)) serviceType = "Ekonomi";
+                else if (rawSt.Equals("express", StringComparison.OrdinalIgnoreCase)) serviceType = "Express";
+                else if (!string.IsNullOrWhiteSpace(rawSt)) serviceType = rawSt;
+            }
+
+            // 5. Teslimat süresi
+            if (element.TryGetProperty("minTransitTime", out var minT) && element.TryGetProperty("maxTransitTime", out var maxT))
+            {
+                if (minT.TryGetInt32(out int minDays) && maxT.TryGetInt32(out int maxDays))
+                {
+                    delivery = $"{minDays}-{maxDays} iş günü";
+                }
+            }
+            else if (element.TryGetProperty("deliveryTime", out var dProp)) delivery = dProp.GetString() ?? delivery;
+
+            // 6. Etiketler (best-express-price, best-economy-price vb.)
+            if (element.TryGetProperty("tags", out var tagsProp) && tagsProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var tag in tagsProp.EnumerateArray())
+                {
+                    string t = tag.GetString() ?? "";
+                    if (t.Contains("best-express", StringComparison.OrdinalIgnoreCase)) isBestExpress = true;
+                    if (t.Contains("best-economy", StringComparison.OrdinalIgnoreCase)) isBestEconomy = true;
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(carrier) && price > 0)
             {
-                list.Add(new NavlungoQuoteOffer
+                if (!list.Exists(x => x.Carrier.Equals(carrier, StringComparison.OrdinalIgnoreCase) && x.Price == price && x.ServiceType.Equals(serviceType, StringComparison.OrdinalIgnoreCase)))
                 {
-                    Carrier = carrier,
-                    ServiceName = $"{carrier} {delivery}",
-                    ServiceType = serviceType,
-                    DeliveryEstimate = delivery,
-                    Price = price,
-                    Currency = currency,
-                    Note = "Navlungo API"
-                });
+                    list.Add(new NavlungoQuoteOffer
+                    {
+                        Carrier = carrier,
+                        ServiceName = $"{carrier} {delivery}",
+                        ServiceType = serviceType,
+                        DeliveryEstimate = delivery,
+                        Price = price,
+                        Currency = currency,
+                        IsBestExpress = isBestExpress,
+                        IsBestEconomy = isBestEconomy,
+                        Note = "Navlungo API Canlı Teklif"
+                    });
+                }
             }
         }
     }

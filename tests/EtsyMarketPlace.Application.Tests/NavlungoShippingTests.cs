@@ -44,6 +44,49 @@ public sealed class NavlungoShippingTests
     }
 
     [Fact]
+    public void ParseNavlungoResponse_ParsesRscJsonChunksWithLastMileMapping()
+    {
+        string mockRscJsonChunk = @"
+0:{""status"":""ok""}
+1:[{""lastMile"":""thy"",""price"":15.03,""currency"":""USD"",""serviceType"":""economy"",""minTransitTime"":3,""maxTransitTime"":7,""tags"":[""best-economy-price""]},
+   {""lastMile"":""fedex"",""price"":20.75,""currency"":""USD"",""serviceType"":""express"",""minTransitTime"":1,""maxTransitTime"":3,""tags"":[""best-express-price""]},
+   {""lastMile"":""ups"",""price"":32.96,""currency"":""USD"",""serviceType"":""express"",""minTransitTime"":1,""maxTransitTime"":3}]
+";
+        var req = new NavlungoQuoteRequest();
+        var offers = NavlungoApiClient.ParseNavlungoResponse(mockRscJsonChunk, req);
+
+        Assert.NotEmpty(offers);
+        Assert.Equal(3, offers.Count);
+
+        var widect = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(widect);
+        Assert.Equal(15.03m, widect.Price);
+        Assert.Equal("USD", widect.Currency);
+        Assert.Equal("Ekonomi", widect.ServiceType);
+        Assert.Equal("3-7 iş günü", widect.DeliveryEstimate);
+        Assert.True(widect.IsBestEconomy);
+
+        var fedex = offers.FirstOrDefault(o => o.Carrier.Equals("FedEx", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(fedex);
+        Assert.Equal(20.75m, fedex.Price);
+        Assert.Equal("Express", fedex.ServiceType);
+        Assert.Equal("1-3 iş günü", fedex.DeliveryEstimate);
+        Assert.True(fedex.IsBestExpress);
+
+        var ups = offers.FirstOrDefault(o => o.Carrier.Equals("UPS", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(ups);
+        Assert.Equal(32.96m, ups.Price);
+    }
+
+    [Fact]
+    public void NextActionIds_AreConfiguredProperly()
+    {
+        Assert.False(string.IsNullOrWhiteSpace(NavlungoApiClient.AnonymousActionId));
+        Assert.False(string.IsNullOrWhiteSpace(NavlungoApiClient.AuthenticatedActionId));
+        Assert.NotEqual(NavlungoApiClient.AnonymousActionId, NavlungoApiClient.AuthenticatedActionId);
+    }
+
+    [Fact]
     public void GenerateRealisticFallbackQuotes_ContainsWidectFedExAndUps()
     {
         var req = new NavlungoQuoteRequest
