@@ -747,7 +747,8 @@ internal sealed class AiListingImageForm : Form
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             Margin = new Padding(0, 8, 0, 0),
-            Padding = Padding.Empty
+            Padding = Padding.Empty,
+            BackColor = UiStyle.CardBackground
         };
 
         _btnProcess.Width = 348;
