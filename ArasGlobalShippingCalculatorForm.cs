@@ -154,6 +154,7 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
 
     private readonly IShippingSessionManager _sessionManager = new PuppeteerShippingSessionManager();
     private readonly Button _btnAutoLogin = new();
+    private readonly Button _btnBrowserLogin = new();
 
     private Control BuildTokenBar()
     {
@@ -168,14 +169,15 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 5,
+            ColumnCount = 6,
             RowCount = 2
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 85));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 175));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
 
         var lblToken = new Label
         {
@@ -191,7 +193,7 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         _txtBearerToken.BackColor = Color.FromArgb(15, 23, 42);
         _txtBearerToken.ForeColor = Color.FromArgb(56, 189, 248);
         _txtBearerToken.Font = new Font("Consolas", 8.5F);
-        _txtBearerToken.PlaceholderText = "panel.arasglobalcargo.com Bearer tokeni (veya sağdaki Otomatik Giriş ile çekin)";
+        _txtBearerToken.PlaceholderText = "panel.arasglobalcargo.com Bearer tokeni (veya sağdaki Otomatik / Tarayıcı butonları ile çekin)";
         layout.Controls.Add(_txtBearerToken, 1, 0);
 
         var btnPaste = new Button
@@ -225,7 +227,7 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         _btnSaveToken.Click += async (_, _) => await SaveAndTestTokenAsync();
         layout.Controls.Add(_btnSaveToken, 3, 0);
 
-        _btnAutoLogin.Text = "⚡ Otomatik Giriş Yap";
+        _btnAutoLogin.Text = "⚡ Otomatik Giriş";
         _btnAutoLogin.Dock = DockStyle.Fill;
         _btnAutoLogin.BackColor = Color.FromArgb(16, 185, 129); // Emerald
         _btnAutoLogin.ForeColor = Color.White;
@@ -233,31 +235,47 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         _btnAutoLogin.Cursor = Cursors.Hand;
         _btnAutoLogin.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
         _btnAutoLogin.FlatAppearance.BorderSize = 0;
-        _btnAutoLogin.Click += async (_, _) => await TriggerAutoSessionRefreshAsync(forceDialog: false);
+        _btnAutoLogin.Click += async (_, _) => await TriggerAutoSessionRefreshAsync(forceDialog: false, directBrowser: false);
         layout.Controls.Add(_btnAutoLogin, 4, 0);
+
+        _btnBrowserLogin.Text = "🌐 Tarayıcıda Aç";
+        _btnBrowserLogin.Dock = DockStyle.Fill;
+        _btnBrowserLogin.BackColor = Color.FromArgb(99, 102, 241); // Indigo
+        _btnBrowserLogin.ForeColor = Color.White;
+        _btnBrowserLogin.FlatStyle = FlatStyle.Flat;
+        _btnBrowserLogin.Cursor = Cursors.Hand;
+        _btnBrowserLogin.Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold);
+        _btnBrowserLogin.FlatAppearance.BorderSize = 0;
+        _btnBrowserLogin.Click += async (_, _) => await TriggerAutoSessionRefreshAsync(forceDialog: false, directBrowser: true);
+        layout.Controls.Add(_btnBrowserLogin, 5, 0);
 
         var lblHelp = new Label
         {
-            Text = "💡 Kolaylık: '⚡ Otomatik Giriş Yap' ile F12 açmadan arka planda oturum tazeleyebilir veya e-posta/şifrenizi kaydedebilirsiniz.",
+            Text = "💡 Kolaylık: '🌐 Tarayıcıda Aç' ile Chrome/Edge açılır; bir kez giriş yaptığınızda token otomatik yakalanır ve çerezler kaydedilir.",
             ForeColor = Color.FromArgb(148, 163, 184),
             Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.MiddleLeft,
             Font = new Font("Segoe UI", 8F)
         };
         layout.Controls.Add(lblHelp, 1, 1);
-        layout.SetColumnSpan(lblHelp, 4);
+        layout.SetColumnSpan(lblHelp, 5);
 
         card.Controls.Add(layout);
         return card;
     }
 
-    private async Task TriggerAutoSessionRefreshAsync(bool forceDialog)
+    private async Task TriggerAutoSessionRefreshAsync(bool forceDialog, bool directBrowser = false)
     {
         string email = _settings.SavedEmail ?? string.Empty;
         string pass = ShippingCredentialEncryptor.Decrypt(_settings.EncryptedPassword);
-        bool showBrowser = false;
+        bool showBrowser = directBrowser;
 
-        if (forceDialog || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        if (directBrowser)
+        {
+            // Doğrudan tarayıcıda açılması istendi
+            showBrowser = true;
+        }
+        else if (forceDialog || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
         {
             using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
             if (dlg.ShowDialog(this) != DialogResult.OK)
@@ -279,7 +297,9 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         }
 
         _btnAutoLogin.Enabled = false;
-        _btnAutoLogin.Text = "⏳ Giriş Yapılıyor...";
+        _btnBrowserLogin.Enabled = false;
+        _btnAutoLogin.Text = showBrowser ? "⚡ Otomatik Giriş" : "⏳ Giriş Yapılıyor...";
+        _btnBrowserLogin.Text = showBrowser ? "⏳ Açılıyor..." : "🌐 Tarayıcıda Aç";
         _badgeStatus.Text = "⏳ Oturum Yenileniyor...";
         _badgeStatus.BackColor = Color.FromArgb(30, 58, 138);
         _badgeStatus.ForeColor = Color.FromArgb(147, 197, 253);
@@ -324,7 +344,9 @@ internal sealed class ArasGlobalShippingCalculatorForm : Form
         finally
         {
             _btnAutoLogin.Enabled = true;
-            _btnAutoLogin.Text = "⚡ Otomatik Giriş Yap";
+            _btnBrowserLogin.Enabled = true;
+            _btnAutoLogin.Text = "⚡ Otomatik Giriş";
+            _btnBrowserLogin.Text = "🌐 Tarayıcıda Aç";
             _lblSubtitle.Text = "api.arasglobalcargo.com Canlı API: Widect, UPS, FedEx Anlık Navlun Teklifleri";
         }
     }

@@ -100,9 +100,15 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
             }
 
-            // 3. Birkaç saniye ağ dinlemesi için bekle
+            if (showBrowser)
+            {
+                statusCallback?.Invoke("🌐 Tarayıcı açıldı. Lütfen Aras Global hesabınıza giriş yapın (Token otomatik yakalanacaktır)...");
+            }
+
+            // 3. Ağ dinlemesi ve token yakalama için bekle
+            int maxWait = showBrowser ? 120 : 15;
             int waited = 0;
-            while (string.IsNullOrWhiteSpace(capturedToken) && waited < 12)
+            while (string.IsNullOrWhiteSpace(capturedToken) && waited < maxWait)
             {
                 ct.ThrowIfCancellationRequested();
                 await Task.Delay(1000, ct);
@@ -211,9 +217,15 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "token", "access_token", "auth_token");
             }
 
-            // 3. Ağ dinlemesi için kısa döngü
+            if (showBrowser)
+            {
+                statusCallback?.Invoke("🌐 Tarayıcı açıldı. Lütfen ShipEntegra hesabınıza giriş yapın (Token otomatik yakalanacaktır)...");
+            }
+
+            // 3. Ağ dinlemesi ve token yakalama için bekle
+            int maxWait = showBrowser ? 120 : 15;
             int waited = 0;
-            while (string.IsNullOrWhiteSpace(capturedToken) && waited < 12)
+            while (string.IsNullOrWhiteSpace(capturedToken) && waited < maxWait)
             {
                 ct.ThrowIfCancellationRequested();
                 await Task.Delay(1000, ct);
