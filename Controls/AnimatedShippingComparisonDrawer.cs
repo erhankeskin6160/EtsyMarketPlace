@@ -63,6 +63,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     // Servisler
     private readonly ArasGlobalPricingService _arasService = new();
     private readonly ShipEntegraPricingService _shipEntegraService = new();
+    private readonly INavlungoApiClient _navlungoApiClient = new NavlungoApiClient();
 
     // Canlı Döviz Kuru
     public decimal UsdTryRate { get; set; } = 48.26m;
@@ -475,17 +476,16 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             () => PromptManualToken("ShipEntegra")));
 
         // 3. Navlungo Kartı
+        var navSettings = NavlungoSettingsStore.Load();
+        bool navConnected = !string.IsNullOrWhiteSpace(navSettings.IdToken) || !string.IsNullOrWhiteSpace(navSettings.SessionCookie);
+
         _pnlAccountsFlow.Controls.Add(CreateCarrierAccountCard(
             "Navlungo",
             _navlungoLogo ?? CreateFallbackLogo("navlungo"),
-            true,
-            () =>
-            {
-                MessageBox.Show("Navlungo Canlı API entegrasyonu aktif durumda. Navlun teklifleri doğrudan çekilmektedir.", "Navlungo", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return Task.CompletedTask;
-            },
-            null,
-            () => MessageBox.Show("Navlungo API Anahtarlarınız tanımlıdır.", "Navlungo API", MessageBoxButtons.OK, MessageBoxIcon.Information)));
+            navConnected,
+            () => TriggerNavlungoAutoLoginAsync(false),
+            () => TriggerNavlungoAutoLoginAsync(true),
+            () => PromptManualToken("Navlungo")));
 
         // 4. + Yeni Firma Ekle Kartı
         _pnlAccountsFlow.Controls.Add(CreateAddCarrierPlaceholderCard());
@@ -932,12 +932,37 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         });
 
-        await Task.WhenAll(arasTask, shipEntegraTask);
+        // 3. Navlungo Sorgusu
+        var navSettings = NavlungoSettingsStore.Load();
+        var navlungoTask = Task.Run(async () =>
+        {
+            try
+            {
+                var req = new NavlungoQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height,
+                    Source = "user"
+                };
+                return await _navlungoApiClient.FetchLiveQuotesAsync(req, navSettings);
+            }
+            catch
+            {
+                return new List<NavlungoQuoteOffer>();
+            }
+        });
+
+        await Task.WhenAll(arasTask, shipEntegraTask, navlungoTask);
 
         var arasRes = await arasTask;
         var seRes = await shipEntegraTask;
+        var navOffers = await navlungoTask;
 
-        // Aras Tekliflerini Ekle
+        // 1. Aras Tekliflerini Ekle
         if (arasRes != null && arasRes.Success && arasRes.Offers.Count > 0)
         {
             foreach (var off in arasRes.Offers)
@@ -981,33 +1006,26 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         }
 
-        // 3. Navlungo Tekliflerini Ekle (Çoklu Entegrasyon Örneği)
-        _loadedQuotes.Add(new UnifiedShippingQuote
+        // 3. Navlungo Tekliflerini Ekle (Canlı Widect, FedEx, UPS)
+        if (navOffers != null && navOffers.Count > 0)
         {
-            Provider = "Navlungo",
-            ServiceName = "Navlungo Air Express (UPS/DHL)",
-            SubCarrier = "UPS",
-            PriceUsd = 13.90m,
-            PriceTry = Math.Round(13.90m * UsdTryRate, 2),
-            DeliveryText = "2-4 iş günü",
-            DeliveryDaysMin = 2,
-            DeliveryDaysMax = 4,
-            Note = "Navlungo Akıllı Navlun Entegrasyonu",
-            IsLive = true
-        });
-        _loadedQuotes.Add(new UnifiedShippingQuote
-        {
-            Provider = "Navlungo",
-            ServiceName = "Navlungo Standart Eko (Widect)",
-            SubCarrier = "Widect",
-            PriceUsd = 12.45m,
-            PriceTry = Math.Round(12.45m * UsdTryRate, 2),
-            DeliveryText = "4-7 iş günü",
-            DeliveryDaysMin = 4,
-            DeliveryDaysMax = 7,
-            Note = "Navlungo Eko Hava Kargo",
-            IsLive = true
-        });
+            foreach (var off in navOffers)
+            {
+                _loadedQuotes.Add(new UnifiedShippingQuote
+                {
+                    Provider = "Navlungo",
+                    ServiceName = off.ServiceName,
+                    SubCarrier = off.Carrier,
+                    PriceUsd = off.Price,
+                    PriceTry = Math.Round(off.Price * UsdTryRate, 2),
+                    DeliveryText = off.DeliveryEstimate,
+                    DeliveryDaysMin = ExtractDeliveryDaysMin(off.DeliveryEstimate),
+                    DeliveryDaysMax = ExtractDeliveryDaysMax(off.DeliveryEstimate),
+                    Note = off.Note,
+                    IsLive = true
+                });
+            }
+        }
 
         _btnFetchQuotes.Enabled = true;
         _btnFetchQuotes.Text = "⚡ Teklifleri Getir";
@@ -1554,14 +1572,70 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         }
     }
 
+    private async Task TriggerNavlungoAutoLoginAsync(bool directBrowser)
+    {
+        var settings = NavlungoSettingsStore.Load();
+        string email = settings.SavedEmail ?? string.Empty;
+        string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
+        bool showBrowser = directBrowser;
+
+        if (directBrowser)
+        {
+            showBrowser = true;
+        }
+        else if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        {
+            using var dlg = new ShippingLoginCredentialsDialog("Navlungo", email);
+            if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+            email = dlg.Email;
+            pass = dlg.Password;
+            showBrowser = dlg.OpenInBrowserRequested;
+            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
+            {
+                settings.SavedEmail = email;
+                settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+                settings.AutoRefreshEnabled = dlg.AutoRefresh;
+                NavlungoSettingsStore.Save(settings);
+            }
+        }
+
+        _lblStatus.Text = "⏳ Navlungo oturumu açılıyor...";
+        _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+
+        try
+        {
+            string? freshToken = await _sessionManager.RefreshNavlungoTokenAsync(email, pass, showBrowser);
+            if (!string.IsNullOrWhiteSpace(freshToken))
+            {
+                settings.IdToken = freshToken;
+                NavlungoSettingsStore.Save(settings);
+                _lblStatus.Text = "✅ Navlungo oturumu başarıyla güncellendi!";
+                _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
+                RebuildAccountsHub();
+                await FetchAllQuotesAsync();
+            }
+            else
+            {
+                MessageBox.Show("Navlungo oturumu açılamadı. 'Tarayıcı' (🌐) butonunu kullanarak giriş yapabilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Navlungo oturum hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private void PromptManualToken(string providerName)
     {
         bool isAras = providerName.Contains("Aras", StringComparison.OrdinalIgnoreCase);
-        string currentToken = isAras ? ArasGlobalSettingsStore.Load().BearerToken : ShipEntegraSettingsStore.Load().BearerToken;
+        bool isNav = providerName.Contains("Navlungo", StringComparison.OrdinalIgnoreCase);
+        string currentToken = isAras 
+            ? ArasGlobalSettingsStore.Load().BearerToken 
+            : (isNav ? (NavlungoSettingsStore.Load().IdToken ?? NavlungoSettingsStore.Load().SessionCookie ?? "") : ShipEntegraSettingsStore.Load().BearerToken);
 
         using var dlg = new Form
         {
-            Text = $"{providerName} - Bearer Token Düzenle",
+            Text = $"{providerName} - Oturum / Token Düzenle",
             Size = new Size(520, 240),
             StartPosition = FormStartPosition.CenterParent,
             BackColor = Color.FromArgb(15, 23, 42),
@@ -1573,7 +1647,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         var lbl = new Label
         {
-            Text = $"{providerName} için F12 veya Network sekmesinden kopyaladığınız Bearer tokeni yapıştırın:",
+            Text = $"{providerName} için id_token, Bearer token veya Cookie bilgisini yapıştırın:",
             Dock = DockStyle.Top,
             Height = 36,
             Padding = new Padding(12, 10, 12, 0),
@@ -1622,6 +1696,13 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 var s = ArasGlobalSettingsStore.Load();
                 s.BearerToken = val;
                 ArasGlobalSettingsStore.Save(s);
+            }
+            else if (isNav)
+            {
+                var s = NavlungoSettingsStore.Load();
+                if (val.Contains("=") || val.Contains(";")) s.SessionCookie = val;
+                else s.IdToken = val;
+                NavlungoSettingsStore.Save(s);
             }
             else
             {

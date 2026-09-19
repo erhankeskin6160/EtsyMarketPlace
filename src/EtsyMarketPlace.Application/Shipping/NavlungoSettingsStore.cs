@@ -1,0 +1,56 @@
+namespace EtsyMarketPlace.Application.Shipping;
+
+using System;
+using System.IO;
+using System.Text.Json;
+using EtsyMarketPlace.Domain.Shipping;
+
+/// <summary>
+/// Navlungo ayarlarını, oturum bilgilerini ve çerezlerini yerel diskte saklayan depo.
+/// </summary>
+public static class NavlungoSettingsStore
+{
+    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+
+    public static string SettingsPath
+    {
+        get
+        {
+            var folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "SimilarProductsWinForms");
+            Directory.CreateDirectory(folder);
+            return Path.Combine(folder, "navlungo-settings.json");
+        }
+    }
+
+    public static NavlungoSettings Load(string? customPath = null)
+    {
+        var path = customPath ?? SettingsPath;
+        if (!File.Exists(path))
+        {
+            return new NavlungoSettings();
+        }
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<NavlungoSettings>(json, JsonOptions) ?? new NavlungoSettings();
+        }
+        catch
+        {
+            return new NavlungoSettings();
+        }
+    }
+
+    public static void Save(NavlungoSettings settings, string? customPath = null)
+    {
+        try
+        {
+            var path = customPath ?? SettingsPath;
+            var json = JsonSerializer.Serialize(settings, JsonOptions);
+            File.WriteAllText(path, json);
+        }
+        catch { }
+    }
+}

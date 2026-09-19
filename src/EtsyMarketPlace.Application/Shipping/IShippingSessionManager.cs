@@ -23,4 +23,11 @@ public interface IShippingSessionManager
         bool showBrowser = false,
         Action<string>? statusCallback = null,
         CancellationToken ct = default);
+
+    Task<string?> RefreshNavlungoTokenAsync(
+        string? email = null,
+        string? password = null,
+        bool showBrowser = false,
+        Action<string>? statusCallback = null,
+        CancellationToken ct = default);
 }

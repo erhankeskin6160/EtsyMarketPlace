@@ -262,6 +262,146 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
         }
     }
 
+    public async Task<string?> RefreshNavlungoTokenAsync(
+        string? email = null,
+        string? password = null,
+        bool showBrowser = false,
+        Action<string>? statusCallback = null,
+        CancellationToken ct = default)
+    {
+        string? browserPath = VisualBrowserAgentService.ResolveInstalledBrowserPath();
+        if (string.IsNullOrEmpty(browserPath))
+        {
+            statusCallback?.Invoke("⚠️ Yüklü Google Chrome veya Edge bulunamadı. Lütfen tarayıcı yükleyin.");
+            return null;
+        }
+
+        statusCallback?.Invoke("🚀 Navlungo oturum motoru başlatılıyor...");
+
+        var launchOptions = new LaunchOptions
+        {
+            Headless = !showBrowser,
+            ExecutablePath = browserPath,
+            UserDataDir = GetProfileDirectory("Navlungo"),
+            IgnoredDefaultArgs = new[] { "--enable-automation" },
+            Args = new[]
+            {
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--window-size=1200,800"
+            },
+            DefaultViewport = new ViewPortOptions { Width = 1180, Height = 760 }
+        };
+
+        IBrowser? browser = null;
+        string? capturedToken = null;
+        string? capturedCookies = null;
+
+        try
+        {
+            browser = await Puppeteer.LaunchAsync(launchOptions);
+            var pages = await browser.PagesAsync();
+            var page = pages.Length > 0 ? pages[0] : await browser.NewPageAsync();
+
+            page.Request += (_, e) =>
+            {
+                if (e.Request.Headers.TryGetValue("cookie", out var cookieStr) && !string.IsNullOrWhiteSpace(cookieStr))
+                {
+                    if (cookieStr.Contains("id_token=", StringComparison.OrdinalIgnoreCase) ||
+                        cookieStr.Contains("_SessionUser_", StringComparison.OrdinalIgnoreCase))
+                    {
+                        capturedCookies = cookieStr;
+                        var m = System.Text.RegularExpressions.Regex.Match(cookieStr, @"id_token=([^;]+)");
+                        if (m.Success) capturedToken = m.Groups[1].Value.Trim();
+                    }
+                }
+                if (e.Request.Headers.TryGetValue("authorization", out var auth) &&
+                    !string.IsNullOrWhiteSpace(auth) &&
+                    auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    capturedToken = auth[7..].Trim();
+                }
+            };
+
+            statusCallback?.Invoke("🌐 Navlungo paneline bağlanılıyor...");
+            await page.GoToAsync("https://ship.navlungo.com/login", new NavigationOptions
+            {
+                WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                Timeout = 25000
+            });
+
+            // 1. Önce localStorage kontrol et
+            capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+
+            // 2. Bilgiler varsa form doldurmayı dene
+            if (string.IsNullOrWhiteSpace(capturedToken) && !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
+            {
+                statusCallback?.Invoke("🔑 Navlungo giriş bilgileri dolduruluyor...");
+                await TryFillLoginFormAsync(page, email, password);
+                await Task.Delay(3000, ct);
+
+                capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+            }
+
+            if (showBrowser)
+            {
+                statusCallback?.Invoke("🌐 Tarayıcı açıldı. Lütfen Navlungo hesabınıza giriş yapın (Oturum otomatik yakalanacaktır)...");
+            }
+
+            int maxWait = showBrowser ? 120 : 15;
+            int waited = 0;
+            while (string.IsNullOrWhiteSpace(capturedToken) && string.IsNullOrWhiteSpace(capturedCookies) && waited < maxWait)
+            {
+                ct.ThrowIfCancellationRequested();
+                await Task.Delay(1000, ct);
+                waited++;
+                capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "id_token", "token", "access_token", "accessToken");
+
+                var cookies = await page.GetCookiesAsync("https://ship.navlungo.com", "https://quick-price-calculator.navlungo.com");
+                if (cookies != null && cookies.Length > 0)
+                {
+                    var idTokCookie = cookies.FirstOrDefault(c => c.Name.Equals("id_token", StringComparison.OrdinalIgnoreCase));
+                    if (idTokCookie != null && !string.IsNullOrWhiteSpace(idTokCookie.Value))
+                    {
+                        capturedToken = idTokCookie.Value;
+                        capturedCookies = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+                        break;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(capturedToken) || !string.IsNullOrWhiteSpace(capturedCookies))
+            {
+                statusCallback?.Invoke("✅ Canlı Navlungo oturumu başarıyla yakalandı ve kaydedildi!");
+                var settings = NavlungoSettingsStore.Load();
+                if (!string.IsNullOrWhiteSpace(capturedToken)) settings.IdToken = capturedToken;
+                if (!string.IsNullOrWhiteSpace(capturedCookies)) settings.SessionCookie = capturedCookies;
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                if (!string.IsNullOrWhiteSpace(email)) settings.SavedEmail = email;
+                if (!string.IsNullOrWhiteSpace(password)) settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(password);
+                NavlungoSettingsStore.Save(settings);
+                return capturedToken ?? "connected";
+            }
+
+            statusCallback?.Invoke("⚠️ Oturum yakalanamadı. Lütfen 'Tarayıcı' butonunu kullanarak giriş yapın.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            statusCallback?.Invoke($"❌ Navlungo oturum hatası: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            if (browser != null)
+            {
+                await browser.CloseAsync();
+            }
+        }
+    }
+
     private static async Task<string?> TryExtractLocalStorageTokenAsync(IPage page, params string[] keys)
     {
         try
