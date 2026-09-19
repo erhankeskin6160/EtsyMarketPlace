@@ -86,7 +86,7 @@ internal sealed class AiListingImageForm : Form
 
     // UI: Right Panel Marketing & Export
     private readonly ModernCheckBox _chkEnableBadge = new() { Text = "Pazarlama Rozetini Etkinleştir", AutoSize = true, Font = new Font("Segoe UI Semibold", 9.5F), ForeColor = Color.FromArgb(226, 232, 240) };
-    private readonly ModernComboBox _cboBadgeText = new() { DropDownStyle = ComboBoxStyle.DropDown };
+    private readonly ModernComboBox _cboBadgeText = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernComboBox _cboBadgePosition = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernComboBox _formatComboBox = new() { DropDownStyle = ComboBoxStyle.DropDownList };
     private readonly ModernComboBox _cboEtsyImageSlot = new() { DropDownStyle = ComboBoxStyle.DropDownList };
@@ -507,7 +507,7 @@ internal sealed class AiListingImageForm : Form
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); // 0: Segmented Tab Bar
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 1: Scrollable Tab Content
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 98));  // 2: Fixed Bottom Actions
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));  // 2: Fixed Bottom Actions
 
         // 1. Segmented Tab Bar
         var tabBar = new TableLayoutPanel
@@ -751,21 +751,21 @@ internal sealed class AiListingImageForm : Form
         };
 
         _btnProcess.Width = 348;
-        _btnProcess.Height = 44;
+        _btnProcess.Height = 38;
         _btnProcess.Text = "🚀 Seçili AI ile Görseli Üret / İşle";
         _btnProcess.NormalColor = UiStyle.PrimaryColor;
         _btnProcess.HoverColor = UiStyle.PrimaryHover;
-        _btnProcess.Font = new Font("Segoe UI Semibold", 10.2F, FontStyle.Bold);
-        _btnProcess.Margin = new Padding(0, 0, 0, 8);
+        _btnProcess.Font = new Font("Segoe UI Semibold", 9.6F, FontStyle.Bold);
+        _btnProcess.Margin = new Padding(0, 0, 0, 6);
         _btnProcess.Click += async (_, _) => await ProcessImageWithSelectedEngineAsync();
         actionPanel.Controls.Add(_btnProcess);
 
         _btnBatchProcess.Width = 348;
-        _btnBatchProcess.Height = 38;
+        _btnBatchProcess.Height = 32;
         _btnBatchProcess.Text = "🎯 4'lü Sahne Toplu Üret (Batch)";
         _btnBatchProcess.NormalColor = Color.FromArgb(30, 41, 59);
         _btnBatchProcess.HoverColor = Color.FromArgb(45, 55, 75);
-        _btnBatchProcess.Font = new Font("Segoe UI Semibold", 9.2F, FontStyle.Bold);
+        _btnBatchProcess.Font = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
         _btnBatchProcess.Margin = new Padding(0, 0, 0, 2);
         _btnBatchProcess.Click += async (_, _) => await RunBatchSceneGenerationAsync();
         actionPanel.Controls.Add(_btnBatchProcess);
@@ -954,6 +954,7 @@ internal sealed class AiListingImageForm : Form
             "✨ Limited Holiday Edition"
         ]);
         _cboBadgeText.SelectedIndex = 0;
+        _cboBadgeText.SelectedIndexChanged += (_, _) => UpdateBadgeOverlay();
         _cboBadgeText.TextChanged += (_, _) => UpdateBadgeOverlay();
         contentContainer.Controls.Add(_cboBadgeText);
 
