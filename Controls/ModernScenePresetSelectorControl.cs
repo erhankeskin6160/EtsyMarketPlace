@@ -17,6 +17,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
 
     private readonly FlowLayoutPanel _pnlCategories;
     private readonly Panel _pnlCardsContainer;
+    private readonly ModernScrollPanel _scrollCards;
     private readonly FlowLayoutPanel _flowCards;
     private readonly Label _lblActiveSummary;
     private readonly Button _btnRandom;
@@ -131,12 +132,12 @@ internal sealed class ModernScenePresetSelectorControl : Panel
 
         mainLayout.Controls.Add(_pnlCategories, 0, 0);
 
-        // 2. Şablon Kartları Konteyneri (2 Sütunlu Grid)
+        // 2. Şablon Kartları Konteyneri (2 Sütunlu Grid - Modern Özel Scroll)
         _pnlCardsContainer = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(15, 23, 42),
-            Margin = new Padding(0, 2, 0, 4),
+            Margin = new Padding(0, 2, 8, 4), // Dış panel kaydırma çubuğu ile bitişmemesi için sağa 8px nefes payı
             Padding = new Padding(3)
         };
         _pnlCardsContainer.Paint += (_, e) =>
@@ -147,16 +148,33 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             e.Graphics.DrawPath(pen, path);
         };
 
-        _flowCards = new FlowLayoutPanel
+        _scrollCards = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
-            AutoScroll = true,
+            Margin = Padding.Empty,
+            Padding = Padding.Empty,
+            BackColor = Color.FromArgb(15, 23, 42)
+        };
+        _scrollCards.ScrollBar.Width = 6;
+        _scrollCards.ScrollBar.TrackColor = Color.Transparent;
+        _scrollCards.ScrollBar.ThumbNormalColor = Color.FromArgb(71, 85, 105);
+        _scrollCards.ScrollBar.ThumbHoverColor = Color.FromArgb(100, 116, 139);
+        _scrollCards.ScrollBar.ThumbActiveColor = Color.FromArgb(99, 102, 241);
+
+        _flowCards = new FlowLayoutPanel
+        {
+            Width = 300,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            AutoScroll = false,
             WrapContents = true,
             FlowDirection = FlowDirection.LeftToRight,
             Margin = Padding.Empty,
-            Padding = new Padding(1, 2, 1, 2)
+            Padding = new Padding(2, 2, 2, 2),
+            BackColor = Color.FromArgb(15, 23, 42)
         };
-        _pnlCardsContainer.Controls.Add(_flowCards);
+        _scrollCards.SetContent(_flowCards);
+        _pnlCardsContainer.Controls.Add(_scrollCards);
         mainLayout.Controls.Add(_pnlCardsContainer, 0, 1);
 
         // 3. Aktif Şablon Bilgi Altlığı
@@ -202,7 +220,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
         {
             var btn = new PresetCardButton(preset)
             {
-                Width = 146, // 146 * 2 + 8 margin = 300px, 308px scrollbar alanına tam oturur
+                Width = 144, // 144 * 2 + 8 margin = 296px, 300px genişliğe 2 sütun tam oturur
                 Height = 36,
                 Margin = new Padding(2, 2, 2, 2)
             };
@@ -221,6 +239,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
 
         UpdateSelectionStates();
         _flowCards.ResumeLayout(true);
+        _scrollCards.RecalculateScroll();
     }
 
     private void UpdateSelectionStates()
@@ -336,7 +355,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
                 g.FillPath(ibBrush, ibPath);
             }
 
-            using (var iconFont = new Font("Segoe UI", 9F))
+            using (var iconFont = new Font("Segoe UI Emoji", 8.5F, FontStyle.Regular))
             using (var iconBrush = new SolidBrush(Color.White))
             {
                 var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
