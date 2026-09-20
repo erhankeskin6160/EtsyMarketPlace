@@ -30,7 +30,7 @@ internal sealed class BatchStudioPanelControl : UserControl
     // UI Panelleri
     private ModernBeforeAfterSlider _slider = null!;
     private ModernMultilineTextBox _txtPrompt = null!;
-    private ComboBox _cboEngine = null!;
+    private AiEngineSelectorTableControl _engineTable = null!;
     private ProgressBar _progressBar = null!;
     private Label _lblProgress = null!;
     private Label _lblPromptScore = null!;
@@ -224,23 +224,14 @@ internal sealed class BatchStudioPanelControl : UserControl
 
         // 1. Motor Seçimi
         panel.Controls.Add(CreateSectionTitle("⚙️ 1. AI İşlem Motoru"));
-        _cboEngine = new ComboBox
+        _engineTable = new AiEngineSelectorTableControl
         {
-            DropDownStyle = ComboBoxStyle.DropDownList,
             Width = 330,
-            Height = 28,
-            BackColor = Color.FromArgb(15, 23, 42),
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI Semibold", 9F)
+            Margin = new Padding(0, 2, 0, 8)
         };
-        _cboEngine.Items.AddRange([
-            "⚡ OpenAI GPT-Image-2.5 Flare (Hızlı / Toplu)",
-            "🌟 OpenAI GPT-Image-2.5 Sunburst (Vitrin / Yüksek Sadakat)",
-            "🍌 Google Gemini Flash Image (Visual Grounding)",
-            "✨ PhotoRoom Native AI Background"
-        ]);
-        _cboEngine.SelectedIndex = 0;
-        panel.Controls.Add(_cboEngine);
+        _engineTable.KeyConfigRequested += (providerId) => OpenKeyConfigDialog(providerId);
+        UpdateEngineTableKeyStatus();
+        panel.Controls.Add(_engineTable);
 
         // 2. Hazır Sahne Preset'leri
         panel.Controls.Add(CreateSectionTitle("🎨 2. Popüler Etsy Sahne Şablonları"));
@@ -814,7 +805,17 @@ internal sealed class BatchStudioPanelControl : UserControl
             _aiSettings.PhotoRoomApiKey = fresh.PhotoRoomApiKey;
             _aiSettings.BflApiKey = fresh.BflApiKey;
             _aiSettings.IdeogramApiKey = fresh.IdeogramApiKey;
+            UpdateEngineTableKeyStatus();
         }
+    }
+
+    private void UpdateEngineTableKeyStatus()
+    {
+        if (_engineTable == null) return;
+        bool hasOpenAi = !string.IsNullOrWhiteSpace(_aiSettings.OpenAiApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.OpenAiApiKey);
+        bool hasGemini = !string.IsNullOrWhiteSpace(_aiSettings.GeminiApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.GoogleGeminiApiKey);
+        bool hasPhotoRoom = !string.IsNullOrWhiteSpace(_aiSettings.PhotoRoomApiKey) || !string.IsNullOrWhiteSpace(StudioConfigurationManager.Current.PhotoRoomApiKey);
+        _engineTable.RefreshKeyStatuses(hasOpenAi, hasGemini, hasPhotoRoom);
     }
 
     private bool EnsureApiKeyConfigured(int engineIndex)
@@ -870,7 +871,7 @@ internal sealed class BatchStudioPanelControl : UserControl
 
         if (_isProcessing) return;
 
-        int engine = _cboEngine.SelectedIndex;
+        int engine = _engineTable.SelectedIndex;
         if (!EnsureApiKeyConfigured(engine)) return;
 
         SetBusy(true);
@@ -928,7 +929,7 @@ internal sealed class BatchStudioPanelControl : UserControl
 
         if (_isProcessing) return;
 
-        int engine = _cboEngine.SelectedIndex;
+        int engine = _engineTable.SelectedIndex;
         if (!EnsureApiKeyConfigured(engine)) return;
 
         SetBusy(true);
