@@ -235,7 +235,12 @@ internal sealed class BatchStudioPanelControl : UserControl
 
         // 2. Hazır Sahne Preset'leri
         panel.Controls.Add(CreateSectionTitle("🎨 2. Popüler Etsy Sahne Şablonları"));
-        var presetSelector = new ModernScenePresetSelectorControl();
+        var presetSelector = new ModernScenePresetSelectorControl
+        {
+            Width = 330,
+            Height = 216,
+            Margin = new Padding(0, 2, 0, 8)
+        };
         presetSelector.PresetSelected += (_, preset) =>
         {
             _txtPrompt.Text = preset.Prompt;

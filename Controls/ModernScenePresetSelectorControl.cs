@@ -46,46 +46,42 @@ internal sealed class ModernScenePresetSelectorControl : Panel
         }
     }
 
+    public override Size GetPreferredSize(Size proposedSize)
+    {
+        return new Size(330, 216);
+    }
+
     public ModernScenePresetSelectorControl()
     {
         DoubleBuffered = true;
         Width = 330;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        Height = 216;
+        AutoSize = false;
         BackColor = Color.Transparent;
         Margin = new Padding(0, 0, 0, 8);
 
         var mainLayout = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
-            Width = 330,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Dock = DockStyle.Fill,
+            RowCount = 3,
             ColumnCount = 1,
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));  // 2 satır kategori hapları
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 138)); // 3 satır x 2 sütun kart ızgarası
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // Aktif özet şeridi
         Controls.Add(mainLayout);
 
-        // 1. Kategori & Hızlı Butonlar Barı
-        var topBar = new TableLayoutPanel
-        {
-            Width = 330,
-            Height = 32,
-            ColumnCount = 2,
-            Margin = new Padding(0, 0, 0, 4)
-        };
-        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        topBar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 36));
-
+        // 1. Kategori Hapları (FlowLayoutPanel içinde 2 satır akıcı haplar)
         _pnlCategories = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
-            AutoScroll = true,
+            WrapContents = true,
+            AutoScroll = false,
             Margin = Padding.Empty,
-            Padding = Padding.Empty
+            Padding = new Padding(0, 1, 0, 2)
         };
 
         foreach (var (key, label) in Categories)
@@ -94,11 +90,11 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             {
                 Text = label,
                 AutoSize = true,
-                Height = 24,
+                Height = 22,
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI Semibold", 7.8F, FontStyle.Bold),
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 2, 4, 2),
+                Margin = new Padding(0, 1, 4, 3),
                 Tag = key
             };
             btnCat.FlatAppearance.BorderSize = 0;
@@ -113,38 +109,37 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             };
             _pnlCategories.Controls.Add(btnCat);
         }
-        topBar.Controls.Add(_pnlCategories, 0, 0);
 
+        // 🎲 Rastgele İlham Butonu (Kategorilerin hemen yanında)
         _btnRandom = new Button
         {
-            Text = "🎲",
-            Width = 30,
-            Height = 24,
+            Text = "🎲 İlham Ver",
+            AutoSize = true,
+            Height = 22,
             FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(51, 65, 85),
+            BackColor = Color.FromArgb(79, 70, 229),
             ForeColor = Color.White,
-            Font = new Font("Segoe UI", 9F),
+            Font = new Font("Segoe UI Semibold", 7.8F, FontStyle.Bold),
             Cursor = Cursors.Hand,
-            Margin = new Padding(2, 2, 0, 2)
+            Margin = new Padding(2, 1, 0, 3)
         };
         _btnRandom.FlatAppearance.BorderSize = 0;
         _btnRandom.Click += (_, _) => SelectRandomPreset();
         var tip = new ToolTip();
-        tip.SetToolTip(_btnRandom, "Rastgele Şablon Seç (İlham Al)");
-        topBar.Controls.Add(_btnRandom, 1, 0);
+        tip.SetToolTip(_btnRandom, "Rastgele Popüler Bir Etsy Sahnesi Seç");
+        _pnlCategories.Controls.Add(_btnRandom);
 
-        mainLayout.Controls.Add(topBar);
+        mainLayout.Controls.Add(_pnlCategories, 0, 0);
 
         // 2. Şablon Kartları Konteyneri (2 Sütunlu Grid)
         _pnlCardsContainer = new Panel
         {
-            Width = 330,
-            Height = 132, // Tam 3 satır kart (3 x 40px + boşluklar)
+            Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(15, 23, 42),
-            Margin = new Padding(0, 0, 0, 4),
-            Padding = new Padding(4)
+            Margin = new Padding(0, 2, 0, 4),
+            Padding = new Padding(3)
         };
-        _pnlCardsContainer.Paint += (s, e) =>
+        _pnlCardsContainer.Paint += (_, e) =>
         {
             using var pen = new Pen(Color.FromArgb(51, 65, 85), 1.2f);
             using var path = ModernCardPanel.CreateRoundedRectanglePath(new Rectangle(0, 0, _pnlCardsContainer.Width - 1, _pnlCardsContainer.Height - 1), 6);
@@ -162,20 +157,19 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             Padding = new Padding(1, 2, 1, 2)
         };
         _pnlCardsContainer.Controls.Add(_flowCards);
-        mainLayout.Controls.Add(_pnlCardsContainer);
+        mainLayout.Controls.Add(_pnlCardsContainer, 0, 1);
 
         // 3. Aktif Şablon Bilgi Altlığı
         _lblActiveSummary = new Label
         {
-            Width = 330,
-            Height = 22,
+            Dock = DockStyle.Fill,
             Font = new Font("Segoe UI", 7.6F),
             ForeColor = Color.FromArgb(148, 163, 184),
             TextAlign = ContentAlignment.MiddleLeft,
             Text = "💡 Şablona tıklayarak prompt alanına anında uygulayabilirsiniz.",
-            Margin = new Padding(0, 0, 0, 2)
+            Margin = Padding.Empty
         };
-        mainLayout.Controls.Add(_lblActiveSummary);
+        mainLayout.Controls.Add(_lblActiveSummary, 0, 2);
 
         UpdateCategoryStyles();
         PopulateCards();
@@ -208,7 +202,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
         {
             var btn = new PresetCardButton(preset)
             {
-                Width = 152, // 2 sütun: 152 + 152 + gap = ~310px, 330px kutuya ve scrollbar'a rahat sığar
+                Width = 146, // 146 * 2 + 8 margin = 300px, 308px scrollbar alanına tam oturur
                 Height = 36,
                 Margin = new Padding(2, 2, 2, 2)
             };
@@ -246,7 +240,6 @@ internal sealed class ModernScenePresetSelectorControl : Panel
         var preset = PromptTipsService.Presets[idx];
         _selectedPreset = preset;
 
-        // İlgili kategoriyi aktif yap
         _activeCategory = "Tümü";
         UpdateCategoryStyles();
         PopulateCards();
@@ -352,7 +345,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
 
             // Sağ Metinler (Başlık + Vibe)
             int textX = iconBoxX + iconBoxSize + 6;
-            int textW = w - textX - 6;
+            int textW = w - textX - 4;
 
             using (var titleFont = new Font("Segoe UI Semibold", 7.8F, FontStyle.Bold))
             using (var vibeFont = new Font("Segoe UI", 6.8F))
