@@ -268,14 +268,17 @@ public sealed class AiEngineSelectorTableControl : Control
         using (var headerFont = new Font("Segoe UI Semibold", 7.5F, FontStyle.Bold))
         using (var textMutedBrush = new SolidBrush(Color.FromArgb(148, 163, 184)))
         {
-            g.DrawString("⚙️ MODEL / MOTOR", headerFont, textMutedBrush, 12, 6);
+            // Sol başlık
+            using var dotBrush = new SolidBrush(Color.FromArgb(99, 102, 241));
+            g.FillEllipse(dotBrush, 12, 10, 6, 6);
+            g.DrawString("MODEL / MOTOR", headerFont, textMutedBrush, 22, 6);
 
             var sfRight = new StringFormat { Alignment = StringAlignment.Far };
-            g.DrawString("DURUM & ÖZELLİK", headerFont, textMutedBrush, w - 12, 6, sfRight);
+            g.DrawString("TÜR & DURUM", headerFont, textMutedBrush, w - 12, 6, sfRight);
         }
 
         // 3. Satırlar (Engine Rows)
-        using var titleFont = new Font("Segoe UI Semibold", 8.8F, FontStyle.Bold);
+        using var titleFont = new Font("Segoe UI Semibold", 8.6F, FontStyle.Bold);
         using var subFont = new Font("Segoe UI", 7.2F);
         using var badgeFont = new Font("Segoe UI Semibold", 7.0F, FontStyle.Bold);
 
@@ -316,7 +319,7 @@ public sealed class AiEngineSelectorTableControl : Control
             }
 
             // A) Radyo Seçim Göstergesi
-            int radioX = 12;
+            int radioX = 10;
             int radioY = rowY + (RowHeight / 2) - 6;
             var radioRect = new Rectangle(radioX, radioY, 12, 12);
 
@@ -336,10 +339,10 @@ public sealed class AiEngineSelectorTableControl : Control
             }
 
             // B) İkon Kutusu
-            int iconBoxX = 30;
-            int iconBoxY = rowY + 9;
-            var iconBoxRect = new Rectangle(iconBoxX, iconBoxY, 26, 26);
-            using (var iconBoxPath = ModernCardPanel.CreateRoundedRectanglePath(iconBoxRect, 6))
+            int iconBoxX = 26;
+            int iconBoxY = rowY + 10;
+            var iconBoxRect = new Rectangle(iconBoxX, iconBoxY, 24, 24);
+            using (var iconBoxPath = ModernCardPanel.CreateRoundedRectanglePath(iconBoxRect, 5))
             {
                 using var iconBgBrush = new SolidBrush(Color.FromArgb(35, data.AccentColor));
                 g.FillPath(iconBgBrush, iconBoxPath);
@@ -348,7 +351,7 @@ public sealed class AiEngineSelectorTableControl : Control
                 g.DrawPath(iconBorderPen, iconBoxPath);
             }
 
-            using (var iconFont = new Font("Segoe UI Emoji", 9.5F))
+            using (var iconFont = new Font("Segoe UI", 9F))
             using (var iconBrush = new SolidBrush(Color.White))
             {
                 var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
@@ -356,7 +359,7 @@ public sealed class AiEngineSelectorTableControl : Control
             }
 
             // C) Başlık ve Alt Başlık
-            int textX = 62;
+            int textX = 56;
             Color titleColor = isSelected ? Color.White : (isHovered ? Color.FromArgb(241, 245, 249) : Color.FromArgb(203, 213, 225));
             using (var titleBrush = new SolidBrush(titleColor))
             {
@@ -371,21 +374,21 @@ public sealed class AiEngineSelectorTableControl : Control
 
             // D) Sağ Taraf: Özellik Rozeti + Key Durum Rozeti
             // 1. Key Rozeti (En sağda)
-            int keyBadgeW = 56;
+            int keyBadgeW = 50;
             int keyBadgeH = 18;
-            int keyBadgeX = w - 12 - keyBadgeW;
+            int keyBadgeX = w - 10 - keyBadgeW;
             int keyBadgeY = rowY + 13;
             var keyBadgeRect = new Rectangle(keyBadgeX, keyBadgeY, keyBadgeW, keyBadgeH);
 
             Color keyBg = hasKey ? Color.FromArgb(6, 78, 59) : Color.FromArgb(69, 26, 3);
             Color keyBorder = hasKey ? Color.FromArgb(16, 185, 129) : Color.FromArgb(217, 119, 6);
             Color keyFg = hasKey ? Color.FromArgb(110, 231, 183) : Color.FromArgb(252, 211, 77);
-            string keyText = hasKey ? "🟢 Hazır" : "⚠️ Key";
+            string keyText = hasKey ? "Hazır" : "Key";
 
             if (!hasKey && _hoveredKeyBadgeIndex == i)
             {
                 keyBg = Color.FromArgb(120, 53, 15);
-                keyText = "🔑 Gir";
+                keyText = "Gir";
             }
 
             using (var keyPath = ModernCardPanel.CreateRoundedRectanglePath(keyBadgeRect, 4))
@@ -396,13 +399,16 @@ public sealed class AiEngineSelectorTableControl : Control
                 using var kbPen = new Pen(keyBorder, 1f);
                 g.DrawPath(kbPen, keyPath);
 
+                // Küçük durum noktası çiz (emojisiz, kusursuz net)
+                using var statDotBrush = new SolidBrush(hasKey ? Color.FromArgb(52, 211, 153) : Color.FromArgb(251, 191, 36));
+                g.FillEllipse(statDotBrush, keyBadgeX + 6, keyBadgeY + 6, 6, 6);
+
                 using var kfBrush = new SolidBrush(keyFg);
-                var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-                g.DrawString(keyText, badgeFont, kfBrush, keyBadgeRect, sfCenter);
+                g.DrawString(keyText, badgeFont, kfBrush, keyBadgeX + 16, keyBadgeY + 2);
             }
 
             // 2. Özellik Rozeti (Key Rozetinin Solunda)
-            int tagW = 44;
+            int tagW = 40;
             int tagH = 18;
             int tagX = keyBadgeX - tagW - 4;
             int tagY = rowY + 13;

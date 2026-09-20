@@ -15,7 +15,8 @@ internal sealed record BackgroundPreset(
     string Name,
     string Icon,
     string Category,
-    string Prompt);
+    string Prompt,
+    string Vibe = "");
 
 /// <summary>
 /// Etsy ürün fotoğrafçılığı için akıllı prompt analizi, puanlama, ipuçları ve kategori şablonları servisi.
@@ -24,18 +25,41 @@ internal static class PromptTipsService
 {
     public static readonly List<BackgroundPreset> Presets =
     [
-        new("Sıcak Ev Ortamı", "🏠", "Ev & Yaşam", "Warm cozy Scandinavian living room, natural sunlight streaming through sheer curtains, soft blurred bokeh background, neutral beige tones"),
-        new("Doğal Botanik", "🌿", "Doğal & Organik", "Lush green botanical garden setting, fresh eucalyptus leaves and soft monstera shadows, soft dappled morning sunlight, organic earth tones"),
-        new("Lüks Mermer", "🏛️", "Takı & Lüks", "Polished white Carrara marble counter, soft neutral diffused museum lighting, ultra-clean minimalist luxury aesthetic, elegant reflections"),
-        new("Artisan Ahşap", "🪵", "El Emeği & Rustik", "Weathered rustic oak wooden surface, warm morning window side lighting, artisan workshop ambiance, rich natural wood grain"),
-        new("Pastel Gradyan", "🎨", "Modern & Trend", "Soft pastel gradient background blending warm peach and lavender, dreamy ethereal studio lighting, clean contemporary product display"),
-        new("Kış & Yılbaşı", "🎄", "Mevsimsel", "Festive cozy holiday scene, subtle warm fairy bokeh lights in background, frosted pine cone accents, warm golden ambient glow"),
-        new("Yaz Açık Hava", "☀️", "Mevsimsel", "Sun-drenched outdoor terracotta patio table, Mediterranean summer afternoon, warm golden sunlight with palm leaf cast shadows"),
-        new("Sahil & Kumsal", "🏖️", "Boho & Tatil", "Fine white beach sand surface, gentle turquoise ocean waves softly blurred in background, natural driftwood accent, bright coastal sunlight"),
-        new("E-Ticaret Beyaz", "📦", "Katalog", "Pure infinite seamless studio white background, commercial e-commerce catalog photography, balanced dual softbox lighting, soft contact shadow"),
-        new("Vintage & Retro", "📻", "Vintage", "Warm nostalgic vintage study room, antique desk surface, old leather-bound books softly out of focus, warm Edison lamp lighting"),
-        new("Mat Beton / Endüstriyel", "🏢", "Modern Erkek / Tech", "Smooth raw concrete surface, subtle architectural shadows, sleek modern loft background, crisp directional daylight"),
-        new("Altın Saat (Golden Hour)", "🌅", "Lifestyle", "Outdoor wooden deck during golden hour sunset, warm magical backlight, glowing rim light, natural lifestyle product ambiance")
+        // Ev & Yaşam (Cozy Living)
+        new("Sıcak İskandinav", "🏠", "Ev & Yaşam", "Warm cozy Scandinavian living room, natural sunlight streaming through sheer curtains, soft blurred bokeh background, neutral beige tones", "Aydınlık & Sıcak"),
+        new("Kahve & Kafe Köşesi", "☕", "Ev & Yaşam", "Aesthetic modern coffee shop corner, rustic reclaimed wood table, soft steam, warm morning sunlight, cozy atmosphere", "Sıcak & Samimi"),
+        new("Şömine & Romantik", "🕯️", "Ev & Yaşam", "Cozy evening beside a glowing fireplace, rustic brick hearth, warm candlelight reflections, soft shadows, intimate ambiance", "Akşam Sıcaklığı"),
+        new("Bohem Oturma Odası", "🪴", "Ev & Yaşam", "Sunny bohemian living room, macrame wall art softly blurred in background, rattan furniture, natural earthy textures, warm ambient glow", "Bohem & Sıcak"),
+
+        // Doğal & Organik (Botanical)
+        new("Doğal Botanik", "🌿", "Doğal & Botanik", "Lush green botanical garden setting, fresh eucalyptus leaves and soft monstera shadows, soft dappled morning sunlight, organic earth tones", "Taze Okaliptüs"),
+        new("Güneşli Sera", "🌱", "Doğal & Botanik", "Sunlit greenhouse interior, exotic tropical leaves, glass roof with warm sunlight filtering through, fresh organic atmosphere", "Organik Sera"),
+        new("Kuru Çiçek & Pampa", "🌾", "Doğal & Botanik", "Delicate dried pampas grass and bunny tails, warm terracotta backdrop, soft natural shadows, minimalist boho aesthetic", "Boho & Pampa"),
+        new("Bambu & Zen Bahçe", "🍃", "Doğal & Botanik", "Peaceful Japanese zen garden, smooth river stones, subtle green bamboo accents, tranquil soft diffused lighting", "Zen & Huzur"),
+
+        // Lüks & Takı (Luxury)
+        new("Carrara Mermer", "🏛️", "Lüks & Takı", "Polished white Carrara marble counter, soft neutral diffused museum lighting, ultra-clean minimalist luxury aesthetic, elegant reflections", "Saf Beyaz Mermer"),
+        new("Siyah Kadife Vitrin", "💎", "Lüks & Takı", "Premium matte black velvet surface, dramatic moody jewelry spotlighting, high contrast luxury aesthetic, crisp fine highlights", "Dramatik Lüks"),
+        new("Minimalist Podyum", "✨", "Lüks & Takı", "Architectural geometric pedestal podium in warm cream beige, subtle elegant cast shadows, high-end editorial product photoshoot", "Modern Podyum"),
+        new("Yansımalı Akrilik", "🪞", "Lüks & Takı", "Sleek glossy white acrylic surface with crisp mirror-like reflection, commercial strobe lighting, ultra clean modern elegance", "Kristal Yansıma"),
+
+        // Artisan & Rustik (Rustic Wood)
+        new("Artisan Ahşap", "🪵", "Artisan & Rustik", "Weathered rustic oak wooden surface, warm morning window side lighting, artisan workshop ambiance, rich natural wood grain", "Ham Meşe"),
+        new("Ham Keten Dokulu", "🧵", "Artisan & Rustik", "Textured natural unbleached raw linen fabric, gentle organic folds, soft neutral daylight, handcrafted artisan product photography", "Doğal Keten"),
+        new("Endüstriyel Tuğla", "🧱", "Artisan & Rustik", "Exposed vintage red brick wall, dark stained wooden workbench, warm loft lighting, authentic industrial artisan workshop", "Loft & Tuğla"),
+        new("Çömlek & Terracotta", "🏺", "Artisan & Rustik", "Warm rustic terracotta tile surface, Mediterranean ceramic studio, sunbeams casting soft shadows, artisanal craft vibe", "Terracotta"),
+
+        // E-Ticaret & Stüdyo (Commercial)
+        new("E-Ticaret Beyaz", "📦", "Stüdyo & Katalog", "Pure infinite seamless studio white background, commercial e-commerce catalog photography, balanced dual softbox lighting, soft contact shadow", "Sonsuz Beyaz"),
+        new("Nötr Açık Gri Stüdyo", "🏢", "Stüdyo & Katalog", "Professional neutral light gray studio cyclorama, balanced soft lighting, subtle gradient backdrop, crisp clean e-commerce standard", "Nötr Gri Stüdyo"),
+        new("Softbox Vitrin", "💡", "Stüdyo & Katalog", "Modern studio lightbox setup, continuous soft illumination, zero harsh reflections, perfect true-to-life color rendering", "Yumuşak Işık"),
+
+        // Trend & Mevsimsel (Aesthetic & Seasonal)
+        new("Pastel Gradyan", "🎨", "Trend & Mevsim", "Soft pastel gradient background blending warm peach and lavender, dreamy ethereal studio lighting, clean contemporary product display", "Peach & Lavender"),
+        new("Altın Saat (Sunset)", "🌅", "Trend & Mevsim", "Outdoor wooden deck during golden hour sunset, warm magical backlight, glowing rim light, natural lifestyle product ambiance", "Büyülü Gün Batımı"),
+        new("Sahil & Kumsal", "🏖️", "Trend & Mevsim", "Fine white beach sand surface, gentle turquoise ocean waves softly blurred in background, natural driftwood accent, bright coastal sunlight", "Deniz & Kumsal"),
+        new("Kış & Yılbaşı", "🎄", "Trend & Mevsim", "Festive cozy holiday scene, subtle warm fairy bokeh lights in background, frosted pine cone accents, warm golden ambient glow", "Yılbaşı Işıltısı"),
+        new("Yaz Terası", "☀️", "Trend & Mevsim", "Sun-drenched Mediterranean outdoor terracotta terrace, bright summer daylight, subtle palm leaf shadows, cheerful vibrant mood", "Yaz Enerjisi")
     ];
 
     /// <summary>

@@ -235,44 +235,13 @@ internal sealed class BatchStudioPanelControl : UserControl
 
         // 2. Hazır Sahne Preset'leri
         panel.Controls.Add(CreateSectionTitle("🎨 2. Popüler Etsy Sahne Şablonları"));
-        var presetsScroll = new ModernScrollPanel
+        var presetSelector = new ModernScenePresetSelectorControl();
+        presetSelector.PresetSelected += (_, preset) =>
         {
-            Width = 330,
-            Height = 110,
-            Margin = new Padding(0, 2, 0, 6)
+            _txtPrompt.Text = preset.Prompt;
+            UpdatePromptAnalysis();
         };
-        var flowPresets = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            WrapContents = true,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            AutoScroll = false
-        };
-        foreach (var preset in PromptTipsService.Presets)
-        {
-            var btnChip = new Button
-            {
-                Text = $"{preset.Icon} {preset.Name}",
-                AutoSize = true,
-                Height = 27,
-                FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 8.2F),
-                BackColor = Color.FromArgb(51, 65, 85),
-                ForeColor = Color.White,
-                Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 4, 4)
-            };
-            btnChip.FlatAppearance.BorderSize = 0;
-            btnChip.Click += (_, _) =>
-            {
-                _txtPrompt.Text = preset.Prompt;
-                UpdatePromptAnalysis();
-            };
-            flowPresets.Controls.Add(btnChip);
-        }
-        presetsScroll.SetContent(flowPresets);
-        panel.Controls.Add(presetsScroll);
+        panel.Controls.Add(presetSelector);
 
         // 3. Prompt Giriş Alanı
         panel.Controls.Add(CreateSectionTitle("✍️ 3. Özel Sahne & Arka Plan Promptu"));
