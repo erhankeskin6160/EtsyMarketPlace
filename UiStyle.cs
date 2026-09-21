@@ -4,6 +4,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Collections.Generic;
 
@@ -84,6 +85,15 @@ internal static class UiStyle
         
         ApplyToControls(form.Controls);
 
+        if (form.IsHandleCreated)
+        {
+            EnableImmersiveDarkMode(form.Handle);
+        }
+        else
+        {
+            form.HandleCreated += (sender, e) => EnableImmersiveDarkMode(form.Handle);
+        }
+
         form.ControlAdded += (sender, e) =>
         {
             if (e.Control != null)
@@ -96,6 +106,32 @@ internal static class UiStyle
         {
             ApplyToControls(form.Controls);
         };
+    }
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+    /// <summary>
+    /// Windows 10 (18985+) ve Windows 11'de pencere başlık çubuğunu (Title Bar) modern koyu temaya (Immersive Dark Mode) geçirir.
+    /// </summary>
+    public static void EnableImmersiveDarkMode(IntPtr handle)
+    {
+        if (handle == IntPtr.Zero) return;
+        try
+        {
+            if (Environment.OSVersion.Version.Major >= 10)
+            {
+                int useImmersiveDarkMode = CurrentTheme == AppTheme.Dark ? 1 : 0;
+                if (DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useImmersiveDarkMode, sizeof(int)) != 0)
+                {
+                    DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref useImmersiveDarkMode, sizeof(int));
+                }
+            }
+        }
+        catch { }
     }
 
     public static void MakeResponsive(Form form, SimilarProductsWinForms.Controls.ModernSidebarNav? sidebar = null)
