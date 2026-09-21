@@ -31,12 +31,10 @@ internal sealed class BatchStudioPanelControl : UserControl
     private ModernBeforeAfterSlider _slider = null!;
     private ModernMultilineTextBox _txtPrompt = null!;
     private AiEngineSelectorTableControl _engineTable = null!;
-    private ProgressBar _progressBar = null!;
     private Label _lblProgress = null!;
     private Label _lblPromptScore = null!;
     private Label _lblPromptTip = null!;
-    private ListView _lvImages = null!;
-    private ImageList _imageList = null!;
+    private ModernBatchQueueListControl _queueList = null!;
     private ModernButtonControl _btnRunSingle = null!;
     private ModernButtonControl _btnRunBatch = null!;
     private ModernButtonControl _btnMagicEnhance = null!;
@@ -116,7 +114,7 @@ internal sealed class BatchStudioPanelControl : UserControl
         };
         mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 385)); // Sol: Ayarlar & Prompt
         mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));   // Orta: Before/After Slider & Alt Çubuk
-        mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330)); // Sağ: Fotoğraf Listesi & Toplu Kuyruk
+        mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 345)); // Sağ: Fotoğraf Listesi & Toplu Kuyruk
         root.Controls.Add(mainGrid, 0, 1);
 
         mainGrid.Controls.Add(BuildLeftPanel(), 0, 0);
@@ -346,33 +344,16 @@ internal sealed class BatchStudioPanelControl : UserControl
         bottomLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         bottomCard.Controls.Add(bottomLayout);
 
-        // İlerleme Bilgisi
-        var progressRow = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2
-        };
-        progressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-        progressRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-
+        // İlerleme / Durum Bilgisi (Gereksiz standart ProgressBar kaldırıldı, şık durum metni)
         _lblProgress = new Label
         {
             Dock = DockStyle.Fill,
             Text = "Hazır. Görsel seçip işlemi başlatın.",
-            Font = new Font("Segoe UI", 8.8F),
+            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold),
             ForeColor = Color.FromArgb(203, 213, 225),
             TextAlign = ContentAlignment.MiddleLeft
         };
-        progressRow.Controls.Add(_lblProgress, 0, 0);
-
-        _progressBar = new ProgressBar
-        {
-            Dock = DockStyle.Fill,
-            Height = 18,
-            Style = ProgressBarStyle.Continuous
-        };
-        progressRow.Controls.Add(_progressBar, 1, 0);
-        bottomLayout.Controls.Add(progressRow, 0, 0);
+        bottomLayout.Controls.Add(_lblProgress, 0, 0);
 
         // Butonlar Sırası
         var btnRow = new FlowLayoutPanel
@@ -478,7 +459,7 @@ internal sealed class BatchStudioPanelControl : UserControl
             CardColor = Color.FromArgb(30, 41, 59),
             BorderColor = Color.FromArgb(51, 65, 85),
             Margin = new Padding(8, 0, 0, 0),
-            Padding = new Padding(12)
+            Padding = new Padding(12, 12, 6, 12)
         };
 
         var root = new TableLayoutPanel
@@ -543,32 +524,13 @@ internal sealed class BatchStudioPanelControl : UserControl
         actionFlow.Controls.Add(btnClear);
         root.Controls.Add(actionFlow, 0, 2);
 
-        // Kuyruk ListView
-        _imageList = new ImageList
+        // Modern Kuyruk Listesi (Windows Win32 ListView & varsayılan beyaz scroll bar yerine modern SaaS kart listesi)
+        _queueList = new ModernBatchQueueListControl
         {
-            ImageSize = new Size(64, 64),
-            ColorDepth = ColorDepth.Depth32Bit
+            Dock = DockStyle.Fill
         };
-
-        _lvImages = new ListView
-        {
-            Dock = DockStyle.Fill,
-            View = View.Details,
-            FullRowSelect = true,
-            MultiSelect = false,
-            HideSelection = false,
-            BackColor = Color.FromArgb(15, 23, 42),
-            ForeColor = Color.White,
-            SmallImageList = _imageList,
-            Font = new Font("Segoe UI", 8.8F),
-            BorderStyle = BorderStyle.None
-        };
-        _lvImages.Columns.Add("Görsel", 75);
-        _lvImages.Columns.Add("Başlık / Ürün", 155);
-        _lvImages.Columns.Add("Durum", 85);
-
-        _lvImages.SelectedIndexChanged += (_, _) => OnSelectedImageChanged();
-        root.Controls.Add(_lvImages, 0, 3);
+        _queueList.SelectedItemChanged += (_, item) => OnSelectedImageChanged(item);
+        root.Controls.Add(_queueList, 0, 3);
 
         return card;
     }
@@ -579,32 +541,20 @@ internal sealed class BatchStudioPanelControl : UserControl
     {
         if (items.Count == 0) return;
 
+        var newItems = new List<BatchInputItem>();
         foreach (var item in items)
         {
             if (_loadedItems.Any(x => x.Id == item.Id)) continue;
             _loadedItems.Add(item);
+            newItems.Add(item);
+        }
 
-            try
-            {
-                using var ms = new MemoryStream(item.ImageBytes);
-                using var orig = new Bitmap(ms);
-                var thumb = new Bitmap(orig, new Size(64, 64));
-                _imageList.Images.Add(item.Id, thumb);
-            }
-            catch { }
-
-            var lvi = new ListViewItem(string.Empty, item.Id);
-            lvi.SubItems.Add(item.Title);
-            lvi.SubItems.Add("⏳ Bekliyor");
-            lvi.Tag = item;
-            _lvImages.Items.Add(lvi);
+        if (newItems.Count > 0)
+        {
+            _queueList.AddItems(newItems);
         }
 
         _lblProgress.Text = $"{_loadedItems.Count} adet görsel kuyrukta.";
-        if (_lvImages.Items.Count > 0 && _lvImages.SelectedItems.Count == 0)
-        {
-            _lvImages.Items[0].Selected = true;
-        }
     }
 
     private void ClearQueue()
@@ -612,20 +562,16 @@ internal sealed class BatchStudioPanelControl : UserControl
         if (_isProcessing) return;
         _loadedItems.Clear();
         _results.Clear();
-        _lvImages.Items.Clear();
-        _imageList.Images.Clear();
+        _queueList.ClearQueue();
+        _selectedItem = null;
         _slider.BeforeImage = null;
         _slider.AfterImage = null;
         _lblProgress.Text = "Kuyruk temizlendi.";
     }
 
-    private void OnSelectedImageChanged()
+    private void OnSelectedImageChanged(BatchInputItem? item)
     {
-        if (_lvImages.SelectedItems.Count == 0) return;
-
-        var lvi = _lvImages.SelectedItems[0];
-        if (lvi.Tag is not BatchInputItem item) return;
-
+        if (item == null) return;
         _selectedItem = item;
 
         try
@@ -910,8 +856,6 @@ internal sealed class BatchStudioPanelControl : UserControl
         if (!EnsureApiKeyConfigured(engine)) return;
 
         SetBusy(true);
-        _progressBar.Value = 0;
-        _progressBar.Maximum = _loadedItems.Count;
 
         try
         {
@@ -919,7 +863,6 @@ internal sealed class BatchStudioPanelControl : UserControl
 
             var progress = new Progress<BatchProgressReport>(report =>
             {
-                _progressBar.Value = Math.Min(report.CurrentIndex, _progressBar.Maximum);
                 _lblProgress.Text = report.StatusMessage;
 
                 if (report.LastCompletedItem != null)
@@ -961,14 +904,7 @@ internal sealed class BatchStudioPanelControl : UserControl
 
     private void UpdateListItemStatus(string itemId, string status)
     {
-        foreach (ListViewItem item in _lvImages.Items)
-        {
-            if (item.Tag is BatchInputItem bItem && bItem.Id == itemId)
-            {
-                item.SubItems[2].Text = status;
-                break;
-            }
-        }
+        _queueList.UpdateStatus(itemId, status);
     }
 
     private void SetBusy(bool busy)
