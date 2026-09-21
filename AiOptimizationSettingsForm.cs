@@ -18,12 +18,13 @@ internal sealed class AiOptimizationSettingsForm : Form
 
     // Aktif sağlayıcı butonları
     private readonly Dictionary<string, Button> _providerButtons = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ComboBox _providerComboBox = new();
     private string _currentProvider = "Gemini";
 
     // Birincil LLM ve Görsel Modelleri
-    private readonly ModernComboBox _modelComboBox = new();
+    private readonly ComboBox _modelComboBox = new();
     private readonly TextBox _customModelTextBox = new();
-    private readonly ModernComboBox _imageModelComboBox = new();
+    private readonly ComboBox _imageModelComboBox = new();
     private readonly TextBox _apiKeyTextBox = new();
 
     // Görsel Stüdyo Anahtarları
@@ -32,11 +33,11 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly TextBox _ideogramKeyTextBox = new();
 
     // Sistem Güvenliği & Fallback
-    private readonly ModernCheckBox _chkStrictLiveAi = new();
-    private readonly ModernCheckBox _chkStrictNeverOffline = new();
+    private readonly CheckBox _chkStrictLiveAi = new();
+    private readonly CheckBox _chkStrictNeverOffline = new();
 
     // Terminal & Aksiyonlar
-    private readonly ModernMultilineTextBox _statusTextBox = new();
+    private readonly TextBox _statusTextBox = new();
     private readonly Button _btnSave = new();
     private readonly Button _btnTest = new();
     private readonly Button _btnClose = new();
@@ -50,12 +51,6 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         BuildLayout();
         LoadValues();
-    }
-
-    protected override void OnHandleCreated(EventArgs e)
-    {
-        base.OnHandleCreated(e);
-        UiStyle.EnableImmersiveDarkMode(Handle);
     }
 
     private void BuildLayout()
@@ -109,13 +104,11 @@ internal sealed class AiOptimizationSettingsForm : Form
         // ==========================================
         // 2. KARTLAR (KAYDIRILABİLİR ALAN)
         // ==========================================
-        var scrollPanel = new ModernScrollPanel
+        var scrollPanel = new Panel
         {
             Dock = DockStyle.Fill,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 4, 0),
-            ScrollBarGap = 8,
-            BackColor = Color.FromArgb(15, 23, 42)
+            AutoScroll = true,
+            Padding = new Padding(0, 0, 8, 0)
         };
         mainLayout.Controls.Add(scrollPanel, 0, 1);
 
@@ -127,8 +120,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             ColumnCount = 1,
             RowCount = 3,
             Margin = new Padding(0),
-            Padding = new Padding(0),
-            BackColor = Color.FromArgb(15, 23, 42)
+            Padding = new Padding(0)
         };
         cardsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         cardsTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -143,7 +135,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         cardsTable.Controls.Add(BuildCard2_VisionStudio(), 0, 1);
         cardsTable.Controls.Add(BuildCard3_SecurityFallback(), 0, 2);
 
-        scrollPanel.SetContent(cardsTable);
+        scrollPanel.Controls.Add(cardsTable);
 
         // ==========================================
         // 3. ALT BÖLÜM (FOOTER: EYLEMLER & TERMİNAL)
@@ -255,21 +247,26 @@ internal sealed class AiOptimizationSettingsForm : Form
         pnlFooter.Controls.Add(pnlButtons, 0, 0);
 
         // Sağ Terminal Konsolu
-        var pnlTerminal = new ModernCardPanel
+        var pnlTerminal = new Panel
         {
             Dock = DockStyle.Fill,
-            CornerRadius = 8,
-            CardColor = Color.FromArgb(10, 15, 26),
-            BorderColor = Color.FromArgb(30, 45, 65),
-            Padding = new Padding(3),
-            Margin = new Padding(8, 0, 0, 0)
+            BackColor = Color.FromArgb(10, 15, 26),
+            Padding = new Padding(6)
+        };
+        pnlTerminal.Paint += (_, pe) =>
+        {
+            using var pen = new Pen(Color.FromArgb(30, 45, 65), 1.2f);
+            pe.Graphics.DrawRectangle(pen, 0, 0, pnlTerminal.Width - 1, pnlTerminal.Height - 1);
         };
 
         _statusTextBox.Dock = DockStyle.Fill;
+        _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
+        _statusTextBox.ScrollBars = ScrollBars.Vertical;
         _statusTextBox.BackColor = Color.FromArgb(10, 15, 26);
         _statusTextBox.ForeColor = Color.FromArgb(52, 211, 153); // Terminal Green
         _statusTextBox.Font = new Font("Consolas", 8.2F);
+        _statusTextBox.BorderStyle = BorderStyle.None;
         pnlTerminal.Controls.Add(_statusTextBox);
 
         pnlFooter.Controls.Add(pnlTerminal, 1, 0);
@@ -374,20 +371,17 @@ internal sealed class AiOptimizationSettingsForm : Form
         };
         pnlModelRow.Controls.Add(lblCustom, 1, 0);
 
+        StyleTextBox(_customModelTextBox);
+        _customModelTextBox.Dock = DockStyle.Fill;
         _customModelTextBox.PlaceholderText = "Örn: gemini-2.5-flash, grok-3, o3-mini...";
         _customModelTextBox.TextChanged += (_, _) =>
         {
             if (!string.IsNullOrWhiteSpace(_customModelTextBox.Text))
             {
-                string custom = _customModelTextBox.Text.Trim();
-                if (!_modelComboBox.Items.Contains(custom))
-                {
-                    _modelComboBox.Items.Insert(0, custom);
-                }
-                _modelComboBox.SelectedItem = custom;
+                _modelComboBox.Text = _customModelTextBox.Text.Trim();
             }
         };
-        pnlModelRow.Controls.Add(WrapInModernInput(_customModelTextBox), 2, 0);
+        pnlModelRow.Controls.Add(_customModelTextBox, 2, 0);
 
         content.Controls.Add(pnlModelRow, 1, 1);
 
@@ -435,7 +429,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         content.Controls.Add(CreateFieldLabel("Black Forest Labs (FLUX):"), 0, 1);
         content.Controls.Add(CreateKeyInputWithEye(_bflKeyTextBox), 1, 1);
 
-        content.Controls.Add(CreateFieldLabel("Ideogram v4 (Tipografi & Prompt):"), 0, 2);
+        content.Controls.Add(CreateFieldLabel("Ideogram v4 (Tipografi & Görsel):"), 0, 2);
         content.Controls.Add(CreateKeyInputWithEye(_ideogramKeyTextBox), 1, 2);
 
         return CreateCardContainer(
@@ -460,12 +454,10 @@ internal sealed class AiOptimizationSettingsForm : Form
         };
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        _chkStrictLiveAi.Text = "Canlı AI hata verirse haberim olmadan yerel motora geçme (Ekranda açıkça uyar)";
+        _chkStrictLiveAi.Text = "☑️ Canlı AI hata verirse haberim olmadan yerel motora geçme (Ekranda açıkça uyar)";
         _chkStrictLiveAi.AutoSize = true;
-        _chkStrictLiveAi.Font = new Font("Segoe UI Semibold", 9F);
+        _chkStrictLiveAi.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _chkStrictLiveAi.ForeColor = Color.FromArgb(52, 211, 153); // Emerald/Green accent
-        _chkStrictLiveAi.BoxCheckedColor = Color.FromArgb(16, 185, 129);
-        _chkStrictLiveAi.BoxCheckedHoverColor = Color.FromArgb(5, 150, 105);
         _chkStrictLiveAi.Cursor = Cursors.Hand;
         _chkStrictLiveAi.Margin = new Padding(0, 2, 0, 1);
 
@@ -476,15 +468,13 @@ internal sealed class AiOptimizationSettingsForm : Form
             Font = new Font("Segoe UI", 8F),
             ForeColor = Color.FromArgb(148, 163, 184),
             AutoSize = true,
-            Margin = new Padding(26, 0, 0, 8)
+            Margin = new Padding(22, 0, 0, 8)
         };
 
-        _chkStrictNeverOffline.Text = "Çevrimdışı (Offline) motoru tamamen kapat (Sadece Gerçek Canlı AI Kullan)";
+        _chkStrictNeverOffline.Text = "🚫 Çevrimdışı (Offline) motoru tamamen kapat (Sadece Gerçek Canlı AI Kullan)";
         _chkStrictNeverOffline.AutoSize = true;
-        _chkStrictNeverOffline.Font = new Font("Segoe UI Semibold", 9F);
+        _chkStrictNeverOffline.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         _chkStrictNeverOffline.ForeColor = Color.FromArgb(248, 113, 113); // Coral/Alert red accent
-        _chkStrictNeverOffline.BoxCheckedColor = Color.FromArgb(239, 68, 68);
-        _chkStrictNeverOffline.BoxCheckedHoverColor = Color.FromArgb(220, 38, 38);
         _chkStrictNeverOffline.Cursor = Cursors.Hand;
         _chkStrictNeverOffline.Margin = new Padding(0, 4, 0, 1);
 
@@ -508,7 +498,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             Font = new Font("Segoe UI", 8F),
             ForeColor = Color.FromArgb(148, 163, 184),
             AutoSize = true,
-            Margin = new Padding(26, 0, 0, 4)
+            Margin = new Padding(22, 0, 0, 4)
         };
 
         content.Controls.Add(_chkStrictLiveAi, 0, 0);
@@ -881,18 +871,21 @@ internal sealed class AiOptimizationSettingsForm : Form
     // ==========================================
     // ARAYÜZ YARDIMCILARI & KART KAPSAYICILARI
     // ==========================================
-    private static Control CreateCardContainer(string title, Control content, string? subNote = null)
+    private static Panel CreateCardContainer(string title, Control content, string? subNote = null)
     {
-        var pnl = new ModernCardPanel
+        var pnl = new Panel
         {
             Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            CornerRadius = 10,
-            CardColor = Color.FromArgb(22, 30, 46),
-            BorderColor = Color.FromArgb(38, 50, 72),
+            BackColor = Color.FromArgb(22, 30, 46),
             Padding = new Padding(18, 14, 18, 16),
             Margin = new Padding(0, 0, 0, 16)
+        };
+        pnl.Paint += (_, pe) =>
+        {
+            using var borderPen = new Pen(Color.FromArgb(38, 50, 72), 1.2f);
+            pe.Graphics.DrawRectangle(borderPen, 0, 0, pnl.Width - 1, pnl.Height - 1);
         };
 
         var cardLayout = new TableLayoutPanel
@@ -952,39 +945,21 @@ internal sealed class AiOptimizationSettingsForm : Form
         ForeColor = Color.FromArgb(180, 195, 220)
     };
 
-    private static void StyleComboBox(ModernComboBox cbo)
+    private static void StyleTextBox(TextBox txt)
+    {
+        txt.BackColor = Color.FromArgb(30, 41, 59);
+        txt.ForeColor = Color.White;
+        txt.Font = new Font("Segoe UI", 9F);
+        txt.BorderStyle = BorderStyle.FixedSingle;
+    }
+
+    private static void StyleComboBox(ComboBox cbo)
     {
         cbo.DropDownStyle = ComboBoxStyle.DropDownList;
         cbo.BackColor = Color.FromArgb(30, 41, 59);
         cbo.ForeColor = Color.White;
         cbo.Font = new Font("Segoe UI", 9F);
-    }
-
-    private static Control WrapInModernInput(TextBox txt, int height = 30)
-    {
-        var container = new Panel
-        {
-            Dock = DockStyle.Fill,
-            Height = height,
-            BackColor = Color.FromArgb(30, 41, 59),
-            Padding = new Padding(6, 4, 6, 4)
-        };
-        container.Paint += (_, pe) =>
-        {
-            pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var path = ModernCardPanel.CreateRoundedRectanglePath(new Rectangle(0, 0, container.Width - 1, container.Height - 1), 6);
-            using var pen = new Pen(Color.FromArgb(51, 65, 85), 1f);
-            pe.Graphics.DrawPath(pen, path);
-        };
-
-        txt.Dock = DockStyle.Fill;
-        txt.BorderStyle = BorderStyle.None;
-        txt.BackColor = Color.FromArgb(30, 41, 59);
-        txt.ForeColor = Color.White;
-        txt.Font = new Font("Segoe UI", 9F);
-
-        container.Controls.Add(txt);
-        return container;
+        cbo.FlatStyle = FlatStyle.Flat;
     }
 
     private static Panel CreateKeyInputWithEye(TextBox txt)
@@ -994,14 +969,12 @@ internal sealed class AiOptimizationSettingsForm : Form
             Dock = DockStyle.Fill,
             Height = 30,
             BackColor = Color.FromArgb(30, 41, 59),
-            Padding = new Padding(6, 3, 3, 3)
+            Padding = new Padding(4, 2, 2, 2)
         };
         container.Paint += (_, pe) =>
         {
-            pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            using var path = ModernCardPanel.CreateRoundedRectanglePath(new Rectangle(0, 0, container.Width - 1, container.Height - 1), 6);
             using var pen = new Pen(Color.FromArgb(51, 65, 85), 1f);
-            pe.Graphics.DrawPath(pen, path);
+            pe.Graphics.DrawRectangle(pen, 0, 0, container.Width - 1, container.Height - 1);
         };
 
         txt.Dock = DockStyle.Fill;
