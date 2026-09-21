@@ -141,7 +141,7 @@ public sealed class AiEngineSelectorTableControl : Control
             true);
 
         DoubleBuffered = true;
-        Width = 330;
+        Width = 328;
         Height = HeaderHeight + (Engines.Length * RowHeight) + FooterHeight; // 26 + 176 + 26 = 228
         Font = new Font("Segoe UI", 9F);
         Cursor = Cursors.Hand;

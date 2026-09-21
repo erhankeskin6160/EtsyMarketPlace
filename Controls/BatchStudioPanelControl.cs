@@ -114,7 +114,7 @@ internal sealed class BatchStudioPanelControl : UserControl
             ColumnCount = 3,
             Margin = new Padding(0)
         };
-        mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 360)); // Sol: Ayarlar & Prompt
+        mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 385)); // Sol: Ayarlar & Prompt
         mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));   // Orta: Before/After Slider & Alt Çubuk
         mainGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 330)); // Sağ: Fotoğraf Listesi & Toplu Kuyruk
         root.Controls.Add(mainGrid, 0, 1);
@@ -202,14 +202,15 @@ internal sealed class BatchStudioPanelControl : UserControl
             CardColor = Color.FromArgb(30, 41, 59),
             BorderColor = Color.FromArgb(51, 65, 85),
             Margin = new Padding(0, 0, 8, 0),
-            Padding = new Padding(12)
+            Padding = new Padding(12, 12, 6, 12)
         };
 
         var leftScroll = new ModernScrollPanel
         {
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 2, 0)
+            Padding = new Padding(0, 0, 2, 0),
+            ScrollBarGap = 12
         };
 
         var panel = new FlowLayoutPanel
@@ -219,14 +220,15 @@ internal sealed class BatchStudioPanelControl : UserControl
             WrapContents = false,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            AutoScroll = false
+            AutoScroll = false,
+            Padding = new Padding(0, 0, 4, 0)
         };
 
         // 1. Motor Seçimi
         panel.Controls.Add(CreateSectionTitle("⚙️ 1. AI İşlem Motoru"));
         _engineTable = new AiEngineSelectorTableControl
         {
-            Width = 330,
+            Width = 328,
             Margin = new Padding(0, 2, 0, 8)
         };
         _engineTable.KeyConfigRequested += (providerId) => OpenKeyConfigDialog(providerId);
@@ -237,7 +239,7 @@ internal sealed class BatchStudioPanelControl : UserControl
         panel.Controls.Add(CreateSectionTitle("🎨 2. Popüler Etsy Sahne Şablonları"));
         var presetSelector = new ModernScenePresetSelectorControl
         {
-            Width = 330,
+            Width = 328,
             Height = 216,
             Margin = new Padding(0, 2, 0, 8)
         };
@@ -252,10 +254,11 @@ internal sealed class BatchStudioPanelControl : UserControl
         panel.Controls.Add(CreateSectionTitle("✍️ 3. Özel Sahne & Arka Plan Promptu"));
         _txtPrompt = new ModernMultilineTextBox
         {
-            Width = 330,
+            Width = 328,
             Height = 85,
             Font = new Font("Segoe UI", 9F),
-            Text = "Professional commercial product photography, placed on a smooth polished white marble countertop in a modern bright sunlit studio, soft natural contact shadow, depth of field, 8k crisp details"
+            Text = "Professional commercial product photography, placed on a smooth polished white marble countertop in a modern bright sunlit studio, soft natural contact shadow, depth of field, 8k crisp details",
+            Margin = new Padding(0, 2, 0, 8)
         };
         _txtPrompt.TextChanged += (_, _) => UpdatePromptAnalysis();
         panel.Controls.Add(_txtPrompt);
@@ -264,7 +267,7 @@ internal sealed class BatchStudioPanelControl : UserControl
         _btnMagicEnhance = new ModernButtonControl
         {
             Text = "🪄 AI ile Promptu Profesyonelleştir",
-            Width = 330,
+            Width = 328,
             Height = 32,
             NormalColor = Color.FromArgb(99, 102, 241),
             HoverColor = Color.FromArgb(129, 140, 248),
@@ -289,7 +292,7 @@ internal sealed class BatchStudioPanelControl : UserControl
 
         _lblPromptTip = new Label
         {
-            Width = 330,
+            Width = 328,
             Height = 44,
             Font = new Font("Segoe UI", 8.2F),
             ForeColor = Color.FromArgb(148, 163, 184),

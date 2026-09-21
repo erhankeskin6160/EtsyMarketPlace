@@ -49,13 +49,13 @@ internal sealed class ModernScenePresetSelectorControl : Panel
 
     public override Size GetPreferredSize(Size proposedSize)
     {
-        return new Size(330, 216);
+        return new Size(Width > 0 ? Width : 328, 216);
     }
 
     public ModernScenePresetSelectorControl()
     {
         DoubleBuffered = true;
-        Width = 330;
+        Width = 328;
         Height = 216;
         AutoSize = false;
         BackColor = Color.Transparent;
@@ -137,7 +137,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(15, 23, 42),
-            Margin = new Padding(0, 2, 8, 4), // Dış panel kaydırma çubuğu ile bitişmemesi için sağa 8px nefes payı
+            Margin = new Padding(0, 2, 0, 4),
             Padding = new Padding(3)
         };
         _pnlCardsContainer.Paint += (_, e) =>
@@ -153,6 +153,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             Dock = DockStyle.Fill,
             Margin = Padding.Empty,
             Padding = Padding.Empty,
+            ScrollBarGap = 4,
             BackColor = Color.FromArgb(15, 23, 42)
         };
         _scrollCards.ScrollBar.Width = 6;

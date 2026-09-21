@@ -522,15 +522,18 @@ public sealed class AiUsageTrackerTests
             Assert.Equal(testJson, cached);
 
             // 4. Save daily finalized items
-            await repo.SaveCachedPayloadAsync("OpenAI", "2026-09-15", "daily_usage", "{\"tokens\":5000}", isFinalized: true);
-            await repo.SaveCachedPayloadAsync("OpenAI", "2026-09-16", "daily_usage", "{\"tokens\":8000}", isFinalized: true);
-            await repo.SaveCachedPayloadAsync("OpenAI", "2026-09-17", "daily_usage", "{\"tokens\":2000}", isFinalized: false); // Not finalized (today)
+            string day1 = DateTime.UtcNow.AddDays(-2).ToString("yyyy-MM-dd");
+            string day2 = DateTime.UtcNow.AddDays(-1).ToString("yyyy-MM-dd");
+            string today = DateTime.UtcNow.ToString("yyyy-MM-dd");
+            await repo.SaveCachedPayloadAsync("OpenAI", day1, "daily_usage", "{\"tokens\":5000}", isFinalized: true);
+            await repo.SaveCachedPayloadAsync("OpenAI", day2, "daily_usage", "{\"tokens\":8000}", isFinalized: true);
+            await repo.SaveCachedPayloadAsync("OpenAI", today, "daily_usage", "{\"tokens\":2000}", isFinalized: false); // Not finalized (today)
 
             var finalized = await repo.GetFinalizedDailyItemsAsync("OpenAI", "daily_usage", DateTimeOffset.UtcNow.AddDays(-5));
             Assert.Equal(2, finalized.Count);
-            Assert.True(finalized.ContainsKey("2026-09-15"));
-            Assert.True(finalized.ContainsKey("2026-09-16"));
-            Assert.False(finalized.ContainsKey("2026-09-17")); // Today should not be returned as finalized
+            Assert.True(finalized.ContainsKey(day1));
+            Assert.True(finalized.ContainsKey(day2));
+            Assert.False(finalized.ContainsKey(today)); // Today should not be returned as finalized
 
             // 5. Invalidate specific
             await repo.InvalidateCacheAsync("Gemini", "models_list");

@@ -1306,6 +1306,23 @@ public class ModernScrollPanel : Panel, IMessageFilter
     public ModernHScrollBar HScrollBar => _hScrollBar;
     public bool HorizontalScrollEnabled { get; set; } = false;
 
+    private int _scrollBarGap = 8;
+    /// <summary>
+    /// İçerik/tablo ile kaydırma çubuğu (scroll bar) arasındaki nefes payı (piksel).
+    /// </summary>
+    public int ScrollBarGap
+    {
+        get => _scrollBarGap;
+        set
+        {
+            if (_scrollBarGap != value)
+            {
+                _scrollBarGap = Math.Max(0, value);
+                if (!_isUpdating) RecalculateScroll();
+            }
+        }
+    }
+
 
     public ModernScrollPanel()
     {
@@ -1474,11 +1491,16 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 _content.BackColor = effectiveBg;
             }
 
-            int scrollBarW = 8;
-            int scrollBarH = 8;
+            int scrollBarW = _scrollBar.Width > 0 ? _scrollBar.Width : 8;
+            int scrollBarH = _hScrollBar.Height > 0 ? _hScrollBar.Height : 8;
 
             int availW = ClientSize.Width;
             int availH = ClientSize.Height;
+
+            int padLeft = Padding.Left;
+            int padTop = Padding.Top;
+            int padRight = Padding.Right;
+            int padBottom = Padding.Bottom;
 
             // Content preferred measurement
             int contentW = _content.PreferredSize.Width;
@@ -1494,29 +1516,40 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 }
             }
 
-            int testW = HorizontalScrollEnabled ? contentW : Math.Max(100, availW - scrollBarW);
+            int gapV = Math.Max(_scrollBarGap, padRight);
+            int gapH = Math.Max(_scrollBarGap, padBottom);
+
+            int testW = HorizontalScrollEnabled ? contentW : Math.Max(100, availW - padLeft - scrollBarW - gapV);
             int prefH = _content.GetPreferredSize(new Size(testW, 0)).Height;
             if (prefH > contentH) contentH = prefH;
 
-            bool needVBar = contentH > availH;
-            int visibleContentW = needVBar ? Math.Max(0, availW - scrollBarW) : availW;
+            int usableH = Math.Max(0, availH - padTop - padBottom);
+
+            bool needVBar = contentH > usableH;
+            int vBarSpace = needVBar ? (scrollBarW + gapV) : padRight;
+            int visibleContentW = Math.Max(0, availW - padLeft - vBarSpace);
+
             bool needHBar = HorizontalScrollEnabled && (contentW > visibleContentW);
-            int visibleContentH = needHBar ? Math.Max(0, availH - scrollBarH) : availH;
+            int hBarSpace = needHBar ? (scrollBarH + gapH) : padBottom;
+            int visibleContentH = Math.Max(0, availH - padTop - hBarSpace);
+
             if (!needVBar && contentH > visibleContentH)
             {
                 needVBar = true;
-                visibleContentW = Math.Max(0, availW - scrollBarW);
+                vBarSpace = scrollBarW + gapV;
+                visibleContentW = Math.Max(0, availW - padLeft - vBarSpace);
                 needHBar = HorizontalScrollEnabled && (contentW > visibleContentW);
-                visibleContentH = needHBar ? Math.Max(0, availH - scrollBarH) : availH;
+                hBarSpace = needHBar ? (scrollBarH + gapH) : padBottom;
+                visibleContentH = Math.Max(0, availH - padTop - hBarSpace);
             }
 
             int effectiveContentW = HorizontalScrollEnabled ? Math.Max(visibleContentW, contentW) : visibleContentW;
             int effectiveContentH = Math.Max(visibleContentH, contentH);
 
-            var targetVpBounds = new Rectangle(0, 0, visibleContentW, visibleContentH);
+            var targetVpBounds = new Rectangle(padLeft, padTop, visibleContentW, visibleContentH);
             if (_viewport.Bounds != targetVpBounds)
             {
-                _viewport.SetBounds(0, 0, visibleContentW, visibleContentH);
+                _viewport.SetBounds(padLeft, padTop, visibleContentW, visibleContentH);
             }
 
             var targetContentSize = new Size(effectiveContentW, effectiveContentH);
@@ -1540,23 +1573,31 @@ public class ModernScrollPanel : Panel, IMessageFilter
             if (_hScrollBar.Value > maxH) _hScrollBar.Value = maxH;
 
             // Layout scrollbars and corner panel
+            int vBarX = availW - scrollBarW;
+            int vBarY = padTop;
+            int vBarHeight = Math.Max(0, availH - padTop - (needHBar ? scrollBarH : 0));
+
+            int hBarX = padLeft;
+            int hBarY = availH - scrollBarH;
+            int hBarWidth = Math.Max(0, availW - padLeft - (needVBar ? scrollBarW : 0));
+
             if (needVBar && needHBar)
             {
-                _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height - scrollBarH);
-                _hScrollBar.SetBounds(0, ClientSize.Height - scrollBarH, ClientSize.Width - scrollBarW, scrollBarH);
-                _corner.SetBounds(ClientSize.Width - scrollBarW, ClientSize.Height - scrollBarH, scrollBarW, scrollBarH);
+                _scrollBar.SetBounds(vBarX, vBarY, scrollBarW, vBarHeight);
+                _hScrollBar.SetBounds(hBarX, hBarY, hBarWidth, scrollBarH);
+                _corner.SetBounds(vBarX, hBarY, scrollBarW, scrollBarH);
                 _corner.Visible = true;
                 _corner.BackColor = effectiveBg;
             }
             else if (needVBar)
             {
-                _scrollBar.SetBounds(ClientSize.Width - scrollBarW, 0, scrollBarW, ClientSize.Height);
+                _scrollBar.SetBounds(vBarX, vBarY, scrollBarW, vBarHeight);
                 _hScrollBar.Visible = false;
                 _corner.Visible = false;
             }
             else if (needHBar)
             {
-                _hScrollBar.SetBounds(0, ClientSize.Height - scrollBarH, ClientSize.Width, scrollBarH);
+                _hScrollBar.SetBounds(hBarX, hBarY, hBarWidth, scrollBarH);
                 _scrollBar.Visible = false;
                 _corner.Visible = false;
             }
