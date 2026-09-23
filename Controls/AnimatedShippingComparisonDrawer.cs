@@ -43,6 +43,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     private readonly FlowLayoutPanel _pnlAccountsFlow = new();
     private readonly Button _btnToggleAccounts = new();
     private readonly IShippingSessionManager _sessionManager = new PuppeteerShippingSessionManager();
+    private readonly ToolTip _cardToolTip = new() { InitialDelay = 300, ReshowDelay = 150 };
 
     // Filtreleme ve Sıralama
     private readonly ComboBox _cbSort = new();
@@ -490,7 +491,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             arasConnected,
             () => TriggerArasAutoLoginAsync(false),
             () => TriggerArasAutoLoginAsync(true),
-            () => PromptManualToken("Aras Global")));
+            () => DisconnectCarrierAsync("Aras Global")));
 
         // 2. ShipEntegra Kartı
         _pnlAccountsFlow.Controls.Add(CreateCarrierAccountCard(
@@ -499,7 +500,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             seConnected,
             () => TriggerShipEntegraAutoLoginAsync(false),
             () => TriggerShipEntegraAutoLoginAsync(true),
-            () => PromptManualToken("ShipEntegra")));
+            () => DisconnectCarrierAsync("ShipEntegra")));
 
         // 3. Navlungo Kartı
         var navSettings = NavlungoSettingsStore.Load();
@@ -511,7 +512,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             navConnected,
             () => TriggerNavlungoAutoLoginAsync(false),
             () => TriggerNavlungoAutoLoginAsync(true),
-            () => PromptManualToken("Navlungo")));
+            () => DisconnectCarrierAsync("Navlungo")));
 
         // 4. Shiptomore Kartı
         var stmSettings = ShiptomoreSettingsStore.Load();
@@ -523,7 +524,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             stmConnected,
             () => TriggerShiptomoreAutoLoginAsync(false),
             () => TriggerShiptomoreAutoLoginAsync(true),
-            () => PromptManualToken("Shiptomore")));
+            () => DisconnectCarrierAsync("Shiptomore")));
 
         // 5. + Yeni Firma Ekle Kartı
         _pnlAccountsFlow.Controls.Add(CreateAddCarrierPlaceholderCard());
@@ -535,7 +536,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         bool isConnected, 
         Func<Task> onAutoLogin, 
         Func<Task>? onBrowserLogin, 
-        Action? onManualToken)
+        Func<Task>? onDisconnect)
     {
         var card = new Panel
         {
@@ -639,9 +640,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         var btnAuto = new Button
         {
-            Text = "⚡ Otomatik Giriş",
+            Text = "⚡ Otomatik",
             Height = 28,
-            Width = 100,
+            Width = 92,
             BackColor = Color.FromArgb(16, 185, 129),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
@@ -650,6 +651,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             Margin = new Padding(0, 0, 4, 0)
         };
         btnAuto.FlatAppearance.BorderSize = 0;
+        _cardToolTip.SetToolTip(btnAuto, $"{title} için otomatik / kayıtlı bilgilerle giriş yap");
         btnAuto.Click += async (_, _) => await onAutoLogin();
         pnlButtons.Controls.Add(btnAuto);
 
@@ -668,27 +670,31 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 Margin = new Padding(0, 0, 4, 0)
             };
             btnBrowser.FlatAppearance.BorderSize = 0;
+            _cardToolTip.SetToolTip(btnBrowser, $"{title} web sitesini tarayıcıda açarak oturum aç ve entegre et");
             btnBrowser.Click += async (_, _) => await onBrowserLogin();
             pnlButtons.Controls.Add(btnBrowser);
         }
 
-        if (onManualToken != null)
+        if (onDisconnect != null)
         {
-            var btnToken = new Button
+            var btnDisconnect = new Button
             {
-                Text = "🔑 Token",
+                Text = "🚪",
                 Height = 28,
-                Width = 60,
-                BackColor = Color.FromArgb(51, 65, 85),
+                Width = 32,
+                BackColor = isConnected ? Color.FromArgb(220, 38, 38) : Color.FromArgb(71, 85, 105),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI Semibold", 7.5F),
-                Cursor = Cursors.Hand,
+                Font = new Font("Segoe UI Emoji", 8.5F),
+                Cursor = isConnected ? Cursors.Hand : Cursors.Default,
                 Margin = new Padding(0)
             };
-            btnToken.FlatAppearance.BorderSize = 0;
-            btnToken.Click += (_, _) => onManualToken();
-            pnlButtons.Controls.Add(btnToken);
+            btnDisconnect.FlatAppearance.BorderSize = 0;
+            _cardToolTip.SetToolTip(btnDisconnect, isConnected 
+                ? $"{title} Bağlantısını Kes ve Oturumu Kapat" 
+                : $"{title} için aktif oturum yok");
+            btnDisconnect.Click += async (_, _) => await onDisconnect();
+            pnlButtons.Controls.Add(btnDisconnect);
         }
 
         pnlRight.Controls.Add(pnlButtons, 0, 1);
@@ -1846,271 +1852,71 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         }
     }
 
-    private void PromptManualToken(string providerName)
+    private async Task DisconnectCarrierAsync(string providerName)
     {
         bool isAras = providerName.Contains("Aras", StringComparison.OrdinalIgnoreCase);
         bool isNav = providerName.Contains("Navlungo", StringComparison.OrdinalIgnoreCase);
         bool isStm = providerName.Contains("Shiptomore", StringComparison.OrdinalIgnoreCase);
-        string currentToken = isAras 
-            ? ArasGlobalSettingsStore.Load().BearerToken 
-            : (isNav 
-                ? (NavlungoSettingsStore.Load().SessionCookie ?? NavlungoSettingsStore.Load().IdToken ?? "") 
-                : (isStm ? (ShiptomoreSettingsStore.Load().SessionCookie ?? "") : ShipEntegraSettingsStore.Load().BearerToken));
+        bool isSe = providerName.Contains("ShipEntegra", StringComparison.OrdinalIgnoreCase);
 
-        using var dlg = new Form
+        bool isConnected = false;
+        if (isAras) isConnected = !string.IsNullOrWhiteSpace(ArasGlobalSettingsStore.Load().BearerToken);
+        else if (isNav)
         {
-            Text = $"{providerName} - Oturum / Token Düzenle",
-            Size = new Size(560, 290),
-            StartPosition = FormStartPosition.CenterParent,
-            BackColor = Color.FromArgb(15, 23, 42),
-            ForeColor = Color.White,
-            FormBorderStyle = FormBorderStyle.FixedDialog,
-            MaximizeBox = false,
-            MinimizeBox = false
-        };
+            var s = NavlungoSettingsStore.Load();
+            isConnected = !string.IsNullOrWhiteSpace(s.SessionCookie) || !string.IsNullOrWhiteSpace(s.IdToken);
+        }
+        else if (isStm) isConnected = !string.IsNullOrWhiteSpace(ShiptomoreSettingsStore.Load().SessionCookie);
+        else if (isSe) isConnected = !string.IsNullOrWhiteSpace(ShipEntegraSettingsStore.Load().BearerToken);
 
-        var lbl = new Label
+        if (!isConnected)
         {
-            Text = isNav
-                ? "Navlungo Cookie / cURL / Token Bilgisini Yapıştırın:\n(DevTools Network sekmesinde 'tr?source=user' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' yapabilirsiniz)"
-                : (isStm 
-                    ? "Shiptomore Cookie / cURL / Session ID Bilgisini Yapıştırın:\n(DevTools Network sekmesinde 'calculate' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' yapabilirsiniz)"
-                    : $"{providerName} için id_token, Bearer token veya Cookie bilgisini yapıştırın:"),
-            Dock = DockStyle.Top,
-            Height = 44,
-            Padding = new Padding(12, 8, 12, 0),
-            ForeColor = Color.FromArgb(203, 213, 225),
-            Font = new Font("Segoe UI", 9F)
-        };
-        dlg.Controls.Add(lbl);
-
-        var txt = new TextBox
-        {
-            Text = currentToken,
-            Dock = DockStyle.Top,
-            Height = 90,
-            Multiline = true,
-            BackColor = Color.FromArgb(30, 41, 59),
-            ForeColor = Color.White,
-            ScrollBars = ScrollBars.Vertical
-        };
-        var txtContainer = new Panel { Dock = DockStyle.Fill, Padding = new Padding(12, 6, 12, 6) };
-        txtContainer.Controls.Add(txt);
-        dlg.Controls.Add(txtContainer);
-
-        var pnlBtns = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            Height = 46,
-            FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(12, 6, 12, 6)
-        };
-
-        var btnSave = new Button
-        {
-            Text = "💾 Kaydet & Uygula",
-            BackColor = Color.FromArgb(16, 185, 129),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Height = 32,
-            Width = 140,
-            Cursor = Cursors.Hand
-        };
-        btnSave.FlatAppearance.BorderSize = 0;
-        btnSave.Click += async (_, _) =>
-        {
-            string val = NavlungoCookieSanitizer.Sanitize(txt.Text);
-
-            if (isAras)
-            {
-                var s = ArasGlobalSettingsStore.Load();
-                s.BearerToken = val;
-                ArasGlobalSettingsStore.Save(s);
-            }
-            else if (isNav)
-            {
-                var s = NavlungoSettingsStore.Load();
-                if (val.Contains("=") || val.Contains(";"))
-                {
-                    s.SessionCookie = val;
-                }
-                else
-                {
-                    s.IdToken = val;
-                }
-                s.TokenLastUpdatedUtc = DateTime.UtcNow;
-                NavlungoSettingsStore.Save(s);
-            }
-            else if (isStm)
-            {
-                var s = ShiptomoreSettingsStore.Load();
-                s.SessionCookie = val;
-                s.TokenLastUpdatedUtc = DateTime.UtcNow;
-                ShiptomoreSettingsStore.Save(s);
-            }
-            else
-            {
-                var s = ShipEntegraSettingsStore.Load();
-                s.BearerToken = val;
-                ShipEntegraSettingsStore.Save(s);
-            }
-            dlg.DialogResult = DialogResult.OK;
-            RebuildAccountsHub();
-            await FetchAllQuotesAsync();
-        };
-
-        var btnPaste = new Button
-        {
-            Text = "📋 Yapıştır",
-            BackColor = Color.FromArgb(51, 65, 85),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Height = 32,
-            Width = 90,
-            Cursor = Cursors.Hand
-        };
-        btnPaste.FlatAppearance.BorderSize = 0;
-        btnPaste.Click += (_, _) =>
-        {
-            if (Clipboard.ContainsText())
-            {
-                string raw = Clipboard.GetText();
-                txt.Text = isNav ? NavlungoCookieSanitizer.Sanitize(raw) : raw.Trim();
-            }
-        };
-
-        var btnReset = new Button
-        {
-            Text = "🗑️ Sıfırla",
-            BackColor = Color.FromArgb(239, 68, 68),
-            ForeColor = Color.White,
-            FlatStyle = FlatStyle.Flat,
-            Height = 32,
-            Width = 90,
-            Cursor = Cursors.Hand
-        };
-        btnReset.FlatAppearance.BorderSize = 0;
-        btnReset.Click += async (_, _) =>
-        {
-            txt.Text = string.Empty;
-            if (isStm)
-            {
-                var s = ShiptomoreSettingsStore.Load();
-                s.SessionCookie = null;
-                ShiptomoreSettingsStore.Save(s);
-            }
-            else if (isNav)
-            {
-                var s = NavlungoSettingsStore.Load();
-                s.SessionCookie = null;
-                s.IdToken = null;
-                NavlungoSettingsStore.Save(s);
-            }
-            else if (isAras)
-            {
-                var s = ArasGlobalSettingsStore.Load();
-                s.BearerToken = null;
-                ArasGlobalSettingsStore.Save(s);
-            }
-            else
-            {
-                var s = ShipEntegraSettingsStore.Load();
-                s.BearerToken = null;
-                ShipEntegraSettingsStore.Save(s);
-            }
-            dlg.DialogResult = DialogResult.OK;
-            RebuildAccountsHub();
-            await FetchAllQuotesAsync();
-        };
-
-        pnlBtns.Controls.Add(btnSave);
-        pnlBtns.Controls.Add(btnPaste);
-        pnlBtns.Controls.Add(btnReset);
-
-        if (isNav || isStm)
-        {
-            var btnTest = new Button
-            {
-                Text = "🧪 Test Et",
-                BackColor = Color.FromArgb(14, 165, 233),
-                ForeColor = Color.White,
-                FlatStyle = FlatStyle.Flat,
-                Height = 32,
-                Width = 90,
-                Cursor = Cursors.Hand
-            };
-            btnTest.FlatAppearance.BorderSize = 0;
-            btnTest.Click += async (_, _) =>
-            {
-                string sanitized = NavlungoCookieSanitizer.Sanitize(txt.Text);
-                if (string.IsNullOrWhiteSpace(sanitized))
-                {
-                    MessageBox.Show("Lütfen önce bir token, cURL veya Cookie yapıştırın.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                btnTest.Enabled = false;
-                btnTest.Text = "⏳ Test...";
-                try
-                {
-                    if (isNav)
-                    {
-                        var testSettings = new NavlungoSettings();
-                        if (sanitized.Contains("=") || sanitized.Contains(";")) testSettings.SessionCookie = sanitized;
-                        else testSettings.IdToken = sanitized;
-
-                        var client = new NavlungoApiClient();
-                        var offers = await client.FetchLiveQuotesAsync(new NavlungoQuoteRequest
-                        {
-                            FromCountry = "TR",
-                            ToCountry = "US",
-                            WeightKg = 0.4,
-                            LengthCm = 20,
-                            WidthCm = 15,
-                            HeightCm = 10
-                        }, testSettings);
-
-                        var widect = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
-                        if (widect != null && widect.Note.Contains("Üye", StringComparison.OrdinalIgnoreCase))
-                        {
-                            MessageBox.Show($"🎉 Navlungo Üye Oturumu Başarılı!\nWidect Üye İndirimli Fiyatı: ${widect.Price:F2} USD\n(Tarifeniz portal ile %100 eşitlendi)", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                        else if (widect != null)
-                        {
-                            MessageBox.Show($"⚠️ Canlı fiyat alındı ancak oturum tanınamadı (${widect.Price:F2} USD - {widect.Note}).\n\nTam üye fiyatı ($15.03) için lütfen:\nDevTools Network sekmesinde 'tr?source=user' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' seçeneğini kullanarak kutucuğa yapıştırın veya 'Tarayıcı' (🌐) butonunu kullanın.", "Bilgilendirme", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        }
-                        else
-                        {
-                            MessageBox.Show($"✅ {offers.Count} adet alternatif kargo teklifi alındı.", "Test Sonucu", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                    }
-                    else if (isStm)
-                    {
-                        var (isValid, userName, uid) = await ShiptomoreApiClient.ValidateSessionAsync(sanitized);
-                        if (isValid)
-                        {
-                            MessageBox.Show($"🎉 Shiptomore Üye Oturumu Başarılı!\nKullanıcı: {userName ?? "Üye"} (UID: {uid})\n\nOdoo sunucusu kimliğinizi %100 doğruladı. Tüm sipariş ve paket boyutlarında özel indirimli fiyatlarınız aktiftir.", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                        }
-                        else
-                        {
-                            MessageBox.Show("⚠️ Yapıştırılan çerez geçerli bir üye oturumu içermiyor veya süresi dolmuş.\n(Odoo sunucusu anonim ziyaretçi olduğunu bildirdi).\n\nİndirimli üye fiyatları için lütfen 'Tarayıcı' (🌐) butonu ile giriş yapın veya tarayıcıda giriş yaptıktan sonra 'Copy > Copy as cURL' yapıp yapıştırın.", "Oturum Doğrulanamadı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"❌ Bağlantı Testi Başarısız:\n{ex.Message}", "Test Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
-                finally
-                {
-                    btnTest.Enabled = true;
-                    btnTest.Text = "🧪 Test Et";
-                }
-            };
-            pnlBtns.Controls.Add(btnTest);
+            MessageBox.Show($"{providerName} için zaten aktif bir oturum veya bağlantı bulunmuyor.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
         }
 
-        dlg.Controls.Add(pnlBtns);
+        var result = MessageBox.Show(
+            $"{providerName} oturumunu kapatmak ve sistem bağlantısını kesmek istediğinize emin misiniz?\n\n(Bu işlem aktif oturum çerezlerini temizler ve canlı fiyatları standart liste durumuna çeker.)",
+            $"{providerName} - Bağlantıyı Kes / Çıkış",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question);
 
-        dlg.ShowDialog(FindForm());
+        if (result != DialogResult.Yes) return;
+
+        if (isAras)
+        {
+            var s = ArasGlobalSettingsStore.Load();
+            s.BearerToken = string.Empty;
+            s.TokenLastUpdatedUtc = null;
+            ArasGlobalSettingsStore.Save(s);
+        }
+        else if (isNav)
+        {
+            var s = NavlungoSettingsStore.Load();
+            s.SessionCookie = null;
+            s.IdToken = null;
+            s.TokenLastUpdatedUtc = null;
+            NavlungoSettingsStore.Save(s);
+        }
+        else if (isStm)
+        {
+            var s = ShiptomoreSettingsStore.Load();
+            s.SessionCookie = null;
+            s.TokenLastUpdatedUtc = null;
+            ShiptomoreSettingsStore.Save(s);
+        }
+        else if (isSe)
+        {
+            var s = ShipEntegraSettingsStore.Load();
+            s.BearerToken = string.Empty;
+            s.TokenLastUpdatedUtc = null;
+            ShipEntegraSettingsStore.Save(s);
+        }
+
+        _lblStatus.Text = $"🔴 {providerName} oturumu kapatıldı ve bağlantı kesildi.";
+        _lblStatus.ForeColor = Color.FromArgb(248, 113, 113);
+
+        RebuildAccountsHub();
+        await FetchAllQuotesAsync();
     }
 }
