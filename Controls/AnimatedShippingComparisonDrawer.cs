@@ -1052,7 +1052,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             foreach (var off in navOffers)
             {
-                bool isLiveOffer = !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase);
+                bool isLiveOffer = off.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase) || 
+                                   (!off.Note.Contains("Referans", StringComparison.OrdinalIgnoreCase) && !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase));
                 _loadedQuotes.Add(new UnifiedShippingQuote
                 {
                     Provider = "Navlungo",
@@ -1693,7 +1694,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         var lbl = new Label
         {
-            Text = $"{providerName} için id_token, Bearer token veya Cookie bilgisini yapıştırın:",
+            Text = isNav
+                ? "Navlungo için Chrome DevTools'tan kopyalanan Cookie başlığını veya tokeni yapıştırın:"
+                : $"{providerName} için id_token, Bearer token veya Cookie bilgisini yapıştırın:",
             Dock = DockStyle.Top,
             Height = 36,
             Padding = new Padding(12, 10, 12, 0),
@@ -1736,7 +1739,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         btnSave.FlatAppearance.BorderSize = 0;
         btnSave.Click += async (_, _) =>
         {
-            string val = txt.Text.Trim();
+            string val = txt.Text.Replace("\r\n", " ").Replace("\n", " ").Trim();
+            if (val.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase)) val = val[7..].Trim();
+
             if (isAras)
             {
                 var s = ArasGlobalSettingsStore.Load();
@@ -1774,11 +1779,75 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         btnPaste.FlatAppearance.BorderSize = 0;
         btnPaste.Click += (_, _) =>
         {
-            if (Clipboard.ContainsText()) txt.Text = Clipboard.GetText().Trim();
+            if (Clipboard.ContainsText())
+            {
+                string pasted = Clipboard.GetText().Replace("\r\n", " ").Replace("\n", " ").Trim();
+                if (pasted.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase)) pasted = pasted[7..].Trim();
+                txt.Text = pasted;
+            }
         };
 
         pnlBtns.Controls.Add(btnSave);
         pnlBtns.Controls.Add(btnPaste);
+
+        if (isNav)
+        {
+            var btnTest = new Button
+            {
+                Text = "🧪 Test Et",
+                BackColor = Color.FromArgb(14, 165, 233),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Height = 32,
+                Width = 90,
+                Cursor = Cursors.Hand
+            };
+            btnTest.FlatAppearance.BorderSize = 0;
+            btnTest.Click += async (_, _) =>
+            {
+                string val = txt.Text.Replace("\r\n", " ").Replace("\n", " ").Trim();
+                if (val.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase)) val = val[7..].Trim();
+                if (string.IsNullOrWhiteSpace(val))
+                {
+                    MessageBox.Show("Lütfen önce bir token veya Cookie yapıştırın.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                btnTest.Enabled = false;
+                btnTest.Text = "⏳ Test...";
+                try
+                {
+                    var testSettings = new NavlungoSettings();
+                    if (val.Contains("=") || val.Contains(";")) testSettings.SessionCookie = val;
+                    else testSettings.IdToken = val;
+
+                    var client = new NavlungoApiClient();
+                    var offers = await client.FetchLiveQuotesAsync(new NavlungoQuoteRequest
+                    {
+                        FromCountry = "TR",
+                        ToCountry = "US",
+                        WeightKg = 0.4,
+                        LengthCm = 20,
+                        WidthCm = 15,
+                        HeightCm = 10
+                    }, testSettings);
+
+                    var widect = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
+                    string priceInfo = widect != null ? $"Widect: ${widect.Price:F2} ({widect.Note})" : $"{offers.Count} teklif alındı.";
+                    MessageBox.Show($"✅ Navlungo Bağlantı Testi Başarılı!\n{priceInfo}", "Test Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"❌ Bağlantı Testi Başarısız:\n{ex.Message}", "Test Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+                finally
+                {
+                    btnTest.Enabled = true;
+                    btnTest.Text = "🧪 Test Et";
+                }
+            };
+            pnlBtns.Controls.Add(btnTest);
+        }
+
         dlg.Controls.Add(pnlBtns);
 
         dlg.ShowDialog(FindForm());

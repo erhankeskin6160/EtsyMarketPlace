@@ -137,11 +137,58 @@ public sealed class NavlungoShippingTests
         var fallbackQuotes = NavlungoApiClient.GenerateRealisticFallbackQuotes(req);
 
         Assert.NotNull(fallbackQuotes);
-        Assert.True(fallbackQuotes.Count >= 3);
-        Assert.Contains(fallbackQuotes, q => q.Carrier == "Widect");
-        Assert.Contains(fallbackQuotes, q => q.Carrier == "FedEx");
-        Assert.Contains(fallbackQuotes, q => q.Carrier == "UPS");
+        Assert.True(fallbackQuotes.Count >= 4);
+        var widect = fallbackQuotes.FirstOrDefault(q => q.Carrier == "Widect");
+        Assert.NotNull(widect);
+        Assert.Equal(15.03m, widect.Price);
+
+        var fedex = fallbackQuotes.FirstOrDefault(q => q.Carrier == "FedEx");
+        Assert.NotNull(fedex);
+        Assert.Equal(20.75m, fedex.Price);
+
+        var upsExpress = fallbackQuotes.FirstOrDefault(q => q.Carrier == "UPS" && q.ServiceType == "Express");
+        Assert.NotNull(upsExpress);
+        Assert.Equal(34.00m, upsExpress.Price);
+
+        var upsSaver = fallbackQuotes.FirstOrDefault(q => q.Carrier == "UPS" && q.ServiceType == "Express Saver");
+        Assert.NotNull(upsSaver);
+        Assert.Equal(38.85m, upsSaver.Price);
+
         Assert.All(fallbackQuotes, q => Assert.True(q.Price > 0));
+    }
+
+    [Fact]
+    public async Task FetchLiveQuotesAsync_FallsBackToAnonymous_WhenAuthenticatedReturns500()
+    {
+        string mockRscJsonChunk = @"
+1:[{""lastMile"":""thy"",""price"":19.96,""currency"":""USD"",""serviceType"":""economy"",""minTransitTime"":3,""maxTransitTime"":7,""tags"":[]}]
+";
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(req =>
+        {
+            // If authenticated request (has Cookie or Next-Action is auth), return 500
+            if (req.Headers.Contains("Cookie"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.InternalServerError)
+                {
+                    Content = new StringContent("1:E{\"digest\":\"3601470081\"}")
+                };
+            }
+            // Fallback anonymous request returns 200 with live quotes
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(mockRscJsonChunk)
+            };
+        }));
+
+        var client = new NavlungoApiClient(httpClient);
+        var settings = new NavlungoSettings { SessionCookie = "invalid_cookie=123" };
+        var offers = await client.FetchLiveQuotesAsync(new NavlungoQuoteRequest(), settings);
+
+        Assert.NotEmpty(offers);
+        var widect = offers.First();
+        Assert.Equal("Widect", widect.Carrier);
+        Assert.Equal(19.96m, widect.Price);
+        Assert.Contains("Oturum Çerezi Yenilenmeli", widect.Note);
     }
 
     [Fact]

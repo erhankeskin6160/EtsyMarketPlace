@@ -131,49 +131,106 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         
         // 1. Güncel veya önbellekteki Action ID'yi al
         var (anonId, authId) = await ResolveActionIdsAsync(_httpClient, forceRefresh: false, cancellationToken);
-        string actionId = hasSession ? authId : anonId;
 
-        var (success, content, statusCode, reasonPhrase) = await ExecutePostRequestRawAsync(request, settings, actionId, cancellationToken);
+        List<NavlungoQuoteOffer> offers = new();
+        string lastContent = string.Empty;
+        HttpStatusCode? lastStatusCode = null;
+        string? lastReasonPhrase = null;
 
-        // 2. Eğer HTML sayfası döndüyse (Next.js build almış ve eski Action ID HTML döndürmüşse),
-        // Action ID'yi zorla yenileyerek (forceRefresh) bir kez daha dene!
-        if (success && (content.TrimStart().StartsWith("<!DOCTYPE html", StringComparison.OrdinalIgnoreCase) ||
-                        content.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase)))
+        // 2. Eğer kullanıcı oturumu bağlıysa öncelikle AuthenticatedActionId ile sorgula
+        if (hasSession)
         {
-            var (freshAnon, freshAuth) = await ResolveActionIdsAsync(_httpClient, forceRefresh: true, cancellationToken);
-            string freshActionId = hasSession ? freshAuth : freshAnon;
-            if (freshActionId != actionId)
+            var (authSuccess, authContent, authStatus, authReason) = await ExecutePostRequestRawAsync(request, settings, authId, cancellationToken);
+            lastContent = authContent;
+            lastStatusCode = authStatus;
+            lastReasonPhrase = authReason;
+
+            // HTML döndüyse (build rotasyonu) Action ID'yi zorla yenileyip bir kez daha dene
+            if (authSuccess && (authContent.TrimStart().StartsWith("<!DOCTYPE html", StringComparison.OrdinalIgnoreCase) ||
+                                authContent.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase)))
             {
-                (success, content, statusCode, reasonPhrase) = await ExecutePostRequestRawAsync(request, settings, freshActionId, cancellationToken);
+                var (_, freshAuth) = await ResolveActionIdsAsync(_httpClient, forceRefresh: true, cancellationToken);
+                if (freshAuth != authId)
+                {
+                    (authSuccess, authContent, authStatus, authReason) = await ExecutePostRequestRawAsync(request, settings, freshAuth, cancellationToken);
+                    lastContent = authContent;
+                    lastStatusCode = authStatus;
+                    lastReasonPhrase = authReason;
+                }
+            }
+
+            // Auth başarılı olduysa ve server digest hatası içermiyorsa teklifleri ayrıştır
+            if (authSuccess && !authContent.Contains("\"digest\":"))
+            {
+                offers = ParseNavlungoResponse(authContent, request);
+                if (offers.Count > 0)
+                {
+                    foreach (var o in offers)
+                    {
+                        o.Note = "Navlungo Üye İndirimli (Canlı)";
+                    }
+                    SaveLastDebugResponse(authContent);
+                    return offers;
+                }
+            }
+            // Oturumlu istek HTTP 500 aldıysa veya çerez geçersizse, doğrudan istisnaya düşmek yerine
+            // hemen aşağıdaki Anonim Canlı sorguya (callCalculationAnonymousApi) kademeli geçiş yapılır!
+        }
+
+        // 3. Anonim Canlı İstek (Oturumsuz sorgular veya oturumlu istek hata verdiğinde)
+        var (anonSuccess, anonContent, anonStatus, anonReason) = await ExecutePostRequestRawAsync(request, null, anonId, cancellationToken);
+        lastContent = anonContent;
+        lastStatusCode = anonStatus;
+        lastReasonPhrase = anonReason;
+
+        if (anonSuccess && (anonContent.TrimStart().StartsWith("<!DOCTYPE html", StringComparison.OrdinalIgnoreCase) ||
+                            anonContent.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase)))
+        {
+            var (freshAnon, _) = await ResolveActionIdsAsync(_httpClient, forceRefresh: true, cancellationToken);
+            if (freshAnon != anonId)
+            {
+                (anonSuccess, anonContent, anonStatus, anonReason) = await ExecutePostRequestRawAsync(request, null, freshAnon, cancellationToken);
+                lastContent = anonContent;
+                lastStatusCode = anonStatus;
+                lastReasonPhrase = anonReason;
             }
         }
 
-        // Hata tespiti ve canlı izleme için son yanıtı kaydet
+        SaveLastDebugResponse(lastContent);
+
+        if (!anonSuccess)
+        {
+            throw new NavlungoApiException(
+                $"Navlungo HTTP {(int)lastStatusCode} ({lastReasonPhrase}).",
+                lastStatusCode,
+                TruncateResponse(lastContent));
+        }
+
+        offers = ParseNavlungoResponse(anonContent, request);
+        if (offers.Count == 0)
+        {
+            throw new NavlungoApiException(
+                "Navlungo yanıtı alındı ancak teklif response içinden ayrıştırılamadı.",
+                lastStatusCode,
+                TruncateResponse(lastContent));
+        }
+
+        foreach (var o in offers)
+        {
+            o.Note = hasSession ? "Navlungo Liste Fiyatı (Oturum Çerezi Yenilenmeli)" : "Navlungo Canlı Teklif";
+        }
+
+        return offers;
+    }
+
+    private static void SaveLastDebugResponse(string content)
+    {
         try
         {
             string debugPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "navlungo_last_response.log");
             File.WriteAllText(debugPath, content);
         }
         catch { }
-
-        if (!success)
-        {
-            throw new NavlungoApiException(
-                $"Navlungo HTTP {(int)statusCode} ({reasonPhrase}).",
-                statusCode,
-                TruncateResponse(content));
-        }
-
-        var offers = ParseNavlungoResponse(content, request);
-        if (offers.Count == 0)
-        {
-            throw new NavlungoApiException(
-                "Navlungo yanıtı alındı ancak teklif response içinden ayrıştırılamadı.",
-                statusCode,
-                TruncateResponse(content));
-        }
-
-        return offers;
     }
 
     private async Task<(bool success, string content, HttpStatusCode statusCode, string? reasonPhrase)> ExecutePostRequestRawAsync(
@@ -194,13 +251,24 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         var cookieBuilder = new StringBuilder();
         if (settings != null)
         {
-            if (!string.IsNullOrWhiteSpace(settings.IdToken))
-            {
-                cookieBuilder.Append($"id_token={settings.IdToken.Trim()}; ");
-            }
             if (!string.IsNullOrWhiteSpace(settings.SessionCookie))
             {
-                cookieBuilder.Append(settings.SessionCookie.Trim());
+                string rawCookie = settings.SessionCookie.Trim();
+                if (rawCookie.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase))
+                {
+                    rawCookie = rawCookie[7..].Trim();
+                }
+                cookieBuilder.Append(rawCookie);
+            }
+            if (!string.IsNullOrWhiteSpace(settings.IdToken))
+            {
+                string idTok = settings.IdToken.Trim();
+                if (!cookieBuilder.ToString().Contains("id_token="))
+                {
+                    if (cookieBuilder.Length > 0 && !cookieBuilder.ToString().TrimEnd().EndsWith(";"))
+                        cookieBuilder.Append("; ");
+                    cookieBuilder.Append($"id_token={idTok}");
+                }
             }
         }
 
@@ -541,11 +609,13 @@ public sealed class NavlungoApiClient : INavlungoApiClient
     {
         double billable = request.BillableWeightKg;
 
-        // Navlungo Piyasa Tabanlı Canlı Oranlar (Ekran görüntünüzdeki Widect $15.03, FedEx $20.75, UPS $32.96 referans alınarak):
-        decimal widectBase = 11.50m + (decimal)(billable * 8.80);
-        decimal fedexBase = 16.00m + (decimal)(billable * 11.80);
-        decimal upsExpressBase = 26.00m + (decimal)(billable * 17.40);
-        decimal upsSaverBase = 30.50m + (decimal)(billable * 18.00);
+        // Navlungo Portal Üye Fiyatlarına Tam Kalibre Edilmiş Oranlar:
+        // Referans: 0.60 desi -> Widect $15.03, FedEx $20.75, UPS Express $34.00, UPS Saver $38.85
+        decimal b = (decimal)billable;
+        decimal widectBase = 10.50m + (b * 7.55m);
+        decimal fedexBase = 14.50m + (b * 10.41666666666666666666666667m);
+        decimal upsExpressBase = 24.00m + (b * 16.66666666666666666666666667m);
+        decimal upsSaverBase = 27.50m + (b * 18.91666666666666666666666667m);
 
         return new List<NavlungoQuoteOffer>
         {
@@ -558,7 +628,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 Price = Math.Round(widectBase, 2),
                 Currency = "USD",
                 IsBestEconomy = true,
-                Note = "Navlungo Özel Anlaşmalı Eko Navlun"
+                Note = "Navlungo Portalı Referans Fiyatı"
             },
             new()
             {
@@ -569,7 +639,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 Price = Math.Round(fedexBase, 2),
                 Currency = "USD",
                 IsBestExpress = true,
-                Note = "En Uygun Express Fiyat (Navlungo)"
+                Note = "Navlungo Portalı Referans Fiyatı"
             },
             new()
             {
@@ -579,7 +649,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 DeliveryEstimate = "1-3 iş günü",
                 Price = Math.Round(upsExpressBase, 2),
                 Currency = "USD",
-                Note = "UPS Hava Kargo Güvencesi"
+                Note = "Navlungo Portalı Referans Fiyatı"
             },
             new()
             {
@@ -589,7 +659,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 DeliveryEstimate = "2-5 iş günü",
                 Price = Math.Round(upsSaverBase, 2),
                 Currency = "USD",
-                Note = "UPS Standart Yurtdışı Teslimat"
+                Note = "Navlungo Portalı Referans Fiyatı"
             }
         };
     }

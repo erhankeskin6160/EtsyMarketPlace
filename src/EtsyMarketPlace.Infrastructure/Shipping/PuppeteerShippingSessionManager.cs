@@ -366,7 +366,24 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                     if (idTokCookie != null && !string.IsNullOrWhiteSpace(idTokCookie.Value))
                     {
                         capturedToken = idTokCookie.Value;
+                    }
+
+                    // Herhangi bir oturum çerezi veya kullanıcı göstergesi varsa (_SessionUser, nv_attr, session, token, auth vb.)
+                    bool hasSessionCookie = cookies.Any(c => 
+                        c.Name.Contains("session", StringComparison.OrdinalIgnoreCase) || 
+                        c.Name.Contains("token", StringComparison.OrdinalIgnoreCase) || 
+                        c.Name.Contains("nv_attr", StringComparison.OrdinalIgnoreCase) ||
+                        c.Name.Contains("user", StringComparison.OrdinalIgnoreCase) ||
+                        c.Name.Contains("auth", StringComparison.OrdinalIgnoreCase));
+
+                    bool navigatedAwayFromLogin = !page.Url.Contains("/login", StringComparison.OrdinalIgnoreCase) && 
+                                                 !page.Url.Contains("/giris", StringComparison.OrdinalIgnoreCase) &&
+                                                 !page.Url.Contains("/auth", StringComparison.OrdinalIgnoreCase);
+
+                    if ((hasSessionCookie && navigatedAwayFromLogin) || !string.IsNullOrWhiteSpace(capturedToken))
+                    {
                         capturedCookies = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+                        capturedToken ??= "navlungo_browser_session";
                         break;
                     }
                 }
