@@ -435,6 +435,157 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
         }
     }
 
+    public async Task<string?> RefreshShiptomoreTokenAsync(
+        string? email = null,
+        string? password = null,
+        bool showBrowser = false,
+        Action<string>? statusCallback = null,
+        CancellationToken ct = default)
+    {
+        string? browserPath = VisualBrowserAgentService.ResolveInstalledBrowserPath();
+        if (string.IsNullOrEmpty(browserPath))
+        {
+            statusCallback?.Invoke("⚠️ Yüklü Google Chrome veya Edge bulunamadı. Lütfen tarayıcı yükleyin.");
+            return null;
+        }
+
+        var launchOptions = new LaunchOptions
+        {
+            Headless = !showBrowser,
+            ExecutablePath = browserPath,
+            UserDataDir = GetProfileDirectory("Shiptomore"),
+            IgnoredDefaultArgs = new[] { "--enable-automation" },
+            Args = new[]
+            {
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-infobars",
+                "--window-size=1200,800"
+            },
+            DefaultViewport = new ViewPortOptions { Width = 1180, Height = 760 }
+        };
+
+        IBrowser? browser = null;
+        try
+        {
+            statusCallback?.Invoke("🚀 Shiptomore tarayıcı oturumu başlatılıyor...");
+            browser = await Puppeteer.LaunchAsync(launchOptions);
+            var pages = await browser.PagesAsync();
+            var page = pages.Length > 0 ? pages[0] : await browser.NewPageAsync();
+
+            string? capturedSessionId = null;
+            string? capturedCookies = null;
+
+            // Ağ trafiğini dinleyerek /parcel/calculate veya Odoo session çerezlerini yakala
+            page.Response += (_, e) =>
+            {
+                try
+                {
+                    if (e.Response.Headers.TryGetValue("set-cookie", out var setCookieHeader))
+                    {
+                        if (setCookieHeader.Contains("session_id=", StringComparison.OrdinalIgnoreCase))
+                        {
+                            var match = System.Text.RegularExpressions.Regex.Match(setCookieHeader, @"session_id=([^;,\s]+)");
+                            if (match.Success)
+                            {
+                                capturedSessionId = match.Groups[1].Value;
+                            }
+                        }
+                    }
+                }
+                catch { }
+            };
+
+            statusCallback?.Invoke("🌐 Shiptomore giriş sayfasına gidiliyor...");
+            await page.GoToAsync("https://shiptomore.com/web/login?redirect=%2Fmy%2Fparcel-calculator", new NavigationOptions
+            {
+                WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                Timeout = 30000
+            });
+
+            if (!showBrowser && !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
+            {
+                statusCallback?.Invoke("🔑 Kayıtlı bilgiler ile giriş yapılıyor...");
+                var loginInput = await page.QuerySelectorAsync("input[name='login'], input[type='email'], input#login");
+                if (loginInput != null)
+                {
+                    await loginInput.ClickAsync();
+                    await loginInput.TypeAsync(email);
+                }
+
+                var passInput = await page.QuerySelectorAsync("input[name='password'], input[type='password'], input#password");
+                if (passInput != null)
+                {
+                    await passInput.ClickAsync();
+                    await passInput.TypeAsync(password);
+                }
+
+                var submitBtn = await page.QuerySelectorAsync("button[type='submit'], .oe_login_form button");
+                if (submitBtn != null)
+                {
+                    await submitBtn.ClickAsync();
+                }
+            }
+            else
+            {
+                statusCallback?.Invoke("🌐 Tarayıcı açıldı. Lütfen Shiptomore hesabınıza giriş yapın (Oturum otomatik yakalanacaktır)...");
+            }
+
+            int maxWait = showBrowser ? 120 : 15;
+            int waited = 0;
+            while (string.IsNullOrWhiteSpace(capturedSessionId) && string.IsNullOrWhiteSpace(capturedCookies) && waited < maxWait)
+            {
+                ct.ThrowIfCancellationRequested();
+                await Task.Delay(1000, ct);
+                waited++;
+
+                var cookies = await page.GetCookiesAsync("https://shiptomore.com");
+                if (cookies != null && cookies.Length > 0)
+                {
+                    var sessCookie = cookies.FirstOrDefault(c => c.Name.Equals("session_id", StringComparison.OrdinalIgnoreCase));
+                    if (sessCookie != null && !string.IsNullOrWhiteSpace(sessCookie.Value))
+                    {
+                        bool navigatedAwayFromLogin = !page.Url.Contains("/web/login", StringComparison.OrdinalIgnoreCase);
+                        if (navigatedAwayFromLogin || showBrowser)
+                        {
+                            capturedSessionId = sessCookie.Value;
+                            capturedCookies = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(capturedSessionId) || !string.IsNullOrWhiteSpace(capturedCookies))
+            {
+                statusCallback?.Invoke("✅ Canlı Shiptomore oturumu başarıyla yakalandı ve kaydedildi!");
+                var settings = ShiptomoreSettingsStore.Load();
+                settings.SessionCookie = capturedCookies ?? $"session_id={capturedSessionId}";
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                if (!string.IsNullOrWhiteSpace(email)) settings.SavedEmail = email;
+                if (!string.IsNullOrWhiteSpace(password)) settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(password);
+                ShiptomoreSettingsStore.Save(settings);
+                return capturedSessionId ?? "connected";
+            }
+
+            statusCallback?.Invoke("⚠️ Oturum yakalanamadı. Lütfen 'Tarayıcı' (🌐) butonunu kullanarak giriş yapın.");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            statusCallback?.Invoke($"❌ Shiptomore oturum hatası: {ex.Message}");
+            return null;
+        }
+        finally
+        {
+            if (browser != null)
+            {
+                await browser.CloseAsync();
+            }
+        }
+    }
+
     private static async Task<string?> TryExtractLocalStorageTokenAsync(IPage page, params string[] keys)
     {
         try

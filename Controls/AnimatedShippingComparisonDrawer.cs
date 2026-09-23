@@ -56,14 +56,17 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     private readonly Image? _arasLogo;
     private readonly Image? _shipEntegraLogo;
     private readonly Image? _navlungoLogo;
+    private readonly Image? _shiptomoreLogo;
     private static Image? _upsLogo;
     private static Image? _widectLogo;
+    private static Image? _fedexLogo;
     private static readonly Dictionary<string, Image> _carrierLogoCache = new(StringComparer.OrdinalIgnoreCase);
 
     // Servisler
     private readonly ArasGlobalPricingService _arasService = new();
     private readonly ShipEntegraPricingService _shipEntegraService = new();
     private readonly INavlungoApiClient _navlungoApiClient = new NavlungoApiClient();
+    private readonly IShiptomoreApiClient _shiptomoreApiClient = new ShiptomoreApiClient();
 
     // Canlı Döviz Kuru
     public decimal UsdTryRate { get; set; } = 48.26m;
@@ -88,6 +91,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _upsLogo ??= LoadLogoSafely("ups.png");
         _widectLogo ??= LoadLogoSafely("widect.png");
         _navlungoLogo = LoadLogoSafely("navlungo.png");
+        _shiptomoreLogo = LoadLogoSafely("shiptomore.png");
+        _fedexLogo ??= LoadLogoSafely("fedex.png");
 
         _animTimer.Tick += AnimTimer_Tick;
 
@@ -168,6 +173,16 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             using var fontBold = new Font("Segoe UI Black", 16F, FontStyle.Bold);
             g.DrawString("Navlungo", fontBold, blueBrush, new PointF(15, 26));
         }
+        else if (fileName.Contains("shiptomore", StringComparison.OrdinalIgnoreCase))
+        {
+            // Shiptomore Kırmızı & Turuncu Logo
+            using var redBrush = new SolidBrush(Color.FromArgb(220, 38, 38));
+            using var fontBold = new Font("Segoe UI Black", 13F, FontStyle.Bold);
+            g.DrawString("SHIP TO", fontBold, redBrush, new PointF(10, 16));
+            using var fontMore = new Font("Segoe UI Black", 15F, FontStyle.Bold);
+            using var orangeBrush = new SolidBrush(Color.FromArgb(234, 88, 12));
+            g.DrawString("MORE", fontMore, orangeBrush, new PointF(10, 42));
+        }
         else
         {
             // ShipEntegra Zümrüt & Lacivert Logo
@@ -209,6 +224,17 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             {
                 _carrierLogoCache[key] = _upsLogo;
                 return _upsLogo;
+            }
+        }
+
+        // 3. FedEx Resmi Logosu
+        if (key.Contains("fedex"))
+        {
+            _fedexLogo ??= LoadLogoSafely("fedex.png");
+            if (_fedexLogo != null)
+            {
+                _carrierLogoCache[key] = _fedexLogo;
+                return _fedexLogo;
             }
         }
 
@@ -487,7 +513,19 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             () => TriggerNavlungoAutoLoginAsync(true),
             () => PromptManualToken("Navlungo")));
 
-        // 4. + Yeni Firma Ekle Kartı
+        // 4. Shiptomore Kartı
+        var stmSettings = ShiptomoreSettingsStore.Load();
+        bool stmConnected = !string.IsNullOrWhiteSpace(stmSettings.SessionCookie);
+
+        _pnlAccountsFlow.Controls.Add(CreateCarrierAccountCard(
+            "Shiptomore",
+            _shiptomoreLogo ?? CreateFallbackLogo("shiptomore"),
+            stmConnected,
+            () => TriggerShiptomoreAutoLoginAsync(false),
+            () => TriggerShiptomoreAutoLoginAsync(true),
+            () => PromptManualToken("Shiptomore")));
+
+        // 5. + Yeni Firma Ekle Kartı
         _pnlAccountsFlow.Controls.Add(CreateAddCarrierPlaceholderCard());
     }
 
@@ -833,14 +871,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     private void BuildFilterPills()
     {
         _pnlFilterPills.Controls.Clear();
-        string[] providers = { "Tümü", "Aras Global", "ShipEntegra", "Navlungo" };
+        string[] providers = { "Tümü", "Aras Global", "ShipEntegra", "Navlungo", "Shiptomore" };
 
         foreach (var p in providers)
         {
             bool isSelected = _selectedProviderFilter == p;
             var btn = new Button
             {
-                Text = p == "Tümü" ? "🌐 Tümü" : (p == "Aras Global" ? "🚚 Aras Global" : (p == "ShipEntegra" ? "📦 ShipEntegra" : "🔵 Navlungo")),
+                Text = p == "Tümü" ? "🌐 Tümü" : (p == "Aras Global" ? "🚚 Aras Global" : (p == "ShipEntegra" ? "📦 ShipEntegra" : (p == "Navlungo" ? "🔵 Navlungo" : "🔴 Shiptomore"))),
                 Height = 30,
                 AutoSize = true,
                 BackColor = isSelected ? Color.FromArgb(16, 185, 129) : Color.FromArgb(15, 23, 42),
@@ -997,11 +1035,45 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         });
 
-        await Task.WhenAll(arasTask, shipEntegraTask, navlungoTask);
+        // 4. Shiptomore Sorgusu
+        var stmSettings = ShiptomoreSettingsStore.Load();
+        string? shiptomoreError = null;
+        var shiptomoreTask = Task.Run(async () =>
+        {
+            try
+            {
+                var req = new ShiptomoreQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height
+                };
+                return await _shiptomoreApiClient.FetchLiveQuotesAsync(req, stmSettings);
+            }
+            catch (Exception ex)
+            {
+                shiptomoreError = ex.Message;
+                return ShiptomoreApiClient.GenerateRealisticFallbackQuotes(new ShiptomoreQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height
+                }, !string.IsNullOrWhiteSpace(stmSettings.SessionCookie));
+            }
+        });
+
+        await Task.WhenAll(arasTask, shipEntegraTask, navlungoTask, shiptomoreTask);
 
         var arasRes = await arasTask;
         var seRes = await shipEntegraTask;
         var navOffers = await navlungoTask;
+        var stmOffers = await shiptomoreTask;
 
         // 1. Aras Tekliflerini Ekle
         if (arasRes != null && arasRes.Success && arasRes.Offers.Count > 0)
@@ -1070,6 +1142,29 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         }
 
+        // 4. Shiptomore Tekliflerini Ekle (Canlı Widect, FedEx, UPS)
+        if (stmOffers != null && stmOffers.Count > 0)
+        {
+            foreach (var off in stmOffers)
+            {
+                bool isLiveOffer = off.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase) || 
+                                   (!off.Note.Contains("Simüle", StringComparison.OrdinalIgnoreCase) && !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase));
+                _loadedQuotes.Add(new UnifiedShippingQuote
+                {
+                    Provider = "Shiptomore",
+                    ServiceName = off.ServiceName,
+                    SubCarrier = off.Carrier,
+                    PriceUsd = off.Price,
+                    PriceTry = Math.Round(off.Price * UsdTryRate, 2),
+                    DeliveryText = off.DeliveryEstimate,
+                    DeliveryDaysMin = ExtractDeliveryDaysMin(off.DeliveryEstimate),
+                    DeliveryDaysMax = ExtractDeliveryDaysMax(off.DeliveryEstimate),
+                    Note = off.Note,
+                    IsLive = isLiveOffer
+                });
+            }
+        }
+
         _btnFetchQuotes.Enabled = true;
         _btnFetchQuotes.Text = "⚡ Teklifleri Getir";
 
@@ -1080,10 +1175,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         }
         else
         {
-            _lblStatus.Text = navlungoError is null
+            var errors = new List<string>();
+            if (navlungoError != null) errors.Add($"Navlungo: {navlungoError}");
+            if (shiptomoreError != null) errors.Add($"Shiptomore: {shiptomoreError}");
+
+            _lblStatus.Text = errors.Count == 0
                 ? $"✅ {_loadedQuotes.Count} adet alternatif kargo teklifi bulundu."
-                : $"✅ {_loadedQuotes.Count} adet alternatif kargo teklifi bulundu. ⚠️ Navlungo: {navlungoError}";
-            _lblStatus.ForeColor = navlungoError is null
+                : $"✅ {_loadedQuotes.Count} adet kargo teklifi bulundu. ⚠️ {string.Join(" | ", errors)}";
+            _lblStatus.ForeColor = errors.Count == 0
                 ? Color.FromArgb(52, 211, 153)
                 : Color.FromArgb(251, 191, 36);
         }
@@ -1213,10 +1312,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         var logoImg = (quote.Provider == "Aras Global" 
                         ? _arasLogo 
-                        : (quote.Provider == "ShipEntegra" ? _shipEntegraLogo : _navlungoLogo)) 
+                        : (quote.Provider == "ShipEntegra" 
+                            ? _shipEntegraLogo 
+                            : (quote.Provider == "Navlungo" ? _navlungoLogo : _shiptomoreLogo))) 
                       ?? (quote.Provider == "Aras Global" 
                           ? CreateFallbackLogo("aras") 
-                          : (quote.Provider == "ShipEntegra" ? CreateFallbackLogo("shipentegra") : CreateFallbackLogo("navlungo")));
+                          : (quote.Provider == "ShipEntegra" 
+                              ? CreateFallbackLogo("shipentegra") 
+                              : (quote.Provider == "Navlungo" ? CreateFallbackLogo("navlungo") : CreateFallbackLogo("shiptomore"))));
         picLogo.Image = logoImg;
 
         pnlLogoBox.Controls.Add(picLogo);
@@ -1680,13 +1783,79 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         }
     }
 
+    private async Task TriggerShiptomoreAutoLoginAsync(bool directBrowser)
+    {
+        var settings = ShiptomoreSettingsStore.Load();
+        string email = settings.SavedEmail ?? string.Empty;
+        string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
+        bool showBrowser = directBrowser;
+
+        if (directBrowser)
+        {
+            showBrowser = true;
+        }
+        else if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        {
+            using var dlg = new ShippingLoginCredentialsDialog("Shiptomore", email);
+            if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+            email = dlg.Email;
+            pass = dlg.Password;
+            showBrowser = dlg.OpenInBrowserRequested;
+            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
+            {
+                settings.SavedEmail = email;
+                settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+                settings.AutoRefreshEnabled = dlg.AutoRefresh;
+                ShiptomoreSettingsStore.Save(settings);
+            }
+        }
+
+        _lblStatus.Text = "⏳ Shiptomore oturumu açılıyor...";
+        _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+
+        try
+        {
+            string? freshToken = await _sessionManager.RefreshShiptomoreTokenAsync(email, pass, showBrowser);
+            if (!string.IsNullOrWhiteSpace(freshToken))
+            {
+                var freshSettings = ShiptomoreSettingsStore.Load();
+                freshSettings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                if (!freshToken.Contains("session_id=") && !freshToken.Contains("="))
+                {
+                    freshSettings.SessionCookie = $"session_id={freshToken}";
+                }
+                else
+                {
+                    freshSettings.SessionCookie = freshToken;
+                }
+                ShiptomoreSettingsStore.Save(freshSettings);
+
+                _lblStatus.Text = "✅ Shiptomore oturumu başarıyla güncellendi!";
+                _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
+                RebuildAccountsHub();
+                await FetchAllQuotesAsync();
+            }
+            else
+            {
+                MessageBox.Show("Shiptomore oturumu açılamadı. 'Tarayıcı' (🌐) butonunu kullanarak giriş yapabilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Shiptomore oturum hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
     private void PromptManualToken(string providerName)
     {
         bool isAras = providerName.Contains("Aras", StringComparison.OrdinalIgnoreCase);
         bool isNav = providerName.Contains("Navlungo", StringComparison.OrdinalIgnoreCase);
+        bool isStm = providerName.Contains("Shiptomore", StringComparison.OrdinalIgnoreCase);
         string currentToken = isAras 
             ? ArasGlobalSettingsStore.Load().BearerToken 
-            : (isNav ? (NavlungoSettingsStore.Load().SessionCookie ?? NavlungoSettingsStore.Load().IdToken ?? "") : ShipEntegraSettingsStore.Load().BearerToken);
+            : (isNav 
+                ? (NavlungoSettingsStore.Load().SessionCookie ?? NavlungoSettingsStore.Load().IdToken ?? "") 
+                : (isStm ? (ShiptomoreSettingsStore.Load().SessionCookie ?? "") : ShipEntegraSettingsStore.Load().BearerToken));
 
         using var dlg = new Form
         {
@@ -1704,7 +1873,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             Text = isNav
                 ? "Navlungo Cookie / cURL / Token Bilgisini Yapıştırın:\n(DevTools Network sekmesinde 'tr?source=user' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' yapabilirsiniz)"
-                : $"{providerName} için id_token, Bearer token veya Cookie bilgisini yapıştırın:",
+                : (isStm 
+                    ? "Shiptomore Cookie / cURL / Session ID Bilgisini Yapıştırın:\n(DevTools Network sekmesinde 'calculate' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' yapabilirsiniz)"
+                    : $"{providerName} için id_token, Bearer token veya Cookie bilgisini yapıştırın:"),
             Dock = DockStyle.Top,
             Height = 44,
             Padding = new Padding(12, 8, 12, 0),
@@ -1770,6 +1941,13 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 s.TokenLastUpdatedUtc = DateTime.UtcNow;
                 NavlungoSettingsStore.Save(s);
             }
+            else if (isStm)
+            {
+                var s = ShiptomoreSettingsStore.Load();
+                s.SessionCookie = val;
+                s.TokenLastUpdatedUtc = DateTime.UtcNow;
+                ShiptomoreSettingsStore.Save(s);
+            }
             else
             {
                 var s = ShipEntegraSettingsStore.Load();
@@ -1804,7 +1982,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         pnlBtns.Controls.Add(btnSave);
         pnlBtns.Controls.Add(btnPaste);
 
-        if (isNav)
+        if (isNav || isStm)
         {
             var btnTest = new Button
             {
@@ -1829,33 +2007,67 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 btnTest.Text = "⏳ Test...";
                 try
                 {
-                    var testSettings = new NavlungoSettings();
-                    if (sanitized.Contains("=") || sanitized.Contains(";")) testSettings.SessionCookie = sanitized;
-                    else testSettings.IdToken = sanitized;
+                    if (isNav)
+                    {
+                        var testSettings = new NavlungoSettings();
+                        if (sanitized.Contains("=") || sanitized.Contains(";")) testSettings.SessionCookie = sanitized;
+                        else testSettings.IdToken = sanitized;
 
-                    var client = new NavlungoApiClient();
-                    var offers = await client.FetchLiveQuotesAsync(new NavlungoQuoteRequest
-                    {
-                        FromCountry = "TR",
-                        ToCountry = "US",
-                        WeightKg = 0.4,
-                        LengthCm = 20,
-                        WidthCm = 15,
-                        HeightCm = 10
-                    }, testSettings);
+                        var client = new NavlungoApiClient();
+                        var offers = await client.FetchLiveQuotesAsync(new NavlungoQuoteRequest
+                        {
+                            FromCountry = "TR",
+                            ToCountry = "US",
+                            WeightKg = 0.4,
+                            LengthCm = 20,
+                            WidthCm = 15,
+                            HeightCm = 10
+                        }, testSettings);
 
-                    var widect = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
-                    if (widect != null && widect.Note.Contains("Üye", StringComparison.OrdinalIgnoreCase))
-                    {
-                        MessageBox.Show($"🎉 Navlungo Üye Oturumu Başarılı!\nWidect Üye İndirimli Fiyatı: ${widect.Price:F2} USD\n(Tarifeniz portal ile %100 eşitlendi)", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        var widect = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
+                        if (widect != null && widect.Note.Contains("Üye", StringComparison.OrdinalIgnoreCase))
+                        {
+                            MessageBox.Show($"🎉 Navlungo Üye Oturumu Başarılı!\nWidect Üye İndirimli Fiyatı: ${widect.Price:F2} USD\n(Tarifeniz portal ile %100 eşitlendi)", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        else if (widect != null)
+                        {
+                            MessageBox.Show($"⚠️ Canlı fiyat alındı ancak oturum tanınamadı (${widect.Price:F2} USD - {widect.Note}).\n\nTam üye fiyatı ($15.03) için lütfen:\nDevTools Network sekmesinde 'tr?source=user' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' seçeneğini kullanarak kutucuğa yapıştırın veya 'Tarayıcı' (🌐) butonunu kullanın.", "Bilgilendirme", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                        else
+                        {
+                            MessageBox.Show($"✅ {offers.Count} adet alternatif kargo teklifi alındı.", "Test Sonucu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
                     }
-                    else if (widect != null)
+                    else if (isStm)
                     {
-                        MessageBox.Show($"⚠️ Canlı fiyat alındı ancak oturum tanınamadı (${widect.Price:F2} USD - {widect.Note}).\n\nTam üye fiyatı ($15.03) için lütfen:\nDevTools Network sekmesinde 'tr?source=user' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' seçeneğini kullanarak kutucuğa yapıştırın veya 'Tarayıcı' (🌐) butonunu kullanın.", "Bilgilendirme", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    }
-                    else
-                    {
-                        MessageBox.Show($"✅ {offers.Count} adet alternatif kargo teklifi alındı.", "Test Sonucu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        var testSettings = new ShiptomoreSettings();
+                        testSettings.SessionCookie = sanitized;
+
+                        var client = new ShiptomoreApiClient();
+                        var offers = await client.FetchLiveQuotesAsync(new ShiptomoreQuoteRequest
+                        {
+                            FromCountry = "TR",
+                            ToCountry = "US",
+                            WeightKg = 0.6,
+                            LengthCm = 20,
+                            WidthCm = 15,
+                            HeightCm = 10
+                        }, testSettings);
+
+                        var widect = offers.FirstOrDefault(o => o.Carrier.Contains("Widect", StringComparison.OrdinalIgnoreCase));
+                        var fedex = offers.FirstOrDefault(o => o.Carrier.Contains("FedEx", StringComparison.OrdinalIgnoreCase));
+
+                        string widectInfo = widect != null ? $"Widect: ${widect.Price:F2} USD" : "";
+                        string fedexInfo = fedex != null ? $"FedEx: ${fedex.Price:F2} USD" : "";
+
+                        if (offers.Any(o => o.IsMemberRate))
+                        {
+                            MessageBox.Show($"🎉 Shiptomore Üye Oturumu Başarılı!\n{widectInfo}\n{fedexInfo}\n(Tarifeniz shiptomore.com ile %100 eşitlendi)", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                        else
+                        {
+                            MessageBox.Show($"✅ Canlı Shiptomore Fiyatları Alındı:\n{widectInfo}\n{fedexInfo}\n\nİndirimli üye fiyatı ($13.00) için DevTools'ta 'calculate' isteğine 'Copy > Copy as cURL' yapıp yapıştırabilirsiniz.", "Test Sonucu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
                     }
                 }
                 catch (Exception ex)

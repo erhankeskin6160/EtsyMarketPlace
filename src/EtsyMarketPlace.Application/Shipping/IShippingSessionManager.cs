@@ -30,4 +30,11 @@ public interface IShippingSessionManager
         bool showBrowser = false,
         Action<string>? statusCallback = null,
         CancellationToken ct = default);
+
+    Task<string?> RefreshShiptomoreTokenAsync(
+        string? email = null,
+        string? password = null,
+        bool showBrowser = false,
+        Action<string>? statusCallback = null,
+        CancellationToken ct = default);
 }
