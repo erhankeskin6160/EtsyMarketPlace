@@ -105,9 +105,36 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
     private static Image? LoadLogoSafely(string fileName)
     {
+        // 1. Önce doğrudan diskteki fiziksel varlığı kontrol et (en güncel dosya öncelikli)
         try
         {
-            // 1. Önce doğrudan Assembly Manifest Resources (EmbeddedResource) içini tara
+            string[] probePaths =
+            {
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Shipping", fileName),
+                Path.Combine(Application.StartupPath, "Assets", "Shipping", fileName),
+                Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Shipping", fileName),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Assets", "Shipping", fileName),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "..", "Assets", "Shipping", fileName)
+            };
+
+            foreach (var p in probePaths)
+            {
+                if (File.Exists(p))
+                {
+                    byte[] bytes = File.ReadAllBytes(p);
+                    if (bytes.Length > 0)
+                    {
+                        var ms = new MemoryStream(bytes);
+                        return Image.FromStream(ms);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // 2. Ardından Assembly Manifest Resources (EmbeddedResource) içini tara
+        try
+        {
             var asm = typeof(AnimatedShippingComparisonDrawer).Assembly;
             var resNames = asm.GetManifestResourceNames();
             var matchedRes = resNames.FirstOrDefault(r => r.EndsWith(fileName, StringComparison.OrdinalIgnoreCase));
@@ -116,28 +143,10 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 using var resStream = asm.GetManifestResourceStream(matchedRes);
                 if (resStream != null)
                 {
-                    using var ms = new MemoryStream();
+                    var ms = new MemoryStream();
                     resStream.CopyTo(ms);
                     ms.Position = 0;
                     return Image.FromStream(ms);
-                }
-            }
-
-            // 2. Diskteki fiziksel yolları kontrol et
-            string[] probePaths =
-            {
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Shipping", fileName),
-                Path.Combine(Application.StartupPath, "Assets", "Shipping", fileName),
-                Path.Combine(Directory.GetCurrentDirectory(), "Assets", "Shipping", fileName),
-                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "Assets", "Shipping", fileName)
-            };
-
-            foreach (var p in probePaths)
-            {
-                if (File.Exists(p))
-                {
-                    using var stream = new MemoryStream(File.ReadAllBytes(p));
-                    return Image.FromStream(stream);
                 }
             }
         }
@@ -201,12 +210,23 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     /// <summary>
     /// Taşıyıcı firmanın (UPS, Widect, FedEx, TNT vb.) yüksek kaliteli kurumsal logosunu döner veya üretir.
     /// </summary>
-    private static Image GetCarrierMiniLogo(string subCarrier, string serviceName)
+    private static Image GetCarrierMiniLogo(string subCarrier, string serviceName, string note = "")
     {
-        string key = $"{subCarrier}_{serviceName}".ToLowerInvariant();
+        string key = $"{subCarrier}_{serviceName}_{note}".ToLowerInvariant();
         if (_carrierLogoCache.TryGetValue(key, out var cached)) return cached;
 
-        // 1. Widect Resmi Logosu
+        // 1. FedEx Resmi Logosu (FedEx veya ShipEntegra Smart FedEx/TNT altyapılı servisler öncelikli)
+        if (key.Contains("fedex") || key.Contains("smart"))
+        {
+            _fedexLogo ??= LoadLogoSafely("fedex.png");
+            if (_fedexLogo != null)
+            {
+                _carrierLogoCache[key] = _fedexLogo;
+                return _fedexLogo;
+            }
+        }
+
+        // 2. Widect Resmi Logosu
         if (key.Contains("widect"))
         {
             _widectLogo ??= LoadLogoSafely("widect.png");
@@ -217,7 +237,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         }
 
-        // 2. UPS Resmi Logosu
+        // 3. UPS Resmi Logosu
         if (key.Contains("ups"))
         {
             _upsLogo ??= LoadLogoSafely("ups.png");
@@ -228,37 +248,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         }
 
-        // 3. FedEx Resmi Logosu
-        if (key.Contains("fedex"))
-        {
-            _fedexLogo ??= LoadLogoSafely("fedex.png");
-            if (_fedexLogo != null)
-            {
-                _carrierLogoCache[key] = _fedexLogo;
-                return _fedexLogo;
-            }
-        }
-
         var bmp = new Bitmap(68, 36);
         using var g = Graphics.FromImage(bmp);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
-        if (key.Contains("ups"))
+        if (key.Contains("fedex") || key.Contains("smart"))
         {
-            // UPS Fallback: Kahverengi kalkan ve altın sarısı "ups"
-            g.Clear(Color.FromArgb(53, 26, 12)); // UPS Brown
-            using var shieldBrush = new SolidBrush(Color.FromArgb(255, 181, 0)); // UPS Gold
-            Point[] shield = { new(34, 2), new(62, 7), new(54, 28), new(34, 34), new(14, 28), new(6, 7) };
-            g.DrawPolygon(new Pen(Color.FromArgb(255, 181, 0), 1.5f), shield);
-
-            using var font = new Font("Segoe UI Black", 10F, FontStyle.Bold);
-            using var textBrush = new SolidBrush(Color.FromArgb(255, 181, 0));
-            g.DrawString("ups", font, textBrush, new PointF(18, 8));
-        }
-        else if (key.Contains("fedex") || key.Contains("smart"))
-        {
-            // FedEx: Mor "Fed" ve Turuncu "Ex"
+            // FedEx Vektörel Fallback: Mor "Fed" ve Turuncu "Ex"
             g.Clear(Color.FromArgb(255, 255, 255));
             using var borderPen = new Pen(Color.FromArgb(203, 213, 225), 1f);
             g.DrawRectangle(borderPen, 0, 0, bmp.Width - 1, bmp.Height - 1);
@@ -269,6 +266,18 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
             g.DrawString("Fed", font, purpleBrush, new PointF(6, 7));
             g.DrawString("Ex", font, orangeBrush, new PointF(35, 7));
+        }
+        else if (key.Contains("ups"))
+        {
+            // UPS Fallback: Kahverengi kalkan ve altın sarısı "ups"
+            g.Clear(Color.FromArgb(53, 26, 12)); // UPS Brown
+            using var shieldBrush = new SolidBrush(Color.FromArgb(255, 181, 0)); // UPS Gold
+            Point[] shield = { new(34, 2), new(62, 7), new(54, 28), new(34, 34), new(14, 28), new(6, 7) };
+            g.DrawPolygon(new Pen(Color.FromArgb(255, 181, 0), 1.5f), shield);
+
+            using var font = new Font("Segoe UI Black", 10F, FontStyle.Bold);
+            using var textBrush = new SolidBrush(Color.FromArgb(255, 181, 0));
+            g.DrawString("ups", font, textBrush, new PointF(18, 8));
         }
         else if (key.Contains("widect"))
         {
@@ -439,6 +448,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _lblStatus.Font = new Font("Segoe UI", 9F);
         _lblStatus.Dock = DockStyle.Fill;
         _lblStatus.TextAlign = ContentAlignment.MiddleRight;
+        _lblStatus.AutoEllipsis = true;
         _lblStatus.Margin = new Padding(0, 0, 10, 0);
         pnl.Controls.Add(_lblStatus, 2, 0);
 
@@ -540,11 +550,11 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     {
         var card = new Panel
         {
-            Width = 270,
+            Width = 245,
             Height = 84,
             BackColor = Color.FromArgb(30, 41, 59),
             Padding = new Padding(8, 6, 8, 6),
-            Margin = new Padding(0, 0, 10, 0)
+            Margin = new Padding(0, 0, 8, 0)
         };
         card.Paint += (s, e) =>
         {
@@ -642,7 +652,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             Text = "⚡ Otomatik",
             Height = 28,
-            Width = 92,
+            Width = 86,
             BackColor = Color.FromArgb(16, 185, 129),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
@@ -708,11 +718,11 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     {
         var card = new Panel
         {
-            Width = 180,
+            Width = 160,
             Height = 84,
             BackColor = Color.FromArgb(15, 23, 42),
             Padding = new Padding(8),
-            Margin = new Padding(0, 0, 10, 0),
+            Margin = new Padding(0, 0, 8, 0),
             Cursor = Cursors.Hand
         };
         card.Paint += (s, e) =>
@@ -805,13 +815,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             BackColor = Color.Transparent,
             Margin = new Padding(0)
         };
-        row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 430)); // 0: Filtre Hapları (kesilmeden tam sığar)
-        row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270)); // 1: Sıralama Dropdown
+        row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));      // 0: Filtre Hapları (asla kesilmez, tam sığar)
+        row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 220)); // 1: Sıralama Dropdown (ferah ve kompakt)
         row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // 2: Teklifleri Getir Butonu
 
         _pnlFilterPills.Dock = DockStyle.Fill;
         _pnlFilterPills.FlowDirection = FlowDirection.LeftToRight;
         _pnlFilterPills.WrapContents = false;
+        _pnlFilterPills.AutoSize = true;
         _pnlFilterPills.BackColor = Color.Transparent;
         _pnlFilterPills.Margin = new Padding(0, 6, 8, 0);
 
@@ -827,7 +838,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             BackColor = Color.Transparent,
             Margin = new Padding(0, 6, 8, 0)
         };
-        pnlSort.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 55));
+        pnlSort.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 50));
         pnlSort.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
         var lblSort = new Label
@@ -845,9 +856,9 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _cbSort.ForeColor = Color.White;
         _cbSort.Font = new Font("Segoe UI", 8.5F);
         _cbSort.Dock = DockStyle.Fill;
-        _cbSort.Items.Add("🔽 En Ucuzdan Pahalıya (Fiyat: Artan)");
-        _cbSort.Items.Add("🔼 En Pahalıdan Ucuza (Fiyat: Azalan)");
-        _cbSort.Items.Add("⚡ En Hızlı Teslimat Süresi");
+        _cbSort.Items.Add("🔽 Fiyat (En Ucuz)");
+        _cbSort.Items.Add("🔼 Fiyat (En Pahalı)");
+        _cbSort.Items.Add("⚡ En Hızlı Teslimat");
         _cbSort.SelectedIndex = 0;
         _cbSort.SelectedIndexChanged += (_, _) => RenderFilteredOffers();
         pnlSort.Controls.Add(_cbSort, 1, 0);
@@ -863,7 +874,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _btnFetchQuotes.Cursor = Cursors.Hand;
         _btnFetchQuotes.Font = new Font("Segoe UI Semibold", 9.5F, FontStyle.Bold);
         _btnFetchQuotes.FlatAppearance.BorderSize = 0;
-        _btnFetchQuotes.Margin = new Padding(8, 6, 0, 0);
+        _btnFetchQuotes.Margin = new Padding(4, 6, 0, 0);
         _btnFetchQuotes.Click += async (_, _) => await FetchAllQuotesAsync();
         row1Layout.Controls.Add(_btnFetchQuotes, 2, 0);
 
@@ -892,8 +903,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI Semibold", 8F, isSelected ? FontStyle.Bold : FontStyle.Regular),
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 6, 0),
-                Padding = new Padding(8, 0, 8, 0)
+                Margin = new Padding(0, 0, 4, 0),
+                Padding = new Padding(6, 0, 6, 0)
             };
             btn.FlatAppearance.BorderColor = isSelected ? Color.FromArgb(52, 211, 153) : Color.FromArgb(51, 65, 85);
             btn.FlatAppearance.BorderSize = 1;
@@ -1292,7 +1303,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // 2: Servis, Hat & Detay Bilgisi
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 105)); // 3: En Uygun Rozeti
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 125)); // 4: Fiyat Bloğu ($ ve TL)
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); // 5: Bu Teklifi Kullan Butonu
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 145)); // 5: Bu Teklifi Kullan Butonu
 
         // 1. SÜTUN: ANA SAĞLAYICI LOGO KUTUSU
         var pnlLogoBox = new Panel
@@ -1350,7 +1361,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             Dock = DockStyle.Fill,
             SizeMode = PictureBoxSizeMode.Zoom,
-            Image = GetCarrierMiniLogo(quote.SubCarrier, quote.ServiceName),
+            Image = GetCarrierMiniLogo(quote.SubCarrier, quote.ServiceName, quote.Note),
             BackColor = Color.Transparent
         };
         pnlCarrierLogoBox.Controls.Add(picCarrier);
@@ -1476,7 +1487,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         // 6. SÜTUN: BU TEKLİFİ KULLAN BUTONU
         var btnSelect = new Button
         {
-            Text = "✅ Bu Teklifi Kullan",
+            Text = "✅ Teklifi Seç",
             Dock = DockStyle.Fill,
             BackColor = isCheapest ? Color.FromArgb(16, 185, 129) : Color.FromArgb(37, 99, 235),
             ForeColor = Color.White,
@@ -1537,14 +1548,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _cbCountry.ForeColor = Color.White;
         _cbCountry.Font = new Font("Segoe UI", 9F);
 
-        _cbCountry.Items.Add(new CountryItem("US", "🇺🇸 Amerika (US)"));
-        _cbCountry.Items.Add(new CountryItem("DE", "🇩🇪 Almanya (DE)"));
-        _cbCountry.Items.Add(new CountryItem("GB", "🇬🇧 İngiltere (GB)"));
-        _cbCountry.Items.Add(new CountryItem("FR", "🇫🇷 Fransa (FR)"));
-        _cbCountry.Items.Add(new CountryItem("IT", "🇮🇹 İtalya (IT)"));
-        _cbCountry.Items.Add(new CountryItem("CA", "🇨🇦 Kanada (CA)"));
-        _cbCountry.Items.Add(new CountryItem("AU", "🇦🇺 Avustralya (AU)"));
-        _cbCountry.Items.Add(new CountryItem("NL", "🇳🇱 Hollanda (NL)"));
+        _cbCountry.Items.Add(new CountryItem("US", "Amerika (US)"));
+        _cbCountry.Items.Add(new CountryItem("DE", "Almanya (DE)"));
+        _cbCountry.Items.Add(new CountryItem("GB", "İngiltere (GB)"));
+        _cbCountry.Items.Add(new CountryItem("FR", "Fransa (FR)"));
+        _cbCountry.Items.Add(new CountryItem("IT", "İtalya (IT)"));
+        _cbCountry.Items.Add(new CountryItem("CA", "Kanada (CA)"));
+        _cbCountry.Items.Add(new CountryItem("AU", "Avustralya (AU)"));
+        _cbCountry.Items.Add(new CountryItem("NL", "Hollanda (NL)"));
         _cbCountry.SelectedIndex = 0;
     }
 
