@@ -31,6 +31,56 @@ public sealed class ShiptomoreApiClient : IShiptomoreApiClient
     private const string BaseUrl = "https://shiptomore.com";
     private const string CalculateEndpoint = $"{BaseUrl}/parcel/calculate";
     private const string CountriesEndpoint = $"{BaseUrl}/parcel/countries";
+    private const string SessionInfoEndpoint = $"{BaseUrl}/web/session/get_session_info";
+
+    public static async Task<(bool IsValid, string? UserName, int? Uid)> ValidateSessionAsync(string? rawCookie, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(rawCookie)) return (false, null, null);
+        string sanitized = NavlungoCookieSanitizer.Sanitize(rawCookie);
+        if (string.IsNullOrWhiteSpace(sanitized)) return (false, null, null);
+
+        if (!sanitized.Contains("session_id=", StringComparison.OrdinalIgnoreCase) && !sanitized.Contains('='))
+        {
+            sanitized = $"session_id={sanitized}";
+        }
+
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Post, SessionInfoEndpoint)
+            {
+                Content = new StringContent("{\"jsonrpc\":\"2.0\",\"method\":\"call\",\"params\":{}}", Encoding.UTF8, "application/json")
+            };
+            req.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36");
+            req.Headers.Add("Cookie", sanitized);
+
+            using var resp = await HttpClient.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return (false, null, null);
+
+            string json = await resp.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(json);
+
+            // Odoo hata dönmüşse (ör. SessionExpiredException)
+            if (doc.RootElement.TryGetProperty("error", out _))
+            {
+                return (false, null, null);
+            }
+
+            if (doc.RootElement.TryGetProperty("result", out var resultEl))
+            {
+                // Anonim ziyaretçilerde uid null veya is_public=true olur
+                if (resultEl.TryGetProperty("uid", out var uidProp) && 
+                    uidProp.ValueKind == JsonValueKind.Number)
+                {
+                    int uid = uidProp.GetInt32();
+                    string? name = resultEl.TryGetProperty("name", out var nProp) ? nProp.GetString() : null;
+                    return (true, name, uid);
+                }
+            }
+        }
+        catch { }
+
+        return (false, null, null);
+    }
 
     // Yaygın ülkelerin Shiptomore Odoo veritabanı ID eşleştirmeleri
     private static readonly ConcurrentDictionary<string, int> CountryIdCache = new(StringComparer.OrdinalIgnoreCase)
@@ -108,21 +158,23 @@ public sealed class ShiptomoreApiClient : IShiptomoreApiClient
         httpRequest.Headers.Add("Origin", BaseUrl);
         httpRequest.Headers.Add("Referer", $"{BaseUrl}/my/parcel-calculator");
 
-        // Oturum çerezi (session_id) ekleme
-        bool hasSession = false;
+        // Oturum çerezi (session_id) ekleme ve doğrulama
+        bool isMemberSession = false;
         string? rawCookie = settings?.SessionCookie;
         if (!string.IsNullOrWhiteSpace(rawCookie))
         {
             string sanitized = NavlungoCookieSanitizer.Sanitize(rawCookie);
             if (!string.IsNullOrWhiteSpace(sanitized))
             {
-                // Eğer doğrudan 'session_id=...' değilse veya birden çok çerez varsa
                 if (!sanitized.Contains("session_id=", StringComparison.OrdinalIgnoreCase) && !sanitized.Contains('='))
                 {
                     sanitized = $"session_id={sanitized}";
                 }
                 httpRequest.Headers.Add("Cookie", sanitized);
-                hasSession = true;
+
+                // Oturumun geçerli bir üye oturumu olduğunu Odoo get_session_info UID ile kesin doğrula
+                var (isValid, _, _) = await ValidateSessionAsync(sanitized, cancellationToken);
+                isMemberSession = isValid;
             }
         }
 
@@ -131,7 +183,7 @@ public sealed class ShiptomoreApiClient : IShiptomoreApiClient
             using var response = await HttpClient.SendAsync(httpRequest, cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                return GenerateRealisticFallbackQuotes(request, hasSession);
+                return GenerateRealisticFallbackQuotes(request, isMemberSession);
             }
 
             string responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -191,8 +243,8 @@ public sealed class ShiptomoreApiClient : IShiptomoreApiClient
                         CurrencySymbol = "$",
                         BillableWeight = billableWeight > 0 ? billableWeight : request.BillableWeightKg,
                         ProviderLogoUrl = logoUrl,
-                        IsMemberRate = hasSession,
-                        Note = hasSession ? "Shiptomore Üye İndirimi (Canlı)" : "Shiptomore Standart Liste Fiyatı"
+                        IsMemberRate = isMemberSession,
+                        Note = isMemberSession ? "Shiptomore Üye İndirimi (Canlı)" : "Shiptomore Standart Liste Fiyatı"
                     });
                 }
 
@@ -202,11 +254,11 @@ public sealed class ShiptomoreApiClient : IShiptomoreApiClient
                 }
             }
 
-            return GenerateRealisticFallbackQuotes(request, hasSession);
+            return GenerateRealisticFallbackQuotes(request, isMemberSession);
         }
         catch
         {
-            return GenerateRealisticFallbackQuotes(request, hasSession);
+            return GenerateRealisticFallbackQuotes(request, isMemberSession);
         }
     }
 

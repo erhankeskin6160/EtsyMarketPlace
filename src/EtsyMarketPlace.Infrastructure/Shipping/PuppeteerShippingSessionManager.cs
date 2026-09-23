@@ -532,26 +532,63 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 statusCallback?.Invoke("🌐 Tarayıcı açıldı. Lütfen Shiptomore hesabınıza giriş yapın (Oturum otomatik yakalanacaktır)...");
             }
 
-            int maxWait = showBrowser ? 120 : 15;
+            int maxWait = showBrowser ? 180 : 20;
             int waited = 0;
-            while (string.IsNullOrWhiteSpace(capturedSessionId) && string.IsNullOrWhiteSpace(capturedCookies) && waited < maxWait)
+            while (string.IsNullOrWhiteSpace(capturedSessionId) && waited < maxWait)
             {
                 ct.ThrowIfCancellationRequested();
+
+                // Kullanıcı pencereyi çarpıdan kapattıysa sahte çerez kaydetmeden temiz çık
+                try
+                {
+                    if (page.IsClosed || (await browser.PagesAsync()).Length == 0)
+                    {
+                        statusCallback?.Invoke("⚠️ Tarayıcı penceresi kapatıldı, oturum açma iptal edildi.");
+                        return null;
+                    }
+                }
+                catch
+                {
+                    return null;
+                }
+
                 await Task.Delay(1000, ct);
                 waited++;
 
-                var cookies = await page.GetCookiesAsync("https://shiptomore.com");
-                if (cookies != null && cookies.Length > 0)
+                // 1. Sayfa login adresinden ayrıldı mı?
+                bool navigatedAwayFromLogin = !page.Url.Contains("/web/login", StringComparison.OrdinalIgnoreCase);
+
+                // 2. Sayfa içinde Odoo aktif kullanıcı UID'si oluştu mu?
+                bool isOdooAuthenticated = false;
+                try
                 {
-                    var sessCookie = cookies.FirstOrDefault(c => c.Name.Equals("session_id", StringComparison.OrdinalIgnoreCase));
-                    if (sessCookie != null && !string.IsNullOrWhiteSpace(sessCookie.Value))
+                    isOdooAuthenticated = await page.EvaluateFunctionAsync<bool>(@"() => {
+                        if (window.odoo && window.odoo.__session_info__ && window.odoo.__session_info__.uid) {
+                            return true;
+                        }
+                        return !!document.querySelector('a[href*=""/web/session/logout""], a[href*=""/my/home""], .o_user_bookmark');
+                    }");
+                }
+                catch { }
+
+                if (navigatedAwayFromLogin || isOdooAuthenticated)
+                {
+                    var cookies = await page.GetCookiesAsync("https://shiptomore.com");
+                    if (cookies != null && cookies.Length > 0)
                     {
-                        bool navigatedAwayFromLogin = !page.Url.Contains("/web/login", StringComparison.OrdinalIgnoreCase);
-                        if (navigatedAwayFromLogin || showBrowser)
+                        var sessCookie = cookies.FirstOrDefault(c => c.Name.Equals("session_id", StringComparison.OrdinalIgnoreCase));
+                        if (sessCookie != null && !string.IsNullOrWhiteSpace(sessCookie.Value))
                         {
-                            capturedSessionId = sessCookie.Value;
-                            capturedCookies = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
-                            break;
+                            // Sunucu düzeyinde get_session_info ile UID'yi de kesin doğrula
+                            string candidateCookie = $"session_id={sessCookie.Value}";
+                            var (isValid, userName, uid) = await ShiptomoreApiClient.ValidateSessionAsync(candidateCookie, ct);
+                            if (isValid)
+                            {
+                                capturedSessionId = sessCookie.Value;
+                                capturedCookies = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+                                statusCallback?.Invoke($"🎉 Hoş geldiniz {userName ?? "Kullanıcı"}! Canlı üye oturumu (UID: {uid}) doğrulandı.");
+                                break;
+                            }
                         }
                     }
                 }

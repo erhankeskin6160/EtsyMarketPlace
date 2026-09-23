@@ -119,4 +119,18 @@ public sealed class ShiptomoreShippingTests
             Assert.Equal("USD", off.Currency);
         }
     }
+
+    [Fact]
+    public async Task ValidateSessionAsync_WithEmptyOrInvalidSession_ReturnsFalse()
+    {
+        var (isValidEmpty, _, _) = await ShiptomoreApiClient.ValidateSessionAsync("");
+        Assert.False(isValidEmpty);
+
+        var (isValidNull, _, _) = await ShiptomoreApiClient.ValidateSessionAsync(null);
+        Assert.False(isValidNull);
+
+        var (isValidExpired, _, _) = await ShiptomoreApiClient.ValidateSessionAsync("session_id=invalid_expired_12345");
+        Assert.False(isValidExpired);
+    }
 }
+

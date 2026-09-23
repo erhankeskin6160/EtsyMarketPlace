@@ -1979,8 +1979,53 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
         };
 
+        var btnReset = new Button
+        {
+            Text = "🗑️ Sıfırla",
+            BackColor = Color.FromArgb(239, 68, 68),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Height = 32,
+            Width = 90,
+            Cursor = Cursors.Hand
+        };
+        btnReset.FlatAppearance.BorderSize = 0;
+        btnReset.Click += async (_, _) =>
+        {
+            txt.Text = string.Empty;
+            if (isStm)
+            {
+                var s = ShiptomoreSettingsStore.Load();
+                s.SessionCookie = null;
+                ShiptomoreSettingsStore.Save(s);
+            }
+            else if (isNav)
+            {
+                var s = NavlungoSettingsStore.Load();
+                s.SessionCookie = null;
+                s.IdToken = null;
+                NavlungoSettingsStore.Save(s);
+            }
+            else if (isAras)
+            {
+                var s = ArasGlobalSettingsStore.Load();
+                s.BearerToken = null;
+                ArasGlobalSettingsStore.Save(s);
+            }
+            else
+            {
+                var s = ShipEntegraSettingsStore.Load();
+                s.BearerToken = null;
+                ShipEntegraSettingsStore.Save(s);
+            }
+            dlg.DialogResult = DialogResult.OK;
+            RebuildAccountsHub();
+            await FetchAllQuotesAsync();
+        };
+
         pnlBtns.Controls.Add(btnSave);
         pnlBtns.Controls.Add(btnPaste);
+        pnlBtns.Controls.Add(btnReset);
 
         if (isNav || isStm)
         {
@@ -2040,33 +2085,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                     }
                     else if (isStm)
                     {
-                        var testSettings = new ShiptomoreSettings();
-                        testSettings.SessionCookie = sanitized;
-
-                        var client = new ShiptomoreApiClient();
-                        var offers = await client.FetchLiveQuotesAsync(new ShiptomoreQuoteRequest
+                        var (isValid, userName, uid) = await ShiptomoreApiClient.ValidateSessionAsync(sanitized);
+                        if (isValid)
                         {
-                            FromCountry = "TR",
-                            ToCountry = "US",
-                            WeightKg = 0.6,
-                            LengthCm = 20,
-                            WidthCm = 15,
-                            HeightCm = 10
-                        }, testSettings);
-
-                        var widect = offers.FirstOrDefault(o => o.Carrier.Contains("Widect", StringComparison.OrdinalIgnoreCase));
-                        var fedex = offers.FirstOrDefault(o => o.Carrier.Contains("FedEx", StringComparison.OrdinalIgnoreCase));
-
-                        string widectInfo = widect != null ? $"Widect: ${widect.Price:F2} USD" : "";
-                        string fedexInfo = fedex != null ? $"FedEx: ${fedex.Price:F2} USD" : "";
-
-                        if (offers.Any(o => o.IsMemberRate))
-                        {
-                            MessageBox.Show($"🎉 Shiptomore Üye Oturumu Başarılı!\n{widectInfo}\n{fedexInfo}\n(Tarifeniz shiptomore.com ile %100 eşitlendi)", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MessageBox.Show($"🎉 Shiptomore Üye Oturumu Başarılı!\nKullanıcı: {userName ?? "Üye"} (UID: {uid})\n\nOdoo sunucusu kimliğinizi %100 doğruladı. Tüm sipariş ve paket boyutlarında özel indirimli fiyatlarınız aktiftir.", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
                         }
                         else
                         {
-                            MessageBox.Show($"✅ Canlı Shiptomore Fiyatları Alındı:\n{widectInfo}\n{fedexInfo}\n\nİndirimli üye fiyatı ($13.00) için DevTools'ta 'calculate' isteğine 'Copy > Copy as cURL' yapıp yapıştırabilirsiniz.", "Test Sonucu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                            MessageBox.Show("⚠️ Yapıştırılan çerez geçerli bir üye oturumu içermiyor veya süresi dolmuş.\n(Odoo sunucusu anonim ziyaretçi olduğunu bildirdi).\n\nİndirimli üye fiyatları için lütfen 'Tarayıcı' (🌐) butonu ile giriş yapın veya tarayıcıda giriş yaptıktan sonra 'Copy > Copy as cURL' yapıp yapıştırın.", "Oturum Doğrulanamadı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                         }
                     }
                 }
