@@ -250,6 +250,41 @@ public sealed class NavlungoShippingTests
         Assert.Contains("ayrıştırılamadı", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void NavlungoCookieSanitizer_ExtractsCookieFromCurl()
+    {
+        string curl = @"curl 'https://quick-price-calculator.navlungo.com/tr?source=user' \
+  -H 'accept: text/x-component' \
+  -H 'cookie: nv_attr_lt=abc123; EXP_e0771a79f8_identity=def456' \
+  --data-raw '[{""fromCountry"":""TR""}]'";
+
+        string extracted = NavlungoCookieSanitizer.Sanitize(curl);
+        Assert.Equal("nv_attr_lt=abc123; EXP_e0771a79f8_identity=def456", extracted);
+    }
+
+    [Fact]
+    public void NavlungoCookieSanitizer_ExtractsCookieFromHttpHeaders()
+    {
+        string rawHeaders = @"authority: quick-price-calculator.navlungo.com
+method: POST
+path: /tr?source=user
+scheme: https
+accept: text/x-component
+cookie: nv_attr_lt=xyz789; _ga=GA1.1.123; EXP_e0771a79f8_identity=jwt999
+content-length: 118";
+
+        string extracted = NavlungoCookieSanitizer.Sanitize(rawHeaders);
+        Assert.Equal("nv_attr_lt=xyz789; _ga=GA1.1.123; EXP_e0771a79f8_identity=jwt999", extracted);
+    }
+
+    [Fact]
+    public void NavlungoCookieSanitizer_CleansRawCookieWithNewlines()
+    {
+        string multiline = "nv_attr_lt=abc;\r\n  EXP_identity=123;\n _ga=456";
+        string extracted = NavlungoCookieSanitizer.Sanitize(multiline);
+        Assert.Equal("nv_attr_lt=abc; EXP_identity=123; _ga=456", extracted);
+    }
+
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly Func<HttpRequestMessage, HttpResponseMessage> _responseFactory;

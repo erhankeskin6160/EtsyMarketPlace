@@ -253,21 +253,20 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         {
             if (!string.IsNullOrWhiteSpace(settings.SessionCookie))
             {
-                string rawCookie = settings.SessionCookie.Trim();
-                if (rawCookie.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase))
-                {
-                    rawCookie = rawCookie[7..].Trim();
-                }
-                cookieBuilder.Append(rawCookie);
+                string sanitized = NavlungoCookieSanitizer.Sanitize(settings.SessionCookie);
+                cookieBuilder.Append(sanitized);
             }
             if (!string.IsNullOrWhiteSpace(settings.IdToken))
             {
-                string idTok = settings.IdToken.Trim();
+                string idTok = NavlungoCookieSanitizer.Sanitize(settings.IdToken);
                 if (!cookieBuilder.ToString().Contains("id_token="))
                 {
                     if (cookieBuilder.Length > 0 && !cookieBuilder.ToString().TrimEnd().EndsWith(";"))
                         cookieBuilder.Append("; ");
-                    cookieBuilder.Append($"id_token={idTok}");
+                    if (idTok.Contains("="))
+                        cookieBuilder.Append(idTok);
+                    else
+                        cookieBuilder.Append($"id_token={idTok}");
                 }
             }
         }

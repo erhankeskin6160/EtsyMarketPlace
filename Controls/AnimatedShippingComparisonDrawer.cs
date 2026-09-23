@@ -1654,8 +1654,16 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             string? freshToken = await _sessionManager.RefreshNavlungoTokenAsync(email, pass, showBrowser);
             if (!string.IsNullOrWhiteSpace(freshToken))
             {
-                settings.IdToken = freshToken;
-                NavlungoSettingsStore.Save(settings);
+                // DİKKAT: RefreshNavlungoTokenAsync tüm çerezleri diske (navlungo-settings.json) kaydetmiştir.
+                // Eski hafızadaki settings nesnesiyle ezmemek için diskteki taze ayarları yükle!
+                var freshSettings = NavlungoSettingsStore.Load();
+                if (freshToken != "connected" && !string.IsNullOrWhiteSpace(freshToken))
+                {
+                    freshSettings.IdToken = freshToken;
+                }
+                freshSettings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                NavlungoSettingsStore.Save(freshSettings);
+
                 _lblStatus.Text = "✅ Navlungo oturumu başarıyla güncellendi!";
                 _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
                 RebuildAccountsHub();
@@ -1678,12 +1686,12 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         bool isNav = providerName.Contains("Navlungo", StringComparison.OrdinalIgnoreCase);
         string currentToken = isAras 
             ? ArasGlobalSettingsStore.Load().BearerToken 
-            : (isNav ? (NavlungoSettingsStore.Load().IdToken ?? NavlungoSettingsStore.Load().SessionCookie ?? "") : ShipEntegraSettingsStore.Load().BearerToken);
+            : (isNav ? (NavlungoSettingsStore.Load().SessionCookie ?? NavlungoSettingsStore.Load().IdToken ?? "") : ShipEntegraSettingsStore.Load().BearerToken);
 
         using var dlg = new Form
         {
             Text = $"{providerName} - Oturum / Token Düzenle",
-            Size = new Size(520, 240),
+            Size = new Size(560, 290),
             StartPosition = FormStartPosition.CenterParent,
             BackColor = Color.FromArgb(15, 23, 42),
             ForeColor = Color.White,
@@ -1695,12 +1703,13 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         var lbl = new Label
         {
             Text = isNav
-                ? "Navlungo için Chrome DevTools'tan kopyalanan Cookie başlığını veya tokeni yapıştırın:"
+                ? "Navlungo Cookie / cURL / Token Bilgisini Yapıştırın:\n(DevTools Network sekmesinde 'tr?source=user' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' yapabilirsiniz)"
                 : $"{providerName} için id_token, Bearer token veya Cookie bilgisini yapıştırın:",
             Dock = DockStyle.Top,
-            Height = 36,
-            Padding = new Padding(12, 10, 12, 0),
-            ForeColor = Color.FromArgb(203, 213, 225)
+            Height = 44,
+            Padding = new Padding(12, 8, 12, 0),
+            ForeColor = Color.FromArgb(203, 213, 225),
+            Font = new Font("Segoe UI", 9F)
         };
         dlg.Controls.Add(lbl);
 
@@ -1708,7 +1717,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             Text = currentToken,
             Dock = DockStyle.Top,
-            Height = 80,
+            Height = 90,
             Multiline = true,
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.White,
@@ -1739,8 +1748,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         btnSave.FlatAppearance.BorderSize = 0;
         btnSave.Click += async (_, _) =>
         {
-            string val = txt.Text.Replace("\r\n", " ").Replace("\n", " ").Trim();
-            if (val.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase)) val = val[7..].Trim();
+            string val = NavlungoCookieSanitizer.Sanitize(txt.Text);
 
             if (isAras)
             {
@@ -1751,8 +1759,15 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             else if (isNav)
             {
                 var s = NavlungoSettingsStore.Load();
-                if (val.Contains("=") || val.Contains(";")) s.SessionCookie = val;
-                else s.IdToken = val;
+                if (val.Contains("=") || val.Contains(";"))
+                {
+                    s.SessionCookie = val;
+                }
+                else
+                {
+                    s.IdToken = val;
+                }
+                s.TokenLastUpdatedUtc = DateTime.UtcNow;
                 NavlungoSettingsStore.Save(s);
             }
             else
@@ -1781,9 +1796,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             if (Clipboard.ContainsText())
             {
-                string pasted = Clipboard.GetText().Replace("\r\n", " ").Replace("\n", " ").Trim();
-                if (pasted.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase)) pasted = pasted[7..].Trim();
-                txt.Text = pasted;
+                string raw = Clipboard.GetText();
+                txt.Text = isNav ? NavlungoCookieSanitizer.Sanitize(raw) : raw.Trim();
             }
         };
 
@@ -1805,11 +1819,10 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             btnTest.FlatAppearance.BorderSize = 0;
             btnTest.Click += async (_, _) =>
             {
-                string val = txt.Text.Replace("\r\n", " ").Replace("\n", " ").Trim();
-                if (val.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase)) val = val[7..].Trim();
-                if (string.IsNullOrWhiteSpace(val))
+                string sanitized = NavlungoCookieSanitizer.Sanitize(txt.Text);
+                if (string.IsNullOrWhiteSpace(sanitized))
                 {
-                    MessageBox.Show("Lütfen önce bir token veya Cookie yapıştırın.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    MessageBox.Show("Lütfen önce bir token, cURL veya Cookie yapıştırın.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
                 btnTest.Enabled = false;
@@ -1817,8 +1830,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 try
                 {
                     var testSettings = new NavlungoSettings();
-                    if (val.Contains("=") || val.Contains(";")) testSettings.SessionCookie = val;
-                    else testSettings.IdToken = val;
+                    if (sanitized.Contains("=") || sanitized.Contains(";")) testSettings.SessionCookie = sanitized;
+                    else testSettings.IdToken = sanitized;
 
                     var client = new NavlungoApiClient();
                     var offers = await client.FetchLiveQuotesAsync(new NavlungoQuoteRequest
@@ -1832,8 +1845,18 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                     }, testSettings);
 
                     var widect = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
-                    string priceInfo = widect != null ? $"Widect: ${widect.Price:F2} ({widect.Note})" : $"{offers.Count} teklif alındı.";
-                    MessageBox.Show($"✅ Navlungo Bağlantı Testi Başarılı!\n{priceInfo}", "Test Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    if (widect != null && widect.Note.Contains("Üye", StringComparison.OrdinalIgnoreCase))
+                    {
+                        MessageBox.Show($"🎉 Navlungo Üye Oturumu Başarılı!\nWidect Üye İndirimli Fiyatı: ${widect.Price:F2} USD\n(Tarifeniz portal ile %100 eşitlendi)", "Oturum Doğrulandı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else if (widect != null)
+                    {
+                        MessageBox.Show($"⚠️ Canlı fiyat alındı ancak oturum tanınamadı (${widect.Price:F2} USD - {widect.Note}).\n\nTam üye fiyatı ($15.03) için lütfen:\nDevTools Network sekmesinde 'tr?source=user' isteğine SAĞ TIKLAYIP 'Copy > Copy as cURL' seçeneğini kullanarak kutucuğa yapıştırın veya 'Tarayıcı' (🌐) butonunu kullanın.", "Bilgilendirme", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    }
+                    else
+                    {
+                        MessageBox.Show($"✅ {offers.Count} adet alternatif kargo teklifi alındı.", "Test Sonucu", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
                 }
                 catch (Exception ex)
                 {

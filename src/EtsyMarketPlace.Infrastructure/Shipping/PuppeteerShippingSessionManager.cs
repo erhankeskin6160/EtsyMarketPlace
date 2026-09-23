@@ -382,7 +382,23 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
 
                     if ((hasSessionCookie && navigatedAwayFromLogin) || !string.IsNullOrWhiteSpace(capturedToken))
                     {
-                        capturedCookies = string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
+                        try
+                        {
+                            statusCallback?.Invoke("🌐 Hesaplayıcı çerezleri eşitleniyor...");
+                            await page.GoToAsync("https://quick-price-calculator.navlungo.com/tr?source=user", new NavigationOptions
+                            {
+                                WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
+                                Timeout = 8000
+                            });
+                            var allCookies = await page.GetCookiesAsync("https://ship.navlungo.com", "https://quick-price-calculator.navlungo.com");
+                            if (allCookies != null && allCookies.Length > 0)
+                            {
+                                capturedCookies = string.Join("; ", allCookies.Select(c => $"{c.Name}={c.Value}"));
+                            }
+                        }
+                        catch { }
+
+                        capturedCookies ??= string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
                         capturedToken ??= "navlungo_browser_session";
                         break;
                     }
