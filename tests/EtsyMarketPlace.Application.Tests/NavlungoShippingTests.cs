@@ -88,6 +88,39 @@ public sealed class NavlungoShippingTests
         Assert.False(string.IsNullOrWhiteSpace(NavlungoApiClient.AnonymousActionId));
         Assert.False(string.IsNullOrWhiteSpace(NavlungoApiClient.AuthenticatedActionId));
         Assert.NotEqual(NavlungoApiClient.AnonymousActionId, NavlungoApiClient.AuthenticatedActionId);
+        Assert.Equal("406fad5769e32876f9c8eeccd5dab4d086b9068ca5", NavlungoApiClient.AnonymousActionId);
+        Assert.Equal("40198494a378e36987abc2fe2dd302fceb194b28c4", NavlungoApiClient.AuthenticatedActionId);
+    }
+
+    [Fact]
+    public void ParseNavlungoResponse_ParsesLiveNextJsRscFormat()
+    {
+        string liveRsc = @"
+0:{""a"":""$@1""}
+1:[{""serviceType"":""economy"",""lastMile"":""thy"",""price"":19.96,""currency"":""USD"",""maxTransitTime"":7,""minTransitTime"":3,""tags"":[],""description"":""widect-usps - THY Widect Usps""},
+   {""serviceType"":""express"",""lastMile"":""fedex"",""price"":31.37,""currency"":""USD"",""maxTransitTime"":3,""minTransitTime"":1,""tags"":[""best-express-price""],""description"":""express - Federal Express Express""},
+   {""serviceType"":""express"",""lastMile"":""ups"",""price"":34.66,""currency"":""USD"",""maxTransitTime"":3,""minTransitTime"":1,""tags"":[],""description"":""express - United Parcel Service Express""}]
+";
+        var req = new NavlungoQuoteRequest();
+        var offers = NavlungoApiClient.ParseNavlungoResponse(liveRsc, req);
+
+        Assert.NotEmpty(offers);
+        Assert.Equal(3, offers.Count);
+
+        var widect = offers.FirstOrDefault(o => o.Carrier.Equals("Widect", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(widect);
+        Assert.Equal(19.96m, widect.Price);
+        Assert.Equal("USD", widect.Currency);
+        Assert.Equal("3-7 iş günü", widect.DeliveryEstimate);
+
+        var fedex = offers.FirstOrDefault(o => o.Carrier.Equals("FedEx", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(fedex);
+        Assert.Equal(31.37m, fedex.Price);
+        Assert.True(fedex.IsBestExpress);
+
+        var ups = offers.FirstOrDefault(o => o.Carrier.Equals("UPS", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(ups);
+        Assert.Equal(34.66m, ups.Price);
     }
 
     [Fact]
@@ -140,7 +173,7 @@ public sealed class NavlungoShippingTests
     [Fact]
     public async Task FetchLiveQuotesAsync_ThrowsWhenApiReturnsErrorInsteadOfUsingFallback()
     {
-        using var httpClient = new HttpClient(new StubHttpMessageHandler(
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
             new HttpResponseMessage(HttpStatusCode.Unauthorized)
             {
                 Content = new StringContent("unauthorized")
@@ -157,7 +190,7 @@ public sealed class NavlungoShippingTests
     [Fact]
     public async Task FetchLiveQuotesAsync_ThrowsWhenResponseCannotBeParsedInsteadOfUsingFallback()
     {
-        using var httpClient = new HttpClient(new StubHttpMessageHandler(
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(_ =>
             new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = new StringContent("not-a-navlungo-response")
@@ -172,12 +205,13 @@ public sealed class NavlungoShippingTests
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
-        private readonly HttpResponseMessage _response;
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responseFactory;
 
-        public StubHttpMessageHandler(HttpResponseMessage response) => _response = response;
+        public StubHttpMessageHandler(HttpResponseMessage response) => _responseFactory = _ => response;
+        public StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responseFactory) => _responseFactory = responseFactory;
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
-            CancellationToken cancellationToken) => Task.FromResult(_response);
+            CancellationToken cancellationToken) => Task.FromResult(_responseFactory(request));
     }
 }

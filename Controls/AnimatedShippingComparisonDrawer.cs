@@ -753,15 +753,26 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         grid.Controls.Add(pnlDesiBox, 5, 0);
 
         // --- SATIR 1: FİLTRELER, SIRALAMA & TEKLİFLERİ GETİR BUTONU ---
+        var row1Layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0)
+        };
+        row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 430)); // 0: Filtre Hapları (kesilmeden tam sığar)
+        row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270)); // 1: Sıralama Dropdown
+        row1Layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // 2: Teklifleri Getir Butonu
+
         _pnlFilterPills.Dock = DockStyle.Fill;
         _pnlFilterPills.FlowDirection = FlowDirection.LeftToRight;
         _pnlFilterPills.WrapContents = false;
         _pnlFilterPills.BackColor = Color.Transparent;
-        _pnlFilterPills.Margin = new Padding(0, 6, 0, 0);
+        _pnlFilterPills.Margin = new Padding(0, 6, 8, 0);
 
         BuildFilterPills();
-        grid.Controls.Add(_pnlFilterPills, 0, 1);
-        grid.SetColumnSpan(_pnlFilterPills, 3);
+        row1Layout.Controls.Add(_pnlFilterPills, 0, 0);
 
         // Orta Sıralama Dropdown
         var pnlSort = new TableLayoutPanel
@@ -797,8 +808,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _cbSort.SelectedIndexChanged += (_, _) => RenderFilteredOffers();
         pnlSort.Controls.Add(_cbSort, 1, 0);
 
-        grid.Controls.Add(pnlSort, 3, 1);
-        grid.SetColumnSpan(pnlSort, 2);
+        row1Layout.Controls.Add(pnlSort, 1, 0);
 
         // Sağ Aksiyon Butonu ("⚡ Teklifleri Getir")
         _btnFetchQuotes.Text = "⚡ Teklifleri Getir";
@@ -811,7 +821,10 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _btnFetchQuotes.FlatAppearance.BorderSize = 0;
         _btnFetchQuotes.Margin = new Padding(8, 6, 0, 0);
         _btnFetchQuotes.Click += async (_, _) => await FetchAllQuotesAsync();
-        grid.Controls.Add(_btnFetchQuotes, 5, 1);
+        row1Layout.Controls.Add(_btnFetchQuotes, 2, 0);
+
+        grid.Controls.Add(row1Layout, 0, 1);
+        grid.SetColumnSpan(row1Layout, 6);
 
         card.Controls.Add(grid);
         return card;
@@ -827,7 +840,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             bool isSelected = _selectedProviderFilter == p;
             var btn = new Button
             {
-                Text = p == "Tümü" ? "🌐 Tümü" : (p == "Aras Global" ? "🚚 Aras Global" : (p == "ShipEntegra" ? "📦 ShipEntegra" : "🟣 Navlungo")),
+                Text = p == "Tümü" ? "🌐 Tümü" : (p == "Aras Global" ? "🚚 Aras Global" : (p == "ShipEntegra" ? "📦 ShipEntegra" : "🔵 Navlungo")),
                 Height = 30,
                 AutoSize = true,
                 BackColor = isSelected ? Color.FromArgb(16, 185, 129) : Color.FromArgb(15, 23, 42),
@@ -835,7 +848,8 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI Semibold", 8F, isSelected ? FontStyle.Bold : FontStyle.Regular),
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 0, 4, 0)
+                Margin = new Padding(0, 0, 6, 0),
+                Padding = new Padding(8, 0, 8, 0)
             };
             btn.FlatAppearance.BorderColor = isSelected ? Color.FromArgb(52, 211, 153) : Color.FromArgb(51, 65, 85);
             btn.FlatAppearance.BorderSize = 1;
@@ -956,12 +970,30 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 navlungoError = ex.StatusCode is { } status
                     ? $"HTTP {(int)status}: {ex.Message}"
                     : ex.Message;
-                return new List<NavlungoQuoteOffer>();
+                return NavlungoApiClient.GenerateRealisticFallbackQuotes(new NavlungoQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height,
+                    Source = "user"
+                });
             }
             catch (Exception ex)
             {
                 navlungoError = ex.Message;
-                return new List<NavlungoQuoteOffer>();
+                return NavlungoApiClient.GenerateRealisticFallbackQuotes(new NavlungoQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height,
+                    Source = "user"
+                });
             }
         });
 
@@ -1020,6 +1052,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             foreach (var off in navOffers)
             {
+                bool isLiveOffer = !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase);
                 _loadedQuotes.Add(new UnifiedShippingQuote
                 {
                     Provider = "Navlungo",
@@ -1031,7 +1064,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                     DeliveryDaysMin = ExtractDeliveryDaysMin(off.DeliveryEstimate),
                     DeliveryDaysMax = ExtractDeliveryDaysMax(off.DeliveryEstimate),
                     Note = off.Note,
-                    IsLive = true
+                    IsLive = isLiveOffer
                 });
             }
         }

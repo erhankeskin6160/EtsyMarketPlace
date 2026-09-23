@@ -39,12 +39,87 @@ public sealed class NavlungoApiClient : INavlungoApiClient
     private readonly HttpClient _httpClient;
     private const string BaseEndpoint = "https://quick-price-calculator.navlungo.com/tr?source=user";
 
-    public const string AnonymousActionId = "407c7fce1b21c317e8f462a29fa67400476f149845";
-    public const string AuthenticatedActionId = "409666d23e69677ffd3313a55e305d6fe35c4d7b54";
+    public const string AnonymousActionId = "406fad5769e32876f9c8eeccd5dab4d086b9068ca5";
+    public const string AuthenticatedActionId = "40198494a378e36987abc2fe2dd302fceb194b28c4";
+
+    private static string? _cachedAnonymousActionId = AnonymousActionId;
+    private static string? _cachedAuthenticatedActionId = AuthenticatedActionId;
+    private static DateTime _lastResolvedUtc = DateTime.UtcNow;
+    private static readonly SemaphoreSlim _resolveLock = new(1, 1);
 
     public NavlungoApiClient(HttpClient? httpClient = null)
     {
         _httpClient = httpClient ?? new HttpClient();
+    }
+
+    /// <summary>
+    /// Navlungo web uygulamasından (Next.js App Router) güncel Server Action ID'lerini dinamik olarak çözer.
+    /// Her yeni deploy sonrasında hash'ler değişse bile otomatik güncellenir.
+    /// </summary>
+    public static async Task<(string anonId, string authId)> ResolveActionIdsAsync(
+        HttpClient httpClient,
+        bool forceRefresh = false,
+        CancellationToken ct = default)
+    {
+        if (!forceRefresh && _cachedAnonymousActionId != null && _cachedAuthenticatedActionId != null && (DateTime.UtcNow - _lastResolvedUtc).TotalHours < 6)
+        {
+            return (_cachedAnonymousActionId, _cachedAuthenticatedActionId);
+        }
+
+        await _resolveLock.WaitAsync(ct);
+        try
+        {
+            if (!forceRefresh && _cachedAnonymousActionId != null && _cachedAuthenticatedActionId != null && (DateTime.UtcNow - _lastResolvedUtc).TotalHours < 6)
+            {
+                return (_cachedAnonymousActionId, _cachedAuthenticatedActionId);
+            }
+
+            using var req = new HttpRequestMessage(HttpMethod.Get, BaseEndpoint);
+            req.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+            
+            using var res = await httpClient.SendAsync(req, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                string html = await res.Content.ReadAsStringAsync(ct);
+                // HTML içindeki page chunk dosyasını bul: /_next/static/chunks/app/%5Blocale%5D/page-[a-f0-9]+.js
+                var chunkMatch = Regex.Match(html, @"src=""(/_next/static/chunks/app/(?:%5Blocale%5D|\[locale\])/page-[a-f0-9]+\.js)""");
+                if (chunkMatch.Success)
+                {
+                    string chunkUrl = "https://quick-price-calculator.navlungo.com" + chunkMatch.Groups[1].Value;
+                    using var chunkReq = new HttpRequestMessage(HttpMethod.Get, chunkUrl);
+                    chunkReq.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+                    
+                    using var chunkRes = await httpClient.SendAsync(chunkReq, ct);
+                    if (chunkRes.IsSuccessStatusCode)
+                    {
+                        string js = await chunkRes.Content.ReadAsStringAsync(ct);
+                        var anonMatch = Regex.Match(js, @"createServerReference\(""([a-f0-9]+)""[^,]+,[^,]+,[^,]+,""callCalculationAnonymousApi""\)");
+                        var authMatch = Regex.Match(js, @"createServerReference\(""([a-f0-9]+)""[^,]+,[^,]+,[^,]+,""callCalculationApi""\)");
+                        
+                        if (anonMatch.Success) _cachedAnonymousActionId = anonMatch.Groups[1].Value;
+                        if (authMatch.Success) _cachedAuthenticatedActionId = authMatch.Groups[1].Value;
+                        
+                        if (!string.IsNullOrWhiteSpace(_cachedAnonymousActionId) && !string.IsNullOrWhiteSpace(_cachedAuthenticatedActionId))
+                        {
+                            _lastResolvedUtc = DateTime.UtcNow;
+                            return (_cachedAnonymousActionId, _cachedAuthenticatedActionId);
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Ağ hatası veya Cloudflare kısıtlamasında bilinen sabitlere dön
+        }
+        finally
+        {
+            _resolveLock.Release();
+        }
+
+        _cachedAnonymousActionId ??= AnonymousActionId;
+        _cachedAuthenticatedActionId ??= AuthenticatedActionId;
+        return (_cachedAnonymousActionId, _cachedAuthenticatedActionId);
     }
 
     public async Task<List<NavlungoQuoteOffer>> FetchLiveQuotesAsync(
@@ -52,10 +127,62 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         NavlungoSettings? settings = null,
         CancellationToken cancellationToken = default)
     {
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseEndpoint);
-
         bool hasSession = settings != null && (!string.IsNullOrWhiteSpace(settings.IdToken) || !string.IsNullOrWhiteSpace(settings.SessionCookie));
-        string actionId = hasSession ? AuthenticatedActionId : AnonymousActionId;
+        
+        // 1. Güncel veya önbellekteki Action ID'yi al
+        var (anonId, authId) = await ResolveActionIdsAsync(_httpClient, forceRefresh: false, cancellationToken);
+        string actionId = hasSession ? authId : anonId;
+
+        var (success, content, statusCode, reasonPhrase) = await ExecutePostRequestRawAsync(request, settings, actionId, cancellationToken);
+
+        // 2. Eğer HTML sayfası döndüyse (Next.js build almış ve eski Action ID HTML döndürmüşse),
+        // Action ID'yi zorla yenileyerek (forceRefresh) bir kez daha dene!
+        if (success && (content.TrimStart().StartsWith("<!DOCTYPE html", StringComparison.OrdinalIgnoreCase) ||
+                        content.TrimStart().StartsWith("<html", StringComparison.OrdinalIgnoreCase)))
+        {
+            var (freshAnon, freshAuth) = await ResolveActionIdsAsync(_httpClient, forceRefresh: true, cancellationToken);
+            string freshActionId = hasSession ? freshAuth : freshAnon;
+            if (freshActionId != actionId)
+            {
+                (success, content, statusCode, reasonPhrase) = await ExecutePostRequestRawAsync(request, settings, freshActionId, cancellationToken);
+            }
+        }
+
+        // Hata tespiti ve canlı izleme için son yanıtı kaydet
+        try
+        {
+            string debugPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "navlungo_last_response.log");
+            File.WriteAllText(debugPath, content);
+        }
+        catch { }
+
+        if (!success)
+        {
+            throw new NavlungoApiException(
+                $"Navlungo HTTP {(int)statusCode} ({reasonPhrase}).",
+                statusCode,
+                TruncateResponse(content));
+        }
+
+        var offers = ParseNavlungoResponse(content, request);
+        if (offers.Count == 0)
+        {
+            throw new NavlungoApiException(
+                "Navlungo yanıtı alındı ancak teklif response içinden ayrıştırılamadı.",
+                statusCode,
+                TruncateResponse(content));
+        }
+
+        return offers;
+    }
+
+    private async Task<(bool success, string content, HttpStatusCode statusCode, string? reasonPhrase)> ExecutePostRequestRawAsync(
+        NavlungoQuoteRequest request,
+        NavlungoSettings? settings,
+        string actionId,
+        CancellationToken cancellationToken)
+    {
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseEndpoint);
 
         // Navlungo Next.js Server Action zorunlu başlıkları:
         httpRequest.Headers.TryAddWithoutValidation("Next-Action", actionId);
@@ -124,33 +251,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         using (response)
         {
             string content = await response.Content.ReadAsStringAsync(cancellationToken);
-            
-            // Hata tespiti ve canlı izleme için son yanıtı kaydet
-            try
-            {
-                string debugPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "navlungo_last_response.log");
-                File.WriteAllText(debugPath, content);
-            }
-            catch { }
-
-            if (!response.IsSuccessStatusCode)
-            {
-                throw new NavlungoApiException(
-                    $"Navlungo HTTP {(int)response.StatusCode} ({response.ReasonPhrase}).",
-                    response.StatusCode,
-                    TruncateResponse(content));
-            }
-
-            var offers = ParseNavlungoResponse(content, request);
-            if (offers.Count == 0)
-            {
-                throw new NavlungoApiException(
-                    "Navlungo yanıtı alındı ancak teklif response içinden ayrıştırılamadı.",
-                    response.StatusCode,
-                    TruncateResponse(content));
-            }
-
-            return offers;
+            return (response.IsSuccessStatusCode, content, response.StatusCode, response.ReasonPhrase);
         }
     }
 
