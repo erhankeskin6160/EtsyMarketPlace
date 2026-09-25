@@ -1428,6 +1428,7 @@ internal sealed class DashboardForm : Form
     {
         _sidebarNav.ClearItems();
         _sidebarNav.AddItem("dashboard", "Kontrol Paneli", "📊", "Genel");
+        _sidebarNav.AddItem("orders_shipping", "Sipariş & Kargo", "🚚", "Genel", "YENİ");
         _sidebarNav.AddItem("fast_creator", "Hızlı Ürün Ekle (AI)", "⚡", "Genel", "YENİ");
         _sidebarNav.AddItem("creator", "Ürün Bul & Taslak", "🛍️", "Genel");
         _sidebarNav.AddItem("ai_image", "AI Görsel Stüdyosu", "🎨", "Genel", "PRO");
@@ -1447,7 +1448,6 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("ai_usage", "AI Token & Bakiye Takip", "📊", "Otomasyon & Araçlar", "YENİ");
-        _sidebarNav.AddItem("orders_shipping", "Sipariş & Kargo Stüdyosu", "🚚", "Otomasyon & Araçlar", "YENİ");
 
         _sidebarNav.AddItem("notifications", "Telegram Bildirim Botu", "✈️", "Sistem", "YENİ");
         _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
