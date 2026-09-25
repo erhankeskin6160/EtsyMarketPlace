@@ -48,7 +48,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private Label _lblBuyerAddressLine2 = null!;
     private Label _lblBuyerCountry = null!;
     private SaasUnitInputBox _inputWeight = null!;
-    private SaasUnitInputBox _inputDims = null!;
+    private SaasUnitInputBox _inputLength = null!;
+    private SaasUnitInputBox _inputWidth = null!;
+    private SaasUnitInputBox _inputHeight = null!;
     private ComboBox _cmbHsCode = null!;
     private Label _lblCalculatedDesi = null!;
 
@@ -453,30 +455,41 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Font = new Font("Segoe UI", 11f, FontStyle.Bold),
             ForeColor = Color.FromArgb(248, 250, 252),
             Height = 26,
-            Width = 230,
+            Width = 250,
             Margin = new Padding(0, 2, 0, 6)
         };
         contentFlow.Controls.Add(lblPackageHeader);
 
-        // 4. Weight & Dimensions Kutuları (Yan Yana)
-        var pnlDimsRow = new FlowLayoutPanel
+        // 4. Ağırlık, Boy, En, Yükseklik 2x2 Grid (Kırpılma / Taşma Olmayan SaaS Yerleşimi)
+        var pnlPackageGrid = new TableLayoutPanel
         {
-            Width = 230,
-            Height = 60,
-            FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0, 0, 0, 8),
-            BackColor = Color.Transparent
+            Width = 250,
+            Height = 120,
+            ColumnCount = 2,
+            RowCount = 2,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0, 0, 0, 8)
         };
+        pnlPackageGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        pnlPackageGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
+        pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
 
-        _inputWeight = new SaasUnitInputBox("Weight", "0.40", "kg") { Width = 110 };
-        _inputDims = new SaasUnitInputBox("Dimensions", "20x15x10", "cm") { Width = 114, Margin = new Padding(6, 0, 0, 0) };
+        _inputWeight = new SaasUnitInputBox("Ağırlık (Weight)", "0.40", "kg") { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 4, 4) };
+        _inputLength = new SaasUnitInputBox("Boy (Length)", "20", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 0, 0, 4) };
+        _inputWidth = new SaasUnitInputBox("En (Width)", "15", "cm") { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 4, 0) };
+        _inputHeight = new SaasUnitInputBox("Yükseklik (Height)", "10", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 4, 0, 0) };
 
         _inputWeight.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
-        _inputDims.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
+        _inputLength.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
+        _inputWidth.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
+        _inputHeight.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
 
-        pnlDimsRow.Controls.Add(_inputWeight);
-        pnlDimsRow.Controls.Add(_inputDims);
-        contentFlow.Controls.Add(pnlDimsRow);
+        pnlPackageGrid.Controls.Add(_inputWeight, 0, 0);
+        pnlPackageGrid.Controls.Add(_inputLength, 1, 0);
+        pnlPackageGrid.Controls.Add(_inputWidth, 0, 1);
+        pnlPackageGrid.Controls.Add(_inputHeight, 1, 1);
+        contentFlow.Controls.Add(pnlPackageGrid);
 
         // 5. GTIP HS Code Alanı
         var lblGtipTitle = new Label
@@ -485,14 +498,14 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Font = new Font("Segoe UI", 8.5f, FontStyle.Regular),
             ForeColor = Color.FromArgb(148, 163, 184),
             Height = 20,
-            Width = 230,
+            Width = 250,
             Margin = new Padding(0, 4, 0, 2)
         };
         contentFlow.Controls.Add(lblGtipTitle);
 
         _cmbHsCode = new ComboBox
         {
-            Width = 230,
+            Width = 250,
             BackColor = Color.FromArgb(21, 30, 48),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
@@ -516,13 +529,25 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         _lblCalculatedDesi = new Label
         {
             Text = "Desi: 0.60 | Faturalandırılacak: 0.60 kg",
-            Font = new Font("Segoe UI", 8f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
             ForeColor = Color.FromArgb(251, 191, 36),
-            Width = 230,
-            Height = 26,
-            Margin = new Padding(0, 2, 0, 0)
+            Width = 250,
+            Height = 28,
+            AutoSize = false,
+            Margin = new Padding(0, 4, 0, 0)
         };
         contentFlow.Controls.Add(_lblCalculatedDesi);
+
+        contentFlow.ClientSizeChanged += (_, _) =>
+        {
+            int targetW = Math.Max(230, contentFlow.ClientSize.Width - 10);
+            detailsCard.Width = targetW;
+            lblPackageHeader.Width = targetW;
+            pnlPackageGrid.Width = targetW;
+            lblGtipTitle.Width = targetW;
+            _cmbHsCode.Width = targetW;
+            _lblCalculatedDesi.Width = targetW;
+        };
 
         colPanel.Controls.Add(contentFlow);
         contentFlow.BringToFront();
@@ -715,10 +740,12 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         };
         colPanel.Controls.Add(lblSub);
 
-        var scrollContainer = new Panel
+        var scrollContainer = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             AutoScroll = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
             Padding = new Padding(0, 4, 4, 0)
         };
 
@@ -728,32 +755,34 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Text = "Sender Address",
             Font = new Font("Segoe UI", 8.5f),
             ForeColor = Color.FromArgb(148, 163, 184),
-            Dock = DockStyle.Top,
-            Height = 18
+            Width = 250,
+            Height = 18,
+            Margin = new Padding(0, 0, 0, 2)
         };
         _cmbSenderAddress = new ComboBox
         {
-            Dock = DockStyle.Top,
+            Width = 250,
             BackColor = Color.FromArgb(21, 30, 48),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Font = new Font("Segoe UI", 8.5f),
-            DropDownStyle = ComboBoxStyle.DropDownList
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Margin = new Padding(0, 0, 0, 8)
         };
         _cmbSenderAddress.Items.Add("Ana Depo (Ankara Altındağ - ERHAN KESKİN)");
         _cmbSenderAddress.Items.Add("Main Warehouse, Berlin, DE");
         _cmbSenderAddress.SelectedIndex = 0;
-        scrollContainer.Controls.Add(_cmbSenderAddress);
         scrollContainer.Controls.Add(lblSender);
+        scrollContainer.Controls.Add(_cmbSenderAddress);
 
         // 2. Receiver Summary Kartı
         var pnlReceiver = new SaasCardPanel
         {
-            Dock = DockStyle.Top,
-            Height = 90,
+            Width = 250,
+            Height = 92,
             CardBackground = Color.FromArgb(21, 30, 48),
             BorderColor = Color.FromArgb(37, 51, 71),
-            Margin = new Padding(0, 8, 0, 8),
+            Margin = new Padding(0, 0, 0, 8),
             Padding = new Padding(10)
         };
         var lblRecTitle = new Label { Text = "Receiver Summary", Font = new Font("Segoe UI", 8f, FontStyle.Bold), ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(8, 6), AutoSize = true };
@@ -772,11 +801,11 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         // 3. IOSS Tax Info Kartı
         var pnlIoss = new SaasCardPanel
         {
-            Dock = DockStyle.Top,
+            Width = 250,
             Height = 65,
             CardBackground = Color.FromArgb(21, 30, 48),
             BorderColor = Color.FromArgb(37, 51, 71),
-            Margin = new Padding(0, 6, 0, 8),
+            Margin = new Padding(0, 0, 0, 8),
             Padding = new Padding(10)
         };
         var lblIossHead = new Label { Text = "IOSS Tax Info", Font = new Font("Segoe UI", 8f, FontStyle.Bold), ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(8, 6), AutoSize = true };
@@ -791,21 +820,21 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         // 4. Canlı Barkod Etiketi Önizlemesi (Görseldeki Gerçekçi Beyaz Barkod Kartı)
         _barcodeControl = new SaasBarcodeLabelControl
         {
-            Dock = DockStyle.Top,
+            Width = 250,
             Height = 98,
-            Margin = new Padding(0, 6, 0, 8)
+            Margin = new Padding(0, 0, 0, 8)
         };
         scrollContainer.Controls.Add(_barcodeControl);
 
         // 5. Ücret Özeti (USD & TRY)
-        var pnlPricing = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(4) };
+        var pnlPricing = new Panel { Width = 250, Height = 50, Padding = new Padding(4), Margin = new Padding(0, 0, 0, 6) };
         _lblBasePrice = new Label { Text = "Ücret: $13.13 (≈ 641.47 ₺)", ForeColor = Color.FromArgb(16, 185, 129), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Dock = DockStyle.Top, AutoSize = true };
         _lblFinalPriceTry = new Label { Text = "Tüm vergiler dahil (DDP)", ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Segoe UI", 8f), Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
         pnlPricing.Controls.Add(_lblFinalPriceTry);
         pnlPricing.Controls.Add(_lblBasePrice);
         scrollContainer.Controls.Add(pnlPricing);
 
-        // 6. En Alttaki Büyük Zümrüt Yeşili Gönderi Oluştur Butonu (Görseldeki Buton)
+        // 6. Büyük Zümrüt Yeşili Gönderi Oluştur Butonu
         _btnCreateShipment = new Button
         {
             Text = "Aras Global ile Gönderi Oluştur",
@@ -813,25 +842,40 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             ForeColor = Color.White,
             BackColor = Color.FromArgb(16, 185, 129), // Emerald #10B981
             FlatStyle = FlatStyle.Flat,
-            Dock = DockStyle.Top,
+            Width = 250,
             Height = 44,
             Cursor = Cursors.Hand,
-            Margin = new Padding(0, 6, 0, 6)
+            Margin = new Padding(0, 0, 0, 6)
         };
         _btnCreateShipment.FlatAppearance.BorderSize = 0;
         _btnCreateShipment.Click += async (s, e) => await ExecuteShipmentCreationAsync();
         scrollContainer.Controls.Add(_btnCreateShipment);
 
+        // 7. Durum ve Hata Bildirimi (Butonun Hemen Altında)
         _lblStatusMsg = new Label
         {
             Text = "",
             ForeColor = Color.FromArgb(251, 191, 36),
             Font = new Font("Segoe UI", 8f),
-            Dock = DockStyle.Top,
-            Height = 52,
-            TextAlign = ContentAlignment.TopCenter
+            Width = 250,
+            Height = 54,
+            TextAlign = ContentAlignment.TopCenter,
+            Margin = new Padding(0, 0, 0, 4)
         };
         scrollContainer.Controls.Add(_lblStatusMsg);
+
+        scrollContainer.ClientSizeChanged += (_, _) =>
+        {
+            int targetW = Math.Max(220, scrollContainer.ClientSize.Width - 10);
+            lblSender.Width = targetW;
+            _cmbSenderAddress.Width = targetW;
+            pnlReceiver.Width = targetW;
+            pnlIoss.Width = targetW;
+            _barcodeControl.Width = targetW;
+            pnlPricing.Width = targetW;
+            _btnCreateShipment.Width = targetW;
+            _lblStatusMsg.Width = targetW;
+        };
 
         colPanel.Controls.Add(scrollContainer);
         scrollContainer.BringToFront();
@@ -892,8 +936,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         if (order.Items.Count > 0)
         {
             var itm = order.Items[0];
-            _inputWeight.Value = itm.WeightKg.ToString("0.00");
-            _inputDims.Value = $"{itm.LengthCm}x{itm.WidthCm}x{itm.HeightCm}";
+            _inputWeight.Value = itm.WeightKg > 0 ? itm.WeightKg.ToString("0.00") : "0.40";
+            _inputLength.Value = itm.LengthCm > 0 ? itm.LengthCm.ToString("0") : "20";
+            _inputWidth.Value = itm.WidthCm > 0 ? itm.WidthCm.ToString("0") : "15";
+            _inputHeight.Value = itm.HeightCm > 0 ? itm.HeightCm.ToString("0") : "10";
         }
 
         _ = RecalculateDesiAndQuotesAsync();
@@ -904,19 +950,14 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         if (_selectedOrder == null) return;
 
         decimal kg = _inputWeight.GetDecimal();
-        double w = 15, l = 20, h = 10;
+        double w = (double)_inputWidth.GetDecimal();
+        double l = (double)_inputLength.GetDecimal();
+        double h = (double)_inputHeight.GetDecimal();
 
-        string dimsStr = _inputDims.Value;
-        if (!string.IsNullOrWhiteSpace(dimsStr))
-        {
-            var parts = dimsStr.Split(new[] { 'x', 'X', '*', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 3)
-            {
-                double.TryParse(parts[0], out l);
-                double.TryParse(parts[1], out w);
-                double.TryParse(parts[2], out h);
-            }
-        }
+        if (w <= 0) w = 15;
+        if (l <= 0) l = 20;
+        if (h <= 0) h = 10;
+        if (kg <= 0) kg = 0.40m;
 
         double desi = Math.Round((w * l * h) / 5000.0, 2);
         double billable = Math.Max((double)kg, desi);
@@ -1395,6 +1436,33 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             return;
         }
 
+        if (_selectedCarrier.IsAras)
+        {
+            var arasSettings = ArasGlobalSettingsStore.Load();
+            if (!arasSettings.HasValidTokenFormat)
+            {
+                var ask = MessageBox.Show(
+                    "Aras Global oturum tokeni bulunamadı veya süresi dolmuş.\n\nKargo oluşturabilmek için şimdi Aras Global oturumunu yenilemek ister misiniz?",
+                    "Aras Global Oturumu Gerekli",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (ask == DialogResult.Yes)
+                {
+                    await PromptOrRefreshArasSessionAsync();
+                    arasSettings = ArasGlobalSettingsStore.Load();
+                    if (!arasSettings.HasValidTokenFormat)
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    return;
+                }
+            }
+        }
+
         _btnCreateShipment.Enabled = false;
         _btnCreateShipment.Text = "⏳ Gönderi Oluşturuluyor...";
         _lblStatusMsg.ForeColor = Color.FromArgb(56, 189, 248);
@@ -1403,14 +1471,14 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         try
         {
             decimal kg = _inputWeight.GetDecimal();
-            double w = 15, l = 20, h = 10;
-            var parts = _inputDims.Value.Split(new[] { 'x', 'X', '*', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length >= 3)
-            {
-                double.TryParse(parts[0], out l);
-                double.TryParse(parts[1], out w);
-                double.TryParse(parts[2], out h);
-            }
+            double w = (double)_inputWidth.GetDecimal();
+            double l = (double)_inputLength.GetDecimal();
+            double h = (double)_inputHeight.GetDecimal();
+
+            if (kg <= 0) kg = 0.5m;
+            if (w <= 0) w = 15;
+            if (l <= 0) l = 20;
+            if (h <= 0) h = 10;
 
             var context = new ShipmentCreationContext
             {

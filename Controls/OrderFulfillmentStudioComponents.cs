@@ -474,31 +474,44 @@ public sealed class SaasUnitInputBox : Panel
 
     public SaasUnitInputBox(string title, string initialVal, string unit)
     {
-        Size = new Size(110, 54);
+        Size = new Size(115, 54);
         BackColor = Color.Transparent;
 
         _lblTitle = new Label
         {
             Text = title,
             ForeColor = Color.FromArgb(148, 163, 184),
-            Font = new Font("Segoe UI", 8f, FontStyle.Regular),
-            Location = new Point(0, 0),
-            AutoSize = true
+            Font = new Font("Segoe UI", 7.8f, FontStyle.Regular),
+            Dock = DockStyle.Top,
+            Height = 18,
+            AutoSize = false,
+            TextAlign = ContentAlignment.MiddleLeft
         };
         Controls.Add(_lblTitle);
 
         var innerBox = new Panel
         {
-            Location = new Point(0, 20),
-            Size = new Size(110, 32),
+            Dock = DockStyle.Top,
+            Height = 32,
             BackColor = Color.FromArgb(30, 41, 59)
         };
+
+        _lblUnit = new Label
+        {
+            Text = unit,
+            Dock = DockStyle.Right,
+            Width = 32,
+            ForeColor = Color.FromArgb(100, 116, 139),
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+            TextAlign = ContentAlignment.MiddleCenter
+        };
+        innerBox.Controls.Add(_lblUnit);
 
         _textBox = new TextBox
         {
             Text = initialVal,
             Location = new Point(8, 6),
-            Size = new Size(62, 20),
+            Width = 65,
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.White,
             BorderStyle = BorderStyle.None,
@@ -507,16 +520,11 @@ public sealed class SaasUnitInputBox : Panel
         _textBox.TextChanged += (s, e) => ValueChanged?.Invoke(this, EventArgs.Empty);
         innerBox.Controls.Add(_textBox);
 
-        _lblUnit = new Label
+        innerBox.SizeChanged += (s, e) =>
         {
-            Text = unit,
-            Location = new Point(72, 6),
-            Size = new Size(32, 20),
-            ForeColor = Color.FromArgb(100, 116, 139),
-            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
-            TextAlign = ContentAlignment.MiddleRight
+            _textBox.Width = Math.Max(20, innerBox.Width - _lblUnit.Width - 14);
+            innerBox.Invalidate();
         };
-        innerBox.Controls.Add(_lblUnit);
 
         innerBox.Paint += (s, e) =>
         {
@@ -527,6 +535,7 @@ public sealed class SaasUnitInputBox : Panel
         };
 
         Controls.Add(innerBox);
+        innerBox.BringToFront();
     }
 
     public decimal GetDecimal()
