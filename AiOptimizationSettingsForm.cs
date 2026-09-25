@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using SimilarProductsWinForms.Controls;
 using SimilarProductsWinForms.Models;
@@ -13,6 +14,15 @@ using EtsyMarketPlace.Application.AiUsage;
 
 internal sealed class AiOptimizationSettingsForm : Form
 {
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    private const int DWMWA_BORDER_COLOR = 34;
+    private const int DWMWA_CAPTION_COLOR = 35;
+    private const int DWMWA_TEXT_COLOR = 36;
+
     private readonly AiOptimizationSettings _settings;
     private bool _isInitializing = false;
 
@@ -22,9 +32,9 @@ internal sealed class AiOptimizationSettingsForm : Form
     private string _currentProvider = "Gemini";
 
     // Birincil LLM ve Görsel Modelleri
-    private readonly ComboBox _modelComboBox = new();
+    private readonly ModernComboBox _modelComboBox = new();
     private readonly TextBox _customModelTextBox = new();
-    private readonly ComboBox _imageModelComboBox = new();
+    private readonly ModernComboBox _imageModelComboBox = new();
     private readonly TextBox _apiKeyTextBox = new();
 
     // Görsel Stüdyo Anahtarları
@@ -33,14 +43,17 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly TextBox _ideogramKeyTextBox = new();
 
     // Sistem Güvenliği & Fallback
-    private readonly CheckBox _chkStrictLiveAi = new();
-    private readonly CheckBox _chkStrictNeverOffline = new();
+    private readonly ModernCheckBox _chkStrictLiveAi = new();
+    private readonly ModernCheckBox _chkStrictNeverOffline = new();
 
     // Terminal & Aksiyonlar
     private readonly TextBox _statusTextBox = new();
-    private readonly Button _btnSave = new();
-    private readonly Button _btnTest = new();
-    private readonly Button _btnClose = new();
+    private readonly ModernButtonControl _btnSave = new();
+    private readonly ModernButtonControl _btnTest = new();
+    private readonly ModernButtonControl _btnClose = new();
+
+    // Modern Kaydırılabilir Alan
+    private readonly ModernScrollPanel _scrollCards = new();
 
     public AiOptimizationSettingsForm()
     {
@@ -53,15 +66,53 @@ internal sealed class AiOptimizationSettingsForm : Form
         LoadValues();
     }
 
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        EnableDarkModeTitleBar();
+    }
+
+    private void EnableDarkModeTitleBar()
+    {
+        try
+        {
+            if (Environment.OSVersion.Version.Major >= 10 && IsHandleCreated)
+            {
+                int darkMode = 1;
+                if (DwmSetWindowAttribute(Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int)) != 0)
+                {
+                    DwmSetWindowAttribute(Handle, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref darkMode, sizeof(int));
+                }
+
+                int captionColor = 0x002A170F; // BGR: #0F172A
+                int textColor = 0x00FFFFFF;    // BGR: White
+                int borderColor = 0x00554133;  // BGR: #334155
+                DwmSetWindowAttribute(Handle, DWMWA_CAPTION_COLOR, ref captionColor, sizeof(int));
+                DwmSetWindowAttribute(Handle, DWMWA_TEXT_COLOR, ref textColor, sizeof(int));
+                DwmSetWindowAttribute(Handle, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+            }
+        }
+        catch { }
+    }
+
     private void BuildLayout()
     {
         Text = "AI Optimizasyon Ayarları & Model Yapılandırması";
         StartPosition = FormStartPosition.CenterParent;
-        Size = new Size(900, 740);
+        Size = new Size(920, 750);
         MinimumSize = new Size(840, 680);
         Font = new Font("Segoe UI", 9F);
         BackColor = Color.FromArgb(15, 23, 42); // #0F172A
         ForeColor = Color.White;
+        MaximizeBox = false;
+
+        try
+        {
+            string icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+            if (!System.IO.File.Exists(icoPath)) icoPath = "app.ico";
+            if (System.IO.File.Exists(icoPath)) Icon = new Icon(icoPath);
+        }
+        catch { }
 
         var mainLayout = new TableLayoutPanel
         {
@@ -72,7 +123,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         };
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));  // 1. Header
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // 2. Scrollable Cards
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 82));  // 3. Footer (Buttons + Terminal)
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));  // 3. Footer (Buttons + Terminal)
         Controls.Add(mainLayout);
 
         // ==========================================
@@ -102,25 +153,29 @@ internal sealed class AiOptimizationSettingsForm : Form
         mainLayout.Controls.Add(pnlHeader, 0, 0);
 
         // ==========================================
-        // 2. KARTLAR (KAYDIRILABİLİR ALAN)
+        // 2. KARTLAR (KAYDIRILABİLİR ALAN - MODERN SCROLL)
         // ==========================================
-        var scrollPanel = new Panel
-        {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
-            Padding = new Padding(0, 0, 8, 0)
-        };
-        mainLayout.Controls.Add(scrollPanel, 0, 1);
+        _scrollCards.Dock = DockStyle.Fill;
+        _scrollCards.Margin = Padding.Empty;
+        _scrollCards.Padding = new Padding(0, 0, 2, 0);
+        _scrollCards.ScrollBarGap = 8;
+        _scrollCards.BackColor = Color.FromArgb(15, 23, 42);
+        _scrollCards.ScrollBar.Width = 6;
+        _scrollCards.ScrollBar.TrackColor = Color.Transparent;
+        _scrollCards.ScrollBar.ThumbNormalColor = Color.FromArgb(71, 85, 105);
+        _scrollCards.ScrollBar.ThumbHoverColor = Color.FromArgb(100, 116, 139);
+        _scrollCards.ScrollBar.ThumbActiveColor = Color.FromArgb(99, 102, 241);
 
         var cardsTable = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
+            Width = 845,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
             RowCount = 3,
-            Margin = new Padding(0),
-            Padding = new Padding(0)
+            Margin = Padding.Empty,
+            Padding = new Padding(0, 0, 4, 0),
+            BackColor = Color.FromArgb(15, 23, 42)
         };
         cardsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         cardsTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -135,7 +190,17 @@ internal sealed class AiOptimizationSettingsForm : Form
         cardsTable.Controls.Add(BuildCard2_VisionStudio(), 0, 1);
         cardsTable.Controls.Add(BuildCard3_SecurityFallback(), 0, 2);
 
-        scrollPanel.Controls.Add(cardsTable);
+        _scrollCards.SetContent(cardsTable);
+        mainLayout.Controls.Add(_scrollCards, 0, 1);
+
+        Resize += (_, _) =>
+        {
+            if (_scrollCards.ClientSize.Width > 50)
+            {
+                cardsTable.Width = _scrollCards.ClientSize.Width - 14;
+                _scrollCards.RecalculateScroll();
+            }
+        };
 
         // ==========================================
         // 3. ALT BÖLÜM (FOOTER: EYLEMLER & TERMİNAL)
@@ -154,18 +219,19 @@ internal sealed class AiOptimizationSettingsForm : Form
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight,
-            Padding = new Padding(0, 14, 0, 0)
+            WrapContents = false,
+            Padding = new Padding(0, 16, 0, 0)
         };
 
         _btnSave.Text = "💾 Kaydet & Aktifleştir";
         _btnSave.UseMnemonic = false;
-        _btnSave.BackColor = Color.FromArgb(16, 185, 129); // Neon Emerald Green
+        _btnSave.NormalColor = Color.FromArgb(16, 185, 129); // Neon Emerald Green
+        _btnSave.HoverColor = Color.FromArgb(5, 150, 105);
         _btnSave.ForeColor = Color.White;
-        _btnSave.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-        _btnSave.FlatStyle = FlatStyle.Flat;
-        _btnSave.FlatAppearance.BorderSize = 0;
-        _btnSave.Height = 36;
-        _btnSave.Width = 195;
+        _btnSave.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        _btnSave.CornerRadius = 8;
+        _btnSave.Height = 38;
+        _btnSave.Width = 185;
         _btnSave.Cursor = Cursors.Hand;
         _btnSave.Click += (_, _) =>
         {
@@ -218,27 +284,28 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         _btnTest.Text = "⚡ Hızlı API Testi";
         _btnTest.UseMnemonic = false;
-        _btnTest.BackColor = Color.FromArgb(30, 41, 59);
-        _btnTest.ForeColor = Color.FromArgb(56, 189, 248); // Electric Cyan
-        _btnTest.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
-        _btnTest.FlatStyle = FlatStyle.Flat;
-        _btnTest.FlatAppearance.BorderColor = Color.FromArgb(56, 189, 248);
-        _btnTest.Height = 36;
-        _btnTest.Width = 145;
+        _btnTest.NormalColor = Color.FromArgb(14, 116, 144); // Electric Cyan/Navy
+        _btnTest.HoverColor = Color.FromArgb(8, 145, 178);
+        _btnTest.ForeColor = Color.White;
+        _btnTest.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        _btnTest.CornerRadius = 8;
+        _btnTest.Height = 38;
+        _btnTest.Width = 140;
         _btnTest.Cursor = Cursors.Hand;
-        _btnTest.Margin = new Padding(10, 0, 0, 0);
+        _btnTest.Margin = new Padding(8, 0, 0, 0);
         _btnTest.Click += (_, _) => TestSettings();
 
         _btnClose.Text = "✕ Kapat";
         _btnClose.UseMnemonic = false;
-        _btnClose.BackColor = Color.FromArgb(30, 41, 59);
-        _btnClose.ForeColor = Color.FromArgb(148, 163, 184);
-        _btnClose.FlatStyle = FlatStyle.Flat;
-        _btnClose.FlatAppearance.BorderColor = Color.FromArgb(51, 65, 85);
-        _btnClose.Height = 36;
-        _btnClose.Width = 90;
+        _btnClose.NormalColor = Color.FromArgb(51, 65, 85); // Slate 700
+        _btnClose.HoverColor = Color.FromArgb(71, 85, 105);
+        _btnClose.ForeColor = Color.FromArgb(241, 245, 249);
+        _btnClose.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
+        _btnClose.CornerRadius = 8;
+        _btnClose.Height = 38;
+        _btnClose.Width = 85;
         _btnClose.Cursor = Cursors.Hand;
-        _btnClose.Margin = new Padding(10, 0, 0, 0);
+        _btnClose.Margin = new Padding(8, 0, 0, 0);
         _btnClose.Click += (_, _) => Close();
 
         pnlButtons.Controls.Add(_btnSave);
@@ -246,17 +313,19 @@ internal sealed class AiOptimizationSettingsForm : Form
         pnlButtons.Controls.Add(_btnClose);
         pnlFooter.Controls.Add(pnlButtons, 0, 0);
 
-        // Sağ Terminal Konsolu
+        // Sağ Terminal Konsolu (Modern Koyu Kart)
         var pnlTerminal = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(10, 15, 26),
-            Padding = new Padding(6)
+            Padding = new Padding(8, 6, 8, 6)
         };
         pnlTerminal.Paint += (_, pe) =>
         {
-            using var pen = new Pen(Color.FromArgb(30, 45, 65), 1.2f);
-            pe.Graphics.DrawRectangle(pen, 0, 0, pnlTerminal.Width - 1, pnlTerminal.Height - 1);
+            using var pen = new Pen(Color.FromArgb(38, 50, 72), 1.2f);
+            using var path = ModernCardPanel.CreateRoundedRectanglePath(new Rectangle(0, 0, pnlTerminal.Width - 1, pnlTerminal.Height - 1), 6);
+            pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            pe.Graphics.DrawPath(pen, path);
         };
 
         _statusTextBox.Dock = DockStyle.Fill;
@@ -371,9 +440,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         };
         pnlModelRow.Controls.Add(lblCustom, 1, 0);
 
-        StyleTextBox(_customModelTextBox);
-        _customModelTextBox.Dock = DockStyle.Fill;
-        _customModelTextBox.PlaceholderText = "Örn: gemini-2.5-flash, grok-3, o3-mini...";
+        var pnlCustom = CreateModernInputWrapper(_customModelTextBox, "Örn: gemini-2.5-flash, grok-3, o3-mini...");
         _customModelTextBox.TextChanged += (_, _) =>
         {
             if (!string.IsNullOrWhiteSpace(_customModelTextBox.Text))
@@ -381,7 +448,7 @@ internal sealed class AiOptimizationSettingsForm : Form
                 _modelComboBox.Text = _customModelTextBox.Text.Trim();
             }
         };
-        pnlModelRow.Controls.Add(_customModelTextBox, 2, 0);
+        pnlModelRow.Controls.Add(pnlCustom, 2, 0);
 
         content.Controls.Add(pnlModelRow, 1, 1);
 
@@ -454,10 +521,11 @@ internal sealed class AiOptimizationSettingsForm : Form
         };
         content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
 
-        _chkStrictLiveAi.Text = "☑️ Canlı AI hata verirse haberim olmadan yerel motora geçme (Ekranda açıkça uyar)";
+        _chkStrictLiveAi.Text = " Canlı AI hata verirse haberim olmadan yerel motora geçme (Ekranda açıkça uyar)";
         _chkStrictLiveAi.AutoSize = true;
-        _chkStrictLiveAi.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        _chkStrictLiveAi.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
         _chkStrictLiveAi.ForeColor = Color.FromArgb(52, 211, 153); // Emerald/Green accent
+        _chkStrictLiveAi.BoxCheckedColor = Color.FromArgb(16, 185, 129);
         _chkStrictLiveAi.Cursor = Cursors.Hand;
         _chkStrictLiveAi.Margin = new Padding(0, 2, 0, 1);
 
@@ -468,13 +536,14 @@ internal sealed class AiOptimizationSettingsForm : Form
             Font = new Font("Segoe UI", 8F),
             ForeColor = Color.FromArgb(148, 163, 184),
             AutoSize = true,
-            Margin = new Padding(22, 0, 0, 8)
+            Margin = new Padding(26, 0, 0, 8)
         };
 
-        _chkStrictNeverOffline.Text = "🚫 Çevrimdışı (Offline) motoru tamamen kapat (Sadece Gerçek Canlı AI Kullan)";
+        _chkStrictNeverOffline.Text = " Çevrimdışı (Offline) motoru tamamen kapat (Sadece Gerçek Canlı AI Kullan)";
         _chkStrictNeverOffline.AutoSize = true;
-        _chkStrictNeverOffline.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        _chkStrictNeverOffline.Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold);
         _chkStrictNeverOffline.ForeColor = Color.FromArgb(248, 113, 113); // Coral/Alert red accent
+        _chkStrictNeverOffline.BoxCheckedColor = Color.FromArgb(239, 68, 68);
         _chkStrictNeverOffline.Cursor = Cursors.Hand;
         _chkStrictNeverOffline.Margin = new Padding(0, 4, 0, 1);
 
@@ -498,7 +567,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             Font = new Font("Segoe UI", 8F),
             ForeColor = Color.FromArgb(148, 163, 184),
             AutoSize = true,
-            Margin = new Padding(22, 0, 0, 4)
+            Margin = new Padding(26, 0, 0, 4)
         };
 
         content.Controls.Add(_chkStrictLiveAi, 0, 0);
@@ -884,8 +953,10 @@ internal sealed class AiOptimizationSettingsForm : Form
         };
         pnl.Paint += (_, pe) =>
         {
-            using var borderPen = new Pen(Color.FromArgb(38, 50, 72), 1.2f);
-            pe.Graphics.DrawRectangle(borderPen, 0, 0, pnl.Width - 1, pnl.Height - 1);
+            using var borderPen = new Pen(Color.FromArgb(51, 65, 85), 1.2f);
+            using var path = ModernCardPanel.CreateRoundedRectanglePath(new Rectangle(0, 0, pnl.Width - 1, pnl.Height - 1), 8);
+            pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            pe.Graphics.DrawPath(borderPen, path);
         };
 
         var cardLayout = new TableLayoutPanel
@@ -953,13 +1024,45 @@ internal sealed class AiOptimizationSettingsForm : Form
         txt.BorderStyle = BorderStyle.FixedSingle;
     }
 
-    private static void StyleComboBox(ComboBox cbo)
+    private static void StyleComboBox(ModernComboBox cbo)
     {
         cbo.DropDownStyle = ComboBoxStyle.DropDownList;
         cbo.BackColor = Color.FromArgb(30, 41, 59);
         cbo.ForeColor = Color.White;
         cbo.Font = new Font("Segoe UI", 9F);
-        cbo.FlatStyle = FlatStyle.Flat;
+        cbo.ItemHeight = 26;
+    }
+
+    private static Panel CreateModernInputWrapper(TextBox txt, string placeholder = "")
+    {
+        var container = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Height = 32,
+            BackColor = Color.FromArgb(30, 41, 59),
+            Padding = new Padding(8, 6, 8, 4)
+        };
+        bool hasFocus = false;
+        container.Paint += (_, pe) =>
+        {
+            using var pen = new Pen(hasFocus ? Color.FromArgb(99, 102, 241) : Color.FromArgb(51, 65, 85), 1.2f);
+            using var path = ModernCardPanel.CreateRoundedRectanglePath(new Rectangle(0, 0, container.Width - 1, container.Height - 1), 6);
+            pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            pe.Graphics.DrawPath(pen, path);
+        };
+
+        txt.Dock = DockStyle.Fill;
+        txt.BorderStyle = BorderStyle.None;
+        txt.BackColor = Color.FromArgb(30, 41, 59);
+        txt.ForeColor = Color.White;
+        txt.Font = new Font("Segoe UI", 9F);
+        if (!string.IsNullOrEmpty(placeholder)) txt.PlaceholderText = placeholder;
+
+        txt.GotFocus += (_, _) => { hasFocus = true; container.Invalidate(); };
+        txt.LostFocus += (_, _) => { hasFocus = false; container.Invalidate(); };
+
+        container.Controls.Add(txt);
+        return container;
     }
 
     private static Panel CreateKeyInputWithEye(TextBox txt)
@@ -967,14 +1070,17 @@ internal sealed class AiOptimizationSettingsForm : Form
         var container = new Panel
         {
             Dock = DockStyle.Fill,
-            Height = 30,
+            Height = 32,
             BackColor = Color.FromArgb(30, 41, 59),
-            Padding = new Padding(4, 2, 2, 2)
+            Padding = new Padding(8, 6, 4, 4)
         };
+        bool hasFocus = false;
         container.Paint += (_, pe) =>
         {
-            using var pen = new Pen(Color.FromArgb(51, 65, 85), 1f);
-            pe.Graphics.DrawRectangle(pen, 0, 0, container.Width - 1, container.Height - 1);
+            using var pen = new Pen(hasFocus ? Color.FromArgb(99, 102, 241) : Color.FromArgb(51, 65, 85), 1.2f);
+            using var path = ModernCardPanel.CreateRoundedRectanglePath(new Rectangle(0, 0, container.Width - 1, container.Height - 1), 6);
+            pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            pe.Graphics.DrawPath(pen, path);
         };
 
         txt.Dock = DockStyle.Fill;
@@ -983,6 +1089,9 @@ internal sealed class AiOptimizationSettingsForm : Form
         txt.ForeColor = Color.White;
         txt.Font = new Font("Consolas", 9.5F);
         txt.UseSystemPasswordChar = true;
+
+        txt.GotFocus += (_, _) => { hasFocus = true; container.Invalidate(); };
+        txt.LostFocus += (_, _) => { hasFocus = false; container.Invalidate(); };
 
         var btnEye = new Button
         {
