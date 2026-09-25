@@ -1444,20 +1444,47 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         settings.AutoRefreshEnabled = dlg.AutoRefresh;
         ArasGlobalSettingsStore.Save(settings);
 
+        if (dlg.OpenInDefaultBrowserRequested)
+        {
+            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/login");
+            MessageBox.Show(
+                "Aras Global paneli varsayılan tarayıcınızda açıldı!\n\nLütfen giriş yaptıktan sonra F12 DevTools Network sekmesindeki Bearer tokenini kopyalayıp buradaki 'Canlı Token' kutusuna yapıştırın.",
+                "Tarayıcı Açıldı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
         if (dlg.OpenInBrowserRequested)
         {
             _btnArasSession.Text = "⏳ Tarayıcı Açılıyor...";
             _btnArasSession.Enabled = false;
             try
             {
-                await _sessionManager.RefreshArasGlobalTokenAsync(
+                string? captured = await _sessionManager.RefreshArasGlobalTokenAsync(
                     email,
                     pass,
                     showBrowser: true,
                     knownExpiredToken: settings.CleanToken);
                 settings = ArasGlobalSettingsStore.Load();
                 UpdateSessionButtonState();
+                if (!string.IsNullOrWhiteSpace(captured))
+                {
+                    MessageBox.Show("Aras Global canlı oturumu tarayıcıdan başarıyla yakalandı!", "Oturum Hazır", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
                 _ = RecalculateDesiAndQuotesAsync();
+            }
+            catch (Exception ex)
+            {
+                var ask = MessageBox.Show(
+                    $"Görünür otomatik tarayıcı başlatılamadı:\n{ex.Message}\n\nResmi Aras Global panelini normal Chrome tarayıcınızda açmak ister misiniz?",
+                    "Normal Chrome'da Aç",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+                if (ask == DialogResult.Yes)
+                {
+                    PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/login");
+                }
             }
             finally
             {

@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Infrastructure.Shipping;
 
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -24,7 +25,49 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             "ShippingProfiles",
             provider);
         Directory.CreateDirectory(baseFolder);
+        CleanProfileLocks(baseFolder);
         return baseFolder;
+    }
+
+    public static void CleanProfileLocks(string profileDir)
+    {
+        try
+        {
+            if (!Directory.Exists(profileDir)) return;
+            string[] lockFiles = ["SingletonLock", "SingletonCookie", "SingletonSocket", "lockfile"];
+            foreach (var name in lockFiles)
+            {
+                string p = Path.Combine(profileDir, name);
+                if (File.Exists(p))
+                {
+                    try { File.Delete(p); } catch { }
+                }
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Kullanıcının varsayılan sistem tarayıcısında (Chrome/Edge vb.) resmi paneli doğrudan açar.
+    /// </summary>
+    public static void OpenOfficialPortalInDefaultBrowser(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo("cmd", $"/c start \"\" \"{url}\"") { CreateNoWindow = true });
+            }
+            catch { }
+        }
     }
 
     public async Task<string?> RefreshArasGlobalTokenAsync(
@@ -62,9 +105,10 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 "--disable-setuid-sandbox",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
-                "--window-size=1200,800"
+                "--window-size=1200,800",
+                "--remote-debugging-port=0"
             },
-            DefaultViewport = new ViewPortOptions { Width = 1180, Height = 760 }
+            DefaultViewport = showBrowser ? null : new ViewPortOptions { Width = 1180, Height = 760 }
         };
 
         IBrowser? browser = null;
@@ -206,6 +250,10 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
         catch (Exception ex)
         {
             statusCallback?.Invoke($"❌ Aras Global oturum hatası: {ex.Message}");
+            if (showBrowser)
+            {
+                throw;
+            }
             return null;
         }
         finally

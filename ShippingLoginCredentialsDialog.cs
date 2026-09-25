@@ -13,6 +13,7 @@ internal sealed class ShippingLoginCredentialsDialog : Form
     public string Password => _txtPassword.Text;
     public bool AutoRefresh => _chkAutoRefresh.Checked;
     public bool OpenInBrowserRequested { get; private set; }
+    public bool OpenInDefaultBrowserRequested { get; private set; }
     public string DirectToken => _txtDirectToken.Text.Trim();
 
     private readonly TextBox _txtDirectToken = new();
@@ -23,7 +24,7 @@ internal sealed class ShippingLoginCredentialsDialog : Form
     public ShippingLoginCredentialsDialog(string providerName, string existingEmail)
     {
         Text = $"{providerName} - Oturum ve Giriş Bilgileri";
-        Size = new Size(480, 440);
+        Size = new Size(580, 490);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -41,12 +42,12 @@ internal sealed class ShippingLoginCredentialsDialog : Form
             ForeColor = Color.FromArgb(56, 189, 248), // Sky 400
             Font = new Font("Segoe UI", 8.8f, FontStyle.Bold),
             Location = new Point(20, 16),
-            Size = new Size(420, 20)
+            Size = new Size(520, 20)
         };
         pnl.Controls.Add(lblTokenSection);
 
         _txtDirectToken.Location = new Point(20, 38);
-        _txtDirectToken.Width = 420;
+        _txtDirectToken.Width = 520;
         _txtDirectToken.Height = 44;
         _txtDirectToken.Multiline = true;
         _txtDirectToken.BackColor = Color.FromArgb(30, 41, 59);
@@ -59,7 +60,7 @@ internal sealed class ShippingLoginCredentialsDialog : Form
         {
             Text = "🔑 Bu Tokeni Kaydet & Kullan",
             Location = new Point(20, 88),
-            Size = new Size(420, 32),
+            Size = new Size(520, 32),
             BackColor = Color.FromArgb(16, 185, 129), // Emerald
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
@@ -75,6 +76,7 @@ internal sealed class ShippingLoginCredentialsDialog : Form
                 return;
             }
             OpenInBrowserRequested = false;
+            OpenInDefaultBrowserRequested = false;
             DialogResult = DialogResult.OK;
             Close();
         };
@@ -83,11 +85,11 @@ internal sealed class ShippingLoginCredentialsDialog : Form
         // Ayırıcı
         var lblDivider = new Label
         {
-            Text = "─────────────── VEYA ───────────────",
+            Text = "─────────────────────────── VEYA ───────────────────────────",
             ForeColor = Color.FromArgb(100, 116, 139),
             Font = new Font("Segoe UI", 8f),
-            Location = new Point(20, 130),
-            Size = new Size(420, 18),
+            Location = new Point(20, 128),
+            Size = new Size(520, 18),
             TextAlign = ContentAlignment.MiddleCenter
         };
         pnl.Controls.Add(lblDivider);
@@ -95,29 +97,29 @@ internal sealed class ShippingLoginCredentialsDialog : Form
         // 2. Seçenek: Otomatik Giriş Bilgileri
         var lblAutoSection = new Label
         {
-            Text = "🔐 Seçenek 2: Otomatik Giriş için Hesap Bilgileri",
+            Text = "🔐 Seçenek 2: Otomatik Giriş ve Tarayıcı Seçenekleri",
             ForeColor = Color.FromArgb(203, 213, 225),
             Font = new Font("Segoe UI", 8.8f, FontStyle.Bold),
-            Location = new Point(20, 154),
-            Size = new Size(420, 20)
+            Location = new Point(20, 150),
+            Size = new Size(520, 20)
         };
         pnl.Controls.Add(lblAutoSection);
 
         // Email
-        var lblEmail = new Label { Text = "E-Posta / Kullanıcı Adı:", ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(20, 178), AutoSize = true };
+        var lblEmail = new Label { Text = "E-Posta / Kullanıcı Adı:", ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(20, 172), AutoSize = true };
         pnl.Controls.Add(lblEmail);
-        _txtEmail.Location = new Point(20, 198);
-        _txtEmail.Width = 420;
+        _txtEmail.Location = new Point(20, 192);
+        _txtEmail.Width = 520;
         _txtEmail.BackColor = Color.FromArgb(30, 41, 59);
         _txtEmail.ForeColor = Color.White;
         _txtEmail.Text = existingEmail;
         pnl.Controls.Add(_txtEmail);
 
         // Password
-        var lblPassword = new Label { Text = "Şifre:", ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(20, 228), AutoSize = true };
+        var lblPassword = new Label { Text = "Şifre:", ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(20, 222), AutoSize = true };
         pnl.Controls.Add(lblPassword);
-        _txtPassword.Location = new Point(20, 248);
-        _txtPassword.Width = 420;
+        _txtPassword.Location = new Point(20, 242);
+        _txtPassword.Width = 520;
         _txtPassword.UseSystemPasswordChar = true;
         _txtPassword.BackColor = Color.FromArgb(30, 41, 59);
         _txtPassword.ForeColor = Color.White;
@@ -126,46 +128,81 @@ internal sealed class ShippingLoginCredentialsDialog : Form
         // Checkbox
         _chkAutoRefresh.Text = "Şifremi Windows DPAPI ile güvenli şifrele & token bittiğinde otomatik yenile";
         _chkAutoRefresh.Checked = true;
-        _chkAutoRefresh.Location = new Point(20, 280);
-        _chkAutoRefresh.Width = 420;
+        _chkAutoRefresh.Location = new Point(20, 274);
+        _chkAutoRefresh.Width = 520;
         _chkAutoRefresh.ForeColor = Color.FromArgb(52, 211, 153); // Emerald
         pnl.Controls.Add(_chkAutoRefresh);
 
-        // Alt Butonlar
+        // Canlı Rehberlik / İpucu Notu
+        var lblHint = new Label
+        {
+            Text = "💡 İpucu: Tarayıcı açılmıyorsa '🚀 Normal Chrome'da Aç' butonuna basarak doğrudan giriş yapabilir ve tokeni kopyalayıp yukarı yapıştırabilirsiniz.",
+            ForeColor = Color.FromArgb(148, 163, 184),
+            Font = new Font("Segoe UI", 7.8f, FontStyle.Italic),
+            Location = new Point(20, 310),
+            Size = new Size(520, 36)
+        };
+        pnl.Controls.Add(lblHint);
+
+        // Alt Butonlar Satırı
         var btnBrowser = new Button
         {
-            Text = "🌐 Tarayıcıda Aç",
-            Location = new Point(20, 330),
-            Size = new Size(130, 36),
+            Text = "🌐 Tarayıcı (Otomatik)",
+            Location = new Point(20, 355),
+            Size = new Size(155, 36),
             BackColor = Color.FromArgb(51, 65, 85),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI Semibold", 8.2f)
         };
         btnBrowser.FlatAppearance.BorderSize = 0;
         btnBrowser.Click += (_, _) =>
         {
             OpenInBrowserRequested = true;
+            OpenInDefaultBrowserRequested = false;
             DialogResult = DialogResult.OK;
             Close();
         };
         pnl.Controls.Add(btnBrowser);
 
+        var btnDefaultBrowser = new Button
+        {
+            Text = "🚀 Normal Chrome'da Aç",
+            Location = new Point(180, 355),
+            Size = new Size(160, 36),
+            BackColor = Color.FromArgb(14, 116, 144), // Cyan 700
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI Semibold", 8.2f)
+        };
+        btnDefaultBrowser.FlatAppearance.BorderSize = 0;
+        btnDefaultBrowser.Click += (_, _) =>
+        {
+            OpenInBrowserRequested = false;
+            OpenInDefaultBrowserRequested = true;
+            DialogResult = DialogResult.OK;
+            Close();
+        };
+        pnl.Controls.Add(btnDefaultBrowser);
+
         var btnSave = new Button
         {
-            Text = "⚡ Otomatik Giriş Yap",
-            Location = new Point(160, 330),
-            Size = new Size(170, 36),
+            Text = "⚡ Otomatik Giriş",
+            Location = new Point(345, 355),
+            Size = new Size(130, 36),
             BackColor = Color.FromArgb(37, 99, 235), // Blue
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
             Cursor = Cursors.Hand,
-            Font = new Font("Segoe UI Semibold", 9F, FontStyle.Bold)
+            Font = new Font("Segoe UI Semibold", 8.2f, FontStyle.Bold)
         };
         btnSave.FlatAppearance.BorderSize = 0;
         btnSave.Click += (_, _) =>
         {
             OpenInBrowserRequested = false;
+            OpenInDefaultBrowserRequested = false;
             DialogResult = DialogResult.OK;
             Close();
         };
@@ -173,13 +210,14 @@ internal sealed class ShippingLoginCredentialsDialog : Form
 
         var btnCancel = new Button
         {
-            Text = "İptal",
-            Location = new Point(340, 330),
-            Size = new Size(100, 36),
+            Text = "Kapat",
+            Location = new Point(480, 355),
+            Size = new Size(60, 36),
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.FromArgb(148, 163, 184),
             FlatStyle = FlatStyle.Flat,
-            Cursor = Cursors.Hand
+            Cursor = Cursors.Hand,
+            Font = new Font("Segoe UI", 8.2f)
         };
         btnCancel.FlatAppearance.BorderSize = 0;
         btnCancel.Click += (_, _) =>

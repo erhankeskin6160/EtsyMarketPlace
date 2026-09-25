@@ -489,10 +489,10 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _pnlAccountsFlow.Controls.Clear();
 
         var arasSettings = ArasGlobalSettingsStore.Load();
-        bool arasConnected = !string.IsNullOrWhiteSpace(arasSettings.BearerToken);
+        bool arasConnected = arasSettings.HasValidTokenFormat;
 
         var seSettings = ShipEntegraSettingsStore.Load();
-        bool seConnected = !string.IsNullOrWhiteSpace(seSettings.BearerToken);
+        bool seConnected = seSettings.HasValidTokenFormat;
 
         // 1. Aras Global Kartı
         _pnlAccountsFlow.Controls.Add(CreateCarrierAccountCard(
@@ -1640,14 +1640,49 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
         bool showBrowser = directBrowser;
 
-        if (directBrowser)
-        {
-            showBrowser = true;
-        }
-        else if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        if (directBrowser || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass) || !settings.HasValidTokenFormat)
         {
             using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
             if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+            // 1. Kullanıcı doğrudan Bearer token yapıştırdıysa
+            if (!string.IsNullOrWhiteSpace(dlg.DirectToken))
+            {
+                string cleanTok = dlg.DirectToken.Trim();
+                if (cleanTok.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleanTok = cleanTok.Substring(7).Trim();
+                }
+
+                if (cleanTok.Length > 20 && !JwtTokenInspector.IsExpired(cleanTok))
+                {
+                    settings.BearerToken = "Bearer " + cleanTok;
+                    settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                    ArasGlobalSettingsStore.Save(settings);
+                    _lblStatus.Text = "✅ Aras Global tokeni başarıyla güncellendi!";
+                    _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
+                    RebuildAccountsHub();
+                    await FetchAllQuotesAsync();
+                    return;
+                }
+                else
+                {
+                    MessageBox.Show("Girilen token formatı geçersiz veya süresi dolmuş.", "Geçersiz Token", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+            }
+
+            if (dlg.OpenInDefaultBrowserRequested)
+            {
+                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/login");
+                MessageBox.Show(
+                    "Aras Global paneli varsayılan tarayıcınızda açıldı!\n\nLütfen giriş yaptıktan sonra F12 DevTools Network sekmesindeki Bearer tokenini kopyalayıp buradaki 'Canlı Token' kutusuna yapıştırın.",
+                    "Tarayıcı Açıldı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
             email = dlg.Email;
             pass = dlg.Password;
             showBrowser = dlg.OpenInBrowserRequested;
@@ -1665,10 +1700,15 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
         try
         {
-            string? freshToken = await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser);
+            string? freshToken = await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser, s =>
+            {
+                _lblStatus.Text = s;
+            }, knownExpiredToken: settings.CleanToken);
+
             if (!string.IsNullOrWhiteSpace(freshToken))
             {
                 settings.BearerToken = freshToken;
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
                 ArasGlobalSettingsStore.Save(settings);
                 _lblStatus.Text = "✅ Aras Global tokeni başarıyla güncellendi!";
                 _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
@@ -1677,12 +1717,20 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             }
             else
             {
-                MessageBox.Show("Aras Global otomatik oturum açılamadı. 'Tarayıcı' butonunu deneyebilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Aras Global otomatik oturum açılamadı. 'Normal Chrome'da Aç' seçeneğiyle doğrudan giriş yapabilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Aras oturum hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            var ask = MessageBox.Show(
+                $"Aras otomatik tarayıcı hatası:\n{ex.Message}\n\nNormal Chrome tarayıcınızda açmak ister misiniz?",
+                "Tarayıcıda Aç",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+            if (ask == DialogResult.Yes)
+            {
+                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/login");
+            }
         }
     }
 
@@ -1693,14 +1741,43 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
         bool showBrowser = directBrowser;
 
-        if (directBrowser)
-        {
-            showBrowser = true;
-        }
-        else if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        if (directBrowser || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass) || !settings.HasValidTokenFormat)
         {
             using var dlg = new ShippingLoginCredentialsDialog("ShipEntegra", email);
             if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
+
+            if (!string.IsNullOrWhiteSpace(dlg.DirectToken))
+            {
+                string cleanTok = dlg.DirectToken.Trim();
+                if (cleanTok.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleanTok = cleanTok.Substring(7).Trim();
+                }
+
+                if (cleanTok.Length > 20 && !JwtTokenInspector.IsExpired(cleanTok))
+                {
+                    settings.BearerToken = "Bearer " + cleanTok;
+                    settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                    ShipEntegraSettingsStore.Save(settings);
+                    _lblStatus.Text = "✅ ShipEntegra tokeni başarıyla güncellendi!";
+                    _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
+                    RebuildAccountsHub();
+                    await FetchAllQuotesAsync();
+                    return;
+                }
+            }
+
+            if (dlg.OpenInDefaultBrowserRequested)
+            {
+                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://app.shipentegra.com/login");
+                MessageBox.Show(
+                    "ShipEntegra paneli varsayılan tarayıcınızda açıldı!\n\nLütfen giriş yaptıktan sonra F12 DevTools Network sekmesindeki Bearer tokenini kopyalayıp buradaki 'Canlı Token' kutusuna yapıştırın.",
+                    "Tarayıcı Açıldı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
             email = dlg.Email;
             pass = dlg.Password;
             showBrowser = dlg.OpenInBrowserRequested;
