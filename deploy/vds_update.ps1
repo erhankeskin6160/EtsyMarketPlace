@@ -68,8 +68,8 @@ try {
     Write-Host "[1/5] GitHub 'dev-latest' surumu indiriliyor (~92 MB)..." -ForegroundColor Yellow
     if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force }
 
-    $maxRetries = 4
-    $retryDelaySeconds = 5
+    $maxRetries = 6
+    $retryDelaySeconds = 8
     $downloadSuccess = $false
 
     # Öncelik 1: Windows BITS Motoru (Genellikle 10-15 saniyede tamamlar)
@@ -81,7 +81,7 @@ try {
             $downloadSuccess = $true
         }
     } catch {
-        Write-Host "      BITS motoru desteklenmedi, standart akisa geciliyor..." -ForegroundColor DarkYellow
+        Write-Host "      BITS motoru bekleniyor veya standart akisa geciliyor..." -ForegroundColor DarkYellow
     }
 
     # Öncelik 2: BITS başarısız olursa canlı akış ve hız göstergeli HttpWebRequest
@@ -130,13 +130,22 @@ try {
                 break
             } catch {
                 if (Test-Path $tempDownload) { Remove-Item $tempDownload -Force -ErrorAction SilentlyContinue }
+                $is404 = $_.Exception.Message -match "404"
                 if ($attempt -lt $maxRetries) {
                     Write-Host ""
-                    Write-Host "      [Bekleme] GitHub yeni surumu hazirliyor veya baglanti yavas. $retryDelaySeconds sn bekleniyor..." -ForegroundColor DarkYellow
+                    if ($is404) {
+                        Write-Host "      [GitHub Derlemesi Bekleniyor] GitHub Actions henuz yeni derlemeyi yukluyor olabilir (404). $retryDelaySeconds sn bekleniyor..." -ForegroundColor DarkYellow
+                    } else {
+                        Write-Host "      [Bekleme] Baglanti yeniden deneniyor. $retryDelaySeconds sn bekleniyor ($($_.Exception.Message))..." -ForegroundColor DarkYellow
+                    }
                     Start-Sleep -Seconds $retryDelaySeconds
                     $retryDelaySeconds += 5
                 } else {
-                    throw $_
+                    if ($is404) {
+                        throw "GitHub 'dev-latest' surumu su anda derleniyor veya hazirlaniyor (404). Lutfen 1-2 dakika sonra tekrar calistirin."
+                    } else {
+                        throw $_
+                    }
                 }
             }
         }
@@ -211,6 +220,31 @@ try {
         Write-Host "      Masaustu kisayolu hazirlandi: $shortcutPath" -ForegroundColor Green
     } catch { }
 
+    # Guncelleyici betiklerini (vds_update.ps1 ve Guncelle_Ve_Baslat.bat) otomatik guncelle
+    try {
+        $rawBase = "https://raw.githubusercontent.com/$repo/development/deploy"
+        $wc = New-Object System.Net.WebClient
+        $wc.Headers.Add("User-Agent", "EtsyMarketPlace-VDS-Updater")
+        
+        $currentScript = $MyInvocation.MyCommand.Path
+        if ($currentScript -and (Test-Path $currentScript)) {
+            $newScriptPath = "$currentScript.latest"
+            $wc.DownloadFile("$rawBase/vds_update.ps1", $newScriptPath)
+            if ((Test-Path $newScriptPath) -and ((Get-Item $newScriptPath).Length -gt 1000)) {
+                Move-Item -Path $newScriptPath -Destination $currentScript -Force
+            }
+        }
+        
+        $batPath = Join-Path (Split-Path -Parent $currentScript) "Guncelle_Ve_Baslat.bat"
+        if (Test-Path $batPath) {
+            $newBatPath = "$batPath.latest"
+            $wc.DownloadFile("$rawBase/Guncelle_Ve_Baslat.bat", $newBatPath)
+            if ((Test-Path $newBatPath) -and ((Get-Item $newBatPath).Length -gt 100)) {
+                Move-Item -Path $newBatPath -Destination $batPath -Force
+            }
+        }
+    } catch { }
+
     # 5. Programı başlat
     Write-Host "[5/5] Yeni surum baslatiliyor..." -ForegroundColor Yellow
     Start-Process -FilePath $targetExe -WorkingDirectory $appDir
@@ -228,6 +262,11 @@ try {
 catch {
     Write-Host ""
     Write-Host "❌ HATA OLUSTU: $($_.Exception.Message)" -ForegroundColor Red
+    
+    if ($_.Exception.Message -match "404") {
+        Write-Host "   💡 BILGI: GitHub Actions henüz derlemeyi bitirmemis veya yeni surum yukleniyor olabilir." -ForegroundColor Yellow
+        Write-Host "   Lutfen 1-2 dakika bekleyip 'Guncelle_Ve_Baslat.bat' dosyasini tekrar calistirin." -ForegroundColor Yellow
+    }
     
     $logFile = Join-Path $appDir "vds_update.log"
     $logMsg = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] HATA: $($_.Exception.Message)"

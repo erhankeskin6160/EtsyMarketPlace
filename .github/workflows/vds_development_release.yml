@@ -80,11 +80,11 @@ jobs:
           
           if (-not $releaseExists) {
             Write-Host "Creating 'dev-latest' pre-release pointing to commit ${{ github.sha }}..."
-            gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
+            gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat deploy/vds_update.ps1 deploy/Guncelle_Ve_Baslat.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
           } else {
             Write-Host "Updating 'dev-latest' release pointing to commit ${{ github.sha }}..."
             gh release edit dev-latest --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --target ${{ github.sha }}
             Write-Host "Uploading standalone assets with --clobber..."
-            gh release upload dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat --clobber
+            gh release upload dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat deploy/vds_update.ps1 deploy/Guncelle_Ve_Baslat.bat --clobber
           }
           Write-Host "VDS release successfully published!"
