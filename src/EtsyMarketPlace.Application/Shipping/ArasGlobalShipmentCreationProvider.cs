@@ -115,12 +115,24 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         var order = context.Order;
 
         // 1. Kutu ve Ebat Bilgileri
+        double length = context.LengthCm > 0 ? context.LengthCm : 20.0;
+        double width = context.WidthCm > 0 ? context.WidthCm : 15.0;
+        double height = context.HeightCm > 0 ? context.HeightCm : 10.0;
+        double weight = context.WeightKg > 0 ? context.WeightKg : 0.4;
+        double desi = Math.Round((length * width * height) / 5000.0, 2);
+        if (desi <= 0) desi = 0.60;
+
         var box = new ArasBox
         {
-            Length = context.LengthCm > 0 ? context.LengthCm : 20.0,
-            Width = context.WidthCm > 0 ? context.WidthCm : 15.0,
-            Height = context.HeightCm > 0 ? context.HeightCm : 10.0,
-            Weight = context.WeightKg > 0 ? context.WeightKg : 0.4
+            Length = length,
+            Width = width,
+            Height = height,
+            Weight = weight,
+            VolumetricWeight = desi,
+            volumetricWeight = desi,
+            Desi = desi,
+            desi = desi,
+            PackageCount = 1
         };
 
         // 2. Ürün Kalemleri (Etsy Order Items)
@@ -136,7 +148,12 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             InternationalCargoProvider = string.IsNullOrWhiteSpace(context.SelectedSubCarrier) ? "widect" : context.SelectedSubCarrier.ToLowerInvariant(),
             InternationalShipmentCategory = "4", // Mikro İhracat
             IsMicroExport = true,
-            PackageCount = 1
+            PackageCount = 1,
+            Weight = weight,
+            VolumetricWeight = desi,
+            volumetricWeight = desi,
+            Desi = desi,
+            desi = desi
         };
         request.BoxList.Add(box);
 
@@ -151,7 +168,11 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Length = box.Length,
                 Width = box.Width,
                 Height = box.Height,
-                Weight = box.Weight
+                Weight = box.Weight,
+                VolumetricWeight = desi,
+                volumetricWeight = desi,
+                Desi = desi,
+                desi = desi
             });
         }
 
@@ -166,7 +187,11 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Length = box.Length,
                 Width = box.Width,
                 Height = box.Height,
-                Weight = box.Weight
+                Weight = box.Weight,
+                VolumetricWeight = desi,
+                volumetricWeight = desi,
+                Desi = desi,
+                desi = desi
             });
         }
 

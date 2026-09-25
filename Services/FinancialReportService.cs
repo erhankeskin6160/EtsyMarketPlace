@@ -284,6 +284,28 @@ internal sealed class FinancialReportService
         long tsSeconds = el.TryGetProperty("create_date", out var propDate) && propDate.ValueKind == JsonValueKind.Number ? propDate.GetInt64() : 0;
         var ts = tsSeconds > 0 ? DateTimeOffset.FromUnixTimeSeconds(tsSeconds) : DateTimeOffset.UtcNow;
 
+        long refId = 0;
+        if (el.TryGetProperty("reference_id", out var propRefId))
+        {
+            if (propRefId.ValueKind == JsonValueKind.Number)
+            {
+                refId = propRefId.GetInt64();
+            }
+            else if (propRefId.ValueKind == JsonValueKind.String && long.TryParse(propRefId.GetString(), out var parsedRef))
+            {
+                refId = parsedRef;
+            }
+        }
+
+        if (refId == 0 && !string.IsNullOrWhiteSpace(desc))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(desc, @"#?(\d{9,11})");
+            if (match.Success && long.TryParse(match.Groups[1].Value, out var parsedFromDesc))
+            {
+                refId = parsedFromDesc;
+            }
+        }
+
         decimal amount = 0m;
         decimal netAmount = 0m;
         string currency = "USD";
@@ -408,7 +430,7 @@ internal sealed class FinancialReportService
 
         return new LedgerEntry(entryId, type, amount, netAmount,
             currency, desc, ts,
-            exRate);
+            exRate, refId);
     }
 
     private static async Task<FinancialReport> BuildReportAsync(
@@ -541,7 +563,7 @@ internal sealed class FinancialReportService
             .ToList();
 
         // Sipariş bazında net kâr özetleri (mağaza fişleri üzerinden - RAM'deki kilitli kur sözlüğüyle 0 ms'de eşleşir)
-        var orderSummaries = BuildOrderSummaries(receipts, orderCosts, productCosts, rateMap, exchangeRate);
+        var orderSummaries = BuildOrderSummaries(entries, receipts, orderCosts, productCosts, rateMap, exchangeRate);
 
         // Sipariş maliyetlerini receipt'lerden topla (daha doğru)
         if (orderSummaries.Count > 0)
@@ -603,6 +625,7 @@ internal sealed class FinancialReportService
     /// Formül (Türkiye): GrandTotal - Tax - İşlem(%6.5) - Ödeme(%6.5+3TL) - Yasal(%1.5) - KDV(%20) - İlan - [Dış Reklam(%15)] - Sipariş Maliyeti
     /// </summary>
     private static List<OrderFinancialSummary> BuildOrderSummaries(
+        List<LedgerEntry>? entries,
         IReadOnlyList<OwnShopReceipt> receipts,
         List<OrderCostEntry> orderCosts,
         List<ProductCostEntry> productCosts,
@@ -617,6 +640,32 @@ internal sealed class FinancialReportService
         var productCostMap = productCosts
             .GroupBy(c => c.ListingId)
             .ToDictionary(g => g.Key, g => g.Last());
+
+        // Defterdeki (Ledger) gerçek dış reklam (Offsite Ads) kesintilerini sipariş bazında haritala
+        var offsiteAdsMap = new Dictionary<long, decimal>();
+        if (entries != null)
+        {
+            foreach (var e in entries)
+            {
+                if (e.Type == "offsite_ads")
+                {
+                    long rId = e.ReferenceId;
+                    if (rId <= 0 && !string.IsNullOrWhiteSpace(e.Description))
+                    {
+                        var m = System.Text.RegularExpressions.Regex.Match(e.Description, @"#?(\d{9,11})");
+                        if (m.Success && long.TryParse(m.Groups[1].Value, out var parsed))
+                        {
+                            rId = parsed;
+                        }
+                    }
+
+                    if (rId > 0)
+                    {
+                        offsiteAdsMap[rId] = Math.Abs(e.Amount);
+                    }
+                }
+            }
+        }
 
         foreach (var r in receipts)
         {
@@ -695,9 +744,11 @@ internal sealed class FinancialReportService
                 }
 
                 // 1. Vergi Düşülmesi (Etsy'nin alıp hemen kestiği müşteri satış vergisi)
-                // 2. İşlem Komisyonu (%6.5) - Ürün bedeli + kargo üzerinden
-                decimal subtotalAndShipping = Math.Max(grandTotal, subtotal + shippingCost);
-                transactionFee = Math.Round(subtotalAndShipping * 0.065m, 2);
+                // 2. İşlem Komisyonu (%6.5) - Ürün bedeli + kargo üzerinden (Müşteri satış vergisi HARİÇ)
+                decimal feeBase = subtotal > 0
+                    ? (subtotal + shippingCost)
+                    : Math.Max(0, grandTotal - tax);
+                transactionFee = Math.Round(feeBase * 0.065m, 2);
 
                 // 3. Ödeme İşleme Komisyonu (TR için %6.5 + Sabit İşlem Ücreti: USD hesaplar için $0.14 sabit / TRY için 3 TL)
                 decimal trPaymentFixedUsd = r.CurrencyCode.Equals("USD", StringComparison.OrdinalIgnoreCase) || grandTotal > 0
@@ -705,11 +756,20 @@ internal sealed class FinancialReportService
                     : Math.Round(3m / rate, 2);
                 paymentFee = Math.Round(grandTotal * 0.065m, 2) + trPaymentFixedUsd;
 
-                // 4. Yasal İşlem Ücreti (TR için %1.67)
-                regulatoryFee = Math.Round(subtotalAndShipping * 0.0167m, 2);
+                // 4. Yasal İşlem Ücreti (TR için %1.67) - Ürün bedeli + kargo üzerinden
+                regulatoryFee = Math.Round(feeBase * 0.0167m, 2);
 
                 // 5. Dış Reklam (Offsite Ads) Kesimi (%15)
-                offsiteAdFee = r.IsFromOffsiteAds ? Math.Round(grandTotal * 0.15m, 2) : 0m;
+                // Öncelik 1: Etsy defterindeki (Ledger) gerçek kesinti tutarı ($25.65 gibi)
+                // Öncelik 2: r.IsFromOffsiteAds bayrağı varsa vergi hariç matrah üzerinden %15
+                if (offsiteAdsMap.TryGetValue(r.ReceiptId, out var mappedOffsiteFee) && mappedOffsiteFee > 0)
+                {
+                    offsiteAdFee = mappedOffsiteFee;
+                }
+                else if (r.IsFromOffsiteAds)
+                {
+                    offsiteAdFee = Math.Round(feeBase * 0.15m, 2);
+                }
 
                 // 6. Bilgilendirme KDV'si (Etsy sipariş anında KDV kesmez; TR 2 No'lu KDV beyannamesi için bilgilendirme amacıyla hesaplanır)
                 decimal totalFeesToTax = transactionFee + paymentFee + regulatoryFee + offsiteAdFee;

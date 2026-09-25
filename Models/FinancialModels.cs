@@ -11,7 +11,8 @@ internal sealed record LedgerEntry(
     string Currency,     // "USD" | "EUR" | "TRY" ...
     string Description,
     DateTimeOffset CreatedAt,
-    decimal ExchangeRate = 48.25m // Sipariş/İşlem Günü Kabul Edilen Dolar/TL Kuru
+    decimal ExchangeRate = 48.25m, // Sipariş/İşlem Günü Kabul Edilen Dolar/TL Kuru
+    long ReferenceId = 0
 )
 {
     public decimal AmountTRY => Math.Round(Amount * ExchangeRate, 2);

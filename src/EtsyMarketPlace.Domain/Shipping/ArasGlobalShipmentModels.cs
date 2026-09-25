@@ -39,6 +39,11 @@ public sealed class ArasBox
     public double Width { get; set; } = 15.0;
     public double Height { get; set; } = 10.0;
     public double Weight { get; set; } = 0.4;
+    public double VolumetricWeight { get; set; } = 0.6;
+    public double volumetricWeight { get; set; } = 0.6;
+    public double Desi { get; set; } = 0.6;
+    public double desi { get; set; } = 0.6;
+    public int PackageCount { get; set; } = 1;
 }
 
 /// <summary>
@@ -54,6 +59,10 @@ public sealed class ArasShipmentItem
     public double Width { get; set; } = 15.0;
     public double Length { get; set; } = 20.0;
     public double Weight { get; set; } = 0.4;
+    public double VolumetricWeight { get; set; } = 0.6;
+    public double volumetricWeight { get; set; } = 0.6;
+    public double Desi { get; set; } = 0.6;
+    public double desi { get; set; } = 0.6;
     public string Category { get; set; } = string.Empty;
 }
 
@@ -64,6 +73,7 @@ public sealed class ArasCreateShipmentRequest
 {
     public string ShipmentId { get; set; } = string.Empty;
     public List<ArasBox> BoxList { get; set; } = new();
+    public List<ArasBox> ShipmentDimensions => BoxList;
     public List<ArasShipmentItem> ShipmentItems { get; set; } = new();
     public ArasAddress SenderAddress { get; set; } = new();
     public ArasAddress SenderBillingAddress { get; set; } = new();
@@ -76,6 +86,12 @@ public sealed class ArasCreateShipmentRequest
     public string InternationalShipmentCategory { get; set; } = "4"; // 4: E-Ticaret / Mikro İhracat
     public bool IsMicroExport { get; set; } = true;
     public int PackageCount { get; set; } = 1;
+
+    public double Weight { get; set; } = 0.4;
+    public double VolumetricWeight { get; set; } = 0.6;
+    public double volumetricWeight { get; set; } = 0.6;
+    public double Desi { get; set; } = 0.6;
+    public double desi { get; set; } = 0.6;
 }
 
 /// <summary>
