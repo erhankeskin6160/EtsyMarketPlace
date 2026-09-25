@@ -139,7 +139,7 @@ public sealed class OrderFulfillmentStudioTests
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.ShipmentId);
-        Assert.StartsWith("ARAS-", result.TrackingNumber);
+        Assert.Equal("7095417722341", result.TrackingNumber);
         Assert.NotNull(result.PriceBreakdown);
         Assert.Equal(13.13m, result.PriceBreakdown!.BasePrice);
         Assert.Equal(15.51m, result.PriceBreakdown.ExchangeTotalPrice);
@@ -186,9 +186,16 @@ public sealed class OrderFulfillmentStudioTests
             return Task.FromResult("Tüm paketler 1 kg 0.27 desi üzerinden fiyatlandırılmaktadır.");
         }
 
-        public Task<string> CreateShipmentAsync(ArasCreateShipmentRequest request, string rawBearerToken, CancellationToken cancellationToken = default)
+        public Task<ArasCreateShipmentResponse> CreateShipmentAsync(ArasCreateShipmentRequest request, string rawBearerToken, CancellationToken cancellationToken = default)
         {
-            return Task.FromResult("mock-shipment-guid-12345");
+            return Task.FromResult(new ArasCreateShipmentResponse
+            {
+                IsSuccess = true,
+                ShipmentId = "mock-shipment-guid-12345",
+                ReferenceCode = "7095417722341",
+                ResultCode = 200,
+                ResultMessage = "Success"
+            });
         }
 
         public Task<bool> UpdateShipmentAsync(ArasCreateShipmentRequest request, string rawBearerToken, CancellationToken cancellationToken = default)

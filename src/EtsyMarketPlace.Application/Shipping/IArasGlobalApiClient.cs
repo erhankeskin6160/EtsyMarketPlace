@@ -40,7 +40,7 @@ public interface IArasGlobalApiClient
         string rawBearerToken,
         CancellationToken cancellationToken = default);
 
-    Task<string> CreateShipmentAsync(
+    Task<ArasCreateShipmentResponse> CreateShipmentAsync(
         ArasCreateShipmentRequest request,
         string rawBearerToken,
         CancellationToken cancellationToken = default);

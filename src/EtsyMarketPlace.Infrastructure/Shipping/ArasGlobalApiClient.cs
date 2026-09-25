@@ -2,6 +2,7 @@ namespace EtsyMarketPlace.Infrastructure.Shipping;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -259,9 +260,9 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
     }
 
     /// <summary>
-    /// Gönderi taslağını oluşturur ve gönderi ID'sini döner.
+    /// Gönderi taslağını oluşturur ve gönderi ID'si ile referans kodunu döner.
     /// </summary>
-    public async Task<string> CreateShipmentAsync(
+    public async Task<ArasCreateShipmentResponse> CreateShipmentAsync(
         ArasCreateShipmentRequest request,
         string rawBearerToken,
         CancellationToken cancellationToken = default)
@@ -273,28 +274,79 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         string json = JsonSerializer.Serialize(request, JsonOpts);
         httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
+        LogApiTrace("CreateShipment-Request", json);
+
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogApiTrace("CreateShipment-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
 
         CheckTokenExpired(root);
 
+        int resultCode = root.TryGetProperty("resultCode", out var code) ? code.GetInt32() : (int)response.StatusCode;
+        string resultMessage = root.TryGetProperty("resultMessage", out var msgElem) ? msgElem.GetString() ?? "" : "";
+
+        if (resultCode != 200)
+        {
+            throw new InvalidOperationException($"Aras Global Gönderi Başlatma Hatası ({resultCode}): {resultMessage}");
+        }
+
+        var result = new ArasCreateShipmentResponse
+        {
+            IsSuccess = true,
+            ResultCode = resultCode,
+            ResultMessage = resultMessage,
+            RawJson = responseContent
+        };
+
         if (root.TryGetProperty("payload", out var payloadElem))
         {
             if (payloadElem.ValueKind == JsonValueKind.String)
             {
-                return payloadElem.GetString() ?? string.Empty;
+                result.ShipmentId = payloadElem.GetString() ?? string.Empty;
+                result.ReferenceCode = result.ShipmentId;
             }
-            if (payloadElem.ValueKind == JsonValueKind.Object && payloadElem.TryGetProperty("id", out var idElem))
+            else if (payloadElem.ValueKind == JsonValueKind.Object)
             {
-                return idElem.GetString() ?? string.Empty;
+                if (payloadElem.TryGetProperty("id", out var idElem))
+                {
+                    result.ShipmentId = idElem.GetString() ?? string.Empty;
+                }
+                else if (payloadElem.TryGetProperty("shipmentId", out var sIdElem))
+                {
+                    result.ShipmentId = sIdElem.GetString() ?? string.Empty;
+                }
+
+                if (payloadElem.TryGetProperty("referenceCode", out var refElem))
+                {
+                    result.ReferenceCode = refElem.GetString() ?? string.Empty;
+                }
+                else if (payloadElem.TryGetProperty("shipmentNumber", out var numElem))
+                {
+                    result.ReferenceCode = numElem.GetString() ?? string.Empty;
+                }
+                else if (payloadElem.TryGetProperty("code", out var codeElem))
+                {
+                    result.ReferenceCode = codeElem.GetString() ?? string.Empty;
+                }
             }
         }
 
-        return Guid.NewGuid().ToString(); // Geriye benzersiz gönderi referansı
+        if (string.IsNullOrWhiteSpace(result.ShipmentId))
+        {
+            throw new InvalidOperationException($"Aras Global sunucusu geçerli bir Gönderi ID'si dönmedi. Yanıt: {resultMessage}");
+        }
+
+        if (string.IsNullOrWhiteSpace(result.ReferenceCode))
+        {
+            result.ReferenceCode = result.ShipmentId;
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -312,16 +364,27 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         string json = JsonSerializer.Serialize(request, JsonOpts);
         httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
+        LogApiTrace("UpdateShipment-Request", json);
+
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogApiTrace("UpdateShipment-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
 
         CheckTokenExpired(root);
 
-        return root.TryGetProperty("resultCode", out var code) && code.GetInt32() == 200;
+        int resultCode = root.TryGetProperty("resultCode", out var code) ? code.GetInt32() : (int)response.StatusCode;
+        if (resultCode != 200)
+        {
+            string msg = root.TryGetProperty("resultMessage", out var msgElem) ? msgElem.GetString() ?? "" : "";
+            throw new InvalidOperationException($"Aras Global Gönderi Güncelleme Hatası ({resultCode}): {msg}");
+        }
+
+        return true;
     }
 
     /// <summary>
@@ -444,16 +507,29 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
             isAgreementAccepted = true
         };
 
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        string json = JsonSerializer.Serialize(payload, JsonOpts);
+        httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        LogApiTrace("SendShipmentPrice-Request", json);
+
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogApiTrace("SendShipmentPrice-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
         CheckTokenExpired(root);
 
-        return response.IsSuccessStatusCode;
+        int resultCode = root.TryGetProperty("resultCode", out var code) ? code.GetInt32() : (int)response.StatusCode;
+        if (resultCode != 200)
+        {
+            string msg = root.TryGetProperty("resultMessage", out var msgElem) ? msgElem.GetString() ?? "" : "";
+            throw new InvalidOperationException($"Aras Global Fiyat/Taşıyıcı Onay Hatası ({resultCode}): {msg}");
+        }
+
+        return true;
     }
 
     private async Task<string> StartCalculationAsync(
@@ -637,5 +713,20 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
             t = t[7..].Trim();
         }
         return t;
+    }
+
+    public static void LogApiTrace(string step, string content)
+    {
+        try
+        {
+            var folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "SimilarProductsWinForms");
+            Directory.CreateDirectory(folder);
+            string logPath = Path.Combine(folder, "aras_shipment_api_trace.log");
+            string line = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] [{step}]\n{content}\n----------------------------------------\n";
+            File.AppendAllText(logPath, line);
+        }
+        catch { }
     }
 }

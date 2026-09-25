@@ -53,4 +53,19 @@ public static class ArasGlobalSettingsStore
         }
         catch { }
     }
+
+    public static void LogTrace(string step, string content)
+    {
+        try
+        {
+            var folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "SimilarProductsWinForms");
+            Directory.CreateDirectory(folder);
+            string logPath = Path.Combine(folder, "aras_shipment_api_trace.log");
+            string line = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] [{step}]\n{content}\n----------------------------------------\n";
+            File.AppendAllText(logPath, line);
+        }
+        catch { }
+    }
 }

@@ -122,3 +122,17 @@ public sealed class ArasGtipSearchResult
     public string Code { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Aras Global gönderi oluşturma / taslak başlatma API yanıt modeli.
+/// </summary>
+public sealed class ArasCreateShipmentResponse
+{
+    public bool IsSuccess { get; set; }
+    public string ShipmentId { get; set; } = string.Empty;
+    public string ReferenceCode { get; set; } = string.Empty;
+    public int ResultCode { get; set; } = 200;
+    public string ResultMessage { get; set; } = string.Empty;
+    public string RawJson { get; set; } = string.Empty;
+}
+
