@@ -481,19 +481,18 @@ public sealed class SaasUnitInputBox : Panel
         {
             Text = title,
             ForeColor = Color.FromArgb(148, 163, 184),
-            Font = new Font("Segoe UI", 7.8f, FontStyle.Regular),
+            Font = new Font("Segoe UI", 8f, FontStyle.Regular),
             Dock = DockStyle.Top,
             Height = 18,
             AutoSize = false,
             TextAlign = ContentAlignment.MiddleLeft
         };
-        Controls.Add(_lblTitle);
 
         var innerBox = new Panel
         {
-            Dock = DockStyle.Top,
-            Height = 32,
-            BackColor = Color.FromArgb(30, 41, 59)
+            Dock = DockStyle.Fill,
+            BackColor = Color.FromArgb(30, 41, 59),
+            Margin = new Padding(0)
         };
 
         _lblUnit = new Label
@@ -535,7 +534,8 @@ public sealed class SaasUnitInputBox : Panel
         };
 
         Controls.Add(innerBox);
-        innerBox.BringToFront();
+        Controls.Add(_lblTitle);
+        _lblTitle.BringToFront();
     }
 
     public decimal GetDecimal()

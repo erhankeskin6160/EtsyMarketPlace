@@ -15,6 +15,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
     private readonly IArasGlobalApiClient _apiClient;
     private readonly IShippingSessionManager? _sessionManager;
     private readonly Func<string, string>? _passwordDecryptor;
+    private readonly Func<ArasGlobalSettings> _settingsProvider;
 
     public string ProviderName => "Aras Global";
     public bool IsCreationSupported => true;
@@ -22,11 +23,13 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
     public ArasGlobalShipmentCreationProvider(
         IArasGlobalApiClient apiClient,
         IShippingSessionManager? sessionManager = null,
-        Func<string, string>? passwordDecryptor = null)
+        Func<string, string>? passwordDecryptor = null,
+        Func<ArasGlobalSettings>? settingsProvider = null)
     {
         _apiClient = apiClient ?? throw new ArgumentNullException(nameof(apiClient));
         _sessionManager = sessionManager;
         _passwordDecryptor = passwordDecryptor;
+        _settingsProvider = settingsProvider ?? (() => ArasGlobalSettingsStore.Load());
     }
 
     public async Task<ShipmentCreationResult> CreateShipmentAsync(
@@ -42,7 +45,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             };
         }
 
-        var settings = ArasGlobalSettingsStore.Load();
+        var settings = _settingsProvider();
         string token = settings.CleanToken;
 
         // Token geçersizse, süresi dolmuşsa veya kayıtlı hesap varsa önce otomatik yenilemeyi dene

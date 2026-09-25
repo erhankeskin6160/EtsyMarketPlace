@@ -27,11 +27,10 @@ public static class JwtTokenInspector
         }
 
         var parts = clean.Split('.');
-        if (parts.Length < 2)
+        if (parts.Length < 2 || !clean.StartsWith("eyJ", StringComparison.OrdinalIgnoreCase))
         {
-            // JWT formatında değilse (opak token veya birim test mock tokeni)
-            // JWT süresi denetlenemez, bu nedenle süresi dolmuş sayılmaz
-            return false;
+            // JWT formatında değilse (opak veya sahte dummy string) geçerli bir JWT sayılamaz
+            return true;
         }
 
         try
@@ -59,14 +58,24 @@ public static class JwtTokenInspector
         }
         catch
         {
-            // Eğer 'eyJ' ile başlıyorsa ve çözülemediyse bozuk/geçersiz JWT'dir
-            if (clean.StartsWith("eyJ", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
+            return true;
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Birim testler ve simülasyonlar için sentetik geçerli bir JWT üretir.
+    /// </summary>
+    public static string CreateSyntheticToken(TimeSpan? lifetime = null, string sub = "test_user")
+    {
+        var duration = lifetime ?? TimeSpan.FromHours(4);
+        long exp = DateTimeOffset.UtcNow.Add(duration).ToUnixTimeSeconds();
+        string headerJson = "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
+        string payloadJson = $"{{\"sub\":\"{sub}\",\"exp\":{exp}}}";
+        string b64Header = Convert.ToBase64String(Encoding.UTF8.GetBytes(headerJson)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string b64Payload = Convert.ToBase64String(Encoding.UTF8.GetBytes(payloadJson)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        return $"{b64Header}.{b64Payload}.synthetic_test_signature";
     }
 
     /// <summary>

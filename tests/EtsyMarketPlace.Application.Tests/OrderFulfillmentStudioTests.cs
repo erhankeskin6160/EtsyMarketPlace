@@ -85,16 +85,19 @@ public sealed class OrderFulfillmentStudioTests
     [Fact]
     public async Task ArasGlobalShipmentCreationProvider_ExecutesFullCreationFlow()
     {
-        // Token ayarını test ortamında yazalım
+        // Sentetik geçerli test JWT'si ve izole ayar sağlayıcı (üretim dosyasına dokunmaz)
         var testSettings = new ArasGlobalSettings
         {
-            BearerToken = "Bearer test_valid_long_token_for_unit_tests_12345678901234567890",
+            BearerToken = "Bearer " + JwtTokenInspector.CreateSyntheticToken(),
             SavedEmail = "test@example.com"
         };
-        ArasGlobalSettingsStore.Save(testSettings);
 
         var mockApiClient = new MockArasGlobalApiClient();
-        var provider = new ArasGlobalShipmentCreationProvider(mockApiClient);
+        var provider = new ArasGlobalShipmentCreationProvider(
+            mockApiClient,
+            sessionManager: null,
+            passwordDecryptor: null,
+            settingsProvider: () => testSettings);
 
         var order = new EtsyOrderFulfillmentItem
         {

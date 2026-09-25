@@ -37,6 +37,7 @@ try {
     # 0. Akıllı Sürüm Kontrolü (Gereksiz 96 MB indirmeyi engeller)
     Write-Host "[0/5] Surum kontrol ediliyor..." -ForegroundColor Cyan
     $remoteBytes = 0
+    $lastModified = [DateTime]::MinValue
     try {
         $headReq = [System.Net.HttpWebRequest]::Create($downloadUrl)
         $headReq.Method = "HEAD"
@@ -44,13 +45,15 @@ try {
         $headReq.Timeout = 12000
         $headResp = $headReq.GetResponse()
         $remoteBytes = $headResp.ContentLength
+        $lastModified = $headResp.LastModified
         $headResp.Close()
     } catch { }
 
     if ((Test-Path $targetExe) -and ($remoteBytes -gt 10MB)) {
-        $localBytes = (Get-Item $targetExe).Length
-        if ($localBytes -eq $remoteBytes) {
-            Write-Host "   ✅ Programiniz zaten dev-latest son surumunde ($([math]::Round($localBytes/1MB, 2)) MB)!" -ForegroundColor Green
+        $localItem = Get-Item $targetExe
+        $isForce = $args -and ($args.Contains("-Force") -or $args.Contains("-f"))
+        if ($localItem.Length -eq $remoteBytes -and $localItem.LastWriteTime -ge $lastModified -and -not $isForce) {
+            Write-Host "   ✅ Programiniz zaten dev-latest son surumunde ($([math]::Round($localItem.Length/1MB, 2)) MB)!" -ForegroundColor Green
             Write-Host "   ⚡ Yeniden indirme gerekmiyor, uygulama baslatiliyor..." -ForegroundColor Green
             
             $running = Get-Process -Name "SimilarProductsWinForms" -ErrorAction SilentlyContinue

@@ -475,10 +475,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
         pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
 
-        _inputWeight = new SaasUnitInputBox("Ağırlık (Weight)", "0.40", "kg") { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 4, 4) };
-        _inputLength = new SaasUnitInputBox("Boy (Length)", "20", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 0, 0, 4) };
-        _inputWidth = new SaasUnitInputBox("En (Width)", "15", "cm") { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 4, 0) };
-        _inputHeight = new SaasUnitInputBox("Yükseklik (Height)", "10", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 4, 0, 0) };
+        _inputWeight = new SaasUnitInputBox("Ağırlık", "0.40", "kg") { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 4, 4) };
+        _inputLength = new SaasUnitInputBox("Boy", "20", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 0, 0, 4) };
+        _inputWidth = new SaasUnitInputBox("En", "15", "cm") { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 4, 0) };
+        _inputHeight = new SaasUnitInputBox("Yükseklik", "10", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 4, 0, 0) };
 
         _inputWeight.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
         _inputLength.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
@@ -538,7 +538,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         };
         contentFlow.Controls.Add(_lblCalculatedDesi);
 
-        contentFlow.ClientSizeChanged += (_, _) =>
+        void ApplyPackageColumnWidths()
         {
             int targetW = Math.Max(230, contentFlow.ClientSize.Width - 10);
             detailsCard.Width = targetW;
@@ -547,7 +547,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             lblGtipTitle.Width = targetW;
             _cmbHsCode.Width = targetW;
             _lblCalculatedDesi.Width = targetW;
-        };
+        }
+
+        contentFlow.ClientSizeChanged += (_, _) => ApplyPackageColumnWidths();
+        colPanel.SizeChanged += (_, _) => ApplyPackageColumnWidths();
 
         colPanel.Controls.Add(contentFlow);
         contentFlow.BringToFront();
@@ -864,7 +867,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         };
         scrollContainer.Controls.Add(_lblStatusMsg);
 
-        scrollContainer.ClientSizeChanged += (_, _) =>
+        void ApplyActionPanelWidths()
         {
             int targetW = Math.Max(220, scrollContainer.ClientSize.Width - 10);
             lblSender.Width = targetW;
@@ -875,7 +878,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             pnlPricing.Width = targetW;
             _btnCreateShipment.Width = targetW;
             _lblStatusMsg.Width = targetW;
-        };
+        }
+
+        scrollContainer.ClientSizeChanged += (_, _) => ApplyActionPanelWidths();
+        colPanel.SizeChanged += (_, _) => ApplyActionPanelWidths();
 
         colPanel.Controls.Add(scrollContainer);
         scrollContainer.BringToFront();

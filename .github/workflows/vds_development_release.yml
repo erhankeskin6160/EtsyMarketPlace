@@ -69,22 +69,16 @@ jobs:
           "@
           $notes | Out-File -FilePath release_notes.md -Encoding utf8
           
-          Write-Host "Checking if 'dev-latest' release exists..."
-          $releaseExists = $false
-          try {
-            gh release view dev-latest --json tagName 2>$null
-            if ($LASTEXITCODE -eq 0) { $releaseExists = $true }
-          } catch {
-            $releaseExists = $false
-          }
+          Write-Host "Force-updating Git tag 'dev-latest' to commit ${{ github.sha }}..."
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -f dev-latest ${{ github.sha }}
+          git push -f origin dev-latest
           
-          if (-not $releaseExists) {
-            Write-Host "Creating 'dev-latest' pre-release pointing to commit ${{ github.sha }}..."
-            gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat deploy/vds_update.ps1 deploy/Guncelle_Ve_Baslat.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
-          } else {
-            Write-Host "Updating 'dev-latest' release pointing to commit ${{ github.sha }}..."
-            gh release edit dev-latest --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --target ${{ github.sha }}
-            Write-Host "Uploading standalone assets with --clobber..."
-            gh release upload dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat deploy/vds_update.ps1 deploy/Guncelle_Ve_Baslat.bat --clobber
-          }
+          Write-Host "Re-creating 'dev-latest' release pointing to commit ${{ github.sha }}..."
+          try {
+            gh release delete dev-latest -y 2>$null
+          } catch { }
+
+          gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat deploy/vds_update.ps1 deploy/Guncelle_Ve_Baslat.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
           Write-Host "VDS release successfully published!"
