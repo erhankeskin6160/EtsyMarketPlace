@@ -32,13 +32,20 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
         string? password = null,
         bool showBrowser = false,
         Action<string>? statusCallback = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? knownExpiredToken = null)
     {
         string? browserPath = VisualBrowserAgentService.ResolveInstalledBrowserPath();
         if (string.IsNullOrEmpty(browserPath))
         {
             statusCallback?.Invoke("⚠️ Yüklü Google Chrome veya Edge bulunamadı. Lütfen tarayıcı yükleyin.");
             return null;
+        }
+
+        string cleanExpired = (knownExpiredToken ?? string.Empty).Trim();
+        if (cleanExpired.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            cleanExpired = cleanExpired[7..].Trim();
         }
 
         statusCallback?.Invoke("🚀 Aras Global oturum motoru başlatılıyor...");
@@ -69,35 +76,92 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             var pages = await browser.PagesAsync();
             var page = pages.Length > 0 ? pages[0] : await browser.NewPageAsync();
 
-            // Ağ trafiğini dinle: Authorization: Bearer başlıklarını yakala
+            // 1. Ağ isteklerini dinle: Authorization: Bearer başlıklarını yakala
             page.Request += (_, e) =>
             {
                 if (e.Request.Headers.TryGetValue("authorization", out var auth) &&
                     !string.IsNullOrWhiteSpace(auth) &&
                     auth.StartsWith("Bearer eyJ", StringComparison.OrdinalIgnoreCase))
                 {
-                    capturedToken = auth[7..].Trim();
+                    string cand = auth[7..].Trim();
+                    if (!cand.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) && !JwtTokenInspector.IsExpired(cand))
+                    {
+                        capturedToken = cand;
+                    }
                 }
             };
 
+            // 2. Ağ yanıtlarını dinle: /login, /token, /auth endpointlerinden dönen JWT'leri yakala
+            page.Response += async (_, e) =>
+            {
+                try
+                {
+                    string url = e.Response.Url;
+                    if (url.Contains("/login", StringComparison.OrdinalIgnoreCase) ||
+                        url.Contains("/auth", StringComparison.OrdinalIgnoreCase) ||
+                        url.Contains("/token", StringComparison.OrdinalIgnoreCase) ||
+                        url.Contains("arasglobalcargo.com", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string body = await e.Response.TextAsync();
+                        if (!string.IsNullOrWhiteSpace(body) && body.Contains("eyJ"))
+                        {
+                            string? extracted = ExtractJwtFromString(body);
+                            if (!string.IsNullOrWhiteSpace(extracted) &&
+                                !extracted.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                                !JwtTokenInspector.IsExpired(extracted))
+                            {
+                                capturedToken = extracted;
+                            }
+                        }
+                    }
+                }
+                catch { }
+            };
+
             statusCallback?.Invoke("🌐 Aras Global paneline bağlanılıyor...");
-            await page.GoToAsync("https://panel.arasglobalcargo.com/self-service", new NavigationOptions
+            await page.GoToAsync("https://panel.arasglobalcargo.com/login", new NavigationOptions
             {
                 WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
                 Timeout = 25000
             });
 
-            // 1. Önce localStorage kontrol et
-            capturedToken = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
+            // 3. localStorage kontrol et; eğer süresi dolmuşsa veya bilinen eski tokense temizle!
+            string? localTok = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
+            if (!string.IsNullOrWhiteSpace(localTok))
+            {
+                if (localTok.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) || JwtTokenInspector.IsExpired(localTok))
+                {
+                    statusCallback?.Invoke("🧹 Süresi dolmuş eski oturum tokeni tarayıcıdan temizleniyor...");
+                    await page.EvaluateFunctionAsync(@"() => {
+                        try {
+                            localStorage.removeItem('token');
+                            localStorage.removeItem('jwt');
+                            localStorage.removeItem('accessToken');
+                            sessionStorage.clear();
+                        } catch {}
+                    }");
+                    localTok = null;
+                }
+                else
+                {
+                    capturedToken = localTok;
+                }
+            }
 
-            // 2. Eğer token bulunamadıysa ve kullanıcı adı/şifre varsa giriş formunu doldur
+            // 4. Eğer geçerli bir token yoksa ve giriş bilgileri tanımlıysa formu doldur
             if (string.IsNullOrWhiteSpace(capturedToken) && !string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(password))
             {
                 statusCallback?.Invoke("🔑 Giriş bilgileri dolduruluyor...");
                 await TryFillLoginFormAsync(page, email, password);
                 await Task.Delay(3000, ct);
 
-                capturedToken ??= await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
+                var checkAfterLogin = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
+                if (!string.IsNullOrWhiteSpace(checkAfterLogin) &&
+                    !checkAfterLogin.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                    !JwtTokenInspector.IsExpired(checkAfterLogin))
+                {
+                    capturedToken = checkAfterLogin;
+                }
             }
 
             if (showBrowser)
@@ -105,15 +169,23 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 statusCallback?.Invoke("🌐 Tarayıcı açıldı. Lütfen Aras Global hesabınıza giriş yapın (Token otomatik yakalanacaktır)...");
             }
 
-            // 3. Ağ dinlemesi ve token yakalama için bekle
-            int maxWait = showBrowser ? 120 : 15;
+            // 5. Ağ dinlemesi ve token yakalama için bekle
+            int maxWait = showBrowser ? 120 : 18;
             int waited = 0;
             while (string.IsNullOrWhiteSpace(capturedToken) && waited < maxWait)
             {
                 ct.ThrowIfCancellationRequested();
                 await Task.Delay(1000, ct);
                 waited++;
-                capturedToken = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
+
+                var loopTok = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
+                if (!string.IsNullOrWhiteSpace(loopTok) &&
+                    !loopTok.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                    !JwtTokenInspector.IsExpired(loopTok))
+                {
+                    capturedToken = loopTok;
+                    break;
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(capturedToken))
@@ -672,5 +744,18 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             }
         }
         catch { }
+    }
+
+    private static string? ExtractJwtFromString(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return null;
+
+        var match = System.Text.RegularExpressions.Regex.Match(input, @"ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+");
+        if (match.Success)
+        {
+            return match.Value;
+        }
+
+        return null;
     }
 }

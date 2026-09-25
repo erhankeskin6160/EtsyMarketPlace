@@ -45,10 +45,10 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         var settings = ArasGlobalSettingsStore.Load();
         string token = settings.CleanToken;
 
-        // Token geçersizse veya kayıtlı hesap varsa önce otomatik yenilemeyi dene
-        if (string.IsNullOrWhiteSpace(token) || token.Length <= 20)
+        // Token geçersizse, süresi dolmuşsa veya kayıtlı hesap varsa önce otomatik yenilemeyi dene
+        if (string.IsNullOrWhiteSpace(token) || token.Length <= 20 || JwtTokenInspector.IsExpired(token))
         {
-            string? autoToken = await TryRefreshTokenAsync(settings, cancellationToken);
+            string? autoToken = await TryRefreshTokenAsync(settings, cancellationToken, knownExpiredToken: token);
             if (!string.IsNullOrWhiteSpace(autoToken))
             {
                 token = autoToken;
@@ -70,7 +70,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         catch (ArasGlobalTokenExpiredException)
         {
             // Token süresi doldu hatası (HTTP 401) alındığında arka planda bir kez otomatik tazelemeyi dene
-            string? freshToken = await TryRefreshTokenAsync(settings, cancellationToken);
+            string? freshToken = await TryRefreshTokenAsync(settings, cancellationToken, knownExpiredToken: token);
             if (!string.IsNullOrWhiteSpace(freshToken))
             {
                 try
@@ -264,7 +264,10 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         };
     }
 
-    private async Task<string?> TryRefreshTokenAsync(ArasGlobalSettings settings, CancellationToken cancellationToken)
+    private async Task<string?> TryRefreshTokenAsync(
+        ArasGlobalSettings settings,
+        CancellationToken cancellationToken,
+        string? knownExpiredToken = null)
     {
         if (_sessionManager == null || string.IsNullOrWhiteSpace(settings.SavedEmail))
             return null;
@@ -279,6 +282,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 settings.SavedEmail,
                 pass,
                 showBrowser: false,
+                knownExpiredToken: knownExpiredToken ?? settings.CleanToken,
                 ct: cancellationToken);
 
             if (!string.IsNullOrWhiteSpace(freshToken))

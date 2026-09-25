@@ -998,7 +998,11 @@ public sealed class OrderFulfillmentStudioControl : UserControl
 
         try
         {
-            string? fresh = await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser: false);
+            string? fresh = await _sessionManager.RefreshArasGlobalTokenAsync(
+                email,
+                pass,
+                showBrowser: false,
+                knownExpiredToken: settings.CleanToken);
             if (!string.IsNullOrWhiteSpace(fresh))
             {
                 settings.BearerToken = fresh.Trim();
@@ -1015,7 +1019,11 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                     MessageBoxIcon.Question);
                 if (ask == DialogResult.Yes)
                 {
-                    await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser: true);
+                    await _sessionManager.RefreshArasGlobalTokenAsync(
+                        email,
+                        pass,
+                        showBrowser: true,
+                        knownExpiredToken: settings.CleanToken);
                 }
             }
         }

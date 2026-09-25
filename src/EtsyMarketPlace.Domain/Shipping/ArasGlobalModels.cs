@@ -98,7 +98,7 @@ public sealed class ArasGlobalSettings
     }
 
     public bool HasValidTokenFormat =>
-        !string.IsNullOrWhiteSpace(BearerToken) && CleanToken.Length > 20;
+        !string.IsNullOrWhiteSpace(BearerToken) && CleanToken.Length > 20 && !JwtTokenInspector.IsExpired(CleanToken);
 }
 
 /// <summary>

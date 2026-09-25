@@ -100,4 +100,45 @@ public sealed class ShippingAutoSessionTests
         Assert.Contains("ArasGlobal", arasDir);
         Assert.Contains("ShipEntegra", shipDir);
     }
+
+    [Fact]
+    public void JwtTokenInspector_HandlesNullAndEmptyTokens()
+    {
+        Assert.True(JwtTokenInspector.IsExpired(null));
+        Assert.True(JwtTokenInspector.IsExpired(""));
+        Assert.True(JwtTokenInspector.IsExpired("   "));
+        Assert.True(JwtTokenInspector.IsExpired("eyJ_broken.payload"));
+    }
+
+    [Fact]
+    public void JwtTokenInspector_DetectsExpiredTokenCorrectly()
+    {
+        // Past timestamp (exp: 1000000000 => 2001-09-09)
+        // Header: {"alg":"HS256","typ":"JWT"} -> eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
+        // Payload: {"sub":"123","exp":1000000000} -> eyJzdWIiOiIxMjMiLCJleHAiOjEwMDAwMDAwMDB9
+        string expiredJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJleHAiOjEwMDAwMDAwMDB9.signature";
+        Assert.True(JwtTokenInspector.IsExpired(expiredJwt));
+        Assert.True(JwtTokenInspector.IsExpired("Bearer " + expiredJwt));
+    }
+
+    [Fact]
+    public void JwtTokenInspector_DetectsValidFutureTokenCorrectly()
+    {
+        long futureExp = DateTimeOffset.UtcNow.AddHours(2).ToUnixTimeSeconds();
+        string payload = System.Text.Json.JsonSerializer.Serialize(new { sub = "user1", exp = futureExp });
+        string b64Payload = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payload)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string validJwt = $"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.{b64Payload}.test_signature";
+
+        Assert.False(JwtTokenInspector.IsExpired(validJwt));
+        Assert.False(JwtTokenInspector.IsExpired("Bearer " + validJwt));
+    }
+
+    [Fact]
+    public void ArasGlobalSettings_HasValidTokenFormat_RejectsExpiredJwtToken()
+    {
+        string expiredJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJleHAiOjEwMDAwMDAwMDB9.signature";
+        var settings = new ArasGlobalSettings { BearerToken = expiredJwt };
+
+        Assert.False(settings.HasValidTokenFormat);
+    }
 }

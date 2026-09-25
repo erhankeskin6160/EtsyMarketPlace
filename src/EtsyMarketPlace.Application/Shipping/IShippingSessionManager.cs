@@ -15,7 +15,8 @@ public interface IShippingSessionManager
         string? password = null,
         bool showBrowser = false,
         Action<string>? statusCallback = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        string? knownExpiredToken = null);
 
     Task<string?> RefreshShipEntegraTokenAsync(
         string? email = null,
