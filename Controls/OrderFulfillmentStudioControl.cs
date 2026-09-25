@@ -17,6 +17,7 @@ using EtsyMarketPlace.Infrastructure.Shipping;
 /// <summary>
 /// Etsy Sipariş & Canlı Çoklu Kargo Yönetim Stüdyosu Kontrolü.
 /// Siparişleri listeler, canlı kargo tekliflerini karşılaştırır ve tek tıkla kargo gönderisi/etiketi oluşturur.
+/// Aras Global oturum süresi dolduğunda otomatik arka plan yenileme desteği sunar.
 /// </summary>
 public sealed class OrderFulfillmentStudioControl : UserControl
 {
@@ -24,10 +25,12 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private readonly ShipmentCreationManager _creationManager;
     private readonly ArasGlobalPricingService _arasPricingService;
     private readonly ArasGlobalApiClient _arasApiClient;
+    private readonly IShippingSessionManager _sessionManager;
 
     // UI Bileşenleri
     private TextBox _txtSearch = null!;
     private Button _btnRefresh = null!;
+    private Button _btnArasSession = null!;
     private FlowLayoutPanel _ordersFlowPanel = null!;
     private Label _lblOrderCount = null!;
 
@@ -77,15 +80,20 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     public OrderFulfillmentStudioControl(
         EtsyOrderService? orderService = null,
         ShipmentCreationManager? creationManager = null,
-        ArasGlobalPricingService? arasPricingService = null)
+        ArasGlobalPricingService? arasPricingService = null,
+        IShippingSessionManager? sessionManager = null)
     {
         _orderService = orderService ?? new EtsyOrderService();
         _arasApiClient = new ArasGlobalApiClient();
         _arasPricingService = arasPricingService ?? new ArasGlobalPricingService(_arasApiClient);
+        _sessionManager = sessionManager ?? new PuppeteerShippingSessionManager();
 
         _creationManager = creationManager ?? new ShipmentCreationManager(new IShipmentCreationProvider[]
         {
-            new ArasGlobalShipmentCreationProvider(_arasApiClient),
+            new ArasGlobalShipmentCreationProvider(
+                _arasApiClient,
+                _sessionManager,
+                pass => ShippingCredentialEncryptor.Decrypt(pass)),
             new ShipEntegraShipmentCreationProvider(),
             new NavlungoShipmentCreationProvider(),
             new ShiptomoreShipmentCreationProvider()
@@ -102,6 +110,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     protected override async void OnLoad(EventArgs e)
     {
         base.OnLoad(e);
+        UpdateSessionButtonState();
         await ReloadOrdersAsync();
     }
 
@@ -109,7 +118,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     {
         Controls.Clear();
 
-        // 1. Üst Başlık Çubuğu (Dikey FlowLayout ile metin çakışması %100 önlendi)
+        // 1. Üst Başlık Çubuğu
         var topBar = CreateTopBar();
         Controls.Add(topBar);
 
@@ -123,7 +132,6 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Padding = new Padding(12),
         };
 
-        // Kolon Genişlikleri: %26 Siparişler | %24 Detay & Koli | %26 Kargo Teklifleri | %24 Finansal Aksiyon
         mainTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 26f));
         mainTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24f));
         mainTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 26f));
@@ -157,7 +165,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         var titleStack = new FlowLayoutPanel
         {
             Location = new Point(16, 10),
-            Size = new Size(540, 50),
+            Size = new Size(520, 50),
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             BackColor = Color.Transparent
@@ -189,9 +197,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             ForeColor = Color.White,
             BackColor = Color.FromArgb(30, 41, 59),
             FlatStyle = FlatStyle.Flat,
-            Size = new Size(90, 34),
+            Size = new Size(85, 34),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(bar.Width - 110, 16),
+            Location = new Point(bar.Width - 95, 16),
             Cursor = Cursors.Hand
         };
         _btnRefresh.FlatAppearance.BorderSize = 0;
@@ -204,15 +212,99 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle,
-            Size = new Size(180, 30),
+            Size = new Size(160, 30),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(bar.Width - 305, 18),
-            PlaceholderText = "Sipariş no veya alıcı..."
+            Location = new Point(bar.Width - 265, 18),
+            PlaceholderText = "Sipariş no..."
         };
         _txtSearch.TextChanged += async (s, e) => await ReloadOrdersAsync(_txtSearch.Text);
         bar.Controls.Add(_txtSearch);
 
+        // Hızlı Oturum Durumu ve Yenileme Butonu
+        _btnArasSession = new Button
+        {
+            Text = "🔑 Aras Oturumu",
+            Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+            Size = new Size(165, 34),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(bar.Width - 440, 16),
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+        _btnArasSession.FlatAppearance.BorderSize = 0;
+        _btnArasSession.Click += async (s, e) => await PromptOrRefreshArasSessionAsync();
+        bar.Controls.Add(_btnArasSession);
+
+        UpdateSessionButtonState();
         return bar;
+    }
+
+    private void UpdateSessionButtonState()
+    {
+        if (_btnArasSession == null || _btnArasSession.IsDisposed) return;
+        var settings = ArasGlobalSettingsStore.Load();
+        bool hasValid = settings.HasValidTokenFormat;
+
+        _btnArasSession.Text = hasValid ? "🟢 Aras Oturumu: Açık" : "⚡ Aras Oturumu Yenile";
+        _btnArasSession.BackColor = hasValid ? Color.FromArgb(6, 78, 59) : Color.FromArgb(120, 53, 15);
+        _btnArasSession.ForeColor = hasValid ? Color.FromArgb(167, 243, 208) : Color.FromArgb(254, 215, 170);
+    }
+
+    private async Task PromptOrRefreshArasSessionAsync()
+    {
+        var settings = ArasGlobalSettingsStore.Load();
+        string email = settings.SavedEmail;
+        string pass = !string.IsNullOrWhiteSpace(settings.EncryptedPassword)
+            ? ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword)
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        {
+            using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+            email = dlg.Email;
+            pass = dlg.Password;
+            settings.SavedEmail = email;
+            settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+            settings.AutoRefreshEnabled = dlg.AutoRefresh;
+            ArasGlobalSettingsStore.Save(settings);
+        }
+
+        _btnArasSession.Text = "⏳ Giriş Yapılıyor...";
+        _btnArasSession.Enabled = false;
+
+        try
+        {
+            string? fresh = await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser: false);
+            if (!string.IsNullOrWhiteSpace(fresh))
+            {
+                settings.BearerToken = fresh.Trim();
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                ArasGlobalSettingsStore.Save(settings);
+                MessageBox.Show("Aras Global canlı oturumu başarıyla açıldı ve yeni token alındı!", "Oturum Açıldı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                var ask = MessageBox.Show(
+                    "Otomatik oturum açılamadı. Aras Global panelini tarayıcıda açarak manuel giriş yapmak ister misiniz?",
+                    "Tarayıcıda Aç",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+                if (ask == DialogResult.Yes)
+                {
+                    await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser: true);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Oturum açma hatası:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _btnArasSession.Enabled = true;
+            UpdateSessionButtonState();
+        }
     }
 
     private Control BuildOrdersColumn()
@@ -250,7 +342,6 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     {
         var card = CreateColumnCard("Sipariş & Paket Detayları");
 
-        // Doğal yukarıdan aşağıya akış (Düzgün hiyerarşi)
         _detailsFlowPanel = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
@@ -571,7 +662,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         var panel = new Panel
         {
             Dock = DockStyle.Fill,
-            BackColor = Color.FromArgb(20, 30, 48), // Derin kart arkaplanı
+            BackColor = Color.FromArgb(20, 30, 48),
             Margin = new Padding(6),
             Padding = new Padding(8)
         };
@@ -762,7 +853,6 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     {
         _selectedOrder = order;
 
-        // Kart vurgusu
         foreach (Control c in _ordersFlowPanel.Controls)
         {
             if (c is Panel p)
@@ -808,9 +898,6 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         ApplyCarrierFilter();
     }
 
-    /// <summary>
-    /// Zenginleştirilmiş kargo teklifleri matrisi (Aras Global, ShipEntegra, Navlungo, Shiptomore).
-    /// </summary>
     private void GenerateExpandedQuotes(double billableWeight)
     {
         _allQuotes.Clear();
@@ -1168,9 +1255,6 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         UpdateActionPanelFinancials();
     }
 
-    /// <summary>
-    /// Aras API'sinden gelen finansal verileri kuruşu kuruşuna aksiyon paneline bağlar.
-    /// </summary>
     private void UpdateActionPanelFinancials()
     {
         if (_selectedOrder == null || _selectedCarrier == null) return;
@@ -1226,7 +1310,6 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         g.DrawString($"CARRIER: {_selectedCarrier?.CarrierName ?? "ARAS GLOBAL"}", fontTitle, brush, 8, 6);
         g.DrawString($"RECEIVER: {_selectedOrder?.BuyerName ?? "INGE NEUER"}", fontTitle, brush, 8, 20);
 
-        // Barkod çizgileri çizimi
         int startX = 8;
         int barY = 36;
         int barH = 28;
@@ -1263,7 +1346,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         _btnCreateShipment.Enabled = false;
         _btnCreateShipment.Text = "⏳ Gönderi Oluşturuluyor...";
         _lblStatusMsg.ForeColor = Color.FromArgb(56, 189, 248);
-        _lblStatusMsg.Text = "Aras Global API ile gönderi taslağı, DDP gümrükleme ve sözleşmeler onaylanıyor...";
+        _lblStatusMsg.Text = "Aras Global API ile gönderi taslağı ve sözleşmeler onaylanıyor...";
 
         try
         {
@@ -1305,7 +1388,25 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             {
                 _lblStatusMsg.ForeColor = Color.FromArgb(239, 68, 68);
                 _lblStatusMsg.Text = $"Hata: {result.ErrorMessage}";
-                MessageBox.Show(result.ErrorMessage, "Gönderi Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+
+                // Token hatası ise kullanıcıya tek tıkla oturum açma imkanı sun
+                if (result.ErrorMessage.Contains("token") || result.ErrorMessage.Contains("401"))
+                {
+                    var ask = MessageBox.Show(
+                        $"{result.ErrorMessage}\n\nŞimdi tek tıkla Aras Global oturumunu yenilemek ister misiniz?",
+                        "Oturum Yenileme",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (ask == DialogResult.Yes)
+                    {
+                        await PromptOrRefreshArasSessionAsync();
+                    }
+                }
+                else
+                {
+                    MessageBox.Show(result.ErrorMessage, "Gönderi Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
         catch (Exception ex)
@@ -1318,6 +1419,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         {
             _btnCreateShipment.Enabled = true;
             _btnCreateShipment.Text = $"🚀  {_selectedCarrier.CarrierName} ile Gönderi Oluştur";
+            UpdateSessionButtonState();
         }
     }
 
