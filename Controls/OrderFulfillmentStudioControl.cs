@@ -1399,148 +1399,19 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     #region 7. Aras Global Gönderi Oluşturma Akışı & Oturum Yenileme
     private async Task PromptOrRefreshArasSessionAsync()
     {
-        var settings = ArasGlobalSettingsStore.Load();
-        string email = settings.SavedEmail;
-        string pass = !string.IsNullOrWhiteSpace(settings.EncryptedPassword)
-            ? ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword)
-            : string.Empty;
-
-        using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
-        if (dlg.ShowDialog(this) != DialogResult.OK) return;
-
-        // 1. Kullanıcı doğrudan Bearer token yapıştırdıysa (Chrome DevTools'tan)
-        if (!string.IsNullOrWhiteSpace(dlg.DirectToken))
-        {
-            string cleanTok = dlg.DirectToken.Trim();
-            if (cleanTok.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            {
-                cleanTok = cleanTok.Substring(7).Trim();
-            }
-
-            if (cleanTok.Length > 20 && !JwtTokenInspector.IsExpired(cleanTok))
-            {
-                settings.BearerToken = "Bearer " + cleanTok;
-                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
-                ArasGlobalSettingsStore.Save(settings);
-                UpdateSessionButtonState();
-                MessageBox.Show("Aras Global canlı oturum tokeni başarıyla kaydedildi ve doğrulandı!\nArtık canlı fiyat tekliflerini alabilir ve gönderi oluşturabilirsiniz.", "Canlı Oturum Hazır", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                _ = RecalculateDesiAndQuotesAsync();
-                return;
-            }
-            else
-            {
-                MessageBox.Show("Girilen token formatı geçersiz veya süresi dolmuş.\nLütfen Chrome DevTools Network sekmesindeki güncel 'Bearer eyJ...' tokenini kopyalayıp yapıştırın.", "Geçersiz Token", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-        }
-
-        email = dlg.Email;
-        pass = dlg.Password;
-        settings.SavedEmail = email;
-        if (!string.IsNullOrWhiteSpace(pass))
-        {
-            settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
-        }
-        settings.AutoRefreshEnabled = dlg.AutoRefresh;
-        ArasGlobalSettingsStore.Save(settings);
-
-        if (dlg.OpenInDefaultBrowserRequested)
-        {
-            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/auth");
-            MessageBox.Show(
-                "Aras Global paneli varsayılan tarayıcınızda açıldı!\n\nLütfen giriş yaptıktan sonra F12 DevTools Network sekmesindeki Bearer tokenini kopyalayıp buradaki 'Canlı Token' kutusuna yapıştırın.",
-                "Tarayıcı Açıldı",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return;
-        }
-
-        if (dlg.OpenInBrowserRequested)
-        {
-            _btnArasSession.Text = "⏳ Tarayıcı Açılıyor...";
-            _btnArasSession.Enabled = false;
-            try
-            {
-                string? captured = await _sessionManager.RefreshArasGlobalTokenAsync(
-                    email,
-                    pass,
-                    showBrowser: true,
-                    knownExpiredToken: settings.CleanToken);
-                settings = ArasGlobalSettingsStore.Load();
-                UpdateSessionButtonState();
-                if (!string.IsNullOrWhiteSpace(captured))
-                {
-                    MessageBox.Show("Aras Global canlı oturumu tarayıcıdan başarıyla yakalandı!", "Oturum Hazır", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
-                _ = RecalculateDesiAndQuotesAsync();
-            }
-            catch (Exception ex)
-            {
-                var ask = MessageBox.Show(
-                    $"Görünür otomatik tarayıcı başlatılamadı:\n{ex.Message}\n\nResmi Aras Global panelini normal Chrome tarayıcınızda açmak ister misiniz?",
-                    "Normal Chrome'da Aç",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-                if (ask == DialogResult.Yes)
-                {
-                    PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/auth");
-                }
-            }
-            finally
-            {
-                _btnArasSession.Enabled = true;
-                UpdateSessionButtonState();
-            }
-            return;
-        }
-
-        _btnArasSession.Text = "⏳ Giriş Yapılıyor...";
-        _btnArasSession.Enabled = false;
-
+        await Task.Yield();
         try
         {
-            string? fresh = await _sessionManager.RefreshArasGlobalTokenAsync(
-                email,
-                pass,
-                showBrowser: false,
-                knownExpiredToken: settings.CleanToken);
-            if (!string.IsNullOrWhiteSpace(fresh))
+            using var loginForm = new ArasGlobalEmbeddedLoginForm();
+            if (loginForm.ShowDialog(this) == DialogResult.OK)
             {
-                settings.BearerToken = fresh.Trim();
-                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
-                ArasGlobalSettingsStore.Save(settings);
                 UpdateSessionButtonState();
-                MessageBox.Show("Aras Global canlı oturumu başarıyla açıldı ve yeni token alındı!", "Oturum Açıldı", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 _ = RecalculateDesiAndQuotesAsync();
-            }
-            else
-            {
-                var ask = MessageBox.Show(
-                    "Otomatik oturum açılamadı. Aras Global panelini tarayıcıda açarak manuel giriş yapmak ister misiniz?",
-                    "Tarayıcıda Aç",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
-                if (ask == DialogResult.Yes)
-                {
-                    await _sessionManager.RefreshArasGlobalTokenAsync(
-                        email,
-                        pass,
-                        showBrowser: true,
-                        knownExpiredToken: settings.CleanToken);
-                    settings = ArasGlobalSettingsStore.Load();
-                    UpdateSessionButtonState();
-                    _ = RecalculateDesiAndQuotesAsync();
-                }
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Oturum açma hatası:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-        finally
-        {
-            _btnArasSession.Enabled = true;
-            UpdateSessionButtonState();
+            MessageBox.Show($"Oturum açma penceresi açılamadı:\n{ex.Message}", "Oturum Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

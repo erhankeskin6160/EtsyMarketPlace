@@ -1635,102 +1635,20 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
     private async Task TriggerArasAutoLoginAsync(bool directBrowser)
     {
-        var settings = ArasGlobalSettingsStore.Load();
-        string email = settings.SavedEmail ?? string.Empty;
-        string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
-        bool showBrowser = directBrowser;
-
-        if (directBrowser || string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass) || !settings.HasValidTokenFormat)
-        {
-            using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
-            if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
-
-            // 1. Kullanıcı doğrudan Bearer token yapıştırdıysa
-            if (!string.IsNullOrWhiteSpace(dlg.DirectToken))
-            {
-                string cleanTok = dlg.DirectToken.Trim();
-                if (cleanTok.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-                {
-                    cleanTok = cleanTok.Substring(7).Trim();
-                }
-
-                if (cleanTok.Length > 20 && !JwtTokenInspector.IsExpired(cleanTok))
-                {
-                    settings.BearerToken = "Bearer " + cleanTok;
-                    settings.TokenLastUpdatedUtc = DateTime.UtcNow;
-                    ArasGlobalSettingsStore.Save(settings);
-                    _lblStatus.Text = "✅ Aras Global tokeni başarıyla güncellendi!";
-                    _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
-                    RebuildAccountsHub();
-                    await FetchAllQuotesAsync();
-                    return;
-                }
-                else
-                {
-                    MessageBox.Show("Girilen token formatı geçersiz veya süresi dolmuş.", "Geçersiz Token", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-            }
-
-            if (dlg.OpenInDefaultBrowserRequested)
-            {
-                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/auth");
-                MessageBox.Show(
-                    "Aras Global paneli varsayılan tarayıcınızda açıldı!\n\nLütfen giriş yaptıktan sonra F12 DevTools Network sekmesindeki Bearer tokenini kopyalayıp buradaki 'Canlı Token' kutusuna yapıştırın.",
-                    "Tarayıcı Açıldı",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-                return;
-            }
-
-            email = dlg.Email;
-            pass = dlg.Password;
-            showBrowser = dlg.OpenInBrowserRequested;
-            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
-            {
-                settings.SavedEmail = email;
-                settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
-                settings.AutoRefreshEnabled = dlg.AutoRefresh;
-                ArasGlobalSettingsStore.Save(settings);
-            }
-        }
-
-        _lblStatus.Text = "⏳ Aras Global oturumu açılıyor...";
-        _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
-
         try
         {
-            string? freshToken = await _sessionManager.RefreshArasGlobalTokenAsync(email, pass, showBrowser, s =>
+            using var loginForm = new ArasGlobalEmbeddedLoginForm();
+            if (loginForm.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                _lblStatus.Text = s;
-            }, knownExpiredToken: settings.CleanToken);
-
-            if (!string.IsNullOrWhiteSpace(freshToken))
-            {
-                settings.BearerToken = freshToken;
-                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
-                ArasGlobalSettingsStore.Save(settings);
                 _lblStatus.Text = "✅ Aras Global tokeni başarıyla güncellendi!";
                 _lblStatus.ForeColor = Color.FromArgb(52, 211, 153);
                 RebuildAccountsHub();
                 await FetchAllQuotesAsync();
             }
-            else
-            {
-                MessageBox.Show("Aras Global otomatik oturum açılamadı. 'Normal Chrome'da Aç' seçeneğiyle doğrudan giriş yapabilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
         }
         catch (Exception ex)
         {
-            var ask = MessageBox.Show(
-                $"Aras otomatik tarayıcı hatası:\n{ex.Message}\n\nNormal Chrome tarayıcınızda açmak ister misiniz?",
-                "Tarayıcıda Aç",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-            if (ask == DialogResult.Yes)
-            {
-                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/auth");
-            }
+            MessageBox.Show($"Oturum penceresi açılamadı:\n{ex.Message}", "Oturum Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
