@@ -129,9 +129,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             Height = height,
             Weight = weight,
             VolumetricWeight = desi,
-            volumetricWeight = desi,
             Desi = desi,
-            desi = desi,
             PackageCount = 1
         };
 
@@ -151,9 +149,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             PackageCount = 1,
             Weight = weight,
             VolumetricWeight = desi,
-            volumetricWeight = desi,
-            Desi = desi,
-            desi = desi
+            Desi = desi
         };
         request.BoxList.Add(box);
 
@@ -170,9 +166,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Height = box.Height,
                 Weight = box.Weight,
                 VolumetricWeight = desi,
-                volumetricWeight = desi,
-                Desi = desi,
-                desi = desi
+                Desi = desi
             });
         }
 
@@ -189,9 +183,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Height = box.Height,
                 Weight = box.Weight,
                 VolumetricWeight = desi,
-                volumetricWeight = desi,
-                Desi = desi,
-                desi = desi
+                Desi = desi
             });
         }
 

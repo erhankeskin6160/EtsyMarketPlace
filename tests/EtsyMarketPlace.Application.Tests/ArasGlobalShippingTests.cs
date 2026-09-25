@@ -120,4 +120,58 @@ public sealed class ArasGlobalShippingTests
         var ex = new ArasGlobalTokenExpiredException("401 Unauthorized token expired");
         Assert.Contains("401", ex.Message);
     }
+
+    [Fact]
+    public void ArasCreateShipmentRequest_SerializesToJson_WithoutPropertyCollisions()
+    {
+        var request = new ArasCreateShipmentRequest
+        {
+            ShipmentId = "TEST-SHIPMENT-01",
+            Price = 11.16m,
+            CargoPrice = 13.13m,
+            Currency = "USD",
+            InternationalCargoProvider = "widect",
+            Weight = 0.4,
+            VolumetricWeight = 0.6,
+            Desi = 0.6
+        };
+
+        request.BoxList.Add(new ArasBox
+        {
+            Length = 20,
+            Width = 15,
+            Height = 10,
+            Weight = 0.4,
+            VolumetricWeight = 0.6,
+            Desi = 0.6,
+            PackageCount = 1
+        });
+
+        request.ShipmentItems.Add(new ArasShipmentItem
+        {
+            Description = "Test Item",
+            HsCode = "3926400000",
+            Quantity = 1,
+            UnitPrice = 11.16m,
+            Length = 20,
+            Width = 15,
+            Height = 10,
+            Weight = 0.4,
+            VolumetricWeight = 0.6,
+            Desi = 0.6
+        });
+
+        var options = new System.Text.Json.JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        };
+
+        // Serileştirme sırasında hiçbir 'collides with another property' hatası fırlatılmamalı
+        string json = System.Text.Json.JsonSerializer.Serialize(request, options);
+
+        Assert.NotNull(json);
+        Assert.Contains("\"VolumetricWeight\":0.6", json);
+        Assert.Contains("\"Desi\":0.6", json);
+        Assert.Contains("\"BoxList\":[", json);
+    }
 }
