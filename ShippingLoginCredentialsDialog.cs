@@ -105,13 +105,14 @@ internal sealed class ShippingLoginCredentialsDialog : Form
         };
         pnl.Controls.Add(lblAutoSection);
 
-        // Email
-        var lblEmail = new Label { Text = "E-Posta / Kullanıcı Adı:", ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(20, 172), AutoSize = true };
+        // Email / Telefon
+        var lblEmail = new Label { Text = "Telefon Numarası veya E-Posta:", ForeColor = Color.FromArgb(148, 163, 184), Location = new Point(20, 172), AutoSize = true };
         pnl.Controls.Add(lblEmail);
         _txtEmail.Location = new Point(20, 192);
         _txtEmail.Width = 520;
         _txtEmail.BackColor = Color.FromArgb(30, 41, 59);
         _txtEmail.ForeColor = Color.White;
+        _txtEmail.PlaceholderText = "Örn: 5342600561 veya e-posta adresi";
         _txtEmail.Text = existingEmail;
         pnl.Controls.Add(_txtEmail);
 

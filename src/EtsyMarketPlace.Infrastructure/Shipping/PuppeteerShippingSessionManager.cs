@@ -163,10 +163,10 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             };
 
             statusCallback?.Invoke("🌐 Aras Global paneline bağlanılıyor...");
-            await page.GoToAsync("https://panel.arasglobalcargo.com/login", new NavigationOptions
+            await page.GoToAsync("https://panel.arasglobalcargo.com/auth", new NavigationOptions
             {
                 WaitUntil = new[] { WaitUntilNavigation.DOMContentLoaded },
-                Timeout = 25000
+                Timeout = 30000
             });
 
             // 3. localStorage kontrol et; eğer süresi dolmuşsa veya bilinen eski tokense temizle!
@@ -768,12 +768,12 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
     {
         try
         {
-            // Email input bulma
-            var emailInput = await page.QuerySelectorAsync("input[type='email'], input[name='email'], input[name='username'], input[formcontrolname='email'], input[formcontrolname='userName']");
-            if (emailInput != null)
+            // Telefon / Email / Kullanıcı Adı input bulma
+            var phoneOrEmailInput = await page.QuerySelectorAsync("input[type='tel'], input[name*='phone'], input[name*='gsm'], input[name*='tel'], input[placeholder*='Telefon'], input[type='email'], input[name='email'], input[name='username'], input[formcontrolname='email'], input[formcontrolname='userName'], input[type='text']");
+            if (phoneOrEmailInput != null)
             {
-                await emailInput.ClickAsync();
-                await emailInput.TypeAsync(email);
+                await phoneOrEmailInput.ClickAsync();
+                await phoneOrEmailInput.TypeAsync(email);
             }
 
             // Password input bulma
@@ -785,7 +785,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             }
 
             // Submit butonu tıklama
-            var submitBtn = await page.QuerySelectorAsync("button[type='submit'], input[type='submit'], button.login-btn, button.btn-primary");
+            var submitBtn = await page.QuerySelectorAsync("button[type='submit'], input[type='submit'], button.login-btn, button.btn-primary, button.ant-btn-primary");
             if (submitBtn != null)
             {
                 await submitBtn.ClickAsync();

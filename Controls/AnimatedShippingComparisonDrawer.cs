@@ -1674,7 +1674,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
             if (dlg.OpenInDefaultBrowserRequested)
             {
-                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/login");
+                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/auth");
                 MessageBox.Show(
                     "Aras Global paneli varsayılan tarayıcınızda açıldı!\n\nLütfen giriş yaptıktan sonra F12 DevTools Network sekmesindeki Bearer tokenini kopyalayıp buradaki 'Canlı Token' kutusuna yapıştırın.",
                     "Tarayıcı Açıldı",
@@ -1729,7 +1729,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 MessageBoxIcon.Question);
             if (ask == DialogResult.Yes)
             {
-                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/login");
+                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/auth");
             }
         }
     }
