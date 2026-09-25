@@ -61,4 +61,11 @@ public interface IArasGlobalApiClient
         string docType,
         string rawBearerToken,
         CancellationToken cancellationToken = default);
+
+    Task<bool> SendShipmentPriceAsync(
+        string shipmentId,
+        string provider,
+        decimal cargoPrice,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
 }

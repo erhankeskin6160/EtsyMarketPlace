@@ -34,6 +34,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
     private const string UpdateShipmentEndpoint = "/Shipment/UpdateShipment";
     private const string CalculatePriceEndpoint = "/ShipmentPricing/CalculateShipmentPrice";
     private const string LegalDocEndpoint = "/Shipment/GetShipmentLegalDocument";
+    private const string SendShipmentPriceEndpoint = "/ShipmentPricing/SendShipmentPrice";
 
     public ArasGlobalApiClient(HttpClient? httpClient = null)
     {
@@ -418,6 +419,41 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         }
 
         return Guid.NewGuid().ToString();
+    }
+
+    /// <summary>
+    /// Fiyatlandırma adımında seçilen taşıyıcı teklifini ve onayları Aras Global'e gönderir (SendShipmentPrice).
+    /// </summary>
+    public async Task<bool> SendShipmentPriceAsync(
+        string shipmentId,
+        string provider,
+        decimal cargoPrice,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanToken = CleanToken(rawBearerToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrl + SendShipmentPriceEndpoint);
+        ApplyHeaders(httpRequest, cleanToken);
+
+        var payload = new
+        {
+            shipmentId = shipmentId,
+            internationalCargoProvider = provider.ToLowerInvariant(),
+            cargoPrice = cargoPrice,
+            isPreInformationApproved = true,
+            isAgreementAccepted = true
+        };
+
+        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        ValidateStatus(response);
+
+        string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(responseContent);
+        var root = doc.RootElement;
+        CheckTokenExpired(root);
+
+        return response.IsSuccessStatusCode;
     }
 
     private async Task<string> StartCalculationAsync(

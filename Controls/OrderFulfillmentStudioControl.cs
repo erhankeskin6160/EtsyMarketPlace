@@ -80,6 +80,8 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private EtsyOrderFulfillmentItem? _selectedOrder;
     private CarrierQuoteCardModel? _selectedCarrier;
     private List<CarrierQuoteCardModel> _allQuotes = new();
+    private bool _isUpdatingInputs = false;
+    private CancellationTokenSource? _quoteCts;
     public decimal UsdTryRate { get; set; } = 48.855m;
 
     public OrderFulfillmentStudioControl(
@@ -464,7 +466,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         var pnlPackageGrid = new TableLayoutPanel
         {
             Width = 250,
-            Height = 120,
+            Height = 136,
             ColumnCount = 2,
             RowCount = 2,
             BackColor = Color.Transparent,
@@ -472,18 +474,18 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         };
         pnlPackageGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
         pnlPackageGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-        pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
-        pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
+        pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 64f));
+        pnlPackageGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 64f));
 
         _inputWeight = new SaasUnitInputBox("Ağırlık", "0.40", "kg") { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 4, 4) };
         _inputLength = new SaasUnitInputBox("Boy", "20", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 0, 0, 4) };
         _inputWidth = new SaasUnitInputBox("En", "15", "cm") { Dock = DockStyle.Fill, Margin = new Padding(0, 4, 4, 0) };
         _inputHeight = new SaasUnitInputBox("Yükseklik", "10", "cm") { Dock = DockStyle.Fill, Margin = new Padding(4, 4, 0, 0) };
 
-        _inputWeight.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
-        _inputLength.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
-        _inputWidth.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
-        _inputHeight.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
+        _inputWeight.ValueChanged += (s, e) => { if (!_isUpdatingInputs) _ = RecalculateDesiAndQuotesAsync(); };
+        _inputLength.ValueChanged += (s, e) => { if (!_isUpdatingInputs) _ = RecalculateDesiAndQuotesAsync(); };
+        _inputWidth.ValueChanged += (s, e) => { if (!_isUpdatingInputs) _ = RecalculateDesiAndQuotesAsync(); };
+        _inputHeight.ValueChanged += (s, e) => { if (!_isUpdatingInputs) _ = RecalculateDesiAndQuotesAsync(); };
 
         pnlPackageGrid.Controls.Add(_inputWeight, 0, 0);
         pnlPackageGrid.Controls.Add(_inputLength, 1, 0);
@@ -939,13 +941,21 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         _barcodeControl.ReceiverName = order.BuyerName;
         _barcodeControl.AddressLine = order.StreetAddress;
 
-        if (order.Items.Count > 0)
+        _isUpdatingInputs = true;
+        try
         {
-            var itm = order.Items[0];
-            _inputWeight.Value = itm.WeightKg > 0 ? itm.WeightKg.ToString("0.00") : "0.40";
-            _inputLength.Value = itm.LengthCm > 0 ? itm.LengthCm.ToString("0") : "20";
-            _inputWidth.Value = itm.WidthCm > 0 ? itm.WidthCm.ToString("0") : "15";
-            _inputHeight.Value = itm.HeightCm > 0 ? itm.HeightCm.ToString("0") : "10";
+            if (order.Items.Count > 0)
+            {
+                var itm = order.Items[0];
+                _inputWeight.Value = itm.WeightKg > 0 ? itm.WeightKg.ToString("0.00") : "0.40";
+                _inputLength.Value = itm.LengthCm > 0 ? itm.LengthCm.ToString("0") : "20";
+                _inputWidth.Value = itm.WidthCm > 0 ? itm.WidthCm.ToString("0") : "15";
+                _inputHeight.Value = itm.HeightCm > 0 ? itm.HeightCm.ToString("0") : "10";
+            }
+        }
+        finally
+        {
+            _isUpdatingInputs = false;
         }
 
         _ = RecalculateDesiAndQuotesAsync();
@@ -953,7 +963,20 @@ public sealed class OrderFulfillmentStudioControl : UserControl
 
     private async Task RecalculateDesiAndQuotesAsync()
     {
-        if (_selectedOrder == null) return;
+        if (_selectedOrder == null || _isUpdatingInputs) return;
+
+        _quoteCts?.Cancel();
+        _quoteCts = new CancellationTokenSource();
+        var ct = _quoteCts.Token;
+
+        try
+        {
+            await Task.Delay(150, ct); // Debounce
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
 
         decimal kg = _inputWeight.GetDecimal();
         double w = (double)_inputWidth.GetDecimal();
@@ -969,13 +992,16 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         double billable = Math.Max((double)kg, desi);
         _lblCalculatedDesi.Text = $"Desi: {desi:N2} | Faturalandırılacak: {billable:N2} kg";
 
-        await GenerateCarrierQuotesAsync(billable, w, l, h);
-        RenderCarrierCards();
+        await GenerateCarrierQuotesAsync(billable, w, l, h, ct);
+        if (!ct.IsCancellationRequested)
+        {
+            RenderCarrierCards();
+        }
     }
 
-    private async Task GenerateCarrierQuotesAsync(double billableWeight, double w, double l, double h)
+    private async Task GenerateCarrierQuotesAsync(double billableWeight, double w, double l, double h, CancellationToken cancellationToken = default)
     {
-        _allQuotes.Clear();
+        var collected = new List<CarrierQuoteCardModel>();
 
         string countryCode = !string.IsNullOrWhiteSpace(_selectedOrder?.CountryCode) ? _selectedOrder.CountryCode : "US";
         double weight = billableWeight;
@@ -1002,7 +1028,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             {
                 return null;
             }
-        });
+        }, cancellationToken);
 
         // 2. ShipEntegra Sorgusu
         var shipEntegraTask = Task.Run(async () =>
@@ -1023,7 +1049,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             {
                 return null;
             }
-        });
+        }, cancellationToken);
 
         // 3. Navlungo Sorgusu
         var navSettings = NavlungoSettingsStore.Load();
@@ -1056,7 +1082,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                     Source = "user"
                 });
             }
-        });
+        }, cancellationToken);
 
         // 4. Shiptomore Sorgusu
         var stmSettings = ShiptomoreSettingsStore.Load();
@@ -1087,9 +1113,11 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                     HeightCm = height
                 }, !string.IsNullOrWhiteSpace(stmSettings.SessionCookie));
             }
-        });
+        }, cancellationToken);
 
         await Task.WhenAll(arasTask, shipEntegraTask, navlungoTask, shiptomoreTask);
+
+        if (cancellationToken.IsCancellationRequested) return;
 
         var arasRes = await arasTask;
         var seRes = await shipEntegraTask;
@@ -1102,7 +1130,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             foreach (var off in arasRes.Offers)
             {
                 string sName = $"{off.Cargo} {off.ProviderServiceType}".Trim();
-                _allQuotes.Add(new CarrierQuoteCardModel
+                collected.Add(new CarrierQuoteCardModel
                 {
                     ProviderName = "Aras Global",
                     CarrierName = "Aras Global",
@@ -1127,7 +1155,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             foreach (var off in seRes.Offers)
             {
                 string sName = !string.IsNullOrWhiteSpace(off.ClearServiceName) ? off.ClearServiceName : off.ServiceName;
-                _allQuotes.Add(new CarrierQuoteCardModel
+                collected.Add(new CarrierQuoteCardModel
                 {
                     ProviderName = "ShipEntegra",
                     CarrierName = "ShipEntegra",
@@ -1155,7 +1183,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             {
                 bool isLiveOffer = off.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase) ||
                                    (!off.Note.Contains("Referans", StringComparison.OrdinalIgnoreCase) && !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase));
-                _allQuotes.Add(new CarrierQuoteCardModel
+                collected.Add(new CarrierQuoteCardModel
                 {
                     ProviderName = "Navlungo",
                     CarrierName = "Navlungo",
@@ -1183,7 +1211,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             {
                 bool isLiveOffer = off.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase) ||
                                    (!off.Note.Contains("Simüle", StringComparison.OrdinalIgnoreCase) && !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase));
-                _allQuotes.Add(new CarrierQuoteCardModel
+                collected.Add(new CarrierQuoteCardModel
                 {
                     ProviderName = "Shiptomore",
                     CarrierName = "Shiptomore",
@@ -1204,15 +1232,25 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             }
         }
 
+        if (cancellationToken.IsCancellationRequested) return;
+
+        // Tekilleştirme (Deduplication): Aynı sağlayıcı ve servis tekliflerini tekil tut
+        var deduplicated = collected
+            .GroupBy(q => $"{q.ProviderName}_{q.SubCarrier}_{q.ServiceType}_{q.PriceUsd}")
+            .Select(g => g.First())
+            .ToList();
+
         // En ucuz teklifi belirle
-        if (_allQuotes.Count > 0)
+        if (deduplicated.Count > 0)
         {
-            decimal minPrice = _allQuotes.Min(q => q.PriceUsd);
-            foreach (var q in _allQuotes)
+            decimal minPrice = deduplicated.Min(q => q.PriceUsd);
+            foreach (var q in deduplicated)
             {
                 q.IsCheapest = (q.PriceUsd == minPrice);
             }
         }
+
+        _allQuotes = deduplicated;
     }
 
     private void RenderCarrierCards()
@@ -1367,16 +1405,66 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             ? ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword)
             : string.Empty;
 
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
+        using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
+        if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+        // 1. Kullanıcı doğrudan Bearer token yapıştırdıysa (Chrome DevTools'tan)
+        if (!string.IsNullOrWhiteSpace(dlg.DirectToken))
         {
-            using var dlg = new ShippingLoginCredentialsDialog("Aras Global", email);
-            if (dlg.ShowDialog(this) != DialogResult.OK) return;
-            email = dlg.Email;
-            pass = dlg.Password;
-            settings.SavedEmail = email;
+            string cleanTok = dlg.DirectToken.Trim();
+            if (cleanTok.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanTok = cleanTok.Substring(7).Trim();
+            }
+
+            if (cleanTok.Length > 20 && !JwtTokenInspector.IsExpired(cleanTok))
+            {
+                settings.BearerToken = "Bearer " + cleanTok;
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                ArasGlobalSettingsStore.Save(settings);
+                UpdateSessionButtonState();
+                MessageBox.Show("Aras Global canlı oturum tokeni başarıyla kaydedildi ve doğrulandı!\nArtık canlı fiyat tekliflerini alabilir ve gönderi oluşturabilirsiniz.", "Canlı Oturum Hazır", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _ = RecalculateDesiAndQuotesAsync();
+                return;
+            }
+            else
+            {
+                MessageBox.Show("Girilen token formatı geçersiz veya süresi dolmuş.\nLütfen Chrome DevTools Network sekmesindeki güncel 'Bearer eyJ...' tokenini kopyalayıp yapıştırın.", "Geçersiz Token", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+        }
+
+        email = dlg.Email;
+        pass = dlg.Password;
+        settings.SavedEmail = email;
+        if (!string.IsNullOrWhiteSpace(pass))
+        {
             settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
-            settings.AutoRefreshEnabled = dlg.AutoRefresh;
-            ArasGlobalSettingsStore.Save(settings);
+        }
+        settings.AutoRefreshEnabled = dlg.AutoRefresh;
+        ArasGlobalSettingsStore.Save(settings);
+
+        if (dlg.OpenInBrowserRequested)
+        {
+            _btnArasSession.Text = "⏳ Tarayıcı Açılıyor...";
+            _btnArasSession.Enabled = false;
+            try
+            {
+                await _sessionManager.RefreshArasGlobalTokenAsync(
+                    email,
+                    pass,
+                    showBrowser: true,
+                    knownExpiredToken: settings.CleanToken);
+                settings = ArasGlobalSettingsStore.Load();
+                UpdateSessionButtonState();
+                _ = RecalculateDesiAndQuotesAsync();
+            }
+            finally
+            {
+                _btnArasSession.Enabled = true;
+                UpdateSessionButtonState();
+            }
+            return;
         }
 
         _btnArasSession.Text = "⏳ Giriş Yapılıyor...";
@@ -1394,7 +1482,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                 settings.BearerToken = fresh.Trim();
                 settings.TokenLastUpdatedUtc = DateTime.UtcNow;
                 ArasGlobalSettingsStore.Save(settings);
+                UpdateSessionButtonState();
                 MessageBox.Show("Aras Global canlı oturumu başarıyla açıldı ve yeni token alındı!", "Oturum Açıldı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                _ = RecalculateDesiAndQuotesAsync();
             }
             else
             {
@@ -1410,6 +1500,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                         pass,
                         showBrowser: true,
                         knownExpiredToken: settings.CleanToken);
+                    settings = ArasGlobalSettingsStore.Load();
+                    UpdateSessionButtonState();
+                    _ = RecalculateDesiAndQuotesAsync();
                 }
             }
         }

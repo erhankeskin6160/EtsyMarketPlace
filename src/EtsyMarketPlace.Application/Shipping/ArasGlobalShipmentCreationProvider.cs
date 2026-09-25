@@ -239,7 +239,17 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             // Yasal doküman sessiz onay
         }
 
-        // Adım 4: Finansal Fiyat Kalemlerini Hesapla
+        // Adım 4: Fiyatlandırma ve Taşıyıcı Onayını Aras Global'e Gönder (SendShipmentPrice)
+        try
+        {
+            await _apiClient.SendShipmentPriceAsync(shipmentId, request.InternationalCargoProvider, request.CargoPrice, token, cancellationToken);
+        }
+        catch
+        {
+            // Sessiz geçiş / tolerans
+        }
+
+        // Adım 5: Finansal Fiyat Kalemlerini Hesapla
         ArasShipmentPriceBreakdown? breakdown = null;
         try
         {

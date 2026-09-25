@@ -221,5 +221,10 @@ public sealed class OrderFulfillmentStudioTests
         {
             return Task.FromResult("mock-doc-guid-5582");
         }
+
+        public Task<bool> SendShipmentPriceAsync(string shipmentId, string provider, decimal cargoPrice, string rawBearerToken, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
     }
 }
