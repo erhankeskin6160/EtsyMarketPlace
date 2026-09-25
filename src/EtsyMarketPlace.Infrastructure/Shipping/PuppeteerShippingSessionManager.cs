@@ -120,32 +120,68 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             var pages = await browser.PagesAsync();
             var page = pages.Length > 0 ? pages[0] : await browser.NewPageAsync();
 
-            // 1. Ağ isteklerini dinle: Authorization: Bearer başlıklarını yakala
+            // 1. Ağ isteklerini dinle: Authorization, token veya herhangi bir başlık/postData'daki JWT'leri yakala
             page.Request += (_, e) =>
             {
-                if (e.Request.Headers.TryGetValue("authorization", out var auth) &&
-                    !string.IsNullOrWhiteSpace(auth) &&
-                    auth.StartsWith("Bearer eyJ", StringComparison.OrdinalIgnoreCase))
+                try
                 {
-                    string cand = auth[7..].Trim();
-                    if (!cand.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) && !JwtTokenInspector.IsExpired(cand))
+                    foreach (var header in e.Request.Headers)
                     {
-                        capturedToken = cand;
+                        if (header.Key.Equals("authorization", StringComparison.OrdinalIgnoreCase) ||
+                            header.Key.Equals("token", StringComparison.OrdinalIgnoreCase) ||
+                            header.Key.Equals("x-auth-token", StringComparison.OrdinalIgnoreCase) ||
+                            header.Value.Contains("eyJ"))
+                        {
+                            string? cand = ExtractJwtFromString(header.Value);
+                            if (!string.IsNullOrWhiteSpace(cand) &&
+                                !cand.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                                !JwtTokenInspector.IsExpired(cand))
+                            {
+                                capturedToken = cand;
+                            }
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(e.Request.PostData) && e.Request.PostData.Contains("eyJ"))
+                    {
+                        string? cand = ExtractJwtFromString(e.Request.PostData);
+                        if (!string.IsNullOrWhiteSpace(cand) &&
+                            !cand.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                            !JwtTokenInspector.IsExpired(cand))
+                        {
+                            capturedToken = cand;
+                        }
                     }
                 }
+                catch { }
             };
 
-            // 2. Ağ yanıtlarını dinle: /login, /token, /auth endpointlerinden dönen JWT'leri yakala
+            // 2. Ağ yanıtlarını dinle: Aras domaini, auth/login yanıtları ve response header'larını dinle
             page.Response += async (_, e) =>
             {
                 try
                 {
                     string url = e.Response.Url;
-                    if (url.Contains("/login", StringComparison.OrdinalIgnoreCase) ||
+                    if (url.Contains("arasglobalcargo.com", StringComparison.OrdinalIgnoreCase) ||
                         url.Contains("/auth", StringComparison.OrdinalIgnoreCase) ||
-                        url.Contains("/token", StringComparison.OrdinalIgnoreCase) ||
-                        url.Contains("arasglobalcargo.com", StringComparison.OrdinalIgnoreCase))
+                        url.Contains("/login", StringComparison.OrdinalIgnoreCase) ||
+                        url.Contains("/token", StringComparison.OrdinalIgnoreCase))
                     {
+                        foreach (var rh in e.Response.Headers)
+                        {
+                            if (rh.Value.Contains("eyJ"))
+                            {
+                                string? ext = ExtractJwtFromString(rh.Value);
+                                if (!string.IsNullOrWhiteSpace(ext) &&
+                                    !ext.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                                    !JwtTokenInspector.IsExpired(ext))
+                                {
+                                    capturedToken = ext;
+                                    return;
+                                }
+                            }
+                        }
+
                         string body = await e.Response.TextAsync();
                         if (!string.IsNullOrWhiteSpace(body) && body.Contains("eyJ"))
                         {
@@ -169,8 +205,8 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 Timeout = 30000
             });
 
-            // 3. localStorage kontrol et; eğer süresi dolmuşsa veya bilinen eski tokense temizle!
-            string? localTok = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
+            // 3. localStorage ve sessionStorage kontrol et; eğer süresi dolmuşsa veya bilinen eski tokense temizle!
+            string? localTok = await TryExtractAnyStorageTokenAsync(page, cleanExpired);
             if (!string.IsNullOrWhiteSpace(localTok))
             {
                 if (localTok.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) || JwtTokenInspector.IsExpired(localTok))
@@ -178,9 +214,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                     statusCallback?.Invoke("🧹 Süresi dolmuş eski oturum tokeni tarayıcıdan temizleniyor...");
                     await page.EvaluateFunctionAsync(@"() => {
                         try {
-                            localStorage.removeItem('token');
-                            localStorage.removeItem('jwt');
-                            localStorage.removeItem('accessToken');
+                            localStorage.clear();
                             sessionStorage.clear();
                         } catch {}
                     }");
@@ -199,10 +233,8 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 await TryFillLoginFormAsync(page, email, password);
                 await Task.Delay(3000, ct);
 
-                var checkAfterLogin = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
-                if (!string.IsNullOrWhiteSpace(checkAfterLogin) &&
-                    !checkAfterLogin.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
-                    !JwtTokenInspector.IsExpired(checkAfterLogin))
+                var checkAfterLogin = await TryExtractAnyStorageTokenAsync(page, cleanExpired);
+                if (!string.IsNullOrWhiteSpace(checkAfterLogin))
                 {
                     capturedToken = checkAfterLogin;
                 }
@@ -222,13 +254,24 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 await Task.Delay(1000, ct);
                 waited++;
 
-                var loopTok = await TryExtractLocalStorageTokenAsync(page, "token", "jwt", "accessToken");
-                if (!string.IsNullOrWhiteSpace(loopTok) &&
-                    !loopTok.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
-                    !JwtTokenInspector.IsExpired(loopTok))
+                var loopTok = await TryExtractAnyStorageTokenAsync(page, cleanExpired);
+                if (!string.IsNullOrWhiteSpace(loopTok))
                 {
                     capturedToken = loopTok;
                     break;
+                }
+
+                // Sayfa /auth adresinden ayrılıp Dashboard'a ulaştı mı?
+                if (!page.Url.Contains("/auth", StringComparison.OrdinalIgnoreCase) && waited > 3)
+                {
+                    statusCallback?.Invoke("🎉 Giriş başarılı, canlı oturum tokeni alınıyor...");
+                    await Task.Delay(1500, ct);
+                    var postNavTok = await TryExtractAnyStorageTokenAsync(page, cleanExpired);
+                    if (!string.IsNullOrWhiteSpace(postNavTok))
+                    {
+                        capturedToken = postNavTok;
+                        break;
+                    }
                 }
             }
 
@@ -741,6 +784,76 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 await browser.CloseAsync();
             }
         }
+    }
+
+    private static async Task<string?> TryExtractAnyStorageTokenAsync(IPage page, string? cleanExpired = null)
+    {
+        try
+        {
+            // 1. Tüm localStorage ve sessionStorage alanlarını tara
+            string script = @"() => {
+                const jwtRegex = /ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
+                try {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        const v = localStorage.getItem(k);
+                        if (v && v.includes('eyJ')) {
+                            const m = v.match(jwtRegex);
+                            if (m) return m[0];
+                        }
+                    }
+                } catch {}
+                try {
+                    for (let i = 0; i < sessionStorage.length; i++) {
+                        const k = sessionStorage.key(i);
+                        const v = sessionStorage.getItem(k);
+                        if (v && v.includes('eyJ')) {
+                            const m = v.match(jwtRegex);
+                            if (m) return m[0];
+                        }
+                    }
+                } catch {}
+                return '';
+            }";
+
+            string? candidate = await page.EvaluateFunctionAsync<string>(script);
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                candidate = candidate.Trim('\"', '\'', ' ');
+                if (candidate.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                {
+                    candidate = candidate.Substring(7).Trim();
+                }
+
+                if (candidate.Length > 20 &&
+                    !candidate.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                    !JwtTokenInspector.IsExpired(candidate))
+                {
+                    return candidate;
+                }
+            }
+
+            // 2. Çerezleri tara
+            var cookies = await page.GetCookiesAsync();
+            if (cookies != null)
+            {
+                foreach (var c in cookies)
+                {
+                    if (!string.IsNullOrWhiteSpace(c.Value) && c.Value.Contains("eyJ"))
+                    {
+                        string? ext = ExtractJwtFromString(c.Value);
+                        if (!string.IsNullOrWhiteSpace(ext) &&
+                            !ext.Equals(cleanExpired, StringComparison.OrdinalIgnoreCase) &&
+                            !JwtTokenInspector.IsExpired(ext))
+                        {
+                            return ext;
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+        return null;
     }
 
     private static async Task<string?> TryExtractLocalStorageTokenAsync(IPage page, params string[] keys)
