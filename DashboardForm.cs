@@ -1447,6 +1447,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("ai_usage", "AI Token & Bakiye Takip", "📊", "Otomasyon & Araçlar", "YENİ");
+        _sidebarNav.AddItem("orders_shipping", "Sipariş & Kargo Stüdyosu", "🚚", "Otomasyon & Araçlar", "YENİ");
 
         _sidebarNav.AddItem("notifications", "Telegram Bildirim Botu", "✈️", "Sistem", "YENİ");
         _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
@@ -1662,6 +1663,7 @@ internal sealed class DashboardForm : Form
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),
             "ai_usage" => new AiUsageDashboardForm(),
+            "orders_shipping" => new OrderFulfillmentStudioForm(),
             _ => null
         };
 
