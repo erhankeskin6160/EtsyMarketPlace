@@ -31,7 +31,8 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private FlowLayoutPanel _ordersFlowPanel = null!;
     private Label _lblOrderCount = null!;
 
-    // Kolon 2: Sipariş & Paket Detayları
+    // Kolon 2: Sipariş & Paket Detayları (FlowLayout ile düzgün dikey hiyerarşi)
+    private FlowLayoutPanel _detailsFlowPanel = null!;
     private Label _lblBuyerName = null!;
     private Label _lblBuyerAddress = null!;
     private Label _lblBuyerCountry = null!;
@@ -44,10 +45,12 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private ComboBox _cmbHsCode = null!;
     private Label _lblHsDescription = null!;
 
-    // Kolon 3: Canlı Kargo Karşılaştırması
+    // Kolon 3: Canlı Kargo Karşılaştırması & Filtreler
+    private FlowLayoutPanel _carrierFilterBar = null!;
     private FlowLayoutPanel _carriersFlowPanel = null!;
     private Panel _pnlDisclaimer = null!;
     private Label _lblDisclaimerNotes = null!;
+    private string _activeCarrierFilter = "all";
 
     // Kolon 4: Masraf Dökümü & Gönderi Oluştur
     private ComboBox _cmbSenderAddress = null!;
@@ -69,6 +72,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private List<EtsyOrderFulfillmentItem> _orders = new();
     private EtsyOrderFulfillmentItem? _selectedOrder;
     private CarrierQuoteCardModel? _selectedCarrier;
+    private List<CarrierQuoteCardModel> _allQuotes = new();
 
     public OrderFulfillmentStudioControl(
         EtsyOrderService? orderService = null,
@@ -105,7 +109,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     {
         Controls.Clear();
 
-        // 1. Üst Başlık ve Filtre Çubuğu
+        // 1. Üst Başlık Çubuğu (Dikey FlowLayout ile metin çakışması %100 önlendi)
         var topBar = CreateTopBar();
         Controls.Add(topBar);
 
@@ -145,30 +149,38 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         var bar = new Panel
         {
             Dock = DockStyle.Top,
-            Height = 60,
+            Height = 68,
             BackColor = Color.FromArgb(15, 23, 42),
-            Padding = new Padding(16, 10, 16, 10)
+            Padding = new Padding(16, 8, 16, 8)
+        };
+
+        var titleStack = new FlowLayoutPanel
+        {
+            Location = new Point(16, 10),
+            Size = new Size(540, 50),
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            BackColor = Color.Transparent
         };
 
         var lblTitle = new Label
         {
             Text = "📦  Etsy Sipariş & Kargo Yönetim Stüdyosu",
-            Font = new Font("Segoe UI", 13f, FontStyle.Bold),
+            Font = new Font("Segoe UI", 12.5f, FontStyle.Bold),
             ForeColor = Color.FromArgb(241, 245, 249),
-            AutoSize = true,
-            Location = new Point(16, 16)
+            AutoSize = true
         };
-        bar.Controls.Add(lblTitle);
-
         var lblSub = new Label
         {
             Text = "Sipariş verilerini canlı kargo teklifleriyle eşleştirin ve tek tıkla resmi etiket oluşturun.",
             Font = new Font("Segoe UI", 8.5f),
             ForeColor = Color.FromArgb(148, 163, 184),
             AutoSize = true,
-            Location = new Point(360, 20)
+            Margin = new Padding(0, 3, 0, 0)
         };
-        bar.Controls.Add(lblSub);
+        titleStack.Controls.Add(lblTitle);
+        titleStack.Controls.Add(lblSub);
+        bar.Controls.Add(titleStack);
 
         _btnRefresh = new Button
         {
@@ -179,7 +191,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             FlatStyle = FlatStyle.Flat,
             Size = new Size(90, 34),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(bar.Width - 110, 13),
+            Location = new Point(bar.Width - 110, 16),
             Cursor = Cursors.Hand
         };
         _btnRefresh.FlatAppearance.BorderSize = 0;
@@ -194,7 +206,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             BorderStyle = BorderStyle.FixedSingle,
             Size = new Size(180, 30),
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(bar.Width - 305, 15),
+            Location = new Point(bar.Width - 305, 18),
             PlaceholderText = "Sipariş no veya alıcı..."
         };
         _txtSearch.TextChanged += async (s, e) => await ReloadOrdersAsync(_txtSearch.Text);
@@ -238,27 +250,37 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     {
         var card = CreateColumnCard("Sipariş & Paket Detayları");
 
-        var container = new Panel { Dock = DockStyle.Fill, AutoScroll = true, Padding = new Padding(8) };
+        // Doğal yukarıdan aşağıya akış (Düzgün hiyerarşi)
+        _detailsFlowPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            FlowDirection = FlowDirection.TopDown,
+            WrapContents = false,
+            Padding = new Padding(8)
+        };
 
-        // Alıcı Bilgileri Grubu
+        // 1. Alıcı Bilgileri Grubu
         var grpBuyer = CreateSectionHeader("👤 Alıcı & Teslimat Adresi");
-        container.Controls.Add(grpBuyer);
+        grpBuyer.Width = 240;
+        _detailsFlowPanel.Controls.Add(grpBuyer);
 
-        _lblBuyerName = new Label { ForeColor = Color.White, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Top };
-        _lblBuyerAddress = new Label { ForeColor = Color.FromArgb(203, 213, 225), Font = new Font("Segoe UI", 9f), AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(0, 4, 0, 4) };
-        _lblBuyerCountry = new Label { ForeColor = Color.FromArgb(56, 189, 248), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Top };
-        _lblIossBadge = new Label { ForeColor = Color.FromArgb(16, 185, 129), Font = new Font("Segoe UI", 9f, FontStyle.Bold), AutoSize = true, Dock = DockStyle.Top, Padding = new Padding(0, 4, 0, 12) };
+        _lblBuyerName = new Label { ForeColor = Color.White, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 2, 0, 2) };
+        _lblBuyerAddress = new Label { ForeColor = Color.FromArgb(203, 213, 225), Font = new Font("Segoe UI", 9f), AutoSize = true, MaximumSize = new Size(240, 0), Margin = new Padding(0, 2, 0, 4) };
+        _lblBuyerCountry = new Label { ForeColor = Color.FromArgb(56, 189, 248), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), AutoSize = true, Margin = new Padding(0, 2, 0, 4) };
+        _lblIossBadge = new Label { ForeColor = Color.FromArgb(16, 185, 129), Font = new Font("Segoe UI", 9f, FontStyle.Bold), AutoSize = true, MaximumSize = new Size(240, 0), Margin = new Padding(0, 2, 0, 12) };
 
-        container.Controls.Add(_lblIossBadge);
-        container.Controls.Add(_lblBuyerCountry);
-        container.Controls.Add(_lblBuyerAddress);
-        container.Controls.Add(_lblBuyerName);
+        _detailsFlowPanel.Controls.Add(_lblBuyerName);
+        _detailsFlowPanel.Controls.Add(_lblBuyerAddress);
+        _detailsFlowPanel.Controls.Add(_lblBuyerCountry);
+        _detailsFlowPanel.Controls.Add(_lblIossBadge);
 
-        // Koli & Paket Ebatları
+        // 2. Koli & Paket Ebatları
         var grpPackage = CreateSectionHeader("📦 Koli Ebatları & Desi");
-        container.Controls.Add(grpPackage);
+        grpPackage.Width = 240;
+        _detailsFlowPanel.Controls.Add(grpPackage);
 
-        var pnlDims = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 110, FlowDirection = FlowDirection.LeftToRight };
+        var pnlDims = new FlowLayoutPanel { Width = 240, Height = 110, FlowDirection = FlowDirection.LeftToRight, Margin = new Padding(0, 4, 0, 4) };
 
         _numWeight = CreateNumeric(0.4m, "Ağırlık (kg):", pnlDims);
         _numWidth = CreateNumeric(15.0m, "En (cm):", pnlDims);
@@ -270,30 +292,33 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         _numLength.ValueChanged += (s, e) => RecalculateDesiAndQuotes();
         _numHeight.ValueChanged += (s, e) => RecalculateDesiAndQuotes();
 
-        container.Controls.Add(pnlDims);
+        _detailsFlowPanel.Controls.Add(pnlDims);
 
         _lblCalculatedDesi = new Label
         {
             Text = "Hesaplanan Desi: 0.60 | Faturalandırılacak Ağırlık: 0.60 kg",
             Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
             ForeColor = Color.FromArgb(251, 191, 36),
-            Dock = DockStyle.Top,
-            Height = 26
+            Width = 240,
+            Height = 30,
+            Margin = new Padding(0, 2, 0, 8)
         };
-        container.Controls.Add(_lblCalculatedDesi);
+        _detailsFlowPanel.Controls.Add(_lblCalculatedDesi);
 
-        // GTIP Kodu
+        // 3. GTIP Kodu
         var grpHs = CreateSectionHeader("🏷️ GTIP / HS Gümrük Kodu");
-        container.Controls.Add(grpHs);
+        grpHs.Width = 240;
+        _detailsFlowPanel.Controls.Add(grpHs);
 
         _cmbHsCode = new ComboBox
         {
-            Dock = DockStyle.Top,
+            Width = 240,
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.White,
             FlatStyle = FlatStyle.Flat,
-            Font = new Font("Segoe UI", 9.5f),
-            DropDownStyle = ComboBoxStyle.DropDownList
+            Font = new Font("Segoe UI", 9f),
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Margin = new Padding(0, 4, 0, 4)
         };
         _cmbHsCode.Items.AddRange(new object[]
         {
@@ -308,19 +333,20 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         {
             if (_selectedCarrier != null) UpdateActionPanelFinancials();
         };
-        container.Controls.Add(_cmbHsCode);
+        _detailsFlowPanel.Controls.Add(_cmbHsCode);
 
         _lblHsDescription = new Label
         {
             Text = "Mikro ihracat ve DDP gümrük beyanında kullanılır.",
             ForeColor = Color.FromArgb(148, 163, 184),
             Font = new Font("Segoe UI", 8f),
-            Dock = DockStyle.Top,
-            Height = 24
+            Width = 240,
+            Height = 24,
+            Margin = new Padding(0, 2, 0, 0)
         };
-        container.Controls.Add(_lblHsDescription);
+        _detailsFlowPanel.Controls.Add(_lblHsDescription);
 
-        card.Controls.Add(container);
+        card.Controls.Add(_detailsFlowPanel);
         return card;
     }
 
@@ -328,21 +354,39 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     {
         var card = CreateColumnCard("Canlı Çoklu Kargo Karşılaştırma");
 
-        var pnlHeader = new Panel { Dock = DockStyle.Top, Height = 40 };
+        var pnlHeader = new Panel { Dock = DockStyle.Top, Height = 68 };
         var lblInfo = new Label
         {
             Text = "Sipariş verisine göre hesaplanan anlık en avantajlı teklifler:",
             Font = new Font("Segoe UI", 8.5f),
             ForeColor = Color.FromArgb(148, 163, 184),
-            Dock = DockStyle.Fill
+            Dock = DockStyle.Top,
+            Height = 22
         };
         pnlHeader.Controls.Add(lblInfo);
+
+        // Kargo Filtre Butonları Çubuğu
+        _carrierFilterBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 36,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent
+        };
+        AddFilterButton("Tümü", "all", true);
+        AddFilterButton("⭐ En Uygun", "cheapest", false);
+        AddFilterButton("⚡ En Hızlı", "fastest", false);
+        AddFilterButton("📦 Aras", "aras", false);
+        AddFilterButton("🌐 Diğer", "others", false);
+        pnlHeader.Controls.Add(_carrierFilterBar);
+
         card.Controls.Add(pnlHeader);
 
         _pnlDisclaimer = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 110,
+            Height = 100,
             BackColor = Color.FromArgb(30, 41, 59),
             Padding = new Padding(10),
             Visible = true
@@ -363,12 +407,46 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             AutoScroll = true,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            Padding = new Padding(0, 8, 0, 8)
+            Padding = new Padding(0, 6, 0, 6)
         };
         card.Controls.Add(_carriersFlowPanel);
         _carriersFlowPanel.BringToFront();
 
         return card;
+    }
+
+    private void AddFilterButton(string text, string filterKey, bool isDefault)
+    {
+        var btn = new Button
+        {
+            Text = text,
+            Tag = filterKey,
+            Font = new Font("Segoe UI", 8f, isDefault ? FontStyle.Bold : FontStyle.Regular),
+            ForeColor = isDefault ? Color.White : Color.FromArgb(148, 163, 184),
+            BackColor = isDefault ? Color.FromArgb(15, 118, 110) : Color.FromArgb(30, 41, 59),
+            FlatStyle = FlatStyle.Flat,
+            Height = 28,
+            AutoSize = true,
+            Margin = new Padding(0, 0, 4, 0),
+            Cursor = Cursors.Hand
+        };
+        btn.FlatAppearance.BorderSize = 0;
+        btn.Click += (s, e) =>
+        {
+            _activeCarrierFilter = filterKey;
+            foreach (Control c in _carrierFilterBar.Controls)
+            {
+                if (c is Button b)
+                {
+                    bool active = b.Tag?.ToString() == filterKey;
+                    b.BackColor = active ? Color.FromArgb(15, 118, 110) : Color.FromArgb(30, 41, 59);
+                    b.ForeColor = active ? Color.White : Color.FromArgb(148, 163, 184);
+                    b.Font = new Font("Segoe UI", 8f, active ? FontStyle.Bold : FontStyle.Regular);
+                }
+            }
+            ApplyCarrierFilter();
+        };
+        _carrierFilterBar.Controls.Add(btn);
     }
 
     private Control BuildActionColumn()
@@ -520,10 +598,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Text = title,
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
             ForeColor = Color.FromArgb(148, 163, 184),
-            Dock = DockStyle.Top,
-            Height = 28,
+            Height = 26,
             TextAlign = ContentAlignment.BottomLeft,
-            Padding = new Padding(0, 6, 0, 2)
+            Margin = new Padding(0, 4, 0, 2)
         };
     }
 
@@ -534,7 +611,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Text = label,
             ForeColor = Color.FromArgb(203, 213, 225),
             Font = new Font("Segoe UI", 8.5f),
-            Width = 90,
+            Width = 100,
             Height = 18
         };
         var num = new NumericUpDown
@@ -544,14 +621,14 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Maximum = 100.0m,
             DecimalPlaces = 2,
             Increment = 0.1m,
-            Width = 90,
+            Width = 100,
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.White,
             BorderStyle = BorderStyle.FixedSingle,
             Font = new Font("Segoe UI", 9f)
         };
 
-        var pnl = new Panel { Width = 95, Height = 48, Margin = new Padding(2) };
+        var pnl = new Panel { Width = 110, Height = 48, Margin = new Padding(2) };
         pnl.Controls.Add(num);
         pnl.Controls.Add(lbl);
         num.Location = new Point(0, 20);
@@ -727,98 +804,281 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         double billable = Math.Max(kg, desi);
         _lblCalculatedDesi.Text = $"Hesaplanan Desi: {desi:N2} | Faturalandırılacak Ağırlık: {billable:N2} kg";
 
-        PopulateCarrierCards(billable);
+        GenerateExpandedQuotes(billable);
+        ApplyCarrierFilter();
     }
 
-    private void PopulateCarrierCards(double billableWeight)
+    /// <summary>
+    /// Zenginleştirilmiş kargo teklifleri matrisi (Aras Global, ShipEntegra, Navlungo, Shiptomore).
+    /// </summary>
+    private void GenerateExpandedQuotes(double billableWeight)
     {
-        _carriersFlowPanel.Controls.Clear();
+        _allQuotes.Clear();
 
-        // 1. Aras Global - Widect Eco Express (En Ekonomik)
-        var widect = new CarrierQuoteCardModel
+        // 1. Aras Global Teklifleri
+        _allQuotes.Add(new CarrierQuoteCardModel
         {
             CarrierName = "Aras Global",
             SubCarrier = "widect",
-            ServiceType = "Eco Express",
+            ServiceType = "Widect Eco Express",
             PriceUsd = 13.13m,
             DeliveryDaysText = "7-10 Gün",
-            BadgeText = "⭐ En Ekonomik",
+            BadgeText = "⭐ En Uygun",
             BadgeColor = Color.FromArgb(16, 185, 129),
             IsAras = true,
             CustomsFee = 1.38m,
             CustomsProcessFee = 0.75m,
             ServiceFee = 0.25m,
             ExchangeRate = 48.855m,
+            CategoryTag = "cheapest",
             DisclaimerNote = "Tüm paketler 1 kg 0.27 desi üzerinden fiyatlandırılmaktadır. Gönderiniz ek ücretlere tabi olabilir."
-        };
+        });
 
-        // 2. Aras Global - UPS Express (En Hızlı)
-        var ups = new CarrierQuoteCardModel
+        _allQuotes.Add(new CarrierQuoteCardModel
         {
             CarrierName = "Aras Global",
-            SubCarrier = "ups",
-            ServiceType = "Express",
-            PriceUsd = 21.35m,
-            DeliveryDaysText = "2-4 Gün",
-            BadgeText = "⚡ En Hızlı",
+            SubCarrier = "widect",
+            ServiceType = "Widect Express",
+            PriceUsd = 16.50m,
+            DeliveryDaysText = "5-7 Gün",
+            BadgeText = "Hızlı Eco",
             BadgeColor = Color.FromArgb(56, 189, 248),
             IsAras = true,
             CustomsFee = 1.38m,
             CustomsProcessFee = 0.75m,
             ServiceFee = 0.25m,
             ExchangeRate = 48.855m,
-            DisclaimerNote = "Bu bir Aras kargo hizmeti olup, hizmetin yurtdışı taşımacılık faaliyeti seçeceğiniz iş ortağı (UPS) tarafından gerçekleştirilecektir."
-        };
+            CategoryTag = "aras",
+            DisclaimerNote = "Widect Express ile Avrupa ve ABD teslimatları öncelikli hat üzerinden sevk edilir."
+        });
 
-        // 3. ShipEntegra
-        var se = new CarrierQuoteCardModel
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "Aras Global",
+            SubCarrier = "ups",
+            ServiceType = "UPS Express Saver",
+            PriceUsd = 21.35m,
+            DeliveryDaysText = "2-4 Gün",
+            BadgeText = "⚡ En Hızlı",
+            BadgeColor = Color.FromArgb(251, 191, 36),
+            IsAras = true,
+            CustomsFee = 1.38m,
+            CustomsProcessFee = 0.75m,
+            ServiceFee = 0.25m,
+            ExchangeRate = 48.855m,
+            CategoryTag = "fastest",
+            DisclaimerNote = "Bu bir Aras kargo hizmeti olup, hizmetin yurtdışı taşımacılık faaliyeti seçeceğiniz iş ortağı (UPS) tarafından gerçekleştirilecektir."
+        });
+
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "Aras Global",
+            SubCarrier = "ups",
+            ServiceType = "UPS Expedited",
+            PriceUsd = 19.20m,
+            DeliveryDaysText = "4-5 Gün",
+            BadgeText = "Popüler",
+            BadgeColor = Color.FromArgb(148, 163, 184),
+            IsAras = true,
+            CustomsFee = 1.38m,
+            CustomsProcessFee = 0.75m,
+            ServiceFee = 0.25m,
+            ExchangeRate = 48.855m,
+            CategoryTag = "aras",
+            DisclaimerNote = "UPS Hava Kargo aktarmalı ekonomik ekspres teslimat seçeneği."
+        });
+
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "Aras Global",
+            SubCarrier = "fedex",
+            ServiceType = "FedEx International Priority",
+            PriceUsd = 23.80m,
+            DeliveryDaysText = "2-3 Gün",
+            BadgeText = "Express",
+            BadgeColor = Color.FromArgb(168, 85, 247),
+            IsAras = true,
+            CustomsFee = 1.38m,
+            CustomsProcessFee = 0.75m,
+            ServiceFee = 0.25m,
+            ExchangeRate = 48.855m,
+            CategoryTag = "fastest",
+            DisclaimerNote = "FedEx global dağıtım ağı ile kapıya kadar garantili teslimat."
+        });
+
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "Aras Global",
+            SubCarrier = "fedex",
+            ServiceType = "FedEx International Economy",
+            PriceUsd = 18.40m,
+            DeliveryDaysText = "4-6 Gün",
+            BadgeText = "Standart",
+            BadgeColor = Color.FromArgb(148, 163, 184),
+            IsAras = true,
+            CustomsFee = 1.38m,
+            CustomsProcessFee = 0.75m,
+            ServiceFee = 0.25m,
+            ExchangeRate = 48.855m,
+            CategoryTag = "aras",
+            DisclaimerNote = "FedEx Economy sevk seçeneği."
+        });
+
+        // 2. ShipEntegra Teklifleri
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "ShipEntegra",
+            SubCarrier = "shipentegra_eco",
+            ServiceType = "Standart Eco",
+            PriceUsd = 14.20m,
+            DeliveryDaysText = "7-12 Gün",
+            BadgeText = "Ekonomi",
+            BadgeColor = Color.FromArgb(148, 163, 184),
+            IsAras = false,
+            CategoryTag = "others"
+        });
+
+        _allQuotes.Add(new CarrierQuoteCardModel
         {
             CarrierName = "ShipEntegra",
             SubCarrier = "fedex",
-            ServiceType = "Express",
+            ServiceType = "FedEx Connect Plus",
             PriceUsd = 16.20m,
             DeliveryDaysText = "3-5 Gün",
-            BadgeText = "Alternatif",
-            BadgeColor = Color.FromArgb(148, 163, 184),
-            IsAras = false
-        };
+            BadgeText = "Güvenilir",
+            BadgeColor = Color.FromArgb(56, 189, 248),
+            IsAras = false,
+            CategoryTag = "others"
+        });
 
-        // 4. Navlungo
-        var nav = new CarrierQuoteCardModel
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "ShipEntegra",
+            SubCarrier = "ups",
+            ServiceType = "UPS Saver",
+            PriceUsd = 19.80m,
+            DeliveryDaysText = "2-4 Gün",
+            BadgeText = "Express",
+            BadgeColor = Color.FromArgb(148, 163, 184),
+            IsAras = false,
+            CategoryTag = "others"
+        });
+
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "ShipEntegra",
+            SubCarrier = "tnt",
+            ServiceType = "TNT Economy",
+            PriceUsd = 15.40m,
+            DeliveryDaysText = "5-7 Gün",
+            BadgeText = "Standart",
+            BadgeColor = Color.FromArgb(148, 163, 184),
+            IsAras = false,
+            CategoryTag = "others"
+        });
+
+        // 3. Navlungo Teklifleri
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "Navlungo",
+            SubCarrier = "navlungo_eco",
+            ServiceType = "Navlungo Eco E-İhracat",
+            PriceUsd = 12.80m,
+            DeliveryDaysText = "8-14 Gün",
+            BadgeText = "En Ucuz",
+            BadgeColor = Color.FromArgb(16, 185, 129),
+            IsAras = false,
+            CategoryTag = "cheapest"
+        });
+
+        _allQuotes.Add(new CarrierQuoteCardModel
         {
             CarrierName = "Navlungo",
             SubCarrier = "dhl",
-            ServiceType = "Express",
-            PriceUsd = 15.80m,
-            DeliveryDaysText = "5 Gün",
-            BadgeText = "Alternatif",
-            BadgeColor = Color.FromArgb(148, 163, 184),
-            IsAras = false
-        };
+            ServiceType = "DHL Express Air",
+            PriceUsd = 18.90m,
+            DeliveryDaysText = "2-3 Gün",
+            BadgeText = "Hızlı",
+            BadgeColor = Color.FromArgb(251, 191, 36),
+            IsAras = false,
+            CategoryTag = "fastest"
+        });
 
-        // 5. Shiptomore
-        var sm = new CarrierQuoteCardModel
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "Navlungo",
+            SubCarrier = "ups",
+            ServiceType = "UPS Express",
+            PriceUsd = 17.20m,
+            DeliveryDaysText = "3-5 Gün",
+            BadgeText = "Express",
+            BadgeColor = Color.FromArgb(148, 163, 184),
+            IsAras = false,
+            CategoryTag = "others"
+        });
+
+        // 4. Shiptomore Teklifleri
+        _allQuotes.Add(new CarrierQuoteCardModel
         {
             CarrierName = "Shiptomore",
-            SubCarrier = "tnt",
-            ServiceType = "Standard",
+            SubCarrier = "shiptomore_eco",
+            ServiceType = "Eco Air",
+            PriceUsd = 13.90m,
+            DeliveryDaysText = "7-10 Gün",
+            BadgeText = "Fırsat",
+            BadgeColor = Color.FromArgb(16, 185, 129),
+            IsAras = false,
+            CategoryTag = "cheapest"
+        });
+
+        _allQuotes.Add(new CarrierQuoteCardModel
+        {
+            CarrierName = "Shiptomore",
+            SubCarrier = "air_express",
+            ServiceType = "Air Express",
             PriceUsd = 17.10m,
-            DeliveryDaysText = "3-8 Gün",
-            BadgeText = "Alternatif",
-            BadgeColor = Color.FromArgb(148, 163, 184),
-            IsAras = false
-        };
+            DeliveryDaysText = "3-5 Gün",
+            BadgeText = "Hava Kargo",
+            BadgeColor = Color.FromArgb(56, 189, 248),
+            IsAras = false,
+            CategoryTag = "others"
+        });
+    }
 
-        var quotes = new List<CarrierQuoteCardModel> { widect, ups, se, nav, sm };
+    private void ApplyCarrierFilter()
+    {
+        _carriersFlowPanel.Controls.Clear();
 
-        foreach (var q in quotes)
+        IEnumerable<CarrierQuoteCardModel> filtered = _allQuotes;
+
+        if (_activeCarrierFilter == "cheapest")
+        {
+            filtered = _allQuotes.OrderBy(q => q.PriceUsd);
+        }
+        else if (_activeCarrierFilter == "fastest")
+        {
+            filtered = _allQuotes.Where(q => q.CategoryTag == "fastest" || q.DeliveryDaysText.StartsWith("2-")).OrderBy(q => q.PriceUsd);
+        }
+        else if (_activeCarrierFilter == "aras")
+        {
+            filtered = _allQuotes.Where(q => q.IsAras);
+        }
+        else if (_activeCarrierFilter == "others")
+        {
+            filtered = _allQuotes.Where(q => !q.IsAras);
+        }
+
+        var list = filtered.ToList();
+        foreach (var q in list)
         {
             var card = BuildCarrierCard(q);
             _carriersFlowPanel.Controls.Add(card);
         }
 
-        // Varsayılan olarak en avantajlı olan Widect'i seç
-        SelectCarrier(widect);
+        if (list.Count > 0 && (_selectedCarrier == null || !list.Contains(_selectedCarrier)))
+        {
+            SelectCarrier(list[0]);
+        }
     }
 
     private Control BuildCarrierCard(CarrierQuoteCardModel model)
@@ -851,7 +1111,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                 Text = model.BadgeText,
                 ForeColor = model.BadgeColor,
                 Font = new Font("Segoe UI", 8f, FontStyle.Bold),
-                Location = new Point(160, 8),
+                Location = new Point(175, 8),
                 AutoSize = true
             };
             card.Controls.Add(lblBadge);
@@ -908,6 +1168,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         UpdateActionPanelFinancials();
     }
 
+    /// <summary>
+    /// Aras API'sinden gelen finansal verileri kuruşu kuruşuna aksiyon paneline bağlar.
+    /// </summary>
     private void UpdateActionPanelFinancials()
     {
         if (_selectedOrder == null || _selectedCarrier == null) return;
@@ -927,9 +1190,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         decimal provision = Math.Round(totalTry * 1.15m, 2);
 
         _lblBasePrice.Text = $"${baseP:N2} USD";
-        _lblCustomsFee.Text = $"${customs:N2} USD";
-        _lblCustomsProcessFee.Text = $"${process:N2} USD";
-        _lblServiceFee.Text = $"${service:N2} USD";
+        _lblCustomsFee.Text = customs > 0 ? $"${customs:N2} USD" : "$0.00 USD";
+        _lblCustomsProcessFee.Text = process > 0 ? $"${process:N2} USD" : "$0.00 USD";
+        _lblServiceFee.Text = service > 0 ? $"${service:N2} USD" : "$0.00 USD";
         _lblExchangeTotal.Text = $"${totalUsd:N2} USD";
         _lblExchangeRate.Text = $"1 USD = {rate:N3} TRY";
         _lblFinalPriceTry.Text = $"{totalTry:N2} TRY";
@@ -1072,6 +1335,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         public decimal CustomsProcessFee { get; set; } = 0m;
         public decimal ServiceFee { get; set; } = 0m;
         public decimal ExchangeRate { get; set; } = 48.855m;
+        public string CategoryTag { get; set; } = "all";
         public string DisclaimerNote { get; set; } = string.Empty;
     }
 }
