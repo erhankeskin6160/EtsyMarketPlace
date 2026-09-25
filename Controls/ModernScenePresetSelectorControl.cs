@@ -49,14 +49,14 @@ internal sealed class ModernScenePresetSelectorControl : Panel
 
     public override Size GetPreferredSize(Size proposedSize)
     {
-        return new Size(Width > 0 ? Width : 328, 216);
+        return new Size(Width > 0 ? Width : 328, 222);
     }
 
     public ModernScenePresetSelectorControl()
     {
         DoubleBuffered = true;
         Width = 328;
-        Height = 216;
+        Height = 222;
         AutoSize = false;
         BackColor = Color.Transparent;
         Margin = new Padding(0, 0, 0, 8);
@@ -69,7 +69,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             Margin = Padding.Empty,
             Padding = Padding.Empty
         };
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));  // 2 satır kategori hapları
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));  // 2 satır kategori hapları (alt satıra ferah margin-bottom)
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 138)); // 3 satır x 2 sütun kart ızgarası
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));  // Aktif özet şeridi
         Controls.Add(mainLayout);
@@ -82,11 +82,12 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             WrapContents = true,
             AutoScroll = false,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 1, 0, 2)
+            Padding = new Padding(0, 1, 0, 4)
         };
 
         foreach (var (key, label) in Categories)
         {
+            bool isBottomRow = key is "Artisan & Rustik" or "Stüdyo & Katalog" or "Trend & Mevsim";
             var btnCat = new Button
             {
                 Text = label,
@@ -95,7 +96,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
                 FlatStyle = FlatStyle.Flat,
                 Font = new Font("Segoe UI Semibold", 7.8F, FontStyle.Bold),
                 Cursor = Cursors.Hand,
-                Margin = new Padding(0, 1, 4, 3),
+                Margin = new Padding(0, 1, 4, isBottomRow ? 8 : 4),
                 Tag = key
             };
             btnCat.FlatAppearance.BorderSize = 0;
@@ -122,7 +123,7 @@ internal sealed class ModernScenePresetSelectorControl : Panel
             ForeColor = Color.White,
             Font = new Font("Segoe UI Semibold", 7.8F, FontStyle.Bold),
             Cursor = Cursors.Hand,
-            Margin = new Padding(2, 1, 0, 3)
+            Margin = new Padding(2, 1, 0, 8)
         };
         _btnRandom.FlatAppearance.BorderSize = 0;
         _btnRandom.Click += (_, _) => SelectRandomPreset();

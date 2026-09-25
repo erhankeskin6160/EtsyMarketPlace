@@ -238,7 +238,7 @@ internal sealed class BatchStudioPanelControl : UserControl
         var presetSelector = new ModernScenePresetSelectorControl
         {
             Width = 328,
-            Height = 216,
+            Height = 222,
             Margin = new Padding(0, 2, 0, 8)
         };
         presetSelector.PresetSelected += (_, preset) =>
