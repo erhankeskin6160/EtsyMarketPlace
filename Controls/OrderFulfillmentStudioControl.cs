@@ -26,6 +26,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private readonly ArasGlobalPricingService _arasPricingService;
     private readonly ArasGlobalApiClient _arasApiClient;
     private readonly IShippingSessionManager _sessionManager;
+    private readonly ShipEntegraPricingService _shipEntegraPricingService;
+    private readonly INavlungoApiClient _navlungoApiClient;
+    private readonly IShiptomoreApiClient _shiptomoreApiClient;
 
     // Üst Bar Bileşenleri
     private Button _tabOrders = null!;
@@ -51,8 +54,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
 
     // Kolon 3: Package Customization / Live Multi-Carrier Shipping Comparison
     private FlowLayoutPanel _carriersFlowPanel = null!;
+    private FlowLayoutPanel _pnlFilterPills = null!;
     private Panel _pnlDisclaimer = null!;
     private Label _lblDisclaimerNotes = null!;
+    private string _selectedCarrierFilter = "Tümü";
 
     // Kolon 4: Action Panel (Shipment Actions)
     private ComboBox _cmbSenderAddress = null!;
@@ -73,6 +78,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     private EtsyOrderFulfillmentItem? _selectedOrder;
     private CarrierQuoteCardModel? _selectedCarrier;
     private List<CarrierQuoteCardModel> _allQuotes = new();
+    public decimal UsdTryRate { get; set; } = 48.855m;
 
     public OrderFulfillmentStudioControl(
         EtsyOrderService? orderService = null,
@@ -84,6 +90,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         _arasApiClient = new ArasGlobalApiClient();
         _arasPricingService = arasPricingService ?? new ArasGlobalPricingService(_arasApiClient);
         _sessionManager = sessionManager ?? new PuppeteerShippingSessionManager();
+        _shipEntegraPricingService = new ShipEntegraPricingService();
+        _navlungoApiClient = new NavlungoApiClient();
+        _shiptomoreApiClient = new ShiptomoreApiClient();
 
         _creationManager = creationManager ?? new ShipmentCreationManager(new IShipmentCreationProvider[]
         {
@@ -297,24 +306,12 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         };
         pnlHeader.Controls.Add(lblTitle);
 
-        var btnSearchIcon = new Button
-        {
-            Text = "🔍",
-            Size = new Size(28, 28),
-            Location = new Point(lblTitle.Right + 90, 6),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(21, 30, 48),
-            ForeColor = Color.FromArgb(148, 163, 184),
-            Cursor = Cursors.Hand
-        };
-        btnSearchIcon.FlatAppearance.BorderSize = 0;
-        btnSearchIcon.Click += (s, e) => { _txtSearch.Focus(); };
-
         var btnAddIcon = new Button
         {
-            Text = "➕",
+            Text = "🔄",
             Size = new Size(28, 28),
-            Location = new Point(btnSearchIcon.Right + 6, 6),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(pnlHeader.Width - 32, 6),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(21, 30, 48),
             ForeColor = Color.FromArgb(148, 163, 184),
@@ -323,8 +320,27 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         btnAddIcon.FlatAppearance.BorderSize = 0;
         btnAddIcon.Click += async (s, e) => await ReloadOrdersAsync();
 
+        var btnSearchIcon = new Button
+        {
+            Text = "🔍",
+            Size = new Size(28, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(pnlHeader.Width - 64, 6),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(21, 30, 48),
+            ForeColor = Color.FromArgb(148, 163, 184),
+            Cursor = Cursors.Hand
+        };
+        btnSearchIcon.FlatAppearance.BorderSize = 0;
+        btnSearchIcon.Click += (s, e) => { _txtSearch.Focus(); };
+
         pnlHeader.Controls.Add(btnSearchIcon);
         pnlHeader.Controls.Add(btnAddIcon);
+        pnlHeader.SizeChanged += (s, e) =>
+        {
+            btnAddIcon.Location = new Point(pnlHeader.Width - 32, 6);
+            btnSearchIcon.Location = new Point(pnlHeader.Width - 64, 6);
+        };
         colPanel.Controls.Add(pnlHeader);
 
         _lblOrderCount = new Label
@@ -455,8 +471,8 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         _inputWeight = new SaasUnitInputBox("Weight", "0.40", "kg") { Width = 110 };
         _inputDims = new SaasUnitInputBox("Dimensions", "20x15x10", "cm") { Width = 114, Margin = new Padding(6, 0, 0, 0) };
 
-        _inputWeight.ValueChanged += (s, e) => RecalculateDesiAndQuotes();
-        _inputDims.ValueChanged += (s, e) => RecalculateDesiAndQuotes();
+        _inputWeight.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
+        _inputDims.ValueChanged += (s, e) => _ = RecalculateDesiAndQuotesAsync();
 
         pnlDimsRow.Controls.Add(_inputWeight);
         pnlDimsRow.Controls.Add(_inputDims);
@@ -520,15 +536,15 @@ public sealed class OrderFulfillmentStudioControl : UserControl
     {
         var colPanel = new Panel { Dock = DockStyle.Fill, Margin = new Padding(4) };
 
-        // Üst Başlık & Açıklamalar
-        var pnlHeader = new Panel { Dock = DockStyle.Top, Height = 74, BackColor = Color.Transparent };
+        // Üst Başlık & Açıklamalar & Filtre Hapları
+        var pnlHeader = new Panel { Dock = DockStyle.Top, Height = 104, BackColor = Color.Transparent };
 
         var lblMainTitle = new Label
         {
             Text = "Package Customization",
             Font = new Font("Segoe UI", 12f, FontStyle.Bold),
             ForeColor = Color.FromArgb(248, 250, 252),
-            Location = new Point(4, 6),
+            Location = new Point(4, 4),
             AutoSize = true
         };
         var lblSubTitle = new Label
@@ -536,7 +552,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Text = "Live Multi-Carrier Shipping Comparison",
             Font = new Font("Segoe UI", 9f, FontStyle.Bold),
             ForeColor = Color.FromArgb(56, 189, 248),
-            Location = new Point(4, 28),
+            Location = new Point(4, 25),
             AutoSize = true
         };
         var lblDesc = new Label
@@ -544,13 +560,57 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             Text = "Real-time rate quotes from omnicommercial carriers and multi-carrier shipping",
             Font = new Font("Segoe UI", 7.8f),
             ForeColor = Color.FromArgb(100, 116, 139),
-            Location = new Point(4, 48),
-            Size = new Size(260, 24)
+            Location = new Point(4, 45),
+            Size = new Size(270, 22)
         };
+
+        // Filtreleme Hapları (Pills)
+        _pnlFilterPills = new FlowLayoutPanel
+        {
+            Location = new Point(2, 70),
+            Size = new Size(340, 30),
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Margin = new Padding(0)
+        };
+
+        string[] filterNames = { "Tümü", "Aras Global", "ShipEntegra", "Navlungo", "Shiptomore" };
+        foreach (var fname in filterNames)
+        {
+            var btnPill = new Button
+            {
+                Text = fname,
+                Tag = fname,
+                Height = 26,
+                AutoSize = true,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI Semibold", 7.8f, FontStyle.Bold),
+                Cursor = Cursors.Hand,
+                Margin = new Padding(0, 0, 4, 0),
+                Padding = new Padding(6, 0, 6, 0)
+            };
+            btnPill.FlatAppearance.BorderSize = 1;
+            UpdatePillStyle(btnPill, fname == _selectedCarrierFilter);
+            btnPill.Click += (s, e) =>
+            {
+                _selectedCarrierFilter = (string)((Button)s!).Tag!;
+                foreach (Control c in _pnlFilterPills.Controls)
+                {
+                    if (c is Button b)
+                    {
+                        UpdatePillStyle(b, (string)b.Tag! == _selectedCarrierFilter);
+                    }
+                }
+                RenderCarrierCards();
+            };
+            _pnlFilterPills.Controls.Add(btnPill);
+        }
 
         pnlHeader.Controls.Add(lblMainTitle);
         pnlHeader.Controls.Add(lblSubTitle);
         pnlHeader.Controls.Add(lblDesc);
+        pnlHeader.Controls.Add(_pnlFilterPills);
         colPanel.Controls.Add(pnlHeader);
 
         // Canlı Teklif Kartları Listesi
@@ -562,6 +622,18 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             WrapContents = false,
             Padding = new Padding(0, 4, 4, 0)
         };
+        _carriersFlowPanel.ClientSizeChanged += (_, _) =>
+        {
+            int targetWidth = Math.Max(260, _carriersFlowPanel.ClientSize.Width - 10);
+            foreach (Control c in _carriersFlowPanel.Controls)
+            {
+                if (c is SaasCarrierCardControl card)
+                {
+                    card.Width = targetWidth;
+                }
+            }
+        };
+
         colPanel.Controls.Add(_carriersFlowPanel);
         _carriersFlowPanel.BringToFront();
 
@@ -569,13 +641,13 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         _pnlDisclaimer = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 70,
+            Height = 60,
             BackColor = Color.FromArgb(17, 24, 39),
             Padding = new Padding(8)
         };
         _lblDisclaimerNotes = new Label
         {
-            Text = "ℹ️ Aras Global seçildiğinde gönderiniz DDP gümrük beyanı ile sevk edilir.",
+            Text = "ℹ️ Seçilen kargo taşıyıcısının gümrük ve teslimat şartları uygulanır.",
             ForeColor = Color.FromArgb(148, 163, 184),
             Font = new Font("Segoe UI", 8f),
             Dock = DockStyle.Fill
@@ -584,6 +656,22 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         colPanel.Controls.Add(_pnlDisclaimer);
 
         return colPanel;
+    }
+
+    private static void UpdatePillStyle(Button btn, bool isActive)
+    {
+        if (isActive)
+        {
+            btn.BackColor = Color.FromArgb(16, 185, 129); // Vibrant emerald #10B981
+            btn.ForeColor = Color.White;
+            btn.FlatAppearance.BorderColor = Color.FromArgb(16, 185, 129);
+        }
+        else
+        {
+            btn.BackColor = Color.FromArgb(21, 30, 48);
+            btn.ForeColor = Color.FromArgb(148, 163, 184);
+            btn.FlatAppearance.BorderColor = Color.FromArgb(37, 51, 71);
+        }
     }
     #endregion
 
@@ -710,9 +798,9 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         scrollContainer.Controls.Add(_barcodeControl);
 
         // 5. Ücret Özeti (USD & TRY)
-        var pnlPricing = new Panel { Dock = DockStyle.Top, Height = 48, Padding = new Padding(4) };
-        _lblBasePrice = new Label { Text = "Ücret: €14.50 (757.74 TRY)", ForeColor = Color.FromArgb(16, 185, 129), Font = new Font("Segoe UI", 9f, FontStyle.Bold), Dock = DockStyle.Top };
-        _lblFinalPriceTry = new Label { Text = "Tüm vergiler dahil (DDP)", ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Segoe UI", 7.8f), Dock = DockStyle.Top };
+        var pnlPricing = new Panel { Dock = DockStyle.Top, Height = 54, Padding = new Padding(4) };
+        _lblBasePrice = new Label { Text = "Ücret: $13.13 (≈ 641.47 ₺)", ForeColor = Color.FromArgb(16, 185, 129), Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), Dock = DockStyle.Top, AutoSize = true };
+        _lblFinalPriceTry = new Label { Text = "Tüm vergiler dahil (DDP)", ForeColor = Color.FromArgb(100, 116, 139), Font = new Font("Segoe UI", 8f), Dock = DockStyle.Top, AutoSize = true, Margin = new Padding(0, 2, 0, 0) };
         pnlPricing.Controls.Add(_lblFinalPriceTry);
         pnlPricing.Controls.Add(_lblBasePrice);
         scrollContainer.Controls.Add(pnlPricing);
@@ -740,8 +828,8 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             ForeColor = Color.FromArgb(251, 191, 36),
             Font = new Font("Segoe UI", 8f),
             Dock = DockStyle.Top,
-            Height = 36,
-            TextAlign = ContentAlignment.MiddleCenter
+            Height = 52,
+            TextAlign = ContentAlignment.TopCenter
         };
         scrollContainer.Controls.Add(_lblStatusMsg);
 
@@ -808,10 +896,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             _inputDims.Value = $"{itm.LengthCm}x{itm.WidthCm}x{itm.HeightCm}";
         }
 
-        RecalculateDesiAndQuotes();
+        _ = RecalculateDesiAndQuotesAsync();
     }
 
-    private void RecalculateDesiAndQuotes()
+    private async Task RecalculateDesiAndQuotesAsync()
     {
         if (_selectedOrder == null) return;
 
@@ -834,84 +922,280 @@ public sealed class OrderFulfillmentStudioControl : UserControl
         double billable = Math.Max((double)kg, desi);
         _lblCalculatedDesi.Text = $"Desi: {desi:N2} | Faturalandırılacak: {billable:N2} kg";
 
-        GenerateCarrierQuotes(billable);
+        await GenerateCarrierQuotesAsync(billable, w, l, h);
         RenderCarrierCards();
     }
 
-    private void GenerateCarrierQuotes(double billableWeight)
+    private async Task GenerateCarrierQuotesAsync(double billableWeight, double w, double l, double h)
     {
         _allQuotes.Clear();
 
-        // 1. Aras Global (Görseldeki 1. Seçili Firma)
-        _allQuotes.Add(new CarrierQuoteCardModel
+        string countryCode = !string.IsNullOrWhiteSpace(_selectedOrder?.CountryCode) ? _selectedOrder.CountryCode : "US";
+        double weight = billableWeight;
+        double width = w;
+        double length = l;
+        double height = h;
+
+        // 1. Aras Global Sorgusu
+        var arasTask = Task.Run(async () =>
         {
-            CarrierName = "Aras Global",
-            SubCarrier = "widect",
-            ServiceType = "Quotes",
-            PriceEur = 14.50m,
-            PriceUsd = 13.13m,
-            DeliveryDaysText = "4 days",
-            IsCheapest = true,
-            IsAras = true,
-            DisclaimerNote = "Widect Eco Express ile Avrupa DDP gümrüklü doğrudan teslimat.",
-            ExchangeRate = 48.855m
+            try
+            {
+                var req = new ArasGlobalQuoteRequest
+                {
+                    ReceiverCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height
+                };
+                return await _arasPricingService.GetQuotesAsync(req);
+            }
+            catch
+            {
+                return null;
+            }
         });
 
-        // 2. ShipEntegra
-        _allQuotes.Add(new CarrierQuoteCardModel
+        // 2. ShipEntegra Sorgusu
+        var shipEntegraTask = Task.Run(async () =>
         {
-            CarrierName = "ShipEntegra",
-            SubCarrier = "fedex",
-            ServiceType = "Quotes",
-            PriceEur = 16.20m,
-            PriceUsd = 15.00m,
-            DeliveryDaysText = "3-5 days",
-            IsCheapest = false,
-            IsAras = false
+            try
+            {
+                var req = new ShipEntegraQuoteRequest
+                {
+                    ReceiverCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height
+                };
+                return await _shipEntegraPricingService.GetQuotesAsync(req);
+            }
+            catch
+            {
+                return null;
+            }
         });
 
-        // 3. Navlungo
-        _allQuotes.Add(new CarrierQuoteCardModel
+        // 3. Navlungo Sorgusu
+        var navSettings = NavlungoSettingsStore.Load();
+        var navlungoTask = Task.Run(async () =>
         {
-            CarrierName = "Navlungo",
-            SubCarrier = "navlungo_eco",
-            ServiceType = "Quotes",
-            PriceEur = 15.80m,
-            PriceUsd = 14.60m,
-            DeliveryDaysText = "5 days",
-            IsCheapest = false,
-            IsAras = false
+            try
+            {
+                var req = new NavlungoQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height,
+                    Source = "user"
+                };
+                return await _navlungoApiClient.FetchLiveQuotesAsync(req, navSettings);
+            }
+            catch
+            {
+                return NavlungoApiClient.GenerateRealisticFallbackQuotes(new NavlungoQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height,
+                    Source = "user"
+                });
+            }
         });
 
-        // 4. Shiptomore
-        _allQuotes.Add(new CarrierQuoteCardModel
+        // 4. Shiptomore Sorgusu
+        var stmSettings = ShiptomoreSettingsStore.Load();
+        var shiptomoreTask = Task.Run(async () =>
         {
-            CarrierName = "Shiptomore",
-            SubCarrier = "air_express",
-            ServiceType = "Quotes",
-            PriceEur = 17.10m,
-            PriceUsd = 16.00m,
-            DeliveryDaysText = "3-8 days",
-            IsCheapest = false,
-            IsAras = false
+            try
+            {
+                var req = new ShiptomoreQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height
+                };
+                return await _shiptomoreApiClient.FetchLiveQuotesAsync(req, stmSettings);
+            }
+            catch
+            {
+                return ShiptomoreApiClient.GenerateRealisticFallbackQuotes(new ShiptomoreQuoteRequest
+                {
+                    FromCountry = "TR",
+                    ToCountry = countryCode,
+                    WeightKg = weight,
+                    WidthCm = width,
+                    LengthCm = length,
+                    HeightCm = height
+                }, !string.IsNullOrWhiteSpace(stmSettings.SessionCookie));
+            }
         });
+
+        await Task.WhenAll(arasTask, shipEntegraTask, navlungoTask, shiptomoreTask);
+
+        var arasRes = await arasTask;
+        var seRes = await shipEntegraTask;
+        var navOffers = await navlungoTask;
+        var stmOffers = await shiptomoreTask;
+
+        // 1. Aras Global Tekliflerini Ekle
+        if (arasRes != null && arasRes.Success && arasRes.Offers.Count > 0)
+        {
+            foreach (var off in arasRes.Offers)
+            {
+                string sName = $"{off.Cargo} {off.ProviderServiceType}".Trim();
+                _allQuotes.Add(new CarrierQuoteCardModel
+                {
+                    ProviderName = "Aras Global",
+                    CarrierName = "Aras Global",
+                    ServiceName = sName,
+                    SubCarrier = off.Cargo,
+                    ServiceType = sName,
+                    PriceUsd = off.Price,
+                    PriceEur = Math.Round(off.Price * 0.92m, 2),
+                    PriceTry = Math.Round(off.Price * UsdTryRate, 2),
+                    DeliveryDaysText = off.DeliveryDaysText,
+                    IsAras = true,
+                    IsLive = off.IsLivePrice,
+                    DisclaimerNote = off.IsLivePrice ? "Aras Global canlı DDP entegrasyonu." : "Yedek tarife (DDP Avrupa teslimat).",
+                    ExchangeRate = UsdTryRate
+                });
+            }
+        }
+
+        // 2. ShipEntegra Tekliflerini Ekle
+        if (seRes != null && seRes.Success && seRes.Offers.Count > 0)
+        {
+            foreach (var off in seRes.Offers)
+            {
+                string sName = !string.IsNullOrWhiteSpace(off.ClearServiceName) ? off.ClearServiceName : off.ServiceName;
+                _allQuotes.Add(new CarrierQuoteCardModel
+                {
+                    ProviderName = "ShipEntegra",
+                    CarrierName = "ShipEntegra",
+                    ServiceName = sName,
+                    SubCarrier = ExtractSubCarrierName(off.ServiceName),
+                    ServiceType = sName,
+                    PriceUsd = off.TotalPrice,
+                    PriceEur = Math.Round(off.TotalPrice * 0.92m, 2),
+                    PriceTry = Math.Round(off.TotalPrice * UsdTryRate, 2),
+                    DeliveryDaysText = ExtractDeliveryTime(off.AdditionalDescription),
+                    DeliveryDaysMin = ExtractDeliveryDaysMin(off.AdditionalDescription),
+                    DeliveryDaysMax = ExtractDeliveryDaysMax(off.AdditionalDescription),
+                    IsAras = false,
+                    IsLive = off.IsLivePrice,
+                    DisclaimerNote = CleanHtml(off.AdditionalDescription),
+                    ExchangeRate = UsdTryRate
+                });
+            }
+        }
+
+        // 3. Navlungo Tekliflerini Ekle
+        if (navOffers != null && navOffers.Count > 0)
+        {
+            foreach (var off in navOffers)
+            {
+                bool isLiveOffer = off.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase) ||
+                                   (!off.Note.Contains("Referans", StringComparison.OrdinalIgnoreCase) && !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase));
+                _allQuotes.Add(new CarrierQuoteCardModel
+                {
+                    ProviderName = "Navlungo",
+                    CarrierName = "Navlungo",
+                    ServiceName = off.ServiceName,
+                    SubCarrier = off.Carrier,
+                    ServiceType = off.ServiceName,
+                    PriceUsd = off.Price,
+                    PriceEur = Math.Round(off.Price * 0.92m, 2),
+                    PriceTry = Math.Round(off.Price * UsdTryRate, 2),
+                    DeliveryDaysText = off.DeliveryEstimate,
+                    DeliveryDaysMin = ExtractDeliveryDaysMin(off.DeliveryEstimate),
+                    DeliveryDaysMax = ExtractDeliveryDaysMax(off.DeliveryEstimate),
+                    IsAras = false,
+                    IsLive = isLiveOffer,
+                    DisclaimerNote = off.Note,
+                    ExchangeRate = UsdTryRate
+                });
+            }
+        }
+
+        // 4. Shiptomore Tekliflerini Ekle
+        if (stmOffers != null && stmOffers.Count > 0)
+        {
+            foreach (var off in stmOffers)
+            {
+                bool isLiveOffer = off.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase) ||
+                                   (!off.Note.Contains("Simüle", StringComparison.OrdinalIgnoreCase) && !off.Note.Contains("Yedek", StringComparison.OrdinalIgnoreCase));
+                _allQuotes.Add(new CarrierQuoteCardModel
+                {
+                    ProviderName = "Shiptomore",
+                    CarrierName = "Shiptomore",
+                    ServiceName = off.ServiceName,
+                    SubCarrier = off.Carrier,
+                    ServiceType = off.ServiceName,
+                    PriceUsd = off.Price,
+                    PriceEur = Math.Round(off.Price * 0.92m, 2),
+                    PriceTry = Math.Round(off.Price * UsdTryRate, 2),
+                    DeliveryDaysText = off.DeliveryEstimate,
+                    DeliveryDaysMin = ExtractDeliveryDaysMin(off.DeliveryEstimate),
+                    DeliveryDaysMax = ExtractDeliveryDaysMax(off.DeliveryEstimate),
+                    IsAras = false,
+                    IsLive = isLiveOffer,
+                    DisclaimerNote = off.Note,
+                    ExchangeRate = UsdTryRate
+                });
+            }
+        }
+
+        // En ucuz teklifi belirle
+        if (_allQuotes.Count > 0)
+        {
+            decimal minPrice = _allQuotes.Min(q => q.PriceUsd);
+            foreach (var q in _allQuotes)
+            {
+                q.IsCheapest = (q.PriceUsd == minPrice);
+            }
+        }
     }
 
     private void RenderCarrierCards()
     {
         _carriersFlowPanel.Controls.Clear();
 
-        foreach (var q in _allQuotes)
+        var filtered = _allQuotes.AsEnumerable();
+        if (!string.Equals(_selectedCarrierFilter, "Tümü", StringComparison.OrdinalIgnoreCase))
+        {
+            filtered = filtered.Where(q => string.Equals(q.ProviderName, _selectedCarrierFilter, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var list = filtered.OrderBy(q => q.PriceUsd).ToList();
+        int targetWidth = Math.Max(260, _carriersFlowPanel.ClientSize.Width - 10);
+
+        foreach (var q in list)
         {
             var card = new SaasCarrierCardControl
             {
+                ProviderName = q.ProviderName,
                 CarrierName = q.CarrierName,
                 SubCarrier = q.SubCarrier,
-                ServiceType = q.ServiceType,
-                Price = q.PriceEur,
-                Currency = "€",
+                ServiceType = q.ServiceName,
+                Price = q.PriceUsd,
+                Currency = "$",
+                PriceTry = q.PriceTry,
                 DeliveryDays = q.DeliveryDaysText,
                 IsCheapest = q.IsCheapest,
+                IsLive = q.IsLive,
+                Width = targetWidth,
                 AssociatedModel = q
             };
 
@@ -919,9 +1203,13 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             _carriersFlowPanel.Controls.Add(card);
         }
 
-        if (_allQuotes.Count > 0 && (_selectedCarrier == null || !_allQuotes.Contains(_selectedCarrier)))
+        if (list.Count > 0 && (_selectedCarrier == null || !list.Contains(_selectedCarrier)))
         {
-            SelectCarrier(_allQuotes[0]);
+            SelectCarrier(list[0]);
+        }
+        else if (_selectedCarrier != null && list.Contains(_selectedCarrier))
+        {
+            SelectCarrier(_selectedCarrier);
         }
     }
 
@@ -937,10 +1225,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             }
         }
 
-        _barcodeControl.CarrierName = carrier.CarrierName;
+        _barcodeControl.CarrierName = carrier.ServiceName;
         _lblDisclaimerNotes.Text = !string.IsNullOrWhiteSpace(carrier.DisclaimerNote)
             ? $"ℹ️ {carrier.DisclaimerNote}"
-            : "ℹ️ Seçilen kargo taşıyıcısının gümrük ve teslimat şartları uygulanır.";
+            : $"ℹ️ {carrier.ProviderName} ({carrier.ServiceName}) teslimat ve gümrük koşulları geçerlidir.";
 
         UpdateActionPanelFinancials();
     }
@@ -951,24 +1239,75 @@ public sealed class OrderFulfillmentStudioControl : UserControl
 
         decimal priceEur = _selectedCarrier.PriceEur;
         decimal priceUsd = _selectedCarrier.PriceUsd;
-        decimal rate = _selectedCarrier.ExchangeRate > 0 ? _selectedCarrier.ExchangeRate : 48.855m;
+        decimal rate = _selectedCarrier.ExchangeRate > 0 ? _selectedCarrier.ExchangeRate : UsdTryRate;
         decimal totalTry = Math.Round(priceUsd * rate, 2);
 
-        _lblIossAppliedRate.Text = $"Applied rate: €{priceEur:N2}";
-        _lblBasePrice.Text = $"Ücret: €{priceEur:N2} (${priceUsd:N2} USD - {totalTry:N2} TRY)";
+        _lblIossAppliedRate.Text = $"Applied rate: ${priceUsd:N2} (€{priceEur:N2})";
+        _lblBasePrice.Text = $"Ücret: ${priceUsd:N2} (≈ {totalTry:N2} ₺)";
+        _lblFinalPriceTry.Text = $"{_selectedCarrier.ProviderName} • {_selectedCarrier.ServiceName}";
 
-        _btnCreateShipment.Text = $"{_selectedCarrier.CarrierName} ile Gönderi Oluştur";
+        _btnCreateShipment.Text = $"{_selectedCarrier.ProviderName} ile Gönderi Oluştur";
 
         if (!_selectedCarrier.IsAras)
         {
             _btnCreateShipment.BackColor = Color.FromArgb(71, 85, 105);
-            _lblStatusMsg.Text = "Not: Bu firma API modeli sonraki fazda eklenecektir.";
+            _lblStatusMsg.Text = "Not: Aras Global dışındaki API entegrasyonu sonraki fazda eklenecektir.";
         }
         else
         {
             _btnCreateShipment.BackColor = Color.FromArgb(16, 185, 129); // Vibrant emerald #10B981
             _lblStatusMsg.Text = "";
         }
+    }
+
+    private static string ExtractSubCarrierName(string serviceName)
+    {
+        if (serviceName.Contains("eko", StringComparison.OrdinalIgnoreCase)) return "Eko Plus";
+        if (serviceName.Contains("smart", StringComparison.OrdinalIgnoreCase)) return "Smart (FedEx/TNT)";
+        if (serviceName.Contains("ups", StringComparison.OrdinalIgnoreCase)) return "UPS";
+        if (serviceName.Contains("widect", StringComparison.OrdinalIgnoreCase)) return "Widect";
+        if (serviceName.Contains("express", StringComparison.OrdinalIgnoreCase)) return "Express";
+        if (serviceName.Contains("fedex", StringComparison.OrdinalIgnoreCase)) return "FedEx";
+        return "ShipEntegra";
+    }
+
+    private static string ExtractDeliveryTime(string desc)
+    {
+        if (string.IsNullOrWhiteSpace(desc)) return "3-6 iş günü";
+        int idx = desc.IndexOf("Tahmini Teslimat Süresi", StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) idx = desc.IndexOf("Tahmini Teslim Süresi", StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+        {
+            string part = desc[idx..];
+            int br = part.IndexOf("<br", StringComparison.OrdinalIgnoreCase);
+            if (br > 0) part = part[..br];
+            return part.Replace("Tahmini Teslimat Süresi", "", StringComparison.OrdinalIgnoreCase)
+                       .Replace("Tahmini Teslim Süresi", "", StringComparison.OrdinalIgnoreCase)
+                       .Trim();
+        }
+        return "3-6 iş günü";
+    }
+
+    private static double ExtractDeliveryDaysMin(string desc)
+    {
+        string text = ExtractDeliveryTime(desc);
+        var parts = text.Split(new[] { '-', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length > 0 && double.TryParse(parts[0], out double val)) return val;
+        return 3;
+    }
+
+    private static double ExtractDeliveryDaysMax(string desc)
+    {
+        string text = ExtractDeliveryTime(desc);
+        var parts = text.Split(new[] { '-', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length > 1 && double.TryParse(parts[1], out double val)) return val;
+        return 7;
+    }
+
+    private static string CleanHtml(string html)
+    {
+        if (string.IsNullOrWhiteSpace(html)) return string.Empty;
+        return html.Replace("<br>", " • ").Replace("<br/>", " • ").Replace("<br />", " • ").Trim(' ', '•');
     }
     #endregion
 
@@ -1149,14 +1488,20 @@ public sealed class OrderFulfillmentStudioControl : UserControl
 
     private sealed class CarrierQuoteCardModel
     {
+        public string ProviderName { get; set; } = string.Empty;
         public string CarrierName { get; set; } = string.Empty;
         public string SubCarrier { get; set; } = string.Empty;
+        public string ServiceName { get; set; } = string.Empty;
         public string ServiceType { get; set; } = string.Empty;
         public decimal PriceEur { get; set; }
         public decimal PriceUsd { get; set; }
+        public decimal PriceTry { get; set; }
         public string DeliveryDaysText { get; set; } = string.Empty;
+        public double DeliveryDaysMin { get; set; }
+        public double DeliveryDaysMax { get; set; }
         public bool IsCheapest { get; set; }
         public bool IsAras { get; set; }
+        public bool IsLive { get; set; }
         public string DisclaimerNote { get; set; } = string.Empty;
         public decimal ExchangeRate { get; set; } = 48.855m;
     }

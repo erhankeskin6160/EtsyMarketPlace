@@ -273,26 +273,33 @@ public sealed class SaasOrderCardControl : UserControl
 }
 
 /// <summary>
-/// Görseldeki Canlı Kargo Teklifi Kartı (Logo kutusu, Taşıyıcı Adı, Quotes, Fiyat, Teslimat Süresi, Cheapest Rozeti).
+/// Görseldeki Canlı Kargo Teklifi Kartı (Çift Kurumsal Logo: Sağlayıcı + Taşıyıcı, Servis Adı, Canlı Fiyat, Teslimat Süresi, En Ucuz Rozeti).
 /// </summary>
 public sealed class SaasCarrierCardControl : UserControl
 {
+    private string _providerName = string.Empty;
     private string _carrierName = string.Empty;
     private string _subCarrier = string.Empty;
     private string _serviceType = string.Empty;
     private decimal _price = 0m;
-    private string _currency = "€";
-    private string _deliveryDays = "4 days";
+    private string _currency = "$";
+    private decimal _priceTry = 0m;
+    private string _deliveryDays = "3-5 gün";
     private bool _isCheapest = false;
+    private bool _isLive = true;
     private bool _isSelected = false;
+    private bool _isHovered = false;
 
+    public string ProviderName { get => _providerName; set { _providerName = value; Invalidate(); } }
     public string CarrierName { get => _carrierName; set { _carrierName = value; Invalidate(); } }
     public string SubCarrier { get => _subCarrier; set { _subCarrier = value; Invalidate(); } }
     public string ServiceType { get => _serviceType; set { _serviceType = value; Invalidate(); } }
     public decimal Price { get => _price; set { _price = value; Invalidate(); } }
     public string Currency { get => _currency; set { _currency = value; Invalidate(); } }
+    public decimal PriceTry { get => _priceTry; set { _priceTry = value; Invalidate(); } }
     public string DeliveryDays { get => _deliveryDays; set { _deliveryDays = value; Invalidate(); } }
     public bool IsCheapest { get => _isCheapest; set { _isCheapest = value; Invalidate(); } }
+    public bool IsLive { get => _isLive; set { _isLive = value; Invalidate(); } }
     public bool IsSelected { get => _isSelected; set { _isSelected = value; Invalidate(); } }
 
     public object? AssociatedModel { get; set; }
@@ -309,10 +316,24 @@ public sealed class SaasCarrierCardControl : UserControl
             true);
         DoubleBuffered = true;
 
-        Size = new Size(245, 68);
+        Size = new Size(270, 72);
         Margin = new Padding(0, 0, 0, 8);
         Cursor = Cursors.Hand;
         BackColor = Color.Transparent;
+    }
+
+    protected override void OnMouseEnter(EventArgs e)
+    {
+        base.OnMouseEnter(e);
+        _isHovered = true;
+        Invalidate();
+    }
+
+    protected override void OnMouseLeave(EventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _isHovered = false;
+        Invalidate();
     }
 
     protected override void OnClick(EventArgs e)
@@ -331,120 +352,107 @@ public sealed class SaasCarrierCardControl : UserControl
         using var path = SaasCardPanel.CreateRoundedPath(bounds, 10);
 
         // 1. Zemin Rengi
-        Color bgColor = _isSelected ? Color.FromArgb(22, 38, 59) : Color.FromArgb(21, 30, 48);
+        Color bgColor = _isSelected 
+            ? Color.FromArgb(22, 38, 59) 
+            : (_isHovered 
+                ? Color.FromArgb(28, 41, 64) 
+                : (_isCheapest ? Color.FromArgb(19, 36, 48) : Color.FromArgb(21, 30, 48)));
         using var bgBrush = new SolidBrush(bgColor);
         g.FillPath(bgBrush, path);
 
-        // 2. Kenarlık (Seçiliyse Parlak Yeşil / Zümrüt Vurgu)
-        Color borderColor = _isSelected ? Color.FromArgb(16, 185, 129) : Color.FromArgb(37, 51, 71);
-        using var borderPen = new Pen(borderColor, _isSelected ? 1.8f : 1f);
+        // 2. Kenarlık (Seçiliyse Parlak Zümrüt Vurgu, Hover ise Açık Mavi)
+        Color borderColor = _isSelected 
+            ? Color.FromArgb(16, 185, 129) 
+            : (_isHovered 
+                ? Color.FromArgb(59, 130, 246) 
+                : (_isCheapest ? Color.FromArgb(16, 185, 129, 130) : Color.FromArgb(37, 51, 71)));
+        using var borderPen = new Pen(borderColor, _isSelected ? 2f : 1f);
         g.DrawPath(borderPen, path);
 
-        // 3. Sol Logo Kutusu (Aras Global, ShipEntegra, Navlungo, Shiptomore)
-        int logoX = 10;
-        int logoY = 12;
-        int logoSize = 42;
-        var logoRect = new Rectangle(logoX, logoY, logoSize, logoSize);
-        using var logoPath = SaasCardPanel.CreateRoundedPath(logoRect, 8);
+        // 3. Sol Çift Logo Kutusu (1: Aracı Sağlayıcı + 2: Alt Taşıyıcı)
+        int box1W = 44, box1H = 34, box1X = 8, box1Y = 12;
+        var logo1Rect = new Rectangle(box1X, box1Y, box1W, box1H);
+        using var logo1Path = SaasCardPanel.CreateRoundedPath(logo1Rect, 6);
+        using var logo1BgBrush = new SolidBrush(Color.FromArgb(248, 250, 252));
+        g.FillPath(logo1BgBrush, logo1Path);
+        using var logo1BorderPen = new Pen(Color.FromArgb(226, 232, 240), 1f);
+        g.DrawPath(logo1BorderPen, logo1Path);
 
-        using var logoBgBrush = new SolidBrush(Color.FromArgb(15, 23, 42));
-        g.FillPath(logoBgBrush, logoPath);
-        using var logoBorderPen = new Pen(Color.FromArgb(51, 65, 85), 1f);
-        g.DrawPath(logoBorderPen, logoPath);
+        var provImg = ShippingLogoHelper.GetProviderLogo(!string.IsNullOrWhiteSpace(_providerName) ? _providerName : _carrierName);
+        var inner1 = new Rectangle(box1X + 2, box1Y + 2, box1W - 4, box1H - 4);
+        ShippingLogoHelper.DrawImagePreserveAspect(g, provImg, inner1);
 
-        DrawCarrierIcon(g, logoRect, _carrierName);
+        int box2W = 44, box2H = 34, box2X = 56, box2Y = 12;
+        var logo2Rect = new Rectangle(box2X, box2Y, box2W, box2H);
+        using var logo2Path = SaasCardPanel.CreateRoundedPath(logo2Rect, 6);
+        g.FillPath(logo1BgBrush, logo2Path);
+        g.DrawPath(logo1BorderPen, logo2Path);
 
-        // 4. Orta Bilgiler: Firma Adı & "Quotes"
-        int textX = logoX + logoSize + 10;
-        using var fontName = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+        var carrImg = ShippingLogoHelper.GetCarrierLogo(_subCarrier, _serviceType, _carrierName);
+        var inner2 = new Rectangle(box2X + 2, box2Y + 2, box2W - 4, box2H - 4);
+        ShippingLogoHelper.DrawImagePreserveAspect(g, carrImg, inner2);
+
+        // 4. Orta Bilgiler: Servis Adı & Sağlayıcı/Süre Detayı
+        int textX = 106;
+        int rightColWidth = 86;
+        int middleWidth = Math.Max(50, Width - textX - rightColWidth);
+
+        string displayTitle = !string.IsNullOrWhiteSpace(_serviceType) ? _serviceType : _carrierName;
+        using var fontName = new Font("Segoe UI", 9.2f, FontStyle.Bold);
         using var brushWhite = new SolidBrush(Color.FromArgb(248, 250, 252));
-        g.DrawString(_carrierName, fontName, brushWhite, textX, 14);
+        using var sfLeftEllipsis = new StringFormat
+        {
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
+        var titleRect = new RectangleF(textX, 11, middleWidth, 18);
+        g.DrawString(displayTitle, fontName, brushWhite, titleRect, sfLeftEllipsis);
 
+        string provName = !string.IsNullOrWhiteSpace(_providerName) ? _providerName : _carrierName;
+        string subInfo = $"{provName} • {_deliveryDays}";
         using var fontSub = new Font("Segoe UI", 8f, FontStyle.Regular);
         using var brushMuted = new SolidBrush(Color.FromArgb(148, 163, 184));
-        string subInfo = !string.IsNullOrWhiteSpace(_serviceType) ? _serviceType : "Quotes";
-        if (subInfo.Length > 16) subInfo = subInfo.Substring(0, 14) + "..";
-        g.DrawString(subInfo, fontSub, brushMuted, textX, 35);
+        var subRect = new RectangleF(textX, 31, middleWidth, 16);
+        g.DrawString(subInfo, fontSub, brushMuted, subRect, sfLeftEllipsis);
 
-        // 5. Sağ Bilgiler: Fiyat & Teslimat Süresi
+        if (_isLive)
+        {
+            using var liveDotBrush = new SolidBrush(Color.FromArgb(52, 211, 153));
+            g.FillEllipse(liveDotBrush, textX, 54, 5, 5);
+            using var fontTag = new Font("Segoe UI", 7.2f, FontStyle.Regular);
+            using var brushTag = new SolidBrush(Color.FromArgb(148, 163, 184));
+            g.DrawString("Canlı Entegrasyon", fontTag, brushTag, textX + 8, 50);
+        }
+
+        // 5. Sağ Bilgiler: Fiyat, Yaklaşık TL & Teslimat Süresi / Rozet
         using var fontPrice = new Font("Segoe UI", 11.5f, FontStyle.Bold);
-        using var brushPrice = new SolidBrush(Color.FromArgb(16, 185, 129)); // Neon Emerald #10B981
+        using var brushPrice = new SolidBrush(Color.FromArgb(16, 185, 129)); // Emerald #10B981
         using var sfRight = new StringFormat { Alignment = StringAlignment.Far };
 
         string priceText = $"{_currency}{_price:N2}";
-        g.DrawString(priceText, fontPrice, brushPrice, Width - 12, 13, sfRight);
+        g.DrawString(priceText, fontPrice, brushPrice, Width - 10, 10, sfRight);
 
-        using var fontDays = new Font("Segoe UI", 8f, FontStyle.Regular);
-        g.DrawString(_deliveryDays, fontDays, brushMuted, Width - 12, 36, sfRight);
+        if (_priceTry > 0)
+        {
+            using var fontTry = new Font("Segoe UI", 8f, FontStyle.Regular);
+            g.DrawString($"≈ {_priceTry:N0} ₺", fontTry, brushMuted, Width - 10, 30, sfRight);
+        }
 
-        // 6. "Cheapest" Rozeti
+        // 6. "🏆 EN UCUZ" Rozeti
         if (_isCheapest)
         {
-            int badgeW = 60;
-            int badgeH = 16;
-            var badgeRect = new Rectangle(Width - 12 - badgeW, Height - 18, badgeW, badgeH);
-            using var badgePath = SaasCardPanel.CreateRoundedPath(badgeRect, 8);
+            int badgeW = 66;
+            int badgeH = 17;
+            var badgeRect = new Rectangle(Width - 10 - badgeW, 49, badgeW, badgeH);
+            using var badgePath = SaasCardPanel.CreateRoundedPath(badgeRect, 5);
 
             using var badgeBgBrush = new SolidBrush(Color.FromArgb(6, 78, 59));
             g.FillPath(badgeBgBrush, badgePath);
 
-            using var fontBadge = new Font("Segoe UI", 7f, FontStyle.Bold);
+            using var fontBadge = new Font("Segoe UI", 6.8f, FontStyle.Bold);
             using var brushBadgeText = new SolidBrush(Color.FromArgb(52, 211, 153));
             using var sfCenter = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString("✓ En Uygun", fontBadge, brushBadgeText, badgeRect, sfCenter);
-        }
-    }
-
-    private static void DrawCarrierIcon(Graphics g, Rectangle r, string carrier)
-    {
-        int cx = r.X + (r.Width / 2);
-        int cy = r.Y + (r.Height / 2);
-
-        if (carrier.IndexOf("Aras", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            // Aras Global: Kırmızı zemin üzerinde beyaz ok / kuş simgesi
-            using var b = new SolidBrush(Color.FromArgb(220, 38, 38));
-            g.FillEllipse(b, cx - 12, cy - 12, 24, 24);
-
-            Point[] arrow =
-            {
-                new Point(cx - 6, cy - 5),
-                new Point(cx + 6, cy),
-                new Point(cx - 6, cy + 5)
-            };
-            using var arrowBrush = new SolidBrush(Color.White);
-            g.FillPolygon(arrowBrush, arrow);
-        }
-        else if (carrier.IndexOf("ShipEntegra", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            // ShipEntegra: Turuncu / Mavi sarmal
-            using var b = new SolidBrush(Color.FromArgb(234, 88, 12));
-            g.FillEllipse(b, cx - 12, cy - 12, 24, 24);
-
-            using var pen = new Pen(Color.FromArgb(6, 182, 212), 2f);
-            g.DrawArc(pen, cx - 8, cy - 8, 16, 16, 45, 270);
-        }
-        else if (carrier.IndexOf("Navlungo", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            // Navlungo: Mavi N harfi
-            using var b = new SolidBrush(Color.FromArgb(37, 99, 235));
-            g.FillEllipse(b, cx - 12, cy - 12, 24, 24);
-
-            using var f = new Font("Segoe UI", 9f, FontStyle.Bold);
-            using var wb = new SolidBrush(Color.White);
-            using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString("N", f, wb, r, sf);
-        }
-        else
-        {
-            // Shiptomore: Yeşil S harfi
-            using var b = new SolidBrush(Color.FromArgb(5, 150, 105));
-            g.FillEllipse(b, cx - 12, cy - 12, 24, 24);
-
-            using var f = new Font("Segoe UI", 9f, FontStyle.Bold);
-            using var wb = new SolidBrush(Color.White);
-            using var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString("S", f, wb, r, sf);
+            g.DrawString("🏆 EN UCUZ", fontBadge, brushBadgeText, badgeRect, sfCenter);
         }
     }
 }
