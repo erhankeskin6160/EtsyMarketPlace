@@ -6,60 +6,9 @@ using System.Drawing.Drawing2D;
 using System.Runtime.CompilerServices;
 using System.Windows.Forms;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 
 internal static class UiStyle
 {
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
-
-    private const int DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19;
-    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-    private const int DWMWA_BORDER_COLOR = 34;
-    private const int DWMWA_CAPTION_COLOR = 35;
-    private const int DWMWA_TEXT_COLOR = 36;
-
-    public static void EnableDarkModeTitleBar(Form form)
-    {
-        if (form == null || form.IsDisposed) return;
-
-        void ApplyToHandle(IntPtr handle)
-        {
-            if (handle == IntPtr.Zero) return;
-            try
-            {
-                if (Environment.OSVersion.Version.Major >= 10)
-                {
-                    int darkMode = CurrentTheme == AppTheme.Dark ? 1 : 0;
-                    if (DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int)) != 0)
-                    {
-                        DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref darkMode, sizeof(int));
-                    }
-
-                    if (CurrentTheme == AppTheme.Dark)
-                    {
-                        int captionColor = 0x002A170F; // BGR format: #0F172A (R=15, G=23, B=42)
-                        int textColor = 0x00FFFFFF;    // BGR: White
-                        int borderColor = 0x00554133;  // BGR: #334155
-                        DwmSetWindowAttribute(handle, DWMWA_CAPTION_COLOR, ref captionColor, sizeof(int));
-                        DwmSetWindowAttribute(handle, DWMWA_TEXT_COLOR, ref textColor, sizeof(int));
-                        DwmSetWindowAttribute(handle, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
-                    }
-                }
-            }
-            catch { }
-        }
-
-        if (form.IsHandleCreated)
-        {
-            ApplyToHandle(form.Handle);
-        }
-        else
-        {
-            form.HandleCreated += (_, _) => ApplyToHandle(form.Handle);
-        }
-    }
-
     static UiStyle()
     {
         try
@@ -114,16 +63,12 @@ internal static class UiStyle
     {
         try
         {
-            string icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
-            if (!System.IO.File.Exists(icoPath)) icoPath = "app.ico";
-            if (System.IO.File.Exists(icoPath))
+            if (System.IO.File.Exists("app.ico"))
             {
-                form.Icon = new Icon(icoPath);
+                form.Icon = new Icon("app.ico");
             }
         }
         catch { }
-
-        EnableDarkModeTitleBar(form);
 
         try
         {
