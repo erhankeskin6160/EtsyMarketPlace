@@ -298,7 +298,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
 
         if (resultCode != 200)
         {
-            throw new InvalidOperationException($"Aras Global Gönderi Başlatma Hatası ({resultCode}): {resultMessage}" + "\nRAW RESPONSE: " + responseContent);
+            throw new InvalidOperationException($"Aras Global Gönderi Başlatma Hatası ({resultCode}): {resultMessage}" + "\nRAW RESPONSE: " + responseContent + "\nREQUEST JSON: " + json);
         }
 
         var result = new ArasCreateShipmentResponse

@@ -19,6 +19,7 @@ public sealed class ShipmentCreationContext
     public string HsCode { get; set; } = string.Empty;
     public string SelectedSubCarrier { get; set; } = "widect"; // widect, ups, vb.
     public string ServiceType { get; set; } = "Eco Express";
+    public decimal CargoPrice { get; set; } = 0m;
     public ArasAddress SenderAddress { get; set; } = new();
 }
 
