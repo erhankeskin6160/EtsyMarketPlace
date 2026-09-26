@@ -276,6 +276,18 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
 
         LogApiTrace("CreateShipment-Request", json);
 
+        // Karsilastirma icin son gonderilen govdeyi sakla; panel yakalamasi bununla diff'lenecek.
+        try
+        {
+            string captureDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "SimilarProductsWinForms",
+                "captures");
+            Directory.CreateDirectory(captureDir);
+            File.WriteAllText(Path.Combine(captureDir, "last-createshipment-request.json"), json);
+        }
+        catch { }
+
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         
 
