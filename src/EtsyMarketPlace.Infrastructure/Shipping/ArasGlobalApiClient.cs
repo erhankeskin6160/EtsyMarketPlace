@@ -546,50 +546,31 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrl + StartCalcEndpoint);
         ApplyHeaders(httpRequest, token);
 
-        var payload = new
+        var payload = new ArasStartCalculationPayload
         {
-            ShipmentDimensions = new[]
+            Currency = request.Currency,
+            InternationalShipmentCategory = "4",
+            IsIndividualCustomer = request.IsIndividualCustomer,
+            IsMicroExport = true,
+            PackageCount = 1,
+            PackageType = request.PackageType,
+            ReceiverCity = request.ReceiverCity,
+            ReceiverCountry = request.ReceiverCountry,
+            ReceiverPostalCode = request.ReceiverPostalCode,
+            ReceiverState = request.ReceiverState,
+            ReceiverTown = request.ReceiverTown,
+            SenderCountry = request.SenderCountry,
+            ShipmentDimensions =
             {
-                new
+                new ArasStartCalculationBox
                 {
-                    Height = request.HeightCm,
-                    Width = request.WidthCm,
                     Length = request.LengthCm,
+                    Width = request.WidthCm,
+                    Height = request.HeightCm,
                     Weight = request.WeightKg,
                     PackageCount = 1
                 }
-            },
-            Currency = request.Currency,
-            DiscountCode = "",
-            InternationalShipmentCategory = "4",
-            IsMicroExport = true,
-            PackageCount = 1,
-            ReceiverCity = request.ReceiverCity,
-            ReceiverCountryCode = request.ReceiverCountry,
-            ReceiverPostalCode = request.ReceiverPostalCode,
-            ReceiverTown = request.ReceiverTown,
-            SenderCity = "ankara",
-            SenderCountry = request.SenderCountry,
-            SenderDistrict = "altındağ",
-            SenderTown = "örnekler",
-            ShipmentItems = new[]
-            {
-                new
-                {
-                    Height = request.HeightCm,
-                    Width = request.WidthCm,
-                    Length = request.LengthCm,
-                    Weight = request.WeightKg,
-                    Category = "1",
-                    HsCode = "3926400000",
-                    ItemDescription = "3d print figür",
-                    PackageCount = 1,
-                    Quantity = 1,
-                    UnitPrice = request.ItemUnitPrice
-                }
-            },
-            ShipmentId = "00000000-0000-0000-0000-000000000000",
-            TotalPrice = request.ItemUnitPrice
+            }
         };
 
         string jsonBody = JsonSerializer.Serialize(payload);
