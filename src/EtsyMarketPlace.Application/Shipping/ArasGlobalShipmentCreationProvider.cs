@@ -119,7 +119,10 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         double width = context.WidthCm > 0 ? context.WidthCm : 15.0;
         double height = context.HeightCm > 0 ? context.HeightCm : 10.0;
         double weight = context.WeightKg > 0 ? context.WeightKg : 0.4;
-        double desi = Math.Round((length * width * height) / 5000.0, 2);
+        // Tek kaynak: teklif adiminda kullanilan desi; yoksa yerel hesap.
+        double desi = context.Desi > 0
+            ? context.Desi
+            : Math.Round((length * width * height) / 5000.0, 2);
         if (desi <= 0) desi = 0.60;
 
         var box = new ArasBox
@@ -138,7 +141,10 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             ? context.HsCode
             : (order.Items.Count > 0 && !string.IsNullOrWhiteSpace(order.Items[0].HsCode) ? order.Items[0].HsCode : "3926400000");
 
-        decimal orderPrice = order.TotalPrice > 0 ? order.TotalPrice : 11.0m;
+        decimal itemsTotal = order.Items.Count > 0
+            ? order.Items.Sum(i => i.Price * Math.Max(1, i.Quantity))
+            : 0m;
+        decimal orderPrice = itemsTotal > 0 ? itemsTotal : (order.TotalPrice > 0 ? order.TotalPrice : 11.0m);
         var request = new ArasCreateShipmentRequest
         {
             Currency = string.IsNullOrWhiteSpace(order.Currency) ? "USD" : order.Currency,
@@ -172,7 +178,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Weight = box.Weight,
                 VolumetricWeight = desi,
                 Desi = desi,
-                Category = "1"
+                Category = string.IsNullOrWhiteSpace(context.Category) ? "Home Decor" : context.Category
             });
         }
 
@@ -191,7 +197,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Weight = box.Weight,
                 VolumetricWeight = desi,
                 Desi = desi,
-                Category = "1"
+                Category = string.IsNullOrWhiteSpace(context.Category) ? "Home Decor" : context.Category
             });
         }
 
@@ -240,6 +246,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
 
         request.ReceiverAddress = new ArasAddress
         {
+            Title = "Teslimat",
             FirstName = buyerFirst,
             LastName = buyerLast,
             Address = !string.IsNullOrWhiteSpace(order.StreetAddress) ? order.StreetAddress : "Delivery Address",
