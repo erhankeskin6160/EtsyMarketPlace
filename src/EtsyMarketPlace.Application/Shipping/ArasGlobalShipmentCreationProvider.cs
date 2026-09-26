@@ -279,6 +279,23 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         request.ShipmentId = shipmentId;
 
         // Adım 2: Güncelleme ve Seçilen Taşıyıcıyı Kaydet
+        // (F4) Sozlesme sirasi: fiyat kirilimi guncelleme ve onay adimlarindan ONCE hesaplanir.
+        ArasShipmentPriceBreakdown? earlyBreakdown = null;
+        try
+        {
+            earlyBreakdown = await _apiClient.CalculateShipmentPriceAsync(shipmentId, request.InternationalCargoProvider, token, cancellationToken);
+        }
+        catch (Exception priceEx)
+        {
+            ArasGlobalSettingsStore.LogTrace("CalculatePrice-Warning", priceEx.Message);
+        }
+
+        // Hesaplanan taban fiyat varsa onay adimina o deger gitsin (sabit/uydurma deger degil).
+        if (earlyBreakdown != null && earlyBreakdown.BasePrice > 0)
+        {
+            request.CargoPrice = earlyBreakdown.BasePrice;
+        }
+
         await _apiClient.UpdateShipmentAsync(request, token, cancellationToken);
 
         // Adım 3: Yasal Sözleşme Onaylarını Al
