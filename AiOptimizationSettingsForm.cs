@@ -359,6 +359,18 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         StyleComboBox(_modelComboBox);
         _modelComboBox.Dock = DockStyle.Fill;
+        _modelComboBox.SelectionChangeCommitted += (_, _) =>
+        {
+            _customModelTextBox.Text = "";
+        };
+        _modelComboBox.SelectedIndexChanged += (_, _) =>
+        {
+            if (_isInitializing || _customModelTextBox.Focused) return;
+            if (_modelComboBox.Focused && _modelComboBox.SelectedIndex >= 0)
+            {
+                _customModelTextBox.Text = "";
+            }
+        };
         pnlModelRow.Controls.Add(_modelComboBox, 0, 0);
 
         var lblCustom = new Label
@@ -376,7 +388,8 @@ internal sealed class AiOptimizationSettingsForm : Form
         _customModelTextBox.PlaceholderText = "Örn: gemini-2.5-flash, grok-3, o3-mini...";
         _customModelTextBox.TextChanged += (_, _) =>
         {
-            if (!string.IsNullOrWhiteSpace(_customModelTextBox.Text))
+            if (_isInitializing) return;
+            if (_customModelTextBox.Focused && !string.IsNullOrWhiteSpace(_customModelTextBox.Text))
             {
                 _modelComboBox.Text = _customModelTextBox.Text.Trim();
             }
@@ -577,8 +590,9 @@ internal sealed class AiOptimizationSettingsForm : Form
                 "gemini-1.5-flash",
                 "gemini-1.5-pro"
             ]);
-            _modelComboBox.Text = AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel);
-            _customModelTextBox.Text = (!_modelComboBox.Items.Contains(_settings.GeminiModel) || _settings.GeminiModel == "gemini-3.8-flash") ? (_settings.GeminiModel ?? "") : "";
+            var normalizedGemini = AiModelNormalizer.NormalizeGeminiTextModel(_settings.GeminiModel);
+            _modelComboBox.Text = normalizedGemini;
+            _customModelTextBox.Text = ContainsItemCaseInsensitive(_modelComboBox, normalizedGemini) ? "" : (_settings.GeminiModel ?? "");
 
             _imageModelComboBox.Enabled = true;
             _imageModelComboBox.Items.AddRange([
@@ -616,8 +630,9 @@ internal sealed class AiOptimizationSettingsForm : Form
                 "chatgpt-4o-latest",
                 "gpt-4-turbo"
             ]);
-            _modelComboBox.Text = AiModelNormalizer.NormalizeOpenAiTextModel(_settings.OpenAiModel);
-            _customModelTextBox.Text = !_modelComboBox.Items.Contains(_settings.OpenAiModel) ? (_settings.OpenAiModel ?? "") : "";
+            var normalizedOpenAi = AiModelNormalizer.NormalizeOpenAiTextModel(_settings.OpenAiModel);
+            _modelComboBox.Text = normalizedOpenAi;
+            _customModelTextBox.Text = ContainsItemCaseInsensitive(_modelComboBox, normalizedOpenAi) ? "" : (_settings.OpenAiModel ?? "");
 
             _imageModelComboBox.Enabled = true;
             _imageModelComboBox.Items.AddRange([
@@ -649,8 +664,9 @@ internal sealed class AiOptimizationSettingsForm : Form
                 "deepseek-chat",
                 "deepseek-reasoner"
             ]);
-            _modelComboBox.Text = AiModelNormalizer.NormalizeDeepSeekModel(_settings.DeepSeekModel);
-            _customModelTextBox.Text = !_modelComboBox.Items.Contains(_settings.DeepSeekModel) ? (_settings.DeepSeekModel ?? "") : "";
+            var normalizedDeepSeek = AiModelNormalizer.NormalizeDeepSeekModel(_settings.DeepSeekModel);
+            _modelComboBox.Text = normalizedDeepSeek;
+            _customModelTextBox.Text = ContainsItemCaseInsensitive(_modelComboBox, normalizedDeepSeek) ? "" : (_settings.DeepSeekModel ?? "");
 
             _imageModelComboBox.Enabled = false;
             _imageModelComboBox.Items.Add("Görsel Desteği Yok (PhotoRoom / FLUX kullanın)");
@@ -667,8 +683,9 @@ internal sealed class AiOptimizationSettingsForm : Form
                 "claude-3-5-haiku-20241022",
                 "claude-3-opus-20240229"
             ]);
-            _modelComboBox.Text = AiModelNormalizer.NormalizeClaudeTextModel(_settings.ClaudeModel);
-            _customModelTextBox.Text = !_modelComboBox.Items.Contains(_settings.ClaudeModel) ? (_settings.ClaudeModel ?? "") : "";
+            var normalizedClaude = AiModelNormalizer.NormalizeClaudeTextModel(_settings.ClaudeModel);
+            _modelComboBox.Text = normalizedClaude;
+            _customModelTextBox.Text = ContainsItemCaseInsensitive(_modelComboBox, normalizedClaude) ? "" : (_settings.ClaudeModel ?? "");
 
             _imageModelComboBox.Enabled = false;
             _imageModelComboBox.Items.Add("Görsel Desteği Yok (PhotoRoom / FLUX kullanın)");
@@ -683,8 +700,9 @@ internal sealed class AiOptimizationSettingsForm : Form
                 "grok-3",
                 "grok-2-latest"
             ]);
-            _modelComboBox.Text = AiModelNormalizer.NormalizeGrokModel(_settings.GrokModel);
-            _customModelTextBox.Text = !_modelComboBox.Items.Contains(_settings.GrokModel) ? (_settings.GrokModel ?? "") : "";
+            var normalizedGrok = AiModelNormalizer.NormalizeGrokModel(_settings.GrokModel);
+            _modelComboBox.Text = normalizedGrok;
+            _customModelTextBox.Text = ContainsItemCaseInsensitive(_modelComboBox, normalizedGrok) ? "" : (_settings.GrokModel ?? "");
 
             _imageModelComboBox.Enabled = false;
             _imageModelComboBox.Items.Add("Görsel Desteği Yok (PhotoRoom / FLUX kullanın)");
@@ -709,6 +727,18 @@ internal sealed class AiOptimizationSettingsForm : Form
         }
 
         WriteStatus($"Sağlayıcı seçildi: {GetProviderDisplayName(providerKey)} (Model: {_modelComboBox.Text})");
+    }
+
+    private static bool ContainsItemCaseInsensitive(ComboBox cb, string? val)
+    {
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var trimmed = val.Trim();
+        foreach (var item in cb.Items)
+        {
+            if (string.Equals(item?.ToString()?.Trim(), trimmed, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     private static string GetProviderDisplayName(string key) => key switch
