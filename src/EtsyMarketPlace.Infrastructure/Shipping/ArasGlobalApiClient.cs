@@ -277,10 +277,16 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         LogApiTrace("CreateShipment-Request", json);
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-        ValidateStatus(response);
+        
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         LogApiTrace("CreateShipment-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException(
+                $"Aras Global CreateShipment HTTP ({(int)response.StatusCode}). Body: {responseContent}\nREQUEST JSON: {json}");
+        }
 
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
@@ -292,7 +298,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
 
         if (resultCode != 200)
         {
-            throw new InvalidOperationException($"Aras Global Gönderi Başlatma Hatası ({resultCode}): {resultMessage}");
+            throw new InvalidOperationException($"Aras Global Gönderi Başlatma Hatası ({resultCode}): {resultMessage}" + "\nRAW RESPONSE: " + responseContent);
         }
 
         var result = new ArasCreateShipmentResponse
