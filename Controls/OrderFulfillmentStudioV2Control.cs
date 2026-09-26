@@ -1518,10 +1518,15 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 var request = new ArasGlobalQuoteRequest
                 {
                     ReceiverCountry = country,
+                    ReceiverCity = _selectedOrder?.City ?? string.Empty,
+                    ReceiverPostalCode = _selectedOrder?.PostalCode ?? string.Empty,
+                    ReceiverState = _selectedOrder?.State ?? string.Empty,
                     WeightKg = weight,
                     WidthCm = w,
                     LengthCm = l,
-                    HeightCm = h
+                    HeightCm = h,
+                    Currency = string.IsNullOrWhiteSpace(_selectedOrder?.Currency) ? "USD" : _selectedOrder!.Currency,
+                    ItemUnitPrice = (double)(_selectedOrder?.Items.FirstOrDefault()?.Price ?? 10m)
                 };
 
                 var response = await _arasPricingService.GetQuotesAsync(request);
