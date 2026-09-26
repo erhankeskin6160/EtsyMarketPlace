@@ -144,7 +144,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             Currency = string.IsNullOrWhiteSpace(order.Currency) ? "USD" : order.Currency,
             Price = orderPrice,
             TotalPrice = orderPrice,
-            CargoPrice = 13.13m,
+            CargoPrice = context.CargoPrice > 0 ? context.CargoPrice : 13.13m,
             InternationalCargoProvider = string.IsNullOrWhiteSpace(context.SelectedSubCarrier) ? "widect" : context.SelectedSubCarrier.ToLowerInvariant(),
             InternationalShipmentCategory = "4", // Mikro İhracat
             IsMicroExport = true,
