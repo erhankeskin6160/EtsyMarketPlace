@@ -50,6 +50,7 @@ public sealed class ArasBox
 public sealed class ArasShipmentItem
 {
     public string Description { get; set; } = string.Empty;
+    public string ItemDescription { get; set; } = string.Empty;
     public string HsCode { get; set; } = string.Empty; // GTIP Kodu (örn: 3926400000)
     public int Quantity { get; set; } = 1;
     public decimal UnitPrice { get; set; } = 0m;
@@ -68,6 +69,7 @@ public sealed class ArasShipmentItem
 public sealed class ArasCreateShipmentRequest
 {
     public string ShipmentId { get; set; } = string.Empty;
+    public List<ArasBox> ShipmentDimensions { get; set; } = new();
     public List<ArasBox> BoxList { get; set; } = new();
     public List<ArasShipmentItem> ShipmentItems { get; set; } = new();
     public ArasAddress SenderAddress { get; set; } = new();
@@ -75,6 +77,7 @@ public sealed class ArasCreateShipmentRequest
     public ArasAddress ReceiverAddress { get; set; } = new();
 
     public decimal Price { get; set; }
+    public decimal TotalPrice { get; set; }
     public decimal CargoPrice { get; set; }
     public string Currency { get; set; } = "USD";
     public string InternationalCargoProvider { get; set; } = "widect"; // widect, ups, vb.

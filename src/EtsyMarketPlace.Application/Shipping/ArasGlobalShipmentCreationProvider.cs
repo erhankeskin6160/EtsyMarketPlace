@@ -138,10 +138,12 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             ? context.HsCode
             : (order.Items.Count > 0 && !string.IsNullOrWhiteSpace(order.Items[0].HsCode) ? order.Items[0].HsCode : "3926400000");
 
+        decimal orderPrice = order.TotalPrice > 0 ? order.TotalPrice : 11.0m;
         var request = new ArasCreateShipmentRequest
         {
             Currency = string.IsNullOrWhiteSpace(order.Currency) ? "USD" : order.Currency,
-            Price = order.TotalPrice > 0 ? order.TotalPrice : 11.0m,
+            Price = orderPrice,
+            TotalPrice = orderPrice,
             CargoPrice = 13.13m,
             InternationalCargoProvider = string.IsNullOrWhiteSpace(context.SelectedSubCarrier) ? "widect" : context.SelectedSubCarrier.ToLowerInvariant(),
             InternationalShipmentCategory = "4", // Mikro İhracat
@@ -151,13 +153,16 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             VolumetricWeight = desi,
             Desi = desi
         };
+        request.ShipmentDimensions.Add(box);
         request.BoxList.Add(box);
 
         foreach (var itm in order.Items)
         {
+            string desc = !string.IsNullOrWhiteSpace(itm.Title) ? itm.Title : "E-Ticaret Ürünü";
             request.ShipmentItems.Add(new ArasShipmentItem
             {
-                Description = !string.IsNullOrWhiteSpace(itm.Title) ? itm.Title : "E-Ticaret Ürünü",
+                Description = desc,
+                ItemDescription = desc,
                 HsCode = hsCode,
                 Quantity = itm.Quantity > 0 ? itm.Quantity : 1,
                 UnitPrice = itm.Price > 0 ? itm.Price : 10.0m,
@@ -166,7 +171,8 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Height = box.Height,
                 Weight = box.Weight,
                 VolumetricWeight = desi,
-                Desi = desi
+                Desi = desi,
+                Category = "1"
             });
         }
 
@@ -175,6 +181,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             request.ShipmentItems.Add(new ArasShipmentItem
             {
                 Description = "3d print figür",
+                ItemDescription = "3d print figür",
                 HsCode = hsCode,
                 Quantity = 1,
                 UnitPrice = request.Price,
@@ -183,7 +190,8 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 Height = box.Height,
                 Weight = box.Weight,
                 VolumetricWeight = desi,
-                Desi = desi
+                Desi = desi,
+                Category = "1"
             });
         }
 
