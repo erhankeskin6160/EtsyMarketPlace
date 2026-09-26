@@ -16,10 +16,10 @@ using SimilarProductsWinForms.Controls;
 public sealed class OrderFulfillmentStudioForm : Form
 {
     /// <summary>
-    /// Yeni (V2) arayüzü etkinleştirir. Üretim akışını etkilememek için şimdilik kapalı;
-    /// yeni ekranı görmek için true yapın.
+    /// Yeni (V2) üç bölgeli kokpiti etkinleştirir. Varsayılan olarak açıktır.
+    /// Sorun görülürse false yapıldığında eski dört kolonlu ekran aynen geri gelir.
     /// </summary>
-    public static bool UseV2 { get; set; } = false;
+    public static bool UseV2 { get; set; } = true;
 
     private readonly Control _studioControl;
 
