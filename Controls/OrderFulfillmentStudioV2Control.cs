@@ -71,6 +71,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private TextBox _txtSearch = null!;
     private Button _btnRefresh = null!;
     private Button _btnSession = null!;
+    private Button _btnCaptureTemplate = null!;
 
     // --- bölge 1 ---
     private ThemedCard _colQueue = null!;
@@ -451,7 +452,21 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
         var right = new Panel { Dock = DockStyle.Right, Width = 520, BackColor = Color.Transparent };
 
-        _btnCreateShipmentPlaceholder(right);
+        _btnCaptureTemplate = new Button
+        {
+            Text = "Aras şablonu yakala",
+            Height = 33,
+            Width = 172,
+            FlatStyle = FlatStyle.Flat,
+            Font = UiStyle.SemiboldBaseFont,
+            BackColor = UiStyle.SecondaryColor,
+            ForeColor = UiStyle.TextDark,
+            Location = new Point(0, 12),
+            Cursor = Cursors.Hand
+        };
+        _btnCaptureTemplate.FlatAppearance.BorderSize = 0;
+        _btnCaptureTemplate.Click += async (s, e) => await CaptureArasTemplateAsync();
+        right.Controls.Add(_btnCaptureTemplate);
 
         _btnRefresh = UiStyle.CreateButton("Yenile", isSecondary: true);
         _btnRefresh.Width = 92;
@@ -494,19 +509,129 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         return bar;
     }
 
-    /// <summary>Toolbar içindeki etiketli alanları ileride genişletmek için ayrılmış yer tutucu.</summary>
-    private void _btnCreateShipmentPlaceholder(Control host)
+    /// <summary>
+    /// Aras panelinde kullanıcının yaptığı gerçek gönderi işleminin istek/yanıt çiftini kaydeder.
+    /// Amaç: API'nin beklediği gerçek gövdeyi görmek (400 volumetricweightismissing teşhisi).
+    /// </summary>
+    private async Task CaptureArasTemplateAsync()
     {
-        var hint = new Label
+        var confirm = MessageBox.Show(
+            "Aras Global panelinde gerçek bir gönderi işlemi yapılacak ve istek/yanıt kaydedilecek.\n\n" +
+            "1) Tarayıcı açılacak, panele giriş yapman istenecek.\n" +
+            "2) Panelden bir gönderi oluştur — bu GERÇEK bir gönderidir, ücret yansıyabilir.\n" +
+            "3) İstek yakalanınca kayıt dosyası oluşturulacak.\n\n" +
+            "Devam edilsin mi?",
+            "Aras Şablonunu Yakala",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning);
+
+        if (confirm != DialogResult.Yes)
         {
-            Text = "Kokpit",
-            Font = _smallFont,
-            ForeColor = UiStyle.TextMuted,
-            AutoSize = true,
-            BackColor = Color.Transparent,
-            Location = new Point(0, 20)
-        };
-        host.Controls.Add(hint);
+            return;
+        }
+
+        using var cts = new CancellationTokenSource();
+        string? path = null;
+        var capture = new ArasShipmentTemplateCapture();
+
+        using (var dialog = new CaptureProgressForm(cts))
+        {
+            dialog.Shown += async (s, e) =>
+            {
+                try
+                {
+                    path = await capture.CaptureAsync(
+                        showBrowser: true,
+                        statusCallback: msg => dialog.SetStatus(msg),
+                        ct: cts.Token);
+                }
+                catch (Exception ex)
+                {
+                    dialog.SetStatus("Hata: " + ex.Message);
+                }
+                finally
+                {
+                    dialog.Close();
+                }
+            };
+
+            dialog.ShowDialog(this);
+        }
+
+        if (!string.IsNullOrWhiteSpace(path))
+        {
+            MessageBox.Show(
+                "Şablon kaydedildi:\n\n" + path +
+                "\n\nBu dosyayı paylaşırsan API'nin beklediği gövdeyi birebir görebiliriz.",
+                "Yakalama Tamamlandı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+    }
+
+    /// <summary>Yakalama sürerken gösterilen basit durum penceresi.</summary>
+    private sealed class CaptureProgressForm : Form
+    {
+        private readonly Label _status;
+        private readonly CancellationTokenSource _cts;
+
+        public CaptureProgressForm(CancellationTokenSource cts)
+        {
+            _cts = cts;
+            Text = "Aras Şablonu Yakalanıyor";
+            Size = new Size(580, 210);
+            StartPosition = FormStartPosition.CenterParent;
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MinimizeBox = false;
+            MaximizeBox = false;
+            BackColor = UiStyle.BackgroundColor;
+            ForeColor = UiStyle.TextDark;
+            Font = UiStyle.BaseFont;
+
+            _status = new Label
+            {
+                Dock = DockStyle.Fill,
+                Text = "Hazırlanıyor...",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Padding = new Padding(16),
+                ForeColor = UiStyle.TextDark
+            };
+
+            var cancel = UiStyle.CreateButton("İptal", isSecondary: true);
+            cancel.Dock = DockStyle.Bottom;
+            cancel.Height = 36;
+            cancel.Click += (s, e) =>
+            {
+                _cts.Cancel();
+                SetStatus("İptal ediliyor...");
+            };
+
+            Controls.Add(_status);
+            Controls.Add(cancel);
+        }
+
+        public void SetStatus(string message)
+        {
+            if (IsDisposed)
+            {
+                return;
+            }
+
+            if (InvokeRequired)
+            {
+                try
+                {
+                    BeginInvoke(new Action(() => SetStatus(message)));
+                }
+                catch
+                {
+                }
+
+                return;
+            }
+
+            _status.Text = message;
+        }
     }
 
     private void UpdateSessionBadge()
