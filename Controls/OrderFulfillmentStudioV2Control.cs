@@ -13,6 +13,7 @@ using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Domain.Orders;
 using EtsyMarketPlace.Domain.Shipping;
 using EtsyMarketPlace.Infrastructure.Shipping;
+using SimilarProductsWinForms.Services;
 
 /// <summary>
 /// "Sipariş &amp; Kargo" modülünün yeni (V2) arayüzü.
@@ -53,6 +54,9 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private readonly Font _bigValueFont = new("Segoe UI Semibold", 17f, FontStyle.Bold);
 
     public decimal UsdTryRate { get; set; } = 48.855m;
+
+    private readonly ExchangeRateService _exchangeRateService = new();
+    private string _rateNote = "kur yükleniyor";
 
     // --- iskelet ---
     private ThemedCard _topBar = null!;
@@ -149,7 +153,39 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     {
         base.OnLoad(e);
         UpdateSessionBadge();
+        await LoadExchangeRateAsync();
         await ReloadOrdersAsync();
+    }
+
+    /// <summary>
+    /// USD/TRY kurunu uygulamanın canlı kur servisinden alır (15 dk önbellekli).
+    /// Servis erişilemezse sabit varsayılana düşer ve bu durum ekranda açıkça yazılır —
+    /// hangi kurdan çevrildiği asla gizlenmez.
+    /// </summary>
+    private async Task LoadExchangeRateAsync()
+    {
+        try
+        {
+            decimal rate = await _exchangeRateService.GetLiveUsdTryRateAsync();
+            if (rate > 0)
+            {
+                UsdTryRate = rate;
+                _rateNote = $"canlı kur {rate:N2}";
+            }
+            else
+            {
+                _rateNote = $"sabit kur {UsdTryRate:N2} (canlı kur alınamadı)";
+            }
+        }
+        catch
+        {
+            _rateNote = $"sabit kur {UsdTryRate:N2} (canlı kur alınamadı)";
+        }
+
+        if (_lblPriceTry != null)
+        {
+            _lblPriceTry.Text = _rateNote;
+        }
     }
 
     protected override void OnResize(EventArgs e)
@@ -1038,7 +1074,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         center.Controls.Add(_lblPriceUsd);
         _lblPriceTry = new Label
         {
-            Text = "kur: " + UsdTryRate.ToString("N2"),
+            Text = _rateNote,
             Font = _smallFont,
             ForeColor = UiStyle.TextMuted,
             AutoSize = true,
@@ -1671,7 +1707,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             _lblSelectedService.Text = "Teklif seçilmedi";
             _lblSelectedProvider.Text = string.Empty;
             _lblPriceUsd.Text = "—";
-            _lblPriceTry.Text = $"kur: {UsdTryRate:N2}";
+            _lblPriceTry.Text = _rateNote;
             _btnCreateShipment.Enabled = false;
             _btnCreateShipment.Text = "Gönderi Oluştur";
             _lblActionStatus.Text = "Önce sipariş seçip geçerli paket ölçüleri girin.";
@@ -1681,7 +1717,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _lblSelectedService.Text = _selectedQuote.ServiceName;
         _lblSelectedProvider.Text = _selectedQuote.ProviderName;
         _lblPriceUsd.Text = $"${_selectedQuote.PriceUsd:N2}";
-        _lblPriceTry.Text = $"{_selectedQuote.PriceTry:N2} ₺ · kur {_selectedQuote.ExchangeRate:N2}";
+        _lblPriceTry.Text = $"{_selectedQuote.PriceTry:N2} ₺ · {_rateNote}";
 
         bool supported = _selectedQuote.IsCreationSupported;
         _btnCreateShipment.Enabled = supported;
