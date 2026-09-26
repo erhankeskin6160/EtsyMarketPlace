@@ -3,10 +3,15 @@ namespace EtsyMarketPlace.Application.Shipping;
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using EtsyMarketPlace.Domain.Shipping;
 
 /// <summary>
 /// Aras Global ayarlarını ve oturum tokenini yerel diskte saklayan depo.
+///
+/// Güvenlik: oturum tokeni diskte ŞİFRELİ tutulur (kayıtlı bir <see cref="IShippingSecretProtector"/>
+/// varsa) ve dosyada <c>TokenProtected: true</c> işaretiyle işaretlenir. Geriye uyumluluk için eski
+/// düz metin dosyalar okunmaya devam eder; bir sonraki kayıtta şifreli yazıma geçilir.
 /// </summary>
 public static class ArasGlobalSettingsStore
 {
@@ -34,8 +39,27 @@ public static class ArasGlobalSettingsStore
 
         try
         {
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<ArasGlobalSettings>(json, JsonOptions) ?? new ArasGlobalSettings();
+            string json = File.ReadAllText(path);
+            bool protectedAtRest = IsTokenProtectedInFile(json);
+
+            var settings = JsonSerializer.Deserialize<ArasGlobalSettings>(json, JsonOptions) ?? new ArasGlobalSettings();
+
+            if (protectedAtRest && !string.IsNullOrWhiteSpace(settings.BearerToken))
+            {
+                var protector = ShippingSecretProtector.Current;
+                if (protector == null)
+                {
+                    // Şifre çözücü yok. Şifreli metni token sanıp API'ye göndermektense temizle.
+                    settings.BearerToken = string.Empty;
+                    settings.TokenLastUpdatedUtc = null;
+                }
+                else
+                {
+                    settings.BearerToken = protector.Unprotect(settings.BearerToken);
+                }
+            }
+
+            return settings;
         }
         catch
         {
@@ -45,13 +69,43 @@ public static class ArasGlobalSettingsStore
 
     public static void Save(ArasGlobalSettings settings, string? customPath = null)
     {
+        if (settings == null)
+        {
+            return;
+        }
+
         try
         {
             var path = customPath ?? SettingsPath;
-            var json = JsonSerializer.Serialize(settings, JsonOptions);
-            File.WriteAllText(path, json);
+            var node = JsonSerializer.SerializeToNode(settings, JsonOptions) as JsonObject ?? new JsonObject();
+
+            var protector = ShippingSecretProtector.Current;
+            if (protector != null && !string.IsNullOrWhiteSpace(settings.BearerToken))
+            {
+                node["BearerToken"] = protector.Protect(settings.BearerToken);
+                node["TokenProtected"] = true;
+            }
+            else
+            {
+                node["TokenProtected"] = false;
+            }
+
+            File.WriteAllText(path, node.ToJsonString(JsonOptions));
         }
         catch { }
+    }
+
+    private static bool IsTokenProtectedInFile(string json)
+    {
+        try
+        {
+            var node = JsonNode.Parse(json) as JsonObject;
+            return node?["TokenProtected"]?.GetValue<bool>() == true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static void LogTrace(string step, string content)
