@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PuppeteerSharp;
 using EtsyMarketPlace.Infrastructure.Viral3DModels.Services;
+using EtsyMarketPlace.Application.Shipping;
 
 /// <summary>
 /// Aras panelinde kullanıcının yaptığı gerçek bir işlemin ağ trafiğini kaydeder.
@@ -277,9 +278,54 @@ public sealed class ArasShipmentTemplateCapture
         string json = JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(path, json, new UTF8Encoding(false));
 
+        WriteComparison(path, exchanges);
+
         return path;
     }
 
+    /// <summary>
+    /// Uygulamanın son gönderdiği CreateShipment gövdesi ile panelden yakalanan gövdeyi karşılaştırır.
+    /// </summary>
+    private void WriteComparison(string capturePath, List<CapturedExchange> exchanges)
+    {
+        try
+        {
+            var panelCreate = exchanges.FirstOrDefault(x =>
+                x.Url.Contains("CreateShipment", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(x.RequestBody));
+
+            if (panelCreate == null)
+            {
+                return;
+            }
+
+            string lastRequestPath = Path.Combine(OutputDirectory, "last-createshipment-request.json");
+            if (!File.Exists(lastRequestPath))
+            {
+                return;
+            }
+
+            string ours = File.ReadAllText(lastRequestPath);
+            var diffs = ArasPayloadComparer.Compare(ours, panelCreate.RequestBody,
+                new[] { "shipmentId", "referenceCode", "createdAt", "updatedAt", "date" });
+
+            var sb = new StringBuilder();
+            sb.AppendLine("Aras CreateShipment govde karsilastirmasi");
+            sb.AppendLine("Bizim govde  : " + lastRequestPath);
+            sb.AppendLine("Panel govdesi: " + capturePath);
+            sb.AppendLine("Fark sayisi  : " + diffs.Count);
+            sb.AppendLine(new string('-', 60));
+            foreach (var diff in diffs)
+            {
+                sb.AppendLine(diff.ToString());
+            }
+
+            File.WriteAllText(capturePath + ".fark.txt", sb.ToString(), new UTF8Encoding(false));
+        }
+        catch
+        {
+        }
+    }
     private static string Shorten(string url)
     {
         if (string.IsNullOrEmpty(url)) return string.Empty;
