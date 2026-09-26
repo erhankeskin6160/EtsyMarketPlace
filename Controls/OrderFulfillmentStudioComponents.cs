@@ -469,11 +469,13 @@ public sealed class SaasUnitInputBox : Panel
     public string Title { get => _lblTitle.Text; set => _lblTitle.Text = value; }
     public string Unit { get => _lblUnit.Text; set => _lblUnit.Text = value; }
     public string Value { get => _textBox.Text; set => _textBox.Text = value; }
+    private readonly string _defaultVal;
 
     public event EventHandler? ValueChanged;
 
     public SaasUnitInputBox(string title, string initialVal, string unit)
     {
+        _defaultVal = initialVal;
         Size = new Size(115, 54);
         BackColor = Color.Transparent;
 
@@ -516,7 +518,20 @@ public sealed class SaasUnitInputBox : Panel
             BorderStyle = BorderStyle.None,
             Font = new Font("Segoe UI", 9.5f, FontStyle.Bold)
         };
-        _textBox.TextChanged += (s, e) => ValueChanged?.Invoke(this, EventArgs.Empty);
+        _textBox.TextChanged += (s, e) =>
+        {
+            innerBox.Invalidate();
+            ValueChanged?.Invoke(this, EventArgs.Empty);
+        };
+        _textBox.Leave += (s, e) =>
+        {
+            if (string.IsNullOrWhiteSpace(_textBox.Text) || !decimal.TryParse(_textBox.Text.Replace(',', '.'), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal v) || v <= 0)
+            {
+                _textBox.Text = _defaultVal;
+                innerBox.Invalidate();
+                ValueChanged?.Invoke(this, EventArgs.Empty);
+            }
+        };
         innerBox.Controls.Add(_textBox);
 
         innerBox.SizeChanged += (s, e) =>
@@ -529,7 +544,9 @@ public sealed class SaasUnitInputBox : Panel
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
             using var p = SaasCardPanel.CreateRoundedPath(new Rectangle(0, 0, innerBox.Width - 1, innerBox.Height - 1), 6);
-            using var pen = new Pen(Color.FromArgb(51, 65, 85), 1f);
+            bool isInvalid = GetDecimal() <= 0;
+            Color borderColor = isInvalid ? Color.FromArgb(239, 68, 68) : Color.FromArgb(51, 65, 85);
+            using var pen = new Pen(borderColor, isInvalid ? 1.5f : 1f);
             e.Graphics.DrawPath(pen, p);
         };
 

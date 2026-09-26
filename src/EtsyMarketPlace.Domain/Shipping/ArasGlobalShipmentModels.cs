@@ -2,32 +2,33 @@ namespace EtsyMarketPlace.Domain.Shipping;
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 /// <summary>
 /// Aras Global gönderi adresi modeli (Alıcı, Gönderici ve Fatura adresi).
 /// </summary>
 public sealed class ArasAddress
 {
-    public string Id { get; set; } = string.Empty;
-    public string Title { get; set; } = string.Empty;
-    public string FirstName { get; set; } = string.Empty;
-    public string LastName { get; set; } = string.Empty;
-    public string CompanyName { get; set; } = string.Empty;
-    public string Address { get; set; } = string.Empty;
-    public string CityName { get; set; } = string.Empty;
-    public string DistrictName { get; set; } = string.Empty;
-    public string TownName { get; set; } = string.Empty;
-    public string CountryCode { get; set; } = "TR";
-    public string FromCountryCode { get; set; } = "TR";
-    public string PostalCode { get; set; } = string.Empty;
-    public string Phone { get; set; } = string.Empty;
-    public string Email { get; set; } = string.Empty;
-    public string TaxId { get; set; } = string.Empty; // Etsy IOSS IM3720000224 veya TC/Vergi No
-    public bool HasState { get; set; } = false;
-    public string StateCode { get; set; } = string.Empty;
-    public string StateName { get; set; } = string.Empty;
-    public bool IsCommercialAddress { get; set; } = false;
-    public bool IsResidentialAddress { get; set; } = true;
+    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
+    [JsonPropertyName("title")] public string Title { get; set; } = string.Empty;
+    [JsonPropertyName("firstName")] public string FirstName { get; set; } = string.Empty;
+    [JsonPropertyName("lastName")] public string LastName { get; set; } = string.Empty;
+    [JsonPropertyName("companyName")] public string CompanyName { get; set; } = string.Empty;
+    [JsonPropertyName("address")] public string Address { get; set; } = string.Empty;
+    [JsonPropertyName("cityName")] public string CityName { get; set; } = string.Empty;
+    [JsonPropertyName("districtName")] public string DistrictName { get; set; } = string.Empty;
+    [JsonPropertyName("townName")] public string TownName { get; set; } = string.Empty;
+    [JsonPropertyName("countryCode")] public string CountryCode { get; set; } = "TR";
+    [JsonPropertyName("fromCountryCode")] public string FromCountryCode { get; set; } = "TR";
+    [JsonPropertyName("postalCode")] public string PostalCode { get; set; } = string.Empty;
+    [JsonPropertyName("phone")] public string Phone { get; set; } = string.Empty;
+    [JsonPropertyName("email")] public string Email { get; set; } = string.Empty;
+    [JsonPropertyName("taxId")] public string TaxId { get; set; } = string.Empty; // Etsy IOSS IM3720000224 veya TC/Vergi No
+    [JsonPropertyName("hasState")] public bool HasState { get; set; } = false;
+    [JsonPropertyName("stateCode")] public string StateCode { get; set; } = string.Empty;
+    [JsonPropertyName("stateName")] public string StateName { get; set; } = string.Empty;
+    [JsonPropertyName("isCommercialAddress")] public bool IsCommercialAddress { get; set; } = false;
+    [JsonPropertyName("isResidentialAddress")] public bool IsResidentialAddress { get; set; } = true;
 }
 
 /// <summary>
@@ -35,13 +36,13 @@ public sealed class ArasAddress
 /// </summary>
 public sealed class ArasBox
 {
-    public double Length { get; set; } = 20.0;
-    public double Width { get; set; } = 15.0;
-    public double Height { get; set; } = 10.0;
-    public double Weight { get; set; } = 0.4;
-    public double VolumetricWeight { get; set; } = 0.6;
-    public double Desi { get; set; } = 0.6;
-    public int PackageCount { get; set; } = 1;
+    [JsonPropertyName("length")] public double Length { get; set; } = 20.0;
+    [JsonPropertyName("width")] public double Width { get; set; } = 15.0;
+    [JsonPropertyName("height")] public double Height { get; set; } = 10.0;
+    [JsonPropertyName("weight")] public double Weight { get; set; } = 0.4;
+    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; } = 0.6;
+    [JsonPropertyName("desi")] public double Desi { get; set; } = 0.6;
+    [JsonPropertyName("packageCount")] public int PackageCount { get; set; } = 1;
 }
 
 /// <summary>
@@ -49,18 +50,18 @@ public sealed class ArasBox
 /// </summary>
 public sealed class ArasShipmentItem
 {
-    public string Description { get; set; } = string.Empty;
-    public string ItemDescription { get; set; } = string.Empty;
-    public string HsCode { get; set; } = string.Empty; // GTIP Kodu (örn: 3926400000)
-    public int Quantity { get; set; } = 1;
-    public decimal UnitPrice { get; set; } = 0m;
-    public double Height { get; set; } = 10.0;
-    public double Width { get; set; } = 15.0;
-    public double Length { get; set; } = 20.0;
-    public double Weight { get; set; } = 0.4;
-    public double VolumetricWeight { get; set; } = 0.6;
-    public double Desi { get; set; } = 0.6;
-    public string Category { get; set; } = string.Empty;
+    [JsonPropertyName("description")] public string Description { get; set; } = string.Empty;
+    [JsonPropertyName("itemDescription")] public string ItemDescription { get; set; } = string.Empty;
+    [JsonPropertyName("hsCode")] public string HsCode { get; set; } = string.Empty; // GTIP Kodu (örn: 3926400000)
+    [JsonPropertyName("quantity")] public int Quantity { get; set; } = 1;
+    [JsonPropertyName("unitPrice")] public decimal UnitPrice { get; set; } = 0m;
+    [JsonPropertyName("height")] public double Height { get; set; } = 10.0;
+    [JsonPropertyName("width")] public double Width { get; set; } = 15.0;
+    [JsonPropertyName("length")] public double Length { get; set; } = 20.0;
+    [JsonPropertyName("weight")] public double Weight { get; set; } = 0.4;
+    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; } = 0.6;
+    [JsonPropertyName("desi")] public double Desi { get; set; } = 0.6;
+    [JsonPropertyName("category")] public string Category { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -68,26 +69,26 @@ public sealed class ArasShipmentItem
 /// </summary>
 public sealed class ArasCreateShipmentRequest
 {
-    public string ShipmentId { get; set; } = string.Empty;
-    public List<ArasBox> ShipmentDimensions { get; set; } = new();
-    public List<ArasBox> BoxList { get; set; } = new();
-    public List<ArasShipmentItem> ShipmentItems { get; set; } = new();
-    public ArasAddress SenderAddress { get; set; } = new();
-    public ArasAddress SenderBillingAddress { get; set; } = new();
-    public ArasAddress ReceiverAddress { get; set; } = new();
+    [JsonPropertyName("shipmentId")] public string ShipmentId { get; set; } = "00000000-0000-0000-0000-000000000000";
+    [JsonPropertyName("shipmentDimensions")] public List<ArasBox> ShipmentDimensions { get; set; } = new();
+    [JsonPropertyName("boxList")] public List<ArasBox> BoxList { get; set; } = new();
+    [JsonPropertyName("shipmentItems")] public List<ArasShipmentItem> ShipmentItems { get; set; } = new();
+    [JsonPropertyName("senderAddress")] public ArasAddress SenderAddress { get; set; } = new();
+    [JsonPropertyName("senderBillingAddress")] public ArasAddress SenderBillingAddress { get; set; } = new();
+    [JsonPropertyName("receiverAddress")] public ArasAddress ReceiverAddress { get; set; } = new();
 
-    public decimal Price { get; set; }
-    public decimal TotalPrice { get; set; }
-    public decimal CargoPrice { get; set; }
-    public string Currency { get; set; } = "USD";
-    public string InternationalCargoProvider { get; set; } = "widect"; // widect, ups, vb.
-    public string InternationalShipmentCategory { get; set; } = "4"; // 4: E-Ticaret / Mikro İhracat
-    public bool IsMicroExport { get; set; } = true;
-    public int PackageCount { get; set; } = 1;
+    [JsonPropertyName("price")] public decimal Price { get; set; }
+    [JsonPropertyName("totalPrice")] public decimal TotalPrice { get; set; }
+    [JsonPropertyName("cargoPrice")] public decimal CargoPrice { get; set; }
+    [JsonPropertyName("currency")] public string Currency { get; set; } = "USD";
+    [JsonPropertyName("internationalCargoProvider")] public string InternationalCargoProvider { get; set; } = "widect"; // widect, ups, vb.
+    [JsonPropertyName("internationalShipmentCategory")] public string InternationalShipmentCategory { get; set; } = "4"; // 4: E-Ticaret / Mikro İhracat
+    [JsonPropertyName("isMicroExport")] public bool IsMicroExport { get; set; } = true;
+    [JsonPropertyName("packageCount")] public int PackageCount { get; set; } = 1;
 
-    public double Weight { get; set; } = 0.4;
-    public double VolumetricWeight { get; set; } = 0.6;
-    public double Desi { get; set; } = 0.6;
+    [JsonPropertyName("weight")] public double Weight { get; set; } = 0.4;
+    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; } = 0.6;
+    [JsonPropertyName("desi")] public double Desi { get; set; } = 0.6;
 }
 
 /// <summary>

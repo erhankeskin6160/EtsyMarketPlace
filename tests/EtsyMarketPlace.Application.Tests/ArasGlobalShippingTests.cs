@@ -179,13 +179,14 @@ public sealed class ArasGlobalShippingTests
         };
 
         // Serileştirme sırasında hiçbir 'collides with another property' hatası fırlatılmamalı
+        // ve Aras Global backend'inin beklediği camelCase alanlar (volumetricWeight, desi vb.) üretilmeli
         string json = System.Text.Json.JsonSerializer.Serialize(request, options);
 
         Assert.NotNull(json);
-        Assert.Contains("\"VolumetricWeight\":0.6", json);
-        Assert.Contains("\"Desi\":0.6", json);
-        Assert.Contains("\"ShipmentDimensions\":[", json);
-        Assert.Contains("\"BoxList\":[", json);
-        Assert.Contains("\"ItemDescription\":\"Test Item\"", json);
+        Assert.Contains("\"volumetricWeight\":0.6", json);
+        Assert.Contains("\"desi\":0.6", json);
+        Assert.Contains("\"shipmentDimensions\":[", json);
+        Assert.Contains("\"boxList\":[", json);
+        Assert.Contains("\"itemDescription\":\"Test Item\"", json);
     }
 }

@@ -1460,6 +1460,18 @@ public sealed class OrderFulfillmentStudioControl : UserControl
             }
         }
 
+        decimal kg = _inputWeight.GetDecimal();
+        double w = (double)_inputWidth.GetDecimal();
+        double l = (double)_inputLength.GetDecimal();
+        double h = (double)_inputHeight.GetDecimal();
+
+        if (kg <= 0 || w <= 0 || l <= 0 || h <= 0)
+        {
+            _lblStatusMsg.ForeColor = Color.FromArgb(248, 113, 113);
+            _lblStatusMsg.Text = "⚠️ Lütfen paket ağırlık ve ebat (En, Boy, Yükseklik) bilgilerini eksiksiz girin.";
+            return;
+        }
+
         _btnCreateShipment.Enabled = false;
         _btnCreateShipment.Text = "⏳ Gönderi Oluşturuluyor...";
         _lblStatusMsg.ForeColor = Color.FromArgb(56, 189, 248);
@@ -1467,15 +1479,6 @@ public sealed class OrderFulfillmentStudioControl : UserControl
 
         try
         {
-            decimal kg = _inputWeight.GetDecimal();
-            double w = (double)_inputWidth.GetDecimal();
-            double l = (double)_inputLength.GetDecimal();
-            double h = (double)_inputHeight.GetDecimal();
-
-            if (kg <= 0) kg = 0.5m;
-            if (w <= 0) w = 15;
-            if (l <= 0) l = 20;
-            if (h <= 0) h = 10;
 
             var context = new ShipmentCreationContext
             {
