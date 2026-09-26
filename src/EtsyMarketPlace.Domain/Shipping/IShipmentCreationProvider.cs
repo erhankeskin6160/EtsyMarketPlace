@@ -20,6 +20,10 @@ public sealed class ShipmentCreationContext
     public string SelectedSubCarrier { get; set; } = "widect"; // widect, ups, vb.
     public string ServiceType { get; set; } = "Eco Express";
     public decimal CargoPrice { get; set; } = 0m;
+    /// <summary>Teklif adiminda kullanilan desi (hacimsel agirlik). Tek kaynak burasidir.</summary>
+    public double Desi { get; set; } = 0;
+    /// <summary>Kargo kalemi kategorisi (Aras sozlesmesindeki shipmentItems[].category).</summary>
+    public string Category { get; set; } = "Home Decor";
     public ArasAddress SenderAddress { get; set; } = new();
 }
 

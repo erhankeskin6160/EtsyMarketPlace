@@ -721,6 +721,12 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         return t;
     }
 
+    /// <summary>Son iz yaziminin yolu (teshis icin).</summary>
+    public static string LastTracePath { get; private set; } = string.Empty;
+
+    /// <summary>Son iz yazim hatasi (bos ise hata yok).</summary>
+    public static string LastTraceError { get; private set; } = string.Empty;
+
     public static void LogApiTrace(string step, string content)
     {
         try
@@ -731,7 +737,18 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
             Directory.CreateDirectory(folder);
             string logPath = Path.Combine(folder, "aras_shipment_api_trace.log");
             string line = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] [{step}]\n{content}\n----------------------------------------\n";
-            File.AppendAllText(logPath, line);
+            try
+            {
+                File.AppendAllText(logPath, line);
+                LastTracePath = logPath;
+            }
+            catch (Exception ex)
+            {
+                LastTraceError = ex.Message;
+                string fallback = Path.Combine(Path.GetTempPath(), "aras_shipment_api_trace.log");
+                File.AppendAllText(fallback, line);
+                LastTracePath = fallback;
+            }
         }
         catch { }
     }

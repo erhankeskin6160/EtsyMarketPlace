@@ -1969,7 +1969,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 HsCode = (_cmbHsCode.SelectedItem?.ToString() ?? "3926400000").Split(' ')[0],
                 SelectedSubCarrier = _selectedQuote.SubCarrier,
                 ServiceType = _selectedQuote.ServiceType,
-                CargoPrice = _selectedQuote.PriceUsd
+                CargoPrice = _selectedQuote.PriceUsd,
+                Desi = measurement.Desi
             };
 
             _lblActionStatus.Text = "Adım 3/3 · taşıyıcıya gönderiliyor";
