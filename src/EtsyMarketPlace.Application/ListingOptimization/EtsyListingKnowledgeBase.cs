@@ -27,7 +27,7 @@ public static class EtsyListingKnowledgeBase
         """
         Etsy listing knowledge:
         - Write every buyer-facing field in natural English. Do not write Turkish in title, tags, materials, or description.
-        - Title: make it readable, not keyword-stuffed. Put the product identity in the first words. Keep under 140 characters and avoid vague claims such as perfect, best, official, licensed, or authentic unless proven.
+        - Title: make it readable, not keyword-stuffed. Put the product identity in the first words. Keep under 140 characters and avoid vague claims such as perfect, best, official, licensed, or authentic unless proven. NEVER use the ampersand '&' character in titles; always write 'and' or use hyphens/commas (Etsy API rejects multiple ampersands).
         - Tags: provide up to 13 Etsy tags. Each tag must be 20 characters or less, buyer-searchable, not repetitive, and preferably multi-word when possible.
         - Description: write unique buyer-facing copy for the exact product. Use short paragraphs: what it is, who it is for, material/finish/size cues, use cases, and a final review/risk note.
         - Materials: only list materials explicitly supported by the source listing text. Never invent materials.

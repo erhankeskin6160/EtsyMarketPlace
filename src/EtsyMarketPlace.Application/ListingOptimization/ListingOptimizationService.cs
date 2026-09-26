@@ -472,7 +472,7 @@ public sealed class ListingOptimizationService
             ?? nonPrimaryTags.ElementAtOrDefault(0) ?? "Handcrafted Design";
 
         var tagDisplay = nonPrimaryTags.FirstOrDefault(t => t != tagCraft && (t.Contains("Decor", StringComparison.OrdinalIgnoreCase) || t.Contains("Desk", StringComparison.OrdinalIgnoreCase) || t.Contains("Display", StringComparison.OrdinalIgnoreCase) || t.Contains("Art", StringComparison.OrdinalIgnoreCase) || t.Contains("Room", StringComparison.OrdinalIgnoreCase) || t.Contains("Lamp", StringComparison.OrdinalIgnoreCase)))
-            ?? nonPrimaryTags.ElementAtOrDefault(1) ?? "Display Art & Decor";
+            ?? nonPrimaryTags.ElementAtOrDefault(1) ?? "Display Art and Decor";
 
         var tagGift = nonPrimaryTags.FirstOrDefault(t => t != tagCraft && t != tagDisplay && (t.Contains("Gift", StringComparison.OrdinalIgnoreCase) || t.Contains("Fan", StringComparison.OrdinalIgnoreCase) || t.Contains("Collector", StringComparison.OrdinalIgnoreCase) || t.Contains("Present", StringComparison.OrdinalIgnoreCase) || t.Contains("Tribute", StringComparison.OrdinalIgnoreCase)))
             ?? nonPrimaryTags.ElementAtOrDefault(2) ?? "Unique Collector Gift";
@@ -511,6 +511,7 @@ public sealed class ListingOptimizationService
         var title3 = AssembleFluidTitle(title3Hook, title3Candidates, 138);
 
         return new[] { title1, title2, title3 }
+            .Select(EtsyTitleFormatter.NormalizeForEtsy)
             .Where(title => !string.IsNullOrWhiteSpace(title))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(3)

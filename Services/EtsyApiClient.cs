@@ -669,7 +669,7 @@ internal sealed class EtsyApiClient
         var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
         var form = new List<KeyValuePair<string, string>>
         {
-            new("title", update.Title.Trim()),
+            new("title", EtsyMarketPlace.Application.ListingOptimization.EtsyTitleFormatter.NormalizeForEtsy(update.Title)),
             new("description", EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(update.Description)),
         };
 
@@ -919,7 +919,7 @@ internal sealed class EtsyApiClient
         var form = new List<KeyValuePair<string, string>>
         {
             new("quantity", Math.Max(1, draft.Quantity).ToString(CultureInfo.InvariantCulture)),
-            new("title", draft.Title.Trim()),
+            new("title", EtsyMarketPlace.Application.ListingOptimization.EtsyTitleFormatter.NormalizeForEtsy(draft.Title)),
             new("description", draft.Description.Trim()),
             new("price", draft.Price.ToString("0.00", CultureInfo.InvariantCulture)),
             new("who_made", string.IsNullOrWhiteSpace(draft.WhoMade) ? "i_did" : draft.WhoMade.Trim()),

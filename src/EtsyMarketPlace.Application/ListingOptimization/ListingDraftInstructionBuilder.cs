@@ -113,6 +113,7 @@ public static class ListingDraftInstructionBuilder
         - MULTILINGUAL INPUT & ENGLISH OUTPUT:
           * When the seller provides Turkish title, description, or tags, understand the product intent completely and translate/adapt it into high-search-volume English terminology used by global Etsy buyers.
         - title_suggestions: exactly 3 items. All in English. Max 140 characters limit (STRICT TARGET: 130-139 characters).
+          * ABSOLUTE ETSY API RULE - NEVER USE '&' IN TITLES: NEVER include the ampersand character '&' anywhere in any title! Etsy's official API rejects listings with multiple '&' characters (HTTP 400: "& can only be used once"). ALWAYS write the full English word "and" or use commas/hyphens instead of '&' (e.g. write "Statue and Model", "Desk and Room Decor" - NEVER "Statue & Model").
           * NO ROBOTIC TAG CHAINS: NEVER produce raw lists of short tags joined by pipes (e.g. NEVER output "Item | Tag1 | Tag2 | Tag3 | Tag4 | Tag5 | Tag6"). Titles must read like natural, premium human-written product titles that maximize click-through rate (CTR).
           * TWO-ZONE ARCHITECTURE MANDATE (MANDATORY FOR ALL 3 TITLES):
             - ZONE 1: FRONT-LOADING (FIRST 40-55 CHARS) - CRITICAL MOBILE CUTOFF RULE:
@@ -128,9 +129,9 @@ public static class ListingDraftInstructionBuilder
               * Fill the remaining ~85 characters with high-intent search angles: gift occasions ("Gamer Gift, Birthday Present for Boyfriend"), room placement ("Desk Display, Gaming Room Decor"), style/fan details, and craft materials.
               * Never produce a title shorter than 120 characters, and NEVER exceed 140 characters. Target sweet spot: 128 - 139 characters.
           * 3 DISTINCT CREATIVE STRATEGIES:
-            1. Title 1 (High-Converting Mobile Hook): [Core Product & Standout Feature (First 50 chars)] - [Artisan Craft & Material] | [Room Placement & Gift Long-Tail]
-            2. Title 2 (Collector & Aesthetic Display): [Handcrafted Showcase Identity (First 50 chars)] | [Atmospheric Vibe & Material] | [Collector Niche & Room Decor]
-            3. Title 3 (Gift & Occasion Keepsake): [Memorable Product Name & Sizing (First 50 chars)] - [Gift for Him/Her & Enthusiasts] | [Fine Craft Details]
+            1. Title 1 (High-Converting Mobile Hook): [Core Product and Standout Feature (First 50 chars)] - [Artisan Craft, Material] | [Room Placement and Gift Long-Tail]
+            2. Title 2 (Collector and Aesthetic Display): [Handcrafted Showcase Identity (First 50 chars)] | [Atmospheric Vibe and Material] | [Collector Niche and Room Decor]
+            3. Title 3 (Gift and Occasion Keepsake): [Memorable Product Name and Sizing (First 50 chars)] - [Gift for Him/Her and Enthusiasts] | [Fine Craft Details]
           * NO SYSTEM PROMPT LEAKS: NEVER include instructions, metadata, or phrases like "OUTPUT LANGUAGE", "English only", "Do not write Turkish", "Title 1:", etc. in any title.
         - tag_suggestions: exactly 13 items. All in English.
           * TAG REFRESH & NO ECHO RULE: When input listing already has tags, DO NOT simply echo or repeat them back! Keep at most 2-3 high-relevance terms if critical, and replace at least 10 tags with FRESH, high-intent search terms across gift, audience, style, placement, and materials.

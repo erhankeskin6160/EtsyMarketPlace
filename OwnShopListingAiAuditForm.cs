@@ -1182,7 +1182,7 @@ internal sealed class OwnShopListingAiAuditForm(
 
         var aiSettings = AiOptimizationSettingsStore.Load();
         string engineName = aiSettings.GetActiveEngineName();
-        string optTitle = result.TitleSuggestions.FirstOrDefault() ?? row.Title;
+        string optTitle = EtsyMarketPlace.Application.ListingOptimization.EtsyTitleFormatter.NormalizeForEtsy(result.TitleSuggestions.FirstOrDefault() ?? row.Title);
         var optTags = result.TagSuggestions.Take(13).ToList();
         var normalizedDesc = EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(result.DescriptionDraft);
 
@@ -1337,7 +1337,7 @@ internal sealed class OwnShopListingAiAuditForm(
 
     private static ListingTextUpdate CreateListingUpdate(ListingOptimizationResult result) =>
         new(
-            result.TitleSuggestions.FirstOrDefault()?.Trim() ?? "",
+            EtsyMarketPlace.Application.ListingOptimization.EtsyTitleFormatter.NormalizeForEtsy(result.TitleSuggestions.FirstOrDefault() ?? ""),
             EtsyMarketPlace.Application.ListingOptimization.EtsyDescriptionFormatter.NormalizeForEtsy(result.DescriptionDraft),
             result.TagSuggestions.Select(tag => tag.Trim()).Where(tag => tag.Length > 0).Take(13).ToList(),
             EtsyApiClient.NormalizeListingMaterialsForEtsy(result.MaterialSuggestions));
@@ -1353,6 +1353,12 @@ internal sealed class OwnShopListingAiAuditForm(
         if (update.Title.Length > 140)
         {
             message = "Baslik 140 karakterden uzun. Etsy kabul etmeyebilir.";
+            return false;
+        }
+
+        if (update.Title.Count(c => c == '&') > 1)
+        {
+            message = "Etsy kuralı: Başlıkta '&' karakteri en fazla 1 kez kullanılabilir. Lütfen '&' yerine 'and' kullanın.";
             return false;
         }
 
