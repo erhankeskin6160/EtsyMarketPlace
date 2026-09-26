@@ -1,5 +1,7 @@
 namespace EtsyMarketPlace.Domain.Shipping;
 
+using System.Text.Json.Serialization;
+
 using System;
 using System.Collections.Generic;
 
@@ -83,6 +85,8 @@ public sealed class ArasGlobalSettings
     public string EncryptedPassword { get; set; } = string.Empty;
     public bool AutoRefreshEnabled { get; set; } = true;
 
+    [JsonIgnore]
+
     public string CleanToken
     {
         get
@@ -96,6 +100,8 @@ public sealed class ArasGlobalSettings
             return t;
         }
     }
+
+    [JsonIgnore]
 
     public bool HasValidTokenFormat =>
         !string.IsNullOrWhiteSpace(BearerToken) && CleanToken.Length > 20 && !JwtTokenInspector.IsExpired(CleanToken);

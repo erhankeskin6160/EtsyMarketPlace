@@ -40,6 +40,10 @@ static class Program
             };
             Application.ThreadException += (s, e) => HandleFatalException(e.Exception);
 
+            // Kargo kimlik bilgileri ve oturum tokenleri diskte DPAPI ile saklanir.
+            EtsyMarketPlace.Application.Shipping.ShippingSecretProtector.Current =
+                new EtsyMarketPlace.Infrastructure.Shipping.DpapiShippingSecretProtector();
+
             RealMain(args);
         }
         catch (Exception ex)
