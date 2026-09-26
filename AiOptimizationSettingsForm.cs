@@ -36,9 +36,6 @@ internal sealed class AiOptimizationSettingsForm : Form
     private readonly CheckBox _chkStrictLiveAi = new();
     private readonly CheckBox _chkStrictNeverOffline = new();
 
-    // Scroll Container
-    private ModernScrollPanel? _scrollPanel;
-
     // Terminal & Aksiyonlar
     private readonly TextBox _statusTextBox = new();
     private readonly Button _btnSave = new();
@@ -54,12 +51,6 @@ internal sealed class AiOptimizationSettingsForm : Form
 
         BuildLayout();
         LoadValues();
-    }
-
-    protected override void OnShown(EventArgs e)
-    {
-        base.OnShown(e);
-        _scrollPanel?.RecalculateScroll();
     }
 
     private void BuildLayout()
@@ -113,29 +104,23 @@ internal sealed class AiOptimizationSettingsForm : Form
         // ==========================================
         // 2. KARTLAR (KAYDIRILABİLİR ALAN)
         // ==========================================
-        _scrollPanel = new ModernScrollPanel
+        var scrollPanel = new Panel
         {
             Dock = DockStyle.Fill,
-            Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 4, 0),
-            BackColor = Color.FromArgb(15, 23, 42),
-            ScrollBarGap = 8
+            AutoScroll = true,
+            Padding = new Padding(0, 0, 8, 0)
         };
-        _scrollPanel.ScrollBar.Width = 9;
-        _scrollPanel.ScrollBar.ThumbNormalColor = Color.FromArgb(71, 85, 105);   // Slate 600
-        _scrollPanel.ScrollBar.ThumbHoverColor = Color.FromArgb(100, 116, 139);  // Slate 500
-        _scrollPanel.ScrollBar.ThumbActiveColor = Color.FromArgb(56, 189, 248);  // Electric Cyan
-        mainLayout.Controls.Add(_scrollPanel, 0, 1);
+        mainLayout.Controls.Add(scrollPanel, 0, 1);
 
         var cardsTable = new TableLayoutPanel
         {
+            Dock = DockStyle.Top,
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
             RowCount = 3,
             Margin = new Padding(0),
-            Padding = new Padding(0, 0, 8, 0),
-            BackColor = Color.FromArgb(15, 23, 42)
+            Padding = new Padding(0)
         };
         cardsTable.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         cardsTable.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -150,7 +135,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         cardsTable.Controls.Add(BuildCard2_VisionStudio(), 0, 1);
         cardsTable.Controls.Add(BuildCard3_SecurityFallback(), 0, 2);
 
-        _scrollPanel.SetContent(cardsTable);
+        scrollPanel.Controls.Add(cardsTable);
 
         // ==========================================
         // 3. ALT BÖLÜM (FOOTER: EYLEMLER & TERMİNAL)
@@ -277,7 +262,7 @@ internal sealed class AiOptimizationSettingsForm : Form
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
-        _statusTextBox.ScrollBars = ScrollBars.None;
+        _statusTextBox.ScrollBars = ScrollBars.Vertical;
         _statusTextBox.BackColor = Color.FromArgb(10, 15, 26);
         _statusTextBox.ForeColor = Color.FromArgb(52, 211, 153); // Terminal Green
         _statusTextBox.Font = new Font("Consolas", 8.2F);
@@ -724,7 +709,6 @@ internal sealed class AiOptimizationSettingsForm : Form
         }
 
         WriteStatus($"Sağlayıcı seçildi: {GetProviderDisplayName(providerKey)} (Model: {_modelComboBox.Text})");
-        _scrollPanel?.RecalculateScroll();
     }
 
     private static string GetProviderDisplayName(string key) => key switch
@@ -915,6 +899,12 @@ internal sealed class AiOptimizationSettingsForm : Form
             Padding = new Padding(0)
         };
         cardLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        if (!string.IsNullOrWhiteSpace(subNote))
+        {
+            cardLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
+        cardLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         int r = 0;
         var lblTitle = new Label

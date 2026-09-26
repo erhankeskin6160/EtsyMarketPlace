@@ -53,8 +53,15 @@ internal static class AiProviderIconHelper
 
         return _cache.GetOrAdd(cacheKey, _ =>
         {
-            string svgPath = GetSvgPath(providerKey);
-            return RenderSvgPath(svgPath, size, color);
+            try
+            {
+                string svgPath = GetSvgPath(providerKey);
+                return RenderSvgPath(svgPath, size, color);
+            }
+            catch
+            {
+                return new Bitmap(size, size);
+            }
         });
     }
 
@@ -73,44 +80,53 @@ internal static class AiProviderIconHelper
 
     private static Bitmap RenderSvgPath(string svgPathData, int size, Color color)
     {
-        using var skBmp = new SKBitmap(size, size, SKColorType.Bgra8888, SKAlphaType.Premul);
-        using (var canvas = new SKCanvas(skBmp))
+        try
         {
-            canvas.Clear(SKColors.Transparent);
-
-            using var path = SKPath.ParseSvgPathData(svgPathData);
-            if (path != null)
+            using var skBmp = new SKBitmap(size, size, SKColorType.Bgra8888, SKAlphaType.Premul);
+            using (var canvas = new SKCanvas(skBmp))
             {
-                var bounds = path.Bounds;
-                if (bounds.Width > 0 && bounds.Height > 0)
+                canvas.Clear(SKColors.Transparent);
+
+                using var path = SKPath.ParseSvgPathData(svgPathData);
+                if (path != null)
                 {
-                    // Buton içinde dengeli durması için %6 oranında hafif nefes payı
-                    float pad = size * 0.06f;
-                    float availW = size - (pad * 2f);
-                    float availH = size - (pad * 2f);
-                    float scale = Math.Min(availW / bounds.Width, availH / bounds.Height);
-
-                    float dx = (size - bounds.Width * scale) / 2f - bounds.Left * scale;
-                    float dy = (size - bounds.Height * scale) / 2f - bounds.Top * scale;
-
-                    canvas.Translate(dx, dy);
-                    canvas.Scale(scale);
-
-                    using var paint = new SKPaint
+                    var bounds = path.Bounds;
+                    if (bounds.Width > 0 && bounds.Height > 0)
                     {
-                        Color = new SKColor(color.R, color.G, color.B, color.A),
-                        IsAntialias = true,
-                        Style = SKPaintStyle.Fill
-                    };
-                    canvas.DrawPath(path, paint);
+                        // Buton içinde dengeli durması için %6 oranında hafif nefes payı
+                        float pad = size * 0.06f;
+                        float availW = size - (pad * 2f);
+                        float availH = size - (pad * 2f);
+                        float scale = Math.Min(availW / bounds.Width, availH / bounds.Height);
+
+                        float dx = (size - bounds.Width * scale) / 2f - bounds.Left * scale;
+                        float dy = (size - bounds.Height * scale) / 2f - bounds.Top * scale;
+
+                        canvas.Translate(dx, dy);
+                        canvas.Scale(scale);
+
+                        using var paint = new SKPaint
+                        {
+                            Color = new SKColor(color.R, color.G, color.B, color.A),
+                            IsAntialias = true,
+                            Style = SKPaintStyle.Fill
+                        };
+                        canvas.DrawPath(path, paint);
+                    }
                 }
             }
-        }
 
-        // SKBitmap -> GDI+ System.Drawing.Bitmap dönüşümü
-        using var image = SKImage.FromBitmap(skBmp);
-        using var data = image.Encode(SKEncodedImageFormat.Png, 100);
-        using var ms = new MemoryStream(data.ToArray());
-        return new Bitmap(ms);
+            // SKBitmap -> GDI+ System.Drawing.Bitmap dönüşümü
+            // Bellek akışı kapandığında GDI+ çiziminin bozulmaması için bağımsız klon alınır
+            using var image = SKImage.FromBitmap(skBmp);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            using var ms = new MemoryStream(data.ToArray());
+            using var tempBmp = new Bitmap(ms);
+            return new Bitmap(tempBmp);
+        }
+        catch
+        {
+            return new Bitmap(size, size);
+        }
     }
 }
