@@ -136,6 +136,16 @@ public sealed class ArasGlobalShippingTests
             Desi = 0.6
         };
 
+        request.ShipmentDimensions.Add(new ArasBox
+        {
+            Length = 20,
+            Width = 15,
+            Height = 10,
+            Weight = 0.4,
+            VolumetricWeight = 0.6,
+            Desi = 0.6,
+            PackageCount = 1
+        });
         request.BoxList.Add(new ArasBox
         {
             Length = 20,
@@ -150,6 +160,7 @@ public sealed class ArasGlobalShippingTests
         request.ShipmentItems.Add(new ArasShipmentItem
         {
             Description = "Test Item",
+            ItemDescription = "Test Item",
             HsCode = "3926400000",
             Quantity = 1,
             UnitPrice = 11.16m,
@@ -158,7 +169,8 @@ public sealed class ArasGlobalShippingTests
             Height = 10,
             Weight = 0.4,
             VolumetricWeight = 0.6,
-            Desi = 0.6
+            Desi = 0.6,
+            Category = "1"
         });
 
         var options = new System.Text.Json.JsonSerializerOptions
@@ -172,6 +184,8 @@ public sealed class ArasGlobalShippingTests
         Assert.NotNull(json);
         Assert.Contains("\"VolumetricWeight\":0.6", json);
         Assert.Contains("\"Desi\":0.6", json);
+        Assert.Contains("\"ShipmentDimensions\":[", json);
         Assert.Contains("\"BoxList\":[", json);
+        Assert.Contains("\"ItemDescription\":\"Test Item\"", json);
     }
 }
