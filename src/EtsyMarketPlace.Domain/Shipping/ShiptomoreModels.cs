@@ -1,5 +1,7 @@
 namespace EtsyMarketPlace.Domain.Shipping;
 
+using System.Text.Json.Serialization;
+
 using System;
 using System.Collections.Generic;
 
@@ -56,4 +58,11 @@ public sealed class ShiptomoreSettings
 
     /// <summary>Resmî API Client Secret — DPAPI ile şifreli saklanır.</summary>
     public string? EncryptedClientSecret { get; set; }
+
+    /// <summary>Bellekteki düz metin secret. Diske YAZILMAZ; kalıcı alan EncryptedClientSecret'tır.</summary>
+    [JsonIgnore]
+    public string? ClientSecret { get; set; }
+
+    /// <summary>Diskteki secret şifreli mi? (yalnızca kalıcılık göstergesi)</summary>
+    public bool ClientSecretProtected { get; set; }
 }

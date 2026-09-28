@@ -223,7 +223,18 @@ public sealed class ShiptomoreOfficialApiClient : IShiptomoreOfficialApi
 
     private static string DecryptSecret(ShiptomoreSettings? settings)
     {
-        if (settings == null || string.IsNullOrWhiteSpace(settings.EncryptedClientSecret))
+        if (settings == null)
+        {
+            return string.Empty;
+        }
+
+        // Depo, korumali dosyayi okurken duz metni ClientSecret'a koyar (bellekte).
+        if (!string.IsNullOrWhiteSpace(settings.ClientSecret))
+        {
+            return settings.ClientSecret!;
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.EncryptedClientSecret))
         {
             return string.Empty;
         }
