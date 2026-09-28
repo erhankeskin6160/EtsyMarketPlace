@@ -5,24 +5,6 @@ using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Shipping;
 
 /// <summary>
-/// ShipEntegra gönderi oluşturma sağlayıcısı (API modeli keşfedildiğinde aktifleştirilecek).
-/// </summary>
-public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvider
-{
-    public string ProviderName => "ShipEntegra";
-    public bool IsCreationSupported => false;
-
-    public Task<ShipmentCreationResult> CreateShipmentAsync(ShipmentCreationContext context, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(new ShipmentCreationResult
-        {
-            IsSuccess = false,
-            ErrorMessage = "ShipEntegra kargo oluşturma API modeli keşfedildiğinde bu modül üzerinden otomatik gönderi oluşturulabilecektir. Şu an Aras Global tam aktiftir."
-        });
-    }
-}
-
-/// <summary>
 /// Navlungo gönderi oluşturma sağlayıcısı (API modeli keşfedildiğinde aktifleştirilecek).
 /// </summary>
 public sealed class NavlungoShipmentCreationProvider : IShipmentCreationProvider

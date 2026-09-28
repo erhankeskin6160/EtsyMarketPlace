@@ -4,6 +4,7 @@ namespace EtsyMarketPlace.Infrastructure.Shipping;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -21,6 +22,7 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
 {
     private readonly HttpClient _httpClient;
     private const string BaseEndpoint = "https://api.shipentegra.com/v1/tools/calculate/all";
+    private const string BaseUrlV1 = "https://api.shipentegra.com/v1";
 
     public ShipEntegraApiClient(HttpClient? httpClient = null)
     {
@@ -125,6 +127,191 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         }
 
         return offers;
+    }
+
+    /// <summary>Sipariş oluşturur (panel sözleşmesi). Dönen modelde sipariş ve kalem kimlikleri bulunur.</summary>
+    public async Task<ShipEntegraOrderResult> CreateOrderAsync(
+        ShipEntegraCreateOrderRequest request,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanToken = CleanToken(rawBearerToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrlV1 + "/orders");
+        ApplyHeaders(httpRequest, cleanToken);
+
+        string json = JsonSerializer.Serialize(request);
+        httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        LogShipEntegraTrace("CreateOrder-Request", json);
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        ValidateStatus(response);
+
+        string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogShipEntegraTrace("CreateOrder-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"ShipEntegra sipariş oluşturma HTTP ({(int)response.StatusCode}). Yanıt: {responseContent}");
+        }
+
+        return ParseOrderResult(responseContent);
+    }
+
+    /// <summary>Siparişin kalem kimliklerini getirir (/orders/{id}/items).</summary>
+    public async Task<List<long>> GetOrderItemsAsync(
+        long orderId,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanToken = CleanToken(rawBearerToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, BaseUrlV1 + $"/orders/{orderId}/items");
+        ApplyHeaders(httpRequest, cleanToken);
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        ValidateStatus(response);
+
+        string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogShipEntegraTrace("GetOrderItems-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
+        var ids = new List<long>();
+        try
+        {
+            using var doc = JsonDocument.Parse(responseContent);
+            var root = doc.RootElement;
+            JsonElement list = root;
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var dataElem))
+            {
+                list = dataElem;
+            }
+
+            if (list.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in list.EnumerateArray())
+                {
+                    long id = TryReadLong(item, "id");
+                    if (id == 0)
+                    {
+                        id = TryReadLong(item, "itemId");
+                    }
+
+                    if (id != 0)
+                    {
+                        ids.Add(id);
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Ayrıştırılamayan yanıt boş liste döner; çağıran taraf anlamlı hata üretir.
+        }
+
+        return ids;
+    }
+
+    /// <summary>Etiket oluşturur ve ham yanıt baytlarını döner (PDF veya JSON olabilir).</summary>
+    public async Task<byte[]?> CreateLabelAsync(
+        ShipEntegraCreateLabelRequest request,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanToken = CleanToken(rawBearerToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrlV1 + "/logistics/labels/shipentegra");
+        ApplyHeaders(httpRequest, cleanToken);
+
+        string json = JsonSerializer.Serialize(request);
+        httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        LogShipEntegraTrace("CreateLabel-Request", json);
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        ValidateStatus(response);
+
+        byte[] bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        LogShipEntegraTrace("CreateLabel-Response", $"Status: {(int)response.StatusCode} | {bytes.Length} bayt");
+
+        return bytes;
+    }
+
+    private static ShipEntegraOrderResult ParseOrderResult(string json)
+    {
+        var result = new ShipEntegraOrderResult { RawJson = json };
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            JsonElement data = root;
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("data", out var dataElem) && dataElem.ValueKind == JsonValueKind.Object)
+            {
+                data = dataElem;
+            }
+
+            result.OrderId = TryReadLong(data, "id");
+            if (result.OrderId == 0)
+            {
+                result.OrderId = TryReadLong(data, "orderId");
+            }
+
+            if (data.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var it in items.EnumerateArray())
+                {
+                    long id = TryReadLong(it, "id");
+                    if (id == 0)
+                    {
+                        id = TryReadLong(it, "itemId");
+                    }
+
+                    if (id != 0)
+                    {
+                        result.ItemIds.Add(id);
+                    }
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Ham yanıt zaten result.RawJson içinde; çağıran taraf değerlendirir.
+        }
+
+        return result;
+    }
+
+    private static long TryReadLong(JsonElement element, string name)
+    {
+        if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(name, out var prop))
+        {
+            return 0;
+        }
+
+        if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt64(out long value))
+        {
+            return value;
+        }
+
+        if (prop.ValueKind == JsonValueKind.String && long.TryParse(prop.GetString(), out long parsed))
+        {
+            return parsed;
+        }
+
+        return 0;
+    }
+
+    private static void LogShipEntegraTrace(string step, string content)
+    {
+        try
+        {
+            string folder = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "SimilarProductsWinForms");
+            Directory.CreateDirectory(folder);
+            string logPath = Path.Combine(folder, "shipentegra_api_trace.log");
+            string line = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] [{step}]\n{content}\n----------------------------------------\n";
+            File.AppendAllText(logPath, line);
+        }
+        catch (Exception)
+        {
+            // Teşhis yazımı akışı etkilemez.
+        }
     }
 
     private static void ApplyHeaders(HttpRequestMessage req, string token)

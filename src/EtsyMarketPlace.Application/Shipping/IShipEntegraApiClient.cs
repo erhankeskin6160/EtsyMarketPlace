@@ -14,4 +14,19 @@ public interface IShipEntegraApiClient
         ShipEntegraQuoteRequest request,
         string rawBearerToken,
         CancellationToken cancellationToken = default);
+
+    Task<ShipEntegraOrderResult> CreateOrderAsync(
+        ShipEntegraCreateOrderRequest request,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
+
+    Task<List<long>> GetOrderItemsAsync(
+        long orderId,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
+
+    Task<byte[]?> CreateLabelAsync(
+        ShipEntegraCreateLabelRequest request,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
 }

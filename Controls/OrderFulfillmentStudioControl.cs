@@ -104,7 +104,10 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                 _arasApiClient,
                 _sessionManager,
                 pass => ShippingCredentialEncryptor.Decrypt(pass)),
-            new ShipEntegraShipmentCreationProvider(),
+            new ShipEntegraShipmentCreationProvider(
+                new ShipEntegraApiClient(),
+                _sessionManager,
+                pass => ShippingCredentialEncryptor.Decrypt(pass)),
             new NavlungoShipmentCreationProvider(),
             new ShiptomoreOfficialShipmentCreationProvider(new ShiptomoreOfficialApiClient())
         });
