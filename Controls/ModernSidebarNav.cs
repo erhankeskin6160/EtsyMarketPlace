@@ -25,7 +25,7 @@ public class SidebarItemSelectedEventArgs : EventArgs
 
 public class ModernSidebarNav : UserControl, IMessageFilter
 {
-    public const int DefaultExpandedWidth = 275;
+    public const int DefaultExpandedWidth = 323;
     public const int CollapsedWidth = 64;
 
     public event EventHandler<SidebarItemSelectedEventArgs>? ItemSelected;
