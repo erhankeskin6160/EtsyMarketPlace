@@ -37,30 +37,34 @@ internal sealed class OrderDetailsForm : Form
 
     private async void OrderDetailsForm_Load(object? sender, EventArgs e)
     {
-        var orderEntry = await _orderCostRepo.GetByReceiptIdAsync(_order.ReceiptId.ToString());
-        if (orderEntry != null)
+        try
         {
-            _productionCost = orderEntry.UnitCost;
-            _shippingCost = orderEntry.UnitShippingCost;
-            _packagingCost = orderEntry.UnitPackagingCost;
-        }
-        else
-        {
-            var prodEntry = await _productCostRepo.GetByIdAsync(_order.ListingId.ToString());
-            if (prodEntry != null)
+            var orderEntry = await _orderCostRepo.GetByReceiptIdAsync(_order.ReceiptId.ToString());
+            if (orderEntry != null)
             {
-                _productionCost = prodEntry.UnitCost;
-                _shippingCost = prodEntry.UnitShippingCost;
-                _packagingCost = prodEntry.UnitPackagingCost;
+                _productionCost = orderEntry.UnitCost;
+                _shippingCost = orderEntry.UnitShippingCost;
+                _packagingCost = orderEntry.UnitPackagingCost;
             }
             else
             {
-                _productionCost = _order.UnitProductionCost;
-                _shippingCost = _order.UnitShippingCost;
-                _packagingCost = _order.UnitPackagingCost;
+                var prodEntry = await _productCostRepo.GetByIdAsync(_order.ListingId.ToString());
+                if (prodEntry != null)
+                {
+                    _productionCost = prodEntry.UnitCost;
+                    _shippingCost = prodEntry.UnitShippingCost;
+                    _packagingCost = prodEntry.UnitPackagingCost;
+                }
+                else
+                {
+                    _productionCost = _order.UnitProductionCost;
+                    _shippingCost = _order.UnitShippingCost;
+                    _packagingCost = _order.UnitPackagingCost;
+                }
             }
+            UpdateProfitLabel();
         }
-        UpdateProfitLabel();
+        catch (Exception ex) { AppLog.Swallowed(ex, "OrderDetailsForm.OrderDetailsForm_Load"); }
     }
 
     private void BuildLayout()

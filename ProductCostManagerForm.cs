@@ -27,7 +27,7 @@ internal sealed class ProductCostManagerForm : Form
 
         BuildLayout();
         UiStyle.ApplyTheme(this);
-        LoadData();
+        _ = LoadDataAsync();
     }
 
     /// <summary>
@@ -174,7 +174,7 @@ internal sealed class ProductCostManagerForm : Form
         };
     }
 
-    private async void LoadData()
+    private async Task LoadDataAsync()
     {
         try
         {
@@ -194,6 +194,7 @@ internal sealed class ProductCostManagerForm : Form
         catch (Exception ex)
         {
             MessageBox.Show($"Maliyetler yüklenirken hata oluştu: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppLog.Swallowed(ex, "ProductCostManagerForm.LoadDataAsync");
         }
     }
 
@@ -214,33 +215,41 @@ internal sealed class ProductCostManagerForm : Form
 
     private async void OnSaveClicked(object? sender, EventArgs e)
     {
-        var id = _txtListingId.Text.Trim();
-        var title = _txtTitle.Text.Trim();
-
-        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(title))
+        try
         {
-            MessageBox.Show("Lütfen İlan / Ürün ID ve Ürün Adını doldurun.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            return;
-        }
+            var id = _txtListingId.Text.Trim();
+            var title = _txtTitle.Text.Trim();
 
-        var entry = new ProductCostEntry(id, title, _numUnitCost.Value, _numShippingCost.Value, 0m, DateTimeOffset.UtcNow);
-        await _repository.SaveAsync(entry);
-        LoadData();
+            if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(title))
+            {
+                MessageBox.Show("Lütfen İlan / Ürün ID ve Ürün Adını doldurun.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var entry = new ProductCostEntry(id, title, _numUnitCost.Value, _numShippingCost.Value, 0m, DateTimeOffset.UtcNow);
+            await _repository.SaveAsync(entry);
+            await LoadDataAsync();
+        }
+        catch (Exception ex) { AppLog.Swallowed(ex, "ProductCostManagerForm.OnSaveClicked"); }
     }
 
     private async void OnDeleteClicked(object? sender, EventArgs e)
     {
-        var id = _txtListingId.Text.Trim();
-        if (string.IsNullOrWhiteSpace(id)) return;
-
-        if (MessageBox.Show($"'{id}' kimlikli maliyet kaydını silmek istediğinize emin misiniz?", "Onay", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+        try
         {
-            await _repository.DeleteAsync(id);
-            _txtListingId.Clear();
-            _txtTitle.Clear();
-            _numUnitCost.Value = 0;
-            _numShippingCost.Value = 0;
-            LoadData();
+            var id = _txtListingId.Text.Trim();
+            if (string.IsNullOrWhiteSpace(id)) return;
+
+            if (MessageBox.Show($"'{id}' kimlikli maliyet kaydını silmek istediğinize emin misiniz?", "Onay", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            {
+                await _repository.DeleteAsync(id);
+                _txtListingId.Clear();
+                _txtTitle.Clear();
+                _numUnitCost.Value = 0;
+                _numShippingCost.Value = 0;
+                await LoadDataAsync();
+            }
         }
+        catch (Exception ex) { AppLog.Swallowed(ex, "ProductCostManagerForm.OnDeleteClicked"); }
     }
 }

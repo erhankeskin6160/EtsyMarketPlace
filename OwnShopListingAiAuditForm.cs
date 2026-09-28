@@ -64,12 +64,16 @@ internal sealed class OwnShopListingAiAuditForm(
 
     protected override async void OnLoad(EventArgs e)
     {
-        base.OnLoad(e);
-        BuildLayout();
-        if (initialListingId is > 0)
+        try
         {
-            await LoadSingleListingAsync(initialListingId.Value);
+            base.OnLoad(e);
+            BuildLayout();
+            if (initialListingId is > 0)
+            {
+                await LoadSingleListingAsync(initialListingId.Value);
+            }
         }
+        catch (Exception ex) { AppLog.Swallowed(ex, "OwnShopListingAiAuditForm.OnLoad"); }
     }
 
     private AuditRow? SelectedRow => _bindingSource.Current as AuditRow;

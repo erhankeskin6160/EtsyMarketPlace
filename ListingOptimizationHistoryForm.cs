@@ -11,9 +11,13 @@ internal sealed class ListingOptimizationHistoryForm(ListingOptimizationHistoryS
 
     protected override async void OnLoad(EventArgs e)
     {
-        base.OnLoad(e);
-        BuildLayout();
-        await LoadHistoryAsync();
+        try
+        {
+            base.OnLoad(e);
+            BuildLayout();
+            await LoadHistoryAsync();
+        }
+        catch (Exception ex) { AppLog.Swallowed(ex, "ListingOptimizationHistoryForm.OnLoad"); }
     }
 
     private void BuildLayout()
