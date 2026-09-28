@@ -1687,7 +1687,7 @@ internal sealed class DashboardForm : Form
             "EtsyMarketPlace",
             "market-tracking.db");
         var repo = new EtsyMarketPlace.Infrastructure.AbTesting.SqliteAbTestRepository(databasePath);
-        repo.InitializeAsync().GetAwaiter().GetResult();
+        Task.Run(async () => await repo.InitializeAsync()).GetAwaiter().GetResult();
         return new AbTestService(repo);
     }
 
@@ -1698,7 +1698,7 @@ internal sealed class DashboardForm : Form
             "EtsyMarketPlace",
             "market-tracking.db");
         var repo = new EtsyMarketPlace.Infrastructure.BatchQueue.SqliteBatchQueueRepository(databasePath);
-        repo.InitializeAsync().GetAwaiter().GetResult();
+        Task.Run(async () => await repo.InitializeAsync()).GetAwaiter().GetResult();
         return new BatchQueueProcessorService(repo, new OpenAiListingOptimizer(AiOptimizationSettingsStore.Load, new ListingOptimizationService()));
     }
 }
