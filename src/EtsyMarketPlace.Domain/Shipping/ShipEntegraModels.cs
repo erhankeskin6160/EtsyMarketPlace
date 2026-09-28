@@ -116,6 +116,106 @@ public sealed class ShipEntegraSettings
 }
 
 /// <summary>
+/// ShipEntegra sipariş oluşturma isteği (panel sözleşmesi, gerçek trafikten birebir alındı).
+/// </summary>
+public sealed class ShipEntegraCreateOrderRequest
+{
+    [JsonPropertyName("rememberSenderAddress")] public bool RememberSenderAddress { get; set; }
+    [JsonPropertyName("shipTo")] public ShipEntegraShipTo ShipTo { get; set; } = new();
+    [JsonPropertyName("rememberShipToContact")] public bool RememberShipToContact { get; set; }
+    [JsonPropertyName("currency")] public string Currency { get; set; } = "USD";
+    [JsonPropertyName("reference")] public string Reference { get; set; } = string.Empty;
+    [JsonPropertyName("description")] public string Description { get; set; } = string.Empty;
+    [JsonPropertyName("products")] public List<ShipEntegraOrderProduct> Products { get; set; } = new();
+    [JsonPropertyName("packages")] public List<ShipEntegraOrderPackage> Packages { get; set; } = new();
+}
+
+/// <summary>ShipEntegra alıcı adresi (boş opsiyonel alanlar istekte yer almaz).</summary>
+public sealed class ShipEntegraShipTo
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("address1")] public string Address1 { get; set; } = string.Empty;
+
+    [JsonPropertyName("address2")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Address2 { get; set; }
+
+    [JsonPropertyName("city")] public string City { get; set; } = string.Empty;
+
+    [JsonPropertyName("state")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? State { get; set; }
+
+    [JsonPropertyName("zipCode")] public string ZipCode { get; set; } = string.Empty;
+    [JsonPropertyName("country")] public string Country { get; set; } = string.Empty;
+
+    [JsonPropertyName("phone")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Phone { get; set; }
+
+    [JsonPropertyName("email")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Email { get; set; }
+}
+
+/// <summary>ShipEntegra sipariş kalemi.</summary>
+public sealed class ShipEntegraOrderProduct
+{
+    [JsonPropertyName("name")] public string Name { get; set; } = string.Empty;
+    [JsonPropertyName("quantity")] public int Quantity { get; set; } = 1;
+    [JsonPropertyName("unitPrice")] public decimal UnitPrice { get; set; }
+    [JsonPropertyName("hsCode")] public string HsCode { get; set; } = string.Empty;
+}
+
+/// <summary>ShipEntegra koli bilgisi (cm / kg).</summary>
+public sealed class ShipEntegraOrderPackage
+{
+    [JsonPropertyName("packageQuantity")] public int PackageQuantity { get; set; } = 1;
+    [JsonPropertyName("weight")] public double Weight { get; set; }
+    [JsonPropertyName("width")] public double Width { get; set; }
+    [JsonPropertyName("length")] public double Length { get; set; }
+    [JsonPropertyName("height")] public double Height { get; set; }
+}
+
+/// <summary>ShipEntegra sipariş oluşturma sonucu (sipariş ve kalem kimlikleri).</summary>
+public sealed class ShipEntegraOrderResult
+{
+    public long OrderId { get; set; }
+    public List<long> ItemIds { get; set; } = new();
+    public string RawJson { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// ShipEntegra etiket oluşturma isteği (panel sözleşmesi, gerçek trafikten birebir alındı).
+/// </summary>
+public sealed class ShipEntegraCreateLabelRequest
+{
+    [JsonPropertyName("specialService")] public string SpecialService { get; set; } = "shipentegra-express";
+    [JsonPropertyName("content")] public string Content { get; set; } = string.Empty;
+    [JsonPropertyName("weight")] public double Weight { get; set; }
+    [JsonPropertyName("iossNumber")] public string IossNumber { get; set; } = string.Empty;
+    [JsonPropertyName("currency")] public string Currency { get; set; } = "USD";
+    [JsonPropertyName("items")] public List<ShipEntegraLabelItem> Items { get; set; } = new();
+    [JsonPropertyName("orderId")] public long OrderId { get; set; }
+    [JsonPropertyName("serviceType")] public int ServiceType { get; set; } = 1;
+    [JsonPropertyName("country")] public string Country { get; set; } = string.Empty;
+    [JsonPropertyName("insurance")] public bool Insurance { get; set; }
+    [JsonPropertyName("noTracking")] public bool NoTracking { get; set; }
+    [JsonPropertyName("verpackg")] public int Verpackg { get; set; } = -1;
+}
+
+/// <summary>Etiket isteğindeki tek kalem.</summary>
+public sealed class ShipEntegraLabelItem
+{
+    [JsonPropertyName("itemId")] public long ItemId { get; set; }
+    [JsonPropertyName("declaredPrice")] public decimal DeclaredPrice { get; set; }
+    [JsonPropertyName("declaredQuantity")] public int DeclaredQuantity { get; set; } = 1;
+    [JsonPropertyName("orderId")] public long OrderId { get; set; }
+    [JsonPropertyName("errorMessage")] public Dictionary<string, object> ErrorMessage { get; set; } = new();
+    [JsonPropertyName("gtip")] public string Gtip { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// ShipEntegra oturum tokeninin süresi dolduğunda veya yetki reddedildiğinde fırlatılan özel istisna.
 /// </summary>
 public sealed class ShipEntegraTokenExpiredException : Exception

@@ -71,10 +71,10 @@ public sealed class OrderFulfillmentStudioTests
 
         Assert.Equal(3, manager.GetAvailableProviders().Count);
 
-        // ShipEntegra henüz keşif aşamasında olduğu için hata veya bilgilendirme dönmeli
+        // ShipEntegra gerçek sağlayıcı: istemci verilmediğinde yapılandırma hatası döner
         var seResult = await manager.CreateShipmentAsync("ShipEntegra", new ShipmentCreationContext());
         Assert.False(seResult.IsSuccess);
-        Assert.Contains("henüz geliştirme aşamasındadır", seResult.ErrorMessage);
+        Assert.Contains("ShipEntegra API istemcisi", seResult.ErrorMessage);
 
         // Olmayan taşıyıcı kontrolü
         var invalidResult = await manager.CreateShipmentAsync("UnknownCarrier", new ShipmentCreationContext());
