@@ -22,9 +22,11 @@ public sealed class ArasStartCalculationPayloadTests
         ReceiverPostalCode = "56068",
         ReceiverState = string.Empty,
         SenderCountry = "TR",
+        VolumetricWeight = 0.6,
+        Desi = 0.6,
         ShipmentDimensions =
         {
-            new ArasStartCalculationBox { Length = 20, Width = 15, Height = 10, Weight = 0.4, PackageCount = 1 }
+            new ArasStartCalculationBox { Length = 20, Width = 15, Height = 10, Weight = 0.4, PackageCount = 1, VolumetricWeight = 0.6, Desi = 0.6 }
         }
     };
 
@@ -69,13 +71,16 @@ public sealed class ArasStartCalculationPayloadTests
     }
 
     [Fact]
-    public void Payload_OmitsVolumetricWeightAtPricingStage()
+    public void Payload_CarriesVolumetricWeightSoThePricingContextHasIt()
     {
-        // Sözleşmede bu adımda yalnız ebat + ağırlık gönderilir; desi/hacim ağırlığı istemez.
+        // Geçmiş: bu adımda desi gönderilmiyordu (sözleşme örneği yalnız ebat + ağırlık gösteriyor).
+        // Ancak Aras "volumetricweightismissing" hatası 25 denemede gövdemize tepki vermedi;
+        // API'nin kendi fiyat kaydında aradığı düşünüldüğü için bu adımda da gönderiliyor.
         string json = Serialize(Build());
 
-        Assert.DoesNotContain("volumetricWeight", json);
-        Assert.DoesNotContain("\"desi\"", json);
+        Assert.Contains("\"volumetricWeight\"", json);
+        Assert.Contains("\"desi\"", json);
+        Assert.Contains("\"volumetricWeight\":0.6", json);
     }
 
     [Fact]

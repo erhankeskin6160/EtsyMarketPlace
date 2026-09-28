@@ -559,6 +559,9 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrl + StartCalcEndpoint);
         ApplyHeaders(httpRequest, token);
 
+        double desi = Math.Round((request.LengthCm * request.WidthCm * request.HeightCm) / 5000.0, 2);
+        if (desi <= 0) desi = 0.6;
+
         var payload = new ArasStartCalculationPayload
         {
             Currency = request.Currency,
@@ -573,6 +576,8 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
             ReceiverState = request.ReceiverState,
             ReceiverTown = request.ReceiverTown,
             SenderCountry = request.SenderCountry,
+            VolumetricWeight = desi,
+            Desi = desi,
             ShipmentDimensions =
             {
                 new ArasStartCalculationBox
@@ -581,6 +586,8 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
                     Width = request.WidthCm,
                     Height = request.HeightCm,
                     Weight = request.WeightKg,
+                    VolumetricWeight = desi,
+                    Desi = desi,
                     PackageCount = 1
                 }
             }
