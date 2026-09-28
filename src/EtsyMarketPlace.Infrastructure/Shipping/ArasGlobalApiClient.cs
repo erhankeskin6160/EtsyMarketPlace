@@ -287,6 +287,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
                 "captures");
             Directory.CreateDirectory(captureDir);
             File.WriteAllText(Path.Combine(captureDir, "last-createshipment-request.json"), json);
+            File.WriteAllText(Path.Combine(Path.GetTempPath(), "last-createshipment-request.json"), json);
         }
         catch (Exception caught) { AppLog.Swallowed(caught); }
 
@@ -883,6 +884,13 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
                 File.AppendAllText(fallback, line);
                 LastTracePath = fallback;
             }
+
+            // Her durumda TEMP'e de yedek yaz (teshis icin ikinci kanal).
+            try
+            {
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "aras_shipment_api_trace.log"), line);
+            }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
         catch (Exception caught) { AppLog.Swallowed(caught); }
     }

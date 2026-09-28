@@ -126,9 +126,12 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         double weight = context.WeightKg > 0 ? context.WeightKg : 0.4;
 
         // 2. Ürün kalemleri (Etsy siparişinden)
-        string hsCode = !string.IsNullOrWhiteSpace(context.HsCode)
+        string desiredHs = !string.IsNullOrWhiteSpace(context.HsCode)
             ? context.HsCode
             : (order.Items.Count > 0 && !string.IsNullOrWhiteSpace(order.Items[0].HsCode) ? order.Items[0].HsCode : "3926400000");
+
+        // GTİP kodu, panelin kendi veritabanından doğrulanır; aksi halde API "His Code Format Is Wrong" döner.
+        string hsCode = await ResolveHsCodeAsync(desiredHs, token, cancellationToken);
 
         decimal itemsTotal = order.Items.Count > 0
             ? order.Items.Sum(i => i.Price * Math.Max(1, i.Quantity))
@@ -334,6 +337,59 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             LabelUrl = $"https://panel.arasglobalcargo.com/order/barcode/{shipmentId}",
             PriceBreakdown = breakdown
         };
+    }
+
+    /// <summary>
+    /// GTİP (HS) kodunu panelin kendi arama servisinden doğrular/çözer.
+    /// Panel, yalnızca kendi veritabanındaki kodları kabul eder; serbest kodlar
+    /// "His Code Format Is Wrong" hatasıyla reddedilir.
+    /// </summary>
+    private async Task<string> ResolveHsCodeAsync(string desired, string token, CancellationToken cancellationToken)
+    {
+        string code = (desired ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(code))
+        {
+            code = "3926400000";
+        }
+
+        try
+        {
+            var results = await _apiClient.SearchGtipCodeAsync(code, token, cancellationToken);
+            if (results == null || results.Count == 0)
+            {
+                // Tam kod bulunamadıysa daha geniş bir aramayla dene (ilk 6 / ilk 4 hane)
+                if (code.Length >= 6)
+                {
+                    results = await _apiClient.SearchGtipCodeAsync(code.Substring(0, 6), token, cancellationToken);
+                }
+
+                if ((results == null || results.Count == 0) && code.Length >= 4)
+                {
+                    results = await _apiClient.SearchGtipCodeAsync(code.Substring(0, 4), token, cancellationToken);
+                }
+            }
+
+            if (results != null && results.Count > 0)
+            {
+                var exact = results.Find(r => string.Equals(r.Code, code, StringComparison.Ordinal));
+                if (exact != null && !string.IsNullOrWhiteSpace(exact.Code))
+                {
+                    return exact.Code!;
+                }
+
+                string prefix = code.Length >= 6 ? code.Substring(0, 6) : code;
+                var close = results.Find(r => !string.IsNullOrWhiteSpace(r.Code) && r.Code!.StartsWith(prefix, StringComparison.Ordinal));
+                string picked = (close ?? results[0]).Code ?? code;
+                ArasGlobalSettingsStore.LogTrace("GtipResolve", $"{code} -> {picked}");
+                return picked;
+            }
+        }
+        catch (Exception ex)
+        {
+            ArasGlobalSettingsStore.LogTrace("GtipResolve-Warning", ex.Message);
+        }
+
+        return code;
     }
 
     /// <summary>Panel sözleşmesindeki taşıyıcı adı biçimi (widect → Widect, ups → UPS).</summary>
