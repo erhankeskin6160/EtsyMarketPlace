@@ -466,6 +466,27 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         };
         _btnCaptureTemplate.FlatAppearance.BorderSize = 0;
         _btnCaptureTemplate.Click += async (s, e) => await CaptureArasTemplateAsync();
+
+        var btnShipToMore = new Button
+        {
+            Text = "Ship to More bağlantısı",
+            Height = 33,
+            Width = 190,
+            FlatStyle = FlatStyle.Flat,
+            Font = UiStyle.SemiboldBaseFont,
+            BackColor = UiStyle.SecondaryColor,
+            ForeColor = UiStyle.TextDark,
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(right.Width - 190 - 14, 12),
+            Cursor = Cursors.Hand
+        };
+        btnShipToMore.FlatAppearance.BorderSize = 0;
+        btnShipToMore.Click += (s, e) =>
+        {
+            using var connectionForm = new ShiptomoreConnectionForm();
+            connectionForm.ShowDialog(this);
+        };
+        right.Controls.Add(btnShipToMore);
         right.Controls.Add(_btnCaptureTemplate);
 
         _btnRefresh = UiStyle.CreateButton("Yenile", isSecondary: true);
