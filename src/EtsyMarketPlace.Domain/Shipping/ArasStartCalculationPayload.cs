@@ -25,6 +25,11 @@ public sealed class ArasStartCalculationPayload
     [JsonPropertyName("receiverState")] public string ReceiverState { get; set; } = string.Empty;
     [JsonPropertyName("receiverTown")] public string ReceiverTown { get; set; } = string.Empty;
     [JsonPropertyName("senderCountry")] public string SenderCountry { get; set; } = "TR";
+
+    /// <summary>Hacim ağırlığı (desi). API'nin fiyat bağlamında bulunması için gönderilir.</summary>
+    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; }
+
+    [JsonPropertyName("desi")] public double Desi { get; set; }
     [JsonPropertyName("shipmentDimensions")] public List<ArasStartCalculationBox> ShipmentDimensions { get; set; } = new();
 }
 
@@ -35,5 +40,7 @@ public sealed class ArasStartCalculationBox
     [JsonPropertyName("width")] public double Width { get; set; } = 15.0;
     [JsonPropertyName("height")] public double Height { get; set; } = 10.0;
     [JsonPropertyName("weight")] public double Weight { get; set; } = 0.4;
+    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; }
+    [JsonPropertyName("desi")] public double Desi { get; set; }
     [JsonPropertyName("packageCount")] public int PackageCount { get; set; } = 1;
 }
