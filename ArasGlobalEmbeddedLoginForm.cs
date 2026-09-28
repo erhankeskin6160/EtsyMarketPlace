@@ -91,8 +91,26 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
 
             Directory.CreateDirectory(userDataFolder);
 
-            var env = await CoreWebView2Environment.CreateAsync(null, userDataFolder);
-            await _webView.EnsureCoreWebView2Async(env);
+            // Kilitli/eski bir kullanıcı veri klasörü başlatmayı sonsuza kadar bekletebilir
+            // (lockfile + arkada kalan msedgewebview2 süreçleri). Bu yüzden hem zaman aşımı
+            // koyuyoruz hem de ilk deneme takılırsa TAZE bir profille bir kez daha deniyoruz.
+            CoreWebView2Environment env;
+            try
+            {
+                env = await CreateEnvironmentWithTimeoutAsync(userDataFolder, TimeSpan.FromSeconds(20));
+            }
+            catch (TimeoutException)
+            {
+                AppLog.Warn(
+                    "Aras gömülü tarayıcısı ilk denemede açılamadı (profil kilitli olabilir); taze profil ile yeniden denenecek.",
+                    nameof(ArasGlobalEmbeddedLoginForm));
+
+                userDataFolder = userDataFolder + "_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                Directory.CreateDirectory(userDataFolder);
+                env = await CreateEnvironmentWithTimeoutAsync(userDataFolder, TimeSpan.FromSeconds(20));
+            }
+
+            await EnsureWithTimeoutAsync(env, TimeSpan.FromSeconds(25));
 
             _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
@@ -143,6 +161,31 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
         }
     }
 
+    /// <summary>Ortam oluşturmayı zaman aşımıyla sınırlar; kilitli profil sonsuza kadar beklemesin.</summary>
+    private static async Task<CoreWebView2Environment> CreateEnvironmentWithTimeoutAsync(string folder, TimeSpan timeout)
+    {
+        var createTask = CoreWebView2Environment.CreateAsync(null, folder);
+        var finished = await Task.WhenAny(createTask, Task.Delay(timeout));
+        if (finished != createTask)
+        {
+            throw new TimeoutException($"Gömülü tarayıcı {timeout.TotalSeconds:0} saniyede başlatılamadı.");
+        }
+
+        return await createTask;
+    }
+
+    /// <summary>WebView2 çekirdeğini zaman aşımıyla başlatır.</summary>
+    private async Task EnsureWithTimeoutAsync(CoreWebView2Environment env, TimeSpan timeout)
+    {
+        var ensureTask = _webView.EnsureCoreWebView2Async(env);
+        var finished = await Task.WhenAny(ensureTask, Task.Delay(timeout));
+        if (finished != ensureTask)
+        {
+            throw new TimeoutException($"Gömülü tarayıcı çekirdeği {timeout.TotalSeconds:0} saniyede hazır olmadı.");
+        }
+
+        await ensureTask;
+    }
     private async void OnWebResourceResponseReceived(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs e)
     {
         if (_tokenCaptured) return;
