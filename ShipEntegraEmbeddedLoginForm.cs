@@ -58,6 +58,23 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
         _lblStatus.AutoSize = true;
         _topBar.Controls.Add(_lblStatus);
 
+        // Yedek yol: gömülü tarayıcı bağlanamazsa gerçek Chrome ile giriş
+        var btnOpenBrowser = new Button
+        {
+            Text = "Tarayıcıda Aç (yedek)",
+            FlatStyle = FlatStyle.Flat,
+            Font = new Font("Segoe UI", 8.5f),
+            ForeColor = Color.FromArgb(226, 232, 240),
+            BackColor = Color.FromArgb(51, 65, 85),
+            Size = new Size(150, 26),
+            Location = new Point(372, 19),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Cursor = Cursors.Hand
+        };
+        btnOpenBrowser.FlatAppearance.BorderSize = 0;
+        btnOpenBrowser.Click += async (_, _) => await OpenInRealBrowserFallbackAsync();
+        _topBar.Controls.Add(btnOpenBrowser);
+
         Controls.Add(_topBar);
 
         // WebView2 Bileşeni
@@ -163,7 +180,14 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
     /// <summary>Ortam oluşturmayı zaman aşımıyla sınırlar; kilitli profil sonsuza kadar beklemesin.</summary>
     private static async Task<CoreWebView2Environment> CreateEnvironmentWithTimeoutAsync(string folder, TimeSpan timeout)
     {
-        var createTask = CoreWebView2Environment.CreateAsync(null, folder);
+        // Bazı makinelerde gömülü tarayıcının DNS çözümlemesi app.shipentegra.com için takılabiliyor
+        // (ERR_NAME_NOT_RESOLVED). Alan adlarını Cloudflare kenar IP'lerine sabitleyerek bu katmanı atlarız.
+        var envOptions = new CoreWebView2EnvironmentOptions
+        {
+            AdditionalBrowserArguments = "--host-resolver-rules=\"MAP app.shipentegra.com 172.66.146.49, MAP api.shipentegra.com 172.66.146.49\""
+        };
+
+        var createTask = CoreWebView2Environment.CreateAsync(null, folder, envOptions);
         var finished = await Task.WhenAny(createTask, Task.Delay(timeout));
         if (finished != createTask)
         {
@@ -264,6 +288,43 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
             }
         }
         catch (Exception caught) { AppLog.Swallowed(caught, "ShipEntegraEmbeddedLoginForm.CheckStorageTokenAsync"); }
+    }
+
+    private async Task OpenInRealBrowserFallbackAsync()
+    {
+        try
+        {
+            _lblStatus.Text = "Gerçek tarayıcı açılıyor; lütfen ShipEntegra hesabınıza giriş yapın...";
+            _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+
+            var sessionManager = new PuppeteerShippingSessionManager();
+            string? token = await sessionManager.RefreshShipEntegraTokenAsync(
+                null,
+                null,
+                showBrowser: true,
+                statusCallback: message =>
+                {
+                    if (!IsDisposed)
+                    {
+                        Invoke(new Action(() => _lblStatus.Text = message));
+                    }
+                });
+
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                await CompleteLoginSuccessAsync(token);
+            }
+            else
+            {
+                _lblStatus.Text = "Tarayıcıdan token alınamadı. Pencereyi kapatıp tekrar deneyin.";
+                _lblStatus.ForeColor = Color.FromArgb(239, 68, 68);
+            }
+        }
+        catch (Exception ex)
+        {
+            _lblStatus.Text = $"Tarayıcı yedeği başarısız: {ex.Message}";
+            _lblStatus.ForeColor = Color.FromArgb(239, 68, 68);
+        }
     }
 
     private async Task CompleteLoginSuccessAsync(string token)
