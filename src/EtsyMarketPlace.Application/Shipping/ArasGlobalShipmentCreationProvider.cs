@@ -367,6 +367,11 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 {
                     results = await _apiClient.SearchGtipCodeAsync(code.Substring(0, 4), token, cancellationToken);
                 }
+
+                if ((results == null || results.Count == 0) && code.Length >= 2)
+                {
+                    results = await _apiClient.SearchGtipCodeAsync(code.Substring(0, 2), token, cancellationToken);
+                }
             }
 
             if (results != null && results.Count > 0)

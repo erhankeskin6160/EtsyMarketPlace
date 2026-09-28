@@ -138,7 +138,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrl + SearchGtipEndpoint);
         ApplyHeaders(httpRequest, cleanToken);
 
-        var payload = new { keyword = keyword };
+        var payload = new { searchTerm = keyword, page = 1, pageSize = 1000 };
         httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
@@ -151,15 +151,29 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         CheckTokenExpired(root);
 
         var results = new List<ArasGtipSearchResult>();
-        if (root.TryGetProperty("payload", out var payloadElem) && payloadElem.ValueKind == JsonValueKind.Array)
+        if (root.TryGetProperty("payload", out var payloadElem))
         {
-            foreach (var item in payloadElem.EnumerateArray())
+            JsonElement listElem = payloadElem;
+            if (payloadElem.ValueKind == JsonValueKind.Object && payloadElem.TryGetProperty("results", out var resultsElem))
             {
-                string code = item.TryGetProperty("code", out var c) ? c.GetString() ?? "" : "";
-                string desc = item.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
-                if (!string.IsNullOrWhiteSpace(code))
+                listElem = resultsElem;
+            }
+
+            if (listElem.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in listElem.EnumerateArray())
                 {
-                    results.Add(new ArasGtipSearchResult { Code = code, Description = desc });
+                    string code = item.TryGetProperty("code", out var c) ? c.GetString() ?? "" : "";
+                    string desc = item.TryGetProperty("descriptionTr", out var dtr) ? dtr.GetString() ?? "" : "";
+                    if (string.IsNullOrWhiteSpace(desc))
+                    {
+                        desc = item.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(code))
+                    {
+                        results.Add(new ArasGtipSearchResult { Code = code, Description = desc });
+                    }
                 }
             }
         }
