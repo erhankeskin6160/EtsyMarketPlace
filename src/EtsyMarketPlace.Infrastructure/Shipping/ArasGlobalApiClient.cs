@@ -38,6 +38,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
     private const string LegalDocEndpoint = "/Shipment/GetShipmentLegalDocument";
     private const string SendShipmentPriceEndpoint = "/ShipmentPricing/SendShipmentPrice";
     private const string GetAddressesEndpoint = "/Auth/GetAddresses";
+    private static bool _debugHeaderWritten;
 
     public ArasGlobalApiClient(HttpClient? httpClient = null)
     {
@@ -903,6 +904,29 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
             try
             {
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "aras_shipment_api_trace.log"), line);
+            }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
+
+            // Ucuncu kanal: exe'nin bulundugu klasor (kesin okunabilir) + kimlik baskisi.
+            try
+            {
+                string debugPath = Path.Combine(AppContext.BaseDirectory, "aras-trace-debug.log");
+                if (!_debugHeaderWritten)
+                {
+                    _debugHeaderWritten = true;
+                    string header =
+                        "=== ARAS TRACE DEBUG HEADER ===" + Environment.NewLine +
+                        "when: " + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + Environment.NewLine +
+                        "user: " + Environment.UserName + Environment.NewLine +
+                        "appData: " + Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + Environment.NewLine +
+                        "currentDir: " + Environment.CurrentDirectory + Environment.NewLine +
+                        "baseDir: " + AppContext.BaseDirectory + Environment.NewLine +
+                        "process: " + Environment.ProcessPath + Environment.NewLine +
+                        "=================================" + Environment.NewLine;
+                    File.AppendAllText(debugPath, header);
+                }
+
+                File.AppendAllText(debugPath, line);
             }
             catch (Exception caught) { AppLog.Swallowed(caught); }
         }
