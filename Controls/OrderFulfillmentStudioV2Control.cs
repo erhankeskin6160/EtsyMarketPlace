@@ -1305,12 +1305,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
     private IEnumerable<EtsyOrderFulfillmentItem> ApplyStatusFilter(IEnumerable<EtsyOrderFulfillmentItem> orders)
     {
-        return _statusFilter switch
-        {
-            "Bekleyen" => orders.Where(o => !IsShipped(o)),
-            "Gönderildi" => orders.Where(IsShipped),
-            _ => orders
-        };
+        return OrderQueueFilter.ApplyStatus(orders, _statusFilter);
     }
 
     private static bool IsShipped(EtsyOrderFulfillmentItem order)
@@ -1874,17 +1869,17 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _lblPriceUsd.Text = $"${_selectedQuote.PriceUsd:N2}";
         _lblPriceTry.Text = $"{_selectedQuote.PriceTry:N2} ₺ · {_rateNote}";
 
-        bool supported = _selectedQuote.IsCreationSupported;
-        _btnCreateShipment.Enabled = supported;
-        _btnCreateShipment.Text = supported
-            ? $"{_selectedQuote.ProviderName} ile Gönderi Oluştur"
-            : "Gönderi kapalı";
-        _btnCreateShipment.BackColor = supported ? UiStyle.SuccessColor : UiStyle.SecondaryColor;
-        _btnCreateShipment.ForeColor = supported ? Color.White : UiStyle.TextMuted;
+        var actionState = ShipmentActionEvaluator.Evaluate(
+            hasSelectedQuote: true,
+            creationSupported: _selectedQuote.IsCreationSupported,
+            providerName: _selectedQuote.ProviderName,
+            quoteSource: _selectedQuote.Source);
 
-        _lblActionStatus.Text = supported
-            ? (_selectedQuote.Source == QuoteSource.Live ? "Canlı teklif seçildi." : "Tahmini tarife seçildi — fiyat teyidi önerilir.")
-            : $"{_selectedQuote.ProviderName} için gönderi oluşturma henüz aktif değil; yalnız karşılaştırma amaçlıdır.";
+        _btnCreateShipment.Enabled = actionState.CanCreate;
+        _btnCreateShipment.Text = actionState.ButtonText;
+        _btnCreateShipment.BackColor = actionState.CanCreate ? UiStyle.SuccessColor : UiStyle.SecondaryColor;
+        _btnCreateShipment.ForeColor = actionState.CanCreate ? Color.White : UiStyle.TextMuted;
+        _lblActionStatus.Text = actionState.StatusMessage;
     }
 
     #endregion
