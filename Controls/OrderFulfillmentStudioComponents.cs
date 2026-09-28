@@ -511,7 +511,7 @@ public sealed class SaasUnitInputBox : Panel
         _textBox = new TextBox
         {
             Text = initialVal,
-            Location = new Point(8, 6),
+            Location = new Point(10, 6),
             Width = 65,
             BackColor = Color.FromArgb(30, 41, 59),
             ForeColor = Color.White,
@@ -537,6 +537,7 @@ public sealed class SaasUnitInputBox : Panel
         innerBox.SizeChanged += (s, e) =>
         {
             _textBox.Width = Math.Max(20, innerBox.Width - _lblUnit.Width - 14);
+            _textBox.Top = Math.Max(4, (innerBox.Height - _textBox.Height) / 2);
             innerBox.Invalidate();
         };
 

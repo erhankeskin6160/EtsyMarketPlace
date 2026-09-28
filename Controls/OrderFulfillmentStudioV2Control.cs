@@ -859,14 +859,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             ColumnCount = 2,
             RowCount = 2,
             Dock = DockStyle.Fill,
-            Height = 122,
+            Height = 138,
             Margin = new Padding(0, 0, 0, 6),
             BackColor = Color.Transparent
         };
         measGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
         measGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
-        measGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
-        measGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 58f));
+        measGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));
+        measGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 66f));
 
         _inWeight = MakeUnitInput("Ağırlık", "kg", "0.00");
         _inHeight = MakeUnitInput("Yükseklik", "cm", "0");
@@ -1009,7 +1009,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         var box = new SaasUnitInputBox(title, initialValue, unit)
         {
             Dock = DockStyle.Fill,
-            Margin = new Padding(0, 0, 6, 6)
+            Margin = new Padding(0, 0, 8, 8)
         };
         box.ValueChanged += (s, e) => ScheduleRecalculation();
         return box;
