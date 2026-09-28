@@ -498,7 +498,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
         _txtSearch = new TextBox
         {
-            Width = 210,
+            Width = 268,
             Height = 33,
             Font = UiStyle.BaseFont,
             BorderStyle = BorderStyle.FixedSingle,
@@ -953,7 +953,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         desiStrip.Controls.Add(_lblBillableValue);
         _lblMeasureSource = new Label
         {
-            Text = "kaynak: paket ölçüleri",
+            Text = "kaynak: ölçüler",
             Font = _smallFont,
             ForeColor = UiStyle.TextMuted,
             AutoSize = true,
@@ -1515,7 +1515,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _lblDesiValue.Text = measurement.Desi.ToString("N2");
         _lblBillableValue.Text = $"{measurement.BillableWeightKg:N2} kg";
         _lblMeasureSource.Text = measurement.BillableWeightKg > measurement.WeightKg
-            ? "kaynak: desi (desi ağırlıktan büyük)"
+            ? "kaynak: desi"
             : "kaynak: paket ağırlığı";
 
         _quoteCts?.Cancel();
@@ -2349,7 +2349,18 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             int textX = x + 46;
             int textWidth = Math.Max(80, Width - textX - priceBlockWidth - 10);
 
-            TextRenderer.DrawText(g, Quote.ServiceName, NameFont,
+            // Saglayici adi ikinci satirda zaten yaziyor; baslikta tekrar etmesin.
+            string displayName = Quote.ServiceName ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(Quote.ProviderName))
+            {
+                string prefix = Quote.ProviderName.Trim() + " ";
+                if (displayName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    displayName = displayName.Substring(prefix.Length).TrimStart();
+                }
+            }
+
+            TextRenderer.DrawText(g, displayName, NameFont,
                 new Rectangle(textX, 10, textWidth, 18), UiStyle.TextDark,
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter);
 
