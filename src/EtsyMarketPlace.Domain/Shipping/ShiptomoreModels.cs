@@ -50,4 +50,10 @@ public sealed class ShiptomoreSettings
     public string? EncryptedPassword { get; set; }
     public DateTime? TokenLastUpdatedUtc { get; set; }
     public bool AutoRefreshEnabled { get; set; } = true;
+
+    /// <summary>Resmî API Client ID (HTTP Basic kullanıcı adı).</summary>
+    public string? ClientId { get; set; }
+
+    /// <summary>Resmî API Client Secret — DPAPI ile şifreli saklanır.</summary>
+    public string? EncryptedClientSecret { get; set; }
 }
