@@ -76,7 +76,7 @@ public static class AiBalanceCheckerService
                             info.AvailableModels = AiPriceCalculator.ParseDeepSeekModelsJson(modelBody);
                         }
                     }
-                    catch { }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
 
                     return info;
                 }

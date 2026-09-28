@@ -37,7 +37,7 @@ public static class AiTokenUsageTrackerService
                 {
                     await repo.InitializeAsync();
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             });
         }
     }
@@ -87,7 +87,7 @@ public static class AiTokenUsageTrackerService
                 await repo.SaveUsageAsync(record);
                 AiDataCacheService.InvalidateTodayAndBalance(provider);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         });
     }
 

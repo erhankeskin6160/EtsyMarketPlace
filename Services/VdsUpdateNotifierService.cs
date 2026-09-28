@@ -48,7 +48,7 @@ internal sealed class VdsUpdateNotifierService
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return string.Empty;
     }
@@ -273,7 +273,7 @@ del ""%~f0"" & exit
             _autoUpdateCts?.Dispose();
             _autoUpdateCts = null;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     public static void StartPeriodicAutoUpdater(TimeSpan checkInterval, Action<string>? onStatusChanged = null)

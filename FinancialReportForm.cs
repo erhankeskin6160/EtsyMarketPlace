@@ -1236,7 +1236,7 @@ internal sealed class FinancialReportForm : Form
                     string url = $"https://www.etsy.com/your/orders/sold?order_id={o.ReceiptId}";
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         });
 

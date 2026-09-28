@@ -85,7 +85,7 @@ internal sealed class BatchStudioPanelControl : UserControl
 
                 AddItemsToStudio([item]);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
     }
 
@@ -588,7 +588,7 @@ internal sealed class BatchStudioPanelControl : UserControl
                 _slider.AfterImage = null;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private async Task BrowseLocalFilesAsync()
@@ -662,7 +662,7 @@ internal sealed class BatchStudioPanelControl : UserControl
                             listWithImages.Add((l.ListingId, l.Title, urls[0]));
                         }
                     }
-                    catch { }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
             }
 
@@ -947,7 +947,7 @@ internal sealed class BatchStudioPanelControl : UserControl
         {
             Process.Start(new ProcessStartInfo { FileName = fbd.SelectedPath, UseShellExecute = true });
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private async Task UploadResultsToEtsyAsync()

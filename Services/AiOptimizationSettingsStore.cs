@@ -73,7 +73,7 @@ internal static class AiOptimizationSettingsStore
                         needsSave = true;
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
 
             if (needsSave)
@@ -109,7 +109,7 @@ internal static class AiOptimizationSettingsStore
                     var existing = JsonSerializer.Deserialize<Dictionary<string, object>>(File.ReadAllText(studioCfgPath));
                     if (existing != null) studioDict = existing;
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
 
             if (!string.IsNullOrWhiteSpace(settings.OpenAiApiKey)) studioDict["OpenAiApiKey"] = settings.OpenAiApiKey.Trim();
@@ -118,6 +118,6 @@ internal static class AiOptimizationSettingsStore
 
             File.WriteAllText(studioCfgPath, JsonSerializer.Serialize(studioDict, JsonOptions));
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

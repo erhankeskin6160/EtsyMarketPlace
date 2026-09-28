@@ -613,7 +613,7 @@ internal sealed class AiOptimizationSettingsForm : Form
                         _settings.GeminiApiKey = StudioConfigurationManager.Current.GoogleGeminiApiKey;
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
 
             _apiKeyTextBox.Text = _settings.GeminiApiKey ?? "";
@@ -652,7 +652,7 @@ internal sealed class AiOptimizationSettingsForm : Form
                         _settings.OpenAiApiKey = StudioConfigurationManager.Current.OpenAiApiKey;
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
 
             _apiKeyTextBox.Text = _settings.OpenAiApiKey ?? "";
@@ -851,7 +851,7 @@ internal sealed class AiOptimizationSettingsForm : Form
             if (!string.IsNullOrWhiteSpace(_settings.PhotoRoomApiKey)) studioCfg.PhotoRoomApiKey = _settings.PhotoRoomApiKey;
             StudioConfigurationManager.Save(studioCfg);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         WriteStatus($"AI ayarları başarıyla kaydedildi. Aktif Motor: {_settings.GetActiveEngineName()}");
     }

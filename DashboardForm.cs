@@ -179,7 +179,7 @@ internal sealed class DashboardForm : Form
                 _hoverCheckTimer.Dispose();
                 _customToolTipForm.Dispose();
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         };
 
         Shown += async (_, _) =>
@@ -197,7 +197,7 @@ internal sealed class DashboardForm : Form
                             _lblLastUpdated.ForeColor = UiStyle.EtsyColor;
                         });
                     }
-                    catch { }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
             });
 
@@ -1101,7 +1101,7 @@ internal sealed class DashboardForm : Form
                 });
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void PopulateRecentOrdersGrid()
@@ -1479,7 +1479,7 @@ internal sealed class DashboardForm : Form
                 _currentEmbeddedForm.Close();
                 _currentEmbeddedForm.Dispose();
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
             finally
             {
                 _currentEmbeddedForm = null;
@@ -1523,7 +1523,7 @@ internal sealed class DashboardForm : Form
                 _currentEmbeddedForm.Close();
                 _currentEmbeddedForm.Dispose();
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
             finally
             {
                 _currentEmbeddedForm = null;
@@ -1557,7 +1557,7 @@ internal sealed class DashboardForm : Form
         {
             BeginInvoke(action);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void UpdateActiveViewLayout()

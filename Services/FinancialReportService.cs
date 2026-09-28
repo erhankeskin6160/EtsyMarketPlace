@@ -58,7 +58,7 @@ internal sealed class FinancialReportService
         }
         catch (Exception ex) when (ex.Message.Contains("403") || ex.Message.Contains("401") || ex.Message.Contains("billing_r"))
         {
-            try { File.WriteAllText("etsy_error_log.txt", ex.ToString()); } catch { }
+            try { File.WriteAllText("etsy_error_log.txt", ex.ToString()); } catch (Exception caught) { AppLog.Swallowed(caught); }
             // Payment Account (billing_r) yetkisi yoksa gerçek sipariş/satış (transactions_r) verilerini raporla
             return await BuildReportFromReceiptsAsync(receipts, from, to, exchangeRate, ct);
         }

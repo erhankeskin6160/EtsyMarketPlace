@@ -1090,7 +1090,7 @@ public class ModernGridScrollAdapter : IDisposable
                 _grid.FirstDisplayedScrollingRowIndex = targetRow;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         finally
         {
             _isSyncing = false;
@@ -1105,7 +1105,7 @@ public class ModernGridScrollAdapter : IDisposable
         {
             _grid.HorizontalScrollingOffset = _hBar.Value;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         finally
         {
             _isSyncing = false;
@@ -1150,7 +1150,7 @@ public class ModernGridScrollAdapter : IDisposable
                 _hBar.Value = Math.Clamp(_grid.HorizontalScrollingOffset, 0, _hBar.Maximum);
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         finally
         {
             _isSyncing = false;
@@ -1201,7 +1201,7 @@ public class ModernGridScrollAdapter : IDisposable
             // 4. Update bounds
             UpdateLayout();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void UpdateLayout()
@@ -1264,7 +1264,7 @@ public class ModernGridScrollAdapter : IDisposable
             _hBar.Dispose();
             _corner.Dispose();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }
 
@@ -1360,7 +1360,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
             System.Windows.Forms.Application.AddMessageFilter(this);
             _isFilterRegistered = true;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         ResumeLayout(false);
     }
@@ -1408,7 +1408,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 _content.Location = newLoc;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         finally
         {
             _isSyncing = false;
@@ -1427,7 +1427,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
         {
             if (!_isUpdating) UpdateLayout();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     protected override void OnLayout(LayoutEventArgs levent)
@@ -1437,7 +1437,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
         {
             if (!_isUpdating) UpdateLayout();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void UpdateLayout()
@@ -1473,7 +1473,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
             };
             RecalculateScroll();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     public void RecalculateScroll()
@@ -1614,7 +1614,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
 
             ApplyScrollPosition();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         finally
         {
             _isUpdating = false;
@@ -1667,7 +1667,7 @@ public class ModernScrollPanel : Panel, IMessageFilter
                 System.Windows.Forms.Application.RemoveMessageFilter(this);
                 _isFilterRegistered = false;
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
         base.Dispose(disposing);
     }

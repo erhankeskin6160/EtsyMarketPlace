@@ -80,7 +80,7 @@ public sealed class AiUsageDashboardForm : Form
             {
                 BeginInvoke(async () => await RefreshDataAsync(queryLiveBalance: false));
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         };
         AiDataCacheService.OnUsageUpdated += onUsage;
         FormClosed += (_, _) => AiDataCacheService.OnUsageUpdated -= onUsage;

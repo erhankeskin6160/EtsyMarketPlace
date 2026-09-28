@@ -255,7 +255,7 @@ internal sealed class ClientUpdateDialog : Form
             _isDownloading = false;
             _btnAction.Enabled = true;
             _btnCancel.Text = "Kapat";
-            try { if (File.Exists(tempDownloadPath)) File.Delete(tempDownloadPath); } catch { }
+            try { if (File.Exists(tempDownloadPath)) File.Delete(tempDownloadPath); } catch (Exception caught) { AppLog.Swallowed(caught); }
         }
         catch (Exception ex)
         {
@@ -265,7 +265,7 @@ internal sealed class ClientUpdateDialog : Form
             _isDownloading = false;
             _btnAction.Enabled = true;
             _btnCancel.Text = "Kapat";
-            try { if (File.Exists(tempDownloadPath)) File.Delete(tempDownloadPath); } catch { }
+            try { if (File.Exists(tempDownloadPath)) File.Delete(tempDownloadPath); } catch (Exception caught) { AppLog.Swallowed(caught); }
         }
     }
 

@@ -375,7 +375,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
                     split.SplitterDistance = Math.Clamp(split.Height - 220, split.Panel1MinSize, split.Height - split.Panel2MinSize);
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         };
     }
 
@@ -890,7 +890,7 @@ internal sealed class ShopVaultMigrationControl : UserControl
         {
             aiApiKey = AiOptimizationSettingsStore.Load()?.OpenAiApiKey;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         _cts = new CancellationTokenSource();
         _btnStart.Enabled = false;

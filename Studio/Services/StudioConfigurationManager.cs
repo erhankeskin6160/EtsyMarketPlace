@@ -147,6 +147,6 @@ public static class StudioConfigurationManager
             legacyAi.IdeogramApiKey = config.IdeogramApiKey;
             AiOptimizationSettingsStore.Save(legacyAi);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

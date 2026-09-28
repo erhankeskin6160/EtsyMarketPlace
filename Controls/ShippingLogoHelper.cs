@@ -233,7 +233,7 @@ public static class ShippingLogoHelper
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return null;
     }

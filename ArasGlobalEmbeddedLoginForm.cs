@@ -175,7 +175,7 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private async Task CheckStorageTokenAsync()
@@ -196,7 +196,7 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
                         const parsed = JSON.parse(u);
                         if (parsed?.token?.accessToken) return parsed.token.accessToken;
                     }
-                } catch {}
+                } catch (Exception caught) { AppLog.Swallowed(caught); }
                 return '';
             })()";
 
@@ -215,7 +215,7 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private async Task CompleteLoginSuccessAsync(string token)

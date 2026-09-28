@@ -130,7 +130,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         // 2. Ardından Assembly Manifest Resources (EmbeddedResource) içini tara
         try
@@ -150,7 +150,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         // 3. Fallback: Dinamik Vektörel Kurumsal Logo Çiz
         return CreateFallbackLogo(fileName);

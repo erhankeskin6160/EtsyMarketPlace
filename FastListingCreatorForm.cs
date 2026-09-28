@@ -931,7 +931,7 @@ internal sealed class FastListingCreatorForm : Form
                         hasInitializedSplitter = true;
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         };
 
@@ -2686,7 +2686,7 @@ internal sealed class FastListingCreatorForm : Form
                 using var bmp = Image.FromStream(fs);
                 pic.Image = new Bitmap(bmp);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
             card.Controls.Add(pic);
 
             var lblBadge = new Label
@@ -3757,7 +3757,7 @@ internal sealed class FastListingCreatorForm : Form
 
             FastListingDraftStore.SaveDraft(draft);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void RestoreDraftIfAvailable()
@@ -3854,7 +3854,7 @@ internal sealed class FastListingCreatorForm : Form
             _statusLabel.Text = "ℹ️ Önceki çalışmanızdaki taslak otomatik olarak geri yüklendi.";
             _statusLabel.ForeColor = UiStyle.AccentColor;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void OpenAiSettingsDialog()
@@ -3926,9 +3926,7 @@ internal sealed class FastListingCreatorForm : Form
                 _galleryToolTip.SetToolTip(_lblAiBadge, $"Aktif AI Sağlayıcı: {provider} ({model})\nDeğiştirmek veya yapılandırmak için tıklayın.");
             }
         }
-        catch
-        {
-        }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void BuildAiContextMenu()

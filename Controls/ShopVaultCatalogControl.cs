@@ -674,7 +674,7 @@ internal sealed class ShopVaultCatalogControl : UserControl
                             _galleryStrip.Controls.Add(thumbBox);
                         }
                     }
-                    catch { }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
             }
 
@@ -723,7 +723,7 @@ internal sealed class ShopVaultCatalogControl : UserControl
                 _picPreview.Image = newImg;
                 oldImg?.Dispose();
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
     }
 

@@ -652,9 +652,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 {
                     BeginInvoke(new Action(() => SetStatus(message)));
                 }
-                catch
-                {
-                }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
 
                 return;
             }
@@ -1628,9 +1626,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                     }
                 }
             }
-            catch
-            {
-            }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
 
             return list;
         }, ct);
@@ -1672,9 +1668,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
                     AppendGenericOffers(list, "Navlungo", fallback, rate);
                 }
-                catch
-                {
-                }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
 
             return list;
@@ -1717,9 +1711,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
                     AppendGenericOffers(list, "Shiptomore", fallback, rate);
                 }
-                catch
-                {
-                }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
 
             return list;

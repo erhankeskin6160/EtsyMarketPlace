@@ -159,7 +159,7 @@ internal sealed class OwnShopListingAiAuditForm(
                     split.SplitterDistance = Math.Clamp(target, 30, Math.Max(40, split.Height - 40));
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         Shown += (_, _) => AdjustSplitter();
@@ -758,7 +758,7 @@ internal sealed class OwnShopListingAiAuditForm(
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.SetProperty,
                 null, _grid, new object[] { true });
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         _grid.RowTemplate.MinimumHeight = 70;
         _grid.DataSource = _bindingSource;

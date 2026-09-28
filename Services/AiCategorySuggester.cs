@@ -254,7 +254,7 @@ internal sealed class AiCategorySuggester : IAiCategorySuggester
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         if (doc.RootElement.TryGetProperty("candidates", out var cands) && cands.GetArrayLength() > 0)
         {

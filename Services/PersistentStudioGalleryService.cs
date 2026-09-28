@@ -68,7 +68,7 @@ internal sealed class PersistentStudioGalleryService
             await cmd.ExecuteNonQueryAsync(cancellationToken);
             _initialized = true;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     public static async Task<StudioGalleryItem?> SaveItemAsync(
@@ -151,7 +151,7 @@ internal sealed class PersistentStudioGalleryService
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return list;
     }

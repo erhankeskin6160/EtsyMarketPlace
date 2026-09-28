@@ -102,6 +102,6 @@ internal static class EtsyApiSettingsStore
                 File.Delete(SettingsPath);
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

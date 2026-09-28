@@ -77,6 +77,6 @@ internal static class FastListingDraftStore
                 File.Delete(DraftFilePath);
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }
