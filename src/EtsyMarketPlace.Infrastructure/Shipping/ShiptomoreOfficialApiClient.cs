@@ -303,8 +303,6 @@ public sealed class ShiptomoreOfficialApiClient : IShiptomoreOfficialApi
             string line = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] [Shiptomore] [{step}]\n{content}\n{new string('-', 60)}\n";
             File.AppendAllText(Path.Combine(folder, "shiptomore_api_trace.log"), line);
         }
-        catch
-        {
-        }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

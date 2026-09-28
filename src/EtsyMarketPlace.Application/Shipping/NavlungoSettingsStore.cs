@@ -51,6 +51,6 @@ public static class NavlungoSettingsStore
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             File.WriteAllText(path, json);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

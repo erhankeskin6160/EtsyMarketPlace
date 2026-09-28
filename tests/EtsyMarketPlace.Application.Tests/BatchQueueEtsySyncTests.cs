@@ -28,9 +28,9 @@ public sealed class BatchQueueEtsySyncTests
     private static void Cleanup(string dbPath)
     {
         SqliteConnection.ClearAllPools();
-        try { if (File.Exists(dbPath)) File.Delete(dbPath); } catch { }
-        try { if (File.Exists(dbPath + "-wal")) File.Delete(dbPath + "-wal"); } catch { }
-        try { if (File.Exists(dbPath + "-shm")) File.Delete(dbPath + "-shm"); } catch { }
+        try { if (File.Exists(dbPath)) File.Delete(dbPath); } catch (Exception caught) { AppLog.Swallowed(caught); }
+        try { if (File.Exists(dbPath + "-wal")) File.Delete(dbPath + "-wal"); } catch (Exception caught) { AppLog.Swallowed(caught); }
+        try { if (File.Exists(dbPath + "-shm")) File.Delete(dbPath + "-shm"); } catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     [Fact]

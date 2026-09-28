@@ -77,7 +77,7 @@ public sealed class ShiptomoreApiClient : IShiptomoreApiClient
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return (false, null, null);
     }
@@ -309,7 +309,7 @@ public sealed class ShiptomoreApiClient : IShiptomoreApiClient
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return 233; // Bulunamazsa US
     }

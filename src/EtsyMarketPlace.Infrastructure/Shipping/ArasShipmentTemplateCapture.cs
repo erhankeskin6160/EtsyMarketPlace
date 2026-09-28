@@ -137,9 +137,7 @@ public sealed class ArasShipmentTemplateCapture
 
                     statusCallback?.Invoke($"İstek yakalandı: {e.Request.Method} {Shorten(url)}");
                 }
-                catch
-                {
-                }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             };
 
             // Yanıt gövdelerini eşleştir
@@ -158,9 +156,7 @@ public sealed class ArasShipmentTemplateCapture
                     {
                         body = await e.Response.TextAsync();
                     }
-                    catch
-                    {
-                    }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
 
                     CapturedExchange? target;
                     lock (gate)
@@ -178,9 +174,7 @@ public sealed class ArasShipmentTemplateCapture
 
                     statusCallback?.Invoke($"Yanıt yakalandı: {(int)e.Response.Status} {Shorten(url)}");
                 }
-                catch
-                {
-                }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             };
 
             statusCallback?.Invoke("Panel açılıyor. Lütfen gönderi işlemini panelden tamamlayın...");
@@ -245,17 +239,13 @@ public sealed class ArasShipmentTemplateCapture
                 {
                     await browser.CloseAsync();
                 }
-                catch
-                {
-                }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
 
                 try
                 {
                     await browser.DisposeAsync();
                 }
-                catch
-                {
-                }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }
@@ -322,9 +312,7 @@ public sealed class ArasShipmentTemplateCapture
 
             File.WriteAllText(capturePath + ".fark.txt", sb.ToString(), new UTF8Encoding(false));
         }
-        catch
-        {
-        }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
     private static string Shorten(string url)
     {

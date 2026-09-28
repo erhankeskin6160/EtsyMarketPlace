@@ -230,7 +230,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             string debugPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "navlungo_last_response.log");
             File.WriteAllText(debugPath, content);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private async Task<(bool success, string content, HttpStatusCode statusCode, string? reasonPhrase)> ExecutePostRequestRawAsync(
@@ -347,7 +347,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 if (list.Count > 0) return list;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         // 2. Next.js RSC streaming satırlarını ve chunk'larındaki JSON nesnelerini ayrıştır
         try
@@ -355,7 +355,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
             ExtractFromRscJsonObjects(content, list);
             if (list.Count > 0) return list;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         // 3. Metin/Regex tabanlı ayrıştırma (RSC string chunk'ları içerisindeki taşıyıcı ve fiyat kalıpları)
         // Örn: Widect USD 15.03, FedEx USD 20.75, UPS USD 32.96
@@ -433,7 +433,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                 ExtractFromJsonElement(doc.RootElement, list);
                 if (list.Count > 0) return;
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         // 2. Standart RSC satır satır chunk ayrıştırma (id:[...] veya id:{...})
@@ -449,7 +449,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                     using var doc = JsonDocument.Parse(jsonCandidate);
                     ExtractFromJsonElement(doc.RootElement, list);
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
 
@@ -487,7 +487,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
                         using var doc = JsonDocument.Parse(objStr);
                         ExtractFromJsonElement(doc.RootElement, list);
                     }
-                    catch { }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
                 start = end + 1;
             }

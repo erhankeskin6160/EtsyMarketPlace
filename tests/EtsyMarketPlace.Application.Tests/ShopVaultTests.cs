@@ -35,7 +35,7 @@ public sealed class ShopVaultTests : IDisposable
                 Directory.Delete(_tempDirectory, true);
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     [Fact]

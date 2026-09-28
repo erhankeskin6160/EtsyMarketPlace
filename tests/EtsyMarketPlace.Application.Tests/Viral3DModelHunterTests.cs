@@ -149,7 +149,7 @@ public class Viral3DModelHunterTests
         {
             if (System.IO.File.Exists(tempDb))
             {
-                try { System.IO.File.Delete(tempDb); } catch { }
+                try { System.IO.File.Delete(tempDb); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }
@@ -423,7 +423,7 @@ public class Viral3DModelHunterTests
         {
             if (System.IO.File.Exists(tempDb))
             {
-                try { System.IO.File.Delete(tempDb); } catch { }
+                try { System.IO.File.Delete(tempDb); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }
@@ -459,7 +459,7 @@ public class Viral3DModelHunterTests
         {
             if (System.IO.File.Exists(tempDb))
             {
-                try { System.IO.File.Delete(tempDb); } catch { }
+                try { System.IO.File.Delete(tempDb); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }
@@ -507,7 +507,7 @@ public class Viral3DModelHunterTests
         {
             if (System.IO.File.Exists(tempDb))
             {
-                try { System.IO.File.Delete(tempDb); } catch { }
+                try { System.IO.File.Delete(tempDb); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }
@@ -635,7 +635,7 @@ public class Viral3DModelHunterTests
         {
             if (System.IO.File.Exists(tempDb))
             {
-                try { System.IO.File.Delete(tempDb); } catch { }
+                try { System.IO.File.Delete(tempDb); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }
@@ -674,7 +674,7 @@ public class Viral3DModelHunterTests
         {
             if (System.IO.File.Exists(tempDb))
             {
-                try { System.IO.File.Delete(tempDb); } catch { }
+                try { System.IO.File.Delete(tempDb); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }

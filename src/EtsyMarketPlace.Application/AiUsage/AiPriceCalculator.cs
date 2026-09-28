@@ -268,7 +268,7 @@ public static class AiPriceCalculator
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return (items, nextCursor);
     }
@@ -378,7 +378,7 @@ public static class AiPriceCalculator
             report.TotalRequests = report.DailyItems.Sum(x => x.RequestCount);
             report.TotalCostUsd = report.DailyItems.Sum(x => x.CostUsd);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return nextCursor;
     }
@@ -514,7 +514,7 @@ public static class AiPriceCalculator
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return list;
     }
@@ -548,7 +548,7 @@ public static class AiPriceCalculator
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return list;
     }
@@ -587,7 +587,7 @@ public static class AiPriceCalculator
                     return $"⚠️ Hata ({status ?? httpStatusCode.ToString()}): {message}";
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return $"⚠️ Yanıt Kodu: {httpStatusCode}";
     }

@@ -40,11 +40,11 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 string p = Path.Combine(profileDir, name);
                 if (File.Exists(p))
                 {
-                    try { File.Delete(p); } catch { }
+                    try { File.Delete(p); } catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     /// <summary>
@@ -66,7 +66,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             {
                 Process.Start(new ProcessStartInfo("cmd", $"/c start \"\" \"{url}\"") { CreateNoWindow = true });
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
     }
 
@@ -153,7 +153,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                         }
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             };
 
             // 2. Ağ yanıtlarını dinle: Aras domaini, auth/login yanıtları ve response header'larını dinle
@@ -195,7 +195,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                         }
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             };
 
             statusCallback?.Invoke("🌐 Aras Global paneline bağlanılıyor...");
@@ -216,7 +216,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                         try {
                             localStorage.clear();
                             sessionStorage.clear();
-                        } catch {}
+                        } catch (Exception caught) { AppLog.Swallowed(caught); }
                     }");
                     localTok = null;
                 }
@@ -559,7 +559,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                                 capturedCookies = string.Join("; ", allCookies.Select(c => $"{c.Name}={c.Value}"));
                             }
                         }
-                        catch { }
+                        catch (Exception caught) { AppLog.Swallowed(caught); }
 
                         capturedCookies ??= string.Join("; ", cookies.Select(c => $"{c.Name}={c.Value}"));
                         capturedToken ??= "navlungo_browser_session";
@@ -657,7 +657,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                         }
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             };
 
             statusCallback?.Invoke("🌐 Shiptomore giriş sayfasına gidiliyor...");
@@ -732,7 +732,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                         return !!document.querySelector('a[href*=""/web/session/logout""], a[href*=""/my/home""], .o_user_bookmark');
                     }");
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
 
                 if (navigatedAwayFromLogin || isOdooAuthenticated)
                 {
@@ -802,7 +802,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                             if (m) return m[0];
                         }
                     }
-                } catch {}
+                } catch (Exception caught) { AppLog.Swallowed(caught); }
                 try {
                     for (let i = 0; i < sessionStorage.length; i++) {
                         const k = sessionStorage.key(i);
@@ -812,7 +812,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                             if (m) return m[0];
                         }
                     }
-                } catch {}
+                } catch (Exception caught) { AppLog.Swallowed(caught); }
                 return '';
             }";
 
@@ -852,7 +852,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         return null;
     }
 
@@ -872,7 +872,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return null;
     }
@@ -904,7 +904,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                 await submitBtn.ClickAsync();
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private static string? ExtractJwtFromString(string input)

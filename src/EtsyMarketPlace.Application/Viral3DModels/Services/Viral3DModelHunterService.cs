@@ -152,7 +152,7 @@ public sealed class Viral3DModelHunterService
                     }
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         statusCallback?.Invoke($"🎯 [Faz 1/5] {searchKeywords.Count} stratejik alt arama terimi belirlendi: {string.Join(", ", searchKeywords.Take(4))}...");
@@ -207,7 +207,7 @@ public sealed class Viral3DModelHunterService
                     }
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         statusCallback?.Invoke($"📦 [Faz 2/5] Toplam {allModelsDict.Count} ham aday model toplandı.");
@@ -264,7 +264,7 @@ public sealed class Viral3DModelHunterService
                     statusCallback?.Invoke($"📊 [{checkedCount}/{topPicks.Count}] '{titleShort}' -> Etsy'de {comp} rakip bulundu.");
                     await Task.Delay(180, ct);
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
 
@@ -278,7 +278,7 @@ public sealed class Viral3DModelHunterService
             {
                 await _lakeRepository.SaveOrUpdateModelsAsync(safeCandidates, ct);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         var finalResults = ApplyFiltersAndSort(safeCandidates, categoryFilter, commercialOnly, minOpportunityScore, shopNicheOnly, shopProfile);

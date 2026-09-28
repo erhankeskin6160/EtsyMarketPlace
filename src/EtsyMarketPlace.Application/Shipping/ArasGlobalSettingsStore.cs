@@ -92,7 +92,7 @@ public static class ArasGlobalSettingsStore
 
             File.WriteAllText(path, node.ToJsonString(JsonOptions));
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private static bool IsTokenProtectedInFile(string json)
@@ -120,6 +120,6 @@ public static class ArasGlobalSettingsStore
             string line = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] [{step}]\n{content}\n----------------------------------------\n";
             File.AppendAllText(logPath, line);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

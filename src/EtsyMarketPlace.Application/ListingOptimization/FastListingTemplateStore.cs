@@ -159,9 +159,7 @@ public static class FastListingTemplateStore
             var json = JsonSerializer.Serialize(customList, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(FilePath, json);
         }
-        catch
-        {
-        }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     public static IReadOnlyList<FastListingTemplate> GetBuiltInTemplates() => BuiltInTemplates;

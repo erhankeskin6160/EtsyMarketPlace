@@ -134,9 +134,7 @@ public static class ShiptomoreSettingsStore
 
             File.WriteAllText(path, node.ToJsonString(JsonOptions));
         }
-        catch
-        {
-        }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private static bool IsSecretProtectedInFile(string json)
