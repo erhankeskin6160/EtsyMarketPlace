@@ -543,6 +543,82 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     }
 
     /// <summary>
+    /// Panelin gerçek GTİP arama API'sinden kodları çeker ve kombo listesini canlı sonuçlarla doldurur.
+    /// Kullanım: GTİP alanına arama terimini yazıp Enter'a bas (ör. "heykel", "oyuncak", "3926").
+    /// </summary>
+    private async Task SearchGtipFromPanelAsync(string? term)
+    {
+        string query = (term ?? string.Empty).Trim();
+        int dash = query.IndexOf(" - ", StringComparison.Ordinal);
+        if (dash > 0)
+        {
+            query = query.Substring(0, dash).Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return;
+        }
+
+        try
+        {
+            var arasSettings = ArasGlobalSettingsStore.Load();
+            if (!arasSettings.HasValidTokenFormat || string.IsNullOrWhiteSpace(arasSettings.CleanToken))
+            {
+                _lblActionStatus.ForeColor = UiStyle.DangerColor;
+                _lblActionStatus.Text = "GTİP araması için Aras oturumu gerekli.";
+                return;
+            }
+
+            _lblActionStatus.ForeColor = UiStyle.TextMuted;
+            _lblActionStatus.Text = "GTİP aranıyor...";
+            Cursor = Cursors.WaitCursor;
+
+            var results = await _arasApiClient.SearchGtipCodeAsync(query, arasSettings.CleanToken, CancellationToken.None);
+
+            if (results == null || results.Count == 0)
+            {
+                _lblActionStatus.ForeColor = UiStyle.DangerColor;
+                _lblActionStatus.Text = $"GTİP bulunamadı: '{query}'";
+                return;
+            }
+
+            _cmbHsCode.Items.Clear();
+            foreach (var r in results.Take(50))
+            {
+                string desc = r.Description ?? string.Empty;
+                if (desc.Length > 90)
+                {
+                    desc = desc.Substring(0, 90) + "…";
+                }
+
+                _cmbHsCode.Items.Add(string.IsNullOrWhiteSpace(desc) ? r.Code : r.Code + " - " + desc);
+            }
+
+            if (_cmbHsCode.Items.Count > 0)
+            {
+                _cmbHsCode.SelectedIndex = 0;
+            }
+
+            _lblActionStatus.ForeColor = UiStyle.SuccessColor;
+            _lblActionStatus.Text = $"GTİP: {results.Count} sonuç bulundu — listeden seç.";
+            if (_cmbHsCode.Focused)
+            {
+                _cmbHsCode.DroppedDown = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _lblActionStatus.ForeColor = UiStyle.DangerColor;
+            _lblActionStatus.Text = "GTİP araması başarısız: " + ex.Message;
+        }
+        finally
+        {
+            Cursor = Cursors.Default;
+        }
+    }
+
+    /// <summary>
     /// Aras panelinde kullanıcının yaptığı gerçek gönderi işleminin istek/yanıt çiftini kaydeder.
     /// Amaç: API'nin beklediği gerçek gövdeyi görmek (400 volumetricweightismissing teşhisi).
     /// </summary>
@@ -893,11 +969,11 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         stack.Controls.Add(_lblPackageError, 0, 3);
 
         // HS kodu
-        stack.Controls.Add(MakeSectionLabel("GTIP / HS KODU"), 0, 4);
+        stack.Controls.Add(MakeSectionLabel("GTİP / HS KODU  ·  yaz + Enter: panelde ara"), 0, 4);
         _cmbHsCode = new ComboBox
         {
             Dock = DockStyle.Fill,
-            DropDownStyle = ComboBoxStyle.DropDownList,
+            DropDownStyle = ComboBoxStyle.DropDown,
             Font = UiStyle.BaseFont,
             Margin = new Padding(0, 0, 0, 10),
             Height = 30
@@ -911,6 +987,17 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             "9403600000 - Ahşap Mobilya"
         });
         _cmbHsCode.SelectedIndex = 0;
+        _cmbHsCode.KeyDown += async (s, e) =>
+        {
+            if (e.KeyCode != Keys.Enter)
+            {
+                return;
+            }
+
+            e.SuppressKeyPress = true;
+            e.Handled = true;
+            await SearchGtipFromPanelAsync(_cmbHsCode.Text);
+        };
         stack.Controls.Add(_cmbHsCode, 0, 5);
 
         // desi şeridi
@@ -1995,7 +2082,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 WidthCm = measurement.WidthCm,
                 LengthCm = measurement.LengthCm,
                 HeightCm = measurement.HeightCm,
-                HsCode = (_cmbHsCode.SelectedItem?.ToString() ?? "3926400000").Split(' ')[0],
+                HsCode = (_cmbHsCode.SelectedItem?.ToString() ?? _cmbHsCode.Text ?? "3926400000").Split(' ')[0],
                 SelectedSubCarrier = _selectedQuote.SubCarrier,
                 ServiceType = _selectedQuote.ServiceType,
                 CargoPrice = _selectedQuote.PriceUsd,
