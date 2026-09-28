@@ -55,7 +55,7 @@ public sealed class ShiptomoreOfficialApiTests
         var settings = new ShiptomoreSettings
         {
             ClientId = "client-id",
-            EncryptedClientSecret = "s3cr3t"
+            ClientSecret = "s3cr3t"
         };
 
         var client = new ShiptomoreOfficialApiClient(new HttpClient(handler), () => settings)
@@ -145,7 +145,7 @@ public sealed class ShiptomoreOfficialApiTests
         Assert.NotNull(auth);
         Assert.Equal("Basic", auth!.Scheme);
 
-        string expectedSecret = ShippingSecretProtector.Current?.Unprotect("s3cr3t") ?? "s3cr3t";
+        string expectedSecret = "s3cr3t";
         string decoded = Encoding.UTF8.GetString(Convert.FromBase64String(auth.Parameter!));
         Assert.Equal($"client-id:{expectedSecret}", decoded);
     }
