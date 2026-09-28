@@ -450,18 +450,28 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         brand.Controls.Add(brandTitle);
         brand.Controls.Add(brandSub);
 
-        var right = new Panel { Dock = DockStyle.Right, Width = 520, BackColor = Color.Transparent };
+        // Ust barin sag tarafi: sabit konum yerine akis duzeni — ogeler artik ust uste binmez.
+        var right = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Right,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            BackColor = Color.Transparent,
+            Padding = new Padding(6, 11, 14, 0)
+        };
 
         _btnCaptureTemplate = new Button
         {
-            Text = "Aras şablonu yakala",
+            Text = "Şablon yakala",
             Height = 33,
-            Width = 172,
+            Width = 136,
             FlatStyle = FlatStyle.Flat,
             Font = UiStyle.SemiboldBaseFont,
             BackColor = UiStyle.SecondaryColor,
             ForeColor = UiStyle.TextDark,
-            Location = new Point(0, 12),
+            Margin = new Padding(0, 0, 6, 0),
             Cursor = Cursors.Hand
         };
         _btnCaptureTemplate.FlatAppearance.BorderSize = 0;
@@ -469,15 +479,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
         var btnShipToMore = new Button
         {
-            Text = "Ship to More bağlantısı",
+            Text = "Ship to More",
             Height = 33,
-            Width = 190,
+            Width = 140,
             FlatStyle = FlatStyle.Flat,
             Font = UiStyle.SemiboldBaseFont,
             BackColor = UiStyle.SecondaryColor,
             ForeColor = UiStyle.TextDark,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(right.Width - 190 - 14, 12),
+            Margin = new Padding(0, 0, 6, 0),
             Cursor = Cursors.Hand
         };
         btnShipToMore.FlatAppearance.BorderSize = 0;
@@ -486,41 +495,40 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             using var connectionForm = new ShiptomoreConnectionForm();
             connectionForm.ShowDialog(this);
         };
-        right.Controls.Add(btnShipToMore);
-        right.Controls.Add(_btnCaptureTemplate);
 
-        _btnRefresh = UiStyle.CreateButton("Yenile", isSecondary: true);
-        _btnRefresh.Width = 92;
-        _btnRefresh.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-        _btnRefresh.Location = new Point(right.Width - _btnRefresh.Width - 14, 12);
-        _btnRefresh.Click += async (s, e) => await ReloadOrdersAsync(force: true);
+        _txtSearch = new TextBox
+        {
+            Width = 210,
+            Height = 33,
+            Font = UiStyle.BaseFont,
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = UiStyle.InputBackground,
+            ForeColor = UiStyle.TextDark,
+            Margin = new Padding(0, 0, 6, 0)
+        };
+        _txtSearch.PlaceholderText = "Sipariş no · müşteri · ürün ara";
+        _txtSearch.TextChanged += async (s, e) => await ReloadOrdersAsync();
 
         _btnSession = new Button
         {
             Height = 33,
-            Width = 168,
+            Width = 150,
             FlatStyle = FlatStyle.Flat,
             Font = UiStyle.SemiboldBaseFont,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(right.Width - 168 - 92 - 24, 12),
+            Margin = new Padding(0, 0, 6, 0),
             Cursor = Cursors.Hand
         };
         _btnSession.FlatAppearance.BorderSize = 0;
         _btnSession.Click += async (s, e) => await PromptOrRefreshArasSessionAsync();
 
-        _txtSearch = new TextBox
-        {
-            Width = 240,
-            Font = UiStyle.BaseFont,
-            BorderStyle = BorderStyle.FixedSingle,
-            BackColor = UiStyle.InputBackground,
-            ForeColor = UiStyle.TextDark,
-            Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(right.Width - 168 - 92 - 24 - 240 - 12, 14)
-        };
-        _txtSearch.PlaceholderText = "Sipariş no · müşteri · ürün ara";
-        _txtSearch.TextChanged += async (s, e) => await ReloadOrdersAsync();
+        _btnRefresh = UiStyle.CreateButton("Yenile", isSecondary: true);
+        _btnRefresh.Width = 80;
+        _btnRefresh.Height = 33;
+        _btnRefresh.Margin = new Padding(0);
+        _btnRefresh.Click += async (s, e) => await ReloadOrdersAsync(force: true);
 
+        right.Controls.Add(_btnCaptureTemplate);
+        right.Controls.Add(btnShipToMore);
         right.Controls.Add(_txtSearch);
         right.Controls.Add(_btnSession);
         right.Controls.Add(_btnRefresh);
@@ -705,9 +713,10 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         var chipRow = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 36,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
             BackColor = Color.Transparent,
             Padding = new Padding(12, 0, 8, 0)
         };
@@ -776,8 +785,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         {
             Text = text,
             Height = 28,
-            AutoSize = false,
-            Width = 78,
+            AutoSize = true,
+            Padding = new Padding(10, 0, 10, 0),
             FlatStyle = FlatStyle.Flat,
             Font = UiStyle.SemiboldBaseFont,
             Margin = new Padding(0, 0, 6, 0),
@@ -903,7 +912,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         stack.Controls.Add(_cmbHsCode, 0, 5);
 
         // desi şeridi
-        var desiStrip = new Panel { BackColor = UiStyle.BackgroundColor, Dock = DockStyle.Fill, Height = 72, Margin = new Padding(0, 0, 0, 10) };
+        var desiStrip = new Panel { BackColor = UiStyle.BackgroundColor, Dock = DockStyle.Fill, Height = 84, Margin = new Padding(0, 0, 0, 10) };
         desiStrip.Controls.Add(new Label
         {
             Text = "DESİ",
@@ -949,7 +958,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             ForeColor = UiStyle.TextMuted,
             AutoSize = true,
             BackColor = Color.Transparent,
-            Location = new Point(14, 52)
+            Location = new Point(14, 60)
         };
         desiStrip.Controls.Add(_lblMeasureSource);
         stack.Controls.Add(desiStrip, 0, 6);
@@ -1048,9 +1057,10 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         var chipRow = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 36,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             FlowDirection = FlowDirection.LeftToRight,
-            WrapContents = false,
+            WrapContents = true,
             BackColor = Color.Transparent,
             Padding = new Padding(12, 0, 8, 0)
         };
