@@ -998,7 +998,15 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             e.Handled = true;
             await SearchGtipFromPanelAsync(_cmbHsCode.Text);
         };
-        stack.Controls.Add(_cmbHsCode, 0, 5);
+        var gtipRow = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10), Height = 32 };
+        var btnGtipSearch = UiStyle.CreateButton("GTİP Ara", isSecondary: true);
+        btnGtipSearch.Dock = DockStyle.Right;
+        btnGtipSearch.Width = 92;
+        btnGtipSearch.Click += async (s, e) => await SearchGtipFromPanelAsync(_cmbHsCode.Text);
+        _cmbHsCode.Margin = new Padding(0);
+        gtipRow.Controls.Add(_cmbHsCode);
+        gtipRow.Controls.Add(btnGtipSearch);
+        stack.Controls.Add(gtipRow, 0, 5);
 
         // desi şeridi
         var desiStrip = new Panel { BackColor = UiStyle.BackgroundColor, Dock = DockStyle.Fill, Height = 84, Margin = new Padding(0, 0, 0, 10) };
