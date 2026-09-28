@@ -26,8 +26,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private const int NarrowBreakpoint = 1200;
     private const int TopBarHeight = 56;
     private const int ActionStripHeight = 64;
-    private const int QueueRegionWidth = 320;
-    private const int QuotesRegionWidth = 380;
+    private const int QueueRegionWidth = 312;
+    private const int QuotesRegionWidth = 424;
 
     // --- servisler ---
     private readonly EtsyOrderService _orderService;
@@ -2271,7 +2271,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     /// <summary>Taşıyıcı karşılaştırma listesindeki tek satır.</summary>
     internal sealed class QuoteRowControl : Control
     {
-        private static readonly Font NameFont = new("Segoe UI Semibold", 9.5f);
+        private static readonly Font NameFont = new("Segoe UI Semibold", 8.8f);
         private static readonly Font MetaFont = new("Segoe UI", 8.5f);
         private static readonly Font PriceFont = new("Segoe UI Semibold", 12f, FontStyle.Bold);
         private static readonly Font PillFont = new("Segoe UI", 8f, FontStyle.Bold);
