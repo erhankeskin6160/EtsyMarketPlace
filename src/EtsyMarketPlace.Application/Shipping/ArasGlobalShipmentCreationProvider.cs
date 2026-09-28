@@ -126,11 +126,16 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
         double weight = context.WeightKg > 0 ? context.WeightKg : 0.4;
 
         // 2. Ürün kalemleri (Etsy siparişinden)
-        string desiredHs = !string.IsNullOrWhiteSpace(context.HsCode)
+        // GTİP seçimi: kokpitte seçilen kod > sipariş kaleminin kodu > varsayılan.
+        // Tek bir kod tüm kalemlere uygulanır ve panelin kendi veritabanından doğrulanır;
+        // aksi halde API "Hs Code Format Is Wrong" döner.
+        const string DefaultHsCode = "3926400000";
+        string desiredHs = !string.IsNullOrWhiteSpace(context.HsCode) && context.HsCode != DefaultHsCode
             ? context.HsCode
-            : (order.Items.Count > 0 && !string.IsNullOrWhiteSpace(order.Items[0].HsCode) ? order.Items[0].HsCode : "3926400000");
+            : (order.Items.Count > 0 && !string.IsNullOrWhiteSpace(order.Items[0].HsCode) && order.Items[0].HsCode != DefaultHsCode
+                ? order.Items[0].HsCode!
+                : DefaultHsCode);
 
-        // GTİP kodu, panelin kendi veritabanından doğrulanır; aksi halde API "His Code Format Is Wrong" döner.
         string hsCode = await ResolveHsCodeAsync(desiredHs, token, cancellationToken);
 
         decimal itemsTotal = order.Items.Count > 0
@@ -149,7 +154,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             contentItems.Add(new ArasShipmentContentItem
             {
                 Description = desc,
-                HsCode = !string.IsNullOrWhiteSpace(itm.HsCode) ? itm.HsCode : hsCode,
+                HsCode = hsCode, // tek kaynak: doğrulanmış kod (kalem kodu burada geçersiz olabilir)
                 ProductBarcode = Guid.NewGuid().ToString(),
                 Disabled = false,
                 Quantity = qty,
@@ -382,10 +387,14 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                     return exact.Code!;
                 }
 
+                // Panel, 10 haneli yaprak kodları kabul ediyor; önce onları tercih et.
+                var tenDigit = results.FindAll(r => !string.IsNullOrWhiteSpace(r.Code) && r.Code!.Length == 10);
+                var pool = tenDigit.Count > 0 ? tenDigit : results;
+
                 string prefix = code.Length >= 6 ? code.Substring(0, 6) : code;
-                var close = results.Find(r => !string.IsNullOrWhiteSpace(r.Code) && r.Code!.StartsWith(prefix, StringComparison.Ordinal));
-                string picked = (close ?? results[0]).Code ?? code;
-                ArasGlobalSettingsStore.LogTrace("GtipResolve", $"{code} -> {picked}");
+                var close = pool.Find(r => !string.IsNullOrWhiteSpace(r.Code) && r.Code!.StartsWith(prefix, StringComparison.Ordinal));
+                string picked = (close ?? pool[0]).Code ?? code;
+                ArasGlobalSettingsStore.LogTrace("GtipResolve", $"{code} -> {picked} (aday: {pool.Count})");
                 return picked;
             }
         }
