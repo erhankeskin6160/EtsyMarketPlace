@@ -71,6 +71,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private TextBox _txtSearch = null!;
     private Button _btnRefresh = null!;
     private Button _btnSession = null!;
+    private Button _btnSeSession = null!;
     private Button _btnCaptureTemplate = null!;
 
     // --- bölge 1 ---
@@ -528,6 +529,18 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _btnSession.FlatAppearance.BorderSize = 0;
         _btnSession.Click += async (s, e) => await PromptOrRefreshArasSessionAsync();
 
+        _btnSeSession = new Button
+        {
+            Height = 33,
+            Width = 170,
+            FlatStyle = FlatStyle.Flat,
+            Font = UiStyle.SemiboldBaseFont,
+            Margin = new Padding(0, 0, 6, 0),
+            Cursor = Cursors.Hand
+        };
+        _btnSeSession.FlatAppearance.BorderSize = 0;
+        _btnSeSession.Click += async (s, e) => await PromptOrRefreshShipEntegraSessionAsync();
+
         _btnRefresh = UiStyle.CreateButton("Yenile", isSecondary: true);
         _btnRefresh.Width = 80;
         _btnRefresh.Height = 33;
@@ -538,6 +551,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         right.Controls.Add(btnShipToMore);
         right.Controls.Add(_txtSearch);
         right.Controls.Add(_btnSession);
+        right.Controls.Add(_btnSeSession);
         right.Controls.Add(_btnRefresh);
 
         bar.Controls.Add(right);
@@ -759,6 +773,11 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _btnSession.Text = valid ? "Aras oturumu açık" : "Aras oturumu yok";
         _btnSession.BackColor = valid ? UiStyle.SuccessColor : UiStyle.WarningColor;
         _btnSession.ForeColor = valid ? Color.White : Color.FromArgb(40, 30, 0);
+        var seSettings = ShipEntegraSettingsStore.Load();
+        bool seValid = seSettings.HasValidTokenFormat;
+        _btnSeSession.Text = seValid ? "ShipEntegra oturumu a\u00e7\u0131k" : "ShipEntegra oturumu yok";
+        _btnSeSession.BackColor = seValid ? UiStyle.SuccessColor : UiStyle.WarningColor;
+        _btnSeSession.ForeColor = seValid ? Color.White : Color.FromArgb(40, 30, 0);
     }
 
     #endregion
@@ -2004,6 +2023,86 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             "Etiket Önizleme",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
+    }
+
+    /// <summary>
+    /// ShipEntegra oturumunu y\u00f6netir: kay\u0131tl\u0131 bilgilerle dener ya da taray\u0131c\u0131da
+    /// manuel giri\u015f ak\u0131\u015f\u0131n\u0131 ba\u015flat\u0131r; yakalanan tokeni kal\u0131c\u0131 olarak kaydeder.
+    /// </summary>
+    private async Task PromptOrRefreshShipEntegraSessionAsync()
+    {
+        var settings = ShipEntegraSettingsStore.Load();
+
+        using var dialog = new ShippingLoginCredentialsDialog("ShipEntegra", settings.SavedEmail);
+        if (dialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        if (dialog.OpenInDefaultBrowserRequested)
+        {
+            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://app.shipentegra.com/login");
+            MessageBox.Show(
+                "ShipEntegra paneli varsay\u0131lan taray\u0131c\u0131n\u0131zda a\u00e7\u0131ld\u0131!\n\nGiri\u015f yapt\u0131ktan sonra kokpitte 'Yenile'ye bas\u0131n.",
+                "Taray\u0131c\u0131 A\u00e7\u0131ld\u0131",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+            return;
+        }
+
+        string email = dialog.Email;
+        string pass = dialog.Password;
+        bool showBrowser = dialog.OpenInBrowserRequested;
+
+        if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
+        {
+            settings.SavedEmail = email;
+            settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+            settings.AutoRefreshEnabled = dialog.AutoRefresh;
+            ShipEntegraSettingsStore.Save(settings);
+        }
+
+        _lblActionStatus.ForeColor = UiStyle.TextMuted;
+        _lblActionStatus.Text = "ShipEntegra oturumu a\u00e7\u0131l\u0131yor...";
+
+        try
+        {
+            string? freshToken = await _sessionManager.RefreshShipEntegraTokenAsync(
+                email,
+                pass,
+                showBrowser,
+                message => _lblActionStatus.Text = message);
+
+            if (!string.IsNullOrWhiteSpace(freshToken))
+            {
+                settings.BearerToken = freshToken;
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                ShipEntegraSettingsStore.Save(settings);
+
+                _btnSeSession.Text = "ShipEntegra oturumu a\u00e7\u0131k";
+                _btnSeSession.BackColor = UiStyle.SuccessColor;
+                _btnSeSession.ForeColor = Color.White;
+
+                _lblActionStatus.ForeColor = UiStyle.SuccessColor;
+                _lblActionStatus.Text = "ShipEntegra oturumu a\u00e7\u0131ld\u0131 \u2713";
+                await ReloadOrdersAsync();
+            }
+            else
+            {
+                _lblActionStatus.ForeColor = UiStyle.DangerColor;
+                _lblActionStatus.Text = "ShipEntegra oturumu a\u00e7\u0131lamad\u0131.";
+                MessageBox.Show(
+                    "ShipEntegra oturumu a\u00e7\u0131lamad\u0131. 'Taray\u0131c\u0131da A\u00e7' se\u00e7ene\u011fiyle bir kez manuel giri\u015f yapmay\u0131 deneyin.",
+                    "Bilgi",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+        }
+        catch (Exception ex)
+        {
+            _lblActionStatus.ForeColor = UiStyle.DangerColor;
+            _lblActionStatus.Text = "ShipEntegra oturum hatas\u0131: " + ex.Message;
+        }
     }
 
     private async Task PromptOrRefreshArasSessionAsync()
