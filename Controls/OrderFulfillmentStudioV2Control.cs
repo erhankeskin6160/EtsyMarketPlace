@@ -1225,7 +1225,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             AutoSize = true,
             BackColor = Color.Transparent,
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(center.Width - 150, 14)
+            Location = new Point(0, 12)
         };
         center.Controls.Add(_lblPriceUsd);
         _lblPriceTry = new Label
@@ -1236,7 +1236,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             AutoSize = true,
             BackColor = Color.Transparent,
             Anchor = AnchorStyles.Top | AnchorStyles.Right,
-            Location = new Point(center.Width - 150, 38)
+            Location = new Point(0, 36)
         };
         center.Controls.Add(_lblPriceTry);
         _lblActionStatus = new Label
@@ -2340,17 +2340,23 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 ShippingLogoHelper.DrawImagePreserveAspect(g, _logo, logoRect);
             }
 
-            int textX = x + 46;
-            TextRenderer.DrawText(g, Quote.ServiceName, NameFont, new Point(textX, 11), UiStyle.TextDark, TextFormatFlags.NoPadding);
-            TextRenderer.DrawText(
-                g,
-                $"{Quote.ProviderName}  ·  {Quote.DeliveryText}",
-                MetaFont,
-                new Point(textX, 29),
-                UiStyle.TextMuted,
-                TextFormatFlags.NoPadding);
-
             string usd = $"${Quote.PriceUsd:N2}";
+            string tryTextPreview = $"{Quote.PriceTry:N2} ₺";
+            Size usdSizePreview = TextRenderer.MeasureText(usd, PriceFont);
+            Size trySizePreview = TextRenderer.MeasureText(tryTextPreview, MetaFont);
+            int priceBlockWidth = Math.Max(usdSizePreview.Width, trySizePreview.Width) + 14;
+
+            int textX = x + 46;
+            int textWidth = Math.Max(80, Width - textX - priceBlockWidth - 10);
+
+            TextRenderer.DrawText(g, Quote.ServiceName, NameFont,
+                new Rectangle(textX, 10, textWidth, 18), UiStyle.TextDark,
+                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter);
+
+            TextRenderer.DrawText(g, $"{Quote.ProviderName}  ·  {Quote.DeliveryText}", MetaFont,
+                new Rectangle(textX, 28, textWidth, 16), UiStyle.TextMuted,
+                TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter);
+
             Size usdSize = TextRenderer.MeasureText(usd, PriceFont);
             TextRenderer.DrawText(g, usd, PriceFont, new Point(Width - usdSize.Width - 14, 10), UiStyle.TextDark, TextFormatFlags.NoPadding);
 
