@@ -108,7 +108,7 @@ public sealed class ShopMigrationDeploymentService
                         }
                         finally
                         {
-                            try { File.Delete(tempCleanPath); } catch { }
+                            try { File.Delete(tempCleanPath); } catch (Exception caught) { AppLog.Swallowed(caught); }
                         }
 
                         currentRank++;

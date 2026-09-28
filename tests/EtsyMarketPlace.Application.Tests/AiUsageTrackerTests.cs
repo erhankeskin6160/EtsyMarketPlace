@@ -123,7 +123,7 @@ public sealed class AiUsageTrackerTests
         {
             if (File.Exists(tempDbPath))
             {
-                try { File.Delete(tempDbPath); } catch { }
+                try { File.Delete(tempDbPath); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }
@@ -544,7 +544,7 @@ public sealed class AiUsageTrackerTests
         {
             if (File.Exists(tempDbPath))
             {
-                try { File.Delete(tempDbPath); } catch { }
+                try { File.Delete(tempDbPath); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
     }

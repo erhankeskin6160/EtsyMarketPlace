@@ -777,7 +777,7 @@ public sealed class VisualBrowserAgentService
         {
             if (browser != null)
             {
-                try { await browser.CloseAsync(); } catch { }
+                try { await browser.CloseAsync(); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
 

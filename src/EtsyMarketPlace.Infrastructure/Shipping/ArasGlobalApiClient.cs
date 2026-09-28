@@ -286,7 +286,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
             Directory.CreateDirectory(captureDir);
             File.WriteAllText(Path.Combine(captureDir, "last-createshipment-request.json"), json);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         
@@ -743,6 +743,6 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
                 LastTracePath = fallback;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

@@ -287,11 +287,11 @@ public sealed class SqliteShopVaultRepository : IShopVaultRepository
 
                 if (!reader.IsDBNull(9))
                 {
-                    try { listing.Tags = JsonSerializer.Deserialize<List<string>>(reader.GetString(9), JsonOptions) ?? []; } catch { }
+                    try { listing.Tags = JsonSerializer.Deserialize<List<string>>(reader.GetString(9), JsonOptions) ?? []; } catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
                 if (!reader.IsDBNull(10))
                 {
-                    try { listing.Materials = JsonSerializer.Deserialize<List<string>>(reader.GetString(10), JsonOptions) ?? []; } catch { }
+                    try { listing.Materials = JsonSerializer.Deserialize<List<string>>(reader.GetString(10), JsonOptions) ?? []; } catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
 
                 listings.Add(listing);
