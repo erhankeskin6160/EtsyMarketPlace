@@ -442,10 +442,19 @@ internal sealed class BatchQueueForm : Form
         if (_cts is not null) return;
 
         _cts = new CancellationTokenSource();
-        var progress = new Progress<BatchQueueSummary>(summary =>
+        // Progress<T> geri cagrisi UI thread'inde calisir; burada engellemek kilitlenme
+        // uretir (devam kodu ayni thread'e donmek ister). async void + await dogru cozum.
+        var progress = new Progress<BatchQueueSummary>(async summary =>
         {
             UpdateSummaryBadges(summary);
-            LoadQueueAsync().GetAwaiter().GetResult();
+            try
+            {
+                await LoadQueueAsync();
+            }
+            catch (Exception caught)
+            {
+                AppLog.Swallowed(caught, "BatchQueueForm.Progress");
+            }
         });
 
         try

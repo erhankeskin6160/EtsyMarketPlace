@@ -103,7 +103,7 @@ public sealed class EbayMarketplaceProvider : SearchUrlMarketplaceProvider
 
         try
         {
-            var products = apiClient.SearchAsync(settings, context.Query).GetAwaiter().GetResult();
+            var products = Task.Run(async () => await apiClient.SearchAsync(settings, context.Query)).GetAwaiter().GetResult();
             return products.Count == 0
                 ? base.Search(context)
                 : products.Select(product => ToMarketplaceProduct(product, context)).ToList();
