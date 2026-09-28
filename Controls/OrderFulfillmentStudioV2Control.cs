@@ -2031,77 +2031,21 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     /// </summary>
     private async Task PromptOrRefreshShipEntegraSessionAsync()
     {
-        var settings = ShipEntegraSettingsStore.Load();
-
-        using var dialog = new ShippingLoginCredentialsDialog("ShipEntegra", settings.SavedEmail);
-        if (dialog.ShowDialog(this) != DialogResult.OK)
-        {
-            return;
-        }
-
-        if (dialog.OpenInDefaultBrowserRequested)
-        {
-            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://app.shipentegra.com/login");
-            MessageBox.Show(
-                "ShipEntegra paneli varsay\u0131lan taray\u0131c\u0131n\u0131zda a\u00e7\u0131ld\u0131!\n\nGiri\u015f yapt\u0131ktan sonra kokpitte 'Yenile'ye bas\u0131n.",
-                "Taray\u0131c\u0131 A\u00e7\u0131ld\u0131",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-            return;
-        }
-
-        string email = dialog.Email;
-        string pass = dialog.Password;
-        bool showBrowser = dialog.OpenInBrowserRequested;
-
-        if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
-        {
-            settings.SavedEmail = email;
-            settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
-            settings.AutoRefreshEnabled = dialog.AutoRefresh;
-            ShipEntegraSettingsStore.Save(settings);
-        }
-
-        _lblActionStatus.ForeColor = UiStyle.TextMuted;
-        _lblActionStatus.Text = "ShipEntegra oturumu a\u00e7\u0131l\u0131yor...";
-
+        await Task.Yield();
         try
         {
-            string? freshToken = await _sessionManager.RefreshShipEntegraTokenAsync(
-                email,
-                pass,
-                showBrowser,
-                message => _lblActionStatus.Text = message);
-
-            if (!string.IsNullOrWhiteSpace(freshToken))
+            using var loginForm = new ShipEntegraEmbeddedLoginForm();
+            if (loginForm.ShowDialog(this) == DialogResult.OK)
             {
-                settings.BearerToken = freshToken;
-                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
-                ShipEntegraSettingsStore.Save(settings);
-
                 _btnSeSession.Text = "ShipEntegra oturumu a\u00e7\u0131k";
                 _btnSeSession.BackColor = UiStyle.SuccessColor;
                 _btnSeSession.ForeColor = Color.White;
-
-                _lblActionStatus.ForeColor = UiStyle.SuccessColor;
-                _lblActionStatus.Text = "ShipEntegra oturumu a\u00e7\u0131ld\u0131 \u2713";
                 await ReloadOrdersAsync();
-            }
-            else
-            {
-                _lblActionStatus.ForeColor = UiStyle.DangerColor;
-                _lblActionStatus.Text = "ShipEntegra oturumu a\u00e7\u0131lamad\u0131.";
-                MessageBox.Show(
-                    "ShipEntegra oturumu a\u00e7\u0131lamad\u0131. 'Taray\u0131c\u0131da A\u00e7' se\u00e7ene\u011fiyle bir kez manuel giri\u015f yapmay\u0131 deneyin.",
-                    "Bilgi",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
             }
         }
         catch (Exception ex)
         {
-            _lblActionStatus.ForeColor = UiStyle.DangerColor;
-            _lblActionStatus.Text = "ShipEntegra oturum hatas\u0131: " + ex.Message;
+            MessageBox.Show($"Oturum a\u00e7ma penceresi a\u00e7\u0131lamad\u0131:\n{ex.Message}", "Oturum Hatas\u0131", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
