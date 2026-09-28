@@ -5,90 +5,121 @@ using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
 /// <summary>
-/// Aras Global gönderi adresi modeli (Alıcı, Gönderici ve Fatura adresi).
+/// Aras Global gönderi GÖNDERİCİ / fatura adresi.
+/// Alan adları panelin GERÇEK isteğinden birebir alınmıştır (PascalCase sözleşme).
 /// </summary>
-public sealed class ArasAddress
+public sealed class ArasShipmentSenderAddress
 {
-    [JsonPropertyName("id")] public string Id { get; set; } = string.Empty;
-    [JsonPropertyName("title")] public string Title { get; set; } = string.Empty;
-    [JsonPropertyName("firstName")] public string FirstName { get; set; } = string.Empty;
-    [JsonPropertyName("lastName")] public string LastName { get; set; } = string.Empty;
-    [JsonPropertyName("companyName")] public string CompanyName { get; set; } = string.Empty;
-    [JsonPropertyName("address")] public string Address { get; set; } = string.Empty;
-    [JsonPropertyName("cityName")] public string CityName { get; set; } = string.Empty;
-    [JsonPropertyName("districtName")] public string DistrictName { get; set; } = string.Empty;
-    [JsonPropertyName("townName")] public string TownName { get; set; } = string.Empty;
-    [JsonPropertyName("countryCode")] public string CountryCode { get; set; } = "TR";
-    [JsonPropertyName("fromCountryCode")] public string FromCountryCode { get; set; } = "TR";
-    [JsonPropertyName("postalCode")] public string PostalCode { get; set; } = string.Empty;
-    [JsonPropertyName("phone")] public string Phone { get; set; } = string.Empty;
-    [JsonPropertyName("email")] public string Email { get; set; } = string.Empty;
-    [JsonPropertyName("taxId")] public string TaxId { get; set; } = string.Empty; // Etsy IOSS IM3720000224 veya TC/Vergi No
-    [JsonPropertyName("hasState")] public bool HasState { get; set; } = false;
-    [JsonPropertyName("stateCode")] public string StateCode { get; set; } = string.Empty;
-    [JsonPropertyName("stateName")] public string StateName { get; set; } = string.Empty;
-    [JsonPropertyName("isCommercialAddress")] public bool IsCommercialAddress { get; set; } = false;
-    [JsonPropertyName("isResidentialAddress")] public bool IsResidentialAddress { get; set; } = true;
+    [JsonPropertyName("ExternalId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ExternalId { get; set; }
+
+    [JsonPropertyName("Id")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Id { get; set; }
+
+    [JsonPropertyName("CityName")] public string CityName { get; set; } = string.Empty;
+    [JsonPropertyName("CompanyName")] public string CompanyName { get; set; } = string.Empty;
+    [JsonPropertyName("CountryName")] public string CountryName { get; set; } = "Turkiye";
+    [JsonPropertyName("CountryCode")] public string CountryCode { get; set; } = "TR";
+    [JsonPropertyName("Details")] public string Details { get; set; } = string.Empty;
+    [JsonPropertyName("PhoneNumber")] public string PhoneNumber { get; set; } = string.Empty;
+    [JsonPropertyName("FirstName")] public string FirstName { get; set; } = string.Empty;
+    [JsonPropertyName("LastName")] public string LastName { get; set; } = string.Empty;
+    [JsonPropertyName("Title")] public string Title { get; set; } = string.Empty;
+    [JsonPropertyName("PostalCode")] public string PostalCode { get; set; } = string.Empty;
+    [JsonPropertyName("TownName")] public string TownName { get; set; } = string.Empty;
+    [JsonPropertyName("TaxNumber")] public string TaxNumber { get; set; } = string.Empty;
+    [JsonPropertyName("Email")] public string Email { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// Aras Global gönderi koli/kutu ebatları.
+/// Aras Global gönderi ALICI adresi (panel sözleşmesi).
 /// </summary>
-public sealed class ArasBox
+public sealed class ArasReceiverAddress
 {
-    [JsonPropertyName("length")] public double Length { get; set; } = 20.0;
-    [JsonPropertyName("width")] public double Width { get; set; } = 15.0;
-    [JsonPropertyName("height")] public double Height { get; set; } = 10.0;
-    [JsonPropertyName("weight")] public double Weight { get; set; } = 0.4;
-    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; } = 0.6;
-    [JsonPropertyName("desi")] public double Desi { get; set; } = 0.6;
-    [JsonPropertyName("packageCount")] public int PackageCount { get; set; } = 1;
+    [JsonPropertyName("Title")] public string Title { get; set; } = string.Empty;
+    [JsonPropertyName("FirstName")] public string FirstName { get; set; } = string.Empty;
+    [JsonPropertyName("LastName")] public string LastName { get; set; } = string.Empty;
+    [JsonPropertyName("CityName")] public string CityName { get; set; } = string.Empty;
+    [JsonPropertyName("TownName")] public string TownName { get; set; } = string.Empty;
+
+    [JsonPropertyName("PhoneCountryCode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? PhoneCountryCode { get; set; }
+
+    [JsonPropertyName("CountryCode")] public string CountryCode { get; set; } = string.Empty;
+    [JsonPropertyName("StateCode")] public string StateCode { get; set; } = string.Empty;
+    [JsonPropertyName("StateName")] public string StateName { get; set; } = string.Empty;
+    [JsonPropertyName("PhoneNumber")] public string PhoneNumber { get; set; } = string.Empty;
+    [JsonPropertyName("PostalCode")] public string PostalCode { get; set; } = string.Empty;
+    [JsonPropertyName("Email")] public string Email { get; set; } = string.Empty;
+    [JsonPropertyName("CompanyName")] public string CompanyName { get; set; } = string.Empty;
+    [JsonPropertyName("Details")] public string Details { get; set; } = string.Empty;
+    [JsonPropertyName("Details2")] public string Details2 { get; set; } = string.Empty;
+    [JsonPropertyName("Type")] public int Type { get; set; } = 2;
 }
 
-/// <summary>
-/// Aras Global gönderi kalem / ürün detayı (HS Code, açıklama, tutar).
-/// </summary>
-public sealed class ArasShipmentItem
+/// <summary>Tahmini kutu ölçüleri (panel sözleşmesi).</summary>
+public sealed class ArasEstimatedDimensions
+{
+    [JsonPropertyName("Length")] public double Length { get; set; }
+    [JsonPropertyName("Width")] public double Width { get; set; }
+    [JsonPropertyName("Height")] public double Height { get; set; }
+    [JsonPropertyName("Weight")] public double Weight { get; set; }
+}
+
+/// <summary>Gönderi içeriğindeki tek ürün kalemi (panel sözleşmesi).</summary>
+public sealed class ArasShipmentContentItem
 {
     [JsonPropertyName("description")] public string Description { get; set; } = string.Empty;
-    [JsonPropertyName("itemDescription")] public string ItemDescription { get; set; } = string.Empty;
-    [JsonPropertyName("hsCode")] public string HsCode { get; set; } = string.Empty; // GTIP Kodu (örn: 3926400000)
+    [JsonPropertyName("HsCode")] public string HsCode { get; set; } = string.Empty;
+    [JsonPropertyName("productBarcode")] public string ProductBarcode { get; set; } = string.Empty;
+    [JsonPropertyName("disabled")] public bool Disabled { get; set; }
     [JsonPropertyName("quantity")] public int Quantity { get; set; } = 1;
-    [JsonPropertyName("unitPrice")] public decimal UnitPrice { get; set; } = 0m;
-    [JsonPropertyName("height")] public double Height { get; set; } = 10.0;
-    [JsonPropertyName("width")] public double Width { get; set; } = 15.0;
-    [JsonPropertyName("length")] public double Length { get; set; } = 20.0;
-    [JsonPropertyName("weight")] public double Weight { get; set; } = 0.4;
-    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; } = 0.6;
-    [JsonPropertyName("desi")] public double Desi { get; set; } = 0.6;
-    [JsonPropertyName("category")] public string Category { get; set; } = string.Empty;
+    [JsonPropertyName("amount")] public int Amount { get; set; } = 1;
+    [JsonPropertyName("unitPrice")] public decimal UnitPrice { get; set; }
+    [JsonPropertyName("manufacturerCountry")] public string ManufacturerCountry { get; set; } = "TR";
+    [JsonPropertyName("maxDigitalValue")] public decimal MaxDigitalValue { get; set; }
+}
+
+/// <summary>Gönderi içeriği: ölçüler + kalemler (panel sözleşmesi).</summary>
+public sealed class ArasShipmentContent
+{
+    [JsonPropertyName("EstimatedDimensions")] public ArasEstimatedDimensions EstimatedDimensions { get; set; } = new();
+    [JsonPropertyName("items")] public List<ArasShipmentContentItem> Items { get; set; } = new();
 }
 
 /// <summary>
-/// Aras Global gönderi oluşturma ve güncelleme isteği.
+/// Aras Global gönderi oluşturma (taslak) ve güncelleme isteği.
+/// Şema, panelin GERÇEK ağ trafiğinden birebir alınmıştır (PascalCase).
+/// "ShipmentId" ve "InternationalCargoProvider" yalnızca UpdateShipment'ta gönderilir;
+/// taslak oluşturmada bu alanlar istekte hiç yer almaz.
 /// </summary>
 public sealed class ArasCreateShipmentRequest
 {
-    [JsonPropertyName("shipmentId")] public string ShipmentId { get; set; } = "00000000-0000-0000-0000-000000000000";
-    [JsonPropertyName("shipmentDimensions")] public List<ArasBox> ShipmentDimensions { get; set; } = new();
-    [JsonPropertyName("boxList")] public List<ArasBox> BoxList { get; set; } = new();
-    [JsonPropertyName("shipmentItems")] public List<ArasShipmentItem> ShipmentItems { get; set; } = new();
-    [JsonPropertyName("senderAddress")] public ArasAddress SenderAddress { get; set; } = new();
-    [JsonPropertyName("senderBillingAddress")] public ArasAddress SenderBillingAddress { get; set; } = new();
-    [JsonPropertyName("receiverAddress")] public ArasAddress ReceiverAddress { get; set; } = new();
+    [JsonPropertyName("SenderAddress")] public ArasShipmentSenderAddress SenderAddress { get; set; } = new();
+    [JsonPropertyName("BillingAddress")] public object? BillingAddress { get; set; }
+    [JsonPropertyName("ReceiverAddress")] public ArasReceiverAddress ReceiverAddress { get; set; } = new();
+    [JsonPropertyName("PieceCount")] public int PieceCount { get; set; } = 1;
+    [JsonPropertyName("InternationalShipmentCategory")] public string InternationalShipmentCategory { get; set; } = "0";
+    [JsonPropertyName("Contents")] public List<ArasShipmentContent> Contents { get; set; } = new();
+    [JsonPropertyName("Currency")] public string Currency { get; set; } = "USD";
+    [JsonPropertyName("FINCode")] public string FINCode { get; set; } = string.Empty;
+    [JsonPropertyName("PudoPointId")] public string PudoPointId { get; set; } = string.Empty;
+    [JsonPropertyName("IsDraftShipment")] public bool IsDraftShipment { get; set; } = true;
+    [JsonPropertyName("SaveReceiverAddress")] public bool SaveReceiverAddress { get; set; }
+    [JsonPropertyName("SaveBillingAddress")] public bool SaveBillingAddress { get; set; }
+    [JsonPropertyName("PackageType")] public int PackageType { get; set; } = 1;
+    [JsonPropertyName("SenderBillingAddress")] public ArasShipmentSenderAddress SenderBillingAddress { get; set; } = new();
 
-    [JsonPropertyName("price")] public decimal Price { get; set; }
-    [JsonPropertyName("totalPrice")] public decimal TotalPrice { get; set; }
-    [JsonPropertyName("cargoPrice")] public decimal CargoPrice { get; set; }
-    [JsonPropertyName("currency")] public string Currency { get; set; } = "USD";
-    [JsonPropertyName("internationalCargoProvider")] public string InternationalCargoProvider { get; set; } = "widect"; // widect, ups, vb.
-    [JsonPropertyName("internationalShipmentCategory")] public string InternationalShipmentCategory { get; set; } = "4"; // 4: E-Ticaret / Mikro İhracat
-    [JsonPropertyName("isMicroExport")] public bool IsMicroExport { get; set; } = true;
-    [JsonPropertyName("packageCount")] public int PackageCount { get; set; } = 1;
+    [JsonPropertyName("ShipmentId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ShipmentId { get; set; }
 
-    [JsonPropertyName("weight")] public double Weight { get; set; } = 0.4;
-    [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; } = 0.6;
-    [JsonPropertyName("desi")] public double Desi { get; set; } = 0.6;
+    [JsonPropertyName("InternationalCargoProvider")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? InternationalCargoProvider { get; set; }
 }
 
 /// <summary>
@@ -148,4 +179,3 @@ public sealed class ArasCreateShipmentResponse
     public string ResultMessage { get; set; } = string.Empty;
     public string RawJson { get; set; } = string.Empty;
 }
-

@@ -121,56 +121,56 @@ public sealed class ArasGlobalShippingTests
         Assert.Contains("401", ex.Message);
     }
 
-    [Fact]
-    public void ArasCreateShipmentRequest_SerializesToJson_WithoutPropertyCollisions()
+        [Fact]
+    public void ArasCreateShipmentRequest_SerializesToPanelContract()
     {
         var request = new ArasCreateShipmentRequest
         {
-            ShipmentId = "TEST-SHIPMENT-01",
-            Price = 11.16m,
-            CargoPrice = 13.13m,
+            SenderAddress = new ArasShipmentSenderAddress
+            {
+                CityName = "ANKARA",
+                CountryName = "Turkiye",
+                CountryCode = "TR",
+                Details = "Ankara",
+                FirstName = "ERHAN KESKIN",
+                Title = "ankara",
+                PostalCode = "06130",
+                TownName = "ALTINDAĞ",
+                Email = "e@x.com"
+            },
+            ReceiverAddress = new ArasReceiverAddress
+            {
+                FirstName = "John",
+                LastName = "Doe",
+                CityName = "Berlin",
+                CountryCode = "DE",
+                PostalCode = "10115",
+                Details = "Str 1",
+                Type = 2
+            },
+            PieceCount = 1,
+            InternationalShipmentCategory = "0",
             Currency = "USD",
-            InternationalCargoProvider = "widect",
-            Weight = 0.4,
-            VolumetricWeight = 0.6,
-            Desi = 0.6
+            IsDraftShipment = true,
+            PackageType = 1
         };
-
-        request.ShipmentDimensions.Add(new ArasBox
+        request.SenderBillingAddress = request.SenderAddress;
+        request.Contents.Add(new ArasShipmentContent
         {
-            Length = 20,
-            Width = 15,
-            Height = 10,
-            Weight = 0.4,
-            VolumetricWeight = 0.6,
-            Desi = 0.6,
-            PackageCount = 1
-        });
-        request.BoxList.Add(new ArasBox
-        {
-            Length = 20,
-            Width = 15,
-            Height = 10,
-            Weight = 0.4,
-            VolumetricWeight = 0.6,
-            Desi = 0.6,
-            PackageCount = 1
-        });
-
-        request.ShipmentItems.Add(new ArasShipmentItem
-        {
-            Description = "Test Item",
-            ItemDescription = "Test Item",
-            HsCode = "3926400000",
-            Quantity = 1,
-            UnitPrice = 11.16m,
-            Length = 20,
-            Width = 15,
-            Height = 10,
-            Weight = 0.4,
-            VolumetricWeight = 0.6,
-            Desi = 0.6,
-            Category = "1"
+            EstimatedDimensions = new ArasEstimatedDimensions { Length = 20, Width = 15, Height = 10, Weight = 0.4 },
+            Items =
+            {
+                new ArasShipmentContentItem
+                {
+                    Description = "Test Item",
+                    HsCode = "3926400000",
+                    ProductBarcode = "barcode-1",
+                    Quantity = 1,
+                    Amount = 1,
+                    UnitPrice = 11.16m,
+                    ManufacturerCountry = "TR"
+                }
+            }
         });
 
         var options = new System.Text.Json.JsonSerializerOptions
@@ -178,15 +178,14 @@ public sealed class ArasGlobalShippingTests
             PropertyNameCaseInsensitive = true
         };
 
-        // Serileştirme sırasında hiçbir 'collides with another property' hatası fırlatılmamalı
-        // ve Aras Global backend'inin beklediği camelCase alanlar (volumetricWeight, desi vb.) üretilmeli
         string json = System.Text.Json.JsonSerializer.Serialize(request, options);
 
-        Assert.NotNull(json);
-        Assert.Contains("\"volumetricWeight\":0.6", json);
-        Assert.Contains("\"desi\":0.6", json);
-        Assert.Contains("\"shipmentDimensions\":[", json);
-        Assert.Contains("\"boxList\":[", json);
-        Assert.Contains("\"itemDescription\":\"Test Item\"", json);
+        Assert.Contains("\"IsDraftShipment\":true", json);
+        Assert.Contains("\"Contents\":[", json);
+        Assert.Contains("\"EstimatedDimensions\"", json);
+        Assert.Contains("\"productBarcode\":\"barcode-1\"", json);
+        Assert.Contains("\"PieceCount\":1", json);
+        Assert.DoesNotContain("\"volumetricWeight\"", json);
+        Assert.DoesNotContain("\"ShipmentId\"", json);
     }
 }
