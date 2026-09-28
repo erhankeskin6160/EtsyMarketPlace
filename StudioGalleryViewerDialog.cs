@@ -134,7 +134,7 @@ internal sealed class StudioGalleryViewerDialog : Form
                 using var img = Image.FromStream(stream);
                 pb.Image = new Bitmap(img);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
 
             stack.Controls.Add(pb, 0, 0);
 

@@ -128,7 +128,7 @@ public static class AiDataCacheService
                 var repo = AiTokenUsageTrackerService.GetRepository();
                 await repo.InvalidateCacheAsync(provider, todayKey);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         });
 
         OnUsageUpdated?.Invoke();

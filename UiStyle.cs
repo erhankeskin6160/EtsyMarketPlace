@@ -15,7 +15,7 @@ internal static class UiStyle
         {
             ToolStripManager.Renderer = new ModernDarkMenuRenderer();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     public enum AppTheme
@@ -68,13 +68,13 @@ internal static class UiStyle
                 form.Icon = new Icon("app.ico");
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         try
         {
             ToolStripManager.Renderer = new ModernDarkMenuRenderer();
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         form.BackColor = BackgroundColor;
         form.Font = BaseFont;
@@ -128,7 +128,7 @@ internal static class UiStyle
             typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
                 ?.SetValue(control, true, null);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     public static void ApplyToControls(Control.ControlCollection controls)
@@ -413,7 +413,7 @@ internal static class UiStyle
             var property = typeof(Control).GetProperty("DoubleBuffered", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             property?.SetValue(grid, true, null);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         // Attach modern scrollbars (hides native win32 scrollbars, adds ModernVScrollBar & ModernHScrollBar)
         SimilarProductsWinForms.Controls.ModernGridScrollAdapter.Attach(grid);

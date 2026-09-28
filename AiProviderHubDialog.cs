@@ -631,6 +631,6 @@ public sealed class AiProviderHubDialog : Form
                 UseShellExecute = true
             });
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

@@ -87,7 +87,7 @@ internal static class AiResponseValidator
                 return prop.GetString() ?? defaultValue;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         return defaultValue;
     }
 
@@ -106,7 +106,7 @@ internal static class AiResponseValidator
                     return val;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         return defaultValue;
     }
 
@@ -127,7 +127,7 @@ internal static class AiResponseValidator
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         return result;
     }
 }

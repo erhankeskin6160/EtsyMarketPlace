@@ -1617,7 +1617,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
                             _bindingSource.ResetBindings(false);
                             _grid.Invalidate();
                         }
-                        catch { }
+                        catch (Exception caught) { AppLog.Swallowed(caught); }
                     });
                 }
             }
@@ -1642,7 +1642,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
                     _bindingSource.ResetBindings(false);
                     _grid.Refresh();
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             });
         }
     }
@@ -1700,7 +1700,7 @@ internal sealed class ProductDiscoveryListingCreatorForm(
                             _bindingSource.ResetBindings(false);
                             _grid.Invalidate();
                         }
-                        catch { }
+                        catch (Exception caught) { AppLog.Swallowed(caught); }
                     });
                 }
             }

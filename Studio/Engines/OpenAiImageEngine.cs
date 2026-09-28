@@ -82,7 +82,7 @@ public sealed class OpenAiImageEngine : IAiImageEngine
                             maskBytes = maskRes.MaskPngBytes;
                         }
                     }
-                    catch { }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
             }
 

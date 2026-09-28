@@ -146,13 +146,13 @@ internal sealed class NotificationSettingsForm : Form
                     _statusLabel.Text = "Token panodan temizlenerek yapıştırıldı.";
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         };
         var btnOpenFather = UiStyle.CreateButton("🤖 @BotFather", isSecondary: true);
         btnOpenFather.Height = 32;
         btnOpenFather.Click += (_, _) =>
         {
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://t.me/BotFather") { UseShellExecute = true }); } catch { }
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://t.me/BotFather") { UseShellExecute = true }); } catch (Exception caught) { AppLog.Swallowed(caught); }
         };
         tokenRow.Controls.Add(_telegramTokenTxt, 0, 0);
         tokenRow.Controls.Add(btnPaste, 1, 0);
@@ -169,7 +169,7 @@ internal sealed class NotificationSettingsForm : Form
         btnOpenIdBot.Height = 32;
         btnOpenIdBot.Click += (_, _) =>
         {
-            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://t.me/userinfobot") { UseShellExecute = true }); } catch { }
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("https://t.me/userinfobot") { UseShellExecute = true }); } catch (Exception caught) { AppLog.Swallowed(caught); }
         };
         chatRow.Controls.Add(_telegramChatIdTxt, 0, 0);
         chatRow.Controls.Add(btnOpenIdBot, 1, 0);

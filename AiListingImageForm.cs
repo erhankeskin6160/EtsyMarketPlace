@@ -1619,7 +1619,7 @@ internal sealed class AiListingImageForm : Form
             var bmp = new Bitmap(loaded);
             SetLoadedBitmap(bmp, "Listing Kapak Görseli");
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void SetLoadedBitmap(Bitmap bmp, string displayName)
@@ -1741,7 +1741,7 @@ internal sealed class AiListingImageForm : Form
                     };
                     flow.Controls.Add(thumb);
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
 
@@ -2134,7 +2134,7 @@ internal sealed class AiListingImageForm : Form
                     var settings = EtsyApiSettingsStore.Load();
                     await _apiClient.UploadOwnShopListingImageAsync(settings, _targetListingId.Value, tempFile, rank);
 
-                    try { File.Delete(tempFile); } catch { }
+                    try { File.Delete(tempFile); } catch (Exception caught) { AppLog.Swallowed(caught); }
 
                     MessageBox.Show(this, $"Görsel Etsy listing'inize '{slotDesc}' olarak başarıyla yüklendi!", "Etsy Senkronizasyonu", MessageBoxButtons.OK, MessageBoxIcon.Information);
                     _statusLabel.Text = "✅ Görsel Etsy API üzerinden listing'e yüklendi!";

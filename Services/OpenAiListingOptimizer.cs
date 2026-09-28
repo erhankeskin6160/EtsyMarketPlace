@@ -682,6 +682,6 @@ internal sealed class OpenAiListingOptimizer(
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

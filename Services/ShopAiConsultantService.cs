@@ -31,7 +31,7 @@ internal static class ShopAiConsultantService
                 var res = await FetchOpenAiReportAsync(prompt, aiSettings.OpenAiApiKey, aiSettings.OpenAiModel, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(res)) return res;
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
         else if (aiSettings.UseGemini)
         {
@@ -40,7 +40,7 @@ internal static class ShopAiConsultantService
                 var res = await FetchGeminiReportAsync(prompt, aiSettings.GeminiApiKey, aiSettings.GeminiModel, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(res)) return res;
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         return GenerateDeterministicAudit(comparison, pareto);

@@ -228,7 +228,7 @@ public sealed class GoogleGeminiEngine : IAiImageEngine
                 }
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return $"Gemini API Hatası ({statusCode}): {body}";
     }

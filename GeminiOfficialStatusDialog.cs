@@ -565,6 +565,6 @@ public sealed class GeminiOfficialStatusDialog : Form
                 UseShellExecute = true
             });
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

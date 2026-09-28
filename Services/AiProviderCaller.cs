@@ -174,7 +174,7 @@ internal static class AiProviderCaller
                         }
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
 
             string err = ExtractErrorMessage(body, resp.ReasonPhrase ?? "İstek başarısız");
@@ -306,7 +306,7 @@ internal static class AiProviderCaller
                     return msgEl.GetString() ?? defaultError;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         return defaultError;
     }
 

@@ -30,7 +30,7 @@ static class Program
             {
                 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
 
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
@@ -61,7 +61,7 @@ static class Program
             Directory.CreateDirectory(appDataDir);
             File.WriteAllText(Path.Combine(appDataDir, "startup.log"), $"[Baslatma: {DateTime.Now:yyyy-MM-dd HH:mm:ss}] Args: {string.Join(" ", args)}\n");
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         var databasePath = Path.Combine(appDataDir, "market-tracking.db");
 
@@ -215,14 +215,14 @@ static class Program
             Directory.CreateDirectory(dir);
             File.WriteAllText(Path.Combine(dir, "crash.log"), msg);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         try
         {
             var desktopLog = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "ETSY_HATA_RAPORU.txt");
             File.WriteAllText(desktopLog, $"[Tarih: {DateTime.Now:yyyy-MM-dd HH:mm:ss}]\n{msg}");
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         MessageBox.Show(
             $"Uygulama başlatılırken bir hata oluştu:\n\n{ex.Message}\n\nDetaylar crash.log ve masaüstündeki ETSY_HATA_RAPORU.txt dosyasına yazıldı.",

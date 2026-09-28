@@ -312,7 +312,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
                     mainSplit.SplitterDistance = Math.Clamp(target, minLeft, maxLeft);
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
         Shown += (_, _) => AdjustSplitter();
         mainSplit.SizeChanged += (_, _) => { if (mainSplit.Width > 200) AdjustSplitter(); };
@@ -612,7 +612,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
                     split.SplitterDistance = Math.Clamp(target, minTop, maxTop);
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
         Shown += (_, _) => AdjustSubSplitter();
         split.SizeChanged += (_, _) => { if (split.Height > 100) AdjustSubSplitter(); };
@@ -965,8 +965,8 @@ internal sealed class CompetitorAndTrendSpyForm : Form
         {
             if (_thumbnailCts != null)
             {
-                try { _thumbnailCts.Cancel(); } catch { }
-                try { _thumbnailCts.Dispose(); } catch { }
+                try { _thumbnailCts.Cancel(); } catch (Exception caught) { AppLog.Swallowed(caught); }
+                try { _thumbnailCts.Dispose(); } catch (Exception caught) { AppLog.Swallowed(caught); }
                 _thumbnailCts = null;
             }
             _thumbnailCts = new CancellationTokenSource();
@@ -1182,7 +1182,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
                                 _imageUrlCache[listing.ListingId] = imageUrl;
                             }
                         }
-                        catch { }
+                        catch (Exception caught) { AppLog.Swallowed(caught); }
                     }
                 }
 
@@ -1230,7 +1230,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
         {
             await Task.WhenAll(tasks);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     private void TransferToDraftCreator()
@@ -1270,7 +1270,7 @@ internal sealed class CompetitorAndTrendSpyForm : Form
                 tempImagePath = Path.Combine(Path.GetTempPath(), $"competitor_{_selectedListing.ListingId}.png");
                 _selectedListing.ThumbnailImage.Save(tempImagePath);
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         var form = new AiListingImageForm(_aiOptimizer, tempImagePath, _selectedListing.Title);
@@ -1769,14 +1769,14 @@ internal sealed class CompetitorAndTrendSpyForm : Form
             {
                 if (_thumbnailCts != null)
                 {
-                    try { _thumbnailCts.Cancel(); } catch { }
-                    try { _thumbnailCts.Dispose(); } catch { }
+                    try { _thumbnailCts.Cancel(); } catch (Exception caught) { AppLog.Swallowed(caught); }
+                    try { _thumbnailCts.Dispose(); } catch (Exception caught) { AppLog.Swallowed(caught); }
                     _thumbnailCts = null;
                 }
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
 
-            try { _imageHttpClient.Dispose(); } catch { }
+            try { _imageHttpClient.Dispose(); } catch (Exception caught) { AppLog.Swallowed(caught); }
         }
         _isDisposed = true;
         base.Dispose(disposing);

@@ -52,6 +52,6 @@ internal static class CompetitorWatchlistStore
             var json = JsonSerializer.Serialize(list, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(FilePath, json);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

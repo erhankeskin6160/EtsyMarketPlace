@@ -188,7 +188,7 @@ internal sealed class ModernBatchQueueListControl : UserControl
                 using var orig = new Bitmap(ms);
                 thumb = new Bitmap(orig, new Size(64, 64));
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
 
             int index = _cards.Count + 1;
             var card = new BatchQueueItemCard(item, thumb, index)

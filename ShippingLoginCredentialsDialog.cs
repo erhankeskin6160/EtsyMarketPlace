@@ -290,6 +290,6 @@ internal sealed class ShippingLoginCredentialsDialog : Form
                 MessageBox.Show("Panoda geçerli bir Bearer JWT tokeni bulunamadı. Lütfen Chrome'dan tokeni kopyalayıp tekrar deneyin.", "Pano Boş", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 }

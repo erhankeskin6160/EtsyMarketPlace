@@ -161,7 +161,7 @@ public static class OpenAiUsageFetcherService
                         AiPriceCalculator.MergeOpenAiUsageJson(report, embBody, "Embeddings");
                     }
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
 
                 report.DataSource = "OpenAI Admin API (Canlı Resmi Fatura)";
                 return report;
@@ -208,7 +208,7 @@ public static class OpenAiUsageFetcherService
                 report.TotalRequests += dailyItem.RequestCount;
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         return report;
     }

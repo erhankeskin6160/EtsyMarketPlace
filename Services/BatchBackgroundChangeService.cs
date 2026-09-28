@@ -236,7 +236,7 @@ internal static class BatchBackgroundChangeService
                             maskBytes = maskRes.MaskPngBytes;
                         }
                     }
-                    catch { }
+                    catch (Exception caught) { AppLog.Swallowed(caught); }
                 }
 
                 maskBytes ??= BackgroundMaskService.CreateFallbackOpenAiMask(originalBmp);
@@ -349,7 +349,7 @@ internal static class BatchBackgroundChangeService
             }
             finally
             {
-                try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
+                try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
 

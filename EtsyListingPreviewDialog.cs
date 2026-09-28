@@ -192,7 +192,7 @@ internal sealed class EtsyListingPreviewDialog : Form
         };
         if (_imagePaths.Count > 0 && File.Exists(_imagePaths[0]))
         {
-            try { picThumb.Image = Image.FromFile(_imagePaths[0]); } catch { }
+            try { picThumb.Image = Image.FromFile(_imagePaths[0]); } catch (Exception caught) { AppLog.Swallowed(caught); }
         }
 
         // Heart favorite button badge
@@ -535,7 +535,7 @@ internal sealed class EtsyListingPreviewDialog : Form
                     _currentMainImage = img;
                 };
             }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
 
             _pnlThumbnails.Controls.Add(thumb);
         }

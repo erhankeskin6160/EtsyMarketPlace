@@ -131,7 +131,7 @@ public class ModernSidebarNav : UserControl, IMessageFilter
             Application.AddMessageFilter(this);
             _isFilterRegistered = true;
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
     public bool HasUpdateNotification => _hasUpdateNotification;
@@ -170,7 +170,7 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                     Application.RemoveMessageFilter(this);
                     _isFilterRegistered = false;
                 }
-                catch { }
+                catch (Exception caught) { AppLog.Swallowed(caught); }
             }
         }
         base.Dispose(disposing);
@@ -477,7 +477,7 @@ public class ModernSidebarNav : UserControl, IMessageFilter
                 _cachedAppLogo = Image.FromFile("app_icon.png");
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
         return _cachedAppLogo;
     }
 

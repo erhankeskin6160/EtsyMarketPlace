@@ -1235,7 +1235,7 @@ public sealed class Trending3DModelHunterForm : Form
         {
             Clipboard.SetText(reportContent);
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         // Also save to artifact directory if brain folder exists
         try
@@ -1246,7 +1246,7 @@ public sealed class Trending3DModelHunterForm : Form
                 File.WriteAllText(Path.Combine(artifactDir, "etsy_magaza_3dartdesignsstore_model_avcisi_raporu.md"), reportContent);
             }
         }
-        catch { }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
 
         MessageBox.Show(
             this,

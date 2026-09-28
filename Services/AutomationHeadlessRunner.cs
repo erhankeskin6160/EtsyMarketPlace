@@ -30,7 +30,7 @@ internal sealed class AutomationHeadlessRunner(
         catch (Exception ex)
         {
             try { await WriteLogAsync($"Hata | {ex}", cancellationToken); }
-            catch { }
+            catch (Exception caught) { AppLog.Swallowed(caught); }
             return 1;
         }
     }
