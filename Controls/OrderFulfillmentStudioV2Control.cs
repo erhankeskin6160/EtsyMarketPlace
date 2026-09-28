@@ -2282,7 +2282,9 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
             try
             {
-                _logo = ShippingLogoHelper.GetCarrierLogo(quote.SubCarrier, quote.ServiceName, quote.Note);
+                // Sağlayıcı markası: Aras satırında Aras, ShipEntegra satırında ShipEntegra,
+// Ship to More satırında Ship to More logosu görünür (alt taşıyıcı logosu değil).
+                _logo = ShippingLogoHelper.GetProviderLogo(quote.ProviderName);
             }
             catch
             {
