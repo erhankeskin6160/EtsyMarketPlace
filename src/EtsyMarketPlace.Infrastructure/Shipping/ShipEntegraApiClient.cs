@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Infrastructure.Http;
 namespace EtsyMarketPlace.Infrastructure.Shipping;
 
 using System;
@@ -23,7 +24,7 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
 
     public ShipEntegraApiClient(HttpClient? httpClient = null)
     {
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? SharedHttpClient.Instance;
     }
 
     /// <summary>

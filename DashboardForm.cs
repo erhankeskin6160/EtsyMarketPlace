@@ -1453,6 +1453,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("theme", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "Açık Moda Geç" : "Karanlık Moda Geç", UiStyle.CurrentTheme == UiStyle.AppTheme.Dark ? "☀️" : "🌙", "Sistem");
         _sidebarNav.AddItem("api", "Etsy API Ayarları", "⚙️", "Sistem");
         _sidebarNav.AddItem("update", "Sürüm Güncelle (Client)", "🚀", "Sistem", "YENİ");
+        _sidebarNav.AddItem("logs", "Uygulama Günlüğü", "📄", "Sistem");
     }
 
     private async void OnSidebarItemSelected(object? sender, SidebarItemSelectedEventArgs e)
@@ -1613,6 +1614,30 @@ internal sealed class DashboardForm : Form
         }
     }
 
+    /// <summary>Uygulama günlüğünü varsayılan düzenleyicide açar.</summary>
+    private void OpenApplicationLog()
+    {
+        try
+        {
+            string path = AppLog.FilePath;
+            if (!System.IO.File.Exists(path))
+            {
+                MessageBox.Show(
+                    "Henüz günlük kaydı yok.\n\nBeklenen konum:\n" + path,
+                    "Uygulama Günlüğü",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, nameof(OpenApplicationLog));
+            MessageBox.Show("Günlük açılamadı: " + caught.Message, "Uygulama Günlüğü", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
     public async Task OpenModuleByIdAsync(string targetModule)
     {
         _sidebarNav.SelectedItemId = targetModule;
@@ -1640,6 +1665,11 @@ internal sealed class DashboardForm : Form
         {
             using var form = new ClientUpdateDialog();
             form.ShowDialog(this);
+            return;
+        }
+        if (targetModule is "logs")
+        {
+            OpenApplicationLog();
             return;
         }
 

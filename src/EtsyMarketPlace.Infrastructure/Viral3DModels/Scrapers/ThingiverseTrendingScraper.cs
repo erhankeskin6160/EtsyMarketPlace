@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Infrastructure.Http;
 namespace EtsyMarketPlace.Infrastructure.Viral3DModels.Scrapers;
 
 using System;
@@ -21,7 +22,7 @@ public sealed class ThingiverseTrendingScraper : I3DModelPlatformScraper
 
     public ThingiverseTrendingScraper(HttpClient? httpClient = null)
     {
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? SharedHttpClient.Instance;
         if (!_httpClient.DefaultRequestHeaders.Contains("User-Agent"))
         {
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36");

@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Infrastructure.Http;
 namespace EtsyMarketPlace.Infrastructure.Viral3DModels.Services;
 
 using System;
@@ -18,7 +19,7 @@ public sealed class EtsyCompetitionCheckerService : IEtsyCompetitionChecker
 
     public EtsyCompetitionCheckerService(HttpClient? httpClient = null)
     {
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? SharedHttpClient.Instance;
         _httpClient.Timeout = TimeSpan.FromSeconds(15);
     }
 
