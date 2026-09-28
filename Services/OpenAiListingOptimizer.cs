@@ -604,7 +604,8 @@ internal sealed class OpenAiListingOptimizer(
         IReadOnlyList<string>? values,
         IReadOnlyList<string> fallback) =>
         NormalizeList(values, fallback)
-            .Select(value => value.Length <= 140 ? value : value[..140].TrimEnd())
+            .Select(value => EtsyMarketPlace.Application.ListingOptimization.EtsyTitleFormatter.NormalizeForEtsy(value))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
             .Take(3)
             .ToList();
 

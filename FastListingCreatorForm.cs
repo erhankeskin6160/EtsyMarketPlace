@@ -50,6 +50,21 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Button _btnSaveTemplate = new();
     private readonly Button _btnDeleteTemplate = new();
 
+    // AI Provider Selector Badge & Context Menu
+    private readonly Label _lblAiBadge = new()
+    {
+        AutoSize = true,
+        Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold),
+        ForeColor = Color.White,
+        BackColor = Color.FromArgb(30, 58, 138),
+        Height = 28,
+        Padding = new Padding(10, 5, 10, 5),
+        TextAlign = ContentAlignment.MiddleCenter,
+        Cursor = Cursors.Hand
+    };
+    private readonly ContextMenuStrip _aiContextMenu = new();
+    private Color _currentAiBadgeColor = Color.FromArgb(30, 58, 138);
+
     // Primary Action Buttons
     private readonly ModernButtonControl _btnHeaderPreview = new();
     private readonly ModernButtonControl _btnHeaderPublish = new();
@@ -117,6 +132,7 @@ internal sealed class FastListingCreatorForm : Form
 
         SuspendLayout();
         BuildLayout();
+        UpdateAiBadge();
         LoadTemplatesCombo();
         WireEvents();
         ApplyCachedShopProfilesIfAvailable();
@@ -193,12 +209,13 @@ internal sealed class FastListingCreatorForm : Form
         var header = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 3,
+            ColumnCount = 4,
             RowCount = 1,
             BackColor = Color.Transparent,
             Margin = Padding.Empty
         };
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Left: Branding & Subtitle
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // AI Provider Selector Badge
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f)); // Center: Template Strip
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize)); // Right: Action Buttons
 
@@ -211,7 +228,7 @@ internal sealed class FastListingCreatorForm : Form
             AutoSize = true,
             AutoSizeMode = AutoSizeMode.GrowAndShrink,
             Margin = Padding.Empty,
-            Padding = new Padding(0, 0, 16, 0)
+            Padding = new Padding(0, 0, 10, 0)
         };
         titleContainer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         titleContainer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -223,10 +240,13 @@ internal sealed class FastListingCreatorForm : Form
             ForeColor = Color.White,
             BackColor = UiStyle.AiColor,
             Padding = new Padding(8, 4, 8, 4),
-            Margin = new Padding(0, 4, 12, 4),
+            Margin = new Padding(0, 4, 10, 4),
             AutoSize = true,
-            TextAlign = ContentAlignment.MiddleCenter
+            TextAlign = ContentAlignment.MiddleCenter,
+            Cursor = Cursors.Hand
         };
+        lblBadge.Click += (_, _) => OpenAiSettingsDialog();
+        _galleryToolTip.SetToolTip(lblBadge, "AI ayarlarını görüntülemek ve yapılandırmak için tıklayın");
         titleContainer.Controls.Add(lblBadge, 0, 0);
 
         var titleStack = new TableLayoutPanel
@@ -261,6 +281,38 @@ internal sealed class FastListingCreatorForm : Form
         titleStack.Controls.Add(lblSubtitle, 0, 1);
         titleContainer.Controls.Add(titleStack, 1, 0);
         header.Controls.Add(titleContainer, 0, 0);
+
+        // AI Provider Capsule
+        var aiCard = new ModernCardPanel
+        {
+            Dock = DockStyle.Left,
+            AutoSize = true,
+            CornerRadius = 8,
+            CardColor = Color.FromArgb(28, 30, 42),
+            BorderColor = UiStyle.BorderColor,
+            Padding = new Padding(2, 2, 2, 2),
+            Margin = new Padding(4, 2, 4, 2)
+        };
+        _lblAiBadge.Margin = Padding.Empty;
+        aiCard.Controls.Add(_lblAiBadge);
+        header.Controls.Add(aiCard, 1, 0);
+
+        _lblAiBadge.Click += (_, _) =>
+        {
+            BuildAiContextMenu();
+            _aiContextMenu.Show(_lblAiBadge, new Point(0, _lblAiBadge.Height + 2));
+        };
+        _lblAiBadge.MouseEnter += (_, _) =>
+        {
+            _lblAiBadge.BackColor = Color.FromArgb(
+                Math.Min(255, _currentAiBadgeColor.R + 25),
+                Math.Min(255, _currentAiBadgeColor.G + 25),
+                Math.Min(255, _currentAiBadgeColor.B + 25));
+        };
+        _lblAiBadge.MouseLeave += (_, _) =>
+        {
+            _lblAiBadge.BackColor = _currentAiBadgeColor;
+        };
 
         // Center: Template Strip inside sleek capsule
         var templateCard = new ModernCardPanel
@@ -340,7 +392,7 @@ internal sealed class FastListingCreatorForm : Form
         templateFlow.Controls.Add(_btnDeleteTemplate);
 
         templateCard.Controls.Add(templateFlow);
-        header.Controls.Add(templateCard, 1, 0);
+        header.Controls.Add(templateCard, 2, 0);
 
         // Right: Primary Actions Cluster
         var actionCluster = new FlowLayoutPanel
@@ -394,7 +446,7 @@ internal sealed class FastListingCreatorForm : Form
         _btnClearAll.Click += (_, _) => ResetForm();
         actionCluster.Controls.Add(_btnClearAll);
 
-        header.Controls.Add(actionCluster, 2, 0);
+        header.Controls.Add(actionCluster, 3, 0);
         headerCard.Controls.Add(header);
         return headerCard;
     }
@@ -3803,5 +3855,149 @@ internal sealed class FastListingCreatorForm : Form
             _statusLabel.ForeColor = UiStyle.AccentColor;
         }
         catch { }
+    }
+
+    private void OpenAiSettingsDialog()
+    {
+        using var form = new AiOptimizationSettingsForm();
+        if (form.ShowDialog(this) == DialogResult.OK)
+        {
+            UpdateAiBadge();
+        }
+    }
+
+    private void UpdateAiBadge()
+    {
+        try
+        {
+            var settings = AiOptimizationSettingsStore.Load();
+            string provider = settings.Provider ?? "Gemini";
+            string model = provider.ToLowerInvariant() switch
+            {
+                "openai" => settings.OpenAiModel,
+                "gemini" => settings.GeminiModel,
+                "claude" => settings.ClaudeModel,
+                "deepseek" => settings.DeepSeekModel,
+                "grok" => settings.GrokModel,
+                _ => ""
+            };
+
+            bool hasKey = provider.ToLowerInvariant() switch
+            {
+                "openai" => !string.IsNullOrWhiteSpace(settings.OpenAiApiKey),
+                "gemini" => !string.IsNullOrWhiteSpace(settings.GeminiApiKey),
+                "claude" => !string.IsNullOrWhiteSpace(settings.ClaudeApiKey),
+                "deepseek" => !string.IsNullOrWhiteSpace(settings.DeepSeekApiKey),
+                "grok" => !string.IsNullOrWhiteSpace(settings.GrokApiKey),
+                _ => true
+            };
+
+            string icon = provider.ToLowerInvariant() switch
+            {
+                "openai" => "🟢 OpenAI",
+                "gemini" => "💎 Gemini",
+                "claude" => "🟣 Claude",
+                "deepseek" => "🐳 DeepSeek",
+                "grok" => "⚡ Grok",
+                _ => "⚙️ " + provider
+            };
+
+            Color badgeColor = provider.ToLowerInvariant() switch
+            {
+                "openai" => Color.FromArgb(16, 163, 127),
+                "gemini" => Color.FromArgb(26, 115, 232),
+                "claude" => Color.FromArgb(147, 51, 234),
+                "deepseek" => Color.FromArgb(14, 116, 144),
+                "grok" => Color.FromArgb(234, 88, 12),
+                _ => Color.FromArgb(75, 85, 99)
+            };
+
+            _currentAiBadgeColor = badgeColor;
+            _lblAiBadge.BackColor = badgeColor;
+            _lblAiBadge.Text = string.IsNullOrWhiteSpace(model) ? $"{icon} ▾" : $"{icon} ({model}) ▾";
+
+            if (!hasKey && !provider.Equals("Offline", StringComparison.OrdinalIgnoreCase))
+            {
+                _lblAiBadge.Text += " ⚠️ [Key Eksik]";
+                _galleryToolTip.SetToolTip(_lblAiBadge, $"{provider} API anahtarı girilmemiş! Değiştirmek veya anahtar girmek için tıklayın.");
+            }
+            else
+            {
+                _galleryToolTip.SetToolTip(_lblAiBadge, $"Aktif AI Sağlayıcı: {provider} ({model})\nDeğiştirmek veya yapılandırmak için tıklayın.");
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    private void BuildAiContextMenu()
+    {
+        _aiContextMenu.Items.Clear();
+
+        var settings = AiOptimizationSettingsStore.Load();
+        string currentProvider = settings.Provider ?? "Gemini";
+
+        var providers = new[]
+        {
+            ("Gemini", "💎 Google Gemini (Önerilen)", settings.GeminiModel, !string.IsNullOrWhiteSpace(settings.GeminiApiKey)),
+            ("OpenAI", "🟢 OpenAI (GPT-4o)", settings.OpenAiModel, !string.IsNullOrWhiteSpace(settings.OpenAiApiKey)),
+            ("DeepSeek", "🐳 DeepSeek (R1 / V3)", settings.DeepSeekModel, !string.IsNullOrWhiteSpace(settings.DeepSeekApiKey)),
+            ("Claude", "🟣 Anthropic Claude", settings.ClaudeModel, !string.IsNullOrWhiteSpace(settings.ClaudeApiKey)),
+            ("Grok", "⚡ xAI Grok", settings.GrokModel, !string.IsNullOrWhiteSpace(settings.GrokApiKey))
+        };
+
+        var titleItem = new ToolStripMenuItem("🤖 AI Sağlayıcı Seçimi")
+        {
+            Enabled = false,
+            Font = new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold)
+        };
+        _aiContextMenu.Items.Add(titleItem);
+        _aiContextMenu.Items.Add(new ToolStripSeparator());
+
+        foreach (var (code, display, model, hasKey) in providers)
+        {
+            bool isCurrent = code.Equals(currentProvider, StringComparison.OrdinalIgnoreCase);
+            string keyStatus = hasKey ? "" : " ⚠️ (Key Yok)";
+            string text = $"{(isCurrent ? "✓ " : "   ")}{display} - {model}{keyStatus}";
+
+            var item = new ToolStripMenuItem(text)
+            {
+                Font = isCurrent ? new Font("Segoe UI Semibold", 8.5F, FontStyle.Bold) : new Font("Segoe UI", 8.5F),
+                ForeColor = isCurrent ? UiStyle.PrimaryColor : Color.Black
+            };
+
+            item.Click += (_, _) =>
+            {
+                SwitchAiProvider(code);
+            };
+
+            _aiContextMenu.Items.Add(item);
+        }
+
+        _aiContextMenu.Items.Add(new ToolStripSeparator());
+        var settingsItem = new ToolStripMenuItem("⚙️ Tüm AI ve API Ayarlarını Aç...")
+        {
+            Font = new Font("Segoe UI Semibold", 8.5F)
+        };
+        settingsItem.Click += (_, _) => OpenAiSettingsDialog();
+        _aiContextMenu.Items.Add(settingsItem);
+    }
+
+    private void SwitchAiProvider(string newProvider)
+    {
+        try
+        {
+            var settings = AiOptimizationSettingsStore.Load();
+            settings.Provider = newProvider;
+            AiOptimizationSettingsStore.Save(settings);
+            UpdateAiBadge();
+            _statusLabel.Text = $"🤖 Aktif AI Sağlayıcı '{newProvider}' olarak güncellendi.";
+            _statusLabel.ForeColor = UiStyle.SuccessColor;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"AI Sağlayıcı değiştirilemedi: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 }
