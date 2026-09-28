@@ -15,6 +15,7 @@ using EtsyMarketPlace.Domain.Shipping;
 /// Not: <see cref="ShippingSecretProtector.Current"/> genel bir kayıt olduğu için tüm
 /// şifreleme testleri bu sınıfta tutulur ve her testte eski değer geri yazılır.
 /// </summary>
+[Collection("SecretProtector")]
 public sealed class ArasTokenAndSessionTests
 {
     private sealed class FakeProtector : IShippingSecretProtector
