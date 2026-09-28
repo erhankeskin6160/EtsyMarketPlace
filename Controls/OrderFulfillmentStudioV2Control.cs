@@ -1665,7 +1665,9 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 };
 
                 var settings = ShiptomoreSettingsStore.Load();
-                var offers = await _shiptomoreApiClient.FetchLiveQuotesAsync(request, settings);
+                // S3b: resmi API. Anahtar yoksa bos liste doner; uydurma teklif uretilmez.
+                var officialSource = new ShiptomoreOfficialQuoteSource(new ShiptomoreOfficialApiClient());
+                var offers = await officialSource.GetQuotesAsync(request, ct);
                 AppendGenericOffers(list, "Shiptomore", offers, rate);
             }
             catch
