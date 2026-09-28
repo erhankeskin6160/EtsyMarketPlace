@@ -638,12 +638,24 @@ public sealed class SaasBarcodeLabelControl : UserControl
 
         using var fontLabel = new Font("Segoe UI", 7.5f, FontStyle.Bold);
         using var brushDark = new SolidBrush(Color.FromArgb(30, 41, 59));
-        g.DrawString($"Shipping Label {_carrierName}", fontLabel, brushDark, 26, barY + barH + 20);
+        // Metin, karakter sayisina gore degil KULLANILABILIR GENISLIGE gore kisaltilir.
+        // Onceki kod 30 karakterde Substring ile kesiyordu; bu yuzden genis panelde bile
+        // adres yarim goruluyordu ("Inge Neuer - Conrad-Scholl-S..").
+        using var sfTrim = new StringFormat
+        {
+            Trimming = StringTrimming.EllipsisCharacter,
+            FormatFlags = StringFormatFlags.NoWrap,
+            LineAlignment = StringAlignment.Center
+        };
+
+        float lineWidth = Math.Max(40f, Width - 26 - 12);
+        var labelLineRect = new RectangleF(26, barY + barH + 17, lineWidth, 15f);
+        g.DrawString($"Shipping Label {_carrierName}", fontLabel, brushDark, labelLineRect, sfTrim);
 
         using var fontSub = new Font("Segoe UI", 7f, FontStyle.Regular);
         using var brushGray = new SolidBrush(Color.FromArgb(100, 116, 139));
         string recShort = $"{_receiverName} - {_addressLine}";
-        if (recShort.Length > 30) recShort = recShort.Substring(0, 28) + "..";
-        g.DrawString(recShort, fontSub, brushGray, 26, barY + barH + 32);
+        var receiverLineRect = new RectangleF(26, barY + barH + 31, lineWidth, 15f);
+        g.DrawString(recShort, fontSub, brushGray, receiverLineRect, sfTrim);
     }
 }
