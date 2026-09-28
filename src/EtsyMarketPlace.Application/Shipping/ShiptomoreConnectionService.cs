@@ -26,14 +26,16 @@ public sealed class ShiptomoreConnectionService
     public const string DeveloperPortalUrl = "https://dev.shiptomore.com";
 
     private readonly IShiptomoreOfficialApi _api;
+    private readonly Func<bool> _hasCredentials;
 
-    public ShiptomoreConnectionService(IShiptomoreOfficialApi api)
+    public ShiptomoreConnectionService(IShiptomoreOfficialApi api, Func<bool>? hasCredentials = null)
     {
         _api = api ?? throw new ArgumentNullException(nameof(api));
+        _hasCredentials = hasCredentials ?? (() => ShiptomoreSettingsStore.HasCredentials());
     }
 
     /// <summary>Kayıtlı anahtar var mı (hiç ağa çıkmadan).</summary>
-    public bool HasSavedCredentials() => ShiptomoreSettingsStore.HasCredentials();
+    public bool HasSavedCredentials() => _hasCredentials();
 
     /// <summary>Kayıtlı anahtarları şifreli olarak yazar. Boşluklar kırpılır.</summary>
     public void SaveFromUserInput(string clientId, string clientSecret)

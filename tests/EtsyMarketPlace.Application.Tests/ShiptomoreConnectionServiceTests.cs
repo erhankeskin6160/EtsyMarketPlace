@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using EtsyMarketPlace.Application.Shipping;
+using EtsyMarketPlace.Domain.Shipping;
 
 /// <summary>
 /// Kullanıcıya dönük Ship to More bağlantı servisi: kayıt, unutma ve
@@ -49,7 +50,7 @@ public sealed class ShiptomoreConnectionServiceTests
     [Fact]
     public async Task Test_ReportsSuccessWithProviderCount()
     {
-        var service = new ShiptomoreConnectionService(new StubApi());
+        var service = new ShiptomoreConnectionService(new StubApi(), () => true);
 
         var status = await service.TestAsync();
 
@@ -61,7 +62,7 @@ public sealed class ShiptomoreConnectionServiceTests
     public async Task Test_ExplainsRejectedCredentialsWithoutJargon()
     {
         var api = new StubApi { ThrowOnProviders = new ShiptomoreApiException("401 yetkisiz", 401, Array.Empty<string>()) };
-        var service = new ShiptomoreConnectionService(api);
+        var service = new ShiptomoreConnectionService(api, () => true);
 
         var status = await service.TestAsync();
 
@@ -73,7 +74,7 @@ public sealed class ShiptomoreConnectionServiceTests
     public async Task Test_ExplainsUnreachableService()
     {
         var api = new StubApi { ThrowOnProviders = new InvalidOperationException("bağlantı zaman aşımı") };
-        var service = new ShiptomoreConnectionService(api);
+        var service = new ShiptomoreConnectionService(api, () => true);
 
         var status = await service.TestAsync();
 
@@ -82,14 +83,14 @@ public sealed class ShiptomoreConnectionServiceTests
     }
 
     [Fact]
-    public void SaveFromUserInput_TrimsBothValues()
+    public async Task Test_WithoutSavedCredentials_AsksForTheKeyInPlainLanguage()
     {
-        var service = new ShiptomoreConnectionService(new StubApi { HasCredentials = false });
+        var service = new ShiptomoreConnectionService(new StubApi(), () => false);
 
-        // Boş değerlerle çağrı: dosyaya yazım yolu çalışır, istisna fırlatmaz.
-        service.SaveFromUserInput("   ", "  ");
+        var status = await service.TestAsync();
 
-        Assert.NotNull(service);
+        Assert.False(status.IsConnected);
+        Assert.Contains("erişim anahtarı", status.Message);
     }
 
     [Fact]
