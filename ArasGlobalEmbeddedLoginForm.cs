@@ -218,7 +218,7 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
                 }
             }
         }
-        catch (Exception caught) { AppLog.Swallowed(caught); }
+        catch (Exception caught) { AppLog.Swallowed(caught, "ArasGlobalEmbeddedLoginForm.OnWebResourceResponseReceived"); }
     }
 
     private async Task CheckStorageTokenAsync()
@@ -258,7 +258,7 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
                 }
             }
         }
-        catch (Exception caught) { AppLog.Swallowed(caught); }
+        catch (Exception caught) { AppLog.Swallowed(caught, "ArasGlobalEmbeddedLoginForm.CheckStorageTokenAsync"); }
     }
 
     private async Task CompleteLoginSuccessAsync(string token)

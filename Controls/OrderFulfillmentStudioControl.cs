@@ -119,9 +119,13 @@ public sealed class OrderFulfillmentStudioControl : UserControl
 
     protected override async void OnLoad(EventArgs e)
     {
-        base.OnLoad(e);
-        UpdateSessionButtonState();
-        await ReloadOrdersAsync();
+        try
+        {
+            base.OnLoad(e);
+            UpdateSessionButtonState();
+            await ReloadOrdersAsync();
+        }
+        catch (Exception ex) { AppLog.Swallowed(ex, "OrderFulfillmentStudioControl.OnLoad"); }
     }
 
     private void InitializeSaaSLegacyLayout()

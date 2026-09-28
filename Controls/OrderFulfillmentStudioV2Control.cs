@@ -152,10 +152,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
     protected override async void OnLoad(EventArgs e)
     {
-        base.OnLoad(e);
-        UpdateSessionBadge();
-        await LoadExchangeRateAsync();
-        await ReloadOrdersAsync();
+        try
+        {
+            base.OnLoad(e);
+            UpdateSessionBadge();
+            await LoadExchangeRateAsync();
+            await ReloadOrdersAsync();
+        }
+        catch (Exception ex) { AppLog.Swallowed(ex, "OrderFulfillmentStudioV2Control.OnLoad"); }
     }
 
     /// <summary>

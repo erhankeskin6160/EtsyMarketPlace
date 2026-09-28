@@ -2089,72 +2089,76 @@ internal sealed class FinancialReportForm : Form
 
     private async void OnOrderGridDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex < 0 || e.RowIndex >= _gridOrders.Rows.Count) return;
-        if (_gridOrders.Rows[e.RowIndex].Tag is not OrderFinancialSummary order) return;
-
-        bool isInvoiceColumn = e.ColumnIndex >= 0 && _gridOrders.Columns[e.ColumnIndex].Name == "OInvoiceFlag";
-        if (isInvoiceColumn && order.HasInvoice)
+        try
         {
-            if (!InvoiceStorageService.OpenInvoice(order.InvoiceFilePath))
+            if (e.RowIndex < 0 || e.RowIndex >= _gridOrders.Rows.Count) return;
+            if (_gridOrders.Rows[e.RowIndex].Tag is not OrderFinancialSummary order) return;
+
+            bool isInvoiceColumn = e.ColumnIndex >= 0 && _gridOrders.Columns[e.ColumnIndex].Name == "OInvoiceFlag";
+            if (isInvoiceColumn && order.HasInvoice)
             {
-                MessageBox.Show(this, "Fatura dosyası açılamadı veya silinmiş.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-            return;
-        }
-
-        // Maliyet sütununa veya fatura bayrağına tıklandıysa doğrudan Maliyet & Kargo Faturası Düzenleme Penceresini aç
-        bool isCostColumn = e.ColumnIndex >= 0 && 
-            (_gridOrders.Columns[e.ColumnIndex].Name == "OCost" || 
-             _gridOrders.Columns[e.ColumnIndex].Name == "OCostFlag" ||
-             _gridOrders.Columns[e.ColumnIndex].Name == "OInvoiceFlag");
-
-        if (isCostColumn || !order.HasCostData)
-        {
-            var orderRepo = new SqliteOrderCostRepository();
-            var currentCost = await orderRepo.GetByReceiptIdAsync(order.ReceiptId.ToString());
-
-            using var popup = new CostDetailsPopupForm(order, currentCost);
-            if (popup.ShowDialog(this) == DialogResult.OK)
-            {
-                var newEntry = new OrderCostEntry(
-                    order.ReceiptId.ToString(),
-                    order.ListingId.ToString(),
-                    order.ProductTitle,
-                    popup.UnitCost,
-                    popup.UnitShippingCost,
-                    popup.UnitPackagingCost,
-                    DateTimeOffset.UtcNow,
-                    popup.InvoiceFilePath,
-                    order.BuyerUserId,
-                    order.BuyerName,
-                    order.BuyerEmail);
-
-                await orderRepo.SaveAsync(newEntry);
-
-                if (popup.ApplyToAllOrdersOfListing && order.ListingId > 0)
+                if (!InvoiceStorageService.OpenInvoice(order.InvoiceFilePath))
                 {
-                    int count = await orderRepo.BulkApplyCostToListingOrdersAsync(
-                        order.ListingId.ToString(), 
-                        popup.UnitCost, 
-                        popup.UnitShippingCost, 
-                        popup.UnitPackagingCost);
-                    if (count > 0)
-                    {
-                        MessageBox.Show(this, $"{count} adet eşleşen siparişin maliyeti otomatik olarak güncellendi!", "Toplu Maliyet Güncelleme", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    }
+                    MessageBox.Show(this, "Fatura dosyası açılamadı veya silinmiş.", "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
+                return;
+            }
 
-                _ = LoadReportAsync();
-            }
-        }
-        else
-        {
-            using var form = new OrderDetailsForm(order);
-            if (form.ShowDialog(this) == DialogResult.OK)
+            // Maliyet sütununa veya fatura bayrağına tıklandıysa doğrudan Maliyet & Kargo Faturası Düzenleme Penceresini aç
+            bool isCostColumn = e.ColumnIndex >= 0 && 
+                (_gridOrders.Columns[e.ColumnIndex].Name == "OCost" || 
+                 _gridOrders.Columns[e.ColumnIndex].Name == "OCostFlag" ||
+                 _gridOrders.Columns[e.ColumnIndex].Name == "OInvoiceFlag");
+
+            if (isCostColumn || !order.HasCostData)
             {
-                _ = LoadReportAsync();
+                var orderRepo = new SqliteOrderCostRepository();
+                var currentCost = await orderRepo.GetByReceiptIdAsync(order.ReceiptId.ToString());
+
+                using var popup = new CostDetailsPopupForm(order, currentCost);
+                if (popup.ShowDialog(this) == DialogResult.OK)
+                {
+                    var newEntry = new OrderCostEntry(
+                        order.ReceiptId.ToString(),
+                        order.ListingId.ToString(),
+                        order.ProductTitle,
+                        popup.UnitCost,
+                        popup.UnitShippingCost,
+                        popup.UnitPackagingCost,
+                        DateTimeOffset.UtcNow,
+                        popup.InvoiceFilePath,
+                        order.BuyerUserId,
+                        order.BuyerName,
+                        order.BuyerEmail);
+
+                    await orderRepo.SaveAsync(newEntry);
+
+                    if (popup.ApplyToAllOrdersOfListing && order.ListingId > 0)
+                    {
+                        int count = await orderRepo.BulkApplyCostToListingOrdersAsync(
+                            order.ListingId.ToString(), 
+                            popup.UnitCost, 
+                            popup.UnitShippingCost, 
+                            popup.UnitPackagingCost);
+                        if (count > 0)
+                        {
+                            MessageBox.Show(this, $"{count} adet eşleşen siparişin maliyeti otomatik olarak güncellendi!", "Toplu Maliyet Güncelleme", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        }
+                    }
+
+                    _ = LoadReportAsync();
+                }
+            }
+            else
+            {
+                using var form = new OrderDetailsForm(order);
+                if (form.ShowDialog(this) == DialogResult.OK)
+                {
+                    _ = LoadReportAsync();
+                }
             }
         }
+        catch (Exception ex) { AppLog.Swallowed(ex, "FinancialReportForm.OnOrderGridDoubleClick"); }
     }
 
     private void UpdateCharts()

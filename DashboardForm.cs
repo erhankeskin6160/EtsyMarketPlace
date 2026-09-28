@@ -1458,12 +1458,16 @@ internal sealed class DashboardForm : Form
 
     private async void OnSidebarItemSelected(object? sender, SidebarItemSelectedEventArgs e)
     {
-        if (e.Item.Id == "theme")
+        try
         {
-            ToggleTheme();
-            return;
+            if (e.Item.Id == "theme")
+            {
+                ToggleTheme();
+                return;
+            }
+            await OpenModuleByIdAsync(e.Item.Id);
         }
-        await OpenModuleByIdAsync(e.Item.Id);
+        catch (Exception ex) { AppLog.Swallowed(ex, "DashboardForm.OnSidebarItemSelected"); }
     }
 
     public void EmbedModuleForm(Form moduleForm)
