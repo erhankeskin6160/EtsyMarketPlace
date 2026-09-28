@@ -37,6 +37,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
     private const string CalculatePriceEndpoint = "/ShipmentPricing/CalculateShipmentPrice";
     private const string LegalDocEndpoint = "/Shipment/GetShipmentLegalDocument";
     private const string SendShipmentPriceEndpoint = "/ShipmentPricing/SendShipmentPrice";
+    private const string GetAddressesEndpoint = "/Auth/GetAddresses";
 
     public ArasGlobalApiClient(HttpClient? httpClient = null)
     {
@@ -409,6 +410,9 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
     /// <summary>
     /// Gümrük, kargo, kur ve hizmet bedellerini kuruşu kuruşuna hesaplar.
     /// </summary>
+        /// <summary>
+    /// Gümrük, kargo, kur ve hizmet bedellerini panel sözleşmesiyle hesaplar (CalculateShipmentPrice).
+    /// </summary>
     public async Task<ArasShipmentPriceBreakdown> CalculateShipmentPriceAsync(
         string shipmentId,
         string provider,
@@ -421,29 +425,43 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
 
         var payload = new
         {
-            internationalcargoprovider = provider.ToLowerInvariant(),
-            saturdayshipment = false,
-            insurancepayment = false,
-            extraboxpayment = false,
-            location = true,
-            servicefeespayment = true,
-            iscalculatedservice = true,
-            shipmentid = shipmentId
+            ShipmentProvider = FormatProviderName(provider),
+            SaturdayShipment = false,
+            InsurancePayment = false,
+            IsSignedShipment = false,
+            TaxPayment = "SenderPays",
+            ShipmentId = shipmentId,
+            SaveCalculatedPrice = true,
+            FinalPricing = false,
+            Localization = true
         };
 
-        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        string json = JsonSerializer.Serialize(payload, JsonOpts);
+        httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+        LogApiTrace("CalculateShipmentPrice-Request", json);
+
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogApiTrace("CalculateShipmentPrice-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
 
         CheckTokenExpired(root);
 
+        int resultCode = root.TryGetProperty("resultCode", out var code) ? code.GetInt32() : (int)response.StatusCode;
+        if (resultCode != 200)
+        {
+            string msg = root.TryGetProperty("resultMessage", out var msgElem) ? msgElem.GetString() ?? "" : "";
+            throw new InvalidOperationException($"Aras Global Fiyat Hesaplama Hatası ({resultCode}): {msg}\nREQUEST JSON: {json}");
+        }
+
         var result = new ArasShipmentPriceBreakdown();
         if (root.TryGetProperty("payload", out var p) && p.ValueKind == JsonValueKind.Object)
         {
+            result.ShipmentPriceId = p.TryGetProperty("shipmentPriceId", out var spid) ? spid.GetString() ?? "" : "";
             result.BasePrice = p.TryGetProperty("basePrice", out var bp) ? bp.GetDecimal() : 0m;
             result.ExchangeTotalPrice = p.TryGetProperty("exchangeTotalPrice", out var etp) ? etp.GetDecimal() : 0m;
             result.ExchangeCurrency = p.TryGetProperty("exchangeCurrency", out var ec) ? ec.GetString() ?? "USD" : "USD";
@@ -482,7 +500,7 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         var payload = new
         {
             ShipmentId = shipmentId,
-            DocType = docType // "shipmentpreinformation" veya "shipmentagreement"
+            FileType = docType // "ShipmentAgreement" veya "ShipmentInformationForm"
         };
 
         httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
@@ -506,10 +524,13 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
     /// <summary>
     /// Fiyatlandırma adımında seçilen taşıyıcı teklifini ve onayları Aras Global'e gönderir (SendShipmentPrice).
     /// </summary>
+        /// <summary>
+    /// Fiyatlandırma adımında seçilen taşıyıcıyı ve onayları panel sözleşmesiyle gönderir (SendShipmentPrice).
+    /// </summary>
     public async Task<bool> SendShipmentPriceAsync(
         string shipmentId,
         string provider,
-        decimal cargoPrice,
+        decimal finalPrice,
         string rawBearerToken,
         CancellationToken cancellationToken = default)
     {
@@ -519,16 +540,20 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
 
         var payload = new
         {
-            shipmentId = shipmentId,
-            internationalCargoProvider = provider.ToLowerInvariant(),
-            cargoPrice = cargoPrice,
-            isPreInformationApproved = true,
-            isAgreementAccepted = true
+            ShipmentType = FormatProviderName(provider),
+            SaturdayShipment = false,
+            InsurancePayment = false,
+            TaxPayment = "SenderPays",
+            ShipmentId = shipmentId,
+            FinalPricing = false,
+            FinalPrice = finalPrice,
+            ShipmentAgreementApproved = true,
+            InformationFormApproved = true,
+            IsSignedShipment = false
         };
 
         string json = JsonSerializer.Serialize(payload, JsonOpts);
         httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
-
         LogApiTrace("SendShipmentPrice-Request", json);
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
@@ -545,10 +570,118 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         if (resultCode != 200)
         {
             string msg = root.TryGetProperty("resultMessage", out var msgElem) ? msgElem.GetString() ?? "" : "";
-            throw new InvalidOperationException($"Aras Global Fiyat/Taşıyıcı Onay Hatası ({resultCode}): {msg}");
+            throw new InvalidOperationException($"Aras Global Fiyat Gönderim Hatası ({resultCode}): {msg}");
         }
 
         return true;
+    }
+
+    /// <summary>Panelde kayıtlı gönderici adreslerini çeker (ilk adres kullanılır).</summary>
+    public async Task<ArasShipmentSenderAddress?> GetPrimarySenderAddressAsync(
+        string rawBearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanToken = CleanToken(rawBearerToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrl + GetAddressesEndpoint);
+        ApplyHeaders(httpRequest, cleanToken);
+
+        string json = JsonSerializer.Serialize(new { type = 0 }, JsonOpts);
+        httpRequest.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        ValidateStatus(response);
+
+        string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(responseContent);
+        var root = doc.RootElement;
+
+        CheckTokenExpired(root);
+
+        if (root.TryGetProperty("payload", out var payloadElem) &&
+            payloadElem.ValueKind == JsonValueKind.Array &&
+            payloadElem.GetArrayLength() > 0)
+        {
+            var a = payloadElem[0];
+            return new ArasShipmentSenderAddress
+            {
+                ExternalId = a.TryGetProperty("arasAddressId", out var ext) ? ext.GetString() : null,
+                Id = a.TryGetProperty("id", out var id) ? id.GetString() : null,
+                CityName = a.TryGetProperty("cityName", out var city) ? city.GetString() ?? "" : "",
+                CompanyName = a.TryGetProperty("companyName", out var comp) ? comp.GetString() ?? "" : "",
+                CountryName = a.TryGetProperty("countryName", out var cname) && !string.IsNullOrWhiteSpace(cname.GetString()) ? cname.GetString()! : "Turkiye",
+                CountryCode = a.TryGetProperty("countryCode", out var cc) ? cc.GetString() ?? "TR" : "TR",
+                Details = a.TryGetProperty("details", out var det) ? det.GetString() ?? "" : "",
+                PhoneNumber = a.TryGetProperty("phoneNumber", out var ph) ? ph.GetString() ?? "" : "",
+                FirstName = a.TryGetProperty("firstName", out var fn) ? fn.GetString() ?? "" : "",
+                LastName = a.TryGetProperty("lastName", out var ln) ? ln.GetString() ?? "" : "",
+                Title = a.TryGetProperty("title", out var tt) ? tt.GetString() ?? "" : "",
+                PostalCode = a.TryGetProperty("postalCode", out var pc) ? pc.GetString() ?? "" : "",
+                TownName = a.TryGetProperty("townName", out var tn) ? tn.GetString() ?? "" : "",
+                TaxNumber = a.TryGetProperty("taxNumber", out var tax) ? tax.GetString() ?? "" : "",
+                Email = a.TryGetProperty("email", out var em) ? em.GetString() ?? "" : ""
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>Belirli bir gönderi için canlı fiyat hesaplamayı başlatır (oluşturma sonrası adım).</summary>
+    public async Task<bool> StartPriceCalculationForShipmentAsync(
+        ArasStartCalculationPayload payload,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanToken = CleanToken(rawBearerToken);
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrl + StartCalcEndpoint);
+        ApplyHeaders(httpRequest, cleanToken);
+
+        string jsonBody = JsonSerializer.Serialize(payload);
+        httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+        LogApiTrace("StartCalculation-Request", jsonBody);
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        ValidateStatus(response);
+
+        string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogApiTrace("StartCalculation-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+
+        using var doc = JsonDocument.Parse(responseContent);
+        var root = doc.RootElement;
+
+        CheckTokenExpired(root);
+
+        int resultCode = root.TryGetProperty("resultCode", out var code) ? code.GetInt32() : (int)response.StatusCode;
+        if (resultCode != 200)
+        {
+            string msg = root.TryGetProperty("resultMessage", out var msgElem) ? msgElem.GetString() ?? "" : "";
+            throw new InvalidOperationException($"Aras Global Fiyat Başlatma Hatası ({resultCode}): {msg}\nREQUEST JSON: {jsonBody}");
+        }
+
+        return true;
+    }
+
+    /// <summary>Teklif listesini sorgular (polling).</summary>
+    public async Task<(bool IsConcluded, List<ArasGlobalQuoteOffer> Offers)> PollBasePriceListAsync(
+        string referenceCode,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanToken = CleanToken(rawBearerToken);
+        return await QueryBasePricesAsync(referenceCode, cleanToken, cancellationToken);
+    }
+
+    /// <summary>Panel sözleşmesindeki taşıyıcı adı biçimi (widect -> Widect, ups -> UPS).</summary>
+    private static string FormatProviderName(string provider)
+    {
+        string p = (provider ?? string.Empty).Trim();
+        return p.ToLowerInvariant() switch
+        {
+            "widect" or "widex" => "Widect",
+            "ups" => "UPS",
+            "" => "Widect",
+            _ => char.ToUpperInvariant(p[0]) + p.Substring(1)
+        };
     }
 
     private async Task<string> StartCalculationAsync(

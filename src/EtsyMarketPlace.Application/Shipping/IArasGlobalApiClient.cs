@@ -40,6 +40,10 @@ public interface IArasGlobalApiClient
         string rawBearerToken,
         CancellationToken cancellationToken = default);
 
+    Task<ArasShipmentSenderAddress?> GetPrimarySenderAddressAsync(
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
+
     Task<ArasCreateShipmentResponse> CreateShipmentAsync(
         ArasCreateShipmentRequest request,
         string rawBearerToken,
@@ -47,6 +51,16 @@ public interface IArasGlobalApiClient
 
     Task<bool> UpdateShipmentAsync(
         ArasCreateShipmentRequest request,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> StartPriceCalculationForShipmentAsync(
+        ArasStartCalculationPayload payload,
+        string rawBearerToken,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool IsConcluded, List<ArasGlobalQuoteOffer> Offers)> PollBasePriceListAsync(
+        string referenceCode,
         string rawBearerToken,
         CancellationToken cancellationToken = default);
 
@@ -65,7 +79,7 @@ public interface IArasGlobalApiClient
     Task<bool> SendShipmentPriceAsync(
         string shipmentId,
         string provider,
-        decimal cargoPrice,
+        decimal finalPrice,
         string rawBearerToken,
         CancellationToken cancellationToken = default);
 }

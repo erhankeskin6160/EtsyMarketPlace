@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Application.Tests;
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Xunit;
@@ -8,114 +9,115 @@ using EtsyMarketPlace.Domain.Shipping;
 
 /// <summary>
 /// Aras CreateShipment isteğinin GERÇEK JSON gövdesini doğrular.
-/// Amaç: "volumetricweightismissing" hatasının payload'dan mı kaynaklandığını
-/// kesin olarak görebilmek ve Postman'de aynen tekrarlanabilecek gövdeyi üretmek.
+/// Şema, panelin kendi başarılı isteğinden birebir alınmıştır (PascalCase sözleşme).
 /// </summary>
 public sealed class ArasCreateShipmentPayloadTests
 {
     private static readonly JsonSerializerOptions Options = new() { PropertyNameCaseInsensitive = true };
 
-    /// <summary>Provider'ın ürettiği gövdenin aynısı (ArasGlobalShipmentCreationProvider ile aynı değerler).</summary>
-    private static ArasCreateShipmentRequest BuildPayload()
+    private static ArasCreateShipmentRequest BuildDraftPayload()
     {
-        double length = 20.0, width = 15.0, height = 10.0, weight = 0.40;
-        double desi = Math.Round((length * width * height) / 5000.0, 2);
-
-        var box = new ArasBox
+        var sender = new ArasShipmentSenderAddress
         {
-            Length = length,
-            Width = width,
-            Height = height,
-            Weight = weight,
-            VolumetricWeight = desi,
-            Desi = desi,
-            PackageCount = 1
-        };
-
-        var request = new ArasCreateShipmentRequest
-        {
-            Currency = "USD",
-            Price = 11.0m,
-            TotalPrice = 11.0m,
-            CargoPrice = 13.13m,
-            InternationalCargoProvider = "widect",
-            InternationalShipmentCategory = "4",
-            IsMicroExport = true,
-            PackageCount = 1,
-            Weight = weight,
-            VolumetricWeight = desi,
-            Desi = desi
-        };
-
-        request.ShipmentDimensions.Add(box);
-        request.BoxList.Add(box);
-
-        request.ShipmentItems.Add(new ArasShipmentItem
-        {
-            Description = "3D print figur",
-            ItemDescription = "3D print figur",
-            HsCode = "3926400000",
-            Quantity = 1,
-            UnitPrice = 25.0m,
-            Length = box.Length,
-            Width = box.Width,
-            Height = box.Height,
-            Weight = box.Weight,
-            VolumetricWeight = desi,
-            Desi = desi,
-            Category = "1"
-        });
-
-        request.SenderAddress = new ArasAddress
-        {
-            Title = "Merkez",
-            FirstName = "ERHAN",
-            LastName = "KESKIN",
-            Address = "Ankara",
-            CityName = "Ankara",
-            DistrictName = "Altindag",
+            ExternalId = "5dc807f4-test",
+            Id = "69c26fb6637a62ed6d370c5e",
+            CityName = "ANKARA",
+            CountryName = "Turkiye",
             CountryCode = "TR",
-            FromCountryCode = "TR",
-            PostalCode = "06000",
-            Phone = "05342600561",
-            Email = "erhankeskin6160@gmail.com"
+            Details = "Ankara Altındağ Çevreli Caddesi",
+            PhoneNumber = "05342600561",
+            FirstName = "ERHAN KESKIN",
+            LastName = "",
+            Title = "ankara",
+            PostalCode = "06130",
+            TownName = "ALTINDAĞ",
+            TaxNumber = "10126091684",
+            Email = "erhankeskin0661@gmail.com"
         };
 
-        request.ReceiverAddress = new ArasAddress
+        return new ArasCreateShipmentRequest
         {
-            FirstName = "Inge",
-            LastName = "Neuer",
-            Address = "Conrad-Scholl-Str 2",
-            CityName = "Koblenz",
-            CountryCode = "DE",
-            PostalCode = "56068",
-            Phone = "",
-            Email = "",
-            TaxId = "IM13720000224",
-            IsResidentialAddress = true
+            SenderAddress = sender,
+            BillingAddress = null,
+            ReceiverAddress = new ArasReceiverAddress
+            {
+                FirstName = "Inge",
+                LastName = "Neuer",
+                CityName = "Koblenz",
+                CountryCode = "DE",
+                PostalCode = "56068",
+                Details = "Conrad-Scholl-Str 2",
+                Type = 2
+            },
+            PieceCount = 1,
+            InternationalShipmentCategory = "0",
+            Contents =
+            {
+                new ArasShipmentContent
+                {
+                    EstimatedDimensions = new ArasEstimatedDimensions { Length = 20, Width = 15, Height = 10, Weight = 0.4 },
+                    Items =
+                    {
+                        new ArasShipmentContentItem
+                        {
+                            Description = "3D Printed Gothic Gargoyle Mini Figure",
+                            HsCode = "3926400000",
+                            ProductBarcode = "cd0155ef-1eec-42e3-b1c6-2e84df70ae2c",
+                            Quantity = 1,
+                            Amount = 1,
+                            UnitPrice = 11.0m,
+                            ManufacturerCountry = "TR"
+                        }
+                    }
+                }
+            },
+            Currency = "USD",
+            IsDraftShipment = true,
+            PackageType = 1,
+            SenderBillingAddress = sender
         };
-
-        return request;
     }
 
     [Fact]
-    public void Payload_ContainsVolumetricWeightAtEveryLevel()
+    public void DraftPayload_MatchesPanelContract()
     {
-        string json = JsonSerializer.Serialize(BuildPayload(), Options);
+        string json = JsonSerializer.Serialize(BuildDraftPayload(), Options);
 
-        Assert.Contains("\"volumetricWeight\"", json);
-        Assert.Contains("\"desi\"", json);
-        Assert.Contains("\"shipmentDimensions\"", json);
-        Assert.Contains("\"shipmentItems\"", json);
+        Assert.Contains("\"SenderAddress\"", json);
+        Assert.Contains("\"BillingAddress\":null", json);
+        Assert.Contains("\"ReceiverAddress\"", json);
+        Assert.Contains("\"PieceCount\":1", json);
+        Assert.Contains("\"InternationalShipmentCategory\":\"0\"", json);
+        Assert.Contains("\"Contents\"", json);
+        Assert.Contains("\"EstimatedDimensions\"", json);
+        Assert.Contains("\"productBarcode\"", json);
+        Assert.Contains("\"IsDraftShipment\":true", json);
+        Assert.Contains("\"SenderBillingAddress\"", json);
 
-        // Alan gerçekten dolu mu (0 değil)?
-        Assert.Contains("\"volumetricWeight\":0.6", json);
+        // Taslak isteğinde ShipmentId ve taşıyıcı alanı HİÇ gönderilmez (panel sözleşmesi).
+        Assert.DoesNotContain("\"ShipmentId\"", json);
+        Assert.DoesNotContain("\"InternationalCargoProvider\"", json);
     }
 
     [Fact]
-    public void Payload_IsDumpedForPostmanComparison()
+    public void UpdatePayload_IncludesShipmentIdAndProvider()
     {
-        string json = JsonSerializer.Serialize(BuildPayload(), Options);
+        var request = BuildDraftPayload();
+        request.IsDraftShipment = false;
+        request.ShipmentId = "6abac6444e4bd2b9830fed2e";
+        request.InternationalCargoProvider = "Widect";
+
+        string json = JsonSerializer.Serialize(request, Options);
+
+        Assert.Contains("\"IsDraftShipment\":false", json);
+        Assert.Contains("\"ShipmentId\":\"6abac6444e4bd2b9830fed2e\"", json);
+        Assert.Contains("\"InternationalCargoProvider\":\"Widect\"", json);
+    }
+
+    [Fact]
+    public void DraftPayload_IsDumpedForComparison()
+    {
+        string json = JsonSerializer.Serialize(BuildDraftPayload(), Options);
         string dir = Path.Combine(Path.GetTempPath(), "aras-postman");
         Directory.CreateDirectory(dir);
         string path = Path.Combine(dir, "create-shipment-request.json");

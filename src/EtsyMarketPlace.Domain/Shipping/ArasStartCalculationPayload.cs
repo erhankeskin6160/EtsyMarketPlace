@@ -30,6 +30,32 @@ public sealed class ArasStartCalculationPayload
     [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; }
 
     [JsonPropertyName("desi")] public double Desi { get; set; }
+
+    /// <summary>Yalnızca gönderi oluşturulduktan sonraki fiyat hesabında doldurulur.</summary>
+    [JsonPropertyName("shipmentId")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? ShipmentId { get; set; }
+
+    [JsonPropertyName("totalPrice")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public decimal? TotalPrice { get; set; }
+
+    [JsonPropertyName("senderPostalCode")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SenderPostalCode { get; set; }
+
+    [JsonPropertyName("senderCity")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SenderCity { get; set; }
+
+    [JsonPropertyName("senderState")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SenderState { get; set; }
+
+    [JsonPropertyName("senderTown")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SenderTown { get; set; }
+
     [JsonPropertyName("shipmentDimensions")] public List<ArasStartCalculationBox> ShipmentDimensions { get; set; } = new();
 }
 
@@ -43,4 +69,14 @@ public sealed class ArasStartCalculationBox
     [JsonPropertyName("volumetricWeight")] public double VolumetricWeight { get; set; }
     [JsonPropertyName("desi")] public double Desi { get; set; }
     [JsonPropertyName("packageCount")] public int PackageCount { get; set; } = 1;
+
+    [JsonPropertyName("shipmentItems")] public List<ArasStartCalculationItem> ShipmentItems { get; set; } = new();
+}
+
+/// <summary>Fiyat başlatma isteğindeki kalem (miktar / GTİP / birim fiyat).</summary>
+public sealed class ArasStartCalculationItem
+{
+    [JsonPropertyName("quantity")] public int Quantity { get; set; } = 1;
+    [JsonPropertyName("hsCode")] public string HsCode { get; set; } = string.Empty;
+    [JsonPropertyName("unitPrice")] public decimal UnitPrice { get; set; }
 }

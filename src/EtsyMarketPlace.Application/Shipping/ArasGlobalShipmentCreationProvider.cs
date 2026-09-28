@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Application.Shipping;
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Orders;
@@ -8,6 +9,10 @@ using EtsyMarketPlace.Domain.Shipping;
 
 /// <summary>
 /// Aras Global gönderi oluşturma sağlayıcısı (IShipmentCreationProvider implementasyonu).
+/// Akış, panelin GERÇEK ağ trafiğinden birebir alınmıştır:
+/// taslak oluştur → bu gönderi için fiyat hesaplamayı başlat → teklif listesini bekle →
+/// gönderiyi güncelle (taslak kapat, taşıyıcı seç) → fiyatı hesapla → yasal belgeler →
+/// fiyat ve onayları gönder. (Ödeme adımı kapsam dışıdır; panelden yapılır.)
 /// Oturum süresi dolduğunda (401) otomatik token yenileme yeteneğine sahiptir.
 /// </summary>
 public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvider
@@ -41,7 +46,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             return new ShipmentCreationResult
             {
                 IsSuccess = false,
-                ErrorMessage = "Gönderi bağlamı veya Etsy sipariş bilgisi eksik."
+                ErrorMessage = "Gönderi başlamış veya Etsy sipariş bilgisi eksik."
             };
         }
 
@@ -61,7 +66,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
                 return new ShipmentCreationResult
                 {
                     IsSuccess = false,
-                    ErrorMessage = "Aras Global oturum tokeni bulunamadı veya süresi dolmuş. Lütfen 'Aras Oturumu Yenile' butonuna tıklayarak giriş yapın."
+                    ErrorMessage = "Aras Global oturum tokeni bulunamadı veya süresi dolmuş. Lütfen 'Aras Oturumu Yenile' butonuna basın."
                 };
             }
         }
@@ -93,7 +98,7 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             return new ShipmentCreationResult
             {
                 IsSuccess = false,
-                ErrorMessage = "Aras Global canlı oturum tokeninizin süresi dolmuş (HTTP 401). Lütfen üst bardaki '🔑 Aras Oturumu Yenile' butonuna tıklayarak tek tıkla oturumunuzu tazeleyin."
+                ErrorMessage = "Aras Global canlı oturum tokeninizin süresi dolmuş (HTTP 401). Lütfen üst bardaki 'Aras Oturumu' düğmesinden yenileyin."
             };
         }
         catch (Exception ex)
@@ -114,29 +119,13 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
     {
         var order = context.Order;
 
-        // 1. Kutu ve Ebat Bilgileri
+        // 1. Kutu ve ebat bilgileri
         double length = context.LengthCm > 0 ? context.LengthCm : 20.0;
         double width = context.WidthCm > 0 ? context.WidthCm : 15.0;
         double height = context.HeightCm > 0 ? context.HeightCm : 10.0;
         double weight = context.WeightKg > 0 ? context.WeightKg : 0.4;
-        // Tek kaynak: teklif adiminda kullanilan desi; yoksa yerel hesap.
-        double desi = context.Desi > 0
-            ? context.Desi
-            : Math.Round((length * width * height) / 5000.0, 2);
-        if (desi <= 0) desi = 0.60;
 
-        var box = new ArasBox
-        {
-            Length = length,
-            Width = width,
-            Height = height,
-            Weight = weight,
-            VolumetricWeight = desi,
-            Desi = desi,
-            PackageCount = 1
-        };
-
-        // 2. Ürün Kalemleri (Etsy Order Items)
+        // 2. Ürün kalemleri (Etsy siparişinden)
         string hsCode = !string.IsNullOrWhiteSpace(context.HsCode)
             ? context.HsCode
             : (order.Items.Count > 0 && !string.IsNullOrWhiteSpace(order.Items[0].HsCode) ? order.Items[0].HsCode : "3926400000");
@@ -145,94 +134,55 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             ? order.Items.Sum(i => i.Price * Math.Max(1, i.Quantity))
             : 0m;
         decimal orderPrice = itemsTotal > 0 ? itemsTotal : (order.TotalPrice > 0 ? order.TotalPrice : 11.0m);
-        var request = new ArasCreateShipmentRequest
-        {
-            Currency = string.IsNullOrWhiteSpace(order.Currency) ? "USD" : order.Currency,
-            Price = orderPrice,
-            TotalPrice = orderPrice,
-            CargoPrice = context.CargoPrice > 0 ? context.CargoPrice : 13.13m,
-            InternationalCargoProvider = string.IsNullOrWhiteSpace(context.SelectedSubCarrier) ? "widect" : context.SelectedSubCarrier.ToLowerInvariant(),
-            InternationalShipmentCategory = "4", // Mikro İhracat
-            IsMicroExport = true,
-            PackageCount = 1,
-            Weight = weight,
-            VolumetricWeight = desi,
-            Desi = desi
-        };
-        request.ShipmentDimensions.Add(box);
-        request.BoxList.Add(box);
 
+        string providerName = NormalizeProviderName(context.SelectedSubCarrier);
+        string currency = string.IsNullOrWhiteSpace(order.Currency) ? "USD" : order.Currency;
+
+        var contentItems = new List<ArasShipmentContentItem>();
         foreach (var itm in order.Items)
         {
             string desc = !string.IsNullOrWhiteSpace(itm.Title) ? itm.Title : "E-Ticaret Ürünü";
-            request.ShipmentItems.Add(new ArasShipmentItem
+            int qty = itm.Quantity > 0 ? itm.Quantity : 1;
+            contentItems.Add(new ArasShipmentContentItem
             {
                 Description = desc,
-                ItemDescription = desc,
-                HsCode = hsCode,
-                Quantity = itm.Quantity > 0 ? itm.Quantity : 1,
-                UnitPrice = itm.Price > 0 ? itm.Price : 10.0m,
-                Length = box.Length,
-                Width = box.Width,
-                Height = box.Height,
-                Weight = box.Weight,
-                VolumetricWeight = desi,
-                Desi = desi,
-                Category = string.IsNullOrWhiteSpace(context.Category) ? "Home Decor" : context.Category
+                HsCode = !string.IsNullOrWhiteSpace(itm.HsCode) ? itm.HsCode : hsCode,
+                ProductBarcode = Guid.NewGuid().ToString(),
+                Disabled = false,
+                Quantity = qty,
+                Amount = qty,
+                UnitPrice = itm.Price > 0 ? itm.Price : orderPrice,
+                ManufacturerCountry = "TR",
+                MaxDigitalValue = 0
             });
         }
 
-        if (request.ShipmentItems.Count == 0)
+        if (contentItems.Count == 0)
         {
-            request.ShipmentItems.Add(new ArasShipmentItem
+            contentItems.Add(new ArasShipmentContentItem
             {
                 Description = "3d print figür",
-                ItemDescription = "3d print figür",
                 HsCode = hsCode,
+                ProductBarcode = Guid.NewGuid().ToString(),
+                Disabled = false,
                 Quantity = 1,
-                UnitPrice = request.Price,
-                Length = box.Length,
-                Width = box.Width,
-                Height = box.Height,
-                Weight = box.Weight,
-                VolumetricWeight = desi,
-                Desi = desi,
-                Category = string.IsNullOrWhiteSpace(context.Category) ? "Home Decor" : context.Category
+                Amount = 1,
+                UnitPrice = orderPrice,
+                ManufacturerCountry = "TR",
+                MaxDigitalValue = 0
             });
         }
 
-        // 3. Gönderici Adresi (Varsayılan veya Profil)
-        string senderPhone = "05342600561";
-        if (!string.IsNullOrWhiteSpace(settings.SavedEmail) && settings.SavedEmail.All(char.IsDigit))
+        // 3. Gönderici adresi: panelde kayıtlı adres (GetAddresses). Alınamazsa güvenli varsayılan.
+        var sender = await _apiClient.GetPrimarySenderAddressAsync(token, cancellationToken);
+        if (sender == null || string.IsNullOrWhiteSpace(sender.CityName))
         {
-            senderPhone = settings.SavedEmail.StartsWith("0") ? settings.SavedEmail : "0" + settings.SavedEmail;
+            sender = BuildFallbackSender(settings);
         }
 
-        string senderEmail = !string.IsNullOrWhiteSpace(settings.SavedEmail) && settings.SavedEmail.Contains("@")
-            ? settings.SavedEmail
-            : "erhankeskin6160@gmail.com";
-
-        request.SenderAddress = context.SenderAddress != null && !string.IsNullOrWhiteSpace(context.SenderAddress.FirstName)
-            ? context.SenderAddress
-            : new ArasAddress
-            {
-                Title = "Merkez",
-                FirstName = "ERHAN",
-                LastName = "KESKİN",
-                CompanyName = "ERHAN KESKİN",
-                Address = "Ankara Altındağ",
-                CityName = "ankara",
-                DistrictName = "altındağ",
-                CountryCode = "TR",
-                PostalCode = "06350",
-                Phone = senderPhone,
-                Email = senderEmail
-            };
-        request.SenderBillingAddress = request.SenderAddress;
-
-        // 4. Alıcı Adresi (Etsy Siparişinden Otomatik Parse)
+        // 4. Alıcı adresi (Etsy siparişinden)
         string buyerFirst = order.BuyerName;
-        string buyerLast = "";
+        string buyerLast = string.Empty;
         int spaceIdx = order.BuyerName.LastIndexOf(' ');
         if (spaceIdx > 0)
         {
@@ -240,30 +190,54 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             buyerLast = order.BuyerName.Substring(spaceIdx + 1);
         }
 
-        string receiverPhone = !string.IsNullOrWhiteSpace(order.Phone)
-            ? order.Phone
-            : "5551234567";
-
-        request.ReceiverAddress = new ArasAddress
+        var receiver = new ArasReceiverAddress
         {
-            Title = "Teslimat",
+            Title = string.Empty,
             FirstName = buyerFirst,
             LastName = buyerLast,
-            Address = !string.IsNullOrWhiteSpace(order.StreetAddress) ? order.StreetAddress : "Delivery Address",
             CityName = order.City,
-            PostalCode = order.PostalCode,
+            TownName = string.Empty,
+            PhoneCountryCode = null,
             CountryCode = !string.IsNullOrWhiteSpace(order.CountryCode) ? order.CountryCode : "US",
-            FromCountryCode = "TR",
+            StateCode = order.HasState ? (order.State ?? string.Empty) : string.Empty,
+            StateName = order.HasState ? (order.State ?? string.Empty) : string.Empty,
+            PhoneNumber = order.Phone ?? string.Empty,
+            PostalCode = order.PostalCode,
             Email = order.BuyerEmail,
-            Phone = receiverPhone,
-            TaxId = order.IossNumber, // Etsy IOSS Numarası (IM3720000224)
-            HasState = order.HasState,
-            StateCode = order.State,
-            StateName = order.State,
-            IsResidentialAddress = true
+            CompanyName = string.Empty,
+            Details = !string.IsNullOrWhiteSpace(order.StreetAddress) ? order.StreetAddress : "Delivery Address",
+            Details2 = string.Empty,
+            Type = 2
         };
 
-        // Adım 1: Gönderi Taslağını Başlat
+        var request = new ArasCreateShipmentRequest
+        {
+            SenderAddress = sender,
+            BillingAddress = null,
+            ReceiverAddress = receiver,
+            PieceCount = 1,
+            InternationalShipmentCategory = "0", // Panel sözleşmesi (Numune); içerik ticari beyanı Contents ile yapılır.
+            Contents = new List<ArasShipmentContent>
+            {
+                new ArasShipmentContent
+                {
+                    EstimatedDimensions = new ArasEstimatedDimensions
+                    {
+                        Length = length,
+                        Width = width,
+                        Height = height,
+                        Weight = weight
+                    },
+                    Items = contentItems
+                }
+            },
+            Currency = currency,
+            IsDraftShipment = true,
+            PackageType = 1,
+            SenderBillingAddress = sender
+        };
+
+        // Adım 1: Gönderi taslağını oluştur
         var createResponse = await _apiClient.CreateShipmentAsync(request, token, cancellationToken);
         if (createResponse == null || !createResponse.IsSuccess || string.IsNullOrWhiteSpace(createResponse.ShipmentId))
         {
@@ -276,59 +250,81 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
 
         string shipmentId = createResponse.ShipmentId;
         string referenceCode = !string.IsNullOrWhiteSpace(createResponse.ReferenceCode) ? createResponse.ReferenceCode : shipmentId;
+
+        // Adım 2: Bu gönderi için canlı fiyat hesaplamayı başlat ve teklif listesini bekle
+        var startPayload = new ArasStartCalculationPayload
+        {
+            Currency = currency,
+            InternationalShipmentCategory = "0",
+            IsIndividualCustomer = true,
+            IsMicroExport = true,
+            PackageCount = 1,
+            PackageType = 1,
+            ReceiverCity = receiver.CityName,
+            ReceiverCountry = receiver.CountryCode,
+            ReceiverPostalCode = receiver.PostalCode,
+            ReceiverState = receiver.StateName,
+            ReceiverTown = receiver.TownName,
+            SenderCountry = sender.CountryCode,
+            SenderPostalCode = sender.PostalCode,
+            SenderCity = sender.CityName,
+            SenderState = string.Empty,
+            SenderTown = sender.TownName,
+            TotalPrice = orderPrice,
+            ShipmentId = shipmentId,
+            ShipmentDimensions =
+            {
+                new ArasStartCalculationBox
+                {
+                    Length = length,
+                    Width = width,
+                    Height = height,
+                    Weight = weight,
+                    PackageCount = 1,
+                    ShipmentItems = contentItems.ConvertAll(i => new ArasStartCalculationItem
+                    {
+                        Quantity = i.Quantity,
+                        HsCode = i.HsCode,
+                        UnitPrice = i.UnitPrice
+                    })
+                }
+            }
+        };
+
+        await _apiClient.StartPriceCalculationForShipmentAsync(startPayload, token, cancellationToken);
+
+        for (int attempt = 1; attempt <= 10; attempt++)
+        {
+            await Task.Delay(1000, cancellationToken);
+            var (isConcluded, _) = await _apiClient.PollBasePriceListAsync(shipmentId, token, cancellationToken);
+            if (isConcluded)
+            {
+                break;
+            }
+        }
+
+        // Adım 3: Gönderiyi güncelle (taslağı kapat, seçilen taşıyıcıyı işle)
+        request.IsDraftShipment = false;
         request.ShipmentId = shipmentId;
-
-        // Adım 2: Güncelleme ve Seçilen Taşıyıcıyı Kaydet
-        // (F4) Sozlesme sirasi: fiyat kirilimi guncelleme ve onay adimlarindan ONCE hesaplanir.
-        ArasShipmentPriceBreakdown? earlyBreakdown = null;
-        try
-        {
-            earlyBreakdown = await _apiClient.CalculateShipmentPriceAsync(shipmentId, request.InternationalCargoProvider, token, cancellationToken);
-        }
-        catch (Exception priceEx)
-        {
-            ArasGlobalSettingsStore.LogTrace("CalculatePrice-Warning", priceEx.Message);
-        }
-
-        // Hesaplanan taban fiyat varsa onay adimina o deger gitsin (sabit/uydurma deger degil).
-        if (earlyBreakdown != null && earlyBreakdown.BasePrice > 0)
-        {
-            request.CargoPrice = earlyBreakdown.BasePrice;
-        }
-
+        request.InternationalCargoProvider = providerName;
         await _apiClient.UpdateShipmentAsync(request, token, cancellationToken);
 
-        // Adım 3: Yasal Sözleşme Onaylarını Al
+        // Adım 4: Nihai fiyatı hesapla
+        var breakdown = await _apiClient.CalculateShipmentPriceAsync(shipmentId, providerName, token, cancellationToken);
+
+        // Adım 5: Yasal sözleşme belgelerini al (onay öncesi)
         try
         {
-            await _apiClient.GetShipmentLegalDocumentAsync(shipmentId, "shipmentpreinformation", token, cancellationToken);
-            await _apiClient.GetShipmentLegalDocumentAsync(shipmentId, "shipmentagreement", token, cancellationToken);
+            await _apiClient.GetShipmentLegalDocumentAsync(shipmentId, "ShipmentAgreement", token, cancellationToken);
+            await _apiClient.GetShipmentLegalDocumentAsync(shipmentId, "ShipmentInformationForm", token, cancellationToken);
         }
         catch (Exception docEx)
         {
             ArasGlobalSettingsStore.LogTrace("LegalDoc-Warning", docEx.Message);
         }
 
-        // Adım 4: Fiyatlandırma ve Taşıyıcı Onayını Aras Global'e Gönder (SendShipmentPrice)
-        await _apiClient.SendShipmentPriceAsync(shipmentId, request.InternationalCargoProvider, request.CargoPrice, token, cancellationToken);
-
-        // Adım 5: Finansal Fiyat Kalemlerini Hesapla
-        ArasShipmentPriceBreakdown? breakdown = null;
-        try
-        {
-            breakdown = await _apiClient.CalculateShipmentPriceAsync(shipmentId, request.InternationalCargoProvider, token, cancellationToken);
-        }
-        catch
-        {
-            breakdown = new ArasShipmentPriceBreakdown
-            {
-                BasePrice = request.CargoPrice,
-                ExchangeTotalPrice = request.CargoPrice + 2.38m,
-                TotalPrice = 757.74m,
-                ExchangeRate = 48.855m,
-                TotalPriceWithProvisionRate = 871.4m
-            };
-        }
+        // Adım 6: Fiyat ve onayları Aras Global'e gönder (ödeme adımı panelde tamamlanır)
+        await _apiClient.SendShipmentPriceAsync(shipmentId, providerName, breakdown.TotalPrice, token, cancellationToken);
 
         return new ShipmentCreationResult
         {
@@ -337,6 +333,48 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             TrackingNumber = referenceCode,
             LabelUrl = $"https://panel.arasglobalcargo.com/order/barcode/{shipmentId}",
             PriceBreakdown = breakdown
+        };
+    }
+
+    /// <summary>Panel sözleşmesindeki taşıyıcı adı biçimi (widect → Widect, ups → UPS).</summary>
+    private static string NormalizeProviderName(string? subCarrier)
+    {
+        string p = (subCarrier ?? string.Empty).Trim();
+        return p.ToLowerInvariant() switch
+        {
+            "widect" or "widex" => "Widect",
+            "ups" => "UPS",
+            "" => "Widect",
+            _ => char.ToUpperInvariant(p[0]) + p.Substring(1)
+        };
+    }
+
+    /// <summary>Panel adresi alınamazsa kullanılan güvenli varsayılan gönderici.</summary>
+    private static ArasShipmentSenderAddress BuildFallbackSender(ArasGlobalSettings settings)
+    {
+        string senderPhone = "05342600561";
+        if (!string.IsNullOrWhiteSpace(settings.SavedEmail) && settings.SavedEmail.All(char.IsDigit))
+        {
+            senderPhone = settings.SavedEmail.StartsWith("0") ? settings.SavedEmail : "0" + settings.SavedEmail;
+        }
+
+        string senderEmail = !string.IsNullOrWhiteSpace(settings.SavedEmail) && settings.SavedEmail.Contains("@")
+            ? settings.SavedEmail
+            : "erhankeskin6160@gmail.com";
+
+        return new ArasShipmentSenderAddress
+        {
+            Title = "Merkez",
+            FirstName = "ERHAN KESKİN",
+            LastName = string.Empty,
+            CityName = "ANKARA",
+            TownName = "ALTINDAĞ",
+            Details = "Ankara Altındağ",
+            CountryName = "Turkiye",
+            CountryCode = "TR",
+            PostalCode = "06350",
+            PhoneNumber = senderPhone,
+            Email = senderEmail
         };
     }
 

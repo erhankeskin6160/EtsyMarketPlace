@@ -229,6 +229,30 @@ public sealed class OrderFulfillmentStudioTests
             return Task.FromResult("mock-doc-guid-5582");
         }
 
+        public Task<ArasShipmentSenderAddress?> GetPrimarySenderAddressAsync(string rawBearerToken, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<ArasShipmentSenderAddress?>(new ArasShipmentSenderAddress
+            {
+                Title = "Merkez",
+                FirstName = "Mock Sender",
+                CityName = "Ankara",
+                CountryName = "Turkiye",
+                CountryCode = "TR",
+                PostalCode = "06000",
+                Email = "mock@example.com"
+            });
+        }
+
+        public Task<bool> StartPriceCalculationForShipmentAsync(ArasStartCalculationPayload payload, string rawBearerToken, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(true);
+        }
+
+        public Task<(bool IsConcluded, List<ArasGlobalQuoteOffer> Offers)> PollBasePriceListAsync(string referenceCode, string rawBearerToken, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult((true, new List<ArasGlobalQuoteOffer>()));
+        }
+
         public Task<bool> SendShipmentPriceAsync(string shipmentId, string provider, decimal cargoPrice, string rawBearerToken, CancellationToken cancellationToken = default)
         {
             return Task.FromResult(true);

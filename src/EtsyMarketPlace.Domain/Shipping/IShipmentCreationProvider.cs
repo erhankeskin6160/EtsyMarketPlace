@@ -24,7 +24,7 @@ public sealed class ShipmentCreationContext
     public double Desi { get; set; } = 0;
     /// <summary>Kargo kalemi kategorisi (Aras sozlesmesindeki shipmentItems[].category).</summary>
     public string Category { get; set; } = "Home Decor";
-    public ArasAddress SenderAddress { get; set; } = new();
+    public ArasShipmentSenderAddress SenderAddress { get; set; } = new();
 }
 
 /// <summary>
