@@ -10,6 +10,7 @@ using EtsyMarketPlace.Application.Shipping;
 /// Genel <see cref="ShippingSecretProtector.Current"/> kaydını değiştirdiği için
 /// tüm koruma testleri bu sınıfta toplanır ve her testte eski değer geri yazılır.
 /// </summary>
+[Collection("SecretProtector")]
 public sealed class ShiptomoreCredentialStorageTests
 {
     private sealed class FakeProtector : IShippingSecretProtector
