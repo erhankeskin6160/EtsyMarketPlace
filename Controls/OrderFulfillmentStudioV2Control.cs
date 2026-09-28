@@ -138,7 +138,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 pass => ShippingCredentialEncryptor.Decrypt(pass)),
             new ShipEntegraShipmentCreationProvider(),
             new NavlungoShipmentCreationProvider(),
-            new ShiptomoreShipmentCreationProvider()
+            new ShiptomoreOfficialShipmentCreationProvider(new ShiptomoreOfficialApiClient())
         });
 
         UiStyle.SetDoubleBuffered(this);

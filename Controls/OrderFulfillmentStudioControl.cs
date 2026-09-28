@@ -106,7 +106,7 @@ public sealed class OrderFulfillmentStudioControl : UserControl
                 pass => ShippingCredentialEncryptor.Decrypt(pass)),
             new ShipEntegraShipmentCreationProvider(),
             new NavlungoShipmentCreationProvider(),
-            new ShiptomoreShipmentCreationProvider()
+            new ShiptomoreOfficialShipmentCreationProvider(new ShiptomoreOfficialApiClient())
         });
 
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
