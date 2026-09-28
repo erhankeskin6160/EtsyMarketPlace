@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Infrastructure.Http;
 namespace EtsyMarketPlace.Infrastructure.Viral3DModels.Scrapers;
 
 using System;
@@ -21,7 +22,7 @@ public sealed class PrintablesTrendingScraper : I3DModelPlatformScraper
 
     public PrintablesTrendingScraper(HttpClient? httpClient = null)
     {
-        _httpClient = httpClient ?? new HttpClient();
+        _httpClient = httpClient ?? SharedHttpClient.Instance;
         SlicerClientProtocolFactory.ApplySlicerHeaders(_httpClient, ModelPlatformType.Printables);
     }
 
