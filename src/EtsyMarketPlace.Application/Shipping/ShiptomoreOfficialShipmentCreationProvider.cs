@@ -2,6 +2,7 @@ namespace EtsyMarketPlace.Application.Shipping;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -92,12 +93,30 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         {
             var response = await _api.CreateShipmentAsync(request, cancellationToken).ConfigureAwait(false);
 
+            string labelPath = string.Empty;
+            string? labelBase64 = response.Labels?.Data;
+            if (!string.IsNullOrWhiteSpace(labelBase64))
+            {
+                try
+                {
+                    byte[] labelBytes = Convert.FromBase64String(labelBase64);
+                    if (labelBytes.Length > 0)
+                    {
+                        labelPath = SaveLabelBytes(order.ReceiptId, labelBytes);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AppLog.Info("Ship to More etiketi kaydedilemedi: " + ex.Message, "ShiptomoreLabelSave");
+                }
+            }
+
             return new ShipmentCreationResult
             {
                 IsSuccess = true,
                 ShipmentId = response.Id,
                 TrackingNumber = response.TrackingNumbers.FirstOrDefault() ?? string.Empty,
-                LabelUrl = string.Empty, // etiket PDF'i DownloadLabelAsync ile alınır
+                LabelUrl = labelPath,
                 ErrorMessage = string.Empty
             };
         }
@@ -192,6 +211,23 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         return idx > 0
             ? (name[..idx], name[(idx + 1)..])
             : (name, string.Empty);
+    }
+
+    /// <summary>Etiket PDF'ini kalıcı klasöre kaydeder ve tam yolunu döner.</summary>
+    private static string SaveLabelBytes(long orderId, byte[] bytes)
+    {
+        string labelDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SimilarProductsWinForms",
+            "labels");
+        Directory.CreateDirectory(labelDir);
+        bool isPdf = bytes.Length > 4 &&
+                     bytes[0] == 0x25 && bytes[1] == 0x50 &&
+                     bytes[2] == 0x44 && bytes[3] == 0x46;
+        string ext = isPdf ? "pdf" : "bin";
+        string labelPath = Path.Combine(labelDir, $"shiptomore-{orderId}.{ext}");
+        File.WriteAllBytes(labelPath, bytes);
+        return labelPath;
     }
 
     private static ShipmentCreationResult Fail(string message) => new()

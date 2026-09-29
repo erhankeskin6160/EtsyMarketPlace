@@ -37,15 +37,17 @@ public sealed class ShiptomoreProviderMappingTests
         public Task<IReadOnlyList<ShiptomorePriceOption>> CalculatePricesAsync(ShiptomorePriceRequest request, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ShiptomorePriceOption>>(Array.Empty<ShiptomorePriceOption>());
 
+        public ShiptomoreShipmentResponse ShipmentResponse { get; set; } = new()
+        {
+            Id = "slug-1",
+            State = "confirmed",
+            TrackingNumbers = { "TRK-1" }
+        };
+
         public Task<ShiptomoreShipmentResponse> CreateShipmentAsync(ShiptomoreShipmentRequest request, CancellationToken ct = default)
         {
             LastRequest = request;
-            return Task.FromResult(new ShiptomoreShipmentResponse
-            {
-                Id = "slug-1",
-                State = "confirmed",
-                TrackingNumbers = { "TRK-1" }
-            });
+            return Task.FromResult(ShipmentResponse);
         }
 
         public Task<ShiptomoreShipmentDetail> GetShipmentAsync(string slug, bool includeLabels = false, CancellationToken ct = default)
@@ -178,6 +180,26 @@ public sealed class ShiptomoreProviderMappingTests
         var line = Assert.Single(api.LastRequest!.ProductLines);
         Assert.Equal("39264000", line.HsCode);
         Assert.Equal(new[] { "3926400000", "39264000" }, api.HsCodeQueries);
+    }
+
+    [Fact]
+    public async Task CreateShipment_SavesBase64LabelPdfFromResponse()
+    {
+        var api = new StubApi();
+        api.HsCodeResults["39264000"] = new List<ShiptomoreHsCode> { new() { Code = "39264000" } };
+        api.ShipmentResponse.Labels = new ShiptomoreLabelData
+        {
+            Data = Convert.ToBase64String(new byte[] { 0x25, 0x50, 0x44, 0x46, 0x2D, 0x31, 0x2E, 0x34 })
+        };
+        var provider = new ShiptomoreOfficialShipmentCreationProvider(api);
+
+        var result = await provider.CreateShipmentAsync(Context());
+
+        Assert.True(result.IsSuccess);
+        Assert.False(string.IsNullOrWhiteSpace(result.LabelUrl));
+        Assert.True(File.Exists(result.LabelUrl), "Etiket dosyası kaydedilmeliydi.");
+        Assert.EndsWith(".pdf", result.LabelUrl);
+        File.Delete(result.LabelUrl);
     }
 
     [Fact]
