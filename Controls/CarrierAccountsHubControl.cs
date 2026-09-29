@@ -72,7 +72,7 @@ public sealed class CarrierAccountsHubControl : UserControl
             _arasLogo ?? CreateFallbackLogo("aras"),
             arasConnected,
             () => TriggerArasEmbeddedLoginAsync(),
-            () => TriggerArasEmbeddedLoginAsync(),
+            () => OpenCarrierPanelInBrowserAsync("Aras Global", "https://panel.arasglobalcargo.com/auth"),
             () => DisconnectCarrierAsync("Aras Global")));
 
         _flow.Controls.Add(CreateCarrierAccountCard(
@@ -80,7 +80,7 @@ public sealed class CarrierAccountsHubControl : UserControl
             _shipEntegraLogo ?? CreateFallbackLogo("shipentegra"),
             seConnected,
             () => TriggerShipEntegraEmbeddedLoginAsync(),
-            () => TriggerShipEntegraEmbeddedLoginAsync(),
+            () => OpenCarrierPanelInBrowserAsync("ShipEntegra", "https://app.shipentegra.com/login"),
             () => DisconnectCarrierAsync("ShipEntegra")));
 
         var navSettings = NavlungoSettingsStore.Load();
@@ -91,7 +91,7 @@ public sealed class CarrierAccountsHubControl : UserControl
             _navlungoLogo ?? CreateFallbackLogo("navlungo"),
             navConnected,
             () => TriggerNavlungoEmbeddedLoginAsync(),
-            () => OpenNavlungoPanelInBrowserAsync(),
+            () => OpenCarrierPanelInBrowserAsync("Navlungo", "https://ship.navlungo.com/"),
             () => DisconnectCarrierAsync("Navlungo")));
 
         bool stmConnected = ShiptomoreSettingsStore.HasCredentials();
@@ -166,17 +166,17 @@ public sealed class CarrierAccountsHubControl : UserControl
         }
     }
 
-    /// <summary>Navlungo panelini varsayılan tarayıcıda açar (kart üzerindeki 🌐 düğmesi).</summary>
-    private Task OpenNavlungoPanelInBrowserAsync()
+    /// <summary>Taşıyıcı panelini varsayılan tarayıcıda açar (kart üzerindeki 🌐 düğmesi).</summary>
+    private Task OpenCarrierPanelInBrowserAsync(string carrierName, string url)
     {
         try
         {
-            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://ship.navlungo.com/");
-            Report("🌐 Navlungo paneli tarayıcıda açıldı.", CarrierHubStatusKind.Info);
+            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser(url);
+            Report($"🌐 {carrierName} paneli tarayıcıda açıldı.", CarrierHubStatusKind.Info);
         }
         catch (Exception ex)
         {
-            Report($"Panel açılamadı: {ex.Message}", CarrierHubStatusKind.Error);
+            Report($"🌐 {carrierName} paneli açılamadı: {ex.Message}", CarrierHubStatusKind.Error);
         }
 
         return Task.CompletedTask;
@@ -412,7 +412,7 @@ public sealed class CarrierAccountsHubControl : UserControl
                 Margin = new Padding(0, 0, 4, 0)
             };
             btnBrowser.FlatAppearance.BorderSize = 0;
-            _cardToolTip.SetToolTip(btnBrowser, $"{title} web sitesini tarayıcıda açarak oturum aç ve entegre et");
+            _cardToolTip.SetToolTip(btnBrowser, $"{title} panelini varsayılan tarayıcıda açar");
             btnBrowser.Click += async (_, _) => await onBrowserLogin();
             pnlButtons.Controls.Add(btnBrowser);
         }

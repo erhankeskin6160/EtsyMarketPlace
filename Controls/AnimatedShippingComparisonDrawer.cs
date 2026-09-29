@@ -521,7 +521,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
             _navlungoLogo ?? CreateFallbackLogo("navlungo"),
             navConnected,
             () => TriggerNavlungoEmbeddedLoginAsync(),
-            () => TriggerNavlungoEmbeddedLoginAsync(),
+            () => OpenNavlungoPanelInBrowserAsync(),
             () => DisconnectCarrierAsync("Navlungo")));
 
         // 4. Shiptomore Kartı
@@ -680,7 +680,7 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 Margin = new Padding(0, 0, 4, 0)
             };
             btnBrowser.FlatAppearance.BorderSize = 0;
-            _cardToolTip.SetToolTip(btnBrowser, $"{title} web sitesini tarayıcıda açarak oturum aç ve entegre et");
+            _cardToolTip.SetToolTip(btnBrowser, $"{title} panelini varsayılan tarayıcıda açar");
             btnBrowser.Click += async (_, _) => await onBrowserLogin();
             pnlButtons.Controls.Add(btnBrowser);
         }
@@ -1652,6 +1652,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     {
         try
         {
+            if (directBrowser)
+            {
+                PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://panel.arasglobalcargo.com/auth");
+                _lblStatus.Text = "🌐 Aras Global paneli tarayıcıda açıldı.";
+                _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+                return;
+            }
+
             using var loginForm = new ArasGlobalEmbeddedLoginForm();
             if (loginForm.ShowDialog(FindForm()) == DialogResult.OK)
             {
@@ -1669,6 +1677,14 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
 
     private async Task TriggerShipEntegraAutoLoginAsync(bool directBrowser)
     {
+        if (directBrowser)
+        {
+            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://app.shipentegra.com/login");
+            _lblStatus.Text = "🌐 ShipEntegra paneli tarayıcıda açıldı.";
+            _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+            return;
+        }
+
         var settings = ShipEntegraSettingsStore.Load();
         string email = settings.SavedEmail ?? string.Empty;
         string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
@@ -1767,6 +1783,22 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         {
             MessageBox.Show($"Oturum açma penceresi açılamadı:\n{ex.Message}", "Oturum Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private Task OpenNavlungoPanelInBrowserAsync()
+    {
+        try
+        {
+            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://ship.navlungo.com/");
+            _lblStatus.Text = "🌐 Navlungo paneli tarayıcıda açıldı.";
+            _lblStatus.ForeColor = Color.FromArgb(56, 189, 248);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Panel açılamadı:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task TriggerShiptomoreAutoLoginAsync(bool directBrowser)
