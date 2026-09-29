@@ -2190,7 +2190,17 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
                 bool isSeFailure = ShipmentSessionRouter.IsShipEntegraContext(_selectedQuote?.ProviderName, result.ErrorMessage);
 
-                if (isSeFailure)
+                bool isNetworkFailure = ShipmentSessionRouter.IsNetworkLevelFailure(result.ErrorMessage);
+
+                if (isNetworkFailure)
+                {
+                    MessageBox.Show(
+                        message + "\n\nBu bir ağ/bağlantı hatası olarak görünüyor. Birkaç saniye bekleyip 'Gönderi Oluştur' ile yeniden deneyin.\n\nSorun sürerse güvenlik yazılımınızın (antivirüs) ağ koruması bu uygulamayı engelliyor olabilir.",
+                        "Bağlantı Hatası",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+                else if (isSeFailure)
                 {
                     var askSe = MessageBox.Show(
                         $"{message}\n\nŞimdi ShipEntegra oturumunu yenilemek ister misiniz?",

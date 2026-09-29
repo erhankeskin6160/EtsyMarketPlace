@@ -38,4 +38,37 @@ public sealed class ShipmentSessionRouterTests
     {
         Assert.True(ShipmentSessionRouter.IsShipEntegraContext("shipentegra", null));
     }
+
+    [Fact]
+    public void IsNetworkLevelFailure_SocketProviderError_ReturnsTrue()
+    {
+        Assert.True(ShipmentSessionRouter.IsNetworkLevelFailure(
+            "ShipEntegra gönderi oluşturma hatası: İstenen hizmet sağlayıcısı yüklenemedi veya başlatılamadı. (api.shipentegra.com:443)"));
+    }
+
+    [Fact]
+    public void IsNetworkLevelFailure_AsciiVariant_ReturnsTrue()
+    {
+        Assert.True(ShipmentSessionRouter.IsNetworkLevelFailure("hizmet saglayicisi yuklenemedi"));
+    }
+
+    [Fact]
+    public void IsNetworkLevelFailure_ConnectionAborted_ReturnsTrue()
+    {
+        Assert.True(ShipmentSessionRouter.IsNetworkLevelFailure("Connection aborted. (api.shipentegra.com:443)"));
+    }
+
+    [Fact]
+    public void IsNetworkLevelFailure_TokenExpiredMessage_ReturnsFalse()
+    {
+        Assert.False(ShipmentSessionRouter.IsNetworkLevelFailure(
+            "ShipEntegra oturumunuzun süresi dolmuş. Lütfen yeniden giriş yapın."));
+    }
+
+    [Fact]
+    public void IsNetworkLevelFailure_NullOrEmpty_ReturnsFalse()
+    {
+        Assert.False(ShipmentSessionRouter.IsNetworkLevelFailure(null));
+        Assert.False(ShipmentSessionRouter.IsNetworkLevelFailure("   "));
+    }
 }
