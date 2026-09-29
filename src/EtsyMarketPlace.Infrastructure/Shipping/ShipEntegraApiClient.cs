@@ -340,6 +340,55 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         }
     }
 
+    /// <summary>
+    /// E-posta/şifre ile doğrudan API oturumu açar; v4.public token çiftini döndürür.
+    /// Otomatik token yenilemenin tarayıcısız yoludur (panel ile aynı uç: /v1/auth/login).
+    /// </summary>
+    public async Task<ShipEntegraAuthTokens?> LoginAsync(
+        string email,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+        {
+            return null;
+        }
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrlV1 + "/auth/login");
+        httpRequest.Headers.TryAddWithoutValidation("Origin", "https://app.shipentegra.com");
+        httpRequest.Headers.TryAddWithoutValidation("Referer", "https://app.shipentegra.com/");
+
+        var payload = new
+        {
+            email = email,
+            password = password,
+            pushId = " ",
+            keepMeOpen = false
+        };
+
+        httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        string body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var (access, refresh) = ShipEntegraTokenExtractor.ExtractFromText(body);
+        if (string.IsNullOrWhiteSpace(access))
+        {
+            return null;
+        }
+
+        return new ShipEntegraAuthTokens
+        {
+            AccessToken = access!,
+            RefreshToken = refresh ?? string.Empty
+        };
+    }
+
     public static string CleanToken(string? rawToken)
     {
         if (string.IsNullOrWhiteSpace(rawToken)) return string.Empty;
