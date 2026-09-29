@@ -120,6 +120,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private FlowLayoutPanel _quotesFlow = null!;
     private Label _lblQuoteCount = null!;
     private Label _lblQuoteSummary = null!;
+    private Label _lblQuoteIssues = null!;
+    private readonly List<string> _quoteIssues = new();
     private Label _lblQuotesEmpty = null!;
     private readonly Dictionary<string, Button> _providerChips = new();
     private SaasBarcodeLabelControl _barcode = null!;
@@ -142,6 +144,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _orderService = orderService ?? new EtsyOrderService();
         _arasApiClient = new ArasGlobalApiClient();
         _arasPricingService = arasPricingService ?? new ArasGlobalPricingService(_arasApiClient);
+        _arasPricingService.TokenRefresher = RefreshArasTokenSilentlyAsync;
         _sessionManager = sessionManager ?? new PuppeteerShippingSessionManager();
         _shipEntegraPricingService = new ShipEntegraPricingService(new ShipEntegraApiClient());
         _navlungoApiClient = new NavlungoApiClient();
@@ -1365,7 +1368,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     {
         var card = new ThemedCard { Dock = DockStyle.Fill };
 
-        var header = new Panel { Dock = DockStyle.Top, Height = 56, BackColor = Color.Transparent };
+        var header = new Panel { Dock = DockStyle.Top, Height = 84, BackColor = Color.Transparent };
         header.Controls.Add(new Label
         {
             Text = "TAŞIYICI KARŞILAŞTIRMA",
@@ -1395,6 +1398,20 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             Location = new Point(96, 33)
         };
         header.Controls.Add(_lblQuoteSummary);
+
+        _lblQuoteIssues = new Label
+        {
+            Text = string.Empty,
+            Font = _smallFont,
+            ForeColor = Color.FromArgb(251, 191, 36),
+            AutoSize = true,
+            MaximumSize = new Size(340, 0),
+            BackColor = Color.Transparent,
+            Location = new Point(14, 52),
+            Visible = false
+        };
+        header.Controls.Add(_lblQuoteIssues);
+        header.Resize += (s, e) => _lblQuoteIssues.MaximumSize = new Size(Math.Max(120, header.ClientSize.Width - 28), 0);
 
         var chipRow = new FlowLayoutPanel
         {
@@ -1925,6 +1942,11 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
         var collected = new List<OrderQuote>();
 
+        lock (_quoteIssues)
+        {
+            _quoteIssues.Clear();
+        }
+
         Task<List<OrderQuote>> arasTask = Task.Run(async () =>
         {
             var list = new List<OrderQuote>();
@@ -1947,6 +1969,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 var response = await _arasPricingService.GetQuotesAsync(request);
                 if (response != null && response.Success)
                 {
+                    if (!response.IsLive && !string.IsNullOrWhiteSpace(response.StatusMessage))
+                    {
+                        lock (_quoteIssues)
+                        {
+                            _quoteIssues.Add(response.StatusMessage);
+                        }
+                    }
+
                     foreach (var offer in response.Offers)
                     {
                         string service = $"{offer.Cargo} {offer.ProviderServiceType}".Trim();
@@ -2141,6 +2171,54 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _quotes = deduplicated;
     }
 
+    /// <summary>
+    /// Aras Global tokeninin süresi dolduğunda sessizce yeniler (görünmez oturum;
+    /// kayıtlı e-posta/şifre kullanılır). Başarılıysa yeni token diske yazılır ve
+    /// canlı teklif akışı tekrar denenir.
+    /// </summary>
+    private async Task<string?> RefreshArasTokenSilentlyAsync(ArasGlobalSettings settings, CancellationToken ct)
+    {
+        if (settings == null || string.IsNullOrWhiteSpace(settings.SavedEmail))
+        {
+            return null;
+        }
+
+        try
+        {
+            string pass = string.IsNullOrWhiteSpace(settings.EncryptedPassword)
+                ? string.Empty
+                : ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
+
+            string? fresh = await _sessionManager.RefreshArasGlobalTokenAsync(
+                settings.SavedEmail,
+                pass,
+                showBrowser: false,
+                knownExpiredToken: settings.CleanToken,
+                ct: ct);
+
+            if (string.IsNullOrWhiteSpace(fresh))
+            {
+                return null;
+            }
+
+            string clean = fresh.Trim();
+            if (clean.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                clean = clean.Substring(7).Trim();
+            }
+
+            settings.BearerToken = clean;
+            settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+            ArasGlobalSettingsStore.Save(settings);
+            return clean;
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught);
+            return null;
+        }
+    }
+
     private static void AppendGenericOffers<T>(List<OrderQuote> target, string providerName, IEnumerable<T> offers, decimal rate)
     {
         foreach (var offer in offers)
@@ -2222,6 +2300,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         int live = visible.Count(q => q.Source == QuoteSource.Live);
         int estimated = visible.Count - live;
         _lblQuoteSummary.Text = visible.Count == 0 ? string.Empty : $"{live} canlı · {estimated} tahmini";
+
+        string issueText;
+        lock (_quoteIssues)
+        {
+            issueText = string.Join("  ", _quoteIssues);
+        }
+        _lblQuoteIssues.Text = issueText;
+        _lblQuoteIssues.Visible = issueText.Length > 0;
 
         FitFlow(_quotesFlow);
     }
