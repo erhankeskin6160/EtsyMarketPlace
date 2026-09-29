@@ -1363,64 +1363,6 @@ internal sealed class EtsyApiClient
         return receipts;
     }
 
-    /// <summary>
-    /// Etsy siparişini "gönderildi" olarak işaretler ve takip numarasını yazar.
-    /// Etsy bu işlem için <c>transactions_w</c> yazma izni ister.
-    /// </summary>
-    public async Task MarkReceiptAsShippedAsync(
-        EtsyApiSettings settings,
-        long receiptId,
-        string trackingCode,
-        string carrierName,
-        CancellationToken cancellationToken = default)
-    {
-        if (receiptId <= 0)
-        {
-            throw new ArgumentException("Gecersiz siparis kimligi.", nameof(receiptId));
-        }
-
-        if (string.IsNullOrWhiteSpace(trackingCode))
-        {
-            throw new ArgumentException("Takip numarasi bos olamaz.", nameof(trackingCode));
-        }
-
-        EnsureApiCredentials(settings);
-        await EnsureAccessTokenAsync(settings, cancellationToken);
-
-        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
-        if (shopId <= 0)
-        {
-            throw new InvalidOperationException("OAuth kullanicisina ait Etsy magazasi bulunamadi.");
-        }
-
-        var form = new Dictionary<string, string>
-        {
-            ["tracking_code"] = trackingCode.Trim(),
-        };
-        if (!string.IsNullOrWhiteSpace(carrierName))
-        {
-            form["carrier_name"] = carrierName.Trim();
-        }
-
-        using var request = CreateRequest(settings, HttpMethod.Post, $"{BaseUrl}/shops/{shopId}/receipts/{receiptId}/tracking", useAccessToken: true);
-        request.Content = new FormUrlEncodedContent(form);
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        var body = await response.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
-        {
-            if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
-            {
-                throw new InvalidOperationException(
-                    "Etsy, siparisi 'gonderildi' isaretlemek icin yazma izni istedi (transactions_w). " +
-                    "Etsy API Ayarlari ekranindan baglantiyi yeniden yetkilendirin. " +
-                    $"Detay: HTTP {(int)response.StatusCode}.");
-            }
-
-            throw new InvalidOperationException($"Etsy guncellemesi basarisiz. HTTP {(int)response.StatusCode}: {body}");
-        }
-    }
-
     private static EtsyFulfillmentReceipt ParseFulfillmentReceipt(JsonElement receipt)
     {
         var (total, currency) = ReadMoney(receipt, "grandtotal");

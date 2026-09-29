@@ -2238,38 +2238,6 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         => !string.IsNullOrWhiteSpace(quote?.ProviderName)
            && quote!.ProviderName.Contains("Shiptomore", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// Gönderi oluşturulduktan sonra siparişi Etsy tarafında "gönderildi" olarak işaretler.
-    /// Başarısızlık gönderiyi geri almaz; kullanıcıya kısa bir bilgi notu döner.
-    /// </summary>
-    private async Task<string> TryMarkShippedOnEtsyAsync(OrderQuote quote, EtsyOrderFulfillmentItem order, string trackingNumber)
-    {
-        if (order.ReceiptId <= 0)
-        {
-            return string.Empty;
-        }
-
-        try
-        {
-            var settings = EtsyApiSettingsStore.Load();
-            if (!settings.HasApiCredentials)
-            {
-                return "\n\nNot: Etsy bağlantısı olmadığı için sipariş Etsy'de 'gönderildi' olarak işaretlenemedi.";
-            }
-
-            string carrier = string.IsNullOrWhiteSpace(quote.SubCarrier) ? quote.ProviderName : quote.SubCarrier;
-            var client = new EtsyApiClient();
-            await client.MarkReceiptAsShippedAsync(settings, order.ReceiptId, trackingNumber, carrier);
-
-            AppLog.Info($"Etsy'de '{order.ReceiptId}' siparişi gönderildi olarak işaretlendi ({carrier} · {trackingNumber}).", "EtsyMarkShipped");
-            return "\n\nEtsy'de sipariş 'gönderildi' olarak işaretlendi.";
-        }
-        catch (Exception ex)
-        {
-            AppLog.Info("Etsy'de 'gönderildi' işaretleme başarısız: " + ex.Message, "EtsyMarkShipped");
-            return "\n\nUyarı: Etsy'de 'gönderildi' olarak işaretlenemedi: " + ex.Message;
-        }
-    }
 
     private async Task PromptOrRefreshArasSessionAsync()
     {
@@ -2402,8 +2370,6 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
                 await _orderService.MarkOrderAsShippedAsync(_selectedOrder.ReceiptId, _selectedQuote.ProviderName, result.TrackingNumber, result.LabelUrl);
 
-                string etsyNote = await TryMarkShippedOnEtsyAsync(_selectedQuote, _selectedOrder, result.TrackingNumber);
-
                 string labelNote = string.IsNullOrWhiteSpace(result.LabelUrl)
                     ? "\n\nNot: Etiket şu an oluşturulamadı. 'Etiketi Önizle' ile yeniden deneyebilirsiniz."
                     : string.Empty;
@@ -2412,7 +2378,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                     $"Kargo gönderisi başarıyla oluşturuldu.\n\n" +
                     $"Takip No: {result.TrackingNumber}\n" +
                     $"Taşıyıcı: {_selectedQuote.ProviderName}\n" +
-                    $"Alıcı: {_selectedOrder.BuyerName}{etsyNote}{labelNote}",
+                    $"Alıcı: {_selectedOrder.BuyerName}{labelNote}",
                     "Kargo Oluşturuldu",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
