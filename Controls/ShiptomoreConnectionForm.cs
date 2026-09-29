@@ -36,7 +36,7 @@ public sealed class ShiptomoreConnectionForm : Form
     private void BuildUi()
     {
         Text = "Ship to More Bağlantısı";
-        Size = new Size(620, 380);
+        Size = new Size(620, 460);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -69,8 +69,9 @@ public sealed class ShiptomoreConnectionForm : Form
         };
 
         var btnOpenPanel = UiStyle.CreateButton("Paneli Aç", isSecondary: true);
+        btnOpenPanel.Dock = DockStyle.None;
+        btnOpenPanel.Size = new Size(120, 36);
         btnOpenPanel.Location = new Point(22, 158);
-        btnOpenPanel.Width = 120;
         btnOpenPanel.Click += (s, e) => OpenPortal();
 
         AddField("Client ID", 200, out _txtClientId, secret: false);
@@ -87,24 +88,30 @@ public sealed class ShiptomoreConnectionForm : Form
         };
 
         _btnTest = UiStyle.CreateButton("Bağlantıyı Test Et", isSecondary: true);
+        _btnTest.Dock = DockStyle.None;
+        _btnTest.Size = new Size(160, 36);
         _btnTest.Location = new Point(22, 348);
-        _btnTest.Width = 160;
         _btnTest.Click += async (s, e) => await TestAsync();
 
         _btnSave = UiStyle.CreateButton("Kaydet", isSecondary: false);
+        _btnSave.Dock = DockStyle.None;
+        _btnSave.Size = new Size(110, 36);
         _btnSave.Location = new Point(192, 348);
-        _btnSave.Width = 110;
         _btnSave.Click += (s, e) => Save();
 
         _btnForget = UiStyle.CreateButton("Bağlantıyı Kes", isSecondary: true);
+        _btnForget.Dock = DockStyle.None;
+        _btnForget.Size = new Size(150, 36);
         _btnForget.Location = new Point(312, 348);
-        _btnForget.Width = 150;
         _btnForget.Click += (s, e) => Forget();
 
         var btnClose = UiStyle.CreateButton("Kapat", isSecondary: true);
+        btnClose.Dock = DockStyle.None;
+        btnClose.Size = new Size(110, 36);
         btnClose.Location = new Point(472, 348);
-        btnClose.Width = 110;
         btnClose.Click += (s, e) => Close();
+
+        AcceptButton = _btnSave;
 
         Controls.Add(title);
         Controls.Add(help);
