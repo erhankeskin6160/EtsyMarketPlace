@@ -23,11 +23,20 @@ echo [1/3] Calisan program kontrol ediliyor...
 taskkill /F /IM SimilarProductsWinForms.exe 2>nul
 timeout /t 1 /nobreak >nul
 
-echo [2/3] GitHub 'dev-latest' surumu indiriliyor (~92 MB)...
+echo [2/3] GitHub 'dev-latest' surumu indiriliyor (~93 MB)...
 set "TEMP_DOWNLOAD=%TARGET_EXE%.download"
 if exist "%TEMP_DOWNLOAD%" del /f /q "%TEMP_DOWNLOAD%"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; $url = 'https://github.com/erhankeskin6160/EtsyMarketPlace/releases/download/dev-latest/SimilarProductsWinForms.exe'; $done = $false; for ($i=1; $i -le 4; $i++) { try { Import-Module BitsTransfer -ErrorAction SilentlyContinue; Write-Host '  [Motor: Windows BITS Hizlandirici] Indiriliyor...'; Start-BitsTransfer -Source $url -Destination '$env:TEMP_DOWNLOAD' -DisplayName 'EtsyMarketPlace-Update' -Priority Foreground; if ((Test-Path '$env:TEMP_DOWNLOAD') -and ((Get-Item '$env:TEMP_DOWNLOAD').Length -gt 10MB)) { $done = $true; break } } catch { } try { Write-Host '  [Standart Motor] Indiriliyor...'; (New-Object System.Net.WebClient).DownloadFile($url, '$env:TEMP_DOWNLOAD'); if ((Test-Path '$env:TEMP_DOWNLOAD') -and ((Get-Item '$env:TEMP_DOWNLOAD').Length -gt 10MB)) { $done = $true; break } } catch { if ($i -lt 4) { Write-Host '  [Bekleme] GitHub yeni surumu hazirliyor olabilir. 10 sn sonra yeniden denenecek...' -ForegroundColor Yellow; Start-Sleep -Seconds 10 } } } if (-not $done) { exit 1 }"
+where curl.exe >nul 2>nul
+if %ERRORLEVEL% EQU 0 (
+    echo   [Motor: curl.exe Yuksek Hizli Indirici]
+    curl.exe -f -L --progress-bar -o "%TEMP_DOWNLOAD%" "https://github.com/erhankeskin6160/EtsyMarketPlace/releases/download/dev-latest/SimilarProductsWinForms.exe"
+)
+
+if not exist "%TEMP_DOWNLOAD%" (
+    echo   [Motor: Alternatif WebClient]
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13; (New-Object System.Net.WebClient).DownloadFile('https://github.com/erhankeskin6160/EtsyMarketPlace/releases/download/dev-latest/SimilarProductsWinForms.exe', '$env:TEMP_DOWNLOAD')"
+)
 
 if exist "%TEMP_DOWNLOAD%" (
     echo [3/3] Surum guncelleniyor...

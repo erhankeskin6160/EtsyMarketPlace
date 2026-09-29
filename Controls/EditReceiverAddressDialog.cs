@@ -78,7 +78,23 @@ public sealed class EditReceiverAddressDialog : Form
             Size = new Size(510, 20)
         };
         mainPanel.Controls.Add(lblSub);
-        y += 30;
+        y += 24;
+
+        var btnPaste = new Button
+        {
+            Text = "📋 Etsy'den Kopyalanan Adresi Otomatik Yapıştır (1-Tık)",
+            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+            BackColor = Color.FromArgb(16, 185, 129), // Emerald 500
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Location = new Point(24, y),
+            Size = new Size(510, 32),
+            Cursor = Cursors.Hand
+        };
+        btnPaste.FlatAppearance.BorderSize = 0;
+        btnPaste.Click += BtnPasteFromClipboard_Click;
+        mainPanel.Controls.Add(btnPaste);
+        y += 40;
 
         // Alıcı Adı
         AddLabel(mainPanel, "Alıcı Adı & Soyadı *", 24, y);
@@ -307,6 +323,50 @@ public sealed class EditReceiverAddressDialog : Form
     private void ShowError(string msg)
     {
         _lblValidationMsg.Text = "⚠️ " + msg;
+        _lblValidationMsg.ForeColor = Color.FromArgb(248, 113, 113); // Red 400
         _lblValidationMsg.Visible = true;
+    }
+
+    private void BtnPasteFromClipboard_Click(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (!Clipboard.ContainsText())
+            {
+                ShowError("Panoda (Clipboard) metin bulunamadı. Lütfen Etsy sayfasından teslimat adresini kopyalayın.");
+                return;
+            }
+
+            string text = Clipboard.GetText();
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            var parsed = EtsyMarketPlace.Application.Orders.EtsyAddressParser.ParseFromFormattedAddress(text);
+            if (!string.IsNullOrWhiteSpace(parsed.BuyerName)) _txtBuyerName.Text = parsed.BuyerName;
+            if (!string.IsNullOrWhiteSpace(parsed.StreetAddress)) _txtStreetAddress.Text = parsed.StreetAddress;
+            if (!string.IsNullOrWhiteSpace(parsed.SecondAddress)) _txtSecondAddress.Text = parsed.SecondAddress;
+            if (!string.IsNullOrWhiteSpace(parsed.City)) _txtCity.Text = parsed.City;
+            if (!string.IsNullOrWhiteSpace(parsed.PostalCode)) _txtPostalCode.Text = parsed.PostalCode;
+            if (!string.IsNullOrWhiteSpace(parsed.CountryCode))
+            {
+                _txtCountryCode.Text = parsed.CountryCode;
+                _txtCountryName.Text = parsed.CountryCode;
+            }
+
+            if (!string.IsNullOrWhiteSpace(parsed.State))
+            {
+                var (code, name) = UsStateHelper.ResolveUsOrCaState(parsed.State);
+                int idx = _cmbState.FindString(code);
+                if (idx >= 0) _cmbState.SelectedIndex = idx;
+                else _cmbState.Text = parsed.State;
+            }
+
+            _lblValidationMsg.Text = "✓ Adres panodan başarıyla ayrıştırıldı ve alanlara dolduruldu!";
+            _lblValidationMsg.ForeColor = Color.FromArgb(52, 211, 153); // Emerald 400
+            _lblValidationMsg.Visible = true;
+        }
+        catch (Exception ex)
+        {
+            ShowError("Panodaki adres ayrıştırılamadı: " + ex.Message);
+        }
     }
 }

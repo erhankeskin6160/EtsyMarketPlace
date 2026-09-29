@@ -105,6 +105,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private Label _lblBuyerCountry = null!;
     private Label _lblIoss = null!;
     private Button _btnEditAddress = null!;
+    private Button _btnPasteAddress = null!;
     private Label _lblAddressWarning = null!;
     private SaasUnitInputBox _inWeight = null!;
     private SaasUnitInputBox _inLength = null!;
@@ -1188,6 +1189,21 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _btnEditAddress.FlatAppearance.BorderSize = 0;
         _btnEditAddress.Click += (_, _) => OnEditAddressClicked();
 
+        _btnPasteAddress = new Button
+        {
+            Text = "📋 Etsy'den Yapıştır",
+            Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+            BackColor = Color.FromArgb(16, 185, 129),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Size = new Size(140, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(80, 6),
+            Cursor = Cursors.Hand
+        };
+        _btnPasteAddress.FlatAppearance.BorderSize = 0;
+        _btnPasteAddress.Click += (_, _) => OnQuickPasteAddressClicked();
+
         _lblAddressWarning = new Label
         {
             Text = "⚠️ Alıcı adresi eksik! Aras Global gönderisi için bilgileri tamamlayın.",
@@ -1203,6 +1219,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         buyer.Controls.Add(_lblBuyerLine2);
         buyer.Controls.Add(_lblBuyerCountry);
         buyer.Controls.Add(_lblIoss);
+        buyer.Controls.Add(_btnPasteAddress);
         buyer.Controls.Add(_btnEditAddress);
         buyer.Controls.Add(_lblAddressWarning);
         buyer.Height = 122;
@@ -1889,6 +1906,64 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         {
             _orderService.UpdateOrderAddress(_selectedOrder.ReceiptId, _selectedOrder);
             RefreshBuyerCard(_selectedOrder);
+        }
+    }
+
+    private void OnQuickPasteAddressClicked()
+    {
+        if (_selectedOrder == null)
+        {
+            MessageBox.Show("Lütfen önce listeden bir sipariş seçin.", "Sipariş Seçilmedi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        try
+        {
+            if (!Clipboard.ContainsText())
+            {
+                MessageBox.Show("Panoda (Clipboard) metin bulunamadı.\n\nLütfen Etsy sipariş detayından alıcı teslimat adresini kopyalayıp (Ctrl+C) tekrar bu butona basın.", "Pano Boş", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string text = Clipboard.GetText();
+            if (string.IsNullOrWhiteSpace(text)) return;
+
+            var parsed = EtsyAddressParser.ParseFromFormattedAddress(text);
+            if (!string.IsNullOrWhiteSpace(parsed.BuyerName)) _selectedOrder.BuyerName = parsed.BuyerName;
+            if (!string.IsNullOrWhiteSpace(parsed.StreetAddress)) _selectedOrder.StreetAddress = parsed.StreetAddress;
+            if (!string.IsNullOrWhiteSpace(parsed.SecondAddress)) _selectedOrder.SecondAddress = parsed.SecondAddress;
+            if (!string.IsNullOrWhiteSpace(parsed.City)) _selectedOrder.City = parsed.City;
+            if (!string.IsNullOrWhiteSpace(parsed.PostalCode)) _selectedOrder.PostalCode = parsed.PostalCode;
+            if (!string.IsNullOrWhiteSpace(parsed.CountryCode))
+            {
+                _selectedOrder.CountryCode = parsed.CountryCode;
+                _selectedOrder.CountryName = parsed.CountryCode;
+            }
+
+            if (!string.IsNullOrWhiteSpace(parsed.State))
+            {
+                var (code, _) = UsStateHelper.ResolveUsOrCaState(parsed.State);
+                _selectedOrder.State = code;
+                _selectedOrder.HasState = true;
+            }
+
+            _orderService.UpdateOrderAddress(_selectedOrder.ReceiptId, _selectedOrder);
+            RefreshBuyerCard(_selectedOrder);
+
+            MessageBox.Show(
+                $"Alıcı adresi panodan başarıyla aktarıldı:\n\n" +
+                $"• Alıcı: {_selectedOrder.BuyerName}\n" +
+                $"• Adres: {_selectedOrder.StreetAddress} {(!string.IsNullOrWhiteSpace(_selectedOrder.SecondAddress) ? $"({_selectedOrder.SecondAddress})" : "")}\n" +
+                $"• Şehir / Eyalet: {_selectedOrder.City} {_selectedOrder.State}\n" +
+                $"• Posta Kodu: {_selectedOrder.PostalCode}\n" +
+                $"• Ülke: {_selectedOrder.CountryCode}",
+                "Adres Başarıyla Aktarıldı",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Adres yapıştırılamadı: " + ex.Message, "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
@@ -2655,6 +2730,43 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 _lblActionStatus.Text = "Paket ölçüleri geçersiz.";
                 MessageBox.Show(string.Join("\n", measurement.Errors), "Geçersiz Paket Ölçüsü", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
+            }
+
+            // Alıcı adres kontrolü: eksikse önce kullanıcıya tamamlat
+            bool isMissing = string.IsNullOrWhiteSpace(_selectedOrder.StreetAddress) ||
+                             string.IsNullOrWhiteSpace(_selectedOrder.City) ||
+                             string.IsNullOrWhiteSpace(_selectedOrder.PostalCode) ||
+                             (UsStateHelper.RequiresState(_selectedOrder.CountryCode) && string.IsNullOrWhiteSpace(_selectedOrder.State));
+            if (isMissing)
+            {
+                var ask = MessageBox.Show(
+                    "Bu siparişin teslimat adresi (Sokak, Şehir veya Posta Kodu) eksik!\n\n" +
+                    "Eski Etsy bağlantınızda adres okuma izni (address_r) bulunmadığı için adres çekilememiş olabilir.\n\n" +
+                    "Adresi şimdi tamamlamak / Etsy'den kopyalayıp yapıştırmak ister misiniz?",
+                    "Alıcı Adresi Eksik",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (ask == DialogResult.Yes)
+                {
+                    OnEditAddressClicked();
+                    isMissing = string.IsNullOrWhiteSpace(_selectedOrder.StreetAddress) ||
+                                string.IsNullOrWhiteSpace(_selectedOrder.City) ||
+                                string.IsNullOrWhiteSpace(_selectedOrder.PostalCode) ||
+                                (UsStateHelper.RequiresState(_selectedOrder.CountryCode) && string.IsNullOrWhiteSpace(_selectedOrder.State));
+                    if (isMissing)
+                    {
+                        _lblActionStatus.ForeColor = UiStyle.DangerColor;
+                        _lblActionStatus.Text = "Alıcı adresi tamamlanmadığı için gönderi oluşturulmadı.";
+                        return;
+                    }
+                }
+                else
+                {
+                    _lblActionStatus.ForeColor = UiStyle.DangerColor;
+                    _lblActionStatus.Text = "Alıcı adresi eksik.";
+                    return;
+                }
             }
 
             _lblActionStatus.Text = "Adım 2/3 · gönderi taslağı oluşturuluyor";

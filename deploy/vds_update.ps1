@@ -75,16 +75,18 @@ try {
     $retryDelaySeconds = 8
     $downloadSuccess = $false
 
-    # Öncelik 1: Windows BITS Motoru (Genellikle 10-15 saniyede tamamlar)
-    try {
-        Import-Module BitsTransfer -ErrorAction SilentlyContinue
-        Write-Host "      [Motor: Windows BITS Hizlandirici] Indirme baslatildi..." -ForegroundColor Cyan
-        Start-BitsTransfer -Source $downloadUrl -Destination $tempDownload -DisplayName "EtsyMarketPlace-Update" -Priority Foreground
-        if ((Test-Path $tempDownload) -and ((Get-Item $tempDownload).Length -gt 10MB)) {
-            $downloadSuccess = $true
+    # Öncelik 1: curl.exe (Yerleşik Windows curl - en hızlı ve asla takılmayan yöntem)
+    $curlAvailable = (Get-Command "curl.exe" -ErrorAction SilentlyContinue) -ne $null
+    if ($curlAvailable) {
+        try {
+            Write-Host "      [Motor: curl.exe Yüksek Hızlı İndirici]" -ForegroundColor Cyan
+            & curl.exe -f -L --progress-bar -o $tempDownload $downloadUrl
+            if ((Test-Path $tempDownload) -and ((Get-Item $tempDownload).Length -gt 10MB)) {
+                $downloadSuccess = $true
+            }
+        } catch {
+            Write-Host "      curl hatası alındı, alternatif canlı akışa geçiliyor..." -ForegroundColor DarkYellow
         }
-    } catch {
-        Write-Host "      BITS motoru bekleniyor veya standart akisa geciliyor..." -ForegroundColor DarkYellow
     }
 
     # Öncelik 2: BITS başarısız olursa canlı akış ve hız göstergeli HttpWebRequest
