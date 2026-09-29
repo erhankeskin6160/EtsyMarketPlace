@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Application.Tests;
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -187,5 +188,161 @@ public sealed class ArasGlobalShippingTests
         Assert.Contains("\"PieceCount\":1", json);
         Assert.DoesNotContain("\"volumetricWeight\"", json);
         Assert.DoesNotContain("\"ShipmentId\"", json);
+    }
+
+    [Fact]
+    public async Task GetQuotesAsync_RefreshesExpiredTokenAndReturnsLiveOffers()
+    {
+        string expired = JwtTokenInspector.CreateSyntheticToken(TimeSpan.FromMinutes(-5));
+        var settings = new ArasGlobalSettings { BearerToken = expired, SavedEmail = "test@example.com" };
+        var client = new FakeArasApiClient();
+        client.Offers.Add(new ArasGlobalQuoteOffer
+        {
+            Cargo = "UPS",
+            Price = 21.31m,
+            Currency = "USD",
+            ProviderServiceType = "Express",
+            IsLivePrice = true
+        });
+
+        var service = new ArasGlobalPricingService(client, () => settings);
+        service.TokenRefresher = (s, ct) => Task.FromResult<string?>("fresh-live-token-1234567890");
+
+        var result = await service.GetQuotesAsync(new ArasGlobalQuoteRequest { ReceiverCountry = "US" });
+
+        Assert.True(result.IsLive);
+        Assert.Single(result.Offers);
+        Assert.Equal(1, client.FetchCalls);
+        Assert.Equal("fresh-live-token-1234567890", client.LastToken);
+    }
+
+    [Fact]
+    public async Task GetQuotesAsync_RetriesOnceWhenTokenExpiresMidFlight()
+    {
+        var settings = new ArasGlobalSettings
+        {
+            BearerToken = JwtTokenInspector.CreateSyntheticToken(TimeSpan.FromMinutes(30)),
+            SavedEmail = "test@example.com"
+        };
+
+        var client = new FakeArasApiClient();
+        client.FetchBehaviors.Enqueue(new ArasGlobalTokenExpiredException("HTTP 401 Unauthorized"));
+        client.Offers.Add(new ArasGlobalQuoteOffer
+        {
+            Cargo = "UPS",
+            Price = 19.0m,
+            Currency = "USD",
+            IsLivePrice = true
+        });
+
+        var service = new ArasGlobalPricingService(client, () => settings);
+        int refreshes = 0;
+        service.TokenRefresher = (s, ct) =>
+        {
+            refreshes++;
+            return Task.FromResult<string?>("fresh-2-token-123456789012");
+        };
+
+        var result = await service.GetQuotesAsync(new ArasGlobalQuoteRequest { ReceiverCountry = "US" });
+
+        Assert.True(result.IsLive);
+        Assert.Equal(1, refreshes);
+        Assert.Equal(2, client.FetchCalls);
+        Assert.Equal("fresh-2-token-123456789012", client.LastToken);
+    }
+
+    [Fact]
+    public async Task GetQuotesAsync_WithoutRefresher_FallsBackWhenTokenMissing()
+    {
+        var settings = new ArasGlobalSettings { BearerToken = string.Empty };
+        var service = new ArasGlobalPricingService(new FakeArasApiClient(), () => settings);
+
+        var result = await service.GetQuotesAsync(new ArasGlobalQuoteRequest { ReceiverCountry = "US" });
+
+        Assert.False(result.IsLive);
+        Assert.True(result.TokenExpired);
+        Assert.NotEmpty(result.Offers);
+        Assert.Contains("token", result.StatusMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task GetQuotesAsync_RefresherReturningNull_FallsBack()
+    {
+        var settings = new ArasGlobalSettings { BearerToken = string.Empty, SavedEmail = "test@example.com" };
+        var service = new ArasGlobalPricingService(new FakeArasApiClient(), () => settings);
+        int calls = 0;
+        service.TokenRefresher = (s, ct) =>
+        {
+            calls++;
+            return Task.FromResult<string?>(null);
+        };
+
+        var result = await service.GetQuotesAsync(new ArasGlobalQuoteRequest { ReceiverCountry = "US" });
+
+        Assert.False(result.IsLive);
+        Assert.Equal(1, calls);
+    }
+
+    private sealed class FakeArasApiClient : IArasGlobalApiClient
+    {
+        public int FetchCalls { get; private set; }
+        public string? LastToken { get; private set; }
+        public List<ArasGlobalQuoteOffer> Offers { get; } = new();
+        public Queue<Exception?> FetchBehaviors { get; } = new();
+
+        public Task<List<ArasGlobalQuoteOffer>> FetchLiveQuotesAsync(
+            ArasGlobalQuoteRequest request,
+            string rawBearerToken,
+            CancellationToken cancellationToken = default)
+        {
+            FetchCalls++;
+            LastToken = rawBearerToken;
+            if (FetchBehaviors.Count > 0)
+            {
+                Exception? behavior = FetchBehaviors.Dequeue();
+                if (behavior != null)
+                {
+                    throw behavior;
+                }
+            }
+
+            return Task.FromResult(Offers.ToList());
+        }
+
+        public Task<decimal> TranslateCurrencyAsync(decimal price, string entryCurrency, string exitCurrency, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(0m);
+
+        public Task<List<ArasGtipSearchResult>> SearchGtipCodeAsync(string keyword, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(new List<ArasGtipSearchResult>());
+
+        public Task<ArasAdditionalOptions> GetAdditionalOptionsAsync(string destinationCountry, string provider, decimal orderTotalUsd, string currency, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult<ArasAdditionalOptions>(null!);
+
+        public Task<string> GetAdditionalInformationAsync(string provider, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
+
+        public Task<ArasShipmentSenderAddress?> GetPrimarySenderAddressAsync(string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult<ArasShipmentSenderAddress?>(null);
+
+        public Task<ArasCreateShipmentResponse> CreateShipmentAsync(ArasCreateShipmentRequest request, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult<ArasCreateShipmentResponse>(null!);
+
+        public Task<bool> UpdateShipmentAsync(ArasCreateShipmentRequest request, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
+        public Task<bool> StartPriceCalculationForShipmentAsync(ArasStartCalculationPayload payload, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
+        public Task<(bool IsConcluded, List<ArasGlobalQuoteOffer> Offers)> PollBasePriceListAsync(string referenceCode, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult((false, new List<ArasGlobalQuoteOffer>()));
+
+        public Task<ArasShipmentPriceBreakdown> CalculateShipmentPriceAsync(string shipmentId, string provider, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult<ArasShipmentPriceBreakdown>(null!);
+
+        public Task<string> GetShipmentLegalDocumentAsync(string shipmentId, string docType, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
+
+        public Task<bool> SendShipmentPriceAsync(string shipmentId, string provider, decimal finalPrice, string rawBearerToken, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
     }
 }

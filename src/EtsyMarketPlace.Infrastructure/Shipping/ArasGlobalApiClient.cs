@@ -745,10 +745,13 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         string jsonBody = JsonSerializer.Serialize(payload);
         httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
+        LogApiTrace("LiveCalc-Request", jsonBody);
+
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogApiTrace("LiveCalc-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
 
@@ -774,10 +777,13 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         string jsonBody = JsonSerializer.Serialize(payload);
         httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
 
+        LogApiTrace("LivePriceList-Request", jsonBody);
+
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
         ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogApiTrace("LivePriceList-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
 

@@ -38,6 +38,12 @@ public sealed class ArasGlobalPricingService
     }
 
     /// <summary>
+    /// Tokenin süresi dolduğunda otomatik yenileme fonksiyonu (arayüz katmanı bağlar).
+    /// Yeni token dönerse canlı akış kesintisiz sürer; null dönerse yedek tarife gösterilir.
+    /// </summary>
+    public Func<ArasGlobalSettings, CancellationToken, Task<string?>>? TokenRefresher { get; set; }
+
+    /// <summary>
     /// Kargo fiyat tekliflerini çeker. Token geçerliyse canlı API'yi kullanır;
     /// token dolmuşsa veya yoksa kullanıcıyı uyararak yedek listeyi sunar.
     /// </summary>
@@ -49,8 +55,17 @@ public sealed class ArasGlobalPricingService
         double desi = request.CalculatedDesi;
         double billable = request.BillableWeightKg;
 
-        // Token kontrolü
+        // Token kontrolü: yoksa veya süresi dolmuşsa önce sessizce otomatik yenilemeyi dene.
         string token = settings.CleanToken;
+        if (IsTokenMissingOrExpired(token))
+        {
+            string? refreshed = await TryRefreshTokenAsync(settings, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(refreshed))
+            {
+                token = refreshed;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(token))
         {
             var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry);
@@ -113,6 +128,33 @@ public sealed class ArasGlobalPricingService
         }
         catch (ArasGlobalTokenExpiredException ex)
         {
+            // HTTP 401: token bu sırada dolmuş olabilir; sessizce bir kez yenileyip tekrar dene.
+            string? freshToken = await TryRefreshTokenAsync(settings, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(freshToken) && !string.Equals(freshToken, token, StringComparison.Ordinal))
+            {
+                try
+                {
+                    var retryOffers = await _apiClient!.FetchLiveQuotesAsync(request, freshToken, cancellationToken);
+                    if (retryOffers.Count > 0)
+                    {
+                        return new ArasGlobalPricingResult
+                        {
+                            Success = true,
+                            IsLive = true,
+                            TokenExpired = false,
+                            StatusMessage = $"🟢 Canlı Aras Global API'sinden {retryOffers.Count} adet güncel teklif başarıyla alındı.",
+                            Offers = retryOffers.OrderBy(o => o.Price).ToList(),
+                            CalculatedDesi = desi,
+                            BillableWeightKg = billable
+                        };
+                    }
+                }
+                catch (Exception) when (!cancellationToken.IsCancellationRequested)
+                {
+                    // Yenileme sonrası deneme de başarısız; aşağıdaki yedek liste gösterilir.
+                }
+            }
+
             var fallbackOffers = GenerateFallbackOffers(billable, request.ReceiverCountry);
             return new ArasGlobalPricingResult
             {
@@ -138,6 +180,29 @@ public sealed class ArasGlobalPricingService
                 CalculatedDesi = desi,
                 BillableWeightKg = billable
             };
+        }
+    }
+
+    private static bool IsTokenMissingOrExpired(string? token)
+        => string.IsNullOrWhiteSpace(token)
+           || token.Length <= 20
+           || JwtTokenInspector.IsExpired(token);
+
+    private async Task<string?> TryRefreshTokenAsync(ArasGlobalSettings settings, CancellationToken cancellationToken)
+    {
+        var refresher = TokenRefresher;
+        if (refresher == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return await refresher(settings, cancellationToken);
+        }
+        catch (Exception)
+        {
+            return null;
         }
     }
 
