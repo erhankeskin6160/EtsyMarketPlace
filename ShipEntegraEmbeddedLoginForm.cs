@@ -26,6 +26,7 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
     private readonly Panel _topBar = new();
     private readonly System.Windows.Forms.Timer _storageCheckTimer = new();
     private bool _tokenCaptured = false;
+    private bool _autoFallbackStarted = false;
 
     public ShipEntegraEmbeddedLoginForm()
     {
@@ -147,6 +148,23 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
                 {
                     _lblStatus.Text = "ShipEntegra sayfasına bağlanılamadı. İnternet bağlantınızı kontrol edin.";
                     _lblStatus.ForeColor = Color.FromArgb(239, 68, 68); // Red
+
+                    AppLog.Warn(
+                        "ShipEntegra gömülü tarayıcı sayfayı yükleyemedi (WebView2: " + e.WebErrorStatus + "); gerçek tarayıcı yedeği değerlendiriliyor.",
+                        nameof(ShipEntegraEmbeddedLoginForm));
+
+                    if (!_autoFallbackStarted && !_tokenCaptured)
+                    {
+                        _autoFallbackStarted = true;
+                        _lblStatus.Text = "Gömülü tarayıcı bağlanamadı — gerçek tarayıcı otomatik açılıyor...";
+                        _lblStatus.ForeColor = Color.FromArgb(251, 191, 36); // Amber
+                        BeginInvoke(new Action(async () =>
+                        {
+                            await Task.Delay(1500);
+                            await OpenInRealBrowserFallbackAsync();
+                        }));
+                    }
+
                 }
             };
 
@@ -184,7 +202,7 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
         // (ERR_NAME_NOT_RESOLVED). Alan adlarını Cloudflare kenar IP'lerine sabitleyerek bu katmanı atlarız.
         var envOptions = new CoreWebView2EnvironmentOptions
         {
-            AdditionalBrowserArguments = "--host-resolver-rules=\"MAP app.shipentegra.com 172.66.146.49, MAP api.shipentegra.com 172.66.146.49\""
+            AdditionalBrowserArguments = "--host-resolver-rules=\"MAP app.shipentegra.com 172.66.146.49, MAP api.shipentegra.com 172.66.146.49\" --no-proxy-server --disable-quic"
         };
 
         var createTask = CoreWebView2Environment.CreateAsync(null, folder, envOptions);
