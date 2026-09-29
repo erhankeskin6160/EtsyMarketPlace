@@ -39,4 +39,11 @@ public interface IShipEntegraApiClient
         ShipEntegraCreateLabelRequest request,
         string rawBearerToken,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Panel etiket yanıtındaki (data.label) herkese açık PDF URL'sini indirir.
+    /// </summary>
+    Task<byte[]?> DownloadLabelFileAsync(
+        string url,
+        CancellationToken cancellationToken = default);
 }

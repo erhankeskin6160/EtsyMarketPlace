@@ -234,16 +234,17 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
             });
         }
 
+        string specialServiceCode = ShipEntegraLabelServiceCodes.Resolve(context.SelectedServiceCode, context.SelectedSubCarrier) ?? string.Empty;
         var labelRequest = new ShipEntegraCreateLabelRequest
         {
-            SpecialService = ShipEntegraLabelServiceCodes.Resolve(context.SelectedServiceCode, context.SelectedSubCarrier) ?? string.Empty,
+            SpecialService = specialServiceCode,
             Content = description,
             Weight = weight,
             IossNumber = order.IossNumber ?? string.Empty,
             Currency = currency,
             Items = labelItems,
             OrderId = orderResult.OrderId,
-            ServiceType = 1,
+            ServiceType = ShipEntegraLabelServiceCodes.ResolveServiceType(specialServiceCode),
             Country = request.ShipTo.Country,
             Insurance = false,
             NoTracking = false,
@@ -251,16 +252,20 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
         };
 
         byte[]? labelBytes = null;
+        string labelRemoteUrl = string.Empty;
         try
         {
-            labelBytes = await _apiClient.CreateLabelAsync(labelRequest, token, cancellationToken);
+            byte[]? labelResponseBytes = await _apiClient.CreateLabelAsync(labelRequest, token, cancellationToken);
+            (labelBytes, labelRemoteUrl) = await ResolveLabelPdfAsync(labelResponseBytes, cancellationToken);
         }
         catch (Exception)
         {
             // Sipariş oluştu; etiket 'Etiketi Önizle' ile yeniden alınabilir.
         }
 
-        bool labelSucceeded = labelBytes is { Length: > 0 };
+        // Panel sözleşmesi: 200 yanıtta etiket oluşmuştur (data.label URL'si gelir).
+        // İndirme başarısız olsa bile etiket alınmış sayılır; çift etiket alınmaz.
+        bool labelSucceeded = labelBytes is { Length: > 0 } || !string.IsNullOrEmpty(labelRemoteUrl);
         if (!labelSucceeded)
         {
             ShipEntegraPendingLabelStore.Save(
@@ -275,11 +280,13 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
         {
             try
             {
-                labelPath = SaveLabelBytes(orderResult.OrderId, labelBytes!);
+                labelPath = labelBytes is { Length: > 0 }
+                    ? SaveLabelBytes(orderResult.OrderId, labelBytes!)
+                    : labelRemoteUrl;
             }
             catch (Exception)
             {
-                labelPath = string.Empty;
+                labelPath = labelRemoteUrl;
             }
         }
 
@@ -348,7 +355,8 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
         try
         {
-            return SaveRetriedLabel(receiptId, orderId, await SendLabelAsync(request, token, cancellationToken));
+            (byte[]? labelPdf, string labelUrl) = await SendLabelAsync(request, token, cancellationToken);
+            return SaveRetriedLabel(receiptId, orderId, labelPdf, labelUrl);
         }
         catch (ShipEntegraTokenExpiredException)
         {
@@ -357,7 +365,8 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
             {
                 try
                 {
-                    return SaveRetriedLabel(receiptId, orderId, await SendLabelAsync(request, fresh, cancellationToken));
+                    (byte[]? labelPdf, string labelUrl) = await SendLabelAsync(request, fresh, cancellationToken);
+                    return SaveRetriedLabel(receiptId, orderId, labelPdf, labelUrl);
                 }
                 catch (Exception retryEx)
                 {
@@ -373,28 +382,74 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
         }
     }
 
-    private async Task<byte[]?> SendLabelAsync(
+    private async Task<(byte[]? Bytes, string RemoteUrl)> SendLabelAsync(
         ShipEntegraCreateLabelRequest request,
         string token,
         CancellationToken cancellationToken)
     {
-        byte[]? bytes = await _apiClient!.CreateLabelAsync(request, token, cancellationToken);
-        if (bytes == null || bytes.Length == 0)
+        byte[]? responseBytes = await _apiClient!.CreateLabelAsync(request, token, cancellationToken);
+        (byte[]? pdfBytes, string remoteUrl) = await ResolveLabelPdfAsync(responseBytes, cancellationToken);
+        if (pdfBytes == null && string.IsNullOrEmpty(remoteUrl))
         {
-            throw new InvalidOperationException("Etiket yanıtı boş döndü.");
+            throw new InvalidOperationException("Etiket yanıtı boş veya tanınmayan biçimde döndü.");
         }
 
-        return bytes;
+        return (pdfBytes, remoteUrl);
     }
 
-    private static ShipmentCreationResult SaveRetriedLabel(long receiptId, long orderId, byte[]? bytes)
+    /// <summary>
+    /// Etiket yanıtını çözümler: yanıt JSON ise data.label URL'sinden gerçek PDF'i indirir;
+    /// yanıt doğrudan PDF ise olduğu gibi kullanır. İndirme başarısız olsa bile etiket
+    /// sunucuda oluştuğu için uzak URL ile devam edilir (çift etiket alınmaz).
+    /// </summary>
+    private async Task<(byte[]? Pdf, string RemoteUrl)> ResolveLabelPdfAsync(
+        byte[]? labelResponseBytes,
+        CancellationToken cancellationToken)
     {
-        if (bytes == null || bytes.Length == 0)
+        string remoteUrl = ShipEntegraLabelResponseParser.TryExtractLabelFileUrl(labelResponseBytes) ?? string.Empty;
+        if (!string.IsNullOrEmpty(remoteUrl) && _apiClient != null)
+        {
+            try
+            {
+                byte[]? pdf = await _apiClient.DownloadLabelFileAsync(remoteUrl, cancellationToken);
+                if (ShipEntegraLabelResponseParser.IsPdf(pdf))
+                {
+                    return (pdf, remoteUrl);
+                }
+            }
+            catch (Exception)
+            {
+                // İndirme başarısız; uzak URL ile devam edilir.
+            }
+        }
+
+        return (ShipEntegraLabelResponseParser.IsPdf(labelResponseBytes) ? labelResponseBytes : null, remoteUrl);
+    }
+
+    private static ShipmentCreationResult SaveRetriedLabel(long receiptId, long orderId, byte[]? bytes, string remoteUrl)
+    {
+        if ((bytes == null || bytes.Length == 0) && string.IsNullOrEmpty(remoteUrl))
         {
             throw new InvalidOperationException("Etiket yanıtı boş döndü.");
         }
 
-        string path = SaveLabelBytes(orderId, bytes);
+        string path;
+        if (bytes is { Length: > 0 })
+        {
+            try
+            {
+                path = SaveLabelBytes(orderId, bytes);
+            }
+            catch (Exception)
+            {
+                path = remoteUrl;
+            }
+        }
+        else
+        {
+            path = remoteUrl;
+        }
+
         ShipEntegraPendingLabelStore.Delete(receiptId);
         return new ShipmentCreationResult
         {
