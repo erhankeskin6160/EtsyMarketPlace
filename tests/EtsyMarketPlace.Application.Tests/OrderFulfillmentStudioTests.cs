@@ -14,16 +14,37 @@ using EtsyMarketPlace.Domain.Shipping;
 public sealed class OrderFulfillmentStudioTests
 {
     [Fact]
-    public async Task EtsyOrderService_ReturnsSampleOrdersAndFiltersCorrectly()
+    public async Task EtsyOrderService_StartsWithEmptyQueueAndAppliesSearchAfterSync()
     {
         var service = new EtsyOrderService();
-        var orders = await service.GetOrdersAsync();
 
-        Assert.NotEmpty(orders);
-        var ingeOrder = orders.FirstOrDefault(o => o.BuyerName.Contains("Inge Neuer"));
-        Assert.NotNull(ingeOrder);
-        Assert.Equal("IM3720000224", ingeOrder!.IossNumber);
-        Assert.Equal("DE", ingeOrder.CountryCode);
+        // Canlı Etsy senkronizasyonundan önce kuyruk boştur (uydurma sipariş gösterilmez).
+        var initial = await service.GetOrdersAsync();
+        Assert.Empty(initial);
+
+        service.SyncLiveQueue(new List<EtsyOrderFulfillmentItem>
+        {
+            new()
+            {
+                ReceiptId = 4176634453,
+                BuyerName = "Inge Neuer",
+                CountryCode = "DE",
+                CountryName = "Germany",
+                IossNumber = "IM3720000224",
+                Status = "Unfulfilled"
+            },
+            new()
+            {
+                ReceiptId = 4178829104,
+                BuyerName = "Sarah Jenkins",
+                CountryCode = "US",
+                CountryName = "United States",
+                Status = "Unfulfilled"
+            }
+        });
+
+        var orders = await service.GetOrdersAsync();
+        Assert.Equal(2, orders.Count);
 
         // Arama filtresi testi
         var filtered = await service.GetOrdersAsync("Germany");
@@ -31,11 +52,35 @@ public sealed class OrderFulfillmentStudioTests
         Assert.Equal("Inge Neuer", filtered[0].BuyerName);
 
         // Gönderildi işaretleme testi
-        await service.MarkOrderAsShippedAsync(ingeOrder.ReceiptId, "Aras Global", "ARAS-12345", "https://label.com");
+        await service.MarkOrderAsShippedAsync(4176634453, "Aras Global", "ARAS-12345", "https://label.com");
         var updated = await service.GetOrdersAsync("Inge Neuer");
         Assert.Equal("Shipped", updated[0].Status);
         Assert.Equal("Aras Global", updated[0].SelectedCarrier);
         Assert.Equal("ARAS-12345", updated[0].TrackingCode);
+    }
+
+    [Fact]
+    public async Task EtsyOrderService_SyncLiveQueueKeepsLocallyShippedOrders()
+    {
+        var service = new EtsyOrderService();
+        service.SyncLiveQueue(new List<EtsyOrderFulfillmentItem>
+        {
+            new() { ReceiptId = 1, BuyerName = "A", Status = "Unfulfilled" }
+        });
+
+        await service.MarkOrderAsShippedAsync(1, "Shiptomore", "TRK-1", string.Empty);
+
+        // Etsy tarafı hâlâ "gönderilmemiş" gibi görünse bile yerel olarak kargolanan sipariş korunur.
+        service.SyncLiveQueue(new List<EtsyOrderFulfillmentItem>
+        {
+            new() { ReceiptId = 1, BuyerName = "A", Status = "Unfulfilled" },
+            new() { ReceiptId = 2, BuyerName = "B", Status = "Unfulfilled" }
+        });
+
+        var orders = await service.GetOrdersAsync();
+        Assert.Equal(2, orders.Count);
+        Assert.Equal("Shipped", orders.Single(o => o.ReceiptId == 1).Status);
+        Assert.Equal("Unfulfilled", orders.Single(o => o.ReceiptId == 2).Status);
     }
 
     [Fact]

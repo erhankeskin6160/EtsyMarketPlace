@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using EtsyMarketPlace.Application.Diagnostics;
 using EtsyMarketPlace.Application.Orders;
 using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Domain.Orders;
@@ -51,6 +52,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private bool _suspendRecalc;
     private CancellationTokenSource? _quoteCts;
     private System.Windows.Forms.Timer? _debounceTimer;
+    private DateTime _lastEtsyQueueSyncUtc = DateTime.MinValue;
     private readonly Font _smallFont = new("Segoe UI", 8.5f);
     private readonly Font _priceFont = new("Segoe UI Semibold", 13f, FontStyle.Bold);
     private readonly Font _bigValueFont = new("Segoe UI Semibold", 17f, FontStyle.Bold);
@@ -1448,8 +1450,49 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
     #region veri yükleme ve seçim
 
+    /// <summary>
+    /// Sipariş kuyruğunu canlı Etsy verisiyle besler (son 45 gün + gönderilmemiş/takipsiz kuralı).
+    /// Etsy bağlantısı yoksa kuyruk kendi kendini doldurmaz; durum metni nedeni açıklar.
+    /// </summary>
+    private async Task SyncOrderQueueFromEtsyAsync()
+    {
+        try
+        {
+            var settings = EtsyApiSettingsStore.Load();
+            if (!settings.HasApiCredentials)
+            {
+                _lblQueueEmpty.Text = "Etsy bağlantısı kurulmamış. Ayarlar → Etsy API bölümünden bağlanın.";
+                return;
+            }
+
+            var client = new EtsyApiClient();
+            var receipts = await client.GetFulfillmentQueueReceiptsAsync(settings, EtsyFulfillmentQueuePolicy.LookbackDays);
+
+            var now = DateTimeOffset.UtcNow;
+            var liveOrders = receipts
+                .Where(r => EtsyFulfillmentQueuePolicy.ShouldInclude(r, now))
+                .OrderByDescending(r => r.CreatedAt)
+                .Select(EtsyFulfillmentQueuePolicy.ToQueueItem)
+                .ToList();
+
+            _orderService.SyncLiveQueue(liveOrders);
+            _lblQueueEmpty.Text = "Son 45 güne ait, işlem bekleyen sipariş yok.";
+        }
+        catch (Exception ex)
+        {
+            _lblQueueEmpty.Text = "Etsy siparişleri alınamadı: " + ex.Message;
+            AppLog.Info("Etsy sipariş kuyruğu senkronizasyonu başarısız: " + ex.Message, "EtsyQueueSync");
+        }
+    }
+
     private async Task ReloadOrdersAsync(bool force = false)
     {
+        if (force || DateTime.UtcNow - _lastEtsyQueueSyncUtc > TimeSpan.FromSeconds(90))
+        {
+            await SyncOrderQueueFromEtsyAsync();
+            _lastEtsyQueueSyncUtc = DateTime.UtcNow;
+        }
+
         string? filter = string.IsNullOrWhiteSpace(_txtSearch.Text) ? null : _txtSearch.Text.Trim();
         var orders = await _orderService.GetOrdersAsync(filter);
 
@@ -2188,6 +2231,46 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         => !string.IsNullOrWhiteSpace(quote?.ProviderName)
            && quote!.ProviderName.Contains("ShipEntegra", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsArasQuote(OrderQuote? quote)
+        => ShipmentSessionRouter.IsArasGlobalContext(quote?.ProviderName, null);
+
+    private static bool IsShiptomoreQuote(OrderQuote? quote)
+        => !string.IsNullOrWhiteSpace(quote?.ProviderName)
+           && quote!.ProviderName.Contains("Shiptomore", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Gönderi oluşturulduktan sonra siparişi Etsy tarafında "gönderildi" olarak işaretler.
+    /// Başarısızlık gönderiyi geri almaz; kullanıcıya kısa bir bilgi notu döner.
+    /// </summary>
+    private async Task<string> TryMarkShippedOnEtsyAsync(OrderQuote quote, EtsyOrderFulfillmentItem order, string trackingNumber)
+    {
+        if (order.ReceiptId <= 0)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var settings = EtsyApiSettingsStore.Load();
+            if (!settings.HasApiCredentials)
+            {
+                return "\n\nNot: Etsy bağlantısı olmadığı için sipariş Etsy'de 'gönderildi' olarak işaretlenemedi.";
+            }
+
+            string carrier = string.IsNullOrWhiteSpace(quote.SubCarrier) ? quote.ProviderName : quote.SubCarrier;
+            var client = new EtsyApiClient();
+            await client.MarkReceiptAsShippedAsync(settings, order.ReceiptId, trackingNumber, carrier);
+
+            AppLog.Info($"Etsy'de '{order.ReceiptId}' siparişi gönderildi olarak işaretlendi ({carrier} · {trackingNumber}).", "EtsyMarkShipped");
+            return "\n\nEtsy'de sipariş 'gönderildi' olarak işaretlendi.";
+        }
+        catch (Exception ex)
+        {
+            AppLog.Info("Etsy'de 'gönderildi' işaretleme başarısız: " + ex.Message, "EtsyMarkShipped");
+            return "\n\nUyarı: Etsy'de 'gönderildi' olarak işaretlenemedi: " + ex.Message;
+        }
+    }
+
     private async Task PromptOrRefreshArasSessionAsync()
     {
         await Task.Yield();
@@ -2224,7 +2307,22 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             return;
         }
 
-        if (!IsShipEntegraQuote(_selectedQuote))
+        // Ship to More alıcı telefonunu zorunlu alan olarak ister; Etsy siparişlerinde
+        // telefon alanı çoğu zaman boş gelir. Oluşturmadan önce kullanıcıdan isteyelim.
+        if (IsShiptomoreQuote(_selectedQuote) && string.IsNullOrWhiteSpace(_selectedOrder.Phone))
+        {
+            string? phone = PhoneNumberPromptForm.Ask(this, _selectedOrder.BuyerName);
+            if (string.IsNullOrWhiteSpace(phone))
+            {
+                _lblActionStatus.ForeColor = UiStyle.DangerColor;
+                _lblActionStatus.Text = "Alıcı telefonu girilmediği için gönderi oluşturma iptal edildi.";
+                return;
+            }
+
+            _selectedOrder.Phone = phone.Trim();
+        }
+
+        if (IsArasQuote(_selectedQuote))
         {
             var arasSettings = ArasGlobalSettingsStore.Load();
             if (!arasSettings.HasValidTokenFormat)
@@ -2247,7 +2345,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 }
             }
         }
-        else if (!ShipEntegraSettingsStore.Load().HasValidTokenFormat)
+        else if (IsShipEntegraQuote(_selectedQuote) && !ShipEntegraSettingsStore.Load().HasValidTokenFormat)
         {
             // ShipEntegra tokeni yoksa sağlayıcı kendi sessiz yenilemesini dener;
             // başarısız olursa hata akışı oturum penceresini önerir.
@@ -2304,6 +2402,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
                 await _orderService.MarkOrderAsShippedAsync(_selectedOrder.ReceiptId, _selectedQuote.ProviderName, result.TrackingNumber, result.LabelUrl);
 
+                string etsyNote = await TryMarkShippedOnEtsyAsync(_selectedQuote, _selectedOrder, result.TrackingNumber);
+
                 string labelNote = string.IsNullOrWhiteSpace(result.LabelUrl)
                     ? "\n\nNot: Etiket şu an oluşturulamadı. 'Etiketi Önizle' ile yeniden deneyebilirsiniz."
                     : string.Empty;
@@ -2312,12 +2412,12 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                     $"Kargo gönderisi başarıyla oluşturuldu.\n\n" +
                     $"Takip No: {result.TrackingNumber}\n" +
                     $"Taşıyıcı: {_selectedQuote.ProviderName}\n" +
-                    $"Alıcı: {_selectedOrder.BuyerName}{labelNote}",
+                    $"Alıcı: {_selectedOrder.BuyerName}{etsyNote}{labelNote}",
                     "Kargo Oluşturuldu",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
 
-                await ReloadOrdersAsync();
+                await ReloadOrdersAsync(force: true);
             }
             else
             {
@@ -2610,10 +2710,28 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         private static readonly Font PriceFont = new("Segoe UI Semibold", 12f, FontStyle.Bold);
         private static readonly Font PillFont = new("Segoe UI", 8f, FontStyle.Bold);
 
+        private static readonly Color SelectedAccent = Color.FromArgb(167, 139, 250); // seçili teklif moru
+
         private Image? _logo;
+        private bool _isSelected;
 
         public OrderQuote Quote { get; }
-        public bool IsSelected { get; set; }
+
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected == value)
+                {
+                    return;
+                }
+
+                _isSelected = value;
+                Invalidate();
+            }
+        }
+
         public event EventHandler? Selected;
 
         public QuoteRowControl(OrderQuote quote)
@@ -2647,7 +2765,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             Color baseFill = UiStyle.BackgroundColor;
             if (IsSelected)
             {
-                baseFill = OrderRowControl.Blend(baseFill, UiStyle.AccentColor, 0.14);
+                baseFill = OrderRowControl.Blend(baseFill, SelectedAccent, 0.16);
             }
             else if (Quote.IsCheapest)
             {
@@ -2655,7 +2773,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             }
 
             Color stroke = IsSelected
-                ? UiStyle.AccentColor
+                ? SelectedAccent
                 : (Quote.IsCheapest ? UiStyle.SuccessColor : UiStyle.BorderColor);
             float strokeWidth = IsSelected || Quote.IsCheapest ? 1.5f : 1f;
 
@@ -2718,6 +2836,11 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             pillX = DrawPill(g, CarrierQuoteTrust.ToBadgeText(Quote.Source), PillFont, pillX, pillY,
                 Quote.Source == QuoteSource.Live ? UiStyle.SuccessColor : UiStyle.WarningColor);
 
+            if (IsSelected)
+            {
+                pillX = DrawPill(g, "SEÇİLİ", PillFont, pillX, pillY, SelectedAccent);
+            }
+
             if (Quote.IsCheapest)
             {
                 pillX = DrawPill(g, "EN UCUZ", PillFont, pillX, pillY, UiStyle.SuccessColor);
@@ -2752,4 +2875,77 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     }
 
     #endregion
+
+    /// <summary>
+    /// Ship to More alıcı telefon ister; Etsy siparişlerinde telefon alanı çoğu
+    /// zaman boş geldiği için gönderi oluşturmadan önce küçük bir giriş istenir.
+    /// </summary>
+    internal sealed class PhoneNumberPromptForm : Form
+    {
+        private readonly TextBox _txtPhone = new();
+
+        public static string? Ask(IWin32Window owner, string buyerName)
+        {
+            using var form = new PhoneNumberPromptForm(buyerName);
+            return form.ShowDialog(owner) == DialogResult.OK ? form._txtPhone.Text.Trim() : null;
+        }
+
+        private PhoneNumberPromptForm(string buyerName)
+        {
+            Text = "Alıcı Telefonu Gerekli";
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            StartPosition = FormStartPosition.CenterParent;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            ShowInTaskbar = false;
+            ClientSize = new Size(400, 158);
+            BackColor = UiStyle.BackgroundColor;
+            ForeColor = UiStyle.TextDark;
+
+            var lblInfo = new Label
+            {
+                Text = $"{buyerName} için alıcı telefonu gerekli.\nTelefon numarasını girin:",
+                Location = new Point(16, 14),
+                Size = new Size(368, 42),
+                ForeColor = UiStyle.TextDark,
+                Font = new Font("Segoe UI", 9.5f)
+            };
+
+            _txtPhone.Location = new Point(16, 60);
+            _txtPhone.Width = 368;
+            _txtPhone.Font = new Font("Segoe UI", 10.5f);
+            _txtPhone.BorderStyle = BorderStyle.FixedSingle;
+
+            var btnOk = UiStyle.CreateButton("Kaydet", isSecondary: false);
+            btnOk.Dock = DockStyle.None;
+            btnOk.Size = new Size(120, 32);
+            btnOk.Location = new Point(160, 112);
+            btnOk.Click += (s, e) =>
+            {
+                if (string.IsNullOrWhiteSpace(_txtPhone.Text))
+                {
+                    MessageBox.Show(this, "Telefon numarası boş olamaz.", "Eksik Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                DialogResult = DialogResult.OK;
+                Close();
+            };
+
+            var btnCancel = UiStyle.CreateButton("Vazgeç", isSecondary: true);
+            btnCancel.Dock = DockStyle.None;
+            btnCancel.Size = new Size(110, 32);
+            btnCancel.Location = new Point(288, 112);
+            btnCancel.Click += (s, e) =>
+            {
+                DialogResult = DialogResult.Cancel;
+                Close();
+            };
+
+            Controls.Add(lblInfo);
+            Controls.Add(_txtPhone);
+            Controls.Add(btnOk);
+            Controls.Add(btnCancel);
+        }
+    }
 }

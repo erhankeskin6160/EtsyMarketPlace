@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.Json;
+using EtsyMarketPlace.Application.Orders;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Http;
 using SimilarProductsWinForms.Models;
@@ -1301,6 +1302,183 @@ internal sealed class EtsyApiClient
         }
 
         return receipts;
+    }
+
+    /// <summary>
+    /// Sipariş kuyruğu için son <paramref name="lookbackDays"/> günün Etsy siparişlerini çeker.
+    /// Kuyruk politikası (45 gün + gönderilmemiş/takipsiz) çağıran tarafta uygulanır.
+    /// </summary>
+    public async Task<List<EtsyFulfillmentReceipt>> GetFulfillmentQueueReceiptsAsync(
+        EtsyApiSettings settings,
+        int lookbackDays = 45,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        if (shopId <= 0)
+        {
+            throw new InvalidOperationException("OAuth kullanicisina ait Etsy magazasi bulunamadi.");
+        }
+
+        long minCreated = DateTimeOffset.UtcNow.AddDays(-Math.Max(1, lookbackDays)).ToUnixTimeSeconds();
+        const int pageSize = 100;
+        var receipts = new List<EtsyFulfillmentReceipt>();
+        var offset = 0;
+
+        while (true)
+        {
+            var query = ToQueryString(new Dictionary<string, string>
+            {
+                ["min_created"] = minCreated.ToString(CultureInfo.InvariantCulture),
+                ["limit"] = pageSize.ToString(CultureInfo.InvariantCulture),
+                ["offset"] = offset.ToString(CultureInfo.InvariantCulture),
+            });
+
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/receipts?{query}", useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Etsy siparisleri alinamadi. HTTP {(int)response.StatusCode}: {body}");
+            }
+
+            using var document = JsonDocument.Parse(body);
+            var results = GetArray(document.RootElement, "results");
+            if (!results.HasValue || results.Value.GetArrayLength() == 0)
+            {
+                break;
+            }
+
+            receipts.AddRange(results.Value.EnumerateArray().Select(ParseFulfillmentReceipt));
+            offset += results.Value.GetArrayLength();
+            var count = GetInt(document.RootElement, "count");
+            if (results.Value.GetArrayLength() < pageSize || (count > 0 && offset >= count))
+            {
+                break;
+            }
+        }
+
+        return receipts;
+    }
+
+    /// <summary>
+    /// Etsy siparişini "gönderildi" olarak işaretler ve takip numarasını yazar.
+    /// Etsy bu işlem için <c>transactions_w</c> yazma izni ister.
+    /// </summary>
+    public async Task MarkReceiptAsShippedAsync(
+        EtsyApiSettings settings,
+        long receiptId,
+        string trackingCode,
+        string carrierName,
+        CancellationToken cancellationToken = default)
+    {
+        if (receiptId <= 0)
+        {
+            throw new ArgumentException("Gecersiz siparis kimligi.", nameof(receiptId));
+        }
+
+        if (string.IsNullOrWhiteSpace(trackingCode))
+        {
+            throw new ArgumentException("Takip numarasi bos olamaz.", nameof(trackingCode));
+        }
+
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        if (shopId <= 0)
+        {
+            throw new InvalidOperationException("OAuth kullanicisina ait Etsy magazasi bulunamadi.");
+        }
+
+        var form = new Dictionary<string, string>
+        {
+            ["tracking_code"] = trackingCode.Trim(),
+        };
+        if (!string.IsNullOrWhiteSpace(carrierName))
+        {
+            form["carrier_name"] = carrierName.Trim();
+        }
+
+        using var request = CreateRequest(settings, HttpMethod.Post, $"{BaseUrl}/shops/{shopId}/receipts/{receiptId}/tracking", useAccessToken: true);
+        request.Content = new FormUrlEncodedContent(form);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            if ((int)response.StatusCode == 401 || (int)response.StatusCode == 403)
+            {
+                throw new InvalidOperationException(
+                    "Etsy, siparisi 'gonderildi' isaretlemek icin yazma izni istedi (transactions_w). " +
+                    "Etsy API Ayarlari ekranindan baglantiyi yeniden yetkilendirin. " +
+                    $"Detay: HTTP {(int)response.StatusCode}.");
+            }
+
+            throw new InvalidOperationException($"Etsy guncellemesi basarisiz. HTTP {(int)response.StatusCode}: {body}");
+        }
+    }
+
+    private static EtsyFulfillmentReceipt ParseFulfillmentReceipt(JsonElement receipt)
+    {
+        var (total, currency) = ReadMoney(receipt, "grandtotal");
+
+        var lines = GetArray(receipt, "transactions", "Transactions")?
+            .EnumerateArray()
+            .Select(transaction =>
+            {
+                var (amount, _) = ReadMoney(transaction, "price");
+                return new EtsyFulfillmentLine(
+                    GetLong(transaction, "listing_id"),
+                    GetString(transaction, "title"),
+                    Math.Max(1, GetInt(transaction, "quantity")),
+                    amount);
+            })
+            .ToList() ?? [];
+
+        long createdTimestamp = GetLong(receipt, "created_timestamp");
+        if (createdTimestamp <= 0)
+        {
+            createdTimestamp = GetLong(receipt, "create_timestamp");
+        }
+
+        var trackingCodes = new List<string>();
+        var shipments = GetArray(receipt, "shipments");
+        if (shipments.HasValue)
+        {
+            foreach (var shipment in shipments.Value.EnumerateArray())
+            {
+                string code = GetString(shipment, "tracking_code");
+                if (!string.IsNullOrWhiteSpace(code))
+                {
+                    trackingCodes.Add(code);
+                }
+            }
+        }
+
+        string countryCode = GetString(receipt, "country_iso");
+
+        return new EtsyFulfillmentReceipt(
+            GetLong(receipt, "receipt_id"),
+            GetFirstString(receipt, "name", "buyer_name"),
+            GetString(receipt, "buyer_email"),
+            GetFirstString(receipt, "buyer_phone", "phone"),
+            GetString(receipt, "first_line"),
+            GetString(receipt, "second_line"),
+            GetString(receipt, "city"),
+            GetString(receipt, "state"),
+            GetString(receipt, "zip"),
+            countryCode,
+            EtsyFulfillmentQueuePolicy.CountryDisplayName(countryCode),
+            GetFirstString(receipt, "ioss_number"),
+            total,
+            currency,
+            createdTimestamp > 0 ? DateTimeOffset.FromUnixTimeSeconds(createdTimestamp) : DateTimeOffset.MinValue,
+            GetBool(receipt, "was_shipped"),
+            trackingCodes,
+            lines);
     }
 
     private static OwnShopReceipt ParseOwnShopReceipt(JsonElement receipt)
