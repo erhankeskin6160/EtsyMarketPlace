@@ -58,11 +58,13 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
 
         string jsonBody = JsonSerializer.Serialize(payload);
         httpRequest.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+        LogShipEntegraTrace("Quote-Request", jsonBody);
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-        ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+        LogShipEntegraTrace("Quote-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+        ValidateStatus(response, responseContent);
         using var doc = JsonDocument.Parse(responseContent);
         var root = doc.RootElement;
 

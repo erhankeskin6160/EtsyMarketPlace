@@ -64,10 +64,10 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
     private static readonly Dictionary<string, Image> _carrierLogoCache = new(StringComparer.OrdinalIgnoreCase);
 
     // Servisler
-    private readonly ArasGlobalPricingService _arasService = new();
-    private readonly ShipEntegraPricingService _shipEntegraService = new();
+    private readonly ArasGlobalPricingService _arasService = new(new ArasGlobalApiClient());
+    private readonly ShipEntegraPricingService _shipEntegraService = new(new ShipEntegraApiClient());
     private readonly INavlungoApiClient _navlungoApiClient = new NavlungoApiClient();
-    private readonly IShiptomoreApiClient _shiptomoreApiClient = new ShiptomoreApiClient();
+    private readonly ShiptomoreOfficialQuoteSource _shiptomoreOfficialSource = new(new ShiptomoreOfficialApiClient());
 
     // Canlı Döviz Kuru
     public decimal UsdTryRate { get; set; } = 48.26m;
@@ -1025,40 +1025,27 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                 navlungoError = ex.StatusCode is { } status
                     ? $"HTTP {(int)status}: {ex.Message}"
                     : ex.Message;
-                return NavlungoApiClient.GenerateRealisticFallbackQuotes(new NavlungoQuoteRequest
-                {
-                    FromCountry = "TR",
-                    ToCountry = countryCode,
-                    WeightKg = weight,
-                    WidthCm = width,
-                    LengthCm = length,
-                    HeightCm = height,
-                    Source = "user"
-                });
+                return new List<NavlungoQuoteOffer>();
             }
             catch (Exception ex)
             {
                 navlungoError = ex.Message;
-                return NavlungoApiClient.GenerateRealisticFallbackQuotes(new NavlungoQuoteRequest
-                {
-                    FromCountry = "TR",
-                    ToCountry = countryCode,
-                    WeightKg = weight,
-                    WidthCm = width,
-                    LengthCm = length,
-                    HeightCm = height,
-                    Source = "user"
-                });
+                return new List<NavlungoQuoteOffer>();
             }
         });
 
-        // 4. Shiptomore Sorgusu
-        var stmSettings = ShiptomoreSettingsStore.Load();
+        // 4. Shiptomore Sorgusu (RESMÎ API: /v1/prices/calculate; anahtar yoksa uydurma fiyat üretilmez)
         string? shiptomoreError = null;
         var shiptomoreTask = Task.Run(async () =>
         {
             try
             {
+                if (!_shiptomoreOfficialSource.IsAvailable)
+                {
+                    shiptomoreError = "API anahtarı tanımlı değil (Client ID/Secret) — Hesaplar bölümünden ekleyin";
+                    return new List<ShiptomoreQuoteOffer>();
+                }
+
                 var req = new ShiptomoreQuoteRequest
                 {
                     FromCountry = "TR",
@@ -1068,20 +1055,12 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                     LengthCm = length,
                     HeightCm = height
                 };
-                return await _shiptomoreApiClient.FetchLiveQuotesAsync(req, stmSettings);
+                return await _shiptomoreOfficialSource.GetQuotesAsync(req);
             }
             catch (Exception ex)
             {
                 shiptomoreError = ex.Message;
-                return ShiptomoreApiClient.GenerateRealisticFallbackQuotes(new ShiptomoreQuoteRequest
-                {
-                    FromCountry = "TR",
-                    ToCountry = countryCode,
-                    WeightKg = weight,
-                    WidthCm = width,
-                    LengthCm = length,
-                    HeightCm = height
-                }, !string.IsNullOrWhiteSpace(stmSettings.SessionCookie));
+                return new List<ShiptomoreQuoteOffer>();
             }
         });
 
@@ -1092,10 +1071,11 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         var navOffers = await navlungoTask;
         var stmOffers = await shiptomoreTask;
 
-        // 1. Aras Tekliflerini Ekle
+        // 1. Aras Tekliflerini Ekle (yalnızca CANLI fiyatlar; yedek tahmin listelenmez)
+        string? arasStatus = null;
         if (arasRes != null && arasRes.Success && arasRes.Offers.Count > 0)
         {
-            foreach (var off in arasRes.Offers)
+            foreach (var off in arasRes.Offers.Where(o => o.IsLivePrice))
             {
                 string sName = $"{off.Cargo} {off.ProviderServiceType}".Trim();
                 _loadedQuotes.Add(new UnifiedShippingQuote
@@ -1108,16 +1088,32 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                     DeliveryText = off.DeliveryDaysText,
                     DeliveryDaysMin = off.EstimatedStartDeliveryDate,
                     DeliveryDaysMax = off.EstimatedEndDeliveryDate,
-                    Note = off.IsLivePrice ? "Aras Global Canlı Entegrasyon" : "Yedek Tarife",
-                    IsLive = off.IsLivePrice
+                    Note = "Aras Global Canlı Entegrasyon",
+                    IsLive = true
                 });
             }
+
+            if (!arasRes.IsLive)
+            {
+                arasStatus = arasRes.TokenExpired
+                    ? "Aras Global: oturum süresi dolmuş — oturumu yenileyin"
+                    : "Aras Global: canlı teklif alınamadı";
+            }
+        }
+        else if (arasRes != null && arasRes.TokenExpired)
+        {
+            arasStatus = "Aras Global: oturum süresi dolmuş — oturumu yenileyin";
+        }
+        else
+        {
+            arasStatus = "Aras Global: canlı teklif alınamadı";
         }
 
-        // 2. ShipEntegra Tekliflerini Ekle
+        // 2. ShipEntegra Tekliflerini Ekle (yalnızca CANLI fiyatlar)
+        string? seStatus = null;
         if (seRes != null && seRes.Success && seRes.Offers.Count > 0)
         {
-            foreach (var off in seRes.Offers)
+            foreach (var off in seRes.Offers.Where(o => o.IsLivePrice))
             {
                 string sName = !string.IsNullOrWhiteSpace(off.ClearServiceName) ? off.ClearServiceName : off.ServiceName;
                 _loadedQuotes.Add(new UnifiedShippingQuote
@@ -1131,9 +1127,24 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
                     DeliveryDaysMin = ExtractDeliveryDaysMin(off.AdditionalDescription),
                     DeliveryDaysMax = ExtractDeliveryDaysMax(off.AdditionalDescription),
                     Note = CleanHtml(off.AdditionalDescription),
-                    IsLive = off.IsLivePrice
+                    IsLive = true
                 });
             }
+
+            if (!seRes.IsLive)
+            {
+                seStatus = seRes.TokenExpired
+                    ? "ShipEntegra: oturum süresi dolmuş — token yenileyin"
+                    : "ShipEntegra: canlı teklif alınamadı";
+            }
+        }
+        else if (seRes != null && seRes.TokenExpired)
+        {
+            seStatus = "ShipEntegra: oturum süresi dolmuş — token yenileyin";
+        }
+        else
+        {
+            seStatus = "ShipEntegra: canlı teklif alınamadı";
         }
 
         // 3. Navlungo Tekliflerini Ekle (Canlı Widect, FedEx, UPS)
@@ -1185,21 +1196,25 @@ public sealed class AnimatedShippingComparisonDrawer : Panel
         _btnFetchQuotes.Enabled = true;
         _btnFetchQuotes.Text = "⚡ Teklifleri Getir";
 
+        var providerIssues = new List<string>();
+        if (arasStatus != null) providerIssues.Add(arasStatus);
+        if (seStatus != null) providerIssues.Add(seStatus);
+        if (navlungoError != null) providerIssues.Add($"Navlungo: {navlungoError}");
+        if (shiptomoreError != null) providerIssues.Add($"Shiptomore: {shiptomoreError}");
+
         if (_loadedQuotes.Count == 0)
         {
-            _lblStatus.Text = "⚠️ Canlı teklif alınamadı (Token eksik veya yetkisiz).";
+            _lblStatus.Text = providerIssues.Count > 0
+                ? "⚠️ Canlı teklif alınamadı. " + string.Join(" | ", providerIssues)
+                : "⚠️ Canlı teklif alınamadı (oturum veya API anahtarı eksik olabilir).";
             _lblStatus.ForeColor = Color.FromArgb(248, 113, 113);
         }
         else
         {
-            var errors = new List<string>();
-            if (navlungoError != null) errors.Add($"Navlungo: {navlungoError}");
-            if (shiptomoreError != null) errors.Add($"Shiptomore: {shiptomoreError}");
-
-            _lblStatus.Text = errors.Count == 0
+            _lblStatus.Text = providerIssues.Count == 0
                 ? $"✅ {_loadedQuotes.Count} adet alternatif kargo teklifi bulundu."
-                : $"✅ {_loadedQuotes.Count} adet kargo teklifi bulundu. ⚠️ {string.Join(" | ", errors)}";
-            _lblStatus.ForeColor = errors.Count == 0
+                : $"✅ {_loadedQuotes.Count} adet kargo teklifi bulundu. ⚠️ {string.Join(" | ", providerIssues)}";
+            _lblStatus.ForeColor = providerIssues.Count == 0
                 ? Color.FromArgb(52, 211, 153)
                 : Color.FromArgb(251, 191, 36);
         }
