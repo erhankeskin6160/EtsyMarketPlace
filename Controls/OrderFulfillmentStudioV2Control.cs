@@ -1461,7 +1461,11 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             var settings = EtsyApiSettingsStore.Load();
             if (!settings.HasApiCredentials)
             {
-                _lblQueueEmpty.Text = "Etsy bağlantısı kurulmamış. Ayarlar → Etsy API bölümünden bağlanın.";
+                // Bu ortamda Etsy API bağlı değil: kuyruğu demo siparişlerle doldur ki
+                // akış (teklif, gönderi oluşturma, yerel "Gönderildi") denenebilsin.
+                // Etsy bağlantısı olan ortamlarda (VDS) burası çalışmaz, canlı veri yüklenir.
+                _orderService.SyncLiveQueue(EtsyDemoOrders.CreateQueue());
+                _lblQueueEmpty.Text = "Etsy bağlantısı kurulmamış — demo siparişler gösteriliyor (canlı veri için Ayarlar → Etsy API).";
                 return;
             }
 
