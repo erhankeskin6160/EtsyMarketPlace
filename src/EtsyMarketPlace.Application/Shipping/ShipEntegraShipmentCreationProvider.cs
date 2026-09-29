@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Orders;
@@ -235,7 +236,7 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
         var labelRequest = new ShipEntegraCreateLabelRequest
         {
-            SpecialService = !string.IsNullOrWhiteSpace(context.SelectedSubCarrier) ? context.SelectedSubCarrier! : "shipentegra-express",
+            SpecialService = ShipEntegraLabelServiceCodes.Resolve(context.SelectedServiceCode, context.SelectedSubCarrier) ?? string.Empty,
             Content = description,
             Weight = weight,
             IossNumber = order.IossNumber ?? string.Empty,
@@ -256,25 +257,25 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
         }
         catch (Exception)
         {
-            // Sipariş oluştu; etiket daha sonra panelden de alınabilir.
+            // Sipariş oluştu; etiket 'Etiketi Önizle' ile yeniden alınabilir.
+        }
+
+        bool labelSucceeded = labelBytes is { Length: > 0 };
+        if (!labelSucceeded)
+        {
+            ShipEntegraPendingLabelStore.Save(
+                order.ReceiptId,
+                orderResult.OrderId,
+                JsonSerializer.Serialize(labelRequest),
+                labelRequest.SpecialService);
         }
 
         string labelPath = string.Empty;
-        if (labelBytes != null && labelBytes.Length > 0)
+        if (labelSucceeded)
         {
             try
             {
-                string labelDir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "SimilarProductsWinForms",
-                    "labels");
-                Directory.CreateDirectory(labelDir);
-                bool isPdf = labelBytes.Length > 4 &&
-                             labelBytes[0] == 0x25 && labelBytes[1] == 0x50 &&
-                             labelBytes[2] == 0x44 && labelBytes[3] == 0x46;
-                string ext = isPdf ? "pdf" : "bin";
-                labelPath = Path.Combine(labelDir, $"shipentegra-{orderResult.OrderId}.{ext}");
-                File.WriteAllBytes(labelPath, labelBytes);
+                labelPath = SaveLabelBytes(orderResult.OrderId, labelBytes!);
             }
             catch (Exception)
             {
@@ -290,6 +291,134 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
             LabelUrl = labelPath,
             PriceBreakdown = null
         };
+    }
+
+    /// <summary>
+    /// Gönderisi oluşturulmuş ancak etiketi alınamamış siparişin etiketini yeniden dener.
+    /// Sipariş çoğaltılmaz; yalnızca bekleyen etiket isteği tekrar gönderilir.
+    /// </summary>
+    public async Task<ShipmentCreationResult> RetryLabelAsync(
+        long receiptId,
+        CancellationToken cancellationToken = default)
+    {
+        if (_apiClient == null)
+        {
+            return Fail("ShipEntegra API istemcisi yapılandırılmamış.");
+        }
+
+        if (!ShipEntegraPendingLabelStore.TryLoad(receiptId, out long orderId, out string requestJson))
+        {
+            return Fail("Bu sipariş için bekleyen etiket kaydı bulunamadı.");
+        }
+
+        ShipEntegraCreateLabelRequest? request;
+        try
+        {
+            request = JsonSerializer.Deserialize<ShipEntegraCreateLabelRequest>(requestJson);
+        }
+        catch (Exception)
+        {
+            request = null;
+        }
+
+        if (request == null)
+        {
+            return Fail("Bekleyen etiket isteği okunamadı.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.SpecialService))
+        {
+            return Fail("Bu servis için etiket kodu tanımlı değil; kod tanımlandığında tekrar deneyin.");
+        }
+
+        var settings = _settingsProvider();
+        string token = settings.CleanToken;
+        if (string.IsNullOrWhiteSpace(token) || token.Length <= 20)
+        {
+            string? fresh = await TryRefreshTokenAsync(settings, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(fresh))
+            {
+                token = fresh;
+            }
+            else
+            {
+                return Fail("ShipEntegra oturum tokeni bulunamadı. Lütfen oturum düğmesinden giriş yapın.");
+            }
+        }
+
+        try
+        {
+            return SaveRetriedLabel(receiptId, orderId, await SendLabelAsync(request, token, cancellationToken));
+        }
+        catch (ShipEntegraTokenExpiredException)
+        {
+            string? fresh = await TryRefreshTokenAsync(settings, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(fresh))
+            {
+                try
+                {
+                    return SaveRetriedLabel(receiptId, orderId, await SendLabelAsync(request, fresh, cancellationToken));
+                }
+                catch (Exception retryEx)
+                {
+                    return Fail($"Etiket yeniden alınamadı: {retryEx.Message}");
+                }
+            }
+
+            return Fail("ShipEntegra oturumunuzun süresi dolmuş. Lütfen yeniden giriş yapın.");
+        }
+        catch (Exception ex)
+        {
+            return Fail($"ShipEntegra etiketi alınamadı: {ex.Message}");
+        }
+    }
+
+    private async Task<byte[]?> SendLabelAsync(
+        ShipEntegraCreateLabelRequest request,
+        string token,
+        CancellationToken cancellationToken)
+    {
+        byte[]? bytes = await _apiClient!.CreateLabelAsync(request, token, cancellationToken);
+        if (bytes == null || bytes.Length == 0)
+        {
+            throw new InvalidOperationException("Etiket yanıtı boş döndü.");
+        }
+
+        return bytes;
+    }
+
+    private static ShipmentCreationResult SaveRetriedLabel(long receiptId, long orderId, byte[]? bytes)
+    {
+        if (bytes == null || bytes.Length == 0)
+        {
+            throw new InvalidOperationException("Etiket yanıtı boş döndü.");
+        }
+
+        string path = SaveLabelBytes(orderId, bytes);
+        ShipEntegraPendingLabelStore.Delete(receiptId);
+        return new ShipmentCreationResult
+        {
+            IsSuccess = true,
+            ShipmentId = orderId.ToString(),
+            TrackingNumber = orderId.ToString(),
+            LabelUrl = path
+        };
+    }
+
+    private static string SaveLabelBytes(long orderId, byte[] bytes)
+    {
+        string labelDir = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "SimilarProductsWinForms",
+            "labels");
+        Directory.CreateDirectory(labelDir);
+        bool isPdf = bytes.Length > 4 &&
+                     bytes[0] == 0x25 && bytes[1] == 0x50 &&
+                     bytes[2] == 0x44 && bytes[3] == 0x46;
+        string ext = isPdf ? "pdf" : "bin";
+        string labelPath = Path.Combine(labelDir, $"shipentegra-{orderId}.{ext}");
+        File.WriteAllBytes(labelPath, bytes);
+        return labelPath;
     }
 
     private async Task<string?> TryRefreshTokenAsync(ShipEntegraSettings settings, CancellationToken cancellationToken)

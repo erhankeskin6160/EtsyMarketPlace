@@ -1,6 +1,8 @@
 namespace SimilarProductsWinForms.Controls;
 
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
@@ -1329,7 +1331,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _btnPreviewLabel.Height = 38;
         _btnPreviewLabel.Anchor = AnchorStyles.Top | AnchorStyles.Right;
         _btnPreviewLabel.Location = new Point(right.Width - 250 - 12 - 140 - 10, 13);
-        _btnPreviewLabel.Click += (s, e) => PreviewLabel();
+        _btnPreviewLabel.Click += async (s, e) => await PreviewLabelAsync();
 
         right.Controls.Add(_btnCreateShipment);
         right.Controls.Add(_btnPreviewLabel);
@@ -1730,6 +1732,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                             ProviderName = "ShipEntegra",
                             CarrierName = "ShipEntegra",
                             ServiceName = service,
+                            ServiceCode = offer.ServiceName,
                             SubCarrier = ExtractSubCarrierName(offer.ServiceName),
                             ServiceType = service,
                             PriceUsd = offer.TotalPrice,
@@ -2007,22 +2010,92 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
     #region gönderi oluşturma
 
-    private void PreviewLabel()
+    private async Task PreviewLabelAsync()
     {
-        if (_selectedQuote == null)
+        if (_selectedOrder == null)
         {
+            return;
+        }
+
+        string labelPath = _selectedOrder.LabelUrl ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(labelPath) && File.Exists(labelPath))
+        {
+            OpenWithShell(labelPath);
+            return;
+        }
+
+        long receiptId = _selectedOrder.ReceiptId;
+        if (ShipEntegraPendingLabelStore.TryLoad(receiptId, out _, out _))
+        {
+            var answer = MessageBox.Show(
+                "Bu gönderinin etiketi daha önce alınamadı.\n\nŞimdi oluşturmayı denemek ister misiniz?\n(Sipariş yeniden oluşturulmaz, yalnızca etiket alınır.)",
+                "Etiket Alınamadı",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (answer != DialogResult.Yes)
+            {
+                return;
+            }
+
+            var provider = _creationManager.GetProvider("ShipEntegra");
+            if (provider is ShipEntegraShipmentCreationProvider seProvider)
+            {
+                _btnPreviewLabel.Enabled = false;
+                _lblActionStatus.ForeColor = UiStyle.TextMuted;
+                _lblActionStatus.Text = "Etiket alınıyor...";
+                try
+                {
+                    var retry = await seProvider.RetryLabelAsync(receiptId);
+                    if (retry.IsSuccess && File.Exists(retry.LabelUrl))
+                    {
+                        await _orderService.MarkOrderAsShippedAsync(receiptId, _selectedOrder.SelectedCarrier, _selectedOrder.TrackingCode, retry.LabelUrl);
+                        _lblActionStatus.ForeColor = UiStyle.SuccessColor;
+                        _lblActionStatus.Text = "Etiket alındı";
+                        MessageBox.Show("Etiket başarıyla alındı.", "Etiket Hazır", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        OpenWithShell(retry.LabelUrl);
+                    }
+                    else
+                    {
+                        _lblActionStatus.ForeColor = UiStyle.DangerColor;
+                        _lblActionStatus.Text = "Etiket alınamadı";
+                        MessageBox.Show(
+                            string.IsNullOrWhiteSpace(retry.ErrorMessage) ? "Etiket alınamadı." : retry.ErrorMessage,
+                            "Etiket Hatası",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning);
+                    }
+                }
+                finally
+                {
+                    _btnPreviewLabel.Enabled = true;
+                }
+            }
+
             return;
         }
 
         MessageBox.Show(
             $"Etiket önizlemesi (taslak)\n\n" +
-            $"Taşıyıcı: {_selectedQuote.ProviderName} — {_selectedQuote.ServiceName}\n" +
-            $"Alıcı: {_selectedOrder?.BuyerName}\n" +
+            $"Taşıyıcı: {_selectedQuote?.ProviderName} — {_selectedQuote?.ServiceName}\n" +
+            $"Alıcı: {_selectedOrder.BuyerName}\n" +
             $"Barkod: {_barcode.BarcodeNumber}\n\n" +
             "Gerçek etiket bağlantısı gönderi oluşturulduğunda üretilir.",
             "Etiket Önizleme",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
+    }
+
+    private static void OpenWithShell(string path)
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            AppLog.Swallowed(ex);
+        }
     }
 
     /// <summary>
@@ -2152,6 +2225,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 HeightCm = measurement.HeightCm,
                 HsCode = (_cmbHsCode.SelectedItem?.ToString() ?? _cmbHsCode.Text ?? "3926400000").Split(' ')[0],
                 SelectedSubCarrier = _selectedQuote.SubCarrier,
+                SelectedServiceCode = _selectedQuote.ServiceCode,
                 ServiceType = _selectedQuote.ServiceType,
                 CargoPrice = _selectedQuote.PriceUsd,
                 Desi = measurement.Desi
@@ -2168,11 +2242,15 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
                 await _orderService.MarkOrderAsShippedAsync(_selectedOrder.ReceiptId, _selectedQuote.ProviderName, result.TrackingNumber, result.LabelUrl);
 
+                string labelNote = string.IsNullOrWhiteSpace(result.LabelUrl)
+                    ? "\n\nNot: Etiket şu an oluşturulamadı. 'Etiketi Önizle' ile yeniden deneyebilirsiniz."
+                    : string.Empty;
+
                 MessageBox.Show(
                     $"Kargo gönderisi başarıyla oluşturuldu.\n\n" +
                     $"Takip No: {result.TrackingNumber}\n" +
                     $"Taşıyıcı: {_selectedQuote.ProviderName}\n" +
-                    $"Alıcı: {_selectedOrder.BuyerName}",
+                    $"Alıcı: {_selectedOrder.BuyerName}{labelNote}",
                     "Kargo Oluşturuldu",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -2280,6 +2358,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         public string CarrierName { get; set; } = string.Empty;
         public string ServiceName { get; set; } = string.Empty;
         public string SubCarrier { get; set; } = string.Empty;
+        public string ServiceCode { get; set; } = string.Empty;
         public string ServiceType { get; set; } = string.Empty;
         public decimal PriceUsd { get; set; }
         public decimal PriceTry { get; set; }
