@@ -129,7 +129,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _arasApiClient = new ArasGlobalApiClient();
         _arasPricingService = arasPricingService ?? new ArasGlobalPricingService(_arasApiClient);
         _sessionManager = sessionManager ?? new PuppeteerShippingSessionManager();
-        _shipEntegraPricingService = new ShipEntegraPricingService();
+        _shipEntegraPricingService = new ShipEntegraPricingService(new ShipEntegraApiClient());
         _navlungoApiClient = new NavlungoApiClient();
         _shiptomoreApiClient = new ShiptomoreApiClient();
 
