@@ -188,7 +188,11 @@ public sealed class NavlungoShippingTests
         var widect = offers.First();
         Assert.Equal("Widect", widect.Carrier);
         Assert.Equal(19.96m, widect.Price);
-        Assert.Contains("Oturum Çerezi Yenilenmeli", widect.Note);
+        // Anonim yol CANLI fiyat döndürür: "Üye oturumu kullanılamadı" açıklamasıyla
+        // CANLI olarak işaretlenmeli (tahmini DEĞİL).
+        Assert.Contains("Canlı Teklif", widect.Note);
+        Assert.Contains("üye oturumu kullanılamadı", widect.Note);
+        Assert.Equal(QuoteSource.Live, CarrierQuoteTrust.Classify(null, widect.Note));
     }
 
     [Fact]

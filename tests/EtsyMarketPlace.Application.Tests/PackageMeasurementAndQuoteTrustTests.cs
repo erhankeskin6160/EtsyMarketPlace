@@ -105,6 +105,8 @@ public sealed class PackageMeasurementAndQuoteTrustTests
     {
         Assert.Equal(QuoteSource.Live, CarrierQuoteTrust.Classify(null, "Navlungo API Canlı Teklif"));
         Assert.Equal(QuoteSource.Live, CarrierQuoteTrust.Classify(null, "Navlungo Üye İndirimli (Canlı)"));
+        // Üye oturumu varken oturumlu uç hata verirse anonim canlı fiyatlar bu notla gelir; canlı sayılmalı.
+        Assert.Equal(QuoteSource.Live, CarrierQuoteTrust.Classify(null, "Navlungo Canlı Teklif (üye oturumu kullanılamadı)"));
     }
 
     [Fact]

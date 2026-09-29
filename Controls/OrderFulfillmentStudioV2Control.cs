@@ -1246,7 +1246,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             BackColor = Color.Transparent,
             Padding = new Padding(12, 0, 8, 0)
         };
-        foreach (string provider in new[] { "Tümü", "Aras Global", "ShipEntegra", "Navlungo" })
+        foreach (string provider in new[] { "Tümü", "Aras Global", "ShipEntegra", "Navlungo", "Shiptomore" })
         {
             string captured = provider;
             var chip = MakePillButton(provider);
@@ -2693,7 +2693,10 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 new Rectangle(textX, 10, textWidth, 18), UiStyle.TextDark,
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter);
 
-            TextRenderer.DrawText(g, $"{Quote.ProviderName}  ·  {Quote.DeliveryText}", MetaFont,
+            string metaLine = string.IsNullOrWhiteSpace(Quote.DeliveryText)
+                ? Quote.ProviderName
+                : $"{Quote.ProviderName}  ·  {Quote.DeliveryText}";
+            TextRenderer.DrawText(g, metaLine, MetaFont,
                 new Rectangle(textX, 28, textWidth, 16), UiStyle.TextMuted,
                 TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter);
 

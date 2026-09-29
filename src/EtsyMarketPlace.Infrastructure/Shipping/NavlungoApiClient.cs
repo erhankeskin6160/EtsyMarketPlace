@@ -218,7 +218,7 @@ public sealed class NavlungoApiClient : INavlungoApiClient
 
         foreach (var o in offers)
         {
-            o.Note = hasSession ? "Navlungo Liste Fiyatı (Oturum Çerezi Yenilenmeli)" : "Navlungo Canlı Teklif";
+            o.Note = hasSession ? "Navlungo Canlı Teklif (üye oturumu kullanılamadı)" : "Navlungo Canlı Teklif";
         }
 
         return offers;
