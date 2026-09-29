@@ -72,9 +72,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     // --- üst bar ---
     private TextBox _txtSearch = null!;
     private Button _btnRefresh = null!;
-    private Button _btnSession = null!;
-    private Button _btnSeSession = null!;
+    private Button _btnAccountsToggle = null!;
     private Button _btnCaptureTemplate = null!;
+
+    // --- kargo hesapları & oturumlar (açılır-kapanır panel, kâr paneli kart tasarımı) ---
+    private Panel _accountsHub = null!;
+    private CarrierAccountsHubControl? _accountsHubControl;
+    private bool _accountsExpanded;
+    private readonly ToolTip _toolTipAccounts = new();
 
     // --- bölge 1 ---
     private ThemedCard _colQueue = null!;
@@ -256,8 +261,10 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
         _topBar = BuildTopBar();
         _actionStrip = BuildActionStrip();
+        _accountsHub = BuildAccountsHubPanel();
 
         Controls.Add(_body);
+        Controls.Add(_accountsHub);
         Controls.Add(_actionStrip);
         Controls.Add(_topBar);
 
@@ -519,29 +526,19 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _txtSearch.PlaceholderText = "Sipariş no · müşteri · ürün ara";
         _txtSearch.TextChanged += async (s, e) => await ReloadOrdersAsync();
 
-        _btnSession = new Button
+        _btnAccountsToggle = new Button
         {
             Height = 33,
-            Width = 150,
+            Width = 262,
             FlatStyle = FlatStyle.Flat,
             Font = UiStyle.SemiboldBaseFont,
+            BackColor = UiStyle.SecondaryColor,
+            ForeColor = UiStyle.TextDark,
             Margin = new Padding(0, 0, 6, 0),
             Cursor = Cursors.Hand
         };
-        _btnSession.FlatAppearance.BorderSize = 0;
-        _btnSession.Click += async (s, e) => await PromptOrRefreshArasSessionAsync();
-
-        _btnSeSession = new Button
-        {
-            Height = 33,
-            Width = 170,
-            FlatStyle = FlatStyle.Flat,
-            Font = UiStyle.SemiboldBaseFont,
-            Margin = new Padding(0, 0, 6, 0),
-            Cursor = Cursors.Hand
-        };
-        _btnSeSession.FlatAppearance.BorderSize = 0;
-        _btnSeSession.Click += async (s, e) => await PromptOrRefreshShipEntegraSessionAsync();
+        _btnAccountsToggle.FlatAppearance.BorderSize = 0;
+        _btnAccountsToggle.Click += (s, e) => ToggleAccountsHub();
 
         _btnRefresh = UiStyle.CreateButton("Yenile", isSecondary: true);
         _btnRefresh.Width = 80;
@@ -552,8 +549,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         right.Controls.Add(_btnCaptureTemplate);
         right.Controls.Add(btnShipToMore);
         right.Controls.Add(_txtSearch);
-        right.Controls.Add(_btnSession);
-        right.Controls.Add(_btnSeSession);
+        right.Controls.Add(_btnAccountsToggle);
         right.Controls.Add(_btnRefresh);
 
         bar.Controls.Add(right);
@@ -762,24 +758,89 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
     private void UpdateSessionBadge()
     {
-        bool valid = false;
+        bool arasValid = false;
         try
         {
-            valid = ArasGlobalSettingsStore.Load().HasValidTokenFormat;
+            arasValid = ArasGlobalSettingsStore.Load().HasValidTokenFormat;
         }
         catch
         {
-            valid = false;
+            arasValid = false;
         }
 
-        _btnSession.Text = valid ? "Aras oturumu açık" : "Aras oturumu yok";
-        _btnSession.BackColor = valid ? UiStyle.SuccessColor : UiStyle.WarningColor;
-        _btnSession.ForeColor = valid ? Color.White : Color.FromArgb(40, 30, 0);
-        var seSettings = ShipEntegraSettingsStore.Load();
-        bool seValid = seSettings.HasValidTokenFormat;
-        _btnSeSession.Text = seValid ? "ShipEntegra oturumu a\u00e7\u0131k" : "ShipEntegra oturumu yok";
-        _btnSeSession.BackColor = seValid ? UiStyle.SuccessColor : UiStyle.WarningColor;
-        _btnSeSession.ForeColor = seValid ? Color.White : Color.FromArgb(40, 30, 0);
+        bool seValid = false;
+        try
+        {
+            seValid = ShipEntegraSettingsStore.Load().HasValidTokenFormat;
+        }
+        catch
+        {
+            seValid = false;
+        }
+
+        if (_btnAccountsToggle != null)
+        {
+            _btnAccountsToggle.Text = _accountsExpanded
+                ? "🔌 Kargo Hesapları & Oturumlar ▲"
+                : "🔌 Kargo Hesapları & Oturumlar ▼";
+            _btnAccountsToggle.BackColor = UiStyle.SecondaryColor;
+            _btnAccountsToggle.ForeColor = arasValid && seValid
+                ? UiStyle.TextDark
+                : Color.FromArgb(180, 83, 9); // amber: eksik oturum var
+            _toolTipAccounts.SetToolTip(
+                _btnAccountsToggle,
+                $"Aras Global: {(arasValid ? "bağlı" : "yok")} · ShipEntegra: {(seValid ? "bağlı" : "yok")}");
+        }
+
+        _accountsHubControl?.RebuildAccounts();
+    }
+
+    private Panel BuildAccountsHubPanel()
+    {
+        var hub = new Panel
+        {
+            Dock = DockStyle.Top,
+            Height = 118,
+            Visible = false,
+            BackColor = Color.FromArgb(15, 23, 42),
+            Padding = new Padding(14, 6, 14, 8)
+        };
+        hub.Paint += (s, e) =>
+        {
+            using var pen = new Pen(Color.FromArgb(51, 65, 85), 1f);
+            e.Graphics.DrawLine(pen, 0, hub.Height - 1, hub.Width, hub.Height - 1);
+        };
+
+        _accountsHubControl = new CarrierAccountsHubControl(_sessionManager)
+        {
+            Dock = DockStyle.Fill
+        };
+        _accountsHubControl.StatusMessage += (message, kind) =>
+        {
+            _lblActionStatus.Text = message;
+            _lblActionStatus.ForeColor = kind switch
+            {
+                CarrierHubStatusKind.Success => UiStyle.SuccessColor,
+                CarrierHubStatusKind.Error => UiStyle.DangerColor,
+                _ => UiStyle.AccentColor
+            };
+        };
+        _accountsHubControl.SessionsChanged += ScheduleRecalculation;
+
+        hub.Controls.Add(_accountsHubControl);
+        return hub;
+    }
+
+    private void ToggleAccountsHub()
+    {
+        _accountsExpanded = !_accountsExpanded;
+        _accountsHub.Visible = _accountsExpanded;
+        if (_accountsExpanded)
+        {
+            _accountsHubControl?.RebuildAccounts();
+        }
+        UpdateSessionBadge();
+        PerformLayout();
     }
 
     #endregion
@@ -2113,15 +2174,13 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             using var loginForm = new ShipEntegraEmbeddedLoginForm();
             if (loginForm.ShowDialog(this) == DialogResult.OK)
             {
-                _btnSeSession.Text = "ShipEntegra oturumu a\u00e7\u0131k";
-                _btnSeSession.BackColor = UiStyle.SuccessColor;
-                _btnSeSession.ForeColor = Color.White;
+                UpdateSessionBadge();
                 await ReloadOrdersAsync();
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Oturum a\u00e7ma penceresi a\u00e7\u0131lamad\u0131:\n{ex.Message}", "Oturum Hatas\u0131", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Oturum açma penceresi açılamadı:\n{ex.Message}", "Oturum Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
