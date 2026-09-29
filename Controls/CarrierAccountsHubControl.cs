@@ -90,8 +90,8 @@ public sealed class CarrierAccountsHubControl : UserControl
             "Navlungo",
             _navlungoLogo ?? CreateFallbackLogo("navlungo"),
             navConnected,
-            () => TriggerNavlungoLoginAsync(false),
-            () => TriggerNavlungoLoginAsync(true),
+            () => TriggerNavlungoEmbeddedLoginAsync(),
+            () => TriggerNavlungoEmbeddedLoginAsync(),
             () => DisconnectCarrierAsync("Navlungo")));
 
         bool stmConnected = ShiptomoreSettingsStore.HasCredentials();
@@ -147,62 +147,22 @@ public sealed class CarrierAccountsHubControl : UserControl
         }
     }
 
-    private async Task TriggerNavlungoLoginAsync(bool directBrowser)
+    private async Task TriggerNavlungoEmbeddedLoginAsync()
     {
-        var settings = NavlungoSettingsStore.Load();
-        string email = settings.SavedEmail ?? string.Empty;
-        string pass = ShippingCredentialEncryptor.Decrypt(settings.EncryptedPassword);
-        bool showBrowser = directBrowser;
-
-        if (directBrowser)
-        {
-            showBrowser = true;
-        }
-        else if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(pass))
-        {
-            using var dlg = new ShippingLoginCredentialsDialog("Navlungo", email);
-            if (dlg.ShowDialog(FindForm()) != DialogResult.OK) return;
-            email = dlg.Email;
-            pass = dlg.Password;
-            showBrowser = dlg.OpenInBrowserRequested;
-            if (!string.IsNullOrWhiteSpace(email) && !string.IsNullOrWhiteSpace(pass))
-            {
-                settings.SavedEmail = email;
-                settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
-                settings.AutoRefreshEnabled = dlg.AutoRefresh;
-                NavlungoSettingsStore.Save(settings);
-            }
-        }
-
-        Report("⏳ Navlungo oturumu açılıyor...", CarrierHubStatusKind.Info);
-
+        await Task.Yield();
         try
         {
-            string? freshToken = await _sessionManager.RefreshNavlungoTokenAsync(email, pass, showBrowser);
-            if (!string.IsNullOrWhiteSpace(freshToken))
+            using var loginForm = new NavlungoEmbeddedLoginForm();
+            if (loginForm.ShowDialog(FindForm()) == DialogResult.OK)
             {
-                // DİKKAT: RefreshNavlungoTokenAsync tüm çerezleri diske kaydetmiştir.
-                // Eski hafızadaki settings nesnesiyle ezmemek için diskteki taze ayarları yükle!
-                var freshSettings = NavlungoSettingsStore.Load();
-                if (freshToken != "connected" && !string.IsNullOrWhiteSpace(freshToken))
-                {
-                    freshSettings.IdToken = freshToken;
-                }
-                freshSettings.TokenLastUpdatedUtc = DateTime.UtcNow;
-                NavlungoSettingsStore.Save(freshSettings);
-
-                Report("✅ Navlungo oturumu başarıyla güncellendi!", CarrierHubStatusKind.Success);
+                Report("✅ Navlungo oturumu güncellendi!", CarrierHubStatusKind.Success);
                 RebuildAccounts();
                 SessionsChanged?.Invoke();
-            }
-            else
-            {
-                MessageBox.Show("Navlungo oturumu açılamadı. 'Tarayıcı' (🌐) butonunu kullanarak giriş yapabilirsiniz.", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"Navlungo oturum hatası: {ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"Oturum açma penceresi açılamadı:\n{ex.Message}", "Oturum Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 
