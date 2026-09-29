@@ -7,4 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\EtsyMarketPlace.Domain\EtsyMarketPlace.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Shipping\Data\se-us-hs-codes.json" />
+  </ItemGroup>
 </Project>

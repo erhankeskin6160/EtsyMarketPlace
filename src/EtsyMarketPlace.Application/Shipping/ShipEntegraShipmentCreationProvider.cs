@@ -3,6 +3,7 @@ namespace EtsyMarketPlace.Application.Shipping;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Orders;
@@ -132,6 +133,26 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
                 UnitPrice = order.TotalPrice > 0 ? order.TotalPrice : 11.0m,
                 HsCode = hsCode
             });
+        }
+
+        if (string.Equals(order.CountryCode, "US", StringComparison.OrdinalIgnoreCase))
+        {
+            var invalidCodes = products
+                .Select(p => p.HsCode)
+                .Where(code => !ShipEntegraHsCodeCatalog.IsUsCode(code))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+
+            if (invalidCodes.Count > 0)
+            {
+                string suggestions = ShipEntegraHsCodeCatalog.SuggestFor(invalidCodes[0]);
+                string hint = string.IsNullOrEmpty(suggestions)
+                    ? string.Empty
+                    : $" Benzer geçerli kodlar: {suggestions}.";
+                throw new InvalidOperationException(
+                    "ABD gönderilerinde HS kodu, ShipEntegra ABD tarife listesinden (HTS) seçilmelidir. " +
+                    $"Geçersiz: {string.Join(", ", invalidCodes)}.{hint} Kodu düzeltip yeniden deneyin.");
+            }
         }
 
         string description = products[0].Name;
