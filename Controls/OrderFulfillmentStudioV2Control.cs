@@ -2367,7 +2367,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 {
                     MessageBox.Show(message, "Gönderi Oluşturulamadı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
-                else
+                else if (ShipmentSessionRouter.IsArasGlobalContext(_selectedQuote?.ProviderName, result.ErrorMessage))
                 {
                     var ask = MessageBox.Show(
                         $"{message}\n\nAras Global oturumunu yenilemek ister misiniz?",
@@ -2379,6 +2379,11 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                     {
                         await PromptOrRefreshArasSessionAsync();
                     }
+                }
+                else
+                {
+                    // Ship to More / Navlungo: oturum yenileme akışı yok — hata metni olduğu gibi gösterilir.
+                    MessageBox.Show(message, "Gönderi Oluşturulamadı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
         }

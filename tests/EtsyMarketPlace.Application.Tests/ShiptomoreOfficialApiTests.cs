@@ -202,4 +202,18 @@ public sealed class ShiptomoreOfficialApiTests
         var (client, _) = Build((HttpStatusCode.OK, "[]"));
         Assert.True(client.HasCredentials);
     }
+
+    [Fact]
+    public async Task SearchHsCodes_ParsesContractFields()
+    {
+        var (client, _) = Build((HttpStatusCode.OK,
+            "[{\"hs_code\":\"39264000\",\"description\":\"Statuettes and other ornamental articles, of plastics\",\"us_tariff_rate\":5.3}]"));
+
+        var results = await client.SearchHsCodesAsync("392640");
+
+        var code = Assert.Single(results);
+        Assert.Equal("39264000", code.Code);
+        Assert.Equal("Statuettes and other ornamental articles, of plastics", code.Description);
+        Assert.Equal(5.3, code.UsTariffRate!.Value, 3);
+    }
 }
