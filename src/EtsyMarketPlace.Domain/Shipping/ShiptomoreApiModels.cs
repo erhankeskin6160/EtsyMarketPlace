@@ -140,6 +140,7 @@ public sealed class ShiptomoreShipmentDetail
 /// <summary>HS/GTIP kodu arama sonucu.</summary>
 public sealed class ShiptomoreHsCode
 {
-    [JsonPropertyName("code")] public string Code { get; set; } = string.Empty;
+    [JsonPropertyName("hs_code")] public string Code { get; set; } = string.Empty;
     [JsonPropertyName("description")] public string Description { get; set; } = string.Empty;
+    [JsonPropertyName("us_tariff_rate")] public double? UsTariffRate { get; set; }
 }

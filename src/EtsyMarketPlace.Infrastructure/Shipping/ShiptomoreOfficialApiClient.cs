@@ -86,8 +86,11 @@ public sealed class ShiptomoreOfficialApiClient : IShiptomoreOfficialApi
             {
                 codes.Add(new ShiptomoreHsCode
                 {
-                    Code = item.TryGetProperty("code", out var c) ? c.GetString() ?? string.Empty : string.Empty,
-                    Description = item.TryGetProperty("description", out var d) ? d.GetString() ?? string.Empty : string.Empty
+                    Code = item.TryGetProperty("hs_code", out var c) ? c.GetString() ?? string.Empty : string.Empty,
+                    Description = item.TryGetProperty("description", out var d) ? d.GetString() ?? string.Empty : string.Empty,
+                    UsTariffRate = item.TryGetProperty("us_tariff_rate", out var u) && u.ValueKind == JsonValueKind.Number
+                        ? u.GetDouble()
+                        : null
                 });
             }
         }

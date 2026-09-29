@@ -24,8 +24,15 @@ public sealed class ShiptomoreProviderMappingTests
         public Task<IReadOnlyList<string>> GetProvidersAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<string>>(Array.Empty<string>());
 
+        public Dictionary<string, List<ShiptomoreHsCode>> HsCodeResults { get; } = new();
+        public List<string> HsCodeQueries { get; } = new();
+
         public Task<IReadOnlyList<ShiptomoreHsCode>> SearchHsCodesAsync(string query, int limit = 50, CancellationToken ct = default)
-            => Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(Array.Empty<ShiptomoreHsCode>());
+        {
+            HsCodeQueries.Add(query);
+            return Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(
+                HsCodeResults.TryGetValue(query, out var results) ? results : new List<ShiptomoreHsCode>());
+        }
 
         public Task<IReadOnlyList<ShiptomorePriceOption>> CalculatePricesAsync(ShiptomorePriceRequest request, CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<ShiptomorePriceOption>>(Array.Empty<ShiptomorePriceOption>());
@@ -147,6 +154,7 @@ public sealed class ShiptomoreProviderMappingTests
     public async Task CreateShipment_ReturnsTrackingNumberOnSuccess()
     {
         var api = new StubApi();
+        api.HsCodeResults["39264000"] = new List<ShiptomoreHsCode> { new() { Code = "39264000" } };
         var provider = new ShiptomoreOfficialShipmentCreationProvider(api);
 
         var result = await provider.CreateShipmentAsync(Context());
@@ -155,6 +163,35 @@ public sealed class ShiptomoreProviderMappingTests
         Assert.Equal("slug-1", result.ShipmentId);
         Assert.Equal("TRK-1", result.TrackingNumber);
         Assert.NotNull(api.LastRequest);
+    }
+
+    [Fact]
+    public async Task CreateShipment_ResolvesTenDigitGtipToProviderCode()
+    {
+        var api = new StubApi();
+        api.HsCodeResults["39264000"] = new List<ShiptomoreHsCode> { new() { Code = "39264000" } };
+        var provider = new ShiptomoreOfficialShipmentCreationProvider(api);
+
+        var result = await provider.CreateShipmentAsync(Context());
+
+        Assert.True(result.IsSuccess);
+        var line = Assert.Single(api.LastRequest!.ProductLines);
+        Assert.Equal("39264000", line.HsCode);
+        Assert.Equal(new[] { "3926400000", "39264000" }, api.HsCodeQueries);
+    }
+
+    [Fact]
+    public async Task CreateShipment_FailsClearlyWhenGtipIsUnknownToProvider()
+    {
+        var api = new StubApi();
+        var provider = new ShiptomoreOfficialShipmentCreationProvider(api);
+
+        var result = await provider.CreateShipmentAsync(Context());
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("tanımıyor", result.ErrorMessage);
+        Assert.Contains("3926400000", result.ErrorMessage);
+        Assert.Null(api.LastRequest);
     }
 
     [Fact]

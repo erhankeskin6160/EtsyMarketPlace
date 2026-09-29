@@ -82,4 +82,39 @@ public sealed class ShipmentSessionRouterTests
     public void IsSessionFailure_ClassifiesAuthMessages(string? message, bool expected)
         => Assert.Equal(expected, ShipmentSessionRouter.IsSessionFailure(message));
 
+    [Fact]
+    public void IsArasGlobalContext_ProviderAras_ReturnsTrue()
+    {
+        Assert.True(ShipmentSessionRouter.IsArasGlobalContext("Aras Global", null));
+    }
+
+    [Fact]
+    public void IsArasGlobalContext_CaseInsensitive_ReturnsTrue()
+    {
+        Assert.True(ShipmentSessionRouter.IsArasGlobalContext("aras global", null));
+    }
+
+    [Fact]
+    public void IsArasGlobalContext_ErrorMessageMentionsAras_ReturnsTrue()
+    {
+        Assert.True(ShipmentSessionRouter.IsArasGlobalContext(
+            "ShipEntegra",
+            "Aras Global oturum tokeni bulunamadı veya süresi dolmuş."));
+    }
+
+    [Fact]
+    public void IsArasGlobalContext_ShiptomoreError_ReturnsFalse()
+    {
+        Assert.False(ShipmentSessionRouter.IsArasGlobalContext(
+            "Shiptomore",
+            "Ship to More API hatası (422): Unknown HS code: 3926400000."));
+    }
+
+    [Fact]
+    public void IsArasGlobalContext_NullInputs_ReturnsFalse()
+    {
+        Assert.False(ShipmentSessionRouter.IsArasGlobalContext(null, null));
+    }
+
+
 }

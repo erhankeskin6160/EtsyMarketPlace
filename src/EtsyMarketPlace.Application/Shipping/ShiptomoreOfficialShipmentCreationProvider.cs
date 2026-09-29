@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using EtsyMarketPlace.Application.Diagnostics;
 using EtsyMarketPlace.Domain.Shipping;
 
 /// <summary>
@@ -62,6 +63,30 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         }
 
         var request = BuildRequest(context);
+
+        if (!string.IsNullOrWhiteSpace(context.HsCode))
+        {
+            var resolution = await ShiptomoreHsCodeResolver
+                .ResolveAsync(context.HsCode, _api, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!resolution.IsResolved)
+            {
+                return Fail(resolution.ErrorMessage);
+            }
+
+            if (!string.Equals(resolution.Code, context.HsCode.Trim(), StringComparison.Ordinal))
+            {
+                AppLog.Info(
+                    $"Ship to More GTİP dönüşümü: {context.HsCode.Trim()} -> {resolution.Code} (sağlayıcı kod listesinden)",
+                    "ShiptomoreGtipResolve");
+
+                foreach (var line in request.ProductLines)
+                {
+                    line.HsCode = resolution.Code;
+                }
+            }
+        }
 
         try
         {

@@ -23,6 +23,23 @@ public static class ShipmentSessionRouter
     }
 
     /// <summary>
+    /// Hata bağlamı Aras Global'e mi ait? Sağlayıcı adı veya hata mesajı
+    /// "Aras" içeriyorsa true döner; diğer taşıyıcı hatalarında oturum
+    /// yenileme akışı açılmaz.
+    /// </summary>
+    public static bool IsArasGlobalContext(string? providerName, string? errorMessage)
+    {
+        if (!string.IsNullOrWhiteSpace(providerName) &&
+            providerName.Contains("Aras", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(errorMessage) &&
+               errorMessage.Contains("Aras", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Hata gerçek bir oturum/yetki sorununa mı işaret ediyor? İş kuralı redleri
     /// (örn. DDP geçersiz) bu kapsama girmez; UI yalnızca gerçek oturum hatalarında
     /// oturum yenileme akışını açar.
