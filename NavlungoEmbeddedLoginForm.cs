@@ -34,6 +34,7 @@ internal sealed class NavlungoEmbeddedLoginForm : Form
     private readonly System.Windows.Forms.Timer _storageCheckTimer = new();
     private bool _tokenCaptured = false;
     private bool _autoFallbackStarted = false;
+    private int _navRetryCount = 0;
 
     public NavlungoEmbeddedLoginForm()
     {
@@ -173,24 +174,16 @@ internal sealed class NavlungoEmbeddedLoginForm : Form
                 }
                 else
                 {
-                    _lblStatus.Text = "Navlungo sayfasına bağlanılamadı. İnternet bağlantınızı kontrol edin.";
-                    _lblStatus.ForeColor = Color.FromArgb(239, 68, 68); // Red
+                    _lblStatus.Text = "Sayfa yükleniyor, doğrulanıyor...";
+                    _lblStatus.ForeColor = Color.FromArgb(251, 191, 36); // Amber
 
                     AppLog.Warn(
-                        "Navlungo gömülü tarayıcı sayfayı yükleyemedi (WebView2: " + e.WebErrorStatus + "); gerçek tarayıcı yedeği değerlendiriliyor.",
+                        "Navlungo gömülü tarayıcı ara yönlendirmede kesinti bildirdi (WebView2: " + e.WebErrorStatus + "); sayfa canlılığı doğrulanıyor.",
                         nameof(NavlungoEmbeddedLoginForm));
 
-                    if (!_autoFallbackStarted && !_tokenCaptured)
-                    {
-                        _autoFallbackStarted = true;
-                        _lblStatus.Text = "Gömülü tarayıcı bağlanamadı — gerçek tarayıcı otomatik açılıyor...";
-                        _lblStatus.ForeColor = Color.FromArgb(251, 191, 36); // Amber
-                        BeginInvoke(new Action(async () =>
-                        {
-                            await Task.Delay(1500);
-                            await OpenInRealBrowserFallbackAsync();
-                        }));
-                    }
+                    // OAuth benzeri yönlendirme zincirindeki ara kesintiler hata sanılabilir;
+                    // kesinleştirmeden önce sayfanın gerçekten ayakta olduğunu doğrula.
+                    BeginInvoke(new Action(async () => await VerifyPageLivenessAsync()));
                 }
             };
 
@@ -582,6 +575,77 @@ internal sealed class NavlungoEmbeddedLoginForm : Form
         {
             DialogResult = DialogResult.OK;
             Close();
+        }
+    }
+
+    /// <summary>
+    /// Navlungo sitesi OAuth benzeri bir yönlendirme zinciri kullanıyor; ara navigasyonlar
+    /// 'ConnectionAborted/Unknown' olarak raporlanabiliyor ve sayfa aslında başarıyla
+    /// yükleniyor. Bu yüzden hata sinyalini kesinleştirmeden önce kısa bir gecikmeyle
+    /// sayfanın canlı olup olmadığı doğrulanır; ölüyse bir kez yeniden denenir.
+    /// </summary>
+    private async Task VerifyPageLivenessAsync()
+    {
+        if (_tokenCaptured || IsDisposed)
+        {
+            return;
+        }
+
+        await Task.Delay(4000);
+        if (_tokenCaptured || IsDisposed)
+        {
+            return;
+        }
+
+        bool alive = false;
+        try
+        {
+            string source = _webView.CoreWebView2.Source ?? string.Empty;
+            if (source.Contains("navlungo", StringComparison.OrdinalIgnoreCase))
+            {
+                string readyState = await _webView.ExecuteScriptAsync("document.readyState");
+                readyState = (readyState ?? string.Empty).Trim('"');
+                alive = readyState is "complete" or "interactive" or "loading";
+            }
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, "NavlungoEmbeddedLoginForm.VerifyPageLivenessAsync");
+        }
+
+        if (alive)
+        {
+            _lblStatus.Text = "Lütfen Navlungo hesabınızla giriş yapın.";
+            _lblStatus.ForeColor = Color.FromArgb(56, 189, 248); // Sky 400
+            _storageCheckTimer.Start();
+            return;
+        }
+
+        if (_navRetryCount < 1)
+        {
+            _navRetryCount++;
+            AppLog.Warn(
+                "Navlungo gömülü tarayıcı sayfası doğrulanamadı; bir kez daha denenecek.",
+                nameof(NavlungoEmbeddedLoginForm));
+            _lblStatus.Text = "Bağlantı yeniden deneniyor...";
+            try
+            {
+                _webView.CoreWebView2.Navigate(LoginUrl);
+            }
+            catch (Exception caught)
+            {
+                AppLog.Swallowed(caught, "NavlungoEmbeddedLoginForm.VerifyPageLivenessAsync.Retry");
+            }
+            return;
+        }
+
+        if (!_autoFallbackStarted)
+        {
+            _autoFallbackStarted = true;
+            _lblStatus.Text = "Gömülü tarayıcı bağlanamadı — gerçek tarayıcı otomatik açılıyor...";
+            _lblStatus.ForeColor = Color.FromArgb(251, 191, 36); // Amber
+            await Task.Delay(1200);
+            await OpenInRealBrowserFallbackAsync();
         }
     }
 

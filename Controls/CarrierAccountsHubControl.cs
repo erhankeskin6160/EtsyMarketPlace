@@ -91,7 +91,7 @@ public sealed class CarrierAccountsHubControl : UserControl
             _navlungoLogo ?? CreateFallbackLogo("navlungo"),
             navConnected,
             () => TriggerNavlungoEmbeddedLoginAsync(),
-            () => TriggerNavlungoEmbeddedLoginAsync(),
+            () => OpenNavlungoPanelInBrowserAsync(),
             () => DisconnectCarrierAsync("Navlungo")));
 
         bool stmConnected = ShiptomoreSettingsStore.HasCredentials();
@@ -164,6 +164,22 @@ public sealed class CarrierAccountsHubControl : UserControl
         {
             MessageBox.Show($"Oturum açma penceresi açılamadı:\n{ex.Message}", "Oturum Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    /// <summary>Navlungo panelini varsayılan tarayıcıda açar (kart üzerindeki 🌐 düğmesi).</summary>
+    private Task OpenNavlungoPanelInBrowserAsync()
+    {
+        try
+        {
+            PuppeteerShippingSessionManager.OpenOfficialPortalInDefaultBrowser("https://ship.navlungo.com/");
+            Report("🌐 Navlungo paneli tarayıcıda açıldı.", CarrierHubStatusKind.Info);
+        }
+        catch (Exception ex)
+        {
+            Report($"Panel açılamadı: {ex.Message}", CarrierHubStatusKind.Error);
+        }
+
+        return Task.CompletedTask;
     }
 
     private Task OpenShiptomoreConnectionFormAsync()
