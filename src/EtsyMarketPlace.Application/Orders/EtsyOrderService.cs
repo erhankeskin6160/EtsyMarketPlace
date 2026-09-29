@@ -119,7 +119,7 @@ public sealed class EtsyOrderService
                     Quantity = 1,
                     Price = 34.50m,
                     Currency = "USD",
-                    HsCode = "8504403000",
+                    HsCode = "8504409580",
                     WeightKg = 0.6,
                     WidthCm = 18.0,
                     LengthCm = 22.0,
