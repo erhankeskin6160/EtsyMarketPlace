@@ -30,6 +30,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private const int TopBarHeight = 56;
     private const int ActionStripHeight = 64;
     private const int QueueRegionWidth = 312;
+    private const int QueueScrollBarWidth = 14;
     private const int QuotesRegionWidth = 424;
 
     // --- servisler ---
@@ -72,7 +73,13 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private int _narrowTabIndex;
 
     // --- üst bar ---
-    private TextBox _txtSearch = null!;
+    private TextBox _queueSearchBox = null!;
+    private ComboBox _cmbQueueSort = null!;
+    private System.Windows.Forms.Timer? _queueSearchDebounce;
+    private Panel _queueViewport = null!;
+    private ModernVScrollBar _queueScrollBar = null!;
+    private int _queueScrollOffset;
+    private OrderQueueSort _queueSortMode = OrderQueueSort.NewestFirst;
     private Button _btnRefresh = null!;
     private Button _btnAccountsToggle = null!;
     private Button _btnCaptureTemplate = null!;
@@ -398,6 +405,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         FitFlow(_ordersFlow);
         FitFlow(_quotesFlow);
         FitFlow(_itemsFlow);
+        UpdateQueueScrollMetrics();
     }
 
     private static void FitFlow(FlowLayoutPanel? flow)
@@ -515,19 +523,6 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             connectionForm.ShowDialog(this);
         };
 
-        _txtSearch = new TextBox
-        {
-            Width = 268,
-            Height = 33,
-            Font = UiStyle.BaseFont,
-            BorderStyle = BorderStyle.FixedSingle,
-            BackColor = UiStyle.InputBackground,
-            ForeColor = UiStyle.TextDark,
-            Margin = new Padding(0, 0, 6, 0)
-        };
-        _txtSearch.PlaceholderText = "Sipariş no · müşteri · ürün ara";
-        _txtSearch.TextChanged += async (s, e) => await ReloadOrdersAsync();
-
         _btnAccountsToggle = new Button
         {
             Height = 33,
@@ -550,7 +545,6 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
         right.Controls.Add(_btnCaptureTemplate);
         right.Controls.Add(btnShipToMore);
-        right.Controls.Add(_txtSearch);
         right.Controls.Add(_btnAccountsToggle);
         right.Controls.Add(_btnRefresh);
 
@@ -893,35 +887,86 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             {
                 _statusFilter = captured;
                 RefreshStatusChipStyles();
+                _queueScrollOffset = 0;
                 await ReloadOrdersAsync();
             };
             _statusChips[status] = chip;
             chipRow.Controls.Add(chip);
         }
 
-        var searchHost = new Panel { Dock = DockStyle.Top, Height = 42, BackColor = Color.Transparent, Padding = new Padding(12, 0, 12, 8) };
-        var queueHint = new Label
+        var searchHost = new Panel { Dock = DockStyle.Top, Height = 46, BackColor = Color.Transparent, Padding = new Padding(12, 0, 12, 10) };
+
+        _queueSearchBox = new TextBox
         {
-            Text = "Sipariş seçildiğinde paket ve teklifler otomatik hazırlanır.",
-            Font = _smallFont,
-            ForeColor = UiStyle.TextMuted,
-            Dock = DockStyle.Fill,
-            AutoSize = false,
-            BackColor = Color.Transparent,
-            TextAlign = ContentAlignment.MiddleLeft
+            Font = UiStyle.BaseFont,
+            BorderStyle = BorderStyle.FixedSingle,
+            BackColor = UiStyle.InputBackground,
+            ForeColor = UiStyle.TextDark,
+            AutoSize = false
         };
-        searchHost.Controls.Add(queueHint);
+        _queueSearchBox.PlaceholderText = "Müşteri adı, sipariş no veya ürün ara";
+        _queueSearchBox.TextChanged += (s, e) =>
+        {
+            _queueSearchDebounce ??= CreateQueueSearchDebounce();
+            _queueSearchDebounce.Stop();
+            _queueSearchDebounce.Start();
+        };
+
+        _cmbQueueSort = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = UiStyle.BaseFont
+        };
+        _cmbQueueSort.Items.AddRange(new object[] { "En yeni üstte", "En eski üstte", "Müşteri A→Z", "Müşteri Z→A" });
+        _cmbQueueSort.SelectedIndex = 0;
+        _cmbQueueSort.SelectedIndexChanged += async (s, e) =>
+        {
+            _queueSortMode = _cmbQueueSort.SelectedIndex switch
+            {
+                1 => OrderQueueSort.OldestFirst,
+                2 => OrderQueueSort.CustomerAscending,
+                3 => OrderQueueSort.CustomerDescending,
+                _ => OrderQueueSort.NewestFirst
+            };
+            _queueScrollOffset = 0;
+            await ReloadOrdersAsync();
+        };
+        UiStyle.ConfigureComboBox(_cmbQueueSort);
+
+        searchHost.Controls.Add(_queueSearchBox);
+        searchHost.Controls.Add(_cmbQueueSort);
+        searchHost.Resize += (s, e) => LayoutQueueSearchRow(searchHost);
+
+        _queueViewport = new Panel
+        {
+            Dock = DockStyle.Fill,
+            BackColor = Color.Transparent
+        };
 
         _ordersFlow = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            AutoScroll = true,
+            Dock = DockStyle.None,
+            AutoScroll = false,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
             BackColor = Color.Transparent,
-            Padding = new Padding(12, 4, 12, 12)
+            Padding = new Padding(12, 4, 12, 12),
+            Location = new Point(0, 0),
+            Size = new Size(QueueRegionWidth - QueueScrollBarWidth, 0)
         };
         _ordersFlow.ClientSizeChanged += (s, e) => FitFlow(_ordersFlow);
+        _ordersFlow.MouseWheel += QueueWheelHandler;
+
+        _queueScrollBar = new ModernVScrollBar
+        {
+            Width = 8,
+            Visible = false
+        };
+        _queueScrollBar.ValueChanged += (s, e) =>
+        {
+            _queueScrollOffset = _queueScrollBar.Value;
+            ApplyQueueScroll();
+        };
 
         _lblQueueEmpty = new Label
         {
@@ -934,8 +979,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             Visible = false
         };
 
-        card.Controls.Add(_ordersFlow);
-        card.Controls.Add(_lblQueueEmpty);
+        _queueViewport.Controls.Add(_queueScrollBar);
+        _queueViewport.Controls.Add(_ordersFlow);
+        _queueViewport.Controls.Add(_lblQueueEmpty);
+        _queueScrollBar.BringToFront();
+        _queueViewport.MouseWheel += QueueWheelHandler;
+        _queueViewport.Resize += (s, e) => UpdateQueueScrollMetrics();
+
+        card.Controls.Add(_queueViewport);
         card.Controls.Add(searchHost);
         card.Controls.Add(chipRow);
         card.Controls.Add(header);
@@ -969,6 +1020,113 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             kv.Value.BackColor = active ? UiStyle.PrimaryColor : UiStyle.SecondaryColor;
             kv.Value.ForeColor = active ? Color.White : UiStyle.TextMuted;
         }
+    }
+
+    /// <summary>Arama kutusu ile sıralama menüsünü yan yana yerleştirir.</summary>
+    private void LayoutQueueSearchRow(Panel host)
+    {
+        if (host == null || host.IsDisposed || _queueSearchBox == null || _cmbQueueSort == null)
+        {
+            return;
+        }
+
+        int left = host.Padding.Left;
+        int width = Math.Max(120, host.ClientSize.Width - host.Padding.Horizontal);
+        int comboWidth = Math.Min(150, Math.Max(96, width / 2));
+        const int height = 30;
+        int y = Math.Max(0, (host.ClientSize.Height - host.Padding.Bottom - height) / 2);
+
+        _queueSearchBox.SetBounds(left, y, Math.Max(80, width - comboWidth - 8), height);
+        _cmbQueueSort.SetBounds(left + width - comboWidth, y, comboWidth, height);
+    }
+
+    private System.Windows.Forms.Timer CreateQueueSearchDebounce()
+    {
+        var timer = new System.Windows.Forms.Timer { Interval = 320 };
+        timer.Tick += async (s, e) =>
+        {
+            timer.Stop();
+            _queueScrollOffset = 0;
+            await ReloadOrdersAsync();
+        };
+        return timer;
+    }
+
+    private void QueueWheelHandler(object? sender, MouseEventArgs e)
+    {
+        if (_queueScrollBar == null || !_queueScrollBar.Visible)
+        {
+            return;
+        }
+
+        _queueScrollBar.Value += -Math.Sign(e.Delta) * 96;
+    }
+
+    private void ApplyQueueScroll()
+    {
+        if (_ordersFlow == null || _ordersFlow.IsDisposed)
+        {
+            return;
+        }
+
+        _ordersFlow.Top = -_queueScrollOffset;
+    }
+
+    /// <summary>
+    /// Kuyruk listesinin scroll metriklerini günceller: içerik yüksekliği, modern
+    /// scrollbar aralığı ve akış konumu. Pencere boyutu ve liste içeriği değişince çağrılır.
+    /// </summary>
+    private void UpdateQueueScrollMetrics()
+    {
+        if (_queueViewport == null || _queueViewport.IsDisposed || _ordersFlow == null || _queueScrollBar == null)
+        {
+            return;
+        }
+
+        int viewportWidth = _queueViewport.ClientSize.Width;
+        int viewportHeight = _queueViewport.ClientSize.Height;
+        if (viewportWidth <= 0 || viewportHeight <= 0)
+        {
+            return;
+        }
+
+        int contentHeight = _ordersFlow.Padding.Vertical;
+        foreach (Control child in _ordersFlow.Controls)
+        {
+            contentHeight += child.Height + child.Margin.Top + child.Margin.Bottom;
+        }
+
+        contentHeight = Math.Max(contentHeight, viewportHeight);
+
+        int flowWidth = Math.Max(220, viewportWidth - QueueScrollBarWidth);
+        if (_ordersFlow.Width != flowWidth)
+        {
+            _ordersFlow.Width = flowWidth;
+        }
+
+        if (_ordersFlow.Height != contentHeight)
+        {
+            _ordersFlow.Height = contentHeight;
+        }
+
+        int maxScroll = Math.Max(0, contentHeight - viewportHeight);
+        _queueScrollOffset = Math.Clamp(_queueScrollOffset, 0, maxScroll);
+
+        _queueScrollBar.Bounds = new Rectangle(
+            viewportWidth - QueueScrollBarWidth + 3,
+            2,
+            QueueScrollBarWidth - 6,
+            Math.Max(40, viewportHeight - 4));
+        _queueScrollBar.Minimum = 0;
+        _queueScrollBar.LargeChange = Math.Max(44, viewportHeight - 48);
+        _queueScrollBar.Maximum = maxScroll;
+        if (_queueScrollBar.Value != _queueScrollOffset)
+        {
+            _queueScrollBar.Value = _queueScrollOffset;
+        }
+        _queueScrollBar.Visible = maxScroll > 0 && _ordersFlow.Visible;
+
+        _ordersFlow.Top = -_queueScrollOffset;
     }
 
     #endregion
@@ -1497,11 +1655,12 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             _lastEtsyQueueSyncUtc = DateTime.UtcNow;
         }
 
-        string? filter = string.IsNullOrWhiteSpace(_txtSearch.Text) ? null : _txtSearch.Text.Trim();
-        var orders = await _orderService.GetOrdersAsync(filter);
+        string? query = string.IsNullOrWhiteSpace(_queueSearchBox.Text) ? null : _queueSearchBox.Text.Trim();
+        var orders = await _orderService.GetOrdersAsync();
+        var view = OrderQueueView.FilterAndSort(ApplyStatusFilter(orders), query, _queueSortMode);
 
         _allOrders.Clear();
-        _allOrders.AddRange(ApplyStatusFilter(orders));
+        _allOrders.AddRange(view);
 
         _lblQueueCount.Text = _allOrders.Count.ToString();
         _ordersFlow.SuspendLayout();
@@ -1511,6 +1670,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         {
             var row = new OrderRowControl(order) { Margin = new Padding(0, 0, 0, 8) };
             row.OrderSelected += (s, e) => SelectOrder(order);
+            row.MouseWheel += QueueWheelHandler;
             _ordersFlow.Controls.Add(row);
         }
 
@@ -2479,6 +2639,10 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             _debounceTimer?.Stop();
             _debounceTimer?.Dispose();
             _debounceTimer = null;
+
+            _queueSearchDebounce?.Stop();
+            _queueSearchDebounce?.Dispose();
+            _queueSearchDebounce = null;
 
             _quoteCts?.Cancel();
             _quoteCts?.Dispose();
