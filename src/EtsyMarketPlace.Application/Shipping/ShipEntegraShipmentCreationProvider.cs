@@ -273,7 +273,45 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
     private async Task<string?> TryRefreshTokenAsync(ShipEntegraSettings settings, CancellationToken cancellationToken)
     {
-        if (_sessionManager == null || string.IsNullOrWhiteSpace(settings.SavedEmail))
+        if (string.IsNullOrWhiteSpace(settings.SavedEmail))
+        {
+            return null;
+        }
+
+        // 1) API ile doğrudan giriş: tarayıcısız, en hızlı ve en güvenilir yol.
+        if (_apiClient != null &&
+            !string.IsNullOrWhiteSpace(settings.EncryptedPassword) &&
+            _passwordDecryptor != null)
+        {
+            try
+            {
+                string pass = _passwordDecryptor(settings.EncryptedPassword);
+                if (!string.IsNullOrWhiteSpace(pass))
+                {
+                    var tokens = await _apiClient.LoginAsync(settings.SavedEmail, pass, cancellationToken);
+                    if (tokens != null && !string.IsNullOrWhiteSpace(tokens.AccessToken))
+                    {
+                        settings.BearerToken = tokens.AccessToken;
+                        settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                        if (!string.IsNullOrWhiteSpace(tokens.RefreshToken))
+                        {
+                            settings.RefreshToken = tokens.RefreshToken;
+                            settings.RefreshTokenLastUpdatedUtc = DateTime.UtcNow;
+                        }
+
+                        ShipEntegraSettingsStore.Save(settings);
+                        return tokens.AccessToken;
+                    }
+                }
+            }
+            catch (Exception caught)
+            {
+                AppLog.Swallowed(caught, "ShipEntegraShipmentCreationProvider.TryRefreshTokenAsync.ApiLogin");
+            }
+        }
+
+        // 2) Yedek yol: görünmez tarayıcı oturumu üzerinden yakalama.
+        if (_sessionManager == null)
         {
             return null;
         }
@@ -297,15 +335,16 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
                 {
                     clean = clean.Substring(7).Trim();
                 }
+
                 settings.BearerToken = clean;
                 settings.TokenLastUpdatedUtc = DateTime.UtcNow;
                 ShipEntegraSettingsStore.Save(settings);
                 return clean;
             }
         }
-        catch (Exception)
+        catch (Exception caught)
         {
-            // Sessiz yenileme hatası; üst katman bilgilendirir.
+            AppLog.Swallowed(caught, "ShipEntegraShipmentCreationProvider.TryRefreshTokenAsync.SessionManager");
         }
 
         return null;

@@ -91,6 +91,8 @@ public sealed class ShipEntegraSettings
     // Otomatik Oturum & Token Yenileme (Kimlik Bilgileri)
     public string SavedEmail { get; set; } = string.Empty;
     public string EncryptedPassword { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
+    public DateTime? RefreshTokenLastUpdatedUtc { get; set; }
     public bool AutoRefreshEnabled { get; set; } = true;
 
     [JsonIgnore]
@@ -222,4 +224,13 @@ public sealed class ShipEntegraTokenExpiredException : Exception
 {
     public ShipEntegraTokenExpiredException(string message) : base(message) { }
     public ShipEntegraTokenExpiredException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>
+/// ShipEntegra oturum giriş yanıtındaki token çifti (v4.public biçimi).
+/// </summary>
+public sealed class ShipEntegraAuthTokens
+{
+    public string AccessToken { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
 }

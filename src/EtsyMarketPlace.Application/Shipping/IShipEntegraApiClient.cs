@@ -10,6 +10,16 @@ using EtsyMarketPlace.Domain.Shipping;
 /// </summary>
 public interface IShipEntegraApiClient
 {
+    /// <summary>
+    /// E-posta/şifre ile doğrudan API oturumu açar (panel ile aynı uç: /v1/auth/login).
+    /// Otomatik token yenilemenin tarayıcısız yoludur.
+    /// </summary>
+    Task<ShipEntegraAuthTokens?> LoginAsync(
+        string email,
+        string password,
+        CancellationToken cancellationToken = default);
+
+
     Task<List<ShipEntegraQuoteOffer>> FetchLiveQuotesAsync(
         ShipEntegraQuoteRequest request,
         string rawBearerToken,

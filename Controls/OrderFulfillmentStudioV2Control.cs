@@ -2053,20 +2053,6 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         => !string.IsNullOrWhiteSpace(quote?.ProviderName)
            && quote!.ProviderName.Contains("ShipEntegra", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Görünmez (headless) ShipEntegra token yenileme dener; başarısızsa null döner.</summary>
-    private async Task<string?> TrySilentShipEntegraRefreshAsync()
-    {
-        try
-        {
-            return await _sessionManager.RefreshShipEntegraTokenAsync(null, null, showBrowser: false);
-        }
-        catch (Exception ex)
-        {
-            AppLog.Swallowed(ex, "OrderFulfillmentStudioV2Control.TrySilentShipEntegraRefresh");
-            return null;
-        }
-    }
-
     private async Task PromptOrRefreshArasSessionAsync()
     {
         await Task.Yield();
@@ -2103,37 +2089,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             return;
         }
 
-        if (IsShipEntegraQuote(_selectedQuote))
-        {
-            var seSettings = ShipEntegraSettingsStore.Load();
-            if (!seSettings.HasValidTokenFormat)
-            {
-                _lblActionStatus.ForeColor = UiStyle.AccentColor;
-                _lblActionStatus.Text = "ShipEntegra oturumu otomatik yenileniyor...";
-
-                string? freshSeToken = await TrySilentShipEntegraRefreshAsync();
-                if (string.IsNullOrWhiteSpace(freshSeToken))
-                {
-                    var askSe = MessageBox.Show(
-                        "ShipEntegra oturumu bulunamadı veya süresi dolmuş.\n\nŞimdi ShipEntegra oturumunu açmak ister misiniz?",
-                        "ShipEntegra Oturumu Gerekli",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
-
-                    if (askSe != DialogResult.Yes)
-                    {
-                        return;
-                    }
-
-                    await PromptOrRefreshShipEntegraSessionAsync();
-                    if (!ShipEntegraSettingsStore.Load().HasValidTokenFormat)
-                    {
-                        return;
-                    }
-                }
-            }
-        }
-        else
+        if (!IsShipEntegraQuote(_selectedQuote))
         {
             var arasSettings = ArasGlobalSettingsStore.Load();
             if (!arasSettings.HasValidTokenFormat)
@@ -2155,6 +2111,13 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                     return;
                 }
             }
+        }
+        else if (!ShipEntegraSettingsStore.Load().HasValidTokenFormat)
+        {
+            // ShipEntegra tokeni yoksa sağlayıcı kendi sessiz yenilemesini dener;
+            // başarısız olursa hata akışı oturum penceresini önerir.
+            _lblActionStatus.ForeColor = UiStyle.AccentColor;
+            _lblActionStatus.Text = "ShipEntegra oturumu doğrulanıyor...";
         }
 
         _btnCreateShipment.Enabled = false;

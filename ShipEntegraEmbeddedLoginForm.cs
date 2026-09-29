@@ -4,6 +4,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using EtsyMarketPlace.Application.Shipping;
@@ -135,6 +136,11 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
             // 1. Ağ yanıtlarını dinle (login/API yanıtlarındaki tokeni yakalar)
             _webView.CoreWebView2.WebResourceResponseReceived += OnWebResourceResponseReceived;
 
+            // 1b. İstek başlıklarını dinle (Authorization: Bearer ...) ve login isteğinden
+            //     kimlik bilgilerini yakala (otomatik yenileme için şifreli saklanır).
+            _webView.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+            _webView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
+
             // 2. Sayfa yönlendirmelerini dinle
             _webView.CoreWebView2.NavigationCompleted += (_, e) =>
             {
@@ -228,6 +234,87 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
         await ensureTask;
     }
 
+    private void OnWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        if (_tokenCaptured)
+        {
+            return;
+        }
+
+        try
+        {
+            string uri = e.Request.Uri;
+            if (!uri.Contains("shipentegra", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            // 1) Token taşıyan başlıkları tara (Authorization: Bearer ... gibi)
+            foreach (var requestHeader in e.Request.Headers)
+            {
+                string headerValue = requestHeader.Value ?? string.Empty;
+                if (headerValue.Length > 0 && headerValue.Length < 2000)
+                {
+                    string? token = ShipEntegraTokenExtractor.ExtractTokenFromAny(headerValue);
+                    if (!string.IsNullOrWhiteSpace(token))
+                    {
+                        string captured = token!;
+                        BeginInvoke(new Action(async () => await CompleteLoginSuccessAsync(captured, null)));
+                        return;
+                    }
+                }
+            }
+
+            // 2) Login isteğinden kimlik bilgilerini yakala (sonraki oturumlar otomatik yenilenebilsin)
+            if (uri.EndsWith("/v1/auth/login", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(e.Request.Method, "POST", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = TryCaptureLoginCredentialsAsync(e);
+            }
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, "ShipEntegraEmbeddedLoginForm.OnWebResourceRequested");
+        }
+    }
+
+    private async Task TryCaptureLoginCredentialsAsync(CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        try
+        {
+            var content = e.Request.Content;
+            if (content == null)
+            {
+                return;
+            }
+
+            using var reader = new StreamReader(content);
+            string body = await reader.ReadToEndAsync();
+            if (string.IsNullOrWhiteSpace(body))
+            {
+                return;
+            }
+
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            string email = root.TryGetProperty("email", out var em) ? em.GetString() ?? string.Empty : string.Empty;
+            string password = root.TryGetProperty("password", out var pw) ? pw.GetString() ?? string.Empty : string.Empty;
+            if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            {
+                return;
+            }
+
+            var settings = ShipEntegraSettingsStore.Load();
+            settings.SavedEmail = email;
+            settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(password);
+            ShipEntegraSettingsStore.Save(settings);
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, "ShipEntegraEmbeddedLoginForm.TryCaptureLoginCredentialsAsync");
+        }
+    }
+
     private async void OnWebResourceResponseReceived(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs e)
     {
         if (_tokenCaptured)
@@ -244,17 +331,10 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
                 using var reader = new StreamReader(stream);
                 string body = await reader.ReadToEndAsync();
 
-                if (!string.IsNullOrWhiteSpace(body) && body.Contains("eyJ"))
+                var (accessToken, refreshToken) = ShipEntegraTokenExtractor.ExtractFromText(body);
+                if (!string.IsNullOrWhiteSpace(accessToken))
                 {
-                    var match = Regex.Match(body, @"ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+");
-                    if (match.Success)
-                    {
-                        string tokenCandidate = match.Value;
-                        if (!JwtTokenInspector.IsExpired(tokenCandidate))
-                        {
-                            await CompleteLoginSuccessAsync(tokenCandidate);
-                        }
-                    }
+                    await CompleteLoginSuccessAsync(accessToken!, refreshToken);
                 }
             }
         }
@@ -271,37 +351,16 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
         try
         {
             // localStorage içindeki token alanlarını oku (ShipEntegra SPA tokeni burada tutar).
-            string script = @"(() => {
-                try {
-                    const t = localStorage.getItem('token') || localStorage.getItem('access_token') || localStorage.getItem('auth_token') || localStorage.getItem('accessToken');
-                    if (t && t.length > 25) return t;
+            // Tüm yerel depoları dökümle ve token çıkarıcıdan geçir (v4.public ve JWT biçimlerini tanır).
+            const string script = @"(() => { try { const o={}; for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);const v=localStorage.getItem(k);if(v&&v.length<8000)o['L:'+k]=v;} for(let i=0;i<sessionStorage.length;i++){const k=sessionStorage.key(i);const v=sessionStorage.getItem(k);if(v&&v.length<8000)o['S:'+k]=v;} return JSON.stringify(o);} catch(e){return '';} })()";
 
-                    const u = localStorage.getItem('user');
-                    if (u) {
-                        const parsed = JSON.parse(u);
-                        if (parsed?.token?.accessToken) return parsed.token.accessToken;
-                        if (parsed?.accessToken) return parsed.accessToken;
-                    }
-                } catch (e) { }
-                return '';
-            })()";
-
-            string jsonResult = await _webView.ExecuteScriptAsync(script);
-            if (!string.IsNullOrWhiteSpace(jsonResult) && jsonResult != "null" && jsonResult != "\"\"")
+            string dump = await _webView.ExecuteScriptAsync(script);
+            if (!string.IsNullOrWhiteSpace(dump) && dump != "null" && dump.Length > 4)
             {
-                string rawToken = jsonResult.Trim('\"', ' ', '\\');
-                if (rawToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                var (access, refresh) = ShipEntegraTokenExtractor.ExtractFromText(dump);
+                if (!string.IsNullOrWhiteSpace(access))
                 {
-                    rawToken = rawToken.Substring(7).Trim();
-                }
-
-                if (rawToken.Length > 25)
-                {
-                    bool looksLikeJwt = rawToken.Contains("eyJ");
-                    if (!looksLikeJwt || !JwtTokenInspector.IsExpired(rawToken))
-                    {
-                        await CompleteLoginSuccessAsync(rawToken);
-                    }
+                    await CompleteLoginSuccessAsync(access!, refresh);
                 }
             }
         }
@@ -345,7 +404,7 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
         }
     }
 
-    private async Task CompleteLoginSuccessAsync(string token)
+    private async Task CompleteLoginSuccessAsync(string token, string? refreshToken = null)
     {
         if (_tokenCaptured)
         {
@@ -361,6 +420,12 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
         var settings = ShipEntegraSettingsStore.Load();
         settings.BearerToken = token;
         settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+        {
+            settings.RefreshToken = refreshToken;
+            settings.RefreshTokenLastUpdatedUtc = DateTime.UtcNow;
+        }
+
         ShipEntegraSettingsStore.Save(settings);
 
         // UI Güncelle
