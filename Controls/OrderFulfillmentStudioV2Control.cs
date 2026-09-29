@@ -2269,7 +2269,9 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                     ? "Taşıyıcı gönderi oluşturamadı."
                     : result.ErrorMessage;
 
-                bool isSeFailure = ShipmentSessionRouter.IsShipEntegraContext(_selectedQuote?.ProviderName, result.ErrorMessage);
+                bool isSeContext = ShipmentSessionRouter.IsShipEntegraContext(_selectedQuote?.ProviderName, result.ErrorMessage);
+
+                bool isSeSessionFailure = isSeContext && ShipmentSessionRouter.IsSessionFailure(result.ErrorMessage);
 
                 bool isNetworkFailure = ShipmentSessionRouter.IsNetworkLevelFailure(result.ErrorMessage);
 
@@ -2281,7 +2283,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Warning);
                 }
-                else if (isSeFailure)
+                else if (isSeSessionFailure)
                 {
                     var askSe = MessageBox.Show(
                         $"{message}\n\nŞimdi ShipEntegra oturumunu yenilemek ister misiniz?",
@@ -2301,6 +2303,10 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                             return;
                         }
                     }
+                }
+                else if (isSeContext)
+                {
+                    MessageBox.Show(message, "Gönderi Oluşturulamadı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 else
                 {

@@ -127,7 +127,14 @@ public sealed class ShipEntegraCreateOrderRequest
     [JsonPropertyName("rememberShipToContact")] public bool RememberShipToContact { get; set; }
     [JsonPropertyName("currency")] public string Currency { get; set; } = "USD";
     [JsonPropertyName("reference")] public string Reference { get; set; } = string.Empty;
-    [JsonPropertyName("shippingType")] public int ShippingType { get; set; } = 1;
+    /// <summary>
+    /// Gümrük/gönderim tipi: 1=DDP, 2=DDU, 3=IOSS, 4=ShipEntegra IOSS, 5=HMRC, 7=VOEC.
+    /// Panel manuel sipariş akışı alanı boş bırakır (istekte yer almaz). ABD için DDP(1)
+    /// canlıda doğrulandı; GB/UK için sunucu DDP'yi reddeder (29.09.2026 canlı).
+    /// </summary>
+    [JsonPropertyName("shippingType")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? ShippingType { get; set; }
     [JsonPropertyName("description")] public string Description { get; set; } = string.Empty;
     [JsonPropertyName("products")] public List<ShipEntegraOrderProduct> Products { get; set; } = new();
     [JsonPropertyName("packages")] public List<ShipEntegraOrderPackage> Packages { get; set; } = new();
@@ -225,6 +232,27 @@ public sealed class ShipEntegraTokenExpiredException : Exception
 {
     public ShipEntegraTokenExpiredException(string message) : base(message) { }
     public ShipEntegraTokenExpiredException(string message, Exception innerException) : base(message, innerException) { }
+}
+
+/// <summary>
+/// ShipEntegra iş kuralı reddi (örn. ERR.28050.1008: hedef ülke için DDP geçerli değil).
+/// Yetki hatası değildir; oturum yenileme akışını tetiklememesi gerekir.
+/// </summary>
+public sealed class ShipEntegraBusinessException : Exception
+{
+    public ShipEntegraBusinessException(string code, string description, int statusCode)
+        : base(string.IsNullOrWhiteSpace(description) ? code : $"{description} ({code})")
+    {
+        Code = code ?? string.Empty;
+        Description = string.IsNullOrWhiteSpace(description) ? Code : description;
+        StatusCode = statusCode;
+    }
+
+    public string Code { get; }
+
+    public string Description { get; }
+
+    public int StatusCode { get; }
 }
 
 /// <summary>

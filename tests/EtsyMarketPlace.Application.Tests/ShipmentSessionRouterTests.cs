@@ -71,4 +71,15 @@ public sealed class ShipmentSessionRouterTests
         Assert.False(ShipmentSessionRouter.IsNetworkLevelFailure(null));
         Assert.False(ShipmentSessionRouter.IsNetworkLevelFailure("   "));
     }
+
+    [Theory]
+    [InlineData("ShipEntegra yetkilendirme hatası (401 Unauthorized). Oturum süreniz dolmuş olabilir.", true)]
+    [InlineData("ShipEntegra oturumunuzun süresi dolmuş. Lütfen yeniden giriş yapın.", true)]
+    [InlineData("ShipEntegra oturum tokeni bulunamadı. Lütfen oturum düğmesinden giriş yapın.", true)]
+    [InlineData("ShipEntegra isteği reddedildi: Bu gönderi için DDP (Delivery Duty Paid) seçeneği geçerli değildir. (ERR.28050.1008)", false)]
+    [InlineData("Token yenilendi ancak gönderi oluşturulamadı: Bu gönderi için DDP (Delivery Duty Paid) seçeneği geçerli değildir.", false)]
+    [InlineData(null, false)]
+    public void IsSessionFailure_ClassifiesAuthMessages(string? message, bool expected)
+        => Assert.Equal(expected, ShipmentSessionRouter.IsSessionFailure(message));
+
 }
