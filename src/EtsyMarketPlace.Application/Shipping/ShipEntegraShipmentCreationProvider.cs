@@ -239,7 +239,8 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
             });
         }
 
-        string specialServiceCode = ShipEntegraLabelServiceCodes.Resolve(context.SelectedServiceCode, context.SelectedSubCarrier) ?? string.Empty;
+        string specialServiceCode = ShipEntegraLabelServiceCodes.ResolveForDestination(
+            context.SelectedServiceCode, context.SelectedSubCarrier, request.ShipTo.Country) ?? string.Empty;
         var labelRequest = new ShipEntegraCreateLabelRequest
         {
             SpecialService = specialServiceCode,
@@ -341,6 +342,16 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
         if (string.IsNullOrWhiteSpace(request.SpecialService))
         {
             return Fail("Bu servis için etiket kodu tanımlı değil; kod tanımlandığında tekrar deneyin.");
+        }
+
+        // Bekleyen kayıt ülkeye uygun olmayan bir Eko Plus varyantı taşıyorsa destinasyona
+        // göre düzelt (canlı: shipentegra-amerika-eko-plus, GB/DE için reddedilmişti, 29.09.2026).
+        string? destinationSpecialService = ShipEntegraLabelServiceCodes.ResolveForDestination(
+            request.SpecialService, null, request.Country);
+        if (!string.IsNullOrWhiteSpace(destinationSpecialService))
+        {
+            request.SpecialService = destinationSpecialService;
+            request.ServiceType = ShipEntegraLabelServiceCodes.ResolveServiceType(destinationSpecialService);
         }
 
         var settings = _settingsProvider();
