@@ -26,4 +26,17 @@ public sealed class ShipEntegraLabelServiceCodeTests
     [InlineData("", "Bilinmeyen Servis")]
     public void Resolve_UnknownService_ReturnsNull(string? code, string? name)
         => Assert.Null(ShipEntegraLabelServiceCodes.Resolve(code, name));
+
+    [Theory]
+    [InlineData("shipentegra-amerika-eko-plus", 2)]
+    [InlineData("shipentegra-eko-plus", 2)]
+    [InlineData("shipentegra-eco", 2)]
+    [InlineData("se-dhlecommerce-eko-plus", 2)]
+    [InlineData("shipentegra-express", 1)]
+    [InlineData("shipentegra-smart-express", 1)]
+    [InlineData("shipentegra-ups-ekspress", 1)]
+    [InlineData(null, 1)]
+    [InlineData("", 1)]
+    public void ResolveServiceType_EkoIcinIki_DigerIcinBirDondurur(string? code, int expected)
+        => Assert.Equal(expected, ShipEntegraLabelServiceCodes.ResolveServiceType(code));
 }

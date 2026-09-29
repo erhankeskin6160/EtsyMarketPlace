@@ -69,6 +69,22 @@ public static class ShipEntegraLabelServiceCodes
         return null;
     }
 
+    /// <summary>
+    /// Panel sözleşmesi: serviceType 1 = Express, 2 = Eko
+    /// (panel bundle: serviceType: "express"===shipping_service?1:2).
+    /// </summary>
+    public static int ResolveServiceType(string? serviceCode)
+    {
+        if (string.IsNullOrWhiteSpace(serviceCode))
+        {
+            return 1;
+        }
+
+        string code = serviceCode.Trim().ToLowerInvariant();
+        bool isEco = code.Contains("eko") || code.Contains("eco");
+        return isEco ? 2 : 1;
+    }
+
     private static string Slug(string? value)
     {
         if (string.IsNullOrWhiteSpace(value))

@@ -209,7 +209,11 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         return ids;
     }
 
-    /// <summary>Etiket oluşturur ve ham yanıt baytlarını döner (PDF veya JSON olabilir).</summary>
+    /// <summary>
+    /// Etiket oluşturur ve ham yanıt baytlarını döner. Panel sözleşmesi (29.09.2026 canlı trafik):
+    /// 200 yanıtı JSON'dur ve gerçek PDF, data.label alanındaki herkese açık URL'dedir;
+    /// doğrudan PDF baytı da desteklenir.
+    /// </summary>
     public async Task<byte[]?> CreateLabelAsync(
         ShipEntegraCreateLabelRequest request,
         string rawBearerToken,
@@ -233,6 +237,24 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         ValidateStatus(response, labelBodyPreview);
 
         return bytes;
+    }
+
+    /// <summary>
+    /// files.shipentegra.com üzerindeki etiket dosyasını indirir.
+    /// Panel yanıtındaki data.label alanı herkese açık bir PDF URL'sidir; kimlik doğrulama gerekmez.
+    /// </summary>
+    public async Task<byte[]?> DownloadLabelFileAsync(string url, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return null;
+        }
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Get, url);
+        using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+        byte[] bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        LogShipEntegraTrace("LabelFile-Download", $"{url} | Status: {(int)response.StatusCode} | {bytes.Length} bayt");
+        return response.IsSuccessStatusCode && bytes.Length > 0 ? bytes : null;
     }
 
     private static ShipEntegraOrderResult ParseOrderResult(string json)

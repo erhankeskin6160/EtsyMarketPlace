@@ -2018,7 +2018,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         }
 
         string labelPath = _selectedOrder.LabelUrl ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(labelPath) && File.Exists(labelPath))
+        if (!string.IsNullOrWhiteSpace(labelPath) &&
+            (File.Exists(labelPath) || labelPath.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
         {
             OpenWithShell(labelPath);
             return;
@@ -2047,7 +2048,9 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 try
                 {
                     var retry = await seProvider.RetryLabelAsync(receiptId);
-                    if (retry.IsSuccess && File.Exists(retry.LabelUrl))
+                    if (retry.IsSuccess &&
+                        (File.Exists(retry.LabelUrl) ||
+                         retry.LabelUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)))
                     {
                         await _orderService.MarkOrderAsShippedAsync(receiptId, _selectedOrder.SelectedCarrier, _selectedOrder.TrackingCode, retry.LabelUrl);
                         _lblActionStatus.ForeColor = UiStyle.SuccessColor;
