@@ -51,9 +51,36 @@ public sealed class EtsyOrderService
         return Task.CompletedTask;
     }
 
+    private readonly Dictionary<long, EtsyOrderFulfillmentItem> _addressOverrides = new();
+
+    public void UpdateOrderAddress(long receiptId, EtsyOrderFulfillmentItem updated)
+    {
+        var order = _orders.FirstOrDefault(o => o.ReceiptId == receiptId);
+        if (order != null)
+        {
+            ApplyAddress(order, updated);
+        }
+        _addressOverrides[receiptId] = updated;
+    }
+
+    private static void ApplyAddress(EtsyOrderFulfillmentItem target, EtsyOrderFulfillmentItem source)
+    {
+        target.BuyerName = source.BuyerName;
+        target.BuyerEmail = source.BuyerEmail;
+        target.Phone = source.Phone;
+        target.StreetAddress = source.StreetAddress;
+        target.SecondAddress = source.SecondAddress;
+        target.City = source.City;
+        target.State = source.State;
+        target.HasState = !string.IsNullOrWhiteSpace(source.State);
+        target.PostalCode = source.PostalCode;
+        target.CountryCode = source.CountryCode;
+        target.CountryName = source.CountryName;
+    }
+
     /// <summary>
     /// Kuyruğu canlı Etsy verisiyle senkronize eder: canlı listedeki siparişler baştan
-    /// yazılır; bu oturumda kargolanan yerel kayıtlar (Gönderildi) korunur.
+    /// yazılır; bu oturumda kargolanan yerel kayıtlar (Gönderildi) ve manuel adres düzenlemeleri korunur.
     /// </summary>
     public void SyncLiveQueue(IReadOnlyList<EtsyOrderFulfillmentItem> liveOrders)
     {
@@ -67,5 +94,14 @@ public sealed class EtsyOrderService
         _orders.Clear();
         _orders.AddRange(incoming.Where(o => !localShippedIds.Contains(o.ReceiptId)));
         _orders.AddRange(localShipped);
+
+        // Kullanıcının elle düzenlediği adresleri koru
+        foreach (var order in _orders)
+        {
+            if (_addressOverrides.TryGetValue(order.ReceiptId, out var ovr))
+            {
+                ApplyAddress(order, ovr);
+            }
+        }
     }
 }

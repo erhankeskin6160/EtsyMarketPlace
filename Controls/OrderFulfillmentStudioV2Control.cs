@@ -104,6 +104,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     private Label _lblBuyerLine2 = null!;
     private Label _lblBuyerCountry = null!;
     private Label _lblIoss = null!;
+    private Button _btnEditAddress = null!;
+    private Label _lblAddressWarning = null!;
     private SaasUnitInputBox _inWeight = null!;
     private SaasUnitInputBox _inLength = null!;
     private SaasUnitInputBox _inWidth = null!;
@@ -1170,12 +1172,40 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _lblBuyerLine2 = MakeLabel(UiStyle.BaseFont, UiStyle.TextMuted, 0, 38);
         _lblBuyerCountry = MakeLabel(UiStyle.BaseFont, UiStyle.TextMuted, 0, 56);
         _lblIoss = MakeLabel(_smallFont, UiStyle.AccentColor, 0, 78);
+
+        _btnEditAddress = new Button
+        {
+            Text = "✏️ Adresi Düzenle",
+            Font = new Font("Segoe UI", 8.5F, FontStyle.Bold),
+            BackColor = Color.FromArgb(51, 65, 85),
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Size = new Size(130, 28),
+            Anchor = AnchorStyles.Top | AnchorStyles.Right,
+            Location = new Point(230, 6),
+            Cursor = Cursors.Hand
+        };
+        _btnEditAddress.FlatAppearance.BorderSize = 0;
+        _btnEditAddress.Click += (_, _) => OnEditAddressClicked();
+
+        _lblAddressWarning = new Label
+        {
+            Text = "⚠️ Alıcı adresi eksik! Aras Global gönderisi için bilgileri tamamlayın.",
+            Font = new Font("Segoe UI", 8F, FontStyle.Bold),
+            ForeColor = Color.FromArgb(245, 158, 11),
+            AutoSize = true,
+            Location = new Point(0, 98),
+            Visible = false
+        };
+
         buyer.Controls.Add(_lblBuyerName);
         buyer.Controls.Add(_lblBuyerLine1);
         buyer.Controls.Add(_lblBuyerLine2);
         buyer.Controls.Add(_lblBuyerCountry);
         buyer.Controls.Add(_lblIoss);
-        buyer.Height = 100;
+        buyer.Controls.Add(_btnEditAddress);
+        buyer.Controls.Add(_lblAddressWarning);
+        buyer.Height = 122;
         stack.Controls.Add(buyer, 0, 0);
 
         // paket ölçüleri
@@ -1655,6 +1685,10 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 .ToList();
 
             _orderService.SyncLiveQueue(liveOrders);
+            if (liveOrders.Any(o => string.IsNullOrWhiteSpace(o.StreetAddress)))
+            {
+                AppLog.Info("Etsy siparişlerinin bazılarında adres bilgisi boş geldi. Eski API token'larında 'address_r' yetkisi eksik olabilir. Ayarlar -> Etsy API ekranından yeni izinlerle tekrar giriş yapabilir veya 'Adresi Düzenle' butonuyla eksik adresleri tamamlayabilirsiniz.", "EtsyAddressSync");
+            }
             _lblQueueEmpty.Text = "Son 45 güne ait, işlem bekleyen sipariş yok.";
         }
         catch (Exception ex)
@@ -1732,18 +1766,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             }
         }
 
-        _lblBuyerName.Text = order.BuyerName;
-        _lblBuyerLine1.Text = order.StreetAddress;
-        _lblBuyerLine2.Text = string.Join(" ", new[] { order.PostalCode, order.City }.Where(x => !string.IsNullOrWhiteSpace(x)));
-        _lblBuyerCountry.Text = string.IsNullOrWhiteSpace(order.CountryName)
-            ? order.CountryCode
-            : $"{order.CountryName} ({order.CountryCode})";
-        _lblIoss.Text = string.IsNullOrWhiteSpace(order.IossNumber)
-            ? "IOSS yok — standart ihracat"
-            : $"IOSS {order.IossNumber}";
-
-        _barcode.ReceiverName = order.BuyerName;
-        _barcode.AddressLine = order.StreetAddress;
+        RefreshBuyerCard(order);
 
         RenderItems(order);
 
@@ -1843,12 +1866,54 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         _lblBuyerLine2.Text = string.Empty;
         _lblBuyerCountry.Text = string.Empty;
         _lblIoss.Text = string.Empty;
+        _lblAddressWarning.Visible = false;
+        _lblBuyerLine1.ForeColor = UiStyle.TextMuted;
         _lblDesiValue.Text = "—";
         _lblBillableValue.Text = "—";
         _itemsFlow.Controls.Clear();
         _quotes.Clear();
         RenderQuotes();
         UpdateActionStrip();
+    }
+
+    private void OnEditAddressClicked()
+    {
+        if (_selectedOrder == null)
+        {
+            MessageBox.Show("Lütfen önce listeden bir sipariş seçin.", "Sipariş Seçilmedi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dlg = new EditReceiverAddressDialog(_selectedOrder);
+        if (dlg.ShowDialog(FindForm()) == DialogResult.OK)
+        {
+            _orderService.UpdateOrderAddress(_selectedOrder.ReceiptId, _selectedOrder);
+            RefreshBuyerCard(_selectedOrder);
+        }
+    }
+
+    private void RefreshBuyerCard(EtsyOrderFulfillmentItem order)
+    {
+        _lblBuyerName.Text = order.BuyerName;
+        _lblBuyerLine1.Text = string.IsNullOrWhiteSpace(order.StreetAddress) ? "(Sokak adresi girilmedi)" : order.StreetAddress;
+        _lblBuyerLine2.Text = string.Join(" ", new[] { order.PostalCode, order.City, order.State }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        _lblBuyerCountry.Text = string.IsNullOrWhiteSpace(order.CountryName)
+            ? order.CountryCode
+            : $"{order.CountryName} ({order.CountryCode})";
+        _lblIoss.Text = string.IsNullOrWhiteSpace(order.IossNumber)
+            ? "IOSS yok — standart ihracat"
+            : $"IOSS {order.IossNumber}";
+
+        _barcode.ReceiverName = order.BuyerName;
+        _barcode.AddressLine = order.StreetAddress;
+
+        bool isMissing = string.IsNullOrWhiteSpace(order.StreetAddress) ||
+                         string.IsNullOrWhiteSpace(order.City) ||
+                         string.IsNullOrWhiteSpace(order.PostalCode) ||
+                         (UsStateHelper.RequiresState(order.CountryCode) && string.IsNullOrWhiteSpace(order.State));
+
+        _lblAddressWarning.Visible = isMissing;
+        _lblBuyerLine1.ForeColor = isMissing ? Color.FromArgb(248, 113, 113) : UiStyle.TextMuted;
     }
 
     #endregion

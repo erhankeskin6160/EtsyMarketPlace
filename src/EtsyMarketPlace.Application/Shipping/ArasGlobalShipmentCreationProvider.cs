@@ -46,7 +46,30 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             return new ShipmentCreationResult
             {
                 IsSuccess = false,
-                ErrorMessage = "Gönderi başlamış veya Etsy sipariş bilgisi eksik."
+                ErrorMessage = "Gönderi bağlamı veya Etsy sipariş bilgisi eksik."
+            };
+        }
+
+        var order = context.Order;
+        var missingFields = new List<string>();
+        if (string.IsNullOrWhiteSpace(order.BuyerName)) missingFields.Add("Alıcı Adı");
+        if (string.IsNullOrWhiteSpace(order.StreetAddress)) missingFields.Add("Sokak Adresi");
+        if (string.IsNullOrWhiteSpace(order.City)) missingFields.Add("Şehir");
+        if (string.IsNullOrWhiteSpace(order.PostalCode)) missingFields.Add("Posta Kodu");
+        string countryCode = !string.IsNullOrWhiteSpace(order.CountryCode) ? order.CountryCode.Trim().ToUpperInvariant() : "US";
+
+        bool isUsOrCa = UsStateHelper.RequiresState(countryCode);
+        if (isUsOrCa && string.IsNullOrWhiteSpace(order.State))
+        {
+            missingFields.Add("Eyalet (ABD/Kanada için zorunlu)");
+        }
+
+        if (missingFields.Count > 0)
+        {
+            return new ShipmentCreationResult
+            {
+                IsSuccess = false,
+                ErrorMessage = $"Aras Global gönderisi için alıcı adres bilgileri eksik ({string.Join(", ", missingFields)}). Lütfen kargo ekranındaki '✏️ Adresi Düzenle' butonu ile alıcı bilgilerini tamamlayıp tekrar deneyin."
             };
         }
 
@@ -188,14 +211,45 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             sender = BuildFallbackSender(settings);
         }
 
-        // 4. Alıcı adresi (Etsy siparişinden)
-        string buyerFirst = order.BuyerName;
+        // 4. Alıcı adresi doğrulaması ve normalizasyonu (Etsy siparişinden)
+        var missingFields = new List<string>();
+        if (string.IsNullOrWhiteSpace(order.BuyerName)) missingFields.Add("Alıcı Adı");
+        if (string.IsNullOrWhiteSpace(order.StreetAddress)) missingFields.Add("Sokak Adresi");
+        if (string.IsNullOrWhiteSpace(order.City)) missingFields.Add("Şehir");
+        if (string.IsNullOrWhiteSpace(order.PostalCode)) missingFields.Add("Posta Kodu");
+        string countryCode = !string.IsNullOrWhiteSpace(order.CountryCode) ? order.CountryCode.Trim().ToUpperInvariant() : "US";
+
+        bool isUsOrCa = UsStateHelper.RequiresState(countryCode);
+        if (isUsOrCa && string.IsNullOrWhiteSpace(order.State))
+        {
+            missingFields.Add("Eyalet (ABD/Kanada için zorunlu)");
+        }
+
+        if (missingFields.Count > 0)
+        {
+            return new ShipmentCreationResult
+            {
+                IsSuccess = false,
+                ErrorMessage = $"Aras Global gönderisi için alıcı adres bilgileri eksik ({string.Join(", ", missingFields)}). Lütfen kargo ekranındaki '✏️ Adresi Düzenle' butonu ile alıcı bilgilerini tamamlayıp tekrar deneyin."
+            };
+        }
+
+        string buyerFirst = order.BuyerName.Trim();
         string buyerLast = string.Empty;
-        int spaceIdx = order.BuyerName.LastIndexOf(' ');
+        int spaceIdx = buyerFirst.LastIndexOf(' ');
         if (spaceIdx > 0)
         {
-            buyerFirst = order.BuyerName.Substring(0, spaceIdx);
-            buyerLast = order.BuyerName.Substring(spaceIdx + 1);
+            buyerLast = buyerFirst.Substring(spaceIdx + 1);
+            buyerFirst = buyerFirst.Substring(0, spaceIdx);
+        }
+
+        string stateCode = string.Empty;
+        string stateName = string.Empty;
+        if (!string.IsNullOrWhiteSpace(order.State))
+        {
+            var resolved = UsStateHelper.ResolveUsOrCaState(order.State);
+            stateCode = resolved.Code;
+            stateName = resolved.Name;
         }
 
         var receiver = new ArasReceiverAddress
@@ -203,18 +257,18 @@ public sealed class ArasGlobalShipmentCreationProvider : IShipmentCreationProvid
             Title = string.Empty,
             FirstName = buyerFirst,
             LastName = buyerLast,
-            CityName = order.City,
+            CityName = order.City.Trim(),
             TownName = string.Empty,
             PhoneCountryCode = null,
-            CountryCode = !string.IsNullOrWhiteSpace(order.CountryCode) ? order.CountryCode : "US",
-            StateCode = order.HasState ? (order.State ?? string.Empty) : string.Empty,
-            StateName = order.HasState ? (order.State ?? string.Empty) : string.Empty,
-            PhoneNumber = order.Phone ?? string.Empty,
-            PostalCode = order.PostalCode,
-            Email = order.BuyerEmail,
+            CountryCode = countryCode,
+            StateCode = stateCode,
+            StateName = stateName,
+            PhoneNumber = !string.IsNullOrWhiteSpace(order.Phone) ? order.Phone.Trim() : "1111111111",
+            PostalCode = order.PostalCode.Trim(),
+            Email = order.BuyerEmail?.Trim() ?? string.Empty,
             CompanyName = string.Empty,
-            Details = !string.IsNullOrWhiteSpace(order.StreetAddress) ? order.StreetAddress : "Delivery Address",
-            Details2 = string.Empty,
+            Details = order.StreetAddress.Trim(),
+            Details2 = order.SecondAddress?.Trim() ?? string.Empty,
             Type = 2
         };
 

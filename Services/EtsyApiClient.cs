@@ -1400,18 +1400,19 @@ internal sealed class EtsyApiClient
             }
         }
 
-        string countryCode = GetString(receipt, "country_iso");
+        var addr = EtsyAddressParser.Parse(receipt);
+        string countryCode = !string.IsNullOrWhiteSpace(addr.CountryCode) ? addr.CountryCode : GetString(receipt, "country_iso");
 
         return new EtsyFulfillmentReceipt(
             GetLong(receipt, "receipt_id"),
-            GetFirstString(receipt, "name", "buyer_name"),
-            GetString(receipt, "buyer_email"),
-            GetFirstString(receipt, "buyer_phone", "phone"),
-            GetString(receipt, "first_line"),
-            GetString(receipt, "second_line"),
-            GetString(receipt, "city"),
-            GetString(receipt, "state"),
-            GetString(receipt, "zip"),
+            !string.IsNullOrWhiteSpace(addr.BuyerName) ? addr.BuyerName : GetFirstString(receipt, "name", "buyer_name"),
+            !string.IsNullOrWhiteSpace(addr.BuyerEmail) ? addr.BuyerEmail : GetString(receipt, "buyer_email"),
+            !string.IsNullOrWhiteSpace(addr.Phone) ? addr.Phone : GetFirstString(receipt, "buyer_phone", "phone"),
+            addr.StreetAddress,
+            addr.SecondAddress,
+            addr.City,
+            addr.State,
+            addr.PostalCode,
             countryCode,
             EtsyFulfillmentQueuePolicy.CountryDisplayName(countryCode),
             GetFirstString(receipt, "ioss_number"),
