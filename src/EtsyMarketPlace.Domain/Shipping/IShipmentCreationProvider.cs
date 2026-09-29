@@ -18,6 +18,8 @@ public sealed class ShipmentCreationContext
     public double HeightCm { get; set; } = 10.0;
     public string HsCode { get; set; } = string.Empty;
     public string SelectedSubCarrier { get; set; } = "widect"; // widect, ups, vb.
+    /// <summary>Secilen teklifin servis kodu (or. shipentegra-amerika-eko-plus). Etiket adiminda kullanilir.</summary>
+    public string SelectedServiceCode { get; set; } = string.Empty;
     public string ServiceType { get; set; } = "Eco Express";
     public decimal CargoPrice { get; set; } = 0m;
     /// <summary>Teklif adiminda kullanilan desi (hacimsel agirlik). Tek kaynak burasidir.</summary>

@@ -224,10 +224,13 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         LogShipEntegraTrace("CreateLabel-Request", json);
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-        ValidateStatus(response);
 
         byte[] bytes = await response.Content.ReadAsByteArrayAsync(cancellationToken);
-        LogShipEntegraTrace("CreateLabel-Response", $"Status: {(int)response.StatusCode} | {bytes.Length} bayt");
+        string labelBodyPreview = bytes.Length > 0 && bytes[0] == 0x25
+            ? $"{bytes.Length} bayt (dosya)"
+            : Encoding.UTF8.GetString(bytes, 0, Math.Min(bytes.Length, 400));
+        LogShipEntegraTrace("CreateLabel-Response", $"Status: {(int)response.StatusCode} | {labelBodyPreview}");
+        ValidateStatus(response, labelBodyPreview);
 
         return bytes;
     }
