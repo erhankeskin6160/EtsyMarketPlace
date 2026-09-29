@@ -127,6 +127,7 @@ public sealed class ShipEntegraCreateOrderRequest
     [JsonPropertyName("rememberShipToContact")] public bool RememberShipToContact { get; set; }
     [JsonPropertyName("currency")] public string Currency { get; set; } = "USD";
     [JsonPropertyName("reference")] public string Reference { get; set; } = string.Empty;
+    [JsonPropertyName("shippingType")] public int ShippingType { get; set; } = 1;
     [JsonPropertyName("description")] public string Description { get; set; } = string.Empty;
     [JsonPropertyName("products")] public List<ShipEntegraOrderProduct> Products { get; set; } = new();
     [JsonPropertyName("packages")] public List<ShipEntegraOrderPackage> Packages { get; set; } = new();
