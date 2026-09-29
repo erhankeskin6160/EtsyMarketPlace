@@ -21,4 +21,32 @@ public static class ShipmentSessionRouter
         return !string.IsNullOrWhiteSpace(errorMessage) &&
                errorMessage.Contains("ShipEntegra", StringComparison.OrdinalIgnoreCase);
     }
+    /// <summary>
+    /// Hata ağ/taşıma katmanına mı ait (soket, DNS, zaman aşımı, bağlantı kesilmesi)?
+    /// Bu tür hatalarda oturum yenileme akışı açılmaz; kullanıcıdan yeniden denemesi istenir.
+    /// </summary>
+    public static bool IsNetworkLevelFailure(string? errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return false;
+        }
+
+        string[] markers =
+        {
+            "hizmet sağlayıcısı", "hizmet saglayicisi",
+            "socket",
+            "bağlantı", "baglanti",
+            "bağlanamadı", "baglanamadi",
+            "ağ hatası", "ag hatasi",
+            "connection", "network",
+            "timed out", "timeout", "zaman aşımı", "zaman asimi",
+            "aborted", "kesildi", "sıfırlandı", "sifirlandi",
+            "çözümlenemedi", "cozumlenemedi",
+            "getaddrinfo", "err_name", "err_connection", "err_failed",
+            "ssl", "tls"
+        };
+
+        return markers.Any(m => errorMessage.Contains(m, StringComparison.OrdinalIgnoreCase));
+    }
 }

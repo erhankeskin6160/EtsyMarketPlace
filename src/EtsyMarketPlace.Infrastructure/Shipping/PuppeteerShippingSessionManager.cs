@@ -29,6 +29,32 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
         return baseFolder;
     }
 
+    /// <summary>
+    /// Tek kullanımlık oturum profili: her çağrıda benzersiz klasör üretir ve eski
+    /// otomatik profilleri fırsatçı temizler. Kalıcı profildeki kilit çakışmalarını önler.
+    /// </summary>
+    private static string GetDisposableProfileDirectory(string provider)
+    {
+        var baseFolder = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "EtsyMarketPlace",
+            "ShippingProfiles");
+        Directory.CreateDirectory(baseFolder);
+
+        try
+        {
+            foreach (var dir in Directory.GetDirectories(baseFolder, provider + "-auto-*"))
+            {
+                try { Directory.Delete(dir, true); } catch (Exception caught) { AppLog.Swallowed(caught); }
+            }
+        }
+        catch (Exception caught) { AppLog.Swallowed(caught); }
+
+        var disposable = Path.Combine(baseFolder, provider + "-auto-" + DateTime.Now.ToString("yyyyMMdd-HHmmssfff"));
+        Directory.CreateDirectory(disposable);
+        return disposable;
+    }
+
     public static void CleanProfileLocks(string profileDir)
     {
         try
@@ -102,7 +128,6 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             Args = new[]
             {
                 "--no-sandbox",
-                "--disable-setuid-sandbox",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
                 "--window-size=1200,800",
@@ -328,12 +353,11 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
         {
             Headless = !showBrowser,
             ExecutablePath = browserPath,
-            UserDataDir = GetProfileDirectory("ShipEntegra"),
+            UserDataDir = GetDisposableProfileDirectory("ShipEntegra"),
             IgnoredDefaultArgs = new[] { "--enable-automation" },
             Args = new[]
             {
                 "--no-sandbox",
-                "--disable-setuid-sandbox",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
                 "--window-size=1200,800"
@@ -450,7 +474,6 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             Args = new[]
             {
                 "--no-sandbox",
-                "--disable-setuid-sandbox",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
                 "--window-size=1200,800"
@@ -621,7 +644,6 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
             Args = new[]
             {
                 "--no-sandbox",
-                "--disable-setuid-sandbox",
                 "--disable-blink-features=AutomationControlled",
                 "--disable-infobars",
                 "--window-size=1200,800"
