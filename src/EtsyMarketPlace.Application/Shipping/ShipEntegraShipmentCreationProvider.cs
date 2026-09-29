@@ -90,6 +90,10 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
             return Fail("ShipEntegra oturumunuzun süresi dolmuş. Lütfen yeniden giriş yapın.");
         }
+        catch (ShipEntegraBusinessException bex)
+        {
+            return Fail($"ShipEntegra isteği reddedildi: {bex.Description} ({bex.Code})");
+        }
         catch (Exception ex)
         {
             return Fail($"ShipEntegra gönderi oluşturma hatası: {ex.Message}");
@@ -178,6 +182,7 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
             },
             Currency = currency,
             Reference = order.ReceiptId.ToString(),
+            ShippingType = ShipEntegraShippingTypeResolver.Resolve(order.CountryCode),
             Description = description,
             Products = products,
             Packages = new List<ShipEntegraOrderPackage>
@@ -375,6 +380,10 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
             }
 
             return Fail("ShipEntegra oturumunuzun süresi dolmuş. Lütfen yeniden giriş yapın.");
+        }
+        catch (ShipEntegraBusinessException bex)
+        {
+            return Fail($"ShipEntegra etiketi reddedildi: {bex.Description} ({bex.Code})");
         }
         catch (Exception ex)
         {

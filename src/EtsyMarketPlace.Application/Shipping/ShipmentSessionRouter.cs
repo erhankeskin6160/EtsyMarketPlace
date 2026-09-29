@@ -21,6 +21,24 @@ public static class ShipmentSessionRouter
         return !string.IsNullOrWhiteSpace(errorMessage) &&
                errorMessage.Contains("ShipEntegra", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Hata gerçek bir oturum/yetki sorununa mı işaret ediyor? İş kuralı redleri
+    /// (örn. DDP geçersiz) bu kapsama girmez; UI yalnızca gerçek oturum hatalarında
+    /// oturum yenileme akışını açar.
+    /// </summary>
+    public static bool IsSessionFailure(string? errorMessage)
+    {
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            return false;
+        }
+
+        return errorMessage.Contains("oturum", StringComparison.OrdinalIgnoreCase) ||
+               errorMessage.Contains("yetkilendirme", StringComparison.OrdinalIgnoreCase) ||
+               errorMessage.Contains("giriş yap", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// Hata ağ/taşıma katmanına mı ait (soket, DNS, zaman aşımı, bağlantı kesilmesi)?
     /// Bu tür hatalarda oturum yenileme akışı açılmaz; kullanıcıdan yeniden denemesi istenir.

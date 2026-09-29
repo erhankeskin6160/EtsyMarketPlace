@@ -46,7 +46,8 @@ public sealed class ShipEntegraCreateOrderPayloadTests
         Assert.Contains("\"packages\":[", json);
         Assert.Contains("\"packageQuantity\":1", json);
         Assert.Contains("\"reference\":\"4176634453\"", json);
-        Assert.Contains("\"shippingType\":1", json);
+        // shippingType panel gibi boş bırakıldı: alan istekte yer almaz (canlı doğrulama 29.09.2026).
+        Assert.DoesNotContain("\"shippingType\"", json);
 
         // Boş bırakılan opsiyonel alanlar istekte yer almaz.
         Assert.DoesNotContain("\"state\"", json);
@@ -71,6 +72,7 @@ public sealed class ShipEntegraCreateOrderPayloadTests
             },
             Currency = "USD",
             Reference = "1",
+            ShippingType = 1,
             Description = "Item",
             Products = { new ShipEntegraOrderProduct { Name = "Item", Quantity = 1, UnitPrice = 5m, HsCode = "0302530000" } },
             Packages = { new ShipEntegraOrderPackage { PackageQuantity = 1, Weight = 1, Width = 11, Length = 11, Height = 11 } }
@@ -79,6 +81,7 @@ public sealed class ShipEntegraCreateOrderPayloadTests
         string json = JsonSerializer.Serialize(request);
 
         Assert.Contains("\"state\":\"OR\"", json);
+        // ABD için DDP (1) — ShipEntegraShippingTypeResolver ile eşleşir (canlıda doğrulandı).
         Assert.Contains("\"shippingType\":1", json);
         Assert.Contains("\"email\":\"customer@example.com\"", json);
     }

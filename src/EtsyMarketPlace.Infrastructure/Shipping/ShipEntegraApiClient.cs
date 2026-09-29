@@ -352,20 +352,38 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
 
     private static void ValidateStatus(HttpResponseMessage response, string? responseBody = null)
     {
+        if (response.IsSuccessStatusCode)
+        {
+            return;
+        }
+
+        // İş kuralı redleri 403 gövdesiyle gelebilir (canlı: ERR.28050.1008, GB için DDP
+        // geçersiz, 29.09.2026). Bu durumda oturum yenileme akışı açılmaz; gerçek sunucu
+        // mesajı korunur.
+        ShipEntegraBusinessException? businessError =
+            ShipEntegraApiErrorParser.TryParse(responseBody, (int)response.StatusCode);
+
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
+            if (businessError != null)
+            {
+                throw businessError;
+            }
+
             throw new ShipEntegraTokenExpiredException(
                 $"ShipEntegra yetkilendirme hatası ({(int)response.StatusCode} {response.ReasonPhrase}). Oturum süreniz dolmuş olabilir.");
         }
 
-        if (!response.IsSuccessStatusCode)
+        if (businessError != null)
         {
-            string detail = string.IsNullOrWhiteSpace(responseBody)
-                ? string.Empty
-                : " | Yanıt: " + (responseBody!.Length > 400 ? responseBody.Substring(0, 400) : responseBody);
-            throw new HttpRequestException(
-                $"ShipEntegra API isteği başarısız oldu: {(int)response.StatusCode} {response.ReasonPhrase}{detail}");
+            throw businessError;
         }
+
+        string detail = string.IsNullOrWhiteSpace(responseBody)
+            ? string.Empty
+            : " | Yanıt: " + (responseBody!.Length > 400 ? responseBody.Substring(0, 400) : responseBody);
+        throw new HttpRequestException(
+            $"ShipEntegra API isteği başarısız oldu: {(int)response.StatusCode} {response.ReasonPhrase}{detail}");
     }
 
     /// <summary>
