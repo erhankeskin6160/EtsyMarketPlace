@@ -144,10 +144,10 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         LogShipEntegraTrace("CreateOrder-Request", json);
 
         using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
-        ValidateStatus(response);
 
         string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
         LogShipEntegraTrace("CreateOrder-Response", $"Status: {(int)response.StatusCode} | Body: {responseContent}");
+        ValidateStatus(response, responseContent);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -325,7 +325,7 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         req.Headers.TryAddWithoutValidation("X-Shipentegra-Client-Os", "WEB");
     }
 
-    private static void ValidateStatus(HttpResponseMessage response)
+    private static void ValidateStatus(HttpResponseMessage response, string? responseBody = null)
     {
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
@@ -335,8 +335,11 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
 
         if (!response.IsSuccessStatusCode)
         {
+            string detail = string.IsNullOrWhiteSpace(responseBody)
+                ? string.Empty
+                : " | Yanıt: " + (responseBody!.Length > 400 ? responseBody.Substring(0, 400) : responseBody);
             throw new HttpRequestException(
-                $"ShipEntegra API isteği başarısız oldu: {(int)response.StatusCode} {response.ReasonPhrase}");
+                $"ShipEntegra API isteği başarısız oldu: {(int)response.StatusCode} {response.ReasonPhrase}{detail}");
         }
     }
 

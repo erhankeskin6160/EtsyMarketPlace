@@ -328,6 +328,11 @@ internal sealed class ShipEntegraEmbeddedLoginForm : Form
             if (uri.Contains("shipentegra", StringComparison.OrdinalIgnoreCase) && e.Response.StatusCode == 200)
             {
                 using var stream = await e.Response.GetContentAsync();
+                if (stream is null)
+                {
+                    return;
+                }
+
                 using var reader = new StreamReader(stream);
                 string body = await reader.ReadToEndAsync();
 

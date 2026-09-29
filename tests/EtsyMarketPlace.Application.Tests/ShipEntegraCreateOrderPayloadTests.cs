@@ -46,6 +46,7 @@ public sealed class ShipEntegraCreateOrderPayloadTests
         Assert.Contains("\"packages\":[", json);
         Assert.Contains("\"packageQuantity\":1", json);
         Assert.Contains("\"reference\":\"4176634453\"", json);
+        Assert.Contains("\"shippingType\":1", json);
 
         // Boş bırakılan opsiyonel alanlar istekte yer almaz.
         Assert.DoesNotContain("\"state\"", json);
@@ -78,6 +79,7 @@ public sealed class ShipEntegraCreateOrderPayloadTests
         string json = JsonSerializer.Serialize(request);
 
         Assert.Contains("\"state\":\"OR\"", json);
+        Assert.Contains("\"shippingType\":1", json);
         Assert.Contains("\"email\":\"customer@example.com\"", json);
     }
 
