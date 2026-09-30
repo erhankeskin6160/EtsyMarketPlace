@@ -9,12 +9,15 @@ using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
 using SimilarProductsWinForms.Controls;
 using System.Globalization;
+using EtsyMarketPlace.Application.Banking;
+using EtsyMarketPlace.Domain.Banking;
 
 internal sealed class FinancialReportForm : Form
 {
     // ── State ──────────────────────────────────────────────────────────────────
     private FinancialReport _report = FinancialReport.Empty;
     private readonly FinancialReportService _service = new();
+    private readonly IBankDepositService _bankDepositService = new BankDepositService();
     private CancellationTokenSource _cts = new();
 
     // ── UI: KPI Labels ─────────────────────────────────────────────────────────
@@ -38,6 +41,7 @@ internal sealed class FinancialReportForm : Form
     private ToolTipDataPayload? _costsTooltipPayload = null;
     private ToolTipDataPayload? _netIncomeTooltipPayload = null;
     private ToolTipDataPayload? _realProfitTooltipPayload = null;
+    private ToolTipDataPayload? _depositsTooltipPayload = null;
 
     // ── UI: Filters & Currency ────────────────────────────────────────────────
     private readonly ModernComboBox _cboDateRange     = new();
@@ -552,6 +556,17 @@ internal sealed class FinancialReportForm : Form
                 {
                     if (_realProfitTooltipPayload != null)
                         tt.ShowStructuredTooltip(_realProfitTooltipPayload, pt, 2000);
+                });
+            }
+
+            var depositsCard = strip.GetControlFromPosition(8, 0);
+            if (depositsCard != null && depositsCard.Tag == null)
+            {
+                depositsCard.Tag = "attached";
+                AttachAnimatedHover(depositsCard, depositsCard, (tt, pt) => 
+                {
+                    if (_depositsTooltipPayload != null)
+                        tt.ShowStructuredTooltip(_depositsTooltipPayload, pt, 2500);
                 });
             }
         };
@@ -1425,6 +1440,7 @@ internal sealed class FinancialReportForm : Form
         UpdateCostsToolTip(showTry);
         UpdateNetIncomeToolTip(showTry);
         UpdateRealProfitToolTip(showTry);
+        UpdateDepositsToolTip(showTry);
     }
 
     private void UpdateRefundsToolTip(bool showTry)
@@ -1735,6 +1751,147 @@ internal sealed class FinancialReportForm : Form
             new[] { 0.07f, 0.23f, 0.15f, 0.16f, 0.07f, 0.32f },
             rows,
             footerNote
+        );
+    }
+
+    private void UpdateDepositsToolTip(bool showTry)
+    {
+        if (_report.IsFallbackMode && _report.DailySummaries.All(d => d.Deposits == 0) && _report.TotalDeposits == 0)
+        {
+            _depositsTooltipPayload = null;
+            return;
+        }
+
+        string cur = showTry ? "₺" : "$";
+
+        // Clean Architecture Application servisine aktar
+        var rawInputs = _report.Entries.Select(e => new RawDepositEntryInput(
+            e.EntryId,
+            e.ReferenceId,
+            e.Type,
+            e.Amount,
+            e.NetAmount,
+            e.Currency,
+            e.Description,
+            e.CreatedAt,
+            e.ExchangeRate
+        ));
+
+        var summary = _bankDepositService.CalculateMonthlyDeposits(
+            rawInputs,
+            _report.PeriodStart,
+            _report.PeriodEnd,
+            date => HistoricalExchangeRateProvider.GetRateForDate(date, _report.ExchangeRate),
+            _report.ExchangeRate
+        );
+
+        // Eğer ham defter girdisi yoksa ancak günlük/dönemsel defter özetinde banka yatırımı varsa
+        decimal totalAmt = showTry ? summary.TotalAmountTRY : summary.TotalAmount;
+        if (summary.DepositCount == 0 && (_report.TotalDeposits > 0 || _report.DailySummaries.Any(d => d.Deposits > 0)))
+        {
+            var fallbackDeposits = new List<BankDepositRecord>();
+            long fallbackId = 1000;
+            foreach (var d in _report.DailySummaries.Where(x => x.Deposits > 0))
+            {
+                decimal exRate = d.AverageExchangeRate > 0 ? d.AverageExchangeRate : _report.ExchangeRate;
+                decimal amt = d.Deposits;
+                decimal amtTRY = Math.Round(amt * exRate, 2);
+                DateTime dt = DateTime.TryParse(d.PeriodLabel, out var parsedDt) ? parsedDt : d.SortDate;
+
+                fallbackDeposits.Add(new BankDepositRecord(
+                    fallbackId++,
+                    fallbackId,
+                    new DateTimeOffset(dt, TimeSpan.Zero),
+                    amt,
+                    "USD",
+                    exRate,
+                    amtTRY,
+                    "Yatırıldı",
+                    "Etsy Payout (Banka Transferi)",
+                    $"Etsy Banka Aktarımı ({d.PeriodLabel})"
+                ));
+            }
+
+            fallbackDeposits.Sort((a, b) => b.DepositDate.CompareTo(a.DepositDate));
+            decimal fTotal = fallbackDeposits.Sum(x => x.Amount);
+            decimal fTotalTRY = fallbackDeposits.Sum(x => x.AmountTRY);
+            summary = new MonthlyDepositSummary(
+                _report.PeriodStart,
+                _report.PeriodEnd,
+                fTotal,
+                fTotalTRY,
+                fallbackDeposits.Count,
+                fallbackDeposits.Count > 0 ? fTotal / fallbackDeposits.Count : 0m,
+                fallbackDeposits.Count > 0 ? fTotalTRY / fallbackDeposits.Count : 0m,
+                fallbackDeposits.FirstOrDefault(),
+                fallbackDeposits
+            );
+            totalAmt = showTry ? summary.TotalAmountTRY : summary.TotalAmount;
+        }
+
+        // Eğer hala sıfırsa ve TotalDeposits varsa
+        if (totalAmt == 0 && _report.TotalDeposits > 0)
+        {
+            totalAmt = showTry 
+                ? (_report.DailySummaries.Sum(d => d.Deposits * d.AverageExchangeRate) is var sumTRY && sumTRY > 0 ? sumTRY : _report.TotalDeposits * _report.ExchangeRate)
+                : _report.TotalDeposits;
+        }
+
+        decimal netRevenue = showTry 
+            ? _report.DailySummaries.Sum(d => d.EtsyNetRevenue * d.AverageExchangeRate) 
+            : _report.TotalNet;
+        double payoutRatio = netRevenue > 0 ? (double)(totalAmt / netRevenue * 100) : 0;
+
+        string lastDateStr = summary.LastDeposit?.DepositDate.ToString("dd.MM.yyyy") 
+            ?? (_report.DailySummaries.LastOrDefault(d => d.Deposits > 0)?.SortDate.ToString("dd.MM.yyyy") ?? "—");
+
+        string? lastSubText = summary.LastDeposit != null 
+            ? $"Son: {cur}{(showTry ? summary.LastDeposit.AmountTRY : summary.LastDeposit.Amount):N2}"
+            : null;
+
+        var kpiCards = new List<ToolTipKpiCard>
+        {
+            new("🏦 Toplam Banka Yatırımı", $"{cur}{totalAmt:N2}", $"{summary.DepositCount} Transfer", UiStyle.AccentColor),
+            new("📅 En Son Yatırılan Tarih", lastDateStr, lastSubText, Color.FromArgb(16, 185, 129)),
+            new("⚖️ Ortalama Transfer", $"{cur}{(showTry ? summary.AverageAmountTRY : summary.AverageAmount):N2}", payoutRatio > 0 ? $"Net Gelirin %{payoutRatio:N1}'i" : null, Color.FromArgb(99, 102, 241))
+        };
+
+        var rows = new List<ToolTipTableRow>();
+        foreach (var dep in summary.Deposits.Take(15))
+        {
+            decimal displayAmt = showTry ? dep.AmountTRY : dep.Amount;
+            string dateStr = dep.DepositDate.ToString("dd.MM.yy HH:mm");
+            string refNo = dep.ReferenceDisplay;
+            string itemType = "Banka Transferi";
+            string amtStr = $"+{cur}{displayAmt:N2}";
+            string status = "✅ Yatırıldı";
+            string desc = $"{dep.Description} (Kur: 1$ = {dep.ExchangeRate:N2}₺)";
+
+            rows.Add(new ToolTipTableRow(
+                dateStr,
+                refNo,
+                itemType,
+                amtStr,
+                true,
+                status,
+                desc
+            ));
+        }
+
+        string footer = summary.DepositCount > 15
+            ? $"ℹ️ Bu dönem toplam {summary.DepositCount} adet banka transferi yapıldı. İlk 15 işlem listeleniyor."
+            : (summary.DepositCount > 0 
+                ? "💡 İpucu: Etsy ödemeleri bankanıza gönderildikten sonra bankanızın işleme alma hızına göre 1-3 iş günü içinde hesabınıza geçer." 
+                : "ℹ️ Seçilen tarih aralığında banka transfer kaydı bulunamadı.");
+
+        _depositsTooltipPayload = new ToolTipDataPayload(
+            "🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)",
+            $"Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: {cur}{totalAmt:N2}",
+            kpiCards,
+            new[] { "Tarih", "İşlem / Ref No", "Tür", "Yatırılan Tutar", "Durum", "Açıklama / Kur Bilgisi" },
+            new[] { 0.16f, 0.16f, 0.15f, 0.16f, 0.10f, 0.27f },
+            rows,
+            footer
         );
     }
 
