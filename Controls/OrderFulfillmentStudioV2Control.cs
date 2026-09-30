@@ -15,6 +15,7 @@ using EtsyMarketPlace.Application.Orders;
 using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Domain.Orders;
 using EtsyMarketPlace.Domain.Shipping;
+using EtsyMarketPlace.Infrastructure.Orders;
 using EtsyMarketPlace.Infrastructure.Shipping;
 using SimilarProductsWinForms.Services;
 
@@ -35,6 +36,8 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
 
     // --- servisler ---
     private readonly EtsyOrderService _orderService;
+    private readonly IOrderAddressRepository _orderAddressRepository;
+    private readonly EtsyCsvFolderWatcher _csvFolderWatcher;
     private readonly ArasGlobalApiClient _arasApiClient;
     private readonly ArasGlobalPricingService _arasPricingService;
     private readonly IShippingSessionManager _sessionManager;
@@ -142,9 +145,14 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         EtsyOrderService? orderService = null,
         ShipmentCreationManager? creationManager = null,
         ArasGlobalPricingService? arasPricingService = null,
-        IShippingSessionManager? sessionManager = null)
+        IShippingSessionManager? sessionManager = null,
+        IOrderAddressRepository? orderAddressRepository = null)
     {
-        _orderService = orderService ?? new EtsyOrderService();
+        _orderAddressRepository = orderAddressRepository ?? new SqliteOrderAddressRepository();
+        _orderService = orderService ?? new EtsyOrderService(_orderAddressRepository);
+        _csvFolderWatcher = new EtsyCsvFolderWatcher(_orderAddressRepository);
+        _csvFolderWatcher.AddressesAutoImported += OnCsvAddressesAutoImported;
+
         _arasApiClient = new ArasGlobalApiClient();
         _arasPricingService = arasPricingService ?? new ArasGlobalPricingService(_arasApiClient);
         _arasPricingService.TokenRefresher = RefreshArasTokenSilentlyAsync;
@@ -172,6 +180,9 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         BackColor = UiStyle.BackgroundColor;
         Font = UiStyle.BaseFont;
         AutoScroll = false;
+        AllowDrop = true;
+        DragEnter += OnFulfillmentDragEnter;
+        DragDrop += OnFulfillmentDragDrop;
 
         BuildLayout();
     }
@@ -183,6 +194,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
             base.OnLoad(e);
             UpdateSessionBadge();
             await LoadExchangeRateAsync();
+            await _csvFolderWatcher.StartAsync();
             await ReloadOrdersAsync();
         }
         catch (Exception ex) { AppLog.Swallowed(ex, "OrderFulfillmentStudioV2Control.OnLoad"); }
@@ -1702,6 +1714,11 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 .ToList();
 
             _orderService.SyncLiveQueue(liveOrders);
+            int hydrated = await _orderService.HydrateSavedAddressesAsync();
+            if (hydrated > 0)
+            {
+                AppLog.Info($"SQLite veri tabanından {hydrated} sipariş adresi otomatik yüklendi.", "EtsyAddressHydration");
+            }
             if (liveOrders.Any(o => string.IsNullOrWhiteSpace(o.StreetAddress)))
             {
                 AppLog.Info("Etsy siparişlerinin bazılarında adres bilgisi boş geldi. Eski API token'larında 'address_r' yetkisi eksik olabilir. Ayarlar -> Etsy API ekranından yeni izinlerle tekrar giriş yapabilir veya 'Adresi Düzenle' butonuyla eksik adresleri tamamlayabilirsiniz.", "EtsyAddressSync");
@@ -1904,7 +1921,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         using var dlg = new EditReceiverAddressDialog(_selectedOrder);
         if (dlg.ShowDialog(FindForm()) == DialogResult.OK)
         {
-            _orderService.UpdateOrderAddress(_selectedOrder.ReceiptId, _selectedOrder);
+            _orderService.UpdateOrderAddress(_selectedOrder.ReceiptId, _selectedOrder, source: "Manual");
             RefreshBuyerCard(_selectedOrder);
         }
     }
@@ -1947,7 +1964,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
                 _selectedOrder.HasState = true;
             }
 
-            _orderService.UpdateOrderAddress(_selectedOrder.ReceiptId, _selectedOrder);
+            _orderService.UpdateOrderAddress(_selectedOrder.ReceiptId, _selectedOrder, source: "Clipboard");
             RefreshBuyerCard(_selectedOrder);
 
             MessageBox.Show(
@@ -1964,6 +1981,61 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
         catch (Exception ex)
         {
             MessageBox.Show("Adres yapıştırılamadı: " + ex.Message, "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnFulfillmentDragEnter(object? sender, DragEventArgs e)
+    {
+        if (e.Data != null && e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effect = DragDropEffects.Copy;
+        }
+    }
+
+    private async void OnFulfillmentDragDrop(object? sender, DragEventArgs e)
+    {
+        try
+        {
+            if (e.Data?.GetData(DataFormats.FileDrop) is string[] files)
+            {
+                foreach (var file in files)
+                {
+                    if (file.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+                    {
+                        int imported = await _csvFolderWatcher.TryProcessFileAsync(file, isInitialScan: false, CancellationToken.None);
+                        if (imported > 0)
+                        {
+                            AppLog.Info($"Sürüklenen Etsy CSV dosyasından {imported} adres yüklendi: {Path.GetFileName(file)}", "CsvDragDrop");
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            AppLog.Swallowed(ex, "OrderFulfillmentStudioV2Control.OnFulfillmentDragDrop");
+        }
+    }
+
+    private async void OnCsvAddressesAutoImported(IReadOnlyList<OrderAddressRecord> records, string fileName)
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() => OnCsvAddressesAutoImported(records, fileName)));
+            return;
+        }
+
+        int count = _orderService.ApplyAddressRecords(records);
+        if (count > 0)
+        {
+            await ReloadOrdersAsync(force: false);
+            if (_selectedOrder != null)
+            {
+                RefreshBuyerCard(_selectedOrder);
+            }
+            _lblActionStatus.ForeColor = UiStyle.SuccessColor;
+            _lblActionStatus.Text = $"Etsy CSV'den {count} sipariş adresi otomatik aktarıldı ({fileName})";
         }
     }
 
@@ -2899,6 +2971,7 @@ public sealed class OrderFulfillmentStudioV2Control : UserControl
     {
         if (disposing)
         {
+            _csvFolderWatcher?.Dispose();
             _debounceTimer?.Stop();
             _debounceTimer?.Dispose();
             _debounceTimer = null;
