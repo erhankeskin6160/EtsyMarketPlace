@@ -563,11 +563,32 @@ internal sealed class FinancialReportForm : Form
             if (depositsCard != null && depositsCard.Tag == null)
             {
                 depositsCard.Tag = "attached";
+                
+                // Standart Windows ToolTip'ini bu kart ve tüm alt elemanlarından temizle
+                _toolTip.SetToolTip(depositsCard, null);
+                foreach (Control c in depositsCard.Controls)
+                {
+                    _toolTip.SetToolTip(c, null);
+                    foreach (Control cc in c.Controls)
+                        _toolTip.SetToolTip(cc, null);
+                }
+
                 AttachAnimatedHover(depositsCard, depositsCard, (tt, pt) => 
                 {
                     if (_depositsTooltipPayload != null)
-                        tt.ShowStructuredTooltip(_depositsTooltipPayload, pt, 2500);
+                        tt.ShowStructuredTooltip(_depositsTooltipPayload, pt, 2000);
                 });
+
+                // Çift tıklandığında beklemeden hemen aç
+                Action openInstantly = () =>
+                {
+                    if (_depositsTooltipPayload != null)
+                    {
+                        var rect = depositsCard.RectangleToScreen(depositsCard.ClientRectangle);
+                        _customToolTipForm.ShowStructuredTooltip(_depositsTooltipPayload, new Point(rect.Left + rect.Width / 2, rect.Bottom + 4), 100);
+                    }
+                };
+                depositsCard.DoubleClick += (s, e) => openInstantly();
             }
         };
 
@@ -651,8 +672,12 @@ internal sealed class FinancialReportForm : Form
         titleLabel.ContextMenuStrip = cms;
         valueLabel.ContextMenuStrip = cms;
 
-        _toolTip.SetToolTip(card, $"Tıklayarak '{title}' tutarını panoya kopyalayın");
-        _toolTip.SetToolTip(valueLabel, $"Tıklayarak '{title}' tutarını panoya kopyalayın");
+        // Yalnızca animasyonsuz kartlara standart metin tooltip'i koy (animasyonlu kartlarda Windows tooltip çakışmasını engelle)
+        if (col != 0 && col != 4 && col != 5 && col != 6 && col != 7 && col != 8)
+        {
+            _toolTip.SetToolTip(card, $"Tıklayarak '{title}' tutarını panoya kopyalayın");
+            _toolTip.SetToolTip(valueLabel, $"Tıklayarak '{title}' tutarını panoya kopyalayın");
+        }
 
         card.Controls.Add(layout);
         parent.Controls.Add(card, col, 0);
@@ -1756,12 +1781,6 @@ internal sealed class FinancialReportForm : Form
 
     private void UpdateDepositsToolTip(bool showTry)
     {
-        if (_report.IsFallbackMode && _report.DailySummaries.All(d => d.Deposits == 0) && _report.TotalDeposits == 0)
-        {
-            _depositsTooltipPayload = null;
-            return;
-        }
-
         string cur = showTry ? "₺" : "$";
 
         // Clean Architecture Application servisine aktar
@@ -1785,16 +1804,17 @@ internal sealed class FinancialReportForm : Form
             _report.ExchangeRate
         );
 
-        // Eğer ham defter girdisi yoksa ancak günlük/dönemsel defter özetinde banka yatırımı varsa
         decimal totalAmt = showTry ? summary.TotalAmountTRY : summary.TotalAmount;
-        if (summary.DepositCount == 0 && (_report.TotalDeposits > 0 || _report.DailySummaries.Any(d => d.Deposits > 0)))
+
+        // 1. Eğer münferit deposit kaydı yoksa ancak DailySummaries içinde depozito varsa (negatif veya pozitif)
+        if (summary.DepositCount == 0 && (Math.Abs(_report.TotalDeposits) > 0 || _report.DailySummaries.Any(d => Math.Abs(d.Deposits) > 0)))
         {
             var fallbackDeposits = new List<BankDepositRecord>();
             long fallbackId = 1000;
-            foreach (var d in _report.DailySummaries.Where(x => x.Deposits > 0))
+            foreach (var d in _report.DailySummaries.Where(x => Math.Abs(x.Deposits) > 0))
             {
                 decimal exRate = d.AverageExchangeRate > 0 ? d.AverageExchangeRate : _report.ExchangeRate;
-                decimal amt = d.Deposits;
+                decimal amt = Math.Abs(d.Deposits);
                 decimal amtTRY = Math.Round(amt * exRate, 2);
                 DateTime dt = DateTime.TryParse(d.PeriodLabel, out var parsedDt) ? parsedDt : d.SortDate;
 
@@ -1829,12 +1849,38 @@ internal sealed class FinancialReportForm : Form
             totalAmt = showTry ? summary.TotalAmountTRY : summary.TotalAmount;
         }
 
-        // Eğer hala sıfırsa ve TotalDeposits varsa
-        if (totalAmt == 0 && _report.TotalDeposits > 0)
+        // 2. Eğer hala 0 ama TotalDeposits dolu ise (tek satırlık genel hakediş dökümü)
+        if (totalAmt == 0 && Math.Abs(_report.TotalDeposits) > 0)
         {
-            totalAmt = showTry 
-                ? (_report.DailySummaries.Sum(d => d.Deposits * d.AverageExchangeRate) is var sumTRY && sumTRY > 0 ? sumTRY : _report.TotalDeposits * _report.ExchangeRate)
-                : _report.TotalDeposits;
+            decimal rawTotal = Math.Abs(_report.TotalDeposits);
+            decimal rawTotalTRY = _report.DailySummaries.Sum(d => Math.Abs(d.Deposits) * d.AverageExchangeRate);
+            if (rawTotalTRY <= 0) rawTotalTRY = Math.Round(rawTotal * _report.ExchangeRate, 2);
+
+            var singleDeposit = new BankDepositRecord(
+                1001,
+                1001,
+                _report.PeriodEnd,
+                rawTotal,
+                "USD",
+                _report.ExchangeRate,
+                rawTotalTRY,
+                "Yatırıldı",
+                "Etsy Payout (Banka Transferi)",
+                "Dönem Sonu Toplu Banka Aktarımı"
+            );
+
+            summary = new MonthlyDepositSummary(
+                _report.PeriodStart,
+                _report.PeriodEnd,
+                rawTotal,
+                rawTotalTRY,
+                1,
+                rawTotal,
+                rawTotalTRY,
+                singleDeposit,
+                new List<BankDepositRecord> { singleDeposit }
+            );
+            totalAmt = showTry ? summary.TotalAmountTRY : summary.TotalAmount;
         }
 
         decimal netRevenue = showTry 
@@ -1843,7 +1889,7 @@ internal sealed class FinancialReportForm : Form
         double payoutRatio = netRevenue > 0 ? (double)(totalAmt / netRevenue * 100) : 0;
 
         string lastDateStr = summary.LastDeposit?.DepositDate.ToString("dd.MM.yyyy") 
-            ?? (_report.DailySummaries.LastOrDefault(d => d.Deposits > 0)?.SortDate.ToString("dd.MM.yyyy") ?? "—");
+            ?? (_report.DailySummaries.LastOrDefault(d => Math.Abs(d.Deposits) > 0)?.SortDate.ToString("dd.MM.yyyy") ?? "—");
 
         string? lastSubText = summary.LastDeposit != null 
             ? $"Son: {cur}{(showTry ? summary.LastDeposit.AmountTRY : summary.LastDeposit.Amount):N2}"
@@ -1857,24 +1903,39 @@ internal sealed class FinancialReportForm : Form
         };
 
         var rows = new List<ToolTipTableRow>();
-        foreach (var dep in summary.Deposits.Take(15))
+        if (summary.Deposits.Count > 0)
         {
-            decimal displayAmt = showTry ? dep.AmountTRY : dep.Amount;
-            string dateStr = dep.DepositDate.ToString("dd.MM.yy HH:mm");
-            string refNo = dep.ReferenceDisplay;
-            string itemType = "Banka Transferi";
-            string amtStr = $"+{cur}{displayAmt:N2}";
-            string status = "✅ Yatırıldı";
-            string desc = $"{dep.Description} (Kur: 1$ = {dep.ExchangeRate:N2}₺)";
+            foreach (var dep in summary.Deposits.Take(15))
+            {
+                decimal displayAmt = showTry ? dep.AmountTRY : dep.Amount;
+                string dateStr = dep.DepositDate.ToString("dd.MM.yy HH:mm");
+                string refNo = dep.ReferenceDisplay;
+                string itemType = "Banka Transferi";
+                string amtStr = $"+{cur}{displayAmt:N2}";
+                string status = "✅ Yatırıldı";
+                string desc = $"{dep.Description} (Kur: 1$ = {dep.ExchangeRate:N2}₺)";
 
+                rows.Add(new ToolTipTableRow(
+                    dateStr,
+                    refNo,
+                    itemType,
+                    amtStr,
+                    true,
+                    status,
+                    desc
+                ));
+            }
+        }
+        else
+        {
             rows.Add(new ToolTipTableRow(
-                dateStr,
-                refNo,
-                itemType,
-                amtStr,
-                true,
-                status,
-                desc
+                DateTime.Now.ToString("dd.MM.yy"),
+                "—",
+                "Bilgi",
+                $"{cur}0,00",
+                false,
+                "",
+                "Seçilen dönemde henüz banka transfer hareketi gerçekleşmemiştir."
             ));
         }
 

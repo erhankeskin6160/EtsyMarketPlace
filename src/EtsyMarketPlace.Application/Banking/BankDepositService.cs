@@ -21,8 +21,11 @@ public sealed class BankDepositService : IBankDepositService
             if (!IsDepositType(entry.Type, entry.Description))
                 continue;
 
-            // Tarih kontrolü (dönem içi)
-            if (entry.CreatedAt < periodStart || entry.CreatedAt > periodEnd)
+            // Tarih kontrolü (dönem içi - UTC ve Yerel saat dilimi toleranslı)
+            DateTime entryDate = entry.CreatedAt.LocalDateTime.Date;
+            DateTime pStartDate = periodStart.LocalDateTime.Date.AddDays(-1);
+            DateTime pEndDate = periodEnd.LocalDateTime.Date.AddDays(1);
+            if (entryDate < pStartDate || entryDate > pEndDate)
                 continue;
 
             decimal rate = entry.PreResolvedRate > 0 

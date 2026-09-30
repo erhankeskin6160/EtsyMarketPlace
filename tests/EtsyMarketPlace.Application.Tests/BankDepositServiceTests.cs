@@ -57,4 +57,24 @@ public class BankDepositServiceTests
         Assert.Equal(49.00m, deposit.ExchangeRate);
         Assert.Equal("✅ Yatırıldı", $"✅ {deposit.Status}");
     }
+
+    [Fact]
+    public void CalculateMonthlyDeposits_HandlesNegativeAmountsFromEtsyApi()
+    {
+        var from = new DateTimeOffset(2026, 9, 1, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 9, 30, 23, 59, 59, TimeSpan.Zero);
+
+        var entries = new List<RawDepositEntryInput>
+        {
+            new(20, 600, "deposit", -500m, -500m, "USD", "Etsy Direct Bank Payout", new DateTimeOffset(2026, 9, 28, 15, 30, 0, TimeSpan.Zero))
+        };
+
+        var summary = _service.CalculateMonthlyDeposits(entries, from, to, _ => 49.0m, 49.0m);
+
+        var dep = Assert.Single(summary.Deposits);
+        Assert.Equal(500m, dep.Amount); // Negatif tutar pozitif döviz olarak okunmalı
+        Assert.Equal(24500.00m, dep.AmountTRY);
+        Assert.Equal(500m, summary.TotalAmount);
+        Assert.Equal(24500.00m, summary.TotalAmountTRY);
+    }
 }
