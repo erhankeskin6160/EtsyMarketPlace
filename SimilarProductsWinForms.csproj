@@ -48,4 +48,10 @@
     <EmbeddedResource Include="Assets\Shipping\**\*.*" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="src\EtsyMarketPlace.Infrastructure\EtsyIntegration\EtsyIntegrationDatabaseInitializer.cs" />
+    <Compile Include="src\EtsyMarketPlace.Infrastructure\EtsyIntegration\EtsyIntegrationOptions.cs" />
+    <Compile Include="src\EtsyMarketPlace.Infrastructure\EtsyIntegration\SqliteEtsyIntegrationStore.cs" />
+  </ItemGroup>
+
 </Project>

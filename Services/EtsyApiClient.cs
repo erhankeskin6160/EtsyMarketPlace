@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms.Services;
 
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.Json;
@@ -68,6 +69,35 @@ internal sealed class EtsyApiClient
         }
 
         ApplyTokenResponse(settings, body);
+    }
+
+    public async Task ImportTokenToIntegrationApiAsync(EtsyApiSettings settings, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(settings.ShopId))
+            throw new InvalidOperationException("Shop ID girilmeden token API'ye aktarilamaz.");
+        if (string.IsNullOrWhiteSpace(settings.AccessToken) || string.IsNullOrWhiteSpace(settings.RefreshToken))
+            throw new InvalidOperationException("Aktarilacak OAuth token bulunamadi.");
+        if (string.IsNullOrWhiteSpace(settings.IntegrationApiBaseUrl))
+            throw new InvalidOperationException("Entegrasyon API adresi girilmelidir.");
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(new Uri(settings.IntegrationApiBaseUrl.TrimEnd('/') + "/"), "api/etsy/token"));
+        request.Content = JsonContent.Create(new
+        {
+            shopId = settings.ShopId.Trim(),
+            accessToken = settings.AccessToken,
+            refreshToken = settings.RefreshToken,
+            accessTokenExpiresAt = settings.AccessTokenExpiresAtUtc,
+            tokenType = "Bearer"
+        });
+        if (!string.IsNullOrWhiteSpace(settings.IntegrationApiKey))
+            request.Headers.Add("X-Api-Key", settings.IntegrationApiKey.Trim());
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Token API'ye aktarilamadi. HTTP {(int)response.StatusCode}: {body}");
     }
 
     public async Task RefreshAccessTokenAsync(EtsyApiSettings settings, CancellationToken cancellationToken = default)

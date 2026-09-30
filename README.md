@@ -79,6 +79,9 @@ Uygulamayı açtıktan sonra `API Ayarları` ekranından keystring ve shared sec
 - `tests/`: Domain/Application birim testleri
 - `docs/`: geliştirme planı ve teknik notlar
 
+VDS kurulumu, API yayınlama, SQLite yedekleme ve güvenlik adımları için
+[Windows VDS kurulum rehberine](docs/vds-kurulum.md) bakın. Başlangıç VDS paketi için SQL Server, Docker ve CI/CD kurulumu gerekli değildir.
+
 ## Yol haritası
 
 1. Pazar araştırma temeli - tamamlandı

@@ -13,6 +13,8 @@ internal sealed class EtsyApiSettingsForm : Form
     private readonly TextBox _keystringTextBox = new();
     private readonly TextBox _sharedSecretTextBox = new();
     private readonly TextBox _redirectUriTextBox = new();
+    private readonly TextBox _integrationApiBaseUrlTextBox = new();
+    private readonly TextBox _integrationApiKeyTextBox = new();
     private readonly TextBox _authorizationUrlTextBox = new();
     private readonly TextBox _authorizationCodeTextBox = new();
     private readonly TextBox _statusTextBox = new();
@@ -36,7 +38,7 @@ internal sealed class EtsyApiSettingsForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 8,
+            RowCount = 10,
         };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -45,6 +47,8 @@ internal sealed class EtsyApiSettingsForm : Form
         _sharedSecretTextBox.UseSystemPasswordChar = true;
         AddRow(root, 1, "Shared secret", _sharedSecretTextBox);
         AddRow(root, 2, "Redirect URI", _redirectUriTextBox);
+        AddRow(root, 3, "Integration API URL", _integrationApiBaseUrlTextBox);
+        AddRow(root, 4, "Integration API key", _integrationApiKeyTextBox);
 
         var authPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3 };
         authPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -61,10 +65,10 @@ internal sealed class EtsyApiSettingsForm : Form
         var openAuthButton = CreateButton("Tarayicida ac");
         openAuthButton.Click += (_, _) => OpenUrl(_authorizationUrlTextBox.Text);
         authPanel.Controls.Add(openAuthButton, 2, 0);
-        root.Controls.Add(CreateLabel("OAuth linki"), 0, 3);
-        root.Controls.Add(authPanel, 1, 3);
+        root.Controls.Add(CreateLabel("OAuth linki"), 0, 5);
+        root.Controls.Add(authPanel, 1, 5);
 
-        AddRow(root, 4, "Auth code", _authorizationCodeTextBox);
+        AddRow(root, 6, "Auth code", _authorizationCodeTextBox);
 
         var buttonPanel = new FlowLayoutPanel
         {
@@ -93,15 +97,15 @@ internal sealed class EtsyApiSettingsForm : Form
         testButton.Click += async (_, _) => await TestConnectionAsync();
         buttonPanel.Controls.Add(testButton);
 
-        root.Controls.Add(new Label(), 0, 5);
-        root.Controls.Add(buttonPanel, 1, 5);
+        root.Controls.Add(new Label(), 0, 7);
+        root.Controls.Add(buttonPanel, 1, 7);
 
         _statusTextBox.Dock = DockStyle.Fill;
         _statusTextBox.Multiline = true;
         _statusTextBox.ReadOnly = true;
         _statusTextBox.ScrollBars = ScrollBars.Vertical;
-        root.Controls.Add(CreateLabel("Durum"), 0, 6);
-        root.Controls.Add(_statusTextBox, 1, 6);
+        root.Controls.Add(CreateLabel("Durum"), 0, 8);
+        root.Controls.Add(_statusTextBox, 1, 8);
 
         var infoLabel = new Label
         {
@@ -109,8 +113,8 @@ internal sealed class EtsyApiSettingsForm : Form
             Text = "Not: Magaza raporu shops_r, listings_r ve transactions_r izinlerini ister. Kargo ve siparis teslimat adresleri icin address_r ve email_r izinleri zorunludur. AI ile guncelleme icin listings_w gerekir. Eski token bu izinleri icermiyorsa 'OAuth link uret' ile baglantiyi yeniden kurun.",
             ForeColor = Color.FromArgb(75, 85, 99),
         };
-        root.Controls.Add(new Label(), 0, 7);
-        root.Controls.Add(infoLabel, 1, 7);
+        root.Controls.Add(new Label(), 0, 9);
+        root.Controls.Add(infoLabel, 1, 9);
 
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
@@ -151,6 +155,8 @@ internal sealed class EtsyApiSettingsForm : Form
         _keystringTextBox.Text = _settings.Keystring;
         _sharedSecretTextBox.Text = _settings.SharedSecret;
         _redirectUriTextBox.Text = _settings.RedirectUri;
+        _integrationApiBaseUrlTextBox.Text = _settings.IntegrationApiBaseUrl;
+        _integrationApiKeyTextBox.Text = _settings.IntegrationApiKey;
         WriteStatus($"Ayar dosyasi: {EtsyApiSettingsStore.SettingsPath}");
     }
 
@@ -159,6 +165,8 @@ internal sealed class EtsyApiSettingsForm : Form
         _settings.Keystring = _keystringTextBox.Text.Trim();
         _settings.SharedSecret = _sharedSecretTextBox.Text.Trim();
         _settings.RedirectUri = _redirectUriTextBox.Text.Trim();
+        _settings.IntegrationApiBaseUrl = _integrationApiBaseUrlTextBox.Text.Trim();
+        _settings.IntegrationApiKey = _integrationApiKeyTextBox.Text.Trim();
         EtsyApiSettingsStore.Save(_settings);
         WriteStatus("Ayarlar kaydedildi.");
     }
@@ -186,6 +194,7 @@ internal sealed class EtsyApiSettingsForm : Form
             SaveValues();
             await _apiClient.ExchangeAuthorizationCodeAsync(_settings, ExtractAuthorizationCode(_authorizationCodeTextBox.Text));
             EtsyApiSettingsStore.Save(_settings);
+            await _apiClient.ImportTokenToIntegrationApiAsync(_settings);
             WriteStatus($"Token alindi. Access token bitis UTC: {_settings.AccessTokenExpiresAtUtc:yyyy-MM-dd HH:mm:ss}");
         }
         catch (Exception ex)
@@ -201,6 +210,7 @@ internal sealed class EtsyApiSettingsForm : Form
             SaveValues();
             await _apiClient.RefreshAccessTokenAsync(_settings);
             EtsyApiSettingsStore.Save(_settings);
+            await _apiClient.ImportTokenToIntegrationApiAsync(_settings);
             WriteStatus($"Token yenilendi. Access token bitis UTC: {_settings.AccessTokenExpiresAtUtc:yyyy-MM-dd HH:mm:ss}");
         }
         catch (Exception ex)

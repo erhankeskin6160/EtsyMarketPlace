@@ -14,6 +14,10 @@ internal sealed class EtsyApiSettings
 
     public string ShopId { get; set; } = "";
 
+    public string IntegrationApiBaseUrl { get; set; } = "http://localhost:5263";
+
+    public string IntegrationApiKey { get; set; } = "";
+
     public DateTimeOffset AccessTokenExpiresAtUtc { get; set; }
 
     public string LastCodeVerifier { get; set; } = "";
