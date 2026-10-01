@@ -2,6 +2,7 @@ namespace SimilarProductsWinForms.Services;
 
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using EtsyMarketPlace.Application.ShopPerformance;
@@ -910,5 +911,110 @@ internal sealed class FinancialReportService
                 netRevenue, realProfitUSD, realProfitTRY, avgExchangeRate,
                 grossTRY, feesTRY, innerAdsTRY, offsiteAdsTRY, refundsTRY, productCostsTRY, netRevenueTRY);
         }).ToList();
+    }
+
+    /// <summary>
+    /// İşlenmiş finansal rapor verilerini, ürün maliyetlerini ve banka ödemelerini VDS API'ye aktarır.
+    /// </summary>
+    public async Task<(int transactions, int payouts, int alerts)> ExportReportToIntegrationApiAsync(
+        EtsyApiSettings settings,
+        FinancialReport report,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(settings.ShopId))
+            throw new InvalidOperationException("Shop ID girilmeden finansal veriler VDS API'ye aktarılamaz.");
+        if (string.IsNullOrWhiteSpace(settings.IntegrationApiBaseUrl))
+            throw new InvalidOperationException("Entegrasyon API adresi girilmelidir.");
+
+        var shopId = settings.ShopId.Trim();
+        var currency = string.IsNullOrWhiteSpace(report.Currency) ? "USD" : report.Currency.Trim();
+
+        // 1. Günlük muhasebe özetlerinden finansal işlemler üret (ciro, komisyon, reklam, ürün maliyeti, iadeler)
+        var transactions = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyFinancialTransaction>();
+        foreach (var daily in report.DailySummaries)
+        {
+            var refId = $"daily-{daily.SortDate:yyyyMMdd}";
+            var occurredAt = new DateTimeOffset(daily.SortDate.Date, TimeSpan.Zero);
+            transactions.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyFinancialTransaction(
+                shopId,
+                refId,
+                occurredAt,
+                daily.GrossSales,
+                Math.Abs(daily.EtsyFees),
+                Math.Abs(daily.InnerAdFees),
+                Math.Abs(daily.OffsiteAdFees),
+                daily.ProductCosts,
+                0m,
+                Math.Abs(daily.Refunds),
+                currency));
+        }
+
+        // 2. Banka transferleri (Payouts)
+        var payouts = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyBankPayout>();
+        foreach (var entry in report.Entries)
+        {
+            var desc = entry.Description ?? "";
+            var isDeposit = entry.Type.Equals("deposit", StringComparison.OrdinalIgnoreCase) ||
+                            desc.Contains("deposit", StringComparison.OrdinalIgnoreCase) ||
+                            desc.Contains("payout", StringComparison.OrdinalIgnoreCase);
+
+            if (isDeposit && entry.Amount != 0)
+            {
+                var refId = entry.EntryId.ToString(CultureInfo.InvariantCulture);
+                payouts.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyBankPayout(
+                    shopId,
+                    refId,
+                    entry.CreatedAt,
+                    Math.Abs(entry.Amount),
+                    currency,
+                    report.ExchangeRate,
+                    "completed",
+                    desc));
+            }
+        }
+
+        // 3. Sipariş bazlı maliyet uyarıları (Order Cost Alerts)
+        var alerts = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyOrderCostAlert>();
+        foreach (var order in report.OrderSummaries)
+        {
+            var totalCost = order.TotalOrderProductionCost + order.TotalOrderPackagingCost;
+            var shippingCost = order.TotalOrderShippingCost;
+            var isMissing = totalCost == 0m || shippingCost == 0m;
+            alerts.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyOrderCostAlert(
+                shopId,
+                order.ReceiptId.ToString(CultureInfo.InvariantCulture),
+                order.OrderDate,
+                currency,
+                order.GrandTotal,
+                totalCost > 0 ? totalCost : null,
+                shippingCost > 0 ? shippingCost : null,
+                isMissing ? "Açık veya maliyeti eksik sipariş." : "Tamamlandı"));
+        }
+
+        var payload = new
+        {
+            shopId,
+            transactions,
+            payouts,
+            orderAlerts = alerts,
+            periodStart = report.PeriodStart,
+            periodEnd = report.PeriodEnd
+        };
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(new Uri(settings.IntegrationApiBaseUrl.TrimEnd('/') + "/"), "api/etsy/financial/import"));
+        request.Content = JsonContent.Create(payload);
+        if (!string.IsNullOrWhiteSpace(settings.IntegrationApiKey))
+            request.Headers.Add("X-Api-Key", settings.IntegrationApiKey.Trim());
+
+        using var response = await Http.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"Finansal veriler VDS API'ye aktarılamadı. HTTP {(int)response.StatusCode}: {body}");
+
+        SimilarProductsWinForms.Diagnostics.AppLog.Info($"Etsy işlenmiş finansal verileri VDS API'ye aktarıldı. ShopId: {shopId}; Günlük İşlemler: {transactions.Count}; Ödemeler: {payouts.Count}; Sipariş Uyarıları: {alerts.Count}");
+
+        return (transactions.Count, payouts.Count, alerts.Count);
     }
 }

@@ -24,7 +24,7 @@ public sealed class McpToolHandler
     public List<McpToolDefinition> GetRegisteredTools() =>
         [
             Tool("get_etsy_bank_payouts", "Etsy banka transferlerini tarih, tutar, kur ve referans bilgileriyle listeler.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") }),
-            Tool("get_financial_performance", "Brüt satış, platform komisyonu, reklam, maliyet ve net kâr marjını döner.", new { shopId = RequiredString("Mağaza kimliği"), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" } }),
+            Tool("get_financial_performance", "Brüt satış, platform komisyonu, reklam, ürün ve kargo maliyetleri ile net kâr marjını döner.", new { shopId = RequiredString("Mağaza kimliği"), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" }, startDate = OptionalDate("Özel başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Özel bitiş tarihi (YYYY-MM-DD)") }),
             Tool("get_unfulfilled_cost_alerts", "Maliyeti eksik açık siparişleri listeler.", new { shopId = RequiredString("Mağaza kimliği") }),
             Tool("get_daily_shop_brief", "Günlük mağaza sağlık skoru ve finans özetini döner.", new { shopId = RequiredString("Mağaza kimliği"), date = OptionalDate("Rapor tarihi (YYYY-MM-DD)") }),
             Tool("analyze_etsy_financials", "Finansal performansı kural tabanlı olarak analiz eder; marj, gider, uyarı ve önerileri döner.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") })
@@ -73,13 +73,21 @@ public sealed class McpToolHandler
     private static (DateTimeOffset Start, DateTimeOffset End) ResolvePeriod(JsonElement parameters)
     {
         var now = DateTimeOffset.UtcNow;
+        if (parameters.TryGetProperty("startDate", out var sVal) && DateTimeOffset.TryParse(sVal.GetString(), out var sDate))
+        {
+            var eDate = parameters.TryGetProperty("endDate", out var eVal) && DateTimeOffset.TryParse(eVal.GetString(), out var parsedEnd)
+                ? parsedEnd
+                : now;
+            return (sDate, eDate);
+        }
+
         var period = parameters.TryGetProperty("period", out var value) ? value.GetString() : "this_month";
         return period switch
         {
             "today" => (now.Date, now),
             "last_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddTicks(-1)),
             "this_month" or null or "" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now),
-            _ => throw new ArgumentException("period today, this_month veya last_month olmalıdır.")
+            _ => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now)
         };
     }
 

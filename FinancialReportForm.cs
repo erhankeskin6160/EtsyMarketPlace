@@ -306,21 +306,22 @@ internal sealed class FinancialReportForm : Form
         var bar = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 11,
+            ColumnCount = 13,
             Padding = new Padding(0, 2, 0, 2),
         };
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // ComboBox
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // DtpFrom
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // DtpTo
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // Yenile
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160)); // Maliyet Yönetimi
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // API Ayarları
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // TL Kur Checkbox
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));  // Kur Tutar
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // Excel
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155)); // Telegram
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // Boşluk
-        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); // Mode etiketi
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130)); // 0: ComboBox
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // 1: DtpFrom
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115)); // 2: DtpTo
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // 3: Yenile
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160)); // 4: Maliyet Yönetimi
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // 5: API Ayarları
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120)); // 6: TL Kur Checkbox
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));  // 7: Kur Tutar
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110)); // 8: Excel
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 155)); // 9: Telegram
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 135)); // 10: VDS'e Aktar
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));  // 11: Boşluk
+        bar.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170)); // 12: Mode etiketi
 
         // Tarih ön-ayarları
         _cboDateRange.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -465,13 +466,52 @@ internal sealed class FinancialReportForm : Form
         };
         bar.Controls.Add(btnTelegram, 9, 0);
 
+        // VDS'e Aktar Butonu
+        var btnSyncVds = new ModernButtonControl
+        {
+            Dock = DockStyle.Fill,
+            Text = "🌐 VDS'e Aktar",
+            NormalColor = Color.FromArgb(16, 185, 129), // Emerald #10B981
+            HoverColor = Color.FromArgb(5, 150, 105),
+            ForeColor = Color.White,
+            Margin = new Padding(0, 0, 4, 0),
+        };
+        btnSyncVds.Click += async (_, _) =>
+        {
+            if (_report == FinancialReport.Empty || _report.DailySummaries.Count == 0)
+            {
+                MessageBox.Show(this, "Aktarılacak finansal rapor verisi bulunamadı. Lütfen önce 'Etsy'den Yenile' yapın.", "VDS Senkronizasyonu", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            btnSyncVds.Enabled = false;
+            try
+            {
+                var settings = EtsyApiSettingsStore.Load();
+                SetStatus("🌐 İşlenmiş finansal veriler VDS API'ye aktarılıyor...", UiStyle.PrimaryColor);
+                var (trans, payouts, alerts) = await _service.ExportReportToIntegrationApiAsync(settings, _report);
+                SetStatus($"✅ VDS API senkronizasyonu tamamlandı: {trans} günlük kayıt, {payouts} banka ödemesi aktarıldı.", UiStyle.SuccessColor);
+                MessageBox.Show(this, $"Finansal veriler ve ürün maliyetleri VDS API'ye başarıyla aktarıldı!\n\n• Günlük İşlem Özeti: {trans}\n• Banka Ödemesi: {payouts}\n• Sipariş / Maliyet Kaydı: {alerts}\n\nArtık Gemini Spark veya MCP araçları bu işlenmiş net kâr verilerini doğrudan okuyabilir.", "🌐 VDS Senkronizasyonu Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                SetStatus($"❌ VDS Aktarım Hatası: {ex.Message}", UiStyle.DangerColor);
+                MessageBox.Show(this, $"VDS API'ye aktarım sırasında hata oluştu:\n{ex.Message}", "VDS Aktarım Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            finally
+            {
+                btnSyncVds.Enabled = true;
+            }
+        };
+        bar.Controls.Add(btnSyncVds, 10, 0);
+
         // Mod Etiketi
         _lblMode.Dock = DockStyle.Fill;
         _lblMode.Text = "🎮 Demo Modu";
         _lblMode.TextAlign = ContentAlignment.MiddleRight;
         _lblMode.ForeColor = UiStyle.WarningColor;
         _lblMode.Font = new Font("Segoe UI", 8.5F, FontStyle.Bold);
-        bar.Controls.Add(_lblMode, 11, 0);
+        bar.Controls.Add(_lblMode, 12, 0);
 
         return bar;
     }
@@ -1383,6 +1423,22 @@ internal sealed class FinancialReportForm : Form
                 _lblMode.Text = string.IsNullOrWhiteSpace(settings.ShopId) ? "🟢 Canlı Etsy API" : $"🟢 Canlı Etsy API ({settings.ShopId})";
                 _lblMode.ForeColor = UiStyle.SuccessColor;
                 SetStatus($"✅ Canlı Etsy API verisi yüklendi: {_report.Entries.Count} kayıt | {_report.PeriodStart:dd.MM.yyyy} — {_report.PeriodEnd:dd.MM.yyyy}", UiStyle.SuccessColor);
+
+                // İşlenmiş muhasebe verilerini ve ürün maliyetlerini arka planda VDS API'ye otomatik aktar
+                if (!string.IsNullOrWhiteSpace(settings.IntegrationApiBaseUrl) && _report.DailySummaries.Count > 0)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _service.ExportReportToIntegrationApiAsync(settings, _report);
+                        }
+                        catch (Exception ex)
+                        {
+                            SimilarProductsWinForms.Diagnostics.AppLog.Warn($"Otomatik VDS senkronizasyonu atlandı: {ex.Message}");
+                        }
+                    });
+                }
             }
             else
             {

@@ -246,6 +246,34 @@ app.MapPost("/api/etsy/sync", async (EtsySyncRequest request, IConfiguration con
     return result.Succeeded ? Results.Ok(result) : Results.Problem(result.ErrorMessage, statusCode: StatusCodes.Status502BadGateway);
 }).WithTags("Etsy Sync").WithName("SynchronizeEtsyFinance");
 
+app.MapPost("/api/etsy/financial/import", async (EtsyFinancialImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.ShopId))
+        return Results.BadRequest(new { error = "ShopId zorunludur." });
+
+    var shopId = request.ShopId.Trim();
+
+    if (request.Transactions?.Count > 0)
+        await repository.SaveTransactionsAsync(request.Transactions, cancellationToken);
+
+    if (request.Payouts?.Count > 0)
+        await repository.SavePayoutsAsync(request.Payouts, cancellationToken);
+
+    if (request.OrderAlerts?.Count > 0)
+        await repository.SaveOrderAlertsAsync(request.OrderAlerts, cancellationToken);
+
+    await repository.SaveSyncStateAsync(shopId, "financial", request.PeriodEnd ?? DateTimeOffset.UtcNow, cancellationToken: cancellationToken);
+
+    return Results.Ok(new
+    {
+        saved = true,
+        shopId,
+        transactionsCount = request.Transactions?.Count ?? 0,
+        payoutsCount = request.Payouts?.Count ?? 0,
+        alertsCount = request.OrderAlerts?.Count ?? 0
+    });
+}).WithTags("Financial").WithName("ImportEtsyFinancialData");
+
 app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyTokenStore tokenStore, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.ShopId) ||
