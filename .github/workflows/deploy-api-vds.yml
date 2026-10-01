@@ -1,0 +1,74 @@
+name: API CI/CD - VDS
+
+on:
+  push:
+    branches:
+      - development
+    paths:
+      - 'src/EtsyMarketPlace.Api/**'
+      - 'src/EtsyMarketPlace.Application/**'
+      - 'src/EtsyMarketPlace.Domain/**'
+      - 'src/EtsyMarketPlace.Infrastructure/**'
+      - 'tests/**'
+      - 'deploy/**'
+      - '*.sln'
+      - '**/*.csproj'
+      - '.github/workflows/deploy-api-vds.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore .\SimilarProductsWinForms.sln
+
+      - name: Test
+        run: dotnet test .\SimilarProductsWinForms.sln -c Release --no-restore
+
+      - name: Publish API
+        run: dotnet publish .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj -c Release -r win-x64 --self-contained true -o .\publish-api-vds --no-restore
+
+      - name: Upload API artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-publish-${{ github.sha }}
+          path: publish-api-vds
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy-to-vds:
+    needs: build-and-test
+    runs-on: [self-hosted, Windows, vds]
+    environment: production
+    steps:
+      - name: Checkout deployment scripts
+        uses: actions/checkout@v4
+
+      - name: Download API artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: api-publish-${{ github.sha }}
+          path: publish-api-vds
+
+      - name: Install or update API
+        shell: powershell
+        run: .\deploy\install_or_update_api_vds.ps1 -PackagePath "${{ github.workspace }}\publish-api-vds" -InstallPath "C:\Apps\EtsyMarketPlace\Api" -Port 5263
+
+      - name: Verify API health
+        shell: powershell
+        run: |
+          $health = Invoke-RestMethod "http://127.0.0.1:5263/health"
+          if ($health.status -ne "Healthy") { throw "API health kontrolü başarısız: $($health | ConvertTo-Json -Compress)" }
+          Write-Host "API sağlıklı: $($health | ConvertTo-Json -Compress)"

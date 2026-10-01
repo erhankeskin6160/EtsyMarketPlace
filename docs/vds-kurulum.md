@@ -212,3 +212,53 @@ SQLite dosyası ve `keys` klasörü aynı yedeğe ait olmalıdır. Tokenlar şif
 - RabbitMQ
 
 Trafik veya kaynak ihtiyacı büyürse API, veritabanı ve deployment ayrı planlanabilir.
+
+## 11. GitHub Actions ile otomatik API deployment
+
+`.github/workflows/deploy-api-vds.yml` workflow’u `development` dalına API ile
+ilgili bir commit pushlandığında otomatik olarak:
+
+1. .NET 8 restore ve test çalıştırır.
+2. API’yi self-contained `win-x64` olarak publish eder.
+3. Publish paketini VDS’deki self-hosted GitHub Actions runner’a aktarır.
+4. Mevcut API sürecini durdurup yeni sürümü `C:\Apps\EtsyMarketPlace\Api`
+   klasörüne kurar.
+5. `http://127.0.0.1:5263/health` ile deployment’ı doğrular.
+
+### VDS’de bir kez yapılacak runner kurulumu
+
+GitHub deposunda **Settings > Actions > Runners > New self-hosted runner**
+adımlarından Windows runner komutlarını alın. VDS’de runner’ı şu klasöre
+kurun:
+
+```powershell
+New-Item -ItemType Directory -Force C:\actions-runner | Out-Null
+Set-Location C:\actions-runner
+```
+
+GitHub’ın verdiği `config.cmd` komutunda runner label olarak `vds` kullanın.
+Workflow bu label’ı şu satırla seçer:
+
+```yaml
+runs-on: [self-hosted, Windows, vds]
+```
+
+Runner’ı Windows servisi olarak kurun ve servisin aşağıdaki klasörlere yazma
+yetkisi olduğundan emin olun:
+
+```text
+C:\Apps\EtsyMarketPlace\Api
+C:\ProgramData\EtsyMarketPlace
+```
+
+Runner kurulumu tamamlandıktan sonra bilgisayardan yalnızca şunu yapmanız
+yeterlidir:
+
+```powershell
+git add .
+git commit -m "feat: API güncellemesi"
+git push origin development
+```
+
+GitHub Actions başarısız olursa VDS’de çalışan mevcut API sürümü korunur;
+başarılı deployment sonrasında workflow health kontrolünü geçmeden tamamlanmaz.
