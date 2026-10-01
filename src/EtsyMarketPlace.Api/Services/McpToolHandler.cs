@@ -12,15 +12,36 @@ public sealed class McpToolHandler
     private readonly IEtsyReportingService _reportingService;
     private readonly IEtsyFinancialAnalysisService _analysisService;
     private readonly IEtsyIntegrationRepository _repository;
+    private readonly IConfiguration _configuration;
 
     public McpToolHandler(
         IEtsyReportingService reportingService,
         IEtsyFinancialAnalysisService analysisService,
-        IEtsyIntegrationRepository repository)
+        IEtsyIntegrationRepository repository,
+        IConfiguration configuration)
     {
         _reportingService = reportingService;
         _analysisService = analysisService;
         _repository = repository;
+        _configuration = configuration;
+    }
+
+    public string DefaultShopId =>
+        _configuration["Etsy:DefaultShopId"]
+        ?? _configuration["Etsy:ShopId"]
+        ?? "53236321";
+
+    public string ResolveShopId(JsonElement parameters)
+    {
+        if (parameters.TryGetProperty("shopId", out var value) && value.ValueKind == JsonValueKind.String)
+        {
+            var raw = value.GetString()?.Trim();
+            if (!string.IsNullOrWhiteSpace(raw) && raw != "523236321")
+            {
+                return raw;
+            }
+        }
+        return DefaultShopId;
     }
 
     /// <summary>
@@ -28,15 +49,15 @@ public sealed class McpToolHandler
     /// </summary>
     public List<McpToolDefinition> GetRegisteredTools() =>
         [
-            Tool("get_etsy_bank_payouts", "Etsy banka transferlerini tarih, tutar, kur ve referans bilgileriyle listeler.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") }),
-            Tool("get_financial_performance", "Brüt satış, platform komisyonu, reklam, ürün ve kargo maliyetleri ile net kâr marjını döner.", new { shopId = RequiredString("Mağaza kimliği"), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" }, startDate = OptionalDate("Özel başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Özel bitiş tarihi (YYYY-MM-DD)") }),
-            Tool("get_monthly_orders_breakdown", "Aylık sipariş adetlerini, satılan ürünleri, brüt ciroyu, sepet ortalamasını ve kargolama durumunu listeler.", new { shopId = RequiredString("Mağaza kimliği"), months = new { type = "integer", description = "Kaç aylık geçmiş (varsayılan 12)" } }),
-            Tool("get_listing_traffic_analytics", "Hangi ürüne günde ve ayda kaç ziyaret/görüntülenme geldiğini, favorilenme sayılarını ve satış dönüşüm oranını listeler.", new { shopId = RequiredString("Mağaza kimliği"), limit = new { type = "integer", description = "Listelenecek ürün adedi (varsayılan 30)" } }),
-            Tool("get_financial_chart_image", "Finansal modül grafiklerinin (gelir-gider bar, nakit akış çizgisi, gider pasta, 30 günlük tahmin) resim bağlantısını ve özetini döner.", new { shopId = RequiredString("Mağaza kimliği"), chartType = new { type = "string", @enum = new[] { "profit_bar", "cashflow_line", "cost_pie", "forecast" }, description = "Grafik tipi" } }),
-            Tool("get_conversion_and_profit_alerts", "Yüksek görüntülenme alıp satışı olmayan (düşük dönüşüm) ürünleri ve maliyeti eksik siparişleri tespit eder.", new { shopId = RequiredString("Mağaza kimliği") }),
-            Tool("get_unfulfilled_cost_alerts", "Maliyeti eksik açık siparişleri listeler.", new { shopId = RequiredString("Mağaza kimliği") }),
-            Tool("get_daily_shop_brief", "Günlük mağaza sağlık skoru ve finans özetini döner.", new { shopId = RequiredString("Mağaza kimliği"), date = OptionalDate("Rapor tarihi (YYYY-MM-DD)") }),
-            Tool("analyze_etsy_financials", "Finansal performansı kural tabanlı olarak analiz eder; marj, gider, uyarı ve önerileri döner.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") })
+            Tool("get_etsy_bank_payouts", "Etsy banka transferlerini tarih, tutar, kur ve referans bilgileriyle listeler.", new { shopId = OptionalShopId(), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") }),
+            Tool("get_financial_performance", "Brüt satış, platform komisyonu, reklam, ürün ve kargo maliyetleri ile net kâr marjını döner.", new { shopId = OptionalShopId(), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" }, startDate = OptionalDate("Özel başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Özel bitiş tarihi (YYYY-MM-DD)") }),
+            Tool("get_monthly_orders_breakdown", "Aylık sipariş adetlerini, satılan ürünleri, brüt ciroyu, sepet ortalamasını ve kargolama durumunu listeler.", new { shopId = OptionalShopId(), months = new { type = "integer", description = "Kaç aylık geçmiş (varsayılan 12)" } }),
+            Tool("get_listing_traffic_analytics", "Hangi ürüne günde ve ayda kaç ziyaret/görüntülenme geldiğini, favorilenme sayılarını ve satış dönüşüm oranını listeler.", new { shopId = OptionalShopId(), limit = new { type = "integer", description = "Listelenecek ürün adedi (varsayılan 30)" } }),
+            Tool("get_financial_chart_image", "Finansal modül grafiklerinin (gelir-gider bar, nakit akış çizgisi, gider pasta, 30 günlük tahmin) resim bağlantısını ve özetini döner.", new { shopId = OptionalShopId(), chartType = new { type = "string", @enum = new[] { "profit_bar", "cashflow_line", "cost_pie", "forecast" }, description = "Grafik tipi" } }),
+            Tool("get_conversion_and_profit_alerts", "Yüksek görüntülenme alıp satışı olmayan (düşük dönüşüm) ürünleri ve maliyeti eksik siparişleri tespit eder.", new { shopId = OptionalShopId() }),
+            Tool("get_unfulfilled_cost_alerts", "Maliyeti eksik açık siparişleri listeler.", new { shopId = OptionalShopId() }),
+            Tool("get_daily_shop_brief", "Günlük mağaza sağlık skoru ve finans özetini döner.", new { shopId = OptionalShopId(), date = OptionalDate("Rapor tarihi (YYYY-MM-DD)") }),
+            Tool("analyze_etsy_financials", "Finansal performansı kural tabanlı olarak analiz eder; marj, gider, uyarı ve önerileri döner.", new { shopId = OptionalShopId(), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") })
         ];
 
     /// <summary>
@@ -45,7 +66,7 @@ public sealed class McpToolHandler
     public async Task<object> ExecuteToolAsync(string toolName, JsonElement? args)
     {
         var parameters = args is { ValueKind: JsonValueKind.Object } value ? value : throw new ArgumentException("Araç parametreleri nesne olmalıdır.");
-        var shopId = Required(parameters, "shopId");
+        var shopId = ResolveShopId(parameters);
         return toolName switch
         {
             "get_etsy_bank_payouts" => Content(await GetPayoutsAsync(shopId, parameters)),
@@ -202,7 +223,8 @@ public sealed class McpToolHandler
     }
 
     private static object Content(object value) => new { content = new[] { new { type = "text", text = JsonSerializer.Serialize(value, new JsonSerializerOptions { WriteIndented = true }) } } };
-    private static McpToolDefinition Tool(string name, string description, object schema) => new() { Name = name, Description = description, InputSchema = new { type = "object", properties = schema, required = new[] { "shopId" } } };
+    private static McpToolDefinition Tool(string name, string description, object schema) => new() { Name = name, Description = description, InputSchema = new { type = "object", properties = schema } };
+    private static object OptionalShopId() => new { type = "string", description = "Mağaza kimliği (opsiyonel; belirtilmezse varsayılan mağaza 53236321 kullanılır)" };
     private static object RequiredString(string description) => new { type = "string", description };
     private static object OptionalDate(string description) => new { type = "string", format = "date", description };
 }

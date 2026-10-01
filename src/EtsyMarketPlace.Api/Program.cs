@@ -205,22 +205,37 @@ app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = Dat
    .WithDescription("VDS üzerinde çalışan API'nin ve arka plan servislerinin ayakta olup olmadığını kontrol eder. 'Healthy' durum kodu döner.")
    .WithName("HealthCheck");
 
-app.MapGet("/api/etsy/banking/payouts", async (string shopId, DateTimeOffset? startDate, DateTimeOffset? endDate, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
+string ResolveShopId(string? queryShopId, HttpContext context, IConfiguration config)
 {
-    if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
+    if (!string.IsNullOrWhiteSpace(queryShopId) && queryShopId != "523236321")
+        return queryShopId.Trim();
+
+    if (context.Request.Headers.TryGetValue("X-Etsy-Shop-Id", out var headerVal))
+    {
+        var hStr = headerVal.ToString().Trim();
+        if (!string.IsNullOrWhiteSpace(hStr) && hStr != "523236321")
+            return hStr;
+    }
+
+    return config["Etsy:DefaultShopId"] ?? config["Etsy:ShopId"] ?? "53236321";
+}
+
+app.MapGet("/api/etsy/banking/payouts", async (string? shopId, DateTimeOffset? startDate, DateTimeOffset? endDate, HttpContext context, IConfiguration config, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
     var end = endDate ?? DateTimeOffset.UtcNow;
     var start = startDate ?? new DateTimeOffset(end.Year, end.Month, 1, 0, 0, 0, TimeSpan.Zero);
     if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
-    return Results.Ok(await reporting.GetBankPayoutsAsync(shopId, start, end, cancellationToken));
+    return Results.Ok(await reporting.GetBankPayoutsAsync(resolvedShopId, start, end, cancellationToken));
 })
 .WithTags("Finans & Banka")
 .WithSummary("Etsy Banka Transferleri (Payouts)")
-.WithDescription("Etsy'nin mağazanız için banka hesabınıza yatırdığı tüm ödeme ve transfer kayıtlarını tarih, tutar, kur ve durum bilgileriyle listeler.")
+.WithDescription("Etsy'nin mağazanız için banka hesabınıza yatırdığı tüm ödeme ve transfer kayıtlarını tarih, tutar, kur ve durum bilgileriyle listeler. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetEtsyBankPayouts");
 
-app.MapGet("/api/etsy/financial/performance", async (string shopId, string? period, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
+app.MapGet("/api/etsy/financial/performance", async (string? shopId, string? period, HttpContext context, IConfiguration config, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
+    var resolvedShopId = ResolveShopId(shopId, context, config);
     var now = DateTimeOffset.UtcNow;
     var (start, end) = period?.ToLowerInvariant() switch
     {
@@ -230,51 +245,51 @@ app.MapGet("/api/etsy/financial/performance", async (string shopId, string? peri
         _ => (DateTimeOffset.MinValue, DateTimeOffset.MinValue)
     };
     if (start == DateTimeOffset.MinValue) return Results.BadRequest(new { error = "period today, this_month veya last_month olmalıdır." });
-    return Results.Ok(await reporting.GetFinancialPerformanceAsync(shopId, start, end, cancellationToken));
+    return Results.Ok(await reporting.GetFinancialPerformanceAsync(resolvedShopId, start, end, cancellationToken));
 })
 .WithTags("Finans & Muhasebe")
 .WithSummary("Finansal Performans ve Kâr-Zarar Karnesi")
-.WithDescription("Belirtilen dönem (today, this_month, last_month veya özel tarih aralığı) için brüt satış, Etsy komisyonları, reklam harcamaları, ürün ve kargo maliyetleri ile net kâr marjını hesaplar.")
+.WithDescription("Belirtilen dönem (today, this_month, last_month veya özel tarih aralığı) için brüt satış, Etsy komisyonları, reklam harcamaları, ürün ve kargo maliyetleri ile net kâr marjını hesaplar. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetFinancialPerformance");
 
-app.MapGet("/api/etsy/financial/analysis", async (string shopId, DateTimeOffset? startDate, DateTimeOffset? endDate, IEtsyFinancialAnalysisService analysis, CancellationToken cancellationToken) =>
+app.MapGet("/api/etsy/financial/analysis", async (string? shopId, DateTimeOffset? startDate, DateTimeOffset? endDate, HttpContext context, IConfiguration config, IEtsyFinancialAnalysisService analysis, CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
+    var resolvedShopId = ResolveShopId(shopId, context, config);
     var end = endDate ?? DateTimeOffset.UtcNow;
     var start = startDate ?? end.AddDays(-30);
     if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
-    return Results.Ok(await analysis.AnalyzeAsync(shopId.Trim(), start, end, cancellationToken));
+    return Results.Ok(await analysis.AnalyzeAsync(resolvedShopId, start, end, cancellationToken));
 })
 .WithTags("Finans & Muhasebe")
 .WithSummary("Akıllı Finansal Analiz ve Öneri Motoru")
-.WithDescription("Finansal performansı kural tabanlı yapay zeka mantığıyla analiz eder. Kâr marjı, ciro değişimi ve gider oranlarını değerlendirerek mağazaya özel finansal uyarılar (insights) ve aksiyon önerileri (recommendations) sunar.")
+.WithDescription("Finansal performansı kural tabanlı yapay zeka mantığıyla analiz eder. Kâr marjı, ciro değişimi ve gider oranlarını değerlendirerek mağazaya özel finansal uyarılar ve öneriler sunar. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetFinancialAnalysis");
 
-app.MapGet("/api/etsy/orders/unfulfilled-cost-alerts", async (string shopId, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
+app.MapGet("/api/etsy/orders/unfulfilled-cost-alerts", async (string? shopId, HttpContext context, IConfiguration config, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
-    return Results.Ok(await reporting.GetUnfulfilledCostAlertsAsync(shopId, cancellationToken));
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    return Results.Ok(await reporting.GetUnfulfilledCostAlertsAsync(resolvedShopId, cancellationToken));
 })
 .WithTags("Sipariş & Maliyet")
 .WithSummary("Maliyeti Eksik Sipariş Alarmları")
-.WithDescription("Henüz kargolanmamış veya üretim/kargo maliyeti girilmemiş açık siparişleri listeler. Gerçek net kârın eksik maliyet yüzünden yanıltıcı çıkmasını önler.")
+.WithDescription("Henüz kargolanmamış veya üretim/kargo maliyeti girilmemiş açık siparişleri listeler. Gerçek net kârın eksik maliyet yüzünden yanıltıcı çıkmasını önler. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetUnfulfilledCostAlerts");
 
-app.MapGet("/api/etsy/shop/daily-brief", async (string shopId, DateTimeOffset? date, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
+app.MapGet("/api/etsy/shop/daily-brief", async (string? shopId, DateTimeOffset? date, HttpContext context, IConfiguration config, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
-    return Results.Ok(await reporting.GetDailyShopBriefAsync(shopId, date ?? DateTimeOffset.UtcNow, cancellationToken));
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    return Results.Ok(await reporting.GetDailyShopBriefAsync(resolvedShopId, date ?? DateTimeOffset.UtcNow, cancellationToken));
 })
 .WithTags("Finans & Muhasebe")
 .WithSummary("Günlük Mağaza Bülteni ve Sağlık Skoru")
-.WithDescription("Seçilen gün için brüt satış, net kâr, sipariş sayısı ve mağaza sağlık skorunu (Health Score 0-100) özetler.")
+.WithDescription("Seçilen gün için brüt satış, net kâr, sipariş sayısı ve mağaza sağlık skorunu (Health Score 0-100) özetler. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetDailyShopBrief");
 
 app.MapPost("/api/etsy/sync", async (EtsySyncRequest request, IConfiguration configuration, IEtsySynchronizationService synchronization, CancellationToken cancellationToken) =>
 {
-    var shopId = string.IsNullOrWhiteSpace(request.ShopId) ? configuration["Etsy:ShopId"] : request.ShopId;
-    if (string.IsNullOrWhiteSpace(shopId))
-        return Results.BadRequest(new { error = "ShopId body içinde veya Etsy:ShopId yapılandırmasında belirtilmelidir." });
+    var shopId = string.IsNullOrWhiteSpace(request.ShopId) 
+        ? (configuration["Etsy:DefaultShopId"] ?? configuration["Etsy:ShopId"] ?? "53236321") 
+        : request.ShopId;
 
     var end = request.EndDate ?? DateTimeOffset.UtcNow;
     var start = request.StartDate ?? end.AddDays(-30);
@@ -372,9 +387,10 @@ app.MapPost("/api/etsy/charts/upload", async (EtsyChartUploadRequest request, IE
 .WithDescription("Masaüstündeki SkiaSharp grafik motorunun ürettiği 4 ana grafiğin (profit_bar, cashflow_line, cost_pie, forecast) Base64 PNG verisini sunucuya yükler.")
 .WithName("UploadChartSnapshot");
 
-app.MapGet("/api/etsy/charts/{shopId}/{chartType}.png", async (string shopId, string chartType, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
+app.MapGet("/api/etsy/charts/{shopId}/{chartType}.png", async (string shopId, string chartType, IConfiguration configuration, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
 {
-    var snapshot = await repository.GetChartSnapshotAsync(shopId, chartType.ToLowerInvariant(), cancellationToken);
+    var resolvedShopId = (shopId == "default" || shopId == "523236321") ? (configuration["Etsy:DefaultShopId"] ?? "53236321") : shopId;
+    var snapshot = await repository.GetChartSnapshotAsync(resolvedShopId, chartType.ToLowerInvariant(), cancellationToken);
     if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.ImagePngBase64))
         return Results.NotFound(new { error = "Grafik resmi bulunamadı." });
 
@@ -481,18 +497,16 @@ app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyToken
 .WithDescription("Masaüstü uygulamasında üretilen Etsy API OAuth Access ve Refresh token bilgilerini VDS güvenli kasasına kaydeder.")
 .WithName("ImportEtsyToken");
 
-app.MapGet("/api/etsy/token/status", async (string shopId, IEtsyTokenStore tokenStore, CancellationToken cancellationToken) =>
+app.MapGet("/api/etsy/token/status", async (string? shopId, HttpContext context, IConfiguration config, IEtsyTokenStore tokenStore, CancellationToken cancellationToken) =>
 {
-    if (string.IsNullOrWhiteSpace(shopId))
-        return Results.BadRequest(new { error = "shopId zorunludur." });
-
-    var token = await tokenStore.GetAsync(shopId.Trim(), cancellationToken);
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
     return token is null
-        ? Results.NotFound(new { exists = false, shopId = shopId.Trim() })
+        ? Results.NotFound(new { exists = false, shopId = resolvedShopId })
         : Results.Ok(new
         {
             exists = true,
-            shopId = shopId.Trim(),
+            shopId = resolvedShopId,
             expiresAt = token.AccessTokenExpiresAt,
             isExpired = token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow,
             tokenType = token.TokenType
