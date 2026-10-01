@@ -1017,4 +1017,192 @@ internal sealed class FinancialReportService
 
         return (transactions.Count, payouts.Count, alerts.Count);
     }
+
+    public async Task<(int transactions, int payouts, int alerts, int monthlyOrders, int traffic, int charts)> ExportAllDataToIntegrationApiAsync(
+        EtsyApiSettings settings,
+        FinancialReport report,
+        IReadOnlyList<(string ChartType, string ImageBase64)>? charts = null,
+        IReadOnlyList<MarketListingResult>? activeListings = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(settings.IntegrationApiBaseUrl))
+            throw new InvalidOperationException("Integration API URL yapılandırılmamış.");
+
+        var shopId = settings.ShopId?.Trim() ?? "";
+        if (string.IsNullOrWhiteSpace(shopId))
+            throw new InvalidOperationException("Etsy ShopId ayarlanmamış.");
+
+        var currency = string.IsNullOrWhiteSpace(report.Currency) ? "USD" : report.Currency.Trim();
+
+        // 1. Günlük muhasebe özetleri
+        var transactions = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyFinancialTransaction>();
+        foreach (var daily in report.DailySummaries)
+        {
+            var refId = $"daily-{daily.SortDate:yyyyMMdd}";
+            var occurredAt = new DateTimeOffset(daily.SortDate.Date, TimeSpan.Zero);
+            transactions.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyFinancialTransaction(
+                shopId,
+                refId,
+                occurredAt,
+                daily.GrossSales,
+                Math.Abs(daily.EtsyFees),
+                Math.Abs(daily.InnerAdFees),
+                Math.Abs(daily.OffsiteAdFees),
+                daily.ProductCosts,
+                0m,
+                Math.Abs(daily.Refunds),
+                currency));
+        }
+
+        // 2. Banka transferleri
+        var payouts = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyBankPayout>();
+        foreach (var entry in report.Entries)
+        {
+            var desc = entry.Description ?? "";
+            var isDeposit = entry.Type.Equals("deposit", StringComparison.OrdinalIgnoreCase) ||
+                            desc.Contains("deposit", StringComparison.OrdinalIgnoreCase) ||
+                            desc.Contains("payout", StringComparison.OrdinalIgnoreCase);
+
+            if (isDeposit && entry.Amount != 0)
+            {
+                var refId = entry.EntryId.ToString(CultureInfo.InvariantCulture);
+                payouts.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyBankPayout(
+                    shopId,
+                    refId,
+                    entry.CreatedAt,
+                    Math.Abs(entry.Amount),
+                    currency,
+                    report.ExchangeRate,
+                    "completed",
+                    desc));
+            }
+        }
+
+        // 3. Sipariş bazlı maliyet uyarıları
+        var alerts = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyOrderCostAlert>();
+        foreach (var order in report.OrderSummaries)
+        {
+            var totalCost = order.TotalOrderProductionCost + order.TotalOrderPackagingCost;
+            var shippingCost = order.TotalOrderShippingCost;
+            var isMissing = totalCost == 0m || shippingCost == 0m;
+            alerts.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyOrderCostAlert(
+                shopId,
+                order.ReceiptId.ToString(CultureInfo.InvariantCulture),
+                order.OrderDate,
+                currency,
+                order.GrandTotal,
+                totalCost > 0 ? totalCost : null,
+                shippingCost > 0 ? shippingCost : null,
+                isMissing ? "Açık veya maliyeti eksik sipariş." : "Tamamlandı"));
+        }
+
+        // 4. Aylık Sipariş İstatistikleri
+        var monthlySummaries = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyMonthlyOrderSummary>();
+        var monthlyGroups = report.OrderSummaries
+            .GroupBy(o => o.OrderDate.ToString("yyyy-MM", CultureInfo.InvariantCulture))
+            .OrderByDescending(g => g.Key);
+
+        foreach (var g in monthlyGroups)
+        {
+            var orderCount = g.Count();
+            var unitsSold = g.Sum(o => o.Quantity);
+            var grossRevenue = g.Sum(o => o.GrandTotal);
+            var aov = orderCount > 0 ? Math.Round(grossRevenue / orderCount, 2) : 0m;
+            var shipped = g.Count(o => !o.IsCanceled && !o.OrderStatus.Equals("Canceled", StringComparison.OrdinalIgnoreCase));
+            var unfulfilled = Math.Max(0, orderCount - shipped);
+
+            monthlySummaries.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyMonthlyOrderSummary(
+                shopId,
+                g.Key,
+                orderCount,
+                unitsSold,
+                grossRevenue,
+                aov,
+                shipped,
+                unfulfilled,
+                currency));
+        }
+
+        // 5. Ürün Bazlı Ziyaret ve Trafik
+        var trafficRecords = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyListingTrafficRecord>();
+        var todayStr = DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+        if (activeListings != null && activeListings.Count > 0)
+        {
+            foreach (var l in activeListings)
+            {
+                var unitsSold = report.OrderSummaries
+                    .Where(o => o.ListingId == l.ListingId && !o.IsCanceled)
+                    .Sum(o => o.Quantity);
+                var revenue = report.OrderSummaries
+                    .Where(o => o.ListingId == l.ListingId && !o.IsCanceled)
+                    .Sum(o => o.GrandTotal);
+                var convRate = l.Views > 0 ? Math.Round(((decimal)unitsSold / l.Views) * 100m, 2) : 0m;
+
+                trafficRecords.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyListingTrafficRecord(
+                    shopId,
+                    l.ListingId,
+                    todayStr,
+                    l.Title ?? "",
+                    l.Views,
+                    l.Favorites,
+                    0,
+                    0,
+                    unitsSold,
+                    revenue,
+                    convRate,
+                    l.ImageUrl ?? "",
+                    l.ListingUrl ?? ""));
+            }
+        }
+
+        // 6. Grafik Resimleri
+        var chartPayloads = new List<object>();
+        if (charts != null && charts.Count > 0)
+        {
+            foreach (var (cType, cBase64) in charts)
+            {
+                if (!string.IsNullOrWhiteSpace(cBase64))
+                {
+                    chartPayloads.Add(new
+                    {
+                        shopId,
+                        chartType = cType.ToLowerInvariant(),
+                        periodStart = report.PeriodStart,
+                        periodEnd = report.PeriodEnd,
+                        imagePngBase64 = cBase64
+                    });
+                }
+            }
+        }
+
+        var payload = new
+        {
+            shopId,
+            transactions,
+            payouts,
+            orderAlerts = alerts,
+            monthlyOrders = monthlySummaries,
+            trafficRecords,
+            charts = chartPayloads,
+            periodStart = report.PeriodStart,
+            periodEnd = report.PeriodEnd
+        };
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            new Uri(new Uri(settings.IntegrationApiBaseUrl.TrimEnd('/') + "/"), "api/etsy/sync-all"));
+        request.Content = JsonContent.Create(payload);
+        if (!string.IsNullOrWhiteSpace(settings.IntegrationApiKey))
+            request.Headers.Add("X-Api-Key", settings.IntegrationApiKey.Trim());
+
+        using var response = await Http.SendAsync(request, ct);
+        var body = await response.Content.ReadAsStringAsync(ct);
+        if (!response.IsSuccessStatusCode)
+            throw new InvalidOperationException($"VDS tam senkronizasyon başarısız oldu. HTTP {(int)response.StatusCode}: {body}");
+
+        SimilarProductsWinForms.Diagnostics.AppLog.Info($"Etsy tüm mağaza verileri ve grafikler VDS API'ye aktarıldı. ShopId: {shopId}; Günlük: {transactions.Count}; Ödeme: {payouts.Count}; Sipariş Uyarısı: {alerts.Count}; Aylık Sipariş: {monthlySummaries.Count}; Trafik: {trafficRecords.Count}; Grafik: {chartPayloads.Count}");
+
+        return (transactions.Count, payouts.Count, alerts.Count, monthlySummaries.Count, trafficRecords.Count, chartPayloads.Count);
+    }
 }

@@ -11,11 +11,16 @@ public sealed class McpToolHandler
 {
     private readonly IEtsyReportingService _reportingService;
     private readonly IEtsyFinancialAnalysisService _analysisService;
+    private readonly IEtsyIntegrationRepository _repository;
 
-    public McpToolHandler(IEtsyReportingService reportingService, IEtsyFinancialAnalysisService analysisService)
+    public McpToolHandler(
+        IEtsyReportingService reportingService,
+        IEtsyFinancialAnalysisService analysisService,
+        IEtsyIntegrationRepository repository)
     {
         _reportingService = reportingService;
         _analysisService = analysisService;
+        _repository = repository;
     }
 
     /// <summary>
@@ -25,6 +30,10 @@ public sealed class McpToolHandler
         [
             Tool("get_etsy_bank_payouts", "Etsy banka transferlerini tarih, tutar, kur ve referans bilgileriyle listeler.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") }),
             Tool("get_financial_performance", "Brüt satış, platform komisyonu, reklam, ürün ve kargo maliyetleri ile net kâr marjını döner.", new { shopId = RequiredString("Mağaza kimliği"), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" }, startDate = OptionalDate("Özel başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Özel bitiş tarihi (YYYY-MM-DD)") }),
+            Tool("get_monthly_orders_breakdown", "Aylık sipariş adetlerini, satılan ürünleri, brüt ciroyu, sepet ortalamasını ve kargolama durumunu listeler.", new { shopId = RequiredString("Mağaza kimliği"), months = new { type = "integer", description = "Kaç aylık geçmiş (varsayılan 12)" } }),
+            Tool("get_listing_traffic_analytics", "Hangi ürüne günde ve ayda kaç ziyaret/görüntülenme geldiğini, favorilenme sayılarını ve satış dönüşüm oranını listeler.", new { shopId = RequiredString("Mağaza kimliği"), limit = new { type = "integer", description = "Listelenecek ürün adedi (varsayılan 30)" } }),
+            Tool("get_financial_chart_image", "Finansal modül grafiklerinin (gelir-gider bar, nakit akış çizgisi, gider pasta, 30 günlük tahmin) resim bağlantısını ve özetini döner.", new { shopId = RequiredString("Mağaza kimliği"), chartType = new { type = "string", @enum = new[] { "profit_bar", "cashflow_line", "cost_pie", "forecast" }, description = "Grafik tipi" } }),
+            Tool("get_conversion_and_profit_alerts", "Yüksek görüntülenme alıp satışı olmayan (düşük dönüşüm) ürünleri ve maliyeti eksik siparişleri tespit eder.", new { shopId = RequiredString("Mağaza kimliği") }),
             Tool("get_unfulfilled_cost_alerts", "Maliyeti eksik açık siparişleri listeler.", new { shopId = RequiredString("Mağaza kimliği") }),
             Tool("get_daily_shop_brief", "Günlük mağaza sağlık skoru ve finans özetini döner.", new { shopId = RequiredString("Mağaza kimliği"), date = OptionalDate("Rapor tarihi (YYYY-MM-DD)") }),
             Tool("analyze_etsy_financials", "Finansal performansı kural tabanlı olarak analiz eder; marj, gider, uyarı ve önerileri döner.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") })
@@ -41,10 +50,103 @@ public sealed class McpToolHandler
         {
             "get_etsy_bank_payouts" => Content(await GetPayoutsAsync(shopId, parameters)),
             "get_financial_performance" => Content(await GetPerformanceAsync(shopId, parameters)),
+            "get_monthly_orders_breakdown" => Content(await GetMonthlyOrdersAsync(shopId, parameters)),
+            "get_listing_traffic_analytics" => Content(await GetListingTrafficAsync(shopId, parameters)),
+            "get_financial_chart_image" => Content(await GetChartImageAsync(shopId, parameters)),
+            "get_conversion_and_profit_alerts" => Content(await GetConversionAndProfitAlertsAsync(shopId)),
             "get_unfulfilled_cost_alerts" => Content(new { shopId, alerts = await _reportingService.GetUnfulfilledCostAlertsAsync(shopId) }),
             "get_daily_shop_brief" => Content(new { shopId, brief = await _reportingService.GetDailyShopBriefAsync(shopId, ParseDate(parameters, "date") ?? DateTimeOffset.UtcNow) }),
             "analyze_etsy_financials" => Content(await GetAnalysisAsync(shopId, parameters)),
             _ => throw new InvalidOperationException($"Bilinmeyen MCP aracı: {toolName}")
+        };
+    }
+
+    private async Task<object> GetMonthlyOrdersAsync(string shopId, JsonElement parameters)
+    {
+        var months = parameters.TryGetProperty("months", out var mVal) && mVal.TryGetInt32(out var m) ? Math.Clamp(m, 1, 36) : 12;
+        var summaries = await _repository.GetMonthlyOrderSummariesAsync(shopId, months);
+        var totalOrders = summaries.Sum(x => x.OrderCount);
+        var totalRevenue = summaries.Sum(x => x.GrossRevenue);
+        return new
+        {
+            shopId,
+            queriedMonths = months,
+            totalOrders,
+            totalRevenue,
+            monthlySummaries = summaries
+        };
+    }
+
+    private async Task<object> GetListingTrafficAsync(string shopId, JsonElement parameters)
+    {
+        var limit = parameters.TryGetProperty("limit", out var lVal) && lVal.TryGetInt32(out var l) ? Math.Clamp(l, 1, 100) : 30;
+        var records = await _repository.GetListingTrafficAnalyticsAsync(shopId, limit: limit);
+        return new
+        {
+            shopId,
+            listingCount = records.Count,
+            topListingsByViews = records
+        };
+    }
+
+    private async Task<object> GetChartImageAsync(string shopId, JsonElement parameters)
+    {
+        var chartType = Required(parameters, "chartType").ToLowerInvariant();
+        var snapshot = await _repository.GetChartSnapshotAsync(shopId, chartType);
+        if (snapshot == null)
+        {
+            return new
+            {
+                shopId,
+                chartType,
+                exists = false,
+                message = "Bu grafik henüz masaüstünden aktarılmamış. Lütfen masaüstü uygulamasında Finansal Rapor'u açıp 'VDS'e Aktar' butonuna basın."
+            };
+        }
+
+        var imageUrl = $"/api/etsy/charts/{Uri.EscapeDataString(shopId)}/{Uri.EscapeDataString(chartType)}.png";
+        return new
+        {
+            shopId,
+            chartType,
+            exists = true,
+            imageUrl,
+            periodStart = snapshot.PeriodStart,
+            periodEnd = snapshot.PeriodEnd,
+            updatedAt = snapshot.UpdatedAt,
+            message = $"Grafik resmi hazır. Doğrudan görüntülemek için: {imageUrl}",
+            imagePreviewDataUrl = $"data:image/png;base64,{snapshot.ImagePngBase64}"
+        };
+    }
+
+    private async Task<object> GetConversionAndProfitAlertsAsync(string shopId)
+    {
+        var traffic = await _repository.GetListingTrafficAnalyticsAsync(shopId, limit: 100);
+        var unfulfilledAlerts = await _reportingService.GetUnfulfilledCostAlertsAsync(shopId);
+
+        var lowConversion = traffic
+            .Where(x => x.Views >= 30 && x.ConversionRate < 0.8m)
+            .OrderByDescending(x => x.Views)
+            .Take(10)
+            .Select(x => new
+            {
+                x.ListingId,
+                x.Title,
+                x.Views,
+                x.Favorites,
+                x.UnitsSoldMonth,
+                ConversionRatePercent = $"{x.ConversionRate:F1}%",
+                Advice = "Trafik yüksek fakat satış zayıf. Fotoğraflar, başlık/etiket uygunluğu veya fiyat seviyesi optimize edilmeli."
+            })
+            .ToList();
+
+        return new
+        {
+            shopId,
+            lowConversionListingCount = lowConversion.Count,
+            lowConversionListings = lowConversion,
+            costAlertsCount = unfulfilledAlerts.Count,
+            unfulfilledCostAlerts = unfulfilledAlerts
         };
     }
 
@@ -104,3 +206,4 @@ public sealed class McpToolHandler
     private static object RequiredString(string description) => new { type = "string", description };
     private static object OptionalDate(string description) => new { type = "string", format = "date", description };
 }
+

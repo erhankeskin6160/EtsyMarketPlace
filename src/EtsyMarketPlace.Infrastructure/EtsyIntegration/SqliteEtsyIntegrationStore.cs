@@ -106,9 +106,51 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                     PRIMARY KEY(shop_id, order_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS monthly_order_summaries (
+                    shop_id TEXT NOT NULL,
+                    year_month TEXT NOT NULL,
+                    order_count INTEGER NOT NULL DEFAULT 0,
+                    units_sold INTEGER NOT NULL DEFAULT 0,
+                    gross_revenue REAL NOT NULL DEFAULT 0,
+                    avg_order_value REAL NOT NULL DEFAULT 0,
+                    shipped_orders INTEGER NOT NULL DEFAULT 0,
+                    unfulfilled_orders INTEGER NOT NULL DEFAULT 0,
+                    currency TEXT NOT NULL DEFAULT 'USD',
+                    PRIMARY KEY(shop_id, year_month)
+                );
+
+                CREATE TABLE IF NOT EXISTS listing_traffic_daily (
+                    shop_id TEXT NOT NULL,
+                    listing_id INTEGER NOT NULL,
+                    snapshot_date TEXT NOT NULL,
+                    title TEXT NOT NULL DEFAULT '',
+                    views INTEGER NOT NULL DEFAULT 0,
+                    favorites INTEGER NOT NULL DEFAULT 0,
+                    views_today INTEGER NOT NULL DEFAULT 0,
+                    favorites_today INTEGER NOT NULL DEFAULT 0,
+                    units_sold_month INTEGER NOT NULL DEFAULT 0,
+                    revenue_month REAL NOT NULL DEFAULT 0,
+                    conversion_rate REAL NOT NULL DEFAULT 0,
+                    image_url TEXT NOT NULL DEFAULT '',
+                    listing_url TEXT NOT NULL DEFAULT '',
+                    PRIMARY KEY(shop_id, listing_id, snapshot_date)
+                );
+
+                CREATE TABLE IF NOT EXISTS chart_snapshots (
+                    shop_id TEXT NOT NULL,
+                    chart_type TEXT NOT NULL,
+                    period_start TEXT NOT NULL,
+                    period_end TEXT NOT NULL,
+                    image_png_base64 TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(shop_id, chart_type)
+                );
+
                 CREATE INDEX IF NOT EXISTS ix_bank_payouts_shop_date ON bank_payouts(shop_id, occurred_at);
                 CREATE INDEX IF NOT EXISTS ix_financial_transactions_shop_date ON financial_transactions(shop_id, occurred_at);
                 CREATE INDEX IF NOT EXISTS ix_order_costs_shop_date ON order_costs(shop_id, created_at);
+                CREATE INDEX IF NOT EXISTS ix_listing_traffic_shop_date ON listing_traffic_daily(shop_id, snapshot_date);
+                CREATE INDEX IF NOT EXISTS ix_monthly_orders_shop ON monthly_order_summaries(shop_id, year_month);
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
             _initialized = true;
@@ -339,6 +381,256 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         var alerts = await GetUnfulfilledCostAlertsAsync(shopId, cancellationToken);
         var score = performance.GrossSales == 0 ? 0 : Math.Clamp((int)Math.Round(performance.NetProfitMargin), 0, 100);
         return new DailyShopBrief(date, score, score >= 80 ? "Mükemmel" : score >= 50 ? "Dikkat" : "Riskli", 0, performance.GrossSales, performance.NetProfit, payouts.Sum(x => x.Amount), alerts.Count);
+    }
+
+    public async Task SaveMonthlyOrderSummariesAsync(IReadOnlyCollection<EtsyMonthlyOrderSummary> summaries, CancellationToken cancellationToken = default)
+    {
+        if (summaries.Count == 0) return;
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO monthly_order_summaries (
+                shop_id, year_month, order_count, units_sold, gross_revenue,
+                avg_order_value, shipped_orders, unfulfilled_orders, currency
+            ) VALUES (
+                $shopId, $yearMonth, $orderCount, $unitsSold, $grossRevenue,
+                $avgOrderValue, $shippedOrders, $unfulfilledOrders, $currency
+            )
+            ON CONFLICT(shop_id, year_month) DO UPDATE SET
+                order_count = excluded.order_count,
+                units_sold = excluded.units_sold,
+                gross_revenue = excluded.gross_revenue,
+                avg_order_value = excluded.avg_order_value,
+                shipped_orders = excluded.shipped_orders,
+                unfulfilled_orders = excluded.unfulfilled_orders,
+                currency = excluded.currency;
+            """;
+        var pShopId = command.Parameters.Add("$shopId", SqliteType.Text);
+        var pYearMonth = command.Parameters.Add("$yearMonth", SqliteType.Text);
+        var pOrderCount = command.Parameters.Add("$orderCount", SqliteType.Integer);
+        var pUnitsSold = command.Parameters.Add("$unitsSold", SqliteType.Integer);
+        var pGrossRevenue = command.Parameters.Add("$grossRevenue", SqliteType.Real);
+        var pAvgOrderValue = command.Parameters.Add("$avgOrderValue", SqliteType.Real);
+        var pShippedOrders = command.Parameters.Add("$shippedOrders", SqliteType.Integer);
+        var pUnfulfilledOrders = command.Parameters.Add("$unfulfilledOrders", SqliteType.Integer);
+        var pCurrency = command.Parameters.Add("$currency", SqliteType.Text);
+
+        foreach (var item in summaries)
+        {
+            pShopId.Value = item.ShopId;
+            pYearMonth.Value = item.YearMonth;
+            pOrderCount.Value = item.OrderCount;
+            pUnitsSold.Value = item.UnitsSold;
+            pGrossRevenue.Value = (double)item.GrossRevenue;
+            pAvgOrderValue.Value = (double)item.AvgOrderValue;
+            pShippedOrders.Value = item.ShippedOrders;
+            pUnfulfilledOrders.Value = item.UnfulfilledOrders;
+            pCurrency.Value = item.Currency;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<EtsyMonthlyOrderSummary>> GetMonthlyOrderSummariesAsync(string shopId, int months = 12, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT year_month, order_count, units_sold, gross_revenue,
+                   avg_order_value, shipped_orders, unfulfilled_orders, currency
+            FROM monthly_order_summaries
+            WHERE shop_id = $shopId
+            ORDER BY year_month DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$limit", months);
+        var result = new List<EtsyMonthlyOrderSummary>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(new EtsyMonthlyOrderSummary(
+                shopId,
+                reader.GetString(0),
+                reader.GetInt32(1),
+                reader.GetInt32(2),
+                reader.GetDecimal(3),
+                reader.GetDecimal(4),
+                reader.GetInt32(5),
+                reader.GetInt32(6),
+                reader.GetString(7)));
+        }
+        return result;
+    }
+
+    public async Task SaveListingTrafficDailyAsync(IReadOnlyCollection<EtsyListingTrafficRecord> records, CancellationToken cancellationToken = default)
+    {
+        if (records.Count == 0) return;
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO listing_traffic_daily (
+                shop_id, listing_id, snapshot_date, title, views, favorites,
+                views_today, favorites_today, units_sold_month, revenue_month,
+                conversion_rate, image_url, listing_url
+            ) VALUES (
+                $shopId, $listingId, $snapshotDate, $title, $views, $favorites,
+                $viewsToday, $favoritesToday, $unitsSoldMonth, $revenueMonth,
+                $conversionRate, $imageUrl, $listingUrl
+            )
+            ON CONFLICT(shop_id, listing_id, snapshot_date) DO UPDATE SET
+                title = excluded.title,
+                views = excluded.views,
+                favorites = excluded.favorites,
+                views_today = excluded.views_today,
+                favorites_today = excluded.favorites_today,
+                units_sold_month = excluded.units_sold_month,
+                revenue_month = excluded.revenue_month,
+                conversion_rate = excluded.conversion_rate,
+                image_url = excluded.image_url,
+                listing_url = excluded.listing_url;
+            """;
+        var pShopId = command.Parameters.Add("$shopId", SqliteType.Text);
+        var pListingId = command.Parameters.Add("$listingId", SqliteType.Integer);
+        var pSnapshotDate = command.Parameters.Add("$snapshotDate", SqliteType.Text);
+        var pTitle = command.Parameters.Add("$title", SqliteType.Text);
+        var pViews = command.Parameters.Add("$views", SqliteType.Integer);
+        var pFavorites = command.Parameters.Add("$favorites", SqliteType.Integer);
+        var pViewsToday = command.Parameters.Add("$viewsToday", SqliteType.Integer);
+        var pFavoritesToday = command.Parameters.Add("$favoritesToday", SqliteType.Integer);
+        var pUnitsSoldMonth = command.Parameters.Add("$unitsSoldMonth", SqliteType.Integer);
+        var pRevenueMonth = command.Parameters.Add("$revenueMonth", SqliteType.Real);
+        var pConversionRate = command.Parameters.Add("$conversionRate", SqliteType.Real);
+        var pImageUrl = command.Parameters.Add("$imageUrl", SqliteType.Text);
+        var pListingUrl = command.Parameters.Add("$listingUrl", SqliteType.Text);
+
+        foreach (var item in records)
+        {
+            pShopId.Value = item.ShopId;
+            pListingId.Value = item.ListingId;
+            pSnapshotDate.Value = item.SnapshotDate;
+            pTitle.Value = item.Title;
+            pViews.Value = item.Views;
+            pFavorites.Value = item.Favorites;
+            pViewsToday.Value = item.ViewsToday;
+            pFavoritesToday.Value = item.FavoritesToday;
+            pUnitsSoldMonth.Value = item.UnitsSoldMonth;
+            pRevenueMonth.Value = (double)item.RevenueMonth;
+            pConversionRate.Value = (double)item.ConversionRate;
+            pImageUrl.Value = item.ImageUrl;
+            pListingUrl.Value = item.ListingUrl;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<EtsyListingTrafficRecord>> GetListingTrafficAnalyticsAsync(string shopId, string? snapshotDate = null, int limit = 50, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+
+        if (string.IsNullOrWhiteSpace(snapshotDate))
+        {
+            command.CommandText = "SELECT MAX(snapshot_date) FROM listing_traffic_daily WHERE shop_id = $shopId;";
+            command.Parameters.AddWithValue("$shopId", shopId);
+            var maxObj = await command.ExecuteScalarAsync(cancellationToken);
+            snapshotDate = maxObj is string str && !string.IsNullOrWhiteSpace(str) ? str : DateTime.UtcNow.ToString("yyyy-MM-dd");
+            command.Parameters.Clear();
+        }
+
+        command.CommandText = """
+            SELECT listing_id, snapshot_date, title, views, favorites,
+                   views_today, favorites_today, units_sold_month, revenue_month,
+                   conversion_rate, image_url, listing_url
+            FROM listing_traffic_daily
+            WHERE shop_id = $shopId AND snapshot_date = $snapshotDate
+            ORDER BY views_today DESC, views DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$snapshotDate", snapshotDate);
+        command.Parameters.AddWithValue("$limit", limit);
+
+        var result = new List<EtsyListingTrafficRecord>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            result.Add(new EtsyListingTrafficRecord(
+                shopId,
+                reader.GetInt64(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetInt32(3),
+                reader.GetInt32(4),
+                reader.GetInt32(5),
+                reader.GetInt32(6),
+                reader.GetInt32(7),
+                reader.GetDecimal(8),
+                reader.GetDecimal(9),
+                reader.GetString(10),
+                reader.GetString(11)));
+        }
+        return result;
+    }
+
+    public async Task SaveChartSnapshotAsync(EtsyChartSnapshot snapshot, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO chart_snapshots (
+                shop_id, chart_type, period_start, period_end, image_png_base64, updated_at
+            ) VALUES (
+                $shopId, $chartType, $periodStart, $periodEnd, $image, $updatedAt
+            )
+            ON CONFLICT(shop_id, chart_type) DO UPDATE SET
+                period_start = excluded.period_start,
+                period_end = excluded.period_end,
+                image_png_base64 = excluded.image_png_base64,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$shopId", snapshot.ShopId);
+        command.Parameters.AddWithValue("$chartType", snapshot.ChartType);
+        command.Parameters.AddWithValue("$periodStart", snapshot.PeriodStart.ToUniversalTime().ToString("O"));
+        command.Parameters.AddWithValue("$periodEnd", snapshot.PeriodEnd.ToUniversalTime().ToString("O"));
+        command.Parameters.AddWithValue("$image", snapshot.ImagePngBase64);
+        command.Parameters.AddWithValue("$updatedAt", snapshot.UpdatedAt.ToUniversalTime().ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<EtsyChartSnapshot?> GetChartSnapshotAsync(string shopId, string chartType, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT period_start, period_end, image_png_base64, updated_at
+            FROM chart_snapshots
+            WHERE shop_id = $shopId AND chart_type = $chartType;
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$chartType", chartType);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+
+        return new EtsyChartSnapshot(
+            shopId,
+            chartType,
+            ParseDate(reader.GetString(0)),
+            ParseDate(reader.GetString(1)),
+            reader.GetString(2),
+            ParseDate(reader.GetString(3)));
     }
 
     private async Task<SqliteConnection> OpenAsync(CancellationToken cancellationToken)

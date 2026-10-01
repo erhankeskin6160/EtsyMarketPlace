@@ -2,7 +2,7 @@
 param(
 	[Parameter(Mandatory = $true)]
 	[string]$PackagePath,
-	[string]$InstallPath = "C:\Apps\EtsyMarketPlace\Api",
+	[string]$InstallPath = "C:\Users\Administrator\Desktop\EtsyM\Api",
 	[int]$Port = 5263,
 	[string]$ApiKey = ""
 )

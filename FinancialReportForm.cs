@@ -17,6 +17,7 @@ internal sealed class FinancialReportForm : Form
     // ── State ──────────────────────────────────────────────────────────────────
     private FinancialReport _report = FinancialReport.Empty;
     private readonly FinancialReportService _service = new();
+    private readonly EtsyApiClient _apiClient = new();
     private readonly IBankDepositService _bankDepositService = new BankDepositService();
     private CancellationTokenSource _cts = new();
 
@@ -168,6 +169,30 @@ internal sealed class FinancialReportForm : Form
             LegendPosition = LiveChartsCore.Measure.LegendPosition.Right,
             BackColor = Color.Transparent,
         };
+    }
+
+    private List<(string ChartType, string ImageBase64)> CaptureChartsAsBase64()
+    {
+        var list = new List<(string ChartType, string ImageBase64)>();
+        void TryCapture(Control? control, string type)
+        {
+            if (control == null || control.Width <= 10 || control.Height <= 10) return;
+            try
+            {
+                using var bmp = new Bitmap(control.Width, control.Height);
+                control.DrawToBitmap(bmp, new Rectangle(0, 0, control.Width, control.Height));
+                using var ms = new MemoryStream();
+                bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                list.Add((type, Convert.ToBase64String(ms.ToArray())));
+            }
+            catch { }
+        }
+
+        TryCapture(_barChart, "profit_bar");
+        TryCapture(_lineChart, "cashflow_line");
+        TryCapture(_pieChart, "cost_pie");
+        TryCapture(_forecastChart, "forecast");
+        return list;
     }
 
     // ── Layout Builder ─────────────────────────────────────────────────────────
@@ -488,10 +513,35 @@ internal sealed class FinancialReportForm : Form
             try
             {
                 var settings = EtsyApiSettingsStore.Load();
-                SetStatus("🌐 İşlenmiş finansal veriler VDS API'ye aktarılıyor...", UiStyle.PrimaryColor);
-                var (trans, payouts, alerts) = await _service.ExportReportToIntegrationApiAsync(settings, _report);
-                SetStatus($"✅ VDS API senkronizasyonu tamamlandı: {trans} günlük kayıt, {payouts} banka ödemesi aktarıldı.", UiStyle.SuccessColor);
-                MessageBox.Show(this, $"Finansal veriler ve ürün maliyetleri VDS API'ye başarıyla aktarıldı!\n\n• Günlük İşlem Özeti: {trans}\n• Banka Ödemesi: {payouts}\n• Sipariş / Maliyet Kaydı: {alerts}\n\nArtık Gemini Spark veya MCP araçları bu işlenmiş net kâr verilerini doğrudan okuyabilir.", "🌐 VDS Senkronizasyonu Başarılı", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                SetStatus("🌐 Tüm mağaza verileri ve grafik resimleri VDS API'ye aktarılıyor...", UiStyle.PrimaryColor);
+
+                var charts = CaptureChartsAsBase64();
+                IReadOnlyList<MarketListingResult>? activeListings = null;
+                try
+                {
+                    activeListings = await _apiClient.GetOwnShopActiveListingsAsync(settings);
+                }
+                catch { }
+
+                var (trans, payouts, alerts, monthlyOrders, traffic, chartsCount) = await _service.ExportAllDataToIntegrationApiAsync(
+                    settings,
+                    _report,
+                    charts,
+                    activeListings);
+
+                SetStatus($"✅ VDS tam senkronizasyonu tamamlandı: {trans} günlük kayıt, {monthlyOrders} ay, {traffic} ürün trafiği, {chartsCount} grafik aktarıldı.", UiStyle.SuccessColor);
+                MessageBox.Show(this,
+                    $"Finansal raporlar, sipariş dökümleri, ürün ziyaretleri ve grafik resimleri VDS API'ye başarıyla aktarıldı!\n\n" +
+                    $"• Günlük Finans İşlemleri: {trans}\n" +
+                    $"• Banka Ödemeleri: {payouts}\n" +
+                    $"• Sipariş / Maliyet Uyarıları: {alerts}\n" +
+                    $"• Aylık Sipariş Dökümü: {monthlyOrders}\n" +
+                    $"• Ürün Ziyaret / Trafik Metriği: {traffic}\n" +
+                    $"• PNG Grafik Resimleri: {chartsCount}\n\n" +
+                    $"Artık Gemini Spark veya MCP araçları aylık siparişleri, ürün ziyaretlerini ve grafik resimlerini doğrudan inceleyebilir!",
+                    "🌐 VDS Tam Senkronizasyon Başarılı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
@@ -1423,22 +1473,6 @@ internal sealed class FinancialReportForm : Form
                 _lblMode.Text = string.IsNullOrWhiteSpace(settings.ShopId) ? "🟢 Canlı Etsy API" : $"🟢 Canlı Etsy API ({settings.ShopId})";
                 _lblMode.ForeColor = UiStyle.SuccessColor;
                 SetStatus($"✅ Canlı Etsy API verisi yüklendi: {_report.Entries.Count} kayıt | {_report.PeriodStart:dd.MM.yyyy} — {_report.PeriodEnd:dd.MM.yyyy}", UiStyle.SuccessColor);
-
-                // İşlenmiş muhasebe verilerini ve ürün maliyetlerini arka planda VDS API'ye otomatik aktar
-                if (!string.IsNullOrWhiteSpace(settings.IntegrationApiBaseUrl) && _report.DailySummaries.Count > 0)
-                {
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await _service.ExportReportToIntegrationApiAsync(settings, _report);
-                        }
-                        catch (Exception ex)
-                        {
-                            SimilarProductsWinForms.Diagnostics.AppLog.Warn($"Otomatik VDS senkronizasyonu atlandı: {ex.Message}");
-                        }
-                    });
-                }
             }
             else
             {
@@ -1456,6 +1490,30 @@ internal sealed class FinancialReportForm : Form
             UpdateGrid();
             UpdatePeriodGrid();
             UpdateOrdersGrid();
+
+            // İşlenmiş muhasebe verilerini, sipariş dökümlerini, ürün trafiğini ve grafik resimlerini arka planda VDS API'ye otomatik aktar
+            if (canAttemptApi && !string.IsNullOrWhiteSpace(settings.IntegrationApiBaseUrl) && _report.DailySummaries.Count > 0)
+            {
+                var capturedCharts = CaptureChartsAsBase64();
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        IReadOnlyList<MarketListingResult>? activeListings = null;
+                        try
+                        {
+                            activeListings = await _apiClient.GetOwnShopActiveListingsAsync(settings);
+                        }
+                        catch { }
+
+                        await _service.ExportAllDataToIntegrationApiAsync(settings, _report, capturedCharts, activeListings);
+                    }
+                    catch (Exception ex)
+                    {
+                        SimilarProductsWinForms.Diagnostics.AppLog.Warn($"Otomatik VDS senkronizasyonu atlandı: {ex.Message}");
+                    }
+                });
+            }
         }
         catch (OperationCanceledException) { /* ignore */ }
         catch (Exception ex)

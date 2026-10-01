@@ -79,3 +79,37 @@ public sealed record EtsySyncResult(
     int OrderCount,
     bool Succeeded,
     string? ErrorMessage);
+
+public sealed record EtsyMonthlyOrderSummary(
+    string ShopId,
+    string YearMonth,
+    int OrderCount,
+    int UnitsSold,
+    decimal GrossRevenue,
+    decimal AvgOrderValue,
+    int ShippedOrders,
+    int UnfulfilledOrders,
+    string Currency);
+
+public sealed record EtsyListingTrafficRecord(
+    string ShopId,
+    long ListingId,
+    string SnapshotDate,
+    string Title,
+    int Views,
+    int Favorites,
+    int ViewsToday,
+    int FavoritesToday,
+    int UnitsSoldMonth,
+    decimal RevenueMonth,
+    decimal ConversionRate,
+    string ImageUrl,
+    string ListingUrl);
+
+public sealed record EtsyChartSnapshot(
+    string ShopId,
+    string ChartType,
+    DateTimeOffset PeriodStart,
+    DateTimeOffset PeriodEnd,
+    string ImagePngBase64,
+    DateTimeOffset UpdatedAt);

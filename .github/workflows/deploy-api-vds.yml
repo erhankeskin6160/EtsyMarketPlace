@@ -64,7 +64,7 @@ jobs:
 
       - name: Install or update API
         shell: powershell
-        run: .\deploy\install_or_update_api_vds.ps1 -PackagePath "${{ github.workspace }}\publish-api-vds" -InstallPath "C:\Apps\EtsyMarketPlace\Api" -Port 5263
+        run: .\deploy\install_or_update_api_vds.ps1 -PackagePath "${{ github.workspace }}\publish-api-vds" -InstallPath "C:\Users\Administrator\Desktop\EtsyM\Api" -Port 5263
 
       - name: Verify API health
         shell: powershell

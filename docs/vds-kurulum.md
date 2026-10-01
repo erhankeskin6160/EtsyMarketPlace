@@ -23,7 +23,7 @@ dotnet publish .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj -c Release -
 `publish\api` klasörünü VDS’ye örneğin şu klasöre kopyalayın:
 
 ```text
-C:\Apps\EtsyMarketPlace\Api
+C:\Users\Administrator\Desktop\EtsyM\Api
 ```
 
 ## 3. VDS yapılandırması
@@ -55,7 +55,7 @@ Production secret’larını environment variable veya güvenli sunucu yapıland
 VDS üzerinde PowerShell:
 
 ```powershell
-cd C:\Apps\EtsyMarketPlace\Api
+cd C:\Users\Administrator\Desktop\EtsyM\Api
 $env:ASPNETCORE_ENVIRONMENT = "Production"
 Start-Process -FilePath .\EtsyMarketPlace.Api.exe -ArgumentList "--urls http://0.0.0.0:5263" -WorkingDirectory (Get-Location)
 ```
@@ -95,8 +95,8 @@ Task Scheduler ayarları:
 - Tetikleyici: Bilgisayar açıldığında
 - Kullanıcı: Yönetici yetkili servis hesabı
 - Program: `dotnet.exe`
-- Argüman: `C:\Apps\EtsyMarketPlace\Api\EtsyMarketPlace.Api.dll --urls http://127.0.0.1:5263`
-- Başlangıç klasörü: `C:\Apps\EtsyMarketPlace\Api`
+- Argüman: `C:\Users\Administrator\Desktop\EtsyM\Api\EtsyMarketPlace.Api.dll --urls http://127.0.0.1:5263`
+- Başlangıç klasörü: `C:\Users\Administrator\Desktop\EtsyM\Api`
 
 ## 7. Uzaktan curl ile API kontrolü
 
@@ -221,7 +221,7 @@ ilgili bir commit pushlandığında otomatik olarak:
 1. .NET 8 restore ve test çalıştırır.
 2. API’yi self-contained `win-x64` olarak publish eder.
 3. Publish paketini VDS’deki self-hosted GitHub Actions runner’a aktarır.
-4. Mevcut API sürecini durdurup yeni sürümü `C:\Apps\EtsyMarketPlace\Api`
+4. Mevcut API sürecini durdurup yeni sürümü `C:\Users\Administrator\Desktop\EtsyM\Api`
    klasörüne kurar.
 5. `http://127.0.0.1:5263/health` ile deployment’ı doğrular.
 
@@ -247,7 +247,7 @@ Runner’ı Windows servisi olarak kurun ve servisin aşağıdaki klasörlere ya
 yetkisi olduğundan emin olun:
 
 ```text
-C:\Apps\EtsyMarketPlace\Api
+C:\Users\Administrator\Desktop\EtsyM\Api
 C:\ProgramData\EtsyMarketPlace
 ```
 

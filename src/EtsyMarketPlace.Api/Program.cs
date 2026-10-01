@@ -63,6 +63,13 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/mcp") || context.Request.Path.StartsWithSegments("/api/etsy"))
     {
+        // PNG grafik resimleri doğrudan tarayıcı veya LLM tarafından önizlenebilir
+        if (context.Request.Path.Value?.EndsWith(".png", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            await next();
+            return;
+        }
+
         var configuredKey = app.Configuration["Security:ApiKey"];
         if (!string.IsNullOrWhiteSpace(configuredKey))
         {
@@ -273,6 +280,108 @@ app.MapPost("/api/etsy/financial/import", async (EtsyFinancialImportRequest requ
         alertsCount = request.OrderAlerts?.Count ?? 0
     });
 }).WithTags("Financial").WithName("ImportEtsyFinancialData");
+
+app.MapPost("/api/etsy/orders/monthly-import", async (EtsyMonthlyOrderImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.ShopId))
+        return Results.BadRequest(new { error = "ShopId zorunludur." });
+
+    if (request.Summaries?.Count > 0)
+        await repository.SaveMonthlyOrderSummariesAsync(request.Summaries, cancellationToken);
+
+    return Results.Ok(new { saved = true, shopId = request.ShopId, count = request.Summaries?.Count ?? 0 });
+}).WithTags("Orders").WithName("ImportMonthlyOrders");
+
+app.MapPost("/api/etsy/analytics/traffic-import", async (EtsyListingTrafficImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.ShopId))
+        return Results.BadRequest(new { error = "ShopId zorunludur." });
+
+    if (request.Records?.Count > 0)
+        await repository.SaveListingTrafficDailyAsync(request.Records, cancellationToken);
+
+    return Results.Ok(new { saved = true, shopId = request.ShopId, count = request.Records?.Count ?? 0 });
+}).WithTags("Analytics").WithName("ImportListingTraffic");
+
+app.MapPost("/api/etsy/charts/upload", async (EtsyChartUploadRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.ShopId) || string.IsNullOrWhiteSpace(request.ChartType) || string.IsNullOrWhiteSpace(request.ImagePngBase64))
+        return Results.BadRequest(new { error = "ShopId, ChartType ve ImagePngBase64 zorunludur." });
+
+    var snapshot = new EtsyChartSnapshot(
+        request.ShopId.Trim(),
+        request.ChartType.Trim().ToLowerInvariant(),
+        request.PeriodStart,
+        request.PeriodEnd,
+        request.ImagePngBase64,
+        DateTimeOffset.UtcNow);
+
+    await repository.SaveChartSnapshotAsync(snapshot, cancellationToken);
+    return Results.Ok(new { saved = true, shopId = request.ShopId, chartType = request.ChartType });
+}).WithTags("Charts").WithName("UploadChartSnapshot");
+
+app.MapGet("/api/etsy/charts/{shopId}/{chartType}.png", async (string shopId, string chartType, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
+{
+    var snapshot = await repository.GetChartSnapshotAsync(shopId, chartType.ToLowerInvariant(), cancellationToken);
+    if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.ImagePngBase64))
+        return Results.NotFound(new { error = "Grafik resmi bulunamadı." });
+
+    try
+    {
+        var bytes = Convert.FromBase64String(snapshot.ImagePngBase64);
+        return Results.File(bytes, "image/png");
+    }
+    catch
+    {
+        return Results.Problem("Grafik resmi çözümlenemedi.", statusCode: StatusCodes.Status500InternalServerError);
+    }
+}).WithTags("Charts").WithName("GetChartSnapshotImage");
+
+app.MapPost("/api/etsy/sync-all", async (EtsyAllDataImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.ShopId))
+        return Results.BadRequest(new { error = "ShopId zorunludur." });
+
+    var shopId = request.ShopId.Trim();
+
+    if (request.Transactions?.Count > 0)
+        await repository.SaveTransactionsAsync(request.Transactions, cancellationToken);
+
+    if (request.Payouts?.Count > 0)
+        await repository.SavePayoutsAsync(request.Payouts, cancellationToken);
+
+    if (request.OrderAlerts?.Count > 0)
+        await repository.SaveOrderAlertsAsync(request.OrderAlerts, cancellationToken);
+
+    if (request.MonthlyOrders?.Count > 0)
+        await repository.SaveMonthlyOrderSummariesAsync(request.MonthlyOrders, cancellationToken);
+
+    if (request.TrafficRecords?.Count > 0)
+        await repository.SaveListingTrafficDailyAsync(request.TrafficRecords, cancellationToken);
+
+    if (request.Charts?.Count > 0)
+    {
+        foreach (var c in request.Charts)
+        {
+            var snap = new EtsyChartSnapshot(shopId, c.ChartType.Trim().ToLowerInvariant(), c.PeriodStart, c.PeriodEnd, c.ImagePngBase64, DateTimeOffset.UtcNow);
+            await repository.SaveChartSnapshotAsync(snap, cancellationToken);
+        }
+    }
+
+    await repository.SaveSyncStateAsync(shopId, "all_desktop_data", request.PeriodEnd ?? DateTimeOffset.UtcNow, cancellationToken: cancellationToken);
+
+    return Results.Ok(new
+    {
+        saved = true,
+        shopId,
+        transactionsCount = request.Transactions?.Count ?? 0,
+        payoutsCount = request.Payouts?.Count ?? 0,
+        alertsCount = request.OrderAlerts?.Count ?? 0,
+        monthlyOrdersCount = request.MonthlyOrders?.Count ?? 0,
+        trafficCount = request.TrafficRecords?.Count ?? 0,
+        chartsCount = request.Charts?.Count ?? 0
+    });
+}).WithTags("Sync").WithName("SyncAllDesktopData");
 
 app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyTokenStore tokenStore, CancellationToken cancellationToken) =>
 {
