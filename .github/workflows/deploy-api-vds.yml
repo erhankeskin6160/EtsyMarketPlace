@@ -65,9 +65,10 @@ jobs:
       - name: Install or update API
         shell: powershell
         run: |
-          Write-Host "Workspace: ${{ github.workspace }}"
-          Get-ChildItem -Path "${{ github.workspace }}\publish-api-vds" -Recurse | Select-Object -First 10 FullName
-          .\deploy\install_or_update_api_vds.ps1 -PackagePath "${{ github.workspace }}\publish-api-vds" -InstallPath "C:\Users\Administrator\Desktop\EtsyM\Api" -Port 5263
+          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
+          $pkgPath = Join-Path "${{ github.workspace }}" "publish-api-vds"
+          $scriptPath = Join-Path "${{ github.workspace }}" "deploy\install_or_update_api_vds.ps1"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$scriptPath" -PackagePath "$pkgPath" -InstallPath "C:\Users\Administrator\Desktop\EtsyM\Api" -Port 5263
 
       - name: Verify API health
         shell: powershell
