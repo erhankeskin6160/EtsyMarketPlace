@@ -63,16 +63,12 @@ jobs:
           path: publish-api-vds
 
       - name: Install or update API
-        shell: powershell
+        shell: cmd
         run: |
-          Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force
-          $pkgPath = Join-Path "${{ github.workspace }}" "publish-api-vds"
-          $scriptPath = Join-Path "${{ github.workspace }}" "deploy\install_or_update_api_vds.ps1"
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$scriptPath" -PackagePath "$pkgPath" -InstallPath "C:\Users\Administrator\Desktop\EtsyM\Api" -Port 5263
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$pkgPath = Join-Path $env:GITHUB_WORKSPACE 'publish-api-vds'; $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'deploy\install_or_update_api_vds.ps1'; & $scriptPath -PackagePath $pkgPath -InstallPath 'C:\Users\Administrator\Desktop\EtsyM\Api' -Port 5263"
 
       - name: Verify API health
-        shell: powershell
+        shell: cmd
         run: |
-          $health = Invoke-RestMethod "http://127.0.0.1:5263/health"
-          if ($health.status -ne "Healthy") { throw "API health kontrolü başarısız: $($health | ConvertTo-Json -Compress)" }
-          Write-Host "API sağlıklı: $($health | ConvertTo-Json -Compress)"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$health = Invoke-RestMethod 'http://127.0.0.1:5263/health'; if ($health.status -ne 'Healthy') { throw 'API health kontrolü başarısız' }; Write-Host 'API sağlıklı: ' $health.status"
+
