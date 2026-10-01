@@ -49,7 +49,7 @@ Write-Host ""
 
 try {
     # 1. API paketini indir
-    Write-Host "[1/5] GitHub 'dev-latest' API paketi indiriliyor (~40 MB)..." -ForegroundColor Yellow
+    Write-Host "[1/5] GitHub 'dev-latest' API paketi indiriliyor (~56 MB)..." -ForegroundColor Yellow
     if (Test-Path $tempZip) { Remove-Item $tempZip -Force }
 
     $downloadSuccess = $false
@@ -89,20 +89,36 @@ try {
     if (Test-Path $extractTemp) { Remove-Item $extractTemp -Recurse -Force }
     Expand-Archive -Path $tempZip -DestinationPath $extractTemp -Force
 
-    # 3. Mevcut API surecini durdur
-    Write-Host "[3/5] Mevcut API sureci kapatiliyor..." -ForegroundColor Cyan
-    $running = Get-Process -Name "EtsyMarketPlace.Api" -ErrorAction SilentlyContinue
-    foreach ($p in $running) {
-        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-    }
-    Start-Sleep -Seconds 2
+    # 3. Mevcut API surecini durdur (Port 5263 dinleyen veya EtsyMarketPlace.Api isimli tum surecler)
+    Write-Host "[3/5] Mevcut API surecleri kapatiliyor..." -ForegroundColor Cyan
+    try {
+        $listeningPids = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($pidToKill in $listeningPids) {
+            Write-Host "      Port $port dinleyen surec durduruluyor (PID: $pidToKill)..." -ForegroundColor Yellow
+            Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+
+    try {
+        $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { 
+            $_.Name -eq $exeName -or 
+            ($_.Name -eq "dotnet.exe" -and $_.CommandLine -like "*EtsyMarketPlace.Api*")
+        }
+        foreach ($process in $procs) {
+            Write-Host "      API sureci durduruluyor: $($process.Name) (PID: $($process.ProcessId))..." -ForegroundColor Yellow
+            Stop-Process -Id $process.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+    } catch { }
+    Start-Sleep -Seconds 3
 
     # 4. Dosyalari guncelle (appsettings.Production.json ve *.db haric)
     Write-Host "[4/5] Yeni API surumu yukleniyor..." -ForegroundColor Cyan
-    $backupPath = Join-Path $apiDir "backup-api-$(Get-Date -Format yyyyMMdd-HHmmss)"
+    $backupPath = Join-Path $env:TEMP "backup-api-$(Get-Date -Format yyyyMMdd-HHmmss)"
     if (Test-Path (Join-Path $apiDir $exeName)) {
-        New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
-        Get-ChildItem -Path $apiDir -Exclude "*.db", "backup-*" | Copy-Item -Destination $backupPath -Recurse -Force -ErrorAction SilentlyContinue
+        try {
+            New-Item -ItemType Directory -Force -Path $backupPath | Out-Null
+            Get-ChildItem -Path $apiDir -Exclude "*.db", "backup-*" | Copy-Item -Destination $backupPath -Recurse -Force -ErrorAction SilentlyContinue
+        } catch { }
     }
 
     # appsettings.Production.json yedegini al
@@ -112,8 +128,21 @@ try {
         $savedProdSettings = Get-Content $prodSettings -Raw
     }
 
-    # Yeni dosyalari kopyala
-    Copy-Item (Join-Path $extractTemp "*") $apiDir -Recurse -Force
+    # Yeni dosyalari kopyala (kilitli dosya varsa 5 deneme)
+    $copied = $false
+    for ($attempt = 1; $attempt -le 5; $attempt++) {
+        try {
+            Copy-Item (Join-Path $extractTemp "*") $apiDir -Recurse -Force
+            $copied = $true
+            break
+        } catch {
+            Write-Warning "Dosya kopyalama denemesi $attempt/5 basarisiz: $_. 2 sn bekleniyor..."
+            Start-Sleep -Seconds 2
+        }
+    }
+    if (-not $copied) {
+        throw "API dosyalari kopyalanamadi: $apiDir"
+    }
 
     # Eger onceden appsettings.Production.json varsa koru, yoksa default olustur
     if ($savedProdSettings) {
@@ -126,9 +155,11 @@ try {
     }
 
     # Firewall kurali kontrol et
-    if (-not (Get-NetFirewallRule -DisplayName "EtsyMarketPlace API $port" -ErrorAction SilentlyContinue)) {
-        New-NetFirewallRule -DisplayName "EtsyMarketPlace API $port" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null
-    }
+    try {
+        if (-not (Get-NetFirewallRule -DisplayName "EtsyMarketPlace API $port" -ErrorAction SilentlyContinue)) {
+            New-NetFirewallRule -DisplayName "EtsyMarketPlace API $port" -Direction Inbound -Protocol TCP -LocalPort $port -Action Allow | Out-Null
+        }
+    } catch { }
 
     # 5. API'yi baslat ve dogrula
     Write-Host "[5/5] Yeni API baslatiliyor..." -ForegroundColor Cyan
@@ -136,14 +167,24 @@ try {
     $arguments = "--urls http://0.0.0.0:$port"
 
     Start-Process -FilePath $targetExe -ArgumentList $arguments -WorkingDirectory $apiDir -WindowStyle Hidden
-    Start-Sleep -Seconds 3
 
-    if (-not (Get-Process -Name "EtsyMarketPlace.Api" -ErrorAction SilentlyContinue)) {
-        throw "API baslatilamadi: $targetExe"
+    # Health kontrolu (15 sn poll)
+    $healthy = $false
+    for ($i = 1; $i -le 15; $i++) {
+        Start-Sleep -Seconds 1
+        try {
+            $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 2
+            if ($health.status -eq "Healthy") {
+                $healthy = $true
+                break
+            }
+        } catch { }
     }
 
-    # Health kontrolu
-    $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 10
+    if (-not $healthy) {
+        throw "API 15 saniye icinde saglikli duruma gecmedi: $targetExe"
+    }
+
     Write-Host "   ✅ API Durumu: $($health.status)" -ForegroundColor Green
     Write-Host "=================================================================" -ForegroundColor Green
     Write-Host "   🎉 VDS API BASARIYLA EN SON SURUME GUNCELLENDI! (Port: $port)" -ForegroundColor Green
