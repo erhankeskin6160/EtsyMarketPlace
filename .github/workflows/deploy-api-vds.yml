@@ -64,6 +64,8 @@ jobs:
 
       - name: Install or update API
         shell: cmd
+        env:
+          RUNNER_TRACKING_ID: ""
         run: |
           powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$pkgPath = Join-Path $env:GITHUB_WORKSPACE 'publish-api-vds'; $scriptPath = Join-Path $env:GITHUB_WORKSPACE 'deploy\install_or_update_api_vds.ps1'; & $scriptPath -PackagePath $pkgPath -InstallPath 'C:\Users\Administrator\Desktop\EtsyM\Api' -Port 5263"
 

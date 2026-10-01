@@ -96,7 +96,7 @@ if ($savedProdSettings) {
 } elseif (-not (Test-Path $appSettings)) {
 	@{
 		EtsyIntegration = @{ DatabasePath = "%ProgramData%\\EtsyMarketPlace\\etsy-finance.db" }
-		Security = @{ ApiKey = $ApiKey; AllowedShopIds = @("523236321") }
+		Security = @{ ApiKey = $ApiKey; AllowedShopIds = @("53236321") }
 	} | ConvertTo-Json -Depth 5 | Set-Content $appSettings -Encoding UTF8 -ErrorAction SilentlyContinue
 }
 
@@ -108,11 +108,20 @@ try {
 } catch { }
 
 # 7. API'yi başlat
-Write-Host "[4/5] API baslatiliyor..." -ForegroundColor Cyan
+Write-Host "[4/5] API baslatiliyor (arka plan servisi olarak)..." -ForegroundColor Cyan
 $env:ASPNETCORE_ENVIRONMENT = "Production"
 $arguments = "--urls http://0.0.0.0:$Port"
 
-Start-Process -FilePath $targetExe -ArgumentList $arguments -WorkingDirectory $InstallPath -WindowStyle Hidden
+# GitHub Actions Runner orphan cleanup tarafindan sonlandirilmamasi icin bagimsiz WMI sureci olarak baslatilir
+$startParams = @{
+	CommandLine = "`"$targetExe`" $arguments"
+	CurrentDirectory = $InstallPath
+}
+$createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $startParams
+if ($createResult.ReturnValue -ne 0) {
+	Write-Warning "Win32_Process Create donus kodu: $($createResult.ReturnValue). Fallback olarak Start-Process deneniyor..."
+	Start-Process -FilePath $targetExe -ArgumentList $arguments -WorkingDirectory $InstallPath -WindowStyle Hidden
+}
 
 # 8. Sağlık kontrolü
 Write-Host "[5/5] Saglik kontrolu yapiliyor (http://127.0.0.1:$Port/health)..." -ForegroundColor Cyan
