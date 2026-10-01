@@ -10,10 +10,12 @@ namespace EtsyMarketPlace.Api.Services;
 public sealed class McpToolHandler
 {
     private readonly IEtsyReportingService _reportingService;
+    private readonly IEtsyFinancialAnalysisService _analysisService;
 
-    public McpToolHandler(IEtsyReportingService reportingService)
+    public McpToolHandler(IEtsyReportingService reportingService, IEtsyFinancialAnalysisService analysisService)
     {
         _reportingService = reportingService;
+        _analysisService = analysisService;
     }
 
     /// <summary>
@@ -24,7 +26,8 @@ public sealed class McpToolHandler
             Tool("get_etsy_bank_payouts", "Etsy banka transferlerini tarih, tutar, kur ve referans bilgileriyle listeler.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") }),
             Tool("get_financial_performance", "Brüt satış, platform komisyonu, reklam, maliyet ve net kâr marjını döner.", new { shopId = RequiredString("Mağaza kimliği"), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" } }),
             Tool("get_unfulfilled_cost_alerts", "Maliyeti eksik açık siparişleri listeler.", new { shopId = RequiredString("Mağaza kimliği") }),
-            Tool("get_daily_shop_brief", "Günlük mağaza sağlık skoru ve finans özetini döner.", new { shopId = RequiredString("Mağaza kimliği"), date = OptionalDate("Rapor tarihi (YYYY-MM-DD)") })
+            Tool("get_daily_shop_brief", "Günlük mağaza sağlık skoru ve finans özetini döner.", new { shopId = RequiredString("Mağaza kimliği"), date = OptionalDate("Rapor tarihi (YYYY-MM-DD)") }),
+            Tool("analyze_etsy_financials", "Finansal performansı kural tabanlı olarak analiz eder; marj, gider, uyarı ve önerileri döner.", new { shopId = RequiredString("Mağaza kimliği"), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") })
         ];
 
     /// <summary>
@@ -40,8 +43,17 @@ public sealed class McpToolHandler
             "get_financial_performance" => Content(await GetPerformanceAsync(shopId, parameters)),
             "get_unfulfilled_cost_alerts" => Content(new { shopId, alerts = await _reportingService.GetUnfulfilledCostAlertsAsync(shopId) }),
             "get_daily_shop_brief" => Content(new { shopId, brief = await _reportingService.GetDailyShopBriefAsync(shopId, ParseDate(parameters, "date") ?? DateTimeOffset.UtcNow) }),
+            "analyze_etsy_financials" => Content(await GetAnalysisAsync(shopId, parameters)),
             _ => throw new InvalidOperationException($"Bilinmeyen MCP aracı: {toolName}")
         };
+    }
+
+    private async Task<object> GetAnalysisAsync(string shopId, JsonElement parameters)
+    {
+        var end = ParseDate(parameters, "endDate") ?? DateTimeOffset.UtcNow;
+        var start = ParseDate(parameters, "startDate") ?? end.AddDays(-30);
+        if (start > end) throw new ArgumentException("startDate endDate değerinden sonra olamaz.");
+        return new { shopId, analysis = await _analysisService.AnalyzeAsync(shopId, start, end) };
     }
 
     private async Task<object> GetPayoutsAsync(string shopId, JsonElement parameters)

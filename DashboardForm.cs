@@ -1447,6 +1447,7 @@ internal sealed class DashboardForm : Form
         _sidebarNav.AddItem("profit", "Kâr Simülatörü", "💰", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("tracking", "Takip Geçmişi", "🎯", "Otomasyon & Araçlar");
         _sidebarNav.AddItem("financial", "Finansal Raporlama", "💳", "Otomasyon & Araçlar", "YENİ");
+        _sidebarNav.AddItem("financial_ai", "Finansal AI Analiz", "🧠", "Otomasyon & Araçlar", "YENİ");
         _sidebarNav.AddItem("ai_usage", "AI Token & Bakiye Takip", "📊", "Otomasyon & Araçlar", "YENİ");
 
         _sidebarNav.AddItem("notifications", "Telegram Bildirim Botu", "✈️", "Sistem", "YENİ");
@@ -1696,6 +1697,7 @@ internal sealed class DashboardForm : Form
             "profit" => new ProfitCalculatorForm(),
             "tracking" => new TrackingHistoryForm(_trackingService),
             "financial" => new FinancialReportForm(),
+            "financial_ai" => new FinancialAnalysisForm(),
             "ai_usage" => new AiUsageDashboardForm(),
             "orders_shipping" => new OrderFulfillmentStudioForm(),
             _ => null

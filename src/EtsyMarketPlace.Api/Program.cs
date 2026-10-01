@@ -29,6 +29,7 @@ builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyTokenStore>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IEtsyIntegrationRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IEtsyReportingService>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisService>();
 builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddScoped<McpToolHandler>();
@@ -208,6 +209,15 @@ app.MapGet("/api/etsy/financial/performance", async (string shopId, string? peri
     if (start == DateTimeOffset.MinValue) return Results.BadRequest(new { error = "period today, this_month veya last_month olmalıdır." });
     return Results.Ok(await reporting.GetFinancialPerformanceAsync(shopId, start, end, cancellationToken));
 }).WithTags("Financial").WithName("GetFinancialPerformance");
+
+app.MapGet("/api/etsy/financial/analysis", async (string shopId, DateTimeOffset? startDate, DateTimeOffset? endDate, IEtsyFinancialAnalysisService analysis, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
+    var end = endDate ?? DateTimeOffset.UtcNow;
+    var start = startDate ?? end.AddDays(-30);
+    if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
+    return Results.Ok(await analysis.AnalyzeAsync(shopId.Trim(), start, end, cancellationToken));
+}).WithTags("Financial").WithName("GetFinancialAnalysis");
 
 app.MapGet("/api/etsy/orders/unfulfilled-cost-alerts", async (string shopId, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {

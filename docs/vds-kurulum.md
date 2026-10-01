@@ -166,7 +166,22 @@ GET /api/etsy/banking/payouts?shopId=523236321
 GET /api/etsy/financial/performance?shopId=523236321&period=this_month
 GET /api/etsy/orders/unfulfilled-cost-alerts?shopId=523236321
 GET /api/etsy/shop/daily-brief?shopId=523236321
+GET /api/etsy/financial/analysis?shopId=523236321&startDate=2026-09-01T00:00:00Z&endDate=2026-09-30T23:59:59Z
 ```
+
+Finansal analiz endpoint’i senkronize SQLite verilerini kullanarak kâr marjı,
+gider oranı, reklam yükü, eksik sipariş maliyetleri ve uygulanabilir öneriler
+üretir. Masaüstünde **Finansal AI Analiz** menüsünden aynı sonucu görüntüleyebilirsiniz.
+
+MCP istemcileri için analiz aracı:
+
+```text
+analyze_etsy_financials
+```
+
+Araç `shopId`, isteğe bağlı `startDate` ve `endDate` alır. Dönen içerik token
+ve OAuth sırrı içermez; LLM/Gemini bağlamına güvenli finansal özet olarak
+aktarılabilir.
 
 ## 9. SQLite yedekleme
 
