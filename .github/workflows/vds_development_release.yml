@@ -39,15 +39,27 @@ jobs:
         run: |
           dotnet publish SimilarProductsWinForms.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:EnableCompressionInSingleFile=true -o publish_vds_standalone
 
-      - name: Verify Published Artifact
+      - name: Build Standalone Win-x64 API
+        shell: pwsh
+        run: |
+          dotnet publish .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj -c Release -r win-x64 --self-contained true -o publish_api_vds
+          Compress-Archive -Path publish_api_vds\* -DestinationPath publish_vds_standalone\EtsyMarketPlace.Api.zip -Force
+
+      - name: Verify Published Artifacts
         shell: pwsh
         run: |
           if (-not (Test-Path "publish_vds_standalone\SimilarProductsWinForms.exe")) {
             Write-Error "SimilarProductsWinForms.exe dosyasi bulunamadi!"
             exit 1
           }
-          $item = Get-Item "publish_vds_standalone\SimilarProductsWinForms.exe"
-          Write-Host "Uretilen EXE Boyutu: $($item.Length) bayt ($([math]::Round($item.Length / 1MB, 2)) MB)"
+          if (-not (Test-Path "publish_vds_standalone\EtsyMarketPlace.Api.zip")) {
+            Write-Error "EtsyMarketPlace.Api.zip dosyasi bulunamadi!"
+            exit 1
+          }
+          $itemExe = Get-Item "publish_vds_standalone\SimilarProductsWinForms.exe"
+          $itemApi = Get-Item "publish_vds_standalone\EtsyMarketPlace.Api.zip"
+          Write-Host "Uretilen EXE Boyutu: $($itemExe.Length) bayt ($([math]::Round($itemExe.Length / 1MB, 2)) MB)"
+          Write-Host "Uretilen API Zip Boyutu: $($itemApi.Length) bayt ($([math]::Round($itemApi.Length / 1MB, 2)) MB)"
 
       - name: Publish or Update 'dev-latest' GitHub Release
         shell: pwsh
@@ -65,7 +77,7 @@ jobs:
           - **Platform:** Windows x64 (Standalone - .NET Runtime GEREKTİRMEZ)
           - **Hedef:** VDS Sunucusu Otomatik Güncelleme
           
-          *VDS üzerindeki Guncelle_Ve_Baslat.bat bu dosyayı otomatik indirip çalıştırır.*
+          *VDS üzerindeki Guncelle_Ve_Baslat.bat masaüstü uygulamasını, API_Guncelle_Ve_Baslat.bat ise VDS API'sini otomatik indirip günceller.*
           "@
           $notes | Out-File -FilePath release_notes.md -Encoding utf8
           
@@ -80,5 +92,5 @@ jobs:
             gh release delete dev-latest -y 2>$null
           } catch { }
 
-          gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe deploy/Client_Guncelle.bat deploy/vds_update.ps1 deploy/Guncelle_Ve_Baslat.bat --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
+          gh release create dev-latest publish_vds_standalone/SimilarProductsWinForms.exe publish_vds_standalone/EtsyMarketPlace.Api.zip deploy/Client_Guncelle.bat deploy/vds_update.ps1 deploy/Guncelle_Ve_Baslat.bat deploy/API_Guncelle_Ve_Baslat.bat deploy/api_vds_update.ps1 --title "VDS Development Build (Son Geliştirme Sürümü)" --notes-file release_notes.md --prerelease --target ${{ github.sha }}
           Write-Host "VDS release successfully published!"
