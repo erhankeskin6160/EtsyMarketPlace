@@ -356,7 +356,51 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
             product += reader.GetDecimal(4); shipping += reader.GetDecimal(5); refunds += reader.GetDecimal(6);
         }
         var net = gross - fees - internalAds - externalAds - product - shipping - refunds;
-        return new FinancialPerformance(startDate, endDate, currency ?? "USD", gross, fees, internalAds, externalAds, product, shipping, refunds, net, gross == 0 ? 0 : net / gross * 100);
+        var margin = gross == 0 ? 0 : net / gross * 100;
+
+        // 1. En güncel döviz kurunu çek (bank_payouts tablosundaki kur veya varsayılan 48.25)
+        decimal exchangeRate = 48.25m;
+        await using (var rateCmd = connection.CreateCommand())
+        {
+            rateCmd.CommandText = "SELECT exchange_rate_to_try FROM bank_payouts WHERE shop_id=$shopId AND exchange_rate_to_try > 30 ORDER BY occurred_at DESC LIMIT 1;";
+            rateCmd.Parameters.AddWithValue("$shopId", shopId);
+            var rateObj = await rateCmd.ExecuteScalarAsync(cancellationToken);
+            if (rateObj is not null && rateObj is not DBNull)
+            {
+                exchangeRate = Convert.ToDecimal(rateObj, CultureInfo.InvariantCulture);
+            }
+        }
+
+        // 2. monthly_order_summaries tablosundan sipariş bazlı ciroyu çek (Masaüstü paneliyle birebir senkron için)
+        decimal? orderGrossUSD = null;
+        var startMonth = startDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+        var endMonth = endDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+        await using (var orderCmd = connection.CreateCommand())
+        {
+            orderCmd.CommandText = "SELECT SUM(gross_revenue) FROM monthly_order_summaries WHERE shop_id=$shopId AND year_month >= $startMonth AND year_month <= $endMonth;";
+            orderCmd.Parameters.AddWithValue("$shopId", shopId);
+            orderCmd.Parameters.AddWithValue("$startMonth", startMonth);
+            orderCmd.Parameters.AddWithValue("$endMonth", endMonth);
+            var orderObj = await orderCmd.ExecuteScalarAsync(cancellationToken);
+            if (orderObj is not null && orderObj is not DBNull)
+            {
+                orderGrossUSD = Convert.ToDecimal(orderObj, CultureInfo.InvariantCulture);
+            }
+        }
+
+        decimal grossSalesTRY = Math.Round(gross * exchangeRate, 2);
+        decimal netProfitTRY = Math.Round(net * exchangeRate, 2);
+
+        decimal? orderGrossSalesTRY = orderGrossUSD.HasValue ? Math.Round(orderGrossUSD.Value * exchangeRate, 2) : null;
+        decimal? orderNetProfitTRY = orderGrossUSD.HasValue
+            ? Math.Round((orderGrossUSD.Value - fees - internalAds - externalAds - product - shipping - refunds) * exchangeRate, 2)
+            : null;
+
+        return new FinancialPerformance(
+            startDate, endDate, currency ?? "USD",
+            gross, fees, internalAds, externalAds, product, shipping, refunds, net, margin,
+            grossSalesTRY, netProfitTRY,
+            orderGrossUSD, orderGrossSalesTRY, orderNetProfitTRY, exchangeRate);
     }
 
     public async Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken cancellationToken = default)
@@ -380,7 +424,10 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         var payouts = await GetBankPayoutsAsync(shopId, start, start.AddDays(1).AddTicks(-1), cancellationToken);
         var alerts = await GetUnfulfilledCostAlertsAsync(shopId, cancellationToken);
         var score = performance.GrossSales == 0 ? 0 : Math.Clamp((int)Math.Round(performance.NetProfitMargin), 0, 100);
-        return new DailyShopBrief(date, score, score >= 80 ? "Mükemmel" : score >= 50 ? "Dikkat" : "Riskli", 0, performance.GrossSales, performance.NetProfit, payouts.Sum(x => x.Amount), alerts.Count);
+        return new DailyShopBrief(
+            date, score, score >= 80 ? "Mükemmel" : score >= 50 ? "Dikkat" : "Riskli",
+            0, performance.GrossSales, performance.NetProfit, payouts.Sum(x => x.Amount), alerts.Count,
+            performance.GrossSalesTRY, performance.NetProfitTRY, performance.ExchangeRateUsed);
     }
 
     public async Task SaveMonthlyOrderSummariesAsync(IReadOnlyCollection<EtsyMonthlyOrderSummary> summaries, CancellationToken cancellationToken = default)

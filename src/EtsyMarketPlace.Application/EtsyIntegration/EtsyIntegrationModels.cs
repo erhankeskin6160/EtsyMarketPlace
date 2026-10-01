@@ -58,7 +58,13 @@ public sealed record FinancialPerformance(
     decimal ShippingCosts,
     decimal Refunds,
     decimal NetProfit,
-    decimal NetProfitMargin);
+    decimal NetProfitMargin,
+    decimal? GrossSalesTRY = null,
+    decimal? NetProfitTRY = null,
+    decimal? OrderGrossSalesUSD = null,
+    decimal? OrderGrossSalesTRY = null,
+    decimal? OrderNetProfitTRY = null,
+    decimal? ExchangeRateUsed = null);
 
 public sealed record DailyShopBrief(
     DateTimeOffset Date,
@@ -68,7 +74,10 @@ public sealed record DailyShopBrief(
     decimal DailyGrossSales,
     decimal DailyNetProfit,
     decimal BankPayouts,
-    int UnfulfilledCostAlertCount);
+    int UnfulfilledCostAlertCount,
+    decimal? DailyGrossSalesTRY = null,
+    decimal? DailyNetProfitTRY = null,
+    decimal? ExchangeRateUsed = null);
 
 public sealed record EtsySyncResult(
     string ShopId,

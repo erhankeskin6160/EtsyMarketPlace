@@ -50,7 +50,7 @@ public sealed class McpToolHandler
     public List<McpToolDefinition> GetRegisteredTools() =>
         [
             Tool("get_etsy_bank_payouts", "Etsy banka transferlerini tarih, tutar, kur ve referans bilgileriyle listeler.", new { shopId = OptionalShopId(), startDate = OptionalDate("Başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Bitiş tarihi (YYYY-MM-DD)") }),
-            Tool("get_financial_performance", "Brüt satış, platform komisyonu, reklam, ürün ve kargo maliyetleri ile net kâr marjını döner.", new { shopId = OptionalShopId(), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" }, startDate = OptionalDate("Özel başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Özel bitiş tarihi (YYYY-MM-DD)") }),
+            Tool("get_financial_performance", "Mağazanın brüt satış, platform komisyonu, reklam, ürün ve kargo maliyetleri ile net kârını hem Türk Lirası (₺) hem Amerikan Doları ($) olarak döner. Masaüstü muhasebe paneliyle kuruşu kuruşuna senkronizedir.", new { shopId = OptionalShopId(), period = new { type = "string", @enum = new[] { "today", "this_month", "last_month" }, description = "Rapor dönemi" }, startDate = OptionalDate("Özel başlangıç tarihi (YYYY-MM-DD)"), endDate = OptionalDate("Özel bitiş tarihi (YYYY-MM-DD)") }),
             Tool("get_monthly_orders_breakdown", "Aylık sipariş adetlerini, satılan ürünleri, brüt ciroyu, sepet ortalamasını ve kargolama durumunu listeler.", new { shopId = OptionalShopId(), months = new { type = "integer", description = "Kaç aylık geçmiş (varsayılan 12)" } }),
             Tool("get_listing_traffic_analytics", "Hangi ürüne günde ve ayda kaç ziyaret/görüntülenme geldiğini, favorilenme sayılarını ve satış dönüşüm oranını listeler.", new { shopId = OptionalShopId(), limit = new { type = "integer", description = "Listelenecek ürün adedi (varsayılan 30)" } }),
             Tool("get_financial_chart_image", "Finansal modül grafiklerinin (gelir-gider bar, nakit akış çizgisi, gider pasta, 30 günlük tahmin) resim bağlantısını ve özetini döner.", new { shopId = OptionalShopId(), chartType = new { type = "string", @enum = new[] { "profit_bar", "cashflow_line", "cost_pie", "forecast" }, description = "Grafik tipi" } }),
@@ -190,7 +190,32 @@ public sealed class McpToolHandler
     private async Task<object> GetPerformanceAsync(string shopId, JsonElement parameters)
     {
         var (start, end) = ResolvePeriod(parameters);
-        return new { shopId, performance = await _reportingService.GetFinancialPerformanceAsync(shopId, start, end) };
+        var perf = await _reportingService.GetFinancialPerformanceAsync(shopId, start, end);
+        return new
+        {
+            shopId,
+            bilgilendirme = "Kullanıcı masaüstü uygulamasında 'TR Oto Kur' aktif olarak Türk Lirası (₺) cinsinden takip yapmaktadır. Raporlama yaparken aşağıdaki 'ozetRapor' içindeki TL (₺) ve Dolar ($) karşılıklarını birlikte kullanın.",
+            ozetRapor = new
+            {
+                donem = $"{start:dd.MM.yyyy} - {end:dd.MM.yyyy}",
+                paraBirimi = "TRY / USD",
+                brutSatisTL = perf.OrderGrossSalesTRY ?? perf.GrossSalesTRY,
+                gercekNetKarTL = perf.OrderNetProfitTRY ?? perf.NetProfitTRY,
+                brutSatisUSD = perf.OrderGrossSalesUSD ?? perf.GrossSales,
+                netKarUSD = perf.NetProfit,
+                netKarMarjiYuzde = Math.Round(perf.NetProfitMargin, 2),
+                kullanilanDovizKuru = perf.ExchangeRateUsed,
+                giderDetaylariUSD = new
+                {
+                    etsyKomisyonlari = perf.PlatformFees,
+                    icReklam = perf.InternalAdsCost,
+                    disReklam = perf.ExternalAdsCost,
+                    urunMaliyetleri = perf.ProductCosts,
+                    iadeler = perf.Refunds
+                }
+            },
+            hamPerformans = perf
+        };
     }
 
     private static (DateTimeOffset Start, DateTimeOffset End) ResolvePeriod(JsonElement parameters)
