@@ -38,7 +38,7 @@ jobs:
         run: dotnet test .\SimilarProductsWinForms.sln -c Release --no-restore
 
       - name: Publish API
-        run: dotnet publish .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj -c Release -r win-x64 --self-contained true -o .\publish-api-vds --no-restore
+        run: dotnet publish .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj -c Release -r win-x64 --self-contained true -o .\publish-api-vds
 
       - name: Upload API artifact
         uses: actions/upload-artifact@v4
