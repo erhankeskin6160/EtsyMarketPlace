@@ -109,7 +109,11 @@ app.MapGet("/mcp", (McpToolHandler handler) =>
         supportedMethods = new[] { "initialize", "tools/list", "tools/call" },
         toolsCount = handler.GetRegisteredTools().Count
     });
-});
+})
+.WithTags("Gemini Spark MCP")
+.WithSummary("MCP Sunucu Bilgisi ve Protokol Durumu")
+.WithDescription("Gemini SparkX veya MCP protokolüyle çalışan yapay zeka istemcileri için protokol el sıkışmasını (handshake) gerçekleştirir, aktif metodları ve kayıtlı analiz araçlarının adedini döner.")
+.WithName("GetMcpInfo");
 
 // POST /mcp — Gemini Spark JSON-RPC 2.0 İletişim Hattı
 app.MapPost("/mcp", async (HttpContext context, McpToolHandler handler) =>
@@ -187,11 +191,19 @@ app.MapPost("/mcp", async (HttpContext context, McpToolHandler handler) =>
         default:
             return Results.Ok(McpResponse.Fail(request.Id, -32601, $"Bilinmeyen metot: {request.Method}"));
     }
-});
+})
+.WithTags("Gemini Spark MCP")
+.WithSummary("Gemini SparkX JSON-RPC 2.0 İletişim Hattı")
+.WithDescription("Gemini SparkX'in soru yanıtlarken kullandığı ana yapay zeka iletişim köprüsüdür. initialize, tools/list ve tools/call çağrılarını icra eder.")
+.WithName("PostMcpJsonRpc");
 
 // ── 5. STANDART REST API ENDPOINT'LERİ ──────────────────────────────────────────
 
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }))
+   .WithTags("Sistem")
+   .WithSummary("API ve Sunucu Sağlık Kontrolü")
+   .WithDescription("VDS üzerinde çalışan API'nin ve arka plan servislerinin ayakta olup olmadığını kontrol eder. 'Healthy' durum kodu döner.")
+   .WithName("HealthCheck");
 
 app.MapGet("/api/etsy/banking/payouts", async (string shopId, DateTimeOffset? startDate, DateTimeOffset? endDate, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {
@@ -200,7 +212,11 @@ app.MapGet("/api/etsy/banking/payouts", async (string shopId, DateTimeOffset? st
     var start = startDate ?? new DateTimeOffset(end.Year, end.Month, 1, 0, 0, 0, TimeSpan.Zero);
     if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
     return Results.Ok(await reporting.GetBankPayoutsAsync(shopId, start, end, cancellationToken));
-}).WithTags("Etsy Banking").WithName("GetEtsyBankPayouts");
+})
+.WithTags("Finans & Banka")
+.WithSummary("Etsy Banka Transferleri (Payouts)")
+.WithDescription("Etsy'nin mağazanız için banka hesabınıza yatırdığı tüm ödeme ve transfer kayıtlarını tarih, tutar, kur ve durum bilgileriyle listeler.")
+.WithName("GetEtsyBankPayouts");
 
 app.MapGet("/api/etsy/financial/performance", async (string shopId, string? period, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {
@@ -215,7 +231,11 @@ app.MapGet("/api/etsy/financial/performance", async (string shopId, string? peri
     };
     if (start == DateTimeOffset.MinValue) return Results.BadRequest(new { error = "period today, this_month veya last_month olmalıdır." });
     return Results.Ok(await reporting.GetFinancialPerformanceAsync(shopId, start, end, cancellationToken));
-}).WithTags("Financial").WithName("GetFinancialPerformance");
+})
+.WithTags("Finans & Muhasebe")
+.WithSummary("Finansal Performans ve Kâr-Zarar Karnesi")
+.WithDescription("Belirtilen dönem (today, this_month, last_month veya özel tarih aralığı) için brüt satış, Etsy komisyonları, reklam harcamaları, ürün ve kargo maliyetleri ile net kâr marjını hesaplar.")
+.WithName("GetFinancialPerformance");
 
 app.MapGet("/api/etsy/financial/analysis", async (string shopId, DateTimeOffset? startDate, DateTimeOffset? endDate, IEtsyFinancialAnalysisService analysis, CancellationToken cancellationToken) =>
 {
@@ -224,19 +244,31 @@ app.MapGet("/api/etsy/financial/analysis", async (string shopId, DateTimeOffset?
     var start = startDate ?? end.AddDays(-30);
     if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
     return Results.Ok(await analysis.AnalyzeAsync(shopId.Trim(), start, end, cancellationToken));
-}).WithTags("Financial").WithName("GetFinancialAnalysis");
+})
+.WithTags("Finans & Muhasebe")
+.WithSummary("Akıllı Finansal Analiz ve Öneri Motoru")
+.WithDescription("Finansal performansı kural tabanlı yapay zeka mantığıyla analiz eder. Kâr marjı, ciro değişimi ve gider oranlarını değerlendirerek mağazaya özel finansal uyarılar (insights) ve aksiyon önerileri (recommendations) sunar.")
+.WithName("GetFinancialAnalysis");
 
 app.MapGet("/api/etsy/orders/unfulfilled-cost-alerts", async (string shopId, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
     return Results.Ok(await reporting.GetUnfulfilledCostAlertsAsync(shopId, cancellationToken));
-}).WithTags("Financial").WithName("GetUnfulfilledCostAlerts");
+})
+.WithTags("Sipariş & Maliyet")
+.WithSummary("Maliyeti Eksik Sipariş Alarmları")
+.WithDescription("Henüz kargolanmamış veya üretim/kargo maliyeti girilmemiş açık siparişleri listeler. Gerçek net kârın eksik maliyet yüzünden yanıltıcı çıkmasını önler.")
+.WithName("GetUnfulfilledCostAlerts");
 
 app.MapGet("/api/etsy/shop/daily-brief", async (string shopId, DateTimeOffset? date, IEtsyReportingService reporting, CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(shopId)) return Results.BadRequest(new { error = "shopId zorunludur." });
     return Results.Ok(await reporting.GetDailyShopBriefAsync(shopId, date ?? DateTimeOffset.UtcNow, cancellationToken));
-}).WithTags("Financial").WithName("GetDailyShopBrief");
+})
+.WithTags("Finans & Muhasebe")
+.WithSummary("Günlük Mağaza Bülteni ve Sağlık Skoru")
+.WithDescription("Seçilen gün için brüt satış, net kâr, sipariş sayısı ve mağaza sağlık skorunu (Health Score 0-100) özetler.")
+.WithName("GetDailyShopBrief");
 
 app.MapPost("/api/etsy/sync", async (EtsySyncRequest request, IConfiguration configuration, IEtsySynchronizationService synchronization, CancellationToken cancellationToken) =>
 {
@@ -251,7 +283,11 @@ app.MapPost("/api/etsy/sync", async (EtsySyncRequest request, IConfiguration con
 
     var result = await synchronization.SynchronizeAsync(shopId, start, end, cancellationToken);
     return result.Succeeded ? Results.Ok(result) : Results.Problem(result.ErrorMessage, statusCode: StatusCodes.Status502BadGateway);
-}).WithTags("Etsy Sync").WithName("SynchronizeEtsyFinance");
+})
+.WithTags("Senkronizasyon")
+.WithSummary("Etsy API Doğrudan Eşitleme")
+.WithDescription("Etsy Open API v3 üzerinden finansal hareketleri ve sipariş verilerini doğrudan VDS veritabanına senkronize eder.")
+.WithName("SynchronizeEtsyFinance");
 
 app.MapPost("/api/etsy/financial/import", async (EtsyFinancialImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
 {
@@ -279,7 +315,11 @@ app.MapPost("/api/etsy/financial/import", async (EtsyFinancialImportRequest requ
         payoutsCount = request.Payouts?.Count ?? 0,
         alertsCount = request.OrderAlerts?.Count ?? 0
     });
-}).WithTags("Financial").WithName("ImportEtsyFinancialData");
+})
+.WithTags("Senkronizasyon")
+.WithSummary("Masaüstü Finansal Rapor Aktarımı")
+.WithDescription("Masaüstü WinForms uygulamasında işlenmiş olan günlük finans dökümlerini ve kâr hesaplamalarını VDS veritabanına aktarır.")
+.WithName("ImportEtsyFinancialData");
 
 app.MapPost("/api/etsy/orders/monthly-import", async (EtsyMonthlyOrderImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
 {
@@ -290,7 +330,11 @@ app.MapPost("/api/etsy/orders/monthly-import", async (EtsyMonthlyOrderImportRequ
         await repository.SaveMonthlyOrderSummariesAsync(request.Summaries, cancellationToken);
 
     return Results.Ok(new { saved = true, shopId = request.ShopId, count = request.Summaries?.Count ?? 0 });
-}).WithTags("Orders").WithName("ImportMonthlyOrders");
+})
+.WithTags("Sipariş & Maliyet")
+.WithSummary("Aylık Sipariş Geçmişi Aktarımı")
+.WithDescription("Masaüstünden gelen son 10-12 aylık sipariş adetlerini, brüt ciroyu ve sepet ortalamasını (AOV) VDS SQLite veritabanına kaydeder.")
+.WithName("ImportMonthlyOrders");
 
 app.MapPost("/api/etsy/analytics/traffic-import", async (EtsyListingTrafficImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
 {
@@ -301,7 +345,11 @@ app.MapPost("/api/etsy/analytics/traffic-import", async (EtsyListingTrafficImpor
         await repository.SaveListingTrafficDailyAsync(request.Records, cancellationToken);
 
     return Results.Ok(new { saved = true, shopId = request.ShopId, count = request.Records?.Count ?? 0 });
-}).WithTags("Analytics").WithName("ImportListingTraffic");
+})
+.WithTags("Trafik & Analitik")
+.WithSummary("Ürün Ziyaret ve Trafik Metrikleri Aktarımı")
+.WithDescription("Ürünlerin günlük ve aylık ziyaret, görüntüleme, favorilenme sayıları ile satış dönüşüm oranlarını (conversion rate) kaydeder.")
+.WithName("ImportListingTraffic");
 
 app.MapPost("/api/etsy/charts/upload", async (EtsyChartUploadRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
 {
@@ -318,7 +366,11 @@ app.MapPost("/api/etsy/charts/upload", async (EtsyChartUploadRequest request, IE
 
     await repository.SaveChartSnapshotAsync(snapshot, cancellationToken);
     return Results.Ok(new { saved = true, shopId = request.ShopId, chartType = request.ChartType });
-}).WithTags("Charts").WithName("UploadChartSnapshot");
+})
+.WithTags("Grafikler")
+.WithSummary("Grafik Görselleri Yükleme (PNG Base64)")
+.WithDescription("Masaüstündeki SkiaSharp grafik motorunun ürettiği 4 ana grafiğin (profit_bar, cashflow_line, cost_pie, forecast) Base64 PNG verisini sunucuya yükler.")
+.WithName("UploadChartSnapshot");
 
 app.MapGet("/api/etsy/charts/{shopId}/{chartType}.png", async (string shopId, string chartType, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
 {
@@ -335,7 +387,11 @@ app.MapGet("/api/etsy/charts/{shopId}/{chartType}.png", async (string shopId, st
     {
         return Results.Problem("Grafik resmi çözümlenemedi.", statusCode: StatusCodes.Status500InternalServerError);
     }
-}).WithTags("Charts").WithName("GetChartSnapshotImage");
+})
+.WithTags("Grafikler")
+.WithSummary("Grafik PNG Resmini Önizleme")
+.WithDescription("Yüklenen grafiği doğrudan web tarayıcısında veya Gemini Spark görsel modunda gösterilmek üzere PNG formatında döner.")
+.WithName("GetChartSnapshotImage");
 
 app.MapPost("/api/etsy/sync-all", async (EtsyAllDataImportRequest request, IEtsyIntegrationRepository repository, CancellationToken cancellationToken) =>
 {
@@ -381,7 +437,11 @@ app.MapPost("/api/etsy/sync-all", async (EtsyAllDataImportRequest request, IEtsy
         trafficCount = request.TrafficRecords?.Count ?? 0,
         chartsCount = request.Charts?.Count ?? 0
     });
-}).WithTags("Sync").WithName("SyncAllDesktopData");
+})
+.WithTags("Senkronizasyon")
+.WithSummary("🌐 Masaüstü Tam Senkronizasyon (Tek Hamlede Aktarım)")
+.WithDescription("Masaüstündeki 'VDS'e Aktar' butonunun tek seferde günlük finans kayıtlarını, banka transferlerini, siparişleri, ürün trafiklerini ve grafik resimlerini topluca VDS'e kaydettiği ana aktarım motorudur.")
+.WithName("SyncAllDesktopData");
 
 app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyTokenStore tokenStore, CancellationToken cancellationToken) =>
 {
@@ -415,7 +475,11 @@ app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyToken
             isExpired = savedToken.AccessTokenExpiresAt <= DateTimeOffset.UtcNow,
             tokenType = savedToken.TokenType
         });
-}).WithTags("Etsy Auth").WithName("ImportEtsyToken");
+})
+.WithTags("Yetkilendirme & Token")
+.WithSummary("Etsy OAuth Token Aktarımı")
+.WithDescription("Masaüstü uygulamasında üretilen Etsy API OAuth Access ve Refresh token bilgilerini VDS güvenli kasasına kaydeder.")
+.WithName("ImportEtsyToken");
 
 app.MapGet("/api/etsy/token/status", async (string shopId, IEtsyTokenStore tokenStore, CancellationToken cancellationToken) =>
 {
@@ -433,7 +497,11 @@ app.MapGet("/api/etsy/token/status", async (string shopId, IEtsyTokenStore token
             isExpired = token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow,
             tokenType = token.TokenType
         });
-}).WithTags("Etsy Auth").WithName("GetEtsyTokenStatus");
+})
+.WithTags("Yetkilendirme & Token")
+.WithSummary("Etsy Token Durum ve Geçerlilik Kontrolü")
+.WithDescription("Kayıtlı Etsy OAuth token'ının süresinin dolup dolmadığını ve kalan geçerlilik süresini kontrol eder.")
+.WithName("GetEtsyTokenStatus");
 
 app.MapGet("/api/banking/deposits", (IBankDepositService bankService) =>
 {
@@ -447,7 +515,11 @@ app.MapGet("/api/banking/deposits", (IBankDepositService bankService) =>
     };
     var summary = bankService.CalculateMonthlyDeposits(sampleEntries, now.AddMonths(-1), now, _ => 49.02m, 49.02m);
     return Results.Ok(summary);
-}).WithTags("Banking");
+})
+.WithTags("Finans & Banka")
+.WithSummary("Banka Yatırım ve Para Transferleri Özeti")
+.WithDescription("Banka hesaplarına aktarılan net mevduat ve transfer kayıtlarının özet listesini getirir.")
+.WithName("GetBankDeposits");
 
 app.MapGet("/api/financial/summary", () => Results.Ok(new
 {
@@ -458,6 +530,10 @@ app.MapGet("/api/financial/summary", () => Results.Ok(new
     productCosts = 9835.33,
     realNetProfit = 19839.50,
     bankPayoutsTotal = 25701.31
-})).WithTags("Financial");
+}))
+.WithTags("Finans & Muhasebe")
+.WithSummary("Hızlı Finansal Özet Tablosu")
+.WithDescription("Son dönemin brüt satış, Etsy kesintisi, net gelir, ürün maliyeti ve gerçek net kârını sade bir özet olarak döner.")
+.WithName("GetFinancialSummary");
 
 app.Run();
