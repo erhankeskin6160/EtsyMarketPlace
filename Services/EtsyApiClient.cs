@@ -98,6 +98,14 @@ internal sealed class EtsyApiClient
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
             throw new InvalidOperationException($"Token API'ye aktarilamadi. HTTP {(int)response.StatusCode}: {body}");
+
+        using var result = JsonDocument.Parse(body);
+        if (!result.RootElement.TryGetProperty("saved", out var saved) || !saved.GetBoolean())
+            throw new InvalidOperationException("Token API'ye gönderildi ancak kayıt doğrulanamadı.");
+
+        var savedShopId = result.RootElement.TryGetProperty("shopId", out var shop) ? shop.GetString() : settings.ShopId;
+        var expiresAt = result.RootElement.TryGetProperty("expiresAt", out var expires) ? expires.GetString() : null;
+        SimilarProductsWinForms.Diagnostics.AppLog.Info($"Etsy OAuth token VDS API'ye aktarıldı. Hedef: {request.RequestUri}; ShopId: {savedShopId}; Bitiş: {expiresAt}");
     }
 
     public async Task RefreshAccessTokenAsync(EtsyApiSettings settings, CancellationToken cancellationToken = default)

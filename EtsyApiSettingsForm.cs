@@ -195,7 +195,7 @@ internal sealed class EtsyApiSettingsForm : Form
             await _apiClient.ExchangeAuthorizationCodeAsync(_settings, ExtractAuthorizationCode(_authorizationCodeTextBox.Text));
             EtsyApiSettingsStore.Save(_settings);
             await _apiClient.ImportTokenToIntegrationApiAsync(_settings);
-            WriteStatus($"Token alindi. Access token bitis UTC: {_settings.AccessTokenExpiresAtUtc:yyyy-MM-dd HH:mm:ss}");
+            WriteStatus($"Token alindi ve VDS API'ye aktarildi. ShopId: {_settings.ShopId}; Access token bitis UTC: {_settings.AccessTokenExpiresAtUtc:yyyy-MM-dd HH:mm:ss}");
         }
         catch (Exception ex)
         {
@@ -211,7 +211,7 @@ internal sealed class EtsyApiSettingsForm : Form
             await _apiClient.RefreshAccessTokenAsync(_settings);
             EtsyApiSettingsStore.Save(_settings);
             await _apiClient.ImportTokenToIntegrationApiAsync(_settings);
-            WriteStatus($"Token yenilendi. Access token bitis UTC: {_settings.AccessTokenExpiresAtUtc:yyyy-MM-dd HH:mm:ss}");
+            WriteStatus($"Token yenilendi ve VDS API'ye aktarildi. ShopId: {_settings.ShopId}; Access token bitis UTC: {_settings.AccessTokenExpiresAtUtc:yyyy-MM-dd HH:mm:ss}");
         }
         catch (Exception ex)
         {

@@ -247,8 +247,9 @@ app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyToken
     }
 
     var tokenType = string.IsNullOrWhiteSpace(request.TokenType) ? "Bearer" : request.TokenType.Trim();
+    var shopId = request.ShopId.Trim();
     await tokenStore.SaveAsync(
-        request.ShopId.Trim(),
+        shopId,
         new EtsyOAuthToken(
             request.AccessToken.Trim(),
             request.RefreshToken.Trim(),
@@ -256,8 +257,36 @@ app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyToken
             tokenType),
         cancellationToken);
 
-    return Results.Ok(new { saved = true, shopId = request.ShopId.Trim() });
+    var savedToken = await tokenStore.GetAsync(shopId, cancellationToken);
+    return savedToken is null
+        ? Results.Problem("Token kaydedilemedi.", statusCode: StatusCodes.Status500InternalServerError)
+        : Results.Ok(new
+        {
+            saved = true,
+            shopId,
+            expiresAt = savedToken.AccessTokenExpiresAt,
+            isExpired = savedToken.AccessTokenExpiresAt <= DateTimeOffset.UtcNow,
+            tokenType = savedToken.TokenType
+        });
 }).WithTags("Etsy Auth").WithName("ImportEtsyToken");
+
+app.MapGet("/api/etsy/token/status", async (string shopId, IEtsyTokenStore tokenStore, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(shopId))
+        return Results.BadRequest(new { error = "shopId zorunludur." });
+
+    var token = await tokenStore.GetAsync(shopId.Trim(), cancellationToken);
+    return token is null
+        ? Results.NotFound(new { exists = false, shopId = shopId.Trim() })
+        : Results.Ok(new
+        {
+            exists = true,
+            shopId = shopId.Trim(),
+            expiresAt = token.AccessTokenExpiresAt,
+            isExpired = token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow,
+            tokenType = token.TokenType
+        });
+}).WithTags("Etsy Auth").WithName("GetEtsyTokenStatus");
 
 app.MapGet("/api/banking/deposits", (IBankDepositService bankService) =>
 {

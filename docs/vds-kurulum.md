@@ -57,7 +57,7 @@ VDS üzerinde PowerShell:
 ```powershell
 cd C:\Apps\EtsyMarketPlace\Api
 $env:ASPNETCORE_ENVIRONMENT = "Production"
-dotnet EtsyMarketPlace.Api.dll --urls http://127.0.0.1:5263
+Start-Process -FilePath .\EtsyMarketPlace.Api.exe -ArgumentList "--urls http://0.0.0.0:5263" -WorkingDirectory (Get-Location)
 ```
 
 Başarılı başlangıçta SQLite dosyası otomatik oluşturulur:
@@ -72,6 +72,9 @@ Kontrol:
 ```powershell
 Invoke-RestMethod http://127.0.0.1:5263/health
 ```
+
+Self-contained publish kullanılıyorsa `dotnet` komutu gerekmez; doğrudan
+`EtsyMarketPlace.Api.exe` çalıştırılır.
 
 ## 5. Windows Firewall
 
@@ -95,7 +98,48 @@ Task Scheduler ayarları:
 - Argüman: `C:\Apps\EtsyMarketPlace\Api\EtsyMarketPlace.Api.dll --urls http://127.0.0.1:5263`
 - Başlangıç klasörü: `C:\Apps\EtsyMarketPlace\Api`
 
-## 7. Finans verisi senkronizasyonu
+## 7. Uzaktan curl ile API kontrolü
+
+VDS’nin dış IP adresini `VDS_IP` yerine yazın. API key etkinse her komuta
+`-H "X-Api-Key: API_KEY"` ekleyin.
+
+Health kontrolü:
+
+```powershell
+curl.exe -i "http://VDS_IP:5263/health"
+```
+
+Masaüstünden token aktarımı için örnek:
+
+```powershell
+curl.exe -i -X POST "http://VDS_IP:5263/api/etsy/token" `
+  -H "Content-Type: application/json" `
+  -H "X-Api-Key: API_KEY" `
+  --data-raw '{"shopId":"523236321","accessToken":"ACCESS_TOKEN","refreshToken":"REFRESH_TOKEN","expiresAt":"2026-12-31T23:59:59Z","tokenType":"Bearer"}'
+```
+
+Tokenın API tarafından gerçekten okunabildiğini doğrulama:
+
+```powershell
+curl.exe -i "http://VDS_IP:5263/api/etsy/token/status?shopId=523236321" -H "X-Api-Key: API_KEY"
+```
+
+Beklenen yanıtta `exists: true` ve geçerli bir `expiresAt` bulunur. Token
+değerleri status yanıtında dönmez.
+
+Senkronizasyon:
+
+```powershell
+curl.exe -i -X POST "http://VDS_IP:5263/api/etsy/sync" `
+  -H "Content-Type: application/json" `
+  -H "X-Api-Key: API_KEY" `
+  --data-raw '{"shopId":"523236321","startDate":"2026-09-01T00:00:00Z","endDate":"2026-09-30T23:59:59Z"}'
+```
+
+PowerShell’de `curl` yerine özellikle `curl.exe` kullanın; böylece PowerShell
+alias davranışından kaçınılır.
+
+## 8. Finans verisi senkronizasyonu
 
 OAuth token kaydedildikten sonra Swagger’dan şu endpoint çağrılır:
 
@@ -124,7 +168,7 @@ GET /api/etsy/orders/unfulfilled-cost-alerts?shopId=523236321
 GET /api/etsy/shop/daily-brief?shopId=523236321
 ```
 
-## 8. SQLite yedekleme
+## 9. SQLite yedekleme
 
 API durdurulduktan sonra veritabanı dosyasını yedekleyin:
 
@@ -141,7 +185,7 @@ Copy-Item C:\ProgramData\EtsyMarketPlace\keys C:\Backups\EtsyMarketPlace\keys -R
 
 SQLite dosyası ve `keys` klasörü aynı yedeğe ait olmalıdır. Tokenlar şifreli olsa da bu klasörleri internete açmayın.
 
-## 9. Bu kurulumda kullanılmayanlar
+## 10. Bu kurulumda kullanılmayanlar
 
 İlk VDS kurulumu için aşağıdakiler gerekli değildir:
 
