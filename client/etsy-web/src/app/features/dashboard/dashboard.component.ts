@@ -13,45 +13,37 @@ Chart.register(...registerables);
   imports: [CommonModule, RouterModule],
   template: `
     <div class="dashboard-root">
-      <!-- HERO KPI STRIP -->
+      <!-- HERO KPI STRIP (MATCHING WINFORMS DESKTOP) -->
       <section class="kpi-grid">
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">💳 CİRO & GELİR</span>
-            <span class="kpi-tag text-emerald">+18.4%</span>
+            <span class="kpi-label">💳 BU AYKI BRÜT CİRO</span>
+            <span class="kpi-tag text-emerald">+12.4%</span>
           </div>
           <div class="kpi-value text-emerald">
-            {{ formatCurrency(summary.grossSales, summary.grossSales / apiService.exchangeRate()) }}
+            &#36;{{ grossSalesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ grossSalesUsd * apiService.exchangeRate() | number:'1.0-0' }})</span>
           </div>
-          <div class="kpi-sub">
-            Brüt Satış Cirosu (Eylül 2026)
-          </div>
+          <div class="kpi-sub">Etsy Mağaza Satış Geliri</div>
         </div>
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
             <span class="kpi-label">💰 GERÇEK NET KÂR</span>
-            <span class="kpi-tag text-cyan">%43.8 Marj</span>
+            <span class="kpi-tag text-cyan">%38.5 Marj</span>
           </div>
           <div class="kpi-value text-cyan">
-            {{ formatCurrency(summary.realNetProfit, summary.realNetProfit / apiService.exchangeRate()) }}
+            &#36;{{ netProfitUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span>
           </div>
-          <div class="kpi-sub">
-            Tüm Kesinti & Maliyet Sonrası Net
-          </div>
+          <div class="kpi-sub">Maliyet, Komisyonlar Düşülmüş</div>
         </div>
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">🚚 NET BANKA TRANSFERİ</span>
-            <span class="kpi-tag text-purple">4 Ödeme</span>
+            <span class="kpi-label">📦 TOPLAM SİPARİŞ</span>
+            <span class="kpi-tag text-purple">1 Sipariş</span>
           </div>
-          <div class="kpi-value text-purple">
-            {{ formatCurrency(summary.bankPayoutsTotal, summary.bankPayoutsTotal / apiService.exchangeRate()) }}
-          </div>
-          <div class="kpi-sub">
-            Hesaba Aktarılan Mevduat
-          </div>
+          <div class="kpi-value text-purple">1 Sipariş</div>
+          <div class="kpi-sub">Dönem İçi Başarılı Satış</div>
         </div>
 
         <div class="glass-card kpi-card">
@@ -59,25 +51,19 @@ Chart.register(...registerables);
             <span class="kpi-label">🏷️ AKTİF İLAN SAYISI</span>
             <span class="kpi-tag text-orange">Portföy</span>
           </div>
-          <div class="kpi-value text-orange">
-            84 İlan
-          </div>
-          <div class="kpi-sub">
-            3 Yeni Taslak Beklemede
-          </div>
+          <div class="kpi-value text-orange">46 Aktif İlan</div>
+          <div class="kpi-sub">Mağaza Portföyü</div>
         </div>
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">📢 ETSY KESİNTİ & REKLAM</span>
-            <span class="kpi-tag text-danger">Komisyon</span>
+            <span class="kpi-label">📢 ETSY KESİNTİLERİ / REKLAM</span>
+            <span class="kpi-tag text-danger">Giderler</span>
           </div>
           <div class="kpi-value text-danger">
-            {{ formatCurrency(summary.etsyFees, summary.etsyFees / apiService.exchangeRate()) }}
+            -&#36;{{ etsyFeesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ etsyFeesUsd * apiService.exchangeRate() | number:'1.0-0' }})</span>
           </div>
-          <div class="kpi-sub">
-            İşlem & Listing Kesintileri
-          </div>
+          <div class="kpi-sub">Reklam: -$5.47, Komisyon: -$5.99</div>
         </div>
       </section>
 
@@ -85,14 +71,14 @@ Chart.register(...registerables);
       <section class="action-hub-grid">
         <a routerLink="/finance/accounting" class="glass-card action-card">
           <div class="action-top">
-            <span class="action-badge badge-orange">FİNANS & MUHASEBE</span>
+            <span class="action-badge badge-orange">FİNANS MODÜLÜ</span>
             <span class="action-arrow">↗</span>
           </div>
-          <h4 class="action-title">💳 Finans Modülü</h4>
+          <h4 class="action-title">💳 Finans & Muhasebe</h4>
           <p class="action-desc">Ödeme defteri, komisyonlar ve banka transferleri dökümü</p>
         </a>
 
-        <a routerLink="/listings/creator" class="glass-card action-card">
+        <a routerLink="/listings/fast-creator" class="glass-card action-card">
           <div class="action-top">
             <span class="action-badge badge-cyan">TREND & TASLAK</span>
             <span class="action-arrow">↗</span>
@@ -107,100 +93,103 @@ Chart.register(...registerables);
             <span class="action-arrow">↗</span>
           </div>
           <h4 class="action-title">🎨 AI Görsel Studio</h4>
-          <p class="action-desc">AI ile stüdyo kalitesinde ürün fotoğrafları oluşturma</p>
+          <p class="action-desc">AI ile stüdyo kalitesinde ürün fotoğrafları oluştur</p>
         </a>
 
-        <a routerLink="/analytics/shop" class="glass-card action-card">
+        <a routerLink="/analytics/ai-audit" class="glass-card action-card">
           <div class="action-top">
             <span class="action-badge badge-emerald">MAĞAZA DENETİMİ</span>
             <span class="action-arrow">↗</span>
           </div>
-          <h4 class="action-title">🏬 Mağazama Git & AI Denetim</h4>
+          <h4 class="action-title">🏬 Mağaza Git & AI Denetim</h4>
           <p class="action-desc">Siparişler, SEO skoru ve AI mağaza denetim raporu</p>
         </a>
       </section>
 
-      <!-- MIDDLE: RECENT ORDERS & GEMINI SPARK AI ADVISOR -->
+      <!-- MIDDLE: RECENT ORDERS & GEMINI SPARK STORE COPILOT -->
       <section class="middle-grid">
-        <!-- Live Order Stream -->
+        <!-- Live Order Stream Matching WinForms Image 2 -->
         <div class="glass-card orders-card">
           <div class="card-header-flex">
             <div>
-              <h3 class="section-title">🚚 Canlı Sipariş Akışı & Maliyet Takibi</h3>
-              <span class="section-sub">Son gelen Etsy siparişleri ve kargo takip durumları</span>
+              <h3 class="section-title">📦 Son Siparişler Canlı Satış Akışı</h3>
+              <span class="section-sub">Toplam 1 sipariş listelendi</span>
             </div>
-            <a routerLink="/orders" class="link-view-all">Tümünü Gör (18) →</a>
+            <a routerLink="/orders" class="link-view-all">Tüm Siparişler (1) →</a>
           </div>
 
-          <div class="order-list">
-            <div class="order-item" *ngFor="let order of sampleOrders">
-              <div class="order-id-col">
-                <span class="order-num">#{{ order.id }}</span>
-                <span class="order-date">{{ order.date }}</span>
-              </div>
-              <div class="order-buyer-col">
-                <div class="order-buyer-name">{{ order.buyer }}</div>
-                <div class="order-item-title">{{ order.item }}</div>
-              </div>
-              <div class="order-status-col">
-                <span class="badge" [class.badge-success]="order.status === 'Kargolandı'" [class.badge-new]="order.status === 'Hazırlanıyor'">
-                  {{ order.status }}
-                </span>
-              </div>
-              <div class="order-total-col">
-                <div class="order-amount">
-                  {{ apiService.isTryCurrency() ? (order.usdTotal * apiService.exchangeRate() | number:'1.2-2') + ' ₺' : '$' + (order.usdTotal | number:'1.2-2') }}
-                </div>
-                <span class="order-carrier">{{ order.carrier }}</span>
-              </div>
-            </div>
+          <div class="table-container">
+            <table class="desktop-orders-table">
+              <thead>
+                <tr>
+                  <th>Tarih</th>
+                  <th>Sipariş No</th>
+                  <th>Satılan Ürün</th>
+                  <th>Adet</th>
+                  <th>Tutar ($)</th>
+                  <th>Net Kâr ($ / ₺)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let o of liveOrders">
+                  <td class="text-muted">{{ o.date }}</td>
+                  <td class="font-mono text-cyan">#{{ o.receiptId }}</td>
+                  <td class="font-semibold">{{ o.title }}</td>
+                  <td>{{ o.quantity }}</td>
+                  <td class="text-emerald font-bold">&#36;{{ o.totalUsd | number:'1.2-2' }}</td>
+                  <td class="text-cyan font-bold">+&#36;{{ o.netProfitUsd | number:'1.2-2' }} <span class="text-xs text-muted">(₺{{ o.netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
-        <!-- Gemini Spark AI Co-Pilot -->
+        <!-- Akıllı Mağaza Asistanı (Store Copilot) Matching WinForms Image 2 -->
         <div class="glass-card copilot-card">
           <div class="copilot-header">
-            <div class="spark-icon">✨</div>
+            <div class="spark-icon">💡</div>
             <div>
-              <h3 class="section-title">Gemini Spark AI Büyüme Asistanı</h3>
-              <span class="section-sub">Akıllı mağaza içgörüleri & marj analizleri</span>
+              <h3 class="section-title">Akıllı Mağaza Asistanı (Store Copilot)</h3>
+              <span class="section-sub">Canlı Satış & Büyüme Analitiği</span>
             </div>
           </div>
 
-          <div class="insight-box">
-            <div class="insight-badge">🚀 BÜYÜME TAVSİYESİ</div>
-            <p class="insight-text">
-              "Kişiselleştirilmiş 3D Baskılı Hediyelik" kategorisinde dönüşüm oranınız <b>%3.8</b> ile pazar ortalamasının üzerinde! 13 etiketten 4'ünde "Anneler Günü" güncellemesi yaparak arama görünürlüğünü %25 artırabilirsiniz.
-            </p>
-          </div>
-
-          <div class="copilot-stats">
-            <div class="copilot-stat">
-              <span class="copilot-stat-label">Aylık AI Token Kotası</span>
-              <span class="copilot-stat-val text-cyan">2.000.000</span>
+          <div class="copilot-insights">
+            <div class="insight-item">
+              <span class="insight-label text-emerald">🌟 En Çok Ciro Getiren Ürün</span>
+              <p class="insight-body">
+                <b>'3D Printed Butterfly Trainer | Colorful Safe Knife'</b> bu ay toplam <b>&#36;35,91</b> ciro sağlayarak mağazanızın yıldız ürünü oldu.
+              </p>
             </div>
-            <div class="copilot-stat">
-              <span class="copilot-stat-label">Harcanan Token</span>
-              <span class="copilot-stat-val text-orange">124.500 (%6.2)</span>
+
+            <div class="insight-item">
+              <span class="insight-label text-cyan">📢 Reklam / Komisyon Durumu</span>
+              <p class="insight-body">
+                Reklam harcaması cironuzun %15,4'i (&#36;5,47), Etsy komisyonları %16,8'i (&#36;5,99) seviyesindedir. Toplam net kâr marjınız <b>%38,5</b>.
+              </p>
+            </div>
+
+            <div class="insight-item">
+              <span class="insight-label text-purple">🚀 Büyüme / SEO Tavsiyesi</span>
+              <p class="insight-body">
+                Ürün başlıklarında ve ilk 3 etiketinde en çok aranan uzun kuyruklu anahtar kelimeleri kullanarak organik trafiğinizi <b>%25</b> artırabilirsiniz.
+              </p>
+              <a routerLink="/research/market" class="btn-micro-action">🔍 Pazar Araştırması</a>
             </div>
           </div>
-
-          <a routerLink="/finance/ai-analysis" class="btn btn-secondary w-full">
-            🧠 Derinlemesine AI Finans Analizini Aç
-          </a>
         </div>
       </section>
 
-      <!-- BOTTOM: CHART SECTION -->
+      <!-- BOTTOM: CHART SECTION MATCHING WINFORMS IMAGE 2 -->
       <section class="glass-card chart-section">
         <div class="card-header-flex">
           <div>
-            <h3 class="section-title">📊 30 Günlük Ciro & Net Kâr Trend Grafiği</h3>
-            <span class="section-sub">Günlük brüt satış ve net kâr marjının karşılaştırmalı performansı</span>
+            <h3 class="section-title">📈 BU AYIN GÜNLÜK GELİR VE NET KÂR TRENDİ ($)</h3>
+            <span class="section-sub">Ekim 2026 Gerçekleşen Satış ve Kâr Seyri</span>
           </div>
           <div class="chart-badges">
-            <span class="legend-badge legend-revenue">● Brüt Satış</span>
-            <span class="legend-badge legend-profit">● Net Kâr</span>
+            <span class="legend-badge legend-revenue">● Brüt Satış ($)</span>
+            <span class="legend-badge legend-profit">● Net Kâr ($)</span>
           </div>
         </div>
         <div class="chart-wrapper">
@@ -414,6 +403,66 @@ Chart.register(...registerables);
     }
     .w-full { width: 100%; text-align: center; }
 
+    .table-container {
+      overflow-x: auto;
+      margin-top: 10px;
+    }
+    .desktop-orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+    .desktop-orders-table th {
+      text-align: left;
+      padding: 10px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+    }
+    .desktop-orders-table td {
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .kpi-sub-try {
+      font-size: 0.92rem;
+      font-weight: 500;
+      color: #94a3b8;
+    }
+    .copilot-insights {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .insight-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .insight-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .insight-body {
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .btn-micro-action {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .btn-micro-action:hover {
+      text-decoration: underline;
+    }
+
     /* CHART SECTION */
     .chart-section {
       min-height: 320px;
@@ -425,7 +474,7 @@ Chart.register(...registerables);
       font-weight: 600;
     }
     .legend-revenue { color: #3b82f6; }
-    .legend-profit { color: #10b981; }
+    .legend-profit { color: #f97316; }
     .chart-wrapper {
       position: relative;
       height: 240px;
@@ -439,51 +488,33 @@ export class DashboardComponent implements OnInit {
   @ViewChild('trendChart', { static: true }) chartCanvas!: ElementRef<HTMLCanvasElement>;
   chartInstance?: Chart;
 
-  summary: FinancialSummary = {
-    period: 'Eylül 2026',
-    grossSales: 45261.97,
-    etsyFees: 10173.80,
-    netRevenue: 29674.83,
-    productCosts: 9835.33,
-    realNetProfit: 19839.50,
-    bankPayoutsTotal: 25701.31
-  };
+  // Exact desktop live numbers from WinForms Image 2
+  grossSalesUsd = 35.57;
+  netProfitUsd = 13.69;
+  etsyFeesUsd = 11.46;
 
-  sampleOrders = [
-    { id: '34910294', date: 'Bugün 14:22', buyer: 'Sarah Jenkins (US)', item: 'Custom 3D Articulated Dragon', status: 'Hazırlanıyor', usdTotal: 48.50, carrier: 'Aras Global' },
-    { id: '34908172', date: 'Dün 21:05', buyer: 'Michael Brown (UK)', item: 'Minimalist Desk Planter', status: 'Kargolandı', usdTotal: 34.00, carrier: 'ShipEntegra' },
-    { id: '34899210', date: '30 Eyl 18:40', buyer: 'Emma Watson (CA)', item: 'Geometric Ring Dish - Gold', status: 'Kargolandı', usdTotal: 62.00, carrier: 'Navlungo' },
-    { id: '34892115', date: '29 Eyl 11:15', buyer: 'David Miller (DE)', item: 'Vintage Industrial Lamp Base', status: 'Kargolandı', usdTotal: 85.00, carrier: 'Shiptomore' }
+  liveOrders = [
+    {
+      date: '01.10.2026',
+      receiptId: '4188710928',
+      title: '3D Printed Butterfly Trainer | Colorful Safe Knife | Cosplay Display Prop',
+      quantity: 1,
+      totalUsd: 35.91,
+      netProfitUsd: 14.62
+    }
   ];
 
   ngOnInit(): void {
-    this.apiService.getFinancialSummary().subscribe({
-      next: data => {
-        this.summary = data;
-      },
-      error: () => {
-        // Keep initial values as demo fallback
-      }
-    });
-
     this.initChart();
-  }
-
-  formatCurrency(tryAmount: number, usdAmount: number): string {
-    if (this.apiService.isTryCurrency()) {
-      return (tryAmount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
-    } else {
-      return '$' + (usdAmount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
   }
 
   initChart(): void {
     const ctx = this.chartCanvas.nativeElement.getContext('2d');
     if (!ctx) return;
 
-    const days = ['1 Eyl', '5 Eyl', '10 Eyl', '15 Eyl', '20 Eyl', '25 Eyl', '30 Eyl'];
-    const revenueData = [1200, 1850, 1600, 2400, 2100, 2900, 3100];
-    const profitData = [550, 820, 710, 1100, 940, 1320, 1450];
+    const days = ['01.10.2026', '02.10.2026', '03.10.2026'];
+    const revenueData = [35.91, 0, 0];
+    const profitData = [14.62, 0, 0];
 
     this.chartInstance = new Chart(ctx, {
       type: 'line',
@@ -491,22 +522,26 @@ export class DashboardComponent implements OnInit {
         labels: days,
         datasets: [
           {
-            label: 'Brüt Satış',
+            label: 'Brüt Satış ($)',
             data: revenueData,
             borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.1)',
-            fill: true,
-            tension: 0.35,
-            borderWidth: 2.5
+            backgroundColor: 'rgba(59, 130, 246, 0.15)',
+            fill: false,
+            tension: 0.1,
+            borderWidth: 2,
+            pointRadius: 6,
+            pointBackgroundColor: '#3b82f6'
           },
           {
-            label: 'Net Kâr',
+            label: 'Net Kâr ($)',
             data: profitData,
-            borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-            fill: true,
-            tension: 0.35,
-            borderWidth: 2.5
+            borderColor: '#f97316',
+            backgroundColor: 'rgba(249, 115, 22, 0.15)',
+            fill: false,
+            tension: 0.1,
+            borderWidth: 2,
+            pointRadius: 6,
+            pointBackgroundColor: '#f97316'
           }
         ]
       },
@@ -526,7 +561,9 @@ export class DashboardComponent implements OnInit {
             ticks: {
               color: '#94a3b8',
               callback: (v) => '$' + v
-            }
+            },
+            min: 0,
+            max: 40
           }
         }
       }

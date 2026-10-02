@@ -13,7 +13,7 @@ export class EtsyApiService {
 
   // Global UI Signals
   readonly activeShopId = signal<string>('53236321');
-  readonly exchangeRate = signal<number>(48.855);
+  readonly exchangeRate = signal<number>(49.12);
   readonly isTryCurrency = signal<boolean>(true);
   readonly isSidebarCollapsed = signal<boolean>(false);
 
@@ -22,28 +22,28 @@ export class EtsyApiService {
   }
 
   fetchLiveExchangeRate(): void {
-    this.http.get<any>('https://open.er-api.com/v6/latest/USD')
-      .subscribe({
-        next: (data) => {
-          const rate = data?.rates?.TRY;
-          if (rate && typeof rate === 'number' && rate > 20) {
-            this.exchangeRate.set(Number(rate.toFixed(3)));
-          }
-        },
-        error: () => {
-          // If public API fails, fallback to frankfurter
-          this.http.get<any>('https://api.frankfurter.app/latest?from=USD&to=TRY').subscribe({
-            next: (fData) => {
-              const fRate = fData?.rates?.TRY;
-              if (fRate && typeof fRate === 'number' && fRate > 20) {
-                this.exchangeRate.set(Number(fRate.toFixed(3)));
-              }
-            },
-            error: () => {
-              // Safe fallback remains 48.855
-            }
-          });
+    // 1. Primary API: open.er-api.com
+    fetch('https://open.er-api.com/v6/latest/USD')
+      .then(res => res.json())
+      .then(data => {
+        const rate = data?.rates?.TRY;
+        if (rate && typeof rate === 'number' && rate > 20) {
+          this.exchangeRate.set(Number(rate.toFixed(2)));
         }
+      })
+      .catch(() => {
+        // 2. Secondary API: api.frankfurter.app
+        fetch('https://api.frankfurter.app/latest?from=USD&to=TRY')
+          .then(res => res.json())
+          .then(fData => {
+            const fRate = fData?.rates?.TRY;
+            if (fRate && typeof fRate === 'number' && fRate > 20) {
+              this.exchangeRate.set(Number(fRate.toFixed(2)));
+            }
+          })
+          .catch(() => {
+            // Default stays 49.12
+          });
       });
   }
 

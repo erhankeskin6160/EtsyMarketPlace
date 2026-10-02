@@ -14,6 +14,10 @@ import { Viral3DComponent } from './features/research/viral-3d.component';
 import { CompetitorSpyComponent } from './features/research/competitor-spy.component';
 import { ShopVaultComponent } from './features/tools/shop-vault.component';
 import { EtsyApiSettingsComponent } from './features/settings/etsy-api-settings.component';
+import { MarketResearchComponent } from './features/research/market-research.component';
+import { AiAuditComponent } from './features/analytics/ai-audit.component';
+import { ShippingHubComponent } from './features/shipping/shipping-hub.component';
+import { SystemLogsComponent } from './features/system/system-logs.component';
 import { authGuard, adminGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
@@ -39,14 +43,14 @@ export const routes: Routes = [
       { path: 'ai-studio', component: AiStudioComponent },
 
       // Research & Intelligence Modules
+      { path: 'research/market', component: MarketResearchComponent },
       { path: 'research/viral-3d', component: Viral3DComponent },
       { path: 'research/competitor', component: CompetitorSpyComponent },
-      { path: 'research/market', component: ModuleViewerComponent },
       { path: 'research/external', component: ModuleViewerComponent },
 
       // Analytics Modules
+      { path: 'analytics/ai-audit', component: AiAuditComponent },
       { path: 'analytics/shop', component: ModuleViewerComponent },
-      { path: 'analytics/ai-audit', component: ModuleViewerComponent },
       { path: 'analytics/ab-test', component: ModuleViewerComponent },
 
       // Finance & Tools Modules
@@ -57,17 +61,17 @@ export const routes: Routes = [
       { path: 'tools/tracking', component: ModuleViewerComponent },
       { path: 'tools/ai-usage', component: ModuleViewerComponent },
 
-      // Shipping & Logistics Modules
-      { path: 'shipping/aras', component: ModuleViewerComponent },
-      { path: 'shipping/shipentegra', component: ModuleViewerComponent },
-      { path: 'shipping/navlungo', component: ModuleViewerComponent },
-      { path: 'shipping/shiptomore', component: ModuleViewerComponent },
+      // Shipping & Logistics Modules (4-Carrier Hub)
+      { path: 'shipping/aras', component: ShippingHubComponent },
+      { path: 'shipping/shipentegra', component: ShippingHubComponent },
+      { path: 'shipping/navlungo', component: ShippingHubComponent },
+      { path: 'shipping/shiptomore', component: ShippingHubComponent },
 
       // System & Settings Modules
       { path: 'settings/etsy-api', component: EtsyApiSettingsComponent },
       { path: 'settings/notifications', component: ModuleViewerComponent },
       { path: 'settings/update', component: ModuleViewerComponent },
-      { path: 'system/logs', component: ModuleViewerComponent }
+      { path: 'system/logs', component: SystemLogsComponent }
     ]
   },
 
