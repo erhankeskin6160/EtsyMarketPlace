@@ -1,0 +1,55 @@
+export interface OrderItem {
+  id: string;
+  title: string;
+  quantity: number;
+  price: number;
+  imageUrl?: string;
+  sku?: string;
+  variations?: string[];
+}
+
+export interface PackageSpecs {
+  widthCm: number;
+  lengthCm: number;
+  heightCm: number;
+  weightKg: number;
+  desi: number;
+}
+
+export interface CarrierQuote {
+  carrierKey: 'aras' | 'shipentegra' | 'navlungo' | 'shiptomore';
+  carrierName: string;
+  serviceType: string;
+  logoUrl?: string;
+  estimatedDays: string;
+  priceUsd: number;
+  priceTry: number;
+  isRecommended: boolean;
+  notes?: string;
+}
+
+export interface OrderFulfillmentItem {
+  orderId: string;
+  orderNumber: string;
+  buyerName: string;
+  buyerEmail?: string;
+  country: string;
+  countryCode: string;
+  city?: string;
+  addressSnippet?: string;
+  orderDate: string;
+  status: 'unfulfilled' | 'shipped' | 'delivered';
+  currency: string;
+  totalAmount: number;
+  productCost: number;
+  shippingCost: number;
+  isCostMissing: boolean;
+  netProfit: number;
+  profitMarginPercent: number;
+  packageSpecs: PackageSpecs;
+  items: OrderItem[];
+  selectedCarrier?: string;
+  trackingCode?: string;
+  carrierServiceName?: string;
+  shippedAt?: string;
+}

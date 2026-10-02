@@ -9,16 +9,20 @@ import { User, UpdateUserRequest, AuditLog, SystemStats } from '../models/auth.m
 })
 export class EtsyApiService {
   private http = inject(HttpClient);
-  private readonly API_BASE = 'http://localhost:5263';
+  private readonly API_BASE = 'http://5.180.81.148:5263';
 
   // Global UI Signals
   readonly activeShopId = signal<string>('53236321');
-  readonly exchangeRate = signal<number>(48.25);
+  readonly exchangeRate = signal<number>(48.855);
   readonly isTryCurrency = signal<boolean>(true);
   readonly isSidebarCollapsed = signal<boolean>(false);
 
   setExchangeRate(rate: number): void {
     if (rate > 0) this.exchangeRate.set(rate);
+  }
+
+  setCurrency(curr: 'TRY' | 'USD'): void {
+    this.isTryCurrency.set(curr === 'TRY');
   }
 
   toggleCurrency(): void {

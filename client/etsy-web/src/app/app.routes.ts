@@ -5,6 +5,8 @@ import { RegisterComponent } from './features/auth/register.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { AdminComponent } from './features/admin/admin.component';
 import { ModuleViewerComponent } from './features/module-viewer/module-viewer.component';
+import { OrdersComponent } from './features/orders/orders.component';
+import { AccountingComponent } from './features/finance/accounting.component';
 import { authGuard, adminGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
@@ -22,8 +24,11 @@ export const routes: Routes = [
       { path: 'dashboard', component: DashboardComponent },
       { path: 'admin', component: AdminComponent, canActivate: [adminGuard] },
 
-      // All 24 Desktop Modules
-      { path: 'orders', component: ModuleViewerComponent },
+      // Core Interactive Modules
+      { path: 'orders', component: OrdersComponent },
+      { path: 'finance/accounting', component: AccountingComponent },
+
+      // Desktop Modules
       { path: 'listings/fast-creator', component: ModuleViewerComponent },
       { path: 'listings/creator', component: ModuleViewerComponent },
       { path: 'ai-studio', component: ModuleViewerComponent },
@@ -36,7 +41,6 @@ export const routes: Routes = [
       { path: 'analytics/ai-audit', component: ModuleViewerComponent },
       { path: 'analytics/ab-test', component: ModuleViewerComponent },
 
-      { path: 'finance/accounting', component: ModuleViewerComponent },
       { path: 'finance/ai-analysis', component: ModuleViewerComponent },
       { path: 'finance/profit', component: ModuleViewerComponent },
       { path: 'tools/automation', component: ModuleViewerComponent },
