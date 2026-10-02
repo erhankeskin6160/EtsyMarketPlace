@@ -4,6 +4,7 @@ using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Api.Services;
+using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Application.Banking;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
@@ -29,19 +30,25 @@ builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyTokenStore>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IEtsyIntegrationRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IEtsyReportingService>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+builder.Services.AddSingleton<IUserRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+builder.Services.AddSingleton(sp => new JwtTokenService(builder.Configuration["Jwt:Secret"]));
 builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisService>();
 builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddScoped<McpToolHandler>();
 
-// 2. CORS (Google Gemini Web ve Harici Entegrasyonlar İçin)
+// 2. CORS (Angular Web Studio, Google Gemini Web ve Harici Entegrasyonlar İçin)
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        var origins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
-        if (origins.Length > 0) policy.WithOrigins(origins);
-        policy.AllowAnyHeader().AllowAnyMethod();
+        policy.WithOrigins(
+            "http://localhost:4200",
+            "http://127.0.0.1:4200",
+            "https://chat.openai.com",
+            "https://chatgpt.com")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
     });
 });
 
@@ -549,5 +556,251 @@ app.MapGet("/api/financial/summary", () => Results.Ok(new
 .WithSummary("Hızlı Finansal Özet Tablosu")
 .WithDescription("Son dönemin brüt satış, Etsy kesintisi, net gelir, ürün maliyeti ve gerçek net kârını sade bir özet olarak döner.")
 .WithName("GetFinancialSummary");
+
+// ── 9. AUTHENTICATION & MEMBERSHIP ENDPOINTS (/api/auth) ──────────────────────
+
+app.MapPost("/api/auth/login", async (LoginRequest request, IUserRepository userRepo, JwtTokenService jwtService, HttpContext context, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.UsernameOrEmail) || string.IsNullOrWhiteSpace(request.Password))
+    {
+        return Results.BadRequest(new AuthResponse(false, null, "Kullanıcı adı/e-posta ve şifre gereklidir.", null));
+    }
+
+    var user = await userRepo.GetByUsernameOrEmailAsync(request.UsernameOrEmail, cancellationToken);
+    if (user == null || !PasswordHasher.VerifyPassword(request.Password, user.PasswordHash, user.PasswordSalt))
+    {
+        return Results.Json(new AuthResponse(false, null, "Geçersiz kullanıcı adı veya şifre.", null), statusCode: StatusCodes.Status401Unauthorized);
+    }
+
+    if (!user.IsActive)
+    {
+        return Results.Json(new AuthResponse(false, null, "Hesabınız askıya alınmıştır. Lütfen yöneticiyle iletişime geçin.", null), statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    var now = DateTimeOffset.UtcNow;
+    await userRepo.UpdateLastLoginAsync(user.Id, now, cancellationToken);
+    await userRepo.AddAuditLogAsync(new AuditLogEntry(0, user.Id, user.Username, "Login", "Giriş başarılı", context.Connection.RemoteIpAddress?.ToString(), now), cancellationToken);
+
+    var token = jwtService.GenerateToken(user);
+    var userDto = new UserDto(user.Id, user.Username, user.Email, user.Role, user.AssignedShopIds, user.MonthlyAiTokenQuota, user.UsedAiTokens, user.IsActive, user.CreatedAt.ToString("O"), now.ToString("O"));
+
+    return Results.Ok(new AuthResponse(true, token, "Giriş başarılı.", userDto));
+})
+.WithTags("Kimlik Doğrulama (Auth)")
+.WithSummary("Kullanıcı Girişi")
+.WithDescription("Kullanıcı adı/e-posta ve şifre ile JWT erişim token'ı alır.")
+.WithName("Login");
+
+app.MapPost("/api/auth/register", async (RegisterRequest request, IUserRepository userRepo, JwtTokenService jwtService, HttpContext context, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Username) || request.Username.Length < 3)
+    {
+        return Results.BadRequest(new AuthResponse(false, null, "Kullanıcı adı en az 3 karakter olmalıdır.", null));
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Email) || !request.Email.Contains('@'))
+    {
+        return Results.BadRequest(new AuthResponse(false, null, "Geçerli bir e-posta adresi giriniz.", null));
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 6)
+    {
+        return Results.BadRequest(new AuthResponse(false, null, "Şifre en az 6 karakter olmalıdır.", null));
+    }
+
+    var existingUser = await userRepo.GetByUsernameOrEmailAsync(request.Username, cancellationToken)
+        ?? await userRepo.GetByUsernameOrEmailAsync(request.Email, cancellationToken);
+
+    if (existingUser != null)
+    {
+        return Results.Conflict(new AuthResponse(false, null, "Bu kullanıcı adı veya e-posta zaten kullanımda.", null));
+    }
+
+    var (hash, salt) = PasswordHasher.HashPassword(request.Password);
+    var now = DateTimeOffset.UtcNow;
+    var assignedShops = string.IsNullOrWhiteSpace(request.ShopId) ? new List<string> { "53236321" } : new List<string> { request.ShopId.Trim() };
+
+    var newUser = new AppUser(
+        Guid.NewGuid().ToString(),
+        request.Username.Trim(),
+        request.Email.Trim().ToLowerInvariant(),
+        hash,
+        salt,
+        UserRoles.StoreOwner,
+        assignedShops,
+        500_000,
+        0,
+        true,
+        now,
+        now);
+
+    await userRepo.CreateUserAsync(newUser, cancellationToken);
+    await userRepo.AddAuditLogAsync(new AuditLogEntry(0, newUser.Id, newUser.Username, "Register", "Yeni kayıt oluşturuldu", context.Connection.RemoteIpAddress?.ToString(), now), cancellationToken);
+
+    var token = jwtService.GenerateToken(newUser);
+    var userDto = new UserDto(newUser.Id, newUser.Username, newUser.Email, newUser.Role, newUser.AssignedShopIds, newUser.MonthlyAiTokenQuota, newUser.UsedAiTokens, newUser.IsActive, newUser.CreatedAt.ToString("O"), now.ToString("O"));
+
+    return Results.Ok(new AuthResponse(true, token, "Kayıt başarıyla tamamlandı.", userDto));
+})
+.WithTags("Kimlik Doğrulama (Auth)")
+.WithSummary("Yeni Kullanıcı Kaydı")
+.WithDescription("Yeni bir mağaza sahibi hesabı oluşturur ve JWT token döner.")
+.WithName("Register");
+
+app.MapGet("/api/auth/me", async (HttpContext context, IUserRepository userRepo, JwtTokenService jwtService, CancellationToken cancellationToken) =>
+{
+    var authHeader = context.Request.Headers["Authorization"].ToString();
+    if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+    {
+        return Results.Unauthorized();
+    }
+
+    var token = authHeader["Bearer ".Length..].Trim();
+    var (isValid, _, userId, _, _) = jwtService.ValidateToken(token);
+    if (!isValid || string.IsNullOrEmpty(userId))
+    {
+        return Results.Unauthorized();
+    }
+
+    var user = await userRepo.GetByIdAsync(userId, cancellationToken);
+    if (user == null || !user.IsActive)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var userDto = new UserDto(user.Id, user.Username, user.Email, user.Role, user.AssignedShopIds, user.MonthlyAiTokenQuota, user.UsedAiTokens, user.IsActive, user.CreatedAt.ToString("O"), user.LastLoginAt?.ToString("O"));
+    return Results.Ok(userDto);
+})
+.WithTags("Kimlik Doğrulama (Auth)")
+.WithSummary("Geçerli Kullanıcı Bilgileri")
+.WithDescription("Bearer JWT token doğrulayarak giriş yapmış kullanıcının profil ve yetkilerini döner.")
+.WithName("GetCurrentUser");
+
+// ── 10. ADMIN MANAGEMENT ENDPOINTS (/api/admin) ────────────────────────────────
+
+app.MapGet("/api/admin/users", async (HttpContext context, IUserRepository userRepo, JwtTokenService jwtService, CancellationToken cancellationToken) =>
+{
+    var authHeader = context.Request.Headers["Authorization"].ToString();
+    var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authHeader["Bearer ".Length..].Trim() : null;
+    var (isValid, _, _, role, _) = jwtService.ValidateToken(token);
+    if (!isValid || role != UserRoles.Admin)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var users = await userRepo.GetAllUsersAsync(cancellationToken);
+    var dtos = users.Select(u => new UserDto(u.Id, u.Username, u.Email, u.Role, u.AssignedShopIds, u.MonthlyAiTokenQuota, u.UsedAiTokens, u.IsActive, u.CreatedAt.ToString("O"), u.LastLoginAt?.ToString("O"))).ToList();
+    return Results.Ok(dtos);
+})
+.WithTags("Admin Yönetim Paneli")
+.WithSummary("Kullanıcı Listesi")
+.WithDescription("Sistemdeki tüm kayıtlı kullanıcıları ve mağaza atamalarını döner (Yalnızca Admin).")
+.WithName("GetAllUsers");
+
+app.MapPut("/api/admin/users/{id}", async (string id, UpdateUserRequest request, HttpContext context, IUserRepository userRepo, JwtTokenService jwtService, CancellationToken cancellationToken) =>
+{
+    var authHeader = context.Request.Headers["Authorization"].ToString();
+    var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authHeader["Bearer ".Length..].Trim() : null;
+    var (isValid, _, adminId, role, adminName) = jwtService.ValidateToken(token);
+    if (!isValid || role != UserRoles.Admin)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var existingUser = await userRepo.GetByIdAsync(id, cancellationToken);
+    if (existingUser == null)
+    {
+        return Results.NotFound(new { error = "Kullanıcı bulunamadı." });
+    }
+
+    var updated = existingUser with
+    {
+        Email = request.Email.Trim().ToLowerInvariant(),
+        Role = request.Role,
+        AssignedShopIds = request.AssignedShopIds ?? existingUser.AssignedShopIds,
+        MonthlyAiTokenQuota = request.MonthlyAiTokenQuota,
+        IsActive = request.IsActive
+    };
+
+    await userRepo.UpdateUserAsync(updated, cancellationToken);
+    await userRepo.AddAuditLogAsync(new AuditLogEntry(0, adminId ?? "admin", adminName ?? "Admin", "UpdateUser", $"Kullanıcı güncellendi: {existingUser.Username} ({updated.Role})", context.Connection.RemoteIpAddress?.ToString(), DateTimeOffset.UtcNow), cancellationToken);
+
+    return Results.Ok(new { success = true, message = "Kullanıcı başarıyla güncellendi." });
+})
+.WithTags("Admin Yönetim Paneli")
+.WithSummary("Kullanıcı Düzenleme & Yetki/Mağaza Atama")
+.WithDescription("Kullanıcının rolünü, e-postasını, yetkili olduğu mağazaları ve AI token kotasını günceller.")
+.WithName("UpdateUser");
+
+app.MapPost("/api/admin/users/{id}/toggle-status", async (string id, HttpContext context, IUserRepository userRepo, JwtTokenService jwtService, CancellationToken cancellationToken) =>
+{
+    var authHeader = context.Request.Headers["Authorization"].ToString();
+    var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authHeader["Bearer ".Length..].Trim() : null;
+    var (isValid, _, adminId, role, adminName) = jwtService.ValidateToken(token);
+    if (!isValid || role != UserRoles.Admin)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var existingUser = await userRepo.GetByIdAsync(id, cancellationToken);
+    if (existingUser == null)
+    {
+        return Results.NotFound(new { error = "Kullanıcı bulunamadı." });
+    }
+
+    var updated = existingUser with { IsActive = !existingUser.IsActive };
+    await userRepo.UpdateUserAsync(updated, cancellationToken);
+    await userRepo.AddAuditLogAsync(new AuditLogEntry(0, adminId ?? "admin", adminName ?? "Admin", "ToggleStatus", $"Kullanıcı durumu değiştirildi: {existingUser.Username} (Aktif: {updated.IsActive})", context.Connection.RemoteIpAddress?.ToString(), DateTimeOffset.UtcNow), cancellationToken);
+
+    return Results.Ok(new { success = true, isActive = updated.IsActive });
+})
+.WithTags("Admin Yönetim Paneli")
+.WithSummary("Kullanıcı Durumu Değiştirme (Aktif/Askıda)")
+.WithDescription("Kullanıcının sisteme erişimini aktif eder veya askıya alır.")
+.WithName("ToggleUserStatus");
+
+app.MapGet("/api/admin/audit-logs", async (int limit = 100, HttpContext context = null!, IUserRepository userRepo = null!, JwtTokenService jwtService = null!, CancellationToken cancellationToken = default) =>
+{
+    var authHeader = context.Request.Headers["Authorization"].ToString();
+    var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authHeader["Bearer ".Length..].Trim() : null;
+    var (isValid, _, _, role, _) = jwtService.ValidateToken(token);
+    if (!isValid || role != UserRoles.Admin)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var logs = await userRepo.GetAuditLogsAsync(Math.Clamp(limit, 1, 500), cancellationToken);
+    var dtos = logs.Select(l => new AuditLogDto(l.Id, l.UserId, l.Username, l.Action, l.Details, l.IpAddress, l.Timestamp.ToString("O"))).ToList();
+    return Results.Ok(dtos);
+})
+.WithTags("Admin Yönetim Paneli")
+.WithSummary("Audit Güvenlik Günlüğü")
+.WithDescription("Sistemdeki giriş, kayıt ve yönetim aksiyonlarının güvenlik kayıtlarını döner.")
+.WithName("GetAuditLogs");
+
+app.MapGet("/api/admin/system-stats", async (HttpContext context, IUserRepository userRepo, JwtTokenService jwtService, CancellationToken cancellationToken) =>
+{
+    var authHeader = context.Request.Headers["Authorization"].ToString();
+    var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? authHeader["Bearer ".Length..].Trim() : null;
+    var (isValid, _, _, role, _) = jwtService.ValidateToken(token);
+    if (!isValid || role != UserRoles.Admin)
+    {
+        return Results.StatusCode(StatusCodes.Status403Forbidden);
+    }
+
+    var users = await userRepo.GetAllUsersAsync(cancellationToken);
+    var logs = await userRepo.GetAuditLogsAsync(1000, cancellationToken);
+
+    var totalUsers = users.Count;
+    var activeUsers = users.Count(u => u.IsActive);
+    var totalShops = users.SelectMany(u => u.AssignedShopIds).Distinct().Count();
+    var totalUsedTokens = users.Sum(u => (long)u.UsedAiTokens);
+
+    return Results.Ok(new SystemStatsDto(totalUsers, activeUsers, totalShops, totalUsedTokens, logs.Count));
+})
+.WithTags("Admin Yönetim Paneli")
+.WithSummary("Sistem ve Kullanıcı İstatistikleri")
+.WithDescription("Toplam kullanıcı, aktif kullanıcı, lisanslı mağaza ve AI token tüketim istatistiklerini döner.")
+.WithName("GetSystemStats");
 
 app.Run();

@@ -1,0 +1,131 @@
+<div class="layout-wrapper">
+  <!-- SIDEBAR NAVIGATION -->
+  <aside class="sidebar" [class.collapsed]="apiService.isSidebarCollapsed()">
+    <div class="sidebar-header">
+      <div class="brand">
+        <span class="brand-icon">🚀</span>
+        <div class="brand-text" *ngIf="!apiService.isSidebarCollapsed()">
+          <span class="brand-title">EtsyMarketPlace</span>
+          <span class="brand-sub">Enterprise Web Studio</span>
+        </div>
+      </div>
+      <button class="btn-toggle" (click)="apiService.toggleSidebar()" title="Menüyü Daralt/Genişlet">
+        {{ apiService.isSidebarCollapsed() ? '▶' : '◀' }}
+      </button>
+    </div>
+
+    <!-- Admin Link (Only for Admin role) -->
+    <div class="admin-quick-strip" *ngIf="authService.isAdmin() && !apiService.isSidebarCollapsed()">
+      <a routerLink="/admin" routerLinkActive="active-nav" class="admin-link">
+        <span class="nav-icon">👑</span>
+        <span class="nav-text">Yönetim & Admin Paneli</span>
+        <span class="badge badge-admin">YÖNETİCİ</span>
+      </a>
+    </div>
+
+    <div class="sidebar-scroll">
+      <div class="nav-category" *ngFor="let cat of categories">
+        <div class="category-title" *ngIf="!apiService.isSidebarCollapsed()">
+          {{ cat.title }}
+        </div>
+        <div class="category-divider" *ngIf="apiService.isSidebarCollapsed()"></div>
+
+        <nav class="nav-list">
+          <a *ngFor="let item of cat.items"
+             [routerLink]="item.route"
+             routerLinkActive="active-nav"
+             class="nav-item"
+             [title]="item.title">
+            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-text" *ngIf="!apiService.isSidebarCollapsed()">{{ item.title }}</span>
+            <span class="badge" [class.badge-new]="item.badge === 'YENİ'" [class.badge-pro]="item.badge === 'PRO'" *ngIf="item.badge && !apiService.isSidebarCollapsed()">
+              {{ item.badge }}
+            </span>
+          </a>
+        </nav>
+      </div>
+    </div>
+
+    <!-- User Profile Bar in Sidebar Bottom -->
+    <div class="sidebar-footer" *ngIf="!apiService.isSidebarCollapsed()">
+      <div class="user-info">
+        <div class="user-avatar">{{ authService.currentUser()?.username?.charAt(0)?.toUpperCase() || 'U' }}</div>
+        <div class="user-details">
+          <div class="user-name">{{ authService.currentUser()?.username || 'Kullanıcı' }}</div>
+          <div class="user-role">{{ authService.currentUser()?.role || 'StoreOwner' }}</div>
+        </div>
+      </div>
+      <button class="btn-logout" (click)="authService.logout()" title="Çıkış Yap">🚪</button>
+    </div>
+  </aside>
+
+  <!-- MAIN VIEWPORT -->
+  <div class="main-viewport">
+    <!-- TOP HEADER BAR -->
+    <header class="top-header">
+      <div class="header-left">
+        <h1 class="page-title">🚀 Etsy Mağaza Komuta Merkezi</h1>
+        <span class="page-subtitle">Canlı Mağaza İstatistikleri, Finansal Özet ve Akıllı Büyüme Paneli</span>
+      </div>
+
+      <div class="header-right">
+        <!-- Live API Badge -->
+        <div class="badge-status">
+          <span class="status-dot"></span>
+          <span>Canlı Etsy API</span>
+        </div>
+
+        <!-- Live Exchange Rate -->
+        <button class="exchange-rate-pill" (click)="openRateModal()" title="Kuru değiştirmek için tıklayın">
+          <span>💱 1 USD = {{ apiService.exchangeRate() | number:'1.2-2' }} ₺</span>
+          <span class="edit-hint">✎</span>
+        </button>
+
+        <!-- Currency Toggle -->
+        <button class="currency-toggle" (click)="apiService.toggleCurrency()" [title]="apiService.isTryCurrency() ? 'USD para birimine geç' : 'TRY para birimine geç'">
+          {{ apiService.isTryCurrency() ? '₺ TRY Aktif' : '$ USD Aktif' }}
+        </button>
+
+        <!-- Store Switcher -->
+        <div class="store-badge">
+          <span class="store-icon">🏬</span>
+          <span>{{ apiService.activeShopId() }}</span>
+        </div>
+
+        <!-- Refresh Button -->
+        <button class="btn-refresh" (click)="router.navigate([router.url])" title="Sayfayı Yenile">
+          🔄 Yenile
+        </button>
+      </div>
+    </header>
+
+    <!-- CONTENT BODY -->
+    <main class="content-body">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>
+
+<!-- EXCHANGE RATE MODAL -->
+<div class="modal-backdrop" *ngIf="isRateModalOpen" (click)="closeRateModal()">
+  <div class="modal-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-header">
+      <h3>💱 Canlı USD / TRY Döviz Kuru Ayarla</h3>
+      <button class="modal-close" (click)="closeRateModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc">
+        Tüm finansal hesaplamalar, ciro ve net kâr raporlarında kullanılacak varsayılan döviz kurunu giriniz:
+      </p>
+      <div class="rate-input-group">
+        <span class="currency-prefix">1 USD =</span>
+        <input type="number" step="0.05" min="1" max="250" class="form-input rate-input" [(ngModel)]="tempRate" />
+        <span class="currency-suffix">₺ (TRY)</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" (click)="closeRateModal()">İptal</button>
+      <button class="btn btn-orange" (click)="saveRate()">💾 Kuru Kaydet</button>
+    </div>
+  </div>
+</div>

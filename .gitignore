@@ -36,3 +36,11 @@ Thumbs.db
 publish_vds_standalone/SimilarProductsWinForms.exe
 scratch_gh_auth.ps1
 scratch/
+
+# Frontend (Angular)
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.angular/
+**/.angular/

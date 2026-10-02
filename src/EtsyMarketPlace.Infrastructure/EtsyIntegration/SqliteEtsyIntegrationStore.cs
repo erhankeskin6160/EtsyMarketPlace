@@ -1,4 +1,7 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
+using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Data.Sqlite;
@@ -6,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
-public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrationRepository, IEtsyReportingService, IAsyncDisposable
+public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrationRepository, IEtsyReportingService, IUserRepository, IAsyncDisposable
 {
     private readonly string _connectionString;
     private readonly IDataProtector _protector;
@@ -151,8 +154,68 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                 CREATE INDEX IF NOT EXISTS ix_order_costs_shop_date ON order_costs(shop_id, created_at);
                 CREATE INDEX IF NOT EXISTS ix_listing_traffic_shop_date ON listing_traffic_daily(shop_id, snapshot_date);
                 CREATE INDEX IF NOT EXISTS ix_monthly_orders_shop ON monthly_order_summaries(shop_id, year_month);
+
+                CREATE TABLE IF NOT EXISTS app_users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    email TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    password_salt TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'StoreOwner',
+                    assigned_shop_ids TEXT NOT NULL DEFAULT '[]',
+                    monthly_ai_token_quota INTEGER NOT NULL DEFAULT 500000,
+                    used_ai_tokens INTEGER NOT NULL DEFAULT 0,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    last_login_at TEXT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL,
+                    username TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details TEXT NULL,
+                    ip_address TEXT NULL,
+                    timestamp TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_app_users_username ON app_users(username);
+                CREATE INDEX IF NOT EXISTS ix_app_users_email ON app_users(email);
+                CREATE INDEX IF NOT EXISTS ix_audit_logs_timestamp ON audit_logs(timestamp);
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
+
+            // Seed default admin user if none exists
+            await using (var checkCmd = connection.CreateCommand())
+            {
+                checkCmd.CommandText = "SELECT COUNT(*) FROM app_users;";
+                var userCount = Convert.ToInt64(await checkCmd.ExecuteScalarAsync(cancellationToken) ?? 0);
+                if (userCount == 0)
+                {
+                    var saltBytes = RandomNumberGenerator.GetBytes(16);
+                    var salt = Convert.ToBase64String(saltBytes);
+                    var hashBytes = Rfc2898DeriveBytes.Pbkdf2("Admin123*!", saltBytes, 100_000, HashAlgorithmName.SHA256, 32);
+                    var hash = Convert.ToBase64String(hashBytes);
+
+                    await using var seedCmd = connection.CreateCommand();
+                    seedCmd.CommandText = """
+                        INSERT INTO app_users (id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at)
+                        VALUES ($id, $username, $email, $hash, $salt, $role, $shops, $quota, 0, 1, $createdAt);
+                        """;
+                    seedCmd.Parameters.AddWithValue("$id", Guid.NewGuid().ToString());
+                    seedCmd.Parameters.AddWithValue("$username", "admin");
+                    seedCmd.Parameters.AddWithValue("$email", "admin@etsymarketplace.local");
+                    seedCmd.Parameters.AddWithValue("$hash", hash);
+                    seedCmd.Parameters.AddWithValue("$salt", salt);
+                    seedCmd.Parameters.AddWithValue("$role", UserRoles.Admin);
+                    seedCmd.Parameters.AddWithValue("$shops", "[\"53236321\"]");
+                    seedCmd.Parameters.AddWithValue("$quota", 2000000);
+                    seedCmd.Parameters.AddWithValue("$createdAt", DateTimeOffset.UtcNow.ToString("O"));
+                    await seedCmd.ExecuteNonQueryAsync(cancellationToken);
+                }
+            }
+
             _initialized = true;
         }
         finally
@@ -701,6 +764,174 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         command.Parameters.AddWithValue("$rate", (object?)payout.ExchangeRateToTry ?? DBNull.Value);
         command.Parameters.AddWithValue("$status", payout.Status);
         command.Parameters.AddWithValue("$description", payout.Description);
+    }
+
+    public async Task<AppUser?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at FROM app_users WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        return MapUser(reader);
+    }
+
+    public async Task<AppUser?> GetByUsernameOrEmailAsync(string identifier, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at FROM app_users WHERE LOWER(username) = LOWER($id) OR LOWER(email) = LOWER($id);";
+        command.Parameters.AddWithValue("$id", identifier.Trim());
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+        return MapUser(reader);
+    }
+
+    public async Task<IReadOnlyList<AppUser>> GetAllUsersAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at FROM app_users ORDER BY created_at DESC;";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var users = new List<AppUser>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            users.Add(MapUser(reader));
+        }
+        return users;
+    }
+
+    public async Task CreateUserAsync(AppUser user, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO app_users (id, username, email, password_hash, password_salt, role, assigned_shop_ids, monthly_ai_token_quota, used_ai_tokens, is_active, created_at, last_login_at)
+            VALUES ($id, $username, $email, $hash, $salt, $role, $shops, $quota, $usedTokens, $isActive, $createdAt, $lastLoginAt);
+            """;
+        command.Parameters.AddWithValue("$id", user.Id);
+        command.Parameters.AddWithValue("$username", user.Username);
+        command.Parameters.AddWithValue("$email", user.Email);
+        command.Parameters.AddWithValue("$hash", user.PasswordHash);
+        command.Parameters.AddWithValue("$salt", user.PasswordSalt);
+        command.Parameters.AddWithValue("$role", user.Role);
+        command.Parameters.AddWithValue("$shops", JsonSerializer.Serialize(user.AssignedShopIds));
+        command.Parameters.AddWithValue("$quota", user.MonthlyAiTokenQuota);
+        command.Parameters.AddWithValue("$usedTokens", user.UsedAiTokens);
+        command.Parameters.AddWithValue("$isActive", user.IsActive ? 1 : 0);
+        command.Parameters.AddWithValue("$createdAt", user.CreatedAt.ToUniversalTime().ToString("O"));
+        command.Parameters.AddWithValue("$lastLoginAt", (object?)user.LastLoginAt?.ToUniversalTime().ToString("O") ?? DBNull.Value);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task UpdateUserAsync(AppUser user, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            UPDATE app_users SET
+                email = $email,
+                role = $role,
+                assigned_shop_ids = $shops,
+                monthly_ai_token_quota = $quota,
+                used_ai_tokens = $usedTokens,
+                is_active = $isActive
+            WHERE id = $id;
+            """;
+        command.Parameters.AddWithValue("$id", user.Id);
+        command.Parameters.AddWithValue("$email", user.Email);
+        command.Parameters.AddWithValue("$role", user.Role);
+        command.Parameters.AddWithValue("$shops", JsonSerializer.Serialize(user.AssignedShopIds));
+        command.Parameters.AddWithValue("$quota", user.MonthlyAiTokenQuota);
+        command.Parameters.AddWithValue("$usedTokens", user.UsedAiTokens);
+        command.Parameters.AddWithValue("$isActive", user.IsActive ? 1 : 0);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task UpdateLastLoginAsync(string id, DateTimeOffset lastLoginAt, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE app_users SET last_login_at = $lastLogin WHERE id = $id;";
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$lastLogin", lastLoginAt.ToUniversalTime().ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task AddAuditLogAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO audit_logs (user_id, username, action, details, ip_address, timestamp)
+            VALUES ($userId, $username, $action, $details, $ip, $timestamp);
+            """;
+        command.Parameters.AddWithValue("$userId", entry.UserId);
+        command.Parameters.AddWithValue("$username", entry.Username);
+        command.Parameters.AddWithValue("$action", entry.Action);
+        command.Parameters.AddWithValue("$details", (object?)entry.Details ?? DBNull.Value);
+        command.Parameters.AddWithValue("$ip", (object?)entry.IpAddress ?? DBNull.Value);
+        command.Parameters.AddWithValue("$timestamp", entry.Timestamp.ToUniversalTime().ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<AuditLogEntry>> GetAuditLogsAsync(int limit = 100, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT id, user_id, username, action, details, ip_address, timestamp FROM audit_logs ORDER BY id DESC LIMIT $limit;";
+        command.Parameters.AddWithValue("$limit", limit);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var logs = new List<AuditLogEntry>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            logs.Add(new AuditLogEntry(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetString(4),
+                reader.IsDBNull(5) ? null : reader.GetString(5),
+                DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
+        }
+        return logs;
+    }
+
+    private static AppUser MapUser(SqliteDataReader reader)
+    {
+        var assignedShopsRaw = reader.GetString(6);
+        List<string> shops;
+        try
+        {
+            shops = JsonSerializer.Deserialize<List<string>>(assignedShopsRaw) ?? [];
+        }
+        catch
+        {
+            shops = [];
+        }
+
+        return new AppUser(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.GetString(3),
+            reader.GetString(4),
+            reader.GetString(5),
+            shops,
+            reader.GetInt32(7),
+            reader.GetInt32(8),
+            reader.GetInt32(9) == 1,
+            DateTimeOffset.Parse(reader.GetString(10), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            reader.IsDBNull(11) ? null : DateTimeOffset.Parse(reader.GetString(11), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
     }
 
     public ValueTask DisposeAsync()
