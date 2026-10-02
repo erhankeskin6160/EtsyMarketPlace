@@ -6,10 +6,12 @@ import { AuthService } from '../../core/services/auth.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { NavItem } from '../../core/models/etsy.models';
 
+import { FloatingCopilotComponent } from '../copilot/floating-copilot.component';
+
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, FloatingCopilotComponent],
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })

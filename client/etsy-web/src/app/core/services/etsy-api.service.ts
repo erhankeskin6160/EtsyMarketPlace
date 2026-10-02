@@ -17,6 +17,36 @@ export class EtsyApiService {
   readonly isTryCurrency = signal<boolean>(true);
   readonly isSidebarCollapsed = signal<boolean>(false);
 
+  constructor() {
+    this.fetchLiveExchangeRate();
+  }
+
+  fetchLiveExchangeRate(): void {
+    this.http.get<any>('https://open.er-api.com/v6/latest/USD')
+      .subscribe({
+        next: (data) => {
+          const rate = data?.rates?.TRY;
+          if (rate && typeof rate === 'number' && rate > 20) {
+            this.exchangeRate.set(Number(rate.toFixed(3)));
+          }
+        },
+        error: () => {
+          // If public API fails, fallback to frankfurter
+          this.http.get<any>('https://api.frankfurter.app/latest?from=USD&to=TRY').subscribe({
+            next: (fData) => {
+              const fRate = fData?.rates?.TRY;
+              if (fRate && typeof fRate === 'number' && fRate > 20) {
+                this.exchangeRate.set(Number(fRate.toFixed(3)));
+              }
+            },
+            error: () => {
+              // Safe fallback remains 48.855
+            }
+          });
+        }
+      });
+  }
+
   setExchangeRate(rate: number): void {
     if (rate > 0) this.exchangeRate.set(rate);
   }

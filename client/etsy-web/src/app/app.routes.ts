@@ -9,6 +9,11 @@ import { OrdersComponent } from './features/orders/orders.component';
 import { AccountingComponent } from './features/finance/accounting.component';
 import { FastCreatorComponent } from './features/listings/fast-creator.component';
 import { AiStudioComponent } from './features/ai-studio/ai-studio.component';
+import { ProfitCalculatorComponent } from './features/finance/profit-calculator.component';
+import { Viral3DComponent } from './features/research/viral-3d.component';
+import { CompetitorSpyComponent } from './features/research/competitor-spy.component';
+import { ShopVaultComponent } from './features/tools/shop-vault.component';
+import { EtsyApiSettingsComponent } from './features/settings/etsy-api-settings.component';
 import { authGuard, adminGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
@@ -29,35 +34,38 @@ export const routes: Routes = [
       // Core Interactive Modules
       { path: 'orders', component: OrdersComponent },
       { path: 'finance/accounting', component: AccountingComponent },
+      { path: 'finance/profit', component: ProfitCalculatorComponent },
       { path: 'listings/fast-creator', component: FastCreatorComponent },
       { path: 'ai-studio', component: AiStudioComponent },
 
-      // Desktop Modules
-      { path: 'listings/creator', component: ModuleViewerComponent },
-      { path: 'analytics/shop', component: ModuleViewerComponent },
-
+      // Research & Intelligence Modules
+      { path: 'research/viral-3d', component: Viral3DComponent },
+      { path: 'research/competitor', component: CompetitorSpyComponent },
       { path: 'research/market', component: ModuleViewerComponent },
-      { path: 'research/viral-3d', component: ModuleViewerComponent },
-      { path: 'research/competitor', component: ModuleViewerComponent },
       { path: 'research/external', component: ModuleViewerComponent },
+
+      // Analytics Modules
+      { path: 'analytics/shop', component: ModuleViewerComponent },
       { path: 'analytics/ai-audit', component: ModuleViewerComponent },
       { path: 'analytics/ab-test', component: ModuleViewerComponent },
 
+      // Finance & Tools Modules
       { path: 'finance/ai-analysis', component: ModuleViewerComponent },
-      { path: 'finance/profit', component: ModuleViewerComponent },
+      { path: 'tools/vault', component: ShopVaultComponent },
       { path: 'tools/automation', component: ModuleViewerComponent },
       { path: 'tools/batch', component: ModuleViewerComponent },
-      { path: 'tools/vault', component: ModuleViewerComponent },
       { path: 'tools/tracking', component: ModuleViewerComponent },
       { path: 'tools/ai-usage', component: ModuleViewerComponent },
 
+      // Shipping & Logistics Modules
       { path: 'shipping/aras', component: ModuleViewerComponent },
       { path: 'shipping/shipentegra', component: ModuleViewerComponent },
       { path: 'shipping/navlungo', component: ModuleViewerComponent },
       { path: 'shipping/shiptomore', component: ModuleViewerComponent },
 
+      // System & Settings Modules
+      { path: 'settings/etsy-api', component: EtsyApiSettingsComponent },
       { path: 'settings/notifications', component: ModuleViewerComponent },
-      { path: 'settings/etsy-api', component: ModuleViewerComponent },
       { path: 'settings/update', component: ModuleViewerComponent },
       { path: 'system/logs', component: ModuleViewerComponent }
     ]
