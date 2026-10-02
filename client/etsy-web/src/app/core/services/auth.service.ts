@@ -13,9 +13,10 @@ export class AuthService {
 
   private readonly API_BASE = 'http://5.180.81.148:5263/api/auth';
   private readonly TOKEN_KEY = 'etsy_web_jwt_token';
+  private readonly USER_KEY = 'etsy_web_user';
 
   // Signals for reactive state
-  readonly currentUser = signal<User | null>(null);
+  readonly currentUser = signal<User | null>(this.getStoredUser());
   readonly token = signal<string | null>(this.getStoredToken());
 
   readonly isAuthenticated = computed(() => !!this.token() && !!this.currentUser());
@@ -50,9 +51,14 @@ export class AuthService {
 
   fetchCurrentUser(): Observable<User | null> {
     return this.http.get<User>(`${this.API_BASE}/me`).pipe(
-      tap(user => this.currentUser.set(user)),
-      catchError(() => {
-        this.logout();
+      tap(user => {
+        this.currentUser.set(user);
+        localStorage.setItem(this.USER_KEY, JSON.stringify(user));
+      }),
+      catchError(err => {
+        if (err.status === 401) {
+          this.logout();
+        }
         return of(null);
       })
     );
@@ -60,6 +66,7 @@ export class AuthService {
 
   logout(): void {
     localStorage.removeItem(this.TOKEN_KEY);
+    localStorage.removeItem(this.USER_KEY);
     this.token.set(null);
     this.currentUser.set(null);
     this.router.navigate(['/auth/login']);
@@ -67,11 +74,21 @@ export class AuthService {
 
   private setSession(token: string, user: User): void {
     localStorage.setItem(this.TOKEN_KEY, token);
+    localStorage.setItem(this.USER_KEY, JSON.stringify(user));
     this.token.set(token);
     this.currentUser.set(user);
   }
 
   getStoredToken(): string | null {
     return localStorage.getItem(this.TOKEN_KEY);
+  }
+
+  getStoredUser(): User | null {
+    try {
+      const stored = localStorage.getItem(this.USER_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
   }
 }

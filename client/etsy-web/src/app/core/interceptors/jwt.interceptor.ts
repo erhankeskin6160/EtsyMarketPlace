@@ -3,8 +3,7 @@ import { inject } from '@angular/core';
 import { AuthService } from '../services/auth.service';
 
 export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
-  const authService = inject(AuthService);
-  const token = authService.getStoredToken();
+  const token = localStorage.getItem('etsy_web_jwt_token');
 
   if (token) {
     const cloned = req.clone({
