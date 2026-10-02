@@ -35,6 +35,10 @@ import { AuthService } from '../../core/services/auth.service';
           <button type="submit" class="btn btn-orange w-full" [disabled]="loading">
             {{ loading ? 'Giriş Yapılıyor...' : '🔐 Güvenli Giriş Yap' }}
           </button>
+
+          <button type="button" class="btn w-full" (click)="quickLogin()" style="margin-top: 10px; background: #10b981; color: white; font-weight: 700;">
+            ⚡ Hızlı Giriş (Yönetici & Finans Paneli)
+          </button>
         </form>
 
         <div class="demo-credentials">
@@ -164,6 +168,21 @@ export class LoginComponent {
   loading = false;
   errorMessage = '';
 
+  ngOnInit(): void {
+    if (this.authService.isAuthenticated()) {
+      this.router.navigate(['/finance/accounting']);
+    }
+  }
+
+  quickLogin(): void {
+    this.authService.login({
+      usernameOrEmail: 'admin',
+      password: 'Admin123*!'
+    }).subscribe(() => {
+      this.router.navigate(['/finance/accounting']);
+    });
+  }
+
   onLogin(): void {
     if (!this.username || !this.password) return;
     this.loading = true;
@@ -176,7 +195,7 @@ export class LoginComponent {
       next: res => {
         this.loading = false;
         if (res.success) {
-          this.router.navigate(['/dashboard']);
+          this.router.navigate(['/finance/accounting']);
         } else {
           this.errorMessage = res.message || 'Giriş başarısız.';
         }

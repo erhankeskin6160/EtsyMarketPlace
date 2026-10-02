@@ -49,3 +49,37 @@ export interface ExpenseBreakdownItem {
   percentage: number;
   color: string;
 }
+
+export interface OrderFinancialRow {
+  orderDate: string;
+  receiptId: string;
+  orderStatus: 'completed' | 'canceled' | 'refunded';
+  displayStatus: string;
+  buyerName: string;
+  productTitle: string;
+  quantity: number;
+  grandTotalUsd: number;
+  etsyFeesUsd: number;
+  offsiteAdFeeUsd: number;
+  productCostUsd: number | null;
+  netProfitUsd: number;
+  exchangeRate: number;
+  netProfitTry: number;
+  hasCostData: boolean;
+  hasInvoice: boolean;
+  invoiceName?: string;
+}
+
+export interface ForecastKpiSummary {
+  expectedGrossUsd: number;
+  expectedGrossTry: number;
+  minGrossUsd: number;
+  maxGrossUsd: number;
+  expectedProfitUsd: number;
+  expectedProfitTry: number;
+  profitMarginPct: number;
+  estimatedOrders: number;
+  monthlyGrowthPct: number;
+  filamentKg: number;
+  shippingBoxesCount: number;
+}

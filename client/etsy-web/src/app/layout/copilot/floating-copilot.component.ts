@@ -1,14 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { GeminiAiService, ChatMessage, GeminiConfig } from '../../core/services/gemini-ai.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
-
-interface ChatMessage {
-  sender: 'user' | 'gemini';
-  text: string;
-  time: string;
-}
 
 @Component({
   selector: 'app-floating-copilot',
@@ -19,7 +13,7 @@ interface ChatMessage {
     <div class="floating-btn-wrap" *ngIf="!isOpen" (click)="toggleOpen()">
       <button class="copilot-fab" title="Gemini Spark AI Asistanı">
         <span class="sparkle-anim">✨</span>
-        <span class="fab-label">Gemini Asistan</span>
+        <span class="fab-label">Gemini AI Danışmanı</span>
       </button>
     </div>
 
@@ -30,17 +24,54 @@ interface ChatMessage {
           <span class="sparkle-icon">✨</span>
           <div>
             <h4 class="copilot-title">Gemini Spark AI Danışmanı</h4>
-            <span class="copilot-sub">VDS MCP Canlı Mağaza Zekası</span>
+            <span class="copilot-sub">
+              {{ currentConfig.model }} • Canlı Mağaza Zekası (1$ = {{ etsyApi.exchangeRate() }} ₺)
+            </span>
           </div>
         </div>
-        <button class="btn-close" (click)="toggleOpen()">×</button>
+        <div class="header-actions">
+          <button class="btn-icon" (click)="toggleSettings()" title="Gemini API & Model Ayarları">⚙️</button>
+          <button class="btn-icon" (click)="clearChat()" title="Sohbeti Temizle">🗑️</button>
+          <button class="btn-close" (click)="toggleOpen()" title="Kapat">×</button>
+        </div>
+      </div>
+
+      <!-- SETTINGS OVERLAY -->
+      <div class="settings-overlay" *ngIf="showSettings">
+        <div class="settings-card">
+          <div class="settings-header">
+            <h5>⚙️ Google Gemini LLM Ayarları</h5>
+            <button class="btn-sub-close" (click)="toggleSettings()">✕</button>
+          </div>
+          <div class="form-group">
+            <label>Google Gemini API Key (AIzaSy...):</label>
+            <input 
+              type="password" 
+              [(ngModel)]="tempApiKey" 
+              placeholder="AIzaSy..." 
+              class="cfg-input" />
+            <span class="hint-text">Google AI Studio'dan aldığınız anahtarı girebilirsiniz. Boş bırakılırsa yerel mağaza zekası devrede kalır.</span>
+          </div>
+          <div class="form-group">
+            <label>Gemini Modeli:</label>
+            <select [(ngModel)]="tempModel" class="cfg-select">
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (En Hızlı & Zeki - Önerilen)</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+              <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+              <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+            </select>
+          </div>
+          <div class="settings-actions">
+            <button class="btn-save-cfg" (click)="saveSettings()">💾 Ayarları Kaydet</button>
+          </div>
+        </div>
       </div>
 
       <!-- MESSAGES STREAM -->
-      <div class="messages-container">
+      <div class="messages-container" #scrollArea>
         <div *ngFor="let msg of messages" class="msg-bubble" [ngClass]="msg.sender">
           <div class="msg-author">{{ msg.sender === 'user' ? 'Siz' : 'Gemini Spark' }}</div>
-          <div class="msg-text" [innerHTML]="formatMessage(msg.text)"></div>
+          <div class="msg-text" [innerHTML]="msg.text"></div>
           <span class="msg-time">{{ msg.time }}</span>
         </div>
 
@@ -48,15 +79,16 @@ interface ChatMessage {
           <div class="typing-dots">
             <span></span><span></span><span></span>
           </div>
-          <span class="thinking-text">Gemini mağaza verilerinizi analiz ediyor...</span>
+          <span class="thinking-text">Gemini düşünüyor ve mağazanızı analiz ediyor...</span>
         </div>
       </div>
 
       <!-- QUICK ACTION CHIPS -->
       <div class="quick-prompts">
-        <button class="q-chip" (click)="sendPrompt('Bugünkü net kârım ve cirom nedir?')">💰 Net Kâr Durumu</button>
-        <button class="q-chip" (click)="sendPrompt('Maliyeti girilmemiş açık siparişim var mı?')">⚠️ Eksik Maliyetler</button>
-        <button class="q-chip" (click)="sendPrompt('En karlı viral 3D model hangisi?')">🔥 Trend 3D Modeller</button>
+        <button class="q-chip" (click)="sendPrompt('Bugünkü net kârım ve cirom nedir?')">💰 Net Kâr</button>
+        <button class="q-chip" (click)="sendPrompt('Maliyeti eksik olan sipariş var mı?')">⚠️ Eksik Maliyet</button>
+        <button class="q-chip" (click)="sendPrompt('Kâr farkı nedir, neden sipariş kârıyla mağaza net kârı farklı?')">❓ Kâr Farkı</button>
+        <button class="q-chip" (click)="sendPrompt('Hangi viral 3D modelleri satmalıyım?')">🔥 Trend 3D</button>
       </div>
 
       <!-- INPUT BAR -->
@@ -65,7 +97,7 @@ interface ChatMessage {
           type="text" 
           [(ngModel)]="userInput" 
           (keyup.enter)="sendMessage()"
-          placeholder="Mağazanızla ilgili her şeyi sorun..." 
+          placeholder="Mağazanızla veya e-ticaretle ilgili her şeyi sorun..." 
           class="chat-input" />
         <button class="btn-send" [disabled]="!userInput.trim() || isThinking" (click)="sendMessage()">
           ➤
@@ -100,34 +132,43 @@ interface ChatMessage {
       box-shadow: 0 12px 30px rgba(168, 85, 247, 0.55);
     }
     .sparkle-anim {
-      font-size: 1.2rem;
-      animation: pulse 2s infinite;
+      font-size: 1.1rem;
+      animation: spin-pulse 3s infinite ease-in-out;
+    }
+    @keyframes spin-pulse {
+      0%, 100% { transform: scale(1) rotate(0deg); }
+      50% { transform: scale(1.2) rotate(180deg); }
     }
 
     .copilot-window {
       position: fixed;
       bottom: 24px;
       right: 28px;
-      width: 400px;
-      height: 560px;
-      background: rgba(15, 23, 42, 0.95);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-radius: 16px;
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
-      backdrop-filter: blur(16px);
-      z-index: 9999;
+      width: 440px;
+      height: 620px;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 20px;
       display: flex;
       flex-direction: column;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.7);
+      z-index: 10000;
       overflow: hidden;
-      animation: popIn 0.3s ease;
+      animation: slide-up 0.25s ease-out;
     }
+    @keyframes slide-up {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
     .window-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
       padding: 14px 18px;
-      background: rgba(30, 41, 59, 0.6);
+      background: rgba(30, 41, 59, 0.95);
       border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(8px);
     }
     .header-info {
       display: flex;
@@ -138,165 +179,306 @@ interface ChatMessage {
       font-size: 1.3rem;
     }
     .copilot-title {
-      font-size: 0.9rem;
+      margin: 0;
+      font-size: 0.95rem;
       font-weight: 700;
       color: #f8fafc;
-      margin: 0;
     }
     .copilot-sub {
-      font-size: 0.72rem;
+      font-size: 0.75rem;
       color: #94a3b8;
     }
-    .btn-close {
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-icon, .btn-close {
       background: transparent;
       border: none;
       color: #94a3b8;
-      font-size: 1.3rem;
+      font-size: 1.1rem;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .btn-icon:hover, .btn-close:hover {
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Settings Overlay */
+    .settings-overlay {
+      position: absolute;
+      top: 60px;
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.98);
+      padding: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      z-index: 20;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .settings-header h5 {
+      margin: 0;
+      font-size: 0.9rem;
+      color: #38bdf8;
+    }
+    .btn-sub-close {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
       cursor: pointer;
     }
-    .btn-close:hover { color: #f87171; }
-
-    .messages-container {
-      flex: 1;
-      padding: 16px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-    .msg-bubble {
-      max-width: 85%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 0.85rem;
-      line-height: 1.4;
+    .form-group {
+      margin-bottom: 10px;
       display: flex;
       flex-direction: column;
       gap: 4px;
     }
+    .form-group label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #cbd5e1;
+    }
+    .cfg-input, .cfg-select {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: #fff;
+      font-size: 0.8rem;
+      outline: none;
+    }
+    .hint-text {
+      font-size: 0.68rem;
+      color: #64748b;
+    }
+    .btn-save-cfg {
+      background: #10b981;
+      border: none;
+      color: white;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+    }
+    .btn-save-cfg:hover {
+      background: #059669;
+    }
+
+    .messages-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      background: #090d16;
+    }
+    .msg-bubble {
+      max-width: 86%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 0.84rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
     .msg-bubble.user {
       align-self: flex-end;
-      background: #6366f1;
-      color: #fff;
-      border-bottom-right-radius: 2px;
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
     }
     .msg-bubble.gemini {
       align-self: flex-start;
-      background: rgba(30, 41, 59, 0.8);
-      color: #e2e8f0;
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-bottom-left-radius: 2px;
+      background: #1e293b;
+      color: #f1f5f9;
+      border-bottom-left-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.06);
     }
     .msg-author {
-      font-size: 0.68rem;
+      font-size: 0.7rem;
       font-weight: 700;
-      color: #94a3b8;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 4px;
     }
-    .msg-bubble.user .msg-author { color: #e0e7ff; }
     .msg-time {
+      display: block;
       font-size: 0.65rem;
-      color: #64748b;
-      align-self: flex-end;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 6px;
+      text-align: right;
+    }
+
+    .thinking {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .typing-dots span {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: #a855f7;
+      border-radius: 50%;
+      margin-right: 3px;
+      animation: bounce 1.4s infinite both;
+    }
+    .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+    .thinking-text {
+      font-size: 0.78rem;
+      color: #94a3b8;
+      font-style: italic;
     }
 
     .quick-prompts {
       display: flex;
       gap: 6px;
-      padding: 8px 12px;
-      overflow-x: auto;
-      background: rgba(15, 23, 42, 0.6);
+      padding: 8px 14px;
+      background: #0f172a;
       border-top: 1px solid rgba(255, 255, 255, 0.05);
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    .quick-prompts::-webkit-scrollbar { display: none; }
     .q-chip {
-      padding: 5px 10px;
-      background: rgba(255, 255, 255, 0.06);
+      white-space: nowrap;
+      padding: 6px 12px;
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 14px;
+      border-radius: 16px;
       color: #cbd5e1;
       font-size: 0.72rem;
-      white-space: nowrap;
+      font-weight: 600;
       cursor: pointer;
+      transition: all 0.2s;
     }
     .q-chip:hover {
       background: rgba(99, 102, 241, 0.2);
-      border-color: #818cf8;
+      border-color: #6366f1;
       color: #fff;
     }
 
     .input-bar {
       display: flex;
-      gap: 8px;
       padding: 12px 14px;
-      background: rgba(30, 41, 59, 0.8);
+      background: #1e293b;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
+      gap: 8px;
     }
     .chat-input {
       flex: 1;
-      padding: 8px 12px;
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 10px 14px;
       color: #fff;
       font-size: 0.85rem;
       outline: none;
+      transition: border-color 0.2s;
+    }
+    .chat-input:focus {
+      border-color: #6366f1;
     }
     .btn-send {
-      padding: 8px 14px;
-      background: #6366f1;
+      width: 42px;
+      height: 42px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
       border: none;
-      border-radius: 8px;
-      color: #fff;
-      font-weight: 700;
+      border-radius: 12px;
+      color: white;
+      font-size: 1.1rem;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
     }
-
-    .typing-dots span {
-      display: inline-block;
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: #818cf8;
-      margin-right: 4px;
-      animation: blink 1.2s infinite;
+    .btn-send:hover:not(:disabled) {
+      transform: scale(1.05);
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
     }
-    .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
-    .thinking-text { font-size: 0.75rem; color: #94a3b8; }
-
-    @keyframes popIn {
-      from { opacity: 0; transform: translateY(20px) scale(0.95); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes pulse {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.2); }
-    }
-    @keyframes blink {
-      0%, 100% { opacity: 0.3; }
-      50% { opacity: 1; }
+    .btn-send:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
   `]
 })
-export class FloatingCopilotComponent {
+export class FloatingCopilotComponent implements OnInit {
   isOpen = false;
-  userInput = '';
   isThinking = false;
+  showSettings = false;
+  userInput = '';
+
+  tempApiKey = '';
+  tempModel = 'gemini-2.5-flash';
+  currentConfig!: GeminiConfig;
 
   messages: ChatMessage[] = [
     {
       sender: 'gemini',
-      text: 'Merhaba! Ben <strong>Gemini Spark</strong> mağaza asistanınız. Mağazanızın siparişleri, kâr marjları veya SEO optimizasyonları ile ilgili bana dilediğinizi sorabilirsiniz.',
-      time: '12:00'
+      text: 'Merhaba! Ben <strong>Gemini Spark AI</strong>, mağazanızın canlı finansal ve e-ticaret danışmanıyım.<br>Tüm sipariş kârlılıklarınız, TCMB dolar kuru senkronizasyonu ve VDS defterleriniz hazır. Size nasıl yardımcı olabilirim?',
+      time: '00:27'
     }
   ];
 
   constructor(
-    private http: HttpClient,
+    private geminiAi: GeminiAiService,
     public etsyApi: EtsyApiService
   ) {}
 
+  ngOnInit(): void {
+    this.currentConfig = this.geminiAi.getConfig();
+    this.tempApiKey = this.currentConfig.apiKey;
+    this.tempModel = this.currentConfig.model;
+  }
+
   toggleOpen(): void {
     this.isOpen = !this.isOpen;
+  }
+
+  toggleSettings(): void {
+    this.showSettings = !this.showSettings;
+  }
+
+  saveSettings(): void {
+    this.geminiAi.saveConfig({
+      apiKey: this.tempApiKey.trim(),
+      model: this.tempModel
+    });
+    this.currentConfig = this.geminiAi.getConfig();
+    this.showSettings = false;
+    this.messages.push({
+      sender: 'gemini',
+      text: `✅ <strong>Ayarlar Kaydedildi:</strong> Model <code>${this.currentConfig.model}</code> olarak güncellendi. ${this.currentConfig.apiKey ? 'Özel Google AI Studio API Key aktif.' : 'Yerel zeka modu aktif.'}`,
+      time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+    });
+  }
+
+  clearChat(): void {
+    this.geminiAi.resetConversation();
+    this.messages = [
+      {
+        sender: 'gemini',
+        text: 'Sohbet geçmişi sıfırlandı. Yeni bir analiz veya soru için hazırım!',
+        time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
   }
 
   sendPrompt(promptText: string): void {
@@ -313,34 +495,12 @@ export class FloatingCopilotComponent {
     this.userInput = '';
     this.isThinking = true;
 
-    // Send to VDS /mcp JSON-RPC endpoint
-    const mcpPayload = {
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method: 'tools/call',
-      params: {
-        name: 'get_financial_summary',
-        arguments: {}
-      }
-    };
-
-    this.http.post<any>('http://5.180.81.148:5263/mcp', mcpPayload).subscribe({
-      next: () => {
+    this.geminiAi.generateResponse(text).subscribe({
+      next: (replyHtml: string) => {
         this.isThinking = false;
-        let reply = '';
-        if (text.includes('kâr') || text.includes('ciro')) {
-          reply = `💰 <strong>Finansal Durum Raporu:</strong><br>• Brüt Satış Hacmi: <strong>$45,261.97</strong> (₺2,223,450)<br>• Gerçek Net Kâr: <strong>$19,839.50</strong><br>• Net Kâr Marjı: <strong>%43.8</strong><br>• Bankaya Yatan Transfer: <strong>$25,701.31</strong>`;
-        } else if (text.includes('maliyet') || text.includes('sipariş')) {
-          reply = `⚠️ <strong>Sipariş Maliyet Denetimi:</strong><br>Şu anda kargo ve üretim maliyeti girilmemiş <strong>2 adet açık siparişiniz</strong> bulunmaktadır (#348912401 ve #348601289).<br>Lütfen <em>Sipariş & Kargo Studio</em> sekmesinden maliyetleri tanımlayınız.`;
-        } else if (text.includes('3D') || text.includes('model') || text.includes('trend')) {
-          reply = `🔥 <strong>Trend 3D Arbitraj Fırsatı:</strong><br>MakerWorld'de bu hafta en çok indirilen model <strong>Mafsallı Kristal Ejderha</strong> modelidir.<br>Üretim Maliyeti: ~$4.80<br>Etsy Satış Fiyatı: ~$38.50<br>Net Kâr Marjı: <strong>+%420</strong>`;
-        } else {
-          reply = `Mağazanızın performansı son 30 günde oldukça dengeli ilerliyor. 1 USD = <strong>${this.etsyApi.exchangeRate()} ₺</strong> kuruyla kâr marjınız %43.8 seviyesindedir.`;
-        }
-
         this.messages.push({
           sender: 'gemini',
-          text: reply,
+          text: replyHtml,
           time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         });
       },
@@ -348,14 +508,10 @@ export class FloatingCopilotComponent {
         this.isThinking = false;
         this.messages.push({
           sender: 'gemini',
-          text: `Mağazanız incelendi. 1 USD = <strong>${this.etsyApi.exchangeRate()} ₺</strong> kuruyla tüm finansal defterleriniz senkronizedir.`,
+          text: 'Üzgünüm, yanıt oluşturulurken bir bağlantı gecikmesi oluştu. Lütfen tekrar deneyiniz.',
           time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         });
       }
     });
-  }
-
-  formatMessage(msg: string): string {
-    return msg;
   }
 }
