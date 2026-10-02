@@ -7,6 +7,8 @@ import { AdminComponent } from './features/admin/admin.component';
 import { ModuleViewerComponent } from './features/module-viewer/module-viewer.component';
 import { OrdersComponent } from './features/orders/orders.component';
 import { AccountingComponent } from './features/finance/accounting.component';
+import { FastCreatorComponent } from './features/listings/fast-creator.component';
+import { AiStudioComponent } from './features/ai-studio/ai-studio.component';
 import { authGuard, adminGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
@@ -27,11 +29,11 @@ export const routes: Routes = [
       // Core Interactive Modules
       { path: 'orders', component: OrdersComponent },
       { path: 'finance/accounting', component: AccountingComponent },
+      { path: 'listings/fast-creator', component: FastCreatorComponent },
+      { path: 'ai-studio', component: AiStudioComponent },
 
       // Desktop Modules
-      { path: 'listings/fast-creator', component: ModuleViewerComponent },
       { path: 'listings/creator', component: ModuleViewerComponent },
-      { path: 'ai-studio', component: ModuleViewerComponent },
       { path: 'analytics/shop', component: ModuleViewerComponent },
 
       { path: 'research/market', component: ModuleViewerComponent },

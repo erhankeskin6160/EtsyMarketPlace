@@ -183,7 +183,11 @@ export class LoginComponent {
       },
       error: err => {
         this.loading = false;
-        this.errorMessage = err?.error?.message || 'Geçersiz kullanıcı adı veya şifre.';
+        if (err.status === 0) {
+          this.errorMessage = 'Sunucuya bağlanılamadı (Ağ Hatası). VDS API bağlantınızı kontrol edin.';
+        } else {
+          this.errorMessage = err?.error?.message || 'Geçersiz kullanıcı adı veya şifre.';
+        }
       }
     });
   }

@@ -11,7 +11,7 @@ export class AuthService {
   private http = inject(HttpClient);
   private router = inject(Router);
 
-  private readonly API_BASE = 'http://localhost:5263/api/auth';
+  private readonly API_BASE = 'http://5.180.81.148:5263/api/auth';
   private readonly TOKEN_KEY = 'etsy_web_jwt_token';
 
   // Signals for reactive state
