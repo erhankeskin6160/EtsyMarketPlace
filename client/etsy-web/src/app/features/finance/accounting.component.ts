@@ -162,27 +162,30 @@ import {
         </div>
 
         <!-- 7. Sipariş Maliyeti -->
-        <div class="kpi-card costs" (click)="copyValue('Sipariş Maliyeti', formatKpi(productCostsTry, productCostsUsd))">
+        <div class="kpi-card costs interactive-kpi" (click)="openCostBreakdownModal()" title="Sipariş & Kargo Maliyet Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">📦 SİPARİŞ MALİYETİ</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-warning">-{{ formatKpi(productCostsTry, productCostsUsd) }}</div>
           <div class="kpi-indicator orange"></div>
         </div>
 
         <!-- 8. Gerçek Net Kâr -->
-        <div class="kpi-card real-profit highlight" (click)="copyValue('Gerçek Net Kâr', formatKpi(realNetProfitTry, realNetProfitUsd))">
+        <div class="kpi-card real-profit highlight interactive-kpi" (click)="openBalanceAnalysisModal()" title="Gerçek Net Kâr & Bilanço Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">💵 GERÇEK NET KÂR</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-emerald">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</div>
           <div class="kpi-indicator emerald"></div>
         </div>
 
         <!-- 9. Banka Yatırımı -->
-        <div class="kpi-card payouts" (click)="copyValue('Banka Yatırımı', formatKpi(bankPayoutsTry, bankPayoutsUsd))">
+        <div class="kpi-card payouts interactive-kpi" (click)="openBankPayoutModal()" title="Etsy Banka Yatırımı & Transfer Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">🏦 BANKA YATIRIMI</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-cyan">-{{ formatKpi(bankPayoutsTry, bankPayoutsUsd) }}</div>
           <div class="kpi-indicator cyan"></div>
@@ -281,21 +284,66 @@ import {
             <table class="glass-table orders-table">
               <thead>
                 <tr>
-                  <th (click)="sortOrders('date')">Tarih ▼</th>
-                  <th (click)="sortOrders('receiptId')">Sipariş No</th>
-                  <th>Durum</th>
-                  <th>Müşteri</th>
-                  <th>Ürün</th>
-                  <th>Adet</th>
-                  <th>Müşteri Ödemesi ($)</th>
-                  <th>Etsy Kesintileri ($)</th>
-                  <th>Dış Reklam ($)</th>
-                  <th>Sipariş Maliyeti ($)</th>
-                  <th>Net Kâr ($)</th>
-                  <th>Kur (₺)</th>
-                  <th>Net Kâr (₺)</th>
-                  <th>Maliyet</th>
-                  <th>Kargo Faturası</th>
+                  <th (click)="sortOrders('date')" class="sortable-th" [class.active-sort]="sortColumn === 'date'" title="Tarihe Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'date'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Tarih
+                  </th>
+                  <th (click)="sortOrders('receiptId')" class="sortable-th" [class.active-sort]="sortColumn === 'receiptId'" title="Sipariş No'ya Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'receiptId'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Sipariş No
+                  </th>
+                  <th (click)="sortOrders('orderStatus')" class="sortable-th" [class.active-sort]="sortColumn === 'orderStatus'" title="Duruma Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'orderStatus'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Durum
+                  </th>
+                  <th (click)="sortOrders('buyerName')" class="sortable-th" [class.active-sort]="sortColumn === 'buyerName'" title="Müşteri Adına Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'buyerName'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Müşteri
+                  </th>
+                  <th (click)="sortOrders('productTitle')" class="sortable-th" [class.active-sort]="sortColumn === 'productTitle'" title="Ürün Adına Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'productTitle'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Ürün
+                  </th>
+                  <th (click)="sortOrders('quantity')" class="sortable-th" [class.active-sort]="sortColumn === 'quantity'" title="Adede Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'quantity'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Adet
+                  </th>
+                  <th (click)="sortOrders('grandTotalUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'grandTotalUsd'" title="Müşteri Ödemesine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'grandTotalUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Müşteri Ödemesi ($)
+                  </th>
+                  <th (click)="sortOrders('etsyFeesUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'etsyFeesUsd'" title="Etsy Kesintisine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'etsyFeesUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Etsy Kesintileri ($)
+                  </th>
+                  <th (click)="sortOrders('offsiteAdFeeUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'offsiteAdFeeUsd'" title="Dış Reklam Maliyetine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'offsiteAdFeeUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Dış Reklam ($)
+                  </th>
+                  <th (click)="sortOrders('productCostUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'productCostUsd'" title="Sipariş Maliyetine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'productCostUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Sipariş Maliyeti ($)
+                  </th>
+                  <th (click)="sortOrders('netProfitUsd')" class="sortable-th highlight-th" [class.active-sort]="sortColumn === 'netProfitUsd'" title="Net Kâr Dolarına Göre Sırala">
+                    <span class="sort-badge highlight" *ngIf="sortColumn === 'netProfitUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Net Kâr ($)
+                  </th>
+                  <th (click)="sortOrders('exchangeRate')" class="sortable-th" [class.active-sort]="sortColumn === 'exchangeRate'" title="Kilitli Kura Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'exchangeRate'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Kur (₺)
+                  </th>
+                  <th (click)="sortOrders('netProfitTry')" class="sortable-th" [class.active-sort]="sortColumn === 'netProfitTry'" title="Net Kâr TL'ye Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'netProfitTry'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Net Kâr (₺)
+                  </th>
+                  <th (click)="sortOrders('hasCostData')" class="sortable-th" [class.active-sort]="sortColumn === 'hasCostData'" title="Maliyet Giriş Durumuna Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'hasCostData'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Maliyet
+                  </th>
+                  <th (click)="sortOrders('hasInvoice')" class="sortable-th" [class.active-sort]="sortColumn === 'hasInvoice'" title="Fatura Durumuna Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'hasInvoice'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Kargo Faturası
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -679,6 +727,199 @@ import {
           <div class="modal-footer">
             <button class="btn-cancel" (click)="closeModals()">İptal</button>
             <button class="btn-primary-modal" (click)="saveOrderCost()">💾 Kaydet & Kârı Güncelle</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRILLDOWN MODAL 1: ETSY BANKA YATIRIMI & TRANSFER ANALİZİ (PAYOUTS - GÖRSEL 2) -->
+      <div class="modal-backdrop" *ngIf="showBankPayoutModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)</h3>
+              <p class="modal-sub">Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: <strong>₺27.594,90</strong></p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Banka Yatırımı</span>
+                <span class="box-val text-cyan">₺27.594,90</span>
+                <span class="box-sub">10 Transfer</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">En Son Yatırılan Tarih</span>
+                <span class="box-val text-white">01.10.2026</span>
+                <span class="box-sub">Son: ₺4.359,09</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Ortalama Transfer</span>
+                <span class="box-val text-primary">₺2.759,49</span>
+                <span class="box-sub">Net Gelirin %77,5'i</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>İşlem / Ref No</th>
+                    <th>Tür</th>
+                    <th>Yatırılan Tutar</th>
+                    <th>Durum</th>
+                    <th>Açıklama / Kur Bilgisi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let p of bankPayoutRecords">
+                    <td class="date-cell">{{ p.date }}</td>
+                    <td class="ref-cell">{{ p.refNo }}</td>
+                    <td>{{ p.type }}</td>
+                    <td class="amount-cell text-emerald">+₺{{ formatNumber(p.amount) }}</td>
+                    <td><span class="badge-status-payout">✅ {{ p.status }}</span></td>
+                    <td class="note-cell">{{ p.note }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ İpucu: Etsy ödemeleri bankanıza gönderdikten sonra bankanızın işleme alma hızına göre 1-3 iş günü içinde hesabınıza geçer. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRILLDOWN MODAL 2: SİPARİŞ & KARGO MALİYET ANALİZİ (COGS - GÖRSEL 3) -->
+      <div class="modal-backdrop" *ngIf="showCostBreakdownModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>📦 Sipariş & Kargo Maliyet Analizi</h3>
+              <p class="modal-sub">Toplam Sipariş Maliyeti (COGS): <strong>₺13.524,10</strong> | Kargo Harcamaları ve Fatura Durumu</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Kargo Maliyeti</span>
+                <span class="box-val text-warning">₺8.126,93</span>
+                <span class="box-sub">Maliyetin %60,1'i</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Üretim / Hammadde</span>
+                <span class="box-val text-primary">₺5.397,16</span>
+                <span class="box-sub">Filament & 3D Yazıcı Payı</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Paketleme & Fatura</span>
+                <span class="box-val text-emerald">₺0,00</span>
+                <span class="box-sub">1 Fatura Kayıtlı</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Sipariş No</th>
+                    <th>Adet</th>
+                    <th>Kargo Maliyeti</th>
+                    <th>Fatura</th>
+                    <th>Ürün / İlan Başlığı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let s of orderCostShippingRecords">
+                    <td class="date-cell">{{ s.date }}</td>
+                    <td class="ref-cell">#{{ s.receiptId }}</td>
+                    <td>{{ s.qty }}</td>
+                    <td class="amount-cell text-warning">{{ s.shippingCostTry > 0 ? ('₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
+                    <td>
+                      <span *ngIf="s.invoice !== '—'" class="badge-invoice">📄 {{ s.invoice }}</span>
+                      <span *ngIf="s.invoice === '—'" class="text-muted">—</span>
+                    </td>
+                    <td class="title-cell" [title]="s.title">{{ s.title }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRILLDOWN MODAL 3: GERÇEK NET KÂR & BİLANÇO ANALİZİ (GÖRSEL 4) -->
+      <div class="modal-backdrop" *ngIf="showBalanceAnalysisModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>💵 Gerçek Net Kâr & Bilanço Analizi</h3>
+              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>₺22.077,69</strong></p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Etsy Net Gelir</span>
+                <span class="box-val text-primary">₺35.601,79</span>
+                <span class="box-sub">Platform Hakedişi</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Ürün Maliyeti</span>
+                <span class="box-val text-danger">-₺13.524,10</span>
+                <span class="box-sub">Kargo, Hammadde & Paketleme</span>
+              </div>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Gerçek Net Kâr</span>
+                <span class="box-val text-emerald">₺22.077,69</span>
+                <span class="box-sub">%40,4 Net Kâr Marjı</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tür</th>
+                    <th>Kalem Adı</th>
+                    <th>Kategori / Detay</th>
+                    <th>Tutar</th>
+                    <th>Durum</th>
+                    <th>Açıklama / Muhasebe Mantığı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let b of balanceBreakdownRecords" [class.highlight-row]="b.type === 'KÂR'">
+                    <td class="type-cell"><strong>{{ b.type }}</strong></td>
+                    <td class="item-name">{{ b.name }}</td>
+                    <td class="detail-cell">{{ b.detail }}</td>
+                    <td class="amount-cell" [ngClass]="b.amount >= 0 ? 'text-emerald' : 'text-danger'">
+                      {{ b.type === 'KÂR' ? '=' : (b.amount > 0 ? '+' : '') }}₺{{ formatNumber(Math.abs(b.amount)) }}
+                    </td>
+                    <td><span *ngIf="b.status" class="badge-status-payout">{{ b.status }}</span></td>
+                    <td class="note-cell">{{ b.explanation }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ İpucu: Henüz maliyeti girilmemiş 1 siparişin maliyetini girdiğinizde bu net kâr kuruşu kuruşuna kesinleşecektir. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
           </div>
         </div>
       </div>
@@ -1362,6 +1603,182 @@ import {
     }
     .calc-row.highlight { font-size: 0.9rem; font-weight: 700; color: #fff; }
     .calc-row strong { font-size: 0.95rem; }
+
+    /* INTERACTIVE KPI CARDS & SORTABLE HEADERS */
+    .interactive-kpi {
+      cursor: pointer;
+      position: relative;
+      transition: all 0.2s ease-in-out;
+    }
+    .interactive-kpi:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      filter: brightness(1.1);
+    }
+    .kpi-zoom-hint {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .interactive-kpi:hover .kpi-zoom-hint {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+    }
+
+    .sortable-th {
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .sortable-th:hover {
+      background: #1e293b !important;
+      color: #38bdf8 !important;
+    }
+    .sortable-th.active-sort {
+      color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.12) !important;
+      font-weight: 800;
+    }
+    .sortable-th.highlight-th.active-sort {
+      color: #34d399 !important;
+      background: rgba(52, 211, 153, 0.12) !important;
+    }
+    .sort-badge {
+      display: inline-block;
+      font-size: 0.78rem;
+      font-weight: 900;
+      color: #38bdf8;
+      margin-right: 4px;
+    }
+    .sort-badge.highlight {
+      color: #34d399;
+    }
+
+    /* DRILLDOWN MODAL STYLES (MATCHING GÖRSEL 2, 3, 4) */
+    .drilldown-card {
+      max-width: 960px;
+      width: 94%;
+      background: #0d1527;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
+      animation: pop-in 0.15s ease-out;
+    }
+    .drilldown-title-box h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 0 0 4px 0;
+      color: #f8fafc;
+    }
+    .modal-sub {
+      font-size: 0.82rem;
+      color: #94a3b8;
+      margin: 0;
+    }
+    .modal-sub strong {
+      color: #f1f5f9;
+    }
+    .drilldown-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .drilldown-summary-box {
+      background: #151d30;
+      border: 1px solid #26334d;
+      border-radius: 8px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .drilldown-summary-box.highlight-emerald {
+      border-color: rgba(16, 185, 129, 0.5);
+      background: rgba(16, 185, 129, 0.08);
+    }
+    .box-lbl {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #94a3b8;
+    }
+    .box-val {
+      font-size: 1.2rem;
+      font-weight: 800;
+    }
+    .box-sub {
+      font-size: 0.72rem;
+      color: #64748b;
+    }
+    .drilldown-table-wrapper {
+      max-height: 380px;
+      overflow-y: auto;
+      border: 1px solid #26334d;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .drilldown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    .drilldown-table th {
+      background: #182238;
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      position: sticky;
+      top: 0;
+      border-bottom: 1px solid #334155;
+      z-index: 10;
+    }
+    .drilldown-table td {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+    .drilldown-table tr:hover {
+      background: rgba(51, 65, 85, 0.4);
+    }
+    .drilldown-table tr.highlight-row {
+      background: rgba(16, 185, 129, 0.1);
+      font-weight: 700;
+    }
+    .badge-status-payout {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+    .badge-invoice {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+    }
+    .drilldown-footnote {
+      font-size: 0.76rem;
+      color: #94a3b8;
+      font-style: italic;
+      background: #151d30;
+      padding: 8px 14px;
+      border-radius: 6px;
+      margin-top: 10px;
+      border-left: 3px solid #38bdf8;
+    }
   `]
 })
 export class AccountingComponent implements OnInit, OnDestroy {
@@ -1656,10 +2073,54 @@ export class AccountingComponent implements OnInit, OnDestroy {
   // Modals
   showReconciliationModal = false;
   showCostModal = false;
+  showBankPayoutModal = false;
+  showCostBreakdownModal = false;
+  showBalanceAnalysisModal = false;
   selectedOrder: OrderFinancialRow | null = null;
   costModalProduction = 0;
   costModalShipping = 0;
   costModalPackaging = 0;
+
+  // Table Sorting State (Matching Görsel 1)
+  sortColumn: string = 'netProfitUsd';
+  sortDirection: 'asc' | 'desc' = 'asc';
+
+  // Modal 1 Data: Bank Payouts (Matching Görsel 2)
+  bankPayoutRecords = [
+    { date: '01.10.26 11:01', refNo: '#208503135526', type: 'Banka Transferi', amount: 4359.09, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 49.05₺)' },
+    { date: '28.09.26 11:04', refNo: '#208313484387', type: 'Banka Transferi', amount: 4403.77, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.93₺)' },
+    { date: '21.09.26 11:10', refNo: '#210139855281', type: 'Banka Transferi', amount: 3898.61, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.79₺)' },
+    { date: '18.09.26 11:01', refNo: '#207743529694', type: 'Banka Transferi', amount: 607.16, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.73₺)' },
+    { date: '17.09.26 11:00', refNo: '#209914284431', type: 'Banka Transferi', amount: 908.67, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.68₺)' },
+    { date: '16.09.26 11:01', refNo: '#207632008578', type: 'Banka Transferi', amount: 3142.58, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.66₺)' },
+    { date: '14.09.26 11:04', refNo: '#207510955300', type: 'Banka Transferi', amount: 961.62, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.61₺)' },
+    { date: '10.09.26 11:00', refNo: '#209507913407', type: 'Banka Transferi', amount: 4705.13, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.51₺)' },
+    { date: '09.09.26 11:01', refNo: '#209450052917', type: 'Banka Transferi', amount: 1693.64, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.47₺)' },
+    { date: '04.09.26 11:00', refNo: '#206922866600', type: 'Banka Transferi', amount: 2914.63, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.40₺)' }
+  ];
+
+  // Modal 2 Data: Shipping & Cost Breakdown (Matching Görsel 3)
+  orderCostShippingRecords = [
+    { date: '01.10.26', receiptId: '4188719047', qty: '1 Ad', shippingCostTry: 475.29, invoice: '—', title: '3D Printed Butterfly Trainer | Colorful Safe K...' },
+    { date: '30.09.26', receiptId: '4188172739', qty: '1 Ad', shippingCostTry: 1037.75, invoice: '—', title: 'Captain Jack Sparrow Resin Statue | Pirates...' },
+    { date: '30.09.26', receiptId: '4187902419', qty: '1 Ad', shippingCostTry: 980.40, invoice: '—', title: 'Fallout Pip-Boy 3000 | Fallout Pip-Boy 3000...' },
+    { date: '28.09.26', receiptId: '4187282652', qty: '1 Ad', shippingCostTry: 1035.85, invoice: '—', title: 'Captain Jack Sparrow Resin Statue | Pirates...' },
+    { date: '25.09.26', receiptId: '4185170234', qty: '1 Ad', shippingCostTry: 977.80, invoice: '—', title: 'Arcane Jinx Statue, League of Legends Figur...' },
+    { date: '18.09.26', receiptId: '4176634453', qty: '1 Ad', shippingCostTry: 974.60, invoice: '—', title: 'Michael Jackson Statue, King of Pop Figure...' },
+    { date: '18.09.26', receiptId: '4178116180', qty: '1 Ad', shippingCostTry: 1120.79, invoice: '—', title: 'Arcane Jinx Statue, League of Legends Figur...' },
+    { date: '15.09.26', receiptId: '4174015409', qty: '1 Ad', shippingCostTry: 1021.44, invoice: '—', title: 'Lotr Aragorn Crown-Aragorn -Crown of Gon...' },
+    { date: '14.09.26', receiptId: '4174282090', qty: '1 Ad', shippingCostTry: 0.00, invoice: '—', title: 'Ben 10 Classic Omnitrix Watch V2  Ben 10...' },
+    { date: '07.09.26', receiptId: '4168067600', qty: '1 Ad', shippingCostTry: 503.01, invoice: 'Fatura', title: '3D Printed Butterfly Trainer | Colorful Safe K...' }
+  ];
+
+  // Modal 3 Data: Balance & Real Profit (Matching Görsel 4)
+  balanceBreakdownRecords = [
+    { type: 'Gelir', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: 35601.79, status: '🟢 Net', isPositive: true, explanation: 'Komisyon ve iadeler sonrası platformdan kalan net hakediş' },
+    { type: 'Kargo', name: 'Kargo Gönderimleri', detail: '9 Gönderi', amount: -8126.93, status: '', isPositive: false, explanation: 'Siparişlerin müşterilere kargolanma ve lojistik maliyeti' },
+    { type: 'Üretim', name: '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -5397.16, status: '', isPositive: false, explanation: 'Üretimde harcanan hammadde ve 3D yazıcı amortismanı' },
+    { type: 'Paket', name: 'Paketleme & Fatura', detail: '1 Fatura', amount: 0.00, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' },
+    { type: 'KÂR', name: 'GERÇEK NET KÂR', detail: 'Saf Kâr', amount: 22077.69, status: '🟢 Kâr', isPositive: true, explanation: 'Tüm platform ve operasyonel giderler çıktıktan sonra bankadaki net kâr' }
+  ];
 
   constructor(
     private etsyApi: EtsyApiService,
@@ -1806,11 +2267,93 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   sortOrders(col: string): void {
-    if (col === 'date') {
-      this.filteredOrders.reverse();
-    } else if (col === 'receiptId') {
-      this.filteredOrders.sort((a, b) => b.receiptId.localeCompare(a.receiptId));
+    if (this.sortColumn === col) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = col;
+      this.sortDirection = 'asc';
     }
+
+    const factor = this.sortDirection === 'asc' ? 1 : -1;
+
+    this.filteredOrders.sort((a, b) => {
+      switch (col) {
+        case 'date': {
+          const parseDate = (dStr: string) => {
+            const [dPart, tPart] = dStr.split(' ');
+            const [day, month, year] = (dPart || '').split('.').map(Number);
+            const [hour, min] = (tPart || '00:00').split(':').map(Number);
+            return new Date(year, month - 1, day, hour, min).getTime();
+          };
+          return factor * (parseDate(a.orderDate) - parseDate(b.orderDate));
+        }
+        case 'receiptId':
+          return factor * a.receiptId.localeCompare(b.receiptId);
+        case 'orderStatus':
+          return factor * a.displayStatus.localeCompare(b.displayStatus, 'tr');
+        case 'buyerName':
+          return factor * a.buyerName.localeCompare(b.buyerName, 'tr');
+        case 'productTitle':
+          return factor * a.productTitle.localeCompare(b.productTitle, 'tr');
+        case 'quantity':
+          return factor * (a.quantity - b.quantity);
+        case 'grandTotalUsd':
+          return factor * (a.grandTotalUsd - b.grandTotalUsd);
+        case 'etsyFeesUsd':
+          return factor * (a.etsyFeesUsd - b.etsyFeesUsd);
+        case 'offsiteAdFeeUsd':
+          return factor * (a.offsiteAdFeeUsd - b.offsiteAdFeeUsd);
+        case 'productCostUsd':
+          return factor * ((a.productCostUsd || 0) - (b.productCostUsd || 0));
+        case 'netProfitUsd':
+          return factor * (a.netProfitUsd - b.netProfitUsd);
+        case 'exchangeRate':
+          return factor * (a.exchangeRate - b.exchangeRate);
+        case 'netProfitTry':
+          return factor * (a.netProfitTry - b.netProfitTry);
+        case 'hasCostData':
+          return factor * (Number(a.hasCostData) - Number(b.hasCostData));
+        case 'hasInvoice':
+          return factor * (Number(a.hasInvoice) - Number(b.hasInvoice));
+        default:
+          return 0;
+      }
+    });
+
+    this.showToast(`📊 Sıralandı: ${this.getColumnLabel(col)} (${this.sortDirection === 'asc' ? 'Küçükten Büyüğe ▲' : 'Büyükten Küçüğe ▼'})`);
+  }
+
+  getColumnLabel(col: string): string {
+    const map: Record<string, string> = {
+      date: 'Tarih',
+      receiptId: 'Sipariş No',
+      orderStatus: 'Durum',
+      buyerName: 'Müşteri',
+      productTitle: 'Ürün',
+      quantity: 'Adet',
+      grandTotalUsd: 'Müşteri Ödemesi ($)',
+      etsyFeesUsd: 'Etsy Kesintileri ($)',
+      offsiteAdFeeUsd: 'Dış Reklam ($)',
+      productCostUsd: 'Sipariş Maliyeti ($)',
+      netProfitUsd: 'Net Kâr ($)',
+      exchangeRate: 'Kur (₺)',
+      netProfitTry: 'Net Kâr (₺)',
+      hasCostData: 'Maliyet Durumu',
+      hasInvoice: 'Kargo Faturası'
+    };
+    return map[col] || col;
+  }
+
+  openBankPayoutModal(): void {
+    this.showBankPayoutModal = true;
+  }
+
+  openCostBreakdownModal(): void {
+    this.showCostBreakdownModal = true;
+  }
+
+  openBalanceAnalysisModal(): void {
+    this.showBalanceAnalysisModal = true;
   }
 
   openProfitReconciliationModal(): void {
@@ -1955,6 +2498,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
   closeModals(): void {
     this.showReconciliationModal = false;
     this.showCostModal = false;
+    this.showBankPayoutModal = false;
+    this.showCostBreakdownModal = false;
+    this.showBalanceAnalysisModal = false;
     this.showContextMenu = false;
     this.selectedOrder = null;
   }
