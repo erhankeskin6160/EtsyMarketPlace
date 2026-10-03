@@ -171,6 +171,14 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                     PRIMARY KEY(shop_id, carrier_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS etsy_app_credentials (
+                    shop_id TEXT PRIMARY KEY,
+                    encrypted_keystring TEXT NOT NULL DEFAULT '',
+                    encrypted_shared_secret TEXT NOT NULL DEFAULT '',
+                    redirect_uri TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS ix_bank_payouts_shop_date ON bank_payouts(shop_id, occurred_at);
                 CREATE INDEX IF NOT EXISTS ix_financial_transactions_shop_date ON financial_transactions(shop_id, occurred_at);
                 CREATE INDEX IF NOT EXISTS ix_order_costs_shop_date ON order_costs(shop_id, created_at);
@@ -1170,6 +1178,152 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
             request.ServiceLevel,
             request.IsConnected,
             updatedAt);
+    }
+
+    public async Task<EtsyAppCredentialsRecord?> GetEtsyAppCredentialsAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT shop_id, encrypted_keystring, encrypted_shared_secret, redirect_uri, updated_at
+            FROM etsy_app_credentials
+            WHERE shop_id = $shop_id
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+
+        var encKey = reader.GetString(1);
+        var encSecret = reader.GetString(2);
+        string maskedKey = string.Empty;
+        string maskedSecret = string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(encKey))
+        {
+            try { maskedKey = MaskSecret(_protector.Unprotect(encKey)); }
+            catch { maskedKey = "****"; }
+        }
+
+        if (!string.IsNullOrWhiteSpace(encSecret))
+        {
+            try { maskedSecret = MaskSecret(_protector.Unprotect(encSecret)); }
+            catch { maskedSecret = "****"; }
+        }
+
+        return new EtsyAppCredentialsRecord(
+            reader.GetString(0),
+            maskedKey,
+            maskedSecret,
+            reader.GetString(3),
+            DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+    }
+
+    public async Task<(string Keystring, string SharedSecret, string RedirectUri)> GetRawEtsyAppCredentialsAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT encrypted_keystring, encrypted_shared_secret, redirect_uri
+            FROM etsy_app_credentials
+            WHERE shop_id = $shop_id
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return (string.Empty, string.Empty, string.Empty);
+
+        var encKey = reader.GetString(0);
+        var encSecret = reader.GetString(1);
+        var redirectUri = reader.GetString(2);
+
+        string rawKey = string.Empty;
+        string rawSecret = string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(encKey))
+        {
+            try { rawKey = _protector.Unprotect(encKey); }
+            catch { rawKey = string.Empty; }
+        }
+
+        if (!string.IsNullOrWhiteSpace(encSecret))
+        {
+            try { rawSecret = _protector.Unprotect(encSecret); }
+            catch { rawSecret = string.Empty; }
+        }
+
+        return (rawKey, rawSecret, redirectUri);
+    }
+
+    public async Task<EtsyAppCredentialsRecord> SaveEtsyAppCredentialsAsync(SaveEtsyAppCredentialsRequest request, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+
+        string encKey = string.Empty;
+        string encSecret = string.Empty;
+
+        // Existing lookup if masked or omitted
+        await using (var selectCmd = connection.CreateCommand())
+        {
+            selectCmd.CommandText = "SELECT encrypted_keystring, encrypted_shared_secret FROM etsy_app_credentials WHERE shop_id = $shop_id LIMIT 1;";
+            selectCmd.Parameters.AddWithValue("$shop_id", request.ShopId);
+            await using var reader = await selectCmd.ExecuteReaderAsync(cancellationToken);
+            if (await reader.ReadAsync(cancellationToken))
+            {
+                encKey = reader.GetString(0);
+                encSecret = reader.GetString(1);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Keystring) && !request.Keystring.Contains("..."))
+        {
+            encKey = _protector.Protect(request.Keystring.Trim());
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SharedSecret) && !request.SharedSecret.Contains("..."))
+        {
+            encSecret = _protector.Protect(request.SharedSecret.Trim());
+        }
+
+        var redirectUri = request.RedirectUri?.Trim() ?? string.Empty;
+        var updatedAt = DateTimeOffset.UtcNow;
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO etsy_app_credentials(shop_id, encrypted_keystring, encrypted_shared_secret, redirect_uri, updated_at)
+            VALUES($shop_id, $key, $secret, $redirect_uri, $updated_at)
+            ON CONFLICT(shop_id) DO UPDATE SET
+                encrypted_keystring = excluded.encrypted_keystring,
+                encrypted_shared_secret = excluded.encrypted_shared_secret,
+                redirect_uri = excluded.redirect_uri,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$shop_id", request.ShopId);
+        command.Parameters.AddWithValue("$key", encKey);
+        command.Parameters.AddWithValue("$secret", encSecret);
+        command.Parameters.AddWithValue("$redirect_uri", redirectUri);
+        command.Parameters.AddWithValue("$updated_at", updatedAt.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        string maskedKey = string.Empty;
+        string maskedSecret = string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(encKey))
+        {
+            try { maskedKey = MaskSecret(_protector.Unprotect(encKey)); }
+            catch { maskedKey = "****"; }
+        }
+
+        if (!string.IsNullOrWhiteSpace(encSecret))
+        {
+            try { maskedSecret = MaskSecret(_protector.Unprotect(encSecret)); }
+            catch { maskedSecret = "****"; }
+        }
+
+        return new EtsyAppCredentialsRecord(request.ShopId, maskedKey, maskedSecret, redirectUri, updatedAt);
     }
 
     private static string MaskSecret(string? secret)

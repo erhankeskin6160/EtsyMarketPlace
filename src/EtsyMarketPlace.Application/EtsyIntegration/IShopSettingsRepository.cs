@@ -36,10 +36,26 @@ public sealed record SaveCarrierSessionRequest(
     string ServiceLevel,
     bool IsConnected);
 
+public sealed record EtsyAppCredentialsRecord(
+    string ShopId,
+    string KeystringMasked,
+    string SecretMasked,
+    string RedirectUri,
+    DateTimeOffset UpdatedAt);
+
+public sealed record SaveEtsyAppCredentialsRequest(
+    string ShopId,
+    string? Keystring,
+    string? SharedSecret,
+    string? RedirectUri);
+
 public interface IShopSettingsRepository
 {
     Task<TelegramShopSettings?> GetTelegramSettingsAsync(string shopId, CancellationToken cancellationToken = default);
     Task<TelegramShopSettings> SaveTelegramSettingsAsync(SaveTelegramSettingsRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<CarrierSessionRecord>> GetCarrierSessionsAsync(string shopId, CancellationToken cancellationToken = default);
     Task<CarrierSessionRecord> SaveCarrierSessionAsync(SaveCarrierSessionRequest request, CancellationToken cancellationToken = default);
+    Task<EtsyAppCredentialsRecord?> GetEtsyAppCredentialsAsync(string shopId, CancellationToken cancellationToken = default);
+    Task<(string Keystring, string SharedSecret, string RedirectUri)> GetRawEtsyAppCredentialsAsync(string shopId, CancellationToken cancellationToken = default);
+    Task<EtsyAppCredentialsRecord> SaveEtsyAppCredentialsAsync(SaveEtsyAppCredentialsRequest request, CancellationToken cancellationToken = default);
 }

@@ -338,6 +338,27 @@ export class EtsyApiService {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/settings/carrier-sessions`, session);
   }
 
+  // ── Etsy Developer Credentials & OAuth PKCE Endpoints ──────────────────────
+  getEtsyCredentials(shopId?: string): Observable<any> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<any>(`${this.API_BASE}/api/etsy/settings/credentials?shopId=${encodeURIComponent(id)}`);
+  }
+
+  saveEtsyCredentials(payload: { shopId: string; keystring?: string; sharedSecret?: string; redirectUri?: string }): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/settings/credentials`, payload);
+  }
+
+  getEtsyConnectUrl(shopId?: string, redirectUri?: string): Observable<{ url: string; state: string; redirectUri: string; shopId: string }> {
+    const id = shopId || this.activeShopId();
+    let url = `${this.API_BASE}/api/etsy/oauth/connect-url?shopId=${encodeURIComponent(id)}`;
+    if (redirectUri) url += `&redirectUri=${encodeURIComponent(redirectUri)}`;
+    return this.http.get<{ url: string; state: string; redirectUri: string; shopId: string }>(url);
+  }
+
+  exchangeEtsyCode(payload: { shopId: string; code: string; state?: string; codeVerifier?: string; redirectUri?: string }): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/oauth/exchange-code`, payload);
+  }
+
   // ── System Health & Version ───────────────────────────────────────────────
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);

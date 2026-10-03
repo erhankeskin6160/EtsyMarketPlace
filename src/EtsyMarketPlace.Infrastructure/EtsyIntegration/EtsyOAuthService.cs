@@ -41,7 +41,6 @@ public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOpti
                 ["code_verifier"] = codeVerifier
             })
         };
-        request.Headers.Add("x-api-key", $"{_options.ApiKey}:{_options.SharedSecret}");
         return await SendTokenRequestAsync(request, cancellationToken);
     }
 
@@ -56,21 +55,25 @@ public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOpti
                 ["refresh_token"] = refreshToken
             })
         };
-        request.Headers.Add("x-api-key", $"{_options.ApiKey}:{_options.SharedSecret}");
         return await SendTokenRequestAsync(request, cancellationToken);
     }
 
     private async Task<EtsyOAuthToken> SendTokenRequestAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         using var response = await httpClient.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"Etsy OAuth sunucu hatası (HTTP {(int)response.StatusCode}): {errorBody}");
+        }
+
         var token = await response.Content.ReadFromJsonAsync<EtsyTokenResponse>(cancellationToken);
         if (token is null || string.IsNullOrWhiteSpace(token.AccessToken) || string.IsNullOrWhiteSpace(token.RefreshToken))
             throw new InvalidOperationException("Etsy OAuth yanıtı geçersiz veya eksik token içeriyor.");
         return new EtsyOAuthToken(token.AccessToken, token.RefreshToken, DateTimeOffset.UtcNow.AddSeconds(token.ExpiresIn), token.TokenType ?? "Bearer");
     }
 
-    private static string Base64Url(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+    public static string Base64Url(byte[] value) => Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
     private sealed class EtsyTokenResponse
     {

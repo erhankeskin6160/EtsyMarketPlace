@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -21,8 +22,10 @@ using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
 
 var builder = WebApplication.CreateBuilder(args);
+var pendingPkceSessions = new ConcurrentDictionary<string, PkceSession>();
 
 // 1. Dependency Injection (Clean Architecture Servisleri)
+builder.Services.AddHttpClient();
 builder.Services.AddSingleton<IBankDepositService, BankDepositService>();
 builder.Services.Configure<EtsyIntegrationOptions>(builder.Configuration.GetSection("EtsyIntegration"));
 builder.Services.Configure<EtsyApiOptions>(builder.Configuration.GetSection("Etsy"));
@@ -585,6 +588,173 @@ app.MapPost("/api/etsy/token/refresh", async (string shopId = "53236321", HttpCo
 .WithSummary("Etsy Token Yenileme (Refresh Token)")
 .WithDescription("Etsy v3 OAuth refresh_token kullanarak access_token'ı doğrudan yeniler.")
 .WithName("RefreshEtsyToken");
+
+app.MapGet("/api/etsy/settings/credentials", async (string shopId = "53236321", HttpContext context = null!, IConfiguration config = null!, IShopSettingsRepository settingsRepo = null!, CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var saved = await settingsRepo.GetEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
+    if (saved is not null)
+        return Results.Ok(saved);
+
+    var cfgKey = config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn";
+    var cfgSecret = config["Etsy:SharedSecret"] ?? "ho2tfkzko9";
+    var redirectUri = config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api";
+    static string Mask(string s) => string.IsNullOrWhiteSpace(s) ? "" : (s.Length <= 8 ? "****" : $"{s[..4]}...{s[^4..]}");
+
+    return Results.Ok(new EtsyAppCredentialsRecord(
+        resolvedShopId,
+        Mask(cfgKey),
+        Mask(cfgSecret),
+        redirectUri,
+        DateTimeOffset.UtcNow));
+})
+.WithTags("Yetkilendirme & Token")
+.WithSummary("Etsy App Geliştirici Anahtarları (Keystring & Secret)")
+.WithName("GetEtsyAppCredentials");
+
+app.MapPost("/api/etsy/settings/credentials", async (SaveEtsyAppCredentialsRequest request, IShopSettingsRepository settingsRepo, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.ShopId))
+        return Results.BadRequest(new { error = "ShopId gereklidir." });
+
+    var saved = await settingsRepo.SaveEtsyAppCredentialsAsync(request, cancellationToken);
+    return Results.Ok(saved);
+})
+.WithTags("Yetkilendirme & Token")
+.WithSummary("Etsy App Geliştirici Anahtarlarını Kaydet (Şifreli)")
+.WithName("SaveEtsyAppCredentials");
+
+app.MapGet("/api/etsy/oauth/connect-url", async (string shopId = "53236321", string? redirectUri = null, HttpContext context = null!, IConfiguration config = null!, IShopSettingsRepository settingsRepo = null!, CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
+    var targetRedirectUri = !string.IsNullOrWhiteSpace(redirectUri)
+        ? redirectUri.Trim()
+        : (!string.IsNullOrWhiteSpace(raw.RedirectUri) ? raw.RedirectUri : (config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api"));
+
+    if (string.IsNullOrWhiteSpace(keystring))
+        return Results.BadRequest(new { error = "Etsy Keystring (Client ID) bulunamadı. Lütfen önce API ayarlarından Keystring kaydedin." });
+
+    var verifierBytes = RandomNumberGenerator.GetBytes(64);
+    var codeVerifier = EtsyOAuthService.Base64Url(verifierBytes);
+    var challengeBytes = SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier));
+    var codeChallenge = EtsyOAuthService.Base64Url(challengeBytes);
+    var state = EtsyOAuthService.Base64Url(RandomNumberGenerator.GetBytes(32));
+
+    pendingPkceSessions[state] = new PkceSession(codeVerifier, resolvedShopId, targetRedirectUri, DateTimeOffset.UtcNow);
+
+    var expireThreshold = DateTimeOffset.UtcNow.AddMinutes(-30);
+    foreach (var kvp in pendingPkceSessions)
+    {
+        if (kvp.Value.CreatedAt < expireThreshold)
+            pendingPkceSessions.TryRemove(kvp.Key, out _);
+    }
+
+    var scopes = "listings_r listings_w shops_r transactions_r billing_r";
+    var authBase = config["Etsy:AuthorizationBaseUrl"] ?? "https://www.etsy.com/oauth/connect";
+    var query = new Dictionary<string, string>
+    {
+        ["response_type"] = "code",
+        ["client_id"] = keystring.Trim(),
+        ["redirect_uri"] = targetRedirectUri.Trim(),
+        ["scope"] = scopes,
+        ["state"] = state,
+        ["code_challenge"] = codeChallenge,
+        ["code_challenge_method"] = "S256"
+    };
+
+    var url = authBase + "?" + string.Join('&', query.Select(x => $"{Uri.EscapeDataString(x.Key)}={Uri.EscapeDataString(x.Value)}"));
+    return Results.Ok(new
+    {
+        url,
+        state,
+        redirectUri = targetRedirectUri,
+        shopId = resolvedShopId
+    });
+})
+.WithTags("Yetkilendirme & Token")
+.WithSummary("Etsy OAuth v3 PKCE Yetkilendirme Bağlantısı Üret")
+.WithName("GetEtsyOAuthConnectUrl");
+
+app.MapPost("/api/etsy/oauth/exchange-code", async (ExchangeCodeApiRequest request, IHttpClientFactory httpClientFactory, IConfiguration config, IEtsyTokenStore tokenStore, IShopSettingsRepository settingsRepo, CancellationToken cancellationToken) =>
+{
+    if (string.IsNullOrWhiteSpace(request.ShopId) || string.IsNullOrWhiteSpace(request.Code))
+        return Results.BadRequest(new { success = false, message = "ShopId ve yetki kodu (code) gereklidir." });
+
+    var shopId = request.ShopId.Trim();
+    var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(shopId, cancellationToken);
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
+
+    string? codeVerifier = request.CodeVerifier;
+    string targetRedirectUri = !string.IsNullOrWhiteSpace(request.RedirectUri) ? request.RedirectUri.Trim() : (!string.IsNullOrWhiteSpace(raw.RedirectUri) ? raw.RedirectUri : (config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api"));
+
+    if (!string.IsNullOrWhiteSpace(request.State) && pendingPkceSessions.TryRemove(request.State, out var session))
+    {
+        codeVerifier ??= session.CodeVerifier;
+        if (string.IsNullOrWhiteSpace(request.RedirectUri))
+            targetRedirectUri = session.RedirectUri;
+    }
+
+    if (string.IsNullOrWhiteSpace(codeVerifier))
+        return Results.BadRequest(new { success = false, message = "PKCE code_verifier bulunamadı veya oturum süresi doldu. Lütfen 'Etsy ile Yetkilendir' butonunu tekrar tıklayın." });
+
+    var tokenUrl = config["Etsy:TokenUrl"] ?? "https://api.etsy.com/v3/public/oauth/token";
+    var client = httpClientFactory.CreateClient();
+
+    using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, tokenUrl)
+    {
+        Content = new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["client_id"] = keystring.Trim(),
+            ["redirect_uri"] = targetRedirectUri.Trim(),
+            ["code"] = request.Code.Trim(),
+            ["code_verifier"] = codeVerifier.Trim()
+        })
+    };
+
+    try
+    {
+        using var response = await client.SendAsync(tokenRequest, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return Results.BadRequest(new
+            {
+                success = false,
+                message = $"Etsy yetkilendirme takası başarısız (HTTP {(int)response.StatusCode}): {body}"
+            });
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        var accessToken = root.GetProperty("access_token").GetString() ?? "";
+        var refreshToken = root.GetProperty("refresh_token").GetString() ?? "";
+        var expiresIn = root.TryGetProperty("expires_in", out var exp) ? exp.GetInt32() : 3600;
+        var tokenType = root.TryGetProperty("token_type", out var tt) ? (tt.GetString() ?? "Bearer") : "Bearer";
+
+        var newToken = new EtsyOAuthToken(accessToken, refreshToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn), tokenType);
+        await tokenStore.SaveAsync(shopId, newToken, cancellationToken);
+
+        return Results.Ok(new
+        {
+            success = true,
+            shopId,
+            expiresAt = newToken.AccessTokenExpiresAt,
+            isExpired = false,
+            message = "Etsy OAuth v3 bağlantısı ve yetkilendirmesi başarıyla tamamlandı!"
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = "Etsy token takas hatası: " + ex.Message });
+    }
+})
+.WithTags("Yetkilendirme & Token")
+.WithSummary("Etsy OAuth Yetki Kodunu Token'a Dönüştür (Code Exchange)")
+.WithName("ExchangeEtsyOAuthCode");
 
 
 app.MapGet("/api/banking/deposits", (IBankDepositService bankService) =>
