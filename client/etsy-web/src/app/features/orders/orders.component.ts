@@ -449,31 +449,40 @@ import {
         <!-- REGION 3: TAŞIYICI KARŞILAŞTIRMA & BARKOD / ETİKET (SAĞ) -->
         <div class="cockpit-region quotes-region" *ngIf="selectedOrder">
           
-          <div class="region-header-bar">
-            <div class="title-with-count">
-              <span class="region-label">TAŞIYICI KARŞILAŞTIRMA</span>
-              <span class="queue-count-badge">{{ filteredQuotes.length }} teklif</span>
+          <div class="region-header-bar quotes-head-bar">
+            <div class="quotes-title-row">
+              <div class="title-with-count">
+                <span class="region-label">TAŞIYICI KARŞILAŞTIRMA</span>
+                <span class="quotes-count-badge">{{ carrierQuotes.length }} teklif</span>
+              </div>
+              <span class="quotes-live-split-pill">{{ liveQuotesCount }} canlı • {{ estimatedQuotesCount }} tahmini</span>
+            </div>
+
+            <!-- Aras Global / Carrier token expired warning banner matching desktop screenshot -->
+            <div *ngIf="carrierWarningMessage" class="carrier-session-warning-banner" (click)="openSessionModal(carrierSessions[0])" title="Tokenı Yenilemek İçin Tıklayın">
+              {{ carrierWarningMessage }}
             </div>
           </div>
 
-          <!-- Carrier Filter Tabs -->
+          <!-- Carrier Filter Tabs with Counts -->
           <div class="carrier-filter-tabs">
             <button 
               *ngFor="let tab of ['Tümü', 'Aras Global', 'ShipEntegra', 'Navlungo', 'Shiptomore']"
               class="carrier-tab-btn"
               [class.active]="selectedCarrierFilter === tab"
               (click)="selectedCarrierFilter = tab">
-              {{ tab }}
+              {{ tab }} <span class="tab-count-num">({{ getQuoteCountForTab(tab) }})</span>
             </button>
           </div>
 
-          <!-- Carrier Quotes Scroll -->
+          <!-- Carrier Quotes Scroll (14 Teklif) -->
           <div class="quotes-scroll-area">
             <div 
               *ngFor="let quote of filteredQuotes" 
               class="quote-card compact-tile"
-              [class.selected-carrier]="selectedOrder.selectedCarrier === quote.carrierKey"
+              [class.selected-carrier]="selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType"
               [class.recommended]="quote.isRecommended"
+              [class.lowest-price]="quote.isLowestPrice"
               (click)="applyCarrierQuote(quote)">
               
               <div class="tile-main-row">
@@ -481,15 +490,17 @@ import {
                   <img *ngIf="quote.logoUrl" [src]="quote.logoUrl" [alt]="quote.carrierName" class="quote-tile-logo" />
                   <div class="tile-carrier-info">
                     <div class="tile-title-line">
-                      <span class="tile-carrier-name">{{ quote.carrierName }}</span>
+                      <span class="tile-carrier-name">{{ quote.serviceType }}</span>
+                      <span *ngIf="quote.isLowestPrice" class="lowest-price-badge">EN UCUZ</span>
                       <span *ngIf="quote.isRecommended" class="recommended-badge">★ En Uygun</span>
                     </div>
-                    <span class="tile-service-desc">{{ quote.serviceType }}</span>
+                    <div class="tile-meta-line">
+                      <span class="tile-carrier-sub">{{ quote.carrierName }} • {{ quote.estimatedDays }}</span>
+                      <span class="trust-badge" [class.live]="quote.isLive">
+                        {{ quote.quoteSourceBadge || (quote.isLive ? 'Canlı teklif' : 'Tahmini tarife') }}
+                      </span>
+                    </div>
                   </div>
-                </div>
-
-                <div class="tile-center-time">
-                  <span class="delivery-time-badge">⏱️ {{ quote.estimatedDays }}</span>
                 </div>
 
                 <div class="tile-right-price">
@@ -498,7 +509,7 @@ import {
                     <span class="tile-try">₺{{ quote.priceTry | number:'1.2-2' }}</span>
                   </div>
                   <button type="button" class="btn-tile-select" (click)="applyCarrierQuote(quote); $event.stopPropagation()">
-                    {{ selectedOrder.selectedCarrier === quote.carrierKey ? '✓ Seçildi' : 'Seç' }}
+                    {{ (selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType) ? '✓ Seçildi' : 'Seç' }}
                   </button>
                 </div>
               </div>
@@ -1698,11 +1709,59 @@ import {
 
     /* REGION 3: QUOTES & BARCODE (SAĞ) */
     .quotes-region {
-      width: 380px;
-      min-width: 360px;
+      width: 410px;
+      min-width: 380px;
       background: #0f172a;
       display: flex;
       flex-direction: column;
+    }
+    .quotes-head-bar {
+      padding: 8px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(15, 23, 42, 0.7);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .quotes-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .quotes-count-badge {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #38bdf8;
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .quotes-live-split-pill {
+      font-size: 0.65rem;
+      color: #94a3b8;
+      font-weight: 600;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      padding: 2px 7px;
+      border-radius: 4px;
+    }
+    .carrier-session-warning-banner {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fbbf24;
+      font-size: 0.66rem;
+      font-weight: 600;
+      line-height: 1.3;
+      padding: 5px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .carrier-session-warning-banner:hover {
+      background: rgba(245, 158, 11, 0.22);
+      border-color: rgba(245, 158, 11, 0.55);
     }
     .carrier-filter-tabs {
       display: flex;
@@ -1717,33 +1776,44 @@ import {
       background: #1e293b;
       border: 1px solid #334155;
       color: #94a3b8;
-      font-size: 0.66rem;
+      font-size: 0.65rem;
       font-weight: 700;
       padding: 4px 7px;
       border-radius: 4px;
       cursor: pointer;
       white-space: nowrap;
       transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .tab-count-num {
+      opacity: 0.75;
+      font-size: 0.62rem;
     }
     .carrier-tab-btn.active {
       background: #2563eb;
       border-color: #3b82f6;
       color: #ffffff;
     }
+    .carrier-tab-btn.active .tab-count-num {
+      opacity: 1;
+      font-weight: 800;
+    }
 
     .quotes-scroll-area {
       flex: 1;
       overflow-y: auto;
-      padding: 10px;
+      padding: 8px 10px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
     .quote-card.compact-tile {
       background: rgba(30, 41, 59, 0.5);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      padding: 8px 10px;
+      padding: 7px 9px;
       cursor: pointer;
       display: flex;
       flex-direction: column;
@@ -1761,6 +1831,9 @@ import {
     }
     .quote-card.compact-tile.recommended {
       border-color: #6366f1;
+    }
+    .quote-card.compact-tile.lowest-price {
+      border-color: rgba(16, 185, 129, 0.4);
     }
     .tile-main-row {
       display: flex;
@@ -1788,40 +1861,68 @@ import {
       display: flex;
       flex-direction: column;
       min-width: 0;
+      gap: 2px;
     }
     .tile-title-line {
       display: flex;
       align-items: center;
       gap: 5px;
+      flex-wrap: wrap;
     }
     .tile-carrier-name {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 800;
       color: #ffffff;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .tile-service-desc {
-      font-size: 0.65rem;
+    .lowest-price-badge {
+      font-size: 0.58rem;
+      font-weight: 800;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      padding: 1px 4px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .recommended-badge {
+      font-size: 0.58rem;
+      font-weight: 800;
+      color: #a5b4fc;
+      background: rgba(99, 102, 241, 0.2);
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      padding: 1px 4px;
+      border-radius: 3px;
+      white-space: nowrap;
+    }
+    .tile-meta-line {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.64rem;
       color: #94a3b8;
+    }
+    .tile-carrier-sub {
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .tile-center-time {
-      display: flex;
-      align-items: center;
-      flex-shrink: 0;
-    }
-    .delivery-time-badge {
-      font-size: 0.65rem;
-      color: #cbd5e1;
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 2px 6px;
-      border-radius: 4px;
+    .trust-badge {
+      font-size: 0.58rem;
+      font-weight: 700;
+      color: #fbbf24;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      padding: 0 4px;
+      border-radius: 3px;
       white-space: nowrap;
+    }
+    .trust-badge.live {
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.3);
     }
     .tile-right-price {
       display: flex;
@@ -1835,13 +1936,13 @@ import {
       align-items: flex-end;
     }
     .tile-usd {
-      font-size: 0.92rem;
+      font-size: 0.90rem;
       font-weight: 800;
       color: #ffffff;
       line-height: 1.1;
     }
     .tile-try {
-      font-size: 0.65rem;
+      font-size: 0.64rem;
       color: #94a3b8;
       font-weight: 600;
     }
@@ -1849,9 +1950,9 @@ import {
       background: #334155;
       border: 1px solid #475569;
       color: #ffffff;
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       font-weight: 700;
-      padding: 4px 8px;
+      padding: 3px 8px;
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.15s;
@@ -2531,7 +2632,32 @@ export class OrdersComponent implements OnInit, OnDestroy {
     return list;
   }
 
-  // --- FILTERED QUOTES ---
+  // --- FILTERED QUOTES & METRICS ---
+  get liveQuotesCount(): number {
+    return this.carrierQuotes.filter(q => q.isLive).length;
+  }
+
+  get estimatedQuotesCount(): number {
+    return this.carrierQuotes.filter(q => !q.isLive).length;
+  }
+
+  getQuoteCountForTab(tab: string): number {
+    if (tab === 'Tümü') return this.carrierQuotes.length;
+    const filter = tab.toLowerCase();
+    return this.carrierQuotes.filter(q => 
+      q.carrierName.toLowerCase().includes(filter) ||
+      q.carrierKey.toLowerCase().includes(filter)
+    ).length;
+  }
+
+  get carrierWarningMessage(): string | null {
+    const aras = this.carrierSessions.find(s => s.id === 'aras');
+    if (!aras || !aras.isConnected || aras.statusLabel?.includes('Giriş') || aras.tokenOrKey?.includes('...')) {
+      return '⚠️ Aras Global oturum tokeninizin süresi doldu! (Aras Global oturum tokeninin süresi doldu! (HTTP 401...)) Gösterilen fiyatlar yedek listedir. Lütfen panelden tokeninizi yenileyin.';
+    }
+    return null;
+  }
+
   get filteredQuotes(): CarrierQuote[] {
     if (this.selectedCarrierFilter === 'Tümü') return this.carrierQuotes;
     const filter = this.selectedCarrierFilter.toLowerCase();
@@ -2575,7 +2701,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   applyCarrierQuote(quote: CarrierQuote): void {
     if (!this.selectedOrder) return;
     this.selectedOrder.selectedCarrier = quote.carrierKey;
-    this.selectedOrder.carrierServiceName = quote.carrierName;
+    this.selectedOrder.carrierServiceName = quote.serviceType || quote.carrierName;
     this.editableShippingCost = quote.priceUsd;
     this.calculateLiveProfit();
   }

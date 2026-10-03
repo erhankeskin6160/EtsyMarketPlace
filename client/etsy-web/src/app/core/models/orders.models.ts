@@ -17,14 +17,20 @@ export interface PackageSpecs {
 }
 
 export interface CarrierQuote {
+  quoteId?: string;
   carrierKey: 'aras' | 'shipentegra' | 'navlungo' | 'shiptomore';
   carrierName: string;
   serviceType: string;
+  serviceCode?: string;
+  subCarrier?: string;
   logoUrl?: string;
   estimatedDays: string;
   priceUsd: number;
   priceTry: number;
   isRecommended: boolean;
+  isLowestPrice?: boolean;
+  isLive?: boolean;
+  quoteSourceBadge?: 'Tahmini tarife' | 'Canlı teklif';
   notes?: string;
 }
 

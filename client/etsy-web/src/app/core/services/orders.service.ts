@@ -280,64 +280,286 @@ export class OrdersService {
   }
 
   public calculateCarrierQuotes(specs: PackageSpecs, countryCode: string, usdTryRate: number): CarrierQuote[] {
-    const desi = Math.max(specs.desi, specs.weightKg * 1.0);
     const rate = usdTryRate > 0 ? usdTryRate : 49.13;
+    const desi = Number(((specs.widthCm * specs.lengthCm * specs.heightCm) / 5000).toFixed(2));
+    const billable = Math.max(desi, specs.weightKg || 0.40);
+    const weightStep = Math.max(1.0, Math.ceil(billable * 2.0) / 2.0);
+    const extraUnits = Math.max(0, (weightStep - 1.0) / 0.5);
+    const cleanCountry = (countryCode || 'US').trim().toUpperCase();
+    const isEu = ['DE', 'FR', 'IT', 'ES', 'NL', 'BE', 'AT', 'PL', 'SE', 'DK', 'FI', 'GB', 'UK'].includes(cleanCountry);
 
-    // Aras Global Express
-    const arasUsd = Number((11.50 + (desi * 2.80)).toFixed(2));
-    // ShipEntegra Express
-    const shipEntegraUsd = Number((10.90 + (desi * 2.95)).toFixed(2));
-    // Navlungo Express
-    const navlungoUsd = Number((12.20 + (desi * 2.65)).toFixed(2));
-    // Shiptomore Eco/Express
-    const shiptomoreUsd = Number((9.95 + (desi * 3.10)).toFixed(2));
+    const quotes: CarrierQuote[] = [];
 
-    const quotes: CarrierQuote[] = [
-      {
-        carrierKey: 'aras',
-        carrierName: 'Aras Global',
-        serviceType: 'Aras Hava Kargo (Air Cargo)',
-        logoUrl: 'assets/shipping/aras_global.png',
-        estimatedDays: '3-5 İş Günü',
-        priceUsd: arasUsd,
-        priceTry: Number((arasUsd * rate).toFixed(2)),
-        isRecommended: false,
-        notes: 'Kapıdan Teslim & Doğrudan Aras Hub'
-      },
-      {
-        carrierKey: 'shipentegra',
-        carrierName: 'ShipEntegra',
-        serviceType: 'FedEx / UPS Entegrasyonu',
-        logoUrl: 'assets/shipping/shipentegra.jpg',
-        estimatedDays: '3-5 İş Günü',
-        priceUsd: shipEntegraUsd,
-        priceTry: Number((shipEntegraUsd * rate).toFixed(2)),
-        isRecommended: false,
-        notes: 'Canlı Barkod & Otomatik IOSS'
-      },
-      {
-        carrierKey: 'navlungo',
-        carrierName: 'Navlungo',
-        serviceType: 'DHL Express Taşıma',
-        logoUrl: 'assets/shipping/navlungo.png',
-        estimatedDays: '2-4 İş Günü',
-        priceUsd: navlungoUsd,
-        priceTry: Number((navlungoUsd * rate).toFixed(2)),
-        isRecommended: false,
-        notes: 'Gümrük Güvenceli Hızlı Hat'
-      },
-      {
-        carrierKey: 'shiptomore',
-        carrierName: 'Shiptomore',
-        serviceType: 'Hızlı Kapıdan Teslimat (DDP)',
-        logoUrl: 'assets/shipping/shiptomore.png',
-        estimatedDays: '2-4 İş Günü',
-        priceUsd: shiptomoreUsd,
-        priceTry: Number((shiptomoreUsd * rate).toFixed(2)),
-        isRecommended: true,
-        notes: 'En Hızlı & En Uygun Fiyat'
+    // ==========================================
+    // 1. ARAS GLOBAL (2 TEKLİF)
+    // ==========================================
+    let arasWidectUsd = Number((13.13 + (extraUnits * 2.40)).toFixed(2));
+    let arasUpsUsd = Number((21.16 + (extraUnits * 3.80)).toFixed(2));
+    if (isEu) {
+      arasWidectUsd = Number((arasWidectUsd * 0.85).toFixed(2));
+      arasUpsUsd = Number((arasUpsUsd * 0.90).toFixed(2));
+    }
+
+    quotes.push({
+      quoteId: 'aras-widect-eco',
+      carrierKey: 'aras',
+      carrierName: 'Aras Global',
+      serviceType: 'Widect Eco Express',
+      subCarrier: 'Widect',
+      logoUrl: 'assets/shipping/aras_global.png',
+      estimatedDays: '7-10 Gün',
+      priceUsd: arasWidectUsd,
+      priceTry: Number((arasWidectUsd * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife',
+      notes: 'Tahmini tarife (Sözleşmeli Aras Hub)'
+    });
+
+    quotes.push({
+      quoteId: 'aras-ups-express',
+      carrierKey: 'aras',
+      carrierName: 'Aras Global',
+      serviceType: 'UPS Express',
+      subCarrier: 'UPS',
+      logoUrl: 'assets/shipping/aras_global.png',
+      estimatedDays: '2-4 Gün',
+      priceUsd: arasUpsUsd,
+      priceTry: Number((arasUpsUsd * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife',
+      notes: 'Hızlı UPS Hattı & Doğrudan Teslimat'
+    });
+
+    // ==========================================
+    // 2. SHIPENTEGRA (6 TEKLİF)
+    // ==========================================
+    let seEkoPlus = Number((12.96 + (extraUnits * 2.10)).toFixed(2));
+    let seSmartExpress = Number((19.01 + (extraUnits * 2.80)).toFixed(2));
+    let seWidect = Number((19.55 + (extraUnits * 2.90)).toFixed(2));
+    let seExpedited = Number((22.40 + (extraUnits * 3.10)).toFixed(2));
+    let seExpress = Number((24.80 + (extraUnits * 3.30)).toFixed(2));
+    let seUpsExpress = Number((28.50 + (extraUnits * 3.60)).toFixed(2));
+
+    if (isEu) {
+      seEkoPlus = Number((seEkoPlus * 0.90).toFixed(2));
+      seSmartExpress = Number((seSmartExpress * 0.90).toFixed(2));
+    }
+
+    quotes.push({
+      quoteId: 'se-eko-plus',
+      carrierKey: 'shipentegra',
+      carrierName: 'ShipEntegra',
+      serviceCode: 'shipentegra-amerika-eko-plus',
+      serviceType: 'Amerika Eko Plus',
+      subCarrier: 'ShipEntegra',
+      logoUrl: 'assets/shipping/shipentegra.jpg',
+      estimatedDays: '3-6 iş günü',
+      priceUsd: seEkoPlus,
+      priceTry: Number((seEkoPlus * rate).toFixed(2)),
+      isRecommended: false,
+      isLowestPrice: true,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife',
+      notes: 'Amerika içi geri iade ücretsiz'
+    });
+
+    quotes.push({
+      quoteId: 'se-smart-express',
+      carrierKey: 'shipentegra',
+      carrierName: 'ShipEntegra',
+      serviceCode: 'shipentegra-smart-express',
+      serviceType: 'Smart Express',
+      subCarrier: 'ShipEntegra',
+      logoUrl: 'assets/shipping/shipentegra.jpg',
+      estimatedDays: '2-5 iş günü',
+      priceUsd: seSmartExpress,
+      priceTry: Number((seSmartExpress * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife',
+      notes: '100 $\'a kadar sigortalı'
+    });
+
+    quotes.push({
+      quoteId: 'se-widect',
+      carrierKey: 'shipentegra',
+      carrierName: 'ShipEntegra',
+      serviceCode: 'shipentegra-widect',
+      serviceType: 'Widect',
+      subCarrier: 'ShipEntegra',
+      logoUrl: 'assets/shipping/shipentegra.jpg',
+      estimatedDays: '4-9 iş günü',
+      priceUsd: seWidect,
+      priceTry: Number((seWidect * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    quotes.push({
+      quoteId: 'se-expedited',
+      carrierKey: 'shipentegra',
+      carrierName: 'ShipEntegra',
+      serviceCode: 'shipentegra-expedited',
+      serviceType: 'Expedited',
+      subCarrier: 'ShipEntegra',
+      logoUrl: 'assets/shipping/shipentegra.jpg',
+      estimatedDays: '3-5 iş günü',
+      priceUsd: seExpedited,
+      priceTry: Number((seExpedited * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    quotes.push({
+      quoteId: 'se-express',
+      carrierKey: 'shipentegra',
+      carrierName: 'ShipEntegra',
+      serviceCode: 'shipentegra-express',
+      serviceType: 'Express',
+      subCarrier: 'ShipEntegra',
+      logoUrl: 'assets/shipping/shipentegra.jpg',
+      estimatedDays: '2-4 iş günü',
+      priceUsd: seExpress,
+      priceTry: Number((seExpress * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    quotes.push({
+      quoteId: 'se-ups-express',
+      carrierKey: 'shipentegra',
+      carrierName: 'ShipEntegra',
+      serviceCode: 'shipentegra-ups-express',
+      serviceType: 'Ups Express',
+      subCarrier: 'ShipEntegra',
+      logoUrl: 'assets/shipping/shipentegra.jpg',
+      estimatedDays: '1-4 iş günü',
+      priceUsd: seUpsExpress,
+      priceTry: Number((seUpsExpress * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    // ==========================================
+    // 3. NAVLUNGO (4 TEKLİF)
+    // ==========================================
+    const b = billable;
+    const navWidect = Number((10.50 + (b * 7.55)).toFixed(2));
+    const navFedEx = Number((14.50 + (b * 10.42)).toFixed(2));
+    const navUpsExpress = Number((24.00 + (b * 16.67)).toFixed(2));
+    const navUpsSaver = Number((27.50 + (b * 18.92)).toFixed(2));
+
+    quotes.push({
+      quoteId: 'nav-widect',
+      carrierKey: 'navlungo',
+      carrierName: 'Navlungo',
+      serviceType: 'Widect',
+      subCarrier: 'Widect',
+      logoUrl: 'assets/shipping/navlungo.png',
+      estimatedDays: '4-8 Gün',
+      priceUsd: navWidect,
+      priceTry: Number((navWidect * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    quotes.push({
+      quoteId: 'nav-fedex',
+      carrierKey: 'navlungo',
+      carrierName: 'Navlungo',
+      serviceType: 'FedEx Priority',
+      subCarrier: 'FedEx',
+      logoUrl: 'assets/shipping/navlungo.png',
+      estimatedDays: '2-4 Gün',
+      priceUsd: navFedEx,
+      priceTry: Number((navFedEx * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    quotes.push({
+      quoteId: 'nav-ups-express',
+      carrierKey: 'navlungo',
+      carrierName: 'Navlungo',
+      serviceType: 'UPS Express',
+      subCarrier: 'UPS',
+      logoUrl: 'assets/shipping/navlungo.png',
+      estimatedDays: '1-3 Gün',
+      priceUsd: navUpsExpress,
+      priceTry: Number((navUpsExpress * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    quotes.push({
+      quoteId: 'nav-ups-saver',
+      carrierKey: 'navlungo',
+      carrierName: 'Navlungo',
+      serviceType: 'UPS Saver',
+      subCarrier: 'UPS',
+      logoUrl: 'assets/shipping/navlungo.png',
+      estimatedDays: '2-4 Gün',
+      priceUsd: navUpsSaver,
+      priceTry: Number((navUpsSaver * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: false,
+      quoteSourceBadge: 'Tahmini tarife'
+    });
+
+    // ==========================================
+    // 4. SHIPTOMORE (2 TEKLİF: 1 CANLI, 1 TAHMİNİ)
+    // ==========================================
+    const stmDdp = Number((11.81 + (extraUnits * 1.50)).toFixed(2));
+    const stmFedEx = Number((18.55 + (extraUnits * 2.20)).toFixed(2));
+
+    quotes.push({
+      quoteId: 'stm-air-priority',
+      carrierKey: 'shiptomore',
+      carrierName: 'Shiptomore',
+      serviceType: 'Air Priority (DDP)',
+      subCarrier: 'Shiptomore',
+      logoUrl: 'assets/shipping/shiptomore.png',
+      estimatedDays: '2-4 Gün',
+      priceUsd: stmDdp,
+      priceTry: Number((stmDdp * rate).toFixed(2)),
+      isRecommended: true,
+      isLive: true,
+      quoteSourceBadge: 'Canlı teklif',
+      notes: 'Hızlı Kapıdan Teslimat (DDP Gümrük Dahil)'
+    });
+
+    quotes.push({
+      quoteId: 'stm-fedex-priority',
+      carrierKey: 'shiptomore',
+      carrierName: 'Shiptomore',
+      serviceType: 'FedEx Priority Express',
+      subCarrier: 'FedEx',
+      logoUrl: 'assets/shipping/shiptomore.png',
+      estimatedDays: '2-4 Gün',
+      priceUsd: stmFedEx,
+      priceTry: Number((stmFedEx * rate).toFixed(2)),
+      isRecommended: false,
+      isLive: true,
+      quoteSourceBadge: 'Canlı teklif',
+      notes: 'Doğrudan FedEx Entegrasyonu'
+    });
+
+    // Identify lowest price
+    let minPrice = Math.min(...quotes.map(q => q.priceUsd));
+    quotes.forEach(q => {
+      if (q.priceUsd === minPrice) {
+        q.isLowestPrice = true;
       }
-    ];
+    });
 
     return quotes.sort((a, b) => a.priceUsd - b.priceUsd);
   }
