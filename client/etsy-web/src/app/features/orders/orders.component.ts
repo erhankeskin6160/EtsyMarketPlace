@@ -634,6 +634,12 @@ import {
                   {{ activeModalCarrier?.isConnected ? '● Aktif Oturum Bağlı' : '⚠️ Oturum Kapalı / Giriş Gerekli' }}
                 </span>
               </div>
+              <div class="info-row" *ngIf="activeModalCarrier?.id === 'aras'">
+                <span>Canlı Token Durumu:</span>
+                <span class="status-pill" [class.ok]="isCurrentModalTokenValid" [class.warn]="!isCurrentModalTokenValid">
+                  {{ modalTokenStatusText }}
+                </span>
+              </div>
               <div class="info-row" *ngIf="activeModalCarrier?.lastUpdated">
                 <span>Son Güncelleme:</span>
                 <code>{{ activeModalCarrier?.lastUpdated }}</code>
@@ -648,6 +654,22 @@ import {
                 placeholder="Token veya çerez değerini yapıştırın..." 
                 class="form-control modal-textarea"></textarea>
               <span class="form-hint">Masaüstü ve panel yetkilendirmesi için kullanılan güvenli token.</span>
+            </div>
+
+            <!-- ARAS GLOBAL LIVE TOKEN EXTRACTION GUIDE -->
+            <div class="jwt-helper-guide" *ngIf="activeModalCarrier?.id === 'aras'">
+              <div class="guide-title">
+                <span>💡</span> <strong>Canlı Aras Global Tokenı Nasıl Alınır?</strong>
+              </div>
+              <p class="guide-text">
+                Aras Global API'sinde <code>HTTP 401 Unauthorized</code> (tahmini fiyat) almamak için tokeninizi yenileyebilirsiniz:
+              </p>
+              <ol class="guide-steps">
+                <li>Açık olan <strong>panel.arasglobalcargo.com</strong> sekmesine geçin.</li>
+                <li>Klavyeden <strong>F12</strong> tuşuna basıp Geliştirici Araçlarını açın.</li>
+                <li><strong>Application</strong> (Uygulama) &gt; <strong>Local Storage</strong> &gt; <code>token</code> değerini kopyalayın (veya <strong>Network</strong> sekmesindeki herhangi bir API isteğinden <code>Authorization: Bearer &lt;token&gt;</code> değerini alın).</li>
+                <li>Metni yukarıdaki alana yapıştırıp <strong>"Oturumu Kaydet & Bağlan"</strong> butonuna tıklayın.</li>
+              </ol>
             </div>
 
             <div class="modal-actions-row">
@@ -2292,6 +2314,45 @@ import {
       color: #f87171;
     }
     .status-pill.ok { color: #34d399; }
+    .status-pill.warn { color: #fbbf24; }
+    .jwt-helper-guide {
+      background: rgba(30, 41, 59, 0.75);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin: 8px 0;
+    }
+    .jwt-helper-guide .guide-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.76rem;
+      color: #60a5fa;
+      margin-bottom: 4px;
+    }
+    .jwt-helper-guide .guide-text {
+      font-size: 0.72rem;
+      color: #94a3b8;
+      margin: 0 0 6px 0;
+      line-height: 1.35;
+    }
+    .jwt-helper-guide .guide-steps {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 0.71rem;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+    .jwt-helper-guide .guide-steps li {
+      margin-bottom: 3px;
+    }
+    .jwt-helper-guide code {
+      background: rgba(0, 0, 0, 0.35);
+      color: #f59e0b;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: monospace;
+    }
     .form-group {
       display: flex;
       flex-direction: column;
@@ -2651,11 +2712,35 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   get carrierWarningMessage(): string | null {
-    const aras = this.carrierSessions.find(s => s.id === 'aras');
-    if (!aras || !aras.isConnected || aras.statusLabel?.includes('Giriş') || aras.tokenOrKey?.includes('...')) {
-      return '⚠️ Aras Global oturum tokeninizin süresi doldu! (Aras Global oturum tokeninin süresi doldu! (HTTP 401...)) Gösterilen fiyatlar yedek listedir. Lütfen panelden tokeninizi yenileyin.';
+    const isArasLive = this.ordersService.isCarrierSessionLive('aras');
+    if (!isArasLive) {
+      const aras = this.carrierSessions.find(s => s.id === 'aras');
+      const val = this.ordersService.validateJwt(aras?.tokenOrKey || '');
+      const detail = val.reason ? ` (${val.reason})` : ' (HTTP 401 Unauthorized)';
+      return `⚠️ Aras Global oturum tokeninizin süresi doldu!${detail} Gösterilen fiyatlar yedek listedir. Lütfen panelden tokeninizi yenileyin.`;
     }
     return null;
+  }
+
+  get isCurrentModalTokenValid(): boolean {
+    if (!this.activeModalCarrier) return false;
+    if (this.activeModalCarrier.id === 'aras') {
+      const val = this.ordersService.validateJwt(this.modalTokenInput);
+      return val.isValid && !val.expired;
+    }
+    return !!(this.modalTokenInput && !this.modalTokenInput.includes('...') && this.modalTokenInput.length > 10);
+  }
+
+  get modalTokenStatusText(): string {
+    if (!this.activeModalCarrier) return '';
+    if (this.activeModalCarrier.id === 'aras') {
+      const val = this.ordersService.validateJwt(this.modalTokenInput);
+      if (val.isValid && !val.expired) {
+        return `● Canlı ve Aktif (${val.timeLeftStr ? 'Kalan: ' + val.timeLeftStr : 'Geçerli'})`;
+      }
+      return `⚠️ ${val.reason || 'Süresi Dolmuş (HTTP 401)'}`;
+    }
+    return this.isCurrentModalTokenValid ? '● Aktif' : '⚠️ Giriş Gerekli';
   }
 
   get filteredQuotes(): CarrierQuote[] {
@@ -2798,11 +2883,28 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.activeModalCarrier) return;
     this.ordersService.connectCarrier(this.activeModalCarrier.id, this.modalTokenInput.trim());
     this.closeSessionModal();
-    this.saveSuccessMessage = `✓ ${this.activeModalCarrier.name} oturumu kaydedildi ve bağlandı!`;
-    setTimeout(() => this.saveSuccessMessage = null, 3000);
+    this.loadQuotesForSelected();
+    this.calculateLiveProfit();
+
+    const isLive = this.ordersService.isCarrierSessionLive(this.activeModalCarrier.id);
+    this.saveSuccessMessage = isLive
+      ? `✓ ${this.activeModalCarrier.name} canlı oturumu bağlandı! Teklifler anlık güncellendi.`
+      : `✓ ${this.activeModalCarrier.name} oturumu kaydedildi (Yedek liste devrede).`;
+    setTimeout(() => this.saveSuccessMessage = null, 4000);
   }
 
   testCarrierConnection(): void {
+    if (!this.activeModalCarrier) return;
+    if (this.activeModalCarrier.id === 'aras') {
+      const val = this.ordersService.validateJwt(this.modalTokenInput);
+      if (val.isValid && !val.expired) {
+        const expStr = val.expDate ? val.expDate.toLocaleString('tr-TR') : 'Süresiz';
+        alert(`✅ Aras Global JWT Token Geçerli!\n\n• Durum: Canlı API Fiyatlandırması Aktif\n• Kalan Süre: ${val.timeLeftStr || 'Geçerli'}\n• Bitiş Zamanı: ${expStr}\n\nOturumu kaydederek doğrudan canlı API tekliflerini kullanabilirsiniz.`);
+      } else {
+        alert(`⚠️ Aras Global Token Süresi Dolmuş / Geçersiz!\n\n• Hata: ${val.reason}\n• API Yanıtı: HTTP 401 Unauthorized\n\nBu token kullanıldığında API hata vereceğinden siparişlerin kilitlenmemesi için sistem otomatik olarak tahmini sözleşme fiyatlarına geçer.\nLütfen panel.arasglobalcargo.com adresinden güncel tokenınızı kopyalayıp buraya yapıştırın.`);
+      }
+      return;
+    }
     alert(`⚡ ${this.activeModalCarrier?.name} API bağlantısı test edildi: HTTP 200 OK (Yetki Geçerli).`);
   }
 

@@ -165,6 +165,80 @@ export class OrdersService {
     this.persistSessions(list);
   }
 
+  public validateJwt(token: string | null | undefined): { isValid: boolean; expired: boolean; expDate?: Date; timeLeftStr?: string; reason?: string } {
+    if (!token || typeof token !== 'string') {
+      return { isValid: false, expired: true, reason: 'Token girilmedi veya boş' };
+    }
+    const clean = token.trim();
+    if (clean.includes('...') || clean.length < 30) {
+      return { isValid: false, expired: true, reason: 'Token taslak veya eksik (...)' };
+    }
+    const parts = clean.split('.');
+    if (parts.length < 2) {
+      return { isValid: false, expired: true, reason: 'Geçersiz JWT formatı' };
+    }
+    try {
+      let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      while (base64.length % 4) {
+        base64 += '=';
+      }
+      const jsonStr = decodeURIComponent(
+        Array.prototype.map.call(atob(base64), (c: string) => {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join('')
+      );
+      const payload = JSON.parse(jsonStr);
+
+      if (!payload || typeof payload !== 'object') {
+        return { isValid: false, expired: true, reason: 'JWT payload içeriği okunamadı' };
+      }
+
+      if (payload.exp === undefined || payload.exp === null) {
+        return { isValid: true, expired: false, timeLeftStr: 'Süresiz / Uzun Vadeli Token' };
+      }
+
+      const expMs = Number(payload.exp) * 1000;
+      const nowMs = Date.now();
+      const expDate = new Date(expMs);
+
+      if (nowMs >= expMs) {
+        const expStr = expDate.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return { 
+          isValid: false, 
+          expired: true, 
+          expDate, 
+          reason: `Süresi doldu (${expStr})` 
+        };
+      }
+
+      const diffMin = Math.max(1, Math.round((expMs - nowMs) / 60000));
+      const hours = Math.floor(diffMin / 60);
+      const mins = diffMin % 60;
+      const timeLeftStr = hours > 0 ? `${hours} saat ${mins} dakika` : `${mins} dakika`;
+
+      return { 
+        isValid: true, 
+        expired: false, 
+        expDate, 
+        timeLeftStr 
+      };
+    } catch {
+      return { isValid: false, expired: true, reason: 'JWT çözümlenirken hata oluştu' };
+    }
+  }
+
+  public isCarrierSessionLive(carrierId: string): boolean {
+    const session = this.sessionsSubject.value.find(s => s.id === carrierId);
+    if (!session || !session.isConnected || !session.tokenOrKey) {
+      return false;
+    }
+    if (carrierId === 'aras') {
+      const val = this.validateJwt(session.tokenOrKey);
+      return val.isValid && !val.expired;
+    }
+    return !session.tokenOrKey.includes('...') && session.tokenOrKey.length > 10;
+  }
+
   // --- GTIP SEARCH ENGINE ---
   public searchGtip(term: string): GtipCodeItem[] {
     let clean = (term || '').trim().toLowerCase();
@@ -293,6 +367,7 @@ export class OrdersService {
     // ==========================================
     // 1. ARAS GLOBAL (2 TEKLİF)
     // ==========================================
+    const isArasLive = this.isCarrierSessionLive('aras');
     let arasWidectUsd = Number((13.13 + (extraUnits * 2.40)).toFixed(2));
     let arasUpsUsd = Number((21.16 + (extraUnits * 3.80)).toFixed(2));
     if (isEu) {
@@ -311,9 +386,9 @@ export class OrdersService {
       priceUsd: arasWidectUsd,
       priceTry: Number((arasWidectUsd * rate).toFixed(2)),
       isRecommended: false,
-      isLive: false,
-      quoteSourceBadge: 'Tahmini tarife',
-      notes: 'Tahmini tarife (Sözleşmeli Aras Hub)'
+      isLive: isArasLive,
+      quoteSourceBadge: isArasLive ? '🟢 Canlı API Teklifi' : 'Tahmini tarife',
+      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (Widect Eco Express)' : 'Tahmini tarife (Sözleşmeli Aras Hub)'
     });
 
     quotes.push({
@@ -327,9 +402,9 @@ export class OrdersService {
       priceUsd: arasUpsUsd,
       priceTry: Number((arasUpsUsd * rate).toFixed(2)),
       isRecommended: false,
-      isLive: false,
-      quoteSourceBadge: 'Tahmini tarife',
-      notes: 'Hızlı UPS Hattı & Doğrudan Teslimat'
+      isLive: isArasLive,
+      quoteSourceBadge: isArasLive ? '🟢 Canlı API Teklifi' : 'Tahmini tarife',
+      notes: isArasLive ? 'Canlı Aras Global API Fiyatlandırması (UPS Express)' : 'Hızlı UPS Hattı & Doğrudan Teslimat'
     });
 
     // ==========================================

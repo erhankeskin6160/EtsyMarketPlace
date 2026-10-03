@@ -30,7 +30,7 @@ export interface CarrierQuote {
   isRecommended: boolean;
   isLowestPrice?: boolean;
   isLive?: boolean;
-  quoteSourceBadge?: 'Tahmini tarife' | 'Canlı teklif';
+  quoteSourceBadge?: 'Tahmini tarife' | 'Canlı teklif' | '🟢 Canlı API Teklifi' | string;
   notes?: string;
 }
 
