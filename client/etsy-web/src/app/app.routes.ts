@@ -4,7 +4,6 @@ import { LoginComponent } from './features/auth/login.component';
 import { RegisterComponent } from './features/auth/register.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { AdminComponent } from './features/admin/admin.component';
-import { ModuleViewerComponent } from './features/module-viewer/module-viewer.component';
 import { OrdersComponent } from './features/orders/orders.component';
 import { AccountingComponent } from './features/finance/accounting.component';
 import { FastCreatorComponent } from './features/listings/fast-creator.component';
@@ -21,6 +20,19 @@ import { MarketResearchComponent } from './features/research/market-research.com
 import { AiAuditComponent } from './features/analytics/ai-audit.component';
 import { ShippingHubComponent } from './features/shipping/shipping-hub.component';
 import { SystemLogsComponent } from './features/system/system-logs.component';
+
+// 10 Parity Standalone Components
+import { AbTestDashboardComponent } from './features/analytics/ab-test-dashboard.component';
+import { AiUsageDashboardComponent } from './features/tools/ai-usage-dashboard.component';
+import { BatchQueueComponent } from './features/tools/batch-queue.component';
+import { LiveTrackingRadarComponent } from './features/tools/live-tracking.component';
+import { ShopPerformanceComponent } from './features/analytics/shop-performance.component';
+import { NotificationSettingsComponent } from './features/settings/notification-settings.component';
+import { SystemUpdateComponent } from './features/system/system-update.component';
+import { FinancialAiAnalysisComponent } from './features/finance/financial-ai-analysis.component';
+import { ExternalArbitrageRadarComponent } from './features/research/external-arbitrage.component';
+import { TaskSchedulerAutomationComponent } from './features/tools/automation-scheduler.component';
+
 import { authGuard, adminGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
@@ -51,20 +63,20 @@ export const routes: Routes = [
       { path: 'research/market', component: MarketResearchComponent },
       { path: 'research/viral-3d', component: Viral3DComponent },
       { path: 'research/competitor', component: CompetitorSpyComponent },
-      { path: 'research/external', component: ModuleViewerComponent },
+      { path: 'research/external', component: ExternalArbitrageRadarComponent },
 
       // Analytics Modules
       { path: 'analytics/ai-audit', component: AiAuditComponent },
-      { path: 'analytics/shop', component: ModuleViewerComponent },
-      { path: 'analytics/ab-test', component: ModuleViewerComponent },
+      { path: 'analytics/shop', component: ShopPerformanceComponent },
+      { path: 'analytics/ab-test', component: AbTestDashboardComponent },
 
       // Finance & Tools Modules
-      { path: 'finance/ai-analysis', component: ModuleViewerComponent },
+      { path: 'finance/ai-analysis', component: FinancialAiAnalysisComponent },
       { path: 'tools/vault', component: ShopVaultComponent },
-      { path: 'tools/automation', component: ModuleViewerComponent },
-      { path: 'tools/batch', component: ModuleViewerComponent },
-      { path: 'tools/tracking', component: ModuleViewerComponent },
-      { path: 'tools/ai-usage', component: ModuleViewerComponent },
+      { path: 'tools/automation', component: TaskSchedulerAutomationComponent },
+      { path: 'tools/batch', component: BatchQueueComponent },
+      { path: 'tools/tracking', component: LiveTrackingRadarComponent },
+      { path: 'tools/ai-usage', component: AiUsageDashboardComponent },
 
       // Shipping & Logistics Modules (4-Carrier Hub)
       { path: 'shipping/aras', component: ShippingHubComponent },
@@ -75,8 +87,8 @@ export const routes: Routes = [
       // System & Settings Modules
       { path: 'settings/ai-models', component: AiModelsSettingsComponent },
       { path: 'settings/etsy-api', component: EtsyApiSettingsComponent },
-      { path: 'settings/notifications', component: ModuleViewerComponent },
-      { path: 'settings/update', component: ModuleViewerComponent },
+      { path: 'settings/notifications', component: NotificationSettingsComponent },
+      { path: 'settings/update', component: SystemUpdateComponent },
       { path: 'system/logs', component: SystemLogsComponent }
     ]
   },
