@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -43,6 +43,8 @@ export class FastCreatorComponent implements OnInit {
   aiService = inject(AiSettingsService);
   router = inject(Router);
 
+  @ViewChild('fileInput') fileInputRef?: ElementRef<HTMLInputElement>;
+
   // --- TEMPLATES ---
   templates: CreatorTemplate[] = [
     {
@@ -81,9 +83,9 @@ export class FastCreatorComponent implements OnInit {
 
   // --- COLUMN 1: ÜRÜN & SEO BİLGİLERİ ---
   listingType: 'physical' | 'digital' = 'physical';
-  priceUsd = 34.50;
+  priceUsd: number | null = 34.50;
   priceTry = 0;
-  quantity = 15;
+  quantity: number | null = 15;
   title = '';
   selectedCategory = 'Art & Collectibles > Sculptures';
   shippingProfile = 'Standart Kargo (3-5 iş günü teslimat)';
@@ -196,7 +198,7 @@ export class FastCreatorComponent implements OnInit {
       id: newId,
       name: '📁 ' + name,
       category: this.selectedCategory,
-      defaultPrice: this.priceUsd,
+      defaultPrice: this.priceUsd || 0,
       sampleTitle: this.title,
       sampleTags: [...this.tags],
       sampleDesc: this.description,
@@ -233,7 +235,7 @@ export class FastCreatorComponent implements OnInit {
   }
 
   updatePriceTry(): void {
-    this.priceTry = Number((this.priceUsd * this.usdTryRate).toFixed(2));
+    this.priceTry = Number(((this.priceUsd || 0) * this.usdTryRate).toFixed(2));
   }
 
   clearCloned(): void {
@@ -243,21 +245,38 @@ export class FastCreatorComponent implements OnInit {
   }
 
   resetForm(): void {
-    if (confirm('Tüm formu temizlemek istediğinize emin misiniz?')) {
-      this.title = '';
-      this.priceUsd = 24.99;
-      this.updatePriceTry();
-      this.quantity = 10;
-      this.tags = [];
-      this.description = '';
-      this.materials = '';
-      this.galleryImages = [];
-      this.lastGeneratedImage = null;
-      this.enableVariations = false;
-      this.variationRows = [];
-      this.clonedNotice = '';
-      this.showToast('🔄 Form sıfırlandı.');
+    // 1. Ürün & SEO Bilgileri
+    this.title = '';
+    this.priceUsd = null;
+    this.priceTry = 0;
+    this.quantity = null;
+    this.tags = [];
+    this.newTagInput = '';
+    this.description = '';
+    this.materials = '';
+
+    // 2. Görseller & AI Motoru
+    this.galleryImages = [];
+    this.lastGeneratedImage = null;
+    this.aiPrompt = '';
+    this.isGeneratingAiImage = false;
+    if (this.fileInputRef?.nativeElement) {
+      this.fileInputRef.nativeElement.value = '';
     }
+
+    // 3. Varyasyonlar & Kontrol
+    this.enableVariations = false;
+    this.varValues1 = '';
+    this.enableVar2 = false;
+    this.varValues2 = '';
+    this.customVariationPricing = false;
+    this.variationRows = [];
+
+    // 4. Şablon & Klonlanan
+    this.selectedTemplateId = '';
+    this.clonedNotice = '';
+
+    this.showToast('🔄 Tüm form ve girdi alanları temizlendi!');
   }
 
   // --- TAGS ---
@@ -513,18 +532,19 @@ export class FastCreatorComponent implements OnInit {
       }
       return {
         key: key,
-        price: this.priceUsd,
-        quantity: Math.max(1, Math.floor(this.quantity / (combinations.length || 1))),
+        price: this.priceUsd || 0,
+        quantity: Math.max(1, Math.floor((this.quantity || 10) / (combinations.length || 1))),
         active: true
       };
     });
   }
 
   syncBasePriceToVariations(): void {
+    const p = this.priceUsd || 0;
     this.variationRows.forEach(row => {
-      row.price = this.priceUsd;
+      row.price = p;
     });
-    this.showToast(`⚡ Tüm varyasyon fiyatları $${this.priceUsd} olarak eşitlendi!`);
+    this.showToast(`⚡ Tüm varyasyon fiyatları $${p.toFixed(2)} olarak eşitlendi!`);
   }
 
   // --- CHECKLIST GETTERS ---
@@ -532,7 +552,7 @@ export class FastCreatorComponent implements OnInit {
     return this.title.trim().length > 0 && this.title.length <= 140;
   }
   get isPriceReady(): boolean {
-    return this.priceUsd > 0 && this.quantity > 0;
+    return (this.priceUsd ?? 0) > 0 && (this.quantity ?? 0) > 0;
   }
   get isImagesReady(): boolean {
     return this.galleryImages.length > 0;
