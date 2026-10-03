@@ -23,6 +23,7 @@ using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 var pendingPkceSessions = new ConcurrentDictionary<string, PkceSession>();
 
 // 1. Dependency Injection (Clean Architecture Servisleri)
@@ -598,8 +599,8 @@ app.MapGet("/api/etsy/settings/credentials", async (string shopId = "53236321", 
     if (saved is not null)
         return Results.Ok(saved);
 
-    var cfgKey = config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn";
-    var cfgSecret = config["Etsy:SharedSecret"] ?? "ho2tfkzko9";
+    var cfgKey = config["Etsy:ApiKey"] ?? string.Empty;
+    var cfgSecret = config["Etsy:SharedSecret"] ?? string.Empty;
     var redirectUri = config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api";
     static string Mask(string s) => string.IsNullOrWhiteSpace(s) ? "" : (s.Length <= 8 ? "****" : $"{s[..4]}...{s[^4..]}");
 
@@ -630,7 +631,7 @@ app.MapGet("/api/etsy/oauth/connect-url", async (string shopId = "53236321", str
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
-    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
     var targetRedirectUri = !string.IsNullOrWhiteSpace(redirectUri)
         ? redirectUri.Trim()
         : (!string.IsNullOrWhiteSpace(raw.RedirectUri) ? raw.RedirectUri : (config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api"));
@@ -686,7 +687,9 @@ app.MapPost("/api/etsy/oauth/exchange-code", async (ExchangeCodeApiRequest reque
 
     var shopId = request.ShopId.Trim();
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(shopId, cancellationToken);
-    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
+    if (string.IsNullOrWhiteSpace(keystring))
+        return Results.BadRequest(new { success = false, message = "Etsy Keystring (Client ID) bulunamadı. Lütfen önce API ayarlarından Keystring kaydedin." });
 
     string? codeVerifier = request.CodeVerifier;
     string targetRedirectUri = !string.IsNullOrWhiteSpace(request.RedirectUri) ? request.RedirectUri.Trim() : (!string.IsNullOrWhiteSpace(raw.RedirectUri) ? raw.RedirectUri : (config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api"));
@@ -766,8 +769,10 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
         return Results.NotFound(new { error = "Bu mağaza için kayıtlı OAuth token bulunamadı." });
 
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
-    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
-    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? "ho2tfkzko9");
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? string.Empty);
+    if (string.IsNullOrWhiteSpace(keystring))
+        return Results.BadRequest(new { error = "Etsy Keystring (Client ID) bulunamadı. Lütfen Ayarlar > Etsy API sayfasından API anahtarınızı kaydedin." });
     var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
 
     var client = httpClientFactory.CreateClient();
@@ -1036,8 +1041,10 @@ app.MapPut("/api/etsy/listings/{listingId}", async (string listingId, UpdateList
         return Results.BadRequest(new { error = "Etsy kuralı: Başlıkta '&' karakteri en fazla 1 kez kullanılabilir." });
 
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
-    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
-    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? "ho2tfkzko9");
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? string.Empty);
+    if (string.IsNullOrWhiteSpace(keystring))
+        return Results.BadRequest(new { error = "Etsy Keystring (Client ID) bulunamadı. Lütfen Ayarlar > Etsy API sayfasından API anahtarınızı kaydedin." });
     var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
 
     var client = httpClientFactory.CreateClient();

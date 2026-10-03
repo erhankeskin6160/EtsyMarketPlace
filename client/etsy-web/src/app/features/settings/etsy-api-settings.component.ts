@@ -158,13 +158,13 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
           <div class="credentials-grid">
             <div class="form-group">
               <label>Etsy App Keystring (Client ID)</label>
-              <input type="text" [(ngModel)]="keystring" class="form-input font-mono" placeholder="7k7h5b6g9ks6m0dx8tgl7vcn" />
+              <input type="text" [(ngModel)]="keystring" class="form-input font-mono" placeholder="Etsy Developer KeyString (Client ID) giriniz" />
             </div>
 
             <div class="form-group">
               <label>Etsy Shared Secret</label>
               <div class="secret-wrapper">
-                <input [type]="showSecret ? 'text' : 'password'" [(ngModel)]="sharedSecret" class="form-input font-mono" placeholder="ho2tfkzko9" />
+                <input [type]="showSecret ? 'text' : 'password'" [(ngModel)]="sharedSecret" class="form-input font-mono" placeholder="Etsy Shared Secret giriniz" />
                 <button type="button" class="btn-eye" (click)="showSecret = !showSecret">
                   {{ showSecret ? '👁️' : '🔒' }}
                 </button>
@@ -660,8 +660,8 @@ export class EtsyApiSettingsComponent implements OnInit {
   manualRate = 49.12;
 
   // Etsy Developer Credentials
-  keystring = '7k7h5b6g9ks6m0dx8tgl7vcn';
-  sharedSecret = 'ho2tfkzko9';
+  keystring = '';
+  sharedSecret = '';
   redirectUri = 'http://localhost:4200/settings/etsy-api';
   showSecret = false;
   isSavingCredentials = false;
