@@ -195,13 +195,14 @@
               <td class="col-img">
                 <div class="thumb-container">
                   <img
-                    *ngIf="item.primaryImageUrl"
-                    [src]="item.primaryImageUrl"
+                    *ngIf="item.primaryImageUrl || item.thumbnail"
+                    [src]="item.primaryImageUrl || item.thumbnail"
                     [alt]="item.title"
                     class="thumb-img"
+                    referrerpolicy="no-referrer"
                     loading="lazy"
                   />
-                  <div *ngIf="!item.primaryImageUrl" class="thumb-placeholder">🖼️</div>
+                  <div *ngIf="!item.primaryImageUrl && !item.thumbnail" class="thumb-placeholder">🖼️</div>
                 </div>
               </td>
 
@@ -259,13 +260,13 @@
 
               <!-- 7. Fiyat -->
               <td class="col-price" style="text-align: right;">
-                <span class="price-val">{{ item.priceAmount | number:'1.2-2' }}</span>
-                <span class="currency-code">{{ item.currencyCode }}</span>
+                <span class="price-val">{{ (item.priceAmount != null ? item.priceAmount : item.price) | number:'1.2-2' }}</span>
+                <span class="currency-code">{{ item.currencyCode || item.currency }}</span>
               </td>
 
               <!-- 8. Favori -->
               <td class="col-fav" style="text-align: center;">
-                <span class="fav-badge">❤️ {{ item.numFavorers || 0 }}</span>
+                <span class="fav-badge">❤️ {{ (item.numFavorers != null ? item.numFavorers : item.favorites) || 0 }}</span>
               </td>
 
               <!-- 9. Stok -->
@@ -275,9 +276,10 @@
 
               <!-- 10. Durum -->
               <td class="col-status" style="text-align: center;">
-                <span *ngIf="item.hasSavedAudit" class="status-badge badge-audit-ready">✨ AI Hazır</span>
-                <span *ngIf="!item.hasSavedAudit && item.seoScore >= 80" class="status-badge badge-good">İyi</span>
-                <span *ngIf="!item.hasSavedAudit && item.seoScore < 80" class="status-badge badge-review">İncelenmeli</span>
+                <span *ngIf="item.status === '⚠️ AI: Risk Var' || (item.riskWarnings && item.riskWarnings.length > 0)" class="status-badge badge-risk">⚠️ AI: Risk Var</span>
+                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && (item.hasSavedAudit || item.status === '✨ AI: Hazır')" class="status-badge badge-audit-ready">✨ AI Hazır</span>
+                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && !item.hasSavedAudit && item.status !== '✨ AI: Hazır' && item.seoScore >= 80" class="status-badge badge-good">İyi</span>
+                <span *ngIf="item.status !== '⚠️ AI: Risk Var' && (!item.riskWarnings || item.riskWarnings.length === 0) && !item.hasSavedAudit && item.status !== '✨ AI: Hazır' && item.seoScore < 80" class="status-badge badge-review">İncelenmeli</span>
               </td>
             </tr>
 
@@ -346,12 +348,13 @@
           <!-- Zoom Image -->
           <div class="img-preview-box">
             <img
-              *ngIf="selectedListing.primaryImageUrl"
-              [src]="selectedListing.primaryImageUrl"
+              *ngIf="selectedListing.primaryImageUrl || selectedListing.thumbnail"
+              [src]="selectedListing.primaryImageUrl || selectedListing.thumbnail"
               [alt]="selectedListing.title"
               class="preview-img"
+              referrerpolicy="no-referrer"
             />
-            <div *ngIf="!selectedListing.primaryImageUrl" class="no-img-box">
+            <div *ngIf="!selectedListing.primaryImageUrl && !selectedListing.thumbnail" class="no-img-box">
               <span>🖼️ Görsel Yok</span>
             </div>
           </div>
@@ -360,7 +363,7 @@
           <div class="stats-mini-box">
             <div class="stat-mini">
               <span class="stat-k">Fiyat:</span>
-              <span class="stat-v">{{ selectedListing.priceAmount }} {{ selectedListing.currencyCode }}</span>
+              <span class="stat-v">{{ (selectedListing.priceAmount != null ? selectedListing.priceAmount : selectedListing.price) | number:'1.2-2' }} {{ selectedListing.currencyCode || selectedListing.currency }}</span>
             </div>
             <div class="stat-mini">
               <span class="stat-k">Stok:</span>
@@ -372,7 +375,7 @@
             </div>
             <div class="stat-mini">
               <span class="stat-k">Favori:</span>
-              <span class="stat-v">❤️ {{ selectedListing.numFavorers || 0 }}</span>
+              <span class="stat-v">❤️ {{ (selectedListing.numFavorers != null ? selectedListing.numFavorers : selectedListing.favorites) || 0 }}</span>
             </div>
           </div>
 
@@ -484,15 +487,34 @@
             </div>
           </div>
 
-          <!-- Yapısal Açıklar & Eksikler -->
+          <!-- 🤖 YAPAY ZEKA SEO ELEŞTİRİSİ -->
+          <div *ngIf="aiCritique" class="form-group">
+            <label class="field-label text-cyan">🤖 [YAPAY ZEKA SEO ELEŞTİRİSİ]</label>
+            <div class="critique-card">
+              <p class="critique-text">{{ aiCritique }}</p>
+            </div>
+          </div>
+
+          <!-- 🚨 TELİF VE POLİTİKA RİSKLERİ -->
+          <div *ngIf="(selectedListing.riskWarnings && selectedListing.riskWarnings.length > 0) || riskWarnings.length > 0" class="form-group">
+            <label class="field-label text-rose">🚨 [TELİF VE POLİTİKA RİSKLERİ]</label>
+            <div class="risk-warnings-box">
+              <span class="risk-title">⚠️ Etsy Kapatma & Marka/Telif (DMCA) Riski Tespit Edildi:</span>
+              <ul>
+                <li *ngFor="let w of (selectedListing.riskWarnings && selectedListing.riskWarnings.length > 0 ? selectedListing.riskWarnings : riskWarnings)">{{ w }}</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- 📐 TESPİT EDİLEN EKSİKLER & ALGORİTMA ANALİZİ -->
           <div class="form-group">
-            <label class="field-label text-rose">Tespit Edilen Yapısal SEO Açıkları</label>
+            <label class="field-label text-rose">📐 [TESPİT EDİLEN EKSİKLER & ALGORİTMA ANALİZİ]</label>
             <div class="flaws-list">
               <div *ngFor="let need of selectedListing.structuralNeeds" class="flaw-item">
                 <span class="flaw-bullet">⚠️</span>
                 <span>{{ need }}</span>
               </div>
-              <div *ngIf="selectedListing.structuralNeeds?.length === 0" class="flaw-clean">
+              <div *ngIf="!selectedListing.structuralNeeds || selectedListing.structuralNeeds.length === 0" class="flaw-clean">
                 ✓ Yapısal hata veya eksik tespit edilmedi.
               </div>
             </div>

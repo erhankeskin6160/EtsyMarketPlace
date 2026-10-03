@@ -802,7 +802,15 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
         var title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? "") : "";
         var description = item.TryGetProperty("description", out var d) ? (d.GetString() ?? "") : "";
         var views = item.TryGetProperty("views", out var v) ? v.GetInt32() : 0;
-        var favorites = item.TryGetProperty("num_favorers", out var f) ? f.GetInt32() : 0;
+        int favorites = 0;
+        if (item.TryGetProperty("num_favorers", out var f))
+        {
+            favorites = f.ValueKind == JsonValueKind.Number ? f.GetInt32() : (int.TryParse(f.GetString(), out var nf) ? nf : 0);
+        }
+        else if (item.TryGetProperty("favorites", out var favProp))
+        {
+            favorites = favProp.ValueKind == JsonValueKind.Number ? favProp.GetInt32() : (int.TryParse(favProp.GetString(), out var nf) ? nf : 0);
+        }
         var quantity = item.TryGetProperty("quantity", out var q) ? q.GetInt32() : 0;
 
         decimal price = 0;
@@ -838,16 +846,23 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
         }
 
         var imageUrls = new List<string>();
-        if (item.TryGetProperty("images", out var imgArr) && imgArr.ValueKind == JsonValueKind.Array)
+        var imgProp = (item.TryGetProperty("Images", out var p1) && p1.ValueKind == JsonValueKind.Array) ? p1
+            : ((item.TryGetProperty("images", out var p2) && p2.ValueKind == JsonValueKind.Array) ? p2 : default);
+
+        if (imgProp.ValueKind == JsonValueKind.Array)
         {
-            foreach (var img in imgArr.EnumerateArray())
+            foreach (var img in imgProp.EnumerateArray())
             {
                 string? imgUrl = null;
                 if (img.TryGetProperty("url_570xN", out var u570)) imgUrl = u570.GetString();
                 else if (img.TryGetProperty("url_fullxfull", out var uFull)) imgUrl = uFull.GetString();
-                if (!string.IsNullOrWhiteSpace(imgUrl)) imageUrls.Add(imgUrl);
+                else if (img.TryGetProperty("url_170x135", out var u170)) imgUrl = u170.GetString();
+                else if (img.TryGetProperty("url_75x75", out var u75)) imgUrl = u75.GetString();
+
+                if (!string.IsNullOrWhiteSpace(imgUrl)) imageUrls.Add(imgUrl.Trim());
             }
         }
+        var primaryImg = imageUrls.FirstOrDefault() ?? "";
 
         // Structural SEO Analysis
         int seoScore = 100;
@@ -890,10 +905,22 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
 
         seoScore = Math.Clamp(seoScore, 10, 100);
 
+        // Trademark / Copyright risk scan
+        var riskBlob = $"{title} {description} {string.Join(' ', tags)}".ToLowerInvariant();
+        var detectedRisks = new List<string>();
+        string[] trademarkTerms = ["ben 10", "omnitrix", "thor", "mjolnir", "marvel", "disney", "valorant", "kratos", "god of war", "pokemon", "nintendo", "star wars", "harry potter", "demon slayer", "naruto", "minecraft", "batman", "spiderman", "spider-man", "superman", "iron man", "captain america", "hulk"];
+        foreach (var term in trademarkTerms)
+        {
+            if (riskBlob.Contains(term))
+            {
+                detectedRisks.Add($"🚨 Telif ve Marka Riski: '{term}' tescilli markadır (IP/Trademark). Hak sahipleri veya Etsy tarafından telif yaptırımı riski taşır.");
+            }
+        }
+
         // Check if previously audited
         bool isAiAudited = false;
         int aiScore = seoScore;
-        string status = "Bekliyor";
+        string status = detectedRisks.Count > 0 ? "⚠️ AI: Risk Var" : "Bekliyor";
         string? resultJson = null;
 
         if (savedAudits.TryGetValue(listingId, out var saved))
@@ -913,19 +940,27 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
             tags,
             materials,
             price,
+            priceAmount = price,
             currency,
+            currencyCode = currency,
             quantity,
             views,
             favorites,
+            numFavorers = favorites,
             images = imageUrls,
-            thumbnail = imageUrls.FirstOrDefault() ?? "",
+            thumbnail = primaryImg,
+            primaryImageUrl = primaryImg,
             seoScore,
             aiScore,
             status,
             isAiAudited,
             resultJson,
             seoNeeds = string.Join("\n", needs),
-            seoStrengths = string.Join(", ", strengths)
+            seoStrengths = string.Join(", ", strengths),
+            structuralNeeds = needs,
+            riskWarnings = detectedRisks,
+            hasSavedAudit = isAiAudited,
+            savedAudit = saved
         });
     }
 
@@ -941,7 +976,7 @@ app.MapPost("/api/etsy/listings/{listingId}/ai-optimize", async (string listingI
     var input = new ListingOptimizationInput(request.Title, request.Description, request.Tags, targetKw, request.DescriptionStyle ?? "Storytelling");
     var result = optimizer.Optimize(input);
 
-    var status = result.RiskWarnings.Count > 0 ? "🚨 AI: Risk kontrol" : "✨ AI: Öneri hazır";
+    var status = result.RiskWarnings.Count > 0 ? "⚠️ AI: Risk Var" : "✨ AI: Hazır";
 
     // Save to SQLite
     await settingsRepo.SaveListingAuditAsync(new SaveListingAuditRecordRequest(
@@ -957,20 +992,30 @@ app.MapPost("/api/etsy/listings/{listingId}/ai-optimize", async (string listingI
 
     return Results.Ok(new
     {
+        success = true,
         listingId,
         currentSeoScore = result.CurrentSeoScore,
         optimizedSeoScore = result.OptimizedSeoScore,
-        titleSuggestions = result.TitleSuggestions,
+        seoScoreBefore = result.CurrentSeoScore,
+        seoScoreAfter = result.OptimizedSeoScore,
+        optimizedTitle = result.TitleSuggestions.FirstOrDefault() ?? request.Title,
         suggestedTitle = result.TitleSuggestions.FirstOrDefault() ?? request.Title,
+        titleSuggestions = result.TitleSuggestions,
+        optimizedTags = result.TagSuggestions.Take(13).ToList(),
         tagSuggestions = result.TagSuggestions.Take(13).ToList(),
         materialSuggestions = result.MaterialSuggestions,
+        optimizedDescription = result.DescriptionDraft,
         descriptionDraft = result.DescriptionDraft,
+        critique = result.SeoCritique,
+        seoCritique = result.SeoCritique,
         missingTerms = result.MissingTerms,
         riskWarnings = result.RiskWarnings,
         checklist = result.ActionChecklist,
         status,
+        aiModel = result.ExecutedModel,
         provider = result.ExecutedProvider,
-        model = result.ExecutedModel
+        model = result.ExecutedModel,
+        message = "Listing başarıyla AI ile optimize edildi ve yerel veritabanına kaydedildi."
     });
 })
 .WithTags("Etsy Listing & AI Denetimi")

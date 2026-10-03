@@ -83,7 +83,7 @@ export class AiAuditComponent implements OnInit {
   }
 
   get zeroFavCount(): number {
-    return this.listings.filter(l => (l.numFavorers || 0) === 0).length;
+    return this.listings.filter(l => ((l.numFavorers != null ? l.numFavorers : l.favorites) || 0) === 0).length;
   }
 
   // Pagination Computed
@@ -147,8 +147,10 @@ export class AiAuditComponent implements OnInit {
       this.afterTitle = listing.title;
       this.afterTags = [...(listing.tags || [])];
       this.afterDescription = listing.description;
-      this.aiCritique = '';
-      this.riskWarnings = [];
+      this.aiCritique = listing.riskWarnings && listing.riskWarnings.length > 0
+        ? 'Mevcut listing algoritmik olarak taranmış ve potansiyel marka/telif riskleri tespit edilmiştir. "AI ile Puanla" butonuna basarak yapay zeka ile tam SEO optimizasyonu ve temiz başlık/etiket seti üretebilirsiniz.'
+        : '';
+      this.riskWarnings = [...(listing.riskWarnings || [])];
       this.checklist = [];
       this.aiScoreAfter = null;
       this.aiModelUsed = this.selectedAiModel;
@@ -203,7 +205,7 @@ export class AiAuditComponent implements OnInit {
     } else if (this.activeFilter === 'hasAudit') {
       result = result.filter(l => l.hasSavedAudit);
     } else if (this.activeFilter === 'zeroFav') {
-      result = result.filter(l => (l.numFavorers || 0) === 0);
+      result = result.filter(l => ((l.numFavorers != null ? l.numFavorers : l.favorites) || 0) === 0);
     }
 
     // Search query
@@ -262,6 +264,8 @@ export class AiAuditComponent implements OnInit {
           if (this.selectedListing) {
             this.selectedListing.aiScore = res.seoScoreAfter;
             this.selectedListing.hasSavedAudit = true;
+            this.selectedListing.status = res.riskWarnings && res.riskWarnings.length > 0 ? '⚠️ AI: Risk Var' : '✨ AI: Hazır';
+            this.selectedListing.riskWarnings = res.riskWarnings || [];
             this.selectedListing.savedAudit = {
               id: 0,
               shopId: this.etsyApi.activeShopId(),
@@ -338,6 +342,8 @@ export class AiAuditComponent implements OnInit {
           if (res.success) {
             item.aiScore = res.seoScoreAfter;
             item.hasSavedAudit = true;
+            item.status = res.riskWarnings && res.riskWarnings.length > 0 ? '⚠️ AI: Risk Var' : '✨ AI: Hazır';
+            item.riskWarnings = res.riskWarnings || [];
             if (this.selectedListing?.listingId === item.listingId) {
               this.populateFromAudit({
                 id: 0,

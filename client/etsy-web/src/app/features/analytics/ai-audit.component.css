@@ -776,6 +776,13 @@
   color: #fbbf24;
 }
 
+.badge-risk {
+  background: rgba(244, 63, 94, 0.22);
+  border: 1px solid rgba(244, 63, 94, 0.45);
+  color: #fb7185;
+  font-weight: 700;
+}
+
 .text-muted {
   color: #475569;
 }
