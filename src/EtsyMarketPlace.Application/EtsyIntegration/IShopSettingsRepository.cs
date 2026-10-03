@@ -49,6 +49,29 @@ public sealed record SaveEtsyAppCredentialsRequest(
     string? SharedSecret,
     string? RedirectUri);
 
+public sealed record SavedListingAuditRecord(
+    string ShopId,
+    string ListingId,
+    string Title,
+    int CurrentSeoScore,
+    int OptimizedSeoScore,
+    string Status,
+    string Provider,
+    string Model,
+    string ResultJson,
+    DateTimeOffset AuditedAt);
+
+public sealed record SaveListingAuditRecordRequest(
+    string ShopId,
+    string ListingId,
+    string Title,
+    int CurrentSeoScore,
+    int OptimizedSeoScore,
+    string Status,
+    string Provider,
+    string Model,
+    string ResultJson);
+
 public interface IShopSettingsRepository
 {
     Task<TelegramShopSettings?> GetTelegramSettingsAsync(string shopId, CancellationToken cancellationToken = default);
@@ -58,4 +81,6 @@ public interface IShopSettingsRepository
     Task<EtsyAppCredentialsRecord?> GetEtsyAppCredentialsAsync(string shopId, CancellationToken cancellationToken = default);
     Task<(string Keystring, string SharedSecret, string RedirectUri)> GetRawEtsyAppCredentialsAsync(string shopId, CancellationToken cancellationToken = default);
     Task<EtsyAppCredentialsRecord> SaveEtsyAppCredentialsAsync(SaveEtsyAppCredentialsRequest request, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SavedListingAuditRecord>> GetListingAuditsAsync(string shopId, CancellationToken cancellationToken = default);
+    Task SaveListingAuditAsync(SaveListingAuditRecordRequest request, CancellationToken cancellationToken = default);
 }

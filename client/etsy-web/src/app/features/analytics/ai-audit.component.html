@@ -1,0 +1,668 @@
+<div class="ai-audit-container">
+  <!-- TOAST NOTIFICATION -->
+  <div *ngIf="toastMessage" class="toast-banner" [ngClass]="'toast-' + toastType">
+    <span class="toast-icon">
+      <span *ngIf="toastType === 'success'">✓</span>
+      <span *ngIf="toastType === 'error'">✕</span>
+      <span *ngIf="toastType === 'info'">ℹ</span>
+    </span>
+    <span class="toast-text">{{ toastMessage }}</span>
+  </div>
+
+  <!-- HEADER -->
+  <header class="audit-header">
+    <div class="header-left">
+      <div class="icon-avatar">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+      </div>
+      <div>
+        <div class="title-row">
+          <h1 class="page-title">Kendi Mağaza Listing AI Analizi & Optimizasyon</h1>
+          <span class="badge-tag">Masaüstü 1:1 Parite</span>
+        </div>
+        <p class="page-subtitle">
+          Etsy mağazanızdaki canlı aktif ilanları çeker, yapısal SEO açıklarını tespit eder ve Gemini AI ile doğrudan Etsy'ye güncellenebilir başlık, etiket ve açıklama üretir.
+        </p>
+      </div>
+    </div>
+
+    <div class="header-right">
+      <div class="status-pill" [ngClass]="etsyApi.tokenStatus() === 'connected' ? 'status-connected' : 'status-warning'">
+        <span class="pulse-dot"></span>
+        <span>{{ etsyApi.tokenStatus() === 'connected' ? 'Canlı Etsy v3 Bağlı (' + etsyApi.activeShopId() + ')' : 'Etsy Token: ' + etsyApi.tokenStatus() }}</span>
+      </div>
+
+      <div class="model-badge">
+        <span class="model-icon">🤖</span>
+        <span class="model-name">Model: {{ selectedAiModel }}</span>
+      </div>
+
+      <button class="btn-settings" (click)="showSettingsModal = true" title="AI Ayarları">
+        ⚙️ AI Ayarları
+      </button>
+    </div>
+  </header>
+
+  <!-- 4-PILL KPI STRIP -->
+  <section class="kpi-strip">
+    <div class="kpi-pill">
+      <div class="kpi-icon-wrap bg-cyan-soft">📦</div>
+      <div class="kpi-data">
+        <span class="kpi-label">AKTİF İLANLAR</span>
+        <div class="kpi-value text-cyan">{{ totalCount }} İlan</div>
+        <span class="kpi-sub">Etsy OpenAPI v3 Canlı</span>
+      </div>
+    </div>
+
+    <div class="kpi-pill">
+      <div class="kpi-icon-wrap bg-emerald-soft">🎯</div>
+      <div class="kpi-data">
+        <span class="kpi-label">ORT. YAPISAL SEO</span>
+        <div class="kpi-value text-emerald">{{ averageSeoScore }} <small>/ 100</small></div>
+        <span class="kpi-sub">Etsy Algoritma Uyumu</span>
+      </div>
+    </div>
+
+    <div class="kpi-pill">
+      <div class="kpi-icon-wrap bg-rose-soft">⚠️</div>
+      <div class="kpi-data">
+        <span class="kpi-label">KRİTİK İLANLAR (&lt;60)</span>
+        <div class="kpi-value text-rose">{{ criticalCount }} İlan</div>
+        <span class="kpi-sub">Acil İyileştirme Gerekli</span>
+      </div>
+    </div>
+
+    <div class="kpi-pill">
+      <div class="kpi-icon-wrap bg-indigo-soft">✨</div>
+      <div class="kpi-data">
+        <span class="kpi-label">AI ÖNERİSİ HAZIR</span>
+        <div class="kpi-value text-indigo">{{ optimizedCount }} / {{ totalCount }}</div>
+        <span class="kpi-sub">Yerel SQLite Arşivinde</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACTION & FILTER TOOLBAR -->
+  <section class="toolbar-section">
+    <!-- Filter Chips -->
+    <div class="filter-chips">
+      <button class="chip" [class.active]="activeFilter === 'all'" (click)="setFilter('all')">
+        Tümü <span class="chip-count">{{ listings.length }}</span>
+      </button>
+      <button class="chip chip-warn" [class.active]="activeFilter === 'lowSeo'" (click)="setFilter('lowSeo')">
+        Düşük SEO (&lt;60) <span class="chip-count">{{ lowSeoCount }}</span>
+      </button>
+      <button class="chip chip-danger" [class.active]="activeFilter === 'missingTags'" (click)="setFilter('missingTags')">
+        Eksik Tag (&lt;13) <span class="chip-count">{{ missingTagCount }}</span>
+      </button>
+      <button class="chip chip-success" [class.active]="activeFilter === 'hasAudit'" (click)="setFilter('hasAudit')">
+        Önerisi Hazır <span class="chip-count">{{ optimizedCount }}</span>
+      </button>
+      <button class="chip chip-muted" [class.active]="activeFilter === 'zeroFav'" (click)="setFilter('zeroFav')">
+        0 Favori <span class="chip-count">{{ zeroFavCount }}</span>
+      </button>
+    </div>
+
+    <!-- Search & Limit -->
+    <div class="toolbar-controls">
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input
+          type="text"
+          [(ngModel)]="searchQuery"
+          (input)="onSearchChange()"
+          placeholder="İlan başlığı veya ID ara..."
+          class="search-input"
+        />
+        <button *ngIf="searchQuery" class="clear-search" (click)="searchQuery = ''; onSearchChange()">✕</button>
+      </div>
+
+      <div class="limit-selector">
+        <label>Limit:</label>
+        <select [(ngModel)]="fetchLimit" (change)="loadListings()" class="select-box">
+          <option [ngValue]="10">10</option>
+          <option [ngValue]="25">25</option>
+          <option [ngValue]="50">50</option>
+          <option [ngValue]="100">100</option>
+        </select>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-btn-group">
+        <button class="btn-action btn-refresh" (click)="loadListings()" [disabled]="isLoading">
+          <span class="icon" [class.spin]="isLoading">🔄</span>
+          <span>Listingleri Yükle</span>
+        </button>
+
+        <button class="btn-action btn-batch" (click)="runBatchAiAudit()" [disabled]="isBatchAuditing || isLoading">
+          <span class="icon">⚡</span>
+          <span>Tümünü AI ile Denetle</span>
+        </button>
+
+        <button class="btn-action btn-single-ai" (click)="runAiOptimizationForSelected()" [disabled]="!selectedListing || isAuditingSelected">
+          <span class="icon" [class.spin]="isAuditingSelected">🎯</span>
+          <span>AI ile Puanla</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- BATCH PROGRESS BAR -->
+  <div *ngIf="isBatchAuditing" class="batch-progress-card">
+    <div class="progress-info">
+      <span>Toplu AI Denetimi Yürütülüyor: {{ batchProgress.current }} / {{ batchProgress.total }}</span>
+      <span>{{ Math.round((batchProgress.current / batchProgress.total) * 100) }}%</span>
+    </div>
+    <div class="progress-bar-bg">
+      <div class="progress-bar-fill" [style.width.%]="(batchProgress.current / batchProgress.total) * 100"></div>
+    </div>
+  </div>
+
+  <!-- 10-COLUMN LISTINGS TABLE -->
+  <section class="table-section">
+    <div class="table-card">
+      <div class="table-header-info">
+        <span class="table-title">Mağaza Aktif İlanları ({{ filteredListings.length }} İlan Listelendi)</span>
+        <span class="table-subtitle">İncelemek ve optimize etmek istediğiniz ilana tıklayın</span>
+      </div>
+
+      <div class="table-scroll-container">
+        <table class="listings-table">
+          <thead>
+            <tr>
+              <th style="width: 54px;">Görsel</th>
+              <th style="width: 50px;">#</th>
+              <th>İlan Başlığı</th>
+              <th style="width: 90px; text-align: center;">SEO Skoru</th>
+              <th style="width: 85px; text-align: center;">AI Skoru</th>
+              <th style="width: 85px; text-align: center;">Tag Sayısı</th>
+              <th style="width: 90px; text-align: right;">Fiyat</th>
+              <th style="width: 75px; text-align: center;">Favori</th>
+              <th style="width: 70px; text-align: center;">Stok</th>
+              <th style="width: 95px; text-align: center;">Durum</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              *ngFor="let item of paginatedListings; let idx = index"
+              (click)="selectListing(item)"
+              [class.selected-row]="selectedListing?.listingId === item.listingId"
+              class="listing-row"
+            >
+              <!-- 1. Görsel -->
+              <td class="col-img">
+                <div class="thumb-container">
+                  <img
+                    *ngIf="item.primaryImageUrl"
+                    [src]="item.primaryImageUrl"
+                    [alt]="item.title"
+                    class="thumb-img"
+                    loading="lazy"
+                  />
+                  <div *ngIf="!item.primaryImageUrl" class="thumb-placeholder">🖼️</div>
+                </div>
+              </td>
+
+              <!-- 2. Sıra -->
+              <td class="col-rank">
+                {{ (currentPage - 1) * pageSize + idx + 1 }}
+              </td>
+
+              <!-- 3. Başlık -->
+              <td class="col-title">
+                <div class="title-wrap">
+                  <span class="listing-title-text" [title]="item.title">{{ item.title }}</span>
+                  <div class="title-meta">
+                    <span class="meta-id">ID: {{ item.listingId }}</span>
+                    <span class="meta-len">{{ item.title.length }}/140 krk</span>
+                  </div>
+                </div>
+              </td>
+
+              <!-- 4. SEO Skoru -->
+              <td class="col-seo" style="text-align: center;">
+                <span
+                  class="score-pill"
+                  [ngClass]="{
+                    'score-high': item.seoScore >= 80,
+                    'score-mid': item.seoScore >= 60 && item.seoScore < 80,
+                    'score-low': item.seoScore < 60
+                  }"
+                >
+                  {{ item.seoScore }}
+                </span>
+              </td>
+
+              <!-- 5. AI Skoru -->
+              <td class="col-ai" style="text-align: center;">
+                <span
+                  *ngIf="item.aiScore"
+                  class="score-pill score-ai"
+                >
+                  ✨ {{ item.aiScore }}
+                </span>
+                <span *ngIf="!item.aiScore" class="text-muted">-</span>
+              </td>
+
+              <!-- 6. Tag Sayısı -->
+              <td class="col-tags" style="text-align: center;">
+                <span
+                  class="tag-count-badge"
+                  [class.tag-full]="item.tags.length === 13"
+                  [class.tag-missing]="item.tags.length < 13"
+                >
+                  {{ item.tags.length }} / 13
+                </span>
+              </td>
+
+              <!-- 7. Fiyat -->
+              <td class="col-price" style="text-align: right;">
+                <span class="price-val">{{ item.priceAmount | number:'1.2-2' }}</span>
+                <span class="currency-code">{{ item.currencyCode }}</span>
+              </td>
+
+              <!-- 8. Favori -->
+              <td class="col-fav" style="text-align: center;">
+                <span class="fav-badge">❤️ {{ item.numFavorers || 0 }}</span>
+              </td>
+
+              <!-- 9. Stok -->
+              <td class="col-qty" style="text-align: center;">
+                <span class="qty-badge" [class.qty-zero]="item.quantity === 0">{{ item.quantity }}</span>
+              </td>
+
+              <!-- 10. Durum -->
+              <td class="col-status" style="text-align: center;">
+                <span *ngIf="item.hasSavedAudit" class="status-badge badge-audit-ready">✨ AI Hazır</span>
+                <span *ngIf="!item.hasSavedAudit && item.seoScore >= 80" class="status-badge badge-good">İyi</span>
+                <span *ngIf="!item.hasSavedAudit && item.seoScore < 80" class="status-badge badge-review">İncelenmeli</span>
+              </td>
+            </tr>
+
+            <!-- Empty State -->
+            <tr *ngIf="paginatedListings.length === 0 && !isLoading">
+              <td colspan="10" class="empty-state">
+                <div class="empty-content">
+                  <span class="empty-icon">🔍</span>
+                  <p>Filtreye uygun ilan bulunamadı.</p>
+                  <button class="btn-reset-filter" (click)="setFilter('all'); searchQuery = ''; applyFilter()">Filtreleri Sıfırla</button>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Loading State -->
+            <tr *ngIf="isLoading">
+              <td colspan="10" class="loading-state">
+                <div class="loading-spinner"></div>
+                <p>Etsy API üzerinden canlı ilanlar getiriliyor...</p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- PAGINATION CONTROLS -->
+      <div class="pagination-footer">
+        <div class="pagination-info">
+          <span>Toplam <b>{{ filteredListings.length }}</b> ilandan <b>{{ startIndexDisplay }}-{{ endIndexDisplay }}</b> arası gösteriliyor</span>
+        </div>
+
+        <div class="pagination-controls">
+          <button class="page-btn" (click)="firstPage()" [disabled]="currentPage === 1">« İlk</button>
+          <button class="page-btn" (click)="prevPage()" [disabled]="currentPage === 1">‹ Önceki</button>
+
+          <span class="page-current">Sayfa {{ currentPage }} / {{ totalPages }}</span>
+
+          <button class="page-btn" (click)="nextPage()" [disabled]="currentPage === totalPages">Sonraki ›</button>
+          <button class="page-btn" (click)="lastPage()" [disabled]="currentPage === totalPages">Son »</button>
+
+          <div class="page-size-wrap">
+            <label>Sayfa Başına:</label>
+            <select [(ngModel)]="pageSize" (change)="currentPage = 1" class="select-page-size">
+              <option [ngValue]="10">10</option>
+              <option [ngValue]="15">15</option>
+              <option [ngValue]="25">25</option>
+              <option [ngValue]="50">50</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3-COLUMN SPLIT CONSOLE: BEFORE vs AFTER & ACTIONS -->
+  <section *ngIf="selectedListing" class="split-console-section">
+    <div class="split-grid">
+      <!-- SOL SÜTUN: Görsel & Hızlı Aksiyonlar -->
+      <div class="col-hub">
+        <div class="hub-card">
+          <div class="hub-header">
+            <span class="hub-title">Görsel & Aksiyon Konsolu</span>
+            <span class="badge-listing-id">#{{ selectedListing.listingId }}</span>
+          </div>
+
+          <!-- Zoom Image -->
+          <div class="img-preview-box">
+            <img
+              *ngIf="selectedListing.primaryImageUrl"
+              [src]="selectedListing.primaryImageUrl"
+              [alt]="selectedListing.title"
+              class="preview-img"
+            />
+            <div *ngIf="!selectedListing.primaryImageUrl" class="no-img-box">
+              <span>🖼️ Görsel Yok</span>
+            </div>
+          </div>
+
+          <!-- Quick Stats Pill Box -->
+          <div class="stats-mini-box">
+            <div class="stat-mini">
+              <span class="stat-k">Fiyat:</span>
+              <span class="stat-v">{{ selectedListing.priceAmount }} {{ selectedListing.currencyCode }}</span>
+            </div>
+            <div class="stat-mini">
+              <span class="stat-k">Stok:</span>
+              <span class="stat-v">{{ selectedListing.quantity }} Adet</span>
+            </div>
+            <div class="stat-mini">
+              <span class="stat-k">Görüntüleme:</span>
+              <span class="stat-v">{{ selectedListing.views || 0 }}</span>
+            </div>
+            <div class="stat-mini">
+              <span class="stat-k">Favori:</span>
+              <span class="stat-v">❤️ {{ selectedListing.numFavorers || 0 }}</span>
+            </div>
+          </div>
+
+          <!-- ACTION BUTTONS -->
+          <div class="hub-actions">
+            <!-- 1. Etsy'de Güncelle -->
+            <button
+              class="btn-hub-primary"
+              (click)="updateListingOnEtsy()"
+              [disabled]="isUpdatingEtsy"
+            >
+              <span *ngIf="isUpdatingEtsy" class="btn-spinner"></span>
+              <span>{{ isUpdatingEtsy ? "Etsy'ye Yükleniyor..." : "🚀 Etsy'de Güncelle" }}</span>
+            </button>
+
+            <!-- 2. AI ile Yeniden Optimize Et -->
+            <button
+              class="btn-hub-ai"
+              (click)="runAiOptimizationForSelected()"
+              [disabled]="isAuditingSelected"
+            >
+              <span *ngIf="isAuditingSelected" class="btn-spinner"></span>
+              <span>{{ isAuditingSelected ? 'Gemini Üretiyor...' : '✨ AI ile Yeniden Üret' }}</span>
+            </button>
+
+            <!-- 3. Şablonla Paragrafla -->
+            <button class="btn-hub-secondary" (click)="formatDescriptionTemplate()">
+              <span>📐 Şablonla Paragrafla</span>
+            </button>
+
+            <!-- 4. Öneriyi Kopyala -->
+            <button class="btn-hub-secondary" (click)="copySuggestionToClipboard()">
+              <span>📋 Öneriyi Kopyala</span>
+            </button>
+          </div>
+
+          <div *ngIf="selectedListing.savedAudit?.isAppliedToEtsy" class="applied-badge">
+            ✓ Bu öneri daha önce canlı Etsy mağazasına yüklendi.
+          </div>
+        </div>
+      </div>
+
+      <!-- ORTA SÜTUN: 📌 MEVCUT LİSTİNG (BEFORE) -->
+      <div class="col-before">
+        <div class="panel-card before-card">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-tag tag-before">📌 MEVCUT LİSTİNG (BEFORE)</span>
+            </div>
+            <div class="score-display">
+              <span class="score-title-sub">Mevcut SEO Skoru:</span>
+              <span
+                class="score-pill"
+                [ngClass]="{
+                  'score-high': selectedListing.seoScore >= 80,
+                  'score-mid': selectedListing.seoScore >= 60 && selectedListing.seoScore < 80,
+                  'score-low': selectedListing.seoScore < 60
+                }"
+              >
+                {{ selectedListing.seoScore }} / 100
+              </span>
+            </div>
+          </div>
+
+          <!-- Mevcut Başlık -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">Mevcut İlan Başlığı</label>
+              <span class="char-count" [class.text-danger]="selectedListing.title.length > 140">
+                {{ selectedListing.title.length }} / 140 Karakter
+              </span>
+            </div>
+            <div class="read-only-box title-box">
+              {{ selectedListing.title }}
+            </div>
+          </div>
+
+          <!-- Mevcut 13 Etiket -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">Mevcut Etiketler (Tags)</label>
+              <span
+                class="tag-count-label"
+                [class.text-success]="selectedListing.tags.length === 13"
+                [class.text-danger]="selectedListing.tags.length < 13"
+              >
+                {{ selectedListing.tags.length }} / 13 Etiket
+                <span *ngIf="selectedListing.tags.length < 13"> ({{ 13 - selectedListing.tags.length }} Eksik!)</span>
+              </span>
+            </div>
+            <div class="tags-container">
+              <span *ngFor="let tag of selectedListing.tags" class="tag-chip tag-chip-before">
+                {{ tag }}
+              </span>
+              <span *ngIf="selectedListing.tags.length === 0" class="no-tags-msg">
+                ⚠️ Hiç etiket tanımlanmamış!
+              </span>
+            </div>
+          </div>
+
+          <!-- Mevcut Açıklama -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">Mevcut Açıklama (Description)</label>
+              <span class="char-count">{{ selectedListing.description.length }} Karakter</span>
+            </div>
+            <div class="read-only-box desc-box">
+              {{ selectedListing.description }}
+            </div>
+          </div>
+
+          <!-- Yapısal Açıklar & Eksikler -->
+          <div class="form-group">
+            <label class="field-label text-rose">Tespit Edilen Yapısal SEO Açıkları</label>
+            <div class="flaws-list">
+              <div *ngFor="let need of selectedListing.structuralNeeds" class="flaw-item">
+                <span class="flaw-bullet">⚠️</span>
+                <span>{{ need }}</span>
+              </div>
+              <div *ngIf="selectedListing.structuralNeeds?.length === 0" class="flaw-clean">
+                ✓ Yapısal hata veya eksik tespit edilmedi.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SAĞ SÜTUN: ✨ AI İYİLEŞTİRİLMİŞ LİSTİNG (AFTER) -->
+      <div class="col-after">
+        <div class="panel-card after-card">
+          <div class="panel-header">
+            <div class="panel-title-wrap">
+              <span class="panel-tag tag-after">✨ AI İYİLEŞTİRİLMİŞ LİSTİNG (AFTER)</span>
+              <span class="ai-model-pill">{{ aiModelUsed }}</span>
+            </div>
+            <div class="score-display">
+              <span class="score-title-sub">Hedef AI Skoru:</span>
+              <span class="score-pill score-high">
+                {{ aiScoreAfter || 96 }} / 100
+              </span>
+            </div>
+          </div>
+
+          <!-- AI Optimize Başlık -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">AI Tarafından Optimize Edilmiş Başlık</label>
+              <span class="char-count" [class.text-danger]="afterTitle.length > 140" [class.text-success]="afterTitle.length >= 100 && afterTitle.length <= 140">
+                {{ afterTitle.length }} / 140 Karakter
+              </span>
+            </div>
+            <input
+              type="text"
+              [(ngModel)]="afterTitle"
+              class="editable-input title-input"
+              placeholder="AI optimize başlık..."
+            />
+          </div>
+
+          <!-- AI Optimize 13 Etiket -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">AI Tarafından Üretilen 13 Etiket</label>
+              <span
+                class="tag-count-label"
+                [class.text-success]="afterTags.length === 13"
+                [class.text-warn]="afterTags.length < 13"
+                [class.text-danger]="afterTags.length > 13"
+              >
+                {{ afterTags.length }} / 13 Etiket
+              </span>
+            </div>
+
+            <!-- Tags Chips -->
+            <div class="tags-container">
+              <span *ngFor="let tag of afterTags; let i = index" class="tag-chip tag-chip-after">
+                <span>{{ tag }}</span>
+                <button class="tag-remove-btn" (click)="removeTag(i)" title="Etiketi Sil">×</button>
+              </span>
+            </div>
+
+            <!-- Add Tag Input -->
+            <div *ngIf="afterTags.length < 13" class="add-tag-box">
+              <input
+                type="text"
+                [(ngModel)]="newTagInput"
+                (keyup.enter)="addTag()"
+                placeholder="Yeni etiket yazıp Enter'a basın (maks 20 krk)..."
+                class="add-tag-input"
+              />
+              <button class="btn-add-tag" (click)="addTag()" [disabled]="!newTagInput.trim()">+ Ekle</button>
+            </div>
+          </div>
+
+          <!-- AI Optimize Açıklama -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">AI Optimize Açıklama Metni</label>
+              <span class="char-count">{{ afterDescription.length }} Karakter</span>
+            </div>
+            <textarea
+              [(ngModel)]="afterDescription"
+              rows="12"
+              class="editable-textarea desc-textarea"
+              placeholder="AI tarafından yapılandırılmış ürün açıklaması..."
+            ></textarea>
+          </div>
+
+          <!-- AI Eleştirisi & Risk Uyarıları -->
+          <div *ngIf="aiCritique || riskWarnings.length > 0" class="form-group">
+            <label class="field-label text-cyan">AI Analizi & Risk Kontrolü</label>
+            <div class="critique-card">
+              <p *ngIf="aiCritique" class="critique-text">{{ aiCritique }}</p>
+
+              <div *ngIf="riskWarnings.length > 0" class="risk-warnings-box">
+                <span class="risk-title">⚠️ Dikkat Edilmesi Gereken Noktalar:</span>
+                <ul>
+                  <li *ngFor="let w of riskWarnings">{{ w }}</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Kontrol Listesi (Checklist) -->
+          <div *ngIf="checklist.length > 0" class="form-group">
+            <label class="field-label text-emerald">Optimizasyon Kontrol Listesi</label>
+            <div class="checklist-box">
+              <div *ngFor="let check of checklist" class="check-item">
+                <span class="check-icon">✓</span>
+                <span>{{ check }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- AI SETTINGS MODAL -->
+  <div *ngIf="showSettingsModal" class="modal-backdrop" (click)="showSettingsModal = false">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">⚙️ AI Model & Optimizasyon Ayarları</h3>
+        <button class="modal-close-btn" (click)="showSettingsModal = false">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="modal-field">
+          <label>Yapay Zeka Modeli</label>
+          <select [(ngModel)]="selectedAiModel" class="modal-select">
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (En Hızlı & Yüksek Kota)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash (Dengeli & Güçlü)</option>
+            <option value="gemini-1.5-pro">Gemini 1.5 Pro (En Yüksek Yaratıcılık & Akıl Yürütme)</option>
+          </select>
+        </div>
+
+        <div class="modal-field">
+          <label>Hedef Alıcı Personası (Target Buyer)</label>
+          <textarea
+            [(ngModel)]="targetBuyerPersona"
+            rows="3"
+            class="modal-input"
+            placeholder="Örn: Hediye arayanlar, düğün ve doğum günü organizatörleri..."
+          ></textarea>
+        </div>
+
+        <div class="modal-field">
+          <label>Özel Odak Anahtar Kelimeleri (Virgülle ayırın)</label>
+          <input
+            type="text"
+            [(ngModel)]="focusKeywords"
+            class="modal-input"
+            placeholder="Örn: personalized gift, handmade wooden, custom decor"
+          />
+        </div>
+
+        <div class="modal-field">
+          <label>Yazım Dili & Tonu</label>
+          <select [(ngModel)]="aiTone" class="modal-select">
+            <option value="Profesyonel & İkna Edici">Profesyonel & İkna Edici</option>
+            <option value="Samimi & Sıcak (Boutique)">Samimi & Sıcak (Boutique)</option>
+            <option value="Lüks & Premium">Lüks & Premium</option>
+            <option value="Minimalist & Bilgilendirici">Minimalist & Bilgilendirici</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-modal-save" (click)="showSettingsModal = false">Ayarları Kaydet</button>
+      </div>
+    </div>
+  </div>
+</div>

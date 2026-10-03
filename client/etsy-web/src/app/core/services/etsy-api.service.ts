@@ -68,6 +68,63 @@ export interface EtsyTokenStatusDto {
   saved?: boolean;
 }
 
+export interface SavedListingAuditDto {
+  id: number;
+  shopId: string;
+  listingId: string;
+  originalTitle: string;
+  originalTagsJson: string;
+  originalDescription: string;
+  optimizedTitle: string;
+  optimizedTagsJson: string;
+  optimizedDescription: string;
+  aiModel: string;
+  seoScoreBefore: number;
+  seoScoreAfter: number;
+  structuralIssuesJson?: string;
+  riskWarningsJson?: string;
+  checklistJson?: string;
+  isAppliedToEtsy: boolean;
+  appliedAt?: string | null;
+  createdAt: string;
+}
+
+export interface ShopListingItemDto {
+  listingId: number;
+  title: string;
+  description: string;
+  state: string;
+  quantity: number;
+  numFavorers: number;
+  views: number;
+  tags: string[];
+  materials: string[];
+  primaryImageUrl?: string;
+  priceAmount: number;
+  currencyCode: string;
+  seoScore: number;
+  structuralNeeds: string[];
+  aiScore?: number | null;
+  hasSavedAudit: boolean;
+  savedAudit?: SavedListingAuditDto | null;
+}
+
+export interface OptimizeListingResponseDto {
+  success: boolean;
+  listingId: string;
+  optimizedTitle: string;
+  optimizedTags: string[];
+  optimizedDescription: string;
+  aiModel: string;
+  seoScoreBefore: number;
+  seoScoreAfter: number;
+  critique?: string;
+  structuralIssues: string[];
+  riskWarnings: string[];
+  checklist: string[];
+  message?: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -357,6 +414,43 @@ export class EtsyApiService {
 
   exchangeEtsyCode(payload: { shopId: string; code: string; state?: string; codeVerifier?: string; redirectUri?: string }): Observable<any> {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/oauth/exchange-code`, payload);
+  }
+
+  // ── Shop Active Listings & AI Optimization ──────────────────────────────
+  getShopActiveListings(shopId?: string, limit: number = 25): Observable<ShopListingItemDto[]> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<ShopListingItemDto[]>(`${this.API_BASE}/api/etsy/shop/listings?shopId=${encodeURIComponent(id)}&limit=${limit}`);
+  }
+
+  optimizeListingWithAi(listingId: string | number, payload: {
+    shopId?: string;
+    title?: string;
+    tags?: string[];
+    description?: string;
+    focusKeywords?: string;
+    targetBuyerPersona?: string;
+    tone?: string;
+    model?: string;
+  }): Observable<OptimizeListingResponseDto> {
+    const shopId = payload.shopId || this.activeShopId();
+    return this.http.post<OptimizeListingResponseDto>(`${this.API_BASE}/api/etsy/listings/${listingId}/ai-optimize?shopId=${encodeURIComponent(shopId)}`, payload);
+  }
+
+  updateEtsyListing(listingId: string | number, payload: {
+    shopId?: string;
+    title?: string;
+    description?: string;
+    tags?: string[];
+    materials?: string[];
+    state?: string;
+  }): Observable<any> {
+    const shopId = payload.shopId || this.activeShopId();
+    return this.http.put<any>(`${this.API_BASE}/api/etsy/listings/${listingId}?shopId=${encodeURIComponent(shopId)}`, payload);
+  }
+
+  getListingAudits(shopId?: string): Observable<SavedListingAuditDto[]> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<SavedListingAuditDto[]>(`${this.API_BASE}/api/etsy/listings/audits?shopId=${encodeURIComponent(id)}`);
   }
 
   // ── System Health & Version ───────────────────────────────────────────────

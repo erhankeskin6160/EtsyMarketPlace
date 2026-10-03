@@ -179,6 +179,22 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                     updated_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS listing_ai_audits (
+                    shop_id TEXT NOT NULL,
+                    listing_id TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    current_seo_score INTEGER NOT NULL DEFAULT 0,
+                    optimized_seo_score INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT '',
+                    provider TEXT NOT NULL DEFAULT '',
+                    model TEXT NOT NULL DEFAULT '',
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    audited_at TEXT NOT NULL,
+                    PRIMARY KEY(shop_id, listing_id)
+                );
+
+                CREATE INDEX IF NOT EXISTS ix_listing_ai_audits_shop ON listing_ai_audits(shop_id);
+
                 CREATE INDEX IF NOT EXISTS ix_bank_payouts_shop_date ON bank_payouts(shop_id, occurred_at);
                 CREATE INDEX IF NOT EXISTS ix_financial_transactions_shop_date ON financial_transactions(shop_id, occurred_at);
                 CREATE INDEX IF NOT EXISTS ix_order_costs_shop_date ON order_costs(shop_id, created_at);
@@ -1324,6 +1340,68 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         }
 
         return new EtsyAppCredentialsRecord(request.ShopId, maskedKey, maskedSecret, redirectUri, updatedAt);
+    }
+
+    public async Task<IReadOnlyList<SavedListingAuditRecord>> GetListingAuditsAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT shop_id, listing_id, title, current_seo_score, optimized_seo_score, status, provider, model, result_json, audited_at
+            FROM listing_ai_audits
+            WHERE shop_id = $shop_id
+            ORDER BY audited_at DESC;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var list = new List<SavedListingAuditRecord>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            list.Add(new SavedListingAuditRecord(
+                reader.GetString(0),
+                reader.GetString(1),
+                reader.GetString(2),
+                reader.GetInt32(3),
+                reader.GetInt32(4),
+                reader.GetString(5),
+                reader.GetString(6),
+                reader.GetString(7),
+                reader.GetString(8),
+                DateTimeOffset.Parse(reader.GetString(9), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
+        }
+        return list;
+    }
+
+    public async Task SaveListingAuditAsync(SaveListingAuditRecordRequest request, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO listing_ai_audits(shop_id, listing_id, title, current_seo_score, optimized_seo_score, status, provider, model, result_json, audited_at)
+            VALUES($shop_id, $listing_id, $title, $cur_seo, $opt_seo, $status, $provider, $model, $json, $audited_at)
+            ON CONFLICT(shop_id, listing_id) DO UPDATE SET
+                title = excluded.title,
+                current_seo_score = excluded.current_seo_score,
+                optimized_seo_score = excluded.optimized_seo_score,
+                status = excluded.status,
+                provider = excluded.provider,
+                model = excluded.model,
+                result_json = excluded.result_json,
+                audited_at = excluded.audited_at;
+            """;
+        command.Parameters.AddWithValue("$shop_id", request.ShopId);
+        command.Parameters.AddWithValue("$listing_id", request.ListingId);
+        command.Parameters.AddWithValue("$title", request.Title);
+        command.Parameters.AddWithValue("$cur_seo", request.CurrentSeoScore);
+        command.Parameters.AddWithValue("$opt_seo", request.OptimizedSeoScore);
+        command.Parameters.AddWithValue("$status", request.Status);
+        command.Parameters.AddWithValue("$provider", request.Provider);
+        command.Parameters.AddWithValue("$model", request.Model);
+        command.Parameters.AddWithValue("$json", request.ResultJson);
+        command.Parameters.AddWithValue("$audited_at", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     private static string MaskSecret(string? secret)

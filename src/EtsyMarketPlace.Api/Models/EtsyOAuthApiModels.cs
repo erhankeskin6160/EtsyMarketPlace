@@ -12,3 +12,18 @@ public sealed record PkceSession(
     string ShopId,
     string RedirectUri,
     DateTimeOffset CreatedAt);
+
+public sealed record OptimizeListingApiRequest(
+    string ShopId,
+    string Title,
+    string Description,
+    IReadOnlyList<string> Tags,
+    string? TargetKeyword = null,
+    string? DescriptionStyle = "Storytelling");
+
+public sealed record UpdateListingApiRequest(
+    string ShopId,
+    string Title,
+    string Description,
+    IReadOnlyList<string> Tags,
+    IReadOnlyList<string>? Materials = null);
