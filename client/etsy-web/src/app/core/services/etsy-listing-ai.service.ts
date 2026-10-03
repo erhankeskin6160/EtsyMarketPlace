@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
+import { Observable, of, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { AiSettingsService } from './ai-settings.service';
 
@@ -36,24 +36,38 @@ export class EtsyListingAiService {
     const cleanInput = (userInput || '').trim();
     const settings = this.aiSettings.settings();
     const provider = settings.provider;
+    const isStrict = settings.strictNeverOffline;
+    const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    // Check if live AI is available
-    if (provider === 'Gemini' && settings.geminiApiKey && settings.geminiApiKey.trim().length > 10) {
+    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+
+    if (isStrict && !hasLiveKey) {
+      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik şablon üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+    }
+
+    if (hasLiveKey) {
       return this.callGeminiForTitle(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash', currentCategory).pipe(
         map(title => ({
           value: this.normalizeTitleLength(title),
           isLive: true,
           provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          message: `✨ Google Gemini ile '${cleanInput || 'Ürün'}' için 140 karakter SEO başlığı optimize edildi!`
+          message: `✨ Google Gemini ile '${cleanInput || 'Ürün'}' için canlı 140 karakter SEO başlığı optimize edildi!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini API hatası, Akıllı Kural Motoru devrede:', err);
+          console.warn('[EtsyListingAiService] Canlı Gemini API hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+          }
           const fallback = this.generateRuleBasedTitle(cleanInput, currentCategory);
+          const msg = isSilentFallback
+            ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline kural motoruna geçildi).`
+            : `⚡ Akıllı Kural Motoru ile '${cleanInput || 'Ürün'}' için 140 karakter SEO başlığı oluşturuldu.`;
           return of({
             value: fallback,
             isLive: false,
             provider: 'Offline Kural Motoru',
-            message: `⚡ Akıllı Kural Motoru ile '${cleanInput || 'Ürün'}' için 140 karakter SEO başlığı oluşturuldu.`
+            message: msg
           });
         })
       );
@@ -90,23 +104,38 @@ export class EtsyListingAiService {
     const cleanInput = (userInput || '').trim();
     const settings = this.aiSettings.settings();
     const provider = settings.provider;
+    const isStrict = settings.strictNeverOffline;
+    const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    if (provider === 'Gemini' && settings.geminiApiKey && settings.geminiApiKey.trim().length > 10) {
+    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+
+    if (isStrict && !hasLiveKey) {
+      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik etiket üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+    }
+
+    if (hasLiveKey) {
       return this.callGeminiForTags(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash').pipe(
         map(tags => ({
           value: this.normalizeTagsList(tags),
           isLive: true,
           provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          message: `✨ Google Gemini 13 altın arama etiketini tam doldurdu!`
+          message: `✨ Google Gemini 13 altın arama etiketini canlı olarak tam doldurdu!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini tag hatası, kural motoruna geçildi:', err);
+          console.warn('[EtsyListingAiService] Canlı Gemini tag hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+          }
           const tags = this.generateRuleBasedTags(cleanInput);
+          const msg = isSilentFallback
+            ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, 13 arama etiketi offline oluşturuldu).`
+            : `⚡ Akıllı Kural Motoru ile 13 arama etiketi üretildi.`;
           return of({
             value: tags,
             isLive: false,
             provider: 'Offline Kural Motoru',
-            message: `⚡ Akıllı Kural Motoru ile 13 arama etiketi üretildi.`
+            message: msg
           });
         })
       );
@@ -128,23 +157,38 @@ export class EtsyListingAiService {
     const cleanInput = (userInput || '').trim();
     const settings = this.aiSettings.settings();
     const provider = settings.provider;
+    const isStrict = settings.strictNeverOffline;
+    const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    if (provider === 'Gemini' && settings.geminiApiKey && settings.geminiApiKey.trim().length > 10) {
+    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+
+    if (isStrict && !hasLiveKey) {
+      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik açıklama üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+    }
+
+    if (hasLiveKey) {
       return this.callGeminiForDescription(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash', materials).pipe(
         map(desc => ({
           value: desc,
           isLive: true,
           provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          message: `✨ Google Gemini ikna edici ürün açıklamasını üretti!`
+          message: `✨ Google Gemini ikna edici ürün açıklamasını canlı üretti!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini açıklama hatası, kural motoruna geçildi:', err);
+          console.warn('[EtsyListingAiService] Canlı Gemini açıklama hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+          }
           const desc = this.generateRuleBasedDescription(cleanInput, materials);
+          const msg = isSilentFallback
+            ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline açıklama oluşturuldu).`
+            : `⚡ Akıllı Kural Motoru ile zengin ürün açıklaması hazırlandı.`;
           return of({
             value: desc,
             isLive: false,
             provider: 'Offline Kural Motoru',
-            message: `⚡ Akıllı Kural Motoru ile zengin ürün açıklaması hazırlandı.`
+            message: msg
           });
         })
       );
@@ -166,8 +210,16 @@ export class EtsyListingAiService {
     const cleanInput = (userInput || '').trim();
     const settings = this.aiSettings.settings();
     const provider = settings.provider;
+    const isStrict = settings.strictNeverOffline;
+    const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    if (provider === 'Gemini' && settings.geminiApiKey && settings.geminiApiKey.trim().length > 10) {
+    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+
+    if (isStrict && !hasLiveKey) {
+      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik listeleme üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
+    }
+
+    if (hasLiveKey) {
       return this.callGeminiForComplete(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash', materials).pipe(
         map(res => ({
           title: this.normalizeTitleLength(res.title),
@@ -177,11 +229,19 @@ export class EtsyListingAiService {
           materials: res.materials || materials || 'Handcrafted, Premium Materials',
           isLive: true,
           provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          summaryMessage: `🎉 Google Gemini ile '${cleanInput || 'Ürün'}' için tüm Etsy listelemesi (Başlık, Kategori, 13 Tag, Açıklama) hazırlandı!`
+          summaryMessage: `🎉 Google Gemini ile '${cleanInput || 'Ürün'}' için tüm Etsy listelemesi (Canlı Başlık, Kategori, 13 Tag, Açıklama) hazırlandı!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini tam paket hatası, kural motoruna geçildi:', err);
-          return of(this.generateRuleBasedComplete(cleanInput, materials));
+          console.warn('[EtsyListingAiService] Canlı Gemini tam paket hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${settings.geminiModel || 'gemini-2.5-flash'}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+          }
+          const ruleRes = this.generateRuleBasedComplete(cleanInput, materials);
+          if (isSilentFallback) {
+            ruleRes.summaryMessage = `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline şablon listelemesi oluşturuldu).`;
+          }
+          return of(ruleRes);
         })
       );
     }
@@ -189,12 +249,17 @@ export class EtsyListingAiService {
     return of(this.generateRuleBasedComplete(cleanInput, materials));
   }
 
-  // =========================================================================
-  // LIVE GEMINI API REST CALLS
-  // =========================================================================
+  private resolveGeminiModel(model: string): string {
+    const m = (model || '').trim();
+    if (m === 'gemini-2.5-pro' || !m) {
+      return 'gemini-2.5-flash';
+    }
+    return m;
+  }
 
   private callGeminiForTitle(input: string, apiKey: string, model: string, category?: string): Observable<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const activeModel = this.resolveGeminiModel(model);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const systemInstruction = `You are a world-class Etsy SEO specialist. Return ONLY a single line containing an optimized English Etsy title up to 140 characters. 
 The first 55 characters MUST contain the most critical search keywords for mobile visibility. 
 Separate keyword phrases with commas or pipes. 
@@ -207,7 +272,7 @@ Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw
       contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.35,
-        maxOutputTokens: 120
+        maxOutputTokens: 1000
       }
     };
 
@@ -220,7 +285,8 @@ Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw
   }
 
   private callGeminiForTags(input: string, apiKey: string, model: string): Observable<string[]> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const activeModel = this.resolveGeminiModel(model);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const systemInstruction = `You are an Etsy SEO expert. Generate exactly 13 unique, high-search-volume buyer tags for this product.
 CRITICAL ETSY RULES:
 - Each tag must be maximum 20 characters long.
@@ -232,6 +298,7 @@ CRITICAL ETSY RULES:
       contents: [{ role: 'user', parts: [{ text: `Product: "${input || 'Handcrafted Gift'}"` }] }],
       generationConfig: {
         temperature: 0.3,
+        maxOutputTokens: 1500,
         responseMimeType: 'application/json'
       }
     };
@@ -251,7 +318,8 @@ CRITICAL ETSY RULES:
   }
 
   private callGeminiForDescription(input: string, apiKey: string, model: string, materials?: string): Observable<string> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const activeModel = this.resolveGeminiModel(model);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const systemInstruction = `You are a top Etsy copywriter. Write a persuasive, beautifully structured product description.
 Include:
 - Catchy hook & opening summary
@@ -266,7 +334,7 @@ Format with clean emojis and line breaks.`;
       contents: [{ role: 'user', parts: [{ text: `Product: "${input || 'Handcrafted Artisan Product'}". Materials: "${materials || ''}"` }] }],
       generationConfig: {
         temperature: 0.5,
-        maxOutputTokens: 800
+        maxOutputTokens: 2500
       }
     };
 
@@ -276,7 +344,8 @@ Format with clean emojis and line breaks.`;
   }
 
   private callGeminiForComplete(input: string, apiKey: string, model: string, materials?: string): Observable<any> {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const activeModel = this.resolveGeminiModel(model);
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const systemInstruction = `You are an elite Etsy listing architect. Return ONLY a valid JSON object with the following fields:
 {
   "title": "SEO title up to 140 chars, first 55 chars mobile-optimized",
@@ -291,6 +360,7 @@ Format with clean emojis and line breaks.`;
       contents: [{ role: 'user', parts: [{ text: `Optimize this listing for: "${input || 'Handmade Artisan Item'}". Materials: "${materials || ''}"` }] }],
       generationConfig: {
         temperature: 0.4,
+        maxOutputTokens: 3500,
         responseMimeType: 'application/json'
       }
     };

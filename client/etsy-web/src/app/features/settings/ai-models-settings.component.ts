@@ -203,7 +203,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
           <div class="checkbox-group">
             <label class="checkbox-label">
-              <input type="checkbox" [(ngModel)]="formSettings.allowSilentOfflineFallback" />
+              <input type="checkbox" [(ngModel)]="formSettings.allowSilentOfflineFallback" (change)="onAllowSilentFallbackChange()" />
               <span class="checkbox-text">
                 <strong>Hata Anında Sessizce Çevrimdışı (Offline) Kural Motoruna Geç</strong>
                 <small>Canlı AI yanıt vermezse veya 503/429 hatası alınırsa kesintisiz çalışmayı sürdürür.</small>
@@ -211,7 +211,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
             </label>
 
             <label class="checkbox-label">
-              <input type="checkbox" [(ngModel)]="formSettings.strictNeverOffline" />
+              <input type="checkbox" [(ngModel)]="formSettings.strictNeverOffline" (change)="onStrictNeverOfflineChange()" />
               <span class="checkbox-text">
                 <strong>Canlı AI Zorunlu: Asla Offline Kural Motoruna Düşme</strong>
                 <small>Canlı AI yanıt vermezse kullanıcıya açıkça hata bildirir; asla sentetik offline şablon kullanmaz.</small>
@@ -737,11 +737,32 @@ export class AiModelsSettingsComponent implements OnInit {
     this.isTesting = false;
   }
 
+  onAllowSilentFallbackChange(): void {
+    if (this.formSettings.allowSilentOfflineFallback) {
+      this.formSettings.strictNeverOffline = false;
+      const now = new Date().toLocaleTimeString('tr-TR');
+      this.terminalLogs.push(`${now} - [POLİTİKA] Kesintisiz çalışma modu: Canlı AI hata verirse sessizce offline kural motoruna geçilecek.`);
+    }
+  }
+
+  onStrictNeverOfflineChange(): void {
+    if (this.formSettings.strictNeverOffline) {
+      this.formSettings.allowSilentOfflineFallback = false;
+      const now = new Date().toLocaleTimeString('tr-TR');
+      this.terminalLogs.push(`${now} - [POLİTİKA] Canlı AI Zorunlu modu: Asla sentetik offline kural motoruna düşülmeyecek.`);
+    }
+  }
+
   saveAndActivate(): void {
     this.aiService.saveSettings(this.formSettings);
     const now = new Date().toLocaleTimeString('tr-TR');
     this.terminalLogs.push(`${now} - [BAŞARILI] AI konfigürasyonu kaydedildi ve global olarak aktifleştirildi.`);
     this.terminalLogs.push(`${now} - Yeni Aktif Rozet: ${this.aiService.activeBadgeText()}`);
+    if (this.formSettings.strictNeverOffline) {
+      this.terminalLogs.push(`${now} - [AKTİF KURAL] Canlı AI Zorunlu: Asla offline kural motoruna düşme devrede.`);
+    } else if (this.formSettings.allowSilentOfflineFallback) {
+      this.terminalLogs.push(`${now} - [AKTİF KURAL] Sessizce offline kural motoruna geçiş devrede.`);
+    }
 
     this.showToast = true;
     setTimeout(() => {

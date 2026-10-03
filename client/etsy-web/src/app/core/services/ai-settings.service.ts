@@ -144,15 +144,23 @@ export class AiSettingsService {
       let s = stored ? JSON.parse(stored) : { ...DEFAULT_SETTINGS };
 
       // Synchronize with copilot gemini config if settings has no key
-      if (!s.geminiApiKey) {
+      if (!s.geminiApiKey || s.geminiApiKey.trim().length === 0) {
         const copilotCfg = localStorage.getItem('etsy_gemini_config');
         if (copilotCfg) {
-          const parsedCopilot = JSON.parse(copilotCfg);
-          if (parsedCopilot.apiKey) s.geminiApiKey = parsedCopilot.apiKey;
-          if (parsedCopilot.model) s.geminiModel = parsedCopilot.model;
+          try {
+            const parsedCopilot = JSON.parse(copilotCfg);
+            if (parsedCopilot.apiKey) s.geminiApiKey = parsedCopilot.apiKey;
+            if (parsedCopilot.model) s.geminiModel = parsedCopilot.model;
+          } catch {}
         }
       }
-      return { ...DEFAULT_SETTINGS, ...s };
+
+      if (s.geminiModel === 'gemini-2.5-pro' || !s.geminiModel) {
+        s.geminiModel = 'gemini-2.5-flash';
+      }
+
+      const merged: AiOptimizationSettings = { ...DEFAULT_SETTINGS, ...s };
+      return merged;
     } catch {
       // ignore
     }
@@ -213,7 +221,8 @@ export class AiSettingsService {
     // Real ping test for Gemini
     if (provider === 'Gemini') {
       try {
-        const targetModel = model || 'gemini-2.5-flash';
+        let targetModel = (model || 'gemini-2.5-flash').trim();
+        if (targetModel === 'gemini-2.5-pro') targetModel = 'gemini-2.5-flash';
         const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}?key=${encodeURIComponent(key.trim())}`);
         const latency = Math.round(performance.now() - start);
         if (resp.ok) {

@@ -314,8 +314,9 @@ export class FastCreatorComponent implements OnInit {
         this.title = res.value;
         this.showToast(res.message);
       },
-      error: () => {
+      error: (err) => {
         this.isGeneratingAi = false;
+        this.showToast(err?.message || '❌ Canlı AI başlık önerisi oluşturulamadı.');
       }
     });
   }
@@ -330,6 +331,9 @@ export class FastCreatorComponent implements OnInit {
       next: res => {
         this.selectedCategory = res.value;
         this.showToast(res.message);
+      },
+      error: (err) => {
+        this.showToast(err?.message || '❌ Kategori önerisi oluşturulamadı.');
       }
     });
   }
@@ -347,8 +351,9 @@ export class FastCreatorComponent implements OnInit {
         this.tags = res.value;
         this.showToast(res.message);
       },
-      error: () => {
+      error: (err) => {
         this.isGeneratingAi = false;
+        this.showToast(err?.message || '❌ Canlı AI etiket önerisi oluşturulamadı.');
       }
     });
   }
@@ -366,8 +371,9 @@ export class FastCreatorComponent implements OnInit {
         this.description = res.value;
         this.showToast(res.message);
       },
-      error: () => {
+      error: (err) => {
         this.isGeneratingAi = false;
+        this.showToast(err?.message || '❌ Canlı AI açıklama önerisi oluşturulamadı.');
       }
     });
   }
@@ -389,8 +395,9 @@ export class FastCreatorComponent implements OnInit {
         if (res.materials) this.materials = res.materials;
         this.showToast(res.summaryMessage);
       },
-      error: () => {
+      error: (err) => {
         this.isGeneratingAi = false;
+        this.showToast(err?.message || '❌ Canlı AI listeleme önerisi oluşturulamadı.');
       }
     });
   }
