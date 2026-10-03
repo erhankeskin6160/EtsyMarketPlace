@@ -767,13 +767,15 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
 
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
     var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? "ho2tfkzko9");
+    var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
 
     var client = httpClientFactory.CreateClient();
     var clampedLimit = Math.Clamp(limit, 1, 100);
     var url = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/active?limit={clampedLimit}&sort_on=updated&sort_order=desc&includes=Images";
 
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
-    request.Headers.Add("x-api-key", keystring);
+    request.Headers.Add("x-api-key", apiKeyHeader);
     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
 
     using var response = await client.SendAsync(request, cancellationToken);
@@ -990,6 +992,8 @@ app.MapPut("/api/etsy/listings/{listingId}", async (string listingId, UpdateList
 
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
     var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? "7k7h5b6g9ks6m0dx8tgl7vcn");
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? "ho2tfkzko9");
+    var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
 
     var client = httpClientFactory.CreateClient();
     var patchUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/{listingId}";
@@ -1010,7 +1014,7 @@ app.MapPut("/api/etsy/listings/{listingId}", async (string listingId, UpdateList
     {
         Content = new FormUrlEncodedContent(formDict)
     };
-    patchReq.Headers.Add("x-api-key", keystring);
+    patchReq.Headers.Add("x-api-key", apiKeyHeader);
     patchReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
 
     using var patchRes = await client.SendAsync(patchReq, cancellationToken);
