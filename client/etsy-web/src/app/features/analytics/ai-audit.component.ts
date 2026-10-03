@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService, ShopListingItemDto, SavedListingAuditDto, OptimizeListingResponseDto } from '../../core/services/etsy-api.service';
+import { AiSettingsService } from '../../core/services/ai-settings.service';
 
 type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
 
@@ -14,6 +15,7 @@ type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
 })
 export class AiAuditComponent implements OnInit {
   etsyApi = inject(EtsyApiService);
+  aiSettings = inject(AiSettingsService);
   readonly Math = Math;
 
   // Data & State
@@ -46,6 +48,7 @@ export class AiAuditComponent implements OnInit {
   checklist: string[] = [];
   aiScoreAfter: number | null = null;
   aiModelUsed = 'gemini-2.5-flash-lite';
+  aiProviderUsed = 'Gemini (Canlı API)';
   newTagInput = '';
 
   // AI Settings Dialog
@@ -234,6 +237,15 @@ export class AiAuditComponent implements OnInit {
   runAiOptimizationForSelected(): void {
     if (!this.selectedListing) return;
 
+    const settings = this.aiSettings.settings();
+    const isStrict = settings.strictNeverOffline;
+    const apiKey = settings.geminiApiKey ? settings.geminiApiKey.trim() : '';
+
+    if (isStrict && !apiKey && settings.provider === 'Gemini') {
+      this.showToast('⚠️ Canlı AI Zorunlu aktif fakat Gemini API anahtarı boş. Lütfen üst menüdeki Gemini butonundan anahtarınızı kaydedin.', 'error');
+      return;
+    }
+
     this.isAuditingSelected = true;
     this.showToast(`${this.selectedListing.listingId} nolu ilan Gemini ile optimize ediliyor...`, 'info');
 
@@ -245,7 +257,9 @@ export class AiAuditComponent implements OnInit {
       focusKeywords: this.focusKeywords,
       targetBuyerPersona: this.targetBuyerPersona,
       tone: this.aiTone,
-      model: this.selectedAiModel
+      model: this.selectedAiModel || settings.geminiModel || 'gemini-2.5-flash',
+      apiKey: apiKey,
+      provider: settings.provider
     };
 
     this.etsyApi.optimizeListingWithAi(this.selectedListing.listingId, payload).subscribe({
@@ -259,7 +273,8 @@ export class AiAuditComponent implements OnInit {
           this.riskWarnings = res.riskWarnings || [];
           this.checklist = res.checklist || [];
           this.aiScoreAfter = res.seoScoreAfter;
-          this.aiModelUsed = res.aiModel;
+          this.aiModelUsed = res.aiModel || res.model || this.selectedAiModel;
+          this.aiProviderUsed = res.provider || 'Gemini (Canlı API)';
 
           // Update in-memory item
           if (this.selectedListing) {
@@ -287,7 +302,7 @@ export class AiAuditComponent implements OnInit {
             };
           }
 
-          this.showToast(`Listing ${res.listingId} başarıyla AI ile optimize edildi! Skor: ${res.seoScoreAfter}/100`, 'success');
+          this.showToast(`Listing ${res.listingId} [${this.aiProviderUsed}] ile başarıyla optimize edildi! Skor: ${res.seoScoreAfter}/100`, 'success');
         } else {
           this.showToast(`AI optimizasyon tamamlanamadı: ${res.message || 'Bilinmeyen hata'}`, 'error');
         }
@@ -318,6 +333,15 @@ export class AiAuditComponent implements OnInit {
     this.isBatchAuditing = true;
     this.batchProgress = { current: 0, total: targets.length };
 
+    const settings = this.aiSettings.settings();
+    const isStrict = settings.strictNeverOffline;
+    const apiKey = settings.geminiApiKey ? settings.geminiApiKey.trim() : '';
+
+    if (isStrict && !apiKey && settings.provider === 'Gemini') {
+      this.showToast('⚠️ Canlı AI Zorunlu aktif fakat Gemini API anahtarı boş. Lütfen üst menüdeki Gemini butonundan anahtarınızı kaydedin.', 'error');
+      return;
+    }
+
     const processNext = (index: number) => {
       if (index >= targets.length) {
         this.isBatchAuditing = false;
@@ -336,7 +360,9 @@ export class AiAuditComponent implements OnInit {
         focusKeywords: this.focusKeywords,
         targetBuyerPersona: this.targetBuyerPersona,
         tone: this.aiTone,
-        model: this.selectedAiModel
+        model: this.selectedAiModel || settings.geminiModel || 'gemini-2.5-flash',
+        apiKey: apiKey,
+        provider: settings.provider
       };
 
       this.etsyApi.optimizeListingWithAi(item.listingId, payload).subscribe({

@@ -23,7 +23,9 @@ public sealed record OptimizeListingApiRequest(
     string? Model = null,
     string? Tone = null,
     string? FocusKeywords = null,
-    string? TargetBuyerPersona = null);
+    string? TargetBuyerPersona = null,
+    string? ApiKey = null,
+    string? Provider = null);
 
 public sealed record UpdateListingApiRequest(
     string ShopId,

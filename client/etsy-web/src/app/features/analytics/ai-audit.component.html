@@ -531,6 +531,7 @@
             <div class="panel-title-wrap">
               <span class="panel-tag tag-after">✨ AI İYİLEŞTİRİLMİŞ LİSTİNG (AFTER)</span>
               <span class="ai-model-pill">{{ aiModelUsed }}</span>
+              <span class="ai-model-pill" [style.background]="aiProviderUsed.includes('Canlı') ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)'" [style.color]="aiProviderUsed.includes('Canlı') ? '#34d399' : '#fbbf24'">{{ aiProviderUsed }}</span>
             </div>
             <div class="score-display">
               <span class="score-title-sub">Hedef AI Skoru:</span>

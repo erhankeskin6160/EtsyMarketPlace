@@ -125,6 +125,8 @@ export interface OptimizeListingResponseDto {
   optimizedTags: string[];
   optimizedDescription: string;
   aiModel: string;
+  provider?: string;
+  model?: string;
   seoScoreBefore: number;
   seoScoreAfter: number;
   critique?: string;
@@ -440,6 +442,8 @@ export class EtsyApiService {
     targetBuyerPersona?: string;
     tone?: string;
     model?: string;
+    apiKey?: string;
+    provider?: string;
   }): Observable<OptimizeListingResponseDto> {
     const shopId = payload.shopId || this.activeShopId();
     const body = { ...payload, shopId };
