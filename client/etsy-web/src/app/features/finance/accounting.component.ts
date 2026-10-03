@@ -920,6 +920,16 @@ import {
               </table>
             </div>
 
+            <div class="drilldown-footnote">
+              💡 [ İpucu: Henüz maliyeti girilmemiş 1 siparişin maliyetini girdiğinizde bu net kâr kuruşu kuruşuna kesinleşecektir. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 4. DRILLDOWN MODAL: SATIŞ VE GELİR ANALİZİ (BRÜT SATIŞ) -->
       <div class="modal-backdrop" *ngIf="showSalesModal" (click)="closeModals()">
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
