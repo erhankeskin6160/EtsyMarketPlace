@@ -201,6 +201,7 @@
                     class="thumb-img"
                     referrerpolicy="no-referrer"
                     loading="lazy"
+                    (error)="onImgError($event)"
                   />
                   <div *ngIf="!item.primaryImageUrl && !item.thumbnail" class="thumb-placeholder">🖼️</div>
                 </div>
@@ -353,6 +354,7 @@
               [alt]="selectedListing.title"
               class="preview-img"
               referrerpolicy="no-referrer"
+              (error)="onImgError($event)"
             />
             <div *ngIf="!selectedListing.primaryImageUrl && !selectedListing.thumbnail" class="no-img-box">
               <span>🖼️ Görsel Yok</span>

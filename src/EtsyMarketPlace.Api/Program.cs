@@ -25,6 +25,7 @@ using EtsyMarketPlace.Infrastructure.Tracking;
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 var pendingPkceSessions = new ConcurrentDictionary<string, PkceSession>();
+var listingPrimaryImgCache = new ConcurrentDictionary<string, string>();
 
 // 1. Dependency Injection (Clean Architecture Servisleri)
 builder.Services.AddHttpClient();
@@ -777,20 +778,34 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
 
     var client = httpClientFactory.CreateClient();
     var clampedLimit = Math.Clamp(limit, 1, 100);
-    var url = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/active?limit={clampedLimit}&sort_on=updated&sort_order=desc&includes=Images";
+    // Official Etsy OpenAPI v3 endpoint supporting includes=Images is getListingsByShop (/shops/{shop_id}/listings?state=active&includes=Images)
+    var url = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings?state=active&limit={clampedLimit}&sort_on=updated&sort_order=desc&includes=Images";
 
     using var request = new HttpRequestMessage(HttpMethod.Get, url);
     request.Headers.Add("x-api-key", apiKeyHeader);
     request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
 
     using var response = await client.SendAsync(request, cancellationToken);
+    string body;
     if (!response.IsSuccessStatusCode)
     {
-        var err = await response.Content.ReadAsStringAsync(cancellationToken);
-        return Results.BadRequest(new { error = $"Etsy API hatası (HTTP {(int)response.StatusCode}): {err}" });
+        // Fallback to active endpoint if needed
+        var fallbackUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/active?limit={clampedLimit}&sort_on=updated&sort_order=desc";
+        using var fbReq = new HttpRequestMessage(HttpMethod.Get, fallbackUrl);
+        fbReq.Headers.Add("x-api-key", apiKeyHeader);
+        fbReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+        using var fbResp = await client.SendAsync(fbReq, cancellationToken);
+        if (!fbResp.IsSuccessStatusCode)
+        {
+            var err = await response.Content.ReadAsStringAsync(cancellationToken);
+            return Results.BadRequest(new { error = $"Etsy API hatası (HTTP {(int)response.StatusCode}): {err}" });
+        }
+        body = await fbResp.Content.ReadAsStringAsync(cancellationToken);
     }
-
-    var body = await response.Content.ReadAsStringAsync(cancellationToken);
+    else
+    {
+        body = await response.Content.ReadAsStringAsync(cancellationToken);
+    }
     using var doc = JsonDocument.Parse(body);
     if (!doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
         return Results.Ok(Array.Empty<object>());
@@ -868,6 +883,57 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
             }
         }
         var primaryImg = imageUrls.FirstOrDefault() ?? "";
+
+        // Check in-memory cache if primary image is empty
+        if (string.IsNullOrWhiteSpace(primaryImg) && !string.IsNullOrWhiteSpace(listingId) && listingPrimaryImgCache.TryGetValue(listingId, out var cachedImg))
+        {
+            primaryImg = cachedImg;
+            imageUrls.Add(cachedImg);
+        }
+
+        // Secondary fallback: Fetch individual listing image directly (as in desktop OwnShopListingAiAuditForm)
+        if (string.IsNullOrWhiteSpace(primaryImg) && !string.IsNullOrWhiteSpace(listingId) && long.TryParse(listingId, out var lidVal) && lidVal > 0)
+        {
+            try
+            {
+                var imgReqUrl = $"https://api.etsy.com/v3/application/listings/{lidVal}/images";
+                using var imgReq = new HttpRequestMessage(HttpMethod.Get, imgReqUrl);
+                imgReq.Headers.Add("x-api-key", apiKeyHeader);
+                using var imgResp = await client.SendAsync(imgReq, cancellationToken);
+                if (imgResp.IsSuccessStatusCode)
+                {
+                    var imgBody = await imgResp.Content.ReadAsStringAsync(cancellationToken);
+                    using var imgDoc = JsonDocument.Parse(imgBody);
+                    if (imgDoc.RootElement.TryGetProperty("results", out var imgArr) && imgArr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var img in imgArr.EnumerateArray())
+                        {
+                            string? urlFound = null;
+                            if (img.TryGetProperty("url_570xN", out var u570)) urlFound = u570.GetString();
+                            else if (img.TryGetProperty("url_fullxfull", out var uFull)) urlFound = uFull.GetString();
+                            else if (img.TryGetProperty("url_170x135", out var u170)) urlFound = u170.GetString();
+                            else if (img.TryGetProperty("url_75x75", out var u75)) urlFound = u75.GetString();
+
+                            if (!string.IsNullOrWhiteSpace(urlFound))
+                            {
+                                primaryImg = urlFound.Trim();
+                                imageUrls.Add(primaryImg);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Silently ignore individual image fetch error
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(primaryImg) && !string.IsNullOrWhiteSpace(listingId))
+        {
+            listingPrimaryImgCache[listingId] = primaryImg;
+        }
 
         // Structural SEO Analysis
         int seoScore = 100;

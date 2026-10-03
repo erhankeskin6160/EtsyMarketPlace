@@ -530,6 +530,20 @@ ${baseDesc}
     this.currentPage = this.totalPages;
   }
 
+  // ── Image Error Fallback ──────────────────────────────────────────────────
+  onImgError(event: Event): void {
+    const target = event.target as HTMLElement;
+    if (target) {
+      target.style.display = 'none';
+      if (target.parentElement) {
+        const placeholder = document.createElement('div');
+        placeholder.className = 'thumb-placeholder';
+        placeholder.textContent = '🖼️';
+        target.parentElement.appendChild(placeholder);
+      }
+    }
+  }
+
   // ── Toast Helper ──────────────────────────────────────────────────────────
   showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
     this.toastMessage = message;
