@@ -238,6 +238,7 @@ export class AiAuditComponent implements OnInit {
     this.showToast(`${this.selectedListing.listingId} nolu ilan Gemini ile optimize ediliyor...`, 'info');
 
     const payload = {
+      shopId: this.etsyApi.activeShopId(),
       title: this.selectedListing.title,
       tags: this.selectedListing.tags,
       description: this.selectedListing.description,
@@ -328,6 +329,7 @@ export class AiAuditComponent implements OnInit {
       this.batchProgress.current = index + 1;
 
       const payload = {
+        shopId: this.etsyApi.activeShopId(),
         title: item.title,
         tags: item.tags,
         description: item.description,

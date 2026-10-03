@@ -1041,53 +1041,70 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
 .WithSummary("Mağazanın Aktif Listinglerini ve Yapısal SEO Analizini Getir")
 .WithName("GetShopListingsWithSeo");
 
-app.MapPost("/api/etsy/listings/{listingId}/ai-optimize", async (string listingId, OptimizeListingApiRequest request, ListingOptimizationService optimizer, IShopSettingsRepository settingsRepo, CancellationToken cancellationToken) =>
+app.MapPost("/api/etsy/listings/{listingId}/ai-optimize", async (string listingId, string? shopId, OptimizeListingApiRequest request, HttpContext context, IConfiguration config, ListingOptimizationService optimizer, IShopSettingsRepository settingsRepo, CancellationToken cancellationToken) =>
 {
-    var targetKw = !string.IsNullOrWhiteSpace(request.TargetKeyword) ? request.TargetKeyword : request.Title;
-    var input = new ListingOptimizationInput(request.Title, request.Description, request.Tags, targetKw, request.DescriptionStyle ?? "Storytelling");
-    var result = optimizer.Optimize(input);
-
-    var status = result.RiskWarnings.Count > 0 ? "⚠️ AI: Risk Var" : "✨ AI: Hazır";
-
-    // Save to SQLite
-    await settingsRepo.SaveListingAuditAsync(new SaveListingAuditRecordRequest(
-        request.ShopId,
-        listingId,
-        request.Title,
-        result.CurrentSeoScore,
-        result.OptimizedSeoScore,
-        status,
-        result.ExecutedProvider,
-        result.ExecutedModel,
-        JsonSerializer.Serialize(result)), cancellationToken);
-
-    return Results.Ok(new
+    try
     {
-        success = true,
-        listingId,
-        currentSeoScore = result.CurrentSeoScore,
-        optimizedSeoScore = result.OptimizedSeoScore,
-        seoScoreBefore = result.CurrentSeoScore,
-        seoScoreAfter = result.OptimizedSeoScore,
-        optimizedTitle = result.TitleSuggestions.FirstOrDefault() ?? request.Title,
-        suggestedTitle = result.TitleSuggestions.FirstOrDefault() ?? request.Title,
-        titleSuggestions = result.TitleSuggestions,
-        optimizedTags = result.TagSuggestions.Take(13).ToList(),
-        tagSuggestions = result.TagSuggestions.Take(13).ToList(),
-        materialSuggestions = result.MaterialSuggestions,
-        optimizedDescription = result.DescriptionDraft,
-        descriptionDraft = result.DescriptionDraft,
-        critique = result.SeoCritique,
-        seoCritique = result.SeoCritique,
-        missingTerms = result.MissingTerms,
-        riskWarnings = result.RiskWarnings,
-        checklist = result.ActionChecklist,
-        status,
-        aiModel = result.ExecutedModel,
-        provider = result.ExecutedProvider,
-        model = result.ExecutedModel,
-        message = "Listing başarıyla AI ile optimize edildi ve yerel veritabanına kaydedildi."
-    });
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
+            ? request.ShopId.Trim()
+            : ResolveShopId(shopId, context, config);
+
+        var title = request?.Title ?? string.Empty;
+        var description = request?.Description ?? string.Empty;
+        var tags = request?.Tags ?? Array.Empty<string>();
+        var targetKw = !string.IsNullOrWhiteSpace(request?.TargetKeyword)
+            ? request.TargetKeyword
+            : (!string.IsNullOrWhiteSpace(title) ? title : listingId);
+
+        var input = new ListingOptimizationInput(title, description, tags, targetKw, request?.DescriptionStyle ?? "Storytelling");
+        var result = optimizer.Optimize(input);
+
+        var status = result.RiskWarnings.Count > 0 ? "⚠️ AI: Risk Var" : "✨ AI: Hazır";
+
+        // Save to SQLite
+        await settingsRepo.SaveListingAuditAsync(new SaveListingAuditRecordRequest(
+            resolvedShopId,
+            listingId,
+            title,
+            result.CurrentSeoScore,
+            result.OptimizedSeoScore,
+            status,
+            result.ExecutedProvider,
+            result.ExecutedModel,
+            JsonSerializer.Serialize(result)), cancellationToken);
+
+        return Results.Ok(new
+        {
+            success = true,
+            listingId,
+            currentSeoScore = result.CurrentSeoScore,
+            optimizedSeoScore = result.OptimizedSeoScore,
+            seoScoreBefore = result.CurrentSeoScore,
+            seoScoreAfter = result.OptimizedSeoScore,
+            optimizedTitle = result.TitleSuggestions.FirstOrDefault() ?? title,
+            suggestedTitle = result.TitleSuggestions.FirstOrDefault() ?? title,
+            titleSuggestions = result.TitleSuggestions,
+            optimizedTags = result.TagSuggestions.Take(13).ToList(),
+            tagSuggestions = result.TagSuggestions.Take(13).ToList(),
+            materialSuggestions = result.MaterialSuggestions,
+            optimizedDescription = result.DescriptionDraft,
+            descriptionDraft = result.DescriptionDraft,
+            critique = result.SeoCritique,
+            seoCritique = result.SeoCritique,
+            missingTerms = result.MissingTerms,
+            riskWarnings = result.RiskWarnings,
+            checklist = result.ActionChecklist,
+            status,
+            aiModel = !string.IsNullOrWhiteSpace(request?.Model) ? request.Model : result.ExecutedModel,
+            provider = result.ExecutedProvider,
+            model = !string.IsNullOrWhiteSpace(request?.Model) ? request.Model : result.ExecutedModel,
+            message = "Listing başarıyla AI ile optimize edildi ve yerel veritabanına kaydedildi."
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { success = false, message = $"AI optimizasyon hatası: {ex.Message}" });
+    }
 })
 .WithTags("Etsy Listing & AI Denetimi")
 .WithSummary("Listing İçin Yapay Zeka SEO ve Başlık/Tag Optimizasyonu")

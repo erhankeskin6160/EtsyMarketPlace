@@ -442,7 +442,8 @@ export class EtsyApiService {
     model?: string;
   }): Observable<OptimizeListingResponseDto> {
     const shopId = payload.shopId || this.activeShopId();
-    return this.http.post<OptimizeListingResponseDto>(`${this.API_BASE}/api/etsy/listings/${listingId}/ai-optimize?shopId=${encodeURIComponent(shopId)}`, payload);
+    const body = { ...payload, shopId };
+    return this.http.post<OptimizeListingResponseDto>(`${this.API_BASE}/api/etsy/listings/${listingId}/ai-optimize?shopId=${encodeURIComponent(shopId)}`, body);
   }
 
   updateEtsyListing(listingId: string | number, payload: {

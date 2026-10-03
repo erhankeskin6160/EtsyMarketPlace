@@ -14,12 +14,16 @@ public sealed record PkceSession(
     DateTimeOffset CreatedAt);
 
 public sealed record OptimizeListingApiRequest(
-    string ShopId,
-    string Title,
-    string Description,
-    IReadOnlyList<string> Tags,
+    string? ShopId = null,
+    string? Title = null,
+    string? Description = null,
+    IReadOnlyList<string>? Tags = null,
     string? TargetKeyword = null,
-    string? DescriptionStyle = "Storytelling");
+    string? DescriptionStyle = "Storytelling",
+    string? Model = null,
+    string? Tone = null,
+    string? FocusKeywords = null,
+    string? TargetBuyerPersona = null);
 
 public sealed record UpdateListingApiRequest(
     string ShopId,
