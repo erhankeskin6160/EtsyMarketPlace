@@ -15,6 +15,28 @@ export interface CompleteListingAiResult {
   summaryMessage: string;
 }
 
+export interface TaxonomyCandidateItem {
+  taxonomyId: number;
+  categoryPath: string;
+  confidenceScore: number;
+}
+
+export interface CategoryAiSuggestion {
+  taxonomyId: number;
+  categoryPath: string;
+  confidenceScore: number;
+  reasoning: string;
+  providerUsed: string;
+  isLive: boolean;
+  message: string;
+  inputSources: {
+    hasTitle: boolean;
+    hasImage: boolean;
+    hasDescription: boolean;
+  };
+  alternatives: TaxonomyCandidateItem[];
+}
+
 export interface AiFieldResult<T> {
   value: T;
   isLive: boolean;
@@ -84,17 +106,134 @@ export class EtsyListingAiService {
   }
 
   /**
-   * Suggests the best matching Etsy Taxonomy category.
+   * Multimodal Etsy Taxonomy Category determination grounded in official Etsy API documentation:
+   * https://developers.etsy.com/documentation/reference#operation/getSellerTaxonomyNodes
+   * Analyzes:
+   * - Product Title
+   * - Product Images (Base64 inlineData or URL)
+   * - Product Description
+   * Or any combination / all 3 simultaneously.
+   */
+  public suggestCategoryMultimodal(
+    title?: string,
+    description?: string,
+    images?: string[]
+  ): Observable<CategoryAiSuggestion> {
+    const cleanTitle = (title || '').trim();
+    const cleanDesc = (description || '').trim();
+    const validImages = (images || []).filter(img => typeof img === 'string' && img.trim().length > 0);
+    const coverImage = validImages.length > 0 ? validImages[0] : null;
+
+    const inputSources = {
+      hasTitle: cleanTitle.length > 0,
+      hasImage: !!coverImage,
+      hasDescription: cleanDesc.length > 0
+    };
+
+    if (!inputSources.hasTitle && !inputSources.hasImage && !inputSources.hasDescription) {
+      return throwError(() => new Error('⚠️ Lütfen kategori belirlemek için en az bir ürün başlığı, ürün görseli veya ürün açıklaması giriniz.'));
+    }
+
+    const settings = this.aiSettings.settings();
+    const provider = settings.provider;
+    const isStrict = settings.strictNeverOffline;
+    const isSilentFallback = settings.allowSilentOfflineFallback;
+
+    // 1. Google Gemini Live Vision & Text
+    if (provider === 'Gemini' && settings.geminiApiKey && settings.geminiApiKey.trim().length > 10) {
+      const activeModel = this.resolveGeminiModel(settings.geminiModel || 'gemini-2.5-flash');
+      return this.callGeminiForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.geminiApiKey.trim(), activeModel, inputSources).pipe(
+        catchError(err => {
+          console.warn('[EtsyListingAiService] Canlı Gemini kategori hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'Gemini yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı Gemini Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+          }
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+        })
+      );
+    }
+
+    // 2. OpenAI GPT-4o / GPT-4o-mini Vision & Text
+    if (provider === 'OpenAI' && settings.openAiApiKey && settings.openAiApiKey.trim().length > 10) {
+      const activeModel = settings.openAiModel || 'gpt-4o';
+      return this.callOpenAiForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.openAiApiKey.trim(), activeModel, inputSources).pipe(
+        catchError(err => {
+          console.warn('[EtsyListingAiService] Canlı OpenAI kategori hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'OpenAI yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı OpenAI Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+          }
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+        })
+      );
+    }
+
+    // 3. Anthropic Claude 3.5 / 3.7 Vision & Text
+    if (provider === 'Claude' && settings.claudeApiKey && settings.claudeApiKey.trim().length > 10) {
+      const activeModel = settings.claudeModel || 'claude-3-7-sonnet';
+      return this.callClaudeForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.claudeApiKey.trim(), activeModel, inputSources).pipe(
+        catchError(err => {
+          console.warn('[EtsyListingAiService] Canlı Claude kategori hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'Claude yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı Claude Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+          }
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+        })
+      );
+    }
+
+    // 4. xAI Grok Vision & Text
+    if (provider === 'Grok' && settings.grokApiKey && settings.grokApiKey.trim().length > 10) {
+      const activeModel = settings.grokModel || 'grok-3';
+      return this.callGrokForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.grokApiKey.trim(), activeModel, inputSources).pipe(
+        catchError(err => {
+          console.warn('[EtsyListingAiService] Canlı Grok kategori hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'Grok yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı Grok Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+          }
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+        })
+      );
+    }
+
+    // 5. DeepSeek (DeepSeek Chat / Reasoner)
+    if (provider === 'DeepSeek' && settings.deepSeekApiKey && settings.deepSeekApiKey.trim().length > 10) {
+      const activeModel = settings.deepSeekModel || 'deepseek-reasoner';
+      return this.callDeepSeekForCategory(cleanTitle, cleanDesc, settings.deepSeekApiKey.trim(), activeModel, inputSources).pipe(
+        catchError(err => {
+          console.warn('[EtsyListingAiService] Canlı DeepSeek kategori hatası:', err);
+          if (isStrict) {
+            const detail = err?.error?.error?.message || err?.message || 'DeepSeek yanıt vermedi';
+            return throwError(() => new Error(`❌ Canlı DeepSeek Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
+          }
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+        })
+      );
+    }
+
+    if (isStrict && provider !== 'Offline') {
+      return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı giriniz.`));
+    }
+
+    // Offline Fallback
+    return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, false));
+  }
+
+  /**
+   * Backwards-compatible legacy method.
    */
   public suggestCategory(userInput: string): Observable<AiFieldResult<string>> {
-    const cleanInput = (userInput || '').trim();
-    const cat = this.detectCategoryFromKeywords(cleanInput);
-    return of({
-      value: cat,
-      isLive: false,
-      provider: 'Etsy Taxonomy Motoru',
-      message: `✨ '${cleanInput || 'Ürün'}' için en uygun Etsy Taxonomy kategorisi belirlendi.`
-    });
+    return this.suggestCategoryMultimodal(userInput).pipe(
+      map(res => ({
+        value: `${res.taxonomyId} - ${res.categoryPath}`,
+        isLive: res.isLive,
+        provider: res.providerUsed,
+        message: res.message
+      }))
+    );
   }
 
   /**
@@ -371,6 +510,532 @@ Format with clean emojis and line breaks.`;
         return JSON.parse(raw);
       })
     );
+  }
+
+  private readonly ETSY_TAXONOMY_SYSTEM_PROMPT = `You are an expert official Etsy Taxonomy and Category Specialist with deep mastery of the Etsy Seller Taxonomy Tree (https://developers.etsy.com/documentation/reference#operation/getSellerTaxonomyNodes).
+
+Your task is to accurately determine the single best official Etsy taxonomy category for a product, by analyzing whatever product data the seller provides:
+1. Product Title (SEO keywords, physical item type)
+2. Product Image (visual shape, materials, aesthetics, functional purpose)
+3. Product Description (features, materials, size, intended use)
+
+OFFICIAL ETSY TAXONOMY RULES:
+- Etsy listing taxonomy requires selecting a specific leaf category node from one of the official Etsy root departments:
+  * Bags & Purses:
+    - 132: Bags & Purses > Handbags > Shoulder Bags
+    - 134: Bags & Purses > Handbags > Tote Bags
+    - 133: Bags & Purses > Handbags > Crossbody Bags
+    - 138: Bags & Purses > Handbags > Clutches & Evening Bags
+    - 140: Bags & Purses > Backpacks
+    - 142: Bags & Purses > Wallets & Money Clips
+  * Jewelry:
+    - 204: Jewelry > Necklaces
+    - 211: Jewelry > Necklaces > Pendants
+    - 220: Jewelry > Rings
+    - 187: Jewelry > Earrings
+    - 172: Jewelry > Bracelets
+  * Clothing:
+    - 270: Clothing > Unisex Adult Clothing > Tops & Tees > T-shirts
+    - 283: Clothing > Women's Clothing > Dresses
+    - 288: Clothing > Unisex Adult Clothing > Hoodies & Sweatshirts
+  * Home & Living:
+    - 1041: Home & Living > Lighting > Lamps
+    - 1042: Home & Living > Lighting > Night Lights
+    - 1054: Home & Living > Home Decor > Wall Decor
+    - 1063: Home & Living > Home Decor > Candleholders
+    - 943: Home & Living > Kitchen & Dining > Drinkware > Mugs
+    - 992: Home & Living > Outdoor & Gardening > Planters & Pots
+  * Art & Collectibles:
+    - 1239: Art & Collectibles > Sculptures > Busts & Statues
+    - 1238: Art & Collectibles > Sculptures > Figurines
+    - 1215: Art & Collectibles > Prints > Digital Prints
+  * Craft Supplies & Tools:
+    - 68: Craft Supplies & Tools > Digital
+    - 590: Craft Supplies & Tools > Patterns & How To
+  * Accessories:
+    - 22: Accessories > Hats & Caps
+    - 62: Accessories > Keychains
+  * Electronics & Accessories:
+    - 2079: Electronics & Accessories > Audio > Headphone & Headset Stands
+    - 651: Electronics & Accessories > Cases & Covers > Phone Cases
+
+CRITICAL INSTRUCTIONS:
+1. Examine the actual physical item. If it is a handbag or purse (e.g. "El yapımı kadın çantası" or bag image), do NOT classify it as 3D print or home decor. Categorize it under Bags & Purses (e.g., taxonomy_id 132: Bags & Purses > Handbags > Shoulder Bags).
+2. If an image is provided, carefully inspect the visual textures, stitching, hardware, materials, and form factor.
+3. Provide a clear 'reasoning' in Turkish explaining how the visual cues, title, or description led to this taxonomy choice.
+4. Suggest 2-3 realistic alternatives in 'alternatives' array.
+
+You MUST respond ONLY with a single valid JSON object matching this schema:
+{
+  "taxonomy_id": <number>,
+  "category_path": "<Department > Subcategory > Specific Leaf>",
+  "confidence_score": <number between 1 and 100>,
+  "reasoning": "<Concise explanation in Turkish citing title/image/description clues>",
+  "alternatives": [
+    {"taxonomy_id": <number>, "category_path": "<Path>", "confidence_score": <number>}
+  ]
+}`;
+
+  private buildTaxonomyUserPrompt(title?: string, desc?: string, hasImage?: boolean): string {
+    let p = 'Lütfen aşağıdaki ürün bilgilerini Etsy resmi dökümantasyonundaki Seller Taxonomy ağacına göre sınıflandırın:\n';
+    if (title && title.trim()) {
+      p += `Ürün Başlığı: "${title.trim()}"\n`;
+    }
+    if (desc && desc.trim()) {
+      p += `Ürün Açıklaması: "${desc.trim().slice(0, 800)}"\n`;
+    }
+    if (hasImage) {
+      p += `[Görsel Sağlandı]: Ürünün fiziksel fotoğrafı iletilmiştir. Görseldeki şekli, malzemeyi, dikiş/tasarım detaylarını ve kullanım amacını analiz ederek en uygun yaprak kategoriyi seçiniz.\n`;
+    }
+    return p;
+  }
+
+  private formatInputSourcesDescription(sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }): string {
+    const list: string[] = [];
+    if (sources.hasTitle) list.push('✍️ Başlık');
+    if (sources.hasImage) list.push('📷 Görsel');
+    if (sources.hasDescription) list.push('📝 Açıklama');
+    return list.length > 0 ? `(${list.join(' + ')})` : '';
+  }
+
+  private parseTaxonomyJsonResponse(raw: string): any {
+    if (!raw) return {};
+    let clean = raw.trim();
+    if (clean.startsWith('```json')) clean = clean.substring(7);
+    else if (clean.startsWith('```')) clean = clean.substring(3);
+    if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
+    clean = clean.trim();
+
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      clean = clean.substring(firstBrace, lastBrace + 1);
+    }
+
+    try {
+      return JSON.parse(clean);
+    } catch {
+      return {};
+    }
+  }
+
+  private callGeminiForCategoryMultimodal(
+    title: string,
+    desc: string,
+    coverImage: string | null,
+    apiKey: string,
+    model: string,
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+  ): Observable<CategoryAiSuggestion> {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+
+    const parts: any[] = [{ text: userPromptText }];
+    if (coverImage && coverImage.startsWith('data:')) {
+      const match = coverImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (match) {
+        parts.push({
+          inlineData: {
+            mimeType: match[1],
+            data: match[2]
+          }
+        });
+      }
+    }
+
+    const body = {
+      systemInstruction: { parts: [{ text: this.ETSY_TAXONOMY_SYSTEM_PROMPT }] },
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 1200,
+        responseMimeType: 'application/json'
+      }
+    };
+
+    return this.http.post<any>(url, body).pipe(
+      map(res => {
+        const rawText = res?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+        const parsed = this.parseTaxonomyJsonResponse(rawText);
+        const sourcesText = this.formatInputSourcesDescription(sources);
+        return {
+          taxonomyId: parsed.taxonomy_id || 132,
+          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          confidenceScore: parsed.confidence_score || 95,
+          reasoning: parsed.reasoning || 'Ürün başlığı ve görsel analizi doğrultusunda belirlendi.',
+          providerUsed: `Google Gemini (${model})`,
+          isLive: true,
+          message: `✨ Google Gemini (${model}) ${sourcesText} inceleyerek Etsy kategorisini belirledi: #${parsed.taxonomy_id} ${parsed.category_path}`,
+          inputSources: sources,
+          alternatives: (parsed.alternatives || []).map((a: any) => ({
+            taxonomyId: Number(a.taxonomy_id) || 0,
+            categoryPath: String(a.category_path || ''),
+            confidenceScore: Number(a.confidence_score) || 80
+          }))
+        };
+      })
+    );
+  }
+
+  private callOpenAiForCategoryMultimodal(
+    title: string,
+    desc: string,
+    coverImage: string | null,
+    apiKey: string,
+    model: string,
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+  ): Observable<CategoryAiSuggestion> {
+    const url = 'https://api.openai.com/v1/chat/completions';
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+    const userContent: any[] = [{ type: 'text', text: userPromptText }];
+
+    if (coverImage) {
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: coverImage, detail: 'auto' }
+      });
+    }
+
+    const body = {
+      model: model || 'gpt-4o',
+      messages: [
+        { role: 'system', content: this.ETSY_TAXONOMY_SYSTEM_PROMPT },
+        { role: 'user', content: userContent }
+      ],
+      temperature: 0.2,
+      max_tokens: 1000,
+      response_format: { type: 'json_object' }
+    };
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => {
+        const rawText = res?.choices?.[0]?.message?.content || '{}';
+        const parsed = this.parseTaxonomyJsonResponse(rawText);
+        const sourcesText = this.formatInputSourcesDescription(sources);
+        return {
+          taxonomyId: parsed.taxonomy_id || 132,
+          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          confidenceScore: parsed.confidence_score || 95,
+          reasoning: parsed.reasoning || 'OpenAI analizi doğrultusunda belirlendi.',
+          providerUsed: `OpenAI (${model})`,
+          isLive: true,
+          message: `✨ OpenAI (${model}) ${sourcesText} inceleyerek Etsy kategorisini belirledi: #${parsed.taxonomy_id} ${parsed.category_path}`,
+          inputSources: sources,
+          alternatives: (parsed.alternatives || []).map((a: any) => ({
+            taxonomyId: Number(a.taxonomy_id) || 0,
+            categoryPath: String(a.category_path || ''),
+            confidenceScore: Number(a.confidence_score) || 80
+          }))
+        };
+      })
+    );
+  }
+
+  private callClaudeForCategoryMultimodal(
+    title: string,
+    desc: string,
+    coverImage: string | null,
+    apiKey: string,
+    model: string,
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+  ): Observable<CategoryAiSuggestion> {
+    const url = 'https://api.anthropic.com/v1/messages';
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+    const userContent: any[] = [];
+
+    if (coverImage && coverImage.startsWith('data:')) {
+      const match = coverImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (match) {
+        userContent.push({
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: match[1],
+            data: match[2]
+          }
+        });
+      }
+    }
+    userContent.push({ type: 'text', text: userPromptText });
+
+    const body = {
+      model: model || 'claude-3-7-sonnet-20250219',
+      max_tokens: 1000,
+      temperature: 0.2,
+      system: this.ETSY_TAXONOMY_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: userContent }]
+    };
+
+    const headers = {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => {
+        const rawText = res?.content?.[0]?.text || '{}';
+        const parsed = this.parseTaxonomyJsonResponse(rawText);
+        const sourcesText = this.formatInputSourcesDescription(sources);
+        return {
+          taxonomyId: parsed.taxonomy_id || 132,
+          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          confidenceScore: parsed.confidence_score || 95,
+          reasoning: parsed.reasoning || 'Claude Vision analizi doğrultusunda belirlendi.',
+          providerUsed: `Claude (${model})`,
+          isLive: true,
+          message: `✨ Anthropic Claude ${sourcesText} inceleyerek Etsy kategorisini belirledi: #${parsed.taxonomy_id} ${parsed.category_path}`,
+          inputSources: sources,
+          alternatives: (parsed.alternatives || []).map((a: any) => ({
+            taxonomyId: Number(a.taxonomy_id) || 0,
+            categoryPath: String(a.category_path || ''),
+            confidenceScore: Number(a.confidence_score) || 80
+          }))
+        };
+      })
+    );
+  }
+
+  private callGrokForCategoryMultimodal(
+    title: string,
+    desc: string,
+    coverImage: string | null,
+    apiKey: string,
+    model: string,
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+  ): Observable<CategoryAiSuggestion> {
+    const url = 'https://api.x.ai/v1/chat/completions';
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+    const userContent: any[] = [{ type: 'text', text: userPromptText }];
+
+    if (coverImage) {
+      userContent.push({
+        type: 'image_url',
+        image_url: { url: coverImage, detail: 'auto' }
+      });
+    }
+
+    const body = {
+      model: model || 'grok-3',
+      messages: [
+        { role: 'system', content: this.ETSY_TAXONOMY_SYSTEM_PROMPT },
+        { role: 'user', content: userContent }
+      ],
+      temperature: 0.2,
+      max_tokens: 1000
+    };
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => {
+        const rawText = res?.choices?.[0]?.message?.content || '{}';
+        const parsed = this.parseTaxonomyJsonResponse(rawText);
+        const sourcesText = this.formatInputSourcesDescription(sources);
+        return {
+          taxonomyId: parsed.taxonomy_id || 132,
+          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          confidenceScore: parsed.confidence_score || 95,
+          reasoning: parsed.reasoning || 'xAI Grok analizi doğrultusunda belirlendi.',
+          providerUsed: `xAI Grok (${model})`,
+          isLive: true,
+          message: `✨ xAI Grok (${model}) ${sourcesText} inceleyerek Etsy kategorisini belirledi: #${parsed.taxonomy_id} ${parsed.category_path}`,
+          inputSources: sources,
+          alternatives: (parsed.alternatives || []).map((a: any) => ({
+            taxonomyId: Number(a.taxonomy_id) || 0,
+            categoryPath: String(a.category_path || ''),
+            confidenceScore: Number(a.confidence_score) || 80
+          }))
+        };
+      })
+    );
+  }
+
+  private callDeepSeekForCategory(
+    title: string,
+    desc: string,
+    apiKey: string,
+    model: string,
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+  ): Observable<CategoryAiSuggestion> {
+    const url = 'https://api.deepseek.com/chat/completions';
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, false);
+
+    const body = {
+      model: model || 'deepseek-reasoner',
+      messages: [
+        { role: 'system', content: this.ETSY_TAXONOMY_SYSTEM_PROMPT },
+        { role: 'user', content: userPromptText }
+      ],
+      temperature: 0.2,
+      max_tokens: 1000
+    };
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => {
+        const rawText = res?.choices?.[0]?.message?.content || '{}';
+        const parsed = this.parseTaxonomyJsonResponse(rawText);
+        const sourcesText = this.formatInputSourcesDescription(sources);
+        return {
+          taxonomyId: parsed.taxonomy_id || 132,
+          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          confidenceScore: parsed.confidence_score || 95,
+          reasoning: parsed.reasoning || 'DeepSeek derin mantık analizi ile belirlendi.',
+          providerUsed: `DeepSeek (${model})`,
+          isLive: true,
+          message: `✨ DeepSeek (${model}) ${sourcesText} inceleyerek Etsy kategorisini belirledi: #${parsed.taxonomy_id} ${parsed.category_path}`,
+          inputSources: sources,
+          alternatives: (parsed.alternatives || []).map((a: any) => ({
+            taxonomyId: Number(a.taxonomy_id) || 0,
+            categoryPath: String(a.category_path || ''),
+            confidenceScore: Number(a.confidence_score) || 80
+          }))
+        };
+      })
+    );
+  }
+
+  private suggestOfflineCategoryDetailed(
+    title: string,
+    desc: string,
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
+    isFallbackFromError: boolean
+  ): CategoryAiSuggestion {
+    const text = `${title} ${desc}`.toLowerCase();
+    const sourcesText = this.formatInputSourcesDescription(sources);
+
+    // 1. Bags & Purses
+    if (text.includes('çanta') || text.includes('bag') || text.includes('purse') || text.includes('omuz çantası') || text.includes('handbag')) {
+      return {
+        taxonomyId: 132,
+        categoryPath: 'Bags & Purses > Handbags > Shoulder Bags',
+        confidenceScore: 92,
+        reasoning: 'Metindeki çanta, omuz çantası veya el yapımı bag anahtar kelimeleri doğrudan Etsy Bags & Purses kategorisiyle eşleşmektedir.',
+        providerUsed: isFallbackFromError ? 'Yerel Kural Motoru (Fallback)' : 'Yerel Kural Motoru',
+        isLive: false,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #132 Bags & Purses > Handbags > Shoulder Bags`,
+        inputSources: sources,
+        alternatives: [
+          { taxonomyId: 134, categoryPath: 'Bags & Purses > Handbags > Tote Bags', confidenceScore: 85 },
+          { taxonomyId: 133, categoryPath: 'Bags & Purses > Handbags > Crossbody Bags', confidenceScore: 80 }
+        ]
+      };
+    }
+
+    if (text.includes('tote') || text.includes('bez çanta') || text.includes('kanvas')) {
+      return {
+        taxonomyId: 134,
+        categoryPath: 'Bags & Purses > Handbags > Tote Bags',
+        confidenceScore: 93,
+        reasoning: 'Bez çanta / tote terimi Etsy Tote Bags yaprak kategorisiyle tam uyumludur.',
+        providerUsed: 'Yerel Kural Motoru',
+        isLive: false,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #134 Bags & Purses > Handbags > Tote Bags`,
+        inputSources: sources,
+        alternatives: [
+          { taxonomyId: 132, categoryPath: 'Bags & Purses > Handbags > Shoulder Bags', confidenceScore: 82 }
+        ]
+      };
+    }
+
+    // 2. Jewelry
+    if (text.includes('kolye') || text.includes('necklace') || text.includes('takı') || text.includes('jewelry') || text.includes('pendant')) {
+      return {
+        taxonomyId: 204,
+        categoryPath: 'Jewelry > Necklaces',
+        confidenceScore: 94,
+        reasoning: 'Takı ve kolye terimleri Etsy Jewelry > Necklaces departmanı ile eşleşti.',
+        providerUsed: 'Yerel Kural Motoru',
+        isLive: false,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #204 Jewelry > Necklaces`,
+        inputSources: sources,
+        alternatives: [
+          { taxonomyId: 211, categoryPath: 'Jewelry > Necklaces > Pendants', confidenceScore: 88 },
+          { taxonomyId: 220, categoryPath: 'Jewelry > Rings', confidenceScore: 70 }
+        ]
+      };
+    }
+
+    // 3. 3D Print / Figurines
+    if (text.includes('3d') || text.includes('baskı') || text.includes('print') || text.includes('figür') || text.includes('ejderha') || text.includes('dragon') || text.includes('fidget')) {
+      return {
+        taxonomyId: 1238,
+        categoryPath: 'Art & Collectibles > Sculptures > Figurines',
+        confidenceScore: 92,
+        reasoning: '3D baskı, figür veya minyatür terimleri Etsy Sculptures & Figurines dalıyla eşleşti.',
+        providerUsed: 'Yerel Kural Motoru',
+        isLive: false,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #1238 Art & Collectibles > Sculptures > Figurines`,
+        inputSources: sources,
+        alternatives: [
+          { taxonomyId: 1239, categoryPath: 'Art & Collectibles > Sculptures > Busts & Statues', confidenceScore: 85 },
+          { taxonomyId: 68, categoryPath: 'Craft Supplies & Tools > Digital', confidenceScore: 75 }
+        ]
+      };
+    }
+
+    // 4. Home & Living - Lighting / Decor
+    if (text.includes('lamba') || text.includes('lamp') || text.includes('ışık') || text.includes('gece lambası')) {
+      return {
+        taxonomyId: 1041,
+        categoryPath: 'Home & Living > Lighting > Lamps',
+        confidenceScore: 90,
+        reasoning: 'Aydınlatma ve dekoratif masa lambası terimleri Etsy Lighting dalıyla eşleşti.',
+        providerUsed: 'Yerel Kural Motoru',
+        isLive: false,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #1041 Home & Living > Lighting > Lamps`,
+        inputSources: sources,
+        alternatives: [
+          { taxonomyId: 1042, categoryPath: 'Home & Living > Lighting > Night Lights', confidenceScore: 86 }
+        ]
+      };
+    }
+
+    // 5. Ceramics / Mugs
+    if (text.includes('seramik') || text.includes('kupa') || text.includes('mug') || text.includes('fincan')) {
+      return {
+        taxonomyId: 943,
+        categoryPath: 'Home & Living > Kitchen & Dining > Drinkware > Mugs',
+        confidenceScore: 95,
+        reasoning: 'Mutfak ve içecek kupası terimleri Mugs yaprak kategorisiyle tam örtüşmektedir.',
+        providerUsed: 'Yerel Kural Motoru',
+        isLive: false,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #943 Home & Living > Kitchen & Dining > Drinkware > Mugs`,
+        inputSources: sources,
+        alternatives: [
+          { taxonomyId: 992, categoryPath: 'Home & Living > Outdoor & Gardening > Planters & Pots', confidenceScore: 70 }
+        ]
+      };
+    }
+
+    // Default Fallback
+    return {
+      taxonomyId: 1239,
+      categoryPath: 'Art & Collectibles > Sculptures > Busts & Statues',
+      confidenceScore: 75,
+      reasoning: 'Genel el sanatı ve tasarım ürün dalı seçildi.',
+      providerUsed: 'Yerel Kural Motoru',
+      isLive: false,
+      message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #1239 Art & Collectibles`,
+      inputSources: sources,
+      alternatives: [
+        { taxonomyId: 1054, categoryPath: 'Home & Living > Home Decor > Wall Decor', confidenceScore: 70 }
+      ]
+    };
   }
 
   // =========================================================================

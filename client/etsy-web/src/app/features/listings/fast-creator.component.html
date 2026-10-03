@@ -146,14 +146,97 @@
               </button>
             </div>
 
-            <div class="field-wrap full">
-              <label>Etsy Taxonomy Kategorisi:</label>
-              <select class="std-select" [(ngModel)]="selectedCategory">
-                <option value="Art & Collectibles > Sculptures">1239 - Art & Collectibles / 3D Printed Sculptures</option>
-                <option value="Home & Living > Home Decor">1482 - Home & Living / Table & Wall Decor</option>
-                <option value="Jewelry > Necklaces">204 - Jewelry / Rings & Custom Necklaces</option>
-                <option value="Craft Supplies > Digital">68 - Craft Supplies / Digital STL 3D Files</option>
-              </select>
+            <!-- Rich Category Command Box -->
+            <div class="tax-command-card">
+              <!-- Active Selection Ribbon -->
+              <div class="tax-ribbon-row">
+                <div class="tax-tag-pill">
+                  <span class="tax-num">#{{ selectedTaxonomyId || 1239 }}</span>
+                  <span class="tax-path">{{ selectedCategory }}</span>
+                </div>
+                <div *ngIf="categoryAiResult" class="tax-conf-badge" [class.badge-live]="categoryAiResult.isLive">
+                  <span class="dot">●</span> %{{ categoryAiResult.confidenceScore }} Doğruluk
+                </div>
+              </div>
+
+              <!-- AI Reasoning Banner -->
+              <div *ngIf="categoryAiResult?.reasoning" class="tax-reasoning-box">
+                <div class="reasoning-header">
+                  <span class="sparkle">✨</span>
+                  <span class="engine-tag">{{ categoryAiResult?.providerUsed }}</span>
+                  <span class="input-indicators">
+                    <span *ngIf="categoryAiResult?.inputSources?.hasTitle" class="src-pill">✍️ Başlık</span>
+                    <span *ngIf="categoryAiResult?.inputSources?.hasImage" class="src-pill">📷 Görsel</span>
+                    <span *ngIf="categoryAiResult?.inputSources?.hasDescription" class="src-pill">📝 Açıklama</span>
+                  </span>
+                </div>
+                <p class="reasoning-body">{{ categoryAiResult?.reasoning }}</p>
+              </div>
+
+              <!-- Taxonomy Combo / Selector -->
+              <div class="field-wrap full tax-select-wrap">
+                <label>Etsy Taxonomy Ağacı (Resmi Dökümantasyon):</label>
+                <select class="std-select" [(ngModel)]="selectedCategoryCombo" (ngModelChange)="onTaxonomyComboChange($event)">
+                  <option [value]="selectedTaxonomyId + '|' + selectedCategory">Aktif: {{ selectedTaxonomyId }} - {{ selectedCategory }}</option>
+                  <optgroup label="🛍️ Çanta & Cüzdan (Bags & Purses)">
+                    <option value="132|Bags & Purses > Handbags > Shoulder Bags">132 - Bags & Purses / Handbags > Shoulder Bags</option>
+                    <option value="134|Bags & Purses > Handbags > Tote Bags">134 - Bags & Purses / Handbags > Tote Bags</option>
+                    <option value="133|Bags & Purses > Handbags > Crossbody Bags">133 - Bags & Purses / Handbags > Crossbody Bags</option>
+                    <option value="138|Bags & Purses > Handbags > Clutches & Evening Bags">138 - Bags & Purses / Clutches & Evening Bags</option>
+                    <option value="140|Bags & Purses > Backpacks">140 - Bags & Purses / Backpacks</option>
+                    <option value="142|Bags & Purses > Wallets & Money Clips">142 - Bags & Purses / Wallets & Money Clips</option>
+                  </optgroup>
+                  <optgroup label="💎 Takı & Mücevher (Jewelry)">
+                    <option value="204|Jewelry > Necklaces">204 - Jewelry / Necklaces</option>
+                    <option value="211|Jewelry > Necklaces > Pendants">211 - Jewelry / Pendants</option>
+                    <option value="220|Jewelry > Rings">220 - Jewelry / Rings</option>
+                    <option value="187|Jewelry > Earrings">187 - Jewelry / Earrings</option>
+                    <option value="172|Jewelry > Bracelets">172 - Jewelry / Bracelets</option>
+                  </optgroup>
+                  <optgroup label="🎨 Sanat, Heykel & 3D Baskı (Art & Collectibles)">
+                    <option value="1239|Art & Collectibles > Sculptures > Busts & Statues">1239 - Art & Collectibles / Busts & Statues</option>
+                    <option value="1238|Art & Collectibles > Sculptures > Figurines">1238 - Art & Collectibles / 3D Printed Figurines & Fidgets</option>
+                    <option value="1215|Art & Collectibles > Prints > Digital Prints">1215 - Art & Collectibles / Digital Prints & Posters</option>
+                  </optgroup>
+                  <optgroup label="🏡 Ev & Yaşam (Home & Living)">
+                    <option value="1041|Home & Living > Lighting > Lamps">1041 - Home & Living / Lighting > Lamps</option>
+                    <option value="1042|Home & Living > Lighting > Night Lights">1042 - Home & Living / Night Lights</option>
+                    <option value="1054|Home & Living > Home Decor > Wall Decor">1054 - Home & Living / Wall Decor</option>
+                    <option value="1063|Home & Living > Home Decor > Candleholders">1063 - Home & Living / Candleholders</option>
+                    <option value="943|Home & Living > Kitchen & Dining > Drinkware > Mugs">943 - Home & Living / Drinkware > Mugs</option>
+                  </optgroup>
+                  <optgroup label="👕 Giyim (Clothing)">
+                    <option value="270|Clothing > Unisex Adult Clothing > Tops & Tees > T-shirts">270 - Clothing / Unisex T-shirts</option>
+                    <option value="283|Clothing > Women's Clothing > Dresses">283 - Clothing / Women's Dresses</option>
+                    <option value="288|Clothing > Unisex Adult Clothing > Hoodies & Sweatshirts">288 - Clothing / Hoodies & Sweatshirts</option>
+                  </optgroup>
+                  <optgroup label="💾 Dijital & Araçlar (Craft Supplies)">
+                    <option value="68|Craft Supplies & Tools > Digital">68 - Craft Supplies / Digital STL 3D Files</option>
+                    <option value="590|Craft Supplies & Tools > Patterns & How To">590 - Craft Supplies / Patterns & Guides</option>
+                  </optgroup>
+                  <optgroup label="🎧 Elektronik Aksesuar (Electronics & Accessories)">
+                    <option value="2079|Electronics & Accessories > Audio > Headphone & Headset Stands">2079 - Audio / Headphone Stands</option>
+                    <option value="651|Electronics & Accessories > Cases & Covers > Phone Cases">651 - Cases & Covers / Phone Cases</option>
+                  </optgroup>
+                </select>
+              </div>
+
+              <!-- Alternatives Pill Strip -->
+              <div *ngIf="categoryAlternatives && categoryAlternatives.length > 0" class="tax-alt-strip">
+                <span class="alt-title">⚡ 1-Tık Alternatif Öneriler:</span>
+                <div class="alt-btn-group">
+                  <button
+                    type="button"
+                    *ngFor="let alt of categoryAlternatives"
+                    class="btn-tax-alt"
+                    (click)="selectAlternativeCategory(alt)"
+                    title="Bu kategoriyi seçmek için tıklayın">
+                    <span class="tax-alt-id">#{{ alt.taxonomyId }}</span>
+                    <span class="tax-alt-name">{{ alt.categoryPath.split('>').pop()?.trim() || alt.categoryPath }}</span>
+                    <span class="tax-alt-score">%{{ alt.confidenceScore }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div class="logistics-row" *ngIf="listingType === 'physical'">

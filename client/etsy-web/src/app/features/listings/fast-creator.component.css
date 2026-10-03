@@ -517,6 +517,179 @@
   text-overflow: ellipsis;
 }
 
+/* ============================================================
+   TAXONOMY COMMAND CARD STYLES
+   ============================================================ */
+.tax-command-card {
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tax-ribbon-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tax-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  padding: 4px 8px;
+  border-radius: 6px;
+  max-width: 80%;
+  overflow: hidden;
+}
+
+.tax-num {
+  background: #6366f1;
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tax-path {
+  font-size: 0.76rem;
+  color: #c7d2fe;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tax-conf-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #94a3b8;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 3px 8px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tax-conf-badge.badge-live {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.tax-conf-badge .dot {
+  font-size: 0.6rem;
+}
+
+.tax-reasoning-box {
+  background: rgba(30, 41, 59, 0.5);
+  border-left: 3px solid #6366f1;
+  padding: 6px 10px;
+  border-radius: 0 6px 6px 0;
+}
+
+.reasoning-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.engine-tag {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #a5b4fc;
+}
+
+.input-indicators {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.src-pill {
+  font-size: 0.64rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.reasoning-body {
+  margin: 0;
+  font-size: 0.73rem;
+  color: #94a3b8;
+  line-height: 1.35;
+}
+
+.tax-select-wrap {
+  margin-top: 2px;
+}
+
+.tax-alt-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.alt-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #f59e0b;
+}
+
+.alt-btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn-tax-alt {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #e2e8f0;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+}
+
+.btn-tax-alt:hover {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+  color: #fde68a;
+  transform: translateY(-1px);
+}
+
+.tax-alt-id {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.tax-alt-score {
+  font-size: 0.65rem;
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.2);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
 .logistics-row {
   display: flex;
   gap: 8px;

@@ -4,7 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
-import { EtsyListingAiService } from '../../core/services/etsy-listing-ai.service';
+import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 export interface GalleryImage {
@@ -90,6 +90,10 @@ export class FastCreatorComponent implements OnInit {
   quantity: number | null = 15;
   title = '';
   selectedCategory = 'Art & Collectibles > Sculptures';
+  selectedTaxonomyId = 1239;
+  categoryAiResult: CategoryAiSuggestion | null = null;
+  categoryAlternatives: TaxonomyCandidateItem[] = [];
+  selectedCategoryCombo = '1239|Art & Collectibles > Sculptures';
   shippingProfile = 'Standart Kargo (3-5 iş günü teslimat)';
   readinessState = 'Hazır Ürün (Ready to ship) 1-3 iş günü';
   tags: string[] = [];
@@ -322,20 +326,51 @@ export class FastCreatorComponent implements OnInit {
   }
 
   suggestAiCategory(): void {
-    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
-    if (!input) {
-      this.showToast('⚠️ Lütfen önce sol panelde ürün başlığı alanına birkaç kelime girin.');
+    const title = this.title.trim();
+    const desc = this.description.trim();
+    const images = this.galleryImages.map(img => img.url).filter(u => !!u);
+
+    if (!title && !desc && images.length === 0) {
+      this.showToast('⚠️ Lütfen AI kategori analizi için bir başlık yazın, açıklama ekleyin veya orta panelden ürün görseli yükleyin.');
       return;
     }
-    this.listingAiService.suggestCategory(input).subscribe({
+
+    this.isGeneratingAi = true;
+    this.listingAiService.suggestCategoryMultimodal(title, desc, images).subscribe({
       next: res => {
-        this.selectedCategory = res.value;
+        this.isGeneratingAi = false;
+        this.selectedTaxonomyId = res.taxonomyId;
+        this.selectedCategory = res.categoryPath;
+        this.categoryAiResult = res;
+        this.categoryAlternatives = res.alternatives || [];
+        this.selectedCategoryCombo = `${res.taxonomyId}|${res.categoryPath}`;
         this.showToast(res.message);
       },
       error: (err) => {
+        this.isGeneratingAi = false;
         this.showToast(err?.message || '❌ Kategori önerisi oluşturulamadı.');
       }
     });
+  }
+
+  onTaxonomyComboChange(val: string): void {
+    if (!val) return;
+    if (val.includes('|')) {
+      const parts = val.split('|');
+      const id = parseInt(parts[0], 10);
+      const path = parts[1];
+      if (id > 0) this.selectedTaxonomyId = id;
+      if (path) this.selectedCategory = path;
+    } else {
+      this.selectedCategory = val;
+    }
+  }
+
+  selectAlternativeCategory(alt: TaxonomyCandidateItem): void {
+    this.selectedTaxonomyId = alt.taxonomyId;
+    this.selectedCategory = alt.categoryPath;
+    this.selectedCategoryCombo = `${alt.taxonomyId}|${alt.categoryPath}`;
+    this.showToast(`📌 Kategori güncellendi: #${alt.taxonomyId} ${alt.categoryPath}`);
   }
 
   suggestAiTags(): void {
