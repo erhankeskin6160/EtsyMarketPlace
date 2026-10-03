@@ -28,6 +28,26 @@ export interface CarrierQuote {
   notes?: string;
 }
 
+export interface CarrierAccountSession {
+  id: 'aras' | 'shipentegra' | 'navlungo' | 'shiptomore';
+  name: string;
+  logoUrl: string;
+  isConnected: boolean;
+  statusLabel: string;
+  autoLabel: string;
+  portalUrl: string;
+  tokenOrKey?: string;
+  clientSecret?: string;
+  lastUpdated?: string;
+  notes?: string;
+}
+
+export interface GtipCodeItem {
+  code: string;
+  description: string;
+  category?: string;
+}
+
 export interface OrderFulfillmentItem {
   orderId: string;
   orderNumber: string;
@@ -37,6 +57,9 @@ export interface OrderFulfillmentItem {
   countryCode: string;
   city?: string;
   addressSnippet?: string;
+  isAddressMissing?: boolean;
+  addressWarning?: string;
+  exportType?: string;
   orderDate: string;
   status: 'unfulfilled' | 'shipped' | 'delivered';
   currency: string;
@@ -47,9 +70,13 @@ export interface OrderFulfillmentItem {
   netProfit: number;
   profitMarginPercent: number;
   packageSpecs: PackageSpecs;
+  gtipCode?: string;
+  gtipDescription?: string;
+  invoicedWeightKg?: number;
   items: OrderItem[];
   selectedCarrier?: string;
-  trackingCode?: string;
   carrierServiceName?: string;
+  trackingCode?: string;
+  barcodeNumber?: string;
   shippedAt?: string;
 }
