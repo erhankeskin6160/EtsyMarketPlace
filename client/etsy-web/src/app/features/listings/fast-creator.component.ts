@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 interface ListingPreset {
   id: string;
@@ -17,7 +18,7 @@ interface ListingPreset {
 @Component({
   selector: 'app-fast-creator',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AiLogoComponent],
   template: `
     <div class="creator-container">
       <!-- TOP HEADER -->
@@ -30,7 +31,7 @@ interface ListingPreset {
           </div>
           <div>
             <h1 class="page-title">Hızlı Ürün Ekle - AI Fast Creator</h1>
-            <p class="page-subtitle">Aktif Model: <span class="active-model-chip" (click)="aiService.openAiSettingsModal()">{{ aiService.activeBadgeText() }} ⚙️</span> ile SEO 140 karakter başlık, açıklama ve kusursuz 13 etiket üretimi</p>
+            <p class="page-subtitle">Aktif Model: <span class="active-model-chip" (click)="aiService.openAiSettingsModal()"><app-ai-logo [provider]="aiService.activeProvider()" [size]="14"></app-ai-logo> {{ aiService.activeBadgeTextClean() }} ⚙️</span> ile SEO 140 karakter başlık, açıklama ve kusursuz 13 etiket üretimi</p>
           </div>
         </div>
 
@@ -39,10 +40,8 @@ interface ListingPreset {
             ⚙️ AI Model Ayarları
           </button>
           <button class="btn-ai-spark" [disabled]="isGeneratingAi" (click)="generateWithAi()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
-            </svg>
-            {{ isGeneratingAi ? (aiService.activeBadgeText() + ' Üretiyor...') : ('✨ ' + aiService.activeBadgeText() + ' ile SEO Üret') }}
+            <app-ai-logo [provider]="aiService.activeProvider()" [size]="18"></app-ai-logo>
+            <span>{{ isGeneratingAi ? (aiService.activeProvider() + ' Üretiyor...') : (aiService.activeProvider() + ' ile SEO Üret') }}</span>
           </button>
         </div>
       </div>

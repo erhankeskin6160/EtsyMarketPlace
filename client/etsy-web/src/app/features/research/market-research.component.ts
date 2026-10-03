@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
+import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 export interface MarketItem {
   id: number;
@@ -30,7 +31,7 @@ export interface MarketItem {
 @Component({
   selector: 'app-market-research',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AiLogoComponent],
   template: `
     <div class="market-view">
       <!-- 1. HEADER (Title + AI Active Badge + Status) -->
@@ -56,7 +57,8 @@ export interface MarketItem {
             [ngClass]="aiService.activeBadgeClass()" 
             (click)="aiService.openAiSettingsModal()" 
             title="Yapay Zeka Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
-            <span>{{ aiService.activeBadgeText() }}</span>
+            <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
+            <span>{{ aiService.activeBadgeTextClean() }}</span>
             <span class="hub-gear">⚙️</span>
           </button>
 
@@ -304,7 +306,8 @@ Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem
                 🚀 Taslağa Klonla
               </button>
               <button type="button" class="btn-action-primary opt-btn" (click)="optimizeWithAi()">
-                ✨ AI Optimizasyon
+                <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
+                <span>AI Optimizasyon</span>
               </button>
               <button type="button" class="btn-action-neutral" (click)="trackSelectedListing()">
                 📌 Takibe Ekle

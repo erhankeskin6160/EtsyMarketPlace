@@ -2,11 +2,12 @@ import { Component, EventEmitter, Input, OnInit, Output, inject } from '@angular
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AiSettingsService, AiOptimizationSettings } from '../../core/services/ai-settings.service';
+import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 @Component({
   selector: 'app-ai-models-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AiLogoComponent],
   template: `
     <div class="ai-hub-container" [class.is-modal-view]="isModal">
       <!-- HEADER -->
@@ -39,7 +40,7 @@ import { AiSettingsService, AiOptimizationSettings } from '../../core/services/a
                 class="provider-pill gemini" 
                 [class.active]="formSettings.provider === 'Gemini'"
                 (click)="selectProvider('Gemini')">
-                <span class="pill-icon">🔵</span>
+                <app-ai-logo provider="Gemini" [size]="18"></app-ai-logo>
                 <span class="pill-name">Google Gemini</span>
                 <span class="pill-check" *ngIf="formSettings.provider === 'Gemini'">✓</span>
               </button>
@@ -49,7 +50,7 @@ import { AiSettingsService, AiOptimizationSettings } from '../../core/services/a
                 class="provider-pill openai" 
                 [class.active]="formSettings.provider === 'OpenAI'"
                 (click)="selectProvider('OpenAI')">
-                <span class="pill-icon">🟢</span>
+                <app-ai-logo provider="OpenAI" [size]="18"></app-ai-logo>
                 <span class="pill-name">OpenAI (GPT)</span>
                 <span class="pill-check" *ngIf="formSettings.provider === 'OpenAI'">✓</span>
               </button>
@@ -59,7 +60,7 @@ import { AiSettingsService, AiOptimizationSettings } from '../../core/services/a
                 class="provider-pill deepseek" 
                 [class.active]="formSettings.provider === 'DeepSeek'"
                 (click)="selectProvider('DeepSeek')">
-                <span class="pill-icon">🔴</span>
+                <app-ai-logo provider="DeepSeek" [size]="18"></app-ai-logo>
                 <span class="pill-name">DeepSeek</span>
                 <span class="pill-check" *ngIf="formSettings.provider === 'DeepSeek'">✓</span>
               </button>
@@ -69,7 +70,7 @@ import { AiSettingsService, AiOptimizationSettings } from '../../core/services/a
                 class="provider-pill claude" 
                 [class.active]="formSettings.provider === 'Claude'"
                 (click)="selectProvider('Claude')">
-                <span class="pill-icon">🟣</span>
+                <app-ai-logo provider="Claude" [size]="18"></app-ai-logo>
                 <span class="pill-name">Claude</span>
                 <span class="pill-check" *ngIf="formSettings.provider === 'Claude'">✓</span>
               </button>
@@ -79,7 +80,7 @@ import { AiSettingsService, AiOptimizationSettings } from '../../core/services/a
                 class="provider-pill grok" 
                 [class.active]="formSettings.provider === 'Grok'"
                 (click)="selectProvider('Grok')">
-                <span class="pill-icon">🟠</span>
+                <app-ai-logo provider="Grok" [size]="18"></app-ai-logo>
                 <span class="pill-name">xAI Grok</span>
                 <span class="pill-check" *ngIf="formSettings.provider === 'Grok'">✓</span>
               </button>
@@ -89,7 +90,7 @@ import { AiSettingsService, AiOptimizationSettings } from '../../core/services/a
                 class="provider-pill offline" 
                 [class.active]="formSettings.provider === 'Offline'"
                 (click)="selectProvider('Offline')">
-                <span class="pill-icon">⚡</span>
+                <app-ai-logo provider="Offline" [size]="18"></app-ai-logo>
                 <span class="pill-name">Offline Motor</span>
                 <span class="pill-check" *ngIf="formSettings.provider === 'Offline'">✓</span>
               </button>

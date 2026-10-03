@@ -71,7 +71,8 @@
       <div class="header-right">
         <!-- Active AI Model Hub Badge (Matching Desktop Image 1) -->
         <button class="ai-model-hub-badge" [ngClass]="aiService.activeBadgeClass()" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
-          <span>{{ aiService.activeBadgeText() }}</span>
+          <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
+          <span>{{ aiService.activeBadgeTextClean() }}</span>
           <span class="hub-gear-icon">⚙️</span>
         </button>
 

@@ -98,6 +98,13 @@ export class AiSettingsService {
     }
   });
 
+  readonly activeProvider = computed(() => this.settings().provider);
+  readonly activeBadgeTextClean = computed(() => {
+    const s = this.settings();
+    const model = this.activeModelName();
+    return s.provider === 'Offline' ? 'Offline Kural Motoru' : `${s.provider} (${model})`;
+  });
+
   readonly activeBadgeText = computed(() => {
     const s = this.settings();
     const model = this.activeModelName();

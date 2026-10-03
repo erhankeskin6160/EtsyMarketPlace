@@ -3,16 +3,17 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { GeminiAiService, ChatMessage, GeminiConfig } from '../../core/services/gemini-ai.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 @Component({
   selector: 'app-floating-copilot',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AiLogoComponent],
   template: `
     <!-- FLOATING BUTTON -->
     <div class="floating-btn-wrap" *ngIf="!isOpen" (click)="toggleOpen()">
       <button class="copilot-fab" title="Gemini Spark AI Asistanı">
-        <span class="sparkle-anim">✨</span>
+        <app-ai-logo provider="Gemini" [size]="20"></app-ai-logo>
         <span class="fab-label">Gemini AI Danışmanı</span>
       </button>
     </div>
@@ -21,7 +22,7 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
     <div class="copilot-window" *ngIf="isOpen">
       <div class="window-header">
         <div class="header-info">
-          <span class="sparkle-icon">✨</span>
+          <app-ai-logo provider="Gemini" [size]="20"></app-ai-logo>
           <div>
             <h4 class="copilot-title">Gemini Spark AI Danışmanı</h4>
             <span class="copilot-sub">

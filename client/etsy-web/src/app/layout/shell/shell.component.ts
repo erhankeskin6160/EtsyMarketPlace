@@ -9,11 +9,12 @@ import { NavItem } from '../../core/models/etsy.models';
 
 import { FloatingCopilotComponent } from '../copilot/floating-copilot.component';
 import { AiModelsSettingsComponent } from '../../features/settings/ai-models-settings.component';
+import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, FloatingCopilotComponent, AiModelsSettingsComponent],
+  imports: [CommonModule, RouterModule, FormsModule, FloatingCopilotComponent, AiModelsSettingsComponent, AiLogoComponent],
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
