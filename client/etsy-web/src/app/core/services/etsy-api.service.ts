@@ -181,4 +181,109 @@ export class EtsyApiService {
   getSystemStats(): Observable<SystemStats> {
     return this.http.get<SystemStats>(`${this.API_BASE}/api/admin/system-stats`);
   }
+
+  // ── A/B Testing Endpoints ─────────────────────────────────────────────────
+  getAbTests(listingId?: string): Observable<any[]> {
+    const url = listingId 
+      ? `${this.API_BASE}/api/etsy/ab-tests?listingId=${encodeURIComponent(listingId)}`
+      : `${this.API_BASE}/api/etsy/ab-tests`;
+    return this.http.get<any[]>(url);
+  }
+
+  createAbTest(experiment: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/ab-tests`, experiment);
+  }
+
+  updateAbTestStatus(id: number, status: number): Observable<any> {
+    return this.http.put<any>(`${this.API_BASE}/api/etsy/ab-tests/${id}/status`, { status });
+  }
+
+  deleteAbTest(id: number): Observable<{ success: boolean }> {
+    return this.http.delete<{ success: boolean }>(`${this.API_BASE}/api/etsy/ab-tests/${id}`);
+  }
+
+  // ── AI Usage Endpoints ────────────────────────────────────────────────────
+  getAiUsageStats(provider?: string): Observable<any> {
+    const url = provider
+      ? `${this.API_BASE}/api/etsy/ai-usage/stats?provider=${encodeURIComponent(provider)}`
+      : `${this.API_BASE}/api/etsy/ai-usage/stats`;
+    return this.http.get<any>(url);
+  }
+
+  getAiUsageHistory(provider?: string, limit: number = 100): Observable<any[]> {
+    let url = `${this.API_BASE}/api/etsy/ai-usage/history?limit=${limit}`;
+    if (provider) url += `&provider=${encodeURIComponent(provider)}`;
+    return this.http.get<any[]>(url);
+  }
+
+  recordAiUsage(record: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/ai-usage`, record);
+  }
+
+  // ── Batch Queue Endpoints ─────────────────────────────────────────────────
+  getBatchQueue(status?: string): Observable<any[]> {
+    const url = status
+      ? `${this.API_BASE}/api/etsy/batch-queue?status=${encodeURIComponent(status)}`
+      : `${this.API_BASE}/api/etsy/batch-queue`;
+    return this.http.get<any[]>(url);
+  }
+
+  enqueueBatch(items: any[]): Observable<any[]> {
+    return this.http.post<any[]>(`${this.API_BASE}/api/etsy/batch-queue/enqueue`, { items });
+  }
+
+  processBatchItem(id: number, req: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/batch-queue/${id}/process`, req);
+  }
+
+  clearCompletedBatch(): Observable<{ success: boolean; cleared: number }> {
+    return this.http.delete<{ success: boolean; cleared: number }>(`${this.API_BASE}/api/etsy/batch-queue/completed`);
+  }
+
+  // ── Tracking Endpoints ────────────────────────────────────────────────────
+  getTrackingItems(): Observable<any[]> {
+    return this.http.get<any[]>(`${this.API_BASE}/api/etsy/tracking`);
+  }
+
+  getTrackingSnapshots(id: number): Observable<any[]> {
+    return this.http.get<any[]>(`${this.API_BASE}/api/etsy/tracking/${id}/snapshots`);
+  }
+
+  saveTrackingCapture(capture: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/tracking/capture`, capture);
+  }
+
+  deleteTrackingItem(id: number): Observable<{ success: boolean }> {
+    return this.http.delete<{ success: boolean }>(`${this.API_BASE}/api/etsy/tracking/${id}`);
+  }
+
+  // ── Shop Performance History Endpoints ────────────────────────────────────
+  getShopPerformanceHistory(shopId?: number): Observable<any[]> {
+    const id = shopId || Number(this.activeShopId()) || 0;
+    return this.http.get<any[]>(`${this.API_BASE}/api/etsy/shop/performance?shopId=${id}`);
+  }
+
+  // ── Secure Settings Endpoints (SQLite Protected) ──────────────────────────
+  getTelegramSettings(shopId?: string): Observable<any> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<any>(`${this.API_BASE}/api/etsy/settings/telegram?shopId=${encodeURIComponent(id)}`);
+  }
+
+  saveTelegramSettings(settings: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/settings/telegram`, settings);
+  }
+
+  getCarrierSessions(shopId?: string): Observable<any[]> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<any[]>(`${this.API_BASE}/api/etsy/settings/carrier-sessions?shopId=${encodeURIComponent(id)}`);
+  }
+
+  saveCarrierSession(session: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/settings/carrier-sessions`, session);
+  }
+
+  // ── System Health & Version ───────────────────────────────────────────────
+  getSystemVersion(): Observable<any> {
+    return this.http.get<any>(`${this.API_BASE}/api/system/version`);
+  }
 }

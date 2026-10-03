@@ -4,10 +4,21 @@ using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Api.Services;
+using EtsyMarketPlace.Application.AbTesting;
+using EtsyMarketPlace.Application.AiUsage;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Application.Banking;
+using EtsyMarketPlace.Application.BatchQueue;
 using EtsyMarketPlace.Application.EtsyIntegration;
+using EtsyMarketPlace.Application.ShopPerformance;
+using EtsyMarketPlace.Application.Tracking;
+using EtsyMarketPlace.Domain.Tracking;
+using EtsyMarketPlace.Infrastructure.AbTesting;
+using EtsyMarketPlace.Infrastructure.AiUsage;
+using EtsyMarketPlace.Infrastructure.BatchQueue;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
+using EtsyMarketPlace.Infrastructure.ShopPerformance;
+using EtsyMarketPlace.Infrastructure.Tracking;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,11 +37,26 @@ builder.Services.AddHttpClient<IEtsyOAuthService, EtsyOAuthService>();
 builder.Services.AddTransient<EtsyAccessTokenHandler>();
 builder.Services.AddHttpClient<IEtsyDataClient, EtsyApiClient>()
     .AddHttpMessageHandler<EtsyAccessTokenHandler>();
+
+var dataDir = Path.Combine(
+    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+    "EtsyMarketPlace");
+Directory.CreateDirectory(dataDir);
+var dbPath = Path.Combine(dataDir, "etsy-finance.db");
+
 builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyTokenStore>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IEtsyIntegrationRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IEtsyReportingService>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IUserRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+builder.Services.AddSingleton<IShopSettingsRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+
+builder.Services.AddSingleton<IAbTestRepository>(sp => new SqliteAbTestRepository(dbPath));
+builder.Services.AddSingleton<IAiUsageRepository>(sp => new SqliteAiUsageRepository(dbPath));
+builder.Services.AddSingleton<IBatchQueueRepository>(sp => new SqliteBatchQueueRepository(dbPath));
+builder.Services.AddSingleton<ITrackingRepository>(sp => new SqliteTrackingRepository(dbPath));
+builder.Services.AddSingleton<IShopPerformanceHistoryRepository>(sp => new SqliteShopPerformanceHistoryRepository(dbPath));
+
 builder.Services.AddSingleton(sp => new JwtTokenService(builder.Configuration["Jwt:Secret"]));
 builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisService>();
 builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationService>();
@@ -802,5 +828,222 @@ app.MapGet("/api/admin/system-stats", async (HttpContext context, IUserRepositor
 .WithSummary("Sistem ve Kullanıcı İstatistikleri")
 .WithDescription("Toplam kullanıcı, aktif kullanıcı, lisanslı mağaza ve AI token tüketim istatistiklerini döner.")
 .WithName("GetSystemStats");
+
+// ── 7. A/B TEST YÖNETİMİ ENDPOINT'LERİ (/api/etsy/ab-tests) ─────────────────
+app.MapGet("/api/etsy/ab-tests", async (string? listingId, IAbTestRepository repo, CancellationToken ct) =>
+{
+    var tests = string.IsNullOrWhiteSpace(listingId)
+        ? await repo.GetRecentAsync(50, ct)
+        : await repo.GetByListingIdAsync(listingId, ct);
+    return Results.Ok(tests);
+})
+.WithTags("A/B Test Paneli")
+.WithSummary("A/B Test Deneylerini Listele")
+.WithName("GetAbTests");
+
+app.MapPost("/api/etsy/ab-tests", async (SaveAbTestExperiment experiment, IAbTestRepository repo, CancellationToken ct) =>
+{
+    var saved = await repo.SaveAsync(experiment, ct);
+    return Results.Ok(saved);
+})
+.WithTags("A/B Test Paneli")
+.WithSummary("Yeni A/B Test Başlat")
+.WithName("CreateAbTest");
+
+app.MapPut("/api/etsy/ab-tests/{id}/status", async (long id, UpdateAbTestStatusRequest request, IAbTestRepository repo, CancellationToken ct) =>
+{
+    var updated = await repo.UpdateStatusAsync(id, request.Status, ct);
+    return updated != null ? Results.Ok(updated) : Results.NotFound();
+})
+.WithTags("A/B Test Paneli")
+.WithSummary("A/B Test Durumunu Güncelle")
+.WithName("UpdateAbTestStatus");
+
+app.MapDelete("/api/etsy/ab-tests/{id}", async (long id, IAbTestRepository repo, CancellationToken ct) =>
+{
+    var deleted = await repo.DeleteAsync(id, ct);
+    return deleted ? Results.Ok(new { success = true }) : Results.NotFound();
+})
+.WithTags("A/B Test Paneli")
+.WithSummary("A/B Test Deneyini Sil")
+.WithName("DeleteAbTest");
+
+// ── 8. AI TOKEN & MODEL KULLANIM ENDPOINT'LERİ (/api/etsy/ai-usage) ──────────
+app.MapGet("/api/etsy/ai-usage/stats", async (string? provider, IAiUsageRepository repo, CancellationToken ct) =>
+{
+    var stats = await repo.GetSummaryStatsAsync(provider, DateTimeOffset.UtcNow.AddDays(-30), ct);
+    return Results.Ok(stats);
+})
+.WithTags("AI Kullanım Takibi")
+.WithSummary("Son 30 Günlük AI Token & Maliyet Özeti")
+.WithName("GetAiUsageStats");
+
+app.MapGet("/api/etsy/ai-usage/history", async (string? provider, int limit, IAiUsageRepository repo, CancellationToken ct) =>
+{
+    var history = await repo.GetHistoryAsync(provider, null, Math.Clamp(limit <= 0 ? 100 : limit, 1, 300), ct);
+    return Results.Ok(history);
+})
+.WithTags("AI Kullanım Takibi")
+.WithSummary("AI Model Çağrı Geçmişi")
+.WithName("GetAiUsageHistory");
+
+app.MapPost("/api/etsy/ai-usage", async (AiUsageRecord record, IAiUsageRepository repo, CancellationToken ct) =>
+{
+    var saved = await repo.SaveUsageAsync(record, ct);
+    return Results.Ok(saved);
+})
+.WithTags("AI Kullanım Takibi")
+.WithSummary("Yeni AI Çağrı Kaydı Ekle")
+.WithName("RecordAiUsage");
+
+// ── 9. TOPLU OPTİMİZASYON & BATCH KUYRUĞU (/api/etsy/batch-queue) ────────────
+app.MapGet("/api/etsy/batch-queue", async (string? status, IBatchQueueRepository repo, CancellationToken ct) =>
+{
+    var items = string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase)
+        ? await repo.GetPendingAsync(100, ct)
+        : await repo.GetAllAsync(200, ct);
+    return Results.Ok(items);
+})
+.WithTags("Toplu İşlem Kuyruğu")
+.WithSummary("Batch Kuyruğundaki İlanları Getir")
+.WithName("GetBatchQueue");
+
+app.MapPost("/api/etsy/batch-queue/enqueue", async (BatchEnqueueRequest request, IBatchQueueRepository repo, CancellationToken ct) =>
+{
+    var enqueued = await repo.EnqueueBatchAsync(request.Items, ct);
+    return Results.Ok(enqueued);
+})
+.WithTags("Toplu İşlem Kuyruğu")
+.WithSummary("Toplu Optimizasyon Kuyruğuna İlan Ekle")
+.WithName("EnqueueBatchItems");
+
+app.MapPost("/api/etsy/batch-queue/{id}/process", async (long id, BatchProcessRequest req, IBatchQueueRepository repo, CancellationToken ct) =>
+{
+    var existing = await repo.GetByIdAsync(id, ct);
+    if (existing == null) return Results.NotFound();
+
+    var updated = existing with
+    {
+        OptimizedTitle = req.OptimizedTitle ?? existing.OptimizedTitle,
+        OptimizedDescription = req.OptimizedDescription ?? existing.OptimizedDescription,
+        OptimizedTags = req.OptimizedTags ?? existing.OptimizedTags,
+        OverallScore = req.OverallScore,
+        Status = req.Status,
+        ProcessedAt = DateTimeOffset.UtcNow
+    };
+
+    var result = await repo.UpdateItemAsync(updated, ct);
+    return Results.Ok(result);
+})
+.WithTags("Toplu İşlem Kuyruğu")
+.WithSummary("Batch Kuyruk Öğesini İşlenmiş Olarak Güncelle")
+.WithName("ProcessBatchItem");
+
+app.MapDelete("/api/etsy/batch-queue/completed", async (IBatchQueueRepository repo, CancellationToken ct) =>
+{
+    var count = await repo.ClearCompletedAsync(ct);
+    return Results.Ok(new { success = true, cleared = count });
+})
+.WithTags("Toplu İşlem Kuyruğu")
+.WithSummary("Tamamlanan Kuyruk Öğelerini Temizle")
+.WithName("ClearCompletedBatch");
+
+// ── 10. CANLI KARGO & ÜRÜN TAKİBİ (/api/etsy/tracking) ──────────────────────
+app.MapGet("/api/etsy/tracking", async (ITrackingRepository repo, CancellationToken ct) =>
+{
+    var items = await repo.GetItemsAsync(ct);
+    return Results.Ok(items);
+})
+.WithTags("Canlı Takip")
+.WithSummary("Takip Edilen Varlıkları Getir")
+.WithName("GetTrackingItems");
+
+app.MapGet("/api/etsy/tracking/{id}/snapshots", async (long id, ITrackingRepository repo, CancellationToken ct) =>
+{
+    var snapshots = await repo.GetSnapshotsAsync(id, ct);
+    return Results.Ok(snapshots);
+})
+.WithTags("Canlı Takip")
+.WithSummary("Takip Öğesinin Geçmiş Anlık Görüntüleri")
+.WithName("GetTrackingSnapshots");
+
+app.MapPost("/api/etsy/tracking/capture", async (TrackingCapture capture, ITrackingRepository repo, CancellationToken ct) =>
+{
+    var item = await repo.SaveCaptureAsync(capture, ct);
+    return Results.Ok(item);
+})
+.WithTags("Canlı Takip")
+.WithSummary("Yeni Takip Görüntüsü Kaydet")
+.WithName("SaveTrackingCapture");
+
+app.MapDelete("/api/etsy/tracking/{id}", async (long id, ITrackingRepository repo, CancellationToken ct) =>
+{
+    await repo.DeleteItemAsync(id, ct);
+    return Results.Ok(new { success = true });
+})
+.WithTags("Canlı Takip")
+.WithSummary("Takip Öğesini Sil")
+.WithName("DeleteTrackingItem");
+
+// ── 11. MAĞAZA GEÇMİŞ PERFORMANSI (/api/etsy/shop/performance) ──────────────
+app.MapGet("/api/etsy/shop/performance", async (long shopId, IShopPerformanceHistoryRepository repo, CancellationToken ct) =>
+{
+    var history = await repo.GetByShopAsync(shopId, ct);
+    return Results.Ok(history);
+})
+.WithTags("Mağaza Performansı")
+.WithSummary("Mağaza Performans Geçmişini Getir")
+.WithName("GetShopPerformanceHistory");
+
+// ── 12. GÜVENLİ MAĞAZA AYARLARI (TELEGRAM & KARGO - SQLite) ──────────────────
+app.MapGet("/api/etsy/settings/telegram", async (string shopId, IShopSettingsRepository repo, CancellationToken ct) =>
+{
+    var settings = await repo.GetTelegramSettingsAsync(shopId, ct);
+    return Results.Ok(settings ?? new TelegramShopSettings(shopId, "", "", false, true, true, true, DateTimeOffset.UtcNow));
+})
+.WithTags("Güvenli SQLite Ayarları")
+.WithSummary("Mağaza Telegram Bildirim Ayarlarını Getir (Maskeli)")
+.WithName("GetTelegramSettings");
+
+app.MapPost("/api/etsy/settings/telegram", async (SaveTelegramSettingsRequest request, IShopSettingsRepository repo, CancellationToken ct) =>
+{
+    var saved = await repo.SaveTelegramSettingsAsync(request, ct);
+    return Results.Ok(saved);
+})
+.WithTags("Güvenli SQLite Ayarları")
+.WithSummary("Mağaza Telegram Ayarlarını Kaydet (Şifreli)")
+.WithName("SaveTelegramSettings");
+
+app.MapGet("/api/etsy/settings/carrier-sessions", async (string shopId, IShopSettingsRepository repo, CancellationToken ct) =>
+{
+    var sessions = await repo.GetCarrierSessionsAsync(shopId, ct);
+    return Results.Ok(sessions);
+})
+.WithTags("Güvenli SQLite Ayarları")
+.WithSummary("Kargo Taşıyıcı Oturumlarını Getir (Maskeli)")
+.WithName("GetCarrierSessions");
+
+app.MapPost("/api/etsy/settings/carrier-sessions", async (SaveCarrierSessionRequest request, IShopSettingsRepository repo, CancellationToken ct) =>
+{
+    var saved = await repo.SaveCarrierSessionAsync(request, ct);
+    return Results.Ok(saved);
+})
+.WithTags("Güvenli SQLite Ayarları")
+.WithSummary("Kargo Taşıyıcı Oturumunu Kaydet (Şifreli)")
+.WithName("SaveCarrierSession");
+
+// ── 13. SİSTEM & VDS CANLILIK KONTROLÜ (/api/system) ────────────────────────
+app.MapGet("/api/system/version", () => Results.Ok(new
+{
+    version = "2.4.0",
+    service = "EtsyMarketPlace VDS Command Engine",
+    status = "Online",
+    database = "SQLite-WAL Encrypted",
+    uptimeSeconds = Environment.TickCount64 / 1000,
+    serverTime = DateTimeOffset.UtcNow.ToString("O")
+}))
+.WithTags("Sistem & VDS")
+.WithSummary("VDS API Sürüm & Sağlık Durumu")
+.WithName("GetSystemVersion");
 
 app.Run();

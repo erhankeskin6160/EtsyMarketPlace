@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
-public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrationRepository, IEtsyReportingService, IUserRepository, IAsyncDisposable
+public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrationRepository, IEtsyReportingService, IUserRepository, IShopSettingsRepository, IAsyncDisposable
 {
     private readonly string _connectionString;
     private readonly IDataProtector _protector;
@@ -147,6 +147,28 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                     image_png_base64 TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     PRIMARY KEY(shop_id, chart_type)
+                );
+
+                CREATE TABLE IF NOT EXISTS shop_telegram_settings (
+                    shop_id TEXT PRIMARY KEY,
+                    encrypted_bot_token TEXT NOT NULL DEFAULT '',
+                    chat_id TEXT NOT NULL DEFAULT '',
+                    is_enabled INTEGER NOT NULL DEFAULT 0,
+                    notify_on_orders INTEGER NOT NULL DEFAULT 1,
+                    notify_on_stock INTEGER NOT NULL DEFAULT 1,
+                    daily_brief_enabled INTEGER NOT NULL DEFAULT 1,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS shop_carrier_sessions (
+                    shop_id TEXT NOT NULL,
+                    carrier_id TEXT NOT NULL,
+                    encrypted_credentials TEXT NOT NULL DEFAULT '',
+                    account_no TEXT NOT NULL DEFAULT '',
+                    service_level TEXT NOT NULL DEFAULT '',
+                    is_connected INTEGER NOT NULL DEFAULT 0,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(shop_id, carrier_id)
                 );
 
                 CREATE INDEX IF NOT EXISTS ix_bank_payouts_shop_date ON bank_payouts(shop_id, occurred_at);
@@ -932,6 +954,229 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
             reader.GetInt32(9) == 1,
             DateTimeOffset.Parse(reader.GetString(10), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             reader.IsDBNull(11) ? null : DateTimeOffset.Parse(reader.GetString(11), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+    }
+
+    public async Task<TelegramShopSettings?> GetTelegramSettingsAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT shop_id, encrypted_bot_token, chat_id, is_enabled, notify_on_orders, notify_on_stock, daily_brief_enabled, updated_at
+            FROM shop_telegram_settings
+            WHERE shop_id = $shop_id
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken)) return null;
+
+        var encryptedToken = reader.GetString(1);
+        string maskedToken = string.Empty;
+        if (!string.IsNullOrWhiteSpace(encryptedToken))
+        {
+            try
+            {
+                var decrypted = _protector.Unprotect(encryptedToken);
+                maskedToken = MaskSecret(decrypted);
+            }
+            catch
+            {
+                maskedToken = "****";
+            }
+        }
+
+        return new TelegramShopSettings(
+            reader.GetString(0),
+            maskedToken,
+            reader.GetString(2),
+            reader.GetInt32(3) == 1,
+            reader.GetInt32(4) == 1,
+            reader.GetInt32(5) == 1,
+            reader.GetInt32(6) == 1,
+            DateTimeOffset.Parse(reader.GetString(7), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind));
+    }
+
+    public async Task<TelegramShopSettings> SaveTelegramSettingsAsync(SaveTelegramSettingsRequest request, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+
+        string encryptedToken = string.Empty;
+        if (string.IsNullOrWhiteSpace(request.BotToken) || request.BotToken.Contains("..."))
+        {
+            await using var selectCmd = connection.CreateCommand();
+            selectCmd.CommandText = "SELECT encrypted_bot_token FROM shop_telegram_settings WHERE shop_id = $shop_id LIMIT 1;";
+            selectCmd.Parameters.AddWithValue("$shop_id", request.ShopId);
+            var res = await selectCmd.ExecuteScalarAsync(cancellationToken);
+            if (res is string existing) encryptedToken = existing;
+        }
+        else
+        {
+            encryptedToken = _protector.Protect(request.BotToken.Trim());
+        }
+
+        var updatedAt = DateTimeOffset.UtcNow;
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO shop_telegram_settings(shop_id, encrypted_bot_token, chat_id, is_enabled, notify_on_orders, notify_on_stock, daily_brief_enabled, updated_at)
+            VALUES($shop_id, $token, $chat_id, $is_enabled, $orders, $stock, $brief, $updated_at)
+            ON CONFLICT(shop_id) DO UPDATE SET
+                encrypted_bot_token = excluded.encrypted_bot_token,
+                chat_id = excluded.chat_id,
+                is_enabled = excluded.is_enabled,
+                notify_on_orders = excluded.notify_on_orders,
+                notify_on_stock = excluded.notify_on_stock,
+                daily_brief_enabled = excluded.daily_brief_enabled,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$shop_id", request.ShopId);
+        command.Parameters.AddWithValue("$token", encryptedToken);
+        command.Parameters.AddWithValue("$chat_id", request.ChatId.Trim());
+        command.Parameters.AddWithValue("$is_enabled", request.IsEnabled ? 1 : 0);
+        command.Parameters.AddWithValue("$orders", request.NotifyOnOrders ? 1 : 0);
+        command.Parameters.AddWithValue("$stock", request.NotifyOnStock ? 1 : 0);
+        command.Parameters.AddWithValue("$brief", request.DailyBriefEnabled ? 1 : 0);
+        command.Parameters.AddWithValue("$updated_at", updatedAt.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        string maskedToken = string.Empty;
+        if (!string.IsNullOrWhiteSpace(encryptedToken))
+        {
+            try
+            {
+                var decrypted = _protector.Unprotect(encryptedToken);
+                maskedToken = MaskSecret(decrypted);
+            }
+            catch
+            {
+                maskedToken = "****";
+            }
+        }
+
+        return new TelegramShopSettings(
+            request.ShopId,
+            maskedToken,
+            request.ChatId,
+            request.IsEnabled,
+            request.NotifyOnOrders,
+            request.NotifyOnStock,
+            request.DailyBriefEnabled,
+            updatedAt);
+    }
+
+    public async Task<IReadOnlyList<CarrierSessionRecord>> GetCarrierSessionsAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT shop_id, carrier_id, encrypted_credentials, account_no, service_level, is_connected, updated_at
+            FROM shop_carrier_sessions
+            WHERE shop_id = $shop_id;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var list = new List<CarrierSessionRecord>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var enc = reader.GetString(2);
+            string masked = string.Empty;
+            if (!string.IsNullOrWhiteSpace(enc))
+            {
+                try
+                {
+                    var dec = _protector.Unprotect(enc);
+                    masked = MaskSecret(dec);
+                }
+                catch
+                {
+                    masked = "****";
+                }
+            }
+
+            list.Add(new CarrierSessionRecord(
+                reader.GetString(0),
+                reader.GetString(1),
+                masked,
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetInt32(5) == 1,
+                DateTimeOffset.Parse(reader.GetString(6), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)));
+        }
+        return list;
+    }
+
+    public async Task<CarrierSessionRecord> SaveCarrierSessionAsync(SaveCarrierSessionRequest request, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+
+        string encCredentials = string.Empty;
+        if (string.IsNullOrWhiteSpace(request.Credentials) || request.Credentials.Contains("..."))
+        {
+            await using var selectCmd = connection.CreateCommand();
+            selectCmd.CommandText = "SELECT encrypted_credentials FROM shop_carrier_sessions WHERE shop_id = $shop_id AND carrier_id = $carrier_id LIMIT 1;";
+            selectCmd.Parameters.AddWithValue("$shop_id", request.ShopId);
+            selectCmd.Parameters.AddWithValue("$carrier_id", request.CarrierId);
+            var res = await selectCmd.ExecuteScalarAsync(cancellationToken);
+            if (res is string existing) encCredentials = existing;
+        }
+        else
+        {
+            encCredentials = _protector.Protect(request.Credentials.Trim());
+        }
+
+        var updatedAt = DateTimeOffset.UtcNow;
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO shop_carrier_sessions(shop_id, carrier_id, encrypted_credentials, account_no, service_level, is_connected, updated_at)
+            VALUES($shop_id, $carrier_id, $enc, $account_no, $service_level, $is_connected, $updated_at)
+            ON CONFLICT(shop_id, carrier_id) DO UPDATE SET
+                encrypted_credentials = excluded.encrypted_credentials,
+                account_no = excluded.account_no,
+                service_level = excluded.service_level,
+                is_connected = excluded.is_connected,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$shop_id", request.ShopId);
+        command.Parameters.AddWithValue("$carrier_id", request.CarrierId);
+        command.Parameters.AddWithValue("$enc", encCredentials);
+        command.Parameters.AddWithValue("$account_no", request.AccountNo.Trim());
+        command.Parameters.AddWithValue("$service_level", request.ServiceLevel.Trim());
+        command.Parameters.AddWithValue("$is_connected", request.IsConnected ? 1 : 0);
+        command.Parameters.AddWithValue("$updated_at", updatedAt.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+
+        string masked = string.Empty;
+        if (!string.IsNullOrWhiteSpace(encCredentials))
+        {
+            try
+            {
+                var dec = _protector.Unprotect(encCredentials);
+                masked = MaskSecret(dec);
+            }
+            catch
+            {
+                masked = "****";
+            }
+        }
+
+        return new CarrierSessionRecord(
+            request.ShopId,
+            request.CarrierId,
+            masked,
+            request.AccountNo,
+            request.ServiceLevel,
+            request.IsConnected,
+            updatedAt);
+    }
+
+    private static string MaskSecret(string? secret)
+    {
+        if (string.IsNullOrWhiteSpace(secret)) return string.Empty;
+        if (secret.Length <= 8) return "****";
+        return $"{secret[..4]}...{secret[^4..]}";
     }
 
     public ValueTask DisposeAsync()
