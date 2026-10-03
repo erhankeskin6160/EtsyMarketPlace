@@ -62,10 +62,21 @@ interface FinancialInsight {
         {{ toastMessage }}
       </div>
 
+      <!-- DISCONNECTED / EXPIRED API WARNING BANNER -->
+      <div *ngIf="etsyApi.tokenStatus() !== 'connected'" class="alert-banner">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-body">
+          <span class="alert-title">Etsy v3 API Bağlantısı Aktif Değil</span>
+          <p class="alert-desc">
+            Finansal yapay zeka analizlerinin mağazanıza özel çalışabilmesi için Etsy API yetkilendirmesi gereklidir. Asla sahte veri üretilmez.
+          </p>
+        </div>
+      </div>
+
       <!-- AI RECOMMENDATIONS GRID -->
       <div class="insights-section">
         <h2 class="section-title">Yapay Zeka Tarafından Üretilen Finansal İyileştirmeler</h2>
-        <div class="insights-grid">
+        <div *ngIf="insights.length > 0" class="insights-grid">
           <div *ngFor="let item of insights" class="insight-card glass-card" [ngClass]="item.type">
             <div class="card-head">
               <span class="type-badge" [ngClass]="item.type">
@@ -83,6 +94,14 @@ interface FinancialInsight {
               </button>
             </div>
           </div>
+        </div>
+
+        <div *ngIf="insights.length === 0" class="empty-state-box glass-card">
+          <span class="empty-icon">🧠</span>
+          <span class="empty-title">Canlı Finansal Analiz Verisi Bulunamadı</span>
+          <p class="empty-desc">
+            Bu mağaza için henüz senkronize edilmiş bir sipariş ve komisyon verisi bulunamadı. Etsy API bağlantısı sağlandığında mağazanızın gerçek kâr marjları ve komisyon yükleri otomatik analiz edilecektir.
+          </p>
         </div>
       </div>
 
@@ -306,37 +325,15 @@ interface FinancialInsight {
 export class FinancialAiAnalysisComponent implements OnInit {
   etsyApi = inject(EtsyApiService);
 
-  projectedRevenue = 4970.00;
-  projectedNetProfit = 2140.00;
-  netMarginPercent = 43.1;
-  feePercentage = 15.2;
-  roasScore = 4.2;
+  // Initialized to 0 - Zero fake data policy!
+  projectedRevenue = 0;
+  projectedNetProfit = 0;
+  netMarginPercent = 0;
+  feePercentage = 0;
+  roasScore = 0;
 
   toastMessage = '';
-
-  insights: FinancialInsight[] = [
-    {
-      type: 'warning',
-      title: 'İskandinav Ahşap Tepsi Marjı Daralıyor',
-      description: 'Navlun ve kargo ücretlerindeki son artış nedeniyle net kâr marjı %48\'den %24\'e geriledi. Fiyatı $34\'ten $39\'a yükseltmeniz önerilir.',
-      impactUsd: -140,
-      actionText: 'Fiyatı $39 Olarak Güncelle'
-    },
-    {
-      type: 'opportunity',
-      title: 'Noel Temalı 3D Ejderha Paket İndirimi',
-      description: 'Tekli satış yerine 2\'li hediye paketi (Bundle) oluşturulursa sepet ortalaması (AOV) $24\'ten $42\'ye çıkarılabilir.',
-      impactUsd: 380,
-      actionText: 'Bundle Taslağı Oluştur'
-    },
-    {
-      type: 'success',
-      title: 'Reklam Harcaması Verimliliği (ROAS: 4.2x)',
-      description: 'Etsy Ads anahtar kelime optimizasyonu sayesinde harcanan her 1 Dolar başı 4.2 Dolar ciro elde ediliyor.',
-      impactUsd: 520,
-      actionText: 'Reklam Bütçesini %15 Artır'
-    }
-  ];
+  insights: FinancialInsight[] = [];
 
   ngOnInit(): void {
     this.loadFinancials();
@@ -346,12 +343,50 @@ export class FinancialAiAnalysisComponent implements OnInit {
     this.etsyApi.getFinancialPerformance('this_month').subscribe({
       next: (perf: any) => {
         if (perf) {
-          const gross = Number(perf.grossSalesUsd ?? perf['grossSalesUsd'] ?? 0);
-          const net = Number(perf.netProfitUsd ?? perf['netProfitUsd'] ?? 0);
-          const margin = Number(perf.netMarginPercent ?? perf['netMarginPercent'] ?? 0);
-          if (gross > 0) this.projectedRevenue = gross * 1.15;
-          if (net > 0) this.projectedNetProfit = net * 1.15;
-          if (margin > 0) this.netMarginPercent = margin;
+          const gross = Number(perf.grossSalesUsd ?? perf['grossSalesUsd'] ?? perf.grossSales ?? 0);
+          const net = Number(perf.netProfitUsd ?? perf['netProfitUsd'] ?? perf.netProfit ?? 0);
+          const margin = Number(perf.netMarginPercent ?? perf['netMarginPercent'] ?? perf.netProfitMargin ?? 0);
+          const fees = Number(perf.platformFees ?? 0);
+          const ads = Number(perf.internalAdsCost ?? 0) + Number(perf.externalAdsCost ?? 0);
+
+          if (gross > 0) {
+            this.projectedRevenue = gross * 1.15;
+            this.projectedNetProfit = net * 1.15;
+            this.netMarginPercent = Number(margin.toFixed(1));
+            this.feePercentage = Number(((fees / gross) * 100).toFixed(1));
+            this.roasScore = ads > 0 ? Number((gross / ads).toFixed(1)) : 0;
+
+            // Generate real data-driven insights based on shop's actual numbers
+            const realInsights: FinancialInsight[] = [];
+            if (this.feePercentage > 15) {
+              realInsights.push({
+                type: 'warning',
+                title: 'Etsy Kesinti Yükü Analizi',
+                description: `Mağazanızın brüt cirosunun %${this.feePercentage}'i Etsy işlem, ilan ve ödeme komisyonlarına ayrılıyor. Fiyatları %5 artırmak komisyon etkisini telafi edebilir.`,
+                impactUsd: Math.round(gross * 0.05),
+                actionText: 'Fiyatlandırma Stratejisini İncele'
+              });
+            }
+            if (this.netMarginPercent > 50) {
+              realInsights.push({
+                type: 'success',
+                title: 'Sağlıklı Kâr Marjı',
+                description: `Net kâr marjınız %${this.netMarginPercent} seviyesinde oldukça güçlü. Bu marj reklam hacmini artırarak ölçeklenmek için alan sağlıyor.`,
+                impactUsd: Math.round(net * 0.1),
+                actionText: 'Büyüme Fırsatlarını Gör'
+              });
+            }
+            if (this.roasScore > 0) {
+              realInsights.push({
+                type: 'opportunity',
+                title: `Reklam Verimliliği (${this.roasScore}x ROAS)`,
+                description: `Harcanan her 1$ reklam maliyeti yaklaşık ${this.roasScore}$ ciro oluşturuyor.`,
+                impactUsd: Math.round(gross * 0.12),
+                actionText: 'Reklam Bütçesini Optimize Et'
+              });
+            }
+            this.insights = realInsights;
+          }
         }
       }
     });

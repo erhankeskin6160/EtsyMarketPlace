@@ -37,7 +37,9 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
         <div class="glass-card">
           <div class="card-head">
             <span class="card-label">1. Etsy Mağaza Bağlantısı & OAuth Token Sağlığı</span>
-            <span class="status-pill active">BAĞLI & AKTİF</span>
+            <span class="status-pill" [ngClass]="etsyApi.tokenStatus()">
+              {{ etsyApi.tokenStatus() === 'connected' ? 'BAĞLI & AKTİF' : (etsyApi.tokenStatus() === 'expired' ? 'SÜRESİ DOLDU' : 'BAĞLI DEĞİL') }}
+            </span>
           </div>
 
           <div class="form-group">
@@ -51,21 +53,37 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
           <div class="token-health-box">
             <div class="health-row">
               <span class="h-label">OAuth v3 Token Durumu:</span>
-              <span class="h-val green">Kayıtlı & Doğrulanmış</span>
+              <span class="h-val" [ngClass]="etsyApi.tokenStatus() === 'connected' ? 'green' : 'amber'">
+                {{ etsyApi.tokenDetails() }}
+              </span>
+            </div>
+            <div class="health-row">
+              <span class="h-label">Son Kullanma Zamanı:</span>
+              <span class="h-val text-muted">
+                {{ etsyApi.tokenExpiresAt() ? (etsyApi.tokenExpiresAt() | date:'medium') : 'Belirtilmedi' }}
+              </span>
             </div>
             <div class="health-row">
               <span class="h-label">Otomatik Yenileme (Auto-Refresh):</span>
-              <span class="h-val green">EtsyAccessTokenHandler Devrede</span>
+              <span class="h-val green">EtsyAccessTokenHandler Devrede (90 Gün)</span>
             </div>
             <div class="health-row">
               <span class="h-label">Erişim İzinleri (Scopes):</span>
-              <span class="h-val text-muted">listings_r, listings_w, transactions_r, shops_r</span>
+              <span class="h-val text-muted">listings_r, listings_w, transactions_r, shops_r, billing_r</span>
             </div>
           </div>
 
-          <button class="btn-sync-token" [disabled]="isTestingToken" (click)="testEtsyToken()">
-            🔄 Token Bağlantısını Test Et & Yenile
-          </button>
+          <div class="btn-actions-row">
+            <button class="btn-sync-token" [disabled]="isTestingToken" (click)="testEtsyToken()">
+              🔍 Durumu Sorgula
+            </button>
+            <button class="btn-refresh-token" [disabled]="isRefreshingToken" (click)="tryRefreshToken()">
+              ⚡ Token'ı Şimdi Yenile
+            </button>
+            <a class="btn-connect-etsy" href="https://developers.etsy.com/documentation/essentials/authentication" target="_blank">
+              🔑 Etsy Developer v3 Kılavuzu
+            </a>
+          </div>
         </div>
 
         <!-- CARD 2: LIVE USD/TRY EXCHANGE RATE API -->
@@ -288,6 +306,44 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
       color: #64748b;
     }
 
+    .status-pill.connected { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+    .status-pill.expired { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+    .status-pill.missing { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    .btn-actions-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn-refresh-token {
+      background: linear-gradient(135deg, #0ea5e9, #0284c7);
+      color: #fff;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .btn-refresh-token:hover { opacity: 0.9; }
+    .btn-refresh-token:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-connect-etsy {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(249, 115, 22, 0.15);
+      border: 1px solid rgba(249, 115, 22, 0.4);
+      color: #fb923c;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn-connect-etsy:hover { background: rgba(249, 115, 22, 0.25); }
+
     .toast-card {
       padding: 12px;
       background: rgba(16, 185, 129, 0.2);
@@ -311,6 +367,7 @@ export class EtsyApiSettingsComponent implements OnInit {
   currentShopId = '53236321';
   manualRate = 49.12;
   isTestingToken = false;
+  isRefreshingToken = false;
   toastMessage = '';
 
   constructor(
@@ -326,7 +383,8 @@ export class EtsyApiSettingsComponent implements OnInit {
   saveShopId(): void {
     if (this.currentShopId.trim()) {
       this.etsyApi.activeShopId.set(this.currentShopId.trim());
-      this.toastMessage = `Aktif mağaza ${this.currentShopId} olarak güncellendi!`;
+      this.etsyApi.verifyApiConnection();
+      this.toastMessage = `Aktif mağaza ${this.currentShopId} olarak güncellendi ve durum kontrol edildi!`;
       setTimeout(() => this.toastMessage = '', 3000);
     }
   }
@@ -350,18 +408,43 @@ export class EtsyApiSettingsComponent implements OnInit {
 
   testEtsyToken(): void {
     this.isTestingToken = true;
-    this.http.get<any>(`http://5.180.81.148:5263/api/etsy/token/status?shopId=${this.currentShopId}`)
-      .subscribe({
-        next: (res) => {
-          this.isTestingToken = false;
-          this.toastMessage = `Etsy OAuth v3 bağlantısı doğrulandı. Mağaza: ${res.shopId}`;
-          setTimeout(() => this.toastMessage = '', 4000);
-        },
-        error: () => {
-          this.isTestingToken = false;
-          this.toastMessage = 'Bağlantı kontrol edildi.';
-          setTimeout(() => this.toastMessage = '', 3000);
+    this.etsyApi.checkTokenStatus(this.currentShopId).subscribe({
+      next: (res) => {
+        this.isTestingToken = false;
+        this.etsyApi.verifyApiConnection();
+        if (res.exists && !res.isExpired) {
+          this.toastMessage = `✅ Etsy OAuth v3 bağlantısı aktif ve geçerli! Mağaza: ${res.shopId}`;
+        } else if (res.exists && res.isExpired) {
+          this.toastMessage = `⚠️ Etsy OAuth v3 token süresi dolmuş (${res.expiresAt ? res.expiresAt.slice(0, 10) : ''}). Lütfen "Token'ı Şimdi Yenile" butonunu kullanın.`;
+        } else {
+          this.toastMessage = `❌ Mağaza #${this.currentShopId} için kayıtlı bir Etsy token bulunamadı.`;
         }
-      });
+        setTimeout(() => this.toastMessage = '', 5000);
+      },
+      error: () => {
+        this.isTestingToken = false;
+        this.toastMessage = '⚠️ VDS API sunucusuna erişilemedi veya bağlantı kurulamadı.';
+        setTimeout(() => this.toastMessage = '', 4000);
+      }
+    });
+  }
+
+  tryRefreshToken(): void {
+    this.isRefreshingToken = true;
+    this.etsyApi.refreshToken(this.currentShopId).subscribe({
+      next: (res) => {
+        this.isRefreshingToken = false;
+        this.etsyApi.verifyApiConnection();
+        this.toastMessage = `✅ ${res.message || 'Etsy OAuth v3 token başarıyla yenilendi!'}`;
+        setTimeout(() => this.toastMessage = '', 5000);
+      },
+      error: (err) => {
+        this.isRefreshingToken = false;
+        this.etsyApi.verifyApiConnection();
+        const msg = err.error?.message || 'Etsy API yetkilendirme yenilemesi başarısız oldu (403 Forbidden).';
+        this.toastMessage = `⚠️ ${msg} Lütfen Etsy Developer portalından taze yetki verin.`;
+        setTimeout(() => this.toastMessage = '', 6000);
+      }
+    });
   }
 }

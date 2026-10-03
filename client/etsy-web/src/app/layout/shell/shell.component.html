@@ -76,11 +76,22 @@
           <span class="hub-gear-icon">⚙️</span>
         </button>
 
-        <!-- Live API Badge -->
-        <div class="badge-status">
+        <!-- Dynamic Live Etsy API Status Badge -->
+        <button class="badge-status" 
+                [ngClass]="apiService.tokenStatus()" 
+                (click)="router.navigate(['/settings/etsy-api'])" 
+                [title]="apiService.tokenDetails() + ' (Ayarlara gitmek için tıklayın)'">
           <span class="status-dot"></span>
-          <span>Canlı Etsy API</span>
-        </div>
+          <span class="status-text">
+            <ng-container [ngSwitch]="apiService.tokenStatus()">
+              <span *ngSwitchCase="'connected'">🟢 Canlı Etsy API</span>
+              <span *ngSwitchCase="'expired'">⚠️ Token Süresi Doldu</span>
+              <span *ngSwitchCase="'missing'">🔴 Etsy API Bağlı Değil</span>
+              <span *ngSwitchCase="'error'">⚠️ VDS Bağlantı Hatası</span>
+              <span *ngSwitchDefault>⏳ API Kontrol Ediliyor...</span>
+            </ng-container>
+          </span>
+        </button>
 
         <!-- Live Exchange Rate -->
         <button class="exchange-rate-pill" (click)="openRateModal()" title="Kuru değiştirmek için tıklayın">
@@ -105,6 +116,22 @@
         </button>
       </div>
     </header>
+
+    <!-- Global Token / API Disconnected Warning Alert Bar -->
+    <div *ngIf="apiService.tokenStatus() === 'expired' || apiService.tokenStatus() === 'missing'" class="global-api-warning-bar">
+      <div class="warning-content">
+        <span class="warning-icon">⚠️</span>
+        <span class="warning-msg">
+          <strong>Dikkat:</strong> 
+          {{ apiService.tokenStatus() === 'expired' 
+             ? 'Etsy v3 OAuth bağlantı token\'ının süresi dolmuş. Canlı mağaza verilerinizin çekilebilmesi için token yenilemesi yapılması gerekmektedir.' 
+             : 'Etsy API bağlantısı kurulu değil. Sayfalarda asla sahte veri uydurulmaz; gerçek mağaza verilerinizi görüntülemek için lütfen Etsy ile bağlanın.' }}
+        </span>
+      </div>
+      <button class="btn-warning-action" (click)="router.navigate(['/settings/etsy-api'])">
+        🔗 Etsy API Yetkilendirme Sayfasına Git
+      </button>
+    </div>
 
     <!-- CONTENT BODY -->
     <main class="content-body">

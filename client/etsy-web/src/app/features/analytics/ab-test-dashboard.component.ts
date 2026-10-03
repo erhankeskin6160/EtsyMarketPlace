@@ -82,7 +82,7 @@ interface AbTestCard {
           </div>
         </div>
 
-        <div class="experiments-grid">
+        <div *ngIf="filteredExperiments.length > 0" class="experiments-grid">
           <div *ngFor="let exp of filteredExperiments" class="exp-card glass-card">
             <div class="exp-header">
               <div class="exp-badge-row">
@@ -152,6 +152,15 @@ interface AbTestCard {
               </div>
             </div>
           </div>
+        </div>
+
+        <div *ngIf="filteredExperiments.length === 0" class="empty-state-box glass-card">
+          <span class="empty-icon">📈</span>
+          <span class="empty-title">Kayıtlı A/B Testi Bulunmuyor</span>
+          <p class="empty-desc">
+            VDS veri tabanında henüz kayıtlı bir A/B deneyi bulunmuyor. <strong>Asla sahte veri uydurulmaz</strong>.
+            Yukarıdaki "+ Yeni A/B Testi Başlat" butonuna tıklayarak ilk ilan testinizi oluşturabilirsiniz.
+          </p>
         </div>
       </div>
 
@@ -543,40 +552,7 @@ export class AbTestDashboardComponent implements OnInit {
   };
   newExpTagsRaw = '';
 
-  experiments: AbTestCard[] = [
-    {
-      id: 1,
-      listingId: '189204859',
-      listingTitle: 'Articulated Crystal Dragon 3D Printed',
-      experimentName: 'Noel Hediye & Ejderha Anahtar Kelime Testi',
-      variantA_Title: 'Articulated Crystal Dragon 3D Printed Toy Desk Figurine',
-      variantB_Title: 'Fidget Dragon Toy 3D Printed Crystal Desk Decor Gift for Him & Teens',
-      variantA_Tags: ['crystal dragon', '3d printed', 'desk toy', 'articulated'],
-      variantB_Tags: ['fidget dragon', 'gift for him', 'desk decor teens', 'sensory toy'],
-      startDate: '2026-09-20',
-      status: 'Active',
-      beforeViews: 412,
-      beforeSales: 8,
-      afterViews: 684,
-      afterSales: 21
-    },
-    {
-      id: 2,
-      listingId: '190412851',
-      listingTitle: 'Handmade Turkish Ceramic Coffee Mug',
-      experimentName: 'Seramik Kupa Başlık & Boho Etiket Testi',
-      variantA_Title: 'Handmade Ceramic Coffee Mug Pottery Gift for Coffee Lover',
-      variantB_Title: 'Boho Ceramic Coffee Cup Handmade Pottery Mug Aesthetic Kitchen Decor',
-      variantA_Tags: ['coffee mug', 'pottery cup', 'gift for lover'],
-      variantB_Tags: ['boho mug', 'aesthetic kitchen', 'handcrafted pottery'],
-      startDate: '2026-09-15',
-      status: 'Completed',
-      beforeViews: 820,
-      beforeSales: 14,
-      afterViews: 1240,
-      afterSales: 34
-    }
-  ];
+  experiments: AbTestCard[] = [];
 
   ngOnInit(): void {
     this.loadFromVds();

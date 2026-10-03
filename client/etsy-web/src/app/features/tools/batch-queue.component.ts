@@ -129,6 +129,18 @@ interface BatchItem {
                   </div>
                 </td>
               </tr>
+              <tr *ngIf="filteredItems.length === 0">
+                <td colspan="7" class="empty-table-cell">
+                  <div class="empty-state-box">
+                    <span class="empty-icon">📦</span>
+                    <span class="empty-title">Kuyrukta İşlem Bulunmuyor</span>
+                    <p class="empty-desc">
+                      Şu anda toplu optimizasyon veya yükleme kuyruğunda bekleyen ilan yok. <strong>Asla sahte veri uydurulmaz</strong>.
+                      İlan ekleme veya pazar araştırma modüllerinden ilanları toplu işleme aktarabilirsiniz.
+                    </p>
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -354,47 +366,7 @@ export class BatchQueueComponent implements OnInit {
   isProcessingBatch = false;
   processProgress = 0;
 
-  items: BatchItem[] = [
-    {
-      id: 101,
-      listingId: '189204859',
-      originalTitle: 'Articulated Crystal Dragon 3D Print Toy',
-      originalDescription: 'Cool 3d printed dragon',
-      targetKeyword: 'crystal dragon desk toy',
-      category: '3D Prints & Toys',
-      status: 'Completed',
-      overallScore: 92,
-      optimizedTitle: 'Fidget Dragon Toy 3D Printed Crystal Desk Decor Gift for Teens',
-      optimizedDescription: 'Articulated crystal dragon figurine, fully flexible joints, premium PLA.',
-      optimizedTags: ['crystal dragon', 'fidget toy', 'desk decor', 'gamer gift']
-    },
-    {
-      id: 102,
-      listingId: '190412851',
-      originalTitle: 'Ceramic Mug Handmade Coffee Cup',
-      originalDescription: 'Handmade pottery mug',
-      targetKeyword: 'boho ceramic coffee cup',
-      category: 'Kitchen & Dining',
-      status: 'Pending',
-      overallScore: 64,
-      optimizedTitle: '',
-      optimizedDescription: '',
-      optimizedTags: []
-    },
-    {
-      id: 103,
-      listingId: '191054332',
-      originalTitle: 'Minimalist Gold Dainty Ring',
-      originalDescription: '14k gold plated delicate ring',
-      targetKeyword: 'dainty gold stacking ring',
-      category: 'Jewelry & Rings',
-      status: 'SyncedToEtsy',
-      overallScore: 96,
-      optimizedTitle: 'Dainty Gold Stacking Ring 14k Gold Minimalist Promise Ring for Her',
-      optimizedDescription: 'Waterproof non-tarnish dainty band ring, perfect for everyday stacking.',
-      optimizedTags: ['gold ring', 'dainty ring', 'stacking ring', 'promise ring']
-    }
-  ];
+  items: BatchItem[] = [];
 
   ngOnInit(): void {
     this.loadQueue();

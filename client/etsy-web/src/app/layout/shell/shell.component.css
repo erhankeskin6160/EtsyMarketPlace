@@ -259,17 +259,100 @@
   background: rgba(16, 185, 129, 0.12);
   color: #34d399;
   border: 1px solid rgba(16, 185, 129, 0.3);
-  padding: 4px 10px;
+  padding: 5px 12px;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.badge-status:hover {
+  transform: translateY(-1px);
 }
 .status-dot {
-  width: 7px;
-  height: 7px;
-  background: #10b981;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+}
+.badge-status.connected {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.badge-status.connected .status-dot {
+  background: #10b981;
   box-shadow: 0 0 8px #10b981;
+}
+.badge-status.expired {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.6);
+  animation: pulse-warning 2s infinite ease-in-out;
+}
+.badge-status.expired .status-dot {
+  background: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+}
+.badge-status.missing {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.6);
+  animation: pulse-danger 2s infinite ease-in-out;
+}
+.badge-status.missing .status-dot {
+  background: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
+}
+.badge-status.error {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.badge-status.error .status-dot {
+  background: #ef4444;
+}
+@keyframes pulse-warning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+}
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+  50% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+}
+
+.global-api-warning-bar {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.18), rgba(245, 158, 11, 0.18));
+  border-bottom: 1px solid rgba(239, 68, 68, 0.35);
+  padding: 10px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fecaca;
+  font-size: 0.82rem;
+  gap: 16px;
+}
+.warning-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.warning-icon {
+  font-size: 1.1rem;
+}
+.btn-warning-action {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+.btn-warning-action:hover {
+  background: #dc2626;
 }
 
 .exchange-rate-pill {

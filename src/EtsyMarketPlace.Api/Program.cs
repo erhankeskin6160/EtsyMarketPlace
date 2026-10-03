@@ -550,6 +550,43 @@ app.MapGet("/api/etsy/token/status", async (string shopId = "53236321", HttpCont
 .WithDescription("Kayıtlı Etsy OAuth token'ının süresinin dolup dolmadığını ve kalan geçerlilik süresini kontrol eder.")
 .WithName("GetEtsyTokenStatus");
 
+app.MapPost("/api/etsy/token/refresh", async (string shopId = "53236321", HttpContext context = null!, IConfiguration config = null!, IEtsyTokenStore tokenStore = null!, IEtsyOAuthService oauthService = null!, CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
+    if (token is null)
+        return Results.NotFound(new { success = false, message = "Bu mağaza için kayıtlı token bulunamadı." });
+
+    try
+    {
+        var refreshed = await oauthService.RefreshTokenAsync(token.RefreshToken, cancellationToken);
+        await tokenStore.SaveAsync(resolvedShopId, refreshed, cancellationToken);
+        return Results.Ok(new
+        {
+            success = true,
+            shopId = resolvedShopId,
+            expiresAt = refreshed.AccessTokenExpiresAt,
+            isExpired = false,
+            message = "Etsy OAuth v3 token başarıyla yenilendi."
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new
+        {
+            success = false,
+            shopId = resolvedShopId,
+            message = "Token yenilenemedi: " + ex.Message,
+            needsReauth = true
+        });
+    }
+})
+.WithTags("Yetkilendirme & Token")
+.WithSummary("Etsy Token Yenileme (Refresh Token)")
+.WithDescription("Etsy v3 OAuth refresh_token kullanarak access_token'ı doğrudan yeniler.")
+.WithName("RefreshEtsyToken");
+
+
 app.MapGet("/api/banking/deposits", (IBankDepositService bankService) =>
 {
     var now = DateTimeOffset.UtcNow;

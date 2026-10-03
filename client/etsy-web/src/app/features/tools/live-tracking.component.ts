@@ -123,6 +123,18 @@ interface TrackedEntity {
                   </div>
                 </td>
               </tr>
+              <tr *ngIf="filteredItems.length === 0">
+                <td colspan="8" class="empty-table-cell">
+                  <div class="empty-state-box">
+                    <span class="empty-icon">🎯</span>
+                    <span class="empty-title">Takip Edilen Öğe Bulunmuyor</span>
+                    <p class="empty-desc">
+                      Henüz radara veya takip listesine bir ürün, kargo ya da rakip eklemediniz. <strong>Asla sahte veri uydurulmaz</strong>.
+                      Yukarıdaki "+ Yeni Takip Öğesi Ekle" butonuna basarak dilediğiniz ilanı canlı izlemeye alabilirsiniz.
+                    </p>
+                  </div>
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -417,53 +429,7 @@ export class LiveTrackingRadarComponent implements OnInit {
     url: ''
   };
 
-  items: TrackedEntity[] = [
-    {
-      id: 1,
-      entityType: 'Listing',
-      externalKey: '189204859',
-      displayName: 'Articulated Crystal Dragon 3D Figurine',
-      url: 'https://etsy.com/listing/189204859',
-      createdAt: '2026-09-18',
-      latestPrice: 24.99,
-      currency: 'USD',
-      favorites: 1420,
-      views: 12500,
-      reviewCount: 88,
-      seoScore: 92,
-      priceTrend: 'down'
-    },
-    {
-      id: 2,
-      entityType: 'Listing',
-      externalKey: '190412851',
-      displayName: 'Handmade Turkish Ceramic Coffee Mug',
-      url: 'https://etsy.com/listing/190412851',
-      createdAt: '2026-09-12',
-      latestPrice: 32.00,
-      currency: 'USD',
-      favorites: 960,
-      views: 8900,
-      reviewCount: 42,
-      seoScore: 84,
-      priceTrend: 'stable'
-    },
-    {
-      id: 3,
-      entityType: 'Shop',
-      externalKey: '3DPrintStudioUSA',
-      displayName: '3D Print Studio USA (Top Competitor)',
-      url: 'https://etsy.com/shop/3DPrintStudioUSA',
-      createdAt: '2026-08-30',
-      latestPrice: 19.50,
-      currency: 'USD',
-      favorites: 4800,
-      views: 45000,
-      reviewCount: 612,
-      seoScore: 88,
-      priceTrend: 'up'
-    }
-  ];
+  items: TrackedEntity[] = [];
 
   ngOnInit(): void {
     this.loadTracked();

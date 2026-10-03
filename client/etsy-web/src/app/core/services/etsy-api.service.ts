@@ -57,6 +57,17 @@ export interface EtsySyncResultDto {
   errorMessage: string | null;
 }
 
+/** VDS: EtsyTokenStatus */
+export interface EtsyTokenStatusDto {
+  exists: boolean;
+  shopId: string;
+  expiresAt: string | null;
+  isExpired: boolean;
+  tokenType?: string;
+  message?: string;
+  saved?: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -70,8 +81,53 @@ export class EtsyApiService {
   readonly isTryCurrency = signal<boolean>(true);
   readonly isSidebarCollapsed = signal<boolean>(false);
 
+  // Live Token & API Connection Signals
+  readonly tokenStatus = signal<'connected' | 'expired' | 'missing' | 'error' | 'checking'>('checking');
+  readonly tokenExpiresAt = signal<string | null>(null);
+  readonly tokenDetails = signal<string>('Kontrol ediliyor...');
+
   constructor() {
     this.fetchLiveExchangeRate();
+    this.verifyApiConnection();
+  }
+
+  /** Checks live Etsy OAuth v3 token validity on VDS and updates reactive signals */
+  verifyApiConnection(): void {
+    this.tokenStatus.set('checking');
+    this.checkTokenStatus().subscribe({
+      next: (res) => {
+        this.tokenExpiresAt.set(res.expiresAt);
+        if (res.exists && !res.isExpired) {
+          this.tokenStatus.set('connected');
+          this.tokenDetails.set(`Etsy v3 OAuth Bağlı (${res.shopId})`);
+        } else if (res.exists && res.isExpired) {
+          this.tokenStatus.set('expired');
+          this.tokenDetails.set(`Token Süresi Doldu (${res.expiresAt ? res.expiresAt.slice(0, 10) : ''})`);
+        } else {
+          this.tokenStatus.set('missing');
+          this.tokenDetails.set('Etsy API Bağlı Değil');
+        }
+      },
+      error: (err) => {
+        if (err.status === 404) {
+          this.tokenStatus.set('missing');
+          this.tokenDetails.set('Etsy API Bağlı Değil');
+        } else {
+          this.tokenStatus.set('error');
+          this.tokenDetails.set('VDS API Sunucusuna Erişilemiyor');
+        }
+      }
+    });
+  }
+
+  checkTokenStatus(shopId?: string): Observable<EtsyTokenStatusDto> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<EtsyTokenStatusDto>(`${this.API_BASE}/api/etsy/token/status?shopId=${id}`);
+  }
+
+  refreshToken(shopId?: string): Observable<any> {
+    const id = shopId || this.activeShopId();
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/token/refresh?shopId=${id}`, {});
   }
 
   fetchLiveExchangeRate(): void {
