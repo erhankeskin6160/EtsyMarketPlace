@@ -51,50 +51,50 @@ export class OrdersService {
         id: 'aras',
         name: 'Aras Global',
         logoUrl: 'assets/shipping/aras_global.png',
-        isConnected: true,
-        statusLabel: '● Bağlı',
-        autoLabel: '⚡ Otomatik',
+        isConnected: false,
+        statusLabel: '⚠️ Giriş Yap',
+        autoLabel: '⚡ Oturum Aç',
         portalUrl: 'https://panel.arasglobalcargo.com/auth',
-        tokenOrKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhcmFzX2VudGVycHJpc2VfdXNlciIsImV4cCI6MTg1MjUwMDAwMCwibmFtZSI6IkVyaGFuIEtlc2tpbiIsImNvbXBhbnkiOiJFdHN5TWFya2V0UGxhY2UifQ.8N0e_fK_uR7_481x_aras_live_sig_9901',
-        lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-        notes: 'Aras Hava Kargo API canlı şablon doğrulaması aktif'
+        tokenOrKey: '',
+        lastUpdated: '-',
+        notes: 'Aras Hava Kargo API oturumunuzu güvenle bağlayın'
       },
       {
         id: 'shipentegra',
         name: 'ShipEntegra',
         logoUrl: 'assets/shipping/shipentegra.jpg',
-        isConnected: true,
-        statusLabel: '● Bağlı',
-        autoLabel: '⚡ Otomatik',
+        isConnected: false,
+        statusLabel: '⚠️ Giriş Yap',
+        autoLabel: '⚡ Oturum Aç',
         portalUrl: 'https://app.shipentegra.com/login',
-        tokenOrKey: 'v4.public.eyJzdWIiOiJzaGlwZW50ZWdyYV9lbnRlcnByaXNlXzIwMjYiLCJleHAiOjE4NTI1MDAwMDB9.se_live_verified_bearer_key_7712',
-        lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-        notes: 'UPS & FedEx canlı sözleşmeli hat entegrasyonu hazır'
+        tokenOrKey: '',
+        lastUpdated: '-',
+        notes: 'UPS & FedEx sözleşmeli hat entegrasyonu'
       },
       {
         id: 'navlungo',
         name: 'Navlungo',
         logoUrl: 'assets/shipping/navlungo.png',
-        isConnected: true,
-        statusLabel: '● Bağlı',
-        autoLabel: '⚡ Otomatik',
+        isConnected: false,
+        statusLabel: '⚠️ Giriş Yap',
+        autoLabel: '⚡ Oturum Aç',
         portalUrl: 'https://ship.navlungo.com/',
-        tokenOrKey: 'nav_session_cookie_c891a27e_dhl_express_active_live_token',
-        lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-        notes: 'DHL Express canlı rota fiyatlaması aktif'
+        tokenOrKey: '',
+        lastUpdated: '-',
+        notes: 'DHL Express rota fiyatlaması'
       },
       {
         id: 'shiptomore',
         name: 'Shiptomore',
         logoUrl: 'assets/shipping/shiptomore.png',
-        isConnected: true,
-        statusLabel: '● Bağlı',
+        isConnected: false,
+        statusLabel: '⚠️ Giriş Yap',
         autoLabel: '⚙️ Bağlantı',
         portalUrl: 'https://shiptomore.com',
-        tokenOrKey: 'stm_live_client_id_8910',
-        clientSecret: 'stm_sec_9941a87b',
-        lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
-        notes: 'API anahtarları doğrulanmış ve yetkili'
+        tokenOrKey: '',
+        clientSecret: '',
+        lastUpdated: '-',
+        notes: 'API anahtarlarınızı girerek yetkilendirin'
       }
     ];
   }
@@ -280,11 +280,53 @@ export class OrdersService {
   public loadOrders(): void {
     this.http.get<any[]>(`${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${this.DEFAULT_SHOP_ID}`)
       .pipe(catchError(() => of([])))
-      .subscribe(() => {
-        const desktop15Orders = this.generateDesktopParityOrders();
-        this.ordersSubject.next(desktop15Orders);
-        if (desktop15Orders.length > 0 && !this.selectedOrderSubject.value) {
-          this.selectedOrderSubject.next(desktop15Orders[0]);
+      .subscribe((apiAlerts) => {
+        if (apiAlerts && apiAlerts.length > 0) {
+          const liveOrders: OrderFulfillmentItem[] = apiAlerts.map(a => ({
+            orderId: a.orderId || `ord-${Date.now()}`,
+            orderNumber: `#${a.orderId}`,
+            buyerName: 'Etsy Müşterisi',
+            buyerEmail: 'musteri@etsy.com',
+            country: 'Amerika Birleşik Devletleri',
+            countryCode: 'US',
+            city: 'Canlı Sipariş',
+            addressSnippet: 'Canlı Etsy API kaydı',
+            isAddressMissing: false,
+            exportType: 'Mikro İhracat (ETGB)',
+            orderDate: a.createdAt || new Date().toISOString(),
+            status: 'unfulfilled',
+            currency: a.currency || 'USD',
+            totalAmount: a.orderTotal || 0,
+            productCost: a.productCost || 0,
+            shippingCost: a.shippingCost || 0,
+            isCostMissing: (a.productCost || 0) <= 0 || (a.shippingCost || 0) <= 0,
+            netProfit: Number(((a.orderTotal || 0) - ((a.productCost || 0) + (a.shippingCost || 0) + ((a.orderTotal || 0) * 0.095))).toFixed(2)),
+            profitMarginPercent: a.orderTotal > 0 ? Number(((((a.orderTotal || 0) - ((a.productCost || 0) + (a.shippingCost || 0))) / a.orderTotal) * 100).toFixed(1)) : 0,
+            packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
+            invoicedWeightKg: 0.60,
+            gtipCode: '3926400000',
+            gtipDescription: '3D Baskı Plastik Heykelcik',
+            items: [
+              {
+                id: `it-${a.orderId}`,
+                title: a.reason || 'Etsy Sipariş Ürünü',
+                quantity: 1,
+                price: a.orderTotal || 0,
+                sku: 'LIVE-SKU'
+              }
+            ]
+          }));
+          this.ordersSubject.next(liveOrders);
+          if (liveOrders.length > 0 && !this.selectedOrderSubject.value) {
+            this.selectedOrderSubject.next(liveOrders[0]);
+          }
+        } else {
+          // If no live alerts from VDS API yet, load baseline parity orders
+          const baseline = this.generateDesktopParityOrders();
+          this.ordersSubject.next(baseline);
+          if (baseline.length > 0 && !this.selectedOrderSubject.value) {
+            this.selectedOrderSubject.next(baseline[0]);
+          }
         }
       });
   }

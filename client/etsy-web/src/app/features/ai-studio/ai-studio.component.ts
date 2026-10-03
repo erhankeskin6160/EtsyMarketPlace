@@ -62,7 +62,16 @@ interface ScenePreset {
               (dragover)="onDragOver($event)" 
               (drop)="onDrop($event)">
               
-              <img [src]="activeImageUrl" class="main-preview-img" [style.filter]="currentFilter" alt="Product" />
+              <!-- Background Scene Layer -->
+              <img *ngIf="backgroundSceneUrl" [src]="backgroundSceneUrl" class="scene-background-img" alt="Sahne Arka Planı" />
+
+              <!-- Foreground Product Image Layer -->
+              <img [src]="activeImageUrl" class="main-preview-img" [class.with-background]="!!backgroundSceneUrl" [style.filter]="currentFilter" alt="Product" />
+
+              <div *ngIf="backgroundSceneUrl" class="active-scene-pill">
+                <span>Sahne: {{ getSelectedSceneName() }}</span>
+                <button (click)="clearScene()" class="btn-clear-scene" title="Arka planı kaldır">✕ Fonu Kaldır</button>
+              </div>
 
               <div *ngIf="isProcessing" class="processing-overlay">
                 <div class="spinner"></div>
@@ -288,11 +297,58 @@ interface ScenePreset {
       justify-content: center;
       border: 2px dashed rgba(255, 255, 255, 0.1);
     }
+    .scene-background-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+      filter: brightness(0.96);
+      transition: opacity 0.3s ease;
+    }
     .main-preview-img {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
-      transition: filter 0.3s ease;
+      transition: all 0.3s ease;
+      position: relative;
+      z-index: 2;
+    }
+    .main-preview-img.with-background {
+      max-width: 76%;
+      max-height: 76%;
+      filter: drop-shadow(0 20px 30px rgba(0, 0, 0, 0.7));
+    }
+    .active-scene-pill {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 5;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      padding: 6px 12px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.78rem;
+      color: #e2e8f0;
+      backdrop-filter: blur(8px);
+    }
+    .btn-clear-scene {
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #fca5a5;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-clear-scene:hover {
+      background: rgba(239, 68, 68, 0.35);
+      color: #fff;
     }
     .processing-overlay {
       position: absolute;
@@ -487,8 +543,9 @@ interface ScenePreset {
   `]
 })
 export class AiStudioComponent {
-  activeImageUrl = 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=1000&auto=format&fit=crop&q=80';
-  selectedSceneId = 'studio_white';
+  activeImageUrl = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=1000&auto=format&fit=crop&q=80';
+  backgroundSceneUrl = '';
+  selectedSceneId = '';
   isProcessing = false;
   toastMessage = '';
 
@@ -530,15 +587,30 @@ export class AiStudioComponent {
 
   constructor(private router: Router) {}
 
+  getSelectedSceneName(): string {
+    return this.scenes.find(s => s.id === this.selectedSceneId)?.name || 'Özel Sahne';
+  }
+
   selectScene(scene: ScenePreset): void {
+    if (this.selectedSceneId === scene.id) {
+      this.clearScene();
+      return;
+    }
     this.selectedSceneId = scene.id;
     this.isProcessing = true;
     setTimeout(() => {
-      this.activeImageUrl = scene.previewUrl;
+      this.backgroundSceneUrl = scene.previewUrl;
       this.isProcessing = false;
-      this.toastMessage = `Sahne "${scene.name}" başarıyla uygulandı!`;
+      this.toastMessage = `Sahne "${scene.name}" arka plana yerleştirildi! (Ürününüz korundu)`;
       setTimeout(() => this.toastMessage = '', 3000);
-    }, 800);
+    }, 600);
+  }
+
+  clearScene(): void {
+    this.selectedSceneId = '';
+    this.backgroundSceneUrl = '';
+    this.toastMessage = 'Arka plan sahnesi kaldırıldı, orijinal ürün fona döndü.';
+    setTimeout(() => this.toastMessage = '', 3000);
   }
 
   updateFilter(): void {
@@ -577,14 +649,62 @@ export class AiStudioComponent {
   }
 
   downloadImage(): void {
-    const a = document.createElement('a');
-    a.href = this.activeImageUrl;
-    a.download = `Etsy_Clean_2000x2000_${Date.now()}.png`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    this.toastMessage = '2000x2000px Etsy karesi indirildi!';
-    setTimeout(() => this.toastMessage = '', 3000);
+    if (!this.backgroundSceneUrl) {
+      const a = document.createElement('a');
+      a.href = this.activeImageUrl;
+      a.download = `Etsy_Clean_2000x2000_${Date.now()}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      this.toastMessage = '2000x2000px Etsy karesi indirildi!';
+      setTimeout(() => this.toastMessage = '', 3000);
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 2000;
+    canvas.height = 2000;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const bgImg = new Image();
+    bgImg.crossOrigin = 'anonymous';
+    bgImg.onload = () => {
+      ctx.drawImage(bgImg, 0, 0, 2000, 2000);
+      const prodImg = new Image();
+      prodImg.crossOrigin = 'anonymous';
+      prodImg.onload = () => {
+        const targetSize = 1500;
+        const x = (2000 - targetSize) / 2;
+        const y = (2000 - targetSize) / 2;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.shadowBlur = 40;
+        ctx.shadowOffsetY = 20;
+        ctx.drawImage(prodImg, x, y, targetSize, targetSize);
+
+        try {
+          const dataUrl = canvas.toDataURL('image/png');
+          const a = document.createElement('a');
+          a.href = dataUrl;
+          a.download = `Etsy_AI_Composite_2000x2000_${Date.now()}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          this.toastMessage = '2000x2000px Etsy kompozit görseli indirildi!';
+        } catch {
+          const a = document.createElement('a');
+          a.href = this.activeImageUrl;
+          a.download = `Etsy_Product_2000x2000_${Date.now()}.png`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          this.toastMessage = '2000x2000px Ürün görseli indirildi!';
+        }
+        setTimeout(() => this.toastMessage = '', 3000);
+      };
+      prodImg.src = this.activeImageUrl;
+    };
+    bgImg.src = this.backgroundSceneUrl;
   }
 
   sendToListing(): void {

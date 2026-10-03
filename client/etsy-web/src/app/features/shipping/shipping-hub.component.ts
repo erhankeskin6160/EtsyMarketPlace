@@ -45,6 +45,18 @@ export interface CarrierRate {
         </div>
       </div>
 
+      <!-- LABEL NOTIFICATION -->
+      <div *ngIf="labelSuccessInfo" class="shipping-toast">
+        <div class="toast-left">
+          <span class="toast-icon">📦</span>
+          <div>
+            <strong>{{ labelSuccessInfo.carrier }} Uluslararası Kargo Barkodu Oluşturuldu!</strong>
+            <p>Takip Numarası: <code>{{ labelSuccessInfo.trackingNumber }}</code> (Hedef: {{ labelSuccessInfo.country }})</p>
+          </div>
+        </div>
+        <button class="btn-close-toast" (click)="labelSuccessInfo = null">✕</button>
+      </div>
+
       <!-- PARCEL CALCULATOR BAR -->
       <div class="glass-card calc-card">
         <div class="calc-row">
@@ -169,6 +181,28 @@ export interface CarrierRate {
     }
     .btn-primary-ship:hover {
       transform: translateY(-1px);
+    }
+    .shipping-toast {
+      padding: 12px 18px;
+      margin-bottom: 20px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      border-radius: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: fadeIn 0.3s ease;
+    }
+    .toast-left { display: flex; align-items: center; gap: 12px; }
+    .toast-icon { font-size: 1.4rem; }
+    .toast-left p { margin: 2px 0 0 0; font-size: 0.8rem; color: #cbd5e1; }
+    .toast-left code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; color: #6ee7b7; font-weight: 700; }
+    .btn-close-toast { background: none; border: none; color: #94a3b8; font-size: 1rem; cursor: pointer; }
+    .btn-close-toast:hover { color: #fff; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     .calc-card {
       padding: 18px 22px;
@@ -415,7 +449,19 @@ export class ShippingHubComponent implements OnInit {
     this.carriers[bestIdx].isBestValue = true;
   }
 
+  labelSuccessInfo: { carrier: string; trackingNumber: string; country: string } | null = null;
+
   createLabel(c: CarrierRate): void {
-    alert(`"${c.name}" için barkodlu uluslararası kargo etiketi oluşturuldu!\nTakip Kodu: TR${Date.now()}US`);
+    const trackingCode = `TR${Date.now().toString().slice(-8)}US`;
+    this.labelSuccessInfo = {
+      carrier: c.name,
+      trackingNumber: trackingCode,
+      country: this.destinationCountry
+    };
+    setTimeout(() => {
+      if (this.labelSuccessInfo?.trackingNumber === trackingCode) {
+        this.labelSuccessInfo = null;
+      }
+    }, 6000);
   }
 }

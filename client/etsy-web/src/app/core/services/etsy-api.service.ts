@@ -4,6 +4,59 @@ import { Observable } from 'rxjs';
 import { DailyBrief, FinancialSummary, BankDeposit } from '../models/etsy.models';
 import { User, UpdateUserRequest, AuditLog, SystemStats } from '../models/auth.models';
 
+/** VDS: EtsyOrderCostAlert (camelCase JSON) */
+export interface EtsyOrderCostAlertDto {
+  shopId: string;
+  orderId: string;
+  createdAt: string;
+  currency: string;
+  orderTotal: number;
+  productCost: number | null;
+  shippingCost: number | null;
+  reason: string;
+}
+
+/** VDS: FinancialPerformance */
+export interface FinancialPerformanceDto {
+  startDate: string;
+  endDate: string;
+  currency: string;
+  grossSales: number;
+  platformFees: number;
+  internalAdsCost: number;
+  externalAdsCost: number;
+  productCosts: number;
+  shippingCosts: number;
+  refunds: number;
+  netProfit: number;
+  netProfitMargin: number;
+  [key: string]: unknown;
+}
+
+/** VDS: EtsyBankPayout */
+export interface EtsyBankPayoutDto {
+  shopId: string;
+  referenceId: string;
+  occurredAt: string;
+  amount: number;
+  currency: string;
+  exchangeRateToTry: number | null;
+  status: string;
+  description: string;
+}
+
+/** VDS: EtsySyncResult */
+export interface EtsySyncResultDto {
+  shopId: string;
+  startedAt: string;
+  completedAt: string;
+  payoutCount: number;
+  transactionCount: number;
+  orderCount: number;
+  succeeded: boolean;
+  errorMessage: string | null;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -63,10 +116,41 @@ export class EtsyApiService {
     this.isSidebarCollapsed.update(c => !c);
   }
 
+  /** Base URL of the VDS API, shared with feature services. */
+  get apiBase(): string {
+    return this.API_BASE;
+  }
+
   // Etsy Endpoints
   getDailyBrief(shopId?: string): Observable<DailyBrief> {
     const id = shopId || this.activeShopId();
-    return this.http.get<DailyBrief>(`${this.API_BASE}/api/etsy/brief?shopId=${id}`);
+    return this.http.get<DailyBrief>(`${this.API_BASE}/api/etsy/shop/daily-brief?shopId=${id}`);
+  }
+
+  /** Pulls finance + orders directly from Etsy Open API v3 into the VDS database. */
+  syncFromEtsy(startDate?: Date, endDate?: Date): Observable<EtsySyncResultDto> {
+    return this.http.post<EtsySyncResultDto>(`${this.API_BASE}/api/etsy/sync`, {
+      shopId: this.activeShopId(),
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null
+    });
+  }
+
+  getUnfulfilledCostAlerts(): Observable<EtsyOrderCostAlertDto[]> {
+    return this.http.get<EtsyOrderCostAlertDto[]>(
+      `${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${this.activeShopId()}`);
+  }
+
+  getFinancialPerformance(period: 'today' | 'this_month' | 'last_month' = 'this_month'): Observable<FinancialPerformanceDto> {
+    return this.http.get<FinancialPerformanceDto>(
+      `${this.API_BASE}/api/etsy/financial/performance?shopId=${this.activeShopId()}&period=${period}`);
+  }
+
+  getBankPayouts(startDate?: Date, endDate?: Date): Observable<EtsyBankPayoutDto[]> {
+    let url = `${this.API_BASE}/api/etsy/banking/payouts?shopId=${this.activeShopId()}`;
+    if (startDate) url += `&startDate=${encodeURIComponent(startDate.toISOString())}`;
+    if (endDate) url += `&endDate=${encodeURIComponent(endDate.toISOString())}`;
+    return this.http.get<EtsyBankPayoutDto[]>(url);
   }
 
   getFinancialSummary(): Observable<FinancialSummary> {

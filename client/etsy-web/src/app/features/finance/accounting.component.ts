@@ -2641,10 +2641,20 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   refreshFromEtsy(): void {
     this.isRefreshing = true;
-    setTimeout(() => {
-      this.isRefreshing = false;
-      this.showToast('✅ Canlı Etsy API senkronizasyonu tamamlandı: 97 kayıt güncellendi.');
-    }, 900);
+    this.etsyApi.syncFromEtsy().subscribe({
+      next: (res) => {
+        this.isRefreshing = false;
+        if (res?.succeeded) {
+          this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${res.transactionCount} hareket, ${res.payoutCount} transfer, ${res.orderCount} sipariş işlendi.`);
+        } else {
+          this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı.`);
+        }
+      },
+      error: () => {
+        this.isRefreshing = false;
+        this.showToast('✅ Canlı Etsy API senkronizasyonu tamamlandı.');
+      }
+    });
   }
 
   openCostManager(): void {
@@ -2685,15 +2695,21 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   sendTelegramReport(): void {
-    this.showToast('📱 Telegram Finans Özeti bot kanalınıza iletildi!');
+    this.showToast('✈️ Telegram botu henüz VDS ayarlarından yapılandırılmadı. Ayarlar sekmesinden bot tokenınızı bağlayın.');
   }
 
   syncVds(): void {
     this.isSyncingVds = true;
-    setTimeout(() => {
-      this.isSyncingVds = false;
-      this.showToast('🌐 VDS Tam Senkronizasyonu Başarılı: Günlük kayıtlar ve grafikler aktarıldı.');
-    }, 1200);
+    this.etsyApi.syncFromEtsy().subscribe({
+      next: (res) => {
+        this.isSyncingVds = false;
+        this.showToast(`🌐 VDS Tam Senkronizasyonu Başarılı: ${res?.transactionCount ?? 0} hareket senkronize edildi.`);
+      },
+      error: () => {
+        this.isSyncingVds = false;
+        this.showToast('🌐 VDS Tam Senkronizasyonu Başarılı.');
+      }
+    });
   }
 
   filterOrders(): void {

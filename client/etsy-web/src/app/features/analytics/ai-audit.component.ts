@@ -42,6 +42,11 @@ export interface AuditItem {
         </div>
       </div>
 
+      <!-- TOAST NOTIFICATION -->
+      <div *ngIf="toastMessage" class="audit-toast">
+        {{ toastMessage }}
+      </div>
+
       <!-- HEALTH SCORE & METRICS CARDS -->
       <div class="score-strip">
         <div class="glass-card main-score-card">
@@ -213,6 +218,25 @@ export interface AuditItem {
     }
     .btn-primary-audit:hover {
       transform: translateY(-1px);
+    }
+    .btn-primary-audit:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .audit-toast {
+      padding: 12px 18px;
+      margin-bottom: 20px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      animation: fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     .score-strip {
       display: grid;
@@ -522,6 +546,8 @@ export class AiAuditComponent implements OnInit {
 
   constructor(public etsyApi: EtsyApiService) {}
 
+  toastMessage = '';
+
   ngOnInit(): void {
     this.selectedItem = this.auditItems[1];
   }
@@ -537,13 +563,15 @@ export class AiAuditComponent implements OnInit {
     setTimeout(() => {
       this.isAuditing = false;
       this.overallScore = 88;
-      alert('Mağaza AI denetimi tamamlandı! Ortalama mağaza SEO skoru: %88');
+      this.toastMessage = '✓ Mağaza AI denetimi tamamlandı! Ortalama mağaza SEO skoru: %88';
+      setTimeout(() => this.toastMessage = '', 4000);
     }, 1500);
   }
 
   applyFix(item: AuditItem): void {
     item.score = 94;
     item.issues = [];
-    alert(`"${item.title}" ilanı için önerilen SEO iyileştirmeleri başarıyla uygulandı! Yeni Skor: %94`);
+    this.toastMessage = `✓ "${item.title}" ilanı için önerilen SEO iyileştirmeleri uygulandı! Yeni Skor: %94`;
+    setTimeout(() => this.toastMessage = '', 4000);
   }
 }
