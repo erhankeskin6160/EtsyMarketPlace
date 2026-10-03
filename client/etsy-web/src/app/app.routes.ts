@@ -14,6 +14,7 @@ import { Viral3DComponent } from './features/research/viral-3d.component';
 import { CompetitorSpyComponent } from './features/research/competitor-spy.component';
 import { ShopVaultComponent } from './features/tools/shop-vault.component';
 import { EtsyApiSettingsComponent } from './features/settings/etsy-api-settings.component';
+import { AiModelsSettingsComponent } from './features/settings/ai-models-settings.component';
 import { MarketResearchComponent } from './features/research/market-research.component';
 import { AiAuditComponent } from './features/analytics/ai-audit.component';
 import { ShippingHubComponent } from './features/shipping/shipping-hub.component';
@@ -68,6 +69,7 @@ export const routes: Routes = [
       { path: 'shipping/shiptomore', component: ShippingHubComponent },
 
       // System & Settings Modules
+      { path: 'settings/ai-models', component: AiModelsSettingsComponent },
       { path: 'settings/etsy-api', component: EtsyApiSettingsComponent },
       { path: 'settings/notifications', component: ModuleViewerComponent },
       { path: 'settings/update', component: ModuleViewerComponent },

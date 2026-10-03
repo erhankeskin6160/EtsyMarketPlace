@@ -69,6 +69,12 @@
       </div>
 
       <div class="header-right">
+        <!-- Active AI Model Hub Badge (Matching Desktop Image 1) -->
+        <button class="ai-model-hub-badge" [ngClass]="aiService.activeBadgeClass()" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
+          <span>{{ aiService.activeBadgeText() }}</span>
+          <span class="hub-gear-icon">⚙️</span>
+        </button>
+
         <!-- Live API Badge -->
         <div class="badge-status">
           <span class="status-dot"></span>
@@ -127,6 +133,13 @@
       <button class="btn btn-secondary" (click)="closeRateModal()">İptal</button>
       <button class="btn btn-orange" (click)="saveRate()">💾 Kuru Kaydet</button>
     </div>
+  </div>
+</div>
+
+<!-- GLOBAL AI OPTIMIZATION & MODEL HUB MODAL -->
+<div class="modal-backdrop-ai-hub" *ngIf="aiService.isAiModalOpen()" (click)="aiService.closeAiSettingsModal()">
+  <div class="modal-dialog-ai-hub" (click)="$event.stopPropagation()">
+    <app-ai-models-settings [isModal]="true" (modalClosed)="aiService.closeAiSettingsModal()"></app-ai-models-settings>
   </div>
 </div>
 

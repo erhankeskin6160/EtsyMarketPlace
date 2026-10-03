@@ -4,20 +4,23 @@ import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AuthService } from '../../core/services/auth.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { NavItem } from '../../core/models/etsy.models';
 
 import { FloatingCopilotComponent } from '../copilot/floating-copilot.component';
+import { AiModelsSettingsComponent } from '../../features/settings/ai-models-settings.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule, FloatingCopilotComponent],
+  imports: [CommonModule, RouterModule, FormsModule, FloatingCopilotComponent, AiModelsSettingsComponent],
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
 export class ShellComponent {
   authService = inject(AuthService);
   apiService = inject(EtsyApiService);
+  aiService = inject(AiSettingsService);
   router = inject(Router);
 
   isRateModalOpen = false;
@@ -71,6 +74,7 @@ export class ShellComponent {
     {
       title: 'Sistem & Ayarlar',
       items: [
+        { id: 'ai_models', title: 'AI Model & Optimizasyon', icon: '⚡', route: '/settings/ai-models', badge: 'YENİ' },
         { id: 'notifications', title: 'Telegram Bildirim Botu', icon: '✈️', route: '/settings/notifications', badge: 'YENİ' },
         { id: 'api', title: 'Etsy API Ayarları', icon: '⚙️', route: '/settings/etsy-api' },
         { id: 'update', title: 'Sürüm Güncelle (Client)', icon: '🚀', route: '/settings/update', badge: 'YENİ' },

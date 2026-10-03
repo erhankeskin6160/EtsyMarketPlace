@@ -1,8 +1,8 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { AiSettingsService } from '../../core/services/ai-settings.service';
 
 interface ListingPreset {
   id: string;
@@ -30,18 +30,28 @@ interface ListingPreset {
           </div>
           <div>
             <h1 class="page-title">Hızlı Ürün Ekle - AI Fast Creator</h1>
-            <p class="page-subtitle">Gemini Spark ile SEO 140 karakter başlık, açıklama ve kusursuz 13 etiket üretimi</p>
+            <p class="page-subtitle">Aktif Model: <span class="active-model-chip" (click)="aiService.openAiSettingsModal()">{{ aiService.activeBadgeText() }} ⚙️</span> ile SEO 140 karakter başlık, açıklama ve kusursuz 13 etiket üretimi</p>
           </div>
         </div>
 
         <div class="header-actions">
-          <button class="btn-ai-spark" [disabled]="isGeneratingAi" (click)="generateWithGeminiSpark()">
+          <button class="btn-model-settings" (click)="aiService.openAiSettingsModal()" title="Yapay Zeka Modeli Değiştir">
+            ⚙️ AI Model Ayarları
+          </button>
+          <button class="btn-ai-spark" [disabled]="isGeneratingAi" (click)="generateWithAi()">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
             </svg>
-            {{ isGeneratingAi ? 'Gemini Üretiyor...' : '✨ Gemini Spark ile SEO Üret' }}
+            {{ isGeneratingAi ? (aiService.activeBadgeText() + ' Üretiyor...') : ('✨ ' + aiService.activeBadgeText() + ' ile SEO Üret') }}
           </button>
         </div>
+      </div>
+
+      <!-- CLONED NOTICE BANNER -->
+      <div *ngIf="clonedNotice" class="cloned-banner">
+        <div class="cloned-badge">🚀 PAZAR ARAŞTIRMASINDAN KLONLANDI</div>
+        <div class="cloned-info">{{ clonedNotice }}</div>
+        <button class="btn-dismiss-cloned" (click)="clearCloned()">Temizle</button>
       </div>
 
       <!-- MAIN WORKSPACE: 2 COLUMNS -->
@@ -280,19 +290,57 @@ interface ListingPreset {
       color: #94a3b8;
       margin: 2px 0 0 0;
     }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .active-model-chip {
+      color: #818cf8;
+      font-weight: 700;
+      background: rgba(99, 102, 241, 0.15);
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .active-model-chip:hover {
+      background: rgba(99, 102, 241, 0.25);
+      border-color: #818cf8;
+    }
+    .btn-model-settings {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 9px 14px;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 8px;
+      color: #cbd5e1;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-model-settings:hover {
+      background: rgba(51, 65, 85, 0.9);
+      color: #fff;
+      border-color: #818cf8;
+    }
     .btn-ai-spark {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 10px 20px;
-      background: linear-gradient(135deg, #f59e0b, #ea580c);
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
       border: none;
       border-radius: 8px;
       color: #fff;
       font-weight: 700;
       font-size: 0.9rem;
       cursor: pointer;
-      box-shadow: 0 4px 16px rgba(245, 158, 11, 0.35);
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
       transition: all 0.2s;
     }
     .btn-ai-spark:hover:not(:disabled) {
@@ -304,9 +352,46 @@ interface ListingPreset {
       cursor: not-allowed;
     }
 
-    .creator-body {
+    .cloned-banner {
       display: flex;
-      gap: 24px;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.15));
+      border: 1px solid rgba(129, 140, 248, 0.4);
+      border-radius: 8px;
+      margin-bottom: 20px;
+      animation: fadeIn 0.3s ease;
+    }
+    .cloned-badge {
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      color: #818cf8;
+      background: rgba(99, 102, 241, 0.2);
+      padding: 3px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .cloned-info {
+      flex: 1;
+      font-size: 0.85rem;
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+    .btn-dismiss-cloned {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #94a3b8;
+      font-size: 0.75rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-dismiss-cloned:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #fff;
     }
     .creator-form-col {
       flex: 1.3;
@@ -734,6 +819,7 @@ Her bir kolye usta zanaatkarlarımız tarafından kişiye özel olarak özenle k
   newTagInput = '';
   description = '';
   sampleImageUrl = 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80';
+  clonedNotice = '';
 
   isGeneratingAi = false;
   isSavingDraft = false;
@@ -741,12 +827,31 @@ Her bir kolye usta zanaatkarlarımız tarafından kişiye özel olarak özenle k
 
   constructor(
     public etsyApi: EtsyApiService,
-    private router: Router
+    public aiService: AiSettingsService
   ) {}
 
   ngOnInit(): void {
+    const cloned = this.aiService.clonedListing();
+    if (cloned) {
+      this.selectedPresetId = '';
+      this.title = cloned.title;
+      this.priceUsd = cloned.priceUsd;
+      this.tags = [...cloned.tags];
+      if (cloned.description) this.description = cloned.description;
+      if (cloned.imageUrl) this.sampleImageUrl = cloned.imageUrl;
+      if (cloned.category) this.selectedCategory = cloned.category;
+      this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 50)}..." (${cloned.shopName}) - Fiyat: $${cloned.priceUsd}`;
+      this.updatePriceTry();
+    } else {
+      this.applyPreset(this.presets[0]);
+      this.updatePriceTry();
+    }
+  }
+
+  clearCloned(): void {
+    this.aiService.clonedListing.set(null);
+    this.clonedNotice = '';
     this.applyPreset(this.presets[0]);
-    this.updatePriceTry();
   }
 
   get usdTryRate(): number {
@@ -790,9 +895,10 @@ Her bir kolye usta zanaatkarlarımız tarafından kişiye özel olarak özenle k
     this.tags.splice(index, 1);
   }
 
-  generateWithGeminiSpark(): void {
+  generateWithAi(): void {
     this.isGeneratingAi = true;
     this.successMessage = '';
+    const activeProvider = this.aiService.activeBadgeText();
 
     setTimeout(() => {
       this.isGeneratingAi = false;
@@ -812,9 +918,13 @@ Her bir kolye usta zanaatkarlarımız tarafından kişiye özel olarak özenle k
         'unique desk decor',
         'dragon sculpture'
       ];
-      this.successMessage = '✨ Gemini Spark SEO başlığı ve 13 etiketi başarıyla optimize etti!';
+      this.successMessage = `✨ ${activeProvider} SEO başlığı ve 13 etiketi başarıyla optimize etti!`;
       setTimeout(() => this.successMessage = '', 4000);
-    }, 1200);
+    }, 1000);
+  }
+
+  generateWithGeminiSpark(): void {
+    this.generateWithAi();
   }
 
   copyAll(): void {
