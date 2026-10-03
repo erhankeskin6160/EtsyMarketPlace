@@ -471,39 +471,36 @@ import {
           <div class="quotes-scroll-area">
             <div 
               *ngFor="let quote of filteredQuotes" 
-              class="quote-card"
+              class="quote-card compact-tile"
               [class.selected-carrier]="selectedOrder.selectedCarrier === quote.carrierKey"
               [class.recommended]="quote.isRecommended"
               (click)="applyCarrierQuote(quote)">
               
-              <div class="quote-card-header">
-                <div class="quote-carrier-meta">
-                  <img *ngIf="quote.logoUrl" [src]="quote.logoUrl" [alt]="quote.carrierName" class="quote-mini-logo" />
-                  <div>
-                    <h3 class="quote-carrier-title">{{ quote.carrierName }}</h3>
-                    <span class="quote-service-sub">{{ quote.serviceType }}</span>
+              <div class="tile-main-row">
+                <div class="tile-left">
+                  <img *ngIf="quote.logoUrl" [src]="quote.logoUrl" [alt]="quote.carrierName" class="quote-tile-logo" />
+                  <div class="tile-carrier-info">
+                    <div class="tile-title-line">
+                      <span class="tile-carrier-name">{{ quote.carrierName }}</span>
+                      <span *ngIf="quote.isRecommended" class="recommended-badge">★ En Uygun</span>
+                    </div>
+                    <span class="tile-service-desc">{{ quote.serviceType }}</span>
                   </div>
                 </div>
 
-                <div *ngIf="quote.isRecommended" class="recommended-badge">
-                  ★ En Uygun
+                <div class="tile-center-time">
+                  <span class="delivery-time-badge">⏱️ {{ quote.estimatedDays }}</span>
                 </div>
-              </div>
 
-              <div class="quote-price-time-row">
-                <div class="delivery-time-pill">
-                  ⏱️ {{ quote.estimatedDays }}
+                <div class="tile-right-price">
+                  <div class="tile-price-stack">
+                    <span class="tile-usd">&#36;{{ quote.priceUsd | number:'1.2-2' }}</span>
+                    <span class="tile-try">₺{{ quote.priceTry | number:'1.2-2' }}</span>
+                  </div>
+                  <button type="button" class="btn-tile-select" (click)="applyCarrierQuote(quote); $event.stopPropagation()">
+                    {{ selectedOrder.selectedCarrier === quote.carrierKey ? '✓ Seçildi' : 'Seç' }}
+                  </button>
                 </div>
-                <div class="quote-pricing-box">
-                  <span class="quote-price-usd">&#36;{{ quote.priceUsd | number:'1.2-2' }}</span>
-                  <span class="quote-price-try">₺{{ quote.priceTry | number:'1.2-2' }}</span>
-                </div>
-              </div>
-
-              <div class="quote-select-action">
-                <button type="button" class="btn-choose-quote" (click)="applyCarrierQuote(quote); $event.stopPropagation()">
-                  {{ selectedOrder.selectedCarrier === quote.carrierKey ? '✓ Seçildi' : 'Bu Taşıyıcıyı Seç' }}
-                </button>
               </div>
             </div>
 
@@ -512,11 +509,20 @@ import {
             </div>
           </div>
 
-          <!-- BARKOD / ETİKET BİLEŞENİ (SAASBARCODELABELCONTROL PARITY) -->
+          <!-- BARKOD / ETİKET BİLEŞENİ (KOMPAKT & KATLANABİLİR) -->
           <div class="barcode-preview-section">
-            <div class="barcode-section-title">BARKOD / ETİKET</div>
+            <div class="barcode-section-header" (click)="isBarcodeExpanded = !isBarcodeExpanded" title="Barkod alanını aç/kapat">
+              <div class="barcode-title-left">
+                <span class="barcode-icon">🏷️</span>
+                <span class="barcode-section-title">BARKOD / ETİKET</span>
+                <span class="barcode-code-pill">{{ selectedOrder.barcodeNumber || '10092370104092' }}</span>
+              </div>
+              <button type="button" class="btn-toggle-barcode">
+                {{ isBarcodeExpanded ? '▲ Gizle' : '▼ Önizle' }}
+              </button>
+            </div>
             
-            <div class="saas-barcode-label-card">
+            <div class="saas-barcode-label-card" *ngIf="isBarcodeExpanded">
               <!-- Barcode Lines Simulation -->
               <div class="barcode-lines-row">
                 <span class="b-line w1"></span><span class="b-line w3"></span><span class="b-line w2"></span>
@@ -546,31 +552,13 @@ import {
                 </div>
               </div>
             </div>
-
-            <!-- ACTION BUTTONS: ETİKETİ ÖNİZLE & GÖNDERİ OLUŞTUR -->
-            <div class="shipment-action-buttons">
-              <button 
-                type="button" 
-                class="btn-preview-label" 
-                (click)="openLabelPreviewModal()">
-                Etiketi Önizle
-              </button>
-
-              <button 
-                type="button" 
-                class="btn-create-shipment" 
-                [disabled]="isGeneratingShipment"
-                (click)="executeCreateShipment()">
-                {{ isGeneratingShipment ? 'Gönderi Oluşturuluyor...' : 'Gönderi Oluştur' }}
-              </button>
-            </div>
           </div>
 
         </div>
 
       </div>
 
-      <!-- 4. BOTTOM PERSISTENT SAVE STRIP -->
+      <!-- 4. BOTTOM PERSISTENT ACTION STRIP MATCHING WINFORMS DESKTOP -->
       <div class="cockpit-footer" *ngIf="selectedOrder">
         <div class="footer-left">
           <span class="footer-order-info">
@@ -582,13 +570,31 @@ import {
         </div>
 
         <div class="footer-right">
-          <button class="btn-save-costs" (click)="saveCosts()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button class="btn-save-costs" (click)="saveCosts()" title="Maliyet ve GTİP Değerlerini Kaydet">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
               <polyline points="17 21 17 13 7 13 7 21"></polyline>
               <polyline points="7 3 7 8 15 8"></polyline>
             </svg>
-            Maliyet & GTİP Kaydet
+            Maliyet Kaydet
+          </button>
+
+          <button 
+            type="button" 
+            class="btn-footer-preview" 
+            (click)="openLabelPreviewModal()" 
+            title="Kargo Etiketini Önizle ve Yazdır">
+            👁️ Etiketi Önizle
+          </button>
+
+          <button 
+            type="button" 
+            class="btn-footer-create-shipment" 
+            [disabled]="isGeneratingShipment"
+            (click)="executeCreateShipment()" 
+            title="Seçili Taşıyıcı ile Gönderi Oluştur">
+            <span *ngIf="!isGeneratingShipment">🚀 Gönderi Oluştur</span>
+            <span *ngIf="isGeneratingShipment">⏳ Oluşturuluyor...</span>
           </button>
         </div>
       </div>
@@ -946,19 +952,19 @@ import {
       align-items: center;
       width: 250px;
       min-width: 250px;
-      height: 72px;
+      height: 56px;
       background: #1e293b;
       border: 1px solid #334155;
       border-radius: 8px;
-      padding: 8px 10px;
+      padding: 6px 10px;
       gap: 10px;
     }
     .carrier-logo-box {
-      width: 48px;
-      height: 48px;
+      width: 38px;
+      height: 38px;
       background: #ffffff;
       border-radius: 6px;
-      padding: 3px;
+      padding: 2px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -984,7 +990,7 @@ import {
       gap: 4px;
     }
     .carrier-card-name {
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       font-weight: 700;
       color: #ffffff;
       white-space: nowrap;
@@ -992,9 +998,9 @@ import {
       text-overflow: ellipsis;
     }
     .session-status-badge {
-      font-size: 0.65rem;
+      font-size: 0.62rem;
       font-weight: 700;
-      padding: 2px 5px;
+      padding: 1px 4px;
       border-radius: 4px;
       background: rgba(239, 68, 68, 0.2);
       color: #f87171;
@@ -1011,11 +1017,11 @@ import {
     }
     .btn-carrier-auto {
       flex: 1;
-      height: 24px;
+      height: 22px;
       background: #10b981;
       border: none;
       color: #ffffff;
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       font-weight: 700;
       border-radius: 4px;
       cursor: pointer;
@@ -1031,12 +1037,12 @@ import {
       filter: brightness(1.1);
     }
     .btn-carrier-web {
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       background: #6366f1;
       color: #ffffff;
       text-decoration: none;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       border-radius: 4px;
       display: flex;
       align-items: center;
@@ -1045,12 +1051,12 @@ import {
     }
     .btn-carrier-web:hover { filter: brightness(1.1); }
     .btn-carrier-disconnect {
-      width: 24px;
-      height: 24px;
+      width: 22px;
+      height: 22px;
       background: #dc2626;
       border: none;
       color: #ffffff;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       border-radius: 4px;
       cursor: pointer;
       display: flex;
@@ -1066,9 +1072,9 @@ import {
     .btn-carrier-disconnect:not(:disabled):hover { filter: brightness(1.1); }
 
     .carrier-add-placeholder {
-      width: 150px;
-      min-width: 150px;
-      height: 72px;
+      width: 140px;
+      min-width: 140px;
+      height: 56px;
       background: rgba(15, 23, 42, 0.6);
       border: 1.5px dashed #475569;
       border-radius: 8px;
@@ -1084,9 +1090,9 @@ import {
       border-color: #94a3b8;
       background: rgba(30, 41, 59, 0.6);
     }
-    .placeholder-icon { font-size: 0.9rem; }
-    .placeholder-title { font-size: 0.72rem; font-weight: 700; color: #cbd5e1; }
-    .placeholder-sub { font-size: 0.64rem; color: #94a3b8; }
+    .placeholder-icon { font-size: 0.85rem; }
+    .placeholder-title { font-size: 0.7rem; font-weight: 700; color: #cbd5e1; }
+    .placeholder-sub { font-size: 0.62rem; color: #94a3b8; }
 
     /* WORKSPACE BODY - 3 COLUMNS */
     .cockpit-body {
@@ -1733,109 +1739,129 @@ import {
       flex-direction: column;
       gap: 8px;
     }
-    .quote-card {
+    .quote-card.compact-tile {
       background: rgba(30, 41, 59, 0.5);
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 8px;
-      padding: 10px;
+      padding: 8px 10px;
       cursor: pointer;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 4px;
       transition: all 0.15s;
     }
-    .quote-card:hover {
+    .quote-card.compact-tile:hover {
       background: rgba(30, 41, 59, 0.85);
       border-color: rgba(255, 255, 255, 0.2);
     }
-    .quote-card.selected-carrier {
+    .quote-card.compact-tile.selected-carrier {
       border-color: #10b981;
-      background: rgba(16, 185, 129, 0.1);
-      box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+      background: rgba(16, 185, 129, 0.12);
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
     }
-    .quote-card.recommended {
+    .quote-card.compact-tile.recommended {
       border-color: #6366f1;
     }
-    .quote-card-header {
+    .tile-main-row {
       display: flex;
-      align-items: flex-start;
+      align-items: center;
       justify-content: space-between;
+      gap: 8px;
     }
-    .quote-carrier-meta {
+    .tile-left {
       display: flex;
       align-items: center;
       gap: 8px;
+      flex: 1;
+      min-width: 0;
     }
-    .quote-mini-logo {
-      width: 28px;
-      height: 28px;
+    .quote-tile-logo {
+      width: 26px;
+      height: 26px;
       border-radius: 4px;
       background: #ffffff;
       padding: 2px;
       object-fit: contain;
+      flex-shrink: 0;
     }
-    .quote-carrier-title {
-      font-size: 0.82rem;
-      font-weight: 800;
-      color: #ffffff;
-      margin: 0;
+    .tile-carrier-info {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
     }
-    .quote-service-sub {
-      font-size: 0.65rem;
-      color: #94a3b8;
-    }
-    .recommended-badge {
-      font-size: 0.62rem;
-      font-weight: 800;
-      color: #a5b4fc;
-      background: rgba(99, 102, 241, 0.2);
-      border: 1px solid rgba(99, 102, 241, 0.4);
-      padding: 1px 5px;
-      border-radius: 4px;
-    }
-    .quote-price-time-row {
+    .tile-title-line {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 5px;
     }
-    .delivery-time-pill {
-      font-size: 0.68rem;
-      color: #cbd5e1;
-    }
-    .quote-pricing-box {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-    .quote-price-usd {
-      font-size: 1rem;
+    .tile-carrier-name {
+      font-size: 0.8rem;
       font-weight: 800;
       color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .quote-price-try {
-      font-size: 0.7rem;
+    .tile-service-desc {
+      font-size: 0.65rem;
       color: #94a3b8;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .quote-select-action {
+    .tile-center-time {
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
+      flex-shrink: 0;
     }
-    .btn-choose-quote {
+    .delivery-time-badge {
+      font-size: 0.65rem;
+      color: #cbd5e1;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .tile-right-price {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .tile-price-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .tile-usd {
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.1;
+    }
+    .tile-try {
+      font-size: 0.65rem;
+      color: #94a3b8;
+      font-weight: 600;
+    }
+    .btn-tile-select {
       background: #334155;
       border: 1px solid #475569;
       color: #ffffff;
-      font-size: 0.7rem;
+      font-size: 0.68rem;
       font-weight: 700;
-      padding: 4px 10px;
+      padding: 4px 8px;
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.15s;
+      white-space: nowrap;
     }
-    .quote-card.selected-carrier .btn-choose-quote {
+    .quote-card.selected-carrier .btn-tile-select {
       background: #10b981;
       border-color: #059669;
     }
-    .btn-choose-quote:hover {
+    .btn-tile-select:hover {
       filter: brightness(1.1);
     }
     .no-quotes-hint {
@@ -1845,14 +1871,36 @@ import {
       margin-top: 20px;
     }
 
-    /* BARKOD / ETİKET BİLEŞENİ (SAASBARCODELABELCONTROL PARITY) */
+    /* BARKOD / ETİKET BİLEŞENİ (KOMPAKT & KATLANABİLİR) */
     .barcode-preview-section {
       background: rgba(15, 23, 42, 0.95);
       border-top: 1px solid rgba(255, 255, 255, 0.08);
-      padding: 12px;
+      padding: 8px 12px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
+    }
+    .barcode-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      padding: 4px 6px;
+      border-radius: 6px;
+      background: rgba(30, 41, 59, 0.4);
+      transition: background 0.15s;
+    }
+    .barcode-section-header:hover {
+      background: rgba(30, 41, 59, 0.8);
+    }
+    .barcode-title-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .barcode-icon {
+      font-size: 0.8rem;
     }
     .barcode-section-title {
       font-size: 0.68rem;
@@ -1860,29 +1908,53 @@ import {
       color: #94a3b8;
       letter-spacing: 0.04em;
     }
+    .barcode-code-pill {
+      font-family: 'Consolas', monospace;
+      font-size: 0.65rem;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      padding: 1px 5px;
+      border-radius: 4px;
+    }
+    .btn-toggle-barcode {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-toggle-barcode:hover {
+      background: #334155;
+      color: #ffffff;
+    }
     .saas-barcode-label-card {
       background: #ffffff;
-      border-radius: 8px;
-      padding: 10px 14px;
+      border-radius: 6px;
+      padding: 8px 12px;
       color: #0f172a;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
+      animation: fadeIn 0.15s ease-out;
     }
     .barcode-lines-row {
       display: flex;
       align-items: flex-start;
       justify-content: center;
-      height: 32px;
+      height: 28px;
       gap: 2px;
       width: 100%;
       overflow: hidden;
     }
     .b-line {
       display: inline-block;
-      height: 32px;
+      height: 28px;
       background: #000000;
     }
     .b-line.w1 { width: 1.5px; }
@@ -1892,7 +1964,7 @@ import {
 
     .barcode-num-text {
       font-family: 'Consolas', 'Courier New', monospace;
-      font-size: 0.78rem;
+      font-size: 0.74rem;
       font-weight: 800;
       color: #000000;
       letter-spacing: 0.1em;
@@ -1902,7 +1974,7 @@ import {
       width: 100%;
       height: 1px;
       background: #e2e8f0;
-      margin: 4px 0;
+      margin: 3px 0;
     }
     .barcode-bottom-info {
       width: 100%;
@@ -1924,12 +1996,12 @@ import {
       display: inline-block;
     }
     .carrier-label-name {
-      font-size: 0.68rem;
+      font-size: 0.66rem;
       font-weight: 800;
       color: #0f172a;
     }
     .barcode-receiver-name {
-      font-size: 0.66rem;
+      font-size: 0.64rem;
       color: #64748b;
       font-weight: 600;
       white-space: nowrap;
@@ -1938,60 +2010,25 @@ import {
       max-width: 140px;
     }
 
-    .shipment-action-buttons {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 4px;
-    }
-    .btn-preview-label {
-      flex: 1;
-      height: 36px;
-      background: #1e293b;
-      border: 1px solid #334155;
-      color: #cbd5e1;
-      font-size: 0.75rem;
-      font-weight: 700;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .btn-preview-label:hover {
-      background: #334155;
-      color: #ffffff;
-    }
-    .btn-create-shipment {
-      flex: 1.4;
-      height: 36px;
-      background: #10b981;
-      border: none;
-      color: #ffffff;
-      font-size: 0.8rem;
-      font-weight: 800;
-      border-radius: 6px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-      transition: all 0.15s;
-    }
-    .btn-create-shipment:hover:not(:disabled) {
-      background: #059669;
-      transform: translateY(-1px);
-    }
-    .btn-create-shipment:disabled {
-      background: #475569;
-      cursor: not-allowed;
-      opacity: 0.7;
-    }
-
     /* FOOTER */
     .cockpit-footer {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 10px 20px;
+      padding: 8px 16px;
       background: rgba(15, 23, 42, 0.95);
       border-top: 1px solid rgba(255, 255, 255, 0.08);
       z-index: 10;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
     .footer-order-info {
       font-size: 0.76rem;
@@ -2001,15 +2038,14 @@ import {
       color: #34d399;
       font-weight: 700;
       font-size: 0.76rem;
-      margin-left: 12px;
     }
     .btn-save-costs {
       background: #2563eb;
       border: none;
       color: #ffffff;
-      padding: 7px 16px;
+      padding: 7px 14px;
       border-radius: 6px;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
       font-weight: 700;
       cursor: pointer;
       display: inline-flex;
@@ -2019,6 +2055,48 @@ import {
     }
     .btn-save-costs:hover {
       background: #1d4ed8;
+    }
+    .btn-footer-preview {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      padding: 7px 14px;
+      border-radius: 6px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-footer-preview:hover {
+      background: #334155;
+      color: #ffffff;
+    }
+    .btn-footer-create-shipment {
+      background: #10b981;
+      border: none;
+      color: #ffffff;
+      padding: 7px 18px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .btn-footer-create-shipment:hover:not(:disabled) {
+      background: #059669;
+      transform: translateY(-1px);
+    }
+    .btn-footer-create-shipment:disabled {
+      background: #475569;
+      cursor: not-allowed;
+      opacity: 0.7;
     }
 
     /* MODALS COMMON */
@@ -2342,6 +2420,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isArasTemplateModalOpen: boolean = false;
   isLabelPreviewOpen: boolean = false;
   isGeneratingShipment: boolean = false;
+  isBarcodeExpanded: boolean = false;
 
   // TOASTS
   saveSuccessMessage: string | null = null;
