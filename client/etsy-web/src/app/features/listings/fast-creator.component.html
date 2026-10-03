@@ -84,9 +84,10 @@
           <div class="col-title">
             <span class="sec-num">1.</span> Ürün & SEO Bilgileri
           </div>
-          <button type="button" class="btn-ai-mini-boost" (click)="generateWithAi()" title="Tüm SEO Verilerini AI ile Üret">
-            <app-ai-logo [provider]="aiService.activeProvider()" [size]="14"></app-ai-logo>
-            <span>AI Destekli</span>
+          <button type="button" class="btn-ai-mini-boost" [class.btn-loading]="isGeneratingAll" [disabled]="isGeneratingAll" (click)="generateWithAi()" title="Tüm SEO Verilerini AI ile Üret">
+            <span *ngIf="isGeneratingAll" class="spin-disc-inline">⏳</span>
+            <app-ai-logo *ngIf="!isGeneratingAll" [provider]="aiService.activeProvider()" [size]="14"></app-ai-logo>
+            <span>{{ isGeneratingAll ? 'AI Hazırlıyor...' : 'AI Destekli' }}</span>
           </button>
         </div>
 
@@ -115,21 +116,29 @@
           </div>
 
           <!-- 2. Ürün Başlığı (SEO 140 Karakter) -->
-          <div class="form-block">
+          <div class="form-block" [class.ai-field-pulse]="isGeneratingTitle || isGeneratingAll">
             <div class="block-header-flex">
               <label class="block-label">✍️ Ürün Başlığı (SEO) ({{ title.length }}/140)</label>
-              <button type="button" class="btn-ai-field-action" (click)="suggestAiTitle()">
-                <app-ai-logo [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                <span>AI Başlık Öner</span>
+              <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingTitle || isGeneratingAll" [disabled]="isGeneratingTitle || isGeneratingAll" (click)="suggestAiTitle()">
+                <span *ngIf="isGeneratingTitle" class="spin-disc-inline">⏳</span>
+                <app-ai-logo *ngIf="!isGeneratingTitle" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
+                <span>{{ (isGeneratingTitle || isGeneratingAll) ? 'Optimize Ediliyor...' : 'AI Başlık Öner' }}</span>
               </button>
             </div>
-            <textarea 
-              class="std-textarea title-area" 
-              rows="3" 
-              maxlength="140" 
-              [(ngModel)]="title" 
-              placeholder="Etsy algoritmasına uyumlu 140 karakter anahtar kelimeli başlık...">
-            </textarea>
+            <div class="ai-input-wrap">
+              <div *ngIf="isGeneratingTitle || isGeneratingAll" class="ai-field-loading-overlay">
+                <span class="spin-disc">✨</span>
+                <span class="ai-overlay-text">{{ aiService.activeProvider() }} İngilizce SEO Başlığı Optimize Ediyor...</span>
+                <div class="ai-shimmer-bar"></div>
+              </div>
+              <textarea 
+                class="std-textarea title-area" 
+                rows="3" 
+                maxlength="140" 
+                [(ngModel)]="title" 
+                placeholder="Etsy algoritmasına uyumlu 140 karakter anahtar kelimeli başlık (Türkçe yazabilirsiniz, AI doğrudan İngilizceye çevirir)...">
+              </textarea>
+            </div>
             <div class="mobile-snippet-strip" [class.ready]="title.length > 0">
               <span class="snippet-tag">📱 Mobilde İlk 55 Karakter:</span>
               <p class="snippet-val">"{{ title.slice(0, 55) || 'Başlık bekleniyor...' }}{{ title.length > 55 ? '...' : '' }}"</p>
@@ -137,17 +146,23 @@
           </div>
 
           <!-- 3. Kategori & Lojistik -->
-          <div class="form-block">
+          <div class="form-block" [class.ai-field-pulse]="isGeneratingCategory || isGeneratingAll">
             <div class="block-header-flex">
               <span class="block-label">📁 Kategori & Lojistik</span>
-              <button type="button" class="btn-ai-field-action" (click)="suggestAiCategory()">
-                <app-ai-logo [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                <span>AI Kategori Belirle</span>
+              <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingCategory || isGeneratingAll" [disabled]="isGeneratingCategory || isGeneratingAll" (click)="suggestAiCategory()">
+                <span *ngIf="isGeneratingCategory" class="spin-disc-inline">⏳</span>
+                <app-ai-logo *ngIf="!isGeneratingCategory" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
+                <span>{{ (isGeneratingCategory || isGeneratingAll) ? 'Belirleniyor...' : 'AI Kategori Belirle' }}</span>
               </button>
             </div>
 
             <!-- Rich Category Command Box -->
-            <div class="tax-command-card">
+            <div class="tax-command-card ai-input-wrap">
+              <div *ngIf="isGeneratingCategory || isGeneratingAll" class="ai-field-loading-overlay">
+                <span class="spin-disc">✨</span>
+                <span class="ai-overlay-text">{{ aiService.activeProvider() }} Etsy Resmi Taxonomy Dökümanını İnceliyor...</span>
+                <div class="ai-shimmer-bar"></div>
+              </div>
               <!-- Active Selection Ribbon -->
               <div class="tax-ribbon-row">
                 <div class="tax-tag-pill">
@@ -260,7 +275,7 @@
           </div>
 
           <!-- 4. Etiketler (Tags - Maksimum 13) -->
-          <div class="form-block">
+          <div class="form-block" [class.ai-field-pulse]="isGeneratingTags || isGeneratingAll">
             <div class="block-header-flex">
               <div class="tags-count-label">
                 <span class="block-label">🏷️ Etiketler (Tags)</span>
@@ -272,9 +287,10 @@
                 <button type="button" class="btn-tool-mini" (click)="trimTags()" title="Tüm etiketleri 20 karaktere kırp">
                   🧹 Kırp
                 </button>
-                <button type="button" class="btn-ai-field-action" (click)="suggestAiTags()">
-                  <app-ai-logo [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                  <span>13 AI Tag</span>
+                <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingTags || isGeneratingAll" [disabled]="isGeneratingTags || isGeneratingAll" (click)="suggestAiTags()">
+                  <span *ngIf="isGeneratingTags" class="spin-disc-inline">⏳</span>
+                  <app-ai-logo *ngIf="!isGeneratingTags" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
+                  <span>{{ (isGeneratingTags || isGeneratingAll) ? 'Üretiliyor...' : '13 AI Tag' }}</span>
                 </button>
               </div>
             </div>
@@ -293,32 +309,47 @@
             </div>
 
             <!-- Tag Chips -->
-            <div class="tag-chips-wrap">
-              <span *ngFor="let t of tags; let i = index" class="tag-chip">
-                {{ t }}
-                <button type="button" class="btn-remove-tag" (click)="removeTag(i)">×</button>
-              </span>
-              <span *ngIf="tags.length === 0" class="empty-tags-hint">
-                Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.
-              </span>
+            <div class="ai-input-wrap">
+              <div *ngIf="isGeneratingTags || isGeneratingAll" class="ai-field-loading-overlay">
+                <span class="spin-disc">✨</span>
+                <span class="ai-overlay-text">{{ aiService.activeProvider() }} 13 Adet İngilizce Etsy SEO Etiketi Üretiyor...</span>
+                <div class="ai-shimmer-bar"></div>
+              </div>
+              <div class="tag-chips-wrap">
+                <span *ngFor="let t of tags; let i = index" class="tag-chip">
+                  {{ t }}
+                  <button type="button" class="btn-remove-tag" (click)="removeTag(i)">×</button>
+                </span>
+                <span *ngIf="tags.length === 0" class="empty-tags-hint">
+                  Henüz etiket eklenmedi. En fazla 13 etiket ekleyebilirsiniz.
+                </span>
+              </div>
             </div>
           </div>
 
           <!-- 5. Ürün Açıklaması -->
-          <div class="form-block">
+          <div class="form-block" [class.ai-field-pulse]="isGeneratingDesc || isGeneratingAll">
             <div class="block-header-flex">
               <span class="block-label">📄 Ürün Açıklaması</span>
-              <button type="button" class="btn-ai-field-action" (click)="suggestAiDescription()">
-                <app-ai-logo [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
-                <span>AI Açıklama Üret</span>
+              <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingDesc || isGeneratingAll" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="suggestAiDescription()">
+                <span *ngIf="isGeneratingDesc" class="spin-disc-inline">⏳</span>
+                <app-ai-logo *ngIf="!isGeneratingDesc" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
+                <span>{{ (isGeneratingDesc || isGeneratingAll) ? 'Yazılıyor...' : 'AI Açıklama Üret' }}</span>
               </button>
             </div>
-            <textarea 
-              class="std-textarea desc-area" 
-              rows="6" 
-              [(ngModel)]="description" 
-              placeholder="Alıcıları ikna eden detaylı ürün özellikleri, boyutlar, bakım bilgisi ve gönderim detayları...">
-            </textarea>
+            <div class="ai-input-wrap">
+              <div *ngIf="isGeneratingDesc || isGeneratingAll" class="ai-field-loading-overlay">
+                <span class="spin-disc">✨</span>
+                <span class="ai-overlay-text">{{ aiService.activeProvider() }} İkna Edici İngilizce Açıklama & Bölümleri Yazıyor...</span>
+                <div class="ai-shimmer-bar"></div>
+              </div>
+              <textarea 
+                class="std-textarea desc-area" 
+                rows="6" 
+                [(ngModel)]="description" 
+                placeholder="Alıcıları ikna eden detaylı ürün özellikleri, boyutlar, bakım bilgisi ve gönderim detayları (Türkçe yazabilirsiniz, AI doğrudan İngilizceye çevirir)...">
+              </textarea>
+            </div>
           </div>
 
           <!-- 6. Kullanılan Malzemeler -->

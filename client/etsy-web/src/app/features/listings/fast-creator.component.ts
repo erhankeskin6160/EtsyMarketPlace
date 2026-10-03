@@ -101,6 +101,13 @@ export class FastCreatorComponent implements OnInit {
   description = '';
   materials = 'PLA, Çevre Dostu Filament';
 
+  // --- AI GENERATION LOADING STATES ---
+  isGeneratingTitle = false;
+  isGeneratingCategory = false;
+  isGeneratingTags = false;
+  isGeneratingDesc = false;
+  isGeneratingAll = false;
+
   // --- COLUMN 2: GÖRSELLER & AI MOTORU (0/10) ---
   galleryImages: GalleryImage[] = [
     {
@@ -306,20 +313,20 @@ export class FastCreatorComponent implements OnInit {
 
   // --- AI SUGGESTIONS ---
   suggestAiTitle(): void {
-    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.title.trim() || this.description.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
     if (!input) {
-      this.showToast('⚠️ Lütfen önce ürün başlığı alanına birkaç kelime yazın (Örn: El Yapımı Kadın Çantası).');
+      this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına ürünle ilgili temel bilgileri yazın.');
       return;
     }
-    this.isGeneratingAi = true;
+    this.isGeneratingTitle = true;
     this.listingAiService.suggestTitle(input, this.selectedCategory).subscribe({
       next: res => {
-        this.isGeneratingAi = false;
+        this.isGeneratingTitle = false;
         this.title = res.value;
         this.showToast(res.message);
       },
       error: (err) => {
-        this.isGeneratingAi = false;
+        this.isGeneratingTitle = false;
         this.showToast(err?.message || '❌ Canlı AI başlık önerisi oluşturulamadı.');
       }
     });
@@ -335,10 +342,10 @@ export class FastCreatorComponent implements OnInit {
       return;
     }
 
-    this.isGeneratingAi = true;
+    this.isGeneratingCategory = true;
     this.listingAiService.suggestCategoryMultimodal(title, desc, images).subscribe({
       next: res => {
-        this.isGeneratingAi = false;
+        this.isGeneratingCategory = false;
         this.selectedTaxonomyId = res.taxonomyId;
         this.selectedCategory = res.categoryPath;
         this.categoryAiResult = res;
@@ -347,7 +354,7 @@ export class FastCreatorComponent implements OnInit {
         this.showToast(res.message);
       },
       error: (err) => {
-        this.isGeneratingAi = false;
+        this.isGeneratingCategory = false;
         this.showToast(err?.message || '❌ Kategori önerisi oluşturulamadı.');
       }
     });
@@ -374,64 +381,71 @@ export class FastCreatorComponent implements OnInit {
   }
 
   suggestAiTags(): void {
-    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.title.trim() || this.description.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
     if (!input) {
-      this.showToast('⚠️ Lütfen önce ürün başlığı alanına bir ürün adı yazın.');
+      this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına ürünle ilgili temel bilgileri yazın.');
       return;
     }
-    this.isGeneratingAi = true;
+    this.isGeneratingTags = true;
     this.listingAiService.suggestTags(input, this.selectedCategory).subscribe({
       next: res => {
-        this.isGeneratingAi = false;
+        this.isGeneratingTags = false;
         this.tags = res.value;
         this.showToast(res.message);
       },
       error: (err) => {
-        this.isGeneratingAi = false;
+        this.isGeneratingTags = false;
         this.showToast(err?.message || '❌ Canlı AI etiket önerisi oluşturulamadı.');
       }
     });
   }
 
   suggestAiDescription(): void {
-    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.description.trim() || this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
     if (!input) {
-      this.showToast('⚠️ Lütfen önce ürün başlığı alanına bir ürün adı yazın.');
+      this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına bir ürün adı yazın.');
       return;
     }
-    this.isGeneratingAi = true;
+    this.isGeneratingDesc = true;
     this.listingAiService.suggestDescription(input, this.materials).subscribe({
       next: res => {
-        this.isGeneratingAi = false;
+        this.isGeneratingDesc = false;
         this.description = res.value;
         this.showToast(res.message);
       },
       error: (err) => {
-        this.isGeneratingAi = false;
+        this.isGeneratingDesc = false;
         this.showToast(err?.message || '❌ Canlı AI açıklama önerisi oluşturulamadı.');
       }
     });
   }
 
   generateWithAi(): void {
-    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.title.trim() || this.description.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
     if (!input) {
       this.showToast('⚠️ Lütfen önce sol panelde ürün başlığı kutusuna birkaç kelime girin (Örn: El Yapımı Kadın Çantası).');
       return;
     }
-    this.isGeneratingAi = true;
+    this.isGeneratingAll = true;
     this.listingAiService.generateCompleteListing(input, this.materials).subscribe({
       next: res => {
-        this.isGeneratingAi = false;
+        this.isGeneratingAll = false;
         this.title = res.title;
         this.selectedCategory = res.category;
         this.tags = res.tags;
         this.description = res.description;
         if (res.materials) this.materials = res.materials;
+
+        // If user already has images in gallery, also refine category using vision
+        const images = this.galleryImages.map(img => img.url).filter(u => !!u);
+        if (images.length > 0) {
+          this.suggestAiCategory();
+        }
+
         this.showToast(res.summaryMessage);
       },
       error: (err) => {
-        this.isGeneratingAi = false;
+        this.isGeneratingAll = false;
         this.showToast(err?.message || '❌ Canlı AI listeleme önerisi oluşturulamadı.');
       }
     });

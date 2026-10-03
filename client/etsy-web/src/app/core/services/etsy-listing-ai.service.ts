@@ -399,12 +399,13 @@ export class EtsyListingAiService {
   private callGeminiForTitle(input: string, apiKey: string, model: string, category?: string): Observable<string> {
     const activeModel = this.resolveGeminiModel(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const systemInstruction = `You are a world-class Etsy SEO specialist. Return ONLY a single line containing an optimized English Etsy title up to 140 characters. 
+    const systemInstruction = `You are a world-class Etsy SEO specialist. Return ONLY a single line containing an optimized English Etsy title up to 140 characters.
+CRITICAL LANGUAGE RULE: The seller's raw input may be in Turkish (e.g. 'El yapımı kadın çantası'), English, or rough notes. You MUST understand the Turkish product concept, materials, and purpose, but your generated title MUST ALWAYS BE 100% IN ENGLISH. NEVER output Turkish in the title.
 The first 55 characters MUST contain the most critical search keywords for mobile visibility. 
 Separate keyword phrases with commas or pipes. 
-Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw title string.`;
+Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw English title string.`;
 
-    const userPrompt = `Product input from seller: "${input || 'Handmade Artisan Gift'}". Category: "${category || ''}". Generate a high-converting 140-character Etsy title:`;
+    const userPrompt = `Product input from seller: "${input || 'Handmade Artisan Gift'}". Category: "${category || ''}". Generate a high-converting 140-character English Etsy title:`;
 
     const body = {
       systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -427,10 +428,11 @@ Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw
     const activeModel = this.resolveGeminiModel(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
     const systemInstruction = `You are an Etsy SEO expert. Generate exactly 13 unique, high-search-volume buyer tags for this product.
+CRITICAL LANGUAGE RULE: The seller's input may be in Turkish, English, or rough notes. You must understand the Turkish meaning and generate all 13 tags 100% in ENGLISH for Etsy US and international shoppers. NEVER output Turkish tags.
 CRITICAL ETSY RULES:
 - Each tag must be maximum 20 characters long.
-- Use only lowercase letters, numbers, and single spaces. No punctuation, no symbols, no hashtags.
-- Output ONLY a valid JSON array of 13 strings, e.g. ["tag one", "tag two", ...]`;
+- Use only lowercase English letters, numbers, and single spaces. No punctuation, no symbols, no hashtags.
+- Output ONLY a valid JSON array of 13 English strings, e.g. ["tag one", "tag two", ...]`;
 
     const body = {
       systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -459,12 +461,14 @@ CRITICAL ETSY RULES:
   private callGeminiForDescription(input: string, apiKey: string, model: string, materials?: string): Observable<string> {
     const activeModel = this.resolveGeminiModel(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const systemInstruction = `You are a top Etsy copywriter. Write a persuasive, beautifully structured product description.
+    const systemInstruction = `You are a top Etsy copywriter. Write a persuasive, beautifully structured product description in ENGLISH tailored for Etsy US and international shoppers.
+CRITICAL LANGUAGE RULE: The seller's input may be in Turkish or rough notes. You must understand the Turkish details, but the entire generated description MUST BE 100% IN NATURAL, ENGAGING ENGLISH. NEVER output Turkish sentences.
 Include:
 - Catchy hook & opening summary
 - Highlighted Key Features (bullet points)
 - Materials & Specifications (${materials || 'Handcrafted, Eco-friendly'})
-- Care & Packaging / Gift wrapping options
+- Sizing / Dimensions & Care instructions
+- Gift packaging options
 - Friendly shop closing.
 Format with clean emojis and line breaks.`;
 
@@ -485,13 +489,15 @@ Format with clean emojis and line breaks.`;
   private callGeminiForComplete(input: string, apiKey: string, model: string, materials?: string): Observable<any> {
     const activeModel = this.resolveGeminiModel(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const systemInstruction = `You are an elite Etsy listing architect. Return ONLY a valid JSON object with the following fields:
+    const systemInstruction = `You are an elite Etsy listing architect. Return ONLY a valid JSON object.
+CRITICAL LANGUAGE RULE: The seller's input may be in Turkish (e.g. 'El yapımı kadın çantası'). You must understand the Turkish product concept, but ALL output fields MUST BE 100% IN ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
+Fields schema:
 {
-  "title": "SEO title up to 140 chars, first 55 chars mobile-optimized",
+  "title": "English SEO title up to 140 chars, first 55 chars mobile-optimized",
   "category": "Matching Etsy Taxonomy breadcrumb e.g. Bags & Purses > Handbags > Shoulder Bags",
-  "tags": ["array of exactly 13 lowercase tags each max 20 chars"],
-  "description": "Engaging formatted product description with emojis and bullet points",
-  "materials": "Comma-separated list of materials used"
+  "tags": ["array of exactly 13 lowercase English tags each max 20 chars"],
+  "description": "Engaging formatted product description in English with emojis and bullet points",
+  "materials": "Comma-separated list of materials used in English"
 }`;
 
     const body = {
@@ -1235,34 +1241,34 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
   private generateRuleBasedDescription(userInput: string, materials?: string): string {
     const lower = (userInput || '').toLowerCase().trim();
 
-    if (lower.includes('çanta') || lower.includes('bag') || lower.includes('purse')) {
-      return `✨ Kusursuz El İşçiliği Kadın Çantası — Zarafet ve Fonksiyonellik Bir Arada!\n\n` +
-        `Usta eller tarafından özenle tasarlanan bu şık el yapımı çanta, günlük kullanımınızda hem zarafeti hem de maksimum konforu sunar. Dayanıklı dikiş yapısı ve geniş iç hacmi ile tüm ihtiyaçlarınızı zahmetsizce taşır.\n\n` +
-        `🌿 Öne Çıkan Özellikler:\n` +
-        `• %100 El Yapımı ve Birinci Sınıf Dikiş Kalitesi\n` +
-        `• Ayarlanabilir ve Çıkarılabilir Omuz Askısı\n` +
-        `• Cüzdan, telefon ve makyaj çantası için fermuarlı güvenli iç cepler\n` +
-        `• Malzeme: ${materials || 'Hakiki Deri / Kaliteli Kanvas Kumaş ve Pirinç Aksesuar'}\n` +
-        `• Boyut: ~28 cm x 20 cm x 8 cm (İdeal günlük taşıma ölçüsü)\n\n` +
-        `🎁 Hediye & Paketleme:\n` +
-        `Tüm ürünlerimiz çevre dostu özel koruyucu toz torbası ve zarif hediye paketi seçeneğiyle kargolanır. Kendiniz veya sevdikleriniz için unutulmaz bir hediye!`;
+    if (lower.includes('çanta') || lower.includes('bag') || lower.includes('purse') || lower.includes('tote')) {
+      return `✨ Artisan Handcrafted Women's Handbag — Timeless Elegance & Daily Practicality!\n\n` +
+        `Expertly designed for daily versatility and refined style, this handcrafted bag combines premium artisan stitching with lightweight durability. The spacious interior and comfortable shoulder strap make it the perfect everyday companion from office to weekend outings.\n\n` +
+        `🌿 Key Highlights & Features:\n` +
+        `• 100% Handcrafted with high-density durable reinforced stitching\n` +
+        `• Adjustable and detachable comfortable shoulder strap\n` +
+        `• Secure zippered inner compartments for phone, wallet, keys, and cosmetics\n` +
+        `• Materials: ${materials || 'Genuine Artisan Leather / Premium Cotton Canvas & Brass Hardware'}\n` +
+        `• Dimensions: Approx. 11.0" x 7.8" x 3.2" (28 x 20 x 8 cm) — Ideal compact daily size\n\n` +
+        `🎁 Gift-Ready & Sustainable Packaging:\n` +
+        `Shipped in an eco-friendly protective dust bag with optional premium gift wrapping. A wonderful keepsake gift for her, birthdays, bridesmaids, or Mother's Day!`;
     }
 
-    if (lower.includes('kolye') || lower.includes('takı') || lower.includes('necklace') || lower.includes('jewelry')) {
-      return `💎 Zarif 925 Ayar Gümüş Kolye — Zamansız Şıklık ve Işıltı!\n\n` +
-        `Her bir takımız en ince ayrıntısına kadar el işçiliğiyle üretilmiş olup kararmaya karşı özel koruyucu rodyum/altın kaplama ile tamamlanmıştır.\n\n` +
-        `✨ Özellikler:\n` +
-        `• Malzeme: ${materials || '925 Ayar Gerçek Gümüş, Antialerjik & Nikelsiz'}\n` +
-        `• Zincir Uzunluğu: 45 cm + 5 cm uzatma payı\n` +
-        `• Özel kadife takı kutusu ve gümüş temizleme bezi hediye!`;
+    if (lower.includes('kolye') || lower.includes('takı') || lower.includes('necklace') || lower.includes('jewelry') || lower.includes('yüzük')) {
+      return `💎 Dainty 925 Sterling Silver Pendant Necklace — Minimalist Everyday Sparkle!\n\n` +
+        `Handcrafted with exquisite precision and finished with anti-tarnish protective plating for everlasting shine and comfort on sensitive skin.\n\n` +
+        `✨ Specifications & Details:\n` +
+        `• Material: ${materials || '925 Solid Sterling Silver, Hypoallergenic & Nickel-Free'}\n` +
+        `• Chain Length: 18 inches + 2-inch extender (45 cm + 5 cm adjustable)\n` +
+        `• Includes complimentary signature velvet jewelry pouch and microfiber polishing cloth!`;
     }
 
-    return `🌟 Özel Tasarım El Yapımı Ürün — Sanat ve Kalite Bir Arada!\n\n` +
-      `Atölyemizde büyük bir tutku ve titizlikle üretilen bu benzersiz ürün, evinize şıklık katmak veya sevdiklerinize anlamlı bir hediye sunmak için tasarlandı.\n\n` +
-      `✨ Detaylar:\n` +
-      `• Malzeme: ${materials || 'Çevre Dostu, Yüksek Kaliteli Birinci Sınıf Malzemeler'}\n` +
-      `• Özenli işçilik ve uzun ömürlü kullanım garantisi\n` +
-      `• Hızlı ve güvenli kargo, özenli koruyucu ambalaj`;
+    return `🌟 Unique Handcrafted Artisan Creation — Made with Passion & Precision!\n\n` +
+      `Add a touch of elegance to your home or delight someone special with this custom handcrafted masterpiece. Each piece is individually crafted for long-lasting beauty and aesthetic charm.\n\n` +
+      `✨ Details & Specifications:\n` +
+      `• Materials: ${materials || 'Premium Eco-Friendly, Handpicked High-Quality Materials'}\n` +
+      `• Fast, secure tracked shipping in protective gift-ready packaging\n` +
+      `• Feel free to message our workshop for custom personalization requests!`;
   }
 
   private generateRuleBasedComplete(userInput: string, materials?: string): CompleteListingAiResult {
