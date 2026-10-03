@@ -108,54 +108,60 @@ import {
       <!-- 2. NINE FINANCIAL KPI CARDS (Matching FinancialReportForm.cs Image 2) -->
       <div class="kpi-grid-9">
         <!-- 1. Brüt Satış -->
-        <div class="kpi-card gross" (click)="copyValue('Brüt Satış', formatKpi(grossSalesTry, grossSalesUsd))">
+        <div class="kpi-card gross interactive-kpi" (click)="openSalesAnalysisModal()" title="Satış ve Gelir Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">💰 BRÜT SATIŞ</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-success">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</div>
           <div class="kpi-indicator green"></div>
         </div>
 
         <!-- 2. Etsy Kesintisi -->
-        <div class="kpi-card fee" (click)="copyValue('Etsy Kesintisi', formatKpi(etsyFeesTry, etsyFeesUsd))">
+        <div class="kpi-card fee interactive-kpi" (click)="openFeesAnalysisModal()" title="Etsy Komisyon & Kesinti Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">📋 ETSY KESİNTİSİ</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-warning">-{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</div>
           <div class="kpi-indicator orange"></div>
         </div>
 
         <!-- 3. İç Reklam -->
-        <div class="kpi-card inner-ad" (click)="copyValue('İç Reklam', formatKpi(innerAdsTry, innerAdsUsd))">
+        <div class="kpi-card inner-ad interactive-kpi" (click)="openInnerAdsModal()" title="Etsy Ads İç Reklam Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">📢 İÇ REKLAM</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-danger">-{{ formatKpi(innerAdsTry, innerAdsUsd) }}</div>
           <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 4. Dış Reklam -->
-        <div class="kpi-card offsite-ad" (click)="copyValue('Dış Reklam', formatKpi(offsiteAdsTry, offsiteAdsUsd))">
+        <div class="kpi-card offsite-ad interactive-kpi" (click)="openOffsiteAdsModal()" title="Offsite Ads Dış Reklam Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">🌐 DIŞ REKLAM</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-orange">-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</div>
           <div class="kpi-indicator dark-orange"></div>
         </div>
 
         <!-- 5. İadeler -->
-        <div class="kpi-card refunds" (click)="copyValue('İadeler', formatKpi(refundsTry, refundsUsd))">
+        <div class="kpi-card refunds interactive-kpi" (click)="openRefundsModal()" title="İade ve Geri Ödeme Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">↩️ İADELER</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-danger">-{{ formatKpi(refundsTry, refundsUsd) }}</div>
           <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 6. Etsy Net Gelir -->
-        <div class="kpi-card net-income" (click)="copyValue('Etsy Net Gelir', formatKpi(netIncomeTry, netIncomeUsd))">
+        <div class="kpi-card net-income interactive-kpi" (click)="openNetIncomeModal()" title="Etsy Net Gelir & Platform Hakediş Analizini Aç (Detay)">
           <div class="kpi-header">
             <span class="kpi-title">✅ ETSY NET GELİR</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value text-primary">{{ formatKpi(netIncomeTry, netIncomeUsd) }}</div>
           <div class="kpi-indicator indigo"></div>
@@ -914,8 +920,390 @@ import {
               </table>
             </div>
 
+      <!-- 4. DRILLDOWN MODAL: SATIŞ VE GELİR ANALİZİ (BRÜT SATIŞ) -->
+      <div class="modal-backdrop" *ngIf="showSalesModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🟢 Satış ve Gelir Analizi (Brüt Satış)</h3>
+              <p class="modal-sub">Dönem Toplam Brüt Satış: <strong>₺54.608,24</strong> ($1.111,73 USD) | 10 İşlem</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Brüt Satış</span>
+                <span class="box-val text-emerald">₺54.608,24</span>
+                <span class="box-sub">$1.111,73 USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Sipariş Sayısı</span>
+                <span class="box-val text-primary">10 Sipariş</span>
+                <span class="box-sub">9 Başarılı, 1 İptal</span>
+              </div>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Ortalama Sepet Tutarı (AOV)</span>
+                <span class="box-val text-emerald">₺5.460,82</span>
+                <span class="box-sub">$111,17 USD / Sipariş</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Sipariş No</th>
+                    <th>Alıcı</th>
+                    <th>Ürün</th>
+                    <th>Tutar ($)</th>
+                    <th>Tutar (₺)</th>
+                    <th>Ödeme Tipi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let s of salesRecords">
+                    <td class="date-cell">{{ s.date }}</td>
+                    <td class="ref-cell">#{{ s.receiptId }}</td>
+                    <td>{{ s.buyer }}</td>
+                    <td class="title-cell" title="{{ s.item }}">{{ s.item }}</td>
+                    <td class="amount-cell text-emerald">{{ '$' + s.amount.toFixed(2) }}</td>
+                    <td class="amount-cell text-emerald">₺{{ formatNumber(s.tryAmount) }}</td>
+                    <td><span class="badge-status-payout" [class.badge-refund]="s.paymentType === 'canceled'">{{ s.paymentType }}</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
             <div class="drilldown-footnote">
-              💡 [ İpucu: Henüz maliyeti girilmemiş 1 siparişin maliyetini girdiğinizde bu net kâr kuruşu kuruşuna kesinleşecektir. ]
+              💡 [ Muhasebe Kuralı: Etsy Payments brüt tutarları müşterinin ödediği toplam sepet (ürün + kargo ücreti) bedelidir. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. DRILLDOWN MODAL: ETSY KOMİSYON & KESİNTİ ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showFeesModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🏷️ Etsy Komisyon & Kesinti Analizi</h3>
+              <p class="modal-sub">Etsy Tarafından Kesilen Toplam Komisyon ve Masraflar: <strong>-₺12.783,71</strong> (-$260,25 USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Kesinti Tutarı</span>
+                <span class="box-val text-warning">-₺12.783,71</span>
+                <span class="box-sub">-$260,25 USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Komisyon / Brüt Satış Oranı</span>
+                <span class="box-val text-orange">%23,41</span>
+                <span class="box-sub">Standart Komisyon + KDV</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">KDV Tevkifatı (TR %20)</span>
+                <span class="box-val text-danger">₺1.383,22</span>
+                <span class="box-sub">Kesintiler Üzerinden KDV</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Kesinti Kalemi</th>
+                    <th>İşlem / Adet</th>
+                    <th>Matrah ($)</th>
+                    <th>Kesinti ($)</th>
+                    <th>Kesinti (₺)</th>
+                    <th>Açıklama / Formül</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let f of feesRecords">
+                    <td><strong>{{ f.type }}</strong></td>
+                    <td>{{ f.count }}</td>
+                    <td>{{ f.baseUsd > 0 ? ('$' + f.baseUsd.toFixed(2)) : '—' }}</td>
+                    <td class="amount-cell text-warning">{{ '-$' + f.feeUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-warning">-₺{{ formatNumber(f.feeTry) }}</td>
+                    <td class="note-cell">{{ f.note }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Bilgi: Etsy, Türkiye merkezli mağazalarda tüm komisyonlar üzerinden %20 yasal KDV ve %1.25 Düzenleyici İşletme Ücreti keser. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. DRILLDOWN MODAL: ETSY ADS İÇ REKLAM ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showInnerAdsModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>📢 Etsy Ads İç Reklam Analizi</h3>
+              <p class="modal-sub">Etsy Arama İçi Tıklama Başı Sponsorlu Reklam Harcamaları: <strong>-₺404,30</strong> (-$8,23 USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Reklam Harcaması</span>
+                <span class="box-val text-danger">-₺404,30</span>
+                <span class="box-sub">-$8,23 USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Reklam Kaynaklı Gelir</span>
+                <span class="box-val text-emerald">₺8.918,87</span>
+                <span class="box-sub">$183,81 USD (2 Sipariş)</span>
+              </div>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Genel Reklam ROAS</span>
+                <span class="box-val text-emerald">22,3x</span>
+                <span class="box-sub">Ortalama Tıklama Başı: $0.12</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Gösterim</th>
+                    <th>Tıklama</th>
+                    <th>Harcama ($)</th>
+                    <th>Harcama (₺)</th>
+                    <th>Reklam Geliri ($)</th>
+                    <th>ROAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let ad of innerAdsRecords">
+                    <td class="date-cell">{{ ad.date }}</td>
+                    <td>{{ ad.impressions }}</td>
+                    <td>{{ ad.clicks }}</td>
+                    <td class="amount-cell text-danger">{{ '-$' + ad.spendUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-danger">-₺{{ formatNumber(ad.spendTry) }}</td>
+                    <td class="amount-cell text-emerald">{{ '$' + ad.salesUsd.toFixed(2) }}</td>
+                    <td><strong [class.text-emerald]="ad.roas !== '0.0x'">{{ ad.roas }}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Performans Analizi: İç reklamlar harcanan her 1₺ karşılığında mağazaya 22,3₺ ciro kazandırmıştır. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. DRILLDOWN MODAL: OFFSITE ADS DIŞ REKLAM ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showOffsiteAdsModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🌐 Offsite Ads Dış Reklam Analizi</h3>
+              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-₺3.930,29</strong> (-$80,01 USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Dış Reklam Kesintisi</span>
+                <span class="box-val text-orange">-₺3.930,29</span>
+                <span class="box-sub">-$80,01 USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Dış Reklam Satış Adedi</span>
+                <span class="box-val text-primary">4 Sipariş</span>
+                <span class="box-sub">Toplam Satışın %40'ı</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Komisyon Oranı</span>
+                <span class="box-val text-warning">%15,00</span>
+                <span class="box-sub">Sadece Satış Olduğunda Kesilir</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Sipariş No</th>
+                    <th>Alıcı</th>
+                    <th>Satış Tutarı ($)</th>
+                    <th>Komisyon Oranı</th>
+                    <th>Kesinti ($)</th>
+                    <th>Kesinti (₺)</th>
+                    <th>Reklam Kanalı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let off of offsiteAdsRecords">
+                    <td class="ref-cell">#{{ off.receiptId }}</td>
+                    <td>{{ off.buyer }}</td>
+                    <td class="amount-cell text-emerald">{{ '$' + off.saleAmountUsd.toFixed(2) }}</td>
+                    <td><span class="badge-status-payout">{{ off.rate }}</span></td>
+                    <td class="amount-cell text-orange">{{ '-$' + off.feeUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-orange">-₺{{ formatNumber(off.feeTry) }}</td>
+                    <td class="note-cell">{{ off.channel }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Offsite Ads Avantajı: Tıklama başına para ödemezsiniz; sadece sipariş gerçekleştiğinde %15 başarı komisyonu tahakkuk eder. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. DRILLDOWN MODAL: İADE VE GERİ ÖDEME ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showRefundsModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🔴 İade ve Geri Ödeme Analizi</h3>
+              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-₺1.888,14</strong> (-$38,44 USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam İade Tutarı</span>
+                <span class="box-val text-danger">-₺1.888,14</span>
+                <span class="box-sub">-$38,44 USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">İade Edilen Sipariş Sayısı</span>
+                <span class="box-val text-danger">1 Sipariş</span>
+                <span class="box-sub">İade Oranı: %3,46</span>
+              </div>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Geri Alınan Etsy Komisyonu</span>
+                <span class="box-val text-emerald">+$4,80 USD</span>
+                <span class="box-sub">İade Sonucu İade Alınan Komisyon</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Sipariş No</th>
+                    <th>Alıcı</th>
+                    <th>Ürün</th>
+                    <th>İade Tutarı ($)</th>
+                    <th>İade Tutarı (₺)</th>
+                    <th>İade Nedeni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let r of refundRecords">
+                    <td class="date-cell">{{ r.date }}</td>
+                    <td class="ref-cell">#{{ r.receiptId }}</td>
+                    <td>{{ r.buyer }}</td>
+                    <td class="title-cell">{{ r.item }}</td>
+                    <td class="amount-cell text-danger">{{ '-$' + r.refundUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-danger">-₺{{ formatNumber(r.refundTry) }}</td>
+                    <td class="note-cell">{{ r.reason }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Finansal Not: İade yapıldığında Etsy işlem komisyonunu ve KDV'sini mağaza bakiyesine otomatik geri yatırır. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9. DRILLDOWN MODAL: ETSY NET GELİR & PLATFORM HAKEDİŞ ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showNetIncomeModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>💎 Etsy Net Gelir & Platform Hakediş Analizi</h3>
+              <p class="modal-sub">Tüm Platform Kesintileri ve İadeler Sonrası Saf Etsy Hakedişi: <strong>₺35.601,79</strong> ($724,80 USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Brüt Satış Geliri</span>
+                <span class="box-val text-emerald">₺54.608,24</span>
+                <span class="box-sub">$1.111,73 USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Platform Giderleri Toplamı</span>
+                <span class="box-val text-danger">-₺19.006,45</span>
+                <span class="box-sub">Komisyon, Reklam & İadeler</span>
+              </div>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Etsy Net Hakediş</span>
+                <span class="box-val text-primary">₺35.601,79</span>
+                <span class="box-sub">$724,80 USD</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Hesap Kalemi</th>
+                    <th>Tutar ($)</th>
+                    <th>Tutar (₺)</th>
+                    <th>Muhasebe Açıklaması</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let n of netIncomeRecords" [class.highlight-row]="n.category.includes('NET HAKEDİŞ')">
+                    <td><strong>{{ n.category }}</strong></td>
+                    <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
+                      {{ (n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountUsd > 0 ? '+' : '')) + '$' + formatNumber(Math.abs(n.amountUsd)) }}
+                    </td>
+                    <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
+                      {{ n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountTry > 0 ? '+' : '') }}₺{{ formatNumber(Math.abs(n.amountTry)) }}
+                    </td>
+                    <td class="note-cell">{{ n.note }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Hakediş Tanımı: Etsy Net Gelir, mağazanın kargo ve ürün maliyeti hariç, doğrudan banka hesabına gönderilecek saf Etsy bakiyesidir. ]
             </div>
           </div>
           <div class="modal-footer">
@@ -2071,6 +2459,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
   ];
 
   // Modals
+  showSalesModal = false;
+  showFeesModal = false;
+  showInnerAdsModal = false;
+  showOffsiteAdsModal = false;
+  showRefundsModal = false;
+  showNetIncomeModal = false;
   showReconciliationModal = false;
   showCostModal = false;
   showBankPayoutModal = false;
@@ -2084,6 +2478,64 @@ export class AccountingComponent implements OnInit, OnDestroy {
   // Table Sorting State (Matching Görsel 1)
   sortColumn: string = 'netProfitUsd';
   sortDirection: 'asc' | 'desc' = 'asc';
+
+  // Modal: Satış ve Gelir Analizi (Brüt Satış)
+  salesRecords = [
+    { date: '01.10.26 14:22', receiptId: '4188710928', buyer: 'Jamie Westerman', item: '3D Printed Butterfly Trainer Blade', amount: 35.31, tryAmount: 1731.96, paymentType: 'payment_gross' },
+    { date: '01.10.26 09:15', receiptId: '4188192041', buyer: 'Diane Barrow', item: 'Captain Jack Sparrow Compass Functional', amount: 156.60, tryAmount: 7676.53, paymentType: 'payment_gross' },
+    { date: '30.09.26 18:40', receiptId: '4187920145', buyer: 'Nathan McCoy', item: 'Fallout Pip Boy 3000 Mk IV Wearable', amount: 148.50, tryAmount: 7280.96, paymentType: 'payment_gross' },
+    { date: '28.09.26 21:05', receiptId: '4187299104', buyer: 'Sarah Jenkins', item: 'Captain Jack Sparrow Resin Statue', amount: 156.60, tryAmount: 7662.30, paymentType: 'payment_gross' },
+    { date: '25.09.26 16:30', receiptId: '4185189201', buyer: 'Lucas Meyer', item: 'Arcane Jinx Statue LoL Figure', amount: 147.20, tryAmount: 7178.94, paymentType: 'payment_gross' },
+    { date: '18.09.26 20:12', receiptId: '4178129840', buyer: 'Elena Rostova', item: 'Arcane Jinx Statue LoL Figure', amount: 169.50, tryAmount: 8259.74, paymentType: 'payment_gross' },
+    { date: '18.09.26 11:45', receiptId: '4176640192', buyer: 'David Kim', item: 'Michael Jackson Statue King of Pop', amount: 147.20, tryAmount: 7172.06, paymentType: 'payment_gross' },
+    { date: '15.09.26 13:20', receiptId: '4174028911', buyer: 'Marcus Vance', item: 'Lotr Aragorn Crown of Gondor', amount: 154.50, tryAmount: 7494.79, paymentType: 'payment_gross' },
+    { date: '14.09.26 08:50', receiptId: '4174291882', buyer: 'Tom Bradley', item: 'Ben 10 Classic Omnitrix Watch V2', amount: 0.00, tryAmount: 0.00, paymentType: 'canceled' },
+    { date: '07.09.26 17:15', receiptId: '4168074902', buyer: 'Chloe Bennett', item: '3D Printed Butterfly Trainer Blade', amount: 37.90, tryAmount: 1836.26, paymentType: 'payment_gross' }
+  ];
+
+  // Modal: Etsy Komisyon & Kesinti Analizi
+  feesRecords = [
+    { type: 'İşlem Komisyonu (%6.5)', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 72.26, feeTry: 3549.41, note: 'Etsy Transaction Fee (%6.5)' },
+    { type: 'Ödeme İşleme (Processing)', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 49.02, feeTry: 2407.86, note: 'Etsy Payments Processing Fee (%3 + $0.25)' },
+    { type: 'Listeleme Ücreti (Listing)', count: '28 Yenileme', baseUsd: 0, feeUsd: 5.60, feeTry: 275.07, note: 'Auto-renew listing fee ($0.20/adet)' },
+    { type: 'Düzenleyici İşletme Ücreti', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 13.90, feeTry: 682.77, note: 'Regulatory Operating Fee (TR %1.25)' },
+    { type: 'Etsy Kesinti KDV (VAT)', count: 'Tüm Kesintiler', baseUsd: 0, feeUsd: 28.16, feeTry: 1383.22, note: '%20 Türkiye KDV Tevkifatı' },
+    { type: 'Offsite Ads Dış Reklam Kesintisi', count: '3 Satış', baseUsd: 533.40, feeUsd: 80.01, feeTry: 3930.29, note: '%15 Offsite Ads komisyonu' },
+    { type: 'Etsy Ads Tıklama Harcaması', count: '68 Tıklama', baseUsd: 0, feeUsd: 8.23, feeTry: 404.30, note: 'Arama içi sponsorlu reklam harcaması' }
+  ];
+
+  // Modal: Etsy Ads İç Reklam Analizi
+  innerAdsRecords = [
+    { date: '02.10.2026', impressions: 420, clicks: 14, spendUsd: 1.82, spendTry: 89.40, salesUsd: 35.31, roas: '19.4x' },
+    { date: '01.10.2026', impressions: 385, clicks: 12, spendUsd: 1.56, spendTry: 76.47, salesUsd: 0.00, roas: '0.0x' },
+    { date: '30.09.2026', impressions: 512, clicks: 18, spendUsd: 2.34, spendTry: 114.71, salesUsd: 148.50, roas: '63.5x' },
+    { date: '29.09.2026', impressions: 310, clicks: 9, spendUsd: 1.17, spendTry: 57.35, salesUsd: 0.00, roas: '0.0x' },
+    { date: '28.09.2026', impressions: 405, clicks: 15, spendUsd: 1.34, spendTry: 65.69, salesUsd: 0.00, roas: '0.0x' }
+  ];
+
+  // Modal: Offsite Ads Dış Reklam Analizi
+  offsiteAdsRecords = [
+    { receiptId: '4188710928', buyer: 'Jamie Westerman', saleAmountUsd: 35.31, rate: '%15', feeUsd: 5.30, feeTry: 259.97, channel: 'Google Shopping' },
+    { receiptId: '4188192041', buyer: 'Diane Barrow', saleAmountUsd: 156.60, rate: '%15', feeUsd: 23.49, feeTry: 1151.48, channel: 'Facebook / Instagram' },
+    { receiptId: '4187299104', buyer: 'Sarah Jenkins', saleAmountUsd: 156.60, rate: '%15', feeUsd: 23.49, feeTry: 1150.31, channel: 'Pinterest Ads' },
+    { receiptId: '4178129840', buyer: 'Elena Rostova', saleAmountUsd: 169.50, rate: '%15', feeUsd: 25.43, feeTry: 1238.44, channel: 'Google Search Partner' }
+  ];
+
+  // Modal: İade ve Geri Ödeme Analizi
+  refundRecords = [
+    { date: '14.09.2026 08:50', receiptId: '4174291882', buyer: 'Tom Bradley', item: 'Ben 10 Classic Omnitrix Watch V2', refundUsd: 38.44, refundTry: 1888.14, reason: 'Alıcı Adres Değişikliği / İptal Talebi', feeRefundedUsd: 4.80 }
+  ];
+
+  // Modal: Etsy Net Gelir Analizi
+  netIncomeRecords = [
+    { category: 'Brüt Satış Geliri', amountUsd: 1111.73, amountTry: 54608.24, isPositive: true, note: 'Müşterilerden tahsil edilen toplam sipariş tutarı' },
+    { category: 'Etsy Standart Komisyon & İşlem Ücreti', amountUsd: -148.98, amountTry: -7318.84, isPositive: false, note: 'Transaction, listing, processing & regulatory fee' },
+    { category: 'Offsite Ads Dış Reklam Kesintisi', amountUsd: -80.01, amountTry: -3930.29, isPositive: false, note: 'Dış arama motoru ve sosyal medya reklam payı' },
+    { category: 'Etsy Ads Arama İçi Reklam', amountUsd: -8.23, amountTry: -404.30, isPositive: false, note: 'Etsy içi tıklama başı reklam harcaması' },
+    { category: 'Etsy Kesinti KDV (VAT)', amountUsd: -28.16, amountTry: -1383.22, isPositive: false, note: 'Kesintilere uygulanan resmî KDV tevkifatı' },
+    { category: 'İadeler ve İptaller (Refunds)', amountUsd: -38.44, amountTry: -1888.14, isPositive: false, note: 'İade edilen sipariş tutarı' },
+    { category: 'NET HAKEDİŞ (ETSY NET GELİR)', amountUsd: 724.80, amountTry: 35601.79, isPositive: true, note: 'Banka hesabına aktarılmaya hazır nihai platform bakiyesi' }
+  ];
 
   // Modal 1 Data: Bank Payouts (Matching Görsel 2)
   bankPayoutRecords = [
@@ -2344,6 +2796,30 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return map[col] || col;
   }
 
+  openSalesAnalysisModal(): void {
+    this.showSalesModal = true;
+  }
+
+  openFeesAnalysisModal(): void {
+    this.showFeesModal = true;
+  }
+
+  openInnerAdsModal(): void {
+    this.showInnerAdsModal = true;
+  }
+
+  openOffsiteAdsModal(): void {
+    this.showOffsiteAdsModal = true;
+  }
+
+  openRefundsModal(): void {
+    this.showRefundsModal = true;
+  }
+
+  openNetIncomeModal(): void {
+    this.showNetIncomeModal = true;
+  }
+
   openBankPayoutModal(): void {
     this.showBankPayoutModal = true;
   }
@@ -2496,6 +2972,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   closeModals(): void {
+    this.showSalesModal = false;
+    this.showFeesModal = false;
+    this.showInnerAdsModal = false;
+    this.showOffsiteAdsModal = false;
+    this.showRefundsModal = false;
+    this.showNetIncomeModal = false;
     this.showReconciliationModal = false;
     this.showCostModal = false;
     this.showBankPayoutModal = false;
