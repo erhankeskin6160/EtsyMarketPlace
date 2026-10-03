@@ -1,4 +1,4 @@
-import { Component, OnInit, ElementRef, ViewChild, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
@@ -14,7 +14,7 @@ Chart.register(...registerables);
   template: `
     <div class="dashboard-root">
       <!-- HERO KPI STRIP (MATCHING WINFORMS DESKTOP) -->
-      <section class="kpi-grid">
+      <section class="kpi-grid" [class.has-popover-open]="isExpensesPopoverOpen">
         <div class="glass-card kpi-card">
           <div class="kpi-header">
             <span class="kpi-label">💳 BU AYKI BRÜT CİRO</span>
@@ -55,15 +55,107 @@ Chart.register(...registerables);
           <div class="kpi-sub">Mağaza Portföyü</div>
         </div>
 
-        <div class="glass-card kpi-card">
+        <div class="glass-card kpi-card kpi-card-expenses"
+             [class.hover-active]="isHoveringExpenses"
+             [class.popover-open]="isExpensesPopoverOpen"
+             (mouseenter)="onExpensesMouseEnter()"
+             (mouseleave)="onExpensesMouseLeave()"
+             (click)="toggleExpensesPopover()"
+             title="Maliyet detayını görmek için üzerinde birkaç saniye bekleyin veya tıklayın">
           <div class="kpi-header">
             <span class="kpi-label">📢 ETSY KESİNTİLERİ / REKLAM</span>
-            <span class="kpi-tag text-danger">Giderler</span>
+            <div class="kpi-header-right">
+              <!-- Animated mini circular countdown / loading badge -->
+              <span class="hover-timer-badge" *ngIf="isHoveringExpenses && !isExpensesPopoverOpen">
+                <span class="pulse-dot"></span>
+                <span>Detay...</span>
+              </span>
+              <span class="kpi-tag text-danger" *ngIf="!isHoveringExpenses || isExpensesPopoverOpen">Giderler</span>
+            </div>
           </div>
           <div class="kpi-value text-danger">
-            -&#36;{{ etsyFeesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ etsyFeesUsd * apiService.exchangeRate() | number:'1.0-0' }})</span>
+            -&#36;{{ etsyFeesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.0-0' }})</span>
           </div>
-          <div class="kpi-sub">Reklam: -$5.47, Komisyon: -$5.99</div>
+          <div class="kpi-sub">
+            Reklam: -$5.47, Komisyon: -$5.99 
+            <span class="kpi-hint-text">💡 (Detay için durun)</span>
+          </div>
+
+          <!-- DETAILED EXPENSES POPOVER (MATCHING WINFORMS ANIMATED TOOLTIP) -->
+          <div class="expenses-popover-box" 
+               *ngIf="isExpensesPopoverOpen"
+               (click)="$event.stopPropagation()"
+               (mouseenter)="onPopoverMouseEnter()"
+               (mouseleave)="onPopoverMouseLeave()">
+            
+            <!-- Popover Header -->
+            <div class="popover-header">
+              <div class="popover-title-row">
+                <span class="popover-icon">📢</span>
+                <div>
+                  <h4 class="popover-title">Etsy Kesintileri & Reklam Harcamaları Analizi</h4>
+                  <span class="popover-subtitle">
+                    Toplam Etsy Kesintisi: -₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.2-2' }} (-&#36;{{ etsyFeesUsd | number:'1.2-2' }}) | Cironun %32.2'si
+                  </span>
+                </div>
+              </div>
+              <button type="button" class="btn-close-popover" (click)="closeExpensesPopover()" title="Kapat">✕</button>
+            </div>
+
+            <!-- 3 KPI Cards Cluster -->
+            <div class="popover-kpi-row">
+              <div class="mini-kpi-card red">
+                <span class="mini-kpi-label">📢 İç Reklam (Etsy Ads)</span>
+                <span class="mini-kpi-try">-₺268.00</span>
+                <span class="mini-kpi-usd">-$5.47 (%47.7)</span>
+              </div>
+              <div class="mini-kpi-card orange">
+                <span class="mini-kpi-label">🌐 Dış Reklam (Offsite)</span>
+                <span class="mini-kpi-try">-₺0.00</span>
+                <span class="mini-kpi-usd">-$0.00 (%0.0)</span>
+              </div>
+              <div class="mini-kpi-card purple">
+                <span class="mini-kpi-label">📋 Etsy Komisyon & Harç</span>
+                <span class="mini-kpi-try">-₺294.00</span>
+                <span class="mini-kpi-usd">-$5.99 (%52.3)</span>
+              </div>
+            </div>
+
+            <!-- Breakdown Table -->
+            <div class="popover-table-wrap">
+              <table class="popover-breakdown-table">
+                <thead>
+                  <tr>
+                    <th>Tür</th>
+                    <th>Kalem Adı</th>
+                    <th>Oran / Tür</th>
+                    <th>Tutar (TL / USD)</th>
+                    <th>Açıklama / Muhasebe Mantığı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let item of expensesBreakdown" [class.total-row]="item.isTotal">
+                    <td>
+                      <span class="type-pill" [ngClass]="item.typeClass">{{ item.type }}</span>
+                    </td>
+                    <td class="name-cell">{{ item.name }}</td>
+                    <td class="rate-cell">{{ item.rate }}</td>
+                    <td class="amount-cell">{{ item.amountText }}</td>
+                    <td class="desc-cell">{{ item.desc }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Popover Footer Action -->
+            <div class="popover-footer">
+              <span class="footer-note">💡 Masaüstü canlı ödeme defteri ve Finans raporu ile %100 senkronizedir.</span>
+              <a routerLink="/finance/accounting" class="btn-goto-accounting" (click)="closeExpensesPopover()">
+                💳 Finans & Muhasebe Detay Tablosu →
+              </a>
+            </div>
+
+          </div>
         </div>
       </section>
 
@@ -210,6 +302,11 @@ Chart.register(...registerables);
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 16px;
+      position: relative;
+      z-index: 10;
+    }
+    .kpi-grid.has-popover-open {
+      z-index: 20000;
     }
     .kpi-card {
       display: flex;
@@ -241,6 +338,259 @@ Chart.register(...registerables);
     .kpi-sub {
       font-size: 0.73rem;
       color: var(--text-muted);
+    }
+
+    /* EXPENSES CARD & HOVER POPOVER */
+    .kpi-card-expenses {
+      position: relative;
+      cursor: pointer;
+      transition: all 0.25s ease;
+      z-index: 15;
+    }
+    .kpi-card-expenses:hover, .kpi-card-expenses.hover-active {
+      border-color: rgba(239, 68, 68, 0.45);
+      box-shadow: 0 4px 20px rgba(239, 68, 68, 0.15);
+    }
+    .kpi-card-expenses.popover-open {
+      z-index: 20001;
+    }
+    .kpi-header-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hover-timer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: rgba(239, 68, 68, 0.2);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #f87171;
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      animation: pulse 1s infinite;
+    }
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: blink 0.8s infinite alternate;
+    }
+    @keyframes blink {
+      0% { opacity: 0.3; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1.2); }
+    }
+    .kpi-hint-text {
+      color: #38bdf8;
+      font-weight: 600;
+      font-size: 0.68rem;
+      margin-left: 4px;
+    }
+
+    /* THE POPOVER BOX */
+    .expenses-popover-box {
+      position: absolute;
+      top: calc(100% + 10px);
+      right: 0;
+      width: 650px;
+      max-width: 90vw;
+      background: linear-gradient(135deg, rgba(17, 24, 39, 0.98) 0%, rgba(15, 23, 42, 0.99) 100%);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 12px;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), 0 0 25px rgba(239, 68, 68, 0.15);
+      backdrop-filter: blur(16px);
+      z-index: 20002;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      cursor: default;
+      animation: popoverFadeIn 0.2s ease-out;
+    }
+    @keyframes popoverFadeIn {
+      from { opacity: 0; transform: translateY(-8px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .popover-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 10px;
+    }
+    .popover-title-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .popover-icon {
+      font-size: 1.4rem;
+    }
+    .popover-title {
+      margin: 0;
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+    .popover-subtitle {
+      font-size: 0.72rem;
+      color: #f87171;
+      font-weight: 600;
+      display: block;
+      margin-top: 2px;
+    }
+    .btn-close-popover {
+      background: rgba(255, 255, 255, 0.06);
+      border: none;
+      color: #94a3b8;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+    .btn-close-popover:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+
+    /* 3 MINI KPI CARDS */
+    .popover-kpi-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+    }
+    .mini-kpi-card {
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .mini-kpi-card.red {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+    .mini-kpi-card.orange {
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+    }
+    .mini-kpi-card.purple {
+      background: rgba(99, 102, 241, 0.12);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+    }
+    .mini-kpi-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+    .mini-kpi-try {
+      font-size: 0.95rem;
+      font-weight: 800;
+      color: #ffffff;
+    }
+    .mini-kpi-card.red .mini-kpi-try { color: #f87171; }
+    .mini-kpi-card.orange .mini-kpi-try { color: #fb923c; }
+    .mini-kpi-card.purple .mini-kpi-try { color: #a5b4fc; }
+    .mini-kpi-usd {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+
+    /* BREAKDOWN TABLE */
+    .popover-table-wrap {
+      max-height: 250px;
+      overflow-y: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+    }
+    .popover-breakdown-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.72rem;
+      text-align: left;
+    }
+    .popover-breakdown-table th {
+      background: #1e293b;
+      color: #94a3b8;
+      padding: 6px 10px;
+      font-weight: 700;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .popover-breakdown-table td {
+      padding: 5px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #cbd5e1;
+    }
+    .popover-breakdown-table tr:hover:not(.total-row) {
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .popover-breakdown-table .total-row {
+      background: rgba(239, 68, 68, 0.15);
+      border-top: 2px solid rgba(239, 68, 68, 0.4);
+      font-weight: 800;
+    }
+    .popover-breakdown-table .total-row td {
+      color: #ffffff;
+      padding: 7px 10px;
+    }
+    .type-pill {
+      font-size: 0.64rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      letter-spacing: 0.03em;
+    }
+    .badge-ad { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+    .badge-fee { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+    .badge-refund { background: rgba(234, 179, 8, 0.2); color: #fde047; }
+    .badge-total { background: #ef4444; color: #ffffff; }
+
+    .name-cell { font-weight: 600; color: #f1f5f9; }
+    .rate-cell { color: #94a3b8; }
+    .amount-cell { font-weight: 700; color: #f87171; white-space: nowrap; }
+    .desc-cell { color: #94a3b8; font-size: 0.68rem; line-height: 1.3; }
+
+    /* FOOTER */
+    .popover-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 10px;
+      gap: 12px;
+    }
+    .footer-note {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+    .btn-goto-accounting {
+      background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+      color: #ffffff;
+      text-decoration: none;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 6px;
+      white-space: nowrap;
+      transition: all 0.15s;
+      box-shadow: 0 2px 8px rgba(249, 115, 22, 0.35);
+    }
+    .btn-goto-accounting:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
     }
 
     /* ACTION HUB */
@@ -482,7 +832,7 @@ Chart.register(...registerables);
     }
   `]
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
   apiService = inject(EtsyApiService);
 
   @ViewChild('trendChart', { static: true }) chartCanvas!: ElementRef<HTMLCanvasElement>;
@@ -492,6 +842,23 @@ export class DashboardComponent implements OnInit {
   grossSalesUsd = 35.57;
   netProfitUsd = 13.69;
   etsyFeesUsd = 11.46;
+
+  // EXPENSES HOVER TOOLTIP POPOVER
+  isHoveringExpenses = false;
+  isExpensesPopoverOpen = false;
+  private hoverTimer: any = null;
+  private leaveTimer: any = null;
+
+  expensesBreakdown = [
+    { type: 'Reklam', typeClass: 'badge-ad', name: 'İç Reklam (Etsy Ads)', rate: 'Tıklama', amountText: '-₺268.00 (-$5.47)', desc: 'Etsy platform içi arama sponsorlu reklam harcaması', isTotal: false },
+    { type: 'Reklam', typeClass: 'badge-ad', name: 'Dış Reklam (Offsite Ads)', rate: '%15', amountText: '-₺0.00 (-$0.00)', desc: 'Google & sosyal medya dış reklam satış komisyonu', isTotal: false },
+    { type: 'Kesinti', typeClass: 'badge-fee', name: 'İşlem Komisyonu (Transaction Fee)', rate: '%6.5', amountText: '-₺113.80 (-$2.32)', desc: 'Ürün ve kargo tutarı üzerinden Etsy standart komisyonu', isTotal: false },
+    { type: 'Kesinti', typeClass: 'badge-fee', name: 'Ödeme İşleme Ücreti (Payment Processing)', rate: '%6.5+3TL', amountText: '-₺116.80 (-$2.38)', desc: 'Etsy Payments güvenli ödeme tahsilat masrafı', isTotal: false },
+    { type: 'Kesinti', typeClass: 'badge-fee', name: 'Yasal İşletim & KDV (Regulatory & VAT)', rate: '%1.5 + KDV', amountText: '-₺43.40 (-$0.88)', desc: 'Türkiye yasal işletim payı ve komisyon KDV\'si', isTotal: false },
+    { type: 'Kesinti', typeClass: 'badge-fee', name: 'İlan Listeleme Ücreti (Listing Fees)', rate: '$0.20', amountText: '-₺20.00 (-$0.41)', desc: 'Ürün listeleme ve 4 aylık otomatik yenileme bedelleri', isTotal: false },
+    { type: 'İade', typeClass: 'badge-refund', name: 'İptal ve İadeler (Refunds)', rate: '0 Adet', amountText: '-₺0.00 (-$0.00)', desc: 'Müşterilere iade edilen sipariş ve kargo tutarları', isTotal: false },
+    { type: 'Toplam', typeClass: 'badge-total', name: 'TOPLAM GİDER & KESİNTİ', rate: 'Tümü', amountText: '-₺562.00 (-$11.46)', desc: 'Brüt cirodan düşülen tüm Etsy kesintileri ve reklam harcaması', isTotal: true }
+  ];
 
   liveOrders = [
     {
@@ -568,5 +935,66 @@ export class DashboardComponent implements OnInit {
         }
       }
     });
+  }
+
+  // --- HOVER TIMING & POPOVER LOGIC ---
+  onExpensesMouseEnter(): void {
+    if (this.leaveTimer) {
+      clearTimeout(this.leaveTimer);
+      this.leaveTimer = null;
+    }
+    this.isHoveringExpenses = true;
+    if (!this.isExpensesPopoverOpen) {
+      this.hoverTimer = setTimeout(() => {
+        this.isExpensesPopoverOpen = true;
+      }, 1200); // 1.2s delay as requested ("bir kaç saniye durunca")
+    }
+  }
+
+  onExpensesMouseLeave(): void {
+    if (this.hoverTimer) {
+      clearTimeout(this.hoverTimer);
+      this.hoverTimer = null;
+    }
+    this.isHoveringExpenses = false;
+    this.leaveTimer = setTimeout(() => {
+      this.isExpensesPopoverOpen = false;
+    }, 350); // graceful leave buffer
+  }
+
+  onPopoverMouseEnter(): void {
+    if (this.leaveTimer) {
+      clearTimeout(this.leaveTimer);
+      this.leaveTimer = null;
+    }
+    this.isHoveringExpenses = true;
+    this.isExpensesPopoverOpen = true;
+  }
+
+  onPopoverMouseLeave(): void {
+    this.onExpensesMouseLeave();
+  }
+
+  toggleExpensesPopover(): void {
+    if (this.hoverTimer) {
+      clearTimeout(this.hoverTimer);
+      this.hoverTimer = null;
+    }
+    this.isExpensesPopoverOpen = !this.isExpensesPopoverOpen;
+  }
+
+  closeExpensesPopover(): void {
+    if (this.hoverTimer) {
+      clearTimeout(this.hoverTimer);
+      this.hoverTimer = null;
+    }
+    this.isExpensesPopoverOpen = false;
+    this.isHoveringExpenses = false;
+  }
+
+  ngOnDestroy(): void {
+    if (this.hoverTimer) clearTimeout(this.hoverTimer);
+    if (this.leaveTimer) clearTimeout(this.leaveTimer);
+    if (this.chartInstance) this.chartInstance.destroy();
   }
 }
