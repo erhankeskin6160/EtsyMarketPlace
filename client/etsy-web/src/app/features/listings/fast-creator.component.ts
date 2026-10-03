@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
+import { EtsyListingAiService } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 export interface GalleryImage {
@@ -41,6 +42,7 @@ export interface VariationRow {
 export class FastCreatorComponent implements OnInit {
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
+  listingAiService = inject(EtsyListingAiService);
   router = inject(Router);
 
   @ViewChild('fileInput') fileInputRef?: ElementRef<HTMLInputElement>;
@@ -300,55 +302,97 @@ export class FastCreatorComponent implements OnInit {
 
   // --- AI SUGGESTIONS ---
   suggestAiTitle(): void {
+    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    if (!input) {
+      this.showToast('⚠️ Lütfen önce ürün başlığı alanına birkaç kelime yazın (Örn: El Yapımı Kadın Çantası).');
+      return;
+    }
     this.isGeneratingAi = true;
-    const provider = this.aiService.activeProvider();
-    setTimeout(() => {
-      this.isGeneratingAi = false;
-      this.title = 'Articulated Crystal Dragon 3D Printed Fidget Toy, Flexible Dragon Desk Pet, Fantasy Mythical Beast Figurine Birthday Gift';
-      this.showToast(`✨ ${provider} SEO başlığını 140 karaktere optimize etti!`);
-    }, 800);
+    this.listingAiService.suggestTitle(input, this.selectedCategory).subscribe({
+      next: res => {
+        this.isGeneratingAi = false;
+        this.title = res.value;
+        this.showToast(res.message);
+      },
+      error: () => {
+        this.isGeneratingAi = false;
+      }
+    });
   }
 
   suggestAiCategory(): void {
-    this.selectedCategory = 'Art & Collectibles > Sculptures > 3D Printed Figurines';
-    this.showToast('✨ AI en uygun Etsy Taxonomy kategorisini belirledi.');
+    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    if (!input) {
+      this.showToast('⚠️ Lütfen önce sol panelde ürün başlığı alanına birkaç kelime girin.');
+      return;
+    }
+    this.listingAiService.suggestCategory(input).subscribe({
+      next: res => {
+        this.selectedCategory = res.value;
+        this.showToast(res.message);
+      }
+    });
   }
 
   suggestAiTags(): void {
+    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    if (!input) {
+      this.showToast('⚠️ Lütfen önce ürün başlığı alanına bir ürün adı yazın.');
+      return;
+    }
     this.isGeneratingAi = true;
-    const provider = this.aiService.activeProvider();
-    setTimeout(() => {
-      this.isGeneratingAi = false;
-      this.tags = [
-        'crystal dragon', '3d printed dragon', 'articulated dragon', 'fidget dragon toy',
-        'desk pet figurine', 'fantasy room decor', 'sensory fidget toy', 'flexi dragon 3d',
-        'bambu lab print', 'dnd mythical gift', 'birthday gift boy', 'unique desk decor',
-        'dragon sculpture'
-      ];
-      this.showToast(`✨ ${provider} 13 altın etiketi tam doldurdu!`);
-    }, 900);
+    this.listingAiService.suggestTags(input, this.selectedCategory).subscribe({
+      next: res => {
+        this.isGeneratingAi = false;
+        this.tags = res.value;
+        this.showToast(res.message);
+      },
+      error: () => {
+        this.isGeneratingAi = false;
+      }
+    });
   }
 
   suggestAiDescription(): void {
+    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    if (!input) {
+      this.showToast('⚠️ Lütfen önce ürün başlığı alanına bir ürün adı yazın.');
+      return;
+    }
     this.isGeneratingAi = true;
-    const provider = this.aiService.activeProvider();
-    setTimeout(() => {
-      this.isGeneratingAi = false;
-      this.description = `🔥 Büyüleyici Mafsallı Kristal Ejderha - Yüksek Hassasiyetli 3D Baskı!\n\n` +
-        `Bu harika mafsallı kristal ejderha, son teknoloji Bambu Lab 3D yazıcılarında yüksek kaliteli çevre dostu PLA filament ile üretilmiştir. Masanızda harika bir stres giderici (fidget toy) veya fantastik bir dekorasyon parçası olarak yerini alır.\n\n` +
-        `✨ Öne Çıkan Özellikler:\n` +
-        `- Tamamen hareketli eklemler ve kıvrımlı gövde\n` +
-        `- Işık altında parlayan özel kristal pul dokusu\n` +
-        `- Boyut: ~35 cm uzunluk\n` +
-        `- Hediye kutusu seçeneği ile hızlı gönderim`;
-      this.showToast(`✨ ${provider} ikna edici ürün açıklamasını üretti!`);
-    }, 1000);
+    this.listingAiService.suggestDescription(input, this.materials).subscribe({
+      next: res => {
+        this.isGeneratingAi = false;
+        this.description = res.value;
+        this.showToast(res.message);
+      },
+      error: () => {
+        this.isGeneratingAi = false;
+      }
+    });
   }
 
   generateWithAi(): void {
-    this.suggestAiTitle();
-    this.suggestAiTags();
-    this.suggestAiDescription();
+    const input = this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    if (!input) {
+      this.showToast('⚠️ Lütfen önce sol panelde ürün başlığı kutusuna birkaç kelime girin (Örn: El Yapımı Kadın Çantası).');
+      return;
+    }
+    this.isGeneratingAi = true;
+    this.listingAiService.generateCompleteListing(input, this.materials).subscribe({
+      next: res => {
+        this.isGeneratingAi = false;
+        this.title = res.title;
+        this.selectedCategory = res.category;
+        this.tags = res.tags;
+        this.description = res.description;
+        if (res.materials) this.materials = res.materials;
+        this.showToast(res.summaryMessage);
+      },
+      error: () => {
+        this.isGeneratingAi = false;
+      }
+    });
   }
 
   // --- GALLERY IMAGE OPERATIONS (0/10) ---

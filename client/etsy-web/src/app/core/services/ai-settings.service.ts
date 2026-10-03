@@ -141,10 +141,18 @@ export class AiSettingsService {
   private loadSettings(): AiOptimizationSettings {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return { ...DEFAULT_SETTINGS, ...parsed };
+      let s = stored ? JSON.parse(stored) : { ...DEFAULT_SETTINGS };
+
+      // Synchronize with copilot gemini config if settings has no key
+      if (!s.geminiApiKey) {
+        const copilotCfg = localStorage.getItem('etsy_gemini_config');
+        if (copilotCfg) {
+          const parsedCopilot = JSON.parse(copilotCfg);
+          if (parsedCopilot.apiKey) s.geminiApiKey = parsedCopilot.apiKey;
+          if (parsedCopilot.model) s.geminiModel = parsedCopilot.model;
+        }
       }
+      return { ...DEFAULT_SETTINGS, ...s };
     } catch {
       // ignore
     }
@@ -155,6 +163,13 @@ export class AiSettingsService {
     this.settings.set({ ...newSettings });
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
+      // Keep copilot config synced
+      if (newSettings.geminiApiKey) {
+        localStorage.setItem('etsy_gemini_config', JSON.stringify({
+          apiKey: newSettings.geminiApiKey,
+          model: newSettings.geminiModel || 'gemini-2.5-flash'
+        }));
+      }
     } catch {
       // ignore
     }
@@ -178,8 +193,6 @@ export class AiSettingsService {
     model: string
   ): Promise<{ success: boolean; latencyMs: number; message: string }> {
     const start = performance.now();
-    await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
-    const latency = Math.round(performance.now() - start);
 
     if (provider === 'Offline') {
       return {
@@ -192,11 +205,43 @@ export class AiSettingsService {
     if (!key || key.trim().length < 8) {
       return {
         success: false,
-        latencyMs: latency,
+        latencyMs: 5,
         message: `Hata: ${provider} için geçerli bir API anahtarı girilmedi. Lütfen API anahtarınızı kontrol edin.`
       };
     }
 
+    // Real ping test for Gemini
+    if (provider === 'Gemini') {
+      try {
+        const targetModel = model || 'gemini-2.5-flash';
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}?key=${encodeURIComponent(key.trim())}`);
+        const latency = Math.round(performance.now() - start);
+        if (resp.ok) {
+          return {
+            success: true,
+            latencyMs: latency,
+            message: `Başarılı! Google Gemini (${targetModel}) modeline ${latency}ms içinde ping atıldı. API kotası ve yetkilendirme doğrulandı.`
+          };
+        } else {
+          const errData = await resp.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || `HTTP ${resp.status} ${resp.statusText}`;
+          return {
+            success: false,
+            latencyMs: latency,
+            message: `Gemini API Hatası: ${errMsg}`
+          };
+        }
+      } catch (err: any) {
+        return {
+          success: false,
+          latencyMs: Math.round(performance.now() - start),
+          message: `Bağlantı Hatası: ${err?.message || 'Google Gemini sunucularına erişilemedi.'}`
+        };
+      }
+    }
+
+    await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
+    const latency = Math.round(performance.now() - start);
     return {
       success: true,
       latencyMs: latency,
