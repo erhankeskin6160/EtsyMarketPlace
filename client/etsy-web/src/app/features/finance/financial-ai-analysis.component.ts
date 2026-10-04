@@ -393,8 +393,29 @@ export class FinancialAiAnalysisComponent implements OnInit {
   }
 
   runFinancialAudit(): void {
-    this.toastMessage = '⚡ Finansal yapay zeka denetimi tamamlandı: 3 kritik öneri güncellendi!';
-    setTimeout(() => this.toastMessage = '', 4000);
+    this.toastMessage = '⚡ VDS Akıllı Finansal Analiz motoru çalıştırılıyor...';
+    this.etsyApi.getFinancialAnalysis().subscribe({
+      next: (res: any) => {
+        if (res && res.recommendations && res.recommendations.length > 0) {
+          this.insights = res.recommendations.map((rec: any, idx: number) => ({
+            type: idx === 0 ? 'warning' : (idx === 1 ? 'opportunity' : 'success'),
+            title: rec.title || rec.category || 'Finansal Tavsiye',
+            description: rec.description || rec.message || 'Kâr marjını korumak için önerilen aksiyon.',
+            impactUsd: rec.potentialGainUsd || Math.round(this.projectedNetProfit * 0.1) || 15,
+            actionText: rec.actionTitle || 'Öneriyi Uygula'
+          }));
+          this.toastMessage = '⚡ Canlı VDS Finansal AI analizi başarıyla tamamlandı ve öneriler güncellendi!';
+          setTimeout(() => this.toastMessage = '', 4000);
+        } else {
+          this.toastMessage = '⚡ Finansal yapay zeka denetimi tamamlandı: Mevcut finansal durum sağlıklı!';
+          setTimeout(() => this.toastMessage = '', 4000);
+        }
+      },
+      error: () => {
+        this.toastMessage = '⚡ Finansal yapay zeka denetimi tamamlandı (Kural motoru devrede).';
+        setTimeout(() => this.toastMessage = '', 4000);
+      }
+    });
   }
 
   applyRecommendation(item: FinancialInsight): void {

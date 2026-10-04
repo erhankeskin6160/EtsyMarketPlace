@@ -270,6 +270,13 @@ export class EtsyApiService {
       `${this.API_BASE}/api/etsy/financial/performance?shopId=${this.activeShopId()}&period=${period}`);
   }
 
+  getFinancialAnalysis(startDate?: Date, endDate?: Date): Observable<any> {
+    let url = `${this.API_BASE}/api/etsy/financial/analysis?shopId=${this.activeShopId()}`;
+    if (startDate) url += `&startDate=${encodeURIComponent(startDate.toISOString())}`;
+    if (endDate) url += `&endDate=${encodeURIComponent(endDate.toISOString())}`;
+    return this.http.get<any>(url);
+  }
+
   getBankPayouts(startDate?: Date, endDate?: Date): Observable<EtsyBankPayoutDto[]> {
     let url = `${this.API_BASE}/api/etsy/banking/payouts?shopId=${this.activeShopId()}`;
     if (startDate) url += `&startDate=${encodeURIComponent(startDate.toISOString())}`;

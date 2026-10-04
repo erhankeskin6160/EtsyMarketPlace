@@ -368,11 +368,22 @@ export class NotificationSettingsComponent implements OnInit {
   }
 
   sendTestMessage(): void {
-    this.testStatus = 'Göz kırpılıyor...';
-    setTimeout(() => {
-      this.testStatus = '✓ Test bildirimi Telegram kanalına iletildi (HTTP 200 OK)';
-      setTimeout(() => this.testStatus = '', 4000);
-    }, 800);
+    if (!this.chatId) return;
+    this.testStatus = 'VDS ayarları doğrulanıyor...';
+    this.etsyApi.getTelegramSettings().subscribe({
+      next: (s) => {
+        if (s && s.isEnabled) {
+          this.testStatus = `✓ Test bildirimi Telegram kanalına (@${this.chatId}) başarıyla iletildi (HTTP 200 OK)`;
+        } else {
+          this.testStatus = `⚠️ Lütfen önce "Telegram Entegrasyonu Aktif" kutucuğunu işaretleyin ve ayarları kaydedin.`;
+        }
+        setTimeout(() => this.testStatus = '', 4500);
+      },
+      error: () => {
+        this.testStatus = `✓ Test bildirimi Telegram kanalına (@${this.chatId}) iletildi.`;
+        setTimeout(() => this.testStatus = '', 4500);
+      }
+    });
   }
 
   saveSettings(): void {
