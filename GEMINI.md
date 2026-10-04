@@ -1,6 +1,12 @@
 # Antigravity Proje Kuralları & Çalışma Prensipleri
 
-## 🚨 Git Dallanma (Branch) ve İş Akışı Kuralı (KESİNLİKLE ZORUNLU)
+## 🚨 1. ZORUNLU İLK ADIM: SİSTEM MİMARİSİ VE KODLAMA EL KİTABINI OKUMA
+**HERHANGİ BİR KODLAMA YAPMADAN VEYA DOSYA DEĞİŞTİRMEDEN ÖNCE:**
+Tüm yapay zeka modelleri ve geliştiriciler, projenin kök dizininde bulunan **`SYSTEM_ARCHITECTURE_AND_AGENT_HANDBOOK.md`** dosyasını **mutlaka okumakla yükümlüdür**.
+- Masaüstü (WinForms), Web (Angular 18), VDS API ve Etsy API arasındaki veri akışı, mimari kurallar ve iş mantığı bu el kitabında tanımlanmıştır.
+- Bu el kitabındaki mimariye, 13 etiket kuralına, anti-ban önlemlerine ve sıfır mock ilkesine aykırı kod yazılamaz.
+
+## 🚨 2. Git Dallanma (Branch) ve İş Akışı Kuralı (KESİNLİKLE ZORUNLU)
 
 Her geliştirme görevi, hata düzeltmesi veya yeni özellik için aşağıdaki akış **İSTİSNASIZ** uygulanacaktır:
 
