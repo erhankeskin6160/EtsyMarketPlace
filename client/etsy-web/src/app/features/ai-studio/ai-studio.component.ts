@@ -708,6 +708,10 @@ export class AiStudioComponent {
   }
 
   sendToListing(): void {
-    this.router.navigate(['/listings/fast-creator']);
+    this.router.navigate(['/listings/fast-creator'], {
+      queryParams: {
+        imageUrl: this.activeImageUrl
+      }
+    });
   }
 }

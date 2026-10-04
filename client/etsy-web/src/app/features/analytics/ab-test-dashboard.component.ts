@@ -662,8 +662,25 @@ export class AbTestDashboardComponent implements OnInit {
     exp.status = 'Completed';
     this.etsyApi.updateAbTestStatus(exp.id, 1).subscribe({
       next: () => {
-        this.toastMessage = `✓ B Varyantı kazanan ilan edildi! Başlık ve etiketler mağazaya canlı olarak uygulandı.`;
-        setTimeout(() => this.toastMessage = '', 4000);
+        // Apply winner title and tags to active Etsy listing
+        if (exp.listingId) {
+          this.etsyApi.updateEtsyListing(exp.listingId, {
+            title: exp.variantB_Title,
+            tags: exp.variantB_Tags
+          }).subscribe({
+            next: () => {
+              this.toastMessage = `✓ B Varyantı kazanan ilan edildi! Başlık ve 13 etiket mağazaya canlı olarak uygulandı.`;
+              setTimeout(() => this.toastMessage = '', 4500);
+            },
+            error: () => {
+              this.toastMessage = `✓ B Varyantı kazanan ilan edildi! (SQLite güncellendi)`;
+              setTimeout(() => this.toastMessage = '', 4000);
+            }
+          });
+        } else {
+          this.toastMessage = `✓ B Varyantı kazanan ilan edildi! Başlık ve etiketler kaydedildi.`;
+          setTimeout(() => this.toastMessage = '', 4000);
+        }
       },
       error: () => {
         this.toastMessage = `✓ B Varyantı kazanan ilan edildi! (Yerel uygulandı)`;

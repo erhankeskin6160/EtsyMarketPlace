@@ -378,7 +378,8 @@ export class ExternalArbitrageRadarComponent implements OnInit {
       queryParams: {
         title: item.title,
         price: item.etsyAvgPrice,
-        category: item.category
+        category: item.category,
+        imageUrl: item.imageUrl
       }
     });
   }

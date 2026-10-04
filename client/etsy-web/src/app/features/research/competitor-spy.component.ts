@@ -1,7 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+
+const COMPETITOR_STORAGE_KEY = 'etsy_competitor_shops_v1';
 
 interface CompetitorShop {
   shopName: string;
@@ -54,12 +56,17 @@ interface CompetitorShop {
               <div 
                 *ngFor="let s of shops" 
                 class="shop-card"
-                [class.selected]="selectedShop.shopName === s.shopName"
+                [class.selected]="selectedShop?.shopName === s.shopName"
                 (click)="selectedShop = s">
                 
                 <div class="shop-card-head">
-                  <span class="shop-name">{{ s.shopName }}</span>
-                  <span class="niche-badge">{{ s.niche }}</span>
+                  <div class="head-left">
+                    <span class="shop-name">{{ s.shopName }}</span>
+                    <span class="niche-badge">{{ s.niche }}</span>
+                  </div>
+                  <button type="button" class="btn-del-shop" (click)="removeCompetitorShop(s.shopName, $event)" title="Rakip Takibini Sil">
+                    ✕
+                  </button>
                 </div>
 
                 <div class="shop-metrics-row">
@@ -232,6 +239,25 @@ interface CompetitorShop {
       align-items: center;
       margin-bottom: 8px;
     }
+    .head-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-del-shop {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .btn-del-shop:hover {
+      background: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+    }
     .shop-name {
       font-size: 0.92rem;
       font-weight: 700;
@@ -310,34 +336,62 @@ interface CompetitorShop {
     }
   `]
 })
-export class CompetitorSpyComponent {
-  shops: CompetitorShop[] = [
-    {
-      shopName: 'MythicForgeCrafts',
-      niche: '3D Baskı Figür & Fidget',
-      sales30d: 840,
-      revenueEstUsd: 31250,
-      activeListings: 64,
-      topItemTitle: 'Articulated Crystal Dragon with Wings 3D Print',
-      topItemPrice: 39.90,
-      topItemTags: ['crystal dragon', '3d printed dragon', 'fidget toy', 'winged dragon', 'desk decor', 'dnd gift', 'dragon sculpture', 'fantasy beast', 'mythical creature', 'adhd toy', 'bambu lab', 'flexi animal', 'gamer gift']
-    },
-    {
-      shopName: 'Botanical3DPrints',
-      niche: 'Geometrik Ev Dekoru',
-      sales30d: 520,
-      revenueEstUsd: 14500,
-      activeListings: 42,
-      topItemTitle: 'Self Watering Geometric Succulent Planter',
-      topItemPrice: 28.00,
-      topItemTags: ['succulent planter', 'geometric pot', 'self watering', 'indoor planter', '3d printed pot', 'modern home decor', 'minimalist vase', 'plant lover gift', 'desktop planter', 'boho decor', 'plant pot', 'nordic style', 'air plant holder']
-    }
-  ];
-
-  selectedShop: CompetitorShop = this.shops[0];
+export class CompetitorSpyComponent implements OnInit {
+  shops: CompetitorShop[] = [];
+  selectedShop: CompetitorShop | null = null;
   copiedMessage = '';
 
   constructor(public etsyApi: EtsyApiService) {}
+
+  ngOnInit(): void {
+    this.loadShops();
+  }
+
+  private loadShops(): void {
+    const saved = localStorage.getItem(COMPETITOR_STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.shops = parsed;
+          this.selectedShop = this.shops[0];
+          return;
+        }
+      } catch {}
+    }
+
+    // Default seed shops
+    this.shops = [
+      {
+        shopName: 'MythicForgeCrafts',
+        niche: '3D Baskı Figür & Fidget',
+        sales30d: 840,
+        revenueEstUsd: 31250,
+        activeListings: 64,
+        topItemTitle: 'Articulated Crystal Dragon with Wings 3D Print',
+        topItemPrice: 39.90,
+        topItemTags: ['crystal dragon', '3d printed dragon', 'fidget toy', 'winged dragon', 'desk decor', 'dnd gift', 'dragon sculpture', 'fantasy beast', 'mythical creature', 'adhd toy', 'bambu lab', 'flexi animal', 'gamer gift']
+      },
+      {
+        shopName: 'Botanical3DPrints',
+        niche: 'Geometrik Ev Dekoru',
+        sales30d: 520,
+        revenueEstUsd: 14500,
+        activeListings: 42,
+        topItemTitle: 'Self Watering Geometric Succulent Planter',
+        topItemPrice: 28.00,
+        topItemTags: ['succulent planter', 'geometric pot', 'self watering', 'indoor planter', '3d printed pot', 'modern home decor', 'minimalist vase', 'plant lover gift', 'desktop planter', 'boho decor', 'plant pot', 'nordic style', 'air plant holder']
+      }
+    ];
+    this.selectedShop = this.shops[0];
+    this.saveShops();
+  }
+
+  private saveShops(): void {
+    try {
+      localStorage.setItem(COMPETITOR_STORAGE_KEY, JSON.stringify(this.shops));
+    } catch {}
+  }
 
   get usdTryRate(): number {
     return this.etsyApi.exchangeRate();
@@ -352,16 +406,35 @@ export class CompetitorSpyComponent {
   addCompetitorShop(): void {
     const name = prompt('Takip etmek istediğiniz Etsy mağaza adını giriniz:');
     if (name && name.trim()) {
-      this.shops.push({
-        shopName: name.trim(),
-        niche: 'Özel Kategori',
-        sales30d: 320,
-        revenueEstUsd: 9800,
-        activeListings: 28,
-        topItemTitle: `${name.trim()} - En Popüler İlan`,
+      const cleanName = name.trim();
+      const newShop: CompetitorShop = {
+        shopName: cleanName,
+        niche: 'Özel Trend Kategori',
+        sales30d: Math.floor(250 + Math.random() * 400),
+        revenueEstUsd: Math.floor(7500 + Math.random() * 15000),
+        activeListings: Math.floor(20 + Math.random() * 50),
+        topItemTitle: `${cleanName} - Popüler Ürün Koleksiyonu`,
         topItemPrice: 34.00,
         topItemTags: ['custom item', 'etsy top seller', 'handmade', 'gift idea', 'trending', 'unique', 'popular', 'best gift', 'home decor', 'accessories', 'craft', 'art', 'design']
-      });
+      };
+      this.shops.unshift(newShop);
+      this.selectedShop = newShop;
+      this.saveShops();
+      this.copiedMessage = `✓ "${cleanName}" rakip takip merkezine eklendi ve kaydedildi!`;
+      setTimeout(() => this.copiedMessage = '', 3500);
+    }
+  }
+
+  removeCompetitorShop(shopName: string, event: MouseEvent): void {
+    event.stopPropagation();
+    if (confirm(`"${shopName}" mağazasını takipten çıkarmak istediğinize emin misiniz?`)) {
+      this.shops = this.shops.filter(s => s.shopName !== shopName);
+      if (this.selectedShop?.shopName === shopName) {
+        this.selectedShop = this.shops.length > 0 ? this.shops[0] : null;
+      }
+      this.saveShops();
+      this.copiedMessage = `✓ "${shopName}" mağazası takipten çıkarıldı.`;
+      setTimeout(() => this.copiedMessage = '', 3500);
     }
   }
 }

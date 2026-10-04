@@ -709,6 +709,14 @@ export class ProductDiscoveryComponent implements OnInit {
     };
 
     this.aiService.clonedListing.set(cloneData);
-    this.router.navigate(['/listings/fast-creator']);
+    this.router.navigate(['/listings/fast-creator'], {
+      queryParams: {
+        title: p.title,
+        price: p.priceUsd,
+        tags: p.tags.join(','),
+        imageUrl: p.imageUrl,
+        category: p.category
+      }
+    });
   }
 }

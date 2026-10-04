@@ -37,6 +37,10 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
           <button type="button" class="btn-back" (click)="returnToAccounting()">
             ← Muhasebeye Dön
           </button>
+          <button type="button" class="btn-sync" [disabled]="isLoading" (click)="syncWithShopListings()">
+            <span *ngIf="isLoading">⏳ Çekiliyor...</span>
+            <span *ngIf="!isLoading">🔄 Mağazadan İlanları Çek</span>
+          </button>
           <button type="button" class="btn-save-all" (click)="saveAll()">
             💾 Tüm Maliyetleri Kaydet
           </button>
@@ -258,6 +262,28 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
     .btn-back:hover {
       background: #334155;
       color: #fff;
+    }
+
+    .btn-sync {
+      background: rgba(99, 102, 241, 0.2);
+      border: 1px solid rgba(99, 102, 241, 0.45);
+      color: #a5b4fc;
+      font-weight: 700;
+      font-size: 0.82rem;
+      padding: 9px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-sync:hover:not(:disabled) {
+      background: rgba(99, 102, 241, 0.35);
+      color: #fff;
+    }
+
+    .btn-sync:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
 
     .btn-save-all {
@@ -545,19 +571,71 @@ export class ProductCostManagerComponent implements OnInit {
     return this.apiService.exchangeRate();
   }
 
+  isLoading = false;
   items: ListingProductCost[] = [];
 
   ngOnInit(): void {
     this.loadCosts();
   }
 
-  private loadCosts(): void {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
+  loadCosts(showSyncToast = false): void {
+    const savedMap = new Map<string, ListingProductCost>();
+    const savedRaw = localStorage.getItem(STORAGE_KEY);
+    if (savedRaw) {
       try {
-        this.items = JSON.parse(saved);
-        return;
+        const parsed: ListingProductCost[] = JSON.parse(savedRaw);
+        parsed.forEach(p => savedMap.set(String(p.listingId), p));
       } catch {}
+    }
+
+    this.isLoading = true;
+    this.apiService.getShopActiveListings(undefined, 100).subscribe({
+      next: (listings) => {
+        this.isLoading = false;
+        if (listings && listings.length > 0) {
+          this.items = listings.map(l => {
+            const idStr = String(l.listingId);
+            const savedItem = savedMap.get(idStr);
+            const price = l.priceAmount || l.price || 0;
+            const skuVal = (l.tags && l.tags.length ? `TAG-${l.tags[0].toUpperCase().replace(/\s+/g, '')}` : `SKU-${idStr.slice(-4)}`);
+            return {
+              listingId: idStr,
+              title: l.title,
+              sku: skuVal,
+              salePriceUsd: price,
+              materialCostUsd: savedItem ? savedItem.materialCostUsd : 0,
+              packagingCostUsd: savedItem ? savedItem.packagingCostUsd : 0,
+              shippingCostUsd: savedItem ? savedItem.shippingCostUsd : 0,
+              lastUpdated: savedItem?.lastUpdated || new Date().toISOString()
+            };
+          });
+          if (showSyncToast) {
+            this.toastMessage = `✓ Mağazadan ${this.items.length} adet aktif ilan çekildi ve maliyetlerle senkronize edildi!`;
+            setTimeout(() => this.toastMessage = '', 4000);
+          }
+          return;
+        }
+        this.fallbackToSavedOrSeed(savedMap);
+      },
+      error: () => {
+        this.isLoading = false;
+        this.fallbackToSavedOrSeed(savedMap);
+        if (showSyncToast) {
+          this.toastMessage = `⚠️ Canlı mağaza ilanlarına erişilemedi, kayıtlı veriler yüklendi.`;
+          setTimeout(() => this.toastMessage = '', 4000);
+        }
+      }
+    });
+  }
+
+  syncWithShopListings(): void {
+    this.loadCosts(true);
+  }
+
+  private fallbackToSavedOrSeed(savedMap: Map<string, ListingProductCost>): void {
+    if (savedMap.size > 0) {
+      this.items = Array.from(savedMap.values());
+      return;
     }
 
     // Default seed listings
@@ -597,7 +675,7 @@ export class ProductCostManagerComponent implements OnInit {
         title: 'Custom Name Dainty Silver Necklace 925 Sterling',
         sku: 'JWL-SLV-04',
         salePriceUsd: 42.00,
-        materialCostUsd: 0, // Eksik
+        materialCostUsd: 0,
         packagingCostUsd: 0,
         shippingCostUsd: 0,
         lastUpdated: new Date().toISOString()
