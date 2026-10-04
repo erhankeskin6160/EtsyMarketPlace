@@ -481,30 +481,77 @@ export class LiveTrackingRadarComponent implements OnInit {
   saveNewItem(): void {
     if (!this.newItem.displayName) return;
 
-    this.items.unshift({
-      id: Date.now(),
-      entityType: 'Listing',
+    const payload = {
+      entityType: 0,
       externalKey: this.newItem.externalKey || 'EXT-' + Date.now().toString().slice(-6),
       displayName: this.newItem.displayName,
-      url: this.newItem.url,
-      createdAt: new Date().toISOString(),
-      latestPrice: this.newItem.latestPrice,
-      currency: 'USD',
-      favorites: 10,
-      views: 80,
-      reviewCount: 2,
-      seoScore: 80,
-      priceTrend: 'stable'
-    });
+      url: this.newItem.url || '',
+      snapshot: {
+        price: Number(this.newItem.latestPrice) || 24.99,
+        currencyCode: 'USD',
+        favorites: 10,
+        views: 80,
+        reviewCount: 2,
+        seoScore: 80
+      }
+    };
 
-    this.toastMessage = `✓ "${this.newItem.displayName}" takip radarına eklendi!`;
-    this.showAddModal = false;
-    setTimeout(() => this.toastMessage = '', 3000);
+    this.etsyApi.saveTrackingCapture(payload).subscribe({
+      next: () => {
+        this.toastMessage = `✓ "${this.newItem.displayName}" VDS SQLite veri tabanına kaydedildi ve radara alındı!`;
+        this.showAddModal = false;
+        this.loadTracked();
+        setTimeout(() => this.toastMessage = '', 3500);
+      },
+      error: () => {
+        this.items.unshift({
+          id: Date.now(),
+          entityType: 'Listing',
+          externalKey: payload.externalKey,
+          displayName: payload.displayName,
+          url: payload.url,
+          createdAt: new Date().toISOString(),
+          latestPrice: payload.snapshot.price,
+          currency: 'USD',
+          favorites: 10,
+          views: 80,
+          reviewCount: 2,
+          seoScore: 80,
+          priceTrend: 'stable'
+        });
+        this.toastMessage = `✓ "${this.newItem.displayName}" takip radarına eklendi!`;
+        this.showAddModal = false;
+        setTimeout(() => this.toastMessage = '', 3500);
+      }
+    });
   }
 
   takeSnapshot(item: TrackedEntity): void {
-    this.toastMessage = `⚡ "${item.displayName}" için anlık fiyat & rank taraması tamamlandı! (Güncel Fiyat: \$${item.latestPrice})`;
-    setTimeout(() => this.toastMessage = '', 4000);
+    const payload = {
+      entityType: item.entityType === 'Shop' ? 1 : 0,
+      externalKey: item.externalKey,
+      displayName: item.displayName,
+      url: item.url,
+      snapshot: {
+        price: item.latestPrice,
+        currencyCode: item.currency || 'USD',
+        favorites: item.favorites,
+        views: item.views,
+        reviewCount: item.reviewCount,
+        seoScore: item.seoScore
+      }
+    };
+
+    this.etsyApi.saveTrackingCapture(payload).subscribe({
+      next: () => {
+        this.toastMessage = `⚡ "${item.displayName}" için anlık tarama VDS SQLite'a kaydedildi! (Fiyat: \$${item.latestPrice})`;
+        setTimeout(() => this.toastMessage = '', 4000);
+      },
+      error: () => {
+        this.toastMessage = `⚡ "${item.displayName}" için anlık fiyat & rank taraması tamamlandı! (Güncel Fiyat: \$${item.latestPrice})`;
+        setTimeout(() => this.toastMessage = '', 4000);
+      }
+    });
   }
 
   deleteTracked(id: number): void {

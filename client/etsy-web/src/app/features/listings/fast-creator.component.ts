@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem } from '../../core/services/etsy-listing-ai.service';
@@ -44,6 +44,7 @@ export class FastCreatorComponent implements OnInit {
   aiService = inject(AiSettingsService);
   listingAiService = inject(EtsyListingAiService);
   router = inject(Router);
+  route = inject(ActivatedRoute);
 
   @ViewChild('fileInput') fileInputRef?: ElementRef<HTMLInputElement>;
 
@@ -180,6 +181,39 @@ export class FastCreatorComponent implements OnInit {
       this.applyTemplateById(this.selectedTemplateId);
       this.updatePriceTry();
     }
+
+    // QueryParams aktarımı (Dış Pazarlar, Viral 3D vb.)
+    this.route.queryParams.subscribe(params => {
+      if (params['title']) {
+        this.selectedTemplateId = '';
+        this.title = params['title'];
+      }
+      if (params['price']) {
+        this.priceUsd = Number(params['price']) || this.priceUsd;
+      }
+      if (params['category']) {
+        this.selectedCategory = params['category'];
+      }
+      if (params['description']) {
+        this.description = params['description'];
+      }
+      if (params['tags']) {
+        const rawTags = params['tags'];
+        this.tags = typeof rawTags === 'string' ? rawTags.split(',').map((t: string) => t.trim()).filter(Boolean) : rawTags;
+      }
+      if (params['imageUrl']) {
+        this.galleryImages = [{
+          id: 'imported-1',
+          url: params['imageUrl'],
+          isCover: true,
+          name: 'Aktarılan Ürün Görseli'
+        }];
+      }
+      if (params['title'] || params['category']) {
+        this.clonedNotice = `Aktarılan Ürün: "${this.title.slice(0, 48)}..." - Kategori: ${this.selectedCategory}`;
+        this.updatePriceTry();
+      }
+    });
 
     this.rebuildVariationGrid();
   }

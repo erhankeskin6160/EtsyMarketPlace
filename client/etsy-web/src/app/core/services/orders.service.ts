@@ -1,7 +1,8 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
+import { EtsyApiService } from './etsy-api.service';
 import { 
   OrderFulfillmentItem, 
   CarrierQuote, 
@@ -17,7 +18,6 @@ const STORAGE_KEY_CARRIER_SESSIONS = 'etsy_carrier_sessions_v2';
 })
 export class OrdersService {
   private readonly API_BASE = 'http://5.180.81.148:5263';
-  private readonly DEFAULT_SHOP_ID = '53236321';
 
   private ordersSubject = new BehaviorSubject<OrderFulfillmentItem[]>([]);
   public orders$ = this.ordersSubject.asObservable();
@@ -40,7 +40,7 @@ export class OrdersService {
     { code: '8523511000', description: 'Yazılım & Dijital 3D STL Tasarım Bellek Kartı', category: 'Elektronik & Dijital' }
   ];
 
-  constructor(private http: HttpClient) {
+  constructor(private http: HttpClient, private etsyApi: EtsyApiService) {
     this.loadOrders();
   }
 
@@ -277,8 +277,9 @@ export class OrdersService {
   }
 
   // --- ORDER RETRIEVAL & QUEUE MANAGEMENT ---
-  public loadOrders(): void {
-    this.http.get<any[]>(`${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${this.DEFAULT_SHOP_ID}`)
+  public loadOrders(shopIdOverride?: string): void {
+    const shopId = shopIdOverride || this.etsyApi.activeShopId() || '53236321';
+    this.http.get<any[]>(`${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${encodeURIComponent(shopId)}`)
       .pipe(catchError(() => of([])))
       .subscribe((apiAlerts) => {
         if (apiAlerts && apiAlerts.length > 0) {

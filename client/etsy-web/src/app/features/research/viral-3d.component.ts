@@ -453,6 +453,14 @@ export class Viral3DComponent implements OnInit {
   }
 
   createListingFromModel(model: ViralModel): void {
-    this.router.navigate(['/listings/fast-creator']);
+    this.router.navigate(['/listings/fast-creator'], {
+      queryParams: {
+        title: model.title,
+        price: model.etsyAvgPriceUsd,
+        tags: model.tags.join(','),
+        imageUrl: model.imageUrl,
+        category: 'Art & Collectibles > Sculptures'
+      }
+    });
   }
 }
