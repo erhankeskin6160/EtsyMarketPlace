@@ -19,6 +19,12 @@ import { User, AuditLog, SystemStats, UpdateUserRequest } from '../../core/model
         <button class="btn btn-secondary" (click)="loadData()">🔄 Verileri Yenile</button>
       </div>
 
+      <!-- TOAST NOTIFICATION -->
+      <div *ngIf="toastMessage" class="admin-toast" [ngClass]="toastType">
+        <span>{{ toastMessage }}</span>
+        <button class="btn-close-toast" (click)="toastMessage = null">✕</button>
+      </div>
+
       <!-- SYSTEM STATS STRIP -->
       <section class="stats-strip">
         <div class="glass-card stat-box">
@@ -313,6 +319,22 @@ import { User, AuditLog, SystemStats, UpdateUserRequest } from '../../core/model
     }
     .action-login { background: rgba(16, 185, 129, 0.15); color: #34d399; }
     .action-register { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+
+    .admin-toast {
+      padding: 12px 18px;
+      margin-bottom: 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: fadeIn 0.25s ease;
+    }
+    .admin-toast.success { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; }
+    .admin-toast.error { background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #f87171; }
+    .admin-toast.info { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; }
+    .btn-close-toast { background: none; border: none; color: inherit; cursor: pointer; font-size: 1rem; }
   `]
 })
 export class AdminComponent implements OnInit {
@@ -327,6 +349,19 @@ export class AdminComponent implements OnInit {
     totalUsedAiTokens: 124500,
     auditLogCount: 1
   };
+
+  toastMessage: string | null = null;
+  toastType: 'success' | 'error' | 'info' = 'info';
+
+  showToast(message: string, type: 'success' | 'error' | 'info' = 'info'): void {
+    this.toastMessage = message;
+    this.toastType = type;
+    setTimeout(() => {
+      if (this.toastMessage === message) {
+        this.toastMessage = null;
+      }
+    }, 4500);
+  }
 
   ngOnInit(): void {
     this.loadData();
@@ -371,13 +406,28 @@ export class AdminComponent implements OnInit {
       isActive: user.isActive
     };
 
-    this.apiService.updateAdminUser(user.id, req).subscribe();
+    this.apiService.updateAdminUser(user.id, req).subscribe({
+      next: () => {
+        this.showToast(`✓ "${user.username}" kullanıcısının rolü "${user.role}" ve ayarları başarıyla kaydedildi.`, 'success');
+        this.loadData();
+      },
+      error: (err) => {
+        const msg = err?.error?.error || err?.message || 'Güncelleme yapılamadı';
+        this.showToast(`⚠️ Kullanıcı güncelleme hatası: ${msg}`, 'error');
+      }
+    });
   }
 
   toggleStatus(user: User): void {
     this.apiService.toggleUserStatus(user.id).subscribe({
       next: res => {
         user.isActive = res.isActive;
+        this.showToast(`✓ "${user.username}" hesabı ${res.isActive ? 'aktif edildi' : 'askıya alındı'}.`, 'success');
+        this.loadData();
+      },
+      error: (err) => {
+        const msg = err?.error?.error || err?.message || 'Durum değiştirilemedi';
+        this.showToast(`⚠️ Hesap durumu değiştirilemedi: ${msg}`, 'error');
       }
     });
   }

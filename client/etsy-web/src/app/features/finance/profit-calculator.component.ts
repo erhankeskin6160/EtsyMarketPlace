@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { EtsyApiService, ShopListingItemDto } from '../../core/services/etsy-api.service';
 
 @Component({
   selector: 'app-profit-calculator',
@@ -117,6 +117,16 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
         <div class="glass-card">
           <span class="card-label">1. Satış & Gelir Kalemleri</span>
 
+          <div class="form-group" *ngIf="activeListings.length > 0">
+            <label>🛍️ Canlı Mağaza İlanından Seç</label>
+            <select [(ngModel)]="selectedListingId" (change)="onListingSelect()" class="form-select highlight-select">
+              <option [ngValue]="null">-- Canlı İlan İçe Aktar (Opsiyonel) --</option>
+              <option *ngFor="let l of activeListings" [ngValue]="l.listingId">
+                {{ l.title | slice:0:45 }}... (&#36;{{ l.price }})
+              </option>
+            </select>
+          </div>
+
           <div class="form-group">
             <label>Ürün Adı / Başlık</label>
             <input type="text" [(ngModel)]="productName" placeholder="Örn: 3D Kristal Ejderha" class="form-input" />
@@ -222,6 +232,13 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
               <option [ngValue]="12">Etsy İsteğe Bağlı (%12)</option>
               <option [ngValue]="15">Etsy Zorunlu Katılım (%15)</option>
             </select>
+          </div>
+
+          <button class="btn-save-costs" (click)="saveToCostManager()">
+            💾 Bu Maliyeti Maliyet Yöneticisine Kaydet
+          </button>
+          <div *ngIf="saveToast" class="cost-saved-toast">
+            {{ saveToast }}
           </div>
         </div>
 
@@ -518,6 +535,39 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
       cursor: pointer;
     }
 
+    .highlight-select {
+      border-color: rgba(59, 130, 246, 0.4);
+      background: rgba(30, 58, 138, 0.25);
+      color: #93c5fd;
+      font-weight: 600;
+    }
+    .btn-save-costs {
+      margin-top: 8px;
+      padding: 10px;
+      background: linear-gradient(135deg, #10b981, #059669);
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-save-costs:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+    .cost-saved-toast {
+      padding: 8px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      animation: fadeIn 0.2s ease;
+    }
+
     @media (max-width: 1200px) {
       .kpi-grid { grid-template-columns: repeat(2, 1fr); }
       .calc-inputs-grid { grid-template-columns: 1fr; }
@@ -529,6 +579,10 @@ export class ProfitCalculatorComponent implements OnInit {
   salePriceUsd = 49.50;
   buyerShippingUsd = 0;
   giftWrapUsd = 0;
+
+  activeListings: ShopListingItemDto[] = [];
+  selectedListingId: number | null = null;
+  saveToast: string | null = null;
 
   materialCostUsd = 8.50;
   shippingCostUsd = 10.90;
@@ -556,6 +610,68 @@ export class ProfitCalculatorComponent implements OnInit {
 
   ngOnInit(): void {
     this.recalc();
+    this.loadListings();
+  }
+
+  loadListings(): void {
+    this.etsyApi.getShopActiveListings(undefined, 50).subscribe({
+      next: (listings) => {
+        this.activeListings = listings || [];
+      },
+      error: () => {}
+    });
+  }
+
+  onListingSelect(): void {
+    const found = this.activeListings.find(l => l.listingId === Number(this.selectedListingId));
+    if (found) {
+      this.productName = found.title;
+      this.salePriceUsd = found.price || this.salePriceUsd;
+
+      try {
+        const savedCosts: any[] = JSON.parse(localStorage.getItem('etsy_product_costs_v1') || '[]');
+        const existing = savedCosts.find((c: any) => c.listingId === found.listingId || c.listingId === found.listingId.toString());
+        if (existing) {
+          this.materialCostUsd = existing.productCostUsd || existing.costUsd || this.materialCostUsd;
+          this.shippingCostUsd = existing.shippingCostUsd || this.shippingCostUsd;
+          this.packagingCostUsd = existing.packagingCostUsd || this.packagingCostUsd;
+        }
+      } catch {}
+
+      this.recalc();
+    }
+  }
+
+  saveToCostManager(): void {
+    const listingId = this.selectedListingId || Date.now();
+    try {
+      const savedCosts: any[] = JSON.parse(localStorage.getItem('etsy_product_costs_v1') || '[]');
+      const idx = savedCosts.findIndex((c: any) => c.listingId === listingId || c.listingId === listingId.toString());
+      const itemToSave = {
+        listingId: listingId,
+        productName: this.productName,
+        salePriceUsd: this.salePriceUsd,
+        productCostUsd: this.materialCostUsd,
+        shippingCostUsd: this.shippingCostUsd,
+        packagingCostUsd: this.packagingCostUsd,
+        netProfitUsd: this.netProfitUsd,
+        marginPercent: this.marginPercent,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (idx >= 0) {
+        savedCosts[idx] = { ...savedCosts[idx], ...itemToSave };
+      } else {
+        savedCosts.push(itemToSave);
+      }
+
+      localStorage.setItem('etsy_product_costs_v1', JSON.stringify(savedCosts));
+      this.saveToast = `✓ "${this.productName.substring(0, 30)}..." maliyetleri başarıyla Ürün Maliyet Yöneticisine kaydedildi!`;
+      setTimeout(() => this.saveToast = null, 4000);
+    } catch {
+      this.saveToast = '⚠️ Kaydedilirken bir hata oluştu.';
+      setTimeout(() => this.saveToast = null, 4000);
+    }
   }
 
   get usdTryRate(): number {

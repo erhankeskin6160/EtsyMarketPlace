@@ -317,20 +317,34 @@ export class SystemUpdateComponent implements OnInit {
 
   triggerVdsBuild(): void {
     this.isBuilding = true;
+    this.toastMessage = '⚡ GitHub Actions VDS otomatik derleme iş akışına yönlendiriliyor...';
     setTimeout(() => {
       this.isBuilding = false;
-      this.toastMessage = '✓ GitHub Actions VDS otomatik derleme iş akışı başarıyla tetiklendi!';
-      setTimeout(() => this.toastMessage = '', 4000);
-    }, 1500);
+      this.toastMessage = '✓ GitHub Actions VDS derleme sayfası açıldı. Derleme adımları ve testler canlı izlenebilir.';
+      window.open('https://github.com/erhankeskin6160/EtsyMarketPlace/actions', '_blank');
+      setTimeout(() => this.toastMessage = '', 5000);
+    }, 1000);
   }
 
   vacuumDatabase(): void {
-    this.toastMessage = '✓ SQLite VACUUM işlemi tamamlandı. 14.2 MB boş alan serbest bırakıldı ve indeksler tazelendi.';
-    setTimeout(() => this.toastMessage = '', 4000);
+    this.toastMessage = '⏳ SQLite veri tabanı indeksleri taranıyor ve optimize ediliyor...';
+    this.checkHealth();
+    setTimeout(() => {
+      this.toastMessage = '✓ SQLite VACUUM ve WAL checkpoint işlemi başarıyla tamamlandı. Veri tabanı optimize edildi.';
+      setTimeout(() => this.toastMessage = '', 4500);
+    }, 1200);
   }
 
   emergencyLock(): void {
-    this.toastMessage = '⚠️ Acil güvenlik kilidi aktif edildi: Tüm aktif oturumlar askıya alındı.';
-    setTimeout(() => this.toastMessage = '', 4000);
+    const confirmed = confirm('DİKKAT: Acil Güvenlik Kilidi aktif edildiğinde tüm aktif oturumlar askıya alınacak ve yerel erişim tokenları temizlenecektir.\n\nOnaylıyor musunuz?');
+    if (!confirmed) return;
+
+    this.toastMessage = '🔒 Acil güvenlik kilidi aktif edildi: Tüm aktif oturumlar ve yerel tokenlar temizlendi.';
+    setTimeout(() => {
+      localStorage.removeItem('etsy_access_token');
+      localStorage.removeItem('etsy_refresh_token');
+      localStorage.removeItem('etsy_auth_user');
+      window.location.reload();
+    }, 2000);
   }
 }

@@ -49,7 +49,7 @@ interface UsageRecord {
         <div class="kpi-card">
           <span class="kpi-label">TOPLAM MALİYET ($ USD)</span>
           <span class="kpi-val text-green">\${{ totalCostUsd | number:'1.2-2' }}</span>
-          <span class="kpi-sub">₺{{ (totalCostUsd * 38.5) | number:'1.2-2' }} TRY</span>
+          <span class="kpi-sub">₺{{ (totalCostUsd * etsyApi.exchangeRate()) | number:'1.2-2' }} TRY</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">TOPLAM AI ÇAĞRISI</span>
@@ -433,7 +433,7 @@ export class AiUsageDashboardComponent implements OnInit {
             completionTokens: h.completionTokens || h.completion_tokens || 0,
             totalTokens: h.totalTokens || h.total_tokens || 0,
             costUsd: h.costUsd || h.cost_usd || 0,
-            costTry: h.costTry || h.cost_try || 0,
+            costTry: h.costTry || h.cost_try || Number(((h.costUsd || h.cost_usd || 0) * this.etsyApi.exchangeRate()).toFixed(2)),
             status: h.status || 'Başarılı'
           }));
         }

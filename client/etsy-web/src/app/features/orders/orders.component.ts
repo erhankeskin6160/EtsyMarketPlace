@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { OrdersService } from '../../core/services/orders.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
@@ -2594,7 +2595,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   constructor(
     private ordersService: OrdersService,
-    private etsyApi: EtsyApiService
+    private etsyApi: EtsyApiService,
+    private route: ActivatedRoute
   ) {}
 
   ngOnInit(): void {
@@ -2627,6 +2629,25 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.carrierSessions = sessions;
     });
     this.subs.push(sessionsSub);
+
+    // 4. Listen to queryParams from Shipping Hub
+    const routeSub = this.route.queryParams.subscribe(params => {
+      if (params['carrierName'] && params['carrierCost']) {
+        const cName = params['carrierName'];
+        const cCost = parseFloat(params['carrierCost']);
+        this.editableShippingCost = cCost;
+        if (this.selectedOrder) {
+          this.selectedOrder.shippingCost = cCost;
+          this.selectedOrder.isCostMissing = false;
+          this.calculateLiveProfit();
+        }
+        this.saveSuccessMessage = `✓ Kargo Hub'ından "${cName}" ($${cCost}) seçildi ve sipariş maliyetine uygulandı.`;
+        setTimeout(() => {
+          this.saveSuccessMessage = null;
+        }, 5000);
+      }
+    });
+    this.subs.push(routeSub);
   }
 
   ngOnDestroy(): void {

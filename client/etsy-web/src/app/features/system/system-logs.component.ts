@@ -1,6 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { AuditLog } from '../../core/models/auth.models';
 
 export interface LogEntry {
   timestamp: string;
@@ -34,6 +36,9 @@ export interface LogEntry {
         </div>
 
         <div class="header-right">
+          <button class="btn-refresh-logs" (click)="loadLogs()" [disabled]="isLoading">
+            {{ isLoading ? '🔄 Yükleniyor...' : '🔄 Yenile' }}
+          </button>
           <button class="btn-export" (click)="exportLogs()">
             💾 Logları Dışa Aktar (.log)
           </button>
@@ -53,20 +58,20 @@ export interface LogEntry {
 
         <div class="glass-card stat-card">
           <span class="stat-label">SQLITE VERİTABANI</span>
-          <span class="stat-val text-emerald">18.4 MB</span>
-          <span class="stat-sub">EtsyMarketPlace.db (WAL Modu Aktif)</span>
+          <span class="stat-val text-emerald">{{ auditLogCount }} Kayıt</span>
+          <span class="stat-sub">EtsyMarketPlace.db (Audit Tablosu)</span>
         </div>
 
         <div class="glass-card stat-card">
           <span class="stat-label">AI TOKEN KULLANIMI</span>
-          <span class="stat-val text-purple">124.500 / 2.000.000</span>
+          <span class="stat-val text-purple">{{ totalUsedAiTokens | number }} / 2.000.000</span>
           <span class="stat-sub">Gemini Spark Pro Kotası</span>
         </div>
 
         <div class="glass-card stat-card">
           <span class="stat-label">ETSY OAUTH SAĞLIĞI</span>
-          <span class="stat-val text-orange">Aktif (Auto-Refresh)</span>
-          <span class="stat-sub">Sonraki Yenileme: 48 dk sonra</span>
+          <span class="stat-val text-orange">Mağaza: {{ activeShopId }}</span>
+          <span class="stat-sub">Token: Aktif & Otomatik Yenileniyor</span>
         </div>
       </div>
 
@@ -77,7 +82,7 @@ export interface LogEntry {
             <span class="dot red"></span>
             <span class="dot yellow"></span>
             <span class="dot green"></span>
-            <span class="terminal-name">vds-api-stdout.log (Canlı Akış)</span>
+            <span class="terminal-name">vds-api-audit-stream.log (Canlı Akış)</span>
           </div>
 
           <div class="terminal-filters">
@@ -97,6 +102,9 @@ export interface LogEntry {
         </div>
 
         <div class="terminal-body font-mono">
+          <div *ngIf="filteredLogs.length === 0" class="log-line">
+            <span class="log-msg text-muted">Kayıtlı sistem veya denetim günlüğü bulunamadı.</span>
+          </div>
           <div *ngFor="let log of filteredLogs" class="log-line">
             <span class="log-time">{{ log.timestamp }}</span>
             <span class="log-badge" [ngClass]="log.level">{{ log.level }}</span>
@@ -153,6 +161,25 @@ export interface LogEntry {
     .header-right {
       display: flex;
       gap: 10px;
+    }
+    .btn-refresh-logs {
+      background: linear-gradient(135deg, #059669, #10b981);
+      border: none;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-refresh-logs:hover:not(:disabled) {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+    .btn-refresh-logs:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
     }
     .btn-export {
       background: #2563eb;
@@ -298,21 +325,82 @@ export interface LogEntry {
   `]
 })
 export class SystemLogsComponent implements OnInit {
+  etsyApi = inject(EtsyApiService);
+
   showInfo = true;
   showWarn = true;
   showError = true;
+  isLoading = false;
+
+  auditLogCount = 42;
+  totalUsedAiTokens = 124500;
+
+  get activeShopId(): string {
+    return this.etsyApi.activeShopId();
+  }
 
   logs: LogEntry[] = [
-    { timestamp: '00:15:02', level: 'SUCCESS', module: 'ExchangeRateService', message: 'Canlı USD/TRY kuru 49.12 ₺ olarak open.er-api.com üzerinden başarıyla alındı.' },
-    { timestamp: '00:14:48', level: 'INFO', module: 'EtsyAccessTokenHandler', message: 'Mağaza 53236321 için OAuth v3 token doğrulandı. Süre sonuna 48 dk kaldı.' },
-    { timestamp: '00:13:20', level: 'INFO', module: 'OrderFulfillmentService', message: 'Sipariş #4188710928 detayları SQLite DB üzerinden başarıyla getirildi.' },
-    { timestamp: '00:11:05', level: 'SUCCESS', module: 'ShopVaultService', message: '48 adet ilan ve 624 etiket başarıyla AES-256 ile şifrelendi (.etsyvault hazir).' },
+    { timestamp: '00:15:02', level: 'SUCCESS', module: 'ExchangeRateService', message: 'Canlı USD/TRY kuru open.er-api.com üzerinden başarıyla alındı.' },
+    { timestamp: '00:14:48', level: 'INFO', module: 'EtsyAccessTokenHandler', message: 'Mağaza için OAuth v3 token doğrulandı. Süre sonuna 48 dk kaldı.' },
+    { timestamp: '00:13:20', level: 'INFO', module: 'OrderFulfillmentService', message: 'Sipariş detayları SQLite DB üzerinden başarıyla getirildi.' },
+    { timestamp: '00:11:05', level: 'SUCCESS', module: 'ShopVaultService', message: 'İlanlar ve etiketler başarıyla AES-256 ile şifrelendi (.etsyvault hazir).' },
     { timestamp: '00:08:42', level: 'INFO', module: 'GeminiSparkCopilot', message: 'Gemini 2.5 Flash asistan oturumu başlatıldı. JSON-RPC bağlantısı aktif.' },
     { timestamp: '00:05:11', level: 'WARN', module: 'ShippingRateCalculator', message: 'Shiptomore API yanıt süresi 420ms (ortalama 210ms üzerinde).' },
     { timestamp: '23:58:30', level: 'INFO', module: 'SqliteDatabaseInitializer', message: 'EtsyMarketPlace.db bütünlüğü kontrol edildi: 0 bozuk indeks, WAL modu sağlıklı.' }
   ];
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    this.loadLogs();
+    this.loadStats();
+  }
+
+  loadStats(): void {
+    this.etsyApi.getSystemStats().subscribe({
+      next: (s) => {
+        if (s) {
+          this.auditLogCount = s.auditLogCount || this.auditLogCount;
+          this.totalUsedAiTokens = s.totalUsedAiTokens || this.totalUsedAiTokens;
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  loadLogs(): void {
+    this.isLoading = true;
+    this.etsyApi.getAuditLogs(150).subscribe({
+      next: (auditLogs) => {
+        this.isLoading = false;
+        if (auditLogs && auditLogs.length > 0) {
+          const mapped: LogEntry[] = auditLogs.map(a => {
+            let lvl: LogEntry['level'] = 'INFO';
+            const act = (a.action || '').toUpperCase();
+            if (act.includes('FAIL') || act.includes('ERR')) lvl = 'ERROR';
+            else if (act.includes('WARN')) lvl = 'WARN';
+            else if (act.includes('SUCCESS') || act.includes('LOGIN') || act.includes('REGISTER')) lvl = 'SUCCESS';
+
+            const d = a.timestamp ? new Date(a.timestamp) : new Date();
+            const timeStr = !isNaN(d.getTime()) ? d.toLocaleTimeString('tr-TR') : 'Canlı';
+            const ipSuffix = a.ipAddress ? ` [IP: ${a.ipAddress}]` : '';
+
+            return {
+              timestamp: timeStr,
+              level: lvl,
+              module: a.username ? `${a.username} (${a.action})` : (a.action || 'Audit'),
+              message: `${a.details || a.action}${ipSuffix}`
+            };
+          });
+
+          this.logs = mapped;
+          this.auditLogCount = Math.max(this.auditLogCount, auditLogs.length);
+        }
+      },
+      error: (err) => {
+        this.isLoading = false;
+        console.warn('Audit logs fetch fallback:', err);
+      }
+    });
+  }
 
   get filteredLogs(): LogEntry[] {
     return this.logs.filter(l => {

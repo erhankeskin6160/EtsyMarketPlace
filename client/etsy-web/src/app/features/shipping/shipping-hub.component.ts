@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 
 export interface CarrierRate {
@@ -27,7 +28,7 @@ export interface CarrierRate {
           <div class="icon-box">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <rect x="1" y="3" width="15" height="13"></rect>
-              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 8"></polygon>
               <circle cx="5.5" cy="18.5" r="2.5"></circle>
               <circle cx="18.5" cy="18.5" r="2.5"></circle>
             </svg>
@@ -117,9 +118,14 @@ export interface CarrierRate {
             <span class="tax-info">Yakıt & Harçlar Dahil</span>
           </div>
 
-          <button class="btn-create-label" (click)="createLabel(c)">
-            🏷️ Bu Taşıyıcı ile Etiket Oluştur
-          </button>
+          <div class="carrier-btn-row">
+            <button class="btn-create-label" (click)="createLabel(c)">
+              🏷️ Etiket Oluştur
+            </button>
+            <button class="btn-send-to-order" (click)="sendToOrders(c)" title="Bu kargo ücretini doğrudan bekleyen siparişlerinize aktarın">
+              📦 Siparişe Aktar
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -350,6 +356,11 @@ export interface CarrierRate {
       margin-top: 4px;
       display: block;
     }
+    .carrier-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
     .btn-create-label {
       background: rgba(255, 255, 255, 0.08);
       border: 1px solid rgba(255, 255, 255, 0.15);
@@ -357,13 +368,28 @@ export interface CarrierRate {
       padding: 10px;
       border-radius: 8px;
       font-weight: 600;
-      font-size: 0.82rem;
+      font-size: 0.8rem;
       cursor: pointer;
       transition: all 0.2s;
     }
     .btn-create-label:hover {
       background: #2563eb;
       border-color: #2563eb;
+    }
+    .btn-send-to-order {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.2), rgba(234, 88, 12, 0.3));
+      border: 1px solid rgba(249, 115, 22, 0.5);
+      color: #fb923c;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-send-to-order:hover {
+      background: #f97316;
+      color: #fff;
     }
   `]
 })
@@ -422,7 +448,10 @@ export class ShippingHubComponent implements OnInit {
     }
   ];
 
-  constructor(public etsyApi: EtsyApiService) {}
+  constructor(
+    public etsyApi: EtsyApiService,
+    private router: Router
+  ) {}
 
   ngOnInit(): void {
     this.calculateRates();
@@ -463,5 +492,15 @@ export class ShippingHubComponent implements OnInit {
         this.labelSuccessInfo = null;
       }
     }, 6000);
+  }
+
+  sendToOrders(c: CarrierRate): void {
+    this.router.navigate(['/orders'], {
+      queryParams: {
+        carrierKey: c.id,
+        carrierName: c.name,
+        carrierCost: c.totalUsd
+      }
+    });
   }
 }
