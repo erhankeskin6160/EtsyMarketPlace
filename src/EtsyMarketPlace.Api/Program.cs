@@ -572,7 +572,7 @@ app.MapPost("/api/etsy/token/refresh", async (string shopId = "53236321", HttpCo
 
     try
     {
-        var refreshed = await oauthService.RefreshTokenAsync(token.RefreshToken, cancellationToken);
+        var refreshed = await oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
         await tokenStore.SaveAsync(resolvedShopId, refreshed, cancellationToken);
         return Results.Ok(new
         {
@@ -695,6 +695,7 @@ app.MapPost("/api/etsy/oauth/exchange-code", async (ExchangeCodeApiRequest reque
     var shopId = request.ShopId.Trim();
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(shopId, cancellationToken);
     var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? string.Empty);
     if (string.IsNullOrWhiteSpace(keystring))
         return Results.BadRequest(new { success = false, message = "Etsy Keystring (Client ID) bulunamadı. Lütfen önce API ayarlarından Keystring kaydedin." });
 
@@ -725,6 +726,8 @@ app.MapPost("/api/etsy/oauth/exchange-code", async (ExchangeCodeApiRequest reque
             ["code_verifier"] = codeVerifier.Trim()
         })
     };
+
+    tokenRequest.Headers.Add("x-api-key", !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim());
 
     try
     {
@@ -768,12 +771,25 @@ app.MapPost("/api/etsy/oauth/exchange-code", async (ExchangeCodeApiRequest reque
 .WithSummary("Etsy OAuth Yetki Kodunu Token'a Dönüştür (Code Exchange)")
 .WithName("ExchangeEtsyOAuthCode");
 
-app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int limit = 50, HttpContext context = null!, IConfiguration config = null!, IEtsyTokenStore tokenStore = null!, IShopSettingsRepository settingsRepo = null!, IHttpClientFactory httpClientFactory = null!, CancellationToken cancellationToken = default) =>
+app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int limit = 50, HttpContext context = null!, IConfiguration config = null!, IEtsyTokenStore tokenStore = null!, IShopSettingsRepository settingsRepo = null!, IHttpClientFactory httpClientFactory = null!, IEtsyOAuthService oauthService = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
     var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
     if (token is null)
         return Results.NotFound(new { error = "Bu mağaza için kayıtlı OAuth token bulunamadı." });
+
+    if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+    {
+        try
+        {
+            token = await oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
+            await tokenStore.SaveAsync(resolvedShopId, token, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new { error = "Etsy token yenilenemedi: " + ex.Message });
+        }
+    }
 
     var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
     var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
@@ -1335,12 +1351,25 @@ app.MapPost("/api/etsy/listings/{listingId}/ai-optimize", async (
 .WithSummary("Listing İçin Yapay Zeka SEO ve Başlık/Tag Optimizasyonu")
 .WithName("OptimizeListingWithAi");
 
-app.MapPut("/api/etsy/listings/{listingId}", async (string listingId, UpdateListingApiRequest request, HttpContext context, IConfiguration config, IEtsyTokenStore tokenStore, IShopSettingsRepository settingsRepo, IHttpClientFactory httpClientFactory, CancellationToken cancellationToken) =>
+app.MapPut("/api/etsy/listings/{listingId}", async (string listingId, UpdateListingApiRequest request, HttpContext context, IConfiguration config, IEtsyTokenStore tokenStore, IShopSettingsRepository settingsRepo, IHttpClientFactory httpClientFactory, IEtsyOAuthService oauthService, CancellationToken cancellationToken) =>
 {
     var resolvedShopId = ResolveShopId(request.ShopId, context, config);
     var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
     if (token is null)
         return Results.NotFound(new { error = "Bu mağaza için kayıtlı OAuth token bulunamadı." });
+
+    if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+    {
+        try
+        {
+            token = await oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
+            await tokenStore.SaveAsync(resolvedShopId, token, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new { error = "Etsy token yenilenemedi: " + ex.Message });
+        }
+    }
 
     if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 140)
         return Results.BadRequest(new { error = "Başlık 1 ile 140 karakter arasında olmalıdır." });

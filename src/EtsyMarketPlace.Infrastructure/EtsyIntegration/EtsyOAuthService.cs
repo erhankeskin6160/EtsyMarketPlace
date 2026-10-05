@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
-public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOptions> options) : IEtsyOAuthService
+public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOptions> options, IShopSettingsRepository settingsRepository) : IEtsyOAuthService
 {
     private readonly EtsyApiOptions _options = options.Value;
 
@@ -28,34 +28,76 @@ public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOpti
         return Task.FromResult(url);
     }
 
-    public async Task<EtsyOAuthToken> ExchangeCodeAsync(string code, string codeVerifier, CancellationToken cancellationToken = default)
+    public async Task<EtsyOAuthToken> ExchangeCodeAsync(string shopId, string code, string codeVerifier, CancellationToken cancellationToken = default)
     {
+        var (keystring, sharedSecret) = await ResolveCredentialsAsync(shopId, cancellationToken);
         using var request = new HttpRequestMessage(HttpMethod.Post, _options.TokenUrl)
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "authorization_code",
-                ["client_id"] = _options.ApiKey,
+                ["client_id"] = keystring,
                 ["redirect_uri"] = _options.RedirectUri,
                 ["code"] = code,
                 ["code_verifier"] = codeVerifier
             })
         };
+        ApplyApiKeyHeader(request, keystring, sharedSecret);
         return await SendTokenRequestAsync(request, cancellationToken);
     }
 
-    public async Task<EtsyOAuthToken> RefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+    public async Task<EtsyOAuthToken> RefreshTokenAsync(string shopId, string refreshToken, CancellationToken cancellationToken = default)
     {
+        var (keystring, sharedSecret) = await ResolveCredentialsAsync(shopId, cancellationToken);
         using var request = new HttpRequestMessage(HttpMethod.Post, _options.TokenUrl)
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "refresh_token",
-                ["client_id"] = _options.ApiKey,
+                ["client_id"] = keystring,
                 ["refresh_token"] = refreshToken
             })
         };
+        ApplyApiKeyHeader(request, keystring, sharedSecret);
         return await SendTokenRequestAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// Etsy token uç noktası, gizli (confidential) istemcilerde x-api-key başlığını
+    /// "keystring:shared_secret" biçiminde bekler. Kimlik bilgileri önce mağaza
+    /// ayarlarından, bulunamazsa yapılandırmadan okunur.
+    /// </summary>
+    internal static string BuildApiKeyHeaderValue(string keystring, string sharedSecret) =>
+        !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
+
+    private static void ApplyApiKeyHeader(HttpRequestMessage request, string keystring, string sharedSecret)
+    {
+        if (!string.IsNullOrWhiteSpace(keystring))
+            request.Headers.Add("x-api-key", BuildApiKeyHeaderValue(keystring, sharedSecret));
+    }
+
+    private async Task<(string Keystring, string SharedSecret)> ResolveCredentialsAsync(string shopId, CancellationToken cancellationToken)
+    {
+        string keystring = string.Empty;
+        string sharedSecret = string.Empty;
+        try
+        {
+            var raw = await settingsRepository.GetRawEtsyAppCredentialsAsync(shopId, cancellationToken);
+            keystring = raw.Keystring;
+            sharedSecret = raw.SharedSecret;
+        }
+        catch
+        {
+            // Mağaza ayarları okunamazsa yapılandırmaya düşülür.
+        }
+
+        if (string.IsNullOrWhiteSpace(keystring)) keystring = _options.ApiKey;
+        if (string.IsNullOrWhiteSpace(sharedSecret)) sharedSecret = _options.SharedSecret;
+
+        if (string.IsNullOrWhiteSpace(keystring))
+            throw new InvalidOperationException("Etsy API keystring (Client ID) yapılandırılmamış. Lütfen Ayarlar > Etsy API sayfasından kaydedin.");
+
+        return (keystring, sharedSecret);
     }
 
     private async Task<EtsyOAuthToken> SendTokenRequestAsync(HttpRequestMessage request, CancellationToken cancellationToken)
