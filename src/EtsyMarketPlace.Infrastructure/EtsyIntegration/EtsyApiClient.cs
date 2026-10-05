@@ -7,7 +7,7 @@ using Microsoft.Extensions.Options;
 
 namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
-public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions> options) : IEtsyDataClient
+public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions> options, IShopSettingsRepository settingsRepository) : IEtsyDataClient
 {
     private readonly EtsyApiOptions _options = options.Value;
 
@@ -31,6 +31,34 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     public Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
         GetPagedAsync("application/shops/{0}/payment-account/ledger-entries", shopId, startDate, endDate, ParseDashboardLedgerFee, cancellationToken);
 
+    /// <summary>
+    /// Etsy istekleri icin x-api-key degerini cozer: once magaza ayarlari (DPAPI sifreli kayit),
+    /// yoksa yapilandirma (appsettings) kullanilir. Token uclariyla ayni kalip (EtsyOAuthService.ResolveCredentialsAsync).
+    /// </summary>
+    private async Task<string> ResolveApiKeyHeaderAsync(string shopId, CancellationToken cancellationToken)
+    {
+        var keystring = string.Empty;
+        var sharedSecret = string.Empty;
+        try
+        {
+            var raw = await settingsRepository.GetRawEtsyAppCredentialsAsync(shopId, cancellationToken);
+            keystring = raw.Keystring;
+            sharedSecret = raw.SharedSecret;
+        }
+        catch
+        {
+            // Magaza ayarlari okunamazsa yapilandirmaya dusulur.
+        }
+
+        if (string.IsNullOrWhiteSpace(keystring)) keystring = _options.ApiKey;
+        if (string.IsNullOrWhiteSpace(sharedSecret)) sharedSecret = _options.SharedSecret;
+
+        if (string.IsNullOrWhiteSpace(keystring))
+            throw new InvalidOperationException("Etsy API keystring (Client ID) yapilandirilmamis. Lutfen Ayarlar > Etsy API sayfasindan kaydedin.");
+
+        return !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
+    }
+
     private async Task<IReadOnlyList<T>> GetPagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken)
         where T : class
     {
@@ -42,7 +70,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}?limit={limit}&offset={offset}&min_created={startDate.ToUnixTimeSeconds()}&max_created={endDate.ToUnixTimeSeconds()}";
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Add("X-Etsy-Shop-Id", shopId);
-            request.Headers.Add("x-api-key", $"{_options.ApiKey}:{_options.SharedSecret}");
+            request.Headers.Add("x-api-key", await ResolveApiKeyHeaderAsync(shopId, cancellationToken));
             using var response = await httpClient.SendAsync(request, cancellationToken);
             if (!response.IsSuccessStatusCode)
                 throw await CreateApiExceptionAsync(response, cancellationToken);
