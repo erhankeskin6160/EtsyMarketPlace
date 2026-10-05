@@ -336,18 +336,30 @@ app.MapGet("/api/etsy/shop/daily-brief", async (string shopId = "53236321", Date
 // Web panelindeki "Son Siparisler" akisi ve "Gunluk Gelir/Net Kar Trendi"
 // bolumlerini masaustu panelle ayni mantikla dogrudan canli Etsy API'den besler.
 
-static async Task<IReadOnlyList<EtsyDashboardLedgerFee>> SafeGetLedgerAsync(IEtsyDataClient client, string shopId, DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
+static async Task<(IReadOnlyList<EtsyDashboardLedgerFee> Entries, string? Error)> SafeGetLedgerAsync(IEtsyDataClient client, string shopId, DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
 {
-    // Odeme hesabi defteri (billing_r) erisilemezse dis reklam bilgisi olmadan devam edilir.
-    try
+    // Odeme hesabi defteri (billing_r) gecici olarak erisilemezse bir kez yeniden denenir;
+    // yine basarisiz olursa dis reklam kesintisi bilgisi olmadan devam edilir ve durum raporlanir.
+    for (var attempt = 1; attempt <= 2; attempt++)
     {
-        return await client.GetPaymentAccountLedgerEntriesAsync(shopId, start, end, ct);
+        try
+        {
+            var entries = await client.GetPaymentAccountLedgerEntriesAsync(shopId, start, end, ct);
+            return (entries, null);
+        }
+        catch (Exception ex)
+        {
+            if (attempt == 2)
+            {
+                Console.Error.WriteLine($"[dashboard] Odeme defteri okunamadi ({shopId}): {ex.Message}");
+                return (Array.Empty<EtsyDashboardLedgerFee>(), ex.Message);
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), ct);
+        }
     }
-    catch (Exception ex)
-    {
-        Console.Error.WriteLine($"[dashboard] Odeme defteri okunamadi ({shopId}): {ex.Message}");
-        return Array.Empty<EtsyDashboardLedgerFee>();
-    }
+
+    return (Array.Empty<EtsyDashboardLedgerFee>(), "bilinmeyen hata");
 }
 
 app.MapGet("/api/etsy/shop/recent-orders", async (string shopId = "53236321", int days = 31, int limit = 15, HttpContext context = null!, IConfiguration config = null!, IEtsyDataClient etsyClient = null!, IEtsyIntegrationRepository repository = null!, CancellationToken cancellationToken = default) =>
@@ -364,9 +376,9 @@ app.MapGet("/api/etsy/shop/recent-orders", async (string shopId = "53236321", in
         var end = DateTimeOffset.UtcNow;
         var start = end.AddDays(-clampedDays);
         var receipts = await etsyClient.GetShopReceiptsAsync(resolvedShopId, start, end, cancellationToken);
-        var ledger = await SafeGetLedgerAsync(etsyClient, resolvedShopId, start, end, cancellationToken);
+        var (ledgerEntries, ledgerError) = await SafeGetLedgerAsync(etsyClient, resolvedShopId, start, end, cancellationToken);
         var costs = await repository.GetOrderCostsAsync(resolvedShopId, cancellationToken);
-        var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledger, costs);
+        var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledgerEntries, costs);
 
         var payload = new
         {
@@ -380,7 +392,9 @@ app.MapGet("/api/etsy/shop/recent-orders", async (string shopId = "53236321", in
                 netProfitUsd = r.NetProfitUsd,
                 hasCost = r.HasCostData
             }).ToList(),
-            count = rows.Count
+            count = rows.Count,
+            ledgerOk = ledgerError is null,
+            ledgerWarning = ledgerError
         };
 
         DashboardResponseCache.Set(cacheKey, payload, TimeSpan.FromSeconds(90));
@@ -434,9 +448,9 @@ app.MapGet("/api/etsy/financial/daily-series", async (string shopId = "53236321"
         }
 
         var receipts = await etsyClient.GetShopReceiptsAsync(resolvedShopId, monthStart, fetchEnd, cancellationToken);
-        var ledger = await SafeGetLedgerAsync(etsyClient, resolvedShopId, monthStart, fetchEnd, cancellationToken);
+        var (ledgerEntries, ledgerError) = await SafeGetLedgerAsync(etsyClient, resolvedShopId, monthStart, fetchEnd, cancellationToken);
         var costs = await repository.GetOrderCostsAsync(resolvedShopId, cancellationToken);
-        var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledger, costs);
+        var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledgerEntries, costs);
         var series = EtsyLiveDashboardCalculator.BuildDailySeries(rows, targetYear, targetMonth, nowUtc);
         var topProduct = EtsyLiveDashboardCalculator.PickTopProduct(rows);
 
@@ -448,7 +462,9 @@ app.MapGet("/api/etsy/financial/daily-series", async (string shopId = "53236321"
             netProfit = series.NetProfit,
             topProductTitle = topProduct.Title,
             topProductRevenueUsd = topProduct.Revenue,
-            orderCount = rows.Count
+            orderCount = rows.Count,
+            ledgerOk = ledgerError is null,
+            ledgerWarning = ledgerError
         };
 
         DashboardResponseCache.Set(cacheKey, payload, TimeSpan.FromSeconds(90));
