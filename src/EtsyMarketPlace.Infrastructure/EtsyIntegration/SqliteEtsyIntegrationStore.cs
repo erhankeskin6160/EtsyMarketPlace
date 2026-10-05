@@ -392,7 +392,10 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                 VALUES($shopId, $orderId, $createdAt, $currency, $total, $product, $shipping, $reason)
                 ON CONFLICT(shop_id, order_id) DO UPDATE SET
                     created_at=excluded.created_at, currency=excluded.currency, order_total=excluded.order_total,
-                    product_cost=excluded.product_cost, shipping_cost=excluded.shipping_cost, alert_reason=excluded.alert_reason;
+                    -- Null gelen maliyet, mevcut dolu degeri EZMEZ (kostuk guncellemesi farkli kaynaklardan gelebilir).
+                    product_cost=COALESCE(excluded.product_cost, order_costs.product_cost),
+                    shipping_cost=COALESCE(excluded.shipping_cost, order_costs.shipping_cost),
+                    alert_reason=excluded.alert_reason;
                 """;
             command.Parameters.AddWithValue("$shopId", item.ShopId);
             command.Parameters.AddWithValue("$orderId", item.OrderId);

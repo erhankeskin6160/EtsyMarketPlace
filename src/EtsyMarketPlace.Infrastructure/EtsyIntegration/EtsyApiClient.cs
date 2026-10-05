@@ -96,7 +96,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     {
         var reference = StringValue(item, "entry_id", "ledger_entry_id", "id");
         if (string.IsNullOrWhiteSpace(reference)) return null;
-        return new EtsyBankPayout(shopId, reference, DateValue(item, "create_date", "created_timestamp", "created", "date"), LedgerAmountCentsToUsd(item), StringValue(item, "currency", "currency_code") ?? "USD", DecimalNullable(item, "exchange_rate"), StringValue(item, "status") ?? "completed", StringValue(item, "description") ?? "Etsy payout");
+        return new EtsyBankPayout(shopId, reference, DateValue(item, "create_date", "created_timestamp", "created", "date"), LedgerAmountToUsd(item), StringValue(item, "currency", "currency_code") ?? "USD", DecimalNullable(item, "exchange_rate"), StringValue(item, "status") ?? "completed", StringValue(item, "description") ?? "Etsy payout");
     }
 
     private static EtsyFinancialTransaction? ParseTransaction(JsonElement item, string shopId)
@@ -186,15 +186,37 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             kind,
             referenceId,
             description,
-            LedgerAmountCentsToUsd(item));
+            LedgerAmountToUsd(item));
     }
 
-    /// <summary>Etsy odeme hesabi defter tutarlari cent cinsinden tam sayi gelir (or. -547 => -5.47 USD).</summary>
-    private static decimal LedgerAmountCentsToUsd(JsonElement item)
+    /// <summary>
+    /// Etsy odeme hesabi defter tutarlarini USD'ye cevirir: tutarlar cent cinsinden tam sayidir (or. -547 => -5.47);
+    /// TRY tutarlar masaustu gibi gunun tarihsel kuru ile bolunur, EUR x1.1 ve GBP x1.3 ile yaklasiklanir.
+    /// </summary>
+    private static decimal LedgerAmountToUsd(JsonElement item)
     {
-        if (item.TryGetProperty("amount", out var amount) && amount.ValueKind == JsonValueKind.Number && amount.TryGetDecimal(out var cents))
-            return cents / 100m;
-        return 0m;
+        if (!item.TryGetProperty("amount", out var amount) || amount.ValueKind != JsonValueKind.Number || !amount.TryGetDecimal(out var raw))
+            return 0m;
+
+        var value = raw / 100m;
+        var currency = (StringValue(item, "currency", "currency_code") ?? "USD").ToUpperInvariant();
+
+        if (currency is "TRY" or "TL")
+        {
+            var entryDate = DateValue(item, "create_date", "created_timestamp");
+            var rate = HistoricalExchangeRateProvider.GetRateForDate(entryDate.UtcDateTime, 48.25m);
+            if (rate > 0) value /= rate;
+        }
+        else if (currency == "EUR")
+        {
+            value *= 1.1m;
+        }
+        else if (currency == "GBP")
+        {
+            value *= 1.3m;
+        }
+
+        return value;
     }
 
     private static string? StringValue(JsonElement element, params string[] names)
