@@ -18,6 +18,12 @@ public interface IEtsyDataClient
     Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EtsyFinancialTransaction>> GetFinancialTransactionsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken cancellationToken = default);
+
+    /// <summary>Web kontrol paneli: magaza fislerini (siparisleri) canli Etsy API'den ceker.</summary>
+    Task<IReadOnlyList<EtsyDashboardReceipt>> GetShopReceiptsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
+
+    /// <summary>Web kontrol paneli: odeme hesabi defter kayitlarini (dis reklam kesintileri eslesmesi icin) ceker.</summary>
+    Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
 }
 
 public interface IEtsyFinancialReportService
