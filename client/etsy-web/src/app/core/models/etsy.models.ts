@@ -9,14 +9,17 @@ export interface FinancialSummary {
 }
 
 export interface DailyBrief {
-  shopId: string;
-  shopName: string;
-  todayOrders: number;
-  todayGrossSalesUSD: number;
-  todayGrossSalesTRY: number;
-  todayNetProfitTRY: number;
-  exchangeRateUsed: number;
-  lastSyncAt: string;
+  date: string;
+  healthScore: number;
+  healthStatus: string;
+  pendingShipments: number;
+  dailyGrossSales: number;
+  dailyNetProfit: number;
+  bankPayouts: number;
+  unfulfilledCostAlertCount: number;
+  dailyGrossSalesTRY?: number | null;
+  dailyNetProfitTRY?: number | null;
+  exchangeRateUsed?: number | null;
 }
 
 export interface BankDeposit {

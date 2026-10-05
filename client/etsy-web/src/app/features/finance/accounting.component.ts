@@ -496,7 +496,7 @@ import {
                   <td class="text-warning">-{{ (financialPerformance.productCosts + financialPerformance.shippingCosts) * liveRate | currency:'TRY' }}</td>
                   <td class="text-primary">{{ (financialPerformance.grossSales - financialPerformance.platformFees - financialPerformance.internalAdsCost - financialPerformance.externalAdsCost - financialPerformance.refunds) * liveRate | currency:'TRY' }}</td>
                   <td class="text-emerald"><strong>{{ financialPerformance.netProfit * liveRate | currency:'TRY' }}</strong></td>
-                  <td><span class="margin-pill">{{ financialPerformance.netProfitMargin | percent:'1.0-1' }}</span></td>
+                  <td><span class="margin-pill">{{ financialPerformance.netProfitMargin / 100 | percent:'1.0-1' }}</span></td>
                 </tr>
                 <tr *ngIf="!financialPerformance"><td colspan="9" class="empty-table-cell">API’den dönemsel finans verisi gelmedi.</td></tr>
               </tbody>
@@ -835,7 +835,7 @@ import {
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Gerçek Net Kâr</span>
                 <span class="box-val text-emerald">{{ financialPerformance ? formatKpi(realNetProfitTry, realNetProfitUsd) : '—' }}</span>
-                <span class="box-sub">{{ financialPerformance ? (financialPerformance.netProfitMargin | percent:'1.0-1') + ' net kâr marjı' : 'Veri yok' }}</span>
+                <span class="box-sub">{{ financialPerformance ? (financialPerformance.netProfitMargin / 100 | percent:'1.0-1') + ' net kâr marjı' : 'Veri yok' }}</span>
               </div>
             </div>
 
@@ -2258,6 +2258,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.liveRate = this.etsyApi.exchangeRate() || 49.12;
 
     this.onPresetChange(false);
+    this.loadFinancialData();
   }
 
   ngOnDestroy(): void {
@@ -2356,8 +2357,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
     }
     this.startDate = this.toDateInputValue(start);
     this.endDate = this.toDateInputValue(end);
-    if (reload) this.loadFinancialData();
-    this.showToast(`📅 Dönem güncellendi: ${this.startDate} — ${this.endDate}`);
+    if (reload) {
+      this.loadFinancialData();
+      this.showToast(`📅 Dönem güncellendi: ${this.startDate} — ${this.endDate}`);
+    }
   }
 
   private getSelectedDateRange(): { start: Date; end: Date } {

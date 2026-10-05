@@ -16,7 +16,7 @@ public sealed class EtsyAccessTokenHandler(IEtsyTokenStore tokenStore, IEtsyOAut
         var token = await tokenStore.GetAsync(shopId, cancellationToken) ?? throw new InvalidOperationException("Mağaza için Etsy OAuth token bulunamadı.");
         if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
         {
-            token = await oauthService.RefreshTokenAsync(token.RefreshToken, cancellationToken);
+            token = await oauthService.RefreshTokenAsync(shopId, token.RefreshToken, cancellationToken);
             await tokenStore.SaveAsync(shopId, token, cancellationToken);
         }
         request.Headers.Authorization = new AuthenticationHeaderValue(token.TokenType, token.AccessToken);

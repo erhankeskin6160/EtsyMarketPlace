@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { FinancialPerformanceDto } from '../../core/services/etsy-api.service';
+import { DailyBrief } from '../../core/models/etsy.models';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
@@ -31,7 +32,7 @@ Chart.register(...registerables);
         <div class="glass-card kpi-card">
           <div class="kpi-header">
             <span class="kpi-label">💰 GERÇEK NET KÂR</span>
-            <span class="kpi-tag text-cyan">{{ financialPerformance ? (financialPerformance.netProfitMargin | percent:'1.0-1') : 'Veri yok' }}</span>
+            <span class="kpi-tag text-cyan">{{ financialPerformance ? (financialPerformance.netProfitMargin / 100 | percent:'1.0-1') : 'Veri yok' }}</span>
           </div>
           <div class="kpi-value text-cyan">
             <ng-container *ngIf="financialPerformance; else noFinanceValue">&#36;{{ netProfitUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
@@ -41,11 +42,11 @@ Chart.register(...registerables);
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">📦 TOPLAM SİPARİŞ</span>
-            <span class="kpi-tag text-purple">{{ dailyBrief ? 'Bugün' : 'Veri yok' }}</span>
+            <span class="kpi-label">📦 AÇIK SİPARİŞ</span>
+            <span class="kpi-tag text-purple">{{ dailyBrief ? 'Güncel' : 'Veri yok' }}</span>
           </div>
-          <div class="kpi-value text-purple">{{ dailyBrief ? (dailyBrief.todayOrders + ' Sipariş') : '—' }}</div>
-          <div class="kpi-sub">Bugünün API özeti</div>
+          <div class="kpi-value text-purple">{{ dailyBrief ? (dailyBrief.unfulfilledCostAlertCount + ' adet') : '—' }}</div>
+          <div class="kpi-sub">Kargo / maliyet bekleyen siparişler</div>
         </div>
 
         <div class="glass-card kpi-card">
@@ -53,8 +54,8 @@ Chart.register(...registerables);
             <span class="kpi-label">🏷️ AKTİF İLAN SAYISI</span>
             <span class="kpi-tag text-orange">Portföy</span>
           </div>
-          <div class="kpi-value text-orange">—</div>
-          <div class="kpi-sub">Aktif ilan sayısı API tarafından sunulmuyor.</div>
+          <div class="kpi-value text-orange">{{ activeListingsText }}</div>
+          <div class="kpi-sub">{{ activeListingsNote }}</div>
         </div>
 
         <div class="glass-card kpi-card kpi-card-expenses"
@@ -76,10 +77,10 @@ Chart.register(...registerables);
             </div>
           </div>
           <div class="kpi-value text-danger">
-            <ng-container *ngIf="financialPerformance; else noFinanceValue">-&#36;{{ etsyFeesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.0-0' }})</span></ng-container>
+            <ng-container *ngIf="financialPerformance; else noFinanceValue">-&#36;{{ etsyDeductionsUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ (etsyDeductionsUsd * apiService.exchangeRate()) | number:'1.0-0' }})</span></ng-container>
           </div>
           <div class="kpi-sub">
-            Reklam ve komisyon toplamı (API)
+            Reklam: &#36;{{ adsTotalUsd | number:'1.2-2' }} • Komisyon: &#36;{{ etsyFeesUsd | number:'1.2-2' }}
             <span class="kpi-hint-text">💡 (Detay için durun)</span>
           </div>
 
@@ -97,7 +98,7 @@ Chart.register(...registerables);
                 <div>
                   <h4 class="popover-title">Etsy Kesintileri & Reklam Harcamaları Analizi</h4>
                   <span class="popover-subtitle">
-                    Toplam platform kesintisi: -₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.2-2' }} (-&#36;{{ etsyFeesUsd | number:'1.2-2' }})
+                    Toplam kesinti & reklam: -₺{{ (etsyDeductionsUsd * apiService.exchangeRate()) | number:'1.2-2' }} (-&#36;{{ etsyDeductionsUsd | number:'1.2-2' }})
                   </span>
                 </div>
               </div>
@@ -108,13 +109,13 @@ Chart.register(...registerables);
             <div class="popover-kpi-row">
               <div class="mini-kpi-card red">
                 <span class="mini-kpi-label">📢 İç Reklam (Etsy Ads)</span>
-                <span class="mini-kpi-try">API verisi yok</span>
-                <span class="mini-kpi-usd">İç reklam maliyeti sunulmuyor</span>
+                <span class="mini-kpi-try">&#36;{{ internalAdsUsd | number:'1.2-2' }}</span>
+                <span class="mini-kpi-usd">₺{{ (internalAdsUsd * apiService.exchangeRate()) | number:'1.2-2' }}</span>
               </div>
               <div class="mini-kpi-card orange">
                 <span class="mini-kpi-label">🌐 Dış Reklam (Offsite)</span>
-                <span class="mini-kpi-try">API verisi yok</span>
-                <span class="mini-kpi-usd">Dış reklam maliyeti sunulmuyor</span>
+                <span class="mini-kpi-try">&#36;{{ externalAdsUsd | number:'1.2-2' }}</span>
+                <span class="mini-kpi-usd">₺{{ (externalAdsUsd * apiService.exchangeRate()) | number:'1.2-2' }}</span>
               </div>
               <div class="mini-kpi-card purple">
                 <span class="mini-kpi-label">📋 Etsy Komisyon & Harç</span>
@@ -208,7 +209,7 @@ Chart.register(...registerables);
           <div class="card-header-flex">
             <div>
               <h3 class="section-title">📦 Son Siparişler Canlı Satış Akışı</h3>
-              <span class="section-sub">{{ dailyBrief?.todayOrders ?? '—' }} günlük sipariş (özet)</span>
+              <span class="section-sub">{{ dailyBrief?.unfulfilledCostAlertCount ?? '—' }} açık sipariş (özet)</span>
             </div>
             <a routerLink="/orders" class="link-view-all">Sipariş modülüne git →</a>
           </div>
@@ -261,7 +262,7 @@ Chart.register(...registerables);
             <div class="insight-item">
               <span class="insight-label text-cyan">📢 Reklam / Komisyon Durumu</span>
               <p class="insight-body">
-                <ng-container *ngIf="financialPerformance; else noFinanceInsight">Net kâr marjı <b>{{ financialPerformance.netProfitMargin | percent:'1.0-1' }}</b>. Platform ücretleri: <b>&#36;{{ financialPerformance.platformFees | number:'1.2-2' }}</b>.</ng-container>
+                <ng-container *ngIf="financialPerformance; else noFinanceInsight">Net kâr marjı <b>{{ financialPerformance.netProfitMargin / 100 | percent:'1.0-1' }}</b>. Platform ücretleri: <b>&#36;{{ financialPerformance.platformFees | number:'1.2-2' }}</b>.</ng-container>
               </p>
             </div>
 
@@ -290,8 +291,8 @@ Chart.register(...registerables);
         </div>
         <div class="chart-wrapper">
           <div *ngIf="!financialPerformance" class="chart-empty">Finans verisi yüklenemedi veya henüz bulunmuyor.</div>
-          <canvas #trendChart *ngIf="financialPerformance"></canvas>
-          <div *ngIf="!financialPerformance" class="chart-empty">Finans verisi yüklenemedi veya henüz bulunmuyor.</div>
+          <div *ngIf="financialPerformance && !hasTrendSeries" class="chart-empty">Günlük gelir/kâr serisi için API uç noktası henüz eklenmedi.</div>
+          <canvas #trendChart *ngIf="financialPerformance && hasTrendSeries"></canvas>
         </div>
       </section>
     </div>
@@ -563,6 +564,7 @@ Chart.register(...registerables);
     .badge-fee { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
     .badge-refund { background: rgba(234, 179, 8, 0.2); color: #fde047; }
     .badge-total { background: #ef4444; color: #ffffff; }
+    .badge-cost { background: rgba(34, 211, 238, 0.18); color: #67e8f9; }
 
     .name-cell { font-weight: 600; color: #f1f5f9; }
     .rate-cell { color: #94a3b8; }
@@ -841,14 +843,22 @@ Chart.register(...registerables);
 export class DashboardComponent implements OnInit, OnDestroy {
   apiService = inject(EtsyApiService);
 
-  @ViewChild('trendChart', { static: true }) chartCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('trendChart') chartCanvas?: ElementRef<HTMLCanvasElement>;
   chartInstance?: Chart;
+  private chartInitTimer: any = null;
+  readonly hasTrendSeries = false; // Günlük zaman serisi API uç noktası eklenene kadar grafik iskeleti boş kalır
 
   financialPerformance: FinancialPerformanceDto | null = null;
-  dailyBrief: { todayOrders: number; todayGrossSalesUSD: number; todayNetProfitTRY: number } | null = null;
+  dailyBrief: DailyBrief | null = null;
   grossSalesUsd = 0;
   netProfitUsd = 0;
   etsyFeesUsd = 0;
+  internalAdsUsd = 0;
+  externalAdsUsd = 0;
+  etsyDeductionsUsd = 0;
+  adsTotalUsd = 0;
+  activeListingsText = '—';
+  activeListingsNote = 'Etsy portföyü yükleniyor...';
 
   // EXPENSES HOVER TOOLTIP POPOVER
   isHoveringExpenses = false;
@@ -860,7 +870,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
   liveOrders: Array<{date: string; receiptId: string; title: string; quantity: number; totalUsd: number; netProfitUsd: number}> = [];
 
   ngOnInit(): void {
-    this.initChart();
     this.loadLiveKpis();
   }
 
@@ -871,12 +880,23 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.grossSalesUsd = perf.grossSales;
         this.netProfitUsd = perf.netProfit;
         this.etsyFeesUsd = perf.platformFees;
+        this.internalAdsUsd = perf.internalAdsCost ?? 0;
+        this.externalAdsUsd = perf.externalAdsCost ?? 0;
+        this.adsTotalUsd = this.internalAdsUsd + this.externalAdsUsd;
+        this.etsyDeductionsUsd = this.etsyFeesUsd + this.adsTotalUsd;
+        this.buildExpensesBreakdown(perf);
+        this.tryInitChart();
       },
       error: () => {
         this.financialPerformance = null;
         this.grossSalesUsd = 0;
         this.netProfitUsd = 0;
         this.etsyFeesUsd = 0;
+        this.internalAdsUsd = 0;
+        this.externalAdsUsd = 0;
+        this.adsTotalUsd = 0;
+        this.etsyDeductionsUsd = 0;
+        this.expensesBreakdown = [];
       }
     });
 
@@ -888,66 +908,102 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.dailyBrief = null;
       }
     });
+
+    this.apiService.getShopActiveListings(undefined, 100).subscribe({
+      next: (items) => {
+        const count = items?.length ?? 0;
+        this.activeListingsText = count >= 100 ? '100+ Aktif İlan' : `${count} Aktif İlan`;
+        this.activeListingsNote = 'Canlı Etsy portföyü';
+      },
+      error: () => {
+        this.activeListingsText = '—';
+        this.activeListingsNote = 'Etsy bağlantısı gerekli (token yenileyin)';
+      }
+    });
   }
 
-  initChart(): void {
-    const ctx = this.chartCanvas.nativeElement.getContext('2d');
-    if (!ctx) return;
+  private buildExpensesBreakdown(perf: FinancialPerformanceDto): void {
+    const rate = this.apiService.exchangeRate() || 49.12;
+    const gross = perf.grossSales || 0;
+    const pct = (value: number) => gross > 0 ? `%${((value / gross) * 100).toFixed(1)} (ciroya oran)` : '—';
+    const money = (value: number) => `-$${value.toFixed(2)} (-₺${(value * rate).toFixed(2)})`;
 
-    const days: string[] = [];
-    const revenueData: number[] = [];
-    const profitData: number[] = [];
+    const rows = [
+      { type: 'KOMİSYON', typeClass: 'badge-fee', name: 'Etsy Komisyon & İşlem Ücretleri', rate: pct(perf.platformFees), amountText: money(perf.platformFees), desc: 'Platform komisyonu, ödeme işlem ve listeleme ücretleri', isTotal: false },
+      { type: 'REKLAM', typeClass: 'badge-ad', name: 'Etsy Ads (İç Reklam)', rate: pct(perf.internalAdsCost), amountText: money(perf.internalAdsCost), desc: 'Mağaza içi arama reklamı harcaması', isTotal: false },
+      { type: 'REKLAM', typeClass: 'badge-ad', name: 'Offsite Ads (Dış Reklam)', rate: pct(perf.externalAdsCost), amountText: money(perf.externalAdsCost), desc: 'Etsy dışı pazarlama reklam harcaması', isTotal: false },
+      { type: 'MALİYET', typeClass: 'badge-cost', name: 'Ürün Maliyeti', rate: pct(perf.productCosts), amountText: money(perf.productCosts), desc: 'Sipariş bazında girilen ürün maliyetleri', isTotal: false },
+      { type: 'MALİYET', typeClass: 'badge-cost', name: 'Kargo Maliyeti', rate: pct(perf.shippingCosts), amountText: money(perf.shippingCosts), desc: 'Gönderi / kargo maliyetleri', isTotal: false },
+      { type: 'İADE', typeClass: 'badge-refund', name: 'İade & Geri Ödemeler', rate: pct(perf.refunds), amountText: money(perf.refunds), desc: 'Müşterilere yapılan iade ve geri ödemeler', isTotal: false }
+    ];
+    const total = perf.platformFees + perf.internalAdsCost + perf.externalAdsCost + perf.productCosts + perf.shippingCosts + perf.refunds;
+    rows.push({ type: 'TOPLAM', typeClass: 'badge-total', name: 'Genel Toplam Gider & Kesinti', rate: pct(total), amountText: money(total), desc: 'Kesinti, reklam, maliyet ve iade toplamı', isTotal: true });
+    this.expensesBreakdown = rows;
+  }
 
-    this.chartInstance = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: days,
-        datasets: [
-          {
-            label: 'Brüt Satış ($)',
-            data: revenueData,
-            borderColor: '#3b82f6',
-            backgroundColor: 'rgba(59, 130, 246, 0.15)',
-            fill: false,
-            tension: 0.1,
-            borderWidth: 2,
-            pointRadius: 6,
-            pointBackgroundColor: '#3b82f6'
-          },
-          {
-            label: 'Net Kâr ($)',
-            data: profitData,
-            borderColor: '#f97316',
-            backgroundColor: 'rgba(249, 115, 22, 0.15)',
-            fill: false,
-            tension: 0.1,
-            borderWidth: 2,
-            pointRadius: 6,
-            pointBackgroundColor: '#f97316'
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false }
-        },
-        scales: {
-          x: {
-            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-            ticks: { color: '#94a3b8' }
-          },
-          y: {
-            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-            ticks: {
-              color: '#94a3b8',
-              callback: (v) => '$' + v
+  private tryInitChart(): void {
+    if (!this.hasTrendSeries || this.chartInstance) return;
+    // Canvas *ngIf ile görünür hale geldiği için DOM güncellendikten sonra başlatılır.
+    this.chartInitTimer = setTimeout(() => {
+      const canvas = this.chartCanvas?.nativeElement;
+      const ctx = canvas?.getContext('2d');
+      if (!ctx) return;
+
+      const days: string[] = [];
+      const revenueData: number[] = [];
+      const profitData: number[] = [];
+
+      this.chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: days,
+          datasets: [
+            {
+              label: 'Brüt Satış ($)',
+              data: revenueData,
+              borderColor: '#3b82f6',
+              backgroundColor: 'rgba(59, 130, 246, 0.15)',
+              fill: false,
+              tension: 0.1,
+              borderWidth: 2,
+              pointRadius: 6,
+              pointBackgroundColor: '#3b82f6'
             },
-            min: 0
+            {
+              label: 'Net Kâr ($)',
+              data: profitData,
+              borderColor: '#f97316',
+              backgroundColor: 'rgba(249, 115, 22, 0.15)',
+              fill: false,
+              tension: 0.1,
+              borderWidth: 2,
+              pointRadius: 6,
+              pointBackgroundColor: '#f97316'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: { color: '#94a3b8' }
+            },
+            y: {
+              grid: { color: 'rgba(255, 255, 255, 0.05)' },
+              ticks: {
+                color: '#94a3b8',
+                callback: (v) => '$' + v
+              },
+              min: 0
+            }
           }
         }
-      }
+      });
     });
   }
 
@@ -1009,6 +1065,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     if (this.hoverTimer) clearTimeout(this.hoverTimer);
     if (this.leaveTimer) clearTimeout(this.leaveTimer);
+    if (this.chartInitTimer) clearTimeout(this.chartInitTimer);
     if (this.chartInstance) this.chartInstance.destroy();
   }
 }
