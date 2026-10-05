@@ -94,9 +94,9 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
 
     private static EtsyBankPayout? ParsePayout(JsonElement item, string shopId)
     {
-        var reference = StringValue(item, "ledger_entry_id", "id");
+        var reference = StringValue(item, "entry_id", "ledger_entry_id", "id");
         if (string.IsNullOrWhiteSpace(reference)) return null;
-        return new EtsyBankPayout(shopId, reference, DateValue(item, "created", "date"), DecimalValue(item, "amount", "amount_money"), StringValue(item, "currency", "currency_code") ?? "USD", DecimalNullable(item, "exchange_rate"), StringValue(item, "status") ?? "completed", StringValue(item, "description") ?? "Etsy payout");
+        return new EtsyBankPayout(shopId, reference, DateValue(item, "create_date", "created_timestamp", "created", "date"), LedgerAmountCentsToUsd(item), StringValue(item, "currency", "currency_code") ?? "USD", DecimalNullable(item, "exchange_rate"), StringValue(item, "status") ?? "completed", StringValue(item, "description") ?? "Etsy payout");
     }
 
     private static EtsyFinancialTransaction? ParseTransaction(JsonElement item, string shopId)
@@ -161,18 +161,40 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
 
     private static EtsyDashboardLedgerFee? ParseDashboardLedgerFee(JsonElement item, string shopId)
     {
-        var type = StringValue(item, "ledger_type", "type");
-        if (string.IsNullOrWhiteSpace(type)) return null;
+        var rawType = (StringValue(item, "ledger_type", "type") ?? string.Empty).ToLowerInvariant();
+        var rawReferenceType = (StringValue(item, "reference_type") ?? string.Empty).ToLowerInvariant();
+        var description = StringValue(item, "description") ?? string.Empty;
+        var lowerDescription = description.ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(rawType) && string.IsNullOrWhiteSpace(description)) return null;
 
         var referenceId = 0L;
-        if (item.TryGetProperty("reference_id", out var referenceProperty) && referenceProperty.ValueKind == JsonValueKind.Number)
-            referenceProperty.TryGetInt64(out referenceId);
+        if (item.TryGetProperty("reference_id", out var referenceProperty))
+        {
+            if (referenceProperty.ValueKind == JsonValueKind.Number)
+                referenceProperty.TryGetInt64(out referenceId);
+            else if (referenceProperty.ValueKind == JsonValueKind.String)
+                long.TryParse(referenceProperty.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out referenceId);
+        }
+
+        // Masaustu MapEntry ile ayni siniflandirma: tur alanlarindan veya aciklamadan "offsite" gecen kayitlar dis reklam kesintisidir.
+        var kind = rawType.Contains("offsite") || rawReferenceType.Contains("offsite") || lowerDescription.Contains("offsite")
+            ? "offsite_ads"
+            : rawType;
 
         return new EtsyDashboardLedgerFee(
-            type.ToLowerInvariant(),
+            kind,
             referenceId,
-            StringValue(item, "description"),
-            MoneyValue(item, "amount"));
+            description,
+            LedgerAmountCentsToUsd(item));
+    }
+
+    /// <summary>Etsy odeme hesabi defter tutarlari cent cinsinden tam sayi gelir (or. -547 => -5.47 USD).</summary>
+    private static decimal LedgerAmountCentsToUsd(JsonElement item)
+    {
+        if (item.TryGetProperty("amount", out var amount) && amount.ValueKind == JsonValueKind.Number && amount.TryGetDecimal(out var cents))
+            return cents / 100m;
+        return 0m;
     }
 
     private static string? StringValue(JsonElement element, params string[] names)
