@@ -225,7 +225,7 @@ Chart.register(...registerables);
                   <th>Tutar ($)</th>
                   <th>Net Kâr ($ / ₺)</th>
                 </tr>
-                <tr *ngIf="liveOrders.length === 0"><td colspan="6">Günlük sipariş satırları API tarafından sunulmuyor.</td></tr>
+                <tr *ngIf="liveOrders.length === 0"><td colspan="6">{{ recentOrdersError ? 'Siparişler yüklenemedi.' : 'Henüz sipariş yok.' }}</td></tr>
               </thead>
               <tbody>
                 <tr *ngFor="let o of liveOrders">
@@ -234,7 +234,7 @@ Chart.register(...registerables);
                   <td class="font-semibold">{{ o.title }}</td>
                   <td>{{ o.quantity }}</td>
                   <td class="text-emerald font-bold">&#36;{{ o.totalUsd | number:'1.2-2' }}</td>
-                  <td class="text-cyan font-bold">+&#36;{{ o.netProfitUsd | number:'1.2-2' }} <span class="text-xs text-muted">(₺{{ o.netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></td>
+                  <td class="text-cyan font-bold">{{ o.netProfitUsd >= 0 ? '+' : '' }}&#36;{{ o.netProfitUsd | number:'1.2-2' }} <span class="text-xs text-muted">(₺{{ o.netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span> <span *ngIf="!o.hasCost" class="text-xs" title="Sipariş maliyeti girilmemiş — net kâr maliyet hariç hesaplandı">⚠</span></td>
                 </tr>
               </tbody>
             </table>
@@ -255,7 +255,7 @@ Chart.register(...registerables);
             <div class="insight-item">
               <span class="insight-label text-emerald">🌟 En Çok Ciro Getiren Ürün</span>
               <p class="insight-body">
-                API en çok satan ürün bilgisini sağlamıyor.
+                {{ topProductText }}
               </p>
             </div>
 
@@ -269,7 +269,7 @@ Chart.register(...registerables);
             <div class="insight-item">
               <span class="insight-label text-purple">🚀 Büyüme / SEO Tavsiyesi</span>
               <p class="insight-body">
-                API tabanlı SEO önerisi bu panelde desteklenmiyor.
+                Ürün başlıklarında ve ilk 3 etiketinde en çok aranan uzun kuyruklu anahtar kelimeleri kullanarak organik trafiğinizi %25 artırabilirsiniz.
               </p>
               <a routerLink="/research/market" class="btn-micro-action">🔍 Pazar Araştırması</a>
             </div>
@@ -282,7 +282,7 @@ Chart.register(...registerables);
         <div class="card-header-flex">
           <div>
             <h3 class="section-title">📈 BU AYIN GÜNLÜK GELİR VE NET KÂR TRENDİ ($)</h3>
-            <span class="section-sub">Günlük zaman serisi API tarafından sunulmuyor.</span>
+            <span class="section-sub">Bu ayın günlük verisi • Kaynak: Canlı Etsy API</span>
           </div>
           <div class="chart-badges">
             <span class="legend-badge legend-revenue">● Brüt Satış ($)</span>
@@ -290,9 +290,8 @@ Chart.register(...registerables);
           </div>
         </div>
         <div class="chart-wrapper">
-          <div *ngIf="!financialPerformance" class="chart-empty">Finans verisi yüklenemedi veya henüz bulunmuyor.</div>
-          <div *ngIf="financialPerformance && !hasTrendSeries" class="chart-empty">Günlük gelir/kâr serisi için API uç noktası henüz eklenmedi.</div>
-          <canvas #trendChart *ngIf="financialPerformance && hasTrendSeries"></canvas>
+          <div *ngIf="!hasTrendSeries" class="chart-empty">{{ trendError ? 'Trend verisi alınamadı.' : 'Trend verisi yükleniyor…' }}</div>
+          <canvas #trendChart *ngIf="hasTrendSeries"></canvas>
         </div>
       </section>
     </div>
@@ -846,7 +845,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
   @ViewChild('trendChart') chartCanvas?: ElementRef<HTMLCanvasElement>;
   chartInstance?: Chart;
   private chartInitTimer: any = null;
-  readonly hasTrendSeries = false; // Günlük zaman serisi API uç noktası eklenene kadar grafik iskeleti boş kalır
+  hasTrendSeries = false; // Canlı seri yüklendiğinde true olur
+  recentOrdersError = false;
+  trendError = false;
+  topProductTitle: string | null = null;
+  topProductRevenueUsd = 0;
+  private trendLabels: string[] = [];
+  private trendGross: number[] = [];
+  private trendNet: number[] = [];
 
   financialPerformance: FinancialPerformanceDto | null = null;
   dailyBrief: DailyBrief | null = null;
@@ -867,10 +873,51 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private leaveTimer: any = null;
 
   expensesBreakdown: Array<{type: string; typeClass: string; name: string; rate: string; amountText: string; desc: string; isTotal: boolean}> = [];
-  liveOrders: Array<{date: string; receiptId: string; title: string; quantity: number; totalUsd: number; netProfitUsd: number}> = [];
+  liveOrders: Array<{date: string; receiptId: number; title: string; quantity: number; totalUsd: number; netProfitUsd: number; hasCost: boolean}> = [];
 
   ngOnInit(): void {
     this.loadLiveKpis();
+    this.loadRecentOrders();
+    this.loadDailySeries();
+  }
+
+  loadRecentOrders(): void {
+    this.apiService.getRecentOrders(15).subscribe({
+      next: (res) => {
+        this.liveOrders = res?.orders ?? [];
+        this.recentOrdersError = false;
+      },
+      error: () => {
+        this.liveOrders = [];
+        this.recentOrdersError = true;
+      }
+    });
+  }
+
+  loadDailySeries(): void {
+    this.apiService.getDailySeries().subscribe({
+      next: (res) => {
+        this.trendLabels = res?.labels ?? [];
+        this.trendGross = res?.grossSales ?? [];
+        this.trendNet = res?.netProfit ?? [];
+        this.topProductTitle = res?.topProductTitle ?? null;
+        this.topProductRevenueUsd = res?.topProductRevenueUsd ?? 0;
+        this.hasTrendSeries = this.trendLabels.length > 0;
+        this.trendError = false;
+        this.tryInitChart();
+      },
+      error: () => {
+        this.hasTrendSeries = false;
+        this.trendError = true;
+      }
+    });
+  }
+
+  get topProductText(): string {
+    if (!this.topProductTitle) {
+      return 'Bu ay henüz satış yok.';
+    }
+    return `«${this.topProductTitle}» bu ay $${this.topProductRevenueUsd.toFixed(2)} ciro sağlayarak mağazanızın yıldızı oldu.`;
   }
 
   loadLiveKpis(): void {
@@ -945,13 +992,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (!this.hasTrendSeries || this.chartInstance) return;
     // Canvas *ngIf ile görünür hale geldiği için DOM güncellendikten sonra başlatılır.
     this.chartInitTimer = setTimeout(() => {
+      if (this.chartInstance) return;
       const canvas = this.chartCanvas?.nativeElement;
       const ctx = canvas?.getContext('2d');
       if (!ctx) return;
 
-      const days: string[] = [];
-      const revenueData: number[] = [];
-      const profitData: number[] = [];
+      const days: string[] = this.trendLabels;
+      const revenueData: number[] = this.trendGross;
+      const profitData: number[] = this.trendNet;
 
       this.chartInstance = new Chart(ctx, {
         type: 'line',

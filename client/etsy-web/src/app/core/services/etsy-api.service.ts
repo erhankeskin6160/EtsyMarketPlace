@@ -251,6 +251,19 @@ export class EtsyApiService {
     return this.http.get<DailyBrief>(`${this.API_BASE}/api/etsy/shop/daily-brief?shopId=${id}`);
   }
 
+  /** Canlı Etsy API: son siparişler (kontrol paneli canlı satış akışı). */
+  getRecentOrders(limit: number = 15): Observable<RecentOrdersResponse> {
+    const id = this.activeShopId();
+    return this.http.get<RecentOrdersResponse>(`${this.API_BASE}/api/etsy/shop/recent-orders?shopId=${id}&limit=${limit}`);
+  }
+
+  /** Canlı Etsy API: günlük gelir/net kâr serisi (kontrol paneli trend grafiği). */
+  getDailySeries(month?: string): Observable<DailySeriesResponse> {
+    const id = this.activeShopId();
+    const suffix = month ? `&month=${month}` : '';
+    return this.http.get<DailySeriesResponse>(`${this.API_BASE}/api/etsy/financial/daily-series?shopId=${id}${suffix}`);
+  }
+
   /** Pulls finance + orders directly from Etsy Open API v3 into the VDS database. */
   syncFromEtsy(startDate?: Date, endDate?: Date): Observable<EtsySyncResultDto> {
     return this.http.post<EtsySyncResultDto>(`${this.API_BASE}/api/etsy/sync`, {
@@ -497,4 +510,32 @@ export class EtsyApiService {
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
   }
+}
+
+
+/** Canlı Etsy API: kontrol paneli son sipariş satırı. */
+export interface RecentOrderRow {
+  date: string;
+  receiptId: number;
+  title: string;
+  quantity: number;
+  totalUsd: number;
+  netProfitUsd: number;
+  hasCost: boolean;
+}
+
+export interface RecentOrdersResponse {
+  orders: RecentOrderRow[];
+  count: number;
+}
+
+/** Canlı Etsy API: kontrol paneli günlük seri yanıtı. */
+export interface DailySeriesResponse {
+  month: string;
+  labels: string[];
+  grossSales: number[];
+  netProfit: number[];
+  topProductTitle: string | null;
+  topProductRevenueUsd: number;
+  orderCount: number;
 }

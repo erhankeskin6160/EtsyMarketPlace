@@ -526,6 +526,28 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         return result;
     }
 
+    public async Task<IReadOnlyDictionary<long, EtsyDashboardOrderCost>> GetOrderCostsAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT order_id, product_cost, shipping_cost FROM order_costs WHERE shop_id=$shopId AND (product_cost IS NOT NULL OR shipping_cost IS NOT NULL);";
+        command.Parameters.AddWithValue("$shopId", shopId);
+        var result = new Dictionary<long, EtsyDashboardOrderCost>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            if (!long.TryParse(reader.GetString(0), NumberStyles.Integer, CultureInfo.InvariantCulture, out var orderId))
+                continue;
+
+            var productCost = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
+            var shippingCost = reader.IsDBNull(2) ? 0m : Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
+            result[orderId] = new EtsyDashboardOrderCost(productCost, shippingCost);
+        }
+
+        return result;
+    }
+
     public async Task<DailyShopBrief> GetDailyShopBriefAsync(string shopId, DateTimeOffset date, CancellationToken cancellationToken = default)
     {
         var start = new DateTimeOffset(date.Year, date.Month, date.Day, 0, 0, 0, date.Offset);

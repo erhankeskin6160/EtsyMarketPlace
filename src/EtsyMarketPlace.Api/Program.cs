@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
@@ -330,6 +331,138 @@ app.MapGet("/api/etsy/shop/daily-brief", async (string shopId = "53236321", Date
 .WithSummary("Günlük Mağaza Bülteni ve Sağlık Skoru")
 .WithDescription("Seçilen gün için brüt satış, net kâr, sipariş sayısı ve mağaza sağlık skorunu (Health Score 0-100) özetler. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetDailyShopBrief");
+
+// ── 05.10.2026: Web Kontrol Paneli canli veri uclari ────────────────────────
+// Web panelindeki "Son Siparisler" akisi ve "Gunluk Gelir/Net Kar Trendi"
+// bolumlerini masaustu panelle ayni mantikla dogrudan canli Etsy API'den besler.
+
+static async Task<IReadOnlyList<EtsyDashboardLedgerFee>> SafeGetLedgerAsync(IEtsyDataClient client, string shopId, DateTimeOffset start, DateTimeOffset end, CancellationToken ct)
+{
+    // Odeme hesabi defteri (billing_r) erisilemezse dis reklam bilgisi olmadan devam edilir.
+    try
+    {
+        return await client.GetPaymentAccountLedgerEntriesAsync(shopId, start, end, ct);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"[dashboard] Odeme defteri okunamadi ({shopId}): {ex.Message}");
+        return Array.Empty<EtsyDashboardLedgerFee>();
+    }
+}
+
+app.MapGet("/api/etsy/shop/recent-orders", async (string shopId = "53236321", int days = 31, int limit = 15, HttpContext context = null!, IConfiguration config = null!, IEtsyDataClient etsyClient = null!, IEtsyIntegrationRepository repository = null!, CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var clampedDays = Math.Clamp(days, 1, 90);
+    var clampedLimit = Math.Clamp(limit, 1, 50);
+    var cacheKey = $"recent-orders:{resolvedShopId}:{clampedDays}:{clampedLimit}";
+    if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
+        return Results.Ok(cachedPayload);
+
+    try
+    {
+        var end = DateTimeOffset.UtcNow;
+        var start = end.AddDays(-clampedDays);
+        var receipts = await etsyClient.GetShopReceiptsAsync(resolvedShopId, start, end, cancellationToken);
+        var ledger = await SafeGetLedgerAsync(etsyClient, resolvedShopId, start, end, cancellationToken);
+        var costs = await repository.GetOrderCostsAsync(resolvedShopId, cancellationToken);
+        var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledger, costs);
+
+        var payload = new
+        {
+            orders = rows.Take(clampedLimit).Select(r => new
+            {
+                date = r.CreatedAt.ToOffset(TimeSpan.FromHours(3)).ToString("dd.MM.yy", CultureInfo.InvariantCulture),
+                receiptId = r.ReceiptId,
+                title = EtsyLiveDashboardCalculator.ShortenTitle(r.Title),
+                quantity = r.Quantity,
+                totalUsd = r.GrandTotal,
+                netProfitUsd = r.NetProfitUsd,
+                hasCost = r.HasCostData
+            }).ToList(),
+            count = rows.Count
+        };
+
+        DashboardResponseCache.Set(cacheKey, payload, TimeSpan.FromSeconds(90));
+        return Results.Ok(payload);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = "Siparişler canlı Etsy API'den alınamadı: " + ex.Message });
+    }
+})
+.WithTags("Sipariş & Maliyet")
+.WithSummary("Son Siparişler — Canlı Satış Akışı")
+.WithDescription("Son N günün Etsy siparişlerini (fişlerini) canlı Etsy API'den çeker; sipariş bazlı net kâr masaüstü panel formülüyle hesaplanır.")
+.WithName("GetRecentOrders");
+
+app.MapGet("/api/etsy/financial/daily-series", async (string shopId = "53236321", string? month = null, HttpContext context = null!, IConfiguration config = null!, IEtsyDataClient etsyClient = null!, IEtsyIntegrationRepository repository = null!, CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var nowUtc = DateTimeOffset.UtcNow;
+    var nowLocal = nowUtc.ToOffset(TimeSpan.FromHours(3));
+    var targetYear = nowLocal.Year;
+    var targetMonth = nowLocal.Month;
+
+    if (!string.IsNullOrWhiteSpace(month))
+    {
+        var parts = month.Split('-');
+        if (parts.Length == 2 && int.TryParse(parts[0], out var parsedYear) && int.TryParse(parts[1], out var parsedMonth) && parsedMonth is >= 1 and <= 12)
+        {
+            targetYear = parsedYear;
+            targetMonth = parsedMonth;
+        }
+        else
+        {
+            return Results.BadRequest(new { error = "month parametresi YYYY-MM biciminde olmalidir." });
+        }
+    }
+
+    var monthKey = $"{targetYear:D4}-{targetMonth:D2}";
+    var cacheKey = $"daily-series:{resolvedShopId}:{monthKey}";
+    if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
+        return Results.Ok(cachedPayload);
+
+    try
+    {
+        var monthStart = new DateTimeOffset(targetYear, targetMonth, 1, 0, 0, 0, TimeSpan.FromHours(3));
+        var monthEnd = monthStart.AddMonths(1);
+        var fetchEnd = monthEnd < nowUtc ? monthEnd : nowUtc;
+        if (fetchEnd <= monthStart)
+        {
+            return Results.Ok(new { month = monthKey, labels = Array.Empty<string>(), grossSales = Array.Empty<decimal>(), netProfit = Array.Empty<decimal>(), topProductTitle = (string?)null, topProductRevenueUsd = 0m, orderCount = 0 });
+        }
+
+        var receipts = await etsyClient.GetShopReceiptsAsync(resolvedShopId, monthStart, fetchEnd, cancellationToken);
+        var ledger = await SafeGetLedgerAsync(etsyClient, resolvedShopId, monthStart, fetchEnd, cancellationToken);
+        var costs = await repository.GetOrderCostsAsync(resolvedShopId, cancellationToken);
+        var rows = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledger, costs);
+        var series = EtsyLiveDashboardCalculator.BuildDailySeries(rows, targetYear, targetMonth, nowUtc);
+        var topProduct = EtsyLiveDashboardCalculator.PickTopProduct(rows);
+
+        var payload = new
+        {
+            month = monthKey,
+            labels = series.Labels,
+            grossSales = series.GrossSales,
+            netProfit = series.NetProfit,
+            topProductTitle = topProduct.Title,
+            topProductRevenueUsd = topProduct.Revenue,
+            orderCount = rows.Count
+        };
+
+        DashboardResponseCache.Set(cacheKey, payload, TimeSpan.FromSeconds(90));
+        return Results.Ok(payload);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = "Günlük gelir/kâr serisi canlı Etsy API'den alınamadı: " + ex.Message });
+    }
+})
+.WithTags("Finans & Maliyet")
+.WithSummary("Günlük Gelir ve Net Kâr Serisi")
+.WithDescription("Seçilen ay için günlük brüt satış ve net kâr serisini canlı Etsy API fişlerinden hesaplar. Web kontrol panelindeki trend grafiğini besler.")
+.WithName("GetDailySeries");
 
 app.MapPost("/api/etsy/sync", async (EtsySyncRequest request, IConfiguration configuration, IEtsySynchronizationService synchronization, CancellationToken cancellationToken) =>
 {
@@ -1945,3 +2078,32 @@ app.MapGet("/api/system/version", () => Results.Ok(new
 .WithName("GetSystemVersion");
 
 app.Run();
+
+/// <summary>Kontrol paneli canli veri yanitlari icin kisa omurlu bellek ici onbellek (Etsy hiz limitlerini korur).</summary>
+internal static class DashboardResponseCache
+{
+    private static readonly ConcurrentDictionary<string, CacheEntry> Entries = new();
+    private sealed record CacheEntry(DateTimeOffset ExpiresAtUtc, object Payload);
+
+    public static bool TryGet(string key, out object? payload)
+    {
+        if (Entries.TryGetValue(key, out var entry) && entry.ExpiresAtUtc > DateTimeOffset.UtcNow)
+        {
+            payload = entry.Payload;
+            return true;
+        }
+
+        payload = null;
+        return false;
+    }
+
+    public static void Set(string key, object payload, TimeSpan ttl)
+    {
+        foreach (var staleKey in Entries.Where(kv => kv.Value.ExpiresAtUtc <= DateTimeOffset.UtcNow).Select(kv => kv.Key).ToList())
+        {
+            Entries.TryRemove(staleKey, out _);
+        }
+
+        Entries[key] = new CacheEntry(DateTimeOffset.UtcNow.Add(ttl), payload);
+    }
+}
