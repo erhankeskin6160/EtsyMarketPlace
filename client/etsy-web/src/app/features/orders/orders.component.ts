@@ -187,6 +187,8 @@ import {
 
           <!-- Queue Scroll List -->
           <div class="order-list-scroll">
+            <div *ngIf="ordersService.ordersLoading" class="empty-orders-view"><p>Sipariş uyarıları API’den yükleniyor…</p></div>
+            <div *ngIf="ordersService.ordersLoadError" class="empty-orders-view"><p>{{ ordersService.ordersLoadError }}</p></div>
             <div 
               *ngFor="let order of filteredOrders" 
               class="order-card"
@@ -224,7 +226,7 @@ import {
             </div>
 
             <div *ngIf="filteredOrders.length === 0" class="empty-orders-view">
-              <p>Filtreye uygun sipariş bulunamadı.</p>
+              <p *ngIf="!ordersService.ordersLoading && !ordersService.ordersLoadError">API’de filtreye uygun açık maliyet uyarısı bulunmuyor. Tam sipariş listesi bu API’de desteklenmiyor.</p>
             </div>
           </div>
         </div>
@@ -2594,7 +2596,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   private subs: Subscription[] = [];
 
   constructor(
-    private ordersService: OrdersService,
+    public ordersService: OrdersService,
     private etsyApi: EtsyApiService,
     private route: ActivatedRoute
   ) {}
@@ -2615,9 +2617,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.selectedOrder = order;
         this.editableProductCost = order.productCost;
         this.editableShippingCost = order.shippingCost;
-        this.gtipSearchTerm = order.gtipCode 
-          ? `${order.gtipCode} - ${order.gtipDescription || ''}`
-          : '3926400000 - 3D Baskı Plastik Heykelcik';
+        this.gtipSearchTerm = order.gtipCode ? `${order.gtipCode} - ${order.gtipDescription || ''}` : '';
         this.calculateLiveProfit();
         this.loadQuotesForSelected();
       }
@@ -2783,8 +2783,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   refreshOrders(): void {
     this.ordersService.loadOrders();
-    this.saveSuccessMessage = 'Veriler başarıyla yenilendi!';
-    setTimeout(() => this.saveSuccessMessage = null, 2500);
+    this.saveSuccessMessage = null;
   }
 
   toggleAccountsHub(): void {
@@ -2862,33 +2861,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.ordersService.updateOrderGtip(this.selectedOrder.orderId, code, desc);
     }
 
-    this.saveSuccessMessage = 'Maliyetler ve GTİP başarıyla kaydedildi!';
-    setTimeout(() => this.saveSuccessMessage = null, 3000);
+    this.saveSuccessMessage = 'Maliyet ve GTİP değerleri yalnızca bu oturumda güncellendi; kalıcı kayıt API’de desteklenmiyor.';
+    setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   // --- SHIPMENT CREATION ---
   executeCreateShipment(): void {
     if (!this.selectedOrder) return;
-    this.isGeneratingShipment = true;
-
-    setTimeout(() => {
-      const quote = this.selectedCarrierQuote || this.carrierQuotes[0];
-      const trackingPrefix = quote.carrierKey === 'aras' ? 'ARAS' : quote.carrierKey === 'shipentegra' ? '1Z' : quote.carrierKey === 'navlungo' ? 'DHL' : 'STM';
-      const randomTrack = trackingPrefix + Math.floor(1000000000 + Math.random() * 9000000000) + 'TR';
-      const barcode = '100923' + Math.floor(10000000 + Math.random() * 90000000);
-
-      this.ordersService.fulfillOrder(
-        this.selectedOrder!.orderId,
-        quote.carrierKey,
-        quote.carrierName,
-        randomTrack,
-        barcode
-      );
-
-      this.isGeneratingShipment = false;
-      this.saveSuccessMessage = `✓ ${quote.carrierName} gönderisi oluşturuldu! Takip No: ${randomTrack}`;
-      setTimeout(() => this.saveSuccessMessage = null, 4000);
-    }, 800);
+    this.saveSuccessMessage = 'Gönderi oluşturma ve takip numarası alma API’de desteklenmediği için işlem yapılmadı.';
+    setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   // --- MODALS OPEN/CLOSE ---
@@ -2910,11 +2891,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
 
-    const isLive = this.ordersService.isCarrierSessionLive(this.activeModalCarrier.id);
-    this.saveSuccessMessage = isLive
-      ? `✓ ${this.activeModalCarrier.name} canlı oturumu bağlandı! Teklifler anlık güncellendi.`
-      : `✓ ${this.activeModalCarrier.name} oturumu kaydedildi (Yedek liste devrede).`;
-    setTimeout(() => this.saveSuccessMessage = null, 4000);
+    this.saveSuccessMessage = `${this.activeModalCarrier.name} kimlik bilgisi yalnızca bu tarayıcıda saklandı; API’ye kaydedilmedi ve bağlantı doğrulanmadı.`;
+    setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   testCarrierConnection(): void {
@@ -2930,14 +2908,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
       return;
     }
     if (this.activeModalCarrier.id === 'shipentegra') {
-      alert(`✅ ShipEntegra Oturumu Doğrulandı!\n\n• Durum: 6 Sözleşmeli Hat Aktif\n• Taşıyıcı Hatları: Amerika Eko Plus, Smart Express, Widect, Expedited, Express, UPS\n• Yetki: Bearer Token Geçerli (HTTP 200 OK)`);
+      alert('ShipEntegra için sunucu taraflı bağlantı testi henüz desteklenmiyor.');
       return;
     }
     if (this.activeModalCarrier.id === 'navlungo') {
-      alert(`✅ Navlungo Oturumu Doğrulandı!\n\n• Durum: 4 Sözleşmeli Hat Aktif\n• Taşıyıcı Hatları: Widect, FedEx Priority, UPS Express, UPS Saver\n• Yetki: DHL Express & Navlungo Live Session Aktif`);
+      alert('Navlungo için sunucu taraflı bağlantı testi henüz desteklenmiyor.');
       return;
     }
-    alert(`⚡ ${this.activeModalCarrier?.name} API bağlantısı test edildi: HTTP 200 OK (Yetki Geçerli).`);
+    alert(`${this.activeModalCarrier.name} için sunucu taraflı bağlantı testi henüz desteklenmiyor.`);
   }
 
   disconnectSession(carrier: CarrierAccountSession): void {
@@ -2952,8 +2930,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   openShiptomoreModal(): void {
     const stm = this.carrierSessions.find(s => s.id === 'shiptomore');
-    this.stmClientId = stm?.tokenOrKey || 'stm_live_client_id_8910';
-    this.stmClientSecret = stm?.clientSecret || 'stm_sec_9941a87b';
+    this.stmClientId = stm?.tokenOrKey || '';
+    this.stmClientSecret = stm?.clientSecret || '';
     this.isShiptomoreModalOpen = true;
   }
 
@@ -2966,12 +2944,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.closeShiptomoreModal();
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
-    this.saveSuccessMessage = '✓ Ship to More API bağlantısı güncellendi!';
-    setTimeout(() => this.saveSuccessMessage = null, 3000);
+    this.saveSuccessMessage = 'Kimlik bilgileri yalnızca bu tarayıcıda saklandı; sunucuya kaydedilmedi ve bağlantı doğrulanmadı.';
+    setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   testShiptomore(): void {
-    alert('✅ Ship to More bağlantısı başarılı: Client kimliği onaylandı ve DDP kargo rotaları aktif.');
+    alert('Ship to More için sunucu taraflı bağlantı testi henüz desteklenmiyor.');
   }
 
   openArasTemplateModal(): void {
@@ -2983,11 +2961,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   syncCapturedTemplates(): void {
-    this.loadQuotesForSelected();
-    this.calculateLiveProfit();
     this.closeArasTemplateModal();
-    this.saveSuccessMessage = '✓ Masaüstü şablonları (%APPDATA%\\captures) başarıyla senkronize edildi: 14 canlı teklif güncel!';
-    setTimeout(() => this.saveSuccessMessage = null, 4000);
+    this.saveSuccessMessage = 'Masaüstü şablonları senkronizasyonu web istemcisinde desteklenmiyor.';
+    setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   openLabelPreviewModal(): void {

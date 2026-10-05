@@ -1,196 +1,66 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of } from 'rxjs';
-import { catchError, map } from 'rxjs/operators';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import { 
   PaymentLedgerEntry, 
   BankPayoutRecord, 
   FinancialKpiSummary, 
   ExpenseBreakdownItem 
 } from '../models/accounting.models';
+import { environment } from '../../../environments/environment';
 
 @Injectable({
   providedIn: 'root'
 })
 export class AccountingService {
-  private readonly API_BASE = 'http://5.180.81.148:5263';
-  private readonly DEFAULT_SHOP_ID = '53236321';
+  private readonly API_BASE = environment.apiBaseUrl;
+  private readonly DEFAULT_SHOP_ID = environment.defaultShopId;
 
   constructor(private http: HttpClient) {}
 
   public getFinancialSummary(): Observable<FinancialKpiSummary> {
     return this.http.get<any>(`${this.API_BASE}/api/financial/summary`).pipe(
       map(data => ({
-        period: data.period || 'Eylül - Ekim 2026',
+        period: data.period || '',
         currency: 'USD',
-        grossSales: data.grossSales || 45261.97,
-        etsyFees: data.etsyFees || 10173.80,
-        innerAds: 2450.00,
-        offsiteAds: 1820.50,
-        refunds: 840.25,
-        netRevenue: data.netRevenue || 29674.83,
-        productCosts: data.productCosts || 9835.33,
-        shippingCosts: 4890.10,
-        realNetProfit: data.realNetProfit || 19839.50,
-        profitMarginPercent: 43.8,
-        bankPayoutsTotal: data.bankPayoutsTotal || 25701.31
-      })),
-      catchError(() => of({
-        period: 'Eylül - Ekim 2026',
-        currency: 'USD',
-        grossSales: 45261.97,
-        etsyFees: 10173.80,
-        innerAds: 2450.00,
-        offsiteAds: 1820.50,
-        refunds: 840.25,
-        netRevenue: 29674.83,
-        productCosts: 9835.33,
-        shippingCosts: 4890.10,
-        realNetProfit: 19839.50,
-        profitMarginPercent: 43.8,
-        bankPayoutsTotal: 25701.31
+        grossSales: Number(data.grossSales) || 0,
+        etsyFees: Number(data.etsyFees) || 0,
+        innerAds: Number(data.innerAds) || 0,
+        offsiteAds: Number(data.offsiteAds) || 0,
+        refunds: Number(data.refunds) || 0,
+        netRevenue: Number(data.netRevenue) || 0,
+        productCosts: Number(data.productCosts) || 0,
+        shippingCosts: Number(data.shippingCosts) || 0,
+        realNetProfit: Number(data.realNetProfit) || 0,
+        profitMarginPercent: Number(data.profitMarginPercent) || 0,
+        bankPayoutsTotal: Number(data.bankPayoutsTotal) || 0
       }))
     );
   }
 
-  public getBankPayouts(usdTryRate: number = 48.855): Observable<BankPayoutRecord[]> {
+  public getBankPayouts(usdTryRate?: number): Observable<BankPayoutRecord[]> {
     return this.http.get<any[]>(`${this.API_BASE}/api/etsy/banking/payouts?shopId=${this.DEFAULT_SHOP_ID}`).pipe(
-      map(list => {
-        if (list && list.length > 0) {
-          return list.map((item, idx) => ({
-            payoutId: item.depositId?.toString() || `PAY-${1000 + idx}`,
-            initiatedDate: item.depositDate || new Date().toISOString(),
-            completedDate: item.depositDate || new Date().toISOString(),
-            status: 'completed' as const,
-            bankName: 'QNB Finansbank A.Ş. (TR)',
-            ibanEnding: '**** 9042',
-            amountUsd: Number(item.amount || 131.25),
-            exchangeRate: Number(item.exchangeRate || usdTryRate),
-            amountTry: Number(((item.amount || 131.25) * (item.exchangeRate || usdTryRate)).toFixed(2)),
-            referenceNumber: `ETS-TR-${item.depositId || (8472910 + idx)}`
-          }));
-        }
-        return this.getDefaultPayouts(usdTryRate);
-      }),
-      catchError(() => of(this.getDefaultPayouts(usdTryRate)))
+      map(list => (list || []).map(item => ({
+        payoutId: String(item.referenceId || ''),
+        initiatedDate: item.occurredAt || '',
+        completedDate: item.occurredAt || '',
+        status: item.status === 'completed' ? 'completed' as const : 'pending' as const,
+        bankName: '',
+        ibanEnding: '',
+        amountUsd: item.currency === 'USD' ? Number(item.amount) : 0,
+        exchangeRate: Number(item.exchangeRateToTry || usdTryRate || 0),
+        amountTry: item.exchangeRateToTry ? Number(item.amount) * Number(item.exchangeRateToTry) : (item.currency === 'TRY' ? Number(item.amount) : 0),
+        referenceNumber: String(item.referenceId || '')
+      })))
     );
   }
 
-  public getLedgerEntries(usdTryRate: number = 48.855): Observable<PaymentLedgerEntry[]> {
-    const rate = usdTryRate > 0 ? usdTryRate : 48.855;
-    const entries: PaymentLedgerEntry[] = [
-      {
-        id: 'TXN-908124',
-        entryDate: '2026-10-02 14:22',
-        transactionType: 'sale',
-        typeDisplay: 'Sipariş Ödemesi',
-        title: 'Ödeme Alma: #348912401 (Emily Watson)',
-        orderNumber: '#348912401',
-        grossAmount: 64.50,
-        feeAmount: -4.19,
-        netAmount: 60.31,
-        currency: 'USD',
-        netAmountTry: Number((60.31 * rate).toFixed(2)),
-        runningBalance: 12450.80
-      },
-      {
-        id: 'TXN-908123',
-        entryDate: '2026-10-02 12:00',
-        transactionType: 'ad',
-        typeDisplay: 'Etsy Ads Tıklama',
-        title: 'Günlük Reklam Harcaması (Tıklama Başı Maliyet)',
-        grossAmount: 0,
-        feeAmount: -12.40,
-        netAmount: -12.40,
-        currency: 'USD',
-        netAmountTry: Number((-12.40 * rate).toFixed(2)),
-        runningBalance: 12390.49
-      },
-      {
-        id: 'TXN-908122',
-        entryDate: '2026-10-02 09:15',
-        transactionType: 'sale',
-        typeDisplay: 'Sipariş Ödemesi',
-        title: 'Ödeme Alma: #348876102 (Oliver Smith)',
-        orderNumber: '#348876102',
-        grossAmount: 89.00,
-        feeAmount: -5.78,
-        netAmount: 83.22,
-        currency: 'USD',
-        netAmountTry: Number((83.22 * rate).toFixed(2)),
-        runningBalance: 12402.89
-      },
-      {
-        id: 'TXN-908121',
-        entryDate: '2026-10-01 23:59',
-        transactionType: 'payout',
-        typeDisplay: 'Banka Transferi',
-        title: 'Banka Hesabına Aktarım (QNB Finansbank ****9042)',
-        grossAmount: 0,
-        feeAmount: 0,
-        netAmount: -2500.00,
-        currency: 'USD',
-        netAmountTry: Number((-2500.00 * rate).toFixed(2)),
-        runningBalance: 12319.67
-      },
-      {
-        id: 'TXN-908120',
-        entryDate: '2026-10-01 18:40',
-        transactionType: 'sale',
-        typeDisplay: 'Sipariş Ödemesi',
-        title: 'Ödeme Alma: #348744590 (Hannah Meyer)',
-        orderNumber: '#348744590',
-        grossAmount: 42.00,
-        feeAmount: -2.73,
-        netAmount: 39.27,
-        currency: 'USD',
-        netAmountTry: Number((39.27 * rate).toFixed(2)),
-        runningBalance: 14819.67
-      },
-      {
-        id: 'TXN-908119',
-        entryDate: '2026-10-01 15:30',
-        transactionType: 'listing',
-        typeDisplay: 'İlan Yenileme Ücreti',
-        title: 'Otomatik İlan Yenileme (Auto-renew 12 Listings)',
-        grossAmount: 0,
-        feeAmount: -2.40,
-        netAmount: -2.40,
-        currency: 'USD',
-        netAmountTry: Number((-2.40 * rate).toFixed(2)),
-        runningBalance: 14780.40
-      },
-      {
-        id: 'TXN-908118',
-        entryDate: '2026-09-30 11:05',
-        transactionType: 'sale',
-        typeDisplay: 'Sipariş Ödemesi',
-        title: 'Ödeme Alma: #348601289 (Jean Dupont)',
-        orderNumber: '#348601289',
-        grossAmount: 115.00,
-        feeAmount: -7.48,
-        netAmount: 107.52,
-        currency: 'USD',
-        netAmountTry: Number((107.52 * rate).toFixed(2)),
-        runningBalance: 14782.80
-      },
-      {
-        id: 'TXN-908117',
-        entryDate: '2026-09-29 16:50',
-        transactionType: 'sale',
-        typeDisplay: 'Sipariş Ödemesi',
-        title: 'Ödeme Alma: #348519403 (Lucas Rossi)',
-        orderNumber: '#348519403',
-        grossAmount: 55.00,
-        feeAmount: -3.58,
-        netAmount: 51.42,
-        currency: 'USD',
-        netAmountTry: Number((51.42 * rate).toFixed(2)),
-        runningBalance: 14675.28
-      }
-    ];
-
-    return of(entries);
+  public getLedgerEntries(_usdTryRate?: number): Observable<PaymentLedgerEntry[]> {
+    return new Observable<PaymentLedgerEntry[]>(subscriber => {
+      subscriber.next([]);
+      subscriber.complete();
+    });
   }
 
   public getExpenseBreakdown(summary: FinancialKpiSummary, usdTryRate: number = 48.855): ExpenseBreakdownItem[] {
@@ -269,56 +139,4 @@ export class AccountingService {
     document.body.removeChild(link);
   }
 
-  private getDefaultPayouts(rate: number): BankPayoutRecord[] {
-    return [
-      {
-        payoutId: 'PAY-18472910',
-        initiatedDate: '2026-10-01 04:30',
-        completedDate: '2026-10-01 14:15',
-        status: 'completed',
-        bankName: 'QNB Finansbank A.Ş. (TR)',
-        ibanEnding: '**** 9042',
-        amountUsd: 131.25,
-        exchangeRate: rate,
-        amountTry: Number((131.25 * rate).toFixed(2)),
-        referenceNumber: 'ETS-TR-18472910'
-      },
-      {
-        payoutId: 'PAY-18410294',
-        initiatedDate: '2026-09-24 04:30',
-        completedDate: '2026-09-24 15:00',
-        status: 'completed',
-        bankName: 'QNB Finansbank A.Ş. (TR)',
-        ibanEnding: '**** 9042',
-        amountUsd: 145.00,
-        exchangeRate: rate - 0.10,
-        amountTry: Number((145.00 * (rate - 0.10)).toFixed(2)),
-        referenceNumber: 'ETS-TR-18410294'
-      },
-      {
-        payoutId: 'PAY-18354890',
-        initiatedDate: '2026-09-17 04:30',
-        completedDate: '2026-09-17 13:45',
-        status: 'completed',
-        bankName: 'QNB Finansbank A.Ş. (TR)',
-        ibanEnding: '**** 9042',
-        amountUsd: 120.50,
-        exchangeRate: rate - 0.25,
-        amountTry: Number((120.50 * (rate - 0.25)).toFixed(2)),
-        referenceNumber: 'ETS-TR-18354890'
-      },
-      {
-        payoutId: 'PAY-18299102',
-        initiatedDate: '2026-09-10 04:30',
-        completedDate: '2026-09-10 16:10',
-        status: 'completed',
-        bankName: 'QNB Finansbank A.Ş. (TR)',
-        ibanEnding: '**** 9042',
-        amountUsd: 128.00,
-        exchangeRate: rate - 0.40,
-        amountTry: Number((128.00 * (rate - 0.40)).toFixed(2)),
-        referenceNumber: 'ETS-TR-18299102'
-      }
-    ];
-  }
 }

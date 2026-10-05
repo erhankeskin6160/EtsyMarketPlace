@@ -36,15 +36,7 @@ import { AuthService } from '../../core/services/auth.service';
             {{ loading ? 'Giriş Yapılıyor...' : '🔐 Güvenli Giriş Yap' }}
           </button>
 
-          <button type="button" class="btn w-full" (click)="quickLogin()" style="margin-top: 10px; background: #10b981; color: white; font-weight: 700;">
-            ⚡ Hızlı Giriş (Yönetici & Finans Paneli)
-          </button>
         </form>
-
-        <div class="demo-credentials">
-          <span class="demo-title">💡 Varsayılan Yönetici Bilgileri:</span>
-          <code>Kullanıcı: <b>admin</b> | Şifre: <b>Admin123*!</b></code>
-        </div>
 
         <div class="auth-footer">
           <span>Hesabınız yok mu?</span>
@@ -172,15 +164,6 @@ export class LoginComponent {
     if (this.authService.isAuthenticated()) {
       this.router.navigate(['/finance/accounting']);
     }
-  }
-
-  quickLogin(): void {
-    this.authService.login({
-      usernameOrEmail: 'admin',
-      password: 'Admin123*!'
-    }).subscribe(() => {
-      this.router.navigate(['/finance/accounting']);
-    });
   }
 
   onLogin(): void {

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject } from '@an
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
-import { DailyBrief, FinancialSummary } from '../../core/models/etsy.models';
+import { FinancialPerformanceDto } from '../../core/services/etsy-api.service';
 import { Chart, registerables } from 'chart.js';
 
 Chart.register(...registerables);
@@ -15,13 +15,15 @@ Chart.register(...registerables);
     <div class="dashboard-root">
       <!-- HERO KPI STRIP (MATCHING WINFORMS DESKTOP) -->
       <section class="kpi-grid" [class.has-popover-open]="isExpensesPopoverOpen">
+        <ng-template #noFinanceValue>—</ng-template>
+        <ng-template #noFinanceInsight>Finansal veriler yüklenemedi veya mevcut değil.</ng-template>
         <div class="glass-card kpi-card">
           <div class="kpi-header">
             <span class="kpi-label">💳 BU AYKI BRÜT CİRO</span>
-            <span class="kpi-tag text-emerald">+12.4%</span>
+            <span class="kpi-tag text-emerald">{{ financialPerformance ? 'API' : 'Veri yok' }}</span>
           </div>
           <div class="kpi-value text-emerald">
-            &#36;{{ grossSalesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ grossSalesUsd * apiService.exchangeRate() | number:'1.0-0' }})</span>
+            <ng-container *ngIf="financialPerformance; else noFinanceValue">&#36;{{ grossSalesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ grossSalesUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
           </div>
           <div class="kpi-sub">Etsy Mağaza Satış Geliri</div>
         </div>
@@ -29,10 +31,10 @@ Chart.register(...registerables);
         <div class="glass-card kpi-card">
           <div class="kpi-header">
             <span class="kpi-label">💰 GERÇEK NET KÂR</span>
-            <span class="kpi-tag text-cyan">%38.5 Marj</span>
+            <span class="kpi-tag text-cyan">{{ financialPerformance ? (financialPerformance.netProfitMargin | percent:'1.0-1') : 'Veri yok' }}</span>
           </div>
           <div class="kpi-value text-cyan">
-            &#36;{{ netProfitUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span>
+            <ng-container *ngIf="financialPerformance; else noFinanceValue">&#36;{{ netProfitUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
           </div>
           <div class="kpi-sub">Maliyet, Komisyonlar Düşülmüş</div>
         </div>
@@ -40,10 +42,10 @@ Chart.register(...registerables);
         <div class="glass-card kpi-card">
           <div class="kpi-header">
             <span class="kpi-label">📦 TOPLAM SİPARİŞ</span>
-            <span class="kpi-tag text-purple">1 Sipariş</span>
+            <span class="kpi-tag text-purple">{{ dailyBrief ? 'Bugün' : 'Veri yok' }}</span>
           </div>
-          <div class="kpi-value text-purple">1 Sipariş</div>
-          <div class="kpi-sub">Dönem İçi Başarılı Satış</div>
+          <div class="kpi-value text-purple">{{ dailyBrief ? (dailyBrief.todayOrders + ' Sipariş') : '—' }}</div>
+          <div class="kpi-sub">Bugünün API özeti</div>
         </div>
 
         <div class="glass-card kpi-card">
@@ -51,8 +53,8 @@ Chart.register(...registerables);
             <span class="kpi-label">🏷️ AKTİF İLAN SAYISI</span>
             <span class="kpi-tag text-orange">Portföy</span>
           </div>
-          <div class="kpi-value text-orange">46 Aktif İlan</div>
-          <div class="kpi-sub">Mağaza Portföyü</div>
+          <div class="kpi-value text-orange">—</div>
+          <div class="kpi-sub">Aktif ilan sayısı API tarafından sunulmuyor.</div>
         </div>
 
         <div class="glass-card kpi-card kpi-card-expenses"
@@ -74,10 +76,10 @@ Chart.register(...registerables);
             </div>
           </div>
           <div class="kpi-value text-danger">
-            -&#36;{{ etsyFeesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.0-0' }})</span>
+            <ng-container *ngIf="financialPerformance; else noFinanceValue">-&#36;{{ etsyFeesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.0-0' }})</span></ng-container>
           </div>
           <div class="kpi-sub">
-            Reklam: -$5.47, Komisyon: -$5.99 
+            Reklam ve komisyon toplamı (API)
             <span class="kpi-hint-text">💡 (Detay için durun)</span>
           </div>
 
@@ -95,7 +97,7 @@ Chart.register(...registerables);
                 <div>
                   <h4 class="popover-title">Etsy Kesintileri & Reklam Harcamaları Analizi</h4>
                   <span class="popover-subtitle">
-                    Toplam Etsy Kesintisi: -₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.2-2' }} (-&#36;{{ etsyFeesUsd | number:'1.2-2' }}) | Cironun %32.2'si
+                    Toplam platform kesintisi: -₺{{ (etsyFeesUsd * apiService.exchangeRate()) | number:'1.2-2' }} (-&#36;{{ etsyFeesUsd | number:'1.2-2' }})
                   </span>
                 </div>
               </div>
@@ -106,18 +108,18 @@ Chart.register(...registerables);
             <div class="popover-kpi-row">
               <div class="mini-kpi-card red">
                 <span class="mini-kpi-label">📢 İç Reklam (Etsy Ads)</span>
-                <span class="mini-kpi-try">-₺268.00</span>
-                <span class="mini-kpi-usd">-$5.47 (%47.7)</span>
+                <span class="mini-kpi-try">API verisi yok</span>
+                <span class="mini-kpi-usd">İç reklam maliyeti sunulmuyor</span>
               </div>
               <div class="mini-kpi-card orange">
                 <span class="mini-kpi-label">🌐 Dış Reklam (Offsite)</span>
-                <span class="mini-kpi-try">-₺0.00</span>
-                <span class="mini-kpi-usd">-$0.00 (%0.0)</span>
+                <span class="mini-kpi-try">API verisi yok</span>
+                <span class="mini-kpi-usd">Dış reklam maliyeti sunulmuyor</span>
               </div>
               <div class="mini-kpi-card purple">
                 <span class="mini-kpi-label">📋 Etsy Komisyon & Harç</span>
-                <span class="mini-kpi-try">-₺294.00</span>
-                <span class="mini-kpi-usd">-$5.99 (%52.3)</span>
+                <span class="mini-kpi-try">&#36;{{ etsyFeesUsd | number:'1.2-2' }}</span>
+                <span class="mini-kpi-usd">Toplam platform ücretleri</span>
               </div>
             </div>
 
@@ -134,6 +136,7 @@ Chart.register(...registerables);
                   </tr>
                 </thead>
                 <tbody>
+                  <tr *ngIf="!financialPerformance"><td colspan="5">Finansal veri API’den henüz yüklenmedi.</td></tr>
                   <tr *ngFor="let item of expensesBreakdown" [class.total-row]="item.isTotal">
                     <td>
                       <span class="type-pill" [ngClass]="item.typeClass">{{ item.type }}</span>
@@ -149,7 +152,7 @@ Chart.register(...registerables);
 
             <!-- Popover Footer Action -->
             <div class="popover-footer">
-              <span class="footer-note">💡 Masaüstü canlı ödeme defteri ve Finans raporu ile %100 senkronizedir.</span>
+              <span class="footer-note">Detaylı işlem satırları API tarafından sunulmuyor.</span>
               <a routerLink="/finance/accounting" class="btn-goto-accounting" (click)="closeExpensesPopover()">
                 💳 Finans & Muhasebe Detay Tablosu →
               </a>
@@ -205,9 +208,9 @@ Chart.register(...registerables);
           <div class="card-header-flex">
             <div>
               <h3 class="section-title">📦 Son Siparişler Canlı Satış Akışı</h3>
-              <span class="section-sub">Toplam 1 sipariş listelendi</span>
+              <span class="section-sub">{{ dailyBrief?.todayOrders ?? '—' }} günlük sipariş (özet)</span>
             </div>
-            <a routerLink="/orders" class="link-view-all">Tüm Siparişler (1) →</a>
+            <a routerLink="/orders" class="link-view-all">Sipariş modülüne git →</a>
           </div>
 
           <div class="table-container">
@@ -221,6 +224,7 @@ Chart.register(...registerables);
                   <th>Tutar ($)</th>
                   <th>Net Kâr ($ / ₺)</th>
                 </tr>
+                <tr *ngIf="liveOrders.length === 0"><td colspan="6">Günlük sipariş satırları API tarafından sunulmuyor.</td></tr>
               </thead>
               <tbody>
                 <tr *ngFor="let o of liveOrders">
@@ -250,21 +254,21 @@ Chart.register(...registerables);
             <div class="insight-item">
               <span class="insight-label text-emerald">🌟 En Çok Ciro Getiren Ürün</span>
               <p class="insight-body">
-                <b>'3D Printed Butterfly Trainer | Colorful Safe Knife'</b> bu ay toplam <b>&#36;35,91</b> ciro sağlayarak mağazanızın yıldız ürünü oldu.
+                API en çok satan ürün bilgisini sağlamıyor.
               </p>
             </div>
 
             <div class="insight-item">
               <span class="insight-label text-cyan">📢 Reklam / Komisyon Durumu</span>
               <p class="insight-body">
-                Reklam harcaması cironuzun %15,4'i (&#36;5,47), Etsy komisyonları %16,8'i (&#36;5,99) seviyesindedir. Toplam net kâr marjınız <b>%38,5</b>.
+                <ng-container *ngIf="financialPerformance; else noFinanceInsight">Net kâr marjı <b>{{ financialPerformance.netProfitMargin | percent:'1.0-1' }}</b>. Platform ücretleri: <b>&#36;{{ financialPerformance.platformFees | number:'1.2-2' }}</b>.</ng-container>
               </p>
             </div>
 
             <div class="insight-item">
               <span class="insight-label text-purple">🚀 Büyüme / SEO Tavsiyesi</span>
               <p class="insight-body">
-                Ürün başlıklarında ve ilk 3 etiketinde en çok aranan uzun kuyruklu anahtar kelimeleri kullanarak organik trafiğinizi <b>%25</b> artırabilirsiniz.
+                API tabanlı SEO önerisi bu panelde desteklenmiyor.
               </p>
               <a routerLink="/research/market" class="btn-micro-action">🔍 Pazar Araştırması</a>
             </div>
@@ -277,7 +281,7 @@ Chart.register(...registerables);
         <div class="card-header-flex">
           <div>
             <h3 class="section-title">📈 BU AYIN GÜNLÜK GELİR VE NET KÂR TRENDİ ($)</h3>
-            <span class="section-sub">Ekim 2026 Gerçekleşen Satış ve Kâr Seyri</span>
+            <span class="section-sub">Günlük zaman serisi API tarafından sunulmuyor.</span>
           </div>
           <div class="chart-badges">
             <span class="legend-badge legend-revenue">● Brüt Satış ($)</span>
@@ -285,7 +289,9 @@ Chart.register(...registerables);
           </div>
         </div>
         <div class="chart-wrapper">
-          <canvas #trendChart></canvas>
+          <div *ngIf="!financialPerformance" class="chart-empty">Finans verisi yüklenemedi veya henüz bulunmuyor.</div>
+          <canvas #trendChart *ngIf="financialPerformance"></canvas>
+          <div *ngIf="!financialPerformance" class="chart-empty">Finans verisi yüklenemedi veya henüz bulunmuyor.</div>
         </div>
       </section>
     </div>
@@ -838,10 +844,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
   @ViewChild('trendChart', { static: true }) chartCanvas!: ElementRef<HTMLCanvasElement>;
   chartInstance?: Chart;
 
-  // Exact desktop live numbers from WinForms Image 2
-  grossSalesUsd = 35.57;
-  netProfitUsd = 13.69;
-  etsyFeesUsd = 11.46;
+  financialPerformance: FinancialPerformanceDto | null = null;
+  dailyBrief: { todayOrders: number; todayGrossSalesUSD: number; todayNetProfitTRY: number } | null = null;
+  grossSalesUsd = 0;
+  netProfitUsd = 0;
+  etsyFeesUsd = 0;
 
   // EXPENSES HOVER TOOLTIP POPOVER
   isHoveringExpenses = false;
@@ -849,27 +856,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private hoverTimer: any = null;
   private leaveTimer: any = null;
 
-  expensesBreakdown = [
-    { type: 'Reklam', typeClass: 'badge-ad', name: 'İç Reklam (Etsy Ads)', rate: 'Tıklama', amountText: '-₺268.00 (-$5.47)', desc: 'Etsy platform içi arama sponsorlu reklam harcaması', isTotal: false },
-    { type: 'Reklam', typeClass: 'badge-ad', name: 'Dış Reklam (Offsite Ads)', rate: '%15', amountText: '-₺0.00 (-$0.00)', desc: 'Google & sosyal medya dış reklam satış komisyonu', isTotal: false },
-    { type: 'Kesinti', typeClass: 'badge-fee', name: 'İşlem Komisyonu (Transaction Fee)', rate: '%6.5', amountText: '-₺113.80 (-$2.32)', desc: 'Ürün ve kargo tutarı üzerinden Etsy standart komisyonu', isTotal: false },
-    { type: 'Kesinti', typeClass: 'badge-fee', name: 'Ödeme İşleme Ücreti (Payment Processing)', rate: '%6.5+3TL', amountText: '-₺116.80 (-$2.38)', desc: 'Etsy Payments güvenli ödeme tahsilat masrafı', isTotal: false },
-    { type: 'Kesinti', typeClass: 'badge-fee', name: 'Yasal İşletim & KDV (Regulatory & VAT)', rate: '%1.5 + KDV', amountText: '-₺43.40 (-$0.88)', desc: 'Türkiye yasal işletim payı ve komisyon KDV\'si', isTotal: false },
-    { type: 'Kesinti', typeClass: 'badge-fee', name: 'İlan Listeleme Ücreti (Listing Fees)', rate: '$0.20', amountText: '-₺20.00 (-$0.41)', desc: 'Ürün listeleme ve 4 aylık otomatik yenileme bedelleri', isTotal: false },
-    { type: 'İade', typeClass: 'badge-refund', name: 'İptal ve İadeler (Refunds)', rate: '0 Adet', amountText: '-₺0.00 (-$0.00)', desc: 'Müşterilere iade edilen sipariş ve kargo tutarları', isTotal: false },
-    { type: 'Toplam', typeClass: 'badge-total', name: 'TOPLAM GİDER & KESİNTİ', rate: 'Tümü', amountText: '-₺562.00 (-$11.46)', desc: 'Brüt cirodan düşülen tüm Etsy kesintileri ve reklam harcaması', isTotal: true }
-  ];
-
-  liveOrders = [
-    {
-      date: '01.10.2026',
-      receiptId: '4188710928',
-      title: '3D Printed Butterfly Trainer | Colorful Safe Knife | Cosplay Display Prop',
-      quantity: 1,
-      totalUsd: 35.91,
-      netProfitUsd: 14.62
-    }
-  ];
+  expensesBreakdown: Array<{type: string; typeClass: string; name: string; rate: string; amountText: string; desc: string; isTotal: boolean}> = [];
+  liveOrders: Array<{date: string; receiptId: string; title: string; quantity: number; totalUsd: number; netProfitUsd: number}> = [];
 
   ngOnInit(): void {
     this.initChart();
@@ -878,34 +866,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   loadLiveKpis(): void {
     this.apiService.getFinancialPerformance('this_month').subscribe({
-      next: (perf: any) => {
-        if (perf) {
-          const gross = Number(perf.grossSalesUsd ?? perf['grossSalesUsd'] ?? perf.grossSales ?? 0);
-          const net = Number(perf.netProfitUsd ?? perf['netProfitUsd'] ?? perf.netProfit ?? 0);
-          const fees = Number(perf.etsyFeesUsd ?? perf['etsyFeesUsd'] ?? perf.etsyFees ?? 0);
-          if (gross > 0) this.grossSalesUsd = gross;
-          if (net > 0) this.netProfitUsd = net;
-          if (fees > 0) this.etsyFeesUsd = fees;
-        }
+      next: (perf) => {
+        this.financialPerformance = perf;
+        this.grossSalesUsd = perf.grossSales;
+        this.netProfitUsd = perf.netProfit;
+        this.etsyFeesUsd = perf.platformFees;
       },
-      error: () => {}
+      error: () => {
+        this.financialPerformance = null;
+        this.grossSalesUsd = 0;
+        this.netProfitUsd = 0;
+        this.etsyFeesUsd = 0;
+      }
     });
 
     this.apiService.getDailyBrief().subscribe({
-      next: (brief: any) => {
-        const orders = brief?.dailyOrders || brief?.todayOrdersList || [];
-        if (Array.isArray(orders) && orders.length > 0) {
-          this.liveOrders = orders.map((o: any) => ({
-            date: o.orderDate ? new Date(o.orderDate).toLocaleDateString('tr-TR') : 'Bugün',
-            receiptId: String(o.receiptId || o.orderId || 'Sipariş'),
-            title: String(o.title || 'Etsy Siparişi'),
-            quantity: Number(o.quantity || 1),
-            totalUsd: Number(o.totalAmount || 35.91),
-            netProfitUsd: Number(o.netProfit || 14.62)
-          }));
-        }
+      next: (brief) => {
+        this.dailyBrief = brief;
       },
-      error: () => {}
+      error: () => {
+        this.dailyBrief = null;
+      }
     });
   }
 
@@ -913,9 +894,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const ctx = this.chartCanvas.nativeElement.getContext('2d');
     if (!ctx) return;
 
-    const days = ['01.10.2026', '02.10.2026', '03.10.2026'];
-    const revenueData = [35.91, 0, 0];
-    const profitData = [14.62, 0, 0];
+    const days: string[] = [];
+    const revenueData: number[] = [];
+    const profitData: number[] = [];
 
     this.chartInstance = new Chart(ctx, {
       type: 'line',
@@ -963,8 +944,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
               color: '#94a3b8',
               callback: (v) => '$' + v
             },
-            min: 0,
-            max: 40
+            min: 0
           }
         }
       }

@@ -1,15 +1,7 @@
-import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
 import { EtsyApiService } from './etsy-api.service';
-import { 
-  OrderFulfillmentItem, 
-  CarrierQuote, 
-  PackageSpecs, 
-  CarrierAccountSession, 
-  GtipCodeItem 
-} from '../models/orders.models';
+import { OrderFulfillmentItem, CarrierQuote, PackageSpecs, CarrierAccountSession, GtipCodeItem } from '../models/orders.models';
 
 const STORAGE_KEY_CARRIER_SESSIONS = 'etsy_carrier_sessions_v2';
 
@@ -17,10 +9,10 @@ const STORAGE_KEY_CARRIER_SESSIONS = 'etsy_carrier_sessions_v2';
   providedIn: 'root'
 })
 export class OrdersService {
-  private readonly API_BASE = 'http://5.180.81.148:5263';
-
   private ordersSubject = new BehaviorSubject<OrderFulfillmentItem[]>([]);
   public orders$ = this.ordersSubject.asObservable();
+  public ordersLoading = false;
+  public ordersLoadError: string | null = null;
 
   private selectedOrderSubject = new BehaviorSubject<OrderFulfillmentItem | null>(null);
   public selectedOrder$ = this.selectedOrderSubject.asObservable();
@@ -28,19 +20,7 @@ export class OrdersService {
   private sessionsSubject = new BehaviorSubject<CarrierAccountSession[]>(this.loadInitialSessions());
   public sessions$ = this.sessionsSubject.asObservable();
 
-  private readonly gtipDatabase: GtipCodeItem[] = [
-    { code: '3926400000', description: '3D Baskı Plastik Heykelcik, Süs ve Biblo Eşyası', category: 'Plastik & 3D Baskı' },
-    { code: '3926909790', description: '3D Baskı Plastik Trainer & Güvenli Cosplay Prop Model', category: 'Plastik & 3D Baskı' },
-    { code: '9503009500', description: 'Plastik Oyuncaklar, Eğitici ve Hobi Trainer Modelleri', category: 'Hobi & Oyuncak' },
-    { code: '9405204000', description: 'Dekoratif 3D Baskı Gece Lambası & Işıklı Stand Paneli', category: 'Aydınlatma & Dekor' },
-    { code: '4420101900', description: 'Ahşap Tabanlı ve Oymalı Masaüstü Süs Eşyası', category: 'Ahşap & El Sanatları' },
-    { code: '6912002500', description: 'Seramik & Porselen Dekoratif Saksı ve Altlık Seti', category: 'Seramik & Ev' },
-    { code: '7117900000', description: 'İmitasyon Takı, Kolye ve El Yapımı Aksesuar', category: 'Takı & Aksesuar' },
-    { code: '6307909800', description: 'Tekstil Kumaş El Yapımı Çanta ve Duvar Sanatı', category: 'Tekstil & Dekor' },
-    { code: '8523511000', description: 'Yazılım & Dijital 3D STL Tasarım Bellek Kartı', category: 'Elektronik & Dijital' }
-  ];
-
-  constructor(private http: HttpClient, private etsyApi: EtsyApiService) {
+  constructor(private etsyApi: EtsyApiService) {
     this.loadOrders();
   }
 
@@ -267,34 +247,30 @@ export class OrdersService {
     if (dash > 0) {
       clean = clean.substring(0, dash).trim();
     }
-    if (!clean) return this.gtipDatabase;
-    const matches = this.gtipDatabase.filter(g => 
-      g.code.includes(clean) || 
-      g.description.toLowerCase().includes(clean) ||
-      (g.category && g.category.toLowerCase().includes(clean))
-    );
-    return matches.length > 0 ? matches : this.gtipDatabase;
+    if (!clean) return [];
+    return [];
   }
 
   // --- ORDER RETRIEVAL & QUEUE MANAGEMENT ---
   public loadOrders(shopIdOverride?: string): void {
-    const shopId = shopIdOverride || this.etsyApi.activeShopId() || '53236321';
-    this.http.get<any[]>(`${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${encodeURIComponent(shopId)}`)
-      .pipe(catchError(() => of([])))
+    this.ordersLoading = true;
+    this.ordersLoadError = null;
+    const shopId = shopIdOverride || this.etsyApi.activeShopId();
+    this.etsyApi.getUnfulfilledCostAlerts(shopId)
       .subscribe((apiAlerts) => {
-        if (apiAlerts && apiAlerts.length > 0) {
-          const liveOrders: OrderFulfillmentItem[] = apiAlerts.map(a => ({
-            orderId: a.orderId || `ord-${Date.now()}`,
+        this.ordersLoading = false;
+        const liveOrders: OrderFulfillmentItem[] = (apiAlerts || []).map(a => ({
+            orderId: a.orderId,
             orderNumber: `#${a.orderId}`,
-            buyerName: 'Etsy Müşterisi',
-            buyerEmail: 'musteri@etsy.com',
-            country: 'Amerika Birleşik Devletleri',
-            countryCode: 'US',
-            city: 'Canlı Sipariş',
-            addressSnippet: 'Canlı Etsy API kaydı',
-            isAddressMissing: false,
-            exportType: 'Mikro İhracat (ETGB)',
-            orderDate: a.createdAt || new Date().toISOString(),
+            buyerName: 'Alıcı bilgisi API tarafından sunulmuyor',
+            buyerEmail: '',
+            country: '',
+            countryCode: '—',
+            city: '',
+            addressSnippet: '',
+            isAddressMissing: true,
+            exportType: '',
+            orderDate: a.createdAt || '',
             status: 'unfulfilled',
             currency: a.currency || 'USD',
             totalAmount: a.orderTotal || 0,
@@ -303,32 +279,29 @@ export class OrdersService {
             isCostMissing: (a.productCost || 0) <= 0 || (a.shippingCost || 0) <= 0,
             netProfit: Number(((a.orderTotal || 0) - ((a.productCost || 0) + (a.shippingCost || 0) + ((a.orderTotal || 0) * 0.095))).toFixed(2)),
             profitMarginPercent: a.orderTotal > 0 ? Number(((((a.orderTotal || 0) - ((a.productCost || 0) + (a.shippingCost || 0))) / a.orderTotal) * 100).toFixed(1)) : 0,
-            packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
-            invoicedWeightKg: 0.60,
-            gtipCode: '3926400000',
-            gtipDescription: '3D Baskı Plastik Heykelcik',
+            packageSpecs: { widthCm: 0, lengthCm: 0, heightCm: 0, weightKg: 0, desi: 0 },
+            invoicedWeightKg: 0,
+            gtipCode: '',
+            gtipDescription: '',
             items: [
               {
                 id: `it-${a.orderId}`,
-                title: a.reason || 'Etsy Sipariş Ürünü',
+                title: a.reason || 'Sipariş ayrıntısı API tarafından sunulmuyor',
                 quantity: 1,
                 price: a.orderTotal || 0,
                 sku: 'LIVE-SKU'
               }
             ]
-          }));
-          this.ordersSubject.next(liveOrders);
-          if (liveOrders.length > 0 && !this.selectedOrderSubject.value) {
-            this.selectedOrderSubject.next(liveOrders[0]);
-          }
-        } else {
-          // If no live alerts from VDS API yet, load baseline parity orders
-          const baseline = this.generateDesktopParityOrders();
-          this.ordersSubject.next(baseline);
-          if (baseline.length > 0 && !this.selectedOrderSubject.value) {
-            this.selectedOrderSubject.next(baseline[0]);
-          }
-        }
+        }));
+
+        this.ordersSubject.next(liveOrders);
+        const selected = this.selectedOrderSubject.value;
+        this.selectedOrderSubject.next((selected && liveOrders.find(order => order.orderId === selected.orderId)) || liveOrders[0] || null);
+      }, () => {
+        this.ordersLoading = false;
+        this.ordersLoadError = 'Sipariş/maliyet uyarıları API’den yüklenemedi.';
+        this.ordersSubject.next([]);
+        this.selectedOrderSubject.next(null);
       });
   }
 

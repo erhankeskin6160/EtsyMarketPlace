@@ -3,10 +3,9 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { FinancialPerformanceDto, EtsyBankPayoutDto } from '../../core/services/etsy-api.service';
 import { 
-  PaymentLedgerEntry, 
-  BankPayoutRecord, 
-  ExpenseBreakdownItem,
+  PaymentLedgerEntry,
   OrderFinancialRow,
   ForecastKpiSummary
 } from '../../core/models/accounting.models';
@@ -22,12 +21,20 @@ import {
         <div class="header-left">
           <div class="title-row">
             <h1 class="page-title">Finansal Raporlama Muhasebe Paneli</h1>
-            <span class="live-status-pill">
-              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: 97 kayıt | 03.09.2026 - 03.10.2026
+            <span class="live-status-pill" *ngIf="financialPerformance && !loadError">
+              <span class="live-dot"></span> Etsy/VDS finansal performans verisi
             </span>
+            <span class="live-status-pill" *ngIf="isLoading">Finansal veriler yükleniyor…</span>
+            <span class="live-status-pill" *ngIf="loadError">{{ loadError }}</span>
           </div>
+
           <p class="page-subtitle">Etsy Payment Account hareketleri, sipariş kâr marjları ve çok katmanlı maliyet denetimi</p>
         </div>
+
+      <div class="empty-state-box" *ngIf="!isLoading && loadError">{{ loadError }}</div>
+      <div class="empty-state-box" *ngIf="!isLoading && !loadError && financialPerformance && grossSalesUsd === 0 && bankPayoutRecords.length === 0">
+        Seçili dönemde senkronize edilmiş finansal veya payout verisi bulunamadı.
+      </div>
 
         <div class="header-actions">
           <!-- LIVE CURRENCY TOGGLE -->
@@ -64,9 +71,9 @@ import {
 
         <!-- Date Range Pickers -->
         <div class="bar-control-group dates">
-          <input type="text" [(ngModel)]="startDate" class="bar-date-input" />
+          <input type="date" [(ngModel)]="startDate" class="bar-date-input" />
           <span class="date-sep">—</span>
-          <input type="text" [(ngModel)]="endDate" class="bar-date-input" />
+          <input type="date" [(ngModel)]="endDate" class="bar-date-input" />
         </div>
 
         <!-- Action Buttons -->
@@ -275,9 +282,7 @@ import {
             <div class="orders-summary-label">
               <span>📦 <strong>{{ filteredOrders.length }} sipariş</strong></span>
               <span class="sep">|</span>
-              <span>Sipariş Kârı: <strong class="text-success">₺24.756,89 ($507,17)</strong></span>
-              <span class="sep">|</span>
-              <span>Mağaza Net: <strong class="text-emerald">₺22.077,69</strong></span>
+              <span>Mağaza net kârı: <strong class="text-emerald">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</strong></span>
               <span class="sep">|</span>
               <span class="missing-badge" *ngIf="missingCostCount > 0">
                 ⚠️ {{ missingCostCount }} maliyetsiz
@@ -351,6 +356,8 @@ import {
                     Kargo Faturası
                   </th>
                 </tr>
+                  <tr *ngIf="filteredOrders.length === 0"><td colspan="15" class="empty-table-cell">Tam sipariş ayrıntısı (alıcı, ürün, durum ve satır bazlı maliyet) mevcut API’de sunulmuyor. Bu tablo örnek sipariş göstermiyor.</td></tr>
+                  <tr *ngIf="ledgerEntries.length === 0"><td colspan="10" class="empty-table-cell">Satır bazlı ödeme defteri API’de mevcut değil; bu kayıtlar gösterilemiyor.</td></tr>
               </thead>
               <tbody>
                 <tr *ngFor="let o of filteredOrders" 
@@ -411,33 +418,33 @@ import {
               <div class="chart-bar-container">
                 <div class="chart-col">
                   <div class="bar-wrap">
-                    <div class="bar gross-bar" style="height: 85%;"></div>
+                  <div class="bar gross-bar" [style.height.%]="chartHeight(grossSalesUsd)"></div>
                   </div>
-                  <span class="bar-lbl">Brüt Satış<br><strong>₺54.608</strong></span>
+                  <span class="bar-lbl">Brüt Satış<br><strong>{{ formatKpi(grossSalesTry, grossSalesUsd) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
-                    <div class="bar fees-bar" style="height: 25%;"></div>
+                  <div class="bar fees-bar" [style.height.%]="chartHeight(etsyFeesUsd)"></div>
                   </div>
-                  <span class="bar-lbl">Kesintiler<br><strong>₺12.783</strong></span>
+                  <span class="bar-lbl">Kesintiler<br><strong>{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
-                    <div class="bar ads-bar" style="height: 12%;"></div>
+                  <div class="bar ads-bar" [style.height.%]="chartHeight(innerAdsUsd + offsiteAdsUsd)"></div>
                   </div>
-                  <span class="bar-lbl">Reklamlar<br><strong>₺4.334</strong></span>
+                  <span class="bar-lbl">Reklamlar<br><strong>{{ formatKpi(innerAdsTry + offsiteAdsTry, innerAdsUsd + offsiteAdsUsd) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
-                    <div class="bar costs-bar" style="height: 28%;"></div>
+                  <div class="bar costs-bar" [style.height.%]="chartHeight(productCostsUsd + shippingCostsUsd)"></div>
                   </div>
-                  <span class="bar-lbl">Maliyetler<br><strong>₺13.524</strong></span>
+                  <span class="bar-lbl">Maliyetler<br><strong>{{ formatKpi(productCostsTry + financialPerformance?.shippingCosts! * liveRate, productCostsUsd + (financialPerformance?.shippingCosts || 0)) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
-                    <div class="bar profit-bar" style="height: 48%;"></div>
+                  <div class="bar profit-bar" [style.height.%]="chartHeight(realNetProfitUsd)"></div>
                   </div>
-                  <span class="bar-lbl">Net Kâr<br><strong>₺22.077</strong></span>
+                  <span class="bar-lbl">Net Kâr<br><strong>{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</strong></span>
                 </div>
               </div>
             </div>
@@ -445,30 +452,7 @@ import {
             <div class="chart-card">
               <h3 class="chart-title">🥧 Gider Dağılımı ve Maliyet Payları</h3>
               <div class="expense-breakdown-list">
-                <div class="expense-row">
-                  <span class="exp-dot orange"></span>
-                  <span class="exp-name">Ürün & Kargo Maliyetleri</span>
-                  <span class="exp-pct">%41.5</span>
-                  <span class="exp-val">₺13.524,10</span>
-                </div>
-                <div class="expense-row">
-                  <span class="exp-dot yellow"></span>
-                  <span class="exp-name">Etsy Komisyon & İşlem Ücreti</span>
-                  <span class="exp-pct">%39.2</span>
-                  <span class="exp-val">₺12.783,71</span>
-                </div>
-                <div class="expense-row">
-                  <span class="exp-dot red"></span>
-                  <span class="exp-name">Offsite & Etsy Ads Reklamları</span>
-                  <span class="exp-pct">%13.4</span>
-                  <span class="exp-val">₺4.334,59</span>
-                </div>
-                <div class="expense-row">
-                  <span class="exp-dot purple"></span>
-                  <span class="exp-name">Müşteri İadeleri</span>
-                  <span class="exp-pct">%5.9</span>
-                  <span class="exp-val">₺1.888,14</span>
-                </div>
+                <div class="empty-state-box">API gider kategorisi detayını sağlamıyor; dönem toplamları yalnızca üst KPI’larda gösteriliyor.</div>
               </div>
             </div>
           </div>
@@ -477,42 +461,12 @@ import {
         <!-- TAB 2: AI KÂR & CİRO TAHMİNİ -->
         <div *ngIf="activeTab === 'forecast'" class="tab-pane">
           <div class="forecast-grid-4">
-            <div class="forecast-card primary">
-              <div class="fc-title">🔮 GELECEK AY BEKLENEN CİRO</div>
-              <div class="fc-value">$1,350 / ₺66,312</div>
-              <div class="fc-sub">Min: $1,150 — Max: $1,580</div>
-            </div>
+              <div class="forecast-card primary"><div class="fc-title">Tahmin verisi yok</div><div class="fc-sub">Bu panel için doğrulanabilir tahmin API’si bağlı değil.</div></div>
 
-            <div class="forecast-card success">
-              <div class="fc-title">💵 BEKLENEN GERÇEK NET KÂR</div>
-              <div class="fc-value">$545 / ₺26,770</div>
-              <div class="fc-sub">Beklenen Kâr Marjı: %40.4</div>
-            </div>
-
-            <div class="forecast-card sky">
-              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME</div>
-              <div class="fc-value">14 Sipariş</div>
-              <div class="fc-sub">Aylık Büyüme: +%22.5</div>
-            </div>
-
-            <div class="forecast-card warning">
-              <div class="fc-title">🖨️ STOK & HAMMADDE İHTİYACI</div>
-              <div class="fc-value">3.8 kg Filament</div>
-              <div class="fc-sub">12 Adet Kargo Kutusu</div>
-            </div>
+            <div class="forecast-card success"><div class="fc-title">Tahminleme desteklenmiyor</div><div class="fc-sub">Yeterli geçmiş veri ve doğrulanmış tahmin servisi bulunmuyor.</div></div>
           </div>
 
-          <div class="ai-cfo-panel">
-            <div class="ai-cfo-header">
-              <span class="sparkle">✨</span>
-              <h4>Gemini Spark AI CFO - Mağaza Büyüme ve Kârlılık Raporu</h4>
-            </div>
-            <div class="ai-cfo-body">
-              <p>• <strong>Dönüşüm Oranı Analizi:</strong> 3D Printed Butterfly Balisong modeli %420 net marj ve %41.4 kâr katkısıyla mağazanızın amiral gemisidir. Reklam bütçenizi bu ürüne %15 artırmanız önerilir.</p>
-              <p>• <strong>Offsite Ads Uyarısı:</strong> Dış reklamlardan gelen 3 sipariş için $80.01 (%15 kesinti) ödenmiştir. Yüksek marjlı ürünler dışında Offsite reklamları sınırlandırmak net kârınızı ₺3.900 artıracaktır.</p>
-              <p>• <strong>Maliyet Girişi:</strong> #4174201942 nolu Ben 10 siparişinin filament maliyetini girdiğinizde gerçek net kârınız netleşecektir.</p>
-            </div>
-          </div>
+          <div class="ai-cfo-panel">Finansal tahmin ve AI önerileri için backend analiz endpoint’i kullanılmalı. Bu ekranda demo öneri gösterilmez.</div>
         </div>
 
         <!-- TAB 3: DÖNEMSEL MUHASEBE -->
@@ -533,28 +487,18 @@ import {
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td><strong>Eylül - Ekim 2026</strong></td>
-                  <td class="text-success">₺54.608,24</td>
-                  <td class="text-warning">-₺12.783,71</td>
-                  <td class="text-danger">-₺4.334,59</td>
-                  <td class="text-danger">-₺1.888,14</td>
-                  <td class="text-warning">-₺13.524,10</td>
-                  <td class="text-primary">₺35.601,79</td>
-                  <td class="text-emerald"><strong>₺22.077,69</strong></td>
-                  <td><span class="margin-pill">%40.4</span></td>
+                <tr *ngIf="financialPerformance">
+                  <td><strong>{{ financialPerformance.startDate | date:'mediumDate' }} - {{ financialPerformance.endDate | date:'mediumDate' }}</strong></td>
+                  <td class="text-success">{{ financialPerformance.grossSales * liveRate | currency:'TRY' }}</td>
+                  <td class="text-warning">-{{ financialPerformance.platformFees * liveRate | currency:'TRY' }}</td>
+                  <td class="text-danger">-{{ (financialPerformance.internalAdsCost + financialPerformance.externalAdsCost) * liveRate | currency:'TRY' }}</td>
+                  <td class="text-danger">-{{ financialPerformance.refunds * liveRate | currency:'TRY' }}</td>
+                  <td class="text-warning">-{{ (financialPerformance.productCosts + financialPerformance.shippingCosts) * liveRate | currency:'TRY' }}</td>
+                  <td class="text-primary">{{ (financialPerformance.grossSales - financialPerformance.platformFees - financialPerformance.internalAdsCost - financialPerformance.externalAdsCost - financialPerformance.refunds) * liveRate | currency:'TRY' }}</td>
+                  <td class="text-emerald"><strong>{{ financialPerformance.netProfit * liveRate | currency:'TRY' }}</strong></td>
+                  <td><span class="margin-pill">{{ financialPerformance.netProfitMargin | percent:'1.0-1' }}</span></td>
                 </tr>
-                <tr>
-                  <td><strong>Ağustos 2026</strong></td>
-                  <td class="text-success">₺48.120,50</td>
-                  <td class="text-warning">-₺11.230,10</td>
-                  <td class="text-danger">-₺3.850,00</td>
-                  <td class="text-danger">-₺940,00</td>
-                  <td class="text-warning">-₺12.100,00</td>
-                  <td class="text-primary">₺32.100,40</td>
-                  <td class="text-emerald"><strong>₺20.000,40</strong></td>
-                  <td><span class="margin-pill">%41.5</span></td>
-                </tr>
+                <tr *ngIf="!financialPerformance"><td colspan="9" class="empty-table-cell">API’den dönemsel finans verisi gelmedi.</td></tr>
               </tbody>
             </table>
           </div>
@@ -652,26 +596,22 @@ import {
           </div>
           <div class="modal-body">
             <div class="rec-section">
-              <h4>1️⃣ Siparişlerin Toplam Katkı Kârı: <span class="text-success">₺24.756,89 ($507,17)</span></h4>
-              <p>• Tek tek 10 adet siparişten elde edilen doğrudan ürün operasyon kârıdır.</p>
-              <p>• Henüz mağaza geneline ait olan reklamlar ve genel giderler bundan düşülmemiştir.</p>
+              <h4>1️⃣ Sipariş kârı: <span class="text-success">Sipariş düzeyinde kâr API’de bulunmuyor.</span></h4>
+              <p>Mevcut API yalnızca dönemsel finansal toplamı döndürüyor; sipariş bazlı katkı kârı ve gider mutabakatı oluşturulamaz.</p>
             </div>
 
             <div class="rec-section">
               <h4>2️⃣ Mağaza Geneline Ait Giderler (Siparişten Bağımsız):</h4>
               <ul>
-                <li>📢 <strong>Etsy Ads İç Reklam:</strong> <span class="text-danger">-₺404,30</span></li>
-                <li>🌐 <strong>Offsite Ads Dış Reklam:</strong> <span class="text-orange">-₺3.930,29</span></li>
-                <li>↩️ <strong>Dönemsel İadeler:</strong> <span class="text-danger">-₺1.888,14</span></li>
-                <li>⚠️ <strong>1 siparişin (#4174201942)</strong> maliyeti girilmediği için geçici olarak yüksek görünmektedir.</li>
+                <li>Reklam ve iade toplamları API’den alınır; satır bazlı nedenler ve sipariş eşlemesi mevcut değildir.</li>
               </ul>
             </div>
 
             <div class="rec-divider"></div>
 
             <div class="rec-final">
-              <h4>🏛️ Üst Karttaki GERÇEK NET KÂR: <span class="text-emerald">₺22.077,69 ($449,46)</span></h4>
-              <p>(Tüm mağaza reklamları, iadeler ve genel giderler düşüldükten sonra banka hesabınıza ve cebinize kalan nihai kârdır.)</p>
+              <h4>🏛️ Dönem net kârı: <span class="text-emerald">{{ financialPerformance ? formatKpi(realNetProfitTry, realNetProfitUsd) : 'Veri yok' }}</span></h4>
+              <p>Bu değer API’nin dönemsel finans raporudur; banka payout toplamıyla aynı kavram değildir.</p>
             </div>
           </div>
           <div class="modal-footer">
@@ -743,7 +683,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)</h3>
-              <p class="modal-sub">Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: <strong>₺27.594,90</strong></p>
+              <p class="modal-sub">Seçili dönemde dönen payout kayıtları: <strong>{{ bankPayoutRecords.length }}</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -751,18 +691,24 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Banka Yatırımı</span>
-                <span class="box-val text-cyan">₺27.594,90</span>
-                <span class="box-sub">10 Transfer</span>
+                <span class="box-val text-cyan">{{ formatNumber(bankPayoutsTry) }} ₺</span>
+                <span class="box-sub">{{ bankPayoutRecords.length }} transfer</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">En Son Yatırılan Tarih</span>
-                <span class="box-val text-white">01.10.2026</span>
-                <span class="box-sub">Son: ₺4.359,09</span>
+                <ng-container *ngIf="latestPayout as payout; else noPayout">
+                  <span class="box-val text-white">{{ payout.occurredAt | date:'shortDate' }}</span>
+                  <span class="box-sub">Son tutar: {{ payout.amount | currency:payout.currency }}</span>
+                </ng-container>
+                <ng-template #noPayout>
+                  <span class="box-val text-white">—</span>
+                  <span class="box-sub">Henüz payout kaydı yok.</span>
+                </ng-template>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Ortalama Transfer</span>
-                <span class="box-val text-primary">₺2.759,49</span>
-                <span class="box-sub">Net Gelirin %77,5'i</span>
+                <span class="box-val text-primary">{{ bankPayoutRecords.length ? formatNumber(bankPayoutsTry / bankPayoutRecords.length) + ' ₺' : '—' }}</span>
+                <span class="box-sub">Kayıt başına ortalama TRY karşılığı</span>
               </div>
             </div>
 
@@ -780,20 +726,19 @@ import {
                 </thead>
                 <tbody>
                   <tr *ngFor="let p of bankPayoutRecords">
-                    <td class="date-cell">{{ p.date }}</td>
-                    <td class="ref-cell">{{ p.refNo }}</td>
-                    <td>{{ p.type }}</td>
-                    <td class="amount-cell text-emerald">+₺{{ formatNumber(p.amount) }}</td>
-                    <td><span class="badge-status-payout">✅ {{ p.status }}</span></td>
-                    <td class="note-cell">{{ p.note }}</td>
+                    <td class="date-cell">{{ p.occurredAt | date:'short' }}</td>
+                    <td class="ref-cell">{{ p.referenceId }}</td>
+                    <td>Banka transferi</td>
+                    <td class="amount-cell text-emerald">{{ p.amount | currency:p.currency }}</td>
+                    <td><span class="badge-status-payout">{{ p.status }}</span></td>
+                    <td class="note-cell">{{ p.description }}</td>
                   </tr>
+                  <tr *ngIf="bankPayoutRecords.length === 0"><td colspan="6" class="empty-table-cell">Bu dönemde API’den payout kaydı gelmedi.</td></tr>
                 </tbody>
               </table>
             </div>
 
-            <div class="drilldown-footnote">
-              💡 [ İpucu: Etsy ödemeleri bankanıza gönderdikten sonra bankanızın işleme alma hızına göre 1-3 iş günü içinde hesabınıza geçer. ]
-            </div>
+            <div class="drilldown-footnote">Payout kaydındaki açıklama, durum ve kur bilgileri API yanıtından gösterilir. Banka adı veya hesap bilgisi API tarafından sağlanmıyor.</div>
           </div>
           <div class="modal-footer">
             <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
@@ -807,7 +752,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>📦 Sipariş & Kargo Maliyet Analizi</h3>
-              <p class="modal-sub">Toplam Sipariş Maliyeti (COGS): <strong>₺13.524,10</strong> | Kargo Harcamaları ve Fatura Durumu</p>
+              <p class="modal-sub">Sipariş bazlı ürün/kargo maliyet ayrıntıları mevcut API’de bulunmuyor.</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -815,18 +760,18 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Kargo Maliyeti</span>
-                <span class="box-val text-warning">₺8.126,93</span>
-                <span class="box-sub">Maliyetin %60,1'i</span>
+                <span class="box-val text-warning">{{ financialPerformance ? formatKpi(financialPerformance.shippingCosts * liveRate, financialPerformance.shippingCosts) : '—' }}</span>
+                <span class="box-sub">Dönemsel API toplamı</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Üretim / Hammadde</span>
-                <span class="box-val text-primary">₺5.397,16</span>
-                <span class="box-sub">Filament & 3D Yazıcı Payı</span>
+                <span class="box-val text-primary">{{ financialPerformance ? formatKpi(productCostsTry, productCostsUsd) : '—' }}</span>
+                <span class="box-sub">Dönemsel API toplamı</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Paketleme & Fatura</span>
-                <span class="box-val text-emerald">₺0,00</span>
-                <span class="box-sub">1 Fatura Kayıtlı</span>
+                <span class="box-val text-emerald">—</span>
+                <span class="box-sub">Fatura verisi API’de yok</span>
               </div>
             </div>
 
@@ -841,6 +786,7 @@ import {
                     <th>Fatura</th>
                     <th>Ürün / İlan Başlığı</th>
                   </tr>
+                  <tr *ngIf="orderCostShippingRecords.length === 0"><td colspan="6" class="empty-table-cell">Siparişe bağlı maliyet ve fatura ayrıntısı API’de sunulmuyor.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let s of orderCostShippingRecords">
@@ -870,7 +816,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>💵 Gerçek Net Kâr & Bilanço Analizi</h3>
-              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>₺22.077,69</strong></p>
+              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>₺ 22.077,69</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -888,8 +834,8 @@ import {
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Gerçek Net Kâr</span>
-                <span class="box-val text-emerald">₺22.077,69</span>
-                <span class="box-sub">%40,4 Net Kâr Marjı</span>
+                <span class="box-val text-emerald">{{ financialPerformance ? formatKpi(realNetProfitTry, realNetProfitUsd) : '—' }}</span>
+                <span class="box-sub">{{ financialPerformance ? (financialPerformance.netProfitMargin | percent:'1.0-1') + ' net kâr marjı' : 'Veri yok' }}</span>
               </div>
             </div>
 
@@ -936,7 +882,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🟢 Satış ve Gelir Analizi (Brüt Satış)</h3>
-              <p class="modal-sub">Dönem Toplam Brüt Satış: <strong>₺54.608,24</strong> ($1.111,73 USD) | 10 İşlem</p>
+              <p class="modal-sub">Dönem brüt satış toplamı API’den alınır. Sipariş/işlem satırları mevcut API’de sunulmuyor.</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -944,18 +890,18 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Brüt Satış</span>
-                <span class="box-val text-emerald">₺54.608,24</span>
-                <span class="box-sub">$1.111,73 USD</span>
+                <span class="box-val text-emerald">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</span>
+                <span class="box-sub">{{ financialPerformance?.currency || '—' }}</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Sipariş Sayısı</span>
-                <span class="box-val text-primary">10 Sipariş</span>
-                <span class="box-sub">9 Başarılı, 1 İptal</span>
+                <span class="box-val text-primary">—</span>
+                <span class="box-sub">Sipariş sayısı API tarafından sunulmuyor.</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Ortalama Sepet Tutarı (AOV)</span>
-                <span class="box-val text-emerald">₺5.460,82</span>
-                <span class="box-sub">$111,17 USD / Sipariş</span>
+                <span class="box-llbl">Ortalama Sepet Tutarı (AOV)</span>
+                <span class="box-val text-emerald">—</span>
+                <span class="box-sub">Sipariş sayısı olmadan hesaplanamaz.</span>
               </div>
             </div>
 
@@ -971,6 +917,7 @@ import {
                     <th>Tutar (₺)</th>
                     <th>Ödeme Tipi</th>
                   </tr>
+                  <tr *ngIf="salesRecords.length === 0"><td colspan="7" class="empty-table-cell">İşlem satırları API’de sunulmuyor; yalnızca dönem toplamı mevcuttur.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let s of salesRecords">
@@ -1002,7 +949,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🏷️ Etsy Komisyon & Kesinti Analizi</h3>
-              <p class="modal-sub">Etsy Tarafından Kesilen Toplam Komisyon ve Masraflar: <strong>-₺12.783,71</strong> (-$260,25 USD)</p>
+              <p class="modal-sub">Dönemsel toplam komisyon: {{ financialPerformance ? formatKpi(etsyFeesTry, etsyFeesUsd) : 'Veri yok' }}. Kesinti türü ayrıntısı API’de sunulmuyor.</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1010,18 +957,18 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Kesinti Tutarı</span>
-                <span class="box-val text-warning">-₺12.783,71</span>
-                <span class="box-sub">-$260,25 USD</span>
+                <span class="box-val text-warning">-{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</span>
+                <span class="box-sub">Toplam platform kesintisi</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Komisyon / Brüt Satış Oranı</span>
-                <span class="box-val text-orange">%23,41</span>
-                <span class="box-sub">Standart Komisyon + KDV</span>
+                <span class="box-val text-orange">{{ grossSalesUsd ? (etsyFeesUsd / grossSalesUsd | percent:'1.0-1') : '—' }}</span>
+                <span class="box-sub">Dönem toplam kesinti / brüt satış</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">KDV Tevkifatı (TR %20)</span>
-                <span class="box-val text-danger">₺1.383,22</span>
-                <span class="box-sub">Kesintiler Üzerinden KDV</span>
+                <span class="box-lbl">Kesinti kategorisi</span>
+                <span class="box-val text-danger">—</span>
+                <span class="box-sub">KDV ayrıştırması API’de mevcut değil.</span>
               </div>
             </div>
 
@@ -1036,6 +983,7 @@ import {
                     <th>Kesinti (₺)</th>
                     <th>Açıklama / Formül</th>
                   </tr>
+                  <tr *ngIf="feesRecords.length === 0"><td colspan="6" class="empty-table-cell">Komisyon/ücret bazında defter hareketi API’de sunulmuyor.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let f of feesRecords">
@@ -1051,7 +999,7 @@ import {
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Bilgi: Etsy, Türkiye merkezli mağazalarda tüm komisyonlar üzerinden %20 yasal KDV ve %1.25 Düzenleyici İşletme Ücreti keser. ]
+              Kesinti türlerinin vergi ayrıştırması API’den alınmadığından burada hesaplanıp gösterilmez.
             </div>
           </div>
           <div class="modal-footer">
@@ -1066,7 +1014,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>📢 Etsy Ads İç Reklam Analizi</h3>
-              <p class="modal-sub">Etsy Arama İçi Tıklama Başı Sponsorlu Reklam Harcamaları: <strong>-₺404,30</strong> (-$8,23 USD)</p>
+              <p class="modal-sub">Reklam toplamları API’den alınır; günlük reklam kırılımı mevcut API’de sunulmuyor.</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1074,8 +1022,8 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Reklam Harcaması</span>
-                <span class="box-val text-danger">-₺404,30</span>
-                <span class="box-sub">-$8,23 USD</span>
+                <span class="box-val text-danger">-{{ formatKpi(innerAdsTry, innerAdsUsd) }}</span>
+                <span class="box-sub">İç reklam dönem toplamı</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Reklam Kaynaklı Gelir</span>
@@ -1101,6 +1049,7 @@ import {
                     <th>Reklam Geliri ($)</th>
                     <th>ROAS</th>
                   </tr>
+                  <tr *ngIf="innerAdsRecords.length === 0"><td colspan="7" class="empty-table-cell">Günlük Etsy Ads verisi API’de mevcut değil.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let ad of innerAdsRecords">
@@ -1112,6 +1061,7 @@ import {
                     <td class="amount-cell text-emerald">{{ '$' + ad.salesUsd.toFixed(2) }}</td>
                     <td><strong [class.text-emerald]="ad.roas !== '0.0x'">{{ ad.roas }}</strong></td>
                   </tr>
+                  <tr *ngIf="offsiteAdsRecords.length === 0"><td colspan="6" class="empty-table-cell">Offsite Ads satırları ve kaynak kanalı API’de mevcut değil.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1167,6 +1117,7 @@ import {
                     <th>Kesinti (₺)</th>
                     <th>Reklam Kanalı</th>
                   </tr>
+                  <tr *ngIf="refundRecords.length === 0"><td colspan="7" class="empty-table-cell">İade toplamı dönemsel finans DTO’sunda bulunabilir; sipariş bazlı iade satırları API’de sunulmuyor.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let off of offsiteAdsRecords">
@@ -1264,7 +1215,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>💎 Etsy Net Gelir & Platform Hakediş Analizi</h3>
-              <p class="modal-sub">Tüm Platform Kesintileri ve İadeler Sonrası Saf Etsy Hakedişi: <strong>₺35.601,79</strong> ($724,80 USD)</p>
+              <p class="modal-sub">Dönemsel net gelir, desteklenen finans toplamlarından hesaplanır; ödeme defteri satırları mevcut değildir.</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1272,18 +1223,18 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Brüt Satış Geliri</span>
-                <span class="box-val text-emerald">₺54.608,24</span>
-                <span class="box-sub">$1.111,73 USD</span>
+                <span class="box-val text-emerald">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</span>
+                <span class="box-sub">Brüt satış toplamı</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Platform Giderleri Toplamı</span>
-                <span class="box-val text-danger">-₺19.006,45</span>
-                <span class="box-sub">Komisyon, Reklam & İadeler</span>
+                <span class="box-val text-danger">-{{ formatKpi((etsyFeesTry + innerAdsTry + offsiteAdsTry + refundsTry), (etsyFeesUsd + innerAdsUsd + offsiteAdsUsd + refundsUsd)) }}</span>
+                <span class="box-sub">API dönem toplamlarından hesaplandı</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Etsy Net Hakediş</span>
-                <span class="box-val text-primary">₺35.601,79</span>
-                <span class="box-sub">$724,80 USD</span>
+                <span class="box-val text-primary">{{ formatKpi(netIncomeTry, netIncomeUsd) }}</span>
+                <span class="box-sub">Hesaplanan dönem net geliri</span>
               </div>
             </div>
 
@@ -1296,6 +1247,7 @@ import {
                     <th>Tutar (₺)</th>
                     <th>Muhasebe Açıklaması</th>
                   </tr>
+                  <tr *ngIf="netIncomeRecords.length === 0"><td colspan="4" class="empty-table-cell">Satır bazlı hesap kalemleri API’de bulunmuyor.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let n of netIncomeRecords" [class.highlight-row]="n.category.includes('NET HAKEDİŞ')">
@@ -1554,7 +1506,7 @@ import {
     .kpi-indicator.red { background: #ef4444; }
     .kpi-indicator.dark-orange { background: #ea580c; }
     .kpi-indicator.indigo { background: #6366f1; }
-    .kpi-indicator.emerald { background: #34d399; box-shadow: 0 0 6px #34d399; }
+    .kpi-indicator.emerald { background: #34d399; box-shadow: 0 0 10px rgba(52, 211, 153, 0.5); }
     .kpi-indicator.cyan { background: #06b6d4; }
 
     .text-success { color: #34d399; }
@@ -1810,7 +1762,7 @@ import {
     .exp-dot.purple { background: #a855f7; }
     .exp-name { flex: 1; color: #cbd5e1; }
     .exp-pct { font-weight: 700; color: #94a3b8; }
-    .exp-val { font-weight: 700; color: #fff; width: 90px; text-align: right; }
+    .exp-val { font-weight: 700, color: #fff; width: 90px; text-align: right; }
 
     /* MODALS */
     .modal-backdrop {
@@ -2193,280 +2145,49 @@ export class AccountingComponent implements OnInit, OnDestroy {
   isRefreshing = false;
   isSyncingVds = false;
   toastMessage = '';
+  isLoading = false;
+  loadError = '';
+  financialPerformance: FinancialPerformanceDto | null = null;
 
   // 9 KPI Values (Matching Desktop Image 2)
-  grossSalesTry = 54608.24;
-  grossSalesUsd = 1111.73;
+  grossSalesTry = 0;
+  grossSalesUsd = 0;
+  get shippingCostsUsd(): number { return this.financialPerformance?.shippingCosts ?? 0; }
 
-  etsyFeesTry = 12783.71;
-  etsyFeesUsd = 260.25;
+  etsyFeesTry = 0;
+  etsyFeesUsd = 0;
 
-  innerAdsTry = 404.30;
-  innerAdsUsd = 8.23;
+  innerAdsTry = 0;
+  innerAdsUsd = 0;
 
-  offsiteAdsTry = 3930.29;
-  offsiteAdsUsd = 80.01;
+  offsiteAdsTry = 0;
+  offsiteAdsUsd = 0;
 
-  refundsTry = 1888.14;
-  refundsUsd = 38.44;
+  refundsTry = 0;
+  refundsUsd = 0;
 
-  netIncomeTry = 35601.79;
-  netIncomeUsd = 724.80;
+  netIncomeTry = 0;
+  netIncomeUsd = 0;
 
-  productCostsTry = 13524.10;
-  productCostsUsd = 275.33;
+  productCostsTry = 0;
+  productCostsUsd = 0;
 
-  realNetProfitTry = 22077.69;
-  realNetProfitUsd = 449.46;
+  realNetProfitTry = 0;
+  realNetProfitUsd = 0;
 
-  bankPayoutsTry = 27594.89;
-  bankPayoutsUsd = 561.78;
+  bankPayoutsTry = 0;
+  bankPayoutsUsd = 0;
+  get netIncomeExpensesTry(): number { return this.etsyFeesTry + this.innerAdsTry + this.offsiteAdsTry + this.refundsTry; }
+  get netIncomeExpensesUsd(): number { return this.etsyFeesUsd + this.innerAdsUsd + this.offsiteAdsUsd + this.refundsUsd; }
 
   // Order List & Filtering
   orderSearchQuery = '';
   orderCostFilter = 'all';
-  orders: OrderFinancialRow[] = [
-    {
-      orderDate: '01.10.2026 14:22',
-      receiptId: '4188710928',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Jamie Westerman (#29481)',
-      productTitle: '3D Printed Butterfly Trainer Blade Custom Balisong',
-      quantity: 1,
-      grandTotalUsd: 35.31,
-      etsyFeesUsd: 5.10,
-      offsiteAdFeeUsd: 5.47,
-      productCostUsd: 10.42,
-      netProfitUsd: 14.62,
-      exchangeRate: 49.05,
-      netProfitTry: 717.11,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '01.10.2026 09:15',
-      receiptId: '4188192041',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Diane Barrow (#19482)',
-      productTitle: 'Captain Jack Sparrow Compass Functional Replica',
-      quantity: 1,
-      grandTotalUsd: 156.60,
-      etsyFeesUsd: 47.08,
-      offsiteAdFeeUsd: 19.68,
-      productCostUsd: 41.96,
-      netProfitUsd: 47.68,
-      exchangeRate: 49.02,
-      netProfitTry: 2337.27,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '30.09.2026 18:40',
-      receiptId: '4187920145',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Nathan McCoy (#38210)',
-      productTitle: 'Fallout Pip Boy 3000 Mk IV Wearable Bluetooth',
-      quantity: 1,
-      grandTotalUsd: 97.20,
-      etsyFeesUsd: 29.27,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 25.00,
-      netProfitUsd: 42.93,
-      exchangeRate: 49.02,
-      netProfitTry: 2104.43,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '28.09.2026 21:10',
-      receiptId: '4187294810',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Sandro Sobral (#49182)',
-      productTitle: 'Captain Jack Sparrow Compass Functional Replica',
-      quantity: 1,
-      grandTotalUsd: 149.99,
-      etsyFeesUsd: 32.47,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 41.96,
-      netProfitUsd: 75.56,
-      exchangeRate: 48.93,
-      netProfitTry: 3697.15,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '26.09.2026 16:30',
-      receiptId: '4185194820',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Anthony Drost (#20194)',
-      productTitle: 'Arcane Jinx Fishbones Rocket Launcher 3D Kit',
-      quantity: 1,
-      grandTotalUsd: 182.57,
-      etsyFeesUsd: 37.98,
-      offsiteAdFeeUsd: 25.01,
-      productCostUsd: 35.31,
-      netProfitUsd: 83.67,
-      exchangeRate: 48.89,
-      netProfitTry: 4090.63,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '18.09.2026 14:05',
-      receiptId: '4176629104',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Inge Neuer (#84912)',
-      productTitle: 'Michael Jackson Smooth Criminal Anti-Gravity Shoes',
-      quantity: 1,
-      grandTotalUsd: 107.10,
-      etsyFeesUsd: 31.55,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 34.00,
-      netProfitUsd: 41.55,
-      exchangeRate: 48.73,
-      netProfitTry: 2024.73,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '18.09.2026 11:20',
-      receiptId: '4176192840',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Adam Schultz (#19482)',
-      productTitle: 'Arcane Jinx Zap Gun LED Lighted Prop Replica',
-      quantity: 1,
-      grandTotalUsd: 170.50,
-      etsyFeesUsd: 39.39,
-      offsiteAdFeeUsd: 23.49,
-      productCostUsd: 38.31,
-      netProfitUsd: 69.31,
-      exchangeRate: 48.73,
-      netProfitTry: 3377.48,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '15.09.2026 19:45',
-      receiptId: '4174091823',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Liz Porter (#48192)',
-      productTitle: 'Lotr Aragorn Crown Elessar King of Gondor Helmet',
-      quantity: 1,
-      grandTotalUsd: 86.25,
-      etsyFeesUsd: 12.80,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 38.67,
-      netProfitUsd: 34.78,
-      exchangeRate: 48.64,
-      netProfitTry: 1691.70,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '14.09.2026 13:10',
-      receiptId: '4174201942',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Barbara Yaptangco (#9184)',
-      productTitle: 'Ben 10 Classic Omnitrix Functional Dial & Sound',
-      quantity: 1,
-      grandTotalUsd: 107.29,
-      etsyFeesUsd: 24.73,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: null,
-      netProfitUsd: 82.56,
-      exchangeRate: 48.61,
-      netProfitTry: 4013.24,
-      hasCostData: false,
-      hasInvoice: false
-    },
-    {
-      orderDate: '07.09.2026 10:30',
-      receiptId: '4168019481',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Heather Taylor (#29481)',
-      productTitle: '3D Printed Butterfly Trainer Blade Custom Balisong',
-      quantity: 1,
-      grandTotalUsd: 39.34,
-      etsyFeesUsd: 7.96,
-      offsiteAdFeeUsd: 5.59,
-      productCostUsd: 11.28,
-      netProfitUsd: 14.51,
-      exchangeRate: 48.46,
-      netProfitTry: 703.15,
-      hasCostData: true,
-      hasInvoice: true
-    }
-  ];
-
+  orders: OrderFinancialRow[] = [];
   filteredOrders: OrderFinancialRow[] = [];
 
   // Ledger Entries
-  ledgerEntries: PaymentLedgerEntry[] = [
-    {
-      id: 'TXN-908124',
-      entryDate: '2026-10-02 14:22',
-      transactionType: 'sale',
-      typeDisplay: 'Sipariş Ödemesi',
-      title: 'Ödeme Alma: #348912401 (Emily Watson)',
-      orderNumber: '#348912401',
-      grossAmount: 64.50,
-      feeAmount: -4.19,
-      netAmount: 60.31,
-      currency: 'USD',
-      netAmountTry: 2962.43,
-      runningBalance: 12450.80
-    },
-    {
-      id: 'TXN-908123',
-      entryDate: '2026-10-02 12:00',
-      transactionType: 'ad',
-      typeDisplay: 'Etsy Ads Tıklama',
-      title: 'Günlük Reklam Harcaması (Tıklama Başı Maliyet)',
-      grossAmount: 0,
-      feeAmount: -12.50,
-      netAmount: -12.50,
-      currency: 'USD',
-      netAmountTry: -614.00,
-      runningBalance: 12390.49
-    },
-    {
-      id: 'TXN-908122',
-      entryDate: '2026-10-02 09:15',
-      transactionType: 'sale',
-      typeDisplay: 'Sipariş Ödemesi',
-      title: 'Ödeme Alma: #348876102 (Oliver Smith)',
-      orderNumber: '#348876102',
-      grossAmount: 118.00,
-      feeAmount: -7.67,
-      netAmount: 110.33,
-      currency: 'USD',
-      netAmountTry: 5419.41,
-      runningBalance: 12402.99
-    },
-    {
-      id: 'TXN-908121',
-      entryDate: '2026-10-01 23:59',
-      transactionType: 'payout',
-      typeDisplay: 'Banka Transferi',
-      title: 'Banka Hesabına Aktarım (QNB Finansbank TR)',
-      grossAmount: 0,
-      feeAmount: 0,
-      netAmount: -561.78,
-      currency: 'USD',
-      netAmountTry: -27594.89,
-      runningBalance: 12292.66
-    }
-  ];
+  ledgerEntries: PaymentLedgerEntry[] = [];
 
   // Modals
   showSalesModal = false;
@@ -2490,99 +2211,42 @@ export class AccountingComponent implements OnInit, OnDestroy {
   sortDirection: 'asc' | 'desc' = 'asc';
 
   // Modal: Satış ve Gelir Analizi (Brüt Satış)
-  salesRecords = [
-    { date: '01.10.26 14:22', receiptId: '4188710928', buyer: 'Jamie Westerman', item: '3D Printed Butterfly Trainer Blade', amount: 35.31, tryAmount: 1731.96, paymentType: 'payment_gross' },
-    { date: '01.10.26 09:15', receiptId: '4188192041', buyer: 'Diane Barrow', item: 'Captain Jack Sparrow Compass Functional', amount: 156.60, tryAmount: 7676.53, paymentType: 'payment_gross' },
-    { date: '30.09.26 18:40', receiptId: '4187920145', buyer: 'Nathan McCoy', item: 'Fallout Pip Boy 3000 Mk IV Wearable', amount: 148.50, tryAmount: 7280.96, paymentType: 'payment_gross' },
-    { date: '28.09.26 21:05', receiptId: '4187299104', buyer: 'Sarah Jenkins', item: 'Captain Jack Sparrow Resin Statue', amount: 156.60, tryAmount: 7662.30, paymentType: 'payment_gross' },
-    { date: '25.09.26 16:30', receiptId: '4185189201', buyer: 'Lucas Meyer', item: 'Arcane Jinx Statue LoL Figure', amount: 147.20, tryAmount: 7178.94, paymentType: 'payment_gross' },
-    { date: '18.09.26 20:12', receiptId: '4178129840', buyer: 'Elena Rostova', item: 'Arcane Jinx Statue LoL Figure', amount: 169.50, tryAmount: 8259.74, paymentType: 'payment_gross' },
-    { date: '18.09.26 11:45', receiptId: '4176640192', buyer: 'David Kim', item: 'Michael Jackson Statue King of Pop', amount: 147.20, tryAmount: 7172.06, paymentType: 'payment_gross' },
-    { date: '15.09.26 13:20', receiptId: '4174028911', buyer: 'Marcus Vance', item: 'Lotr Aragorn Crown of Gondor', amount: 154.50, tryAmount: 7494.79, paymentType: 'payment_gross' },
-    { date: '14.09.26 08:50', receiptId: '4174291882', buyer: 'Tom Bradley', item: 'Ben 10 Classic Omnitrix Watch V2', amount: 0.00, tryAmount: 0.00, paymentType: 'canceled' },
-    { date: '07.09.26 17:15', receiptId: '4168074902', buyer: 'Chloe Bennett', item: '3D Printed Butterfly Trainer Blade', amount: 37.90, tryAmount: 1836.26, paymentType: 'payment_gross' }
-  ];
+  salesRecords: Array<{ date: string; receiptId: string; buyer: string; item: string; amount: number; tryAmount: number; paymentType: string }> = [];
 
   // Modal: Etsy Komisyon & Kesinti Analizi
-  feesRecords = [
-    { type: 'İşlem Komisyonu (%6.5)', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 72.26, feeTry: 3549.41, note: 'Etsy Transaction Fee (%6.5)' },
-    { type: 'Ödeme İşleme (Processing)', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 49.02, feeTry: 2407.86, note: 'Etsy Payments Processing Fee (%3 + $0.25)' },
-    { type: 'Listeleme Ücreti (Listing)', count: '28 Yenileme', baseUsd: 0, feeUsd: 5.60, feeTry: 275.07, note: 'Auto-renew listing fee ($0.20/adet)' },
-    { type: 'Düzenleyici İşletme Ücreti', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 13.90, feeTry: 682.77, note: 'Regulatory Operating Fee (TR %1.25)' },
-    { type: 'Etsy Kesinti KDV (VAT)', count: 'Tüm Kesintiler', baseUsd: 0, feeUsd: 28.16, feeTry: 1383.22, note: '%20 Türkiye KDV Tevkifatı' },
-    { type: 'Offsite Ads Dış Reklam Kesintisi', count: '3 Satış', baseUsd: 533.40, feeUsd: 80.01, feeTry: 3930.29, note: '%15 Offsite Ads komisyonu' },
-    { type: 'Etsy Ads Tıklama Harcaması', count: '68 Tıklama', baseUsd: 0, feeUsd: 8.23, feeTry: 404.30, note: 'Arama içi sponsorlu reklam harcaması' }
-  ];
+  feesRecords: Array<{ type: string; count: string; baseUsd: number; feeUsd: number; feeTry: number; note: string }> = [];
 
   // Modal: Etsy Ads İç Reklam Analizi
-  innerAdsRecords = [
-    { date: '02.10.2026', impressions: 420, clicks: 14, spendUsd: 1.82, spendTry: 89.40, salesUsd: 35.31, roas: '19.4x' },
-    { date: '01.10.2026', impressions: 385, clicks: 12, spendUsd: 1.56, spendTry: 76.47, salesUsd: 0.00, roas: '0.0x' },
-    { date: '30.09.2026', impressions: 512, clicks: 18, spendUsd: 2.34, spendTry: 114.71, salesUsd: 148.50, roas: '63.5x' },
-    { date: '29.09.2026', impressions: 310, clicks: 9, spendUsd: 1.17, spendTry: 57.35, salesUsd: 0.00, roas: '0.0x' },
-    { date: '28.09.2026', impressions: 405, clicks: 15, spendUsd: 1.34, spendTry: 65.69, salesUsd: 0.00, roas: '0.0x' }
-  ];
+  innerAdsRecords: Array<{ date: string; impressions: number; clicks: number; spendUsd: number; spendTry: number; salesUsd: number; roas: string }> = [];
 
   // Modal: Offsite Ads Dış Reklam Analizi
-  offsiteAdsRecords = [
-    { receiptId: '4188710928', buyer: 'Jamie Westerman', saleAmountUsd: 35.31, rate: '%15', feeUsd: 5.30, feeTry: 259.97, channel: 'Google Shopping' },
-    { receiptId: '4188192041', buyer: 'Diane Barrow', saleAmountUsd: 156.60, rate: '%15', feeUsd: 23.49, feeTry: 1151.48, channel: 'Facebook / Instagram' },
-    { receiptId: '4187299104', buyer: 'Sarah Jenkins', saleAmountUsd: 156.60, rate: '%15', feeUsd: 23.49, feeTry: 1150.31, channel: 'Pinterest Ads' },
-    { receiptId: '4178129840', buyer: 'Elena Rostova', saleAmountUsd: 169.50, rate: '%15', feeUsd: 25.43, feeTry: 1238.44, channel: 'Google Search Partner' }
-  ];
+  offsiteAdsRecords: Array<{ receiptId: string; buyer: string; saleAmountUsd: number; rate: string; feeUsd: number; feeTry: number; channel: string }> = [];
 
   // Modal: İade ve Geri Ödeme Analizi
-  refundRecords = [
-    { date: '14.09.2026 08:50', receiptId: '4174291882', buyer: 'Tom Bradley', item: 'Ben 10 Classic Omnitrix Watch V2', refundUsd: 38.44, refundTry: 1888.14, reason: 'Alıcı Adres Değişikliği / İptal Talebi', feeRefundedUsd: 4.80 }
-  ];
+  refundRecords: Array<{ date: string; receiptId: string; buyer: string; item: string; refundUsd: number; refundTry: number; reason: string }> = [];
 
   // Modal: Etsy Net Gelir Analizi
-  netIncomeRecords = [
-    { category: 'Brüt Satış Geliri', amountUsd: 1111.73, amountTry: 54608.24, isPositive: true, note: 'Müşterilerden tahsil edilen toplam sipariş tutarı' },
-    { category: 'Etsy Standart Komisyon & İşlem Ücreti', amountUsd: -148.98, amountTry: -7318.84, isPositive: false, note: 'Transaction, listing, processing & regulatory fee' },
-    { category: 'Offsite Ads Dış Reklam Kesintisi', amountUsd: -80.01, amountTry: -3930.29, isPositive: false, note: 'Dış arama motoru ve sosyal medya reklam payı' },
-    { category: 'Etsy Ads Arama İçi Reklam', amountUsd: -8.23, amountTry: -404.30, isPositive: false, note: 'Etsy içi tıklama başı reklam harcaması' },
-    { category: 'Etsy Kesinti KDV (VAT)', amountUsd: -28.16, amountTry: -1383.22, isPositive: false, note: 'Kesintilere uygulanan resmî KDV tevkifatı' },
-    { category: 'İadeler ve İptaller (Refunds)', amountUsd: -38.44, amountTry: -1888.14, isPositive: false, note: 'İade edilen sipariş tutarı' },
-    { category: 'NET HAKEDİŞ (ETSY NET GELİR)', amountUsd: 724.80, amountTry: 35601.79, isPositive: true, note: 'Banka hesabına aktarılmaya hazır nihai platform bakiyesi' }
-  ];
+  netIncomeRecords: Array<{ category: string; amountUsd: number; amountTry: number; isPositive: boolean; note: string }> = [];
+  orderCostShippingRecords: Array<{ date: string; receiptId: string; qty: number; shippingCostTry: number; invoice: string; title: string }> = [];
 
   // Modal 1 Data: Bank Payouts (Matching Görsel 2)
-  bankPayoutRecords = [
-    { date: '01.10.26 11:01', refNo: '#208503135526', type: 'Banka Transferi', amount: 4359.09, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 49.05₺)' },
-    { date: '28.09.26 11:04', refNo: '#208313484387', type: 'Banka Transferi', amount: 4403.77, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.93₺)' },
-    { date: '21.09.26 11:10', refNo: '#210139855281', type: 'Banka Transferi', amount: 3898.61, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.79₺)' },
-    { date: '18.09.26 11:01', refNo: '#207743529694', type: 'Banka Transferi', amount: 607.16, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.73₺)' },
-    { date: '17.09.26 11:00', refNo: '#209914284431', type: 'Banka Transferi', amount: 908.67, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.68₺)' },
-    { date: '16.09.26 11:01', refNo: '#207632008578', type: 'Banka Transferi', amount: 3142.58, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.66₺)' },
-    { date: '14.09.26 11:04', refNo: '#207510955300', type: 'Banka Transferi', amount: 961.62, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.61₺)' },
-    { date: '10.09.26 11:00', refNo: '#209507913407', type: 'Banka Transferi', amount: 4705.13, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.51₺)' },
-    { date: '09.09.26 11:01', refNo: '#209450052917', type: 'Banka Transferi', amount: 1693.64, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.47₺)' },
-    { date: '04.09.26 11:00', refNo: '#206922866600', type: 'Banka Transferi', amount: 2914.63, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.40₺)' }
-  ];
+  bankPayoutRecords: EtsyBankPayoutDto[] = [];
+  get latestPayout(): EtsyBankPayoutDto | null {
+    return [...this.bankPayoutRecords].sort((a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime())[0] || null;
+  }
+  get balanceBreakdownRecords(): Array<{ type: string; name: string; detail: string; amount: number; status: string; explanation: string }> {
+    if (!this.financialPerformance) return [];
 
-  // Modal 2 Data: Shipping & Cost Breakdown (Matching Görsel 3)
-  orderCostShippingRecords = [
-    { date: '01.10.26', receiptId: '4188719047', qty: '1 Ad', shippingCostTry: 475.29, invoice: '—', title: '3D Printed Butterfly Trainer | Colorful Safe K...' },
-    { date: '30.09.26', receiptId: '4188172739', qty: '1 Ad', shippingCostTry: 1037.75, invoice: '—', title: 'Captain Jack Sparrow Resin Statue | Pirates...' },
-    { date: '30.09.26', receiptId: '4187902419', qty: '1 Ad', shippingCostTry: 980.40, invoice: '—', title: 'Fallout Pip-Boy 3000 | Fallout Pip-Boy 3000...' },
-    { date: '28.09.26', receiptId: '4187282652', qty: '1 Ad', shippingCostTry: 1035.85, invoice: '—', title: 'Captain Jack Sparrow Resin Statue | Pirates...' },
-    { date: '25.09.26', receiptId: '4185170234', qty: '1 Ad', shippingCostTry: 977.80, invoice: '—', title: 'Arcane Jinx Statue, League of Legends Figur...' },
-    { date: '18.09.26', receiptId: '4176634453', qty: '1 Ad', shippingCostTry: 974.60, invoice: '—', title: 'Michael Jackson Statue, King of Pop Figure...' },
-    { date: '18.09.26', receiptId: '4178116180', qty: '1 Ad', shippingCostTry: 1120.79, invoice: '—', title: 'Arcane Jinx Statue, League of Legends Figur...' },
-    { date: '15.09.26', receiptId: '4174015409', qty: '1 Ad', shippingCostTry: 1021.44, invoice: '—', title: 'Lotr Aragorn Crown-Aragorn -Crown of Gon...' },
-    { date: '14.09.26', receiptId: '4174282090', qty: '1 Ad', shippingCostTry: 0.00, invoice: '—', title: 'Ben 10 Classic Omnitrix Watch V2  Ben 10...' },
-    { date: '07.09.26', receiptId: '4168067600', qty: '1 Ad', shippingCostTry: 503.01, invoice: 'Fatura', title: '3D Printed Butterfly Trainer | Colorful Safe K...' }
-  ];
-
-  // Modal 3 Data: Balance & Real Profit (Matching Görsel 4)
-  balanceBreakdownRecords = [
-    { type: 'Gelir', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: 35601.79, status: '🟢 Net', isPositive: true, explanation: 'Komisyon ve iadeler sonrası platformdan kalan net hakediş' },
-    { type: 'Kargo', name: 'Kargo Gönderimleri', detail: '9 Gönderi', amount: -8126.93, status: '', isPositive: false, explanation: 'Siparişlerin müşterilere kargolanma ve lojistik maliyeti' },
-    { type: 'Üretim', name: '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -5397.16, status: '', isPositive: false, explanation: 'Üretimde harcanan hammadde ve 3D yazıcı amortismanı' },
-    { type: 'Paket', name: 'Paketleme & Fatura', detail: '1 Fatura', amount: 0.00, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' },
-    { type: 'KÂR', name: 'GERÇEK NET KÂR', detail: 'Saf Kâr', amount: 22077.69, status: '🟢 Kâr', isPositive: true, explanation: 'Tüm platform ve operasyonel giderler çıktıktan sonra bankadaki net kâr' }
-  ];
+    return [
+      { type: 'GELİR', name: 'Brüt satış', detail: this.financialPerformance.currency, amount: this.financialPerformance.grossSales * this.liveRate, status: '', explanation: 'Seçili dönemin API finansal performans verisi.' },
+      { type: 'GİDER', name: 'Platform ücretleri', detail: this.financialPerformance.currency, amount: -this.financialPerformance.platformFees * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
+      { type: 'GİDER', name: 'İç reklam maliyeti', detail: this.financialPerformance.currency, amount: -this.financialPerformance.internalAdsCost * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
+      { type: 'GİDER', name: 'Dış reklam maliyeti', detail: this.financialPerformance.currency, amount: -this.financialPerformance.externalAdsCost * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
+      { type: 'GİDER', name: 'Ürün ve kargo maliyeti', detail: this.financialPerformance.currency, amount: -(this.financialPerformance.productCosts + this.financialPerformance.shippingCosts) * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
+      { type: 'GİDER', name: 'İadeler', detail: this.financialPerformance.currency, amount: -this.financialPerformance.refunds * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
+      { type: 'KÂR', name: 'Net kâr', detail: this.financialPerformance.currency, amount: this.financialPerformance.netProfit * this.liveRate, status: '', explanation: 'API tarafından döndürülen net kâr.' }
+    ];
+  }
 
   constructor(
     private etsyApi: EtsyApiService,
@@ -2592,9 +2256,58 @@ export class AccountingComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.filteredOrders = [...this.orders];
     this.liveRate = this.etsyApi.exchangeRate() || 49.12;
+
+    this.onPresetChange(false);
   }
 
   ngOnDestroy(): void {
+  }
+
+  loadFinancialData(): void {
+    this.isLoading = true;
+    this.loadError = '';
+    const range = this.getSelectedDateRange();
+    this.etsyApi.getFinancialPerformanceByDateRange(range.start, range.end).subscribe({
+      next: (data) => {
+        this.financialPerformance = data;
+        const rate = this.etsyApi.exchangeRate();
+        this.grossSalesUsd = data.grossSales;
+        this.grossSalesTry = data.grossSales * rate;
+        this.etsyFeesUsd = data.platformFees;
+        this.etsyFeesTry = data.platformFees * rate;
+        this.innerAdsUsd = data.internalAdsCost;
+        this.innerAdsTry = data.internalAdsCost * rate;
+        this.offsiteAdsUsd = data.externalAdsCost;
+        this.offsiteAdsTry = data.externalAdsCost * rate;
+        this.refundsUsd = data.refunds;
+        this.refundsTry = data.refunds * rate;
+        this.productCostsUsd = data.productCosts;
+        this.productCostsTry = data.productCosts * rate;
+        this.realNetProfitUsd = data.netProfit;
+        this.realNetProfitTry = data.netProfit * rate;
+        this.netIncomeUsd = data.grossSales - data.platformFees - data.internalAdsCost - data.externalAdsCost - data.refunds;
+        this.netIncomeTry = this.netIncomeUsd * rate;
+        this.isLoading = false;
+      },
+      error: (error) => {
+        this.isLoading = false;
+        this.loadError = error.status === 0 ? 'API sunucusuna erişilemiyor.' : 'Finansal veriler yüklenemedi.';
+      }
+    });
+
+    this.etsyApi.getBankPayoutsByDateRange(range.start, range.end).subscribe({
+      next: (payouts) => {
+        this.bankPayoutRecords = payouts || [];
+        this.bankPayoutsUsd = this.bankPayoutRecords
+          .filter(payout => payout.currency === 'USD')
+          .reduce((sum, payout) => sum + (typeof payout.amount === 'number' ? payout.amount : Number(payout.amount || 0)), 0);
+        this.bankPayoutsTry = this.bankPayoutRecords.reduce((sum, payout) => sum + (payout.exchangeRateToTry ? payout.amount * payout.exchangeRateToTry : payout.currency === 'TRY' ? payout.amount : 0), 0);
+      },
+      error: () => {
+        this.bankPayoutRecords = [];
+        this.loadError = 'Payout verileri yüklenemedi.';
+      }
+    });
   }
 
   get missingCostCount(): number {
@@ -2616,23 +2329,59 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return val.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
+  formatCostShare(amountUsd: number): string {
+    const total = this.etsyFeesUsd + this.innerAdsUsd + this.offsiteAdsUsd + this.refundsUsd + this.productCostsUsd + this.shippingCostsUsd;
+    return total > 0 ? `${((amountUsd / total) * 100).toFixed(1)}%` : '—';
+  }
+
+  chartHeight(value: number): number {
+    const max = Math.max(this.grossSalesUsd, this.etsyFeesUsd, this.innerAdsUsd + this.offsiteAdsUsd, this.productCostsUsd + this.shippingCostsUsd, Math.abs(this.realNetProfitUsd));
+    return max > 0 ? Math.max(0, (Math.abs(value) / max) * 100) : 0;
+  }
+
   copyValue(label: string, val: string): void {
     navigator.clipboard.writeText(val);
     this.showToast(`📋 Kopyalandı: ${label} ➔ ${val}`);
   }
 
-  onPresetChange(): void {
-    if (this.selectedDatePreset === 'last30') {
-      this.startDate = '03.09.2026';
-      this.endDate = '03.10.2026';
-    } else if (this.selectedDatePreset === 'last7') {
-      this.startDate = '26.09.2026';
-      this.endDate = '03.10.2026';
-    } else if (this.selectedDatePreset === 'thisMonth') {
-      this.startDate = '01.10.2026';
-      this.endDate = '03.10.2026';
+  onPresetChange(reload = true): void {
+    const end = new Date();
+    const start = new Date(end);
+    if (this.selectedDatePreset === 'last30') start.setDate(end.getDate() - 30);
+    else if (this.selectedDatePreset === 'last7') start.setDate(end.getDate() - 7);
+    else if (this.selectedDatePreset === 'thisMonth') start.setDate(1);
+    else if (this.selectedDatePreset === 'lastMonth') {
+      start.setMonth(end.getMonth() - 1, 1);
+      end.setDate(0);
     }
+    this.startDate = this.toDateInputValue(start);
+    this.endDate = this.toDateInputValue(end);
+    if (reload) this.loadFinancialData();
     this.showToast(`📅 Dönem güncellendi: ${this.startDate} — ${this.endDate}`);
+  }
+
+  private getSelectedDateRange(): { start: Date; end: Date } {
+    const end = new Date();
+    const start = new Date(end);
+    if (this.selectedDatePreset === 'last30') start.setDate(end.getDate() - 30);
+    else if (this.selectedDatePreset === 'last7') start.setDate(end.getDate() - 7);
+    else if (this.selectedDatePreset === 'thisMonth') start.setDate(1);
+    else if (this.selectedDatePreset === 'lastMonth') {
+      start.setMonth(end.getMonth() - 1, 1);
+      end.setDate(0);
+    } else if (this.selectedDatePreset === 'custom') {
+      return { start: new Date(`${this.startDate}T00:00:00`), end: new Date(`${this.endDate}T23:59:59.999`) };
+    } else if (this.selectedDatePreset === 'all') {
+      start.setFullYear(2000, 0, 1);
+    }
+    return { start, end };
+  }
+
+  private toDateInputValue(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   onAutoRateToggle(): void {
@@ -2641,18 +2390,20 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   refreshFromEtsy(): void {
     this.isRefreshing = true;
-    this.etsyApi.syncFromEtsy().subscribe({
+    const range = this.getSelectedDateRange();
+    this.etsyApi.syncFromEtsy(range.start, range.end).subscribe({
       next: (res) => {
         this.isRefreshing = false;
         if (res?.succeeded) {
           this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${res.transactionCount} hareket, ${res.payoutCount} transfer, ${res.orderCount} sipariş işlendi.`);
+          this.loadFinancialData(); // Reload financial data on success
         } else {
-          this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı.`);
+          this.showToast(`Senkronizasyon başarısız: ${res?.errorMessage || 'API işlemi tamamlanamadı.'}`);
         }
       },
-      error: () => {
+      error: (error) => {
         this.isRefreshing = false;
-        this.showToast('✅ Canlı Etsy API senkronizasyonu tamamlandı.');
+        this.showToast(error.status === 0 ? 'Etsy API sunucusuna ulaşılamadı.' : `Senkronizasyon hatası (HTTP ${error.status}).`);
       }
     });
   }
@@ -2712,14 +2463,20 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   syncVds(): void {
     this.isSyncingVds = true;
-    this.etsyApi.syncFromEtsy().subscribe({
+    const range = this.getSelectedDateRange();
+    this.etsyApi.syncFromEtsy(range.start, range.end).subscribe({
       next: (res) => {
         this.isSyncingVds = false;
-        this.showToast(`🌐 VDS Tam Senkronizasyonu Başarılı: ${res?.transactionCount ?? 0} hareket senkronize edildi.`);
+        if (res?.succeeded) {
+          this.showToast(`🌐 VDS senkronizasyonu başarılı: ${res.transactionCount} hareket, ${res.payoutCount} transfer.`);
+          this.loadFinancialData();
+        } else {
+          this.showToast(`VDS senkronizasyonu başarısız: ${res?.errorMessage || 'API işlemi tamamlanamadı.'}`);
+        }
       },
-      error: () => {
+      error: (error) => {
         this.isSyncingVds = false;
-        this.showToast('🌐 VDS Tam Senkronizasyonu Başarılı.');
+        this.showToast(error.status === 0 ? 'VDS API sunucusuna ulaşılamadı.' : `VDS senkronizasyon hatası (HTTP ${error.status}).`);
       }
     });
   }

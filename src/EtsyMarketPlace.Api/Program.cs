@@ -273,11 +273,16 @@ app.MapGet("/api/etsy/banking/payouts", async (string shopId = "53236321", DateT
 .WithDescription("Etsy'nin mağazanız için banka hesabınıza yatırdığı tüm ödeme ve transfer kayıtlarını tarih, tutar, kur ve durum bilgileriyle listeler. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetEtsyBankPayouts");
 
-app.MapGet("/api/etsy/financial/performance", async (string shopId = "53236321", string period = "last_month", HttpContext context = null!, IConfiguration config = null!, IEtsyReportingService reporting = null!, CancellationToken cancellationToken = default) =>
+app.MapGet("/api/etsy/financial/performance", async (string shopId = "53236321", string period = "last_month", DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, HttpContext context = null!, IConfiguration config = null!, IEtsyReportingService reporting = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
     var now = DateTimeOffset.UtcNow;
-    var (start, end) = period?.ToLowerInvariant() switch
+    if (startDate.HasValue != endDate.HasValue)
+        return Results.BadRequest(new { error = "Özel tarih aralığı için startDate ve endDate birlikte gönderilmelidir." });
+
+    var (start, end) = startDate.HasValue
+        ? (startDate.Value, endDate!.Value)
+        : period?.ToLowerInvariant() switch
     {
         "today" => (now.Date, now),
         "last_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddTicks(-1)),
@@ -285,11 +290,12 @@ app.MapGet("/api/etsy/financial/performance", async (string shopId = "53236321",
         _ => (DateTimeOffset.MinValue, DateTimeOffset.MinValue)
     };
     if (start == DateTimeOffset.MinValue) return Results.BadRequest(new { error = "period today, this_month veya last_month olmalıdır." });
+    if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
     return Results.Ok(await reporting.GetFinancialPerformanceAsync(resolvedShopId, start, end, cancellationToken));
 })
 .WithTags("Finans & Muhasebe")
 .WithSummary("Finansal Performans ve Kâr-Zarar Karnesi")
-.WithDescription("Belirtilen dönem (today, this_month, last_month veya özel tarih aralığı) için brüt satış, Etsy komisyonları, reklam harcamaları, ürün ve kargo maliyetleri ile net kâr marjını hesaplar. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
+.WithDescription("today, this_month, last_month dönemini veya startDate ve endDate ile özel tarih aralığını kullanarak finansal performansı hesaplar. Özel tarih aralığında iki tarih de gönderilmelidir.")
 .WithName("GetFinancialPerformance");
 
 app.MapGet("/api/etsy/financial/analysis", async (string shopId = "53236321", DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, HttpContext context = null!, IConfiguration config = null!, IEtsyFinancialAnalysisService analysis = null!, CancellationToken cancellationToken = default) =>

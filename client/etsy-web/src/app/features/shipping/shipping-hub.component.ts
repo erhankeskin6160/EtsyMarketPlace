@@ -9,9 +9,9 @@ export interface CarrierRate {
   name: string;
   logo: string;
   eta: string;
-  costUsd: number;
-  fuelSurchargeUsd: number;
-  totalUsd: number;
+  costUsd: number | null;
+  fuelSurchargeUsd: number | null;
+  totalUsd: number | null;
   isBestValue: boolean;
   trackingType: string;
 }
@@ -35,13 +35,13 @@ export interface CarrierRate {
           </div>
           <div>
             <h1 class="page-title">Kargo Entegrasyonları Hub'ı & Navlun Karşılaştırma</h1>
-            <p class="page-subtitle">Aras Global, ShipEntegra, Navlungo ve Shiptomore canlı kargo fiyat karşılaştırma motoru</p>
+            <p class="page-subtitle">Taşıyıcı API fiyat teklifi bu uygulamada henüz desteklenmiyor.</p>
           </div>
         </div>
 
         <div class="header-right">
           <button class="btn-primary-ship" (click)="calculateRates()">
-            ⚡ Canlı Fiyatları Sorgula
+            ⚡ Fiyat desteği bilgisi
           </button>
         </div>
       </div>
@@ -101,7 +101,7 @@ export interface CarrierRate {
         <div *ngFor="let c of carriers" class="glass-card carrier-card" [class.best-card]="c.isBestValue">
           <div class="carrier-badge-row">
             <span *ngIf="c.isBestValue" class="badge-best">🌟 EN KÂRLI TAŞIYICI</span>
-            <span class="carrier-eta">⏱️ {{ c.eta }}</span>
+              <span class="carrier-eta">{{ c.eta }}</span>
           </div>
 
           <div class="carrier-brand-row">
@@ -113,17 +113,17 @@ export interface CarrierRate {
           </div>
 
           <div class="price-box">
-            <div class="price-usd">&#36;{{ c.totalUsd | number:'1.2-2' }}</div>
-            <div class="price-try">₺{{ c.totalUsd * etsyApi.exchangeRate() | number:'1.0-0' }} TRY</div>
-            <span class="tax-info">Yakıt & Harçlar Dahil</span>
+            <div class="price-usd">{{ c.totalUsd === null ? '—' : ('$' + (c.totalUsd | number:'1.2-2')) }}</div>
+            <div class="price-try">Canlı fiyat API’si bağlı değil</div>
+            <span class="tax-info">Fiyat ve teslim süresi sunulmuyor.</span>
           </div>
 
           <div class="carrier-btn-row">
             <button class="btn-create-label" (click)="createLabel(c)">
               🏷️ Etiket Oluştur
             </button>
-            <button class="btn-send-to-order" (click)="sendToOrders(c)" title="Bu kargo ücretini doğrudan bekleyen siparişlerinize aktarın">
-              📦 Siparişe Aktar
+            <button class="btn-send-to-order" [disabled]="c.totalUsd === null" (click)="sendToOrders(c)" title="Önce gerçek taşıyıcı teklifi API üzerinden sunulmalıdır">
+              📦 Teklif kullanılamıyor
             </button>
           </div>
         </div>
@@ -406,45 +406,45 @@ export class ShippingHubComponent implements OnInit {
       id: 'aras',
       name: 'Aras Global Kargo',
       logo: '🚚',
-      eta: '3-5 İş Günü',
-      costUsd: 9.80,
-      fuelSurchargeUsd: 1.10,
-      totalUsd: 10.90,
-      isBestValue: true,
-      trackingType: 'USPS Son Mil Teslimat'
+      eta: 'API desteği yok',
+      costUsd: null,
+      fuelSurchargeUsd: null,
+      totalUsd: null,
+      isBestValue: false,
+      trackingType: 'Canlı teklif alınamıyor'
     },
     {
       id: 'shipentegra',
       name: 'ShipEntegra Kargo',
       logo: '📦',
-      eta: '3-6 İş Günü',
-      costUsd: 11.20,
-      fuelSurchargeUsd: 1.30,
-      totalUsd: 12.50,
+      eta: 'API desteği yok',
+      costUsd: null,
+      fuelSurchargeUsd: null,
+      totalUsd: null,
       isBestValue: false,
-      trackingType: 'FedEx / UPS Express'
+      trackingType: 'Canlı teklif alınamıyor'
     },
     {
       id: 'navlungo',
       name: 'Navlungo Kargo',
       logo: '🚢',
-      eta: '4-7 İş Günü',
-      costUsd: 11.80,
-      fuelSurchargeUsd: 1.40,
-      totalUsd: 13.20,
+      eta: 'API desteği yok',
+      costUsd: null,
+      fuelSurchargeUsd: null,
+      totalUsd: null,
       isBestValue: false,
-      trackingType: 'DHL eCommerce'
+      trackingType: 'Canlı teklif alınamıyor'
     },
     {
       id: 'shiptomore',
       name: 'Shiptomore Kargo',
       logo: '✈️',
-      eta: '2-4 İş Günü',
-      costUsd: 13.50,
-      fuelSurchargeUsd: 1.50,
-      totalUsd: 15.00,
+      eta: 'API desteği yok',
+      costUsd: null,
+      fuelSurchargeUsd: null,
+      totalUsd: null,
       isBestValue: false,
-      trackingType: 'TNT / FedEx Priority'
+      trackingType: 'Canlı teklif alınamıyor'
     }
   ];
 
@@ -459,47 +459,22 @@ export class ShippingHubComponent implements OnInit {
 
   calculateRates(): void {
     this.desi = (this.dimWidth * this.dimLength * this.dimHeight) / 5000;
-    const baseMult = this.destinationCountry === 'US' ? 1.0 : this.destinationCountry === 'GB' ? 0.95 : 1.15;
-    
-    this.carriers[0].totalUsd = Number((10.90 * baseMult).toFixed(2));
-    this.carriers[1].totalUsd = Number((12.50 * baseMult).toFixed(2));
-    this.carriers[2].totalUsd = Number((13.20 * baseMult).toFixed(2));
-    this.carriers[3].totalUsd = Number((15.00 * baseMult).toFixed(2));
-
-    let minPrice = Infinity;
-    let bestIdx = 0;
-    this.carriers.forEach((c, i) => {
-      c.isBestValue = false;
-      if (c.totalUsd < minPrice) {
-        minPrice = c.totalUsd;
-        bestIdx = i;
-      }
-    });
-    this.carriers[bestIdx].isBestValue = true;
   }
 
   labelSuccessInfo: { carrier: string; trackingNumber: string; country: string } | null = null;
 
   createLabel(c: CarrierRate): void {
-    const trackingCode = `TR${Date.now().toString().slice(-8)}US`;
-    this.labelSuccessInfo = {
-      carrier: c.name,
-      trackingNumber: trackingCode,
-      country: this.destinationCountry
-    };
-    setTimeout(() => {
-      if (this.labelSuccessInfo?.trackingNumber === trackingCode) {
-        this.labelSuccessInfo = null;
-      }
-    }, 6000);
+    this.labelSuccessInfo = null;
+    alert(`${c.name} için kargo etiketi oluşturma API’si henüz desteklenmiyor.`);
   }
 
   sendToOrders(c: CarrierRate): void {
+    if (c.totalUsd === null) return;
     this.router.navigate(['/orders'], {
       queryParams: {
         carrierKey: c.id,
         carrierName: c.name,
-        carrierCost: c.totalUsd
+        carrierCost: c.totalUsd ?? ''
       }
     });
   }

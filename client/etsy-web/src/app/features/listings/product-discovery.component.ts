@@ -36,7 +36,7 @@ export interface DiscoveryProduct {
           <div class="icon-box">🛍️</div>
           <div>
             <h1 class="page-title">Ürün Bul & Akıllı Taslak Listeleme (Product Discovery)</h1>
-            <p class="page-subtitle">Trend radarında yükselen ürünler, kârlılık fırsat skoru ve tek tıkla Fast Creator taslak transferi</p>
+            <p class="page-subtitle">Canlı pazar keşfi API’si yapılandırılmadığından ürün ve trend verisi sunulmuyor.</p>
           </div>
         </div>
 
@@ -44,7 +44,7 @@ export interface DiscoveryProduct {
           <button type="button" class="btn-scan" [disabled]="isScanning" (click)="scanOpportunities()">
             <span *ngIf="isScanning" class="spin-disc">⏳</span>
             <span *ngIf="!isScanning">⚡</span>
-            <span>{{ isScanning ? 'Pazar Taranıyor...' : 'Yeni Fırsatları Tara' }}</span>
+            <span>{{ isScanning ? 'Pazar Taranıyor...' : 'API desteği yok' }}</span>
           </button>
         </div>
       </div>
@@ -101,11 +101,11 @@ export interface DiscoveryProduct {
         </div>
         <div class="kpi-card">
           <span class="kpi-lbl">ORTALAMA KÂR MARJI</span>
-          <span class="kpi-val text-emerald">%64.2</span>
+          <span class="kpi-val text-emerald">—</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-lbl">RADAR DURUMU</span>
-          <span class="kpi-val text-cyan">● Canlı Veri Hazır</span>
+          <span class="kpi-val text-cyan">● API desteklenmiyor</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-lbl">DOLAR KURU</span>
@@ -115,6 +115,9 @@ export interface DiscoveryProduct {
 
       <!-- PRODUCTS DISCOVERY GRID -->
       <div class="products-grid">
+        <div *ngIf="filteredProducts.length === 0" class="empty-discovery-state">
+          Etsy pazar keşfi/search-volume API bağlantısı bulunmuyor. Ürün fırsatları ve kârlılık tahminleri gösterilmiyor.
+        </div>
         <div *ngFor="let p of filteredProducts" class="glass-card product-card">
           <div class="card-thumb-wrap">
             <img [src]="p.imageUrl" class="product-thumb" alt="{{ p.title }}" />
@@ -351,6 +354,15 @@ export interface DiscoveryProduct {
       gap: 16px;
     }
 
+    .empty-discovery-state {
+      grid-column: 1 / -1;
+      padding: 24px;
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      border-radius: 12px;
+      color: #94a3b8;
+      text-align: center;
+    }
+
     .product-card {
       display: flex;
       flex-direction: column;
@@ -555,93 +567,7 @@ export class ProductDiscoveryComponent implements OnInit {
     return this.apiService.exchangeRate();
   }
 
-  products: DiscoveryProduct[] = [
-    {
-      id: 'disc-1',
-      title: 'Articulated Crystal Wing Dragon 3D Print Toy',
-      category: 'Art & Collectibles',
-      taxonomyId: 1238,
-      priceUsd: 38.50,
-      estimatedCostUsd: 6.80,
-      estNetProfitUsd: 26.20,
-      opportunityScore: 94,
-      searchVolume: 14200,
-      competitionScore: 42,
-      tags: ['crystal dragon', '3d printed dragon', 'fidget toy', 'winged dragon', 'desk decor', 'dnd gift'],
-      imageUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=600&auto=format&fit=crop&q=80',
-      description: 'Handcrafted articulated crystal dragon printed with high-quality dual-color PLA filament. Perfect fidget desktop toy and fantasy collector piece.',
-      nicheRating: 'Çok Yüksek',
-      viralScore: 96
-    },
-    {
-      id: 'disc-2',
-      title: 'Personalized Leather Shoulder Bag Handmade Vintage Satchel',
-      category: 'Bags & Purses',
-      taxonomyId: 132,
-      priceUsd: 84.00,
-      estimatedCostUsd: 24.50,
-      estNetProfitUsd: 49.30,
-      opportunityScore: 89,
-      searchVolume: 18500,
-      competitionScore: 56,
-      tags: ['leather bag', 'shoulder bag', 'crossbody satchel', 'vintage purse', 'personalized gift'],
-      imageUrl: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=600&auto=format&fit=crop&q=80',
-      description: 'Genuine distressed full-grain leather crossbody messenger bag with custom monogram engraving option.',
-      nicheRating: 'Yüksek',
-      viralScore: 88
-    },
-    {
-      id: 'disc-3',
-      title: 'Self-Watering Geometric Succulent Planter Nordic Pot',
-      category: 'Home & Living',
-      taxonomyId: 1054,
-      priceUsd: 26.00,
-      estimatedCostUsd: 4.20,
-      estNetProfitUsd: 17.80,
-      opportunityScore: 86,
-      searchVolume: 9200,
-      competitionScore: 35,
-      tags: ['succulent pot', 'geometric planter', 'self watering', 'indoor planter', 'minimalist vase'],
-      imageUrl: 'https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=600&auto=format&fit=crop&q=80',
-      description: 'Modern geometric minimalist indoor succulent planter with hidden water reservoir tray.',
-      nicheRating: 'Yüksek',
-      viralScore: 84
-    },
-    {
-      id: 'disc-4',
-      title: 'Custom Name Dainty Silver Necklace 925 Sterling Minimalist',
-      category: 'Jewelry',
-      taxonomyId: 204,
-      priceUsd: 42.00,
-      estimatedCostUsd: 9.10,
-      estNetProfitUsd: 27.60,
-      opportunityScore: 82,
-      searchVolume: 28400,
-      competitionScore: 68,
-      tags: ['name necklace', 'silver necklace', 'custom jewelry', 'dainty necklace', 'bridesmaid gift'],
-      imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=600&auto=format&fit=crop&q=80',
-      description: 'Solid 925 sterling silver custom personalized cursive nameplate pendant necklace on delicate chain.',
-      nicheRating: 'Orta',
-      viralScore: 78
-    },
-    {
-      id: 'disc-5',
-      title: 'Steampunk Industrial Mechanical Gear Table Desk Clock',
-      category: 'Home & Living',
-      taxonomyId: 1041,
-      priceUsd: 92.00,
-      estimatedCostUsd: 18.00,
-      estNetProfitUsd: 61.20,
-      opportunityScore: 91,
-      searchVolume: 8100,
-      competitionScore: 28,
-      tags: ['steampunk clock', 'mechanical clock', 'desk clock', 'gear art', 'industrial decor'],
-      imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&auto=format&fit=crop&q=80',
-      description: 'Handmade industrial steampunk desk clock with exposed moving brass gears and solid wooden base.',
-      nicheRating: 'Çok Yüksek',
-      viralScore: 92
-    }
-  ];
+  products: DiscoveryProduct[] = [];
 
   filteredProducts: DiscoveryProduct[] = [];
 
@@ -650,11 +576,8 @@ export class ProductDiscoveryComponent implements OnInit {
   }
 
   scanOpportunities(): void {
-    this.isScanning = true;
-    setTimeout(() => {
-      this.isScanning = false;
-      this.applyFilters();
-    }, 800);
+    this.isScanning = false;
+    this.applyFilters();
   }
 
   applyFilters(): void {

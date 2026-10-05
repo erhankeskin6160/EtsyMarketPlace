@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { DailyBrief, FinancialSummary, BankDeposit } from '../models/etsy.models';
 import { User, UpdateUserRequest, AuditLog, SystemStats } from '../models/auth.models';
+import { environment } from '../../../environments/environment';
 
 /** VDS: EtsyOrderCostAlert (camelCase JSON) */
 export interface EtsyOrderCostAlertDto {
@@ -30,7 +31,6 @@ export interface FinancialPerformanceDto {
   refunds: number;
   netProfit: number;
   netProfitMargin: number;
-  [key: string]: unknown;
 }
 
 /** VDS: EtsyBankPayout */
@@ -141,10 +141,10 @@ export interface OptimizeListingResponseDto {
 })
 export class EtsyApiService {
   private http = inject(HttpClient);
-  private readonly API_BASE = 'http://5.180.81.148:5263';
+  private readonly API_BASE = environment.apiBaseUrl;
 
   // Global UI Signals
-  readonly activeShopId = signal<string>('53236321');
+  readonly activeShopId = signal<string>(environment.defaultShopId);
   readonly exchangeRate = signal<number>(49.12);
   readonly isTryCurrency = signal<boolean>(true);
   readonly isSidebarCollapsed = signal<boolean>(false);
@@ -260,14 +260,24 @@ export class EtsyApiService {
     });
   }
 
-  getUnfulfilledCostAlerts(): Observable<EtsyOrderCostAlertDto[]> {
+  getUnfulfilledCostAlerts(shopId?: string): Observable<EtsyOrderCostAlertDto[]> {
+    const id = shopId || this.activeShopId();
     return this.http.get<EtsyOrderCostAlertDto[]>(
-      `${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${this.activeShopId()}`);
+      `${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${id}`);
   }
 
   getFinancialPerformance(period: 'today' | 'this_month' | 'last_month' = 'this_month'): Observable<FinancialPerformanceDto> {
     return this.http.get<FinancialPerformanceDto>(
       `${this.API_BASE}/api/etsy/financial/performance?shopId=${this.activeShopId()}&period=${period}`);
+  }
+
+  getFinancialPerformanceByDateRange(startDate: Date, endDate: Date): Observable<FinancialPerformanceDto> {
+    const params = new URLSearchParams({
+      shopId: this.activeShopId(),
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    });
+    return this.http.get<FinancialPerformanceDto>(`${this.API_BASE}/api/etsy/financial/performance?${params}`);
   }
 
   getFinancialAnalysis(startDate?: Date, endDate?: Date): Observable<any> {
@@ -282,6 +292,15 @@ export class EtsyApiService {
     if (startDate) url += `&startDate=${encodeURIComponent(startDate.toISOString())}`;
     if (endDate) url += `&endDate=${encodeURIComponent(endDate.toISOString())}`;
     return this.http.get<EtsyBankPayoutDto[]>(url);
+  }
+
+  getBankPayoutsByDateRange(startDate: Date, endDate: Date): Observable<EtsyBankPayoutDto[]> {
+    const params = new URLSearchParams({
+      shopId: this.activeShopId(),
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    });
+    return this.http.get<EtsyBankPayoutDto[]>(`${this.API_BASE}/api/etsy/banking/payouts?${params}`);
   }
 
   getFinancialSummary(): Observable<FinancialSummary> {

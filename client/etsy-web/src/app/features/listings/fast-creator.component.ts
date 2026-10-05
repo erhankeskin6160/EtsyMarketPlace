@@ -49,58 +49,27 @@ export class FastCreatorComponent implements OnInit {
   @ViewChild('fileInput') fileInputRef?: ElementRef<HTMLInputElement>;
 
   // --- TEMPLATES ---
-  templates: CreatorTemplate[] = [
-    {
-      id: '3d_dragon',
-      name: '🐉 3D Baskı - Kristal Ejderha',
-      category: 'Art & Collectibles > Sculptures',
-      defaultPrice: 34.50,
-      sampleTitle: 'Articulated Crystal Dragon 3D Printed Fidget Toy, Flexible Dragon Desk Pet, Fantasy Mythical Creature Figurine Gift',
-      sampleTags: ['crystal dragon', '3d printed dragon', 'fidget toy', 'articulated dragon', 'desk pet', 'fantasy decor', 'dragon figurine', 'adhd sensory toy', 'mythical creature', 'unique gifts', 'bambu lab print', 'dnd miniature', 'flexi toy'],
-      sampleDesc: `🔥 Büyüleyici Mafsallı Kristal Ejderha - Yüksek Hassasiyetli 3D Baskı!\n\nBu harika mafsallı kristal ejderha, son teknoloji Bambu Lab 3D yazıcılarında yüksek kaliteli çevre dostu PLA filament ile üretilmiştir. Masanızda harika bir stres giderici (fidget toy) veya fantastik bir dekorasyon parçası olarak yerini alır.\n\n✨ Öne Çıkan Özellikler:\n- Tamamen hareketli eklemler ve kıvrımlı gövde\n- Işık altında parlayan özel kristal pul dokusu\n- Boyut: ~35 cm uzunluk\n- Hediye kutusu seçeneği ile hızlı gönderim`,
-      materials: 'PLA, Çevre Dostu Filament, Reçine'
-    },
-    {
-      id: 'digital_stl',
-      name: '💾 Dijital İndirme - 3D STL & SVG',
-      category: 'Craft Supplies > Digital',
-      defaultPrice: 12.00,
-      sampleTitle: 'Geometric Wall Art STL File 3D Print Model, Digital Download 3D Printable Panel, Modern Home Interior Decor STL',
-      sampleTags: ['stl file', '3d print model', 'digital download', 'geometric wall art', '3d stl design', 'wall panel stl', 'interior decor stl', '3d printable file', 'modern wall decor', 'laser cut svg', 'instant download', 'diy home decor', '3d file for print'],
-      sampleDesc: `📥 Anında İndirilebilir Geometrik Duvar Dekoru 3D Baskı STL Dosyası!\n\nBu dosya, eviniz veya ofisiniz için modern geometrik duvar panelleri basmanız için optimize edilmiştir. Desteksiz (supportless) kolay baskı imkanı sunar.\n\n📦 Paket İçeriği:\n- Yüksek poligonlu pürüzsüz .STL dosyası\n- Dilimleyici ayar rehberi\n- Ticari olmayan kişisel kullanım lisansı`,
-      materials: 'Dijital STL, 3D Model Dosyası, ZIP Arşivi'
-    },
-    {
-      id: 'jewelry_gem',
-      name: '💎 El Yapımı Kişiye Özel Takı',
-      category: 'Jewelry > Necklaces',
-      defaultPrice: 42.00,
-      sampleTitle: 'Custom Name Necklace 925 Sterling Silver, Dainty Personalized Nameplate Pendant, Minimalist Birthday Gift for Her',
-      sampleTags: ['name necklace', 'personalized gift', 'silver necklace', 'custom nameplate', 'gift for her', 'dainty jewelry', 'bridesmaid gift', 'minimalist necklace', '925 silver pendant', 'birthday jewelry', 'handcrafted gift', 'custom letter charm', 'mom gift jewelry'],
-      sampleDesc: `✨ 925 Ayar Gerçek Gümüş Kişiye Özel İsimli Kolye!\n\nHer bir kolye usta zanaatkarlarımız tarafından kişiye özel olarak özenle kesilir, parlatılır ve zarif bir hediye kutusunda sunulur.`,
-      materials: '925 Ayar Gümüş, Altın Kaplama, Zirkon Taş'
-    }
-  ];
+  templates: CreatorTemplate[] = [];
 
-  selectedTemplateId = '3d_dragon';
+  selectedTemplateId = '';
 
   // --- COLUMN 1: ÜRÜN & SEO BİLGİLERİ ---
   listingType: 'physical' | 'digital' = 'physical';
-  priceUsd: number | null = 34.50;
+  priceUsd: number | null = null;
   priceTry = 0;
   quantity: number | null = 15;
   title = '';
-  selectedCategory = 'Art & Collectibles > Sculptures';
-  selectedTaxonomyId = 1239;
+  selectedCategory = '';
+  selectedTaxonomyId = 0;
   categoryAiResult: CategoryAiSuggestion | null = null;
   categoryAlternatives: TaxonomyCandidateItem[] = [];
-  selectedCategoryCombo = '1239|Art & Collectibles > Sculptures';
-  shippingProfile = 'Standart Kargo (3-5 iş günü teslimat)';
-  readinessState = 'Hazır Ürün (Ready to ship) 1-3 iş günü';
+  selectedCategoryCombo = '';
+  shippingProfile = '';
+  readinessState = '';
   tags: string[] = [];
   newTagInput = '';
   description = '';
-  materials = 'PLA, Çevre Dostu Filament';
+  materials = '';
 
   // --- AI GENERATION LOADING STATES ---
   isGeneratingTitle = false;
@@ -110,20 +79,7 @@ export class FastCreatorComponent implements OnInit {
   isGeneratingAll = false;
 
   // --- COLUMN 2: GÖRSELLER & AI MOTORU (0/10) ---
-  galleryImages: GalleryImage[] = [
-    {
-      id: 'img-1',
-      url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
-      isCover: true,
-      name: 'Ana Kapak Görseli'
-    },
-    {
-      id: 'img-2',
-      url: 'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=600&auto=format&fit=crop&q=80',
-      isCover: false,
-      name: 'Açı 2 - Yan Detay'
-    }
-  ];
+  galleryImages: GalleryImage[] = [];
 
   // AI Image Studio
   aiPrompt = '';
@@ -132,13 +88,7 @@ export class FastCreatorComponent implements OnInit {
   isStudioPickerOpen = false;
 
   // Studio gallery sample pool
-  studioPool = [
-    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1582562124811-c09040d0a901?w=600&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=600&auto=format&fit=crop&q=80',
-    'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80'
-  ];
+  studioPool: string[] = [];
 
   // --- COLUMN 3: VARYASYONLAR & KONTROL ---
   enableVariations = false;
@@ -176,9 +126,6 @@ export class FastCreatorComponent implements OnInit {
         }];
       }
       this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 48)}..." (${cloned.shopName}) - Fiyat: $${cloned.priceUsd}`;
-      this.updatePriceTry();
-    } else {
-      this.applyTemplateById(this.selectedTemplateId);
       this.updatePriceTry();
     }
 
@@ -256,14 +203,14 @@ export class FastCreatorComponent implements OnInit {
   }
 
   deleteCurrentTemplate(): void {
-    if (this.templates.length <= 1) {
-      alert('En az bir şablon bulunmalıdır.');
+    if (this.templates.length === 0) {
+      alert('Silinecek şablon yok.');
       return;
     }
     if (confirm('Seçili şablonu silmek istediğinize emin misiniz?')) {
       this.templates = this.templates.filter(t => t.id !== this.selectedTemplateId);
-      this.selectedTemplateId = this.templates[0].id;
-      this.applyTemplateById(this.selectedTemplateId);
+      this.selectedTemplateId = '';
+      this.resetForm();
       this.showToast('🗑️ Şablon silindi.');
     }
   }
@@ -288,7 +235,7 @@ export class FastCreatorComponent implements OnInit {
   clearCloned(): void {
     this.aiService.clonedListing.set(null);
     this.clonedNotice = '';
-    this.applyTemplateById(this.templates[0].id);
+    this.resetForm();
   }
 
   resetForm(): void {
@@ -347,7 +294,7 @@ export class FastCreatorComponent implements OnInit {
 
   // --- AI SUGGESTIONS ---
   suggestAiTitle(): void {
-    const input = this.title.trim() || this.description.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.title.trim() || this.description.trim();
     if (!input) {
       this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına ürünle ilgili temel bilgileri yazın.');
       return;
@@ -415,7 +362,7 @@ export class FastCreatorComponent implements OnInit {
   }
 
   suggestAiTags(): void {
-    const input = this.title.trim() || this.description.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.title.trim() || this.description.trim();
     if (!input) {
       this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına ürünle ilgili temel bilgileri yazın.');
       return;
@@ -435,7 +382,7 @@ export class FastCreatorComponent implements OnInit {
   }
 
   suggestAiDescription(): void {
-    const input = this.description.trim() || this.title.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.description.trim() || this.title.trim();
     if (!input) {
       this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına bir ürün adı yazın.');
       return;
@@ -455,7 +402,7 @@ export class FastCreatorComponent implements OnInit {
   }
 
   generateWithAi(): void {
-    const input = this.title.trim() || this.description.trim() || this.templates.find(t => t.id === this.selectedTemplateId)?.sampleTitle || '';
+    const input = this.title.trim() || this.description.trim();
     if (!input) {
       this.showToast('⚠️ Lütfen önce sol panelde ürün başlığı kutusuna birkaç kelime girin (Örn: El Yapımı Kadın Çantası).');
       return;
@@ -594,18 +541,8 @@ export class FastCreatorComponent implements OnInit {
     if (!this.aiPrompt.trim()) {
       this.fillPromptFromTitle();
     }
-    this.isGeneratingAiImage = true;
-    setTimeout(() => {
-      this.isGeneratingAiImage = false;
-      // High quality realistic showcase photo
-      const pool = [
-        'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=800&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=800&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80'
-      ];
-      this.lastGeneratedImage = pool[Math.floor(Math.random() * pool.length)];
-      this.showToast('🎨 Yapay zeka görseli başarıyla üretildi!');
-    }, 1500);
+    this.isGeneratingAiImage = false;
+    this.showToast('AI görsel üretimi bu modülde bağlı değil. AI Studio üzerinden üretim yapın.');
   }
 
   addGeneratedToGallery(): void {
@@ -714,12 +651,8 @@ export class FastCreatorComponent implements OnInit {
   }
 
   publishListingToEtsy(): void {
-    this.isSavingDraft = true;
-    const mode = this.isLivePublish ? 'CANLI YAYINDA' : 'TASLAK (DRAFT)';
-    setTimeout(() => {
-      this.isSavingDraft = false;
-      this.showToast(`🎉 Ürün Etsy mağazanıza başarıyla "${mode}" olarak aktarıldı!`);
-    }, 1200);
+    this.isSavingDraft = false;
+    this.showToast('Etsy ilan oluşturma/taslak API uç noktası yapılandırılmadığı için hiçbir ilan gönderilmedi.');
   }
 
   showToast(msg: string): void {
