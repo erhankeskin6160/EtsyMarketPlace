@@ -8,6 +8,8 @@
   gönderdiği verilere bağımlı değildir**.
 - VDS API, Etsy ödeme hesabı defterini **canlı** okur ve sunucudaki **finans motorunda** işler.
 - Masaüstü panelindeki değerler referans kabul edilir; motor aynı Etsy kaynağından aynı sonucu üretmelidir.
+  Bu motor; performans uçlarının yanı sıra kontrol paneli trend serisini (`financial/daily-series`),
+  finansal analizi (`financial/analysis`) ve günlük bülteni (`shop/daily-brief`) de besler.
 
 ## 2. Mimari Akış
 ```
@@ -78,5 +80,6 @@ Web kontrol paneli kartları
 - Masaüstü kodu bu mimariden bağımsız yaşar; burada YALNIZCA referanstır.
 - Etsy'ye yazma yoktur; tüm çağrılar salt-okunurdur.
 - `financial_transactions` tablosu eski akış uyumluluğu için KORUNUR (silinmez); KPI kaynağı değildir.
-- Sıradaki adım (opsiyonel): `financial/analysis`, `shop/daily-brief` ve MCP finans araçlarının da
-  aynı motora geçirilmesi.
+- **Durum (09.10.2026 akşam):** `financial/daily-series`, `financial/analysis` ve `shop/daily-brief`
+  uçları da motora bağlandı. Sıradaki opsiyonel adım: MCP `get_daily_shop_brief` aracı; mağaza performans
+  geçmişi ve kargo oturumu paylaşımı ayrı kapsam.

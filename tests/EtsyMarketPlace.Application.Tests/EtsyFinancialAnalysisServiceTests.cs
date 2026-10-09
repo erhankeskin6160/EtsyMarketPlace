@@ -16,7 +16,7 @@ public sealed class EtsyFinancialAnalysisServiceTests
             Alerts = [new EtsyOrderCostAlert("shop", "order", DateTimeOffset.UtcNow, "TRY", 100m, null, null, "missing")]
         };
 
-        var result = await new EtsyFinancialAnalysisService(reporting)
+        var result = await new EtsyFinancialAnalysisService(reporting, new StubLedgerReportService())
             .AnalyzeAsync("shop", DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow);
 
         Assert.Equal(19.9m, result.ProfitMarginPercent);
@@ -36,7 +36,7 @@ public sealed class EtsyFinancialAnalysisServiceTests
                 1000m, 50m, 20m, 20m, 100m, 30m, 0m, 780m, 78m)
         };
 
-        var result = await new EtsyFinancialAnalysisService(reporting)
+        var result = await new EtsyFinancialAnalysisService(reporting, new StubLedgerReportService())
             .AnalyzeAsync("shop", DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow);
 
         Assert.Contains(result.Insights, insight => insight.Code == "HEALTHY_FINANCIALS");
@@ -51,5 +51,18 @@ public sealed class EtsyFinancialAnalysisServiceTests
         public Task<FinancialPerformance> GetFinancialPerformanceAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) => Task.FromResult(Performance);
         public Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken cancellationToken = default) => Task.FromResult(Alerts);
         public Task<DailyShopBrief> GetDailyShopBriefAsync(string shopId, DateTimeOffset date, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class StubLedgerReportService : IEtsyLedgerReportService
+    {
+        public Task<EtsyLedgerLiveResult> GetLiveReportAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
+            => Task.FromResult(new EtsyLedgerLiveResult(
+                false,
+                null,
+                "test-stub",
+                DateTimeOffset.UtcNow,
+                new FinancialPerformance(startDate, endDate, "TRY", 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m),
+                Array.Empty<EtsyLedgerDailySummary>(),
+                0));
     }
 }
