@@ -118,7 +118,7 @@ Sistem tek bir platform yerine **Hibrit Mimari** ile inşa edilmiştir:
   - **Sipariş Bazlı Kâr Analizi:** Gelen her siparişin brüt cirosu ile net kârı (Gross vs Net Margin) renkli kâr çubuğu ile gösterilir.
 
 ### 💹 Finansal Veri Akışı (Güncel Mimari — VDS Sunucu Finans Motoru)
-- **Kaynak:** Web finans KPI'ları (Bu Ayki Brüt Ciro, Gerçek Net Kâr, kesinti kırılımı) **VDS sunucu finans motorundan** beslenir: Etsy ödeme hesabı defteri (`payment-account/ledger-entries`) sunucudan **canlı** okunur ve masaüstü `FinancialReportService` mantığının birebir portuyla işlenir (`src/EtsyMarketPlace.Application/EtsyIntegration/EtsyLedgerFinancialEngine.cs` + `EtsyLedgerReportService.cs`; uç: `GET /api/etsy/financial/performance`).
+- **Kaynak:** Web finans KPI'ları (Bu Ayki Brüt Ciro, Gerçek Net Kâr, kesinti kırılımı) **VDS sunucu finans motorundan** beslenir: Etsy ödeme hesabı defteri (`payment-account/ledger-entries`) sunucudan **canlı** okunur ve masaüstü `FinancialReportService` mantığının birebir portuyla işlenir (`src/EtsyMarketPlace.Application/EtsyIntegration/EtsyLedgerFinancialEngine.cs` + `EtsyLedgerReportService.cs`; uçlar: `GET /api/etsy/financial/performance`, `financial/daily-series`, `financial/analysis`, `shop/daily-brief`).
 - **Kural:** Masaüstü uygulamasının VDS'e gönderdiği günlük özetler ve `financial_transactions` tablosundaki ham senkron satırları **web KPI kaynağı DEĞİLDİR** (yalnız yedek/uyumluluk amaçlı saklanır).
 - **Parite sözleşmesi, referans değerler ve doğrulama adımları:** `docs/finans-motoru-ve-parite.md` — finans kodu değiştirmeden önce mutlaka okuyun.
 
