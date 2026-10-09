@@ -1,6 +1,6 @@
 namespace EtsyMarketPlace.Application.EtsyIntegration;
 
-public sealed class EtsyFinancialAnalysisService(IEtsyReportingService reportingService) : IEtsyFinancialAnalysisService
+public sealed class EtsyFinancialAnalysisService(IEtsyReportingService reportingService, IEtsyLedgerReportService ledgerReportService) : IEtsyFinancialAnalysisService
 {
     public async Task<FinancialAnalysisResult> AnalyzeAsync(
         string shopId,
@@ -8,7 +8,12 @@ public sealed class EtsyFinancialAnalysisService(IEtsyReportingService reporting
         DateTimeOffset endDate,
         CancellationToken cancellationToken = default)
     {
-        var performance = await reportingService.GetFinancialPerformanceAsync(shopId, startDate, endDate, cancellationToken);
+        // Performans: sunucu finans motoru (masaustu paritesi); motor erisilemezse isaretli yedek.
+        // Bkz. docs/finans-motoru-ve-parite.md
+        var live = await ledgerReportService.GetLiveReportAsync(shopId, startDate, endDate, cancellationToken);
+        var performance = live.LedgerOk
+            ? live.Performance
+            : await reportingService.GetFinancialPerformanceAsync(shopId, startDate, endDate, cancellationToken);
         var payouts = await reportingService.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
         var alerts = await reportingService.GetUnfulfilledCostAlertsAsync(shopId, cancellationToken);
         var transactions = Array.Empty<EtsyFinancialTransaction>();

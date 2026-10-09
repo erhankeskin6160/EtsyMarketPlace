@@ -385,10 +385,35 @@ app.MapGet("/api/etsy/orders/unfulfilled-cost-alerts", async (string shopId = "5
 .WithDescription("Henüz kargolanmamış veya üretim/kargo maliyeti girilmemiş açık siparişleri listeler. Gerçek net kârın eksik maliyet yüzünden yanıltıcı çıkmasını önler. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetUnfulfilledCostAlerts");
 
-app.MapGet("/api/etsy/shop/daily-brief", async (string shopId = "53236321", DateTimeOffset? date = null, HttpContext context = null!, IConfiguration config = null!, IEtsyReportingService reporting = null!, CancellationToken cancellationToken = default) =>
+app.MapGet("/api/etsy/shop/daily-brief", async (string shopId = "53236321", DateTimeOffset? date = null, HttpContext context = null!, IConfiguration config = null!, IEtsyReportingService reporting = null!, IEtsyLedgerReportService ledgerReport = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
-    return Results.Ok(await reporting.GetDailyShopBriefAsync(resolvedShopId, date ?? DateTimeOffset.UtcNow, cancellationToken));
+    var requestedDate = date ?? DateTimeOffset.UtcNow;
+    var briefStart = new DateTimeOffset(requestedDate.Year, requestedDate.Month, requestedDate.Day, 0, 0, 0, requestedDate.Offset);
+    var briefEnd = briefStart.AddDays(1).AddTicks(-1);
+
+    // Gunluk degerler: sunucu finans motoru (masaustu paritesi). Bkz. docs/finans-motoru-ve-parite.md
+    var live = await ledgerReport.GetLiveReportAsync(resolvedShopId, briefStart, briefEnd, cancellationToken);
+    var performance = live.LedgerOk
+        ? live.Performance
+        : await reporting.GetFinancialPerformanceAsync(resolvedShopId, briefStart, briefEnd, cancellationToken);
+
+    var payouts = await reporting.GetBankPayoutsAsync(resolvedShopId, briefStart, briefEnd, cancellationToken);
+    var alerts = await reporting.GetUnfulfilledCostAlertsAsync(resolvedShopId, cancellationToken);
+    var score = performance.GrossSales == 0 ? 0 : Math.Clamp((int)Math.Round(performance.NetProfitMargin), 0, 100);
+
+    return Results.Ok(new DailyShopBrief(
+        requestedDate,
+        score,
+        score >= 80 ? "Mükemmel" : score >= 50 ? "Dikkat" : "Riskli",
+        0,
+        performance.GrossSales,
+        performance.NetProfit,
+        payouts.Sum(x => x.Amount),
+        alerts.Count,
+        performance.GrossSalesTRY,
+        performance.NetProfitTRY,
+        performance.ExchangeRateUsed));
 })
 .WithTags("Finans & Muhasebe")
 .WithSummary("Günlük Mağaza Bülteni ve Sağlık Skoru")
@@ -473,7 +498,7 @@ app.MapGet("/api/etsy/shop/recent-orders", async (string shopId = "53236321", in
 .WithDescription("Son N günün Etsy siparişlerini (fişlerini) canlı Etsy API'den çeker; sipariş bazlı net kâr masaüstü panel formülüyle hesaplanır.")
 .WithName("GetRecentOrders");
 
-app.MapGet("/api/etsy/financial/daily-series", async (string shopId = "53236321", string? month = null, HttpContext context = null!, IConfiguration config = null!, IEtsyDataClient etsyClient = null!, IEtsyIntegrationRepository repository = null!, CancellationToken cancellationToken = default) =>
+app.MapGet("/api/etsy/financial/daily-series", async (string shopId = "53236321", string? month = null, HttpContext context = null!, IConfiguration config = null!, IEtsyDataClient etsyClient = null!, IEtsyIntegrationRepository repository = null!, IEtsyLedgerReportService ledgerReport = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
     var nowUtc = DateTimeOffset.UtcNow;
@@ -517,17 +542,41 @@ app.MapGet("/api/etsy/financial/daily-series", async (string shopId = "53236321"
         var series = EtsyLiveDashboardCalculator.BuildDailySeries(rows, targetYear, targetMonth, nowUtc);
         var topProduct = EtsyLiveDashboardCalculator.PickTopProduct(rows);
 
+        // Trend serisi: sunucu finans motoru (masaustu paritesi; UTC gun). Bkz. docs/finans-motoru-ve-parite.md
+        var grossSeries = series.GrossSales;
+        var netSeries = series.NetProfit;
+        var seriesSource = "orders-fallback";
+        var utcMonthStart = new DateTimeOffset(targetYear, targetMonth, 1, 0, 0, 0, TimeSpan.Zero);
+        var utcMonthEnd = utcMonthStart.AddMonths(1);
+        var utcFetchEnd = utcMonthEnd < nowUtc ? utcMonthEnd : nowUtc;
+        var live = await ledgerReport.GetLiveReportAsync(resolvedShopId, utcMonthStart, utcFetchEnd, cancellationToken);
+        if (live.LedgerOk)
+        {
+            grossSeries = new decimal[series.Labels.Length];
+            netSeries = new decimal[series.Labels.Length];
+            foreach (var day in live.Daily)
+            {
+                if (day.Date.Year == targetYear && day.Date.Month == targetMonth && day.Date.Day >= 1 && day.Date.Day <= series.Labels.Length)
+                {
+                    grossSeries[day.Date.Day - 1] = day.GrossSales;
+                    netSeries[day.Date.Day - 1] = day.RealNetProfitUsd;
+                }
+            }
+            seriesSource = live.Source;
+        }
+
         var payload = new
         {
             month = monthKey,
             labels = series.Labels,
-            grossSales = series.GrossSales,
-            netProfit = series.NetProfit,
+            grossSales = grossSeries,
+            netProfit = netSeries,
             topProductTitle = topProduct.Title,
             topProductRevenueUsd = topProduct.Revenue,
             orderCount = rows.Count,
-            ledgerOk = ledgerError is null,
-            ledgerWarning = ledgerError
+            ledgerOk = live.LedgerOk,
+            ledgerWarning = live.LedgerOk ? null : (live.Warning ?? ledgerError),
+            source = seriesSource
         };
 
         DashboardResponseCache.Set(cacheKey, payload, TimeSpan.FromSeconds(90));
