@@ -192,6 +192,8 @@ public static class EtsyLiveDashboardCalculator
             var quantity = receipt.Items.Count > 0 ? receipt.Items.Sum(i => i.Quantity) : 1;
             var buyerName = string.IsNullOrWhiteSpace(receipt.BuyerName) ? "Misafir Müşteri" : receipt.BuyerName;
 
+            var orderSpecificRate = HistoricalExchangeRateProvider.GetRateForDate(receipt.CreatedAt.UtcDateTime, exchangeRate);
+
             var grandTotal = receipt.GrandTotal;
             var subtotal = receipt.Subtotal;
             var shippingCost = receipt.ShippingCost;
@@ -199,14 +201,14 @@ public static class EtsyLiveDashboardCalculator
             var tax = receipt.TaxCost;
             var refundedAmt = receipt.RefundedAmount;
 
-            if (receipt.CurrencyCode.Equals("TRY", StringComparison.OrdinalIgnoreCase) && exchangeRate > 0)
+            if (receipt.CurrencyCode.Equals("TRY", StringComparison.OrdinalIgnoreCase) && orderSpecificRate > 0)
             {
-                grandTotal /= exchangeRate;
-                subtotal /= exchangeRate;
-                shippingCost /= exchangeRate;
-                discountAmt /= exchangeRate;
-                tax /= exchangeRate;
-                refundedAmt /= exchangeRate;
+                grandTotal /= orderSpecificRate;
+                subtotal /= orderSpecificRate;
+                shippingCost /= orderSpecificRate;
+                discountAmt /= orderSpecificRate;
+                tax /= orderSpecificRate;
+                refundedAmt /= orderSpecificRate;
             }
 
             var originalGrandTotal = grandTotal;
@@ -252,7 +254,7 @@ public static class EtsyLiveDashboardCalculator
                 transactionFee = Math.Round(feeBase * 0.065m, 2);
                 var trPaymentFixedUsd = receipt.CurrencyCode.Equals("USD", StringComparison.OrdinalIgnoreCase) || grandTotal > 0
                     ? 0.14m
-                    : Math.Round(3m / exchangeRate, 2);
+                    : Math.Round(3m / orderSpecificRate, 2);
                 paymentFee = Math.Round(grandTotal * 0.065m, 2) + trPaymentFixedUsd;
                 regulatoryFee = Math.Round(feeBase * 0.0167m, 2);
 
@@ -275,7 +277,7 @@ public static class EtsyLiveDashboardCalculator
             }
 
             var netProfitUsd = isCanceled ? 0m : Math.Round(grandTotal - etsyFees - offsiteAdFee - (productCost ?? 0m), 2);
-            var netProfitTry = Math.Round(netProfitUsd * exchangeRate, 2);
+            var netProfitTry = Math.Round(netProfitUsd * orderSpecificRate, 2);
             var orderDate = receipt.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
 
             rows.Add(new EtsyOrderFinancialDetail(
@@ -300,7 +302,7 @@ public static class EtsyLiveDashboardCalculator
                 offsiteAdFee,
                 productCost,
                 netProfitUsd,
-                Math.Round(exchangeRate, 2),
+                Math.Round(orderSpecificRate, 2),
                 netProfitTry,
                 hasCost,
                 false,

@@ -193,10 +193,10 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(20.08m, row.OffsiteAdFeeUsd);
         Assert.Equal(35.00m, row.ProductCostUsd);
         Assert.True(row.HasCostData);
-        Assert.Equal(49.19m, row.ExchangeRate);
+        Assert.Equal(48.26m, row.ExchangeRate);
         Assert.True(row.EtsyFeesUsd > 0);
         Assert.True(row.NetProfitUsd > 0);
-        Assert.Equal(Math.Round(row.NetProfitUsd * 49.19m, 2), row.NetProfitTry);
+        Assert.Equal(Math.Round(row.NetProfitUsd * row.ExchangeRate, 2), row.NetProfitTry);
     }
 
     [Fact]

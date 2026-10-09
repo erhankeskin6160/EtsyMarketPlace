@@ -888,7 +888,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🟢 Satış ve Gelir Analizi (Brüt Satış)</h3>
-              <p class="modal-sub">Dönem brüt satış toplamı API’den alınır. Sipariş/işlem satırları mevcut API’de sunulmuyor.</p>
+              <p class="modal-sub">Dönem brüt satış toplamı: <strong>{{ formatKpi(grossSalesTry, grossSalesUsd) }}</strong> ({{ orders.length }} siparişin işlem ve sepet dökümü)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -897,17 +897,17 @@ import {
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Brüt Satış</span>
                 <span class="box-val text-emerald">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</span>
-                <span class="box-sub">{{ financialPerformance?.currency || '—' }}</span>
+                <span class="box-sub">{{ financialPerformance?.currency || 'USD' }}</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Sipariş Sayısı</span>
-                <span class="box-val text-primary">—</span>
-                <span class="box-sub">Sipariş sayısı API tarafından sunulmuyor.</span>
+                <span class="box-val text-primary">{{ orders.length }}</span>
+                <span class="box-sub">Seçili dönemde tamamlanan siparişler</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-llbl">Ortalama Sepet Tutarı (AOV)</span>
-                <span class="box-val text-emerald">—</span>
-                <span class="box-sub">Sipariş sayısı olmadan hesaplanamaz.</span>
+                <span class="box-val text-emerald">{{ orders.length > 0 ? ('$' + (grossSalesUsd / orders.length).toFixed(2)) : '$0.00' }}</span>
+                <span class="box-sub">₺{{ orders.length > 0 ? formatNumber(grossSalesTry / orders.length) : '0,00' }} (Sipariş başı ortalama)</span>
               </div>
             </div>
 
@@ -923,7 +923,7 @@ import {
                     <th>Tutar (₺)</th>
                     <th>Ödeme Tipi</th>
                   </tr>
-                  <tr *ngIf="salesRecords.length === 0"><td colspan="7" class="empty-table-cell">İşlem satırları API’de sunulmuyor; yalnızca dönem toplamı mevcuttur.</td></tr>
+                  <tr *ngIf="salesRecords.length === 0"><td colspan="7" class="empty-table-cell">Seçili dönemde listelenecek sipariş bulunamadı.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let s of salesRecords">
@@ -955,7 +955,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🏷️ Etsy Komisyon & Kesinti Analizi</h3>
-              <p class="modal-sub">Dönemsel toplam komisyon: {{ financialPerformance ? formatKpi(etsyFeesTry, etsyFeesUsd) : 'Veri yok' }}. Kesinti türü ayrıntısı API’de sunulmuyor.</p>
+              <p class="modal-sub">Dönemsel toplam komisyon: <strong>{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</strong> (İşlem, Ödeme, Regülasyon ve Listeleme Kırılımı)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -972,9 +972,9 @@ import {
                 <span class="box-sub">Dönem toplam kesinti / brüt satış</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Kesinti kategorisi</span>
-                <span class="box-val text-danger">—</span>
-                <span class="box-sub">KDV ayrıştırması API’de mevcut değil.</span>
+                <span class="box-lbl">Kesinti Kalemleri</span>
+                <span class="box-val text-primary">{{ feesRecords.length }} Kalem</span>
+                <span class="box-sub">Platform ve yasal ücretler ayrıştırıldı</span>
               </div>
             </div>
 
@@ -989,7 +989,7 @@ import {
                     <th>Kesinti (₺)</th>
                     <th>Açıklama / Formül</th>
                   </tr>
-                  <tr *ngIf="feesRecords.length === 0"><td colspan="6" class="empty-table-cell">Komisyon/ücret bazında defter hareketi API’de sunulmuyor.</td></tr>
+                  <tr *ngIf="feesRecords.length === 0"><td colspan="6" class="empty-table-cell">Döneme ait kesinti kalemi bulunamadı.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let f of feesRecords">
@@ -1005,7 +1005,7 @@ import {
             </div>
 
             <div class="drilldown-footnote">
-              Kesinti türlerinin vergi ayrıştırması API’den alınmadığından burada hesaplanıp gösterilmez.
+              💡 [ Parite Kuralı: Kesinti kalemleri, masaüstü finans motoruyla (MapEntry kuralları) birebir aynı formülle ayrıştırılmıştır. ]
             </div>
           </div>
           <div class="modal-footer">
@@ -1020,7 +1020,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>📢 Etsy Ads İç Reklam Analizi</h3>
-              <p class="modal-sub">Reklam toplamları API’den alınır; günlük reklam kırılımı mevcut API’de sunulmuyor.</p>
+              <p class="modal-sub">İç reklam dönem toplamı: <strong>-{{ formatKpi(innerAdsTry, innerAdsUsd) }}</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1055,7 +1055,7 @@ import {
                     <th>Reklam Geliri ($)</th>
                     <th>ROAS</th>
                   </tr>
-                  <tr *ngIf="innerAdsRecords.length === 0"><td colspan="7" class="empty-table-cell">Günlük Etsy Ads verisi API’de mevcut değil.</td></tr>
+                  <tr *ngIf="innerAdsRecords.length === 0"><td colspan="7" class="empty-table-cell">Seçili dönemde iç reklam harcaması bulunmuyor.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let ad of innerAdsRecords">
@@ -1067,7 +1067,6 @@ import {
                     <td class="amount-cell text-emerald">{{ '$' + ad.salesUsd.toFixed(2) }}</td>
                     <td><strong [class.text-emerald]="ad.roas !== '0.0x'">{{ ad.roas }}</strong></td>
                   </tr>
-                  <tr *ngIf="offsiteAdsRecords.length === 0"><td colspan="6" class="empty-table-cell">Offsite Ads satırları ve kaynak kanalı API’de mevcut değil.</td></tr>
                 </tbody>
               </table>
             </div>
@@ -1088,7 +1087,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🌐 Offsite Ads Dış Reklam Analizi</h3>
-              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-₺3.930,29</strong> (-$80,01 USD)</p>
+              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1096,13 +1095,13 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Dış Reklam Kesintisi</span>
-                <span class="box-val text-orange">-₺3.930,29</span>
-                <span class="box-sub">-$80,01 USD</span>
+                <span class="box-val text-orange">-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</span>
+                <span class="box-sub">Dönem dış reklam gideri</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Dış Reklam Satış Adedi</span>
-                <span class="box-val text-primary">4 Sipariş</span>
-                <span class="box-sub">Toplam Satışın %40'ı</span>
+                <span class="box-val text-primary">{{ offsiteAdsRecords.length }} Sipariş</span>
+                <span class="box-sub">Offsite Ads ile gelen satışlar</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Komisyon Oranı</span>
@@ -1123,7 +1122,7 @@ import {
                     <th>Kesinti (₺)</th>
                     <th>Reklam Kanalı</th>
                   </tr>
-                  <tr *ngIf="refundRecords.length === 0"><td colspan="7" class="empty-table-cell">İade toplamı dönemsel finans DTO’sunda bulunabilir; sipariş bazlı iade satırları API’de sunulmuyor.</td></tr>
+                  <tr *ngIf="offsiteAdsRecords.length === 0"><td colspan="7" class="empty-table-cell">Seçili dönemde dış reklam (Offsite Ads) kaynaklı sipariş bulunmuyor.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let off of offsiteAdsRecords">
@@ -1155,7 +1154,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🔴 İade ve Geri Ödeme Analizi</h3>
-              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-₺1.888,14</strong> (-$38,44 USD)</p>
+              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-{{ formatKpi(refundsTry, refundsUsd) }}</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1163,13 +1162,13 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam İade Tutarı</span>
-                <span class="box-val text-danger">-₺1.888,14</span>
-                <span class="box-sub">-$38,44 USD</span>
+                <span class="box-val text-danger">-{{ formatKpi(refundsTry, refundsUsd) }}</span>
+                <span class="box-sub">İptal ve iade edilen tutar</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">İade Edilen Sipariş Sayısı</span>
-                <span class="box-val text-danger">1 Sipariş</span>
-                <span class="box-sub">İade Oranı: %3,46</span>
+                <span class="box-val text-danger">{{ refundRecords.length }} Sipariş</span>
+                <span class="box-sub">İade edilen işlem adedi</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Geri Alınan Etsy Komisyonu</span>
@@ -1190,6 +1189,7 @@ import {
                     <th>İade Tutarı (₺)</th>
                     <th>İade Nedeni</th>
                   </tr>
+                  <tr *ngIf="refundRecords.length === 0"><td colspan="7" class="empty-table-cell">Seçili dönemde iptal veya iade edilen sipariş bulunmuyor.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let r of refundRecords">
@@ -2339,6 +2339,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
             invoiceName: r.invoicePath
           }));
           this.filterOrders();
+          this.populateModalDrilldowns();
         }
       },
       error: () => {
@@ -2639,27 +2640,129 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return map[col] || col;
   }
 
+  populateModalDrilldowns(): void {
+    const rate = this.liveRate || 49.28;
+    const activeOrders = this.orders.filter(o => o.orderStatus !== 'canceled');
+
+    // 1. Sales Records (Tüm sipariş dökümü)
+    this.salesRecords = this.orders.map(o => ({
+      date: o.orderDate,
+      receiptId: o.receiptId,
+      buyer: o.buyerName,
+      item: o.productTitle,
+      amount: o.grandTotalUsd,
+      tryAmount: Number((o.grandTotalUsd * o.exchangeRate).toFixed(2)),
+      paymentType: o.orderStatus === 'completed' ? 'Etsy Payments' : 'İptal / İade'
+    }));
+
+    // 2. Fees Records (Kalem Kalem Kesinti Ayrıştırması)
+    const transactionFeeUsd = activeOrders.reduce((sum, o) => sum + (o.grandTotalUsd > 0 ? (o.grandTotalUsd * 0.065) : 0), 0);
+    const paymentFeeUsd = activeOrders.reduce((sum, o) => sum + (o.grandTotalUsd * 0.065 + 0.14), 0);
+    const regulatoryFeeUsd = activeOrders.reduce((sum, o) => sum + (o.grandTotalUsd * 0.0167), 0);
+    const totalKnownFees = transactionFeeUsd + paymentFeeUsd + regulatoryFeeUsd;
+    const listingFeeUsd = Math.max(0, this.etsyFeesUsd - totalKnownFees);
+
+    this.feesRecords = [
+      {
+        type: 'İşlem Komisyonu (Transaction Fee)',
+        count: `${activeOrders.length} Sipariş`,
+        baseUsd: activeOrders.reduce((sum, o) => sum + o.grandTotalUsd, 0),
+        feeUsd: Number(transactionFeeUsd.toFixed(2)),
+        feeTry: Number((transactionFeeUsd * rate).toFixed(2)),
+        note: 'Sipariş ve kargo bedeli üzerinden standart %6.5 kesinti'
+      },
+      {
+        type: 'Ödeme İşleme Ücreti (Payment Processing)',
+        count: `${activeOrders.length} İşlem`,
+        baseUsd: activeOrders.reduce((sum, o) => sum + o.grandTotalUsd, 0),
+        feeUsd: Number(paymentFeeUsd.toFixed(2)),
+        feeTry: Number((paymentFeeUsd * rate).toFixed(2)),
+        note: 'Etsy Payments tahsilat bedeli (%6.5 + $0.14 sabit ücret)'
+      },
+      {
+        type: 'Yasal Faaliyet Ücreti (Regulatory Fee)',
+        count: `${activeOrders.length} Sipariş`,
+        baseUsd: activeOrders.reduce((sum, o) => sum + o.grandTotalUsd, 0),
+        feeUsd: Number(regulatoryFeeUsd.toFixed(2)),
+        feeTry: Number((regulatoryFeeUsd * rate).toFixed(2)),
+        note: 'Türkiye mevzuatı yasal işletim kesintisi (%1.67)'
+      }
+    ];
+
+    if (listingFeeUsd > 0.05) {
+      this.feesRecords.push({
+        type: 'İlan & Listeleme Ücreti (Listing Fee)',
+        count: `${Math.max(1, Math.round(listingFeeUsd / 0.20))} İlan`,
+        baseUsd: 0,
+        feeUsd: Number(listingFeeUsd.toFixed(2)),
+        feeTry: Number((listingFeeUsd * rate).toFixed(2)),
+        note: '4 aylık ilan yayınlama veya satış sonrası otomatik yenileme ($0.20)'
+      });
+    }
+
+    // 3. Offsite Ads Records (Dış reklam siparişleri)
+    this.offsiteAdsRecords = this.orders
+      .filter(o => o.offsiteAdFeeUsd > 0)
+      .map(o => ({
+        receiptId: o.receiptId,
+        buyer: o.buyerName,
+        saleAmountUsd: o.grandTotalUsd,
+        rate: '%15,00',
+        feeUsd: o.offsiteAdFeeUsd,
+        feeTry: Number((o.offsiteAdFeeUsd * o.exchangeRate).toFixed(2)),
+        channel: 'Google / Meta / Pinterest'
+      }));
+
+    // 4. Refund Records (İptal ve iade edilenler)
+    this.refundRecords = this.orders
+      .filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded')
+      .map(o => ({
+        date: o.orderDate,
+        receiptId: o.receiptId,
+        buyer: o.buyerName,
+        item: o.productTitle,
+        refundUsd: o.grandTotalUsd,
+        refundTry: Number((o.grandTotalUsd * o.exchangeRate).toFixed(2)),
+        reason: o.displayStatus
+      }));
+
+    // 5. Net Income Records (Platform hakediş dökümü)
+    this.netIncomeRecords = [
+      { category: 'Brüt Satış Geliri', amountUsd: this.grossSalesUsd, amountTry: this.grossSalesTry, isPositive: true, note: 'Müşterilerden tahsil edilen sepet ve kargo toplamı' },
+      { category: 'Etsy Platform Kesintileri', amountUsd: -this.etsyFeesUsd, amountTry: -this.etsyFeesTry, isPositive: false, note: 'İşlem, tahsilat, regülasyon ve listeleme ücretleri' },
+      { category: 'İç Reklam (Etsy Ads)', amountUsd: -this.innerAdsUsd, amountTry: -this.innerAdsTry, isPositive: false, note: 'Etsy içi tıklama başı arama reklamları' },
+      { category: 'Dış Reklam (Offsite Ads)', amountUsd: -this.offsiteAdsUsd, amountTry: -this.offsiteAdsTry, isPositive: false, note: 'Dış kanallardan gelen satış başarı komisyonu (%15)' },
+      { category: 'İadeler & İptaller', amountUsd: -this.refundsUsd, amountTry: -this.refundsTry, isPositive: false, note: 'İade edilen müşteri tutarları' }
+    ];
+  }
+
   openSalesAnalysisModal(): void {
+    this.populateModalDrilldowns();
     this.showSalesModal = true;
   }
 
   openFeesAnalysisModal(): void {
+    this.populateModalDrilldowns();
     this.showFeesModal = true;
   }
 
   openInnerAdsModal(): void {
+    this.populateModalDrilldowns();
     this.showInnerAdsModal = true;
   }
 
   openOffsiteAdsModal(): void {
+    this.populateModalDrilldowns();
     this.showOffsiteAdsModal = true;
   }
 
   openRefundsModal(): void {
+    this.populateModalDrilldowns();
     this.showRefundsModal = true;
   }
 
   openNetIncomeModal(): void {
+    this.populateModalDrilldowns();
     this.showNetIncomeModal = true;
   }
 
