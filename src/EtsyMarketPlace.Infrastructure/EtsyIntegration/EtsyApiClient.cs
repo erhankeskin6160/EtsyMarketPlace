@@ -32,6 +32,13 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         GetPagedAsync("application/shops/{0}/payment-account/ledger-entries", shopId, startDate, endDate, ParseDashboardLedgerFee, cancellationToken);
 
     /// <summary>
+    /// Sunucu finans motoru: tam alanli odeme hesabi defter kayitlari. Tutarlar USD'ye cevrilir ve
+    /// masaustu MapEntry kurallariyla siniflandirilir (parite: docs/finans-motoru-ve-parite.md).
+    /// </summary>
+    public Task<IReadOnlyList<EtsyLedgerEntryDetail>> GetLedgerEntriesDetailedAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
+        GetPagedAsync("application/shops/{0}/payment-account/ledger-entries", shopId, startDate, endDate, ParseLedgerEntryDetail, cancellationToken);
+
+    /// <summary>
     /// Etsy istekleri icin x-api-key degerini cozer: once magaza ayarlari (DPAPI sifreli kayit),
     /// yoksa yapilandirma (appsettings) kullanilir. Token uclariyla ayni kalip (EtsyOAuthService.ResolveCredentialsAsync).
     /// </summary>
@@ -187,6 +194,86 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             referenceId,
             description,
             LedgerAmountToUsd(item));
+    }
+
+    private static EtsyLedgerEntryDetail? ParseLedgerEntryDetail(JsonElement item, string shopId)
+    {
+        // Masaustu FinancialReportService.MapEntry birebir portu (parite: docs/finans-motoru-ve-parite.md)
+        long entryId = item.TryGetProperty("entry_id", out var propEntryId) && propEntryId.ValueKind == JsonValueKind.Number ? propEntryId.GetInt64() : 0;
+        var rawType = (StringValue(item, "ledger_type", "type") ?? string.Empty).ToLowerInvariant();
+        var rawRefType = (StringValue(item, "reference_type") ?? string.Empty).ToLowerInvariant();
+        var desc = (StringValue(item, "description") ?? string.Empty).ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(rawType) && string.IsNullOrWhiteSpace(desc)) return null;
+
+        var createdAt = DateValue(item, "create_date", "created_timestamp", "created");
+
+        long refId = 0;
+        if (item.TryGetProperty("reference_id", out var propRefId))
+        {
+            if (propRefId.ValueKind == JsonValueKind.Number)
+            {
+                refId = propRefId.GetInt64();
+            }
+            else if (propRefId.ValueKind == JsonValueKind.String && long.TryParse(propRefId.GetString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedRef))
+            {
+                refId = parsedRef;
+            }
+        }
+
+        if (refId == 0 && !string.IsNullOrWhiteSpace(desc))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(desc, @"#?(\d{9,11})");
+            if (match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedFromDesc))
+            {
+                refId = parsedFromDesc;
+            }
+        }
+
+        decimal amount = 0m;
+        decimal netAmount = 0m;
+        if (item.TryGetProperty("amount", out var amt) && amt.ValueKind == JsonValueKind.Number && amt.TryGetDecimal(out var rawCents))
+        {
+            amount = rawCents / 100m;
+            netAmount = amount;
+        }
+
+        if ((item.TryGetProperty("net", out var netProp) || item.TryGetProperty("net_amount", out netProp)) && netProp.ValueKind == JsonValueKind.Number)
+        {
+            netAmount = netProp.GetDecimal() / 100m;
+        }
+
+        var currency = StringValue(item, "currency_code", "currency");
+        if (string.IsNullOrWhiteSpace(currency) && item.TryGetProperty("money", out var moneyEl))
+        {
+            currency = StringValue(moneyEl, "currency_code");
+        }
+        currency ??= "USD";
+
+        var rate = HistoricalExchangeRateProvider.GetRateForDate(createdAt.UtcDateTime, 48.25m);
+
+        if (currency.Equals("TRY", StringComparison.OrdinalIgnoreCase) || currency.Equals("TL", StringComparison.OrdinalIgnoreCase))
+        {
+            if (rate > 0) { amount /= rate; netAmount /= rate; }
+            currency = "USD";
+        }
+        else if (currency.Equals("EUR", StringComparison.OrdinalIgnoreCase))
+        {
+            amount *= 1.1m;
+            netAmount *= 1.1m;
+            currency = "USD";
+        }
+        else if (currency.Equals("GBP", StringComparison.OrdinalIgnoreCase))
+        {
+            amount *= 1.3m;
+            netAmount *= 1.3m;
+            currency = "USD";
+        }
+
+        var type = EtsyLedgerFinancialEngine.ClassifyEntry(rawType, rawRefType, desc);
+        var amountTry = Math.Round(amount * rate, 2);
+
+        return new EtsyLedgerEntryDetail(type, rawType, rawRefType, desc, amount, netAmount, amountTry, currency, createdAt, rate, refId, entryId);
     }
 
     /// <summary>

@@ -68,6 +68,7 @@ builder.Services.AddSingleton<IShopPerformanceHistoryRepository>(sp => new Sqlit
 builder.Services.AddSingleton(sp => new JwtTokenService(builder.Configuration["Jwt:Secret"]));
 builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisService>();
 builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationService>();
+builder.Services.AddScoped<IEtsyLedgerReportService, EtsyLedgerReportService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddScoped<McpToolHandler>();
 
@@ -274,7 +275,7 @@ app.MapGet("/api/etsy/banking/payouts", async (string shopId = "53236321", DateT
 .WithDescription("Etsy'nin mağazanız için banka hesabınıza yatırdığı tüm ödeme ve transfer kayıtlarını tarih, tutar, kur ve durum bilgileriyle listeler. Mağaza ID belirtilmezse varsayılan mağaza (53236321) kullanılır.")
 .WithName("GetEtsyBankPayouts");
 
-app.MapGet("/api/etsy/financial/performance", async (string shopId = "53236321", string period = "last_month", DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, HttpContext context = null!, IConfiguration config = null!, IEtsyReportingService reporting = null!, CancellationToken cancellationToken = default) =>
+app.MapGet("/api/etsy/financial/performance", async (string shopId = "53236321", string period = "last_month", DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, HttpContext context = null!, IConfiguration config = null!, IEtsyLedgerReportService ledgerReport = null!, IEtsyReportingService reporting = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
     var now = DateTimeOffset.UtcNow;
@@ -286,17 +287,79 @@ app.MapGet("/api/etsy/financial/performance", async (string shopId = "53236321",
         : period?.ToLowerInvariant() switch
     {
         "today" => (now.Date, now),
-        "last_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddTicks(-1)),
+        "last_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero)),
         null or "" or "this_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now),
         _ => (DateTimeOffset.MinValue, DateTimeOffset.MinValue)
     };
     if (start == DateTimeOffset.MinValue) return Results.BadRequest(new { error = "period today, this_month veya last_month olmalıdır." });
     if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
-    return Results.Ok(await reporting.GetFinancialPerformanceAsync(resolvedShopId, start, end, cancellationToken));
+
+    // Sunucu finans motoru: Etsy odeme hesabi defterinden CANLI hesap (masaustu paritesi).
+    // Kisa omurlu onbellek + defter erisilemezse isaretli yedek. Bkz. docs/finans-motoru-ve-parite.md
+    var cacheKey = $"fin-ledger:{resolvedShopId}:{start:yyyyMMddHHmm}:{end:yyyyMMddHHmm}";
+    if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
+        return Results.Ok(cachedPayload);
+
+    var live = await ledgerReport.GetLiveReportAsync(resolvedShopId, start, end, cancellationToken);
+    if (live.LedgerOk)
+    {
+        var p = live.Performance;
+        var payload = new
+        {
+            grossSales = p.GrossSales,
+            platformFees = p.PlatformFees,
+            internalAdsCost = p.InternalAdsCost,
+            externalAdsCost = p.ExternalAdsCost,
+            productCosts = p.ProductCosts,
+            shippingCosts = p.ShippingCosts,
+            refunds = p.Refunds,
+            netProfit = p.NetProfit,
+            netProfitMargin = p.NetProfitMargin,
+            grossSalesTRY = p.GrossSalesTRY,
+            netProfitTRY = p.NetProfitTRY,
+            orderGrossSalesUSD = (decimal?)null,
+            orderGrossSalesTRY = (decimal?)null,
+            orderNetProfitTRY = (decimal?)null,
+            exchangeRateUsed = p.ExchangeRateUsed,
+            receiptCount = live.ReceiptCount,
+            ledgerOk = true,
+            ledgerWarning = live.Warning,
+            source = live.Source,
+            generatedAt = live.GeneratedAt
+        };
+        DashboardResponseCache.Set(cacheKey, payload, TimeSpan.FromMinutes(4));
+        return Results.Ok(payload);
+    }
+
+    // Defter erisilemedi: masaustu aktarim tabanli yedek ozet (isaretli) - panel bos kalmasin.
+    var legacy = await reporting.GetFinancialPerformanceAsync(resolvedShopId, start, end, cancellationToken);
+    return Results.Ok(new
+    {
+        grossSales = legacy.GrossSales,
+        platformFees = legacy.PlatformFees,
+        internalAdsCost = legacy.InternalAdsCost,
+        externalAdsCost = legacy.ExternalAdsCost,
+        productCosts = legacy.ProductCosts,
+        shippingCosts = legacy.ShippingCosts,
+        refunds = legacy.Refunds,
+        netProfit = legacy.NetProfit,
+        netProfitMargin = legacy.NetProfitMargin,
+        grossSalesTRY = legacy.GrossSalesTRY,
+        netProfitTRY = legacy.NetProfitTRY,
+        orderGrossSalesUSD = legacy.OrderGrossSalesUSD,
+        orderGrossSalesTRY = legacy.OrderGrossSalesTRY,
+        orderNetProfitTRY = legacy.OrderNetProfitTRY,
+        exchangeRateUsed = legacy.ExchangeRateUsed,
+        receiptCount = live.ReceiptCount,
+        ledgerOk = false,
+        ledgerWarning = live.Warning,
+        source = "legacy-fallback",
+        generatedAt = live.GeneratedAt
+    });
 })
 .WithTags("Finans & Muhasebe")
 .WithSummary("Finansal Performans ve Kâr-Zarar Karnesi")
-.WithDescription("today, this_month, last_month dönemini veya startDate ve endDate ile özel tarih aralığını kullanarak finansal performansı hesaplar. Özel tarih aralığında iki tarih de gönderilmelidir.")
+.WithDescription("today, this_month, last_month dönemini veya startDate ve endDate ile özel tarih aralığını kullanarak finansal performansı hesaplar. Kaynak: Etsy ödeme hesabı defteri (canlı sunucu finans motoru, masaüstü paritesi).")
 .WithName("GetFinancialPerformance");
 
 app.MapGet("/api/etsy/financial/analysis", async (string shopId = "53236321", DateTimeOffset? startDate = null, DateTimeOffset? endDate = null, HttpContext context = null!, IConfiguration config = null!, IEtsyFinancialAnalysisService analysis = null!, CancellationToken cancellationToken = default) =>

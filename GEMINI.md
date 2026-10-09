@@ -27,3 +27,10 @@ Her geliştirme görevi, hata düzeltmesi veya yeni özellik için aşağıdaki 
    - `git push origin development`
    - GitHub Actions üzerinden VDS otomatik derlemesi tetiklenir.
    - Sonuç kullanıcıya şeffaf ve açık şekilde raporlanır.
+
+## 🚨 3. FİNANSAL VERİ MİMARİSİ (GÜNCEL — VDS SUNUCU FİNANS MOTORU)
+Web finans KPI'ları, VDS API'nin **sunucu finans motorundan** (Etsy ödeme hesabı defteri, canlı) beslenir.
+Masaüstü uygulamasının gönderdiği günlük özetler ve `financial_transactions` ham satırları **web KPI
+kaynağı DEĞİLDİR** (yalnız yedek/uyumluluk içindir). Parite sözleşmesi, referans değerler ve doğrulama
+adımları: **`docs/finans-motoru-ve-parite.md`** (ayrıca `SYSTEM_ARCHITECTURE_AND_AGENT_HANDBOOK.md` §4 —
+"Finansal Veri Akışı"). Finansla ilgili kod değiştirmeden önce bu iki belgeyi okuyun.
