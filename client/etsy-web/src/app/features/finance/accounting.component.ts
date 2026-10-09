@@ -685,26 +685,26 @@ import {
 
       <!-- DRILLDOWN MODAL 1: ETSY BANKA YATIRIMI & TRANSFER ANALİZİ (PAYOUTS - GÖRSEL 2) -->
       <div class="modal-backdrop" *ngIf="showBankPayoutModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+        <div class="modal-card drilldown-card drilldown-card-lg" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)</h3>
-              <p class="modal-sub">Seçili dönemde dönen payout kayıtları: <strong>{{ bankPayoutRecords.length }}</strong></p>
+              <p class="modal-sub">Seçili dönemde banka hesabınıza aktarılan toplam <strong>{{ bankPayoutRecords.length }}</strong> transfer kaydı.</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Banka Yatırımı</span>
+                <span class="box-lbl">Toplam Banka Yatırımı (TL)</span>
                 <span class="box-val text-cyan">{{ formatNumber(bankPayoutsTry) }} ₺</span>
-                <span class="box-sub">{{ bankPayoutRecords.length }} transfer</span>
+                <span class="box-sub">Toplam {{ formatNumber(bankPayoutsUsd) }} USD ({{ bankPayoutRecords.length }} transfer)</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">En Son Yatırılan Tarih</span>
                 <ng-container *ngIf="latestPayout as payout; else noPayout">
                   <span class="box-val text-white">{{ payout.occurredAt | date:'shortDate' }}</span>
-                  <span class="box-sub">Son tutar: {{ payout.amount | currency:payout.currency }}</span>
+                  <span class="box-sub">Son Tutar: <strong class="text-emerald">{{ formatNumber(getPayoutTryAmount(payout)) }} ₺</strong> ({{ payout.amount | currency:payout.currency }})</span>
                 </ng-container>
                 <ng-template #noPayout>
                   <span class="box-val text-white">—</span>
@@ -714,7 +714,7 @@ import {
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Ortalama Transfer</span>
                 <span class="box-val text-primary">{{ bankPayoutRecords.length ? formatNumber(bankPayoutsTry / bankPayoutRecords.length) + ' ₺' : '—' }}</span>
-                <span class="box-sub">Kayıt başına ortalama TRY karşılığı</span>
+                <span class="box-sub">Transfer başına ortalama TL aktarımı</span>
               </div>
             </div>
 
@@ -725,9 +725,11 @@ import {
                     <th>Tarih</th>
                     <th>İşlem / Ref No</th>
                     <th>Tür</th>
-                    <th>Yatırılan Tutar</th>
+                    <th>Yatırılan Tutar (TL)</th>
+                    <th>Döviz Tutarı</th>
+                    <th>Kur Bilgisi</th>
                     <th>Durum</th>
-                    <th>Açıklama / Kur Bilgisi</th>
+                    <th>Açıklama</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -735,16 +737,20 @@ import {
                     <td class="date-cell">{{ p.occurredAt | date:'short' }}</td>
                     <td class="ref-cell">{{ p.referenceId }}</td>
                     <td>Banka transferi</td>
-                    <td class="amount-cell text-emerald">{{ p.amount | currency:p.currency }}</td>
-                    <td><span class="badge-status-payout">{{ p.status }}</span></td>
-                    <td class="note-cell">{{ p.description }}</td>
+                    <td class="amount-cell text-emerald font-bold">₺{{ formatNumber(getPayoutTryAmount(p)) }}</td>
+                    <td class="amount-cell text-white">{{ p.amount | currency:p.currency }}</td>
+                    <td class="rate-cell text-muted">{{ p.currency === 'TRY' ? '—' : ('1 $ = ' + ((p.exchangeRateToTry || liveRate).toFixed(2)) + ' ₺') }}</td>
+                    <td><span class="badge-status-payout">{{ getPayoutStatusLabel(p.status) }}</span></td>
+                    <td class="note-cell">{{ getPayoutDescription(p.description) }}</td>
                   </tr>
-                  <tr *ngIf="bankPayoutRecords.length === 0"><td colspan="6" class="empty-table-cell">Bu dönemde API’den payout kaydı gelmedi.</td></tr>
+                  <tr *ngIf="bankPayoutRecords.length === 0"><td colspan="8" class="empty-table-cell">Bu dönemde API’den payout kaydı gelmedi.</td></tr>
                 </tbody>
               </table>
             </div>
 
-            <div class="drilldown-footnote">Payout kaydındaki açıklama, durum ve kur bilgileri API yanıtından gösterilir. Banka adı veya hesap bilgisi API tarafından sağlanmıyor.</div>
+            <div class="drilldown-footnote">
+              💡 [ Banka Yatırımı: Etsy ödemeleri bankanıza TL olarak transfer edilir. Döviz tutarları transfer gününün kuru üzerinden TL'ye dönüştürülmüştür. ]
+            </div>
           </div>
           <div class="modal-footer">
             <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
@@ -2026,6 +2032,14 @@ import {
       box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85);
       animation: pop-in 0.15s ease-out;
     }
+    .drilldown-card-lg {
+      max-width: 1080px;
+    }
+    .rate-cell {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      white-space: nowrap;
+    }
     .drilldown-title-box h3 {
       font-size: 1.15rem;
       font-weight: 700;
@@ -2358,7 +2372,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
         this.bankPayoutsUsd = this.bankPayoutRecords
           .filter(payout => payout.currency === 'USD')
           .reduce((sum, payout) => sum + (typeof payout.amount === 'number' ? payout.amount : Number(payout.amount || 0)), 0);
-        this.bankPayoutsTry = this.bankPayoutRecords.reduce((sum, payout) => sum + (payout.exchangeRateToTry ? payout.amount * payout.exchangeRateToTry : payout.currency === 'TRY' ? payout.amount : 0), 0);
+        this.bankPayoutsTry = this.bankPayoutRecords.reduce((sum, payout) => {
+          const amt = typeof payout.amount === 'number' ? payout.amount : Number(payout.amount || 0);
+          const rate = payout.exchangeRateToTry || this.liveRate;
+          return sum + (payout.currency === 'TRY' ? amt : amt * rate);
+        }, 0);
       },
       error: () => {
         this.bankPayoutRecords = [];
@@ -2798,6 +2816,32 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   get invoicedOrdersCount(): number {
     return this.orders.filter(o => o.hasInvoice).length;
+  }
+
+  getPayoutTryAmount(p: EtsyBankPayoutDto): number {
+    if (!p) return 0;
+    const amt = typeof p.amount === 'number' ? p.amount : Number(p.amount || 0);
+    if (p.currency === 'TRY') return amt;
+    const rate = p.exchangeRateToTry || this.liveRate;
+    return amt * rate;
+  }
+
+  getPayoutDescription(desc: string): string {
+    if (!desc) return 'Etsy Hakediş Banka Transferi';
+    const d = desc.toLowerCase();
+    if (d.includes('disburse')) return 'Etsy Hakediş Banka Transferi';
+    if (d.includes('deposit_fee') || d.includes('deposit fee')) return 'Banka Transfer İşlem Ücreti';
+    if (d.includes('refund')) return 'İade Tahakkuku';
+    return desc;
+  }
+
+  getPayoutStatusLabel(status: string): string {
+    if (!status) return 'Tamamlandı';
+    const s = status.toLowerCase();
+    if (s === 'completed') return 'Hesaba Geçti';
+    if (s === 'pending') return 'Beklemede';
+    if (s === 'failed') return 'Başarısız';
+    return status;
   }
 
   openSalesAnalysisModal(): void {
