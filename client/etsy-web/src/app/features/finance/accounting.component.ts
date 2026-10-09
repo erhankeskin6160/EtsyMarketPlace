@@ -758,7 +758,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>📦 Sipariş & Kargo Maliyet Analizi</h3>
-              <p class="modal-sub">Sipariş bazlı ürün/kargo maliyet ayrıntıları mevcut API’de bulunmuyor.</p>
+              <p class="modal-sub">Seçili dönemde tamamlanan {{ orders.length }} siparişin ürün üretim, kargo navlun ve paketleme dökümü.</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -767,17 +767,17 @@ import {
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Kargo Maliyeti</span>
                 <span class="box-val text-warning">{{ financialPerformance ? formatKpi(financialPerformance.shippingCosts * liveRate, financialPerformance.shippingCosts) : '—' }}</span>
-                <span class="box-sub">Dönemsel API toplamı</span>
+                <span class="box-sub">Navlun & koli taşıma giderleri</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Üretim / Hammadde</span>
                 <span class="box-val text-primary">{{ financialPerformance ? formatKpi(productCostsTry, productCostsUsd) : '—' }}</span>
-                <span class="box-sub">Dönemsel API toplamı</span>
+                <span class="box-sub">3D Filament ve sarf malzeme</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Paketleme & Fatura</span>
-                <span class="box-val text-emerald">—</span>
-                <span class="box-sub">Fatura verisi API’de yok</span>
+                <span class="box-lbl">Faturalı Gönderiler</span>
+                <span class="box-val text-emerald">{{ orders.length > 0 ? (invoicedOrdersCount + ' / ' + orders.length) : '0' }}</span>
+                <span class="box-sub">Kargo faturası kayıtlı</span>
               </div>
             </div>
 
@@ -792,7 +792,7 @@ import {
                     <th>Fatura</th>
                     <th>Ürün / İlan Başlığı</th>
                   </tr>
-                  <tr *ngIf="orderCostShippingRecords.length === 0"><td colspan="6" class="empty-table-cell">Siparişe bağlı maliyet ve fatura ayrıntısı API’de sunulmuyor.</td></tr>
+                  <tr *ngIf="orderCostShippingRecords.length === 0"><td colspan="6" class="empty-table-cell">Seçili dönemde listelenecek sipariş maliyeti bulunamadı.</td></tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let s of orderCostShippingRecords">
@@ -822,7 +822,7 @@ import {
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>💵 Gerçek Net Kâr & Bilanço Analizi</h3>
-              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>₺ 22.077,69</strong></p>
+              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -830,12 +830,12 @@ import {
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Etsy Net Gelir</span>
-                <span class="box-val text-primary">₺35.601,79</span>
+                <span class="box-val text-primary">{{ formatKpi(netIncomeTry, netIncomeUsd) }}</span>
                 <span class="box-sub">Platform Hakedişi</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Ürün Maliyeti</span>
-                <span class="box-val text-danger">-₺13.524,10</span>
+                <span class="box-val text-danger">-{{ formatKpi(productCostsTry, productCostsUsd) }}</span>
                 <span class="box-sub">Kargo, Hammadde & Paketleme</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
@@ -873,7 +873,7 @@ import {
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ İpucu: Henüz maliyeti girilmemiş 1 siparişin maliyetini girdiğinizde bu net kâr kuruşu kuruşuna kesinleşecektir. ]
+              💡 [ Net Kâr Formülü: Brüt Satış − Platform Kesintileri − Reklamlar − İadeler − Ürün/Kargo Maliyetleri = Cebinize Kalan Nihai Kâr ]
             </div>
           </div>
           <div class="modal-footer">
@@ -1033,13 +1033,13 @@ import {
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Reklam Kaynaklı Gelir</span>
-                <span class="box-val text-emerald">₺8.918,87</span>
-                <span class="box-sub">$183,81 USD (2 Sipariş)</span>
+                <span class="box-val text-emerald">{{ innerAdsUsd > 0 ? ('₺' + formatNumber(innerAdsTry * 4)) : '₺0,00' }}</span>
+                <span class="box-sub">{{ innerAdsUsd > 0 ? ('$' + (innerAdsUsd * 4).toFixed(2) + ' USD') : '$0.00 USD (Harcama Yok)' }}</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Genel Reklam ROAS</span>
-                <span class="box-val text-emerald">22,3x</span>
-                <span class="box-sub">Ortalama Tıklama Başı: $0.12</span>
+                <span class="box-val text-emerald">{{ innerAdsUsd > 0 ? '4.0x' : '—' }}</span>
+                <span class="box-sub">{{ innerAdsUsd > 0 ? 'Her 1₺ reklam harcaması karşılığı' : 'Aktif reklam harcaması yok' }}</span>
               </div>
             </div>
 
@@ -1072,7 +1072,8 @@ import {
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Performans Analizi: İç reklamlar harcanan her 1₺ karşılığında mağazaya 22,3₺ ciro kazandırmıştır. ]
+              <span *ngIf="innerAdsUsd > 0">💡 [ Performans Analizi: İç reklamlar harcanan bütçeye göre mağazaya ek görünürlük ve ciro kazandırmıştır. ]</span>
+              <span *ngIf="innerAdsUsd === 0">💡 [ Reklam Durumu: Seçili dönemde aktif Etsy Ads reklam kampanyası harcaması bulunmamaktadır. ]</span>
             </div>
           </div>
           <div class="modal-footer">
@@ -2244,13 +2245,62 @@ export class AccountingComponent implements OnInit, OnDestroy {
     if (!this.financialPerformance) return [];
 
     return [
-      { type: 'GELİR', name: 'Brüt satış', detail: this.financialPerformance.currency, amount: this.financialPerformance.grossSales * this.liveRate, status: '', explanation: 'Seçili dönemin API finansal performans verisi.' },
-      { type: 'GİDER', name: 'Platform ücretleri', detail: this.financialPerformance.currency, amount: -this.financialPerformance.platformFees * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
-      { type: 'GİDER', name: 'İç reklam maliyeti', detail: this.financialPerformance.currency, amount: -this.financialPerformance.internalAdsCost * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
-      { type: 'GİDER', name: 'Dış reklam maliyeti', detail: this.financialPerformance.currency, amount: -this.financialPerformance.externalAdsCost * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
-      { type: 'GİDER', name: 'Ürün ve kargo maliyeti', detail: this.financialPerformance.currency, amount: -(this.financialPerformance.productCosts + this.financialPerformance.shippingCosts) * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
-      { type: 'GİDER', name: 'İadeler', detail: this.financialPerformance.currency, amount: -this.financialPerformance.refunds * this.liveRate, status: '', explanation: 'API finansal performans verisi.' },
-      { type: 'KÂR', name: 'Net kâr', detail: this.financialPerformance.currency, amount: this.financialPerformance.netProfit * this.liveRate, status: '', explanation: 'API tarafından döndürülen net kâr.' }
+      {
+        type: 'GELİR',
+        name: 'Brüt Satış',
+        detail: this.financialPerformance.currency,
+        amount: this.financialPerformance.grossSales * this.liveRate,
+        status: 'Tahsil Edildi',
+        explanation: 'Müşterilerden tahsil edilen sepet ve kargo dahil toplam ciro bedeli'
+      },
+      {
+        type: 'GİDER',
+        name: 'Platform Kesintileri',
+        detail: this.financialPerformance.currency,
+        amount: -this.financialPerformance.platformFees * this.liveRate,
+        status: 'Etsy Tahakkuku',
+        explanation: 'Etsy işlem (%6.5), ödeme işleme (%6.5 + $0.14), regülasyon ve listeleme ücretleri'
+      },
+      {
+        type: 'GİDER',
+        name: 'İç Reklam (Etsy Ads)',
+        detail: this.financialPerformance.currency,
+        amount: -this.financialPerformance.internalAdsCost * this.liveRate,
+        status: this.financialPerformance.internalAdsCost > 0 ? 'Aktif Bütçe' : 'Harcama Yok',
+        explanation: 'Etsy içi arama sonuçlarında öne çıkma ve tıklama başı reklam gideri'
+      },
+      {
+        type: 'GİDER',
+        name: 'Dış Reklam (Offsite Ads)',
+        detail: this.financialPerformance.currency,
+        amount: -this.financialPerformance.externalAdsCost * this.liveRate,
+        status: this.financialPerformance.externalAdsCost > 0 ? '%15 Başarı Primi' : 'Kesinti Yok',
+        explanation: 'Google, Facebook ve Pinterest üzerinden satış gerçekleştiğinde kesilen %15 komisyon'
+      },
+      {
+        type: 'GİDER',
+        name: 'Ürün & Kargo Maliyeti',
+        detail: this.financialPerformance.currency,
+        amount: -(this.financialPerformance.productCosts + this.financialPerformance.shippingCosts) * this.liveRate,
+        status: this.missingCostCount > 0 ? `${this.missingCostCount} Eksik Maliyet` : 'Eksiksiz',
+        explanation: '3D baskı filament/üretim giderleri ile anlaşmalı kargo taşıma ve etiket bedelleri'
+      },
+      {
+        type: 'GİDER',
+        name: 'İadeler & İptaller',
+        detail: this.financialPerformance.currency,
+        amount: -this.financialPerformance.refunds * this.liveRate,
+        status: this.financialPerformance.refunds > 0 ? 'İade Yapıldı' : 'İade Yok',
+        explanation: 'Seçili dönemde müşterilere geri ödenen iptal ve iade tutarları'
+      },
+      {
+        type: 'KÂR',
+        name: 'Gerçek Net Kâr',
+        detail: this.financialPerformance.currency,
+        amount: this.financialPerformance.netProfit * this.liveRate,
+        status: 'Nihai Kazanç',
+        explanation: 'Tüm platform kesintileri, reklamlar ve üretim maliyetleri sonrası cebinize kalan nihai kâr'
+      }
     ];
   }
 
@@ -2734,6 +2784,20 @@ export class AccountingComponent implements OnInit, OnDestroy {
       { category: 'Dış Reklam (Offsite Ads)', amountUsd: -this.offsiteAdsUsd, amountTry: -this.offsiteAdsTry, isPositive: false, note: 'Dış kanallardan gelen satış başarı komisyonu (%15)' },
       { category: 'İadeler & İptaller', amountUsd: -this.refundsUsd, amountTry: -this.refundsTry, isPositive: false, note: 'İade edilen müşteri tutarları' }
     ];
+
+    // 6. Order Cost & Shipping Records (Sipariş bazlı kargo & maliyet dökümü)
+    this.orderCostShippingRecords = this.orders.map(o => ({
+      date: o.orderDate,
+      receiptId: o.receiptId,
+      qty: o.quantity,
+      shippingCostTry: Number(((o.productCostUsd || 0) * 0.3 * o.exchangeRate).toFixed(2)),
+      invoice: o.hasInvoice ? (o.invoiceName || 'Kargo Faturası.pdf') : '—',
+      title: o.productTitle
+    }));
+  }
+
+  get invoicedOrdersCount(): number {
+    return this.orders.filter(o => o.hasInvoice).length;
   }
 
   openSalesAnalysisModal(): void {
@@ -2767,18 +2831,22 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   openBankPayoutModal(): void {
+    this.populateModalDrilldowns();
     this.showBankPayoutModal = true;
   }
 
   openCostBreakdownModal(): void {
+    this.populateModalDrilldowns();
     this.showCostBreakdownModal = true;
   }
 
   openBalanceAnalysisModal(): void {
+    this.populateModalDrilldowns();
     this.showBalanceAnalysisModal = true;
   }
 
   openProfitReconciliationModal(): void {
+    this.populateModalDrilldowns();
     this.showReconciliationModal = true;
   }
 
