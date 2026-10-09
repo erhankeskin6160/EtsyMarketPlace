@@ -551,6 +551,28 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         return result;
     }
 
+    public async Task UpsertOrderCostAsync(string shopId, string orderId, decimal? productCost, decimal? shippingCost, decimal? packagingCost, string? notes, CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO order_costs(shop_id, order_id, created_at, currency, order_total, product_cost, shipping_cost, alert_reason)
+            VALUES($shopId, $orderId, $now, 'USD', 0, $productCost, $shippingCost, $reason)
+            ON CONFLICT(shop_id, order_id) DO UPDATE SET
+                product_cost = excluded.product_cost,
+                shipping_cost = excluded.shipping_cost,
+                alert_reason = COALESCE(excluded.alert_reason, order_costs.alert_reason);
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$orderId", orderId);
+        command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("$productCost", (object?)productCost ?? DBNull.Value);
+        command.Parameters.AddWithValue("$shippingCost", (object?)shippingCost ?? DBNull.Value);
+        command.Parameters.AddWithValue("$reason", (object?)notes ?? DBNull.Value);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public async Task<DailyShopBrief> GetDailyShopBriefAsync(string shopId, DateTimeOffset date, CancellationToken cancellationToken = default)
     {
         var start = new DateTimeOffset(date.Year, date.Month, date.Day, 0, 0, 0, date.Offset);

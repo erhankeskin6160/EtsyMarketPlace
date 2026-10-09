@@ -278,12 +278,14 @@ import {
               ❓ Kâr Farkı Nedir?
             </button>
 
-            <!-- Order Summary KPI Text -->
+            <!-- Order Summary KPI Text (Matching Görsel 1 Desktop Parity) -->
             <div class="orders-summary-label">
               <span>📦 <strong>{{ filteredOrders.length }} sipariş</strong></span>
               <span class="sep">|</span>
-              <span>Mağaza net kârı: <strong class="text-emerald">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</strong></span>
+              <span>Sipariş Kârı: <strong class="text-cyan">{{ formatKpi(totalOrderProfitTry, totalOrderProfitUsd) }}</strong></span>
               <span class="sep">|</span>
+              <span>Mağaza Net: <strong class="text-emerald">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</strong></span>
+              <span class="sep" *ngIf="missingCostCount > 0">|</span>
               <span class="missing-badge" *ngIf="missingCostCount > 0">
                 ⚠️ {{ missingCostCount }} maliyetsiz
               </span>
@@ -356,10 +358,14 @@ import {
                     Kargo Faturası
                   </th>
                 </tr>
-                  <tr *ngIf="filteredOrders.length === 0"><td colspan="15" class="empty-table-cell">Tam sipariş ayrıntısı (alıcı, ürün, durum ve satır bazlı maliyet) mevcut API’de sunulmuyor. Bu tablo örnek sipariş göstermiyor.</td></tr>
-                  <tr *ngIf="ledgerEntries.length === 0"><td colspan="10" class="empty-table-cell">Satır bazlı ödeme defteri API’de mevcut değil; bu kayıtlar gösterilemiyor.</td></tr>
               </thead>
               <tbody>
+                <tr *ngIf="filteredOrders.length === 0 && isLoading">
+                  <td colspan="15" class="empty-table-cell">⏳ Canlı Etsy API'den siparişler ve finansal döküm yükleniyor...</td>
+                </tr>
+                <tr *ngIf="filteredOrders.length === 0 && !isLoading">
+                  <td colspan="15" class="empty-table-cell">📦 Seçili tarih aralığında gösterilecek sipariş bulunamadı.</td>
+                </tr>
                 <tr *ngFor="let o of filteredOrders" 
                     [class.canceled-row]="o.orderStatus === 'canceled'"
                     (dblclick)="editOrderCost(o)"
@@ -2309,6 +2315,45 @@ export class AccountingComponent implements OnInit, OnDestroy {
         this.loadError = 'Payout verileri yüklenemedi.';
       }
     });
+
+    this.etsyApi.getOrderFinancialsByDateRange(range.start, range.end).subscribe({
+      next: (res) => {
+        if (res && res.orders) {
+          this.orders = res.orders.map((r: any) => ({
+            orderDate: r.orderDate,
+            receiptId: String(r.receiptId),
+            orderStatus: r.orderStatus,
+            displayStatus: r.displayStatus,
+            buyerName: r.buyerName || 'Misafir Müşteri',
+            productTitle: r.productTitle,
+            quantity: r.quantity,
+            grandTotalUsd: r.grandTotalUsd,
+            etsyFeesUsd: r.etsyFeesUsd,
+            offsiteAdFeeUsd: r.offsiteAdFeeUsd,
+            productCostUsd: r.productCostUsd,
+            netProfitUsd: r.netProfitUsd,
+            exchangeRate: r.exchangeRate,
+            netProfitTry: r.netProfitTry,
+            hasCostData: r.hasCostData,
+            hasInvoice: r.hasInvoice,
+            invoiceName: r.invoicePath
+          }));
+          this.filterOrders();
+        }
+      },
+      error: () => {
+        this.orders = [];
+        this.filteredOrders = [];
+      }
+    });
+  }
+
+  get totalOrderProfitUsd(): number {
+    return this.filteredOrders.filter(o => o.orderStatus !== 'canceled').reduce((sum, o) => sum + (o.netProfitUsd || 0), 0);
+  }
+
+  get totalOrderProfitTry(): number {
+    return this.filteredOrders.filter(o => o.orderStatus !== 'canceled').reduce((sum, o) => sum + (o.netProfitTry || 0), 0);
   }
 
   get missingCostCount(): number {
@@ -2739,11 +2784,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   saveOrderCost(): void {
     if (this.selectedOrder) {
+      const order = this.selectedOrder;
       const totalCost = Number((this.costModalProduction + this.costModalShipping + this.costModalPackaging).toFixed(2));
-      this.selectedOrder.productCostUsd = totalCost;
-      this.selectedOrder.hasCostData = true;
-      this.selectedOrder.netProfitUsd = Number((this.selectedOrder.grandTotalUsd - this.selectedOrder.etsyFeesUsd - this.selectedOrder.offsiteAdFeeUsd - totalCost).toFixed(2));
-      this.selectedOrder.netProfitTry = Number((this.selectedOrder.netProfitUsd * this.selectedOrder.exchangeRate).toFixed(2));
+      order.productCostUsd = totalCost;
+      order.hasCostData = true;
+      order.netProfitUsd = Number((order.grandTotalUsd - order.etsyFeesUsd - order.offsiteAdFeeUsd - totalCost).toFixed(2));
+      order.netProfitTry = Number((order.netProfitUsd * order.exchangeRate).toFixed(2));
 
       // Recalculate KPIs from all completed orders
       const active = this.orders.filter(o => o.orderStatus !== 'canceled');
@@ -2755,7 +2801,18 @@ export class AccountingComponent implements OnInit, OnDestroy {
       this.realNetProfitTry = Number(totalNetTRY.toFixed(2));
       this.realNetProfitUsd = Number((totalNetTRY / this.liveRate).toFixed(2));
 
-      this.showToast(`✅ #${this.selectedOrder.receiptId} maliyeti $${totalCost.toFixed(2)} kaydedildi. Gerçek Net Kâr güncellendi!`);
+      this.etsyApi.saveOrderCost(order.receiptId, {
+        productCost: this.costModalProduction,
+        shippingCost: this.costModalShipping,
+        packagingCost: this.costModalPackaging
+      }).subscribe({
+        next: () => {
+          this.showToast(`✅ #${order.receiptId} maliyeti $${totalCost.toFixed(2)} kaydedildi ve VDS ile senkronize edildi!`);
+        },
+        error: () => {
+          this.showToast(`✅ #${order.receiptId} maliyeti $${totalCost.toFixed(2)} yerel güncellendi.`);
+        }
+      });
     }
     this.closeModals();
   }

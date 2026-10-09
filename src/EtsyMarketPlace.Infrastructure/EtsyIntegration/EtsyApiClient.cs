@@ -150,6 +150,11 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             }
         }
 
+        var buyerName = StringValue(item, "name", "buyer_name");
+        var buyerEmail = StringValue(item, "buyer_email");
+        var uid = LongValue(item, "buyer_user_id");
+        long? buyerUserId = uid > 0 ? uid : null;
+
         return new EtsyDashboardReceipt(
             receiptId,
             DateValue(item, "created_timestamp", "create_timestamp"),
@@ -163,7 +168,11 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             MoneyValue(item, "discount_amt"),
             MoneyValue(item, "total_tax_cost", "total_vat_cost"),
             refundedAmount,
-            items);
+            items,
+            buyerName,
+            buyerUserId,
+            buyerEmail,
+            status);
     }
 
     private static EtsyDashboardLedgerFee? ParseDashboardLedgerFee(JsonElement item, string shopId)

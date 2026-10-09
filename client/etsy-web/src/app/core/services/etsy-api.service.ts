@@ -293,6 +293,27 @@ export class EtsyApiService {
     return this.http.get<FinancialPerformanceDto>(`${this.API_BASE}/api/etsy/financial/performance?${params}`);
   }
 
+  getOrderFinancialsByDateRange(startDate: Date, endDate: Date): Observable<{
+    orders: any[];
+    count: number;
+    totalOrderProfitUsd: number;
+    totalOrderProfitTry: number;
+    exchangeRateUsed: number;
+    ledgerOk: boolean;
+    ledgerWarning?: string;
+  }> {
+    const params = new URLSearchParams({
+      shopId: this.activeShopId(),
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    });
+    return this.http.get<any>(`${this.API_BASE}/api/etsy/financial/orders?${params}`);
+  }
+
+  saveOrderCost(receiptId: string | number, costData: { productCost?: number; shippingCost?: number; packagingCost?: number; notes?: string }): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/financial/orders/${receiptId}/cost?shopId=${this.activeShopId()}`, costData);
+  }
+
   getFinancialAnalysis(startDate?: Date, endDate?: Date): Observable<any> {
     let url = `${this.API_BASE}/api/etsy/financial/analysis?shopId=${this.activeShopId()}`;
     if (startDate) url += `&startDate=${encodeURIComponent(startDate.toISOString())}`;

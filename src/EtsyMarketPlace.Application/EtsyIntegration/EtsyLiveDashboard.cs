@@ -172,6 +172,144 @@ public static class EtsyLiveDashboardCalculator
         return best.Revenue > 0 ? (best.Title, best.Revenue) : (null, 0m);
     }
 
+    /// <summary>Web kokpiti 'Siparişler & Net Kâr' tablosu için 15 sütunlu tam finans dökümü hesaplar (masaüstü FinancialReportService.BuildOrderSummaries paritesi).</summary>
+    public static List<EtsyOrderFinancialDetail> BuildDetailedOrderRows(
+        IReadOnlyList<EtsyDashboardReceipt> receipts,
+        IReadOnlyList<EtsyDashboardLedgerFee> ledgerFees,
+        IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
+        decimal exchangeRate = 49.16m)
+    {
+        var offsiteAdsMap = BuildOffsiteAdsMap(ledgerFees);
+        var rows = new List<EtsyOrderFinancialDetail>();
+
+        foreach (var receipt in receipts)
+        {
+            if (!receipt.IsPaid && !receipt.IsCanceled) continue;
+
+            var firstItem = receipt.Items.Count > 0 ? receipt.Items[0] : null;
+            var title = string.IsNullOrWhiteSpace(firstItem?.Title) ? $"Sipariş #{receipt.ReceiptId}" : firstItem!.Title;
+            var listingId = firstItem?.ListingId ?? 0L;
+            var quantity = receipt.Items.Count > 0 ? receipt.Items.Sum(i => i.Quantity) : 1;
+            var buyerName = string.IsNullOrWhiteSpace(receipt.BuyerName) ? "Misafir Müşteri" : receipt.BuyerName;
+
+            var grandTotal = receipt.GrandTotal;
+            var subtotal = receipt.Subtotal;
+            var shippingCost = receipt.ShippingCost;
+            var discountAmt = receipt.DiscountAmt;
+            var tax = receipt.TaxCost;
+            var refundedAmt = receipt.RefundedAmount;
+
+            if (receipt.CurrencyCode.Equals("TRY", StringComparison.OrdinalIgnoreCase) && exchangeRate > 0)
+            {
+                grandTotal /= exchangeRate;
+                subtotal /= exchangeRate;
+                shippingCost /= exchangeRate;
+                discountAmt /= exchangeRate;
+                tax /= exchangeRate;
+                refundedAmt /= exchangeRate;
+            }
+
+            var originalGrandTotal = grandTotal;
+            var isFullRefundOrCanceled = receipt.IsCanceled || (originalGrandTotal > 0 && refundedAmt >= originalGrandTotal);
+            var isPartialRefund = !isFullRefundOrCanceled && refundedAmt > 0 && refundedAmt < originalGrandTotal;
+            var isCanceled = isFullRefundOrCanceled;
+
+            var orderStatus = isFullRefundOrCanceled ? "canceled" : (isPartialRefund ? "refunded" : "completed");
+            var displayStatus = isFullRefundOrCanceled ? "İptal Edildi" : (isPartialRefund ? "Kısmi İade" : "Tamamlandı");
+
+            var transactionFee = 0m;
+            var paymentFee = 0m;
+            var regulatoryFee = 0m;
+            var etsyFees = 0m;
+            var offsiteAdFee = 0m;
+            decimal? productCost = null;
+            var hasCost = false;
+
+            if (isCanceled)
+            {
+                grandTotal = 0m;
+                subtotal = 0m;
+                shippingCost = 0m;
+                discountAmt = 0m;
+                tax = 0m;
+            }
+            else
+            {
+                if (isPartialRefund)
+                {
+                    grandTotal = Math.Max(0, originalGrandTotal - refundedAmt);
+                }
+
+                if (subtotal <= 0 && grandTotal > 0)
+                {
+                    subtotal = Math.Max(0, grandTotal - shippingCost - tax + discountAmt);
+                }
+
+                var feeBase = subtotal > 0
+                    ? (subtotal + shippingCost)
+                    : Math.Max(0, grandTotal - tax);
+
+                transactionFee = Math.Round(feeBase * 0.065m, 2);
+                var trPaymentFixedUsd = receipt.CurrencyCode.Equals("USD", StringComparison.OrdinalIgnoreCase) || grandTotal > 0
+                    ? 0.14m
+                    : Math.Round(3m / exchangeRate, 2);
+                paymentFee = Math.Round(grandTotal * 0.065m, 2) + trPaymentFixedUsd;
+                regulatoryFee = Math.Round(feeBase * 0.0167m, 2);
+
+                if (offsiteAdsMap.TryGetValue(receipt.ReceiptId, out var mappedOffsiteFee) && mappedOffsiteFee > 0)
+                {
+                    offsiteAdFee = mappedOffsiteFee;
+                }
+                else if (receipt.IsFromOffsiteAds)
+                {
+                    offsiteAdFee = Math.Round(feeBase * 0.15m, 2);
+                }
+
+                etsyFees = transactionFee + paymentFee + regulatoryFee + tax;
+
+                if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
+                {
+                    productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost, 2);
+                    hasCost = true;
+                }
+            }
+
+            var netProfitUsd = isCanceled ? 0m : Math.Round(grandTotal - etsyFees - offsiteAdFee - (productCost ?? 0m), 2);
+            var netProfitTry = Math.Round(netProfitUsd * exchangeRate, 2);
+            var orderDate = receipt.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+
+            rows.Add(new EtsyOrderFinancialDetail(
+                receipt.ReceiptId,
+                receipt.CreatedAt,
+                orderDate,
+                orderStatus,
+                displayStatus,
+                buyerName,
+                title,
+                listingId,
+                quantity,
+                Math.Round(grandTotal, 2),
+                Math.Round(subtotal, 2),
+                Math.Round(shippingCost, 2),
+                Math.Round(discountAmt, 2),
+                Math.Round(tax, 2),
+                transactionFee,
+                paymentFee,
+                regulatoryFee,
+                Math.Round(etsyFees, 2),
+                offsiteAdFee,
+                productCost,
+                netProfitUsd,
+                Math.Round(exchangeRate, 2),
+                netProfitTry,
+                hasCost,
+                false,
+                null));
+        }
+
+        return rows.OrderByDescending(r => r.CreatedAt).ToList();
+    }
+
     /// <summary>Uzun urun basliklarini masaustu panelindeki gibi kisaltir.</summary>
     public static string ShortenTitle(string title, int maxLength = 60)
         => string.IsNullOrEmpty(title) || title.Length <= maxLength ? title : title[..(maxLength - 1)] + "…";
@@ -220,7 +358,11 @@ public sealed record EtsyDashboardReceipt(
     decimal DiscountAmt,
     decimal TaxCost,
     decimal RefundedAmount,
-    IReadOnlyList<EtsyDashboardReceiptItem> Items);
+    IReadOnlyList<EtsyDashboardReceiptItem> Items,
+    string? BuyerName = null,
+    long? BuyerUserId = null,
+    string? BuyerEmail = null,
+    string? Status = null);
 
 public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount);
 
@@ -236,5 +378,33 @@ public sealed record EtsyDashboardOrderRow(
     decimal NetProfitTry,
     bool HasCostData,
     bool IsCanceled);
+
+public sealed record EtsyOrderFinancialDetail(
+    long ReceiptId,
+    DateTimeOffset CreatedAt,
+    string OrderDate,
+    string OrderStatus,
+    string DisplayStatus,
+    string BuyerName,
+    string ProductTitle,
+    long ListingId,
+    int Quantity,
+    decimal GrandTotalUsd,
+    decimal SubtotalUsd,
+    decimal ShippingCostUsd,
+    decimal DiscountAmtUsd,
+    decimal TaxUsd,
+    decimal TransactionFeeUsd,
+    decimal PaymentFeeUsd,
+    decimal RegulatoryFeeUsd,
+    decimal EtsyFeesUsd,
+    decimal OffsiteAdFeeUsd,
+    decimal? ProductCostUsd,
+    decimal NetProfitUsd,
+    decimal ExchangeRate,
+    decimal NetProfitTry,
+    bool HasCostData,
+    bool HasInvoice,
+    string? InvoicePath = null);
 
 public sealed record EtsyDailySeries(string[] Labels, decimal[] GrossSales, decimal[] NetProfit);

@@ -147,4 +147,87 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal("Alpha", top.Title);
         Assert.Equal(20.00m, top.Revenue);
     }
+
+    [Fact]
+    public void BuildDetailedOrderRows_PopulatesAll15Fields_WithAccurateFeesAndProfit()
+    {
+        var receipt = new EtsyDashboardReceipt(
+            4188719047,
+            new DateTimeOffset(2026, 10, 8, 14, 30, 0, TimeSpan.Zero),
+            true,
+            false,
+            false,
+            "USD",
+            138.59m,
+            110.00m,
+            15.00m,
+            0m,
+            13.59m,
+            0m,
+            new[] { new EtsyDashboardReceiptItem("Ben10 Albedo Omnitrix", 12345, 1) },
+            "Christian Johnson",
+            998877,
+            "christian@example.com",
+            "Completed");
+
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4188719047] = new EtsyDashboardOrderCost(25.00m, 10.00m)
+        };
+
+        var ledgerFees = new[]
+        {
+            new EtsyDashboardLedgerFee("offsite_ads", 4188719047, "Offsite ad fee for order #4188719047", 20.08m)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(new[] { receipt }, ledgerFees, costs, 49.19m);
+
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.Equal(4188719047, row.ReceiptId);
+        Assert.Equal("Christian Johnson", row.BuyerName);
+        Assert.Equal("Ben10 Albedo Omnitrix", row.ProductTitle);
+        Assert.Equal("completed", row.OrderStatus);
+        Assert.Equal("Tamamlandı", row.DisplayStatus);
+        Assert.Equal(138.59m, row.GrandTotalUsd);
+        Assert.Equal(20.08m, row.OffsiteAdFeeUsd);
+        Assert.Equal(35.00m, row.ProductCostUsd);
+        Assert.True(row.HasCostData);
+        Assert.Equal(49.19m, row.ExchangeRate);
+        Assert.True(row.EtsyFeesUsd > 0);
+        Assert.True(row.NetProfitUsd > 0);
+        Assert.Equal(Math.Round(row.NetProfitUsd * 49.19m, 2), row.NetProfitTry);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_SetsCanceledStatus_WhenOrderIsCanceled()
+    {
+        var receipt = new EtsyDashboardReceipt(
+            4188719099,
+            new DateTimeOffset(2026, 10, 8, 14, 30, 0, TimeSpan.Zero),
+            true,
+            true,
+            false,
+            "USD",
+            100.00m,
+            80.00m,
+            10.00m,
+            0m,
+            10.00m,
+            100.00m,
+            new[] { new EtsyDashboardReceiptItem("Canceled Item", 999, 1) },
+            "Jane Doe",
+            Status: "Canceled");
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(new[] { receipt }, Array.Empty<EtsyDashboardLedgerFee>(), NoCosts());
+
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.Equal("canceled", row.OrderStatus);
+        Assert.Equal("İptal Edildi", row.DisplayStatus);
+        Assert.Equal(0m, row.GrandTotalUsd);
+        Assert.Equal(0m, row.NetProfitUsd);
+        Assert.Equal(0m, row.NetProfitTry);
+    }
 }
+

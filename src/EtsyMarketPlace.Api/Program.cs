@@ -498,6 +498,109 @@ app.MapGet("/api/etsy/shop/recent-orders", async (string shopId = "53236321", in
 .WithDescription("Son N günün Etsy siparişlerini (fişlerini) canlı Etsy API'den çeker; sipariş bazlı net kâr masaüstü panel formülüyle hesaplanır.")
 .WithName("GetRecentOrders");
 
+app.MapGet("/api/etsy/financial/orders", async (
+    string shopId = "53236321",
+    string period = "this_month",
+    DateTimeOffset? startDate = null,
+    DateTimeOffset? endDate = null,
+    HttpContext context = null!,
+    IConfiguration config = null!,
+    IEtsyDataClient etsyClient = null!,
+    IEtsyIntegrationRepository repository = null!,
+    CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var now = DateTimeOffset.UtcNow;
+    if (startDate.HasValue != endDate.HasValue)
+        return Results.BadRequest(new { error = "Özel tarih aralığı için startDate ve endDate birlikte gönderilmelidir." });
+
+    var (start, end) = startDate.HasValue
+        ? (startDate.Value, endDate!.Value)
+        : period?.ToLowerInvariant() switch
+    {
+        "today" => (now.Date, now),
+        "last_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero)),
+        null or "" or "this_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now),
+        _ => (DateTimeOffset.MinValue, DateTimeOffset.MinValue)
+    };
+    if (start == DateTimeOffset.MinValue) return Results.BadRequest(new { error = "period today, this_month veya last_month olmalıdır." });
+    if (start > end) return Results.BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
+
+    var cacheKey = $"fin-orders:{resolvedShopId}:{start:yyyyMMddHHmm}:{end:yyyyMMddHHmm}";
+    if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
+        return Results.Ok(cachedPayload);
+
+    try
+    {
+        var receipts = await etsyClient.GetShopReceiptsAsync(resolvedShopId, start, end, cancellationToken);
+        var (ledgerEntries, ledgerError) = await SafeGetLedgerAsync(etsyClient, resolvedShopId, start, end, cancellationToken);
+        var costs = await repository.GetOrderCostsAsync(resolvedShopId, cancellationToken);
+
+        var rate = 49.16m;
+        try
+        {
+            var p = await repository.GetBankPayoutsAsync(resolvedShopId, now.AddDays(-30), now, cancellationToken);
+            var latestRate = p.FirstOrDefault(x => x.ExchangeRateToTry.HasValue && x.ExchangeRateToTry.Value > 30)?.ExchangeRateToTry;
+            if (latestRate.HasValue) rate = latestRate.Value;
+        }
+        catch { }
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledgerEntries, costs, rate);
+        var activeRows = rows.Where(r => r.OrderStatus != "canceled").ToList();
+
+        var payload = new
+        {
+            orders = rows,
+            count = rows.Count,
+            totalOrderProfitUsd = activeRows.Sum(r => r.NetProfitUsd),
+            totalOrderProfitTry = activeRows.Sum(r => r.NetProfitTry),
+            exchangeRateUsed = rate,
+            ledgerOk = ledgerError is null,
+            ledgerWarning = ledgerError
+        };
+
+        DashboardResponseCache.Set(cacheKey, payload, TimeSpan.FromMinutes(2));
+        return Results.Ok(payload);
+    }
+    catch (Exception ex)
+    {
+        return Results.BadRequest(new { error = "Sipariş finans dökümü alınamadı: " + ex.Message });
+    }
+})
+.WithTags("Finans & Muhasebe")
+.WithSummary("Siparişler & Net Kâr Detaylı Dökümü")
+.WithDescription("Etsy mağazasının seçilen dönemdeki tüm siparişlerini müşteri, ürün, komisyon, dış reklam ve maliyet kırılımlarıyla listeler (Masaüstü paritesi).")
+.WithName("GetOrderFinancials");
+
+app.MapPost("/api/etsy/financial/orders/{receiptId}/cost", async (
+    string receiptId,
+    EtsyUpdateOrderCostRequest request,
+    string shopId = "53236321",
+    HttpContext context = null!,
+    IConfiguration config = null!,
+    IEtsyIntegrationRepository repository = null!,
+    CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    if (string.IsNullOrWhiteSpace(receiptId))
+        return Results.BadRequest(new { error = "receiptId zorunludur." });
+
+    await repository.UpsertOrderCostAsync(
+        resolvedShopId,
+        receiptId.Trim(),
+        request.ProductCost,
+        request.ShippingCost,
+        request.PackagingCost,
+        request.Notes,
+        cancellationToken);
+
+    return Results.Ok(new { success = true, receiptId, updated = true });
+})
+.WithTags("Finans & Muhasebe")
+.WithSummary("Sipariş Maliyetini Güncelle")
+.WithDescription("Belirtilen siparişin üretim ve kargo maliyetlerini VDS SQLite veritabanına kaydeder.")
+.WithName("UpdateOrderCost");
+
 app.MapGet("/api/etsy/financial/daily-series", async (string shopId = "53236321", string? month = null, HttpContext context = null!, IConfiguration config = null!, IEtsyDataClient etsyClient = null!, IEtsyIntegrationRepository repository = null!, IEtsyLedgerReportService ledgerReport = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
