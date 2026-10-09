@@ -77,11 +77,7 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(
-            "http://localhost:4200",
-            "http://127.0.0.1:4200",
-            "https://chat.openai.com",
-            "https://chatgpt.com")
+        policy.SetIsOriginAllowed(_ => true)
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
