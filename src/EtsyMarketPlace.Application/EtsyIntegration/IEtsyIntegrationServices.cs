@@ -24,6 +24,9 @@ public interface IEtsyDataClient
 
     /// <summary>Web kontrol paneli: odeme hesabi defter kayitlarini (dis reklam kesintileri eslesmesi icin) ceker.</summary>
     Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
+
+    /// <summary>Sunucu finans motoru: tam alanli odeme hesabi defter kayitlari (siniflandirma + USD donusumu ile).</summary>
+    Task<IReadOnlyList<EtsyLedgerEntryDetail>> GetLedgerEntriesDetailedAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
 }
 
 public interface IEtsyFinancialReportService
