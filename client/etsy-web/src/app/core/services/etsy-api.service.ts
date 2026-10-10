@@ -543,11 +543,75 @@ export class EtsyApiService {
     return this.http.get<SavedListingAuditDto[]>(`${this.API_BASE}/api/etsy/listings/audits?shopId=${encodeURIComponent(id)}`);
   }
 
+  // ── Etsy Canlı Pazar Araştırması & Rakip İstihbaratı ─────────────────────
+  searchMarket(keyword: string, limit: number = 50, sortBy: string = 'market_score', shopId?: string): Observable<MarketSearchResponseDto> {
+    const sId = shopId || this.activeShopId();
+    return this.http.get<MarketSearchResponseDto>(`${this.API_BASE}/api/etsy/market/search`, {
+      params: {
+        keyword: keyword.trim(),
+        limit: limit.toString(),
+        sortBy,
+        shopId: sId
+      }
+    });
+  }
+
   // ── System Health & Version ───────────────────────────────────────────────
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
   }
 }
+
+export interface MarketTagFrequencyDto {
+  tag: string;
+  count: number;
+}
+
+export interface MarketSummaryKpisDto {
+  totalListings: number;
+  averagePrice: number;
+  minPrice: number;
+  maxPrice: number;
+  currency: string;
+  averageFavorites: number;
+  averageViews: number;
+  topShopName: string;
+  topShopSales: number;
+  opportunityScore: number;
+  topTags: MarketTagFrequencyDto[];
+}
+
+export interface MarketListingItemDto {
+  id: number;
+  listingRank: number;
+  title: string;
+  priceUsd: number;
+  currency: string;
+  shopName: string;
+  shopSales: number;
+  shopUrl: string;
+  listingUrl: string;
+  favorites: number;
+  views: number;
+  seoScore: number;
+  marketScore: number;
+  tags: string[];
+  materials: string[];
+  imageUrl: string;
+  imageUrls: string[];
+  description: string;
+  reviewCount: number;
+  reviewAverage: number;
+  quantity: number;
+}
+
+export interface MarketSearchResponseDto {
+  keyword: string;
+  total: number;
+  kpis: MarketSummaryKpisDto;
+  listings: MarketListingItemDto[];
+}
+
 
 
 /** Canlı Etsy API: kontrol paneli son sipariş satırı. */

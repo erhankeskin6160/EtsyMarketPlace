@@ -99,8 +99,8 @@ export interface MarketItem {
               <option value="price_desc">Fiyat (Önce En Yüksek)</option>
             </select>
           </div>
-          <button class="btn-primary-search" (click)="onSearch()">
-            🔍 Etsy'de Ara
+          <button class="btn-primary-search" (click)="onSearch()" [disabled]="isLoading">
+            {{ isLoading ? '⏳ Taranıyor...' : '🔍 Etsy\'de Ara' }}
           </button>
         </div>
 
@@ -569,6 +569,10 @@ Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem
     }
     .btn-primary-search:hover {
       background: #0369a1;
+    }
+    .btn-primary-search:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
     }
 
     .search-actions-row {
@@ -1062,6 +1066,7 @@ export class MarketResearchComponent implements OnInit {
   limit = 25;
   sortBy = 'market_score';
   statusText = '9 ilan listelendi. Sıralama: Pazar Puanı';
+  isLoading = false;
   isGeneratingReport = false;
   aiReport = '';
   showHealthModal = false;
@@ -1070,7 +1075,9 @@ export class MarketResearchComponent implements OnInit {
   avgPriceUsd = 34.80;
   avgFavorites = 1420;
   topShopName = 'MythicForgeCrafts';
+  topShopSales = 14820;
   opportunityScore = 88;
+  topTags: { tag: string; count: number }[] = [];
 
   favSortDesc = true;
   currentImageIndex = 0;
@@ -1282,8 +1289,56 @@ export class MarketResearchComponent implements OnInit {
   }
 
   onSearch(): void {
-    this.statusText = `"${this.searchKeyword}" için ${this.items.length} ürün listelendi.`;
-    this.applySort();
+    if (!this.searchKeyword || !this.searchKeyword.trim()) {
+      this.showToastMsg('⚠️ Lütfen aranacak bir kelime girin.');
+      return;
+    }
+
+    this.isLoading = true;
+    this.statusText = `"${this.searchKeyword}" için Etsy canlı pazar verileri taranıyor...`;
+
+    this.etsyApi.searchMarket(this.searchKeyword, this.limit, this.sortBy).subscribe({
+      next: (res) => {
+        this.isLoading = false;
+        if (res && res.listings && res.listings.length > 0) {
+          this.items = res.listings;
+          this.selectedItem = this.items[0];
+          this.currentImageIndex = 0;
+          if (res.kpis) {
+            this.avgPriceUsd = res.kpis.averagePrice;
+            this.avgFavorites = res.kpis.averageFavorites;
+            this.topShopName = res.kpis.topShopName;
+            this.topShopSales = res.kpis.topShopSales;
+            this.opportunityScore = res.kpis.opportunityScore;
+            this.topTags = res.kpis.topTags || [];
+          }
+          this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam bulunan: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()}`;
+          this.showToastMsg(`✅ ${this.items.length} ürün ve pazar metriği başarıyla yüklendi.`);
+        } else {
+          this.statusText = `"${this.searchKeyword}" için Etsy'de aktif ilan bulunamadı.`;
+          this.showToastMsg('ℹ️ Bu anahtar kelime için aktif Etsy ilanı bulunamadı.');
+        }
+      },
+      error: (err) => {
+        this.isLoading = false;
+        const msg = err?.error?.error || err?.message || 'Etsy API ile iletişim kurulamadı.';
+        this.statusText = `⚠️ Hata: ${msg}`;
+        this.showToastMsg(`🚨 Hata: ${msg}`);
+      }
+    });
+  }
+
+  getSortLabel(): string {
+    switch (this.sortBy) {
+      case 'market_score': return 'Pazar Puanı';
+      case 'seo_score': return 'SEO Puanı';
+      case 'favorites': return 'Favori';
+      case 'views': return 'Görüntülenme';
+      case 'shop_sales': return 'Mağaza Satışı';
+      case 'price_asc': return 'Fiyat (Artan)';
+      case 'price_desc': return 'Fiyat (Azalan)';
+      default: return this.sortBy;
+    }
   }
 
   applySort(): void {
@@ -1490,6 +1545,12 @@ export class MarketResearchComponent implements OnInit {
   }
 
   copyAllTopTags(): void {
+    if (this.topTags && this.topTags.length > 0) {
+      const tagList = this.topTags.map(t => t.tag).join(', ');
+      navigator.clipboard.writeText(tagList);
+      this.showToastMsg(`📋 İlk ${this.topTags.length} Altın Etiket kopyalandı!`);
+      return;
+    }
     const allTags = Array.from(new Set(this.items.flatMap(i => i.tags))).slice(0, 13);
     navigator.clipboard.writeText(allTags.join(', '));
     this.showToastMsg(`📋 İlk 13 Ortak Altın Etiket kopyalandı!`);
@@ -1498,15 +1559,16 @@ export class MarketResearchComponent implements OnInit {
   generateAiMarketReport(): void {
     this.isGeneratingReport = true;
     const kw = this.searchKeyword.trim() || 'Pazar Trendi';
-    const topTags = Array.from(new Set(this.items.flatMap(i => i.tags))).slice(0, 3);
-    const suggestedTagsStr = topTags.map(t => `"${t}"`).join(', ') || '"trend", "handmade", "gift"';
+    const topTagsStr = (this.topTags && this.topTags.length > 0)
+      ? this.topTags.slice(0, 3).map(t => `"${t.tag}"`).join(', ')
+      : Array.from(new Set(this.items.flatMap(i => i.tags))).slice(0, 3).map(t => `"${t}"`).join(', ') || '"trend", "handmade", "gift"';
     const recPrice = (this.avgPriceUsd * 0.92).toFixed(2);
     setTimeout(() => {
       this.isGeneratingReport = false;
       this.aiReport = `
         <b>🤖 ${this.aiService.activeBadgeText()} Strateji Raporu:</b> "<b>${kw}</b>" pazarında talep yoğunluğu analiz edildi (Pazar Fırsat Skoru: <b>%${this.opportunityScore}</b>).<br/>
         • <b>Ortalama Satış Fiyatı:</b> &#36;${this.avgPriceUsd.toFixed(2)} (₺${(this.avgPriceUsd * this.etsyApi.exchangeRate()).toFixed(0)}). Hızlı satış ve sıralama kazanımı için <b>&#36;${recPrice}</b> rekabetçi fiyatla girilmesi önerilir.<br/>
-        • <b>Kritik 3 Altın Arama Etiketi:</b> ${suggestedTagsStr}.<br/>
+        • <b>Kritik 3 Altın Arama Etiketi:</b> ${topTagsStr}.<br/>
         • <b>Tavsiye Edilen Aksiyon:</b> İlk sıralardaki ilanlardan birini "🚀 Taslağa Klonla" butonuyla aktarın ve aktif modelinizle 140 karakterlik kusursuz SEO başlığı üretin.
       `;
     }, 600);
