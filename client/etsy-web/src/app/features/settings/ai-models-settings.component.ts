@@ -621,7 +621,7 @@ export class AiModelsSettingsComponent implements OnInit {
   readonly geminiModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
   readonly openAiModels = ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o3-mini', 'gpt-4-turbo'];
   readonly claudeModels = ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'];
-  readonly deepSeekModels = ['deepseek-reasoner', 'deepseek-chat'];
+  readonly deepSeekModels = ['DeepSeek-V4-Flash', 'DeepSeek-V4-Pro', 'deepseek-chat', 'deepseek-reasoner'];
   readonly grokModels = ['grok-3', 'grok-2', 'grok-beta'];
 
   readonly geminiImageModels = ['gemini-2.5-flash-image', 'imagen-3.0-generate-002'];

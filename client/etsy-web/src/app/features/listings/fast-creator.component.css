@@ -974,7 +974,10 @@
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 8px;
   padding: 8px;
-  min-height: 180px;
+  flex-shrink: 0;
+  min-height: auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .empty-gallery-state {
@@ -1138,7 +1141,34 @@
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  flex-shrink: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.btn-goto-studio {
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  border: none;
+  color: #ffffff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-goto-studio:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.ai-studio-desc {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #94a3b8;
+  line-height: 1.4;
 }
 
 .ai-studio-header-flex {

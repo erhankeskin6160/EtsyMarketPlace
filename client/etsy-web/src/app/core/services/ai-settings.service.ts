@@ -249,6 +249,39 @@ export class AiSettingsService {
       }
     }
 
+    // Real ping test for DeepSeek
+    if (provider === 'DeepSeek') {
+      try {
+        const resp = await fetch('https://api.deepseek.com/models', {
+          headers: {
+            'Authorization': `Bearer ${key.trim()}`
+          }
+        });
+        const latency = Math.round(performance.now() - start);
+        if (resp.ok) {
+          return {
+            success: true,
+            latencyMs: latency,
+            message: `Başarılı! DeepSeek (${model}) API bağlantısı ${latency}ms içinde doğrulandı. API anahtarı ve yetkilendirme aktif.`
+          };
+        } else {
+          const errData = await resp.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || `HTTP ${resp.status} ${resp.statusText}`;
+          return {
+            success: false,
+            latencyMs: latency,
+            message: `DeepSeek API Hatası: ${errMsg}`
+          };
+        }
+      } catch (err: any) {
+        return {
+          success: false,
+          latencyMs: Math.round(performance.now() - start),
+          message: `Bağlantı Hatası: ${err?.message || 'DeepSeek sunucularına erişilemedi.'}`
+        };
+      }
+    }
+
     await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
     const latency = Math.round(performance.now() - start);
     return {

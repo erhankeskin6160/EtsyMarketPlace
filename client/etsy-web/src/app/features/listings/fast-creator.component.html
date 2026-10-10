@@ -388,8 +388,8 @@
             <button type="button" class="btn-gallery-tool browse" (click)="fileInput.click()">
               📁 Bilgisayardan Seç
             </button>
-              <button type="button" class="btn-gallery-tool studio" (click)="openStudioGalleryPicker()" [disabled]="studioPool.length === 0">
-              🎨 Stüdyo galerisi (boş)
+            <button type="button" class="btn-gallery-tool studio" (click)="router.navigate(['/ai-studio'])" title="AI Görsel Stüdyosuna Git">
+              🎨 AI Görsel Stüdyosu
             </button>
           </div>
 
@@ -456,74 +456,20 @@
           <!-- Subtle Divider -->
           <div class="center-divider"></div>
 
-          <!-- Bottom: AI Görsel Stüdyosu -->
+          <!-- Bottom: AI Görsel Stüdyosu Hızlı Erişim & Bilgi Kartı -->
           <div class="ai-studio-subbox">
             <div class="ai-studio-header-flex">
               <div class="ai-studio-title">
                 <span class="sparkle">✨</span>
                 <span>AI Görsel Stüdyosu</span>
               </div>
-              <span class="ai-fast-tag">AI Studio ayrı modülde</span>
-            </div>
-
-            <!-- Preset Chips -->
-            <div class="preset-chips-row">
-              <button type="button" class="preset-chip" (click)="applyPromptPreset('Masa', 'on a warm cozy wooden cafe table with morning sunlight, subtle steam, aesthetic atmosphere')">
-                ☕ Masa
-              </button>
-              <button type="button" class="preset-chip" (click)="applyPromptPreset('Salon', 'displayed in a stylish Scandinavian modern living room, neutral aesthetic, architectural interior')">
-                🛋️ Salon
-              </button>
-              <button type="button" class="preset-chip" (click)="applyPromptPreset('Stüdyo', 'isolated on a seamless pure white studio background, commercial softbox lighting, clean catalog')">
-                📸 Stüdyo
-              </button>
-              <button type="button" class="preset-chip" (click)="applyPromptPreset('Bohem', 'on rustic reclaimed wood with lush green indoor potted plants and bohemian vibes')">
-                🌿 Bohem
-              </button>
-              <button type="button" class="preset-chip" (click)="applyPromptPreset('Hediye', 'with luxury artisan kraft gift wrapping, elegant satin ribbon, greeting card')">
-                🎁 Hediye
+              <button type="button" class="btn-goto-studio" (click)="router.navigate(['/ai-studio'])" title="Görsel Stüdyosunu Aç">
+                📸 Stüdyoyu Aç →
               </button>
             </div>
-
-            <!-- Prompt Header + "Başlıktan Al" Button -->
-            <div class="prompt-header-row">
-              <label class="prompt-label">✍️ Prompt / Görsel Açıklaması:</label>
-              <button type="button" class="btn-prompt-title" (click)="fillPromptFromTitle()" title="Ürün başlığından profesyonel prompt oluştur">
-                ✨ Başlıktan Al
-              </button>
-            </div>
-
-            <textarea 
-              class="std-textarea prompt-area" 
-              rows="3" 
-              [(ngModel)]="aiPrompt" 
-              placeholder="AI görsel üretimi için açıklama yazın veya yukarıdaki hazır stillerden birini seçin...">
-            </textarea>
-
-            <!-- Actions: Generate & Add to Gallery -->
-            <div class="ai-action-buttons-grid">
-            <button type="button" class="btn-generate-ai-img" [disabled]="true" title="AI görsel üretimi AI Studio modülünde">
-                <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
-                <span>{{ isGeneratingAiImage ? 'Üretiliyor...' : '🎨 Görseli Üret' }}</span>
-              </button>
-              <button type="button" class="btn-add-to-gallery" [disabled]="!lastGeneratedImage || galleryImages.length >= 10" (click)="addGeneratedToGallery()">
-                ➕ Galeriye Ekle
-              </button>
-            </div>
-
-            <!-- AI Preview Box -->
-            <div class="ai-preview-frame">
-              <div *ngIf="!lastGeneratedImage && !isGeneratingAiImage" class="preview-placeholder">
-                <span class="pl-sparkle">✨</span>
-                <p class="pl-title">AI Görsel Önizleme Alanı</p>
-                <p class="pl-sub">Bu modülde görsel üretim sağlayıcısı bağlı değil. AI Studio’yu kullanın.</p>
-              </div>
-              <div *ngIf="isGeneratingAiImage" class="preview-generating">
-                <div class="spinner"></div>
-                <p>Yapay zeka görseli renderlanıyor...</p>
-              </div>
-              <img *ngIf="lastGeneratedImage && !isGeneratingAiImage" [src]="lastGeneratedImage" alt="AI Generated" class="generated-img" />
-            </div>
+            <p class="ai-studio-desc">
+              Etsy 2000x2000px kare ürün fotoğrafları, anti-ban EXIF temizleme ve profesyonel arka plan oluşturma için <b>AI Görsel Stüdyosu</b>'nu kullanabilirsiniz.
+            </p>
           </div>
 
         </div>

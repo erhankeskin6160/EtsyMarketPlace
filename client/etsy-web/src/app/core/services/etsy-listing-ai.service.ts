@@ -61,22 +61,31 @@ export class EtsyListingAiService {
     const isStrict = settings.strictNeverOffline;
     const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+    const activeApiKey = this.getActiveApiKey(settings);
+    const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
       return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik şablon üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
     }
 
     if (hasLiveKey) {
-      return this.callGeminiForTitle(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash', currentCategory).pipe(
+      const activeModel = this.getActiveModel(settings);
+      let callObs: Observable<string>;
+      if (provider === 'DeepSeek') {
+        callObs = this.callDeepSeekForTitle(cleanInput, activeApiKey, activeModel, currentCategory);
+      } else {
+        callObs = this.callGeminiForTitle(cleanInput, activeApiKey, activeModel, currentCategory);
+      }
+
+      return callObs.pipe(
         map(title => ({
           value: this.normalizeTitleLength(title),
           isLive: true,
-          provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          message: `✨ Google Gemini ile '${cleanInput || 'Ürün'}' için canlı 140 karakter SEO başlığı optimize edildi!`
+          provider: `${provider} (${activeModel})`,
+          message: `✨ ${provider} ile '${cleanInput || 'Ürün'}' için canlı 140 karakter SEO başlığı optimize edildi!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini API hatası:', err);
+          console.warn(`[EtsyListingAiService] Canlı ${provider} API hatası:`, err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
             return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
@@ -201,7 +210,7 @@ export class EtsyListingAiService {
 
     // 5. DeepSeek (DeepSeek Chat / Reasoner)
     if (provider === 'DeepSeek' && settings.deepSeekApiKey && settings.deepSeekApiKey.trim().length > 10) {
-      const activeModel = settings.deepSeekModel || 'deepseek-reasoner';
+      const activeModel = settings.deepSeekModel || 'DeepSeek-V4-Flash';
       return this.callDeepSeekForCategory(cleanTitle, cleanDesc, settings.deepSeekApiKey.trim(), activeModel, inputSources).pipe(
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı DeepSeek kategori hatası:', err);
@@ -246,22 +255,31 @@ export class EtsyListingAiService {
     const isStrict = settings.strictNeverOffline;
     const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+    const activeApiKey = this.getActiveApiKey(settings);
+    const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
       return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik etiket üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
     }
 
     if (hasLiveKey) {
-      return this.callGeminiForTags(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash').pipe(
+      const activeModel = this.getActiveModel(settings);
+      let callObs: Observable<string[]>;
+      if (provider === 'DeepSeek') {
+        callObs = this.callDeepSeekForTags(cleanInput, activeApiKey, activeModel);
+      } else {
+        callObs = this.callGeminiForTags(cleanInput, activeApiKey, activeModel);
+      }
+
+      return callObs.pipe(
         map(tags => ({
           value: this.normalizeTagsList(tags),
           isLive: true,
-          provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          message: `✨ Google Gemini 13 altın arama etiketini canlı olarak tam doldurdu!`
+          provider: `${provider} (${activeModel})`,
+          message: `✨ ${provider} 13 altın arama etiketini canlı olarak tam doldurdu!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini tag hatası:', err);
+          console.warn(`[EtsyListingAiService] Canlı ${provider} tag hatası:`, err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
             return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
@@ -299,22 +317,31 @@ export class EtsyListingAiService {
     const isStrict = settings.strictNeverOffline;
     const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+    const activeApiKey = this.getActiveApiKey(settings);
+    const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
       return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik açıklama üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
     }
 
     if (hasLiveKey) {
-      return this.callGeminiForDescription(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash', materials).pipe(
+      const activeModel = this.getActiveModel(settings);
+      let callObs: Observable<string>;
+      if (provider === 'DeepSeek') {
+        callObs = this.callDeepSeekForDescription(cleanInput, activeApiKey, activeModel, materials);
+      } else {
+        callObs = this.callGeminiForDescription(cleanInput, activeApiKey, activeModel, materials);
+      }
+
+      return callObs.pipe(
         map(desc => ({
           value: desc,
           isLive: true,
-          provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          message: `✨ Google Gemini ikna edici ürün açıklamasını canlı üretti!`
+          provider: `${provider} (${activeModel})`,
+          message: `✨ ${provider} ikna edici ürün açıklamasını canlı üretti!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini açıklama hatası:', err);
+          console.warn(`[EtsyListingAiService] Canlı ${provider} açıklama hatası:`, err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
             return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
@@ -352,14 +379,23 @@ export class EtsyListingAiService {
     const isStrict = settings.strictNeverOffline;
     const isSilentFallback = settings.allowSilentOfflineFallback;
 
-    const hasLiveKey = provider === 'Gemini' && !!settings.geminiApiKey && settings.geminiApiKey.trim().length > 10;
+    const activeApiKey = this.getActiveApiKey(settings);
+    const hasLiveKey = provider !== 'Offline' && !!activeApiKey && activeApiKey.length > 10;
 
     if (isStrict && !hasLiveKey) {
       return throwError(() => new Error(`⚠️ Canlı AI Zorunlu aktif fakat ${provider} API anahtarı tanımlanmamış. 'Asla Offline Kural Motoruna Düşme' seçili olduğundan sentetik listeleme üretilmedi. Lütfen üst menüdeki AI Ayarlarından API anahtarınızı kaydedin.`));
     }
 
     if (hasLiveKey) {
-      return this.callGeminiForComplete(cleanInput, settings.geminiApiKey.trim(), settings.geminiModel || 'gemini-2.5-flash', materials).pipe(
+      const activeModel = this.getActiveModel(settings);
+      let callObs: Observable<any>;
+      if (provider === 'DeepSeek') {
+        callObs = this.callDeepSeekForComplete(cleanInput, activeApiKey, activeModel, materials);
+      } else {
+        callObs = this.callGeminiForComplete(cleanInput, activeApiKey, activeModel, materials);
+      }
+
+      return callObs.pipe(
         map(res => ({
           title: this.normalizeTitleLength(res.title),
           category: res.category || this.detectCategoryFromKeywords(cleanInput),
@@ -367,14 +403,14 @@ export class EtsyListingAiService {
           description: res.description,
           materials: res.materials || materials || 'Handcrafted, Premium Materials',
           isLive: true,
-          provider: `Gemini (${settings.geminiModel || 'gemini-2.5-flash'})`,
-          summaryMessage: `🎉 Google Gemini ile '${cleanInput || 'Ürün'}' için tüm Etsy listelemesi (Canlı Başlık, Kategori, 13 Tag, Açıklama) hazırlandı!`
+          provider: `${provider} (${activeModel})`,
+          summaryMessage: `🎉 ${provider} ile '${cleanInput || 'Ürün'}' için tüm Etsy listelemesi (Canlı Başlık, Kategori, 13 Tag, Açıklama) hazırlandı!`
         })),
         catchError(err => {
-          console.warn('[EtsyListingAiService] Canlı Gemini tam paket hatası:', err);
+          console.warn(`[EtsyListingAiService] Canlı ${provider} tam paket hatası:`, err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${settings.geminiModel || 'gemini-2.5-flash'}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
           const ruleRes = this.generateRuleBasedComplete(cleanInput, materials);
           if (isSilentFallback) {
@@ -386,6 +422,243 @@ export class EtsyListingAiService {
     }
 
     return of(this.generateRuleBasedComplete(cleanInput, materials));
+  }
+
+  private getActiveApiKey(settings: any): string {
+    switch (settings?.provider) {
+      case 'DeepSeek':
+        return (settings?.deepSeekApiKey || '').trim();
+      case 'OpenAI':
+        return (settings?.openAiApiKey || '').trim();
+      case 'Claude':
+        return (settings?.claudeApiKey || '').trim();
+      case 'Grok':
+        return (settings?.grokApiKey || '').trim();
+      case 'Gemini':
+      default:
+        return (settings?.geminiApiKey || '').trim();
+    }
+  }
+
+  private getActiveModel(settings: any): string {
+    switch (settings?.provider) {
+      case 'DeepSeek':
+        return (settings?.deepSeekModel || 'DeepSeek-V4-Flash').trim();
+      case 'OpenAI':
+        return (settings?.openAiModel || 'gpt-4o').trim();
+      case 'Claude':
+        return (settings?.claudeModel || 'claude-3-7-sonnet').trim();
+      case 'Grok':
+        return (settings?.grokModel || 'grok-3').trim();
+      case 'Gemini':
+      default:
+        return (settings?.geminiModel || 'gemini-2.5-flash').trim();
+    }
+  }
+
+  private normalizeDeepSeekModelName(model?: string): string {
+    const m = (model || '').toLowerCase().trim();
+    if (m.includes('reasoner') || m.includes('r1') || m.includes('pro')) {
+      return 'deepseek-reasoner';
+    }
+    return 'deepseek-chat';
+  }
+
+  private parseTagsJsonResponse(raw: string, fallbackInput: string): string[] {
+    if (!raw) return this.generateRuleBasedTags(fallbackInput);
+    let clean = raw.trim();
+    if (clean.startsWith('```json')) clean = clean.substring(7);
+    else if (clean.startsWith('```')) clean = clean.substring(3);
+    if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
+    clean = clean.trim();
+
+    const firstBracket = clean.indexOf('[');
+    const lastBracket = clean.lastIndexOf(']');
+    if (firstBracket >= 0 && lastBracket > firstBracket) {
+      clean = clean.substring(firstBracket, lastBracket + 1);
+    }
+
+    try {
+      const parsed = JSON.parse(clean);
+      if (Array.isArray(parsed)) {
+        return parsed.map((s: any) => String(s).toLowerCase().trim());
+      }
+      if (parsed && Array.isArray(parsed.tags)) {
+        return parsed.tags.map((s: any) => String(s).toLowerCase().trim());
+      }
+    } catch {
+      // ignore
+    }
+    return this.generateRuleBasedTags(fallbackInput);
+  }
+
+  private parseCompleteListingJsonResponse(raw: string, fallbackInput: string, materials?: string): any {
+    if (!raw) return this.generateRuleBasedComplete(fallbackInput, materials);
+    let clean = raw.trim();
+    if (clean.startsWith('```json')) clean = clean.substring(7);
+    else if (clean.startsWith('```')) clean = clean.substring(3);
+    if (clean.endsWith('```')) clean = clean.substring(0, clean.length - 3);
+    clean = clean.trim();
+
+    const firstBrace = clean.indexOf('{');
+    const lastBrace = clean.lastIndexOf('}');
+    if (firstBrace >= 0 && lastBrace > firstBrace) {
+      clean = clean.substring(firstBrace, lastBrace + 1);
+    }
+
+    try {
+      return JSON.parse(clean);
+    } catch {
+      return this.generateRuleBasedComplete(fallbackInput, materials);
+    }
+  }
+
+  private callDeepSeekForTitle(input: string, apiKey: string, model: string, category?: string): Observable<string> {
+    const normalizedModel = this.normalizeDeepSeekModelName(model);
+    const url = 'https://api.deepseek.com/chat/completions';
+    const systemInstruction = `You are a world-class Etsy SEO specialist. Return ONLY a single line containing an optimized English Etsy title up to 140 characters.
+CRITICAL LANGUAGE RULE: The seller's raw input may be in Turkish (e.g. 'El yapımı kadın çantası'), English, or rough notes. You MUST understand the Turkish product concept, materials, and purpose, but your generated title MUST ALWAYS BE 100% IN ENGLISH. NEVER output Turkish in the title.
+The first 55 characters MUST contain the most critical search keywords for mobile visibility.
+Separate keyword phrases with commas or pipes.
+Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw English title string.`;
+
+    const userPrompt = `Product input from seller: "${input || 'Handmade Artisan Gift'}". Category: "${category || ''}". Generate a high-converting 140-character English Etsy title:`;
+
+    const body: any = {
+      model: normalizedModel,
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: 500
+    };
+    if (normalizedModel !== 'deepseek-reasoner') {
+      body.temperature = 0.35;
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => {
+        const text = res?.choices?.[0]?.message?.content?.trim() || '';
+        return text.replace(/^["'`]+|["'`]+$/g, '').trim();
+      })
+    );
+  }
+
+  private callDeepSeekForTags(input: string, apiKey: string, model: string): Observable<string[]> {
+    const normalizedModel = this.normalizeDeepSeekModelName(model);
+    const url = 'https://api.deepseek.com/chat/completions';
+    const systemInstruction = `You are an Etsy SEO expert. Generate exactly 13 unique, high-search-volume buyer tags for this product.
+CRITICAL LANGUAGE RULE: The seller's input may be in Turkish, English, or rough notes. You must understand the Turkish meaning and generate all 13 tags 100% in ENGLISH for Etsy US and international shoppers. NEVER output Turkish tags.
+CRITICAL ETSY RULES:
+- Each tag must be maximum 20 characters long.
+- Use only lowercase English letters, numbers, and single spaces. No punctuation, no symbols, no hashtags.
+- Output ONLY a valid JSON array of 13 English strings, e.g. ["tag one", "tag two", ...]`;
+
+    const userPrompt = `Product: "${input || 'Handcrafted Gift'}". Output 13 English tags JSON array:`;
+
+    const body: any = {
+      model: normalizedModel,
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: userPrompt }
+      ],
+      max_tokens: 1000
+    };
+    if (normalizedModel !== 'deepseek-reasoner') {
+      body.temperature = 0.3;
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => {
+        const raw = res?.choices?.[0]?.message?.content || '[]';
+        return this.parseTagsJsonResponse(raw, input);
+      })
+    );
+  }
+
+  private callDeepSeekForDescription(input: string, apiKey: string, model: string, materials?: string): Observable<string> {
+    const normalizedModel = this.normalizeDeepSeekModelName(model);
+    const url = 'https://api.deepseek.com/chat/completions';
+    const systemInstruction = `You are a top Etsy copywriter. Write a persuasive, beautifully structured product description in ENGLISH tailored for Etsy US and international shoppers.
+CRITICAL LANGUAGE RULE: The seller's input may be in Turkish or rough notes. You must understand the Turkish details, but the entire generated description MUST BE 100% IN NATURAL, ENGAGING ENGLISH. NEVER output Turkish sentences.
+Include:
+- Catchy hook & opening summary
+- Highlighted Key Features (bullet points)
+- Materials & Specifications (${materials || 'Handcrafted, Eco-friendly'})
+- Sizing / Dimensions & Care instructions
+- Gift packaging options
+- Friendly shop closing.
+Format with clean emojis and line breaks.`;
+
+    const body: any = {
+      model: normalizedModel,
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: `Product: "${input || 'Handcrafted Artisan Product'}". Materials: "${materials || ''}"` }
+      ],
+      max_tokens: 2500
+    };
+    if (normalizedModel !== 'deepseek-reasoner') {
+      body.temperature = 0.5;
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(input, materials))
+    );
+  }
+
+  private callDeepSeekForComplete(input: string, apiKey: string, model: string, materials?: string): Observable<any> {
+    const normalizedModel = this.normalizeDeepSeekModelName(model);
+    const url = 'https://api.deepseek.com/chat/completions';
+    const systemInstruction = `You are an elite Etsy listing architect. Return ONLY a valid JSON object.
+CRITICAL LANGUAGE RULE: The seller's input may be in Turkish (e.g. 'El yapımı kadın çantası'). You must understand the Turkish product concept, but ALL output fields MUST BE 100% IN ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
+Fields schema:
+{
+  "title": "English SEO title up to 140 chars, first 55 chars mobile-optimized",
+  "category": "Matching Etsy Taxonomy breadcrumb e.g. Bags & Purses > Handbags > Shoulder Bags",
+  "tags": ["array of exactly 13 lowercase English tags each max 20 chars"],
+  "description": "Engaging formatted product description in English with emojis and bullet points",
+  "materials": "Comma-separated list of materials used in English"
+}`;
+
+    const body: any = {
+      model: normalizedModel,
+      messages: [
+        { role: 'system', content: systemInstruction },
+        { role: 'user', content: `Optimize this listing for: "${input || 'Handmade Artisan Item'}". Materials: "${materials || ''}"` }
+      ],
+      max_tokens: 3500
+    };
+    if (normalizedModel !== 'deepseek-reasoner') {
+      body.temperature = 0.4;
+    }
+
+    const headers = {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res => {
+        const raw = res?.choices?.[0]?.message?.content || '{}';
+        return this.parseCompleteListingJsonResponse(raw, input, materials);
+      })
+    );
   }
 
   private resolveGeminiModel(model: string): string {
@@ -873,18 +1146,21 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     model: string,
     sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
   ): Observable<CategoryAiSuggestion> {
+    const normalizedModel = this.normalizeDeepSeekModelName(model);
     const url = 'https://api.deepseek.com/chat/completions';
     const userPromptText = this.buildTaxonomyUserPrompt(title, desc, false);
 
-    const body = {
-      model: model || 'deepseek-reasoner',
+    const body: any = {
+      model: normalizedModel,
       messages: [
         { role: 'system', content: this.ETSY_TAXONOMY_SYSTEM_PROMPT },
         { role: 'user', content: userPromptText }
       ],
-      temperature: 0.2,
       max_tokens: 1000
     };
+    if (normalizedModel !== 'deepseek-reasoner') {
+      body.temperature = 0.2;
+    }
 
     const headers = {
       'Authorization': `Bearer ${apiKey}`,
