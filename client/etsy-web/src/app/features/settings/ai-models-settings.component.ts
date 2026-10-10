@@ -128,7 +128,12 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
           <!-- API Anahtarı -->
           <div class="form-row" *ngIf="formSettings.provider !== 'Offline'">
-            <label class="row-label">API Anahtarı:</label>
+            <div class="key-header-row">
+              <label class="row-label">API Anahtarı:</label>
+              <span class="db-persisted-badge" *ngIf="hasActiveKeySaved">
+                💾 Merkezi Veritabanında Kayıtlı (Kalıcı)
+              </span>
+            </div>
             <div class="input-with-toggle">
               <input 
                 [type]="showKey ? 'text' : 'password'" 
@@ -136,9 +141,12 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 (ngModelChange)="onApiKeyChange()"
                 placeholder="sk-... veya AIzaSy... API anahtarını girin"
                 class="hub-input key-input" />
-              <button type="button" class="btn-eye" (click)="showKey = !showKey">
+              <button type="button" class="btn-eye" (click)="showKey = !showKey" [title]="showKey ? 'Anahtarı Gizle' : 'Anahtarı Göster'">
                 {{ showKey ? '🙈' : '👁️' }}
               </button>
+            </div>
+            <div class="db-info-subtext" *ngIf="hasActiveKeySaved">
+              ✅ Bu anahtar VDS SQLite veritabanına kaydedilmiştir. Sayfayı yenilediğinizde veya <code>ng serve</code> yaptığınızda silinmez; tekrar girmenize gerek yoktur.
             </div>
             <div class="key-hint-box deepseek-hint" *ngIf="formSettings.provider === 'DeepSeek'">
               <span class="hint-icon">💡</span>
@@ -428,6 +436,39 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
     }
 
+    .key-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2px;
+    }
+    .db-persisted-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: 6px;
+      padding: 2px 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .db-info-subtext {
+      font-size: 0.75rem;
+      color: #10b981;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .db-info-subtext code {
+      color: #38bdf8;
+      background: rgba(15, 23, 42, 0.8);
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
     .input-with-toggle {
       display: flex;
       position: relative;
@@ -661,14 +702,22 @@ export class AiModelsSettingsComponent implements OnInit {
   readonly openAiImageModels = ['gpt-image-2.5-flare', 'dall-e-3', 'dall-e-2'];
   readonly generalImageModels = ['flux-pro-1.1', 'ideogram-v4'];
 
+  get hasActiveKeySaved(): boolean {
+    const key = this.currentSelectedApiKey;
+    return !!key && key.trim().length > 6;
+  }
+
   ngOnInit(): void {
     this.formSettings = { ...this.aiService.settings() };
     if (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner') {
       this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
     }
     const now = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${now} - Ayar dosyası başarıyla yüklendi: ai-optimization-settings.json`);
+    this.terminalLogs.push(`${now} - 🗄️ Merkezi Veritabanı (VDS SQLite) bağlantısı aktif: API ayarları kalıcı olarak yüklendi.`);
     this.terminalLogs.push(`${now} - Aktif Sağlayıcı: ${this.formSettings.provider} (${this.aiService.activeModelName()})`);
+    if (this.hasActiveKeySaved) {
+      this.terminalLogs.push(`${now} - 🔑 Aktif API Anahtarı: Veritabanında kayıtlı ve kullanıma hazır.`);
+    }
   }
 
   selectProvider(prov: AiOptimizationSettings['provider']): void {

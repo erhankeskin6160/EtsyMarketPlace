@@ -83,6 +83,7 @@ const DEFAULT_SETTINGS: AiOptimizationSettings = {
 export class AiSettingsService {
   readonly settings = signal<AiOptimizationSettings>(this.loadSettings());
   readonly isAiModalOpen = signal<boolean>(false);
+  readonly isDbSynced = signal<boolean>(false);
   readonly clonedListing = signal<ClonedMarketListing | null>(null);
 
   readonly activeModelName = computed(() => {
@@ -157,10 +158,16 @@ export class AiSettingsService {
               ...current,
               ...parsed
             };
-            if (!merged.deepSeekApiKey && current.deepSeekApiKey) {
-              merged.deepSeekApiKey = current.deepSeekApiKey;
-            }
+            if (!merged.deepSeekApiKey && current.deepSeekApiKey) merged.deepSeekApiKey = current.deepSeekApiKey;
+            if (!merged.geminiApiKey && current.geminiApiKey) merged.geminiApiKey = current.geminiApiKey;
+            if (!merged.openAiApiKey && current.openAiApiKey) merged.openAiApiKey = current.openAiApiKey;
+            if (!merged.claudeApiKey && current.claudeApiKey) merged.claudeApiKey = current.claudeApiKey;
+            if (!merged.grokApiKey && current.grokApiKey) merged.grokApiKey = current.grokApiKey;
+            if (!merged.photoRoomApiKey && current.photoRoomApiKey) merged.photoRoomApiKey = current.photoRoomApiKey;
+            if (!merged.bflApiKey && current.bflApiKey) merged.bflApiKey = current.bflApiKey;
+            if (!merged.ideogramApiKey && current.ideogramApiKey) merged.ideogramApiKey = current.ideogramApiKey;
             this.settings.set(merged);
+            this.isDbSynced.set(true);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
           } catch {
             // ignore
@@ -220,7 +227,9 @@ export class AiSettingsService {
         shopId,
         settingsJson: JSON.stringify(newSettings)
       }).subscribe({
-        next: () => {},
+        next: () => {
+          this.isDbSynced.set(true);
+        },
         error: () => {}
       });
     } catch {
