@@ -64,7 +64,7 @@ const DEFAULT_SETTINGS: AiOptimizationSettings = {
   claudeApiKey: '',
   claudeModel: 'claude-3-7-sonnet-20250219',
   deepSeekApiKey: '',
-  deepSeekModel: 'deepseek-reasoner',
+  deepSeekModel: 'DeepSeek-V4-Flash',
   grokApiKey: '',
   grokModel: 'grok-3',
   photoRoomApiKey: '',
@@ -92,7 +92,7 @@ export class AiSettingsService {
       case 'Gemini': return s.geminiModel || 'gemini-2.5-flash';
       case 'OpenAI': return s.openAiModel || 'gpt-4o';
       case 'Claude': return s.claudeModel || 'claude-3-7-sonnet';
-      case 'DeepSeek': return s.deepSeekModel || 'deepseek-reasoner';
+      case 'DeepSeek': return s.deepSeekModel || 'DeepSeek-V4-Flash';
       case 'Grok': return s.grokModel || 'grok-3';
       default: return 'Offline Kural Motoru';
     }
@@ -251,10 +251,26 @@ export class AiSettingsService {
 
     // Real ping test for DeepSeek
     if (provider === 'DeepSeek') {
+      const cleanKey = (key || '').trim();
+      if (!cleanKey) {
+        return {
+          success: false,
+          latencyMs: 0,
+          message: 'Lütfen bir DeepSeek API anahtarı giriniz.'
+        };
+      }
+      if (!cleanKey.startsWith('sk-')) {
+        return {
+          success: false,
+          latencyMs: 0,
+          message: `⚠️ Format Uyarısı: DeepSeek API anahtarları 'sk-' ile başlamalıdır (Girdiğiniz anahtar: '${cleanKey.slice(0, 4)}...'). Lütfen https://platform.deepseek.com/api_keys adresindeki anahtarı kopyalayınız.`
+        };
+      }
+
       try {
         const resp = await fetch('https://api.deepseek.com/models', {
           headers: {
-            'Authorization': `Bearer ${key.trim()}`
+            'Authorization': `Bearer ${cleanKey}`
           }
         });
         const latency = Math.round(performance.now() - start);
@@ -267,10 +283,16 @@ export class AiSettingsService {
         } else {
           const errData = await resp.json().catch(() => ({}));
           const errMsg = errData?.error?.message || `HTTP ${resp.status} ${resp.statusText}`;
+          let guidance = errMsg;
+          if (resp.status === 401 || errMsg.toLowerCase().includes('authentication') || errMsg.toLowerCase().includes('invalid')) {
+            guidance = `Yetkilendirme Hatası (401): DeepSeek anahtarınızı '${cleanKey.slice(-4)}' geçersiz buldu. Lütfen platform.deepseek.com/api_keys adresindeki anahtarınızı ve hesap bakiyenizi (Top-up) kontrol edin.`;
+          } else if (resp.status === 402 || errMsg.toLowerCase().includes('insufficient') || errMsg.toLowerCase().includes('balance')) {
+            guidance = `Bakiye Hatası (402): DeepSeek hesabınızda yeterli bakiye bulunmuyor. platform.deepseek.com adresinden bakiye yükleyiniz.`;
+          }
           return {
             success: false,
             latencyMs: latency,
-            message: `DeepSeek API Hatası: ${errMsg}`
+            message: `DeepSeek API Hatası: ${guidance}`
           };
         }
       } catch (err: any) {

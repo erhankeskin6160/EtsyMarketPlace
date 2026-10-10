@@ -139,6 +139,14 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 {{ showKey ? '🙈' : '👁️' }}
               </button>
             </div>
+            <div class="key-hint-box deepseek-hint" *ngIf="formSettings.provider === 'DeepSeek'">
+              <span class="hint-icon">💡</span>
+              <span class="hint-text">
+                DeepSeek anahtarları <code>sk-</code> ile başlar. Anahtarınızı ve bakiye durumunu 
+                <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener noreferrer">platform.deepseek.com/api_keys</a> 
+                üzerinden yönetebilirsiniz.
+              </span>
+            </div>
           </div>
         </div>
 
@@ -547,6 +555,30 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       animation: fade-in 0.2s;
     }
 
+    .key-hint-box {
+      margin-top: 6px;
+      font-size: 0.76rem;
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.6);
+      border: 1px solid rgba(59, 130, 246, 0.25);
+      border-radius: 6px;
+      padding: 6px 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .key-hint-box code {
+      color: #38bdf8;
+      background: rgba(15, 23, 42, 0.8);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: 600;
+    }
+    .key-hint-box a {
+      color: #60a5fa;
+      text-decoration: underline;
+    }
+
     /* TERMINAL */
     .terminal-log-box {
       background: #050811;
@@ -630,6 +662,9 @@ export class AiModelsSettingsComponent implements OnInit {
 
   ngOnInit(): void {
     this.formSettings = { ...this.aiService.settings() };
+    if (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner') {
+      this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
+    }
     const now = new Date().toLocaleTimeString('tr-TR');
     this.terminalLogs.push(`${now} - Ayar dosyası başarıyla yüklendi: ai-optimization-settings.json`);
     this.terminalLogs.push(`${now} - Aktif Sağlayıcı: ${this.formSettings.provider} (${this.aiService.activeModelName()})`);
@@ -637,6 +672,9 @@ export class AiModelsSettingsComponent implements OnInit {
 
   selectProvider(prov: AiOptimizationSettings['provider']): void {
     this.formSettings.provider = prov;
+    if (prov === 'DeepSeek' && (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner')) {
+      this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
+    }
     const now = new Date().toLocaleTimeString('tr-TR');
     this.terminalLogs.push(`${now} - Sağlayıcı değiştirildi: ${prov}`);
   }

@@ -87,8 +87,8 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} API hatası:`, err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            const detail = this.formatAiErrorMessage(provider, activeModel, err);
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
           const fallback = this.generateRuleBasedTitle(cleanInput, currentCategory);
           const msg = isSilentFallback
@@ -215,7 +215,7 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı DeepSeek kategori hatası:', err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'DeepSeek yanıt vermedi';
+            const detail = this.formatAiErrorMessage('DeepSeek', activeModel, err);
             return throwError(() => new Error(`❌ Canlı DeepSeek Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
           }
           return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
@@ -281,8 +281,8 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} tag hatası:`, err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            const detail = this.formatAiErrorMessage(provider, activeModel, err);
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
           const tags = this.generateRuleBasedTags(cleanInput);
           const msg = isSilentFallback
@@ -343,8 +343,8 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} açıklama hatası:`, err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
-            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
+            const detail = this.formatAiErrorMessage(provider, activeModel, err);
+            return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
           const desc = this.generateRuleBasedDescription(cleanInput, materials);
           const msg = isSilentFallback
@@ -409,7 +409,7 @@ export class EtsyListingAiService {
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} tam paket hatası:`, err);
           if (isStrict) {
-            const detail = err?.error?.error?.message || err?.message || 'Model yanıt vermedi';
+            const detail = this.formatAiErrorMessage(provider, activeModel, err);
             return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
           const ruleRes = this.generateRuleBasedComplete(cleanInput, materials);
@@ -422,6 +422,20 @@ export class EtsyListingAiService {
     }
 
     return of(this.generateRuleBasedComplete(cleanInput, materials));
+  }
+
+  private formatAiErrorMessage(provider: string, model: string, err: any): string {
+    const rawDetail = err?.error?.error?.message || err?.error?.message || err?.message || 'Model yanıt vermedi';
+    if (provider === 'DeepSeek') {
+      const lower = String(rawDetail).toLowerCase();
+      if (err?.status === 401 || lower.includes('authentication') || lower.includes('invalid') || lower.includes('api key')) {
+        return `Yetkilendirme Hatası (401): Girdiğiniz DeepSeek API anahtarı platform tarafından geçersiz bulundu. Lütfen https://platform.deepseek.com/api_keys adresindeki 'sk-' ile başlayan geçerli anahtarınızı ve bakiye durumunuzu kontrol edin.`;
+      }
+      if (err?.status === 402 || lower.includes('insufficient') || lower.includes('balance')) {
+        return `Bakiye Hatası (402): DeepSeek hesabınızda yeterli bakiye (kredi) bulunmuyor. platform.deepseek.com adresinden bakiye yükleyiniz.`;
+      }
+    }
+    return rawDetail;
   }
 
   private getActiveApiKey(settings: any): string {
