@@ -77,3 +77,6 @@ public sealed record SaveAiSettingsApiRequest(
     string? ShopId,
     string SettingsJson);
 
+public sealed record UpdateListingStateApiRequest(
+    string State);
+

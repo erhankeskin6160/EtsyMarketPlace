@@ -765,6 +765,7 @@ export class FastCreatorComponent implements OnInit {
     message: string;
   } | null = null;
   isPublishSuccessModalOpen = false;
+  isActivatingListing = false;
 
   openPreviewModal(): void {
     this.isPreviewModalOpen = true;
@@ -776,6 +777,25 @@ export class FastCreatorComponent implements OnInit {
 
   closeSuccessModal(): void {
     this.isPublishSuccessModalOpen = false;
+  }
+
+  activateListingNow(listingId: number | undefined): void {
+    if (!listingId) return;
+    this.isActivatingListing = true;
+    this.etsyApi.updateListingState(listingId, 'active').subscribe({
+      next: (res) => {
+        this.isActivatingListing = false;
+        if (this.createdListingResult) {
+          this.createdListingResult.state = 'active';
+        }
+        this.showToast(`🎉 İlan başarıyla CANLI satışa açıldı! (ID: #${listingId})`);
+      },
+      error: (err) => {
+        this.isActivatingListing = false;
+        const msg = err?.error?.error || err?.message || 'Etsy API aktivasyon hatası.';
+        alert(`❌ Canlıya alma hatası:\n${msg}`);
+      }
+    });
   }
 
   publishListingToEtsy(): void {

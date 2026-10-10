@@ -328,6 +328,14 @@ export class EtsyApiService {
     });
   }
 
+  updateListingState(listingId: number | string, state: 'active' | 'draft' | 'inactive', shopId?: string): Observable<{ success: boolean; listingId: number; state: string; message: string }> {
+    const sId = shopId || this.activeShopId();
+    return this.http.patch<{ success: boolean; listingId: number; state: string; message: string }>(
+      `${this.API_BASE}/api/etsy/listings/${listingId}/state?shopId=${encodeURIComponent(sId)}`,
+      { state }
+    );
+  }
+
   getShippingProfiles(shopId?: string): Observable<any> {
     const id = shopId || this.activeShopId();
     return this.http.get<any>(`${this.API_BASE}/api/etsy/shipping-profiles?shopId=${encodeURIComponent(id)}`);

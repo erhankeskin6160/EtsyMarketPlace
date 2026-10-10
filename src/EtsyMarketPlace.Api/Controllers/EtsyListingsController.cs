@@ -1138,15 +1138,128 @@ public class EtsyListingsController : BaseApiController
             catch { }
         }
 
+        string finalState = "draft";
+        string stateDetailMessage = "";
+
+        if (request.State?.ToLowerInvariant() == "active")
+        {
+            try
+            {
+                var patchStateUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/{createdListingId}";
+                var patchStateForm = new List<KeyValuePair<string, string>>
+                {
+                    new("state", "active")
+                };
+
+                using var patchReq = new HttpRequestMessage(HttpMethod.Patch, patchStateUrl)
+                {
+                    Content = new FormUrlEncodedContent(patchStateForm)
+                };
+                patchReq.Headers.Add("x-api-key", apiKeyHeader);
+                patchReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+                using var patchRes = await client.SendAsync(patchReq, cancellationToken);
+                if (patchRes.IsSuccessStatusCode)
+                {
+                    finalState = "active";
+                }
+                else
+                {
+                    var patchBody = await patchRes.Content.ReadAsStringAsync(cancellationToken);
+                    stateDetailMessage = $" (Etsy canlı aktivasyon uyarısı: {patchBody})";
+                }
+            }
+            catch (Exception ex)
+            {
+                stateDetailMessage = $" (Canlı aktivasyon hatası: {ex.Message})";
+            }
+        }
+
         return Ok(new
         {
             success = true,
             listingId = createdListingId,
             url = listingUrl,
-            state = request.State?.ToLowerInvariant() == "active" ? "active" : "draft",
+            state = finalState,
             uploadedImages = uploadedImageCount,
             variationsCount = uploadedVariationCount,
-            message = $"İlan başarıyla Etsy'ye aktarıldı! (Listing ID: {createdListingId})"
+            message = finalState == "active"
+                ? $"🎉 İlan başarıyla CANLI olarak Etsy'de satışa açıldı! (Listing ID: {createdListingId})"
+                : $"İlan Etsy'ye aktarıldı (Taslak Durumunda). (Listing ID: {createdListingId}){stateDetailMessage}"
+        });
+    }
+
+    [HttpPatch("listings/{listingId:long}/state")]
+    [EndpointSummary("Etsy İlan Durumunu Güncelle (draft / active / inactive)")]
+    public async Task<IActionResult> UpdateListingState(
+        long listingId,
+        [FromBody] UpdateListingStateApiRequest request,
+        [FromQuery] string shopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var token = await _tokenStore.GetAsync(resolvedShopId, cancellationToken);
+        if (token == null || string.IsNullOrWhiteSpace(token.AccessToken))
+        {
+            return Unauthorized(new { error = "Etsy mağaza yetkilendirmesi (Access Token) bulunamadı." });
+        }
+
+        if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+        {
+            try
+            {
+                token = await _oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
+                await _tokenStore.SaveAsync(resolvedShopId, token, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new { error = "Etsy token yenilenemedi: " + ex.Message });
+            }
+        }
+
+        var targetState = request.State?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(targetState) || (targetState != "active" && targetState != "draft" && targetState != "inactive"))
+        {
+            return BadRequest(new { error = "Geçersiz durum. Sadece 'active', 'draft' veya 'inactive' kabul edilir." });
+        }
+
+        var raw = await _settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
+        var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (_config["Etsy:ApiKey"] ?? string.Empty);
+        var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (_config["Etsy:SharedSecret"] ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(keystring))
+        {
+            return BadRequest(new { error = "Etsy Keystring (Client ID) bulunamadı." });
+        }
+        var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
+
+        var client = _httpClientFactory.CreateClient();
+        var patchUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/{listingId}";
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("state", targetState)
+        };
+
+        using var patchReq = new HttpRequestMessage(HttpMethod.Patch, patchUrl)
+        {
+            Content = new FormUrlEncodedContent(form)
+        };
+        patchReq.Headers.Add("x-api-key", apiKeyHeader);
+        patchReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+        using var patchRes = await client.SendAsync(patchReq, cancellationToken);
+        var patchBody = await patchRes.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!patchRes.IsSuccessStatusCode)
+        {
+            return BadRequest(new { error = $"Etsy ilan durumu '{targetState}' olarak güncellenemedi (HTTP {(int)patchRes.StatusCode}): {patchBody}" });
+        }
+
+        return Ok(new
+        {
+            success = true,
+            listingId,
+            state = targetState,
+            message = $"İlan durumu başarıyla '{targetState}' olarak güncellendi."
         });
     }
 

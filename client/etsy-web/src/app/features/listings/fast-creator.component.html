@@ -761,6 +761,16 @@
       </div>
 
       <div class="success-actions-bar">
+        <button
+          type="button"
+          *ngIf="createdListingResult?.state !== 'active'"
+          class="btn-activate-now"
+          style="background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; padding: 9px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 2px 8px rgba(16,185,129,0.35);"
+          [disabled]="isActivatingListing"
+          (click)="activateListingNow(createdListingResult?.listingId)">
+          <span *ngIf="isActivatingListing">⏳ Aktifleştiriliyor...</span>
+          <span *ngIf="!isActivatingListing">🚀 Şimdi Canlıya Al (Satışa Aç)</span>
+        </button>
         <a [href]="createdListingResult?.url" target="_blank" rel="noopener noreferrer" class="btn-etsy-direct-link">
           🛍️ Etsy Listing Editor'de Aç & İncele ↗
         </a>
