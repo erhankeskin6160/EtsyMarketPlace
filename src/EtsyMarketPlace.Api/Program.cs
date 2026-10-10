@@ -152,14 +152,6 @@ app.MapGet("/", () => Results.Ok(new
 .WithSummary("API Kök Bilgilendirme")
 .WithName("GetRootInfo");
 
-app.MapGet("/health", () => Results.Ok(new
-{
-    status = "Healthy",
-    timestamp = DateTimeOffset.UtcNow
-}))
-.WithTags("Sistem Durumu")
-.WithSummary("Sunucu Sağlık Kontrolü")
-.WithName("GetHealth");
 
 // ── 4. RESMİ GOOGLE GEMINI SPARK MCP PROTOCOL ENDPOINT'LERİ (/mcp) ────────────
 

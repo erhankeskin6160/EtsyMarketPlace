@@ -126,7 +126,8 @@ if ($createResult.ReturnValue -ne 0) {
 # 8. Sağlık kontrolü
 Write-Host "[5/5] Saglik kontrolu yapiliyor (http://127.0.0.1:$Port/health)..." -ForegroundColor Cyan
 $healthy = $false
-for ($i = 1; $i -le 20; $i++) {
+$lastError = ""
+for ($i = 1; $i -le 30; $i++) {
 	Start-Sleep -Seconds 1
 	try {
 		$health = Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 2
@@ -135,12 +136,13 @@ for ($i = 1; $i -le 20; $i++) {
 			break
 		}
 	} catch {
-		Write-Host "   Bekleniyor ($i/20)..." -ForegroundColor DarkGray
+		$lastError = $_.Exception.Message
+		Write-Host "   Bekleniyor ($i/30)... ($lastError)" -ForegroundColor DarkGray
 	}
 }
 
 if (-not $healthy) {
-	throw "API 20 saniye icinde saglikli duruma gecmedi: $targetExe"
+	throw "API 30 saniye icinde saglikli duruma gecmedi: $targetExe (Son hata: $lastError)"
 }
 
 Write-Host "   ✅ API calisiyor: http://0.0.0.0:$Port" -ForegroundColor Green
