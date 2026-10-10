@@ -65,6 +65,9 @@ export class FastCreatorComponent implements OnInit {
   categoryAlternatives: TaxonomyCandidateItem[] = [];
   selectedCategoryCombo = '';
   shippingProfile = '';
+  shippingProfilesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number }> = [];
+  selectedShippingProfileId: number | null = null;
+  isLoadingShippingProfiles = false;
   readinessState = '';
   tags: string[] = [];
   newTagInput = '';
@@ -163,6 +166,31 @@ export class FastCreatorComponent implements OnInit {
     });
 
     this.rebuildVariationGrid();
+    this.loadShippingProfiles();
+  }
+
+  loadShippingProfiles(): void {
+    this.isLoadingShippingProfiles = true;
+    this.etsyApi.getShippingProfiles().subscribe({
+      next: (res) => {
+        this.isLoadingShippingProfiles = false;
+        const results = res?.results || (Array.isArray(res) ? res : []);
+        if (results.length > 0) {
+          this.shippingProfilesList = results.map((p: any) => ({
+            id: p.shipping_profile_id,
+            title: p.title || `Profil #${p.shipping_profile_id}`,
+            minDays: p.min_processing_days,
+            maxDays: p.max_processing_days
+          }));
+          if (!this.selectedShippingProfileId) {
+            this.selectedShippingProfileId = this.shippingProfilesList[0].id;
+          }
+        }
+      },
+      error: () => {
+        this.isLoadingShippingProfiles = false;
+      }
+    });
   }
 
   get usdTryRate(): number {
@@ -695,9 +723,12 @@ export class FastCreatorComponent implements OnInit {
       .slice(0, 13);
 
     // Shipping profile ID parsing
-    let shippingProfileId: number | null = null;
-    if (this.shippingProfile && !isNaN(Number(this.shippingProfile))) {
+    let shippingProfileId: number | null = this.selectedShippingProfileId;
+    if (!shippingProfileId && this.shippingProfile && !isNaN(Number(this.shippingProfile))) {
       shippingProfileId = Number(this.shippingProfile);
+    }
+    if (!shippingProfileId && this.shippingProfilesList.length > 0) {
+      shippingProfileId = this.shippingProfilesList[0].id;
     }
 
     const payload = {

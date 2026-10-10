@@ -262,10 +262,12 @@
             <div class="logistics-row" *ngIf="listingType === 'physical'">
               <div class="field-wrap half">
                 <label>🚚 Kargo Profili:</label>
-                <select class="std-select" [(ngModel)]="shippingProfile">
-                  <option value="Standart Kargo (3-5 iş günü teslimat)">Standart Kargo (3-5 iş günü)</option>
-                  <option value="Express Worldwide DHL/FedEx (1-3 gün)">Express Worldwide (1-3 gün)</option>
-                  <option value="Ücretsiz Standart Kargo (Free Shipping)">Ücretsiz Kargo (Free Shipping)</option>
+                <select class="std-select" [(ngModel)]="selectedShippingProfileId">
+                  <option *ngIf="isLoadingShippingProfiles" [ngValue]="null">⏳ Etsy kargo profilleri yükleniyor...</option>
+                  <option *ngIf="!isLoadingShippingProfiles && shippingProfilesList.length === 0" [ngValue]="null">⚠️ Mağazada kargo profili bulunamadı</option>
+                  <option *ngFor="let prof of shippingProfilesList" [ngValue]="prof.id">
+                    📦 {{ prof.title }} (ID: {{ prof.id }})
+                  </option>
                 </select>
               </div>
 

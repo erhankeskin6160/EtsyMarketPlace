@@ -1912,10 +1912,49 @@ app.MapPost("/api/etsy/listings", async (
 
     if (!request.IsDigital)
     {
-        if (request.ShippingProfileId.HasValue && request.ShippingProfileId.Value > 0)
+        long? effectiveShippingProfileId = (request.ShippingProfileId.HasValue && request.ShippingProfileId.Value > 0)
+            ? request.ShippingProfileId.Value
+            : null;
+
+        if (!effectiveShippingProfileId.HasValue)
         {
-            formDict.Add(new("shipping_profile_id", request.ShippingProfileId.Value.ToString(CultureInfo.InvariantCulture)));
+            try
+            {
+                var profUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/shipping-profiles";
+                using var profReq = new HttpRequestMessage(HttpMethod.Get, profUrl);
+                profReq.Headers.Add("x-api-key", apiKeyHeader);
+                profReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+                using var profRes = await client.SendAsync(profReq, cancellationToken);
+                if (profRes.IsSuccessStatusCode)
+                {
+                    var profBody = await profRes.Content.ReadAsStringAsync(cancellationToken);
+                    using var profDoc = JsonDocument.Parse(profBody);
+                    if (profDoc.RootElement.TryGetProperty("results", out var rArray) && rArray.GetArrayLength() > 0)
+                    {
+                        var first = rArray[0];
+                        if (first.TryGetProperty("shipping_profile_id", out var spIdProp))
+                        {
+                            effectiveShippingProfileId = spIdProp.GetInt64();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback attempt
+            }
         }
+
+        if (effectiveShippingProfileId.HasValue && effectiveShippingProfileId.Value > 0)
+        {
+            formDict.Add(new("shipping_profile_id", effectiveShippingProfileId.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+        else
+        {
+            return Results.BadRequest(new { error = "Fiziksel ürünler için Etsy'de tanımlı bir Kargo Profili (shipping_profile_id) gereklidir. Lütfen Etsy Mağaza Yöneticisi > Settings > Shipping settings alanından bir kargo profili oluşturun veya ilanı 'Dijital' olarak seçin." });
+        }
+
         if (request.ReadinessStateId.HasValue && request.ReadinessStateId.Value > 0)
         {
             formDict.Add(new("readiness_state_id", request.ReadinessStateId.Value.ToString(CultureInfo.InvariantCulture)));
@@ -2060,6 +2099,58 @@ app.MapPost("/api/etsy/listings", async (
 .WithTags("Etsy Listing & AI Denetimi")
 .WithSummary("Hızlı Ürün Ekleme (Fast Creator) İle Doğrudan Etsy'de Taslak/Canlı İlan Oluştur")
 .WithName("CreateEtsyListing");
+
+app.MapGet("/api/etsy/shipping-profiles", async (
+    string shopId = "53236321",
+    HttpContext context = null!,
+    IConfiguration config = null!,
+    IEtsyTokenStore tokenStore = null!,
+    IShopSettingsRepository settingsRepo = null!,
+    IHttpClientFactory httpClientFactory = null!,
+    IEtsyOAuthService oauthService = null!,
+    CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
+    if (token is null)
+        return Results.NotFound(new { error = "Bu mağaza için kayıtlı OAuth token bulunamadı." });
+
+    if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+    {
+        try
+        {
+            token = await oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
+            await tokenStore.SaveAsync(resolvedShopId, token, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new { error = "Etsy token yenilenemedi: " + ex.Message });
+        }
+    }
+
+    var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? string.Empty);
+    var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
+
+    var client = httpClientFactory.CreateClient();
+    var profUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/shipping-profiles";
+    using var profReq = new HttpRequestMessage(HttpMethod.Get, profUrl);
+    profReq.Headers.Add("x-api-key", apiKeyHeader);
+    profReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+    using var profRes = await client.SendAsync(profReq, cancellationToken);
+    var profBody = await profRes.Content.ReadAsStringAsync(cancellationToken);
+    if (!profRes.IsSuccessStatusCode)
+    {
+        return Results.BadRequest(new { error = $"Kargo profilleri Etsy'den alınamadı (HTTP {(int)profRes.StatusCode}): {profBody}" });
+    }
+
+    return Results.Content(profBody, "application/json");
+})
+.WithTags("Etsy Kargo & Lojistik")
+.WithSummary("Mağazanın Etsy Kargo Profillerini Canlı Getir")
+.WithName("GetEtsyShippingProfiles");
 
 app.MapGet("/api/settings/ai", async (
     string shopId = "53236321",

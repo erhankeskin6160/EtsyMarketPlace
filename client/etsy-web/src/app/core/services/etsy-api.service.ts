@@ -316,6 +316,11 @@ export class EtsyApiService {
     });
   }
 
+  getShippingProfiles(shopId?: string): Observable<any> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<any>(`${this.API_BASE}/api/etsy/shipping-profiles?shopId=${encodeURIComponent(id)}`);
+  }
+
   getAiSettings(shopId?: string): Observable<GetAiSettingsResponseDto> {
     const id = shopId || this.activeShopId();
     return this.http.get<GetAiSettingsResponseDto>(`${this.API_BASE}/api/settings/ai?shopId=${id}`);
