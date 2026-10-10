@@ -1,0 +1,14 @@
+{
+  "/api": {
+    "target": "http://5.180.81.148:5263",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/health": {
+    "target": "http://5.180.81.148:5263",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}
