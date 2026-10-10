@@ -931,24 +931,40 @@ app.MapPost("/api/etsy/token", async (EtsyTokenImportRequest request, IEtsyToken
 .WithDescription("Masaüstü uygulamasında üretilen Etsy API OAuth Access ve Refresh token bilgilerini VDS güvenli kasasına kaydeder.")
 .WithName("ImportEtsyToken");
 
-app.MapGet("/api/etsy/token/status", async (string shopId = "53236321", HttpContext context = null!, IConfiguration config = null!, IEtsyTokenStore tokenStore = null!, CancellationToken cancellationToken = default) =>
+app.MapGet("/api/etsy/token/status", async (string shopId = "53236321", HttpContext context = null!, IConfiguration config = null!, IEtsyTokenStore tokenStore = null!, IEtsyOAuthService oauthService = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
     var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
-    return token is null
-        ? Results.NotFound(new { exists = false, shopId = resolvedShopId })
-        : Results.Ok(new
+    if (token is null)
+        return Results.NotFound(new { exists = false, shopId = resolvedShopId });
+
+    // Eğer 1 saatlik Access Token dolmuşsa ama RefreshToken varsa, kullanıcıyı bekletmeden sessizce Etsy'den yenile
+    if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow && !string.IsNullOrWhiteSpace(token.RefreshToken))
+    {
+        try
         {
-            exists = true,
-            shopId = resolvedShopId,
-            expiresAt = token.AccessTokenExpiresAt,
-            isExpired = token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow,
-            tokenType = token.TokenType
-        });
+            var refreshed = await oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
+            await tokenStore.SaveAsync(resolvedShopId, refreshed, cancellationToken);
+            token = refreshed;
+        }
+        catch
+        {
+            // Refresh token da geçersizleşmişse (90 gün aşımı), isExpired: true dönecek ve yeniden onay istenecek
+        }
+    }
+
+    return Results.Ok(new
+    {
+        exists = true,
+        shopId = resolvedShopId,
+        expiresAt = token.AccessTokenExpiresAt,
+        isExpired = token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow,
+        tokenType = token.TokenType
+    });
 })
 .WithTags("Yetkilendirme & Token")
 .WithSummary("Etsy Token Durum ve Geçerlilik Kontrolü")
-.WithDescription("Kayıtlı Etsy OAuth token'ının süresinin dolup dolmadığını ve kalan geçerlilik süresini kontrol eder.")
+.WithDescription("Kayıtlı Etsy OAuth token'ının süresini kontrol eder; süresi dolmuşsa resmi Etsy API'den sessizce otomatik yeniler.")
 .WithName("GetEtsyTokenStatus");
 
 app.MapPost("/api/etsy/token/refresh", async (string shopId = "53236321", HttpContext context = null!, IConfiguration config = null!, IEtsyTokenStore tokenStore = null!, IEtsyOAuthService oauthService = null!, CancellationToken cancellationToken = default) =>

@@ -167,10 +167,24 @@ export class EtsyApiService {
         this.tokenExpiresAt.set(res.expiresAt);
         if (res.exists && !res.isExpired) {
           this.tokenStatus.set('connected');
-          this.tokenDetails.set(`Etsy v3 OAuth Bağlı (${res.shopId})`);
         } else if (res.exists && res.isExpired) {
-          this.tokenStatus.set('expired');
-          this.tokenDetails.set(`Token Süresi Doldu (${res.expiresAt ? res.expiresAt.slice(0, 10) : ''})`);
+          // Access token dolmuşsa kullanıcıyı rahatsız etmeden önce sessizce Etsy'den yenilemeyi dene
+          this.refreshToken(res.shopId).subscribe({
+            next: (refreshRes) => {
+              if (refreshRes && !refreshRes.isExpired) {
+                this.tokenStatus.set('connected');
+                this.tokenExpiresAt.set(refreshRes.expiresAt);
+                this.tokenDetails.set(`Etsy v3 OAuth Bağlı (${res.shopId})`);
+              } else {
+                this.tokenStatus.set('expired');
+                this.tokenDetails.set(`Yeniden Yetki Gerekli (${res.expiresAt ? res.expiresAt.slice(0, 10) : ''})`);
+              }
+            },
+            error: () => {
+              this.tokenStatus.set('expired');
+              this.tokenDetails.set(`Yeniden Yetki Gerekli (${res.expiresAt ? res.expiresAt.slice(0, 10) : ''})`);
+            }
+          });
         } else {
           this.tokenStatus.set('missing');
           this.tokenDetails.set('Etsy API Bağlı Değil');
