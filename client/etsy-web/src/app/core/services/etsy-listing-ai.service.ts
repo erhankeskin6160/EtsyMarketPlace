@@ -428,8 +428,10 @@ export class EtsyListingAiService {
     const rawDetail = err?.error?.error?.message || err?.error?.message || err?.message || 'Model yanıt vermedi';
     if (provider === 'DeepSeek') {
       const lower = String(rawDetail).toLowerCase();
+      const currentKey = this.getActiveApiKey(this.aiSettings.settings());
+      const keySuffix = currentKey ? `(Mevcut kayıtlı anahtar: ...${currentKey.slice(-4)})` : '(Kayıtlı anahtar boş)';
       if (err?.status === 401 || lower.includes('authentication') || lower.includes('invalid') || lower.includes('api key')) {
-        return `Yetkilendirme Hatası (401): Girdiğiniz DeepSeek API anahtarı platform tarafından geçersiz bulundu. Lütfen https://platform.deepseek.com/api_keys adresindeki 'sk-' ile başlayan geçerli anahtarınızı ve bakiye durumunuzu kontrol edin.`;
+        return `Yetkilendirme Hatası (401): DeepSeek'e gönderilen API anahtarı ${keySuffix} geçersiz bulundu! Lütfen AI Ayarları ⚙️ menüsünü açıp platform.deepseek.com/api_keys adresindeki yeni ve tam 'sk-...' anahtarınızı yapıştırıp Kaydet'e basınız.`;
       }
       if (err?.status === 402 || lower.includes('insufficient') || lower.includes('balance')) {
         return `Bakiye Hatası (402): DeepSeek hesabınızda yeterli bakiye (kredi) bulunmuyor. platform.deepseek.com adresinden bakiye yükleyiniz.`;

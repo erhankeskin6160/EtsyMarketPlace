@@ -133,6 +133,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
               <input 
                 [type]="showKey ? 'text' : 'password'" 
                 [(ngModel)]="currentSelectedApiKey"
+                (ngModelChange)="onApiKeyChange()"
                 placeholder="sk-... veya AIzaSy... API anahtarını girin"
                 class="hub-input key-input" />
               <button type="button" class="btn-eye" (click)="showKey = !showKey">
@@ -675,8 +676,13 @@ export class AiModelsSettingsComponent implements OnInit {
     if (prov === 'DeepSeek' && (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner')) {
       this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
     }
+    this.aiService.saveSettings(this.formSettings);
     const now = new Date().toLocaleTimeString('tr-TR');
     this.terminalLogs.push(`${now} - Sağlayıcı değiştirildi: ${prov}`);
+  }
+
+  onApiKeyChange(): void {
+    this.aiService.saveSettings(this.formSettings);
   }
 
   get currentSelectedModel(): string {
@@ -756,6 +762,7 @@ export class AiModelsSettingsComponent implements OnInit {
   }
 
   onModelDropdownChange(): void {
+    this.aiService.saveSettings(this.formSettings);
     const now = new Date().toLocaleTimeString('tr-TR');
     this.terminalLogs.push(`${now} - Model seçildi: ${this.currentSelectedModel}`);
   }
@@ -812,6 +819,7 @@ export class AiModelsSettingsComponent implements OnInit {
   }
 
   closeModal(): void {
+    this.aiService.saveSettings(this.formSettings);
     this.aiService.closeAiSettingsModal();
     this.modalClosed.emit();
   }
