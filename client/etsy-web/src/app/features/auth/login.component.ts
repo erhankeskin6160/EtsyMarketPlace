@@ -36,6 +36,9 @@ import { AuthService } from '../../core/services/auth.service';
             {{ loading ? 'Giriş Yapılıyor...' : '🔐 Güvenli Giriş Yap' }}
           </button>
 
+          <div class="auth-hints">
+            <button type="button" class="btn-fill-hint" (click)="fillAdmin()">⚡ Yönetici Girişini Doldur (admin / Admin123*!)</button>
+          </div>
         </form>
 
         <div class="auth-footer">
@@ -149,6 +152,25 @@ import { AuthService } from '../../core/services/auth.service';
     .link-orange:hover {
       text-decoration: underline;
     }
+    .auth-hints {
+      margin-top: 12px;
+      display: flex;
+      justify-content: center;
+    }
+    .btn-fill-hint {
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      font-size: 0.78rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-fill-hint:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+    }
   `]
 })
 export class LoginComponent {
@@ -164,6 +186,12 @@ export class LoginComponent {
     if (this.authService.isAuthenticated()) {
       this.router.navigate(['/finance/accounting']);
     }
+  }
+
+  fillAdmin(): void {
+    this.username = 'admin';
+    this.password = 'Admin123*!';
+    this.errorMessage = '';
   }
 
   onLogin(): void {
@@ -185,10 +213,11 @@ export class LoginComponent {
       },
       error: err => {
         this.loading = false;
+        console.error('[Login] Error:', err);
         if (err.status === 0) {
-          this.errorMessage = 'Sunucuya bağlanılamadı (Ağ Hatası). VDS API bağlantınızı kontrol edin.';
+          this.errorMessage = `Sunucuya bağlanılamadı (Ağ Hatası / Status 0). Lütfen tarayıcıyı Ctrl+F5 ile sert yenileyin. [Denenen URL: ${err?.url || 'VDS/Proxy'}]`;
         } else {
-          this.errorMessage = err?.error?.message || 'Geçersiz kullanıcı adı veya şifre.';
+          this.errorMessage = err?.error?.message || `Hata (HTTP ${err.status}): ${err.statusText || 'Giriş yapılamadı.'}`;
         }
       }
     });

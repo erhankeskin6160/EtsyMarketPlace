@@ -28,13 +28,22 @@ export class AuthService {
   constructor() {}
 
   login(request: LoginRequest): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.API_BASE}/login`, request).pipe(
+    const primaryUrl = `${this.API_BASE}/login`;
+    const fallbackUrl = 'http://5.180.81.148:5263/api/auth/login';
+
+    return this.http.post<AuthResponse>(primaryUrl, request).pipe(
+      catchError(err => {
+        if (err.status === 0 && primaryUrl !== fallbackUrl) {
+          console.warn(`[AuthService] Primary login (${primaryUrl}) failed with network error, trying fallback: ${fallbackUrl}`);
+          return this.http.post<AuthResponse>(fallbackUrl, request);
+        }
+        return throwError(() => err);
+      }),
       tap(res => {
         if (res.success && res.token && res.user) {
           this.setSession(res.token, res.user);
         }
-      }),
-      catchError(error => throwError(() => error))
+      })
     );
   }
 
@@ -56,7 +65,16 @@ export class AuthService {
     if (this.sessionVerified && this.currentUser()) {
       return of(this.currentUser());
     }
-    return this.http.get<User>(`${this.API_BASE}/me`).pipe(
+    const primaryUrl = `${this.API_BASE}/me`;
+    const fallbackUrl = 'http://5.180.81.148:5263/api/auth/me';
+
+    return this.http.get<User>(primaryUrl).pipe(
+      catchError(err => {
+        if (err.status === 0 && primaryUrl !== fallbackUrl) {
+          return this.http.get<User>(fallbackUrl);
+        }
+        return throwError(() => err);
+      }),
       tap(user => {
         this.currentUser.set(user);
         this.sessionVerified = true;
