@@ -2,7 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { EtsyApiService, MarketTagFrequencyDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
@@ -162,7 +162,28 @@ export interface MarketItem {
         <div class="ai-report-content" [innerHTML]="aiReport"></div>
       </div>
 
-      <!-- 4. PRODUCT LISTINGS TABLE (With SEO & Market Score Columns) -->
+      <!-- VIEW NAVIGATION TABS (Listings vs Tag Matrix) -->
+      <div class="view-tabs-bar">
+        <button 
+          type="button" 
+          class="tab-btn" 
+          [class.active]="activeTab === 'listings'" 
+          (click)="activeTab = 'listings'">
+          <span>📋 Pazar İlanları & Rakip Listesi</span>
+          <span class="tab-count-badge">{{ items.length }} İlan</span>
+        </button>
+        <button 
+          type="button" 
+          class="tab-btn" 
+          [class.active]="activeTab === 'tag_matrix'" 
+          (click)="activeTab = 'tag_matrix'">
+          <span>🏷️ eRank & Marmalead Etiket Rekabet Matrisi</span>
+          <span class="tab-count-badge tag-matrix-badge">{{ topTags.length }} Etiket</span>
+        </button>
+      </div>
+
+      <!-- 4. PRODUCT LISTINGS TABLE & DETAILS (TAB 1: LISTINGS) -->
+      <ng-container *ngIf="activeTab === 'listings'">
       <div class="glass-card table-card">
         <div class="table-head-row">
           <div class="table-title-group">
@@ -354,6 +375,161 @@ Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem
             </div>
           </div>
 
+        </div>
+      </div>
+      </ng-container>
+
+      <!-- 5. ERANK & MARMALEAD ETİKET REKABET MATRİSİ (TAB 2: TAG MATRIX) -->
+      <div *ngIf="activeTab === 'tag_matrix'" class="glass-card tag-matrix-card">
+        <!-- Matrix Header & Stats Strip -->
+        <div class="matrix-header-row">
+          <div class="matrix-title-group">
+            <span class="table-title">🏷️ eRank & Marmalead Etiket Rekabet & Hacim Matrisi</span>
+            <span class="matrix-subtitle">İncelenen {{ items.length }} Etsy ilanında tespit edilen benzersiz altın anahtar kelimeler ve rekabet analizi</span>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="matrix-actions-group">
+            <button class="btn-matrix-action select-13" (click)="selectAllTop13Tags()" title="Etsy algoritmasına uygun en popüler ilk 13 etiketi anında seç">
+              <span>🎯 İlk 13'ü Seç ({{ getSelectedCount() }}/13)</span>
+            </button>
+            <button class="btn-matrix-action copy-sel" (click)="copySelectedTagsToClipboard()" [disabled]="getSelectedCount() === 0">
+              <span>📋 Seçilenleri Kopyala</span>
+            </button>
+            <button class="btn-matrix-action push-creator" (click)="sendSelectedTagsToFastCreator()" [disabled]="getSelectedCount() === 0">
+              <span>🚀 Fast Creator'a Aktar</span>
+            </button>
+            <button class="btn-matrix-action clear-sel" (click)="clearSelectedTags()" *ngIf="getSelectedCount() > 0">
+              <span>✕ Temizle</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tag Quick Stats Cards -->
+        <div class="tag-stats-row">
+          <div class="tag-stat-chip">
+            <span class="stat-name">İNCELENEN ETİKET:</span>
+            <span class="stat-value text-cyan">{{ topTags.length }} Adet</span>
+          </div>
+          <div class="tag-stat-chip">
+            <span class="stat-name">ORTALAMA UZUNLUK:</span>
+            <span class="stat-value text-emerald">{{ getAvgTagLength() | number:'1.1-1' }} / 20 Karakter</span>
+          </div>
+          <div class="tag-stat-chip">
+            <span class="stat-name">LONG-TAIL ORANI:</span>
+            <span class="stat-value text-purple">%{{ getLongTailRatio() | number:'1.0-0' }} (2+ Kelime)</span>
+          </div>
+          <div class="tag-stat-chip highlight-chip">
+            <span class="stat-name">SEÇİLEN ETİKET:</span>
+            <span class="stat-value" [ngClass]="getSelectedCount() === 13 ? 'text-emerald' : 'text-orange'">
+              {{ getSelectedCount() }} / 13 Etiket
+            </span>
+          </div>
+        </div>
+
+        <!-- Tag Search Filter Bar -->
+        <div class="tag-filter-bar">
+          <div class="tag-search-input-wrap">
+            <span class="tag-search-icon">🔍</span>
+            <input 
+              type="text" 
+              [(ngModel)]="tagSearchQuery" 
+              placeholder="Matris içindeki etiketleri anında filtrele (örn: dragon, organizer, gift)..." 
+              class="tag-filter-input" />
+            <button *ngIf="tagSearchQuery" class="clear-filter-btn" (click)="tagSearchQuery = ''">✕</button>
+          </div>
+          <span class="filter-count-badge">{{ getFilteredTags().length }} etiket gösteriliyor</span>
+        </div>
+
+        <!-- Tag Matrix Table -->
+        <div class="table-wrap">
+          <table class="market-table tag-matrix-table">
+            <thead>
+              <tr>
+                <th style="width: 45px; text-align: center;">
+                  <input 
+                    type="checkbox" 
+                    [checked]="isAllFilteredSelected()" 
+                    (change)="toggleSelectAllFiltered()" 
+                    title="Tümünü Seç / Kaldır" />
+                </th>
+                <th style="width: 45px;">Sıra</th>
+                <th>Anahtar Kelime / Etiket (Keyword)</th>
+                <th style="width: 170px;">İlan Frekansı</th>
+                <th style="width: 100px; text-align: center;">Pazar Payı</th>
+                <th style="width: 140px; text-align: center;">Marmameters Rekabet</th>
+                <th style="width: 150px; text-align: center;">Kelime Tipi</th>
+                <th style="width: 110px; text-align: center;">Karakter (Max 20)</th>
+                <th style="width: 90px; text-align: center;">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr 
+                *ngFor="let t of getFilteredTags(); let idx = index"
+                [class.selected-row]="isTagSelected(t.tag)"
+                (click)="toggleTagSelection(t.tag)">
+                
+                <!-- Checkbox -->
+                <td style="text-align: center;" (click)="$event.stopPropagation()">
+                  <input 
+                    type="checkbox" 
+                    [checked]="isTagSelected(t.tag)" 
+                    (change)="toggleTagSelection(t.tag)" />
+                </td>
+
+                <!-- Sıra -->
+                <td class="rank-cell">#{{ idx + 1 }}</td>
+
+                <!-- Tag Adı -->
+                <td class="tag-name-cell">
+                  <span class="tag-name-pill" (click)="copySingleTag(t.tag, $event)" title="Tek tıklamayla panoya kopyala">
+                    {{ t.tag }}
+                  </span>
+                </td>
+
+                <!-- Frekans Barı -->
+                <td class="freq-cell">
+                  <div class="freq-bar-wrap">
+                    <div class="freq-bar-fill" [style.width.%]="t.usagePercentage"></div>
+                    <span class="freq-text">{{ t.count }} / {{ items.length }} İlan</span>
+                  </div>
+                </td>
+
+                <!-- Pazar Payı (%) -->
+                <td style="text-align: center;" class="pct-cell">
+                  <b>%{{ t.usagePercentage | number:'1.1-1' }}</b>
+                </td>
+
+                <!-- Marmalead Marmameters Rekabet Çubuğu -->
+                <td style="text-align: center;">
+                  <span class="marmameter-badge" [ngClass]="getCompetitionBadgeClass(t.competitionLevel)">
+                    {{ t.competitionLevel }}
+                  </span>
+                </td>
+
+                <!-- Kelime Tipi (Long-tail vs Single) -->
+                <td style="text-align: center;">
+                  <span class="keyword-type-badge" [ngClass]="t.isLongTail ? 'long-tail' : 'broad'">
+                    {{ t.isLongTail ? '🎯 ' + t.wordCount + ' Kelime' : '⚠️ Tek Kelime' }}
+                  </span>
+                </td>
+
+                <!-- Karakter Sayısı (Etsy 20 limit) -->
+                <td style="text-align: center;">
+                  <span class="char-len-badge" [ngClass]="t.charLength <= 20 ? 'valid-char' : 'invalid-char'">
+                    {{ t.charLength }} / 20 Karakter
+                  </span>
+                </td>
+
+                <!-- Hızlı Kopyala Butonu -->
+                <td style="text-align: center;" (click)="$event.stopPropagation()">
+                  <button class="btn-copy-sm" (click)="copySingleTag(t.tag, $event)" title="Panoya Kopyala">
+                    📋
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -1055,12 +1231,330 @@ Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem
       border-radius: 6px;
       cursor: pointer;
     }
+
+    /* VIEW TABS */
+    .view-tabs-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 2px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 10px 18px;
+      color: #94a3b8;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover {
+      color: #fff;
+    }
+    .tab-btn.active {
+      color: #38bdf8;
+      border-bottom-color: #38bdf8;
+    }
+    .tab-count-badge {
+      background: #1e293b;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #cbd5e1;
+    }
+    .tab-btn.active .tab-count-badge {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+    }
+    .tag-matrix-badge {
+      background: rgba(168, 85, 247, 0.2);
+      color: #c084fc;
+    }
+
+    /* TAG MATRIX STYLES */
+    .tag-matrix-card {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .matrix-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .matrix-title-group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .matrix-subtitle {
+      font-size: 0.76rem;
+      color: #94a3b8;
+    }
+    .matrix-actions-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .btn-matrix-action {
+      background: #182238;
+      border: 1px solid #26334d;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .btn-matrix-action:hover:not(:disabled) {
+      background: #223252;
+      border-color: #38bdf8;
+      color: #fff;
+    }
+    .btn-matrix-action:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-matrix-action.select-13 {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(6, 182, 212, 0.2));
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+    .btn-matrix-action.select-13:hover {
+      background: rgba(16, 185, 129, 0.3);
+      color: #fff;
+    }
+    .btn-matrix-action.push-creator {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(59, 130, 246, 0.25));
+      border-color: rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+    }
+    .btn-matrix-action.clear-sel {
+      color: #f87171;
+      border-color: rgba(248, 113, 113, 0.3);
+    }
+
+    /* TAG STATS ROW */
+    .tag-stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .tag-stat-chip {
+      background: #090e1a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 8px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .tag-stat-chip.highlight-chip {
+      border-color: rgba(56, 189, 248, 0.3);
+      background: rgba(15, 23, 42, 0.7);
+    }
+    .stat-name {
+      font-size: 0.68rem;
+      font-weight: 800;
+      color: #64748b;
+      letter-spacing: 0.04em;
+    }
+    .stat-value {
+      font-size: 0.96rem;
+      font-weight: 800;
+    }
+
+    /* TAG FILTER BAR */
+    .tag-filter-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+    .tag-search-input-wrap {
+      flex: 1;
+      max-width: 480px;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .tag-search-icon {
+      position: absolute;
+      left: 10px;
+      color: #64748b;
+      font-size: 0.8rem;
+    }
+    .tag-filter-input {
+      width: 100%;
+      background: #090e1a;
+      border: 1px solid #26334d;
+      border-radius: 6px;
+      padding: 6px 28px 6px 30px;
+      color: #f1f5f9;
+      font-size: 0.8rem;
+      outline: none;
+    }
+    .tag-filter-input:focus {
+      border-color: #38bdf8;
+    }
+    .clear-filter-btn {
+      position: absolute;
+      right: 8px;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .filter-count-badge {
+      font-size: 0.76rem;
+      color: #94a3b8;
+    }
+
+    /* TAG TABLE ELEMENTS */
+    .tag-name-cell {
+      font-weight: 700;
+    }
+    .tag-name-pill {
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: #f8fafc;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: inline-block;
+    }
+    .tag-name-pill:hover {
+      background: rgba(56, 189, 248, 0.2);
+      border-color: #38bdf8;
+      color: #38bdf8;
+    }
+    .freq-cell {
+      vertical-align: middle;
+    }
+    .freq-bar-wrap {
+      position: relative;
+      height: 18px;
+      background: #090e1a;
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .freq-bar-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      background: linear-gradient(90deg, #0284c7, #38bdf8);
+      border-radius: 3px;
+      transition: width 0.3s;
+    }
+    .freq-text {
+      position: relative;
+      z-index: 2;
+      padding-left: 6px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #f1f5f9;
+      text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+    }
+    .pct-cell {
+      font-size: 0.82rem;
+      color: #38bdf8;
+    }
+    .marmameter-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      display: inline-block;
+    }
+    .marmameter-low {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #34d399;
+    }
+    .marmameter-mid {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fbbf24;
+    }
+    .marmameter-high {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .keyword-type-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      display: inline-block;
+    }
+    .keyword-type-badge.long-tail {
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      color: #c084fc;
+    }
+    .keyword-type-badge.broad {
+      background: rgba(100, 116, 139, 0.15);
+      border: 1px solid rgba(100, 116, 139, 0.3);
+      color: #94a3b8;
+    }
+    .char-len-badge {
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 800;
+    }
+    .char-len-badge.valid-char {
+      color: #34d399;
+    }
+    .char-len-badge.invalid-char {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.15);
+    }
+    .btn-copy-sm {
+      background: #1e293b;
+      border: none;
+      color: #cbd5e1;
+      border-radius: 4px;
+      padding: 3px 6px;
+      font-size: 0.76rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-copy-sm:hover {
+      background: #0284c7;
+      color: #fff;
+    }
   `]
 })
 export class MarketResearchComponent implements OnInit {
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   router = inject(Router);
+
+  activeTab: 'listings' | 'tag_matrix' = 'listings';
+  tagSearchQuery = '';
+  selectedTagsSet = new Set<string>();
 
   searchKeyword = '3D Printed Articulated Dragon';
   limit = 25;
@@ -1077,7 +1571,21 @@ export class MarketResearchComponent implements OnInit {
   topShopName = 'MythicForgeCrafts';
   topShopSales = 14820;
   opportunityScore = 88;
-  topTags: { tag: string; count: number }[] = [];
+  topTags: MarketTagFrequencyDto[] = [
+    { tag: '3d printed', count: 9, usagePercentage: 100, wordCount: 2, charLength: 10, isLongTail: true, competitionLevel: 'Yüksek' },
+    { tag: 'desk organizer', count: 8, usagePercentage: 88.9, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Yüksek' },
+    { tag: 'fidget toy', count: 7, usagePercentage: 77.8, wordCount: 2, charLength: 10, isLongTail: true, competitionLevel: 'Yüksek' },
+    { tag: 'articulated dragon', count: 7, usagePercentage: 77.8, wordCount: 2, charLength: 18, isLongTail: true, competitionLevel: 'Yüksek' },
+    { tag: 'gamer gift', count: 6, usagePercentage: 66.7, wordCount: 2, charLength: 10, isLongTail: true, competitionLevel: 'Yüksek' },
+    { tag: 'office decor', count: 5, usagePercentage: 55.6, wordCount: 2, charLength: 12, isLongTail: true, competitionLevel: 'Yüksek' },
+    { tag: 'cable management', count: 4, usagePercentage: 44.4, wordCount: 2, charLength: 16, isLongTail: true, competitionLevel: 'Orta' },
+    { tag: 'mechanical toy', count: 4, usagePercentage: 44.4, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Orta' },
+    { tag: 'steampunk prop', count: 3, usagePercentage: 33.3, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Orta' },
+    { tag: 'fantasy figurine', count: 3, usagePercentage: 33.3, wordCount: 2, charLength: 16, isLongTail: true, competitionLevel: 'Orta' },
+    { tag: 'tabletop rpg', count: 3, usagePercentage: 33.3, wordCount: 2, charLength: 12, isLongTail: true, competitionLevel: 'Orta' },
+    { tag: 'resin print', count: 2, usagePercentage: 22.2, wordCount: 2, charLength: 11, isLongTail: true, competitionLevel: 'Düşük' },
+    { tag: 'cosplay helmet', count: 2, usagePercentage: 22.2, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Düşük' }
+  ];
 
   favSortDesc = true;
   currentImageIndex = 0;
@@ -1579,5 +2087,128 @@ export class MarketResearchComponent implements OnInit {
     setTimeout(() => {
       if (this.toastMessage === msg) this.toastMessage = '';
     }, 2800);
+  }
+
+  // ==========================================
+  // FAZ 2: ERANK & MARMALEAD ETİKET MATRİSİ METODLARI
+  // ==========================================
+
+  getFilteredTags(): MarketTagFrequencyDto[] {
+    if (!this.tagSearchQuery || !this.tagSearchQuery.trim()) {
+      return this.topTags;
+    }
+    const q = this.tagSearchQuery.toLowerCase().trim();
+    return this.topTags.filter(t => t.tag.toLowerCase().includes(q));
+  }
+
+  isTagSelected(tag: string): boolean {
+    return this.selectedTagsSet.has(tag);
+  }
+
+  toggleTagSelection(tag: string): void {
+    if (this.selectedTagsSet.has(tag)) {
+      this.selectedTagsSet.delete(tag);
+    } else {
+      if (this.selectedTagsSet.size >= 13) {
+        this.showToastMsg('⚠️ Etsy ilanı başına en fazla 13 etiket seçebilirsiniz.');
+        return;
+      }
+      this.selectedTagsSet.add(tag);
+    }
+  }
+
+  selectAllTop13Tags(): void {
+    this.selectedTagsSet.clear();
+    const top13 = this.topTags.slice(0, 13);
+    top13.forEach(t => this.selectedTagsSet.add(t.tag));
+    this.showToastMsg(`🎯 En popüler ilk ${top13.length} altın etiket seçildi!`);
+  }
+
+  clearSelectedTags(): void {
+    this.selectedTagsSet.clear();
+    this.showToastMsg('Temizlendi: Seçili etiketler sıfırlandı.');
+  }
+
+  getSelectedCount(): number {
+    return this.selectedTagsSet.size;
+  }
+
+  isAllFilteredSelected(): boolean {
+    const filtered = this.getFilteredTags();
+    if (filtered.length === 0) return false;
+    return filtered.every(t => this.selectedTagsSet.has(t.tag));
+  }
+
+  toggleSelectAllFiltered(): void {
+    const filtered = this.getFilteredTags();
+    if (this.isAllFilteredSelected()) {
+      filtered.forEach(t => this.selectedTagsSet.delete(t.tag));
+    } else {
+      for (const t of filtered) {
+        if (this.selectedTagsSet.size >= 13) break;
+        this.selectedTagsSet.add(t.tag);
+      }
+      if (this.selectedTagsSet.size >= 13) {
+        this.showToastMsg('ℹ️ Etsy maksimum 13 etiket sınırına ulaşıldı.');
+      }
+    }
+  }
+
+  copySingleTag(tag: string, ev?: MouseEvent): void {
+    if (ev) ev.stopPropagation();
+    navigator.clipboard.writeText(tag);
+    this.showToastMsg(`🏷️ "${tag}" panoya kopyalandı!`);
+  }
+
+  copySelectedTagsToClipboard(): void {
+    if (this.selectedTagsSet.size === 0) return;
+    const tagsArr = Array.from(this.selectedTagsSet);
+    navigator.clipboard.writeText(tagsArr.join(', '));
+    this.showToastMsg(`📋 ${tagsArr.length} adet seçilen etiket panoya kopyalandı!`);
+  }
+
+  sendSelectedTagsToFastCreator(): void {
+    const selected = Array.from(this.selectedTagsSet);
+    if (selected.length === 0) {
+      this.showToastMsg('⚠️ Lütfen önce en az 1 etiket seçin.');
+      return;
+    }
+    const base = this.selectedItem || this.items[0];
+    const cloned: ClonedMarketListing = {
+      id: base ? base.id : Date.now(),
+      title: base ? base.title : `${this.searchKeyword} - Handmade Model`,
+      priceUsd: base ? base.priceUsd : (this.avgPriceUsd || 35.0),
+      tags: [...selected],
+      description: base ? base.description : '',
+      imageUrl: base ? base.imageUrl : '',
+      shopName: base ? base.shopName : '',
+      seoScore: 98,
+      marketScore: this.opportunityScore
+    };
+    this.aiService.setClonedListing(cloned);
+    this.showToastMsg(`🚀 Seçilen ${selected.length} etiket Fast Creator'a aktarıldı, yönlendiriliyorsunuz...`);
+    setTimeout(() => {
+      this.router.navigate(['/listings/fast-creator']);
+    }, 500);
+  }
+
+  getAvgTagLength(): number {
+    if (this.topTags.length === 0) return 0;
+    const totalChars = this.topTags.reduce((acc, t) => acc + (t.charLength || t.tag.length), 0);
+    return totalChars / this.topTags.length;
+  }
+
+  getLongTailRatio(): number {
+    if (this.topTags.length === 0) return 0;
+    const longTails = this.topTags.filter(t => t.isLongTail || t.wordCount >= 2).length;
+    return (longTails / this.topTags.length) * 100;
+  }
+
+  getCompetitionBadgeClass(level: string): string {
+    switch (level?.toLowerCase()) {
+      case 'düşük': return 'marmameter-low';
+      case 'yüksek': return 'marmameter-high';
+      default: return 'marmameter-mid';
+    }
   }
 }

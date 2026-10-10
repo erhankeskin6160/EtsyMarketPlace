@@ -27,6 +27,11 @@ public sealed class MarketTagFrequencyDto
 {
     public string Tag { get; set; } = string.Empty;
     public int Count { get; set; }
+    public double UsagePercentage { get; set; }
+    public int WordCount { get; set; }
+    public int CharLength { get; set; }
+    public bool IsLongTail => WordCount >= 2;
+    public string CompetitionLevel { get; set; } = "Orta";
 }
 
 public sealed class MarketListingItemDto

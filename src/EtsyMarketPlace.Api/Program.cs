@@ -2176,8 +2176,23 @@ app.MapGet("/api/etsy/market/search", async (
 
         kpis.TopTags = tagFreq
             .OrderByDescending(x => x.Value)
-            .Take(13)
-            .Select(x => new MarketTagFrequencyDto { Tag = x.Key, Count = x.Value })
+            .Take(50)
+            .Select(x =>
+            {
+                var tag = x.Key;
+                var words = tag.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+                var pct = listings.Count > 0 ? Math.Round((x.Value / (double)listings.Count) * 100.0, 1) : 0;
+                string comp = pct >= 50 ? "Yüksek" : (pct >= 20 ? "Orta" : "Düşük");
+                return new MarketTagFrequencyDto
+                {
+                    Tag = tag,
+                    Count = x.Value,
+                    UsagePercentage = pct,
+                    WordCount = words,
+                    CharLength = tag.Length,
+                    CompetitionLevel = comp
+                };
+            })
             .ToList();
     }
 

@@ -565,6 +565,11 @@ export class EtsyApiService {
 export interface MarketTagFrequencyDto {
   tag: string;
   count: number;
+  usagePercentage: number;
+  wordCount: number;
+  charLength: number;
+  isLongTail: boolean;
+  competitionLevel: string;
 }
 
 export interface MarketSummaryKpisDto {
