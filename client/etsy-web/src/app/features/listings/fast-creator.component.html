@@ -261,7 +261,12 @@
 
             <div class="logistics-row" *ngIf="listingType === 'physical'">
               <div class="field-wrap half">
-                <label>🚚 Kargo Profili:</label>
+                <div class="field-label-row">
+                  <label>🚚 Kargo Profili:</label>
+                  <button type="button" class="btn-refresh-logistics" (click)="refreshLogistics()" [disabled]="isLoadingShippingProfiles || isLoadingReadinessStates" title="Kargo ve Hazırlık Durumlarını Yenile">
+                    <span [class.spin-disc-inline]="isLoadingShippingProfiles || isLoadingReadinessStates">🔄</span> Yenile
+                  </button>
+                </div>
                 <select class="std-select" [(ngModel)]="selectedShippingProfileId">
                   <option *ngIf="isLoadingShippingProfiles" [ngValue]="null">⏳ Etsy kargo profilleri yükleniyor...</option>
                   <option *ngIf="!isLoadingShippingProfiles && shippingProfilesList.length === 0" [ngValue]="null">⚠️ Mağazada kargo profili bulunamadı</option>
@@ -273,9 +278,12 @@
 
               <div class="field-wrap half">
                 <label>⏱️ Hazırlık Durumu:</label>
-                <select class="std-select" [(ngModel)]="readinessState">
-                  <option value="Hazır Ürün (Ready to ship) 1-3 iş günü">Hazır Ürün (1-3 iş günü)</option>
-                  <option value="Sipariş Üzerine Üretim (Made to order) 3-5 iş günü">Siparişe Özel (3-5 iş günü)</option>
+                <select class="std-select" [(ngModel)]="selectedReadinessStateId">
+                  <option *ngIf="isLoadingReadinessStates" [ngValue]="null">⏳ Etsy hazırlık durumları yükleniyor...</option>
+                  <option *ngIf="!isLoadingReadinessStates && readinessStatesList.length === 0" [ngValue]="null">⚠️ Hazırlık durumu bulunamadı</option>
+                  <option *ngFor="let rState of readinessStatesList" [ngValue]="rState.id">
+                    ⏱️ {{ rState.title }}
+                  </option>
                 </select>
               </div>
             </div>

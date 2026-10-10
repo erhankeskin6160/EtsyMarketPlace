@@ -68,6 +68,9 @@ export class FastCreatorComponent implements OnInit {
   shippingProfilesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number }> = [];
   selectedShippingProfileId: number | null = null;
   isLoadingShippingProfiles = false;
+  readinessStatesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number; state?: string }> = [];
+  selectedReadinessStateId: number | null = null;
+  isLoadingReadinessStates = false;
   readinessState = '';
   tags: string[] = [];
   newTagInput = '';
@@ -166,7 +169,16 @@ export class FastCreatorComponent implements OnInit {
     });
 
     this.rebuildVariationGrid();
+    this.loadLogisticsData();
+  }
+
+  loadLogisticsData(): void {
     this.loadShippingProfiles();
+    this.loadReadinessStates();
+  }
+
+  refreshLogistics(): void {
+    this.loadLogisticsData();
   }
 
   loadShippingProfiles(): void {
@@ -189,6 +201,31 @@ export class FastCreatorComponent implements OnInit {
       },
       error: () => {
         this.isLoadingShippingProfiles = false;
+      }
+    });
+  }
+
+  loadReadinessStates(): void {
+    this.isLoadingReadinessStates = true;
+    this.etsyApi.getReadinessStates().subscribe({
+      next: (res) => {
+        this.isLoadingReadinessStates = false;
+        const results = res?.results || (Array.isArray(res) ? res : []);
+        if (results.length > 0) {
+          this.readinessStatesList = results.map((r: any) => ({
+            id: r.readiness_state_id,
+            title: r.title || `Hazırlık Durumu #${r.readiness_state_id}`,
+            minDays: r.min_processing_time,
+            maxDays: r.max_processing_time,
+            state: r.readiness_state
+          }));
+          if (!this.selectedReadinessStateId) {
+            this.selectedReadinessStateId = this.readinessStatesList[0].id;
+          }
+        }
+      },
+      error: () => {
+        this.isLoadingReadinessStates = false;
       }
     });
   }
@@ -657,10 +694,10 @@ export class FastCreatorComponent implements OnInit {
     return this.galleryImages.length > 0;
   }
   get isShippingReady(): boolean {
-    return this.listingType === 'digital' || !!this.shippingProfile;
+    return this.listingType === 'digital' || !!this.selectedShippingProfileId || this.shippingProfilesList.length > 0;
   }
   get isReadinessReady(): boolean {
-    return this.listingType === 'digital' || !!this.readinessState;
+    return this.listingType === 'digital' || !!this.selectedReadinessStateId || this.readinessStatesList.length > 0;
   }
   get isDescReady(): boolean {
     return this.description.trim().length > 20;
@@ -731,6 +768,12 @@ export class FastCreatorComponent implements OnInit {
       shippingProfileId = this.shippingProfilesList[0].id;
     }
 
+    // Readiness state ID parsing
+    let readinessStateId: number | null = this.selectedReadinessStateId;
+    if (!readinessStateId && this.readinessStatesList.length > 0) {
+      readinessStateId = this.readinessStatesList[0].id;
+    }
+
     const payload = {
       title: this.title.trim(),
       description: this.description.trim() || 'Handmade custom design artisan product.',
@@ -738,6 +781,7 @@ export class FastCreatorComponent implements OnInit {
       quantity: this.quantity || 15,
       taxonomyId: this.selectedTaxonomyId > 0 ? this.selectedTaxonomyId : 1042,
       shippingProfileId,
+      readinessStateId,
       isDigital: this.listingType === 'digital',
       tags: validTags,
       materials: this.materials.split(',').map(m => m.trim()).filter(m => m.length > 0),

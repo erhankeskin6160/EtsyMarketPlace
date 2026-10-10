@@ -1955,9 +1955,76 @@ app.MapPost("/api/etsy/listings", async (
             return Results.BadRequest(new { error = "Fiziksel ürünler için Etsy'de tanımlı bir Kargo Profili (shipping_profile_id) gereklidir. Lütfen Etsy Mağaza Yöneticisi > Settings > Shipping settings alanından bir kargo profili oluşturun veya ilanı 'Dijital' olarak seçin." });
         }
 
-        if (request.ReadinessStateId.HasValue && request.ReadinessStateId.Value > 0)
+        long? effectiveReadinessStateId = (request.ReadinessStateId.HasValue && request.ReadinessStateId.Value > 0)
+            ? request.ReadinessStateId.Value
+            : null;
+
+        if (!effectiveReadinessStateId.HasValue)
         {
-            formDict.Add(new("readiness_state_id", request.ReadinessStateId.Value.ToString(CultureInfo.InvariantCulture)));
+            try
+            {
+                var readyDefUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/readiness-state-definitions";
+                using var readyDefReq = new HttpRequestMessage(HttpMethod.Get, readyDefUrl);
+                readyDefReq.Headers.Add("x-api-key", apiKeyHeader);
+                readyDefReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+                using var readyDefRes = await client.SendAsync(readyDefReq, cancellationToken);
+                if (readyDefRes.IsSuccessStatusCode)
+                {
+                    var readyDefBody = await readyDefRes.Content.ReadAsStringAsync(cancellationToken);
+                    using var readyDefDoc = JsonDocument.Parse(readyDefBody);
+                    if (readyDefDoc.RootElement.TryGetProperty("results", out var rdArray) && rdArray.GetArrayLength() > 0)
+                    {
+                        var firstRd = rdArray[0];
+                        if (firstRd.TryGetProperty("readiness_state_id", out var rsIdProp))
+                        {
+                            effectiveReadinessStateId = rsIdProp.GetInt64();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback attempt
+            }
+        }
+
+        if (!effectiveReadinessStateId.HasValue)
+        {
+            try
+            {
+                var activeListingsUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/active?limit=50";
+                using var actReq = new HttpRequestMessage(HttpMethod.Get, activeListingsUrl);
+                actReq.Headers.Add("x-api-key", apiKeyHeader);
+                actReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+                using var actRes = await client.SendAsync(actReq, cancellationToken);
+                if (actRes.IsSuccessStatusCode)
+                {
+                    var actBody = await actRes.Content.ReadAsStringAsync(cancellationToken);
+                    using var actDoc = JsonDocument.Parse(actBody);
+                    if (actDoc.RootElement.TryGetProperty("results", out var aListings) && aListings.GetArrayLength() > 0)
+                    {
+                        foreach (var al in aListings.EnumerateArray())
+                        {
+                            if (al.TryGetProperty("readiness_state_id", out var rsProp) && rsProp.GetInt64() > 0)
+                            {
+                                effectiveReadinessStateId = rsProp.GetInt64();
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback attempt
+            }
+        }
+
+        if (effectiveReadinessStateId.HasValue && effectiveReadinessStateId.Value > 0)
+        {
+            formDict.Add(new("readiness_state_id", effectiveReadinessStateId.Value.ToString(CultureInfo.InvariantCulture)));
         }
     }
 
@@ -2151,6 +2218,147 @@ app.MapGet("/api/etsy/shipping-profiles", async (
 .WithTags("Etsy Kargo & Lojistik")
 .WithSummary("Mağazanın Etsy Kargo Profillerini Canlı Getir")
 .WithName("GetEtsyShippingProfiles");
+
+app.MapGet("/api/etsy/readiness-states", async (
+    string shopId = "53236321",
+    HttpContext context = null!,
+    IConfiguration config = null!,
+    IEtsyTokenStore tokenStore = null!,
+    IShopSettingsRepository settingsRepo = null!,
+    IHttpClientFactory httpClientFactory = null!,
+    IEtsyOAuthService oauthService = null!,
+    CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
+    if (token is null)
+        return Results.NotFound(new { error = "Bu mağaza için kayıtlı OAuth token bulunamadı." });
+
+    if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+    {
+        try
+        {
+            token = await oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
+            await tokenStore.SaveAsync(resolvedShopId, token, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new { error = "Etsy token yenilenemedi: " + ex.Message });
+        }
+    }
+
+    var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? string.Empty);
+    var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
+
+    var client = httpClientFactory.CreateClient();
+    var list = new List<object>();
+
+    // 1. Try official readiness-state-definitions endpoint
+    try
+    {
+        var defUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/readiness-state-definitions";
+        using var defReq = new HttpRequestMessage(HttpMethod.Get, defUrl);
+        defReq.Headers.Add("x-api-key", apiKeyHeader);
+        defReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+        using var defRes = await client.SendAsync(defReq, cancellationToken);
+        if (defRes.IsSuccessStatusCode)
+        {
+            var defBody = await defRes.Content.ReadAsStringAsync(cancellationToken);
+            using var defDoc = JsonDocument.Parse(defBody);
+            if (defDoc.RootElement.TryGetProperty("results", out var rArray) && rArray.GetArrayLength() > 0)
+            {
+                foreach (var item in rArray.EnumerateArray())
+                {
+                    if (item.TryGetProperty("readiness_state_id", out var idProp))
+                    {
+                        var id = idProp.GetInt64();
+                        var state = item.TryGetProperty("readiness_state", out var sProp) ? sProp.GetString() : null;
+                        var minTime = item.TryGetProperty("min_processing_time", out var minE) && minE.TryGetInt32(out var minVal) ? minVal : 0;
+                        var maxTime = item.TryGetProperty("max_processing_time", out var maxE) && maxE.TryGetInt32(out var maxVal) ? maxVal : 0;
+                        var unit = item.TryGetProperty("processing_time_unit", out var unitE) ? unitE.GetString() ?? "iş günü" : "iş günü";
+
+                        string title;
+                        if (!string.IsNullOrWhiteSpace(state))
+                        {
+                            var stateTr = state.Equals("made_to_order", StringComparison.OrdinalIgnoreCase) ? "Siparişe Özel (Made to order)" : "Hazır Ürün (Ready to ship)";
+                            title = (minTime > 0 || maxTime > 0) ? $"{stateTr} ({minTime}-{maxTime} {unit})" : stateTr;
+                        }
+                        else
+                        {
+                            title = $"Hazırlık Durumu #{id}";
+                        }
+
+                        list.Add(new
+                        {
+                            readiness_state_id = id,
+                            title,
+                            readiness_state = state,
+                            min_processing_time = minTime,
+                            max_processing_time = maxTime,
+                            processing_time_unit = unit
+                        });
+                    }
+                }
+            }
+        }
+    }
+    catch { }
+
+    // 2. Fallback: Query active listings to find used readiness_state_ids
+    if (list.Count == 0)
+    {
+        try
+        {
+            var actUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/active?limit=100";
+            using var actReq = new HttpRequestMessage(HttpMethod.Get, actUrl);
+            actReq.Headers.Add("x-api-key", apiKeyHeader);
+            actReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+            using var actRes = await client.SendAsync(actReq, cancellationToken);
+            if (actRes.IsSuccessStatusCode)
+            {
+                var actBody = await actRes.Content.ReadAsStringAsync(cancellationToken);
+                using var actDoc = JsonDocument.Parse(actBody);
+                if (actDoc.RootElement.TryGetProperty("results", out var aListings) && aListings.GetArrayLength() > 0)
+                {
+                    var seenIds = new HashSet<long>();
+                    foreach (var al in aListings.EnumerateArray())
+                    {
+                        if (al.TryGetProperty("readiness_state_id", out var rsProp) && rsProp.GetInt64() > 0)
+                        {
+                            var id = rsProp.GetInt64();
+                            if (seenIds.Add(id))
+                            {
+                                list.Add(new
+                                {
+                                    readiness_state_id = id,
+                                    title = $"Hazırlık Durumu #{id}",
+                                    readiness_state = "ready_to_ship",
+                                    min_processing_time = 1,
+                                    max_processing_time = 3,
+                                    processing_time_unit = "iş günü"
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+    }
+
+    return Results.Ok(new
+    {
+        count = list.Count,
+        results = list
+    });
+})
+.WithTags("Etsy Kargo & Lojistik")
+.WithSummary("Mağazanın Etsy Hazırlık Durumlarını (readiness-state-definitions) Canlı Getir")
+.WithName("GetEtsyReadinessStates");
 
 app.MapGet("/api/settings/ai", async (
     string shopId = "53236321",
