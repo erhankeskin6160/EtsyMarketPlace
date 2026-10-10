@@ -50,7 +50,8 @@ public sealed record CreateListingApiRequest(
     string WhenMade = "made_to_order",
     string State = "draft",
     IReadOnlyList<ListingImageDto>? Images = null,
-    IReadOnlyList<ListingVariationDto>? Variations = null);
+    IReadOnlyList<ListingVariationDto>? Variations = null,
+    IReadOnlyList<ListingVariationGroupDto>? VariationGroups = null);
 
 public sealed record ListingImageDto(
     string? DataUrl,
@@ -62,6 +63,15 @@ public sealed record ListingVariationDto(
     decimal Price,
     int Quantity,
     bool Active = true);
+
+public sealed record ListingVariationGroupDto(
+    string Name,
+    IReadOnlyList<string> Values);
+
+public sealed record EtsyTaxonomyNodeDto(
+    long Id,
+    string Name,
+    string Path);
 
 public sealed record SaveAiSettingsApiRequest(
     string? ShopId,

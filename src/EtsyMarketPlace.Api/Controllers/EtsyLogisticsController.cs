@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
+using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Application.EtsyIntegration;
 
 namespace EtsyMarketPlace.Api.Controllers;
@@ -201,5 +202,84 @@ public class EtsyLogisticsController : BaseApiController
             count = list.Count,
             results = list
         });
+    }
+
+    private static readonly List<EtsyTaxonomyNodeDto> TaxonomyCache = new();
+    private static readonly object TaxonomyLock = new();
+
+    [HttpGet("taxonomy/nodes")]
+    [EndpointSummary("Etsy Resmi Satıcı Kategori Ağacını (Seller Taxonomy) Getir")]
+    public async Task<IActionResult> GetSellerTaxonomyNodes([FromQuery] string shopId = "53236321", CancellationToken cancellationToken = default)
+    {
+        lock (TaxonomyLock)
+        {
+            if (TaxonomyCache.Count > 0)
+            {
+                return Ok(new { count = TaxonomyCache.Count, results = TaxonomyCache });
+            }
+        }
+
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var raw = await _settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
+        var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (_config["Etsy:ApiKey"] ?? string.Empty);
+        var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (_config["Etsy:SharedSecret"] ?? string.Empty);
+        var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
+
+        var client = _httpClientFactory.CreateClient();
+        var taxUrl = "https://api.etsy.com/v3/application/seller-taxonomy/nodes";
+        using var taxReq = new HttpRequestMessage(HttpMethod.Get, taxUrl);
+        taxReq.Headers.Add("x-api-key", apiKeyHeader);
+
+        using var taxRes = await client.SendAsync(taxReq, cancellationToken);
+        if (!taxRes.IsSuccessStatusCode)
+        {
+            return StatusCode((int)taxRes.StatusCode, new { error = "Etsy seller-taxonomy API çağrısı başarısız oldu." });
+        }
+
+        var taxBody = await taxRes.Content.ReadAsStringAsync(cancellationToken);
+        using var doc = JsonDocument.Parse(taxBody);
+
+        var list = new List<EtsyTaxonomyNodeDto>();
+        if (doc.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var rootNode in results.EnumerateArray())
+            {
+                FlattenTaxonomyTree(rootNode, new List<string>(), list);
+            }
+        }
+
+        lock (TaxonomyLock)
+        {
+            TaxonomyCache.Clear();
+            TaxonomyCache.AddRange(list);
+        }
+
+        return Ok(new { count = list.Count, results = list });
+    }
+
+    private static void FlattenTaxonomyTree(JsonElement node, List<string> parentPath, List<EtsyTaxonomyNodeDto> collector)
+    {
+        long id = 0;
+        if (node.TryGetProperty("id", out var idProp)) id = idProp.GetInt64();
+        else if (node.TryGetProperty("taxonomy_id", out var tProp)) id = tProp.GetInt64();
+
+        string name = "";
+        if (node.TryGetProperty("name", out var nProp)) name = nProp.GetString() ?? "";
+
+        var currentPath = new List<string>(parentPath);
+        if (!string.IsNullOrWhiteSpace(name)) currentPath.Add(name);
+
+        if (id > 0 && currentPath.Count > 0)
+        {
+            collector.Add(new EtsyTaxonomyNodeDto(id, name, string.Join(" > ", currentPath)));
+        }
+
+        if (node.TryGetProperty("children", out var children) && children.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var child in children.EnumerateArray())
+            {
+                FlattenTaxonomyTree(child, currentPath, collector);
+            }
+        }
     }
 }

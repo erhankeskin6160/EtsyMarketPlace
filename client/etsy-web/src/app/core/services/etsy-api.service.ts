@@ -70,6 +70,17 @@ export interface CreateListingVariationPayload {
   active?: boolean;
 }
 
+export interface CreateListingVariationGroupPayload {
+  name: string;
+  values: string[];
+}
+
+export interface EtsyTaxonomyItemDto {
+  id: number;
+  name: string;
+  path: string;
+}
+
 export interface CreateListingPayload {
   shopId?: string;
   title: string;
@@ -87,6 +98,7 @@ export interface CreateListingPayload {
   state?: 'draft' | 'active';
   images?: CreateListingImagePayload[];
   variations?: CreateListingVariationPayload[];
+  variationGroups?: CreateListingVariationGroupPayload[];
 }
 
 export interface CreatedListingResponseDto {
@@ -324,6 +336,11 @@ export class EtsyApiService {
   getReadinessStates(shopId?: string): Observable<any> {
     const id = shopId || this.activeShopId();
     return this.http.get<any>(`${this.API_BASE}/api/etsy/readiness-states?shopId=${encodeURIComponent(id)}`);
+  }
+
+  getSellerTaxonomy(shopId?: string): Observable<{ count: number; results: EtsyTaxonomyItemDto[] }> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<{ count: number; results: EtsyTaxonomyItemDto[] }>(`${this.API_BASE}/api/etsy/taxonomy/nodes?shopId=${encodeURIComponent(id)}`);
   }
 
   getAiSettings(shopId?: string): Observable<GetAiSettingsResponseDto> {

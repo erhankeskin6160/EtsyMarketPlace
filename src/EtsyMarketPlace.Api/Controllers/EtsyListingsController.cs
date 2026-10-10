@@ -758,6 +758,8 @@ public class EtsyListingsController : BaseApiController
             new("state", request.State?.ToLowerInvariant() == "active" ? "active" : "draft")
         };
 
+        long? effectiveReadinessStateId = null;
+
         if (!request.IsDigital)
         {
             long? effectiveShippingProfileId = (request.ShippingProfileId.HasValue && request.ShippingProfileId.Value > 0)
@@ -800,7 +802,7 @@ public class EtsyListingsController : BaseApiController
                 return BadRequest(new { error = "Fiziksel ürünler için Etsy'de tanımlı bir Kargo Profili (shipping_profile_id) gereklidir. Lütfen Etsy Mağaza Yöneticisi > Settings > Shipping settings alanından bir kargo profili oluşturun veya ilanı 'Dijital' olarak seçin." });
             }
 
-            long? effectiveReadinessStateId = (request.ReadinessStateId.HasValue && request.ReadinessStateId.Value > 0)
+            effectiveReadinessStateId = (request.ReadinessStateId.HasValue && request.ReadinessStateId.Value > 0)
                 ? request.ReadinessStateId.Value
                 : null;
 
@@ -985,6 +987,157 @@ public class EtsyListingsController : BaseApiController
             }
         }
 
+        int uploadedVariationCount = 0;
+        if (request.Variations != null && request.Variations.Count > 0)
+        {
+            try
+            {
+                var groups = new List<(string Name, long PropertyId, List<string> Values)>();
+
+                if (request.VariationGroups != null && request.VariationGroups.Count > 0)
+                {
+                    int gIdx = 1;
+                    foreach (var g in request.VariationGroups.Take(2))
+                    {
+                        var (name, propId) = FastListingDraftHelper.ParseVariationType(g.Name, gIdx);
+                        var vals = g.Values.Select(v => v.Trim()).Where(v => v.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                        if (vals.Count > 0)
+                        {
+                            groups.Add((name, propId, vals));
+                            gIdx++;
+                        }
+                    }
+                }
+
+                if (groups.Count == 0)
+                {
+                    var distinctKeys = request.Variations.Select(v => v.Key).Distinct().ToList();
+                    bool hasCompoundKeys = distinctKeys.Any(k => k.Contains('/'));
+                    if (hasCompoundKeys)
+                    {
+                        var g1Vals = distinctKeys.Select(k => k.Split('/')[0].Trim()).Where(v => v.Length > 0).Distinct().ToList();
+                        var g2Vals = distinctKeys.Where(k => k.Contains('/')).Select(k => k.Split('/')[1].Trim()).Where(v => v.Length > 0).Distinct().ToList();
+                        groups.Add(("Size", 513, g1Vals));
+                        if (g2Vals.Count > 0)
+                        {
+                            groups.Add(("Color", 514, g2Vals));
+                        }
+                    }
+                    else
+                    {
+                        var g1Vals = distinctKeys.Select(k => k.Trim()).Where(v => v.Length > 0).Distinct().ToList();
+                        groups.Add(("Custom", 513, g1Vals));
+                    }
+                }
+
+                var customPricingMap = request.Variations.ToDictionary(v => v.Key.Trim(), v => v, StringComparer.OrdinalIgnoreCase);
+                var productsList = new List<object>();
+                var distinctPricesG1 = new HashSet<decimal>();
+                var distinctPricesG2 = new HashSet<decimal>();
+                var sharedSku = $"AUTO-{createdListingId}";
+
+                var combinations = new List<List<(string GroupName, long PropId, string Value)>>();
+                if (groups.Count == 1)
+                {
+                    foreach (var val in groups[0].Values)
+                    {
+                        combinations.Add(new() { (groups[0].Name, groups[0].PropertyId, val) });
+                    }
+                }
+                else if (groups.Count >= 2)
+                {
+                    foreach (var val1 in groups[0].Values)
+                    {
+                        foreach (var val2 in groups[1].Values)
+                        {
+                            combinations.Add(new()
+                            {
+                                (groups[0].Name, groups[0].PropertyId, val1),
+                                (groups[1].Name, groups[1].PropertyId, val2)
+                            });
+                        }
+                    }
+                }
+
+                int prodIdx = 1;
+                foreach (var combo in combinations.Take(70))
+                {
+                    var comboKey = string.Join(" / ", combo.Select(c => c.Value));
+                    decimal rowPrice = request.Price;
+                    int rowQty = Math.Max(1, request.Quantity);
+                    bool isEnabled = true;
+
+                    if (customPricingMap.TryGetValue(comboKey, out var matchedVar) ||
+                        (combo.Count > 0 && customPricingMap.TryGetValue(combo[0].Value, out matchedVar)))
+                    {
+                        rowPrice = matchedVar.Price > 0 ? matchedVar.Price : request.Price;
+                        rowQty = matchedVar.Quantity > 0 ? matchedVar.Quantity : Math.Max(1, request.Quantity);
+                        isEnabled = matchedVar.Active;
+                    }
+
+                    distinctPricesG1.Add(rowPrice);
+                    if (combo.Count > 1) distinctPricesG2.Add(rowPrice);
+
+                    var offering = new Dictionary<string, object>
+                    {
+                        ["price"] = rowPrice.ToString("0.00", CultureInfo.InvariantCulture),
+                        ["quantity"] = Math.Max(1, rowQty),
+                        ["is_enabled"] = isEnabled
+                    };
+                    if (effectiveReadinessStateId.HasValue && effectiveReadinessStateId.Value > 0)
+                    {
+                        offering["readiness_state_id"] = effectiveReadinessStateId.Value;
+                    }
+
+                    productsList.Add(new
+                    {
+                        sku = $"{sharedSku}-{prodIdx}",
+                        property_values = combo.Select(c => new
+                        {
+                            property_id = c.PropId,
+                            property_name = c.GroupName,
+                            values = new[] { c.Value }
+                        }).ToList(),
+                        offerings = new[] { offering }
+                    });
+                    prodIdx++;
+                }
+
+                var priceOnProperty = new List<long>();
+                if (distinctPricesG1.Count > 1 && groups.Count >= 1)
+                {
+                    priceOnProperty.Add(groups[0].PropertyId);
+                }
+                if (distinctPricesG2.Count > 1 && groups.Count >= 2 && !priceOnProperty.Contains(groups[1].PropertyId))
+                {
+                    priceOnProperty.Add(groups[1].PropertyId);
+                }
+
+                var invPayload = new
+                {
+                    products = productsList,
+                    price_on_property = priceOnProperty,
+                    quantity_on_property = Array.Empty<long>(),
+                    sku_on_property = Array.Empty<long>()
+                };
+
+                var invUrl = $"https://api.etsy.com/v3/application/listings/{createdListingId}/inventory";
+                using var invReq = new HttpRequestMessage(HttpMethod.Put, invUrl)
+                {
+                    Content = new StringContent(JsonSerializer.Serialize(invPayload), Encoding.UTF8, "application/json")
+                };
+                invReq.Headers.Add("x-api-key", apiKeyHeader);
+                invReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+                using var invRes = await client.SendAsync(invReq, cancellationToken);
+                if (invRes.IsSuccessStatusCode)
+                {
+                    uploadedVariationCount = productsList.Count;
+                }
+            }
+            catch { }
+        }
+
         return Ok(new
         {
             success = true,
@@ -992,6 +1145,7 @@ public class EtsyListingsController : BaseApiController
             url = listingUrl,
             state = request.State?.ToLowerInvariant() == "active" ? "active" : "draft",
             uploadedImages = uploadedImageCount,
+            variationsCount = uploadedVariationCount,
             message = $"İlan başarıyla Etsy'ye aktarıldı! (Listing ID: {createdListingId})"
         });
     }

@@ -2,7 +2,7 @@ import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core'
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
-import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyTaxonomyItemDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
@@ -64,6 +64,10 @@ export class FastCreatorComponent implements OnInit {
   categoryAiResult: CategoryAiSuggestion | null = null;
   categoryAlternatives: TaxonomyCandidateItem[] = [];
   selectedCategoryCombo = '';
+  categoriesList: EtsyTaxonomyItemDto[] = [];
+  filteredCategories: EtsyTaxonomyItemDto[] = [];
+  categorySearchTerm = '';
+  isLoadingCategories = false;
   shippingProfile = '';
   shippingProfilesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number }> = [];
   selectedShippingProfileId: number | null = null;
@@ -175,10 +179,50 @@ export class FastCreatorComponent implements OnInit {
   loadLogisticsData(): void {
     this.loadShippingProfiles();
     this.loadReadinessStates();
+    this.loadCategories();
   }
 
   refreshLogistics(): void {
     this.loadLogisticsData();
+  }
+
+  loadCategories(): void {
+    this.isLoadingCategories = true;
+    this.etsyApi.getSellerTaxonomy().subscribe({
+      next: (res) => {
+        this.isLoadingCategories = false;
+        this.categoriesList = res?.results || [];
+        this.filterCategories();
+        if (this.selectedTaxonomyId > 0 && !this.selectedCategory) {
+          const match = this.categoriesList.find(c => c.id === this.selectedTaxonomyId);
+          if (match) {
+            this.selectedCategory = match.path;
+            this.selectedCategoryCombo = `${match.id}|${match.path}`;
+          }
+        }
+      },
+      error: () => {
+        this.isLoadingCategories = false;
+      }
+    });
+  }
+
+  filterCategories(): void {
+    const q = (this.categorySearchTerm || '').trim().toLowerCase();
+    if (!q) {
+      this.filteredCategories = this.categoriesList.slice(0, 80);
+    } else {
+      this.filteredCategories = this.categoriesList
+        .filter(c => c.name.toLowerCase().includes(q) || c.path.toLowerCase().includes(q))
+        .slice(0, 150);
+    }
+  }
+
+  selectCategoryItem(cat: EtsyTaxonomyItemDto): void {
+    this.selectedTaxonomyId = cat.id;
+    this.selectedCategory = cat.path;
+    this.selectedCategoryCombo = `${cat.id}|${cat.path}`;
+    this.showToast(`📌 Kategori seçildi: #${cat.id} - ${cat.path}`);
   }
 
   loadShippingProfiles(): void {
@@ -396,7 +440,13 @@ export class FastCreatorComponent implements OnInit {
         this.selectedCategory = res.categoryPath;
         this.categoryAiResult = res;
         this.categoryAlternatives = res.alternatives || [];
-        this.selectedCategoryCombo = `${res.taxonomyId}|${res.categoryPath}`;
+        if (this.categoriesList.length > 0) {
+          const match = this.categoriesList.find(c => c.id === res.taxonomyId);
+          if (match) {
+            this.selectedCategory = match.path;
+          }
+        }
+        this.selectedCategoryCombo = `${this.selectedTaxonomyId}|${this.selectedCategory}`;
         this.showToast(res.message);
       },
       error: (err) => {
@@ -774,6 +824,20 @@ export class FastCreatorComponent implements OnInit {
       readinessStateId = this.readinessStatesList[0].id;
     }
 
+    // Prepare variation groups
+    const variationGroupsPayload = this.enableVariations && this.variationRows.length > 0
+      ? [
+          {
+            name: this.varType1,
+            values: this.varValues1.split(',').map(s => s.trim()).filter(Boolean)
+          },
+          ...(this.enableVar2 ? [{
+            name: this.varType2,
+            values: this.varValues2.split(',').map(s => s.trim()).filter(Boolean)
+          }] : [])
+        ]
+      : undefined;
+
     const payload = {
       title: this.title.trim(),
       description: this.description.trim() || 'Handmade custom design artisan product.',
@@ -787,7 +851,8 @@ export class FastCreatorComponent implements OnInit {
       materials: this.materials.split(',').map(m => m.trim()).filter(m => m.length > 0),
       state: (this.isLivePublish ? 'active' : 'draft') as 'draft' | 'active',
       images: imagesPayload,
-      variations: variationsPayload
+      variations: variationsPayload,
+      variationGroups: variationGroupsPayload
     };
 
     this.etsyApi.createListing(payload).subscribe({
@@ -796,7 +861,8 @@ export class FastCreatorComponent implements OnInit {
         if (res && res.success) {
           this.createdListingResult = res;
           this.isPublishSuccessModalOpen = true;
-          this.showToast(`🎉 Başarılı! İlan ${res.state === 'active' ? 'CANLI' : 'TASLAK'} olarak Etsy'ye aktarıldı! (ID: #${res.listingId})`);
+          const varText = (res as any).variationsCount > 0 ? ` + ${(res as any).variationsCount} varyasyon` : '';
+          this.showToast(`🎉 Başarılı! İlan ${res.state === 'active' ? 'CANLI' : 'TASLAK'} olarak Etsy'ye aktarıldı! (ID: #${res.listingId}${varText})`);
         } else {
           this.showToast('İlan aktarıldı ancak sunucu yanıtı doğrulanamadı.');
         }
