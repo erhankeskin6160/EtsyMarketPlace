@@ -848,7 +848,7 @@ export class FastCreatorComponent implements OnInit {
       readinessStateId,
       isDigital: this.listingType === 'digital',
       tags: validTags,
-      materials: this.materials.split(',').map(m => m.trim()).filter(m => m.length > 0),
+      materials: this.sanitizeMaterialsForPayload(this.materials),
       state: (this.isLivePublish ? 'active' : 'draft') as 'draft' | 'active',
       images: imagesPayload,
       variations: variationsPayload,
@@ -873,6 +873,23 @@ export class FastCreatorComponent implements OnInit {
         alert(`❌ Etsy İlan Gönderim Hatası:\n${errDetail}`);
       }
     });
+  }
+
+  private sanitizeMaterialsForPayload(raw: string): string[] {
+    if (!raw) return [];
+    return raw
+      .split(/[,;\n]/)
+      .map(m => m.trim())
+      .filter(m => m.length > 0)
+      .map(m => {
+        return m
+          .replace(/[&]/g, ' and ')
+          .replace(/[\/\\|_+()[\]{}*•"':;.,!?]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+      })
+      .filter(m => m.length > 0)
+      .slice(0, 13);
   }
 
   showToast(msg: string): void {

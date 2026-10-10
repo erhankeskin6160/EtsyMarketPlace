@@ -871,7 +871,7 @@ public class EtsyListingsController : BaseApiController
 
         if (request.Tags != null)
         {
-            var validTags = request.Tags.Select(t => t.Trim()).Where(t => t.Length > 0 && t.Length <= 20).Take(13).ToList();
+            var validTags = FastListingDraftHelper.SanitizeTags(request.Tags);
             foreach (var tag in validTags)
             {
                 formDict.Add(new("tags[]", tag));
@@ -880,7 +880,7 @@ public class EtsyListingsController : BaseApiController
 
         if (request.Materials != null)
         {
-            var validMats = request.Materials.Select(m => m.Trim()).Where(m => m.Length > 0).Take(13).ToList();
+            var validMats = FastListingDraftHelper.SanitizeMaterials(request.Materials);
             foreach (var mat in validMats)
             {
                 formDict.Add(new("materials[]", mat));

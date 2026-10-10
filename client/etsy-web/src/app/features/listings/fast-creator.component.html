@@ -356,12 +356,15 @@
 
           <!-- 6. Kullanılan Malzemeler -->
           <div class="form-block">
-            <label class="block-label">🧵 Kullanılan Malzemeler (Materials)</label>
+            <div class="block-header-flex">
+              <label class="block-label">🧵 Kullanılan Malzemeler (Materials)</label>
+              <span style="font-size: 0.72rem; color: #94a3b8;">(Max 13 adet, &amp; ve özel karakterler otomatik temizlenir)</span>
+            </div>
             <input 
               type="text" 
               class="std-input" 
               [(ngModel)]="materials" 
-              placeholder="Virgülle ayırın: Ahşap, PLA, Seramik, Deri, 925 Gümüş..." />
+              placeholder="Virgülle ayırın: Resin, PLA, Ahşap, Seramik, Deri, Gümüş..." />
           </div>
 
         </div>

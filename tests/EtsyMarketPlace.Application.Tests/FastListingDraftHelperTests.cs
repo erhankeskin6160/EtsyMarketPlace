@@ -123,4 +123,80 @@ public sealed class FastListingDraftHelperTests
         Assert.Equal(expectedTotal, total);
         Assert.Equal(expectedExceedsLimit, exceedsLimit);
     }
+
+    [Fact]
+    public void SanitizeMaterials_StripsInvalidCharactersAndTransliteratesTurkish()
+    {
+        var rawMaterials = new List<string>
+        {
+            "Resin / PLA & Acrylic Paint (UV-cured)",
+            "Ahşap, Gümüş & Doğal Taş",
+            "Handmade 100% Cotton & Linen!",
+            "   ",
+            "Resin / PLA & Acrylic Paint (UV-cured)" // duplicate
+        };
+
+        var sanitized = FastListingDraftHelper.SanitizeMaterials(rawMaterials);
+
+        // Assert no forbidden characters exist in any item
+        foreach (var mat in sanitized)
+        {
+            Assert.DoesNotContain("/", mat);
+            Assert.DoesNotContain("&", mat);
+            Assert.DoesNotContain("(", mat);
+            Assert.DoesNotContain(")", mat);
+            Assert.DoesNotContain("%", mat);
+            Assert.DoesNotContain("!", mat);
+            Assert.DoesNotContain(",", mat);
+            Assert.True(mat.Length <= 45);
+        }
+
+        // Check Turkish transliteration
+        Assert.Contains(sanitized, m => m.Contains("Ahsap Gumus Dogal Tas"));
+        Assert.Contains(sanitized, m => m.Contains("Resin PLA Acrylic Paint UV-cured"));
+        Assert.Contains(sanitized, m => m.Contains("Handmade 100 Cotton Linen"));
+
+        // Duplicates removed
+        Assert.Equal(3, sanitized.Count);
+    }
+
+    [Fact]
+    public void SanitizeMaterials_LimitsTo13MaterialsAnd45Characters()
+    {
+        var veryLongMaterial = "This is a very long handcrafted material name that definitely exceeds forty five characters threshold completely";
+        var list = new List<string> { veryLongMaterial };
+        for (int i = 1; i <= 20; i++)
+        {
+            list.Add($"Material Number {i}");
+        }
+
+        var result = FastListingDraftHelper.SanitizeMaterials(list);
+
+        Assert.Equal(13, result.Count);
+        Assert.True(result[0].Length <= 45);
+    }
+
+    [Fact]
+    public void SanitizeTags_EnumerableOverload_StripsInvalidSymbols()
+    {
+        var rawTags = new List<string>
+        {
+            "Gothic & Skull / Horror",
+            "Anubis Figure (3D)",
+            "3D Print PLA!"
+        };
+
+        var result = FastListingDraftHelper.SanitizeTags(rawTags);
+
+        Assert.Equal(3, result.Count);
+        foreach (var tag in result)
+        {
+            Assert.DoesNotContain("&", tag);
+            Assert.DoesNotContain("/", tag);
+            Assert.DoesNotContain("(", tag);
+            Assert.DoesNotContain(")", tag);
+            Assert.DoesNotContain("!", tag);
+            Assert.True(tag.Length <= 20);
+        }
+    }
 }
