@@ -34,7 +34,6 @@ export class ShellComponent {
         { id: 'dashboard', title: 'Kontrol Paneli', icon: '📊', route: '/dashboard' },
         { id: 'orders_shipping', title: 'Sipariş & Kargo', icon: '🚚', route: '/orders', badge: 'YENİ' },
         { id: 'fast_creator', title: 'Hızlı Ürün Ekle (AI)', icon: '⚡', route: '/listings/fast-creator', badge: 'YENİ' },
-        { id: 'creator', title: 'Ürün Bul & Taslak', icon: '🛍️', route: '/listings/creator' },
         { id: 'ai_image', title: 'AI Görsel Stüdyosu', icon: '🎨', route: '/ai-studio', badge: 'PRO' },
         { id: 'shop', title: 'Mağazam Performansı', icon: '🏬', route: '/analytics/shop' }
       ]

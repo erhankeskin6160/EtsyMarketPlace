@@ -7,7 +7,6 @@ import { AdminComponent } from './features/admin/admin.component';
 import { OrdersComponent } from './features/orders/orders.component';
 import { AccountingComponent } from './features/finance/accounting.component';
 import { FastCreatorComponent } from './features/listings/fast-creator.component';
-import { ProductDiscoveryComponent } from './features/listings/product-discovery.component';
 import { ProductCostManagerComponent } from './features/finance/product-cost-manager.component';
 import { AiStudioComponent } from './features/ai-studio/ai-studio.component';
 import { ProfitCalculatorComponent } from './features/finance/profit-calculator.component';
@@ -56,7 +55,7 @@ export const routes: Routes = [
       { path: 'finance/profit', component: ProfitCalculatorComponent },
       { path: 'finance/product-costs', component: ProductCostManagerComponent },
       { path: 'listings/fast-creator', component: FastCreatorComponent },
-      { path: 'listings/creator', component: ProductDiscoveryComponent },
+      { path: 'listings/creator', redirectTo: 'listings/fast-creator', pathMatch: 'full' },
       { path: 'ai-studio', component: AiStudioComponent },
 
       // Research & Intelligence Modules
