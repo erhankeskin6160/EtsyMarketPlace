@@ -133,6 +133,34 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
+// ── 3.1. KÖK & SAĞLIK BİLGİLENDİRME ENDPOINT'LERİ (/, /health) ─────────────────
+app.MapGet("/", () => Results.Ok(new
+{
+    status = "Healthy",
+    service = "EtsyMarketPlace VDS API",
+    version = "1.0.0",
+    timestamp = DateTimeOffset.UtcNow,
+    endpoints = new
+    {
+        swagger = "/swagger",
+        health = "/health",
+        auth = "/api/auth/login",
+        mcp = "/mcp"
+    }
+}))
+.WithTags("Sistem Durumu")
+.WithSummary("API Kök Bilgilendirme")
+.WithName("GetRootInfo");
+
+app.MapGet("/health", () => Results.Ok(new
+{
+    status = "Healthy",
+    timestamp = DateTimeOffset.UtcNow
+}))
+.WithTags("Sistem Durumu")
+.WithSummary("Sunucu Sağlık Kontrolü")
+.WithName("GetHealth");
+
 // ── 4. RESMİ GOOGLE GEMINI SPARK MCP PROTOCOL ENDPOINT'LERİ (/mcp) ────────────
 
 // GET /mcp — Gemini Spark Handshake & Sunucu Bilgisi
