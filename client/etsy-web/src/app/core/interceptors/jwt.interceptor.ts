@@ -7,6 +7,7 @@ export const jwtInterceptor: HttpInterceptorFn = (req, next) => {
   // Only attach JWT token to internal VDS backend requests, never to 3rd-party public APIs
   const isInternalApi = req.url.startsWith(environment.apiBaseUrl) || 
                         req.url.startsWith('/api') || 
+                        req.url.includes('5.180.81.148:5263') ||
                         req.url.includes('localhost:5263');
 
   if (isInternalApi) {
