@@ -143,8 +143,13 @@ export class AiAuditComponent implements OnInit {
     this.selectedListing = listing;
     this.newTagInput = '';
 
-    if (listing.savedAudit) {
-      this.populateFromAudit(listing.savedAudit);
+    if (listing.savedAudit || (listing.hasSavedAudit && listing.resultJson)) {
+      this.populateFromAudit(listing.savedAudit || {
+        resultJson: listing.resultJson,
+        optimizedSeoScore: listing.aiScore,
+        status: listing.status,
+        title: listing.title
+      });
     } else {
       // Initialize with current listing content as baseline
       this.afterTitle = listing.title;
@@ -160,30 +165,73 @@ export class AiAuditComponent implements OnInit {
     }
   }
 
-  populateFromAudit(audit: SavedListingAuditDto): void {
-    this.afterTitle = audit.optimizedTitle || '';
-    try {
-      this.afterTags = audit.optimizedTagsJson ? JSON.parse(audit.optimizedTagsJson) : [];
-    } catch {
+  populateFromAudit(audit: any): void {
+    if (!audit) return;
+
+    let parsedResult: any = null;
+    const rawJson = audit.resultJson || audit.ResultJson;
+    if (rawJson) {
+      try {
+        parsedResult = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+      } catch (e) {
+        console.warn('Audit resultJson parse error:', e);
+      }
+    }
+
+    const titleSuggestions: string[] = parsedResult?.TitleSuggestions || parsedResult?.titleSuggestions || [];
+    const tagSuggestions: string[] = parsedResult?.TagSuggestions || parsedResult?.tagSuggestions || [];
+    const descDraft: string = parsedResult?.DescriptionDraft || parsedResult?.descriptionDraft || '';
+    const risks: string[] = parsedResult?.RiskWarnings || parsedResult?.riskWarnings || [];
+    const actions: string[] = parsedResult?.ActionChecklist || parsedResult?.actionChecklist || [];
+    const critique: string = parsedResult?.SeoCritique || parsedResult?.seoCritique || '';
+    const scoreAfter: number = audit.seoScoreAfter || audit.optimizedSeoScore || parsedResult?.OptimizedSeoScore || 0;
+
+    this.afterTitle = audit.optimizedTitle || titleSuggestions[0] || audit.title || '';
+
+    if (audit.optimizedTagsJson) {
+      try {
+        this.afterTags = JSON.parse(audit.optimizedTagsJson);
+      } catch {
+        this.afterTags = [];
+      }
+    } else if (audit.optimizedTags && Array.isArray(audit.optimizedTags)) {
+      this.afterTags = audit.optimizedTags;
+    } else if (tagSuggestions.length > 0) {
+      this.afterTags = tagSuggestions;
+    } else {
       this.afterTags = [];
     }
-    this.afterDescription = audit.optimizedDescription || '';
-    this.aiScoreAfter = audit.seoScoreAfter || null;
-    this.aiModelUsed = audit.aiModel || this.selectedAiModel;
 
-    try {
-      this.riskWarnings = audit.riskWarningsJson ? JSON.parse(audit.riskWarningsJson) : [];
-    } catch {
+    this.afterDescription = audit.optimizedDescription || descDraft || '';
+    this.aiScoreAfter = scoreAfter > 0 ? scoreAfter : null;
+    this.aiModelUsed = audit.aiModel || audit.model || parsedResult?.ExecutedModel || this.selectedAiModel;
+    this.aiProviderUsed = audit.provider || parsedResult?.ExecutedProvider || 'Gemini (Canlı API)';
+
+    if (audit.riskWarningsJson) {
+      try {
+        this.riskWarnings = JSON.parse(audit.riskWarningsJson);
+      } catch {
+        this.riskWarnings = [];
+      }
+    } else if (risks.length > 0) {
+      this.riskWarnings = risks;
+    } else {
       this.riskWarnings = [];
     }
 
-    try {
-      this.checklist = audit.checklistJson ? JSON.parse(audit.checklistJson) : [];
-    } catch {
+    if (audit.checklistJson) {
+      try {
+        this.checklist = JSON.parse(audit.checklistJson);
+      } catch {
+        this.checklist = [];
+      }
+    } else if (actions.length > 0) {
+      this.checklist = actions;
+    } else {
       this.checklist = [];
     }
 
-    this.aiCritique = 'Önceki yapay zeka denetim kaydından başarıyla yüklendi.';
+    this.aiCritique = critique || 'Önceki yapay zeka denetim kaydından başarıyla yüklendi.';
   }
 
   setFilter(filter: FilterType): void {

@@ -1416,9 +1416,10 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
 
         // Check if previously audited
         bool isAiAudited = false;
-        int aiScore = seoScore;
+        int? aiScore = null;
         string status = detectedRisks.Count > 0 ? "⚠️ AI: Risk Var" : "Bekliyor";
         string? resultJson = null;
+        object? savedAuditObj = null;
 
         if (savedAudits.TryGetValue(listingId, out var saved))
         {
@@ -1426,6 +1427,22 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
             aiScore = saved.OptimizedSeoScore;
             status = saved.Status;
             resultJson = saved.ResultJson;
+            savedAuditObj = new
+            {
+                shopId = saved.ShopId,
+                listingId = saved.ListingId,
+                title = saved.Title,
+                currentSeoScore = saved.CurrentSeoScore,
+                optimizedSeoScore = saved.OptimizedSeoScore,
+                seoScoreBefore = saved.CurrentSeoScore,
+                seoScoreAfter = saved.OptimizedSeoScore,
+                status = saved.Status,
+                provider = saved.Provider,
+                model = saved.Model,
+                aiModel = saved.Model,
+                resultJson = saved.ResultJson,
+                auditedAt = saved.AuditedAt
+            };
         }
 
         items.Add(new
@@ -1457,7 +1474,7 @@ app.MapGet("/api/etsy/shop/listings", async (string shopId = "53236321", int lim
             structuralNeeds = needs,
             riskWarnings = detectedRisks,
             hasSavedAudit = isAiAudited,
-            savedAudit = saved
+            savedAudit = savedAuditObj
         });
     }
 

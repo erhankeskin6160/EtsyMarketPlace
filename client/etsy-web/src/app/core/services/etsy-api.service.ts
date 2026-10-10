@@ -115,7 +115,9 @@ export interface ShopListingItemDto {
   riskWarnings?: string[];
   aiScore?: number | null;
   hasSavedAudit: boolean;
-  savedAudit?: SavedListingAuditDto | null;
+  isAiAudited?: boolean;
+  resultJson?: string | null;
+  savedAudit?: SavedListingAuditDto | any | null;
 }
 
 export interface OptimizeListingResponseDto {
