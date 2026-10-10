@@ -20,6 +20,9 @@ public sealed class MarketSummaryKpisDto
     public string TopShopName { get; set; } = "-";
     public int TopShopSales { get; set; }
     public int OpportunityScore { get; set; }
+    public decimal TotalEstimatedMarketRevenue { get; set; }
+    public double AverageEstimatedMonthlySales { get; set; }
+    public decimal TopSellerMonthlyRevenue { get; set; }
     public List<MarketTagFrequencyDto> TopTags { get; set; } = [];
 }
 
@@ -49,6 +52,10 @@ public sealed class MarketListingItemDto
     public int Views { get; set; }
     public int SeoScore { get; set; }
     public int MarketScore { get; set; }
+    public int EstimatedMonthlySales { get; set; }
+    public decimal EstimatedMonthlyRevenue { get; set; }
+    public string SalesVelocity { get; set; } = "Düzenli";
+    public decimal ConversionRateEst { get; set; }
     public List<string> Tags { get; set; } = [];
     public List<string> Materials { get; set; } = [];
     public string ImageUrl { get; set; } = string.Empty;

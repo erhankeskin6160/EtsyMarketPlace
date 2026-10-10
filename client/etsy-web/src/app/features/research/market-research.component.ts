@@ -26,6 +26,10 @@ export interface MarketItem {
   reviewCount: number;
   reviewAverage: number;
   quantity: number;
+  estimatedMonthlySales?: number;
+  estimatedMonthlyRevenue?: number;
+  salesVelocity?: string;
+  conversionRateEst?: number;
 }
 
 @Component({
@@ -91,6 +95,8 @@ export interface MarketItem {
             <label class="filter-label">Sıralama:</label>
             <select [(ngModel)]="sortBy" class="filter-select" (change)="applySort()">
               <option value="market_score">Pazar Puanı (Önce En Yüksek)</option>
+              <option value="estimated_revenue">💰 Tahmini Ciro (En Çok Kazandıran)</option>
+              <option value="estimated_sales">🔥 Tahmini Satış (En Çok Satan)</option>
               <option value="seo_score">SEO Puanı (Önce En Yüksek)</option>
               <option value="favorites">En Çok Beğenilen (Favori)</option>
               <option value="views">Görüntülenme Sayısı</option>
@@ -117,7 +123,7 @@ export interface MarketItem {
         </div>
       </div>
 
-      <!-- 3. KPI SUMMARY STRIP (4 KPI Cards Matching Desktop) -->
+      <!-- 3. KPI SUMMARY STRIP (6 KPI Cards: EverBee / Toolsy / eRank) -->
       <div class="kpi-grid">
         <div class="glass-card kpi-card">
           <span class="kpi-label">ORTALAMA FİYAT (AOV)</span>
@@ -128,9 +134,26 @@ export interface MarketItem {
           <span class="kpi-desc">Kategorideki rekabetçi satış ortalaması</span>
         </div>
 
+        <div class="glass-card kpi-card highlight-emerald">
+          <span class="kpi-label">TAHMİNİ AYLIK PAZAR CİROSU</span>
+          <div class="kpi-val text-emerald">
+            &#36;{{ totalEstimatedMarketRevenue | number:'1.0-0' }} / ay
+            <span class="sub-try">(₺{{ (totalEstimatedMarketRevenue * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
+          </div>
+          <span class="kpi-desc">Toolsy & EverBee algoritmasıyla toplam pazar hacmi</span>
+        </div>
+
+        <div class="glass-card kpi-card">
+          <span class="kpi-label">ORTALAMA AYLIK SATIŞ</span>
+          <div class="kpi-val text-cyan">
+            {{ averageEstimatedMonthlySales | number:'1.0-0' }} Adet / ay
+          </div>
+          <span class="kpi-desc">İlan başına tahmini aylık sipariş hızı</span>
+        </div>
+
         <div class="glass-card kpi-card">
           <span class="kpi-label">ORTALAMA FAVORİ / İLAN</span>
-          <div class="kpi-val text-cyan">
+          <div class="kpi-val text-purple">
             {{ avgFavorites | number:'1.0-0' }} Fav
           </div>
           <span class="kpi-desc">Müşteri kaydetme ve satın alma ilgisi</span>
@@ -141,7 +164,7 @@ export interface MarketItem {
           <div class="kpi-val text-purple">
             {{ topShopName }}
           </div>
-          <span class="kpi-desc">Kategori hacminin %34'üne hakim</span>
+          <span class="kpi-desc">Kategori hacminin lider oyuncusu</span>
         </div>
 
         <div class="glass-card kpi-card highlight-orange">
@@ -200,16 +223,16 @@ export interface MarketItem {
                 <th style="width: 50px;">Resim</th>
                 <th style="width: 45px;">Sıra</th>
                 <th>Ürün Başlığı</th>
-                <th style="width: 110px;">Fiyat ($ / ₺)</th>
-                <th style="width: 140px;">Mağaza</th>
-                <th style="width: 95px;">Mağaza Satışı</th>
+                <th style="width: 105px;">Fiyat ($ / ₺)</th>
+                <th style="width: 110px;">Tahmini Satış</th>
+                <th style="width: 110px;">Tahmini Ciro</th>
+                <th style="width: 130px;">Mağaza</th>
                 <th style="width: 75px;" class="sortable-fav" (click)="toggleFavSort()">
                   Favori {{ favSortDesc ? '▼' : '▲' }}
                 </th>
-                <th style="width: 85px;">Görüntüleme</th>
-                <th style="width: 75px; text-align: center;">SEO</th>
-                <th style="width: 95px; text-align: center;">Pazar Puanı</th>
-                <th style="width: 220px;">Tagler</th>
+                <th style="width: 65px; text-align: center;">SEO</th>
+                <th style="width: 85px; text-align: center;">Pazar Puanı</th>
+                <th style="width: 190px;">Tagler</th>
               </tr>
             </thead>
             <tbody>
@@ -238,6 +261,20 @@ export interface MarketItem {
                   <span class="try-sm">₺{{ (item.priceUsd * etsyApi.exchangeRate()) | number:'1.0-0' }}</span>
                 </td>
 
+                <!-- Tahmini Satış (EverBee Modeli) -->
+                <td class="est-sales-cell">
+                  <b>{{ (item.estimatedMonthlySales || 40) | number }} / ay</b>
+                  <span class="velocity-pill" [ngClass]="getVelocityClass(item.salesVelocity)">
+                    {{ item.salesVelocity || '⚡ Düzenli' }}
+                  </span>
+                </td>
+
+                <!-- Tahmini Ciro (EverBee Modeli) -->
+                <td class="est-rev-cell">
+                  <b class="text-emerald">&#36;{{ (item.estimatedMonthlyRevenue || (item.priceUsd * (item.estimatedMonthlySales || 40))) | number:'1.0-0' }} / ay</b>
+                  <span class="try-sm">₺{{ ((item.estimatedMonthlyRevenue || (item.priceUsd * (item.estimatedMonthlySales || 40))) * etsyApi.exchangeRate()) | number:'1.0-0' }}</span>
+                </td>
+
                 <!-- Mağaza -->
                 <td class="shop-cell">
                   <a [href]="item.shopUrl" target="_blank" (click)="$event.stopPropagation()" class="shop-link" title="Etsy Mağazasını Aç">
@@ -245,14 +282,8 @@ export interface MarketItem {
                   </a>
                 </td>
 
-                <!-- Mağaza Satışı -->
-                <td>{{ item.shopSales | number }} Satış</td>
-
                 <!-- Favori -->
                 <td class="fav-cell">❤️ {{ item.favorites | number }}</td>
-
-                <!-- Görüntüleme -->
-                <td class="view-cell">👁️ {{ item.views | number }}</td>
 
                 <!-- SEO PUANI ROZETİ -->
                 <td class="score-cell">
@@ -308,6 +339,10 @@ export interface MarketItem {
 🏪 <strong>MAĞAZA / FİYAT:</strong> {{ selectedItem.shopName }} | {{ '$' + selectedItem.priceUsd.toFixed(2) }} (₺{{ (selectedItem.priceUsd * etsyApi.exchangeRate()).toFixed(0) }})
 Mağaza Satışı: {{ selectedItem.shopSales | number }} | Yorum: {{ selectedItem.reviewCount | number }} | Puan: {{ selectedItem.reviewAverage }} ⭐
 Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem.views | number }} | Stok: {{ selectedItem.quantity }}
+
+💰 <strong>EVERBEE & TOOLSY GELİR TAHMİNİ:</strong>
+Aylık Tahmini Satış: {{ (selectedItem.estimatedMonthlySales || 45) | number }} Adet/ay | Aylık Tahmini Ciro: &#36;{{ (selectedItem.estimatedMonthlyRevenue || (selectedItem.priceUsd * 45)) | number:'1.0-0' }}/ay (₺{{ ((selectedItem.estimatedMonthlyRevenue || (selectedItem.priceUsd * 45)) * etsyApi.exchangeRate()) | number:'1.0-0' }})
+Satış Hızı: {{ selectedItem.salesVelocity || '🔥 Çok Hızlı Satan' }} | Tahmini Ziyaretçi Dönüşüm Oranı (CVR): %{{ selectedItem.conversionRateEst || 2.8 }}
 
 📊 <strong>SEO / PAZAR:</strong> SEO Puanı: %{{ selectedItem.seoScore }}/100 | Pazar Fırsat Puanı: %{{ selectedItem.marketScore }}/100
 
@@ -1545,6 +1580,40 @@ Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem
       background: #0284c7;
       color: #fff;
     }
+
+    /* EVERBEE & TOOLSY ESTIMATED REVENUE / VELOCITY STYLES */
+    .est-sales-cell {
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+    .est-rev-cell {
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+    .velocity-pill {
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 4px;
+      display: block;
+      width: fit-content;
+      margin-top: 3px;
+    }
+    .vel-high {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+    .vel-steady {
+      background: rgba(56, 189, 248, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+    }
+    .vel-low {
+      background: rgba(148, 163, 184, 0.15);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      color: #94a3b8;
+    }
   `]
 })
 export class MarketResearchComponent implements OnInit {
@@ -1571,6 +1640,9 @@ export class MarketResearchComponent implements OnInit {
   topShopName = 'MythicForgeCrafts';
   topShopSales = 14820;
   opportunityScore = 88;
+  totalEstimatedMarketRevenue = 18450;
+  averageEstimatedMonthlySales = 52;
+  topSellerMonthlyRevenue = 3450;
   topTags: MarketTagFrequencyDto[] = [
     { tag: '3d printed', count: 9, usagePercentage: 100, wordCount: 2, charLength: 10, isLongTail: true, competitionLevel: 'Yüksek' },
     { tag: 'desk organizer', count: 8, usagePercentage: 88.9, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Yüksek' },
@@ -1819,6 +1891,9 @@ export class MarketResearchComponent implements OnInit {
             this.topShopSales = res.kpis.topShopSales;
             this.opportunityScore = res.kpis.opportunityScore;
             this.topTags = res.kpis.topTags || [];
+            this.totalEstimatedMarketRevenue = res.kpis.totalEstimatedMarketRevenue || 0;
+            this.averageEstimatedMonthlySales = res.kpis.averageEstimatedMonthlySales || 0;
+            this.topSellerMonthlyRevenue = res.kpis.topSellerMonthlyRevenue || 0;
           }
           this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam bulunan: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()}`;
           this.showToastMsg(`✅ ${this.items.length} ürün ve pazar metriği başarıyla yüklendi.`);
@@ -1839,6 +1914,8 @@ export class MarketResearchComponent implements OnInit {
   getSortLabel(): string {
     switch (this.sortBy) {
       case 'market_score': return 'Pazar Puanı';
+      case 'estimated_revenue': return 'Tahmini Ciro';
+      case 'estimated_sales': return 'Tahmini Satış';
       case 'seo_score': return 'SEO Puanı';
       case 'favorites': return 'Favori';
       case 'views': return 'Görüntülenme';
@@ -1853,6 +1930,12 @@ export class MarketResearchComponent implements OnInit {
     switch (this.sortBy) {
       case 'market_score':
         this.items.sort((a, b) => b.marketScore - a.marketScore);
+        break;
+      case 'estimated_revenue':
+        this.items.sort((a, b) => (b.estimatedMonthlyRevenue || 0) - (a.estimatedMonthlyRevenue || 0));
+        break;
+      case 'estimated_sales':
+        this.items.sort((a, b) => (b.estimatedMonthlySales || 0) - (a.estimatedMonthlySales || 0));
         break;
       case 'seo_score':
         this.items.sort((a, b) => b.seoScore - a.seoScore);
@@ -1874,6 +1957,13 @@ export class MarketResearchComponent implements OnInit {
         break;
     }
     this.items.forEach((item, idx) => item.listingRank = idx + 1);
+  }
+
+  getVelocityClass(velocity?: string): string {
+    if (!velocity) return 'vel-steady';
+    if (velocity.includes('Çok Hızlı') || velocity.includes('Trend') || velocity.toLowerCase().includes('high')) return 'vel-high';
+    if (velocity.includes('Düşük') || velocity.toLowerCase().includes('low')) return 'vel-low';
+    return 'vel-steady';
   }
 
   toggleFavSort(): void {

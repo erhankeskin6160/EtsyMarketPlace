@@ -583,6 +583,9 @@ export interface MarketSummaryKpisDto {
   topShopName: string;
   topShopSales: number;
   opportunityScore: number;
+  totalEstimatedMarketRevenue: number;
+  averageEstimatedMonthlySales: number;
+  topSellerMonthlyRevenue: number;
   topTags: MarketTagFrequencyDto[];
 }
 
@@ -600,6 +603,10 @@ export interface MarketListingItemDto {
   views: number;
   seoScore: number;
   marketScore: number;
+  estimatedMonthlySales: number;
+  estimatedMonthlyRevenue: number;
+  salesVelocity: string;
+  conversionRateEst: number;
   tags: string[];
   materials: string[];
   imageUrl: string;

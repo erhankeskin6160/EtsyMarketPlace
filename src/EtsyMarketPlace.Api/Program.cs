@@ -2095,6 +2095,31 @@ app.MapGet("/api/etsy/market/search", async (
         var reviewScore = Math.Min(10m, reviewAverage * 2m);
         var marketScore = (int)Math.Round(Math.Clamp(keywordMatch + favoriteScore + viewScore + salesScore + reviewScore + (seoScore * 0.15m), 10m, 99m));
 
+        // 3. EverBee & Toolsy Tarzı Tahmini Aylık Satış, Ciro ve Hız Motoru
+        double favSignal = Math.Max(1.0, favorites * 0.18);
+        double salesFromFav = favSignal * 0.08;
+        double monthlyShopSales = Math.Max(5.0, shopSales / 20.0);
+        double shopWeight = Math.Clamp(views > 0 ? (favorites / (double)Math.Max(50, views)) : 0.05, 0.03, 0.20);
+        double salesFromShop = monthlyShopSales * shopWeight;
+        double reviewSignal = Math.Max(1.0, reviewCount / 24.0) * 8.0;
+
+        double estMonthlySalesRaw = (salesFromFav * 0.45) + (salesFromShop * 0.40) + (reviewSignal * 0.15);
+        if (price > 100) estMonthlySalesRaw *= 0.65;
+        else if (price < 15 && price > 0) estMonthlySalesRaw *= 1.35;
+
+        int estimatedMonthlySales = (int)Math.Round(Math.Clamp(estMonthlySalesRaw, 1.0, 950.0));
+        decimal estimatedMonthlyRevenue = Math.Round(estimatedMonthlySales * price, 2);
+
+        string velocity;
+        if (estimatedMonthlySales >= 45 || estimatedMonthlyRevenue >= 1500)
+            velocity = "🔥 Çok Hızlı";
+        else if (estimatedMonthlySales >= 15 || estimatedMonthlyRevenue >= 500)
+            velocity = "⚡ Düzenli";
+        else
+            velocity = "🐢 Düşük Hacim";
+
+        decimal conversionRate = views > 0 ? Math.Round((decimal)Math.Clamp((estimatedMonthlySales / (double)Math.Max(50, views * 0.25)) * 100.0, 0.8, 6.5), 1) : 2.5m;
+
         string listingUrl = item.TryGetProperty("url", out var u) && !string.IsNullOrWhiteSpace(u.GetString())
             ? u.GetString()!
             : $"https://www.etsy.com/listing/{listingId}";
@@ -2114,6 +2139,10 @@ app.MapGet("/api/etsy/market/search", async (
             Views = views,
             SeoScore = seoScore,
             MarketScore = marketScore,
+            EstimatedMonthlySales = estimatedMonthlySales,
+            EstimatedMonthlyRevenue = estimatedMonthlyRevenue,
+            SalesVelocity = velocity,
+            ConversionRateEst = conversionRate,
             Tags = tags,
             Materials = materials,
             ImageUrl = primaryImg,
@@ -2143,6 +2172,9 @@ app.MapGet("/api/etsy/market/search", async (
 
         kpis.AverageFavorites = Math.Round(listings.Average(l => (double)l.Favorites), 1);
         kpis.AverageViews = Math.Round(listings.Average(l => (double)l.Views), 1);
+        kpis.TotalEstimatedMarketRevenue = Math.Round(listings.Sum(l => l.EstimatedMonthlyRevenue), 2);
+        kpis.AverageEstimatedMonthlySales = Math.Round(listings.Average(l => (double)l.EstimatedMonthlySales), 1);
+        kpis.TopSellerMonthlyRevenue = listings.Max(l => l.EstimatedMonthlyRevenue);
 
         var topShop = listings
             .Where(l => !string.IsNullOrWhiteSpace(l.ShopName))
@@ -2198,6 +2230,8 @@ app.MapGet("/api/etsy/market/search", async (
 
     IEnumerable<MarketListingItemDto> sorted = sortBy switch
     {
+        "estimated_revenue" => listings.OrderByDescending(x => x.EstimatedMonthlyRevenue),
+        "estimated_sales" => listings.OrderByDescending(x => x.EstimatedMonthlySales),
         "seo_score" => listings.OrderByDescending(x => x.SeoScore),
         "favorites" => listings.OrderByDescending(x => x.Favorites),
         "views" => listings.OrderByDescending(x => x.Views),
