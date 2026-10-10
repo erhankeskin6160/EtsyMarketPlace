@@ -642,6 +642,15 @@ export class FastCreatorComponent implements OnInit {
   }
 
   // --- PUBLISH & PREVIEW ---
+  createdListingResult: {
+    listingId: number;
+    url: string;
+    state: string;
+    uploadedImages: number;
+    message: string;
+  } | null = null;
+  isPublishSuccessModalOpen = false;
+
   openPreviewModal(): void {
     this.isPreviewModalOpen = true;
   }
@@ -650,9 +659,79 @@ export class FastCreatorComponent implements OnInit {
     this.isPreviewModalOpen = false;
   }
 
+  closeSuccessModal(): void {
+    this.isPublishSuccessModalOpen = false;
+  }
+
   publishListingToEtsy(): void {
-    this.isSavingDraft = false;
-    this.showToast('Etsy ilan oluşturma/taslak API uç noktası yapılandırılmadığı için hiçbir ilan gönderilmedi.');
+    if (!this.isTitleReady) {
+      alert('Lütfen geçerli bir ürün başlığı giriniz (1-140 karakter).');
+      return;
+    }
+
+    this.isSavingDraft = true;
+
+    // Prepare gallery images
+    const imagesPayload = this.galleryImages.map((img, idx) => ({
+      dataUrl: img.url.startsWith('data:') ? img.url : undefined,
+      url: !img.url.startsWith('data:') ? img.url : undefined,
+      rank: idx + 1
+    }));
+
+    // Prepare variations
+    const variationsPayload = this.enableVariations && this.variationRows.length > 0
+      ? this.variationRows.map(r => ({
+          key: r.key,
+          price: r.price,
+          quantity: r.quantity,
+          active: r.active
+        }))
+      : undefined;
+
+    // Clean tags (Etsy max 13, <=20 chars)
+    const validTags = this.tags
+      .map(t => t.trim())
+      .filter(t => t.length > 0 && t.length <= 20)
+      .slice(0, 13);
+
+    // Shipping profile ID parsing
+    let shippingProfileId: number | null = null;
+    if (this.shippingProfile && !isNaN(Number(this.shippingProfile))) {
+      shippingProfileId = Number(this.shippingProfile);
+    }
+
+    const payload = {
+      title: this.title.trim(),
+      description: this.description.trim() || 'Handmade custom design artisan product.',
+      price: this.priceUsd || 39.90,
+      quantity: this.quantity || 15,
+      taxonomyId: this.selectedTaxonomyId > 0 ? this.selectedTaxonomyId : 1042,
+      shippingProfileId,
+      isDigital: this.listingType === 'digital',
+      tags: validTags,
+      materials: this.materials.split(',').map(m => m.trim()).filter(m => m.length > 0),
+      state: (this.isLivePublish ? 'active' : 'draft') as 'draft' | 'active',
+      images: imagesPayload,
+      variations: variationsPayload
+    };
+
+    this.etsyApi.createListing(payload).subscribe({
+      next: (res) => {
+        this.isSavingDraft = false;
+        if (res && res.success) {
+          this.createdListingResult = res;
+          this.isPublishSuccessModalOpen = true;
+          this.showToast(`🎉 Başarılı! İlan ${res.state === 'active' ? 'CANLI' : 'TASLAK'} olarak Etsy'ye aktarıldı! (ID: #${res.listingId})`);
+        } else {
+          this.showToast('İlan aktarıldı ancak sunucu yanıtı doğrulanamadı.');
+        }
+      },
+      error: (err) => {
+        this.isSavingDraft = false;
+        const errDetail = err?.error?.error || err?.message || 'Etsy API bağlantı hatası.';
+        alert(`❌ Etsy İlan Gönderim Hatası:\n${errDetail}`);
+      }
+    });
   }
 
   showToast(msg: string): void {

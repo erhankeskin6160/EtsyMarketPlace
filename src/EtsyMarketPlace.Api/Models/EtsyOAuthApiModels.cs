@@ -33,3 +33,37 @@ public sealed record UpdateListingApiRequest(
     string Description,
     IReadOnlyList<string> Tags,
     IReadOnlyList<string>? Materials = null);
+
+public sealed record CreateListingApiRequest(
+    string? ShopId,
+    string Title,
+    string Description,
+    decimal Price,
+    int Quantity,
+    long TaxonomyId,
+    long? ShippingProfileId = null,
+    long? ReadinessStateId = null,
+    bool IsDigital = false,
+    IReadOnlyList<string>? Tags = null,
+    IReadOnlyList<string>? Materials = null,
+    string WhoMade = "i_did",
+    string WhenMade = "made_to_order",
+    string State = "draft",
+    IReadOnlyList<ListingImageDto>? Images = null,
+    IReadOnlyList<ListingVariationDto>? Variations = null);
+
+public sealed record ListingImageDto(
+    string? DataUrl,
+    string? Url,
+    int Rank = 1);
+
+public sealed record ListingVariationDto(
+    string Key,
+    decimal Price,
+    int Quantity,
+    bool Active = true);
+
+public sealed record SaveAiSettingsApiRequest(
+    string? ShopId,
+    string SettingsJson);
+

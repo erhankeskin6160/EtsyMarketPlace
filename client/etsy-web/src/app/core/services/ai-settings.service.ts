@@ -1,4 +1,6 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { Injectable, computed, signal, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../../../environments/environment';
 
 export interface AiOptimizationSettings {
   provider: 'Gemini' | 'OpenAI' | 'Claude' | 'DeepSeek' | 'Grok' | 'Offline';
@@ -136,7 +138,40 @@ export class AiSettingsService {
     }
   });
 
-  constructor() {}
+  private http = inject(HttpClient);
+
+  constructor() {
+    this.hydrateFromBackend();
+  }
+
+  private hydrateFromBackend(): void {
+    const shopId = environment.defaultShopId || '53236321';
+    this.http.get<{ exists: boolean; settingsJson: string }>(`${environment.apiBaseUrl}/api/settings/ai?shopId=${shopId}`).subscribe({
+      next: (res) => {
+        if (res && res.exists && res.settingsJson) {
+          try {
+            const parsed = JSON.parse(res.settingsJson);
+            const current = this.settings();
+            const merged: AiOptimizationSettings = {
+              ...DEFAULT_SETTINGS,
+              ...current,
+              ...parsed
+            };
+            if (!merged.deepSeekApiKey && current.deepSeekApiKey) {
+              merged.deepSeekApiKey = current.deepSeekApiKey;
+            }
+            this.settings.set(merged);
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          } catch {
+            // ignore
+          }
+        }
+      },
+      error: () => {
+        // Backend offline or unreachable, local storage remains active
+      }
+    });
+  }
 
   private loadSettings(): AiOptimizationSettings {
     try {
@@ -178,6 +213,16 @@ export class AiSettingsService {
           model: newSettings.geminiModel || 'gemini-2.5-flash'
         }));
       }
+
+      // Persist to central VDS backend database
+      const shopId = environment.defaultShopId || '53236321';
+      this.http.post(`${environment.apiBaseUrl}/api/settings/ai`, {
+        shopId,
+        settingsJson: JSON.stringify(newSettings)
+      }).subscribe({
+        next: () => {},
+        error: () => {}
+      });
     } catch {
       // ignore
     }

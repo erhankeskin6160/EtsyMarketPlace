@@ -57,6 +57,52 @@ export interface EtsySyncResultDto {
   errorMessage: string | null;
 }
 
+export interface CreateListingImagePayload {
+  dataUrl?: string;
+  url?: string;
+  rank?: number;
+}
+
+export interface CreateListingVariationPayload {
+  key: string;
+  price: number;
+  quantity: number;
+  active?: boolean;
+}
+
+export interface CreateListingPayload {
+  shopId?: string;
+  title: string;
+  description: string;
+  price: number;
+  quantity: number;
+  taxonomyId: number;
+  shippingProfileId?: number | null;
+  readinessStateId?: number | null;
+  isDigital?: boolean;
+  tags?: string[];
+  materials?: string[];
+  whoMade?: string;
+  whenMade?: string;
+  state?: 'draft' | 'active';
+  images?: CreateListingImagePayload[];
+  variations?: CreateListingVariationPayload[];
+}
+
+export interface CreatedListingResponseDto {
+  success: boolean;
+  listingId: number;
+  url: string;
+  state: string;
+  uploadedImages: number;
+  message: string;
+}
+
+export interface GetAiSettingsResponseDto {
+  exists: boolean;
+  settingsJson: string;
+}
+
 /** VDS: EtsyTokenStatus */
 export interface EtsyTokenStatusDto {
   exists: boolean;
@@ -262,6 +308,27 @@ export class EtsyApiService {
   }
 
   // Etsy Endpoints
+  createListing(payload: CreateListingPayload): Observable<CreatedListingResponseDto> {
+    const shopId = payload.shopId || this.activeShopId();
+    return this.http.post<CreatedListingResponseDto>(`${this.API_BASE}/api/etsy/listings`, {
+      ...payload,
+      shopId
+    });
+  }
+
+  getAiSettings(shopId?: string): Observable<GetAiSettingsResponseDto> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<GetAiSettingsResponseDto>(`${this.API_BASE}/api/settings/ai?shopId=${id}`);
+  }
+
+  saveAiSettings(settingsJson: string, shopId?: string): Observable<{ success: boolean; message: string }> {
+    const id = shopId || this.activeShopId();
+    return this.http.post<{ success: boolean; message: string }>(`${this.API_BASE}/api/settings/ai`, {
+      shopId: id,
+      settingsJson
+    });
+  }
+
   getDailyBrief(shopId?: string): Observable<DailyBrief> {
     const id = shopId || this.activeShopId();
     return this.http.get<DailyBrief>(`${this.API_BASE}/api/etsy/shop/daily-brief?shopId=${id}`);

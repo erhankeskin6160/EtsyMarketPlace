@@ -193,6 +193,12 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
                     PRIMARY KEY(shop_id, listing_id)
                 );
 
+                CREATE TABLE IF NOT EXISTS shop_ai_settings (
+                    shop_id TEXT PRIMARY KEY,
+                    settings_json TEXT NOT NULL DEFAULT '',
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE INDEX IF NOT EXISTS ix_listing_ai_audits_shop ON listing_ai_audits(shop_id);
 
                 CREATE INDEX IF NOT EXISTS ix_bank_payouts_shop_date ON bank_payouts(shop_id, occurred_at);
@@ -1448,6 +1454,35 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         command.Parameters.AddWithValue("$model", request.Model);
         command.Parameters.AddWithValue("$json", request.ResultJson);
         command.Parameters.AddWithValue("$audited_at", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<string?> GetAiSettingsJsonAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT settings_json FROM shop_ai_settings WHERE shop_id = $shop_id LIMIT 1;";
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result?.ToString();
+    }
+
+    public async Task SaveAiSettingsJsonAsync(string shopId, string settingsJson, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO shop_ai_settings(shop_id, settings_json, updated_at)
+            VALUES($shop_id, $json, $updated_at)
+            ON CONFLICT(shop_id) DO UPDATE SET
+                settings_json = excluded.settings_json,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        command.Parameters.AddWithValue("$json", settingsJson);
+        command.Parameters.AddWithValue("$updated_at", DateTimeOffset.UtcNow.ToString("O"));
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 

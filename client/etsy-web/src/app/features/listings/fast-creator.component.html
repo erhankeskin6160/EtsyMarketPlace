@@ -51,8 +51,13 @@
       <button type="button" class="btn-action-tool preview" (click)="openPreviewModal()" title="Etsy Önizleme Aç">
         👁️ Önizleme
       </button>
-      <button type="button" class="btn-action-primary publish" [disabled]="true" title="Etsy liste oluşturma API’si bağlı değil">
-        🚀 Etsy’ye gönder (desteklenmiyor)
+      <button 
+        type="button" 
+        class="btn-action-primary publish" 
+        [disabled]="isSavingDraft || !isTitleReady" 
+        (click)="publishListingToEtsy()"
+        [title]="isLivePublish ? 'Etsy\'de Hemen Canlı Satışa Aç' : 'Etsy Mağazanıza Güvenli Taslak Olarak Gönder'">
+        <span>{{ isSavingDraft ? '⏳ Aktarılıyor...' : (isLivePublish ? '🚀 Etsy’ye Gönder (Canlı)' : '💾 Etsy’ye Gönder (Taslak)') }}</span>
       </button>
     </div>
   </div>
@@ -712,3 +717,58 @@
     </div>
   </div>
 </div>
+
+<!-- ========================================== -->
+<!-- 5. İLAN BAŞARIYLA AKTARILDI KUTLAMA MODALI -->
+<!-- ========================================== -->
+<div class="modal-backdrop-creator" *ngIf="isPublishSuccessModalOpen" (click)="closeSuccessModal()">
+  <div class="modal-dialog-preview success-dialog" (click)="$event.stopPropagation()">
+    <div class="modal-head success-head">
+      <div class="head-title-wrap">
+        <span class="head-celebrate-emoji">🎉</span>
+        <h3>İlan Resmi Etsy Mağazanıza Aktarıldı!</h3>
+      </div>
+      <button type="button" class="btn-close-dlg" (click)="closeSuccessModal()">✕</button>
+    </div>
+    <div class="modal-body-preview success-body">
+      <div class="success-status-banner" [class.is-live-banner]="createdListingResult?.state === 'active'">
+        <span class="status-indicator-dot"></span>
+        <span>
+          Durum: <strong>{{ createdListingResult?.state === 'active' ? 'CANLI SATIŞTA' : 'GÜVENLİ TASLAK (DRAFT)' }}</strong>
+        </span>
+        <span class="status-badge-id">Listing ID: #{{ createdListingResult?.listingId }}</span>
+      </div>
+
+      <div class="success-info-grid">
+        <div class="info-card">
+          <span class="info-card-label">Ürün Başlığı</span>
+          <span class="info-card-val">{{ title }}</span>
+        </div>
+        <div class="info-card-split">
+          <div class="info-card">
+            <span class="info-card-label">Fiyat</span>
+            <span class="info-card-val highlight-green">${{ (priceUsd || 0).toFixed(2) }} (₺{{ ((priceUsd || 0) * usdTryRate).toFixed(2) }})</span>
+          </div>
+          <div class="info-card">
+            <span class="info-card-label">Stok</span>
+            <span class="info-card-val">{{ quantity }} Adet</span>
+          </div>
+          <div class="info-card">
+            <span class="info-card-label">Yüklenen Görseller</span>
+            <span class="info-card-val">{{ createdListingResult?.uploadedImages || galleryImages.length }} Adet</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="success-actions-bar">
+        <a [href]="createdListingResult?.url" target="_blank" rel="noopener noreferrer" class="btn-etsy-direct-link">
+          🛍️ Etsy Listing Editor'de Aç & İncele ↗
+        </a>
+        <button type="button" class="btn-modal-dismiss" (click)="closeSuccessModal()">
+          Tamam
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+

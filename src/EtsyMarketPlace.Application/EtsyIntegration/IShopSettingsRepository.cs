@@ -83,4 +83,6 @@ public interface IShopSettingsRepository
     Task<EtsyAppCredentialsRecord> SaveEtsyAppCredentialsAsync(SaveEtsyAppCredentialsRequest request, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<SavedListingAuditRecord>> GetListingAuditsAsync(string shopId, CancellationToken cancellationToken = default);
     Task SaveListingAuditAsync(SaveListingAuditRecordRequest request, CancellationToken cancellationToken = default);
+    Task<string?> GetAiSettingsJsonAsync(string shopId, CancellationToken cancellationToken = default);
+    Task SaveAiSettingsJsonAsync(string shopId, string settingsJson, CancellationToken cancellationToken = default);
 }

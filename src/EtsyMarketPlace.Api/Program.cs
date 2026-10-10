@@ -1858,6 +1858,255 @@ app.MapPut("/api/etsy/listings/{listingId}", async (string listingId, UpdateList
 .WithSummary("İlanı Başlık, Etiket ve Açıklama ile Doğrudan Etsy'de Güncelle")
 .WithName("UpdateEtsyListing");
 
+app.MapPost("/api/etsy/listings", async (
+    CreateListingApiRequest request,
+    HttpContext context,
+    IConfiguration config,
+    IEtsyTokenStore tokenStore,
+    IShopSettingsRepository settingsRepo,
+    IHttpClientFactory httpClientFactory,
+    IEtsyOAuthService oauthService,
+    CancellationToken cancellationToken) =>
+{
+    var resolvedShopId = ResolveShopId(request.ShopId, context, config);
+    var token = await tokenStore.GetAsync(resolvedShopId, cancellationToken);
+    if (token is null)
+        return Results.NotFound(new { error = "Bu mağaza için kayıtlı OAuth token bulunamadı." });
+
+    if (token.AccessTokenExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1))
+    {
+        try
+        {
+            token = await oauthService.RefreshTokenAsync(resolvedShopId, token.RefreshToken, cancellationToken);
+            await tokenStore.SaveAsync(resolvedShopId, token, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Results.BadRequest(new { error = "Etsy token yenilenemedi: " + ex.Message });
+        }
+    }
+
+    if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Length > 140)
+        return Results.BadRequest(new { error = "Başlık 1 ile 140 karakter arasında olmalıdır." });
+
+    if (request.Price <= 0)
+        return Results.BadRequest(new { error = "Fiyat 0'dan büyük olmalıdır." });
+
+    if (request.Quantity <= 0)
+        return Results.BadRequest(new { error = "Stok adedi en az 1 olmalıdır." });
+
+    var raw = await settingsRepo.GetRawEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
+    var keystring = !string.IsNullOrWhiteSpace(raw.Keystring) ? raw.Keystring : (config["Etsy:ApiKey"] ?? string.Empty);
+    var sharedSecret = !string.IsNullOrWhiteSpace(raw.SharedSecret) ? raw.SharedSecret : (config["Etsy:SharedSecret"] ?? string.Empty);
+    if (string.IsNullOrWhiteSpace(keystring))
+        return Results.BadRequest(new { error = "Etsy Keystring (Client ID) bulunamadı. Lütfen Ayarlar > Etsy API sayfasından API anahtarınızı kaydedin." });
+    var apiKeyHeader = !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
+
+    var client = httpClientFactory.CreateClient();
+    var postUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings";
+
+    var formDict = new List<KeyValuePair<string, string>>
+    {
+        new("quantity", Math.Max(1, request.Quantity).ToString(CultureInfo.InvariantCulture)),
+        new("title", request.Title.Trim()),
+        new("description", string.IsNullOrWhiteSpace(request.Description) ? "Handmade artisan item." : request.Description.Trim()),
+        new("price", request.Price.ToString("0.00", CultureInfo.InvariantCulture)),
+        new("who_made", string.IsNullOrWhiteSpace(request.WhoMade) ? "i_did" : request.WhoMade.Trim()),
+        new("when_made", string.IsNullOrWhiteSpace(request.WhenMade) ? "made_to_order" : request.WhenMade.Trim()),
+        new("taxonomy_id", request.TaxonomyId > 0 ? request.TaxonomyId.ToString(CultureInfo.InvariantCulture) : "1042"),
+        new("type", request.IsDigital ? "download" : "physical"),
+        new("state", request.State?.ToLowerInvariant() == "active" ? "active" : "draft")
+    };
+
+    if (!request.IsDigital)
+    {
+        if (request.ShippingProfileId.HasValue && request.ShippingProfileId.Value > 0)
+        {
+            formDict.Add(new("shipping_profile_id", request.ShippingProfileId.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+        if (request.ReadinessStateId.HasValue && request.ReadinessStateId.Value > 0)
+        {
+            formDict.Add(new("readiness_state_id", request.ReadinessStateId.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+    }
+
+    if (request.Tags != null)
+    {
+        var validTags = request.Tags.Select(t => t.Trim()).Where(t => t.Length > 0 && t.Length <= 20).Take(13).ToList();
+        foreach (var tag in validTags)
+        {
+            formDict.Add(new("tags[]", tag));
+        }
+    }
+
+    if (request.Materials != null)
+    {
+        var validMats = request.Materials.Select(m => m.Trim()).Where(m => m.Length > 0).Take(13).ToList();
+        foreach (var mat in validMats)
+        {
+            formDict.Add(new("materials[]", mat));
+        }
+    }
+
+    using var postReq = new HttpRequestMessage(HttpMethod.Post, postUrl)
+    {
+        Content = new FormUrlEncodedContent(formDict)
+    };
+    postReq.Headers.Add("x-api-key", apiKeyHeader);
+    postReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+    using var postRes = await client.SendAsync(postReq, cancellationToken);
+    var postBody = await postRes.Content.ReadAsStringAsync(cancellationToken);
+
+    if (!postRes.IsSuccessStatusCode)
+    {
+        return Results.BadRequest(new { error = $"Etsy ilan oluşturma başarısız (HTTP {(int)postRes.StatusCode}): {postBody}" });
+    }
+
+    long createdListingId = 0;
+    string listingUrl = "";
+    try
+    {
+        using var doc = JsonDocument.Parse(postBody);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("listing_id", out var lidProp))
+        {
+            createdListingId = lidProp.GetInt64();
+        }
+        else if (root.TryGetProperty("results", out var resProp) && resProp.GetArrayLength() > 0)
+        {
+            createdListingId = resProp[0].GetProperty("listing_id").GetInt64();
+        }
+
+        if (root.TryGetProperty("url", out var urlProp))
+        {
+            listingUrl = urlProp.GetString() ?? "";
+        }
+    }
+    catch
+    {
+        // ignored
+    }
+
+    if (createdListingId <= 0)
+    {
+        return Results.BadRequest(new { error = $"İlan oluşturuldu ancak listing_id okunamadı: {postBody}" });
+    }
+
+    if (string.IsNullOrWhiteSpace(listingUrl))
+    {
+        listingUrl = $"https://www.etsy.com/your/shops/me/listing-editor/edit/{createdListingId}";
+    }
+
+    // Görselleri Etsy API'sine yükle
+    int uploadedImageCount = 0;
+    if (request.Images != null && request.Images.Count > 0)
+    {
+        int rank = 1;
+        foreach (var img in request.Images.Take(10))
+        {
+            try
+            {
+                byte[]? imageBytes = null;
+                string fileName = $"image_{rank}.jpg";
+
+                if (!string.IsNullOrWhiteSpace(img.DataUrl) && img.DataUrl.StartsWith("data:image/"))
+                {
+                    var base64Part = img.DataUrl[(img.DataUrl.IndexOf(',') + 1)..];
+                    imageBytes = Convert.FromBase64String(base64Part);
+                }
+                else if (!string.IsNullOrWhiteSpace(img.Url) && (img.Url.StartsWith("http://") || img.Url.StartsWith("https://")))
+                {
+                    using var imgDownload = await client.GetAsync(img.Url, cancellationToken);
+                    if (imgDownload.IsSuccessStatusCode)
+                    {
+                        imageBytes = await imgDownload.Content.ReadAsByteArrayAsync(cancellationToken);
+                    }
+                }
+
+                if (imageBytes != null && imageBytes.Length > 0)
+                {
+                    var imgUploadUrl = $"https://api.etsy.com/v3/application/shops/{resolvedShopId}/listings/{createdListingId}/images";
+                    using var imgContent = new MultipartFormDataContent();
+                    var fileContent = new ByteArrayContent(imageBytes);
+                    fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+                    imgContent.Add(fileContent, "image", fileName);
+                    imgContent.Add(new StringContent(rank.ToString(CultureInfo.InvariantCulture)), "rank");
+
+                    using var imgReq = new HttpRequestMessage(HttpMethod.Post, imgUploadUrl)
+                    {
+                        Content = imgContent
+                    };
+                    imgReq.Headers.Add("x-api-key", apiKeyHeader);
+                    imgReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+                    using var imgRes = await client.SendAsync(imgReq, cancellationToken);
+                    if (imgRes.IsSuccessStatusCode)
+                    {
+                        uploadedImageCount++;
+                    }
+                }
+            }
+            catch
+            {
+                // Görsel yükleme hatası ilanın kendisini bozmaz
+            }
+            rank++;
+        }
+    }
+
+    return Results.Ok(new
+    {
+        success = true,
+        listingId = createdListingId,
+        url = listingUrl,
+        state = request.State?.ToLowerInvariant() == "active" ? "active" : "draft",
+        uploadedImages = uploadedImageCount,
+        message = $"İlan başarıyla Etsy'ye aktarıldı! (Listing ID: {createdListingId})"
+    });
+})
+.WithTags("Etsy Listing & AI Denetimi")
+.WithSummary("Hızlı Ürün Ekleme (Fast Creator) İle Doğrudan Etsy'de Taslak/Canlı İlan Oluştur")
+.WithName("CreateEtsyListing");
+
+app.MapGet("/api/settings/ai", async (
+    string shopId = "53236321",
+    HttpContext context = null!,
+    IConfiguration config = null!,
+    IShopSettingsRepository settingsRepo = null!,
+    CancellationToken cancellationToken = default) =>
+{
+    var resolvedShopId = ResolveShopId(shopId, context, config);
+    var json = await settingsRepo.GetAiSettingsJsonAsync(resolvedShopId, cancellationToken);
+    if (string.IsNullOrWhiteSpace(json))
+    {
+        return Results.Ok(new { exists = false, settingsJson = "{}" });
+    }
+    return Results.Ok(new { exists = true, settingsJson = json });
+})
+.WithTags("AI Ayarları & Model Hub")
+.WithSummary("Merkezi Veritabanından AI Model ve API Anahtarlarını Getir")
+.WithName("GetAiSettings");
+
+app.MapPost("/api/settings/ai", async (
+    SaveAiSettingsApiRequest request,
+    HttpContext context,
+    IConfiguration config,
+    IShopSettingsRepository settingsRepo,
+    CancellationToken cancellationToken) =>
+{
+    var resolvedShopId = ResolveShopId(request.ShopId, context, config);
+    if (string.IsNullOrWhiteSpace(request.SettingsJson))
+    {
+        return Results.BadRequest(new { error = "Ayarlar boş olamaz." });
+    }
+    await settingsRepo.SaveAiSettingsJsonAsync(resolvedShopId, request.SettingsJson, cancellationToken);
+    return Results.Ok(new { success = true, message = "AI ayarları ve API anahtarları veritabanına başarıyla kaydedildi!" });
+})
+.WithTags("AI Ayarları & Model Hub")
+.WithSummary("AI Model Ayarlarını ve API Anahtarlarını Merkezi Veritabanında Sakla")
+.WithName("SaveAiSettings");
+
 app.MapGet("/api/etsy/listings/audits", async (string shopId = "53236321", HttpContext context = null!, IConfiguration config = null!, IShopSettingsRepository settingsRepo = null!, CancellationToken cancellationToken = default) =>
 {
     var resolvedShopId = ResolveShopId(shopId, context, config);
