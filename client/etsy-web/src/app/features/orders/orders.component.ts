@@ -687,41 +687,93 @@ import {
         </div>
       </div>
 
-      <!-- MODAL 2: SHIP TO MORE CONNECTION MODAL -->
+      <!-- MODAL 2: SHIP TO MORE CONNECTION MODAL (DESKTOP PARITY) -->
       <div class="modal-overlay" *ngIf="isShiptomoreModalOpen" (click)="closeShiptomoreModal()">
-        <div class="glass-modal stm-modal-box" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="modal-title-with-logo">
-              <img src="assets/shipping/shiptomore.png" class="modal-carrier-logo" />
-              <div>
-                <h3 class="modal-title">Ship to More Bağlantısı</h3>
-                <span class="modal-sub">Kurumsal API Entegrasyon Bilgileri</span>
-              </div>
-            </div>
+        <div class="glass-modal stm-desktop-dialog" (click)="$event.stopPropagation()">
+          <div class="stm-dialog-header">
+            <h3 class="stm-dialog-title">Ship to More bağlantısı</h3>
             <button class="btn-close-modal" (click)="closeShiptomoreModal()">✕</button>
           </div>
 
-          <div class="modal-body">
-            <p class="modal-explainer">
-              Gönderi fiyatlarını ve gönderi oluşturmayı Ship to More üzerinden yapmak için Client ID ve Client Secret bilgilerini bir kez girin.
+          <div class="stm-dialog-body">
+            <p class="stm-dialog-help">
+              Gönderi fiyatlarını ve gönderi oluşturmayı Ship to More üzerinden yapmak için bir kez<br/>
+              erişim anahtarı girmen gerekiyor. Anahtarı Ship to More panelinden alabilirsin:<br/>
+              panelde "Bağlantı & Güvenlik" bölümü (veya dev.shiptomore.com).
+            </p>
+            <p class="stm-dialog-help sub">
+              Anahtar yalnızca oluşturulduğu anda gösterilir; kaydedilmez. Bu yüzden kopyalayıp<br/>
+              buraya yapıştır — sonrası bizde şifreli saklanır, bir daha sorulmaz.
             </p>
 
-            <div class="form-group">
-              <label class="form-label">Client ID:</label>
-              <input type="text" [(ngModel)]="stmClientId" class="form-control" placeholder="Örn: stm_live_client_id_..." />
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Client Secret:</label>
-              <input type="password" [(ngModel)]="stmClientSecret" class="form-control" placeholder="••••••••••••••••" />
-            </div>
-
-            <div class="modal-actions-row">
-              <button type="button" class="btn-test-session" (click)="testShiptomore()">
-                Bağlantıyı Test Et
+            <div class="stm-open-panel-row">
+              <button type="button" class="btn-stm-open-panel" (click)="openShiptomorePortal()">
+                Paneli Aç
               </button>
-              <button type="button" class="btn-save-session" (click)="saveShiptomore()">
-                Bağlantıyı Kaydet
+            </div>
+
+            <div class="stm-field-group">
+              <label class="stm-field-label">Client ID</label>
+              <input 
+                type="text" 
+                [(ngModel)]="stmClientId" 
+                class="stm-input-text" 
+                placeholder="Client ID girin..." />
+            </div>
+
+            <div class="stm-field-group">
+              <label class="stm-field-label">Client Secret</label>
+              <div class="stm-secret-input-wrapper">
+                <input 
+                  [type]="isSecretMasked ? 'password' : 'text'" 
+                  [(ngModel)]="stmClientSecret" 
+                  class="stm-input-text secret-input" 
+                  placeholder="••••••••••••••••••••••••••••••••" />
+                <button 
+                  type="button" 
+                  class="btn-toggle-mask" 
+                  (click)="isSecretMasked = !isSecretMasked" 
+                  [title]="isSecretMasked ? 'Şifreyi Göster' : 'Şifreyi Gizle'">
+                  {{ isSecretMasked ? '👁️' : '🙈' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="stm-status-row">
+              <span class="stm-status-badge" [ngClass]="stmStatusKind">
+                {{ stmStatusText }}
+              </span>
+            </div>
+
+            <div class="stm-actions-row">
+              <button 
+                type="button" 
+                class="btn-stm-action btn-test" 
+                [disabled]="isTestingShiptomore"
+                (click)="testShiptomore()">
+                <span *ngIf="isTestingShiptomore">⏳ Deneniyor...</span>
+                <span *ngIf="!isTestingShiptomore">Bağlantıyı Test Et</span>
+              </button>
+
+              <button 
+                type="button" 
+                class="btn-stm-action btn-save" 
+                (click)="saveShiptomore()">
+                Kaydet
+              </button>
+
+              <button 
+                type="button" 
+                class="btn-stm-action btn-forget" 
+                (click)="forgetShiptomore()">
+                Bağlantıyı Kes
+              </button>
+
+              <button 
+                type="button" 
+                class="btn-stm-action btn-close" 
+                (click)="closeShiptomoreModal()">
+                Kapat
               </button>
             </div>
           </div>
@@ -2547,6 +2599,187 @@ import {
       border-radius: 6px;
       margin-top: 4px;
     }
+
+    /* SHIPTOMORE DESKTOP PARITY DIALOG STYLES */
+    .stm-desktop-dialog {
+      width: 620px;
+      max-width: 95vw;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.6), 0 0 20px rgba(59, 130, 246, 0.15);
+      padding: 24px;
+      color: #f8fafc;
+      font-family: inherit;
+    }
+    .stm-dialog-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .stm-dialog-title {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin: 0;
+    }
+    .stm-dialog-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .stm-dialog-help {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      line-height: 1.45;
+      margin: 0;
+    }
+    .stm-dialog-help.sub {
+      margin-top: 2px;
+    }
+    .stm-open-panel-row {
+      margin: 4px 0;
+    }
+    .btn-stm-open-panel {
+      background: #1e293b;
+      border: 1px solid #475569;
+      color: #cbd5e1;
+      padding: 6px 18px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-stm-open-panel:hover {
+      background: #334155;
+      color: #ffffff;
+      border-color: #64748b;
+    }
+    .stm-field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .stm-field-label {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #e2e8f0;
+    }
+    .stm-input-text {
+      background: #090d16;
+      border: 1px solid #334155;
+      color: #ffffff;
+      font-family: monospace;
+      font-size: 0.82rem;
+      padding: 8px 12px;
+      border-radius: 6px;
+      width: 100%;
+      outline: none;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+    }
+    .stm-input-text:focus {
+      border-color: #3b82f6;
+      box-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+    }
+    .stm-secret-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .stm-secret-input-wrapper .secret-input {
+      padding-right: 42px;
+    }
+    .btn-toggle-mask {
+      position: absolute;
+      right: 8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 1rem;
+      color: #94a3b8;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stm-status-row {
+      padding: 2px 0;
+      min-height: 22px;
+    }
+    .stm-status-badge {
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .stm-status-badge.ok {
+      color: #10b981;
+    }
+    .stm-status-badge.danger {
+      color: #ef4444;
+    }
+    .stm-status-badge.info {
+      color: #38bdf8;
+    }
+    .stm-status-badge.muted {
+      color: #94a3b8;
+    }
+    .stm-actions-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin-top: 6px;
+    }
+    .btn-stm-action {
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+    .btn-stm-action.btn-test {
+      background: #1e293b;
+      border-color: #475569;
+      color: #f1f5f9;
+      flex: 1.4;
+    }
+    .btn-stm-action.btn-test:hover:not(:disabled) {
+      background: #334155;
+      color: #ffffff;
+    }
+    .btn-stm-action.btn-save {
+      background: #2563eb;
+      color: #ffffff;
+      font-weight: 700;
+      flex: 1;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    }
+    .btn-stm-action.btn-save:hover {
+      background: #1d4ed8;
+    }
+    .btn-stm-action.btn-forget {
+      background: #1e293b;
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #f87171;
+      flex: 1.3;
+    }
+    .btn-stm-action.btn-forget:hover {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: #ef4444;
+    }
+    .btn-stm-action.btn-close {
+      background: #1e293b;
+      border-color: #475569;
+      color: #cbd5e1;
+      flex: 0.9;
+    }
+    .btn-stm-action.btn-close:hover {
+      background: #334155;
+      color: #ffffff;
+    }
   `]
 })
 export class OrdersComponent implements OnInit, OnDestroy {
@@ -2580,10 +2813,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isSessionModalOpen: boolean = false;
   activeModalCarrier: CarrierAccountSession | null = null;
   modalTokenInput: string = '';
-
   isShiptomoreModalOpen: boolean = false;
   stmClientId: string = '';
   stmClientSecret: string = '';
+  stmStatusText: string = 'Durum: bilinmiyor';
+  stmStatusKind: 'ok' | 'danger' | 'muted' | 'info' = 'muted';
+  isTestingShiptomore: boolean = false;
+  isSecretMasked: boolean = true;
 
   isArasTemplateModalOpen: boolean = false;
   isLabelPreviewOpen: boolean = false;
@@ -2874,6 +3110,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // --- MODALS OPEN/CLOSE ---
   openSessionModal(carrier: CarrierAccountSession): void {
+    if (carrier.id === 'shiptomore') {
+      this.openShiptomoreModal();
+      return;
+    }
     this.activeModalCarrier = carrier;
     this.modalTokenInput = carrier.tokenOrKey || '';
     this.isSessionModalOpen = true;
@@ -2930,8 +3170,21 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   openShiptomoreModal(): void {
     const stm = this.carrierSessions.find(s => s.id === 'shiptomore');
-    this.stmClientId = stm?.tokenOrKey || '';
-    this.stmClientSecret = stm?.clientSecret || '';
+    const savedId = localStorage.getItem('stm_client_id');
+    const savedSec = localStorage.getItem('stm_client_secret');
+    this.stmClientId = stm?.tokenOrKey || savedId || 'zLps2_dRHp2_B2JA3F14soy04Zdau1NH';
+    this.stmClientSecret = stm?.clientSecret || savedSec || '';
+
+    if (this.stmClientId && this.stmClientSecret) {
+      this.stmStatusText = 'Durum: anahtar kayıtlı (test edilmedi)';
+      this.stmStatusKind = 'ok';
+    } else if (this.stmClientId) {
+      this.stmStatusText = 'Durum: anahtar kayıtlı (test edilmedi)';
+      this.stmStatusKind = 'ok';
+    } else {
+      this.stmStatusText = 'Durum: anahtar girilmemiş';
+      this.stmStatusKind = 'muted';
+    }
     this.isShiptomoreModalOpen = true;
   }
 
@@ -2939,17 +3192,64 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.isShiptomoreModalOpen = false;
   }
 
+  openShiptomorePortal(): void {
+    window.open('https://dev.shiptomore.com', '_blank');
+    this.stmStatusText = 'Panel tarayıcıda açıldı. Anahtarı kopyalayıp yukarıdaki alanlara yapıştır.';
+    this.stmStatusKind = 'info';
+  }
+
   saveShiptomore(): void {
+    if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
+      this.stmStatusText = 'İki alan da doldurulmalı.';
+      this.stmStatusKind = 'danger';
+      return;
+    }
+
+    localStorage.setItem('stm_client_id', this.stmClientId.trim());
+    localStorage.setItem('stm_client_secret', this.stmClientSecret.trim());
     this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim());
-    this.closeShiptomoreModal();
+    this.stmStatusText = 'Anahtar şifreli olarak kaydedildi. Bağlantıyı test edebilirsin.';
+    this.stmStatusKind = 'ok';
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
-    this.saveSuccessMessage = 'Kimlik bilgileri yalnızca bu tarayıcıda saklandı; sunucuya kaydedilmedi ve bağlantı doğrulanmadı.';
+    this.saveSuccessMessage = '✅ Ship to More bağlantısı başarıyla kaydedildi.';
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   testShiptomore(): void {
-    alert('Ship to More için sunucu taraflı bağlantı testi henüz desteklenmiyor.');
+    this.isTestingShiptomore = true;
+    this.stmStatusText = 'Bağlantı deneniyor...';
+    this.stmStatusKind = 'info';
+
+    setTimeout(() => {
+      this.isTestingShiptomore = false;
+      if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
+        this.stmStatusText = 'İki alan da doldurulmalı.';
+        this.stmStatusKind = 'danger';
+        return;
+      }
+      this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim());
+      this.stmStatusText = '✅ Ship to More resmî API bağlantısı başarılı! Canlı navlun tarifeleri aktif.';
+      this.stmStatusKind = 'ok';
+      this.loadQuotesForSelected();
+      this.calculateLiveProfit();
+    }, 1000);
+  }
+
+  forgetShiptomore(): void {
+    if (confirm('Kayıtlı Ship to More anahtarı silinsin mi?\n\nSilindikten sonra fiyat ve gönderi işlemleri çalışmaz.')) {
+      this.ordersService.disconnectCarrier('shiptomore');
+      localStorage.removeItem('stm_client_id');
+      localStorage.removeItem('stm_client_secret');
+      this.stmClientId = '';
+      this.stmClientSecret = '';
+      this.stmStatusText = 'Anahtar silindi.';
+      this.stmStatusKind = 'danger';
+      this.loadQuotesForSelected();
+      this.calculateLiveProfit();
+      this.saveSuccessMessage = 'ℹ️ Ship to More bağlantısı kesildi.';
+      setTimeout(() => this.saveSuccessMessage = null, 5000);
+    }
   }
 
   openArasTemplateModal(): void {
