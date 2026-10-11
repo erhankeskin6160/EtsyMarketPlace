@@ -67,6 +67,7 @@ builder.Services.AddSingleton(sp => new JwtTokenService(builder.Configuration["J
 builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisService>();
 builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationService>();
 builder.Services.AddScoped<IEtsyLedgerReportService, EtsyLedgerReportService>();
+builder.Services.AddScoped<IEtsyDashboardService, EtsyDashboardService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IEtsyListingApiClient, EtsyMarketPlace.Infrastructure.EtsyIntegration.EtsyListingApiClient>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IGeminiListingApiClient, EtsyMarketPlace.Infrastructure.ListingOptimization.GeminiListingApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IFastListingPublishService, EtsyMarketPlace.Application.ListingOptimization.FastListingPublishService>();
