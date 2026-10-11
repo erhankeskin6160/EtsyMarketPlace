@@ -82,10 +82,4 @@ public interface IArasGlobalApiClient
         decimal finalPrice,
         string rawBearerToken,
         CancellationToken cancellationToken = default);
-
-    Task<(bool Success, string? AccessToken, string? RefreshToken, string? ErrorMessage)> LoginAsync(
-        string username,
-        string password,
-        CancellationToken cancellationToken = default);
 }
-

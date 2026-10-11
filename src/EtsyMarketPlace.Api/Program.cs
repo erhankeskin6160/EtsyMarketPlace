@@ -17,8 +17,6 @@ using EtsyMarketPlace.Infrastructure.BatchQueue;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
-using EtsyMarketPlace.Application.Shipping;
-using EtsyMarketPlace.Infrastructure.Shipping;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
@@ -45,7 +43,6 @@ builder.Services.AddHttpClient<IEtsyOAuthService, EtsyOAuthService>();
 builder.Services.AddTransient<EtsyAccessTokenHandler>();
 builder.Services.AddHttpClient<IEtsyDataClient, EtsyApiClient>()
     .AddHttpMessageHandler<EtsyAccessTokenHandler>();
-builder.Services.AddHttpClient<IArasGlobalApiClient, ArasGlobalApiClient>();
 
 var dataDir = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
