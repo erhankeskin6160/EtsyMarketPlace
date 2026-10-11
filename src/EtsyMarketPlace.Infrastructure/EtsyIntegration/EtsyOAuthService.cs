@@ -10,6 +10,7 @@ namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOptions> options, IShopSettingsRepository settingsRepository) : IEtsyOAuthService
 {
     private readonly EtsyApiOptions _options = options.Value;
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string CodeVerifier, string ShopId, string RedirectUri, DateTimeOffset CreatedAt)> PendingPkceSessions = new();
 
     public Task<string> CreateAuthorizationUrlAsync(string userId, string state, CancellationToken cancellationToken = default)
     {
@@ -26,6 +27,73 @@ public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOpti
         };
         var url = _options.AuthorizationBaseUrl + "?" + string.Join('&', query.Select(x => $"{Uri.EscapeDataString(x.Key)}={Uri.EscapeDataString(x.Value)}"));
         return Task.FromResult(url);
+    }
+
+    public async Task<EtsyOAuthConnectUrlResult> CreatePkceConnectUrlAsync(string shopId, string? redirectUri = null, CancellationToken cancellationToken = default)
+    {
+        var (keystring, _) = await ResolveCredentialsAsync(shopId, cancellationToken);
+        var raw = await settingsRepository.GetRawEtsyAppCredentialsAsync(shopId, cancellationToken);
+        var targetRedirectUri = !string.IsNullOrWhiteSpace(redirectUri)
+            ? redirectUri.Trim()
+            : (!string.IsNullOrWhiteSpace(raw.RedirectUri) ? raw.RedirectUri : _options.RedirectUri);
+
+        var verifierBytes = RandomNumberGenerator.GetBytes(64);
+        var codeVerifier = Base64Url(verifierBytes);
+        var challengeBytes = SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier));
+        var codeChallenge = Base64Url(challengeBytes);
+        var state = Base64Url(RandomNumberGenerator.GetBytes(32));
+
+        PendingPkceSessions[state] = (codeVerifier, shopId, targetRedirectUri, DateTimeOffset.UtcNow);
+
+        var expireThreshold = DateTimeOffset.UtcNow.AddMinutes(-30);
+        foreach (var kvp in PendingPkceSessions)
+        {
+            if (kvp.Value.CreatedAt < expireThreshold)
+                PendingPkceSessions.TryRemove(kvp.Key, out _);
+        }
+
+        var scopes = string.Join(' ', _options.Scopes);
+        if (string.IsNullOrWhiteSpace(scopes))
+            scopes = "listings_r listings_w shops_r transactions_r billing_r";
+
+        var authBase = !string.IsNullOrWhiteSpace(_options.AuthorizationBaseUrl) ? _options.AuthorizationBaseUrl : "https://www.etsy.com/oauth/connect";
+        var query = new Dictionary<string, string>
+        {
+            ["response_type"] = "code",
+            ["client_id"] = keystring.Trim(),
+            ["redirect_uri"] = targetRedirectUri.Trim(),
+            ["scope"] = scopes,
+            ["state"] = state,
+            ["code_challenge"] = codeChallenge,
+            ["code_challenge_method"] = "S256"
+        };
+
+        var url = authBase + "?" + string.Join('&', query.Select(x => $"{Uri.EscapeDataString(x.Key)}={Uri.EscapeDataString(x.Value)}"));
+        return new EtsyOAuthConnectUrlResult(url, state, targetRedirectUri, shopId);
+    }
+
+    public async Task<EtsyOAuthToken> ExchangeCodeWithPkceAsync(
+        string shopId,
+        string code,
+        string? state = null,
+        string? codeVerifier = null,
+        string? redirectUri = null,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedVerifier = codeVerifier;
+        var resolvedRedirectUri = redirectUri;
+
+        if (!string.IsNullOrWhiteSpace(state) && PendingPkceSessions.TryRemove(state, out var session))
+        {
+            resolvedVerifier ??= session.CodeVerifier;
+            if (string.IsNullOrWhiteSpace(resolvedRedirectUri))
+                resolvedRedirectUri = session.RedirectUri;
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedVerifier))
+            throw new InvalidOperationException("PKCE code_verifier bulunamadı veya oturum süresi doldu. Lütfen 'Etsy ile Yetkilendir' butonunu tekrar tıklayın.");
+
+        return await ExchangeCodeAsync(shopId, code, resolvedVerifier, resolvedRedirectUri, cancellationToken);
     }
 
     public async Task<EtsyOAuthToken> ExchangeCodeAsync(string shopId, string code, string codeVerifier, string? redirectUri = null, CancellationToken cancellationToken = default)

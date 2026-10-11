@@ -1,9 +1,17 @@
 namespace EtsyMarketPlace.Application.EtsyIntegration;
 
+public record EtsyOAuthConnectUrlResult(
+    string Url,
+    string State,
+    string RedirectUri,
+    string ShopId);
+
 public interface IEtsyOAuthService
 {
     Task<string> CreateAuthorizationUrlAsync(string userId, string state, CancellationToken cancellationToken = default);
+    Task<EtsyOAuthConnectUrlResult> CreatePkceConnectUrlAsync(string shopId, string? redirectUri = null, CancellationToken cancellationToken = default);
     Task<EtsyOAuthToken> ExchangeCodeAsync(string shopId, string code, string codeVerifier, string? redirectUri = null, CancellationToken cancellationToken = default);
+    Task<EtsyOAuthToken> ExchangeCodeWithPkceAsync(string shopId, string code, string? state = null, string? codeVerifier = null, string? redirectUri = null, CancellationToken cancellationToken = default);
     Task<EtsyOAuthToken> RefreshTokenAsync(string shopId, string refreshToken, CancellationToken cancellationToken = default);
 }
 
