@@ -10,4 +10,7 @@
   <ItemGroup>
     <EmbeddedResource Include="Shipping\Data\se-us-hs-codes.json" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
+  </ItemGroup>
 </Project>

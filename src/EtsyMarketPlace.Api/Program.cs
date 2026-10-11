@@ -12,6 +12,8 @@ using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Infrastructure.AbTesting;
+using EtsyMarketPlace.Api.Filters;
+using EtsyMarketPlace.Application.Common.Validation;
 using EtsyMarketPlace.Infrastructure.AiUsage;
 using EtsyMarketPlace.Infrastructure.BatchQueue;
 using EtsyMarketPlace.Infrastructure.Database.Migrations;
@@ -22,8 +24,12 @@ using EtsyMarketPlace.Infrastructure.Tracking;
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
-// 1. Controller Desteği
-builder.Services.AddControllers();
+// 1. Controller Desteği & Global Validation Pipeline
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ValidationFilter>();
+});
+builder.Services.AddApplicationValidation();
 
 // 2. Dependency Injection (Clean Architecture Servisleri)
 builder.Services.AddHttpClient();
