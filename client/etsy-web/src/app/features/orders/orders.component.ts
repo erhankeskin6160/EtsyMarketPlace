@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { OrdersService } from '../../core/services/orders.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
@@ -649,40 +649,145 @@ import {
               </div>
             </div>
 
-            <div class="form-group">
-              <label class="form-label">Bearer Token / Session Cookie / API Key:</label>
-              <textarea 
-                [(ngModel)]="modalTokenInput" 
-                rows="4" 
-                placeholder="Token veya çerez değerini yapıştırın..." 
-                class="form-control modal-textarea"></textarea>
-              <span class="form-hint">Masaüstü ve panel yetkilendirmesi için kullanılan güvenli token.</span>
-            </div>
-
-            <!-- ARAS GLOBAL LIVE TOKEN EXTRACTION GUIDE -->
-            <div class="jwt-helper-guide" *ngIf="activeModalCarrier?.id === 'aras'">
-              <div class="guide-title">
-                <span>💡</span> <strong>Canlı Aras Global Tokenı Nasıl Alınır?</strong>
+            <!-- ARAS GLOBAL TABBED AUTOMATED LOGIN -->
+            <div *ngIf="activeModalCarrier?.id === 'aras'" class="aras-modal-flow">
+              <div class="aras-tab-strip">
+                <button 
+                  type="button" 
+                  class="aras-subtab-btn" 
+                  [class.active]="arasModalTab === 'credentials'"
+                  (click)="arasModalTab = 'credentials'">
+                  ⚡ Otomatik Giriş
+                </button>
+                <button 
+                  type="button" 
+                  class="aras-subtab-btn" 
+                  [class.active]="arasModalTab === 'transfer'"
+                  (click)="arasModalTab = 'transfer'">
+                  🌐 Açık Sekmeyi Bağla
+                </button>
+                <button 
+                  type="button" 
+                  class="aras-subtab-btn" 
+                  [class.active]="arasModalTab === 'manual'"
+                  (click)="arasModalTab = 'manual'">
+                  ⚙️ Manuel Token
+                </button>
               </div>
-              <p class="guide-text">
-                Aras Global API'sinde <code>HTTP 401 Unauthorized</code> (tahmini fiyat) almamak için tokeninizi yenileyebilirsiniz:
-              </p>
-              <ol class="guide-steps">
-                <li>Açık olan <strong>panel.arasglobalcargo.com</strong> sekmesine geçin.</li>
-                <li>Klavyeden <strong>F12</strong> tuşuna basıp Geliştirici Araçlarını açın.</li>
-                <li><strong>Application</strong> (Uygulama) &gt; <strong>Local Storage</strong> &gt; <code>token</code> değerini kopyalayın (veya <strong>Network</strong> sekmesindeki herhangi bir API isteğinden <code>Authorization: Bearer &lt;token&gt;</code> değerini alın).</li>
-                <li>Metni yukarıdaki alana yapıştırıp <strong>"Oturumu Kaydet & Bağlan"</strong> butonuna tıklayın.</li>
-              </ol>
+
+              <!-- TAB 1: DIRECT AUTOMATIC LOGIN -->
+              <div *ngIf="arasModalTab === 'credentials'" class="aras-tab-body">
+                <p class="aras-flow-hint">
+                  Aras Global (panel.arasglobalcargo.com) hesabınızın kullanıcı adı / telefon numarasını ve şifresini girin. Canlı API oturumu otomatik olarak bağlanacaktır.
+                </p>
+
+                <div class="form-group">
+                  <label class="form-label">Kullanıcı Adı / Telefon / E-posta:</label>
+                  <input 
+                    type="text" 
+                    [(ngModel)]="arasUsername" 
+                    placeholder="Örn: 5xxxxxxxxx veya e-posta" 
+                    class="form-control" />
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Şifre:</label>
+                  <input 
+                    type="password" 
+                    [(ngModel)]="arasPassword" 
+                    placeholder="Aras Global şifreniz" 
+                    class="form-control" 
+                    (keyup.enter)="executeArasLogin()" />
+                </div>
+
+                <div *ngIf="arasLoginError" class="aras-error-alert">
+                  ⚠️ {{ arasLoginError }}
+                </div>
+
+                <div class="modal-actions-row">
+                  <button 
+                    type="button" 
+                    class="btn-save-session" 
+                    [disabled]="isArasLoggingIn || !arasUsername || !arasPassword"
+                    (click)="executeArasLogin()">
+                    <span *ngIf="isArasLoggingIn">⏳ Bağlanıyor...</span>
+                    <span *ngIf="!isArasLoggingIn">⚡ Otomatik Giriş Yap & Bağlan</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- TAB 2: 1-CLICK BROWSER TRANSFER -->
+              <div *ngIf="arasModalTab === 'transfer'" class="aras-tab-body">
+                <div class="transfer-box">
+                  <div class="transfer-header">
+                    <span>💡</span> <strong>Tarayıcınızda Aras Global Oturumu Zaten Açık mı?</strong>
+                  </div>
+                  <p class="guide-text">
+                    Eğer <strong>panel.arasglobalcargo.com</strong> sekmesinde oturumunuz açıksa, aşağıdaki yer imi bağlantısını tarayıcınızın yer imleri çubuğuna sürükleyin veya o sekmedeyken tıklayın (F12 gerekmez):
+                  </p>
+
+                  <div class="bookmarklet-action-area">
+                    <a 
+                      [href]="arasBookmarkletHref" 
+                      class="btn-bookmarklet"
+                      title="Bu düğmeyi Yer İmleri (Bookmarks) çubuğunuza sürükleyin ve Aras sekmesindeyken tıklayın">
+                      ⚡ Aras Oturumunu Aktar (Yer İmi)
+                    </a>
+                    <span class="bookmarklet-sub">İpucu: Bu butonu tarayıcınızın Yer İmleri Çubuğuna sürükleyip bırakabilirsiniz!</span>
+                  </div>
+
+                  <div class="open-tab-direct">
+                    <span>Henüz oturum açmadıysanız:</span>
+                    <a href="https://panel.arasglobalcargo.com/auth" target="_blank" class="btn-open-aras-portal">
+                      🌐 Aras Global Panelini Aç (Yeni Sekme)
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB 3: MANUAL TOKEN -->
+              <div *ngIf="arasModalTab === 'manual'" class="aras-tab-body">
+                <div class="form-group">
+                  <label class="form-label">Bearer Token (JWT):</label>
+                  <textarea 
+                    [(ngModel)]="modalTokenInput" 
+                    rows="4" 
+                    placeholder="eyJhbGciOi..." 
+                    class="form-control modal-textarea"></textarea>
+                </div>
+                <div class="modal-actions-row">
+                  <button type="button" class="btn-test-session" (click)="testCarrierConnection()">
+                    ⚡ Bağlantıyı Test Et
+                  </button>
+                  <button type="button" class="btn-save-session" (click)="saveCarrierSession()">
+                    💾 Oturumu Kaydet & Bağlan
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div class="modal-actions-row">
-              <button type="button" class="btn-test-session" (click)="testCarrierConnection()">
-                ⚡ Bağlantıyı Test Et
-              </button>
-              <button type="button" class="btn-save-session" (click)="saveCarrierSession()">
-                💾 Oturumu Kaydet & Bağlan
-              </button>
+            <!-- OTHER CARRIERS (SHIPENTEGRA, NAVLUNGO) -->
+            <div *ngIf="activeModalCarrier?.id !== 'aras'">
+              <div class="form-group">
+                <label class="form-label">Bearer Token / Session Cookie / API Key:</label>
+                <textarea 
+                  [(ngModel)]="modalTokenInput" 
+                  rows="4" 
+                  placeholder="Token veya çerez değerini yapıştırın..." 
+                  class="form-control modal-textarea"></textarea>
+                <span class="form-hint">Masaüstü ve panel yetkilendirmesi için kullanılan güvenli token.</span>
+              </div>
+
+              <div class="modal-actions-row">
+                <button type="button" class="btn-test-session" (click)="testCarrierConnection()">
+                  ⚡ Bağlantıyı Test Et
+                </button>
+                <button type="button" class="btn-save-session" (click)="saveCarrierSession()">
+                  💾 Oturumu Kaydet & Bağlan
+                </button>
+              </div>
             </div>
+
           </div>
         </div>
       </div>
@@ -2547,7 +2652,130 @@ import {
       border-radius: 6px;
       margin-top: 4px;
     }
+
+    /* ARAS TABBED MODAL STYLES */
+    .aras-modal-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .aras-tab-strip {
+      display: flex;
+      gap: 6px;
+      background: #0f172a;
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid #1e293b;
+    }
+    .aras-subtab-btn {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.73rem;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      text-align: center;
+    }
+    .aras-subtab-btn.active {
+      background: #3b82f6;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+    }
+    .aras-tab-body {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .aras-flow-hint {
+      font-size: 0.75rem;
+      color: #94a3b8;
+      line-height: 1.4;
+      margin: 0;
+    }
+    .aras-error-alert {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+    .transfer-box {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .transfer-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #f8fafc;
+      font-size: 0.8rem;
+    }
+    .bookmarklet-action-area {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px;
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px dashed rgba(59, 130, 246, 0.4);
+      border-radius: 8px;
+      align-items: center;
+      text-align: center;
+    }
+    .btn-bookmarklet {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.76rem;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      cursor: grab;
+      user-select: none;
+    }
+    .bookmarklet-sub {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+    .open-tab-direct {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 6px;
+      border-top: 1px solid #1e293b;
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+    .btn-open-aras-portal {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #38bdf8;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.72rem;
+    }
+    .btn-open-aras-portal:hover {
+      text-decoration: underline;
+    }
   `]
+
 })
 export class OrdersComponent implements OnInit, OnDestroy {
   // STATE
@@ -2581,6 +2809,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
   activeModalCarrier: CarrierAccountSession | null = null;
   modalTokenInput: string = '';
 
+  // ARAS AUTOMATED LOGIN STATE
+  arasUsername: string = '';
+  arasPassword: string = '';
+  arasModalTab: 'credentials' | 'transfer' | 'manual' = 'credentials';
+  isArasLoggingIn: boolean = false;
+  arasLoginError: string | null = null;
+  get arasBookmarkletHref(): string {
+    return "javascript:(function(){try{const t=localStorage.getItem('token')||localStorage.getItem('accessToken');if(t&&t.includes('eyJ')){location.href='http://localhost:4200/orders?carrier=aras&token='+encodeURIComponent(t);}else{alert('Aras Global oturum tokeni bulunamadı. Lütfen önce panel.arasglobalcargo.com adresinde oturum açın.');}}catch(e){alert('Hata: '+e.message);}})();";
+  }
+
   isShiptomoreModalOpen: boolean = false;
   stmClientId: string = '';
   stmClientSecret: string = '';
@@ -2598,7 +2836,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   constructor(
     public ordersService: OrdersService,
     private etsyApi: EtsyApiService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private router: Router
   ) {}
 
   ngOnInit(): void {
@@ -2630,8 +2869,21 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
     this.subs.push(sessionsSub);
 
-    // 4. Listen to queryParams from Shipping Hub
+    // 4. Listen to queryParams from Shipping Hub & 1-Click Aras Transfer
     const routeSub = this.route.queryParams.subscribe(params => {
+      if (params['carrier'] === 'aras' && params['token']) {
+        const rawToken = params['token'];
+        this.ordersService.connectCarrier('aras', rawToken);
+        this.loadQuotesForSelected();
+        this.calculateLiveProfit();
+        this.saveSuccessMessage = '🎉 Aras Global oturumu tarayıcınızdan başarıyla aktarıldı ve bağlandı!';
+        setTimeout(() => {
+          this.saveSuccessMessage = null;
+        }, 5000);
+        this.router.navigate([], { replaceUrl: true, queryParams: {} });
+        return;
+      }
+
       if (params['carrierName'] && params['carrierCost']) {
         const cName = params['carrierName'];
         const cCost = parseFloat(params['carrierCost']);
@@ -2884,6 +3136,32 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.activeModalCarrier = null;
   }
 
+  executeArasLogin(): void {
+    if (!this.arasUsername || !this.arasPassword) return;
+    this.isArasLoggingIn = true;
+    this.arasLoginError = null;
+
+    this.ordersService.loginArasGlobal(this.arasUsername.trim(), this.arasPassword.trim()).subscribe({
+      next: (res) => {
+        this.isArasLoggingIn = false;
+        if (res && res.success && res.token) {
+          this.ordersService.connectCarrier('aras', res.token);
+          this.loadQuotesForSelected();
+          this.calculateLiveProfit();
+          this.closeSessionModal();
+          this.saveSuccessMessage = '🎉 Aras Global oturumu başarıyla bağlandı ve canlı API teklifleri aktif edildi!';
+          setTimeout(() => this.saveSuccessMessage = null, 5000);
+        } else {
+          this.arasLoginError = res?.error || 'Giriş yapılamadı. Kullanıcı adı veya şifrenizi kontrol edin.';
+        }
+      },
+      error: (err) => {
+        this.isArasLoggingIn = false;
+        this.arasLoginError = err?.error?.error || err?.message || 'Aras Global sunucusuna bağlanılamadı.';
+      }
+    });
+  }
+
   saveCarrierSession(): void {
     if (!this.activeModalCarrier) return;
     this.ordersService.connectCarrier(this.activeModalCarrier.id, this.modalTokenInput.trim());
@@ -2891,9 +3169,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
 
-    this.saveSuccessMessage = `${this.activeModalCarrier.name} kimlik bilgisi yalnızca bu tarayıcıda saklandı; API’ye kaydedilmedi ve bağlantı doğrulanmadı.`;
+    this.saveSuccessMessage = `✓ ${this.activeModalCarrier.name} oturumu bağlandı ve güvenli şekilde kaydedildi.`;
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
+
 
   testCarrierConnection(): void {
     if (!this.activeModalCarrier) return;

@@ -1184,6 +1184,38 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         return list;
     }
 
+    public async Task<string?> GetRawCarrierTokenAsync(string shopId, string carrierId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT encrypted_credentials, is_connected
+            FROM shop_carrier_sessions
+            WHERE shop_id = $shop_id AND carrier_id = $carrier_id AND is_connected = 1
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        command.Parameters.AddWithValue("$carrier_id", carrierId);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            var enc = reader.GetString(0);
+            if (!string.IsNullOrWhiteSpace(enc))
+            {
+                try
+                {
+                    return _protector.Unprotect(enc);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
     public async Task<CarrierSessionRecord> SaveCarrierSessionAsync(SaveCarrierSessionRequest request, CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken);

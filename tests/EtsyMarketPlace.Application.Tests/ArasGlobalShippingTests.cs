@@ -344,5 +344,9 @@ public sealed class ArasGlobalShippingTests
 
         public Task<bool> SendShipmentPriceAsync(string shipmentId, string provider, decimal finalPrice, string rawBearerToken, CancellationToken cancellationToken = default)
             => Task.FromResult(false);
+
+        public Task<(bool Success, string? AccessToken, string? RefreshToken, string? ErrorMessage)> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+            => Task.FromResult((true, (string?)"mock-jwt-token", (string?)null, (string?)null));
     }
 }
+

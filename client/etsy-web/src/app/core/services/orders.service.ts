@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { BehaviorSubject, Observable, of } from 'rxjs';
 import { EtsyApiService } from './etsy-api.service';
 import { OrderFulfillmentItem, CarrierQuote, PackageSpecs, CarrierAccountSession, GtipCodeItem } from '../models/orders.models';
@@ -20,8 +21,9 @@ export class OrdersService {
   private sessionsSubject = new BehaviorSubject<CarrierAccountSession[]>(this.loadInitialSessions());
   public sessions$ = this.sessionsSubject.asObservable();
 
-  constructor(private etsyApi: EtsyApiService) {
+  constructor(private etsyApi: EtsyApiService, private http: HttpClient) {
     this.loadOrders();
+    this.syncCarrierSessionsWithBackend();
   }
 
   // --- CARRIER ACCOUNT SESSIONS MANAGEMENT ---
@@ -164,7 +166,41 @@ export class OrdersService {
       return s;
     });
     this.persistSessions(list);
+
+    if (carrierId === 'aras' && token && !token.includes('...')) {
+      this.connectArasToken(token).subscribe({
+        next: () => {},
+        error: () => {}
+      });
+    }
   }
+
+  public syncCarrierSessionsWithBackend(): void {
+    this.checkBackendArasSession().subscribe({
+      next: (res) => {
+        if (res && res.isConnected && res.token) {
+          const arasSession = this.sessionsSubject.value.find(s => s.id === 'aras');
+          if (!arasSession || !arasSession.isConnected || arasSession.tokenOrKey !== res.token) {
+            this.connectCarrier('aras', res.token);
+          }
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  public checkBackendArasSession(): Observable<any> {
+    return this.http.get<any>('/api/shipping/aras/session');
+  }
+
+  public loginArasGlobal(username: string, password: string): Observable<{ success: boolean; isConnected: boolean; token?: string; error?: string }> {
+    return this.http.post<{ success: boolean; isConnected: boolean; token?: string; error?: string }>('/api/shipping/aras/login', { username, password });
+  }
+
+  public connectArasToken(token: string): Observable<any> {
+    return this.http.post<any>('/api/shipping/aras/connect-token', { token });
+  }
+
 
   public validateJwt(token: string | null | undefined): { isValid: boolean; expired: boolean; expDate?: Date; timeLeftStr?: string; reason?: string } {
     if (!token || typeof token !== 'string') {

@@ -302,5 +302,11 @@ public sealed class OrderFulfillmentStudioTests
         {
             return Task.FromResult(true);
         }
+
+        public Task<(bool Success, string? AccessToken, string? RefreshToken, string? ErrorMessage)> LoginAsync(string username, string password, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult((true, (string?)"mock-jwt-token", (string?)null, (string?)null));
+        }
     }
+
 }

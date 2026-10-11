@@ -938,4 +938,95 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         }
         catch (Exception caught) { AppLog.Swallowed(caught); }
     }
+
+    /// <summary>
+    /// Kullanıcı adı ve şifre ile resmi Aras Global API'sinde oturum açar ve canlı JWT tokeni döner.
+    /// </summary>
+    public async Task<(bool Success, string? AccessToken, string? RefreshToken, string? ErrorMessage)> LoginAsync(
+        string username,
+        string password,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            return (false, null, null, "Kullanıcı adı ve şifre boş bırakılamaz.");
+        }
+
+        try
+        {
+            var payload = new
+            {
+                username = username.Trim(),
+                password = password.Trim()
+            };
+
+            string jsonBody = JsonSerializer.Serialize(payload, JsonOpts);
+            using var req = new HttpRequestMessage(HttpMethod.Post, BaseUrl + "/Auth/Login")
+            {
+                Content = new StringContent(jsonBody, Encoding.UTF8, "application/json")
+            };
+
+            using var res = await _httpClient.SendAsync(req, cancellationToken);
+            string responseText = await res.Content.ReadAsStringAsync(cancellationToken);
+
+            using var doc = JsonDocument.Parse(responseText);
+            var root = doc.RootElement;
+
+            int resultCode = 0;
+            if (root.TryGetProperty("resultCode", out var codeProp))
+            {
+                resultCode = codeProp.GetInt32();
+            }
+
+            string? resultMessage = null;
+            if (root.TryGetProperty("resultMessage", out var msgProp))
+            {
+                resultMessage = msgProp.GetString();
+            }
+
+            if (resultCode == 200 && root.TryGetProperty("payload", out var pl))
+            {
+                string? accessToken = null;
+                string? refreshToken = null;
+
+                if (pl.TryGetProperty("token", out var tok))
+                {
+                    if (tok.TryGetProperty("accessToken", out var atProp))
+                    {
+                        accessToken = atProp.GetString();
+                    }
+                    if (tok.TryGetProperty("refreshToken", out var rtProp))
+                    {
+                        refreshToken = rtProp.GetString();
+                    }
+                }
+
+                if (string.IsNullOrWhiteSpace(accessToken) && responseText.Contains("eyJ"))
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match(responseText, @"ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+");
+                    if (m.Success)
+                    {
+                        accessToken = m.Value;
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(accessToken))
+                {
+                    return (true, accessToken, refreshToken, null);
+                }
+            }
+
+            string error = !string.IsNullOrWhiteSpace(resultMessage) ? resultMessage : $"Giriş başarısız oldu (HTTP {(int)res.StatusCode}).";
+            if (error.Equals("userNotFound", StringComparison.OrdinalIgnoreCase))
+            {
+                error = "Kullanıcı bulunamadı veya şifre hatalı.";
+            }
+
+            return (false, null, null, error);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, null, $"Aras Global bağlantı hatası: {ex.Message}");
+        }
+    }
 }
