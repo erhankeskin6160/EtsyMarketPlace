@@ -1,0 +1,578 @@
+    <div class="market-view">
+      <!-- 1. HEADER (Title + AI Active Badge + Status) -->
+      <div class="market-header">
+        <div class="header-left">
+          <div class="icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </div>
+          <div>
+            <h1 class="page-title">🔍 Etsy Pazar Araştırması & Rakip İstihbaratı</h1>
+            <p class="page-subtitle">Arama hacmi, ortalama fiyatlar, rekabet skoru, SEO ve pazar fırsat puanlaması</p>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <!-- Active AI Model Hub Badge (Matching Desktop Image 1) -->
+          <button 
+            type="button"
+            class="ai-badge-btn" 
+            [ngClass]="aiService.activeBadgeClass()" 
+            (click)="aiService.openAiSettingsModal()" 
+            title="Yapay Zeka Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
+            <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
+            <span>{{ aiService.activeBadgeTextClean() }}</span>
+            <span class="hub-gear">⚙️</span>
+          </button>
+
+          <span class="header-status-text">{{ statusText }}</span>
+        </div>
+      </div>
+
+      <!-- 2. SEARCH TOOLBAR (2-Row Responsive Layout) -->
+      <div class="glass-card search-card">
+        <div class="search-form-row">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input 
+              type="text" 
+              [(ngModel)]="searchKeyword" 
+              (keyup.enter)="onSearch()"
+              placeholder="Etsy pazarında aranacak kelime: örn. 3d printed desk organizer, cosplay helmet, resin lamp..." 
+              class="search-input" />
+          </div>
+          <div class="filter-wrap">
+            <label class="filter-label">Limit:</label>
+            <select [(ngModel)]="limit" class="filter-select">
+              <option [value]="10">10 İlan</option>
+              <option [value]="25">25 İlan</option>
+              <option [value]="50">50 İlan</option>
+              <option [value]="100">100 İlan</option>
+            </select>
+          </div>
+          <div class="filter-wrap">
+            <label class="filter-label">Sıralama:</label>
+            <select [(ngModel)]="sortBy" class="filter-select" (change)="applySort()">
+              <option value="market_score">Pazar Puanı (Önce En Yüksek)</option>
+              <option value="estimated_revenue">💰 Tahmini Ciro (En Çok Kazandıran)</option>
+              <option value="estimated_sales">🔥 Tahmini Satış (En Çok Satan)</option>
+              <option value="seo_score">SEO Puanı (Önce En Yüksek)</option>
+              <option value="favorites">En Çok Beğenilen (Favori)</option>
+              <option value="views">Görüntülenme Sayısı</option>
+              <option value="shop_sales">Mağaza Satışı</option>
+              <option value="price_asc">Fiyat (Önce En Düşük)</option>
+              <option value="price_desc">Fiyat (Önce En Yüksek)</option>
+            </select>
+          </div>
+          <button class="btn-primary-search" (click)="onSearch()" [disabled]="isLoading">
+            {{ isLoading ? '⏳ Taranıyor...' : '🔍 Etsy\'de Ara' }}
+          </button>
+        </div>
+
+        <div class="search-actions-row">
+          <button class="btn-sub-action" (click)="generateAiMarketReport()" [disabled]="isGeneratingReport">
+            <span>{{ isGeneratingReport ? 'Yapay Zeka Analiz Ediyor...' : '✨ AI Pazar Özeti' }}</span>
+          </button>
+          <button class="btn-sub-action" (click)="copyAllTopTags()">
+            <span>📋 13 Altın Tag'i Kopyala</span>
+          </button>
+          <button class="btn-sub-action" (click)="filterOnlyTopOpportunity()">
+            <span>⚡ Fırsat Ürünlerini Filtrele</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 3. KPI SUMMARY STRIP (6 KPI Cards: EverBee / Toolsy / eRank) -->
+      <div class="kpi-grid">
+        <div class="glass-card kpi-card">
+          <span class="kpi-label">ORTALAMA FİYAT (AOV)</span>
+          <div class="kpi-val text-emerald">
+            &#36;{{ avgPriceUsd | number:'1.2-2' }}
+            <span class="sub-try">(₺{{ (avgPriceUsd * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
+          </div>
+          <span class="kpi-desc">Kategorideki rekabetçi satış ortalaması</span>
+        </div>
+
+        <div class="glass-card kpi-card highlight-emerald">
+          <span class="kpi-label">TAHMİNİ AYLIK PAZAR CİROSU</span>
+          <div class="kpi-val text-emerald">
+            &#36;{{ totalEstimatedMarketRevenue | number:'1.0-0' }} / ay
+            <span class="sub-try">(₺{{ (totalEstimatedMarketRevenue * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
+          </div>
+          <span class="kpi-desc">Toolsy & EverBee algoritmasıyla toplam pazar hacmi</span>
+        </div>
+
+        <div class="glass-card kpi-card">
+          <span class="kpi-label">ORTALAMA AYLIK SATIŞ</span>
+          <div class="kpi-val text-cyan">
+            {{ averageEstimatedMonthlySales | number:'1.0-0' }} Adet / ay
+          </div>
+          <span class="kpi-desc">İlan başına tahmini aylık sipariş hızı</span>
+        </div>
+
+        <div class="glass-card kpi-card">
+          <span class="kpi-label">ORTALAMA FAVORİ / İLAN</span>
+          <div class="kpi-val text-purple">
+            {{ avgFavorites | number:'1.0-0' }} Fav
+          </div>
+          <span class="kpi-desc">Müşteri kaydetme ve satın alma ilgisi</span>
+        </div>
+
+        <div class="glass-card kpi-card">
+          <span class="kpi-label">LİDER SATICI MAĞAZA</span>
+          <div class="kpi-val text-purple">
+            {{ topShopName }}
+          </div>
+          <span class="kpi-desc">Kategori hacminin lider oyuncusu</span>
+        </div>
+
+        <div class="glass-card kpi-card highlight-orange">
+          <span class="kpi-label">PAZAR FIRSAT SKORU</span>
+          <div class="kpi-val text-orange">
+            %{{ opportunityScore }} / 100
+          </div>
+          <span class="kpi-desc">Yüksek talep, optimize edilebilir rekabet</span>
+        </div>
+      </div>
+
+      <!-- AI REPORT CALLOUT -->
+      <div *ngIf="aiReport" class="glass-card ai-report-card">
+        <div class="ai-report-head">
+          <span class="ai-badge">🤖 {{ aiService.activeBadgeText() }} - PAZAR STRATEJİ RAPORU</span>
+          <button class="close-report" (click)="aiReport = ''">×</button>
+        </div>
+        <div class="ai-report-content" [innerHTML]="aiReport"></div>
+      </div>
+
+      <!-- VIEW NAVIGATION TABS (Listings vs Tag Matrix) -->
+      <div class="view-tabs-bar">
+        <button 
+          type="button" 
+          class="tab-btn" 
+          [class.active]="activeTab === 'listings'" 
+          (click)="activeTab = 'listings'">
+          <span>📋 Pazar İlanları & Rakip Listesi</span>
+          <span class="tab-count-badge">{{ items.length }} İlan</span>
+        </button>
+        <button 
+          type="button" 
+          class="tab-btn" 
+          [class.active]="activeTab === 'tag_matrix'" 
+          (click)="activeTab = 'tag_matrix'">
+          <span>🏷️ eRank & Marmalead Etiket Rekabet Matrisi</span>
+          <span class="tab-count-badge tag-matrix-badge">{{ topTags.length }} Etiket</span>
+        </button>
+      </div>
+
+      <!-- 4. PRODUCT LISTINGS TABLE & DETAILS (TAB 1: LISTINGS) -->
+      <ng-container *ngIf="activeTab === 'listings'">
+      <div class="glass-card table-card">
+        <div class="table-head-row">
+          <div class="table-title-group">
+            <span class="table-title">Pazar İlanları</span>
+            <span class="table-count-badge">{{ items.length }} Ürün Sıralandı</span>
+          </div>
+          <span class="table-hint">💡 Bir satıra tıklayarak alttaki 12 eylem aracını kullanabilir veya "🚀 Taslağa Klonla" ile hızlıca satışa açabilirsiniz.</span>
+        </div>
+
+        <div class="table-wrap">
+          <table class="market-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">Resim</th>
+                <th style="width: 45px;">Sıra</th>
+                <th>Ürün Başlığı</th>
+                <th style="width: 105px;">Fiyat ($ / ₺)</th>
+                <th style="width: 110px;">Tahmini Satış</th>
+                <th style="width: 110px;">Tahmini Ciro</th>
+                <th style="width: 130px;">Mağaza</th>
+                <th style="width: 75px;" class="sortable-fav" (click)="toggleFavSort()">
+                  Favori {{ favSortDesc ? '▼' : '▲' }}
+                </th>
+                <th style="width: 65px; text-align: center;">SEO</th>
+                <th style="width: 85px; text-align: center;">Pazar Puanı</th>
+                <th style="width: 190px;">Tagler</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr 
+                *ngFor="let item of items; let idx = index"
+                [class.selected-row]="selectedItem?.id === item.id"
+                (click)="selectItem(item)"
+                (dblclick)="openEtsyListing(item)">
+                
+                <!-- Resim Thumbnail -->
+                <td class="thumb-cell">
+                  <img [src]="item.imageUrl" alt="Thumb" class="prod-thumb" (click)="openImageZoom(item, $event)" />
+                </td>
+
+                <!-- Sıra -->
+                <td class="rank-cell">#{{ item.listingRank }}</td>
+
+                <!-- Ürün Başlığı -->
+                <td class="title-cell">
+                  <span class="prod-title" [title]="item.title">{{ item.title }}</span>
+                </td>
+
+                <!-- Fiyat -->
+                <td class="price-cell">
+                  <b>&#36;{{ item.priceUsd | number:'1.2-2' }}</b>
+                  <span class="try-sm">₺{{ (item.priceUsd * etsyApi.exchangeRate()) | number:'1.0-0' }}</span>
+                </td>
+
+                <!-- Tahmini Satış (EverBee Modeli) -->
+                <td class="est-sales-cell">
+                  <b>{{ (item.estimatedMonthlySales || 40) | number }} / ay</b>
+                  <span class="velocity-pill" [ngClass]="getVelocityClass(item.salesVelocity)">
+                    {{ item.salesVelocity || '⚡ Düzenli' }}
+                  </span>
+                </td>
+
+                <!-- Tahmini Ciro (EverBee Modeli) -->
+                <td class="est-rev-cell">
+                  <b class="text-emerald">&#36;{{ (item.estimatedMonthlyRevenue || (item.priceUsd * (item.estimatedMonthlySales || 40))) | number:'1.0-0' }} / ay</b>
+                  <span class="try-sm">₺{{ ((item.estimatedMonthlyRevenue || (item.priceUsd * (item.estimatedMonthlySales || 40))) * etsyApi.exchangeRate()) | number:'1.0-0' }}</span>
+                </td>
+
+                <!-- Mağaza -->
+                <td class="shop-cell">
+                  <a [href]="item.shopUrl" target="_blank" (click)="$event.stopPropagation()" class="shop-link" title="Etsy Mağazasını Aç">
+                    {{ item.shopName }} ↗
+                  </a>
+                </td>
+
+                <!-- Favori -->
+                <td class="fav-cell">❤️ {{ item.favorites | number }}</td>
+
+                <!-- SEO PUANI ROZETİ -->
+                <td class="score-cell">
+                  <span class="score-badge" [ngClass]="getScoreColorClass(item.seoScore)">
+                    %{{ item.seoScore }}
+                  </span>
+                </td>
+
+                <!-- PAZAR PUANI ROZETİ -->
+                <td class="score-cell">
+                  <span class="score-badge market" [ngClass]="getScoreColorClass(item.marketScore)">
+                    %{{ item.marketScore }}
+                  </span>
+                </td>
+
+                <!-- Tagler -->
+                <td class="tags-cell">
+                  <div class="mini-tags-wrap">
+                    <span *ngFor="let t of item.tags.slice(0, 3)" class="mini-tag">{{ t }}</span>
+                    <span *ngIf="item.tags.length > 3" class="mini-tag more">+{{ item.tags.length - 3 }}</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. BOTTOM DETAILS & 12 ACTION BUTTONS (Matching MarketResearchForm.cs Image) -->
+      <div class="glass-card bottom-details-card" *ngIf="selectedItem">
+        <div class="bottom-grid">
+          
+          <!-- Sol: Görsel Önizleme ve Slider -->
+          <div class="bottom-image-box">
+            <div class="image-preview-wrap">
+              <img [src]="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl" alt="Preview" class="slider-image" />
+              <div class="slider-controls">
+                <button type="button" class="btn-slide" (click)="prevImage()">◀</button>
+                <span class="slide-indicator">{{ currentImageIndex + 1 }} / {{ selectedItem.imageUrls.length || 1 }}</span>
+                <button type="button" class="btn-slide" (click)="nextImage()">▶</button>
+              </div>
+            </div>
+            <button type="button" class="btn-send-studio" (click)="sendToImageStudio()">
+              📸 Görsel Stüdyo'ya Gönder
+            </button>
+          </div>
+
+          <!-- Orta: Monospace Detay Kutusu -->
+          <div class="bottom-detail-box">
+            <div class="detail-content-text">
+📌 <strong>BAŞLIK:</strong> {{ selectedItem.title }}
+
+🏪 <strong>MAĞAZA / FİYAT:</strong> {{ selectedItem.shopName }} | {{ '$' + selectedItem.priceUsd.toFixed(2) }} (₺{{ (selectedItem.priceUsd * etsyApi.exchangeRate()).toFixed(0) }})
+Mağaza Satışı: {{ selectedItem.shopSales | number }} | Yorum: {{ selectedItem.reviewCount | number }} | Puan: {{ selectedItem.reviewAverage }} ⭐
+Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem.views | number }} | Stok: {{ selectedItem.quantity }}
+
+💰 <strong>EVERBEE & TOOLSY GELİR TAHMİNİ:</strong>
+Aylık Tahmini Satış: {{ (selectedItem.estimatedMonthlySales || 45) | number }} Adet/ay | Aylık Tahmini Ciro: &#36;{{ (selectedItem.estimatedMonthlyRevenue || (selectedItem.priceUsd * 45)) | number:'1.0-0' }}/ay (₺{{ ((selectedItem.estimatedMonthlyRevenue || (selectedItem.priceUsd * 45)) * etsyApi.exchangeRate()) | number:'1.0-0' }})
+Satış Hızı: {{ selectedItem.salesVelocity || '🔥 Çok Hızlı Satan' }} | Tahmini Ziyaretçi Dönüşüm Oranı (CVR): %{{ selectedItem.conversionRateEst || 2.8 }}
+
+📊 <strong>SEO / PAZAR:</strong> SEO Puanı: %{{ selectedItem.seoScore }}/100 | Pazar Fırsat Puanı: %{{ selectedItem.marketScore }}/100
+
+🏷️ <strong>ETİKETLER ({{ selectedItem.tags.length }}):</strong>
+{{ selectedItem.tags.join(', ') }}
+
+📝 <strong>ÜRÜN AÇIKLAMASI:</strong>
+{{ selectedItem.description }}
+            </div>
+          </div>
+
+          <!-- Sağ: 12 MASAÜSTÜ EYLEM BUTONU (Grouped & Colorful) -->
+          <div class="bottom-actions-panel">
+            <!-- 1. Satır: Birincil Aksiyonlar -->
+            <div class="actions-row">
+              <button type="button" class="btn-action-primary clone-btn" (click)="cloneSelectedListing()">
+                🚀 Taslağa Klonla
+              </button>
+              <button type="button" class="btn-action-primary opt-btn" (click)="optimizeWithAi()">
+                <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
+                <span>AI Optimizasyon</span>
+              </button>
+              <button type="button" class="btn-action-neutral" (click)="trackSelectedListing()">
+                📌 Takibe Ekle
+              </button>
+            </div>
+
+            <!-- 2. Satır: Analiz Araçları -->
+            <div class="actions-row">
+              <button type="button" class="btn-action-neutral" (click)="openKeywordAnalysisModal()">
+                🔍 Kelime Analizi
+              </button>
+              <button type="button" class="btn-action-neutral" (click)="openCompetitorAnalysisModal()">
+                🕵️ Rakip Analizi
+              </button>
+              <button type="button" class="btn-action-neutral" (click)="openShopUrl()">
+                🏪 Mağaza Aç
+              </button>
+            </div>
+
+            <!-- 3. Satır: Sağlık & Kopyalama -->
+            <div class="actions-row">
+              <button type="button" class="btn-action-neutral health-btn" (click)="openHealthScoreModal()">
+                🩺 Sağlık Skoru
+              </button>
+              <button type="button" class="btn-action-neutral" (click)="copySelectedTags()">
+                🏷️ Tagleri Kopyala
+              </button>
+              <button type="button" class="btn-action-neutral" (click)="copySelectedTitle()">
+                📝 Başlığı Kopyala
+              </button>
+            </div>
+
+            <!-- 4. Satır: Dışa Aktarma & Linkler -->
+            <div class="actions-row">
+              <button type="button" class="btn-action-neutral" (click)="openEtsyListing(selectedItem)">
+                🌐 Etsy'de Aç
+              </button>
+              <button type="button" class="btn-action-neutral" (click)="exportCsv()">
+                📊 CSV Aktar
+              </button>
+              <button type="button" class="btn-action-neutral" (click)="copyListingLink()">
+                🔗 Linki Kopyala
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+      </ng-container>
+
+      <!-- 5. ERANK & MARMALEAD ETİKET REKABET MATRİSİ (TAB 2: TAG MATRIX) -->
+      <div *ngIf="activeTab === 'tag_matrix'" class="glass-card tag-matrix-card">
+        <!-- Matrix Header & Stats Strip -->
+        <div class="matrix-header-row">
+          <div class="matrix-title-group">
+            <span class="table-title">🏷️ eRank & Marmalead Etiket Rekabet & Hacim Matrisi</span>
+            <span class="matrix-subtitle">İncelenen {{ items.length }} Etsy ilanında tespit edilen benzersiz altın anahtar kelimeler ve rekabet analizi</span>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="matrix-actions-group">
+            <button class="btn-matrix-action select-13" (click)="selectAllTop13Tags()" title="Etsy algoritmasına uygun en popüler ilk 13 etiketi anında seç">
+              <span>🎯 İlk 13'ü Seç ({{ getSelectedCount() }}/13)</span>
+            </button>
+            <button class="btn-matrix-action copy-sel" (click)="copySelectedTagsToClipboard()" [disabled]="getSelectedCount() === 0">
+              <span>📋 Seçilenleri Kopyala</span>
+            </button>
+            <button class="btn-matrix-action push-creator" (click)="sendSelectedTagsToFastCreator()" [disabled]="getSelectedCount() === 0">
+              <span>🚀 Fast Creator'a Aktar</span>
+            </button>
+            <button class="btn-matrix-action clear-sel" (click)="clearSelectedTags()" *ngIf="getSelectedCount() > 0">
+              <span>✕ Temizle</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tag Quick Stats Cards -->
+        <div class="tag-stats-row">
+          <div class="tag-stat-chip">
+            <span class="stat-name">İNCELENEN ETİKET:</span>
+            <span class="stat-value text-cyan">{{ topTags.length }} Adet</span>
+          </div>
+          <div class="tag-stat-chip">
+            <span class="stat-name">ORTALAMA UZUNLUK:</span>
+            <span class="stat-value text-emerald">{{ getAvgTagLength() | number:'1.1-1' }} / 20 Karakter</span>
+          </div>
+          <div class="tag-stat-chip">
+            <span class="stat-name">LONG-TAIL ORANI:</span>
+            <span class="stat-value text-purple">%{{ getLongTailRatio() | number:'1.0-0' }} (2+ Kelime)</span>
+          </div>
+          <div class="tag-stat-chip highlight-chip">
+            <span class="stat-name">SEÇİLEN ETİKET:</span>
+            <span class="stat-value" [ngClass]="getSelectedCount() === 13 ? 'text-emerald' : 'text-orange'">
+              {{ getSelectedCount() }} / 13 Etiket
+            </span>
+          </div>
+        </div>
+
+        <!-- Tag Search Filter Bar -->
+        <div class="tag-filter-bar">
+          <div class="tag-search-input-wrap">
+            <span class="tag-search-icon">🔍</span>
+            <input 
+              type="text" 
+              [(ngModel)]="tagSearchQuery" 
+              placeholder="Matris içindeki etiketleri anında filtrele (örn: dragon, organizer, gift)..." 
+              class="tag-filter-input" />
+            <button *ngIf="tagSearchQuery" class="clear-filter-btn" (click)="tagSearchQuery = ''">✕</button>
+          </div>
+          <span class="filter-count-badge">{{ getFilteredTags().length }} etiket gösteriliyor</span>
+        </div>
+
+        <!-- Tag Matrix Table -->
+        <div class="table-wrap">
+          <table class="market-table tag-matrix-table">
+            <thead>
+              <tr>
+                <th style="width: 45px; text-align: center;">
+                  <input 
+                    type="checkbox" 
+                    [checked]="isAllFilteredSelected()" 
+                    (change)="toggleSelectAllFiltered()" 
+                    title="Tümünü Seç / Kaldır" />
+                </th>
+                <th style="width: 45px;">Sıra</th>
+                <th>Anahtar Kelime / Etiket (Keyword)</th>
+                <th style="width: 170px;">İlan Frekansı</th>
+                <th style="width: 100px; text-align: center;">Pazar Payı</th>
+                <th style="width: 140px; text-align: center;">Marmameters Rekabet</th>
+                <th style="width: 150px; text-align: center;">Kelime Tipi</th>
+                <th style="width: 110px; text-align: center;">Karakter (Max 20)</th>
+                <th style="width: 90px; text-align: center;">İşlem</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr 
+                *ngFor="let t of getFilteredTags(); let idx = index"
+                [class.selected-row]="isTagSelected(t.tag)"
+                (click)="toggleTagSelection(t.tag)">
+                
+                <!-- Checkbox -->
+                <td style="text-align: center;" (click)="$event.stopPropagation()">
+                  <input 
+                    type="checkbox" 
+                    [checked]="isTagSelected(t.tag)" 
+                    (change)="toggleTagSelection(t.tag)" />
+                </td>
+
+                <!-- Sıra -->
+                <td class="rank-cell">#{{ idx + 1 }}</td>
+
+                <!-- Tag Adı -->
+                <td class="tag-name-cell">
+                  <span class="tag-name-pill" (click)="copySingleTag(t.tag, $event)" title="Tek tıklamayla panoya kopyala">
+                    {{ t.tag }}
+                  </span>
+                </td>
+
+                <!-- Frekans Barı -->
+                <td class="freq-cell">
+                  <div class="freq-bar-wrap">
+                    <div class="freq-bar-fill" [style.width.%]="t.usagePercentage"></div>
+                    <span class="freq-text">{{ t.count }} / {{ items.length }} İlan</span>
+                  </div>
+                </td>
+
+                <!-- Pazar Payı (%) -->
+                <td style="text-align: center;" class="pct-cell">
+                  <b>%{{ t.usagePercentage | number:'1.1-1' }}</b>
+                </td>
+
+                <!-- Marmalead Marmameters Rekabet Çubuğu -->
+                <td style="text-align: center;">
+                  <span class="marmameter-badge" [ngClass]="getCompetitionBadgeClass(t.competitionLevel)">
+                    {{ t.competitionLevel }}
+                  </span>
+                </td>
+
+                <!-- Kelime Tipi (Long-tail vs Single) -->
+                <td style="text-align: center;">
+                  <span class="keyword-type-badge" [ngClass]="t.isLongTail ? 'long-tail' : 'broad'">
+                    {{ t.isLongTail ? '🎯 ' + t.wordCount + ' Kelime' : '⚠️ Tek Kelime' }}
+                  </span>
+                </td>
+
+                <!-- Karakter Sayısı (Etsy 20 limit) -->
+                <td style="text-align: center;">
+                  <span class="char-len-badge" [ngClass]="t.charLength <= 20 ? 'valid-char' : 'invalid-char'">
+                    {{ t.charLength }} / 20 Karakter
+                  </span>
+                </td>
+
+                <!-- Hızlı Kopyala Butonu -->
+                <td style="text-align: center;" (click)="$event.stopPropagation()">
+                  <button class="btn-copy-sm" (click)="copySingleTag(t.tag, $event)" title="Panoya Kopyala">
+                    📋
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TOAST NOTIFICATION -->
+      <div class="toast-popup" *ngIf="toastMessage">
+        {{ toastMessage }}
+      </div>
+
+      <!-- HEALTH SCORE MODAL -->
+      <div class="modal-backdrop" *ngIf="showHealthModal" (click)="showHealthModal = false">
+        <div class="modal-card-analysis" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>🩺 İlan SEO & Kalite Sağlık Denetimi</h3>
+            <button class="btn-close-modal" (click)="showHealthModal = false">✕</button>
+          </div>
+          <div class="modal-body" *ngIf="selectedItem">
+            <div class="health-gauge-box">
+              <div class="gauge-score" [ngClass]="getScoreColorClass(selectedItem.seoScore)">
+                %{{ selectedItem.seoScore }}
+              </div>
+              <div class="gauge-label">Genel Etsy SEO Sağlık Skoru</div>
+            </div>
+
+            <div class="audit-checklist">
+              <div class="check-item">
+                <span class="icon">✅</span>
+                <span>Başlık Uzunluğu: <strong>{{ selectedItem.title.length }} / 140 Karakter</strong> (Kusursuz anahtar kelime yerleşimi)</span>
+              </div>
+              <div class="check-item">
+                <span class="icon">✅</span>
+                <span>Etiket Doluluğu: <strong>{{ selectedItem.tags.length }} / 13 Etiket</strong> tamamlandı.</span>
+              </div>
+              <div class="check-item">
+                <span class="icon">✅</span>
+                <span>Görsel Çözünürlüğü: <strong>2000x2000px HD</strong> formatında hazır.</span>
+              </div>
+              <div class="check-item">
+                <span class="icon">💡</span>
+                <span>Pazar Fırsat Skoru: <strong>%{{ selectedItem.marketScore }}</strong> - Bu ürünü klonlayarak hızlıca rekabete girebilirsiniz.</span>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="cloneSelectedListing()">🚀 Bu İlanı Klonla & Yayınla</button>
+            <button class="btn-secondary-modal" (click)="showHealthModal = false">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+    </div>

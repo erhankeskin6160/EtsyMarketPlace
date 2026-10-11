@@ -1,0 +1,874 @@
+    <div class="orders-cockpit">
+      <!-- 1. TOP HEADER & DESKTOP PARITY ACTION BAR -->
+      <div class="cockpit-header">
+        <div class="header-left">
+          <div class="header-icon-box">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="1" y="3" width="15" height="13"></rect>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+              <circle cx="5.5" cy="18.5" r="2.5"></circle>
+              <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
+          </div>
+          <div>
+            <div class="header-title-row">
+              <span class="brand-sub">EtsyMarketPlace</span>
+              <h1 class="page-title">SİPARİŞ KARGO STÜDYOSU</h1>
+            </div>
+            <p class="page-subtitle">Canlı Etsy sipariş karşılama, GTİP gümrük kodlama ve 4 taşıyıcılı anlık kargo entegrasyonu</p>
+          </div>
+        </div>
+
+        <!-- RIGHT TOP ACTION BUTTONS MATCHING WINFORMS DESKTOP -->
+        <div class="header-actions-right">
+          <button class="btn-top-action" (click)="openArasTemplateModal()" title="Aras Global Gönderi İstek Şablonu Tanı Aracı">
+            📋 Şablon yakala
+          </button>
+          
+          <button class="btn-top-action" (click)="openShiptomoreModal()" title="Ship to More API Entegrasyonu">
+            🌐 Ship to More
+          </button>
+
+          <button 
+            class="btn-top-action btn-accounts-hub" 
+            [class.has-issues]="connectedSessionsCount < carrierSessions.length"
+            (click)="toggleAccountsHub()" 
+            title="Kargo Taşıyıcı Hesapları ve Oturum Yönetimini Aç">
+            <span class="bolt-icon">⚡</span>
+            <span>Kargo Hesapları Oturumlar</span>
+            <span class="accounts-badge" [class.badge-ok]="connectedSessionsCount === carrierSessions.length">
+              {{ connectedSessionsCount }}/{{ carrierSessions.length }}
+            </span>
+          </button>
+
+          <button class="btn-refresh" (click)="refreshOrders()" title="Siparişleri ve canlı kargo fiyatlarını yenile">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"></path>
+              <path d="M1 20v-6h6"></path>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            Yenile
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. EXPANDABLE CARRIER ACCOUNTS HUB (CARRIERACCOUNTSHUBCONTROL PARITY) -->
+      <div class="carrier-accounts-strip" *ngIf="isAccountsHubVisible">
+        <div class="strip-container">
+          <!-- CARRIER CARD: ARAS GLOBAL -->
+          <div class="carrier-account-card" *ngFor="let s of carrierSessions">
+            <div class="carrier-logo-box">
+              <img [src]="s.logoUrl" [alt]="s.name" class="carrier-logo-img" />
+            </div>
+            <div class="carrier-info-col">
+              <div class="carrier-name-status">
+                <span class="carrier-card-name">{{ s.name }}</span>
+                <span class="session-status-badge" [class.connected]="s.isConnected">
+                  {{ s.isConnected ? '● Bağlı' : '⚠️ Giriş Yap' }}
+                </span>
+              </div>
+              <div class="carrier-actions-row">
+                <button 
+                  type="button" 
+                  class="btn-carrier-auto" 
+                  [class.btn-connect-mode]="s.autoLabel.includes('Bağlantı')"
+                  (click)="openSessionModal(s)">
+                  {{ s.autoLabel }}
+                </button>
+                <a 
+                  [href]="s.portalUrl" 
+                  target="_blank" 
+                  class="btn-carrier-web" 
+                  title="{{ s.name }} Resmi Portalını Tarayıcıda Aç">
+                  🌐
+                </a>
+                <button 
+                  type="button" 
+                  class="btn-carrier-disconnect" 
+                  [disabled]="!s.isConnected"
+                  (click)="disconnectSession(s)" 
+                  title="{{ s.name }} Oturumunu Kapat">
+                  🗑️
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- PLACEHOLDER CARD: YENİ FİRMA EKLE -->
+          <div class="carrier-add-placeholder" (click)="openAddCarrierToast()">
+            <div class="placeholder-icon">➕</div>
+            <span class="placeholder-title">Yeni Firma Ekle</span>
+            <span class="placeholder-sub">(DHL, PTT, vb.)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. MAIN THREE-REGION WORKSPACE MATCHING DESKTOP -->
+      <div class="cockpit-body">
+        
+        <!-- REGION 1: SİPARİŞ KUYRUĞU (SOL) -->
+        <div class="cockpit-region queue-region">
+          <div class="region-header-bar">
+            <div class="title-with-count">
+              <span class="region-label">SİPARİŞ KUYRUĞU</span>
+              <span class="queue-count-badge">{{ filteredOrders.length }}</span>
+            </div>
+          </div>
+
+          <!-- Queue Filter Tabs -->
+          <div class="queue-chips-row">
+            <button 
+              class="queue-chip" 
+              [class.active]="activeTab === 'all'" 
+              (click)="activeTab = 'all'">
+              Tümü
+            </button>
+            <button 
+              class="queue-chip" 
+              [class.active]="activeTab === 'unfulfilled'" 
+              (click)="activeTab = 'unfulfilled'">
+              Bekleyen
+            </button>
+            <button 
+              class="queue-chip" 
+              [class.active]="activeTab === 'shipped'" 
+              (click)="activeTab = 'shipped'">
+              Gönderildi
+            </button>
+            <button 
+              class="queue-chip alert-chip" 
+              [class.active]="activeTab === 'missing_cost'" 
+              (click)="activeTab = 'missing_cost'">
+              ⚠️ Maliyet ({{ missingCostCount }})
+            </button>
+          </div>
+
+          <!-- Queue Search & Sort -->
+          <div class="queue-search-sort-row">
+            <div class="search-input-box">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              <input 
+                type="text" 
+                [(ngModel)]="searchQuery" 
+                placeholder="Müşteri adı, sipariş..."
+                class="queue-search-input" />
+            </div>
+
+            <select [(ngModel)]="sortMode" class="queue-sort-select">
+              <option value="newest">En yeni üstte</option>
+              <option value="oldest">En eski üstte</option>
+              <option value="name_asc">Müşteri A→Z</option>
+              <option value="name_desc">Müşteri Z→A</option>
+            </select>
+          </div>
+
+          <!-- Queue Scroll List -->
+          <div class="order-list-scroll">
+            <div *ngIf="ordersService.ordersLoading" class="empty-orders-view"><p>Sipariş uyarıları API’den yükleniyor…</p></div>
+            <div *ngIf="ordersService.ordersLoadError" class="empty-orders-view"><p>{{ ordersService.ordersLoadError }}</p></div>
+            <div 
+              *ngFor="let order of filteredOrders" 
+              class="order-card"
+              [class.selected]="selectedOrder?.orderId === order.orderId"
+              [class.has-alert]="order.isCostMissing || order.isAddressMissing"
+              (click)="onSelectOrder(order)">
+              
+              <div class="order-card-header">
+                <span class="order-num">{{ order.orderNumber }}</span>
+                <span class="order-status-pill" [ngClass]="order.status">
+                  {{ order.status === 'unfulfilled' ? 'Bekleyen' : order.status === 'shipped' ? 'Gönderildi' : 'Teslim' }}
+                </span>
+              </div>
+
+              <div class="buyer-name-line">
+                <span class="buyer-name-text">{{ order.buyerName }}</span>
+                <span class="country-pill">{{ order.countryCode }}</span>
+              </div>
+
+              <!-- Desktop matching subtitle -->
+              <div class="order-subtitle-line">
+                <span>{{ order.items.length }} kalem</span>
+                <span>·</span>
+                <span>{{ order.packageSpecs.weightKg | number:'1.2-2' }} kg</span>
+                <span>·</span>
+                <span>{{ order.exportType || 'Standart ihracat' }}</span>
+              </div>
+
+              <div *ngIf="order.isAddressMissing" class="order-alert-tag address">
+                ⚠️ Alıcı Adresi Eksik
+              </div>
+              <div *ngIf="order.isCostMissing" class="order-alert-tag cost">
+                ⚠️ Maliyet Eksik
+              </div>
+            </div>
+
+            <div *ngIf="filteredOrders.length === 0" class="empty-orders-view">
+              <p *ngIf="!ordersService.ordersLoading && !ordersService.ordersLoadError">API’de filtreye uygun açık maliyet uyarısı bulunmuyor. Tam sipariş listesi bu API’de desteklenmiyor.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- REGION 2: SİPARİŞ DETAYI (ORTA) -->
+        <div class="cockpit-region detail-region" *ngIf="selectedOrder">
+          
+          <!-- Top Order Customer Line -->
+          <div class="order-detail-header-card">
+            <div class="detail-header-top">
+              <div class="buyer-headline">
+                <h2 class="buyer-display-name">
+                  {{ selectedOrder.buyerName }} 
+                  <span *ngIf="selectedOrder.isAddressMissing" class="address-missing-notice">(Sokak adresi girilmedi)</span>
+                </h2>
+                <div class="badge-group">
+                  <span class="badge-etsy">Etsy'den</span>
+                  <span class="badge-country">{{ selectedOrder.countryCode }}</span>
+                </div>
+              </div>
+              <div class="export-mode-tag">
+                {{ selectedOrder.exportType || 'IOSS yok — standart ihracat' }}
+              </div>
+            </div>
+
+            <!-- Address Warning Alert -->
+            <div *ngIf="selectedOrder.isAddressMissing || selectedOrder.addressWarning" class="address-warning-banner">
+              <span class="warning-icon">⚠️</span>
+              <span>{{ selectedOrder.addressWarning || 'Alıcı adresi eksik! Aras Global gönderisi için bilgileri tamamlayın.' }}</span>
+            </div>
+          </div>
+
+          <div class="detail-scroll">
+            <!-- 1. PAKET ÖLÇÜLERİ (DESKTOP GRID PARITY) -->
+            <div class="glass-card package-specs-card">
+              <div class="card-head-line">
+                <span class="section-title">PAKET ÖLÇÜLERİ</span>
+              </div>
+
+              <div class="specs-input-grid">
+                <div class="spec-cell">
+                  <label class="spec-label">Ağırlık</label>
+                  <div class="input-with-unit">
+                    <input 
+                      type="number" 
+                      step="0.05"
+                      [(ngModel)]="selectedOrder.packageSpecs.weightKg" 
+                      (ngModelChange)="onDimensionChange()"
+                      class="spec-num-input" />
+                    <span class="unit-text">kg</span>
+                  </div>
+                </div>
+
+                <div class="spec-cell">
+                  <label class="spec-label">Yükseklik</label>
+                  <div class="input-with-unit">
+                    <input 
+                      type="number" 
+                      [(ngModel)]="selectedOrder.packageSpecs.heightCm" 
+                      (ngModelChange)="onDimensionChange()"
+                      class="spec-num-input" />
+                    <span class="unit-text">cm</span>
+                  </div>
+                </div>
+
+                <div class="spec-cell">
+                  <label class="spec-label">Boy</label>
+                  <div class="input-with-unit">
+                    <input 
+                      type="number" 
+                      [(ngModel)]="selectedOrder.packageSpecs.lengthCm" 
+                      (ngModelChange)="onDimensionChange()"
+                      class="spec-num-input" />
+                    <span class="unit-text">cm</span>
+                  </div>
+                </div>
+
+                <div class="spec-cell">
+                  <label class="spec-label">En</label>
+                  <div class="input-with-unit">
+                    <input 
+                      type="number" 
+                      [(ngModel)]="selectedOrder.packageSpecs.widthCm" 
+                      (ngModelChange)="onDimensionChange()"
+                      class="spec-num-input" />
+                    <span class="unit-text">cm</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 2. GTİP / HS KODU GÜMRÜK ARAMA BÖLÜMÜ (COMPLETELY RESTORED) -->
+            <div class="glass-card gtip-selector-card">
+              <div class="card-head-line">
+                <span class="section-title">GTİP / HS KODU - yaz + Enter: panelde ara</span>
+              </div>
+
+              <div class="gtip-search-row">
+                <div class="gtip-input-wrap">
+                  <input 
+                    type="text" 
+                    [(ngModel)]="gtipSearchTerm" 
+                    (keyup.enter)="onSearchGtip()"
+                    placeholder="3926400000 - 3D Baskı Plastik Heykelcik" 
+                    class="gtip-input" />
+                  
+                  <div class="gtip-quick-suggestions" *ngIf="showGtipSuggestions">
+                    <div 
+                      *ngFor="let g of gtipResults" 
+                      class="gtip-suggest-item"
+                      (click)="selectGtip(g)">
+                      <span class="suggest-code">{{ g.code }}</span>
+                      <span class="suggest-desc">{{ g.description }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <button type="button" class="btn-gtip-search" (click)="onSearchGtip()">
+                  GTİP Ara
+                </button>
+              </div>
+
+              <!-- DESİ & FATURALANDIRILACAK AĞIRLIK STATS -->
+              <div class="desi-calculation-row">
+                <div class="desi-stat-box">
+                  <div class="desi-val">{{ selectedOrder.packageSpecs.desi | number:'1.2-2' }}</div>
+                  <div class="desi-desc">Desi <span class="desi-src">(kaynak: desi)</span></div>
+                </div>
+
+                <div class="desi-stat-box">
+                  <div class="desi-val">{{ (selectedOrder.invoicedWeightKg || selectedOrder.packageSpecs.desi) | number:'1.2-2' }} kg</div>
+                  <div class="desi-desc">FATURALANDIRILACAK</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. KALEMLER (ITEMS) -->
+            <div class="glass-card items-card">
+              <div class="card-head-line">
+                <span class="section-title">KALEMLER</span>
+              </div>
+              <div class="items-list">
+                <div *ngFor="let item of selectedOrder.items" class="order-item-row">
+                  <img [src]="item.imageUrl || 'assets/placeholder-product.png'" class="item-thumb" alt="Product" />
+                  <div class="item-info">
+                    <span class="item-name">{{ item.quantity }}x {{ item.title }}</span>
+                    <div class="item-meta">
+                      <span class="sku-tag" *ngIf="item.sku">SKU: {{ item.sku }}</span>
+                      <span *ngFor="let v of item.variations" class="var-tag">{{ v }}</span>
+                    </div>
+                  </div>
+                  <div class="item-price-tag">
+                    {{ item.price * item.quantity | number:'1.2-2' }} USD
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 4. FINANSAL MALİYET & KÂR ANALİZİ -->
+            <div class="glass-card cost-engine-card">
+              <div class="card-head-line">
+                <span class="section-title">MALİYET VE KÂR ANALİZİ</span>
+                <span *ngIf="selectedOrder.isCostMissing" class="cost-status-badge warn">Maliyet Eksik</span>
+                <span *ngIf="!selectedOrder.isCostMissing" class="cost-status-badge ok">Mutabık</span>
+              </div>
+
+              <div class="costs-inputs-grid">
+                <div class="cost-field">
+                  <label>Ürün Maliyeti ($ USD)</label>
+                  <input 
+                    type="number" 
+                    step="0.5" 
+                    [(ngModel)]="editableProductCost" 
+                    (ngModelChange)="calculateLiveProfit()"
+                    placeholder="0.00" 
+                    class="form-control" />
+                  <span class="try-conversion">≈ {{ formatTry(editableProductCost) }}</span>
+                </div>
+
+                <div class="cost-field">
+                  <label>Kargo Maliyeti ($ USD)</label>
+                  <input 
+                    type="number" 
+                    step="0.5" 
+                    [(ngModel)]="editableShippingCost" 
+                    (ngModelChange)="calculateLiveProfit()"
+                    placeholder="0.00" 
+                    class="form-control" />
+                  <span class="try-conversion">≈ {{ formatTry(editableShippingCost) }}</span>
+                </div>
+              </div>
+
+              <div class="profit-summary-banner" [class.negative]="liveNetProfit < 0">
+                <div class="summary-col">
+                  <span class="summary-label">Brüt Tutar</span>
+                  <span class="summary-val">{{ selectedOrder.totalAmount | number:'1.2-2' }} USD</span>
+                </div>
+                <div class="summary-col">
+                  <span class="summary-label">Tahmini Etsy (~%9.5)</span>
+                  <span class="summary-val text-fee">-{{ (selectedOrder.totalAmount * 0.095) | number:'1.2-2' }} USD</span>
+                </div>
+                <div class="summary-col highlight">
+                  <span class="summary-label">Net Kâr</span>
+                  <span class="summary-val text-profit">{{ liveNetProfit | number:'1.2-2' }} USD</span>
+                  <span class="try-sub">({{ formatTry(liveNetProfit) }})</span>
+                </div>
+                <div class="summary-col">
+                  <span class="summary-label">Kâr Marjı</span>
+                  <span class="summary-val text-margin">%{{ liveProfitMargin }}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bottom status line matching desktop -->
+          <div class="detail-bottom-strip">
+            <span class="selected-offer-label">SEÇİLİ TEKLİF:</span>
+            <span class="selected-offer-val">{{ selectedCarrierQuote ? selectedCarrierQuote.carrierName + ' (' + selectedCarrierQuote.serviceType + ')' : 'Teklif seçilmedi' }}</span>
+          </div>
+        </div>
+
+        <!-- REGION 3: TAŞIYICI KARŞILAŞTIRMA & BARKOD / ETİKET (SAĞ) -->
+        <div class="cockpit-region quotes-region" *ngIf="selectedOrder">
+          
+          <div class="region-header-bar quotes-head-bar">
+            <div class="quotes-title-row">
+              <div class="title-with-count">
+                <span class="region-label">TAŞIYICI KARŞILAŞTIRMA</span>
+                <span class="quotes-count-badge">{{ carrierQuotes.length }} teklif</span>
+              </div>
+              <span class="quotes-live-split-pill">{{ liveQuotesCount }} canlı • {{ estimatedQuotesCount }} tahmini</span>
+            </div>
+
+            <!-- Aras Global / Carrier token expired warning banner matching desktop screenshot -->
+            <div *ngIf="carrierWarningMessage" class="carrier-session-warning-banner" (click)="openSessionModal(carrierSessions[0])" title="Tokenı Yenilemek İçin Tıklayın">
+              {{ carrierWarningMessage }}
+            </div>
+          </div>
+
+          <!-- Carrier Filter Tabs with Counts -->
+          <div class="carrier-filter-tabs">
+            <button 
+              *ngFor="let tab of ['Tümü', 'Aras Global', 'ShipEntegra', 'Navlungo', 'Shiptomore']"
+              class="carrier-tab-btn"
+              [class.active]="selectedCarrierFilter === tab"
+              (click)="selectedCarrierFilter = tab">
+              {{ tab }} <span class="tab-count-num">({{ getQuoteCountForTab(tab) }})</span>
+            </button>
+          </div>
+
+          <!-- Carrier Quotes Scroll (14 Teklif) -->
+          <div class="quotes-scroll-area">
+            <div 
+              *ngFor="let quote of filteredQuotes" 
+              class="quote-card compact-tile"
+              [class.selected-carrier]="selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType"
+              [class.recommended]="quote.isRecommended"
+              [class.lowest-price]="quote.isLowestPrice"
+              (click)="applyCarrierQuote(quote)">
+              
+              <div class="tile-main-row">
+                <div class="tile-left">
+                  <img *ngIf="quote.logoUrl" [src]="quote.logoUrl" [alt]="quote.carrierName" class="quote-tile-logo" />
+                  <div class="tile-carrier-info">
+                    <div class="tile-title-line">
+                      <span class="tile-carrier-name">{{ quote.serviceType }}</span>
+                      <span *ngIf="quote.isLowestPrice" class="lowest-price-badge">EN UCUZ</span>
+                      <span *ngIf="quote.isRecommended" class="recommended-badge">★ En Uygun</span>
+                    </div>
+                    <div class="tile-meta-line">
+                      <span class="tile-carrier-sub">{{ quote.carrierName }} • {{ quote.estimatedDays }}</span>
+                      <span class="trust-badge" [class.live]="quote.isLive">
+                        {{ quote.quoteSourceBadge || (quote.isLive ? 'Canlı teklif' : 'Tahmini tarife') }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="tile-right-price">
+                  <div class="tile-price-stack">
+                    <span class="tile-usd">&#36;{{ quote.priceUsd | number:'1.2-2' }}</span>
+                    <span class="tile-try">₺{{ quote.priceTry | number:'1.2-2' }}</span>
+                  </div>
+                  <button type="button" class="btn-tile-select" (click)="applyCarrierQuote(quote); $event.stopPropagation()">
+                    {{ (selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType) ? '✓ Seçildi' : 'Seç' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div *ngIf="filteredQuotes.length === 0" class="no-quotes-hint">
+              Bu filtreye uygun aktif taşıyıcı teklifi bulunamadı.
+            </div>
+          </div>
+
+          <!-- BARKOD / ETİKET BİLEŞENİ (KOMPAKT & KATLANABİLİR) -->
+          <div class="barcode-preview-section">
+            <div class="barcode-section-header" (click)="isBarcodeExpanded = !isBarcodeExpanded" title="Barkod alanını aç/kapat">
+              <div class="barcode-title-left">
+                <span class="barcode-icon">🏷️</span>
+                <span class="barcode-section-title">BARKOD / ETİKET</span>
+                <span class="barcode-code-pill">{{ selectedOrder.barcodeNumber || '10092370104092' }}</span>
+              </div>
+              <button type="button" class="btn-toggle-barcode">
+                {{ isBarcodeExpanded ? '▲ Gizle' : '▼ Önizle' }}
+              </button>
+            </div>
+            
+            <div class="saas-barcode-label-card" *ngIf="isBarcodeExpanded">
+              <!-- Barcode Lines Simulation -->
+              <div class="barcode-lines-row">
+                <span class="b-line w1"></span><span class="b-line w3"></span><span class="b-line w2"></span>
+                <span class="b-line w1"></span><span class="b-line w4"></span><span class="b-line w1"></span>
+                <span class="b-line w2"></span><span class="b-line w3"></span><span class="b-line w1"></span>
+                <span class="b-line w4"></span><span class="b-line w2"></span><span class="b-line w1"></span>
+                <span class="b-line w3"></span><span class="b-line w1"></span><span class="b-line w4"></span>
+                <span class="b-line w2"></span><span class="b-line w1"></span><span class="b-line w3"></span>
+                <span class="b-line w2"></span><span class="b-line w4"></span><span class="b-line w1"></span>
+                <span class="b-line w3"></span><span class="b-line w2"></span><span class="b-line w1"></span>
+                <span class="b-line w4"></span><span class="b-line w1"></span><span class="b-line w3"></span>
+              </div>
+
+              <div class="barcode-num-text">
+                {{ selectedOrder.barcodeNumber || '10092370104092' }}
+              </div>
+
+              <div class="barcode-divider"></div>
+
+              <div class="barcode-bottom-info">
+                <div class="barcode-carrier-dot">
+                  <span class="red-dot"></span>
+                  <span class="carrier-label-name">Shipping Label {{ selectedCarrierQuote ? selectedCarrierQuote.carrierName : 'Aras Global' }}</span>
+                </div>
+                <div class="barcode-receiver-name">
+                  {{ selectedOrder.buyerName }} - {{ selectedOrder.countryCode }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- 4. BOTTOM PERSISTENT ACTION STRIP MATCHING WINFORMS DESKTOP -->
+      <div class="cockpit-footer" *ngIf="selectedOrder">
+        <div class="footer-left">
+          <span class="footer-order-info">
+            Seçili Sipariş: <strong>{{ selectedOrder.orderNumber }}</strong> ({{ selectedOrder.buyerName }})
+          </span>
+          <span *ngIf="saveSuccessMessage" class="save-toast">
+            ✓ {{ saveSuccessMessage }}
+          </span>
+        </div>
+
+        <div class="footer-right">
+          <button class="btn-save-costs" (click)="saveCosts()" title="Maliyet ve GTİP Değerlerini Kaydet">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            Maliyet Kaydet
+          </button>
+
+          <button 
+            type="button" 
+            class="btn-footer-preview" 
+            (click)="openLabelPreviewModal()" 
+            title="Kargo Etiketini Önizle ve Yazdır">
+            👁️ Etiketi Önizle
+          </button>
+
+          <button 
+            type="button" 
+            class="btn-footer-create-shipment" 
+            [disabled]="isGeneratingShipment"
+            (click)="executeCreateShipment()" 
+            title="Seçili Taşıyıcı ile Gönderi Oluştur">
+            <span *ngIf="!isGeneratingShipment">🚀 Gönderi Oluştur</span>
+            <span *ngIf="isGeneratingShipment">⏳ Oluşturuluyor...</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ================= MODALS ================= -->
+
+      <!-- MODAL 1: CARRIER SESSIONS & TOKEN MANAGEMENT -->
+      <div class="modal-overlay" *ngIf="isSessionModalOpen" (click)="closeSessionModal()">
+        <div class="glass-modal session-modal-box" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="modal-title-with-logo">
+              <img *ngIf="activeModalCarrier?.logoUrl" [src]="activeModalCarrier?.logoUrl" class="modal-carrier-logo" />
+              <div>
+                <h3 class="modal-title">{{ activeModalCarrier?.name }} - Kargo Oturum Yönetimi</h3>
+                <span class="modal-sub">Doğrudan API ve Otomatik Entegrasyon Oturumu</span>
+              </div>
+            </div>
+            <button class="btn-close-modal" (click)="closeSessionModal()">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="session-info-card">
+              <div class="info-row">
+                <span>Durum:</span>
+                <span class="status-pill" [class.ok]="activeModalCarrier?.isConnected">
+                  {{ activeModalCarrier?.isConnected ? '● Aktif Oturum Bağlı' : '⚠️ Oturum Kapalı / Giriş Gerekli' }}
+                </span>
+              </div>
+              <div class="info-row" *ngIf="activeModalCarrier?.id === 'aras'">
+                <span>Canlı Token Durumu:</span>
+                <span class="status-pill" [class.ok]="isCurrentModalTokenValid" [class.warn]="!isCurrentModalTokenValid">
+                  {{ modalTokenStatusText }}
+                </span>
+              </div>
+              <div class="info-row" *ngIf="activeModalCarrier?.lastUpdated">
+                <span>Son Güncelleme:</span>
+                <code>{{ activeModalCarrier?.lastUpdated }}</code>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Bearer Token / Session Cookie / API Key:</label>
+              <textarea 
+                [(ngModel)]="modalTokenInput" 
+                rows="4" 
+                placeholder="Token veya çerez değerini yapıştırın..." 
+                class="form-control modal-textarea"></textarea>
+              <span class="form-hint">Masaüstü ve panel yetkilendirmesi için kullanılan güvenli token.</span>
+            </div>
+
+            <!-- ARAS GLOBAL LIVE TOKEN EXTRACTION GUIDE -->
+            <div class="jwt-helper-guide" *ngIf="activeModalCarrier?.id === 'aras'">
+              <div class="guide-title">
+                <span>💡</span> <strong>Canlı Aras Global Tokenı Nasıl Alınır?</strong>
+              </div>
+              <p class="guide-text">
+                Aras Global API'sinde <code>HTTP 401 Unauthorized</code> (tahmini fiyat) almamak için tokeninizi yenileyebilirsiniz:
+              </p>
+              <ol class="guide-steps">
+                <li>Açık olan <strong>panel.arasglobalcargo.com</strong> sekmesine geçin.</li>
+                <li>Klavyeden <strong>F12</strong> tuşuna basıp Geliştirici Araçlarını açın.</li>
+                <li><strong>Application</strong> (Uygulama) &gt; <strong>Local Storage</strong> &gt; <code>token</code> değerini kopyalayın (veya <strong>Network</strong> sekmesindeki herhangi bir API isteğinden <code>Authorization: Bearer &lt;token&gt;</code> değerini alın).</li>
+                <li>Metni yukarıdaki alana yapıştırıp <strong>"Oturumu Kaydet & Bağlan"</strong> butonuna tıklayın.</li>
+              </ol>
+            </div>
+
+            <div class="modal-actions-row">
+              <button type="button" class="btn-test-session" (click)="testCarrierConnection()">
+                ⚡ Bağlantıyı Test Et
+              </button>
+              <button type="button" class="btn-save-session" (click)="saveCarrierSession()">
+                💾 Oturumu Kaydet & Bağlan
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL 2: SHIP TO MORE CONNECTION MODAL (DESKTOP PARITY) -->
+      <div class="modal-overlay" *ngIf="isShiptomoreModalOpen" (click)="closeShiptomoreModal()">
+        <div class="glass-modal stm-desktop-dialog" (click)="$event.stopPropagation()">
+          <div class="stm-dialog-header">
+            <h3 class="stm-dialog-title">Ship to More bağlantısı</h3>
+            <button class="btn-close-modal" (click)="closeShiptomoreModal()">✕</button>
+          </div>
+
+          <div class="stm-dialog-body">
+            <p class="stm-dialog-help">
+              Gönderi fiyatlarını ve gönderi oluşturmayı Ship to More üzerinden yapmak için bir kez<br/>
+              erişim anahtarı girmen gerekiyor. Anahtarı Ship to More panelinden alabilirsin:<br/>
+              panelde "Bağlantı & Güvenlik" bölümü (veya dev.shiptomore.com).
+            </p>
+            <p class="stm-dialog-help sub">
+              Anahtar yalnızca oluşturulduğu anda gösterilir; kaydedilmez. Bu yüzden kopyalayıp<br/>
+              buraya yapıştır — sonrası bizde şifreli saklanır, bir daha sorulmaz.
+            </p>
+
+            <div class="stm-open-panel-row">
+              <button type="button" class="btn-stm-open-panel" (click)="openShiptomorePortal()">
+                Paneli Aç
+              </button>
+            </div>
+
+            <div class="stm-field-group">
+              <label class="stm-field-label">Client ID</label>
+              <input 
+                type="text" 
+                [(ngModel)]="stmClientId" 
+                class="stm-input-text" 
+                placeholder="Client ID girin..." />
+            </div>
+
+            <div class="stm-field-group">
+              <label class="stm-field-label">Client Secret</label>
+              <div class="stm-secret-input-wrapper">
+                <input 
+                  [type]="isSecretMasked ? 'password' : 'text'" 
+                  [(ngModel)]="stmClientSecret" 
+                  class="stm-input-text secret-input" 
+                  placeholder="••••••••••••••••••••••••••••••••" />
+                <button 
+                  type="button" 
+                  class="btn-toggle-mask" 
+                  (click)="isSecretMasked = !isSecretMasked" 
+                  [title]="isSecretMasked ? 'Şifreyi Göster' : 'Şifreyi Gizle'">
+                  {{ isSecretMasked ? '👁️' : '🙈' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="stm-status-row">
+              <span class="stm-status-badge" [ngClass]="stmStatusKind">
+                {{ stmStatusText }}
+              </span>
+            </div>
+
+            <div class="stm-actions-row">
+              <button 
+                type="button" 
+                class="btn-stm-action btn-test" 
+                [disabled]="isTestingShiptomore"
+                (click)="testShiptomore()">
+                <span *ngIf="isTestingShiptomore">⏳ Deneniyor...</span>
+                <span *ngIf="!isTestingShiptomore">Bağlantıyı Test Et</span>
+              </button>
+
+              <button 
+                type="button" 
+                class="btn-stm-action btn-save" 
+                (click)="saveShiptomore()">
+                Kaydet
+              </button>
+
+              <button 
+                type="button" 
+                class="btn-stm-action btn-forget" 
+                (click)="forgetShiptomore()">
+                Bağlantıyı Kes
+              </button>
+
+              <button 
+                type="button" 
+                class="btn-stm-action btn-close" 
+                (click)="closeShiptomoreModal()">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL 3: ARAS & MASAÜSTÜ ŞABLON YAKALAMA MODAL -->
+      <div class="modal-overlay" *ngIf="isArasTemplateModalOpen" (click)="closeArasTemplateModal()">
+        <div class="glass-modal template-modal-box" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="modal-title-with-logo">
+              <img src="assets/shipping/aras_global.png" class="modal-carrier-logo" />
+              <div>
+                <h3 class="modal-title">Taşıyıcı & Şablon Entegrasyonu</h3>
+                <span class="modal-sub">Masaüstü Yakalanan API Şablonları & Canlı Fiyat Senkronizasyonu</span>
+              </div>
+            </div>
+            <button class="btn-close-modal" (click)="closeArasTemplateModal()">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <div class="template-instructions">
+              <div class="step-num">1</div>
+              <p><strong>Masaüstü Yakalama Deposu:</strong> <code>%APPDATA%\SimilarProductsWinForms\captures\</code> içerisindeki şablonlar (Aras Widect, ShipEntegra, Navlungo, Shiptomore) canlı sözleşmeli hatlarla eşleştirildi.</p>
+            </div>
+            <div class="template-instructions">
+              <div class="step-num">2</div>
+              <p><strong>Dinamik Desi & GTİP Doğrulama:</strong> Paket ölçüleri ve ağırlık adımları otomatik hesaplanarak 14 teklife birebir uygulanmaktadır.</p>
+            </div>
+
+            <div class="template-status-banner">
+              ✓ 4/4 Taşıyıcı oturumu bağlı ve 14/14 teklif canlı API şablonlarıyla doğrulanmış durumda.
+            </div>
+
+            <div class="modal-actions-row" style="display: flex; gap: 8px; justify-content: flex-end;">
+              <button type="button" class="btn-cancel-modal" (click)="syncCapturedTemplates()">
+                🔄 Şablonları Eşitle
+              </button>
+              <button type="button" class="btn-save-session" (click)="closeArasTemplateModal()">
+                Tamam
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL 4: ETİKET ÖNİZLEME (PRINTABLE LABEL MODAL) -->
+      <div class="modal-overlay" *ngIf="isLabelPreviewOpen" (click)="closeLabelPreviewModal()">
+        <div class="glass-modal label-preview-box" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3 class="modal-title">Termal Kargo Barkod & Etiket Önizleme</h3>
+            <button class="btn-close-modal" (click)="closeLabelPreviewModal()">✕</button>
+          </div>
+
+          <div class="modal-body thermal-label-body">
+            <div class="thermal-label-canvas">
+              <div class="lbl-header">
+                <span class="lbl-carrier-brand">{{ selectedCarrierQuote ? selectedCarrierQuote.carrierName : 'Aras Global Kargo' }}</span>
+                <span class="lbl-priority">AIR PRIORITY (DDP)</span>
+              </div>
+
+              <div class="lbl-grid">
+                <div class="lbl-left-meta">
+                  <div class="lbl-row">
+                    <b>Etsy Order:</b> {{ selectedOrder?.orderNumber }}
+                  </div>
+                  <div class="lbl-row">
+                    <b>Alıcı:</b> {{ selectedOrder?.buyerName }}
+                  </div>
+                  <div class="lbl-row address">
+                    <b>Adres:</b> {{ selectedOrder?.addressSnippet }}, {{ selectedOrder?.city }} / {{ selectedOrder?.country }}
+                  </div>
+                  <div class="lbl-row">
+                    <b>GTİP:</b> {{ selectedOrder?.gtipCode || '3926400000' }}
+                  </div>
+                  <div class="lbl-row">
+                    <b>Ağırlık:</b> {{ selectedOrder?.packageSpecs?.weightKg }} kg (Desi: {{ selectedOrder?.packageSpecs?.desi }})
+                  </div>
+                </div>
+
+                <div class="lbl-right-badge">
+                  <div class="country-big">{{ selectedOrder?.countryCode }}</div>
+                  <div class="export-type">{{ selectedOrder?.exportType || 'Standart' }}</div>
+                </div>
+              </div>
+
+              <div class="lbl-barcode-area">
+                <div class="big-barcode-lines">
+                  <span class="b-line w2"></span><span class="b-line w4"></span><span class="b-line w1"></span>
+                  <span class="b-line w3"></span><span class="b-line w2"></span><span class="b-line w4"></span>
+                  <span class="b-line w1"></span><span class="b-line w3"></span><span class="b-line w2"></span>
+                  <span class="b-line w4"></span><span class="b-line w1"></span><span class="b-line w3"></span>
+                  <span class="b-line w2"></span><span class="b-line w4"></span><span class="b-line w2"></span>
+                  <span class="b-line w3"></span><span class="b-line w1"></span><span class="b-line w4"></span>
+                </div>
+                <div class="big-barcode-text">
+                  *{{ selectedOrder?.barcodeNumber || '10092370104092' }}*
+                </div>
+              </div>
+
+              <div class="lbl-footer-text">
+                Generated via Etsy Enterprise Studio • Customs Verified
+              </div>
+            </div>
+
+            <div class="modal-actions-row">
+              <button type="button" class="btn-print-label" (click)="printLabel()">
+                🖨️ Yazdır (10x15 cm)
+              </button>
+              <button type="button" class="btn-save-session" (click)="closeLabelPreviewModal()">
+                Kapat
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
