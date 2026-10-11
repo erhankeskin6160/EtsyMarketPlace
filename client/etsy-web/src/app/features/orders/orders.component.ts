@@ -649,29 +649,22 @@ import {
               </div>
             </div>
 
-            <!-- ARAS GLOBAL TABBED AUTOMATED LOGIN (DESKTOP PARITY) -->
+            <!-- ARAS GLOBAL TABBED AUTOMATED LOGIN -->
             <div *ngIf="activeModalCarrier?.id === 'aras'" class="aras-modal-flow">
               <div class="aras-tab-strip">
                 <button 
                   type="button" 
                   class="aras-subtab-btn" 
-                  [class.active]="arasModalTab === 'desktop'"
-                  (click)="arasModalTab = 'desktop'">
-                  🖥️ Masaüstü Penceresi (Önerilen)
-                </button>
-                <button 
-                  type="button" 
-                  class="aras-subtab-btn" 
-                  [class.active]="arasModalTab === 'sync'"
-                  (click)="arasModalTab = 'sync'">
-                  🔄 Masaüstünden Aktar
-                </button>
-                <button 
-                  type="button" 
-                  class="aras-subtab-btn" 
                   [class.active]="arasModalTab === 'credentials'"
                   (click)="arasModalTab = 'credentials'">
-                  ⚡ Web Girişi
+                  ⚡ Otomatik Giriş
+                </button>
+                <button 
+                  type="button" 
+                  class="aras-subtab-btn" 
+                  [class.active]="arasModalTab === 'transfer'"
+                  (click)="arasModalTab = 'transfer'">
+                  🌐 Açık Sekmeyi Bağla
                 </button>
                 <button 
                   type="button" 
@@ -682,71 +675,10 @@ import {
                 </button>
               </div>
 
-              <!-- TAB 1: DESKTOP EMBEDDED LOGIN (EXACT PARITY WITH SimilarProductsWinForms) -->
-              <div *ngIf="arasModalTab === 'desktop'" class="aras-tab-body">
-                <div class="desktop-bridge-box">
-                  <div class="desktop-bridge-icon">🚚</div>
-                  <div class="desktop-bridge-info">
-                    <h4>Masaüstü Programı Gibi Resmi Aras Penceresi</h4>
-                    <p>
-                      Masaüstü uygulamanızdaki gibi güvenli Aras Global giriş penceresi açılır. 
-                      Resmi Aras ekranında telefonunuzla giriş yaptığınız anda token otomatik yakalanır ve buraya bağlanır.
-                    </p>
-                  </div>
-                </div>
-
-                <div *ngIf="!isWaitingForDesktopLogin" class="desktop-action-area">
-                  <button 
-                    type="button" 
-                    class="btn-launch-desktop" 
-                    (click)="launchDesktopArasLogin()">
-                    🚀 Aras Global Giriş Penceresini Aç (Masaüstü Gibi)
-                  </button>
-                  <div class="desktop-action-sub">
-                    <span>Masaüstünde zaten oturumunuz açıksa:</span>
-                    <button type="button" class="btn-sub-link" (click)="syncFromDesktop()">
-                      🔄 Masaüstü Oturumunu Web'e Aktar (Sync)
-                    </button>
-                  </div>
-                </div>
-
-                <div *ngIf="isWaitingForDesktopLogin" class="desktop-waiting-pulse">
-                  <div class="waiting-header">
-                    <span class="pulsing-dot"></span>
-                    <strong>Giriş Penceresi Açıldı, Girişiniz Bekleniyor...</strong>
-                  </div>
-                  <p class="waiting-hint">
-                    Ekranınızda açılan Aras Global penceresinde telefon numaranız ve şifrenizle giriş yapın.
-                    Giriş yaptığınız anda bu panel <strong>otomatik olarak bağlanacak ve kapanacaktır</strong>.
-                  </p>
-                  <div class="waiting-footer">
-                    <span class="check-time">Son kontrol: {{ lastDesktopCheckTime || 'Şimdi' }}</span>
-                    <button type="button" class="btn-cancel-polling" (click)="cancelDesktopPolling()">
-                      ✕ Beklemeyi Durdur
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- TAB 2: 1-CLICK DESKTOP SYNC -->
-              <div *ngIf="arasModalTab === 'sync'" class="aras-tab-body">
-                <div class="transfer-box">
-                  <div class="transfer-header">
-                    <span>🔄</span> <strong>Masaüstü Uygulamasındaki Oturumu Web'e Aktar</strong>
-                  </div>
-                  <p class="guide-text">
-                    Bilgisayarınızdaki <code>SimilarProductsWinForms</code> uygulamasında daha önceden açılmış geçerli bir Aras Global oturumu varsa, tek tıkla doğrudan bu web kokpitine aktarabilirsiniz:
-                  </p>
-                  <button type="button" class="btn-save-session" (click)="syncFromDesktop()">
-                    🔄 Masaüstü Oturumunu Web'e Aktar & Bağlan
-                  </button>
-                </div>
-              </div>
-
-              <!-- TAB 3: DIRECT AUTOMATIC LOGIN -->
+              <!-- TAB 1: DIRECT AUTOMATIC LOGIN -->
               <div *ngIf="arasModalTab === 'credentials'" class="aras-tab-body">
                 <p class="aras-flow-hint">
-                  Doğrudan web üzerinden API girişi (SMS doğrulaması veya bot koruması varsa masaüstü penceresini kullanmanız önerilir).
+                  Aras Global (panel.arasglobalcargo.com) hesabınızın kullanıcı adı / telefon numarasını ve şifresini girin. Canlı API oturumu otomatik olarak bağlanacaktır.
                 </p>
 
                 <div class="form-group">
@@ -779,12 +711,41 @@ import {
                     [disabled]="isArasLoggingIn || !arasUsername || !arasPassword"
                     (click)="executeArasLogin()">
                     <span *ngIf="isArasLoggingIn">⏳ Bağlanıyor...</span>
-                    <span *ngIf="!isArasLoggingIn">⚡ Giriş Yap & Bağlan</span>
+                    <span *ngIf="!isArasLoggingIn">⚡ Otomatik Giriş Yap & Bağlan</span>
                   </button>
                 </div>
               </div>
 
-              <!-- TAB 4: MANUAL TOKEN -->
+              <!-- TAB 2: 1-CLICK BROWSER TRANSFER -->
+              <div *ngIf="arasModalTab === 'transfer'" class="aras-tab-body">
+                <div class="transfer-box">
+                  <div class="transfer-header">
+                    <span>💡</span> <strong>Tarayıcınızda Aras Global Oturumu Zaten Açık mı?</strong>
+                  </div>
+                  <p class="guide-text">
+                    Eğer <strong>panel.arasglobalcargo.com</strong> sekmesinde oturumunuz açıksa, aşağıdaki yer imi bağlantısını tarayıcınızın yer imleri çubuğuna sürükleyin veya o sekmedeyken tıklayın (F12 gerekmez):
+                  </p>
+
+                  <div class="bookmarklet-action-area">
+                    <a 
+                      [href]="arasBookmarkletHref" 
+                      class="btn-bookmarklet"
+                      title="Bu düğmeyi Yer İmleri (Bookmarks) çubuğunuza sürükleyin ve Aras sekmesindeyken tıklayın">
+                      ⚡ Aras Oturumunu Aktar (Yer İmi)
+                    </a>
+                    <span class="bookmarklet-sub">İpucu: Bu butonu tarayıcınızın Yer İmleri Çubuğuna sürükleyip bırakabilirsiniz!</span>
+                  </div>
+
+                  <div class="open-tab-direct">
+                    <span>Henüz oturum açmadıysanız:</span>
+                    <a href="https://panel.arasglobalcargo.com/auth" target="_blank" class="btn-open-aras-portal">
+                      🌐 Aras Global Panelini Aç (Yeni Sekme)
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- TAB 3: MANUAL TOKEN -->
               <div *ngIf="arasModalTab === 'manual'" class="aras-tab-body">
                 <div class="form-group">
                   <label class="form-label">Bearer Token (JWT):</label>
@@ -2745,129 +2706,6 @@ import {
       padding: 8px 12px;
       border-radius: 6px;
     }
-    .desktop-bridge-box {
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-      background: #0f172a;
-      border: 1px solid #1e293b;
-      border-radius: 8px;
-      padding: 12px;
-    }
-    .desktop-bridge-icon {
-      font-size: 1.8rem;
-    }
-    .desktop-bridge-info h4 {
-      margin: 0 0 4px 0;
-      font-size: 0.82rem;
-      color: #f8fafc;
-      font-weight: 700;
-    }
-    .desktop-bridge-info p {
-      margin: 0;
-      font-size: 0.72rem;
-      color: #94a3b8;
-      line-height: 1.4;
-    }
-    .desktop-action-area {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      align-items: center;
-      padding: 8px 0;
-    }
-    .btn-launch-desktop {
-      width: 100%;
-      background: linear-gradient(135deg, #0284c7, #0369a1);
-      color: #ffffff;
-      border: none;
-      padding: 12px 18px;
-      border-radius: 8px;
-      font-weight: 700;
-      font-size: 0.82rem;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35);
-      transition: all 0.2s ease;
-    }
-    .btn-launch-desktop:hover {
-      background: linear-gradient(135deg, #0369a1, #075985);
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(2, 132, 199, 0.45);
-    }
-    .desktop-action-sub {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.72rem;
-      color: #94a3b8;
-    }
-    .btn-sub-link {
-      background: transparent;
-      border: none;
-      color: #38bdf8;
-      font-size: 0.72rem;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: underline;
-      padding: 0;
-    }
-    .desktop-waiting-pulse {
-      background: rgba(14, 165, 233, 0.1);
-      border: 1px solid rgba(14, 165, 233, 0.35);
-      border-radius: 8px;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .waiting-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: #38bdf8;
-      font-size: 0.8rem;
-    }
-    .pulsing-dot {
-      width: 10px;
-      height: 10px;
-      background: #38bdf8;
-      border-radius: 50%;
-      box-shadow: 0 0 10px #38bdf8;
-      animation: pulseAnim 1.2s infinite alternate;
-    }
-    @keyframes pulseAnim {
-      from { transform: scale(0.8); opacity: 0.5; }
-      to { transform: scale(1.3); opacity: 1; }
-    }
-    .waiting-hint {
-      margin: 0;
-      font-size: 0.72rem;
-      color: #cbd5e1;
-      line-height: 1.4;
-    }
-    .waiting-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border-top: 1px solid rgba(14, 165, 233, 0.2);
-      padding-top: 8px;
-      font-size: 0.68rem;
-      color: #94a3b8;
-    }
-    .btn-cancel-polling {
-      background: rgba(239, 68, 68, 0.2);
-      border: 1px solid rgba(239, 68, 68, 0.4);
-      color: #fca5a5;
-      font-size: 0.68rem;
-      padding: 3px 8px;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-
     .transfer-box {
       background: #0f172a;
       border: 1px solid #1e293b;
@@ -2883,6 +2721,58 @@ import {
       gap: 8px;
       color: #f8fafc;
       font-size: 0.8rem;
+    }
+    .bookmarklet-action-area {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 10px;
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px dashed rgba(59, 130, 246, 0.4);
+      border-radius: 8px;
+      align-items: center;
+      text-align: center;
+    }
+    .btn-bookmarklet {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      color: #ffffff !important;
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.76rem;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+      cursor: grab;
+      user-select: none;
+    }
+    .bookmarklet-sub {
+      font-size: 0.68rem;
+      color: #94a3b8;
+    }
+    .open-tab-direct {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding-top: 6px;
+      border-top: 1px solid #1e293b;
+      font-size: 0.72rem;
+      color: #94a3b8;
+    }
+    .btn-open-aras-portal {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #38bdf8;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.72rem;
+    }
+    .btn-open-aras-portal:hover {
+      text-decoration: underline;
     }
   `]
 
@@ -2919,15 +2809,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
   activeModalCarrier: CarrierAccountSession | null = null;
   modalTokenInput: string = '';
 
-  // ARAS AUTOMATED LOGIN STATE (DESKTOP PARITY)
+  // ARAS AUTOMATED LOGIN STATE
   arasUsername: string = '';
   arasPassword: string = '';
-  arasModalTab: 'desktop' | 'sync' | 'credentials' | 'manual' = 'desktop';
+  arasModalTab: 'credentials' | 'transfer' | 'manual' = 'credentials';
   isArasLoggingIn: boolean = false;
   arasLoginError: string | null = null;
-  isWaitingForDesktopLogin: boolean = false;
-  lastDesktopCheckTime: string = '';
-  private desktopPollSub: any = null;
+  get arasBookmarkletHref(): string {
+    return "javascript:(function(){try{const t=localStorage.getItem('token')||localStorage.getItem('accessToken');if(t&&t.includes('eyJ')){location.href='http://localhost:4200/orders?carrier=aras&token='+encodeURIComponent(t);}else{alert('Aras Global oturum tokeni bulunamadı. Lütfen önce panel.arasglobalcargo.com adresinde oturum açın.');}}catch(e){alert('Hata: '+e.message);}})();";
+  }
 
   isShiptomoreModalOpen: boolean = false;
   stmClientId: string = '';
@@ -3015,7 +2905,6 @@ export class OrdersComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.subs.forEach(s => s.unsubscribe());
     if (this.autoSaveTimeout) clearTimeout(this.autoSaveTimeout);
-    if (this.desktopPollSub) clearInterval(this.desktopPollSub);
   }
 
   // --- GETTERS & METRICS ---
@@ -3243,91 +3132,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   closeSessionModal(): void {
-    this.cancelDesktopPolling();
     this.isSessionModalOpen = false;
     this.activeModalCarrier = null;
-  }
-
-  launchDesktopArasLogin(): void {
-    this.isWaitingForDesktopLogin = true;
-    this.lastDesktopCheckTime = new Date().toLocaleTimeString('tr-TR');
-    
-    // Windows Custom Protocol'ü tetikle (SimilarProductsWinForms --login-aras açar)
-    window.location.href = 'etsymarketplace://login-aras';
-
-    if (this.desktopPollSub) {
-      clearInterval(this.desktopPollSub);
-    }
-
-    let checkCount = 0;
-    this.desktopPollSub = setInterval(() => {
-      checkCount++;
-      this.lastDesktopCheckTime = new Date().toLocaleTimeString('tr-TR');
-      this.ordersService.checkBackendArasSession().subscribe({
-        next: (res) => {
-          if (res && res.isConnected && res.token) {
-            this.cancelDesktopPolling();
-            this.ordersService.connectCarrier('aras', res.token);
-            this.loadQuotesForSelected();
-            this.calculateLiveProfit();
-            this.closeSessionModal();
-            this.saveSuccessMessage = '🎉 Harika! Aras Global oturumu masaüstü girişinizle otomatik bağlandı!';
-            setTimeout(() => this.saveSuccessMessage = null, 5000);
-          }
-        },
-        error: () => {}
-      });
-
-      // 3 dakika sonra zaman aşımı
-      if (checkCount > 90) {
-        this.cancelDesktopPolling();
-      }
-    }, 1500);
-  }
-
-  cancelDesktopPolling(): void {
-    if (this.desktopPollSub) {
-      clearInterval(this.desktopPollSub);
-      this.desktopPollSub = null;
-    }
-    this.isWaitingForDesktopLogin = false;
-  }
-
-  syncFromDesktop(): void {
-    this.saveSuccessMessage = '⏳ Masaüstü oturumu kontrol ediliyor...';
-    this.ordersService.checkBackendArasSession().subscribe({
-      next: (res) => {
-        if (res && res.isConnected && res.token) {
-          this.ordersService.connectCarrier('aras', res.token);
-          this.loadQuotesForSelected();
-          this.calculateLiveProfit();
-          this.closeSessionModal();
-          this.saveSuccessMessage = '✅ Masaüstünde kayıtlı Aras oturumu başarıyla web kokpitine aktarıldı!';
-          setTimeout(() => this.saveSuccessMessage = null, 5000);
-        } else {
-          // Eğer VDS'te henüz yoksa protokol ile sync tetikle
-          window.location.href = 'etsymarketplace://sync-aras';
-          setTimeout(() => {
-            this.ordersService.checkBackendArasSession().subscribe(r2 => {
-              if (r2?.isConnected && r2?.token) {
-                this.ordersService.connectCarrier('aras', r2.token);
-                this.loadQuotesForSelected();
-                this.closeSessionModal();
-                this.saveSuccessMessage = '✅ Masaüstü oturumu başarıyla eşitlendi ve bağlandı!';
-                setTimeout(() => this.saveSuccessMessage = null, 5000);
-              } else {
-                this.saveSuccessMessage = 'ℹ️ Masaüstünde henüz oturum bulunamadı. Lütfen "Masaüstü Penceresini Aç" seçeneğiyle giriş yapın.';
-                setTimeout(() => this.saveSuccessMessage = null, 6000);
-              }
-            });
-          }, 2000);
-        }
-      },
-      error: (err) => {
-        this.saveSuccessMessage = '⚠️ Senkronizasyon hatası: ' + (err?.message || 'Bağlantı kurulamadı');
-        setTimeout(() => this.saveSuccessMessage = null, 5000);
-      }
-    });
   }
 
   executeArasLogin(): void {
