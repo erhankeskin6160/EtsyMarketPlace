@@ -19,20 +19,17 @@ public class EtsyOAuthController : BaseApiController
     private readonly IEtsyTokenStore _tokenStore;
     private readonly IEtsyOAuthService _oauthService;
     private readonly IShopSettingsRepository _settingsRepo;
-    private readonly IHttpClientFactory _httpClientFactory;
 
     public EtsyOAuthController(
         IConfiguration config,
         IEtsyTokenStore tokenStore,
         IEtsyOAuthService oauthService,
-        IShopSettingsRepository settingsRepo,
-        IHttpClientFactory httpClientFactory)
+        IShopSettingsRepository settingsRepo)
     {
         _config = config;
         _tokenStore = tokenStore;
         _oauthService = oauthService;
         _settingsRepo = settingsRepo;
-        _httpClientFactory = httpClientFactory;
     }
 
     [HttpPost("token")]
@@ -205,7 +202,7 @@ public class EtsyOAuthController : BaseApiController
             return BadRequest(new { success = false, message = "Etsy Keystring (Client ID) bulunamadı. Lütfen önce API ayarlarından Keystring kaydedin." });
 
         string? codeVerifier = request.CodeVerifier;
-        string targetRedirectUri = !string.IsNullOrWhiteSpace(request.RedirectUri) ? request.RedirectUri.Trim() : (!string.IsNullOrWhiteSpace(raw.RedirectUri) ? raw.RedirectUri : (_config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api"));
+        string? targetRedirectUri = !string.IsNullOrWhiteSpace(request.RedirectUri) ? request.RedirectUri.Trim() : (!string.IsNullOrWhiteSpace(raw.RedirectUri) ? raw.RedirectUri : null);
 
         if (!string.IsNullOrWhiteSpace(request.State) && PendingPkceSessions.TryRemove(request.State, out var session))
         {
@@ -217,45 +214,9 @@ public class EtsyOAuthController : BaseApiController
         if (string.IsNullOrWhiteSpace(codeVerifier))
             return BadRequest(new { success = false, message = "PKCE code_verifier bulunamadı veya oturum süresi doldu. Lütfen 'Etsy ile Yetkilendir' butonunu tekrar tıklayın." });
 
-        var tokenUrl = _config["Etsy:TokenUrl"] ?? "https://api.etsy.com/v3/public/oauth/token";
-        var client = _httpClientFactory.CreateClient();
-
-        using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, tokenUrl)
-        {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string>
-            {
-                ["grant_type"] = "authorization_code",
-                ["client_id"] = keystring.Trim(),
-                ["redirect_uri"] = targetRedirectUri.Trim(),
-                ["code"] = request.Code.Trim(),
-                ["code_verifier"] = codeVerifier.Trim()
-            })
-        };
-
-        tokenRequest.Headers.Add("x-api-key", !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim());
-
         try
         {
-            using var response = await client.SendAsync(tokenRequest, cancellationToken);
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                return BadRequest(new
-                {
-                    success = false,
-                    message = $"Etsy yetkilendirme takası başarısız (HTTP {(int)response.StatusCode}): {body}"
-                });
-            }
-
-            using var doc = JsonDocument.Parse(body);
-            var root = doc.RootElement;
-            var accessToken = root.GetProperty("access_token").GetString() ?? "";
-            var refreshToken = root.GetProperty("refresh_token").GetString() ?? "";
-            var expiresIn = root.TryGetProperty("expires_in", out var exp) ? exp.GetInt32() : 3600;
-            var tokenType = root.TryGetProperty("token_type", out var tt) ? (tt.GetString() ?? "Bearer") : "Bearer";
-
-            var newToken = new EtsyOAuthToken(accessToken, refreshToken, DateTimeOffset.UtcNow.AddSeconds(expiresIn), tokenType);
+            var newToken = await _oauthService.ExchangeCodeAsync(shopId, request.Code.Trim(), codeVerifier.Trim(), targetRedirectUri, cancellationToken);
             await _tokenStore.SaveAsync(shopId, newToken, cancellationToken);
 
             return Ok(new

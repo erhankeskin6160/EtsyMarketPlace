@@ -3,7 +3,7 @@ namespace EtsyMarketPlace.Application.EtsyIntegration;
 public interface IEtsyOAuthService
 {
     Task<string> CreateAuthorizationUrlAsync(string userId, string state, CancellationToken cancellationToken = default);
-    Task<EtsyOAuthToken> ExchangeCodeAsync(string shopId, string code, string codeVerifier, CancellationToken cancellationToken = default);
+    Task<EtsyOAuthToken> ExchangeCodeAsync(string shopId, string code, string codeVerifier, string? redirectUri = null, CancellationToken cancellationToken = default);
     Task<EtsyOAuthToken> RefreshTokenAsync(string shopId, string refreshToken, CancellationToken cancellationToken = default);
 }
 

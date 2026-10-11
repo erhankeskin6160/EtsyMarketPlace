@@ -37,4 +37,20 @@ public interface IEtsyListingApiClient
     Task<long?> GetDefaultReadinessStateIdAsync(
         string shopId,
         CancellationToken cancellationToken = default);
+
+    Task<string> GetShopListingsRawJsonAsync(
+        string shopId,
+        int limit,
+        CancellationToken cancellationToken = default);
+
+    Task<string?> GetListingImagesRawJsonAsync(
+        long listingId,
+        string shopId,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(
+        string shopId,
+        string listingId,
+        IReadOnlyDictionary<string, string> formFields,
+        CancellationToken cancellationToken = default);
 }

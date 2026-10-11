@@ -325,4 +325,81 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
 
         return null;
     }
+
+    public async Task<string> GetShopListingsRawJsonAsync(string shopId, int limit, CancellationToken cancellationToken = default)
+    {
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
+        var clampedLimit = Math.Clamp(limit, 1, 100);
+        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/listings?state=active&limit={clampedLimit}&sort_on=updated&sort_order=desc&includes=Images";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("x-api-key", apiKeyHeader);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var fallbackUrl = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/active?limit={clampedLimit}&sort_on=updated&sort_order=desc";
+            using var fbReq = new HttpRequestMessage(HttpMethod.Get, fallbackUrl);
+            fbReq.Headers.Add("x-api-key", apiKeyHeader);
+            fbReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using var fbResp = await _httpClient.SendAsync(fbReq, cancellationToken);
+            if (!fbResp.IsSuccessStatusCode)
+            {
+                var err = await response.Content.ReadAsStringAsync(cancellationToken);
+                throw new HttpRequestException($"Etsy API hatası (HTTP {(int)response.StatusCode}): {err}");
+            }
+            return await fbResp.Content.ReadAsStringAsync(cancellationToken);
+        }
+
+        return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
+    public async Task<string?> GetListingImagesRawJsonAsync(long listingId, string shopId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
+            var imgReqUrl = $"https://api.etsy.com/v3/application/listings/{listingId}/images";
+            using var imgReq = new HttpRequestMessage(HttpMethod.Get, imgReqUrl);
+            imgReq.Headers.Add("x-api-key", apiKeyHeader);
+            imgReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var imgResp = await _httpClient.SendAsync(imgReq, cancellationToken);
+            if (imgResp.IsSuccessStatusCode)
+            {
+                return await imgResp.Content.ReadAsStringAsync(cancellationToken);
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    public async Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(
+        string shopId,
+        string listingId,
+        IReadOnlyDictionary<string, string> formFields,
+        CancellationToken cancellationToken = default)
+    {
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
+        var patchUrl = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/{listingId}";
+
+        using var patchReq = new HttpRequestMessage(new HttpMethod("PATCH"), patchUrl)
+        {
+            Content = new FormUrlEncodedContent(formFields)
+        };
+        patchReq.Headers.Add("x-api-key", apiKeyHeader);
+        patchReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var patchRes = await _httpClient.SendAsync(patchReq, cancellationToken);
+        var patchBody = await patchRes.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!patchRes.IsSuccessStatusCode)
+        {
+            return (false, patchBody, $"Etsy güncelleme başarısız (HTTP {(int)patchRes.StatusCode}): {patchBody}");
+        }
+
+        return (true, patchBody, null);
+    }
 }

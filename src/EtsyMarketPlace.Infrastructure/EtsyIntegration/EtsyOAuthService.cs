@@ -28,16 +28,17 @@ public sealed class EtsyOAuthService(HttpClient httpClient, IOptions<EtsyApiOpti
         return Task.FromResult(url);
     }
 
-    public async Task<EtsyOAuthToken> ExchangeCodeAsync(string shopId, string code, string codeVerifier, CancellationToken cancellationToken = default)
+    public async Task<EtsyOAuthToken> ExchangeCodeAsync(string shopId, string code, string codeVerifier, string? redirectUri = null, CancellationToken cancellationToken = default)
     {
         var (keystring, sharedSecret) = await ResolveCredentialsAsync(shopId, cancellationToken);
+        var targetRedirectUri = !string.IsNullOrWhiteSpace(redirectUri) ? redirectUri.Trim() : _options.RedirectUri;
         using var request = new HttpRequestMessage(HttpMethod.Post, _options.TokenUrl)
         {
             Content = new FormUrlEncodedContent(new Dictionary<string, string>
             {
                 ["grant_type"] = "authorization_code",
                 ["client_id"] = keystring,
-                ["redirect_uri"] = _options.RedirectUri,
+                ["redirect_uri"] = targetRedirectUri,
                 ["code"] = code,
                 ["code_verifier"] = codeVerifier
             })

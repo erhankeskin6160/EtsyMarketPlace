@@ -68,7 +68,10 @@ builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisS
 builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationService>();
 builder.Services.AddScoped<IEtsyLedgerReportService, EtsyLedgerReportService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IEtsyListingApiClient, EtsyMarketPlace.Infrastructure.EtsyIntegration.EtsyListingApiClient>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IGeminiListingApiClient, EtsyMarketPlace.Infrastructure.ListingOptimization.GeminiListingApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IFastListingPublishService, EtsyMarketPlace.Application.ListingOptimization.FastListingPublishService>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IEtsyListingService, EtsyMarketPlace.Application.ListingOptimization.EtsyListingService>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IAiListingOptimizerUseCase, EtsyMarketPlace.Application.ListingOptimization.AiListingOptimizationUseCase>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsApiClient, EtsyMarketPlace.Infrastructure.Shipping.EtsyLogisticsApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsService, EtsyMarketPlace.Application.Shipping.EtsyLogisticsService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.MarketResearch.IEtsyMarketApiClient, EtsyMarketPlace.Infrastructure.MarketResearch.EtsyMarketApiClient>();

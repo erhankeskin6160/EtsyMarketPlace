@@ -38,6 +38,15 @@ public sealed class FastListingPublishServiceTests
 
         public Task<long?> GetDefaultReadinessStateIdAsync(string shopId, CancellationToken ct) =>
             Task.FromResult<long?>(789);
+
+        public Task<string> GetShopListingsRawJsonAsync(string shopId, int limit, CancellationToken ct) =>
+            Task.FromResult("{\"results\":[]}");
+
+        public Task<string?> GetListingImagesRawJsonAsync(long listingId, string shopId, CancellationToken ct) =>
+            Task.FromResult<string?>(null);
+
+        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IReadOnlyDictionary<string, string> formFields, CancellationToken ct) =>
+            Task.FromResult((true, "{}", (string?)null));
     }
 
     [Fact]
