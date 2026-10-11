@@ -14,6 +14,7 @@ using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Infrastructure.AbTesting;
 using EtsyMarketPlace.Infrastructure.AiUsage;
 using EtsyMarketPlace.Infrastructure.BatchQueue;
+using EtsyMarketPlace.Infrastructure.Database.Migrations;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
@@ -50,6 +51,7 @@ var dataDir = Path.Combine(
 Directory.CreateDirectory(dataDir);
 var dbPath = Path.Combine(dataDir, "etsy-finance.db");
 
+builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
 builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyTokenStore>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IEtsyIntegrationRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());

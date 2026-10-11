@@ -21,5 +21,6 @@
     <ProjectReference Include="..\..\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj" />
     <ProjectReference Include="..\..\src\EtsyMarketPlace.Application\EtsyMarketPlace.Application.csproj" />
     <ProjectReference Include="..\..\src\EtsyMarketPlace.Domain\EtsyMarketPlace.Domain.csproj" />
+    <ProjectReference Include="..\..\src\EtsyMarketPlace.Infrastructure\EtsyMarketPlace.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
