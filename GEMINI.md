@@ -34,3 +34,11 @@ Masaüstü uygulamasının gönderdiği günlük özetler ve `financial_transact
 kaynağı DEĞİLDİR** (yalnız yedek/uyumluluk içindir). Parite sözleşmesi, referans değerler ve doğrulama
 adımları: **`docs/finans-motoru-ve-parite.md`** (ayrıca `SYSTEM_ARCHITECTURE_AND_AGENT_HANDBOOK.md` §4 —
 "Finansal Veri Akışı"). Finansla ilgili kod değiştirmeden önce bu iki belgeyi okuyun.
+
+## 🚨 4. KESİNTİSİZ CLEAN ARCHITECTURE KURALI (SIFIR FAT CONTROLLER)
+Projede geliştirilen tüm API ve backend kodları İSTİSNASIZ Clean Architecture katman prensiplerine uymak zorundadır:
+- **Domain Katmanı (`EtsyMarketPlace.Domain`):** Saf iş kuralları, varlıklar (Entities) ve değer nesneleri (Value Objects).
+- **Application Katmanı (`EtsyMarketPlace.Application`):** Tüm Use-Case servisleri (`IService`), orkestrasyon, komut ve sorgu modelleri (`Command/Result DTO`), iş akışı doğrulama kuralları burada yer alır. Dış dünya arayüzleri (`I...ApiClient`, `IRepository`) Dependency Inversion Principle (DIP) gereği burada tanımlanır.
+- **Infrastructure Katmanı (`EtsyMarketPlace.Infrastructure`):** Dış API çağrıları (Etsy v3, Kargo taşıyıcıları vb.), SQLite veritabanı, dosya/ağ işlemleri sadece bu katmanda somutlaştırılır (`ApiClient`, `Repository`).
+- **API Katmanı (`EtsyMarketPlace.Api` - Controller'lar):** Kesinlikle iş mantığı, ham HTTP client çağrıları veya doğrudan veritabanı/dosya operasyonları barındıramaz (**Thin Controller İlkesi**). Controller'ların tek görevi HTTP isteğini karşılamak, ilgili Application servisini çağırmak ve HTTP sonucunu dönmektir. Şişkin Controller metodları KESİNLİKLE YASAKTIR.
+- **Test Edilebilirlik:** Her yeni Application use-case servisi için `tests/EtsyMarketPlace.Application.Tests` altında izole birim testleri (Unit Tests) yazılması zorunludur.
