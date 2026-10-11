@@ -504,12 +504,12 @@
             <div *ngIf="enableVariations" class="var-options-box">
               <div class="field-wrap">
                 <label>1. Varyasyon Tipi:</label>
-                <select class="std-select" [(ngModel)]="varType1">
+                <select class="std-select" [(ngModel)]="varType1" (change)="rebuildVariationGrid()">
                   <option value="Boyut / Size">Boyut / Size</option>
                   <option value="Renk / Color">Renk / Color</option>
                   <option value="Materyal / Material">Materyal / Material</option>
                 </select>
-                <input type="text" class="std-input var-input" [(ngModel)]="varValues1" (blur)="rebuildVariationGrid()" placeholder="Small, Medium, Large" />
+                <input type="text" class="std-input var-input" [(ngModel)]="varValues1" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Small, Medium, Large" />
               </div>
 
               <!-- 2. Varyasyon Grubu -->
@@ -520,12 +520,12 @@
 
               <div *ngIf="enableVar2" class="field-wrap">
                 <label>2. Varyasyon Tipi:</label>
-                <select class="std-select" [(ngModel)]="varType2">
+                <select class="std-select" [(ngModel)]="varType2" (change)="rebuildVariationGrid()">
                   <option value="Renk / Color">Renk / Color</option>
                   <option value="Paketleme / Packaging">Paketleme / Packaging</option>
                   <option value="Stil / Style">Stil / Style</option>
                 </select>
-                <input type="text" class="std-input var-input" [(ngModel)]="varValues2" (blur)="rebuildVariationGrid()" placeholder="Siyah, Beyaz, Altın" />
+                <input type="text" class="std-input var-input" [(ngModel)]="varValues2" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Siyah, Beyaz, Altın" />
               </div>
 
               <!-- Custom Pricing & Stock Grid -->

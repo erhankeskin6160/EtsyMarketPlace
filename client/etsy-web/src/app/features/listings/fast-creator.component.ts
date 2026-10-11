@@ -804,6 +804,10 @@ export class FastCreatorComponent implements OnInit {
       return;
     }
 
+    if (this.enableVariations) {
+      this.rebuildVariationGrid();
+    }
+
     this.isSavingDraft = true;
 
     // Prepare gallery images
@@ -881,7 +885,13 @@ export class FastCreatorComponent implements OnInit {
         if (res && res.success) {
           this.createdListingResult = res;
           this.isPublishSuccessModalOpen = true;
-          const varText = (res as any).variationsCount > 0 ? ` + ${(res as any).variationsCount} varyasyon` : '';
+          const varCount = (res as any).variationsCount || 0;
+          const varText = varCount > 0 ? ` + ${varCount} varyasyon` : '';
+
+          if ((res as any).variationError) {
+            alert(`⚠️ İlan #${res.listingId} Etsy'ye aktarıldı, ANCAK varyasyonlar eklenemedi:\n${(res as any).variationError}`);
+          }
+
           this.showToast(`🎉 Başarılı! İlan ${res.state === 'active' ? 'CANLI' : 'TASLAK'} olarak Etsy'ye aktarıldı! (ID: #${res.listingId}${varText})`);
         } else {
           this.showToast('İlan aktarıldı ancak sunucu yanıtı doğrulanamadı.');
