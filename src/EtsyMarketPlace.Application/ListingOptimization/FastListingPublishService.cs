@@ -296,7 +296,6 @@ public sealed class FastListingPublishService : IFastListingPublishService
         var distinctPricesG2 = new HashSet<decimal>();
         var sharedSku = $"AUTO-{listingId}";
 
-        int prodIdx = 1;
         foreach (var combo in combinations.Take(FastListingDraftHelper.MaxVariationCombinations))
         {
             var comboKey = string.Join(" / ", combo.Select(c => c.Value));
@@ -334,12 +333,10 @@ public sealed class FastListingPublishService : IFastListingPublishService
 
             productsList.Add(new EtsyInventoryProduct
             {
-                Sku = $"{sharedSku}-{prodIdx}",
+                Sku = sharedSku,
                 PropertyValues = propValues,
                 Offerings = [ offering ]
             });
-
-            prodIdx++;
         }
 
         var priceOnProperty = new List<long>();

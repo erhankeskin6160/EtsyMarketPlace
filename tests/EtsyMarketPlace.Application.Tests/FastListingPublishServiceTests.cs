@@ -97,9 +97,14 @@ public sealed class FastListingPublishServiceTests
         Assert.NotNull(payload);
         Assert.Equal(4, payload.Products.Count);
 
-        // Verify that price is numeric float (double), not string
+        // Verify that when SkuOnProperty is empty, all products share the exact same consistent SKU
+        Assert.NotNull(payload.SkuOnProperty);
+        Assert.Empty(payload.SkuOnProperty);
+
+        // Verify that price is numeric float (double), not string, and SKU is consistent
         foreach (var prod in payload.Products)
         {
+            Assert.Equal($"AUTO-{result.ListingId}", prod.Sku);
             Assert.Single(prod.Offerings);
             var offering = prod.Offerings[0];
             Assert.True(offering.Price > 0);
