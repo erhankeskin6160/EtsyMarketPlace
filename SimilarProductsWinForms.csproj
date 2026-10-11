@@ -7,6 +7,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <NoWarn>$(NoWarn);NU1701;MSB3277</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -46,12 +47,6 @@
     </Content>
     <EmbeddedResource Include="Assets\3DModels\**\*.*" />
     <EmbeddedResource Include="Assets\Shipping\**\*.*" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="src\EtsyMarketPlace.Infrastructure\EtsyIntegration\EtsyIntegrationDatabaseInitializer.cs" />
-    <Compile Include="src\EtsyMarketPlace.Infrastructure\EtsyIntegration\EtsyIntegrationOptions.cs" />
-    <Compile Include="src\EtsyMarketPlace.Infrastructure\EtsyIntegration\SqliteEtsyIntegrationStore.cs" />
   </ItemGroup>
 
 </Project>

@@ -99,7 +99,7 @@ public static class AiDataCacheService
             }
         }
 
-        return freshData;
+        return freshData ?? throw new InvalidOperationException($"Cache fetcher returned null for key: {fullKey}");
     }
 
     /// <summary>

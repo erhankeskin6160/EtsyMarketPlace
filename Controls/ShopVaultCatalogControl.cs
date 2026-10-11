@@ -360,7 +360,7 @@ internal sealed class ShopVaultCatalogControl : UserControl
         // Highlight cells with colors
         _grid.CellFormatting += (_, e) =>
         {
-            if (e.RowIndex < 0) return;
+            if (e.RowIndex < 0 || e.CellStyle == null) return;
             if (e.ColumnIndex == 3) // Price
             {
                 e.CellStyle.ForeColor = Color.FromArgb(52, 211, 153); // Emerald
@@ -509,7 +509,7 @@ internal sealed class ShopVaultCatalogControl : UserControl
             {
                 for (int i = 0; i < _cboSessions.Items.Count; i++)
                 {
-                    if (((SessionComboItem)_cboSessions.Items[i]).Session.SessionId == selectSessionId)
+                    if (_cboSessions.Items[i] is SessionComboItem item && item.Session.SessionId == selectSessionId)
                     {
                         _cboSessions.SelectedIndex = i;
                         return;
