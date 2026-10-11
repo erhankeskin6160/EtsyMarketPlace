@@ -275,6 +275,22 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
         settings.TokenLastUpdatedUtc = DateTime.UtcNow;
         ArasGlobalSettingsStore.Save(settings);
 
+        // Web API (VDS) ile arka planda anında eşitle
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                var payload = System.Text.Json.JsonSerializer.Serialize(new { token = token });
+                using var content = new System.Net.Http.StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+                await http.PostAsync("http://5.180.81.148:5263/api/shipping/aras/connect-token", content);
+            }
+            catch (Exception caught)
+            {
+                AppLog.Swallowed(caught, "ArasGlobalEmbeddedLoginForm.SyncToVds");
+            }
+        });
+
         // UI Güncelle
         if (InvokeRequired)
         {

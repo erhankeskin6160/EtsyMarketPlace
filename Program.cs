@@ -67,6 +67,55 @@ static class Program
 
         var automation = CreateAutomationServices(databasePath);
 
+        RegisterProtocolHandler();
+
+        if (args.Any(argument => argument.Contains("login-aras", StringComparison.OrdinalIgnoreCase) ||
+                                 argument.StartsWith("etsymarketplace:", StringComparison.OrdinalIgnoreCase)))
+        {
+            ApplicationConfiguration.Initialize();
+            using var loginForm = new ArasGlobalEmbeddedLoginForm();
+            var dialogRes = loginForm.ShowDialog();
+            if (dialogRes == DialogResult.OK && !string.IsNullOrWhiteSpace(loginForm.CapturedToken))
+            {
+                Console.WriteLine("[SUCCESS] Aras Global oturumu bağlandı ve VDS API'sine eşitlendi.");
+                Environment.ExitCode = 0;
+            }
+            else
+            {
+                Console.WriteLine("[CANCELLED] Aras Global oturumu tamamlanmadı.");
+                Environment.ExitCode = 1;
+            }
+            return;
+        }
+
+        if (args.Any(argument => string.Equals(argument, "--sync-aras", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                var settings = EtsyMarketPlace.Application.Shipping.ArasGlobalSettingsStore.Load();
+                if (!string.IsNullOrWhiteSpace(settings.BearerToken))
+                {
+                    using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                    var payload = System.Text.Json.JsonSerializer.Serialize(new { token = settings.BearerToken });
+                    using var content = new System.Net.Http.StringContent(payload, System.Text.Encoding.UTF8, "application/json");
+                    var res = http.PostAsync("http://5.180.81.148:5263/api/shipping/aras/connect-token", content).GetAwaiter().GetResult();
+                    Console.WriteLine($"[SYNC] VDS senkronizasyonu tamamlandı: {res.StatusCode}");
+                    Environment.ExitCode = 0;
+                }
+                else
+                {
+                    Console.WriteLine("[SYNC] Yerel depoda kayıtlı token bulunamadı.");
+                    Environment.ExitCode = 1;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SYNC-ERROR] {ex.Message}");
+                Environment.ExitCode = 2;
+            }
+            return;
+        }
+
         if (args.Any(argument => string.Equals(
             argument,
             AutomationHeadlessRunner.CommandLineSwitch,
@@ -247,6 +296,29 @@ static class Program
             new FileAutomationReportExporter(),
             settingsStore);
         return new AutomationServices(performanceService, historyService, settingsStore, runService);
+    }
+
+    private static void RegisterProtocolHandler()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                string exePath = Environment.ProcessPath ?? Application.ExecutablePath;
+                using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(@"Software\Classes\etsymarketplace");
+                if (key != null)
+                {
+                    key.SetValue(string.Empty, "URL:EtsyMarketPlace Protocol");
+                    key.SetValue("URL Protocol", string.Empty);
+                    using var cmdKey = key.CreateSubKey(@"shell\open\command");
+                    cmdKey?.SetValue(string.Empty, $"\"{exePath}\" \"%1\"");
+                }
+            }
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, "Program.RegisterProtocolHandler");
+        }
     }
 
     private sealed record AutomationServices(

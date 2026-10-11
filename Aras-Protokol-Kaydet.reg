@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_CURRENT_USER\Software\Classes\etsymarketplace]
+@="URL:EtsyMarketPlace Protocol"
+"URL Protocol"=""
+
+[HKEY_CURRENT_USER\Software\Classes\etsymarketplace\shell]
+
+[HKEY_CURRENT_USER\Software\Classes\etsymarketplace\shell\open]
+
+[HKEY_CURRENT_USER\Software\Classes\etsymarketplace\shell\open\command]
+@="\"C:\\Users\\Erhan Keskin\\.gemini\\antigravity\\scratch\\EtsyMarketPlace\\bin\\Debug\\net8.0-windows\\SimilarProductsWinForms.exe\" \"%1\""
