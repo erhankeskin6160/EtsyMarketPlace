@@ -35,6 +35,16 @@ public sealed class AiProviderBalanceInfo
     public decimal? BalanceCny { get; set; }
     public List<string> AvailableModels { get; set; } = [];
     public bool HasAdminKey { get; set; }
+    public long TotalTokensUsed { get; set; }
+    public long PromptTokensUsed { get; set; }
+    public long CompletionTokensUsed { get; set; }
+    public int TotalApiRequests { get; set; }
+    public decimal TotalCostUsd { get; set; }
+    public decimal TotalCostTry { get; set; }
+    public string ActiveModel { get; set; } = string.Empty;
+    public bool IsActiveProvider { get; set; }
+    public string TopUpUrl { get; set; } = string.Empty;
+    public string TokenUnitTariff { get; set; } = string.Empty;
     public DateTimeOffset CheckedAt { get; set; } = DateTimeOffset.Now;
 
     public decimal TotalBalanceTry(decimal exchangeRate = 40.0m) =>

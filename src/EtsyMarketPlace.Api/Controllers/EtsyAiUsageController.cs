@@ -30,6 +30,18 @@ public class EtsyAiUsageController : ControllerBase
         return Ok(history);
     }
 
+    [HttpGet("balances")]
+    [EndpointSummary("Yapay Zeka Markalarının Canlı Bakiye, Kalan TL/USD ve Token Kullanım Özeti")]
+    public async Task<IActionResult> GetAiBalances(
+        [FromServices] IAiBalanceService balanceService,
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] decimal exchangeRate = 40.0m,
+        CancellationToken ct = default)
+    {
+        var balances = await balanceService.GetProviderBalancesAsync(shopId, exchangeRate, ct);
+        return Ok(balances);
+    }
+
     [HttpPost("")]
     [EndpointSummary("Yeni AI Çağrı Kaydı Ekle")]
     public async Task<IActionResult> RecordAiUsage([FromBody] AiUsageRecord record, CancellationToken ct)

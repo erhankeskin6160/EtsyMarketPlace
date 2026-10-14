@@ -57,6 +57,33 @@ export interface EtsySyncResultDto {
   errorMessage: string | null;
 }
 
+export interface AiProviderBalanceDto {
+  provider: string;
+  isAvailable: boolean;
+  totalBalanceUsd: number;
+  grantedBalanceUsd: number;
+  toppedUpBalanceUsd: number;
+  currency: string;
+  statusMessage: string;
+  dailyRequestsUsed: number;
+  dailyQuotaLimit: number;
+  maskedApiKey: string;
+  officialMonthlyCostUsd?: number;
+  balanceCny?: number;
+  availableModels: string[];
+  hasAdminKey: boolean;
+  totalTokensUsed: number;
+  promptTokensUsed: number;
+  completionTokensUsed: number;
+  totalApiRequests: number;
+  totalCostUsd: number;
+  totalCostTry: number;
+  activeModel: string;
+  isActiveProvider: boolean;
+  topUpUrl: string;
+  tokenUnitTariff: string;
+}
+
 export interface CreateListingImagePayload {
   dataUrl?: string;
   url?: string;
@@ -510,6 +537,14 @@ export class EtsyApiService {
       ? `${this.API_BASE}/api/etsy/ai-usage/stats?provider=${encodeURIComponent(provider)}`
       : `${this.API_BASE}/api/etsy/ai-usage/stats`;
     return this.http.get<any>(url);
+  }
+
+  getAiProviderBalances(shopId?: string, exchangeRate?: number): Observable<AiProviderBalanceDto[]> {
+    const sId = shopId || this.activeShopId();
+    const rate = exchangeRate || this.exchangeRate() || 40.0;
+    return this.http.get<AiProviderBalanceDto[]>(
+      `${this.API_BASE}/api/etsy/ai-usage/balances?shopId=${sId}&exchangeRate=${rate}`
+    );
   }
 
   getAiUsageHistory(provider?: string, limit: number = 100): Observable<any[]> {

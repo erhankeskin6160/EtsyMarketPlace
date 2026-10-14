@@ -85,6 +85,7 @@ builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IEtsyLogisti
 builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsService, EtsyMarketPlace.Application.Shipping.EtsyLogisticsService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.MarketResearch.IEtsyMarketApiClient, EtsyMarketPlace.Infrastructure.MarketResearch.EtsyMarketApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketResearchService, EtsyMarketPlace.Application.MarketResearch.MarketResearchService>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceService, EtsyMarketPlace.Application.AiUsage.AiBalanceService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddScoped<McpToolHandler>();
 
