@@ -27,6 +27,7 @@ public sealed class ShipmentCreationContext
     /// <summary>Kargo kalemi kategorisi (Aras sozlesmesindeki shipmentItems[].category).</summary>
     public string Category { get; set; } = "Home Decor";
     public ArasShipmentSenderAddress SenderAddress { get; set; } = new();
+    public bool NotifyEtsy { get; set; } = true;
 }
 
 /// <summary>

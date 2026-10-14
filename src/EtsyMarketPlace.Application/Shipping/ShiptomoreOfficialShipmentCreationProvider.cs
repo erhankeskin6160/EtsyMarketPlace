@@ -53,8 +53,32 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         if (string.IsNullOrWhiteSpace(order.StreetAddress)) missing.Add("Adres Satırı");
         if (string.IsNullOrWhiteSpace(order.City)) missing.Add("Şehir");
         if (string.IsNullOrWhiteSpace(order.PostalCode)) missing.Add("Posta Kodu");
-        if (string.IsNullOrWhiteSpace(order.BuyerEmail)) missing.Add("alıcı e-postası");
-        if (string.IsNullOrWhiteSpace(order.Phone)) missing.Add("alıcı telefonu");
+
+        // E-posta kontrolü: Canlı modda (Etsy'ye bildirim açık) zorunlu; test modunda güvenli fallback atanır
+        if (string.IsNullOrWhiteSpace(order.BuyerEmail))
+        {
+            if (context.NotifyEtsy)
+            {
+                missing.Add("alıcı e-postası");
+            }
+            else
+            {
+                order.BuyerEmail = $"order.{order.ReceiptId}@etsy-buyer.com";
+            }
+        }
+
+        // Telefon kontrolü: Canlı modda zorunlu; test modunda güvenli test telefonu atanır
+        if (string.IsNullOrWhiteSpace(order.Phone))
+        {
+            if (context.NotifyEtsy)
+            {
+                missing.Add("alıcı telefonu");
+            }
+            else
+            {
+                order.Phone = "+15551234567";
+            }
+        }
 
         if (missing.Count > 0)
         {
@@ -163,18 +187,26 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
             ? order.BuyerEmail.Trim()
             : $"order.{order.ReceiptId}@etsy-buyer.com";
 
+        string countryCode = !string.IsNullOrWhiteSpace(order.CountryCode)
+            ? order.CountryCode.Trim().ToUpperInvariant()
+            : "US";
+
+        string receiverPhone = !string.IsNullOrWhiteSpace(order.Phone)
+            ? order.Phone.Trim()
+            : "+15551234567";
+
         var request = new ShiptomoreShipmentRequest
         {
             ProviderSlug = provider,
             ServiceSlug = service,
-            ReceiverCountryCode = order.CountryCode.ToUpperInvariant(),
+            ReceiverCountryCode = countryCode,
             ReceiverName = receiverName,
-            ReceiverPhone = order.Phone,
+            ReceiverPhone = receiverPhone,
             ReceiverEmail = receiverEmail,
-            ReceiverStreet = order.StreetAddress,
+            ReceiverStreet = order.StreetAddress ?? string.Empty,
             ReceiverStreet2 = string.IsNullOrWhiteSpace(order.SecondAddress) ? null : order.SecondAddress,
-            ReceiverCity = order.City,
-            ReceiverZip = order.PostalCode,
+            ReceiverCity = order.City ?? string.Empty,
+            ReceiverZip = order.PostalCode ?? string.Empty,
             ReceiverStateCode = order.HasState && !string.IsNullOrWhiteSpace(order.State) ? order.State : null,
 
             // Etsy IOSS numarası: alıcı ID'si değil, SATICI'nın IOSS kaydıdır.
@@ -198,16 +230,19 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
             Qty = 1
         });
 
-        foreach (var item in order.Items)
+        if (order.Items != null)
         {
-            request.ProductLines.Add(new ShiptomoreProductLine
+            foreach (var item in order.Items)
             {
-                Description = string.IsNullOrWhiteSpace(item.Title) ? "E-Ticaret Ürünü" : item.Title,
-                Qty = item.Quantity > 0 ? item.Quantity : 1,
-                UnitPrice = item.Price,
-                OriginCountryCode = "TR",
-                HsCode = string.IsNullOrWhiteSpace(context.HsCode) ? null : context.HsCode.Trim()
-            });
+                request.ProductLines.Add(new ShiptomoreProductLine
+                {
+                    Description = string.IsNullOrWhiteSpace(item.Title) ? "E-Ticaret Ürünü" : item.Title,
+                    Qty = item.Quantity > 0 ? item.Quantity : 1,
+                    UnitPrice = item.Price > 0 ? item.Price : (order.TotalPrice > 0 ? order.TotalPrice : 10m),
+                    OriginCountryCode = "TR",
+                    HsCode = string.IsNullOrWhiteSpace(context.HsCode) ? null : context.HsCode.Trim()
+                });
+            }
         }
 
         if (request.ProductLines.Count == 0)
@@ -216,7 +251,7 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
             {
                 Description = "E-Ticaret Ürünü",
                 Qty = 1,
-                UnitPrice = order.TotalPrice,
+                UnitPrice = order.TotalPrice > 0 ? order.TotalPrice : 10m,
                 OriginCountryCode = "TR",
                 HsCode = string.IsNullOrWhiteSpace(context.HsCode) ? null : context.HsCode.Trim()
             });
