@@ -25,9 +25,17 @@ public static class ShiptomoreSettingsStore
     {
         get
         {
-            var folder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "SimilarProductsWinForms");
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            if (string.IsNullOrWhiteSpace(appData))
+            {
+                appData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+            }
+            if (string.IsNullOrWhiteSpace(appData))
+            {
+                appData = AppContext.BaseDirectory;
+            }
+
+            var folder = Path.Combine(appData, "SimilarProductsWinForms");
             Directory.CreateDirectory(folder);
             return Path.Combine(folder, "shiptomore-settings.json");
         }

@@ -49,18 +49,17 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         }
 
         var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(order.BuyerName)) missing.Add("alıcı adı");
-        if (string.IsNullOrWhiteSpace(order.StreetAddress)) missing.Add("adres");
-        if (string.IsNullOrWhiteSpace(order.City)) missing.Add("şehir");
-        if (string.IsNullOrWhiteSpace(order.PostalCode)) missing.Add("posta kodu");
-        if (string.IsNullOrWhiteSpace(order.CountryCode)) missing.Add("ülke");
+        if (string.IsNullOrWhiteSpace(order.BuyerName)) missing.Add("Alıcı Adı Soyadı");
+        if (string.IsNullOrWhiteSpace(order.StreetAddress)) missing.Add("Adres Satırı");
+        if (string.IsNullOrWhiteSpace(order.City)) missing.Add("Şehir");
+        if (string.IsNullOrWhiteSpace(order.PostalCode)) missing.Add("Posta Kodu");
         if (string.IsNullOrWhiteSpace(order.BuyerEmail)) missing.Add("alıcı e-postası");
         if (string.IsNullOrWhiteSpace(order.Phone)) missing.Add("alıcı telefonu");
 
         if (missing.Count > 0)
         {
             return Fail("Ship to More için zorunlu alanlar eksik: " + string.Join(", ", missing) +
-                        ". Sipariş verisinde bu alanlar boş olamaz.");
+                        ". Lütfen 'Adresi Düzenle' düğmesine tıklayarak bu bilgileri doldurun.");
         }
 
         var request = BuildRequest(context);
@@ -143,14 +142,35 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         var (first, last) = SplitName(order.BuyerName);
         string receiverName = string.IsNullOrWhiteSpace(last) ? first : $"{first} {last}";
 
+        string provider = (context.SelectedSubCarrier ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(provider) || provider == "shiptomore")
+        {
+            provider = "fedex";
+        }
+
+        string rawService = (context.ServiceType ?? string.Empty).Trim().ToLowerInvariant();
+        string service = rawService.Replace(' ', '_');
+        if (service.Contains("air_priority") || service.Contains("ddp"))
+        {
+            service = "air_priority";
+        }
+        else if (service.Contains("fedex") || service.Contains("priority_express"))
+        {
+            service = "fedex_priority";
+        }
+
+        string receiverEmail = !string.IsNullOrWhiteSpace(order.BuyerEmail)
+            ? order.BuyerEmail.Trim()
+            : $"order.{order.ReceiptId}@etsy-buyer.com";
+
         var request = new ShiptomoreShipmentRequest
         {
-            ProviderSlug = (context.SelectedSubCarrier ?? string.Empty).Trim().ToLowerInvariant(),
-            ServiceSlug = (context.ServiceType ?? string.Empty).Trim().ToLowerInvariant().Replace(' ', '_'),
+            ProviderSlug = provider,
+            ServiceSlug = service,
             ReceiverCountryCode = order.CountryCode.ToUpperInvariant(),
             ReceiverName = receiverName,
             ReceiverPhone = order.Phone,
-            ReceiverEmail = order.BuyerEmail,
+            ReceiverEmail = receiverEmail,
             ReceiverStreet = order.StreetAddress,
             ReceiverStreet2 = string.IsNullOrWhiteSpace(order.SecondAddress) ? null : order.SecondAddress,
             ReceiverCity = order.City,

@@ -394,6 +394,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const serviceType = quote?.serviceType || 'Express';
     const subCarrier = quote?.subCarrier || 'FedEx';
 
+    if (carrierKey === 'shiptomore' && !this.selectedOrder.phone?.trim()) {
+      alert('⚠️ Ship to More (FedEx/UPS) uluslararası gümrük beyanı için alıcı telefon numarası zorunludur.\n\nLütfen "Adresi Düzenle" butonuna tıklayarak alıcı telefonunu girin.');
+      this.openAddressModal();
+      return;
+    }
+
     const rId = Number(this.selectedOrder.orderId);
     if (!rId || isNaN(rId)) {
       alert('Geçersiz Sipariş ID (Receipt ID)');
@@ -439,12 +445,12 @@ export class OrdersComponent implements OnInit, OnDestroy {
           this.saveSuccessMessage = `✅ Kargo başarıyla oluşturuldu! Takip No: ${res.trackingNumber}. Etsy bildirimi: ${res.etsyNotified ? 'Gönderildi' : 'Beklemede'}`;
           setTimeout(() => this.saveSuccessMessage = null, 8000);
         } else {
-          alert('Kargo oluşturulamadı: ' + (res?.message || 'Bilinmeyen hata'));
+          alert('Kargo oluşturulamadı: ' + (res?.message || res?.errorMessage || 'Bilinmeyen hata'));
         }
       },
       error: (err: any) => {
         this.isGeneratingShipment = false;
-        const errMsg = err?.error?.message || err?.message || 'API Hatası';
+        const errMsg = err?.error?.errorMessage || err?.error?.message || err?.message || 'API Hatası';
         alert('Kargo oluşturma hatası: ' + errMsg);
       }
     });

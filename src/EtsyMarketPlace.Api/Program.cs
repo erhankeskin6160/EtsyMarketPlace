@@ -86,6 +86,8 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsSe
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShipEntegraApiClient, EtsyMarketPlace.Infrastructure.Shipping.ShipEntegraApiClient>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IArasGlobalApiClient, EtsyMarketPlace.Infrastructure.Shipping.ArasGlobalApiClient>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShiptomoreOfficialApi, EtsyMarketPlace.Infrastructure.Shipping.ShiptomoreOfficialApiClient>();
+EtsyMarketPlace.Application.Shipping.ShippingSecretProtector.Current =
+    new EtsyMarketPlace.Infrastructure.Shipping.DpapiShippingSecretProtector();
 
 builder.Services.AddSingleton<EtsyMarketPlace.Domain.Orders.IOrderAddressRepository>(sp => new EtsyMarketPlace.Infrastructure.Orders.SqliteOrderAddressRepository(dbPath));
 builder.Services.AddSingleton<EtsyMarketPlace.Application.Orders.EtsyOrderService>();
