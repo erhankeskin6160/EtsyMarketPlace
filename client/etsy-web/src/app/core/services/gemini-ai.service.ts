@@ -110,6 +110,16 @@ export class GeminiAiService {
 
     return this.http.post<any>(url, body).pipe(
       map(res => {
+        if (res?.usageMetadata) {
+          this.trackAiUsage(
+            'Google Gemini',
+            modelName,
+            'Gemini AI Danışmanı',
+            res.usageMetadata.promptTokenCount,
+            res.usageMetadata.candidatesTokenCount,
+            res.usageMetadata.totalTokenCount
+          );
+        }
         const candidate = res?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (candidate) {
           this.conversationHistory.push({
@@ -255,5 +265,43 @@ Son 30 gündeki 10 sipariş incelendiğinde <strong>1 adet eksik maliyetli sipar
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/\n\n/g, '<br><br>')
       .replace(/\n/g, '<br>');
+  }
+
+  private trackAiUsage(
+    provider: string,
+    model: string,
+    moduleName: string,
+    promptTokens: number,
+    completionTokens: number,
+    totalTokens?: number,
+    status: string = 'Başarılı'
+  ): void {
+    const prompt = Number(promptTokens) || 0;
+    const comp = Number(completionTokens) || 0;
+    const total = Number(totalTokens) || (prompt + comp);
+
+    if (total <= 0 && prompt <= 0 && comp <= 0) return;
+
+    // Gemini 2.5 Flash: $0.15 / 1M prompt, $0.60 / 1M completion
+    const costUsd = ((prompt * 0.15) + (comp * 0.60)) / 1_000_000;
+
+    const payload = {
+      timestamp: new Date().toISOString(),
+      moduleName: moduleName || 'Gemini AI Danışmanı',
+      provider: provider,
+      modelName: model,
+      promptTokens: prompt,
+      completionTokens: comp,
+      totalTokens: total,
+      estimatedCostUsd: Number(costUsd.toFixed(6)),
+      estimatedCostTry: Number((costUsd * 40.0).toFixed(4)),
+      status: status,
+      note: 'Web Studio Canlı AI İşlemi'
+    };
+
+    this.etsyApi.recordAiUsage(payload).subscribe({
+      next: () => {},
+      error: (err) => console.warn('[GeminiAiService] AI kullanım kaydı gönderilemedi:', err)
+    });
   }
 }

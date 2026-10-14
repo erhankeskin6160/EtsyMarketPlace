@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { AiSettingsService } from './ai-settings.service';
+import { EtsyApiService } from './etsy-api.service';
 
 export interface CompleteListingAiResult {
   title: string;
@@ -50,6 +51,7 @@ export interface AiFieldResult<T> {
 export class EtsyListingAiService {
   private http = inject(HttpClient);
   private aiSettings = inject(AiSettingsService);
+  private etsyApi = inject(EtsyApiService);
 
   /**
    * Generates a 140-character Etsy-optimized SEO title.
@@ -559,6 +561,9 @@ Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw
 
     return this.http.post<any>(url, body, { headers }).pipe(
       map(res => {
+        if (res?.usage) {
+          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Başlık Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
+        }
         const text = res?.choices?.[0]?.message?.content?.trim() || '';
         return text.replace(/^["'`]+|["'`]+$/g, '').trim();
       })
@@ -596,6 +601,9 @@ CRITICAL ETSY RULES:
 
     return this.http.post<any>(url, body, { headers }).pipe(
       map(res => {
+        if (res?.usage) {
+          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (13 Etiket Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
+        }
         const raw = res?.choices?.[0]?.message?.content || '[]';
         return this.parseTagsJsonResponse(raw, input);
       })
@@ -634,7 +642,12 @@ Format with clean emojis and line breaks.`;
     };
 
     return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(input, materials))
+      map(res => {
+        if (res?.usage) {
+          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Açıklama Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
+        }
+        return res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(input, materials);
+      })
     );
   }
 
@@ -671,6 +684,9 @@ Fields schema:
 
     return this.http.post<any>(url, body, { headers }).pipe(
       map(res => {
+        if (res?.usage) {
+          this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Tam Paket)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
+        }
         const raw = res?.choices?.[0]?.message?.content || '{}';
         return this.parseCompleteListingJsonResponse(raw, input, materials);
       })
@@ -707,6 +723,9 @@ Do NOT include quotes, explanations, markdown, or greetings. Output ONLY the raw
 
     return this.http.post<any>(url, body).pipe(
       map(res => {
+        if (res?.usageMetadata) {
+          this.trackAiUsage('Google Gemini', activeModel, 'Hızlı Ürün Listeleme (Başlık Üretimi)', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
+        }
         const text = res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
         return text.replace(/^["'`]+|["'`]+$/g, '').trim();
       })
@@ -735,6 +754,9 @@ CRITICAL ETSY RULES:
 
     return this.http.post<any>(url, body).pipe(
       map(res => {
+        if (res?.usageMetadata) {
+          this.trackAiUsage('Google Gemini', activeModel, 'Hızlı Ürün Listeleme (13 Etiket Üretimi)', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
+        }
         const raw = res?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
         try {
           const parsed = JSON.parse(raw);
@@ -771,7 +793,12 @@ Format with clean emojis and line breaks.`;
     };
 
     return this.http.post<any>(url, body).pipe(
-      map(res => res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || this.generateRuleBasedDescription(input, materials))
+      map(res => {
+        if (res?.usageMetadata) {
+          this.trackAiUsage('Google Gemini', activeModel, 'Hızlı Ürün Listeleme (Açıklama Üretimi)', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
+        }
+        return res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || this.generateRuleBasedDescription(input, materials);
+      })
     );
   }
 
@@ -801,6 +828,9 @@ Fields schema:
 
     return this.http.post<any>(url, body).pipe(
       map(res => {
+        if (res?.usageMetadata) {
+          this.trackAiUsage('Google Gemini', activeModel, 'Hızlı Ürün Listeleme (Tam Paket)', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
+        }
         const raw = res?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
         return JSON.parse(raw);
       })
@@ -950,6 +980,9 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
 
     return this.http.post<any>(url, body).pipe(
       map(res => {
+        if (res?.usageMetadata) {
+          this.trackAiUsage('Google Gemini', model, 'Kategori & Taksonomi Tespiti', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
+        }
         const rawText = res?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
         const parsed = this.parseTaxonomyJsonResponse(rawText);
         const sourcesText = this.formatInputSourcesDescription(sources);
@@ -1185,6 +1218,9 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
 
     return this.http.post<any>(url, body, { headers }).pipe(
       map(res => {
+        if (res?.usage) {
+          this.trackAiUsage('DeepSeek', normalizedModel, 'Kategori & Taksonomi Tespiti', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
+        }
         const rawText = res?.choices?.[0]?.message?.content || '{}';
         const parsed = this.parseTaxonomyJsonResponse(rawText);
         const sourcesText = this.formatInputSourcesDescription(sources);
@@ -1612,4 +1648,55 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     }
     return unique.slice(0, 13);
   }
+
+  private trackAiUsage(
+    provider: string,
+    model: string,
+    moduleName: string,
+    promptTokens: number,
+    completionTokens: number,
+    totalTokens?: number,
+    status: string = 'Başarılı'
+  ): void {
+    const prompt = Number(promptTokens) || 0;
+    const comp = Number(completionTokens) || 0;
+    const total = Number(totalTokens) || (prompt + comp);
+
+    if (total <= 0 && prompt <= 0 && comp <= 0) return;
+
+    let costUsd = 0;
+    const pLower = (provider || '').toLowerCase();
+    const mLower = (model || '').toLowerCase();
+
+    if (pLower.includes('deepseek')) {
+      const isReasoner = mLower.includes('reasoner') || mLower.includes('r1');
+      const inRate = isReasoner ? 0.55 : 0.14;
+      const outRate = isReasoner ? 2.19 : 0.28;
+      costUsd = ((prompt * inRate) + (comp * outRate)) / 1_000_000;
+    } else if (pLower.includes('gemini') || pLower.includes('google')) {
+      costUsd = ((prompt * 0.15) + (comp * 0.60)) / 1_000_000;
+    } else if (pLower.includes('openai')) {
+      costUsd = ((prompt * 2.50) + (comp * 10.00)) / 1_000_000;
+    }
+
+    const payload = {
+      timestamp: new Date().toISOString(),
+      moduleName: moduleName || 'Hızlı Ürün Listeleme',
+      provider: provider,
+      modelName: model,
+      promptTokens: prompt,
+      completionTokens: comp,
+      totalTokens: total,
+      estimatedCostUsd: Number(costUsd.toFixed(6)),
+      estimatedCostTry: Number((costUsd * 40.0).toFixed(4)),
+      status: status,
+      note: 'Web Studio Canlı AI İşlemi'
+    };
+
+    this.etsyApi.recordAiUsage(payload).subscribe({
+      next: () => {},
+      error: (err) => console.warn('[EtsyListingAiService] AI kullanım kaydı gönderilemedi:', err)
+    });
+  }
 }
+

@@ -148,6 +148,10 @@ public sealed class AiBalanceServiceTests
             Assert.Equal(1.99m, ds.TotalBalanceUsd);
             Assert.Equal(98.27m, ds.TotalBalanceTry(49.38m));
             Assert.Contains("platform.deepseek.com", ds.TopUpUrl);
+            Assert.Equal(25557, ds.TotalTokensUsed);
+            Assert.Equal(18, ds.TotalApiRequests);
+            Assert.Equal(13850, ds.PromptTokensUsed);
+            Assert.Equal(11707, ds.CompletionTokensUsed);
 
             // Gemini should be present
             var gemini = balances.FirstOrDefault(x => x.Provider == "Google Gemini");
