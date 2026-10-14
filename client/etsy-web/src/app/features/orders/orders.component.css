@@ -1434,7 +1434,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 20px;
+      padding: 16px;
+      overflow-y: auto;
       animation: fadeIn 0.15s ease-out;
     }
     @keyframes fadeIn {
@@ -2104,13 +2105,79 @@
 
 /* ADDRESS MODAL SPECIFICS */
 .address-modal-box {
-  max-width: 600px;
+  max-width: 620px;
   width: 95%;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
   background: #0f172a;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  padding: 24px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  padding: 0;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+}
+
+.address-edit-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 160px);
+  padding: 18px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.address-edit-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.address-edit-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.address-edit-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 4px;
+}
+
+.address-edit-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+.address-modal-footer {
+  flex-shrink: 0;
+  padding: 12px 22px;
+  background: #1e293b;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  z-index: 10;
+}
+
+.btn-save-address {
+  background: #2563eb;
+  border: none;
+  color: #ffffff;
+  padding: 9px 18px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-save-address:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
 }
 
 .form-row-2 {
