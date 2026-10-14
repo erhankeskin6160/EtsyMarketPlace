@@ -1384,6 +1384,46 @@
       opacity: 0.7;
     }
 
+    /* ETSY LIVE SYNC TOGGLE */
+    .etsy-live-sync-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 11px;
+      border-radius: 6px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.2s ease;
+    }
+    .etsy-live-sync-toggle:hover {
+      border-color: rgba(148, 163, 184, 0.4);
+      background: rgba(30, 41, 59, 0.8);
+    }
+    .etsy-live-sync-toggle.active {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.5);
+    }
+    .etsy-live-sync-toggle input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: #f59e0b;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+    }
+    .sync-toggle-label {
+      font-size: 0.74rem;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+    .sync-toggle-label .test-mode {
+      color: #38bdf8;
+    }
+    .sync-toggle-label .live-mode {
+      color: #f59e0b;
+    }
+
     /* MODALS COMMON */
     .modal-overlay {
       position: fixed;

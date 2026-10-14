@@ -99,6 +99,50 @@ public sealed class ShipmentOrchestratorServiceTests
     }
 
     [Fact]
+    public async Task CreateShipmentAsync_WhenNotifyEtsyIsFalse_DoesNotSubmitTrackingToEtsy()
+    {
+        // Arrange
+        var fakeProvider = new FakeShipmentCreationProvider();
+        var manager = new ShipmentCreationManager(new[] { fakeProvider });
+        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+
+        var orchestrator = new ShipmentOrchestratorService(manager, fakeLogisticsApi);
+
+        var command = new CreateCarrierShipmentCommand
+        {
+            ReceiptId = 202,
+            ShopId = "53236321",
+            CarrierKey = "shipentegra",
+            ServiceCode = "shipentegra-express",
+            ServiceType = "Express",
+            SubCarrier = "ups",
+            WeightKg = 0.5,
+            NotifyEtsy = false,
+            RecipientAddress = new EtsyOrderFulfillmentItem
+            {
+                ReceiptId = 202,
+                BuyerName = "Test Buyer",
+                StreetAddress = "456 Test Ave",
+                City = "Seattle",
+                State = "WA",
+                PostalCode = "98101",
+                CountryCode = "US"
+            }
+        };
+
+        // Act
+        var result = await orchestrator.CreateShipmentAsync(command);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("1Z9999999999999999", result.TrackingNumber);
+        Assert.False(result.EtsyTrackingSubmitted);
+        Assert.False(fakeLogisticsApi.SubmittedTracking);
+        Assert.Contains("Test modu", result.EtsyTrackingMessage);
+    }
+
+    [Fact]
     public async Task ConnectCarrierAsync_SavesShipEntegraSettings()
     {
         // Arrange

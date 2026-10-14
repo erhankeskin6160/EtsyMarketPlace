@@ -104,6 +104,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isLabelPreviewOpen: boolean = false;
   isGeneratingShipment: boolean = false;
   isBarcodeExpanded: boolean = false;
+  notifyEtsyOnShipment: boolean = false;
 
   // TOASTS
   saveSuccessMessage: string | null = null;
@@ -419,7 +420,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       heightCm: this.selectedOrder.packageSpecs.heightCm,
       hsCode: this.selectedOrder.gtipCode,
       cargoPrice: quote?.priceUsd || this.selectedOrder.shippingCost,
-      notifyEtsy: true,
+      notifyEtsy: this.notifyEtsyOnShipment,
       recipientAddress: {
         name: this.selectedOrder.buyerName,
         first_line: this.selectedOrder.streetAddress || '',
@@ -436,14 +437,19 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.isGeneratingShipment = false;
         if (res && res.success) {
           if (this.selectedOrder) {
-            this.selectedOrder.status = 'shipped';
+            if (this.notifyEtsyOnShipment && res.etsyTrackingSubmitted) {
+              this.selectedOrder.status = 'shipped';
+            }
             this.selectedOrder.trackingNumber = res.trackingNumber;
             this.selectedOrder.carrier = res.carrierName || carrierKey;
             this.selectedOrder.labelUrl = res.labelUrl;
             this.selectedOrder.labelBase64 = res.labelBase64;
           }
-          this.saveSuccessMessage = `✅ Kargo başarıyla oluşturuldu! Takip No: ${res.trackingNumber}. Etsy bildirimi: ${res.etsyNotified ? 'Gönderildi' : 'Beklemede'}`;
-          setTimeout(() => this.saveSuccessMessage = null, 8000);
+          const etsyNote = this.notifyEtsyOnShipment
+            ? (res.etsyTrackingSubmitted ? 'Etsy mağazanıza takip numarası iletildi ve sipariş kargolandı yapıldı.' : (res.etsyTrackingMessage || 'Etsy bildirimi iletilemedi.'))
+            : '🛡️ Test modu: Etsy mağazanıza bildirilmedi, siparişiniz Etsy üzerinde güvende.';
+          this.saveSuccessMessage = `✅ Kargo başarıyla oluşturuldu! Takip No: ${res.trackingNumber}. ${etsyNote}`;
+          setTimeout(() => this.saveSuccessMessage = null, 9000);
         } else {
           alert('Kargo oluşturulamadı: ' + (res?.message || res?.errorMessage || 'Bilinmeyen hata'));
         }

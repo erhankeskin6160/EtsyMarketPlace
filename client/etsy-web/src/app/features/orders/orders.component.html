@@ -646,6 +646,21 @@
             👁️ Etiketi Önizle
           </button>
 
+          <!-- ETSY LIVE SYNC TOGGLE (SAFE TEST MODE BY DEFAULT) -->
+          <label 
+            class="etsy-live-sync-toggle" 
+            [class.active]="notifyEtsyOnShipment"
+            [title]="notifyEtsyOnShipment ? 'DİKKAT: Etsy mağazanıza takip numarası gönderilecek ve sipariş kargolandı olarak güncellenecek!' : 'GÜVENLİ TEST MODU: Etsy mağazanıza bildirilmez. Sipariş Etsy\'de açık kalır, sadece kargo firmasından etiket alınır.'">
+            <input 
+              type="checkbox" 
+              [(ngModel)]="notifyEtsyOnShipment" 
+              name="notifyEtsyOnShipment" />
+            <span class="sync-toggle-label">
+              <span *ngIf="!notifyEtsyOnShipment" class="mode-text test-mode">🛡️ Test Modu (Etsy'ye Bildirme)</span>
+              <span *ngIf="notifyEtsyOnShipment" class="mode-text live-mode">⚡ Canlı: Etsy'yi Kargolandı Yap</span>
+            </span>
+          </label>
+
           <button 
             type="button" 
             class="btn-footer-create-shipment" 

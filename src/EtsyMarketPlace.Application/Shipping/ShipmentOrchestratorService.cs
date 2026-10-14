@@ -150,9 +150,14 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 result.EtsyTrackingMessage = $"Etsy takip bildirimi hatası: {ex.Message}";
             }
         }
+        else if (!command.NotifyEtsy)
+        {
+            result.EtsyTrackingSubmitted = false;
+            result.EtsyTrackingMessage = "🛡️ Test modu: Etsy mağazanıza bildirilmedi. Siparişiniz Etsy üzerinde güvende.";
+        }
 
-        // Yerel sipariş servisinde kargolandı olarak işaretle
-        if (_orderService != null)
+        // Yerel sipariş servisinde kargolandı olarak işaretle (yalnızca Etsy'ye bildirim istendiyse)
+        if (command.NotifyEtsy && _orderService != null)
         {
             try
             {
