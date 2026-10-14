@@ -1102,11 +1102,12 @@
                 <input type="text" [(ngModel)]="editAddressModel.countryCode" class="form-control" placeholder="US, DE, GB vb." maxlength="2" style="text-transform: uppercase;" />
               </div>
             </div>
+          </div>
 
-            <div class="modal-actions-row" style="margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end;">
-              <button type="button" class="btn-cancel-modal" (click)="closeAddressModal()">İptal</button>
-              <button type="button" class="btn-save-session" (click)="saveEditedAddress()">💾 Adresi Kaydet</button>
-            </div>
+          <!-- FIXED MODAL FOOTER (ALWAYS VISIBLE PINNED ACTIONS) -->
+          <div class="modal-footer address-modal-footer">
+            <button type="button" class="btn-cancel-modal" (click)="closeAddressModal()">İptal</button>
+            <button type="button" class="btn-save-session btn-save-address" (click)="saveEditedAddress()">💾 Adresi Kaydet</button>
           </div>
 
         </div>
