@@ -227,6 +227,12 @@ public static class EtsyLiveDashboardCalculator
             decimal? productCost = null;
             var hasCost = false;
 
+            if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
+            {
+                productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost, 2);
+                hasCost = true;
+            }
+
             if (isCanceled)
             {
                 grandTotal = 0m;
@@ -268,15 +274,11 @@ public static class EtsyLiveDashboardCalculator
                 }
 
                 etsyFees = transactionFee + paymentFee + regulatoryFee + tax;
-
-                if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
-                {
-                    productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost, 2);
-                    hasCost = true;
-                }
             }
 
-            var netProfitUsd = isCanceled ? 0m : Math.Round(grandTotal - etsyFees - offsiteAdFee - (productCost ?? 0m), 2);
+            var netProfitUsd = isCanceled
+                ? (hasCost && productCost.HasValue && productCost.Value > 0 ? -productCost.Value : 0m)
+                : Math.Round(grandTotal - etsyFees - offsiteAdFee - (productCost ?? 0m), 2);
             var netProfitTry = Math.Round(netProfitUsd * orderSpecificRate, 2);
             var orderDate = receipt.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
 

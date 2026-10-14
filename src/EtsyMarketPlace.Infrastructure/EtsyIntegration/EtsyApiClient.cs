@@ -139,7 +139,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         }
 
         var status = StringValue(item, "status") ?? string.Empty;
-        var isCanceled = status.Contains("cancel", StringComparison.OrdinalIgnoreCase) || BoolValue(item, "is_canceled");
+        var grandTotal = MoneyValue(item, "grandtotal");
 
         var refundedAmount = 0m;
         if (item.TryGetProperty("refunds", out var refunds) && refunds.ValueKind == JsonValueKind.Array)
@@ -149,6 +149,18 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
                 refundedAmount += MoneyValue(refund, "amount");
             }
         }
+        else if (item.TryGetProperty("refund_amount", out _))
+        {
+            refundedAmount = MoneyValue(item, "refund_amount");
+        }
+
+        var isCanceled = status.Contains("cancel", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("refund", StringComparison.OrdinalIgnoreCase)
+            || BoolValue(item, "is_canceled")
+            || BoolValue(item, "was_canceled")
+            || BoolValue(item, "is_refunded")
+            || BoolValue(item, "was_refunded")
+            || (grandTotal > 0 && refundedAmount >= grandTotal);
 
         var buyerName = StringValue(item, "name", "buyer_name");
         var buyerEmail = StringValue(item, "buyer_email");
@@ -162,7 +174,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             isCanceled,
             BoolValue(item, "is_from_offsite_ads"),
             StringValue(item, "currency_code", "currency") ?? "USD",
-            MoneyValue(item, "grandtotal"),
+            grandTotal,
             MoneyValue(item, "subtotal"),
             MoneyValue(item, "total_shipping_cost"),
             MoneyValue(item, "discount_amt"),

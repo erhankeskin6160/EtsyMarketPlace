@@ -212,18 +212,18 @@ export class AccountingComponent implements OnInit, OnDestroy {
     {
       orderDate: '14.09.2026 13:10',
       receiptId: '4174201942',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
+      orderStatus: 'canceled',
+      displayStatus: '🔴 İptal Edildi',
       buyerName: 'Barbara Yaptangco (#9184)',
       productTitle: 'Ben 10 Classic Omnitrix Functional Dial & Sound',
       quantity: 1,
-      grandTotalUsd: 107.29,
-      etsyFeesUsd: 24.73,
+      grandTotalUsd: 0.00,
+      etsyFeesUsd: 0.00,
       offsiteAdFeeUsd: 0,
       productCostUsd: null,
-      netProfitUsd: 82.56,
+      netProfitUsd: 0.00,
       exchangeRate: 48.61,
-      netProfitTry: 4013.24,
+      netProfitTry: 0.00,
       hasCostData: false,
       hasInvoice: false
     },
@@ -431,6 +431,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.filteredOrders = [...this.orders];
     this.liveRate = this.etsyApi.exchangeRate() || 49.12;
+    this.loadLiveOrders();
   }
 
   ngOnDestroy(): void {
@@ -438,6 +439,64 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   get missingCostCount(): number {
     return this.orders.filter(o => !o.hasCostData && o.orderStatus !== 'canceled').length;
+  }
+
+  get canceledOrderCount(): number {
+    return this.filteredOrders.filter(o => o.orderStatus === 'canceled').length;
+  }
+
+  get totalOrderProfitUsd(): number {
+    return this.filteredOrders.reduce((sum, o) => sum + (o.netProfitUsd || 0), 0);
+  }
+
+  get totalOrderProfitTry(): number {
+    return this.filteredOrders.reduce((sum, o) => sum + (o.netProfitTry || 0), 0);
+  }
+
+  parseTurkishDate(str: string, endOfDay: boolean = false): Date {
+    const parts = (str || '').split('.');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      return new Date(Date.UTC(year, month, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0));
+    }
+    return new Date();
+  }
+
+  loadLiveOrders(): void {
+    const start = this.parseTurkishDate(this.startDate, false);
+    const end = this.parseTurkishDate(this.endDate, true);
+
+    this.etsyApi.getOrderFinancialsByDateRange(start, end).subscribe({
+      next: (res) => {
+        if (res && res.orders && Array.isArray(res.orders) && res.orders.length > 0) {
+          this.orders = res.orders.map((dto: any) => ({
+            orderDate: dto.orderDate || '',
+            receiptId: String(dto.receiptId),
+            orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded',
+            displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled' ? '🔴 İptal Edildi' : '🟢 Tamamlandı'),
+            buyerName: dto.buyerName || 'Misafir Müşteri',
+            productTitle: dto.productTitle || '',
+            quantity: dto.quantity || 1,
+            grandTotalUsd: dto.grandTotalUsd || 0,
+            etsyFeesUsd: dto.etsyFeesUsd || 0,
+            offsiteAdFeeUsd: dto.offsiteAdFeeUsd || 0,
+            productCostUsd: dto.productCostUsd !== undefined ? dto.productCostUsd : null,
+            netProfitUsd: dto.netProfitUsd || 0,
+            exchangeRate: dto.exchangeRate || this.liveRate,
+            netProfitTry: dto.netProfitTry || 0,
+            hasCostData: Boolean(dto.hasCostData),
+            hasInvoice: Boolean(dto.hasInvoice),
+            invoiceName: dto.invoicePath
+          }));
+          this.filterOrders();
+        }
+      },
+      error: (err) => {
+        console.warn('Canlı sipariş finans dökümü alınamadı, yerel veriler korunuyor:', err);
+      }
+    });
   }
 
   setCurrency(curr: 'USD' | 'TRY'): void {
@@ -472,6 +531,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       this.endDate = '03.10.2026';
     }
     this.showToast(`📅 Dönem güncellendi: ${this.startDate} — ${this.endDate}`);
+    this.loadLiveOrders();
   }
 
   onAutoRateToggle(): void {
@@ -480,10 +540,43 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   refreshFromEtsy(): void {
     this.isRefreshing = true;
-    setTimeout(() => {
-      this.isRefreshing = false;
-      this.showToast('✅ Canlı Etsy API senkronizasyonu tamamlandı: 97 kayıt güncellendi.');
-    }, 900);
+    const start = this.parseTurkishDate(this.startDate, false);
+    const end = this.parseTurkishDate(this.endDate, true);
+
+    this.etsyApi.getOrderFinancialsByDateRange(start, end).subscribe({
+      next: (res) => {
+        this.isRefreshing = false;
+        if (res && res.orders && Array.isArray(res.orders) && res.orders.length > 0) {
+          this.orders = res.orders.map((dto: any) => ({
+            orderDate: dto.orderDate || '',
+            receiptId: String(dto.receiptId),
+            orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded',
+            displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled' ? '🔴 İptal Edildi' : '🟢 Tamamlandı'),
+            buyerName: dto.buyerName || 'Misafir Müşteri',
+            productTitle: dto.productTitle || '',
+            quantity: dto.quantity || 1,
+            grandTotalUsd: dto.grandTotalUsd || 0,
+            etsyFeesUsd: dto.etsyFeesUsd || 0,
+            offsiteAdFeeUsd: dto.offsiteAdFeeUsd || 0,
+            productCostUsd: dto.productCostUsd !== undefined ? dto.productCostUsd : null,
+            netProfitUsd: dto.netProfitUsd || 0,
+            exchangeRate: dto.exchangeRate || this.liveRate,
+            netProfitTry: dto.netProfitTry || 0,
+            hasCostData: Boolean(dto.hasCostData),
+            hasInvoice: Boolean(dto.hasInvoice),
+            invoiceName: dto.invoicePath
+          }));
+          this.filterOrders();
+          this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${this.orders.length} sipariş yüklendi.`);
+        } else {
+          this.showToast('ℹ️ Seçili dönemde sipariş kaydı bulunamadı.');
+        }
+      },
+      error: (err) => {
+        this.isRefreshing = false;
+        this.showToast('⚠️ Canlı API bağlantısı sağlanamadı, yerel veriler korunuyor.');
+      }
+    });
   }
 
   openCostManager(): void {

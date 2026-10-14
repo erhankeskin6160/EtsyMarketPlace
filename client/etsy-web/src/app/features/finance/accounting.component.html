@@ -255,14 +255,17 @@
 
             <!-- Order Summary KPI Text -->
             <div class="orders-summary-label">
-              <span>📦 <strong>{{ filteredOrders.length }} sipariş</strong></span>
+              <span>📦 <strong>{{ filteredOrders.length }} sipariş</strong><ng-container *ngIf="canceledOrderCount > 0"> ({{ canceledOrderCount }} iptal)</ng-container></span>
               <span class="sep">|</span>
-              <span>Sipariş Kârı: <strong class="text-success">₺24.756,89 ($507,17)</strong></span>
+              <span>Sipariş Kârı: <strong [ngClass]="totalOrderProfitUsd >= 0 ? 'text-success' : 'text-danger'">{{ totalOrderProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(totalOrderProfitTry))) : ('₺' + formatNumber(totalOrderProfitTry)) }} ({{ totalOrderProfitUsd < 0 ? ('-$' + Math.abs(totalOrderProfitUsd).toFixed(2)) : ('$' + totalOrderProfitUsd.toFixed(2)) }})</strong></span>
               <span class="sep">|</span>
-              <span>Mağaza Net: <strong class="text-emerald">₺22.077,69</strong></span>
+              <span>🏛️ Mağaza Net: <strong class="text-emerald">₺{{ formatNumber(realNetProfitTry) }}</strong></span>
               <span class="sep">|</span>
               <span class="missing-badge" *ngIf="missingCostCount > 0">
                 ⚠️ {{ missingCostCount }} maliyetsiz
+              </span>
+              <span class="text-success" *ngIf="missingCostCount === 0">
+                ✅ Tamamlandı
               </span>
             </div>
           </div>
@@ -356,19 +359,20 @@
                     {{ o.productCostUsd !== null ? ('$' + o.productCostUsd.toFixed(2)) : '—' }}
                   </td>
                   <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-success' : 'text-danger'">
-                    {{ o.orderStatus === 'canceled' ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2)) }}
+                    {{ o.netProfitUsd < 0 ? ('-$' + Math.abs(o.netProfitUsd).toFixed(2)) : (o.orderStatus === 'canceled' && !o.hasCostData ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2))) }}
                   </td>
                   <td class="rate-cell">₺{{ o.exchangeRate.toFixed(2) }}</td>
                   <td class="profit-try-cell" [ngClass]="o.netProfitTry >= 0 ? 'text-emerald' : 'text-danger'">
-                    {{ o.orderStatus === 'canceled' ? '₺0,00' : ('₺' + formatNumber(o.netProfitTry)) }}
+                    {{ o.netProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(o.netProfitTry))) : (o.orderStatus === 'canceled' && !o.hasCostData ? '₺0,00' : ('₺' + formatNumber(o.netProfitTry))) }}
                   </td>
                   <td class="cost-flag-cell">
                     <span 
                       class="cost-status-pill" 
                       [class.has-cost]="o.hasCostData" 
-                      [class.no-cost]="!o.hasCostData"
+                      [class.no-cost]="!o.hasCostData && o.orderStatus !== 'canceled'"
+                      [class.canceled-pill]="o.orderStatus === 'canceled'"
                       (click)="editOrderCost(o)">
-                      {{ o.hasCostData ? '✅ Girildi' : '⚠️ Eksik' }}
+                      {{ o.orderStatus === 'canceled' ? (o.hasCostData ? '🔴 İptal (Maliyetli)' : '🔴 İptal') : (o.hasCostData ? '✅ Girildi' : '⚠️ Eksik') }}
                     </span>
                   </td>
                   <td class="invoice-cell">

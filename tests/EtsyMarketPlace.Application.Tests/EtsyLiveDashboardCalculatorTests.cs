@@ -229,5 +229,43 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(0m, row.NetProfitUsd);
         Assert.Equal(0m, row.NetProfitTry);
     }
+
+    [Fact]
+    public void BuildDetailedOrderRows_SetsNegativeProfit_WhenCanceledOrderHasShippingCost()
+    {
+        var receipt = new EtsyDashboardReceipt(
+            4188719099,
+            new DateTimeOffset(2026, 10, 8, 14, 30, 0, TimeSpan.Zero),
+            true,
+            true,
+            false,
+            "USD",
+            100.00m,
+            80.00m,
+            10.00m,
+            0m,
+            10.00m,
+            100.00m,
+            new[] { new EtsyDashboardReceiptItem("Canceled Shipped Item", 999, 1) },
+            "Barbara Yaptangco",
+            Status: "Canceled");
+
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4188719099] = new EtsyDashboardOrderCost(0m, 15.00m) // $15 shipping cost incurred
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(new[] { receipt }, Array.Empty<EtsyDashboardLedgerFee>(), costs, 49.00m);
+
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.Equal("canceled", row.OrderStatus);
+        Assert.Equal("İptal Edildi", row.DisplayStatus);
+        Assert.Equal(0m, row.GrandTotalUsd);
+        Assert.Equal(15.00m, row.ProductCostUsd);
+        Assert.True(row.HasCostData);
+        Assert.Equal(-15.00m, row.NetProfitUsd); // Negative balance / loss!
+        Assert.Equal(-723.90m, row.NetProfitTry); // -15 * 48.26 (historical rate)
+    }
 }
 

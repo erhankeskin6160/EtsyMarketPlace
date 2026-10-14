@@ -362,8 +362,8 @@
       background: rgba(255, 255, 255, 0.02);
     }
     .canceled-row td {
-      color: #64748b !important;
-      text-decoration: line-through;
+      color: #94a3b8 !important;
+      opacity: 0.88;
     }
     .order-id-cell { font-weight: 700; color: #38bdf8 !important; }
     .customer-cell { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
@@ -388,6 +388,7 @@
     }
     .cost-status-pill.has-cost { background: rgba(16, 185, 129, 0.15); color: #10b981; }
     .cost-status-pill.no-cost { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+    .cost-status-pill.canceled-pill { background: rgba(239, 68, 68, 0.15); color: #f87171; }
     .cost-status-pill:hover { transform: scale(1.05); }
 
     .btn-invoice {

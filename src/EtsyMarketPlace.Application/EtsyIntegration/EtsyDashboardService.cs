@@ -225,13 +225,12 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         catch { }
 
         var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledgerEntries, costs, rate);
-        var activeRows = rows.Where(r => r.OrderStatus != "canceled").ToList();
 
         return new OrderFinancialsDashboardResult(
             Orders: rows,
             Count: rows.Count,
-            TotalOrderProfitUsd: activeRows.Sum(r => r.NetProfitUsd),
-            TotalOrderProfitTry: activeRows.Sum(r => r.NetProfitTry),
+            TotalOrderProfitUsd: rows.Sum(r => r.NetProfitUsd),
+            TotalOrderProfitTry: rows.Sum(r => r.NetProfitTry),
             ExchangeRateUsed: rate,
             LedgerOk: ledgerError is null,
             LedgerWarning: ledgerError);
