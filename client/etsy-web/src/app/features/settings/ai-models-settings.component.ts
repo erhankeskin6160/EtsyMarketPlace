@@ -138,7 +138,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
               <input 
                 [type]="showKey ? 'text' : 'password'" 
                 [(ngModel)]="currentSelectedApiKey"
-                (ngModelChange)="onApiKeyChange()"
+                autocomplete="new-password"
+                data-lpignore="true"
+                name="ai_model_api_key_input"
                 placeholder="sk-... veya AIzaSy... API anahtarını girin"
                 class="hub-input key-input" />
               <button type="button" class="btn-eye" (click)="showKey = !showKey" [title]="showKey ? 'Anahtarı Gizle' : 'Anahtarı Göster'">
@@ -173,6 +175,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 <input 
                   [type]="showPhotoRoomKey ? 'text' : 'password'" 
                   [(ngModel)]="formSettings.photoRoomApiKey" 
+                  autocomplete="new-password"
+                  data-lpignore="true"
+                  name="photoroom_api_key_input"
                   placeholder="pr_live_... veya PhotoRoom anahtarı"
                   class="hub-input" />
                 <button type="button" class="btn-eye" (click)="showPhotoRoomKey = !showPhotoRoomKey">
@@ -187,6 +192,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 <input 
                   [type]="showBflKey ? 'text' : 'password'" 
                   [(ngModel)]="formSettings.bflApiKey" 
+                  autocomplete="new-password"
+                  data-lpignore="true"
+                  name="bfl_api_key_input"
                   placeholder="bfl_... FLUX API anahtarı"
                   class="hub-input" />
                 <button type="button" class="btn-eye" (click)="showBflKey = !showBflKey">
@@ -201,6 +209,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 <input 
                   [type]="showIdeogramKey ? 'text' : 'password'" 
                   [(ngModel)]="formSettings.ideogramApiKey" 
+                  autocomplete="new-password"
+                  data-lpignore="true"
+                  name="ideogram_api_key_input"
                   placeholder="ideogram_... API anahtarı"
                   class="hub-input" />
                 <button type="button" class="btn-eye" (click)="showIdeogramKey = !showIdeogramKey">
@@ -241,16 +252,21 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       <!-- FOOTER: EYLEMLER & TERMİNAL LOG KUTUSU -->
       <div class="hub-footer">
         <div class="footer-left-buttons">
-          <button type="button" class="btn-save-ai" (click)="saveAndActivate()">
-            💾 Kaydet & Aktifleştir
+          <button type="button" class="btn-save-ai" [disabled]="isSaving" (click)="saveAndActivate()">
+            <span *ngIf="!isSaving">💾 Kaydet & Aktifleştir</span>
+            <span *ngIf="isSaving">⏳ Kaydediliyor...</span>
           </button>
           
-          <button type="button" class="btn-test-ai" [disabled]="isTesting" (click)="runQuickApiTest()">
+          <button type="button" class="btn-test-ai" [disabled]="isTesting || isSaving" (click)="runQuickApiTest()">
             <span>{{ isTesting ? '⏳ Test Ediliyor...' : '⚡ Hızlı API Testi' }}</span>
           </button>
 
           <span class="save-toast" *ngIf="showToast">
             ✅ Ayarlar başarıyla kaydedildi ve tüm sisteme aktarıldı!
+          </span>
+
+          <span class="save-toast error-toast" *ngIf="saveErrorMessage">
+            ❌ {{ saveErrorMessage }}
           </span>
         </div>
 
@@ -596,6 +612,11 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       border-radius: 6px;
       animation: fade-in 0.2s;
     }
+    .save-toast.error-toast {
+      color: #f87171;
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.35);
+    }
 
     .key-hint-box {
       margin-top: 6px;
@@ -689,6 +710,8 @@ export class AiModelsSettingsComponent implements OnInit {
   showIdeogramKey = false;
   isTesting = false;
   showToast = false;
+  isSaving = false;
+  saveErrorMessage = '';
 
   terminalLogs: string[] = [];
 
@@ -725,13 +748,8 @@ export class AiModelsSettingsComponent implements OnInit {
     if (prov === 'DeepSeek' && (!this.formSettings.deepSeekModel || this.formSettings.deepSeekModel === 'deepseek-reasoner')) {
       this.formSettings.deepSeekModel = 'DeepSeek-V4-Flash';
     }
-    this.aiService.saveSettings(this.formSettings);
     const now = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${now} - Sağlayıcı değiştirildi: ${prov}`);
-  }
-
-  onApiKeyChange(): void {
-    this.aiService.saveSettings(this.formSettings);
+    this.terminalLogs.push(`${now} - Sağlayıcı seçildi: ${prov}`);
   }
 
   get currentSelectedModel(): string {
@@ -811,7 +829,6 @@ export class AiModelsSettingsComponent implements OnInit {
   }
 
   onModelDropdownChange(): void {
-    this.aiService.saveSettings(this.formSettings);
     const now = new Date().toLocaleTimeString('tr-TR');
     this.terminalLogs.push(`${now} - Model seçildi: ${this.currentSelectedModel}`);
   }
@@ -847,28 +864,44 @@ export class AiModelsSettingsComponent implements OnInit {
     }
   }
 
-  saveAndActivate(): void {
-    this.aiService.saveSettings(this.formSettings);
+  async saveAndActivate(): Promise<void> {
+    if (this.isSaving) return;
+    this.isSaving = true;
+    this.saveErrorMessage = '';
     const now = new Date().toLocaleTimeString('tr-TR');
-    this.terminalLogs.push(`${now} - [BAŞARILI] AI konfigürasyonu kaydedildi ve global olarak aktifleştirildi.`);
-    this.terminalLogs.push(`${now} - Yeni Aktif Rozet: ${this.aiService.activeBadgeText()}`);
-    if (this.formSettings.strictNeverOffline) {
-      this.terminalLogs.push(`${now} - [AKTİF KURAL] Canlı AI Zorunlu: Asla offline kural motoruna düşme devrede.`);
-    } else if (this.formSettings.allowSilentOfflineFallback) {
-      this.terminalLogs.push(`${now} - [AKTİF KURAL] Sessizce offline kural motoruna geçiş devrede.`);
-    }
+    this.terminalLogs.push(`${now} - ⏳ Ayarlar VDS SQLite veritabanına kaydediliyor...`);
 
-    this.showToast = true;
-    setTimeout(() => {
-      this.showToast = false;
-      if (this.isModal) {
-        this.closeModal();
+    const result = await this.aiService.saveSettings(this.formSettings);
+    const endNow = new Date().toLocaleTimeString('tr-TR');
+
+    if (result.success) {
+      this.terminalLogs.push(`${endNow} - ✅ [BAŞARILI] AI konfigürasyonu VDS SQLite veritabanına kalıcı olarak yazıldı.`);
+      this.terminalLogs.push(`${endNow} - Yeni Aktif Rozet: ${this.aiService.activeBadgeText()}`);
+      if (this.formSettings.strictNeverOffline) {
+        this.terminalLogs.push(`${endNow} - [AKTİF KURAL] Canlı AI Zorunlu: Asla offline kural motoruna düşme devrede.`);
+      } else if (this.formSettings.allowSilentOfflineFallback) {
+        this.terminalLogs.push(`${endNow} - [AKTİF KURAL] Sessizce offline kural motoruna geçiş devrede.`);
       }
-    }, 1800);
+      if (this.hasActiveKeySaved) {
+        this.terminalLogs.push(`${endNow} - 🔑 Aktif API Anahtarı doğrulandı ve veritabanında saklandı.`);
+      }
+
+      this.showToast = true;
+      this.isSaving = false;
+      setTimeout(() => {
+        this.showToast = false;
+        if (this.isModal) {
+          this.closeModal();
+        }
+      }, 1500);
+    } else {
+      this.isSaving = false;
+      this.saveErrorMessage = result.message || 'Kayıt sırasında hata oluştu.';
+      this.terminalLogs.push(`${endNow} - ❌ [HATA] ${this.saveErrorMessage}`);
+    }
   }
 
   closeModal(): void {
-    this.aiService.saveSettings(this.formSettings);
     this.aiService.closeAiSettingsModal();
     this.modalClosed.emit();
   }

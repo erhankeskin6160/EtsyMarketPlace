@@ -1,5 +1,6 @@
 import { Injectable, computed, signal, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import { environment } from '../../../environments/environment';
 
 export interface AiOptimizationSettings {
@@ -155,20 +156,36 @@ export class AiSettingsService {
             const current = this.settings();
             const merged: AiOptimizationSettings = {
               ...DEFAULT_SETTINGS,
-              ...current,
               ...parsed
             };
-            if (!merged.deepSeekApiKey && current.deepSeekApiKey) merged.deepSeekApiKey = current.deepSeekApiKey;
-            if (!merged.geminiApiKey && current.geminiApiKey) merged.geminiApiKey = current.geminiApiKey;
-            if (!merged.openAiApiKey && current.openAiApiKey) merged.openAiApiKey = current.openAiApiKey;
-            if (!merged.claudeApiKey && current.claudeApiKey) merged.claudeApiKey = current.claudeApiKey;
-            if (!merged.grokApiKey && current.grokApiKey) merged.grokApiKey = current.grokApiKey;
-            if (!merged.photoRoomApiKey && current.photoRoomApiKey) merged.photoRoomApiKey = current.photoRoomApiKey;
-            if (!merged.bflApiKey && current.bflApiKey) merged.bflApiKey = current.bflApiKey;
-            if (!merged.ideogramApiKey && current.ideogramApiKey) merged.ideogramApiKey = current.ideogramApiKey;
+
+            // Akıllı koruma: Eğer VDS'te bir anahtar veya ayar boş ise, fakat tarayıcının yerel depolamasında (current) doluysa, yereldeki anahtarı koru
+            const keyFields: (keyof AiOptimizationSettings)[] = [
+              'geminiApiKey', 'openAiApiKey', 'claudeApiKey', 'deepSeekApiKey', 'grokApiKey',
+              'photoRoomApiKey', 'bflApiKey', 'ideogramApiKey', 'customModel'
+            ];
+            let shouldSyncBack = false;
+            for (const k of keyFields) {
+              const parsedVal = (merged[k] as string) || '';
+              const currentVal = (current[k] as string) || '';
+              if (!parsedVal.trim() && currentVal.trim()) {
+                (merged as any)[k] = currentVal;
+                shouldSyncBack = true;
+              }
+            }
+
+            if (!merged.provider && current.provider) {
+              merged.provider = current.provider;
+            }
+
             this.settings.set(merged);
             this.isDbSynced.set(true);
             localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+
+            // Eğer yerelde var olup VDS'te eksik kalmış anahtarlar varsa VDS'i de otomatik senkronize et
+            if (shouldSyncBack) {
+              this.saveSettings(merged).catch(() => {});
+            }
           } catch {
             // ignore
           }
@@ -209,7 +226,7 @@ export class AiSettingsService {
     return { ...DEFAULT_SETTINGS };
   }
 
-  saveSettings(newSettings: AiOptimizationSettings): void {
+  async saveSettings(newSettings: AiOptimizationSettings): Promise<{ success: boolean; message?: string }> {
     this.settings.set({ ...newSettings });
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
@@ -220,20 +237,34 @@ export class AiSettingsService {
           model: newSettings.geminiModel || 'gemini-2.5-flash'
         }));
       }
+    } catch (e) {
+      console.warn('LocalStorage save error:', e);
+    }
 
-      // Persist to central VDS backend database
-      const shopId = environment.defaultShopId || '53236321';
-      this.http.post(`${environment.apiBaseUrl}/api/settings/ai`, {
-        shopId,
-        settingsJson: JSON.stringify(newSettings)
-      }).subscribe({
-        next: () => {
-          this.isDbSynced.set(true);
-        },
-        error: () => {}
-      });
-    } catch {
-      // ignore
+    // Persist to central VDS backend database
+    const shopId = environment.defaultShopId || '53236321';
+    try {
+      const res = await firstValueFrom(
+        this.http.post<{ success: boolean; message?: string }>(
+          `${environment.apiBaseUrl}/api/settings/ai`,
+          {
+            shopId,
+            settingsJson: JSON.stringify(newSettings)
+          }
+        )
+      );
+      this.isDbSynced.set(true);
+      return {
+        success: true,
+        message: res?.message || 'AI ayarları ve API anahtarları veritabanına başarıyla kaydedildi!'
+      };
+    } catch (err: any) {
+      console.error('VDS saveSettings failed:', err);
+      this.isDbSynced.set(false);
+      return {
+        success: false,
+        message: err?.error?.error || err?.message || 'Merkezi veritabanına kayıt başarısız oldu.'
+      };
     }
   }
 
