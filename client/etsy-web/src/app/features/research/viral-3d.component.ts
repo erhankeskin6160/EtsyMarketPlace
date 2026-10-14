@@ -66,6 +66,10 @@ interface ViralModel {
 
       <!-- MAIN GRID OF 3D MODELS -->
       <div class="models-grid">
+        <div *ngIf="filteredModels.length === 0" class="empty-hint">
+          Canlı model radarı veri kaynağı bağlanana kadar bu liste boştur (demo veri gösterilmez).
+          MakerWorld / Printables tarama servisi entegre edildiğinde popüler modeller burada otomatik listelenir.
+        </div>
         <div 
           *ngFor="let m of filteredModels" 
           class="model-card"
@@ -347,6 +351,17 @@ interface ViralModel {
       transform: translateY(-1px);
     }
 
+    .empty-hint {
+      grid-column: 1 / -1;
+      padding: 18px;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      background: rgba(30, 41, 59, 0.4);
+      border: 1px dashed rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      line-height: 1.6;
+    }
+
     @media (max-width: 1200px) {
       .models-grid { grid-template-columns: repeat(2, 1fr); }
     }
@@ -359,72 +374,7 @@ export class Viral3DComponent implements OnInit {
   activePlatform: 'all' | 'MakerWorld' | 'Printables' | 'CrealityCloud' = 'all';
   searchQuery: string = '';
 
-  models: ViralModel[] = [
-    {
-      id: 'vm-1',
-      title: 'Articulated Crystal Dragon (Mafsallı Ejderha)',
-      platform: 'MakerWorld',
-      creator: 'Cinderwing3D',
-      downloads7d: 14820,
-      likes: 6420,
-      weightGrams: 145,
-      printHours: 5.5,
-      estCostUsd: 4.80,
-      etsyAvgPriceUsd: 38.50,
-      arbitrageMargin: 420,
-      isHotOpportunity: true,
-      imageUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
-      tags: ['crystal dragon', 'articulated dragon', 'fidget toy', 'bambu lab print']
-    },
-    {
-      id: 'vm-2',
-      title: 'Minimalist Geometrik Kendinden Drenajlı Saksı',
-      platform: 'Printables',
-      creator: 'DesignKreativ',
-      downloads7d: 9430,
-      likes: 4120,
-      weightGrams: 90,
-      printHours: 3.2,
-      estCostUsd: 2.80,
-      etsyAvgPriceUsd: 26.00,
-      arbitrageMargin: 360,
-      isHotOpportunity: true,
-      imageUrl: 'https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=600&auto=format&fit=crop&q=80',
-      tags: ['planter pot', 'geometric vase', 'indoor planter', 'succulent pot']
-    },
-    {
-      id: 'vm-3',
-      title: 'Steampunk Mekanik Dişli Masa Saati Gövdesi',
-      platform: 'MakerWorld',
-      creator: 'MechanicArt',
-      downloads7d: 8200,
-      likes: 3890,
-      weightGrams: 280,
-      printHours: 11.0,
-      estCostUsd: 8.50,
-      etsyAvgPriceUsd: 89.00,
-      arbitrageMargin: 490,
-      isHotOpportunity: true,
-      imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&auto=format&fit=crop&q=80',
-      tags: ['steampunk clock', 'gear clock', 'desktop clock', 'mechanical art']
-    },
-    {
-      id: 'vm-4',
-      title: 'Modüler Bal Peteği Duvar Rafı & Düzenleyici',
-      platform: 'CrealityCloud',
-      creator: 'PolyGrid',
-      downloads7d: 5410,
-      likes: 2190,
-      weightGrams: 110,
-      printHours: 4.0,
-      estCostUsd: 3.50,
-      etsyAvgPriceUsd: 24.50,
-      arbitrageMargin: 280,
-      isHotOpportunity: false,
-      imageUrl: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=600&auto=format&fit=crop&q=80',
-      tags: ['honeycomb shelf', 'modular organizer', 'wall decor', '3d storage']
-    }
-  ];
+  models: ViralModel[] = [];
 
   constructor(
     public etsyApi: EtsyApiService,
