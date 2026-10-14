@@ -17,6 +17,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
     private readonly ShipmentCreationManager _creationManager;
     private readonly IEtsyLogisticsApiClient _logisticsApiClient;
     private readonly IShipEntegraApiClient? _shipEntegraApiClient;
+    private readonly IShiptomoreOfficialApi? _shiptomoreApi;
     private readonly IEtsyOrderFulfillmentService? _fulfillmentService;
     private readonly EtsyOrderService? _orderService;
 
@@ -24,12 +25,14 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         ShipmentCreationManager creationManager,
         IEtsyLogisticsApiClient logisticsApiClient,
         IShipEntegraApiClient? shipEntegraApiClient = null,
+        IShiptomoreOfficialApi? shiptomoreApi = null,
         IEtsyOrderFulfillmentService? fulfillmentService = null,
         EtsyOrderService? orderService = null)
     {
         _creationManager = creationManager ?? throw new ArgumentNullException(nameof(creationManager));
         _logisticsApiClient = logisticsApiClient ?? throw new ArgumentNullException(nameof(logisticsApiClient));
         _shipEntegraApiClient = shipEntegraApiClient;
+        _shiptomoreApi = shiptomoreApi;
         _fulfillmentService = fulfillmentService;
         _orderService = orderService;
     }
@@ -107,8 +110,12 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             LabelUrl = providerResult.LabelUrl
         };
 
-        // Eğer yerel etiket dosyası üretildiyse Base64 olarak oku
-        if (!string.IsNullOrWhiteSpace(providerResult.LabelUrl) && File.Exists(providerResult.LabelUrl))
+        // Eğer provider doğrudan Base64 döndüyse veya yerel etiket dosyası üretildiyse Base64 olarak oku
+        if (!string.IsNullOrWhiteSpace(providerResult.LabelBase64))
+        {
+            result.LabelBase64 = providerResult.LabelBase64;
+        }
+        else if (!string.IsNullOrWhiteSpace(providerResult.LabelUrl) && File.Exists(providerResult.LabelUrl))
         {
             try
             {
@@ -221,6 +228,45 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             };
         }
 
+        if (key.Contains("shiptomore"))
+        {
+            var clientId = command.ApiKey?.Trim() ?? command.BearerToken?.Trim();
+            var clientSecret = command.ApiSecret?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(clientId) && !string.IsNullOrWhiteSpace(clientSecret))
+            {
+                ShiptomoreSettingsStore.SaveCredentials(clientId, clientSecret);
+            }
+
+            bool isConnected = ShiptomoreSettingsStore.HasCredentials();
+            string? snippet = clientId != null && clientId.Length > 8
+                ? clientId[..4] + "..." + clientId[^4..]
+                : null;
+
+            IReadOnlyList<string>? providers = null;
+            if (_shiptomoreApi != null && isConnected)
+            {
+                try
+                {
+                    providers = await _shiptomoreApi.GetProvidersAsync(cancellationToken);
+                }
+                catch { }
+            }
+
+            string msg = providers != null && providers.Count > 0
+                ? $"Ship to More API bağlantısı başarıyla doğrulandı. Canlı sağlayıcılar: {string.Join(", ", providers)}"
+                : (isConnected ? "Ship to More API anahtarları kaydedildi." : "Lütfen geçerli Client ID ve Client Secret girin.");
+
+            return new ConnectCarrierResult
+            {
+                Success = true,
+                CarrierKey = "shiptomore",
+                IsConnected = isConnected,
+                TokenSnippet = snippet,
+                Message = msg
+            };
+        }
+
         return new ConnectCarrierResult
         {
             Success = true,
@@ -248,6 +294,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         if (sub.Contains("dhl")) return "DHL";
         if (sub.Contains("usps")) return "USPS";
         if (sub.Contains("widect") || sub.Contains("aras")) return "Aras Cargo";
-        return "Other";
+        if (carrierKey.Contains("shipentegra")) return "ShipEntegra";
+        if (carrierKey.Contains("shiptomore")) return "Ship to More";
+        return !string.IsNullOrWhiteSpace(subCarrier) ? subCarrier : "Other";
     }
 }

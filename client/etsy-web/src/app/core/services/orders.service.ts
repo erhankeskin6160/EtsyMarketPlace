@@ -69,14 +69,15 @@ export class OrdersService {
         id: 'shiptomore',
         name: 'Shiptomore',
         logoUrl: 'assets/shipping/shiptomore.png',
-        isConnected: false,
-        statusLabel: '⚠️ Giriş Yap',
+        isConnected: true,
+        statusLabel: '🟢 API Bağlı',
         autoLabel: '⚙️ Bağlantı',
-        portalUrl: 'https://shiptomore.com',
-        tokenOrKey: '',
+        portalUrl: 'https://dev.shiptomore.com/portal/keys',
+        tokenOrKey: 'NhuCndOc1smCm0uBInrLByukAoV5JNRj',
+        apiKey: 'NhuCndOc1smCm0uBInrLByukAoV5JNRj',
         clientSecret: '',
-        lastUpdated: '-',
-        notes: 'API anahtarlarınızı girerek yetkilendirin'
+        lastUpdated: '14.10.2026',
+        notes: 'Resmî REST API Entegrasyonu (dev.shiptomore.com)'
       }
     ];
   }
@@ -259,6 +260,10 @@ export class OrdersService {
     }
     if (carrierId === 'shipentegra') {
       if (session.apiKey && session.apiSecret) return true;
+      return Boolean(session.tokenOrKey && !session.tokenOrKey.includes('...') && session.tokenOrKey.length > 10);
+    }
+    if (carrierId === 'shiptomore') {
+      if (session.apiKey && session.clientSecret) return true;
       return Boolean(session.tokenOrKey && !session.tokenOrKey.includes('...') && session.tokenOrKey.length > 10);
     }
     if (carrierId === 'aras') {

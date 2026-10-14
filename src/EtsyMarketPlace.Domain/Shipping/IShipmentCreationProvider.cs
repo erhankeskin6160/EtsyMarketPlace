@@ -38,6 +38,7 @@ public sealed class ShipmentCreationResult
     public string ShipmentId { get; set; } = string.Empty;
     public string TrackingNumber { get; set; } = string.Empty;
     public string LabelUrl { get; set; } = string.Empty;
+    public string? LabelBase64 { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
     public ArasShipmentPriceBreakdown? PriceBreakdown { get; set; }
 }

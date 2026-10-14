@@ -85,6 +85,7 @@ builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IEtsyLogisti
 builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsService, EtsyMarketPlace.Application.Shipping.EtsyLogisticsService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShipEntegraApiClient, EtsyMarketPlace.Infrastructure.Shipping.ShipEntegraApiClient>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IArasGlobalApiClient, EtsyMarketPlace.Infrastructure.Shipping.ArasGlobalApiClient>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShiptomoreOfficialApi, EtsyMarketPlace.Infrastructure.Shipping.ShiptomoreOfficialApiClient>();
 
 builder.Services.AddSingleton<EtsyMarketPlace.Domain.Orders.IOrderAddressRepository>(sp => new EtsyMarketPlace.Infrastructure.Orders.SqliteOrderAddressRepository(dbPath));
 builder.Services.AddSingleton<EtsyMarketPlace.Application.Orders.EtsyOrderService>();
@@ -99,6 +100,11 @@ builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.ShipmentCreat
     if (arasApi != null)
     {
         manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.ArasGlobalShipmentCreationProvider(arasApi));
+    }
+    var shiptomoreApi = sp.GetService<EtsyMarketPlace.Application.Shipping.IShiptomoreOfficialApi>();
+    if (shiptomoreApi != null)
+    {
+        manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.ShiptomoreOfficialShipmentCreationProvider(shiptomoreApi));
     }
     return manager;
 });

@@ -123,4 +123,54 @@ public sealed class ShipmentOrchestratorServiceTests
         Assert.Equal("shipentegra", result.CarrierKey);
         Assert.True(result.IsConnected);
     }
+
+    private sealed class FakeShiptomoreOfficialApi : IShiptomoreOfficialApi
+    {
+        public string BaseUrl { get; set; } = "https://dev.shiptomore.com";
+        public bool HasCredentials => true;
+        public Task<IReadOnlyList<string>> GetProvidersAsync(CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<string>>(new List<string> { "ups", "fedex", "dhl" });
+        public Task<IReadOnlyList<ShiptomoreHsCode>> SearchHsCodesAsync(string query, int limit = 50, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ShiptomoreHsCode>>(new List<ShiptomoreHsCode>());
+        public Task<IReadOnlyList<ShiptomorePriceOption>> CalculatePricesAsync(ShiptomorePriceRequest request, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<ShiptomorePriceOption>>(new List<ShiptomorePriceOption>());
+        public Task<ShiptomoreShipmentResponse> CreateShipmentAsync(ShiptomoreShipmentRequest request, CancellationToken ct = default) =>
+            Task.FromResult(new ShiptomoreShipmentResponse { Id = "STM-123", TrackingNumbers = new List<string> { "STM-TRACK-999" } });
+        public Task<ShiptomoreShipmentDetail> GetShipmentAsync(string slug, bool includeLabels = false, CancellationToken ct = default) =>
+            Task.FromResult(new ShiptomoreShipmentDetail());
+        public Task<byte[]> DownloadLabelAsync(string slug, string labelFormat = "a4", CancellationToken ct = default) =>
+            Task.FromResult(Array.Empty<byte>());
+        public Task CancelShipmentAsync(string slug, CancellationToken ct = default) => Task.CompletedTask;
+    }
+
+    [Fact]
+    public async Task ConnectCarrierAsync_SavesShiptomoreCredentialsAndValidatesProviders()
+    {
+        // Arrange
+        var manager = new ShipmentCreationManager();
+        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+        var fakeShiptomoreApi = new FakeShiptomoreOfficialApi();
+
+        var orchestrator = new ShipmentOrchestratorService(
+            manager,
+            fakeLogisticsApi,
+            shiptomoreApi: fakeShiptomoreApi);
+
+        var command = new ConnectCarrierCommand
+        {
+            CarrierKey = "shiptomore",
+            ApiKey = "NhuCndOc1smCm0uBInrLByukAoV5JNRj",
+            ApiSecret = "s3cr3t-test"
+        };
+
+        // Act
+        var result = await orchestrator.ConnectCarrierAsync(command);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("shiptomore", result.CarrierKey);
+        Assert.True(result.IsConnected);
+        Assert.Contains("ups", result.Message);
+    }
 }

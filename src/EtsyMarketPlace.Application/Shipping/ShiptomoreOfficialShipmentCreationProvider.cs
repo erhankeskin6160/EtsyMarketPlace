@@ -117,6 +117,7 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
                 ShipmentId = response.Id,
                 TrackingNumber = response.TrackingNumbers.FirstOrDefault() ?? string.Empty,
                 LabelUrl = labelPath,
+                LabelBase64 = labelBase64,
                 ErrorMessage = string.Empty
             };
         }

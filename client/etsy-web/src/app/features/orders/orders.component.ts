@@ -602,17 +602,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const stm = this.carrierSessions.find(s => s.id === 'shiptomore');
     const savedId = localStorage.getItem('stm_client_id');
     const savedSec = localStorage.getItem('stm_client_secret');
-    this.stmClientId = stm?.tokenOrKey || savedId || 'zLps2_dRHp2_B2JA3F14soy04Zdau1NH';
+    this.stmClientId = stm?.apiKey || savedId || 'NhuCndOc1smCm0uBInrLByukAoV5JNRj';
     this.stmClientSecret = stm?.clientSecret || savedSec || '';
 
     if (this.stmClientId && this.stmClientSecret) {
-      this.stmStatusText = 'Durum: anahtar kay�tl� (test edilmedi)';
+      this.stmStatusText = 'Durum: Anahtarlar hazır. Bağlantıyı Test Et butonuna basabilirsiniz.';
       this.stmStatusKind = 'ok';
     } else if (this.stmClientId) {
-      this.stmStatusText = 'Durum: anahtar kay�tl� (test edilmedi)';
-      this.stmStatusKind = 'ok';
+      this.stmStatusText = 'Durum: Client ID tanımlı. Lütfen panelden aldığınız Client Secret bilgisini yapıştırın.';
+      this.stmStatusKind = 'info';
     } else {
-      this.stmStatusText = 'Durum: anahtar girilmemi�';
+      this.stmStatusText = 'Durum: API anahtarı girilmemiş.';
       this.stmStatusKind = 'muted';
     }
     this.isShiptomoreModalOpen = true;
@@ -623,51 +623,82 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   openShiptomorePortal(): void {
-    window.open('https://dev.shiptomore.com', '_blank');
-    this.stmStatusText = 'Panel taray�c�da a��ld�. Anahtar� kopyalay�p yukar�daki alanlara yap��t�r.';
+    window.open('https://dev.shiptomore.com/portal/keys', '_blank');
+    this.stmStatusText = 'Geliştirici paneli açıldı. Oluşturduğunuz anahtarları yukarıdaki alanlara yapıştırın.';
     this.stmStatusKind = 'info';
   }
 
   saveShiptomore(): void {
     if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
-      this.stmStatusText = '�ki alan da doldurulmal�.';
+      this.stmStatusText = 'İki alan da doldurulmalıdır.';
       this.stmStatusKind = 'danger';
       return;
     }
 
     localStorage.setItem('stm_client_id', this.stmClientId.trim());
     localStorage.setItem('stm_client_secret', this.stmClientSecret.trim());
-    this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim());
-    this.stmStatusText = 'Anahtar �ifreli olarak kaydedildi. Ba�lant�y� test edebilirsin.';
-    this.stmStatusKind = 'ok';
-    this.loadQuotesForSelected();
-    this.calculateLiveProfit();
-    this.saveSuccessMessage = '? Ship to More ba�lant�s� ba�ar�yla kaydedildi.';
-    setTimeout(() => this.saveSuccessMessage = null, 5000);
+    this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim(), this.stmClientId.trim(), this.stmClientSecret.trim());
+    this.stmStatusText = 'Anahtar kaydedildi. Bağlantı test ediliyor...';
+    this.stmStatusKind = 'info';
+
+    this.etsyApi.connectCarrier({
+      carrierKey: 'shiptomore',
+      apiKey: this.stmClientId.trim(),
+      apiSecret: this.stmClientSecret.trim()
+    }).subscribe({
+      next: (res) => {
+        this.stmStatusText = res?.message || '✅ Ship to More resmî API bağlantısı başarılı! Canlı navlun tarifeleri aktif.';
+        this.stmStatusKind = 'ok';
+        this.loadQuotesForSelected();
+        this.calculateLiveProfit();
+        this.saveSuccessMessage = '✅ Ship to More bağlantısı başarıyla kaydedildi.';
+        setTimeout(() => this.saveSuccessMessage = null, 5000);
+      },
+      error: (err) => {
+        const msg = err?.error?.message || err?.message || 'Sunucu bağlantı uyarısı';
+        this.stmStatusText = '⚠️ Kaydedildi: ' + msg;
+        this.stmStatusKind = 'ok';
+        this.loadQuotesForSelected();
+        this.calculateLiveProfit();
+      }
+    });
   }
 
   testShiptomore(): void {
+    if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
+      this.stmStatusText = 'İki alan da doldurulmalıdır.';
+      this.stmStatusKind = 'danger';
+      return;
+    }
+
     this.isTestingShiptomore = true;
-    this.stmStatusText = 'Ba�lant� deneniyor...';
+    this.stmStatusText = 'Bağlantı deneniyor (dev.shiptomore.com/v1/providers)...';
     this.stmStatusKind = 'info';
 
-    setTimeout(() => {
-      this.isTestingShiptomore = false;
-      if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
-        this.stmStatusText = '�ki alan da doldurulmal�.';
+    this.etsyApi.connectCarrier({
+      carrierKey: 'shiptomore',
+      apiKey: this.stmClientId.trim(),
+      apiSecret: this.stmClientSecret.trim()
+    }).subscribe({
+      next: (res) => {
+        this.isTestingShiptomore = false;
+        this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim(), this.stmClientId.trim(), this.stmClientSecret.trim());
+        this.stmStatusText = res?.message || '✅ Ship to More resmî API bağlantısı başarılı! Canlı navlun tarifeleri aktif.';
+        this.stmStatusKind = 'ok';
+        this.loadQuotesForSelected();
+        this.calculateLiveProfit();
+      },
+      error: (err) => {
+        this.isTestingShiptomore = false;
+        const msg = err?.error?.message || err?.message || 'Bağlantı başarısız';
+        this.stmStatusText = '❌ Bağlantı hatası: ' + msg;
         this.stmStatusKind = 'danger';
-        return;
       }
-      this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim());
-      this.stmStatusText = '? Ship to More resm� API ba�lant�s� ba�ar�l�! Canl� navlun tarifeleri aktif.';
-      this.stmStatusKind = 'ok';
-      this.loadQuotesForSelected();
-      this.calculateLiveProfit();
-    }, 1000);
+    });
   }
 
   forgetShiptomore(): void {
-    if (confirm('Kay�tl� Ship to More anahtar� silinsin mi?\n\nSilindikten sonra fiyat ve g�nderi i�lemleri �al��maz.')) {
+    if (confirm('Kayıtlı Ship to More anahtarı silinsin mi?\n\nSilindikten sonra fiyat ve gönderi işlemleri çalışmaz.')) {
       this.ordersService.disconnectCarrier('shiptomore');
       localStorage.removeItem('stm_client_id');
       localStorage.removeItem('stm_client_secret');
@@ -677,7 +708,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.stmStatusKind = 'danger';
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
-      this.saveSuccessMessage = '?? Ship to More ba�lant�s� kesildi.';
+      this.saveSuccessMessage = '⚠️ Ship to More bağlantısı kesildi.';
       setTimeout(() => this.saveSuccessMessage = null, 5000);
     }
   }
