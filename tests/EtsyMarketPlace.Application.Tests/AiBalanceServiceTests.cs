@@ -41,6 +41,21 @@ public sealed class AiBalanceServiceTests
         public Task SaveListingAuditAsync(SaveListingAuditRecordRequest request, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
+    private sealed class FakeHttpMessageHandler : HttpMessageHandler
+    {
+        private readonly Func<HttpRequestMessage, HttpResponseMessage> _responder;
+
+        public FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder)
+        {
+            _responder = responder;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(_responder(request));
+        }
+    }
+
     [Fact]
     public void ParseDeepSeekBalanceJson_AccuratelyExtractsToppedUpBalanceAndCalculatesTry()
     {
@@ -91,7 +106,33 @@ public sealed class AiBalanceServiceTests
             """;
             var settingsRepo = new FakeShopSettingsRepository(settingsJson);
 
-            using var httpClient = new HttpClient();
+            // Handler returning DeepSeek live balance response
+            var fakeHandler = new FakeHttpMessageHandler(req =>
+            {
+                if (req.RequestUri != null && req.RequestUri.ToString().Contains("deepseek.com"))
+                {
+                    var resp = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                    {
+                        Content = new StringContent("""
+                        {
+                            "is_available": true,
+                            "balance_infos": [
+                                {
+                                    "currency": "USD",
+                                    "total_balance": "1.99",
+                                    "granted_balance": "0.00",
+                                    "topped_up_balance": "1.99"
+                                }
+                            ]
+                        }
+                        """, System.Text.Encoding.UTF8, "application/json")
+                    };
+                    return resp;
+                }
+                return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+            });
+
+            using var httpClient = new HttpClient(fakeHandler);
             var service = new AiBalanceService(httpClient, settingsRepo, usageRepo);
 
             var balances = await service.GetProviderBalancesAsync("53236321", exchangeRate: 49.38m);
@@ -99,7 +140,7 @@ public sealed class AiBalanceServiceTests
             Assert.NotNull(balances);
             Assert.Equal(5, balances.Count);
 
-            // DeepSeek should be active provider
+            // DeepSeek should be active provider with live balance
             var ds = balances.FirstOrDefault(x => x.Provider == "DeepSeek");
             Assert.NotNull(ds);
             Assert.True(ds.IsActiveProvider);
@@ -113,10 +154,11 @@ public sealed class AiBalanceServiceTests
             Assert.NotNull(gemini);
             Assert.Equal("gemini-2.5-flash", gemini.ActiveModel);
 
-            // OpenAI should be present
+            // OpenAI should be present with 0 balance (Zero Mock rule when no API key)
             var openAi = balances.FirstOrDefault(x => x.Provider == "OpenAI");
             Assert.NotNull(openAi);
-            Assert.True(openAi.TotalBalanceUsd > 0);
+            Assert.Equal(0.00m, openAi.TotalBalanceUsd);
+            Assert.False(openAi.IsAvailable);
         }
         finally
         {

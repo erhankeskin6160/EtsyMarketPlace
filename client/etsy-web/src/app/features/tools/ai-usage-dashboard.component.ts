@@ -1,7 +1,11 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, AfterViewInit, OnDestroy, ViewChild, ElementRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService, AiProviderBalanceDto } from '../../core/services/etsy-api.service';
+import { AiLogoComponent } from '../../core/components/ai-logo.component';
+import { Chart, registerables } from 'chart.js';
+
+Chart.register(...registerables);
 
 interface UsageRecord {
   id: number;
@@ -20,7 +24,7 @@ interface UsageRecord {
 @Component({
   selector: 'app-ai-usage-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, AiLogoComponent],
   template: `
     <div class="usage-container">
       <!-- HEADER -->
@@ -29,7 +33,7 @@ interface UsageRecord {
           <div class="icon-box">📊</div>
           <div>
             <h1 class="page-title">AI Token, Model & Bakiye Takip Merkezi</h1>
-            <p class="page-subtitle">DeepSeek, Gemini, OpenAI, Claude ve Grok bakiye ve token tüketimlerinin anlık takibi, kotaları ve maliyet analizleri</p>
+            <p class="page-subtitle">DeepSeek, Gemini, OpenAI, Claude ve Grok resmi logoları, sıfır-mock canlı bakiyeleri ve analitik grafikleri</p>
           </div>
         </div>
         <div class="header-actions">
@@ -44,10 +48,13 @@ interface UsageRecord {
         <div class="selector-left">
           <label class="selector-label">🎯 İNCELENEN YAPAY ZEKA MARKASI:</label>
           <div class="dropdown-wrapper">
+            <div class="brand-logo-preview" *ngIf="selectedBrand !== 'ALL'">
+              <app-ai-logo [provider]="selectedBrand" [size]="20"></app-ai-logo>
+            </div>
             <select [(ngModel)]="selectedBrand" (change)="onBrandChange()" class="brand-dropdown">
               <option value="ALL">🌐 Tüm Markalar (Konsolide Genel Bakış)</option>
               <option *ngFor="let p of providerBalances" [value]="p.provider">
-                {{ getBrandIcon(p.provider) }} {{ p.provider }} {{ p.isActiveProvider ? '⭐ (Aktif Birincil Motor)' : '' }}
+                {{ p.provider }} {{ p.isActiveProvider ? '⭐ (Aktif Birincil Motor)' : '' }}
               </option>
             </select>
           </div>
@@ -55,13 +62,13 @@ interface UsageRecord {
 
         <div class="selector-right" *ngIf="activeProviderInfo">
           <div class="active-badge-pill">
-            <span class="active-dot"></span>
+            <app-ai-logo [provider]="activeProviderInfo.provider" [size]="16"></app-ai-logo>
             <span class="active-text">Aktif Birincil Motor: <strong>{{ activeProviderInfo.provider }} ({{ activeProviderInfo.activeModel }})</strong></span>
           </div>
         </div>
       </div>
 
-      <!-- KPI METRICS STRIP -->
+      <!-- KPI METRICS STRIP (STRICT ZERO-MOCK: ONLY LIVE/SQLITE VALUES) -->
       <div class="kpi-grid">
         <div class="kpi-card">
           <span class="kpi-label">TOPLAM HARCANAN TOKEN</span>
@@ -81,7 +88,46 @@ interface UsageRecord {
         <div class="kpi-card">
           <span class="kpi-label">TOPLAM AI İSTEK / ÇAĞRISI</span>
           <span class="kpi-val text-purple">{{ displayCalls }} Çağrı</span>
-          <span class="kpi-sub">{{ selectedBrand === 'ALL' ? 'Tüm sağlayıcılar ortalaması' : (selectedBrand + ' toplam çağrısı') }}</span>
+          <span class="kpi-sub">{{ selectedBrand === 'ALL' ? 'Tüm sağlayıcılar toplamı' : (selectedBrand + ' toplam çağrısı') }}</span>
+        </div>
+      </div>
+
+      <!-- PROFESSIONAL ANALYTICS & CHARTS SECTION -->
+      <div class="charts-row">
+        <!-- DONUT CHART: Brand Token Distribution -->
+        <div class="chart-card glass-card">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">🤖 Yapay Zeka Sağlayıcı Token Dağılımı</h3>
+              <p class="chart-subtitle">Resmi AI markalarına göre harcanan token oranları</p>
+            </div>
+            <div class="chart-tag">Canlı Tüketim</div>
+          </div>
+          <div class="chart-body">
+            <canvas #tokenDonutCanvas></canvas>
+            <div *ngIf="isDonutEmpty" class="chart-empty-overlay">
+              <span class="empty-icon">📊</span>
+              <span>Henüz harcanan token kaydı yok (0 Token / ₺0.00 TRY)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- BAR CHART: Module Token Breakdown -->
+        <div class="chart-card glass-card">
+          <div class="chart-header">
+            <div>
+              <h3 class="chart-title">📈 Modül Bazlı AI Tüketim Analizi</h3>
+              <p class="chart-subtitle">{{ selectedBrand === 'ALL' ? 'Tüm modüllerin token tüketimi' : (selectedBrand + ' markasının modül tüketimi') }}</p>
+            </div>
+            <div class="chart-tag">Modül Analitiği</div>
+          </div>
+          <div class="chart-body">
+            <canvas #moduleBarCanvas></canvas>
+            <div *ngIf="isBarEmpty" class="chart-empty-overlay">
+              <span class="empty-icon">📉</span>
+              <span>Henüz modül bazlı tüketim kaydı oluşmadı (0 Çağrı)</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -90,7 +136,7 @@ interface UsageRecord {
         <div class="focus-header">
           <div class="focus-title-group">
             <span class="brand-avatar-box" [ngClass]="getBrandClass(selectedBrandInfo.provider)">
-              {{ getBrandIcon(selectedBrandInfo.provider) }}
+              <app-ai-logo [provider]="selectedBrandInfo.provider" [size]="36"></app-ai-logo>
             </span>
             <div>
               <div class="brand-title-row">
@@ -126,7 +172,7 @@ interface UsageRecord {
             <span class="f-label">TOPLAM HARCANAN TUTAR</span>
             <span class="f-val-cost">\${{ selectedBrandInfo.totalCostUsd | number:'1.2-4' }}</span>
             <span class="f-sub-try">₺{{ (selectedBrandInfo.totalCostUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
-            <span class="f-sub-desc">Son 30 günlük kümülatif harcama</span>
+            <span class="f-sub-desc">Kümülatif AI harcaması</span>
           </div>
 
           <div class="focus-metric-box">
@@ -135,7 +181,7 @@ interface UsageRecord {
             <span class="f-token-detail">
               Girdi: {{ selectedBrandInfo.promptTokensUsed | number }} &nbsp;|&nbsp; Çıktı: {{ selectedBrandInfo.completionTokensUsed | number }}
             </span>
-            <span class="f-sub-desc">Token başına optimize edilmiştir</span>
+            <span class="f-sub-desc">Gerçek SQLite tüketimi</span>
           </div>
 
           <div class="focus-metric-box">
@@ -152,7 +198,7 @@ interface UsageRecord {
         <div class="glass-card provider-card" *ngFor="let p of providerBalances" [class.is-primary]="p.isActiveProvider">
           <div class="provider-header">
             <div class="provider-badge-wrap">
-              <span class="brand-mini-icon">{{ getBrandIcon(p.provider) }}</span>
+              <app-ai-logo [provider]="p.provider" [size]="24"></app-ai-logo>
               <span class="provider-badge" [ngClass]="getBrandClass(p.provider)">{{ p.provider }}</span>
             </div>
             <span class="primary-indicator" *ngIf="p.isActiveProvider">⭐ Aktif Motor</span>
@@ -199,7 +245,7 @@ interface UsageRecord {
         </div>
       </div>
 
-      <!-- USAGE HISTORY TABLE -->
+      <!-- USAGE HISTORY TABLE (ZERO-MOCK: ONLY FROM SQLITE) -->
       <div class="history-section glass-card">
         <div class="table-header">
           <div>
@@ -236,7 +282,10 @@ interface UsageRecord {
                 <td class="cell-time">{{ item.createdAt | slice:11:19 }}</td>
                 <td class="cell-module"><b>{{ item.moduleName }}</b></td>
                 <td>
-                  <span class="badge" [ngClass]="getBrandClass(item.provider)">{{ item.provider }}</span>
+                  <div class="table-brand-cell">
+                    <app-ai-logo [provider]="item.provider" [size]="18"></app-ai-logo>
+                    <span class="badge" [ngClass]="getBrandClass(item.provider)">{{ item.provider }}</span>
+                  </div>
                 </td>
                 <td class="cell-model"><code>{{ item.modelName }}</code></td>
                 <td>{{ item.promptTokens | number }} / {{ item.completionTokens | number }}</td>
@@ -250,7 +299,7 @@ interface UsageRecord {
               </tr>
               <tr *ngIf="filteredHistory.length === 0">
                 <td colspan="9" class="empty-table-cell">
-                  {{ selectedBrand }} markası için henüz kayıtlı çağrı günlüğü bulunmuyor.
+                  {{ selectedBrand === 'ALL' ? 'Sistemde henüz kayıtlı AI çağrı günlüğü bulunmuyor (0 Çağrı / 0 Token).' : (selectedBrand + ' markası için henüz kayıtlı çağrı günlüğü bulunmuyor.') }}
                 </td>
               </tr>
             </tbody>
@@ -337,6 +386,20 @@ interface UsageRecord {
       align-items: center;
       gap: 14px;
     }
+    .dropdown-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .brand-logo-preview {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
     .selector-label {
       font-size: 0.8rem;
       font-weight: 800;
@@ -370,13 +433,6 @@ interface UsageRecord {
       font-size: 0.78rem;
       color: #34d399;
     }
-    .active-dot {
-      width: 8px;
-      height: 8px;
-      background: #10b981;
-      border-radius: 50%;
-      box-shadow: 0 0 8px #10b981;
-    }
 
     /* KPI GRID */
     .kpi-grid {
@@ -404,6 +460,80 @@ interface UsageRecord {
     .text-emerald { color: #10b981; }
     .text-purple { color: #c084fc; }
 
+    /* CHARTS SECTION */
+    .charts-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+      gap: 18px;
+    }
+    .chart-card {
+      background: #0d1527;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 20px 24px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+    .chart-title {
+      font-size: 1.02rem;
+      font-weight: 700;
+      color: #fff;
+      margin: 0;
+    }
+    .chart-subtitle {
+      font-size: 0.76rem;
+      color: #94a3b8;
+      margin: 3px 0 0 0;
+    }
+    .chart-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .chart-body {
+      position: relative;
+      height: 250px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .chart-body canvas {
+      max-height: 250px;
+      width: 100% !important;
+    }
+    .chart-empty-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: rgba(13, 21, 39, 0.88);
+      border-radius: 10px;
+      color: #94a3b8;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-align: center;
+      pointer-events: none;
+    }
+    .chart-empty-overlay .empty-icon {
+      font-size: 1.8rem;
+      opacity: 0.7;
+    }
+
     /* BRAND FOCUS CARD */
     .brand-focus-card {
       background: linear-gradient(145deg, #0f192f, #090e1a);
@@ -428,7 +558,6 @@ interface UsageRecord {
       gap: 18px;
     }
     .brand-avatar-box {
-      font-size: 2.2rem;
       width: 58px;
       height: 58px;
       border-radius: 14px;
@@ -438,11 +567,11 @@ interface UsageRecord {
       background: rgba(255, 255, 255, 0.06);
       border: 1px solid rgba(255, 255, 255, 0.15);
     }
-    .brand-avatar-box.deepseek { background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.35); }
-    .brand-avatar-box.gemini { background: rgba(59, 130, 246, 0.15); border-color: rgba(59, 130, 246, 0.35); }
+    .brand-avatar-box.deepseek { background: rgba(2, 132, 199, 0.15); border-color: rgba(2, 132, 199, 0.35); }
+    .brand-avatar-box.gemini { background: rgba(155, 114, 203, 0.15); border-color: rgba(155, 114, 203, 0.35); }
     .brand-avatar-box.openai { background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.35); }
-    .brand-avatar-box.claude { background: rgba(168, 85, 247, 0.15); border-color: rgba(168, 85, 247, 0.35); }
-    .brand-avatar-box.grok { background: rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.35); }
+    .brand-avatar-box.claude { background: rgba(217, 119, 6, 0.15); border-color: rgba(217, 119, 6, 0.35); }
+    .brand-avatar-box.grok { background: rgba(248, 250, 252, 0.1); border-color: rgba(248, 250, 252, 0.25); }
 
     .brand-title-row {
       display: flex;
@@ -450,145 +579,110 @@ interface UsageRecord {
       gap: 12px;
     }
     .focus-brand-name {
-      font-size: 1.55rem;
+      font-size: 1.45rem;
       font-weight: 800;
       color: #fff;
       margin: 0;
     }
     .active-tag {
+      background: rgba(245, 158, 11, 0.2);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
       font-size: 0.72rem;
       font-weight: 800;
-      color: #fbbf24;
-      background: rgba(245, 158, 11, 0.15);
-      border: 1px solid rgba(245, 158, 11, 0.35);
-      padding: 2px 10px;
-      border-radius: 12px;
+      padding: 3px 8px;
+      border-radius: 6px;
     }
     .status-pill {
-      font-size: 0.74rem;
-      font-weight: 600;
-      color: #94a3b8;
+      font-size: 0.72rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(239, 68, 68, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.3);
     }
-    .status-pill.success { color: #34d399; }
+    .status-pill.success {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border-color: rgba(16, 185, 129, 0.3);
+    }
     .focus-model-text {
-      font-size: 0.82rem;
+      font-size: 0.85rem;
       color: #94a3b8;
       margin: 4px 0 0 0;
     }
-    .text-slate { color: #cbd5e1; }
-
+    .text-slate { color: #64748b; font-size: 0.8rem; }
     .btn-topup {
-      background: linear-gradient(135deg, #10b981, #059669);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
       color: #fff;
       text-decoration: none;
       padding: 10px 18px;
       border-radius: 8px;
       font-weight: 700;
-      font-size: 0.85rem;
+      font-size: 0.88rem;
       transition: all 0.2s;
-      display: inline-flex;
-      align-items: center;
-      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
     .btn-topup:hover {
-      background: #047857;
+      background: linear-gradient(135deg, #1d4ed8, #1e40af);
       transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
-
     .focus-metrics-row {
       display: grid;
-      grid-template-columns: 1.3fr 1fr 1.1fr 1fr;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 16px;
     }
     .focus-metric-box {
-      background: rgba(15, 23, 42, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 12px;
       padding: 16px 18px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
     }
     .focus-metric-box.remaining-box {
-      background: linear-gradient(145deg, rgba(16, 185, 129, 0.12), rgba(15, 23, 42, 0.8));
-      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-color: rgba(16, 185, 129, 0.35);
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(15, 23, 42, 0.8));
     }
-    .f-label {
-      font-size: 0.7rem;
-      font-weight: 700;
-      color: #94a3b8;
-      letter-spacing: 0.4px;
-    }
-    .f-val-usd {
-      font-size: 1.85rem;
-      font-weight: 900;
-      color: #34d399;
-      line-height: 1.1;
-    }
-    .f-val-try {
-      font-size: 1.05rem;
-      font-weight: 800;
-      color: #10b981;
-    }
-    .f-status-msg {
-      font-size: 0.72rem;
-      color: #a7f3d0;
-      margin-top: 4px;
-    }
-    .f-val-cost {
-      font-size: 1.6rem;
-      font-weight: 800;
-      color: #38bdf8;
-    }
-    .f-sub-try {
-      font-size: 0.85rem;
-      font-weight: 700;
-      color: #94a3b8;
-    }
-    .f-val-num {
-      font-size: 1.6rem;
-      font-weight: 800;
-    }
-    .f-token-detail {
-      font-size: 0.74rem;
-      color: #cbd5e1;
-    }
-    .f-key-masked code {
-      font-size: 0.72rem;
-      color: #38bdf8;
-      background: rgba(0,0,0,0.4);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-    .f-sub-desc {
-      font-size: 0.7rem;
-      color: #64748b;
-      margin-top: auto;
-    }
+    .f-label { font-size: 0.72rem; color: #94a3b8; font-weight: 700; }
+    .f-val-usd { font-size: 1.85rem; font-weight: 800; color: #34d399; margin-top: 4px; }
+    .f-val-try { font-size: 1.05rem; font-weight: 700; color: #10b981; }
+    .f-status-msg { font-size: 0.74rem; color: #64748b; margin-top: 6px; }
+    .f-val-cost { font-size: 1.5rem; font-weight: 800; color: #34d399; margin-top: 4px; }
+    .f-sub-try { font-size: 0.85rem; color: #94a3b8; font-weight: 600; }
+    .f-val-num { font-size: 1.6rem; font-weight: 800; margin-top: 4px; }
+    .f-token-detail { font-size: 0.78rem; color: #cbd5e1; margin-top: 4px; }
+    .f-sub-desc { font-size: 0.72rem; color: #64748b; margin-top: 4px; }
+    .f-key-masked { margin-top: 4px; font-size: 0.8rem; color: #94a3b8; }
+    .f-key-masked code { background: rgba(0, 0, 0, 0.3); padding: 2px 6px; border-radius: 4px; color: #38bdf8; }
 
-    /* ALL BRANDS GRID */
+    /* PROVIDER CARDS GRID */
     .provider-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
       gap: 16px;
     }
     .provider-card {
-      background: #111a2e;
+      background: #0d1527;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 18px 20px;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 14px;
       transition: all 0.2s;
     }
     .provider-card:hover {
-      border-color: rgba(56, 189, 248, 0.3);
+      border-color: rgba(56, 189, 248, 0.35);
       transform: translateY(-2px);
     }
     .provider-card.is-primary {
-      border: 1px solid rgba(245, 158, 11, 0.4);
-      background: linear-gradient(145deg, #141f36, #0e1627);
+      border-color: rgba(16, 185, 129, 0.4);
+      background: linear-gradient(145deg, #0d1a29, #0a1120);
     }
     .provider-header {
       display: flex;
@@ -598,154 +692,143 @@ interface UsageRecord {
     .provider-badge-wrap {
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-    .brand-mini-icon {
-      font-size: 1.2rem;
+      gap: 10px;
     }
     .provider-badge {
-      font-size: 0.78rem;
-      font-weight: 700;
-      padding: 3px 8px;
+      font-size: 0.85rem;
+      font-weight: 800;
+      padding: 4px 10px;
       border-radius: 6px;
     }
-    .provider-badge.deepseek { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
-    .provider-badge.gemini { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.4); }
-    .provider-badge.openai { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
-    .provider-badge.claude { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.4); }
-    .provider-badge.grok { background: rgba(249, 115, 22, 0.2); color: #fb923c; border: 1px solid rgba(249, 115, 22, 0.4); }
-
+    .provider-badge.deepseek { background: rgba(2, 132, 199, 0.2); color: #38bdf8; }
+    .provider-badge.gemini { background: rgba(155, 114, 203, 0.2); color: #c084fc; }
+    .provider-badge.openai { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .provider-badge.claude { background: rgba(217, 119, 6, 0.2); color: #fbbf24; }
+    .provider-badge.grok { background: rgba(248, 250, 252, 0.15); color: #f8fafc; }
     .primary-indicator {
-      font-size: 0.7rem;
-      font-weight: 800;
-      color: #fbbf24;
+      font-size: 0.72rem;
+      color: #34d399;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.15);
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(16, 185, 129, 0.3);
     }
-
     .card-balance-banner {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 10px 14px;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(16, 185, 129, 0.1);
-      border: 1px solid rgba(16, 185, 129, 0.25);
-      padding: 8px 12px;
-      border-radius: 8px;
     }
-    .banner-label { font-size: 0.72rem; color: #94a3b8; }
-    .banner-usd { font-size: 1.15rem; font-weight: 800; color: #34d399; margin-left: 6px; }
-    .banner-try { font-size: 0.85rem; font-weight: 700; color: #10b981; }
-
+    .banner-left { display: flex; flex-direction: column; }
+    .banner-label { font-size: 0.68rem; color: #94a3b8; font-weight: 700; }
+    .banner-usd { font-size: 1.25rem; font-weight: 800; color: #34d399; }
+    .banner-right { text-align: right; }
+    .banner-try { font-size: 0.88rem; font-weight: 700; color: #10b981; }
     .provider-desc {
-      font-size: 0.78rem;
-      color: #94a3b8;
+      font-size: 0.8rem;
+      color: #cbd5e1;
       margin: 0;
       line-height: 1.4;
     }
-    .tariff-hint { font-size: 0.72rem; color: #64748b; }
-
+    .tariff-hint { color: #64748b; font-size: 0.72rem; }
     .provider-meta {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
-      font-size: 0.78rem;
-      background: rgba(0, 0, 0, 0.2);
-      padding: 8px 10px;
-      border-radius: 6px;
-    }
-    .meta-item {
-      display: flex;
       justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 10px;
     }
-    .m-label { color: #94a3b8; }
-    .m-val { color: #f1f5f9; }
-
+    .meta-item { display: flex; flex-direction: column; }
+    .m-label { font-size: 0.68rem; color: #94a3b8; }
+    .m-val { font-size: 0.82rem; color: #f8fafc; margin-top: 2px; }
     .card-footer-action {
       display: flex;
       gap: 8px;
-      margin-top: auto;
+      margin-top: 4px;
     }
     .card-btn-topup {
       flex: 1;
       text-align: center;
-      background: rgba(16, 185, 129, 0.15);
-      border: 1px solid rgba(16, 185, 129, 0.35);
-      color: #34d399;
-      text-decoration: none;
-      padding: 6px 10px;
+      background: rgba(37, 99, 235, 0.2);
+      border: 1px solid rgba(37, 99, 235, 0.4);
+      color: #60a5fa;
+      padding: 7px 10px;
       border-radius: 6px;
-      font-size: 0.75rem;
+      font-size: 0.78rem;
       font-weight: 700;
-      transition: all 0.15s;
+      text-decoration: none;
+      transition: all 0.2s;
     }
     .card-btn-topup:hover {
-      background: #10b981;
+      background: #2563eb;
       color: #fff;
     }
     .btn-inspect-brand {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       color: #cbd5e1;
-      padding: 6px 10px;
+      padding: 7px 10px;
       border-radius: 6px;
-      font-size: 0.75rem;
-      font-weight: 600;
+      font-size: 0.78rem;
+      font-weight: 700;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: all 0.2s;
     }
     .btn-inspect-brand:hover {
       background: rgba(255, 255, 255, 0.15);
       color: #fff;
     }
 
-    /* TABLE SECTION */
+    /* HISTORY TABLE */
     .history-section {
       background: #0d1527;
       border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      padding: 20px;
+      border-radius: 14px;
+      padding: 22px 26px;
     }
     .table-header {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 16px;
+      align-items: center;
+      margin-bottom: 18px;
     }
     .table-title {
-      font-size: 1.05rem;
-      font-weight: 800;
+      font-size: 1.15rem;
+      font-weight: 700;
       color: #fff;
       margin: 0;
     }
     .table-subtitle {
-      font-size: 0.76rem;
+      font-size: 0.8rem;
       color: #94a3b8;
-      margin: 3px 0 0 0;
+      margin: 4px 0 0 0;
     }
     .filter-select {
       background: #111a2e;
-      color: #fff;
+      color: #f8fafc;
       border: 1px solid rgba(255, 255, 255, 0.15);
       border-radius: 6px;
       padding: 6px 12px;
-      font-size: 0.8rem;
+      font-size: 0.82rem;
+      font-weight: 600;
     }
-
     .table-responsive {
       overflow-x: auto;
     }
     .data-table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 0.8rem;
-      text-align: left;
+      font-size: 0.82rem;
     }
     .data-table th {
+      text-align: left;
       padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
       color: #94a3b8;
       font-weight: 700;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.4px;
     }
     .data-table td {
       padding: 10px 12px;
@@ -754,6 +837,11 @@ interface UsageRecord {
     }
     .cell-time { color: #94a3b8; }
     .cell-module { color: #f8fafc; }
+    .table-brand-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
     .cell-model code {
       color: #38bdf8;
       background: rgba(15, 23, 42, 0.8);
@@ -766,11 +854,11 @@ interface UsageRecord {
       padding: 2px 6px;
       border-radius: 4px;
     }
-    .badge.deepseek { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-    .badge.gemini { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+    .badge.deepseek { background: rgba(2, 132, 199, 0.2); color: #38bdf8; }
+    .badge.gemini { background: rgba(155, 114, 203, 0.2); color: #c084fc; }
     .badge.openai { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-    .badge.claude { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
-    .badge.grok { background: rgba(249, 115, 22, 0.2); color: #fb923c; }
+    .badge.claude { background: rgba(217, 119, 6, 0.2); color: #fbbf24; }
+    .badge.grok { background: rgba(248, 250, 252, 0.15); color: #f8fafc; }
 
     .status-dot {
       display: inline-block;
@@ -782,14 +870,17 @@ interface UsageRecord {
     .status-dot.green { background: #10b981; box-shadow: 0 0 6px #10b981; }
     .empty-table-cell {
       text-align: center;
-      padding: 24px;
+      padding: 32px;
       color: #64748b;
       font-style: italic;
     }
   `]
 })
-export class AiUsageDashboardComponent implements OnInit {
+export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   etsyApi = inject(EtsyApiService);
+
+  @ViewChild('tokenDonutCanvas') tokenDonutCanvas!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('moduleBarCanvas') moduleBarCanvas!: ElementRef<HTMLCanvasElement>;
 
   providerBalances: AiProviderBalanceDto[] = [];
   selectedBrand: string = 'ALL';
@@ -797,66 +888,13 @@ export class AiUsageDashboardComponent implements OnInit {
   activeProviderInfo: AiProviderBalanceDto | null = null;
   isLoadingBalances: boolean = false;
 
-  totalTokens = 274700;
-  promptTokens = 192000;
-  completionTokens = 82700;
-  totalCostUsd = 3.12;
-  totalCalls = 318;
+  // STRICT ZERO-MOCK: Initialized to 0, no mock numbers
+  history: UsageRecord[] = [];
 
-  history: UsageRecord[] = [
-    {
-      id: 1,
-      createdAt: '2026-10-14T18:14:22Z',
-      moduleName: 'FastListingCreator',
-      provider: 'DeepSeek',
-      modelName: 'DeepSeek-V4-Flash',
-      promptTokens: 1200,
-      completionTokens: 380,
-      totalTokens: 1580,
-      costUsd: 0.0004,
-      costTry: 0.02,
-      status: 'Başarılı'
-    },
-    {
-      id: 2,
-      createdAt: '2026-10-14T17:52:10Z',
-      moduleName: 'AiAuditInspector',
-      provider: 'Claude',
-      modelName: 'claude-3-7-sonnet',
-      promptTokens: 2400,
-      completionTokens: 850,
-      totalTokens: 3250,
-      costUsd: 0.0182,
-      costTry: 0.90,
-      status: 'Başarılı'
-    },
-    {
-      id: 3,
-      createdAt: '2026-10-14T17:10:05Z',
-      moduleName: 'CompetitorSpyRadar',
-      provider: 'Google Gemini',
-      modelName: 'gemini-2.5-flash',
-      promptTokens: 1400,
-      completionTokens: 420,
-      totalTokens: 1820,
-      costUsd: 0.0005,
-      costTry: 0.025,
-      status: 'Başarılı'
-    },
-    {
-      id: 4,
-      createdAt: '2026-10-14T16:30:19Z',
-      moduleName: 'Viral3DModelHunter',
-      provider: 'OpenAI',
-      modelName: 'gpt-4o-mini',
-      promptTokens: 1100,
-      completionTokens: 380,
-      totalTokens: 1480,
-      costUsd: 0.0004,
-      costTry: 0.02,
-      status: 'Başarılı'
-    }
-  ];
+  isDonutEmpty = false;
+  isBarEmpty = false;
+  private donutChart: Chart | null = null;
+  private barChart: Chart | null = null;
 
   get exchangeRate(): number {
     return this.etsyApi.exchangeRate() || 49.38;
@@ -864,38 +902,30 @@ export class AiUsageDashboardComponent implements OnInit {
 
   get displayTokens(): number {
     if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
-      return this.selectedBrandInfo.totalTokensUsed;
+      return this.selectedBrandInfo.totalTokensUsed || 0;
     }
-    return this.providerBalances.length > 0
-      ? this.providerBalances.reduce((sum, b) => sum + (b.totalTokensUsed || 0), 0)
-      : this.totalTokens;
+    return this.providerBalances.reduce((sum, b) => sum + (b.totalTokensUsed || 0), 0);
   }
 
   get displayPromptTokens(): number {
     if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
-      return this.selectedBrandInfo.promptTokensUsed;
+      return this.selectedBrandInfo.promptTokensUsed || 0;
     }
-    return this.providerBalances.length > 0
-      ? this.providerBalances.reduce((sum, b) => sum + (b.promptTokensUsed || 0), 0)
-      : this.promptTokens;
+    return this.providerBalances.reduce((sum, b) => sum + (b.promptTokensUsed || 0), 0);
   }
 
   get displayCompletionTokens(): number {
     if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
-      return this.selectedBrandInfo.completionTokensUsed;
+      return this.selectedBrandInfo.completionTokensUsed || 0;
     }
-    return this.providerBalances.length > 0
-      ? this.providerBalances.reduce((sum, b) => sum + (b.completionTokensUsed || 0), 0)
-      : this.completionTokens;
+    return this.providerBalances.reduce((sum, b) => sum + (b.completionTokensUsed || 0), 0);
   }
 
   get displayCostUsd(): number {
     if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
-      return this.selectedBrandInfo.totalCostUsd;
+      return this.selectedBrandInfo.totalCostUsd || 0;
     }
-    return this.providerBalances.length > 0
-      ? this.providerBalances.reduce((sum, b) => sum + (b.totalCostUsd || 0), 0)
-      : this.totalCostUsd;
+    return this.providerBalances.reduce((sum, b) => sum + (b.totalCostUsd || 0), 0);
   }
 
   get displayCostTry(): number {
@@ -904,7 +934,7 @@ export class AiUsageDashboardComponent implements OnInit {
 
   get displayRemainingBalanceUsd(): number {
     if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
-      return this.selectedBrandInfo.totalBalanceUsd;
+      return this.selectedBrandInfo.totalBalanceUsd || 0;
     }
     return this.providerBalances.reduce((sum, b) => sum + (b.totalBalanceUsd || 0), 0);
   }
@@ -915,11 +945,9 @@ export class AiUsageDashboardComponent implements OnInit {
 
   get displayCalls(): number {
     if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
-      return this.selectedBrandInfo.totalApiRequests;
+      return this.selectedBrandInfo.totalApiRequests || 0;
     }
-    return this.providerBalances.length > 0
-      ? this.providerBalances.reduce((sum, b) => sum + (b.totalApiRequests || 0), 0)
-      : this.totalCalls;
+    return this.providerBalances.reduce((sum, b) => sum + (b.totalApiRequests || 0), 0);
   }
 
   get filteredHistory(): UsageRecord[] {
@@ -936,6 +964,22 @@ export class AiUsageDashboardComponent implements OnInit {
     this.loadData();
   }
 
+  ngAfterViewInit(): void {
+    // Initial chart rendering
+    setTimeout(() => this.updateCharts(), 50);
+  }
+
+  ngOnDestroy(): void {
+    if (this.donutChart) {
+      this.donutChart.destroy();
+      this.donutChart = null;
+    }
+    if (this.barChart) {
+      this.barChart.destroy();
+      this.barChart = null;
+    }
+  }
+
   loadData(): void {
     this.isLoadingBalances = true;
     this.etsyApi.getAiProviderBalances(undefined, this.exchangeRate).subscribe({
@@ -945,6 +989,7 @@ export class AiUsageDashboardComponent implements OnInit {
           this.providerBalances = balances;
           this.activeProviderInfo = balances.find(b => b.isActiveProvider) || balances[0];
           this.updateSelectedBrandInfo();
+          this.updateCharts();
         }
       },
       error: () => {
@@ -968,18 +1013,23 @@ export class AiUsageDashboardComponent implements OnInit {
             costTry: h.costTry || h.cost_try || Number(((h.costUsd || h.cost_usd || 0) * this.exchangeRate).toFixed(2)),
             status: h.status || 'Başarılı'
           }));
+        } else {
+          this.history = [];
         }
+        this.updateCharts();
       }
     });
   }
 
   onBrandChange(): void {
     this.updateSelectedBrandInfo();
+    this.updateCharts();
   }
 
   selectBrand(brand: string): void {
     this.selectedBrand = brand;
     this.updateSelectedBrandInfo();
+    this.updateCharts();
   }
 
   private updateSelectedBrandInfo(): void {
@@ -990,14 +1040,137 @@ export class AiUsageDashboardComponent implements OnInit {
     }
   }
 
-  getBrandIcon(provider: string): string {
-    const p = provider.toLowerCase();
-    if (p.includes('deepseek')) return '🔴';
-    if (p.includes('gemini') || p.includes('google')) return '🔵';
-    if (p.includes('openai') || p.includes('gpt')) return '🟢';
-    if (p.includes('claude') || p.includes('anthropic')) return '🟣';
-    if (p.includes('grok')) return '🟠';
-    return '⚡';
+  updateCharts(): void {
+    this.renderDonutChart();
+    this.renderBarChart();
+  }
+
+  private renderDonutChart(): void {
+    if (!this.tokenDonutCanvas?.nativeElement) return;
+
+    if (this.donutChart) {
+      this.donutChart.destroy();
+      this.donutChart = null;
+    }
+
+    const labels = this.providerBalances.map(p => p.provider);
+    const data = this.providerBalances.map(p => p.totalTokensUsed || 0);
+    const totalTokens = data.reduce((a, b) => a + b, 0);
+
+    this.isDonutEmpty = totalTokens === 0;
+
+    const brandColors: Record<string, string> = {
+      'DeepSeek': '#0284c7',
+      'Google Gemini': '#8b5cf6',
+      'OpenAI': '#10b981',
+      'Claude': '#d97706',
+      'Grok': '#94a3b8'
+    };
+
+    const backgroundColors = labels.map(l => brandColors[l] || '#38bdf8');
+    const ctx = this.tokenDonutCanvas.nativeElement.getContext('2d');
+    if (!ctx) return;
+
+    this.donutChart = new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: this.isDonutEmpty ? ['Veri Yok'] : labels,
+        datasets: [{
+          data: this.isDonutEmpty ? [1] : data,
+          backgroundColor: this.isDonutEmpty ? ['rgba(255, 255, 255, 0.05)'] : backgroundColors,
+          borderColor: '#0d1527',
+          borderWidth: 2,
+          hoverOffset: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            position: 'right',
+            labels: {
+              color: '#94a3b8',
+              font: { size: 11, weight: 'bold' },
+              padding: 12
+            }
+          },
+          tooltip: {
+            enabled: !this.isDonutEmpty,
+            callbacks: {
+              label: (context) => {
+                const val = Number(context.raw || 0);
+                return ` ${context.label}: ${val.toLocaleString()} Token`;
+              }
+            }
+          }
+        },
+        cutout: '72%'
+      }
+    });
+  }
+
+  private renderBarChart(): void {
+    if (!this.moduleBarCanvas?.nativeElement) return;
+
+    if (this.barChart) {
+      this.barChart.destroy();
+      this.barChart = null;
+    }
+
+    const moduleMap = new Map<string, number>();
+    for (const h of this.filteredHistory) {
+      const mod = h.moduleName || 'Genel';
+      moduleMap.set(mod, (moduleMap.get(mod) || 0) + (h.totalTokens || 0));
+    }
+
+    const labels = Array.from(moduleMap.keys());
+    const data = Array.from(moduleMap.values());
+    const total = data.reduce((a, b) => a + b, 0);
+
+    this.isBarEmpty = total === 0 || labels.length === 0;
+
+    const ctx = this.moduleBarCanvas.nativeElement.getContext('2d');
+    if (!ctx) return;
+
+    this.barChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: this.isBarEmpty ? ['Modül Verisi Yok'] : labels,
+        datasets: [{
+          label: 'Harcanan Token',
+          data: this.isBarEmpty ? [0] : data,
+          backgroundColor: 'rgba(56, 189, 248, 0.45)',
+          borderColor: '#38bdf8',
+          borderWidth: 1.5,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { color: '#94a3b8', font: { size: 11 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: { color: '#94a3b8', font: { size: 10 } },
+            beginAtZero: true
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            enabled: !this.isBarEmpty,
+            callbacks: {
+              label: (context) => ` ${Number(context.raw || 0).toLocaleString()} Token`
+            }
+          }
+        }
+      }
+    });
   }
 
   getBrandClass(provider: string): string {
