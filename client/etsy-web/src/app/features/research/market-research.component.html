@@ -72,6 +72,12 @@
           </button>
         </div>
 
+        <div class="search-history-row" *ngIf="searchHistory.length > 0">
+          <span class="history-label">🕘 Son aramalar:</span>
+          <button type="button" class="history-chip" *ngFor="let kw of searchHistory" (click)="searchFromHistory(kw)">{{ kw }}</button>
+          <button type="button" class="clear-history-btn" (click)="clearHistory()" title="Geçmişi temizle">✕</button>
+        </div>
+
         <div class="search-actions-row">
           <button class="btn-sub-action" (click)="generateAiMarketReport()" [disabled]="isGeneratingReport">
             <span>{{ isGeneratingReport ? 'Yapay Zeka Analiz Ediyor...' : '✨ AI Pazar Özeti' }}</span>
@@ -81,6 +87,9 @@
           </button>
           <button class="btn-sub-action" (click)="filterOnlyTopOpportunity()">
             <span>⚡ Fırsat Ürünlerini Filtrele</span>
+          </button>
+          <button class="btn-sub-action" (click)="openCompareModal()">
+            <span>📊 Kelimeleri Karşılaştır</span>
           </button>
         </div>
       </div>
@@ -175,9 +184,31 @@
         <div class="table-head-row">
           <div class="table-title-group">
             <span class="table-title">Pazar İlanları</span>
-            <span class="table-count-badge">{{ items.length }} Ürün Sıralandı</span>
+            <span class="table-count-badge">{{ displayItems.length === items.length ? items.length : displayItems.length + ' / ' + items.length }} Ürün Sıralandı</span>
           </div>
           <span class="table-hint">💡 Bir satıra tıklayarak alttaki 12 eylem aracını kullanabilir veya "🚀 Taslağa Klonla" ile hızlıca satışa açabilirsiniz.</span>
+        </div>
+
+        <div class="result-filter-bar">
+          <span class="filter-bar-title">🎛️ Sonuç Filtreleri</span>
+          <label class="filter-field">
+            <span>Min $</span>
+            <input type="number" min="0" placeholder="0" class="filter-input" [(ngModel)]="filterMinPrice" />
+          </label>
+          <label class="filter-field">
+            <span>Max $</span>
+            <input type="number" min="0" placeholder="∞" class="filter-input" [(ngModel)]="filterMaxPrice" />
+          </label>
+          <label class="filter-field">
+            <span>Min Favori</span>
+            <input type="number" min="0" placeholder="0" class="filter-input" [(ngModel)]="filterMinFavorites" />
+          </label>
+          <label class="filter-toggle">
+            <input type="checkbox" [(ngModel)]="filterOnlyOpportunity" />
+            <span>⚡ Sadece %85+ fırsat</span>
+          </label>
+          <span class="filter-count" [class.active-filter]="isFilterActive">{{ displayItems.length }} / {{ items.length }} ilan</span>
+          <button type="button" class="filter-reset-btn" *ngIf="isFilterActive" (click)="resetFilters()">Filtreleri Sıfırla</button>
         </div>
 
         <div class="table-wrap">
@@ -200,13 +231,13 @@
               </tr>
             </thead>
             <tbody>
-              <tr *ngIf="!hasResults">
+              <tr *ngIf="!hasResults || displayItems.length === 0">
                 <td colspan="11" class="empty-state-cell">
-                  {{ isLoading ? 'Etsy canlı verileri taranıyor…' : 'Henüz canlı veri yok — yukarıdan bir anahtar kelime aratın (örn. "3d printed desk organizer").' }}
+                  {{ isLoading ? 'Etsy canlı verileri taranıyor…' : (!hasResults ? 'Henüz canlı veri yok — yukarıdan bir anahtar kelime aratın (örn. "3d printed desk organizer").' : 'Filtreye uyan ürün yok — filtreleri sıfırlayabilirsiniz.') }}
                 </td>
               </tr>
               <tr 
-                *ngFor="let item of items; let idx = index"
+                *ngFor="let item of displayItems; let idx = index"
                 [class.selected-row]="selectedItem?.id === item.id"
                 (click)="selectItem(item)"
                 (dblclick)="openEtsyListing(item)">
@@ -543,6 +574,89 @@ Satış Hızı: {{ selectedItem.salesVelocity || '🔥 Çok Hızlı Satan' }} | 
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- KEYWORD ANALYSIS MODAL -->
+      <div class="modal-backdrop" *ngIf="showKeywordModal" (click)="showKeywordModal = false">
+        <div class="modal-card-analysis" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>🔍 Kelime Yoğunluk & Eksik Etiket Analizi</h3>
+            <button class="btn-close-modal" (click)="showKeywordModal = false">✕</button>
+          </div>
+          <div class="modal-body" *ngIf="selectedItem">
+            <p class="kw-title">{{ selectedItem.title }}</p>
+            <div class="kw-stats-row">
+              <span class="kw-stat">SEO Gücü: <b>%{{ selectedItem.seoScore }}</b></span>
+              <span class="kw-stat">Etiket: <b>{{ selectedItem.tags.length }}/13</b></span>
+              <span class="kw-stat">Eksik Altın Etiket: <b>{{ getMissingGoldTags().length }}</b></span>
+            </div>
+
+            <h4 class="kw-section-title">İlanın Etiketleri ({{ selectedItem.tags.length }})</h4>
+            <div class="kw-tag-cloud">
+              <span *ngFor="let t of selectedItem.tags" class="kw-tag">{{ t }}</span>
+            </div>
+
+            <h4 class="kw-section-title">Pazarın İlk 10 Altın Etiketi</h4>
+            <div class="kw-gold-list">
+              <div *ngFor="let t of topTags.slice(0, 10)" class="kw-gold-row" [class.owned]="isTagOwnedByItem(t.tag)">
+                <span class="kw-gold-icon">{{ isTagOwnedByItem(t.tag) ? '✅' : '➕' }}</span>
+                <span class="kw-gold-name">{{ t.tag }}</span>
+                <span class="kw-gold-meta">%{{ t.usagePercentage | number:'1.1-1' }} kullanım · {{ t.competitionLevel }}</span>
+              </div>
+              <p *ngIf="topTags.length === 0" class="kw-hint">Önce canlı bir arama yapın — pazar etiketleri burada listelenir.</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="copyMissingGoldTags()">📋 Eksik Altın Etiketleri Kopyala</button>
+            <button class="btn-secondary-modal" (click)="showKeywordModal = false">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KEYWORD COMPARE MODAL -->
+      <div class="modal-backdrop" *ngIf="showCompareModal" (click)="closeCompareModal()">
+        <div class="modal-card-analysis compare-modal-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>📊 Çoklu Kelime Karşılaştırma</h3>
+            <button class="btn-close-modal" (click)="closeCompareModal()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="compare-input-row">
+              <input type="text" class="compare-input" [(ngModel)]="compareInput"
+                     placeholder='Kelimeleri virgülle ayırın — örn: "dragon lamp, desk organizer, fidget toy"'
+                     (keyup.enter)="runComparison()" />
+              <button class="btn-compare-run" (click)="runComparison()" [disabled]="isComparing">
+                {{ isComparing ? '⏳ Analiz ediliyor...' : '⚖️ Karşılaştır' }}
+              </button>
+            </div>
+            <p class="compare-hint">Her kelime için canlı Etsy verisi taranır (ilk 25 ilan örneklemi). Aynı aramalar 10 dk önbellekten döner.</p>
+
+            <div *ngIf="compareResults.length > 0" class="compare-table-wrap">
+              <table class="compare-table">
+                <thead>
+                  <tr>
+                    <th>Metrik</th>
+                    <th *ngFor="let r of compareResults">
+                      <div class="compare-kw-head">
+                        <span class="compare-kw">{{ r.keyword }}</span>
+                        <button class="btn-apply-kw" (click)="applyKeywordFromCompare(r.keyword)" title="Bu kelimeyle ana aramayı başlat">↗ Bu kelimeyle ara</button>
+                      </div>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let row of compareRows">
+                    <td class="compare-metric">{{ row.label }}</td>
+                    <td *ngFor="let v of row.values">{{ v }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary-modal" (click)="closeCompareModal()">Kapat</button>
+          </div>
         </div>
       </div>
 

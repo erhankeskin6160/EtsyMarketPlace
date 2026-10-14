@@ -1023,3 +1023,148 @@
   background: rgba(15, 23, 42, 0.5);
   border-radius: 10px;
 }
+
+
+/* Faz 1: Arama geçmişi */
+.search-history-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.history-label { font-size: 0.78rem; color: #94a3b8; }
+.history-chip {
+  padding: 4px 10px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #c7d2fe;
+  border-radius: 14px;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.history-chip:hover { background: rgba(99, 102, 241, 0.25); }
+.clear-history-btn {
+  background: transparent;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+/* Faz 1: Sonuç filtreleri */
+.result-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+.filter-bar-title { font-size: 0.8rem; font-weight: 700; color: #cbd5e1; }
+.filter-field { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #94a3b8; }
+.filter-input {
+  width: 88px;
+  padding: 5px 8px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.78rem;
+  outline: none;
+}
+.filter-toggle { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #fbbf24; cursor: pointer; }
+.filter-count { font-size: 0.78rem; color: #94a3b8; margin-left: auto; }
+.filter-count.active-filter { color: #34d399; font-weight: 700; }
+.filter-reset-btn {
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  color: #f87171;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+/* Faz 1: Çoklu kelime karşılaştırma */
+.compare-modal-card { max-width: 940px; width: min(94vw, 940px); }
+.compare-input-row { display: flex; gap: 10px; margin-bottom: 8px; }
+.compare-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+}
+.btn-compare-run {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-compare-run[disabled] { opacity: 0.6; cursor: wait; }
+.compare-hint { font-size: 0.75rem; color: #64748b; margin: 4px 0 0; }
+.compare-table-wrap { overflow-x: auto; margin-top: 14px; }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.compare-table th, .compare-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+.compare-table th { color: #94a3b8; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.compare-kw-head { display: flex; flex-direction: column; gap: 4px; }
+.compare-kw { color: #fff; font-weight: 700; font-size: 0.85rem; }
+.btn-apply-kw {
+  align-self: flex-start;
+  padding: 2px 8px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  color: #38bdf8;
+  border-radius: 5px;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.compare-metric { color: #94a3b8; font-weight: 600; white-space: nowrap; }
+
+/* Faz 1: Kelime yoğunluk & eksik etiket modalı */
+.kw-title { font-size: 0.85rem; color: #e2e8f0; margin-bottom: 10px; }
+.kw-stats-row { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
+.kw-stat { font-size: 0.8rem; color: #94a3b8; }
+.kw-stat b { color: #fff; }
+.kw-section-title { font-size: 0.82rem; color: #cbd5e1; margin: 14px 0 8px; }
+.kw-tag-cloud { display: flex; flex-wrap: wrap; gap: 6px; }
+.kw-tag {
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #e2e8f0;
+}
+.kw-gold-list { display: flex; flex-direction: column; gap: 6px; }
+.kw-gold-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.8rem;
+}
+.kw-gold-row.owned { opacity: 0.55; }
+.kw-gold-name { color: #f1f5f9; font-weight: 600; flex: 1; }
+.kw-gold-meta { color: #64748b; font-size: 0.72rem; }
+.kw-hint { font-size: 0.78rem; color: #64748b; }

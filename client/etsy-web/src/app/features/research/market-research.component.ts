@@ -2,7 +2,8 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { EtsyApiService, MarketTagFrequencyDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, MarketTagFrequencyDto, MarketSearchResponseDto } from '../../core/services/etsy-api.service';
+import { forkJoin, of, catchError, map } from 'rxjs';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
@@ -32,6 +33,13 @@ export interface MarketItem {
   conversionRateEst?: number;
 }
 
+export interface CompareResult {
+  keyword: string;
+  ok: boolean;
+  res: MarketSearchResponseDto | null;
+  error: string;
+}
+
 @Component({
   selector: 'app-market-research',
   standalone: true,
@@ -57,6 +65,22 @@ export class MarketResearchComponent implements OnInit {
   aiReport = '';
   showHealthModal = false;
   toastMessage = '';
+  lastUpdatedLabel = '';
+  searchHistory: string[] = [];
+
+  filterMinPrice: number | null = null;
+  filterMaxPrice: number | null = null;
+  filterMinFavorites: number | null = null;
+  filterOnlyOpportunity = false;
+
+  showKeywordModal = false;
+  showCompareModal = false;
+  compareInput = '';
+  compareResults: CompareResult[] = [];
+  isComparing = false;
+
+  private static readonly HISTORY_KEY = 'etsy.marketResearch.history';
+  private static readonly HISTORY_MAX = 8;
 
   // NOT: Bu alanlar yalnızca canlı arama yanıtından (kpis) doldurulur;
   // başlangıç değerleri boştur (sıfır-mock ilkesi).
@@ -75,6 +99,29 @@ export class MarketResearchComponent implements OnInit {
     return this.items.length > 0;
   }
 
+  /** Filtreleri uygulanmış görüntülenecek ilanlar (kaynak liste bozulmaz). */
+  get displayItems(): MarketItem[] {
+    let list = this.items;
+    if (this.filterMinPrice !== null && this.filterMinPrice !== undefined) {
+      list = list.filter(i => i.priceUsd >= this.filterMinPrice!);
+    }
+    if (this.filterMaxPrice !== null && this.filterMaxPrice !== undefined) {
+      list = list.filter(i => i.priceUsd <= this.filterMaxPrice!);
+    }
+    if (this.filterMinFavorites !== null && this.filterMinFavorites !== undefined) {
+      list = list.filter(i => i.favorites >= this.filterMinFavorites!);
+    }
+    if (this.filterOnlyOpportunity) {
+      list = list.filter(i => i.marketScore >= 85);
+    }
+    return list;
+  }
+
+  get isFilterActive(): boolean {
+    return this.filterMinPrice !== null || this.filterMaxPrice !== null
+      || this.filterMinFavorites !== null || this.filterOnlyOpportunity;
+  }
+
   favSortDesc = true;
   currentImageIndex = 0;
 
@@ -87,6 +134,7 @@ export class MarketResearchComponent implements OnInit {
     if (savedKeyword) {
       this.searchKeyword = savedKeyword;
     }
+    this.searchHistory = this.readSavedHistory();
     this.onSearch();
   }
 
@@ -104,6 +152,46 @@ export class MarketResearchComponent implements OnInit {
     } catch {
       // localStorage erişilemezse canlı arama akışı sürdürülür
     }
+  }
+
+  private readSavedHistory(): string[] {
+    try {
+      const raw = localStorage.getItem(MarketResearchComponent.HISTORY_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed)
+        ? parsed.filter((x): x is string => typeof x === 'string').slice(0, MarketResearchComponent.HISTORY_MAX)
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private persistHistory(): void {
+    try {
+      localStorage.setItem(MarketResearchComponent.HISTORY_KEY, JSON.stringify(this.searchHistory));
+    } catch {
+      // localStorage erişilemezse geçmiş yalnızca bu oturumda tutulur
+    }
+  }
+
+  private pushHistory(keyword: string): void {
+    const kw = (keyword || '').trim();
+    if (!kw) return;
+    this.searchHistory = [kw, ...this.searchHistory.filter(h => h.toLowerCase() !== kw.toLowerCase())]
+      .slice(0, MarketResearchComponent.HISTORY_MAX);
+    this.persistHistory();
+  }
+
+  searchFromHistory(keyword: string): void {
+    this.searchKeyword = keyword;
+    this.onSearch();
+  }
+
+  clearHistory(): void {
+    this.searchHistory = [];
+    this.persistHistory();
+    this.showToastMsg('🕘 Arama geçmişi temizlendi.');
   }
 
   onSearch(): void {
@@ -134,7 +222,9 @@ export class MarketResearchComponent implements OnInit {
             this.averageEstimatedMonthlySales = res.kpis.averageEstimatedMonthlySales || 0;
             this.topSellerMonthlyRevenue = res.kpis.topSellerMonthlyRevenue || 0;
           }
-          this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam bulunan: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()}`;
+          this.pushHistory(this.searchKeyword.trim());
+          this.lastUpdatedLabel = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+          this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam bulunan: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()} • Son güncelleme ${this.lastUpdatedLabel}`;
           this.showToastMsg(`✅ ${this.items.length} ürün ve pazar metriği başarıyla yüklendi.`);
         } else {
           this.items = [];
@@ -231,9 +321,22 @@ export class MarketResearchComponent implements OnInit {
       this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
       return;
     }
-    this.items = this.items.filter(i => i.marketScore >= 85);
-    this.statusText = `Filtrelendi: Yalnızca Fırsat Skoru %85+ olan ${this.items.length} ürün gösteriliyor.`;
-    this.showToastMsg(`⚡ Yüksek Fırsatlı ${this.items.length} ürün filtrelendi.`);
+    this.filterOnlyOpportunity = !this.filterOnlyOpportunity;
+    if (this.filterOnlyOpportunity) {
+      this.statusText = `Filtre açık: Fırsat skoru %85+ olan ${this.displayItems.length} ürün gösteriliyor.`;
+      this.showToastMsg(`⚡ Yüksek fırsatlı ${this.displayItems.length} ürün filtrelendi.`);
+    } else {
+      this.statusText = `"${this.searchKeyword}" aramasındaki ${this.items.length} ilan gösteriliyor.`;
+      this.showToastMsg('Filtre kaldırıldı.');
+    }
+  }
+
+  resetFilters(): void {
+    this.filterMinPrice = null;
+    this.filterMaxPrice = null;
+    this.filterMinFavorites = null;
+    this.filterOnlyOpportunity = false;
+    this.showToastMsg('🎛️ Filtreler sıfırlandı.');
   }
 
   selectItem(item: MarketItem): void {
@@ -316,8 +419,32 @@ export class MarketResearchComponent implements OnInit {
   // 4. 🔍 Kelime Analizi
   openKeywordAnalysisModal(): void {
     if (!this.selectedItem) return;
-    const topKeywords = this.selectedItem.tags.slice(0, 5).join(' | ');
-    alert(`🔍 Kelime Yoğunluk Analizi:\n\nÜrün: ${this.selectedItem.title}\n\nEn Yüksek Hacimli Anahtar Kelimeler:\n${topKeywords}\n\nSEO Gücü: %${this.selectedItem.seoScore}`);
+    this.showKeywordModal = true;
+  }
+
+  isTagOwnedByItem(tag: string): boolean {
+    if (!this.selectedItem) return false;
+    const lower = tag.toLowerCase().trim();
+    return this.selectedItem.tags.some(t => t.toLowerCase().trim() === lower);
+  }
+
+  getMissingGoldTags(): string[] {
+    if (!this.selectedItem) return [];
+    return this.topTags
+      .slice(0, 10)
+      .map(t => t.tag)
+      .filter(tag => !this.isTagOwnedByItem(tag));
+  }
+
+  copyMissingGoldTags(): void {
+    if (!this.selectedItem) return;
+    const missing = this.getMissingGoldTags();
+    if (missing.length === 0) {
+      this.showToastMsg('✅ İlan, pazarın ilk 10 altın etiketinin tamamını kullanıyor.');
+      return;
+    }
+    navigator.clipboard.writeText(missing.join(', '));
+    this.showToastMsg(`📋 ${missing.length} eksik altın etiket panoya kopyalandı!`);
   }
 
   // 5. 🕵️ Rakip Analizi
@@ -365,12 +492,12 @@ export class MarketResearchComponent implements OnInit {
 
   // 11. 📊 CSV Aktar
   exportCsv(): void {
-    if (this.items.length === 0) {
-      this.showToastMsg('⚠️ Dışa aktarılacak veri yok — önce canlı bir arama yapın.');
+    if (this.displayItems.length === 0) {
+      this.showToastMsg('⚠️ Dışa aktarılacak (filtrelenmiş) veri yok — önce canlı bir arama yapın veya filtreleri gevşetin.');
       return;
     }
     const headers = 'Sira;ListingId;Baslik;Fiyat_USD;Magaza;Magaza_Satisi;Favori;Goruntulenme;SEO_Puani;Pazar_Puani;Tagler\n';
-    const rows = this.items.map(i => 
+    const rows = this.displayItems.map(i => 
       `${i.listingRank};"${i.id}";"${i.title.replace(/"/g, '""')}";${i.priceUsd};"${i.shopName}";${i.shopSales};${i.favorites};${i.views};${i.seoScore};${i.marketScore};"${i.tags.join(', ')}"`
     ).join('\n');
     
@@ -441,6 +568,76 @@ export class MarketResearchComponent implements OnInit {
         • <b>Tavsiye Edilen Aksiyon:</b> İlk sıralardaki ilanlardan birini "🚀 Taslağa Klonla" butonuyla aktarın ve aktif modelinizle 140 karakterlik kusursuz SEO başlığı üretin.
       `;
     }, 600);
+  }
+
+  openCompareModal(): void {
+    this.showCompareModal = true;
+  }
+
+  closeCompareModal(): void {
+    this.showCompareModal = false;
+  }
+
+  runComparison(): void {
+    const kws = (this.compareInput || '')
+      .split(/[,\n;]+/)
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+    const unique = Array.from(new Set(kws)).slice(0, 4);
+    if (unique.length < 2) {
+      this.showToastMsg('⚠️ En az 2 kelime girin (virgülle ayırın).');
+      return;
+    }
+
+    this.isComparing = true;
+    this.compareResults = [];
+    forkJoin(
+      unique.map(k =>
+        this.etsyApi.searchMarket(k, 25, 'market_score').pipe(
+          map((res): CompareResult => ({ keyword: k, ok: true, res, error: '' })),
+          catchError(err => of<CompareResult>({
+            keyword: k,
+            ok: false,
+            res: null,
+            error: err?.error?.error || err?.message || 'Veri alınamadı'
+          }))
+        )
+      )
+    ).subscribe(results => {
+      this.isComparing = false;
+      this.compareResults = results;
+      const failCount = results.filter(r => !r.ok).length;
+      this.showToastMsg(failCount === 0
+        ? `📊 ${results.length} kelime karşılaştırıldı.`
+        : `📊 Karşılaştırma tamamlandı — ${failCount} kelimede veri alınamadı.`);
+    });
+  }
+
+  applyKeywordFromCompare(keyword: string): void {
+    this.searchKeyword = keyword;
+    this.showCompareModal = false;
+    this.onSearch();
+  }
+
+  get compareRows(): { label: string; values: string[] }[] {
+    const rs = this.compareResults;
+    if (rs.length === 0) return [];
+    const fmtInt = (n?: number | null) => (n === null || n === undefined) ? '—' : Math.round(n).toLocaleString('tr-TR');
+    const fmtUsd = (n?: number | null, d: number = 2) => (n === null || n === undefined) ? '—' : '$' + Number(n).toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const cell = (fn: (r: CompareResult) => string) => rs.map(r => (r.ok && r.res) ? fn(r) : '—');
+
+    return [
+      { label: "Etsy'de Toplam İlan", values: cell(r => fmtInt(r.res!.total)) },
+      { label: 'İncelenen Örneklem', values: cell(r => fmtInt(r.res!.kpis.totalListings)) },
+      { label: 'Ortalama Fiyat (AOV)', values: cell(r => fmtUsd(r.res!.kpis.averagePrice)) },
+      { label: 'Fiyat Aralığı', values: cell(r => fmtUsd(r.res!.kpis.minPrice) + ' – ' + fmtUsd(r.res!.kpis.maxPrice)) },
+      { label: 'Ortalama Favori', values: cell(r => fmtInt(r.res!.kpis.averageFavorites)) },
+      { label: 'Pazar Fırsat Skoru', values: cell(r => '%' + Math.round(r.res!.kpis.opportunityScore)) },
+      { label: 'Ort. Tahmini Aylık Satış', values: cell(r => fmtInt(r.res!.kpis.averageEstimatedMonthlySales) + ' adet') },
+      { label: 'Tahmini Pazar Cirosu (ay)', values: cell(r => fmtUsd(r.res!.kpis.totalEstimatedMarketRevenue, 0)) },
+      { label: 'Lider Mağaza', values: cell(r => r.res!.kpis.topShopName || '—') },
+      { label: 'İlk 3 Altın Etiket', values: cell(r => (r.res!.kpis.topTags || []).slice(0, 3).map(t => t.tag).join(' • ') || '—') }
+    ];
   }
 
   private showToastMsg(msg: string): void {
