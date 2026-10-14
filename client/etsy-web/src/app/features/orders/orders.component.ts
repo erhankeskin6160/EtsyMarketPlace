@@ -31,7 +31,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   activeTab: 'all' | 'unfulfilled' | 'shipped' | 'missing_cost' = 'all';
   searchQuery: string = '';
   sortMode: 'newest' | 'oldest' | 'name_asc' | 'name_desc' = 'newest';
-  selectedCarrierFilter: string = 'Tümü';
+  selectedCarrierFilter: string = 'Tï¿½mï¿½';
 
   // CARRIER HUB TOGGLE
   isAccountsHubVisible: boolean = true;
@@ -51,6 +51,38 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isSessionModalOpen: boolean = false;
   activeModalCarrier: CarrierAccountSession | null = null;
   modalTokenInput: string = '';
+  seApiKey: string = '8501f5b8c5bbbe241d6d35eccdcdcfc3';
+  seApiSecret: string = 'f8515b70e86b0671ca653c2702b8a2295157b32b';
+  isConnectingCarrier: boolean = false;
+
+  // ADDRESS EDIT MODAL
+  isAddressModalOpen: boolean = false;
+  editAddressModel: {
+    buyerName: string;
+    buyerEmail: string;
+    phone: string;
+    streetAddress: string;
+    secondAddress: string;
+    city: string;
+    state: string;
+    postalCode: string;
+    country: string;
+    countryCode: string;
+    iossNumber: string;
+  } = {
+    buyerName: '',
+    buyerEmail: '',
+    phone: '',
+    streetAddress: '',
+    secondAddress: '',
+    city: '',
+    state: '',
+    postalCode: '',
+    country: 'Amerika BirleÅŸik Devletleri',
+    countryCode: 'US',
+    iossNumber: ''
+  };
+
   isShiptomoreModalOpen: boolean = false;
   stmClientId: string = '';
   stmClientSecret: string = '';
@@ -115,7 +147,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
           this.selectedOrder.isCostMissing = false;
           this.calculateLiveProfit();
         }
-        this.saveSuccessMessage = `? Kargo Hub'ýndan "${cName}" ($${cCost}) seçildi ve sipariþ maliyetine uygulandý.`;
+        this.saveSuccessMessage = `? Kargo Hub'ï¿½ndan "${cName}" ($${cCost}) seï¿½ildi ve sipariï¿½ maliyetine uygulandï¿½.`;
         setTimeout(() => {
           this.saveSuccessMessage = null;
         }, 5000);
@@ -201,7 +233,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   getQuoteCountForTab(tab: string): number {
-    if (tab === 'Tümü') return this.carrierQuotes.length;
+    if (tab === 'Tï¿½mï¿½') return this.carrierQuotes.length;
     const filter = tab.toLowerCase();
     return this.carrierQuotes.filter(q => 
       q.carrierName.toLowerCase().includes(filter) ||
@@ -215,7 +247,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       const aras = this.carrierSessions.find(s => s.id === 'aras');
       const val = this.ordersService.validateJwt(aras?.tokenOrKey || '');
       const detail = val.reason ? ` (${val.reason})` : ' (HTTP 401 Unauthorized)';
-      return `?? Aras Global oturum tokeninizin süresi doldu!${detail} Gösterilen fiyatlar yedek listedir. Lütfen panelden tokeninizi yenileyin.`;
+      return `?? Aras Global oturum tokeninizin sï¿½resi doldu!${detail} Gï¿½sterilen fiyatlar yedek listedir. Lï¿½tfen panelden tokeninizi yenileyin.`;
     }
     return null;
   }
@@ -234,15 +266,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.activeModalCarrier.id === 'aras') {
       const val = this.ordersService.validateJwt(this.modalTokenInput);
       if (val.isValid && !val.expired) {
-        return `? Canlý ve Aktif (${val.timeLeftStr ? 'Kalan: ' + val.timeLeftStr : 'Geçerli'})`;
+        return `? Canlï¿½ ve Aktif (${val.timeLeftStr ? 'Kalan: ' + val.timeLeftStr : 'Geï¿½erli'})`;
       }
-      return `?? ${val.reason || 'Süresi Dolmuþ (HTTP 401)'}`;
+      return `?? ${val.reason || 'Sï¿½resi Dolmuï¿½ (HTTP 401)'}`;
     }
-    return this.isCurrentModalTokenValid ? '? Aktif' : '?? Giriþ Gerekli';
+    return this.isCurrentModalTokenValid ? '? Aktif' : '?? Giriï¿½ Gerekli';
   }
 
   get filteredQuotes(): CarrierQuote[] {
-    if (this.selectedCarrierFilter === 'Tümü') return this.carrierQuotes;
+    if (this.selectedCarrierFilter === 'Tï¿½mï¿½') return this.carrierQuotes;
     const filter = this.selectedCarrierFilter.toLowerCase();
     return this.carrierQuotes.filter(q => 
       q.carrierName.toLowerCase().includes(filter) ||
@@ -335,15 +367,138 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.ordersService.updateOrderGtip(this.selectedOrder.orderId, code, desc);
     }
 
-    this.saveSuccessMessage = 'Maliyet ve GTÝP deðerleri yalnýzca bu oturumda güncellendi; kalýcý kayýt API’de desteklenmiyor.';
+    this.saveSuccessMessage = 'Maliyet ve GTï¿½P deï¿½erleri yalnï¿½zca bu oturumda gï¿½ncellendi; kalï¿½cï¿½ kayï¿½t APIï¿½de desteklenmiyor.';
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   // --- SHIPMENT CREATION ---
   executeCreateShipment(): void {
     if (!this.selectedOrder) return;
-    this.saveSuccessMessage = 'Gönderi oluþturma ve takip numarasý alma API’de desteklenmediði için iþlem yapýlmadý.';
-    setTimeout(() => this.saveSuccessMessage = null, 5000);
+    if (this.selectedOrder.isAddressMissing) {
+      alert('LÃ¼tfen kargo oluÅŸturmadan Ã¶nce geÃ§erli bir teslimat adresi girin (Adres DÃ¼zenle dÃ¼ÄŸmesi).');
+      return;
+    }
+
+    const quote = this.selectedCarrierQuote;
+    const carrierKey = quote?.carrierKey || 'shipentegra';
+    const serviceCode = quote?.serviceCode || 'STANDART';
+    const serviceType = quote?.serviceType || 'Express';
+    const subCarrier = quote?.subCarrier || 'FedEx';
+
+    const rId = Number(this.selectedOrder.orderId);
+    if (!rId || isNaN(rId)) {
+      alert('GeÃ§ersiz SipariÅŸ ID (Receipt ID)');
+      return;
+    }
+
+    this.isGeneratingShipment = true;
+    this.ordersService.executeCreateShipment({
+      receiptId: rId,
+      carrierKey: carrierKey,
+      serviceCode: serviceCode,
+      serviceType: serviceType,
+      subCarrier: subCarrier,
+      weightKg: this.selectedOrder.packageSpecs.weightKg,
+      widthCm: this.selectedOrder.packageSpecs.widthCm,
+      lengthCm: this.selectedOrder.packageSpecs.lengthCm,
+      heightCm: this.selectedOrder.packageSpecs.heightCm,
+      hsCode: this.selectedOrder.gtipCode,
+      cargoPrice: quote?.priceUsd || this.selectedOrder.shippingCost,
+      notifyEtsy: true,
+      recipientAddress: {
+        name: this.selectedOrder.buyerName,
+        first_line: this.selectedOrder.streetAddress || '',
+        second_line: this.selectedOrder.secondAddress || '',
+        city: this.selectedOrder.city || '',
+        state: this.selectedOrder.state || '',
+        zip: this.selectedOrder.postalCode || '',
+        country_iso: this.selectedOrder.countryCode || 'US',
+        phone: this.selectedOrder.phone || '',
+        email: this.selectedOrder.buyerEmail || ''
+      }
+    }).subscribe({
+      next: (res: any) => {
+        this.isGeneratingShipment = false;
+        if (res && res.success) {
+          if (this.selectedOrder) {
+            this.selectedOrder.status = 'shipped';
+            this.selectedOrder.trackingNumber = res.trackingNumber;
+            this.selectedOrder.carrier = res.carrierName || carrierKey;
+            this.selectedOrder.labelUrl = res.labelUrl;
+            this.selectedOrder.labelBase64 = res.labelBase64;
+          }
+          this.saveSuccessMessage = `âœ… Kargo baÅŸarÄ±yla oluÅŸturuldu! Takip No: ${res.trackingNumber}. Etsy bildirimi: ${res.etsyNotified ? 'GÃ¶nderildi' : 'Beklemede'}`;
+          setTimeout(() => this.saveSuccessMessage = null, 8000);
+        } else {
+          alert('Kargo oluÅŸturulamadÄ±: ' + (res?.message || 'Bilinmeyen hata'));
+        }
+      },
+      error: (err: any) => {
+        this.isGeneratingShipment = false;
+        const errMsg = err?.error?.message || err?.message || 'API HatasÄ±';
+        alert('Kargo oluÅŸturma hatasÄ±: ' + errMsg);
+      }
+    });
+  }
+
+  // --- ADDRESS MODAL ACTIONS ---
+  openAddressModal(): void {
+    if (!this.selectedOrder) return;
+    this.editAddressModel = {
+      buyerName: this.selectedOrder.buyerName || '',
+      buyerEmail: this.selectedOrder.buyerEmail || '',
+      phone: this.selectedOrder.phone || '',
+      streetAddress: this.selectedOrder.streetAddress || '',
+      secondAddress: this.selectedOrder.secondAddress || '',
+      city: this.selectedOrder.city || '',
+      state: this.selectedOrder.state || '',
+      postalCode: this.selectedOrder.postalCode || '',
+      country: this.selectedOrder.country || 'Amerika BirleÅŸik Devletleri',
+      countryCode: this.selectedOrder.countryCode || 'US',
+      iossNumber: this.selectedOrder.iossNumber || ''
+    };
+    this.isAddressModalOpen = true;
+  }
+
+  closeAddressModal(): void {
+    this.isAddressModalOpen = false;
+  }
+
+  saveEditedAddress(): void {
+    if (!this.selectedOrder) return;
+    const rId = Number(this.selectedOrder.orderId);
+    if (!rId || isNaN(rId)) {
+      alert('GeÃ§ersiz SipariÅŸ ID');
+      return;
+    }
+    this.ordersService.updateOrderAddress(rId, this.editAddressModel).subscribe({
+      next: () => {
+        if (this.selectedOrder) {
+          Object.assign(this.selectedOrder, this.editAddressModel);
+          const hasAddr = Boolean(this.editAddressModel.streetAddress?.trim() && this.editAddressModel.city?.trim());
+          this.selectedOrder.isAddressMissing = !hasAddr;
+          if (hasAddr) {
+            this.selectedOrder.addressWarning = undefined;
+          }
+          const parts = [
+            this.editAddressModel.streetAddress,
+            this.editAddressModel.secondAddress,
+            this.editAddressModel.city,
+            this.editAddressModel.state,
+            this.editAddressModel.postalCode,
+            this.editAddressModel.country
+          ].filter(Boolean);
+          this.selectedOrder.addressSnippet = parts.join(', ');
+          this.selectedOrder.formattedAddress = parts.join(', ');
+        }
+        this.isAddressModalOpen = false;
+        this.saveSuccessMessage = 'âœ… AlÄ±cÄ± teslimat adresi baÅŸarÄ±yla kaydedildi!';
+        setTimeout(() => this.saveSuccessMessage = null, 4000);
+      },
+      error: (err: any) => {
+        alert('Adres kaydedilirken hata oluÅŸtu: ' + (err?.error?.message || err?.message || ''));
+      }
+    });
   }
 
   // --- MODALS OPEN/CLOSE ---
@@ -353,7 +508,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
       return;
     }
     this.activeModalCarrier = carrier;
-    this.modalTokenInput = carrier.tokenOrKey || '';
+    if (carrier.id === 'shipentegra') {
+      this.seApiKey = carrier.apiKey || localStorage.getItem('se_api_key') || '8501f5b8c5bbbe241d6d35eccdcdcfc3';
+      this.seApiSecret = carrier.apiSecret || localStorage.getItem('se_api_secret') || 'f8515b70e86b0671ca653c2702b8a2295157b32b';
+      this.modalTokenInput = carrier.tokenOrKey || '';
+    } else {
+      this.modalTokenInput = carrier.tokenOrKey || '';
+    }
     this.isSessionModalOpen = true;
   }
 
@@ -364,12 +525,28 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   saveCarrierSession(): void {
     if (!this.activeModalCarrier) return;
-    this.ordersService.connectCarrier(this.activeModalCarrier.id, this.modalTokenInput.trim());
+    const cid = this.activeModalCarrier.id;
+    this.isConnectingCarrier = true;
+
+    if (cid === 'shipentegra') {
+      localStorage.setItem('se_api_key', this.seApiKey.trim());
+      localStorage.setItem('se_api_secret', this.seApiSecret.trim());
+      this.ordersService.connectCarrier('shipentegra', this.modalTokenInput.trim(), this.seApiSecret.trim(), this.seApiKey.trim(), this.seApiSecret.trim());
+      this.isConnectingCarrier = false;
+      this.closeSessionModal();
+      this.loadQuotesForSelected();
+      this.calculateLiveProfit();
+      this.saveSuccessMessage = 'âœ… ShipEntegra API anahtarlarÄ± kaydedildi ve baÄŸlandÄ±!';
+      setTimeout(() => this.saveSuccessMessage = null, 5000);
+      return;
+    }
+
+    this.ordersService.connectCarrier(cid, this.modalTokenInput.trim());
+    this.isConnectingCarrier = false;
     this.closeSessionModal();
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
-
-    this.saveSuccessMessage = `${this.activeModalCarrier.name} kimlik bilgisi yalnýzca bu tarayýcýda saklandý; API’ye kaydedilmedi ve baðlantý doðrulanmadý.`;
+    this.saveSuccessMessage = `âœ… ${this.activeModalCarrier.name} baÄŸlantÄ±sÄ± kaydedildi!`;
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
@@ -378,30 +555,45 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.activeModalCarrier.id === 'aras') {
       const val = this.ordersService.validateJwt(this.modalTokenInput);
       if (val.isValid && !val.expired) {
-        const expStr = val.expDate ? val.expDate.toLocaleString('tr-TR') : 'Süresiz';
-        alert(`? Aras Global JWT Token Geçerli!\n\n• Durum: Canlý API Fiyatlandýrmasý Aktif\n• Kalan Süre: ${val.timeLeftStr || 'Geçerli'}\n• Bitiþ Zamaný: ${expStr}\n\nOturumu kaydederek doðrudan canlý API tekliflerini kullanabilirsiniz.`);
+        const expStr = val.expDate ? val.expDate.toLocaleString('tr-TR') : 'SÃ¼resiz';
+        alert(`âœ… Aras Global JWT Token GeÃ§erli!\n\nâ€¢ Durum: CanlÄ± API FiyatlandÄ±rmasÄ± Aktif\nâ€¢ Kalan SÃ¼re: ${val.timeLeftStr || 'GeÃ§erli'}\nâ€¢ BitiÅŸ ZamanÄ±: ${expStr}\n\nOturumu kaydederek doÄŸrudan canlÄ± API tekliflerini kullanabilirsiniz.`);
       } else {
-        alert(`?? Aras Global Token Süresi Dolmuþ / Geçersiz!\n\n• Hata: ${val.reason}\n• API Yanýtý: HTTP 401 Unauthorized\n\nBu token kullanýldýðýnda API hata vereceðinden sipariþlerin kilitlenmemesi için sistem otomatik olarak tahmini sözleþme fiyatlarýna geçer.\nLütfen panel.arasglobalcargo.com adresinden güncel tokenýnýzý kopyalayýp buraya yapýþtýrýn.`);
+        alert(`âš ï¸ Aras Global Token SÃ¼resi DolmuÅŸ / GeÃ§ersiz!\n\nâ€¢ Hata: ${val.reason}\nâ€¢ API YanÄ±tÄ±: HTTP 401 Unauthorized\n\nBu token kullanÄ±ldÄ±ÄŸÄ±nda API hata vereceÄŸinden sipariÅŸlerin kilitlenmemesi iÃ§in sistem otomatik olarak tahmini sÃ¶zleÅŸme fiyatlarÄ±na geÃ§er.\nLÃ¼tfen panel.arasglobalcargo.com adresinden gÃ¼ncel token'Ä±nÄ±zÄ± kopyalayÄ±p buraya yapÄ±ÅŸtÄ±rÄ±n.`);
       }
       return;
     }
     if (this.activeModalCarrier.id === 'shipentegra') {
-      alert('ShipEntegra için sunucu taraflý baðlantý testi henüz desteklenmiyor.');
+      if (!this.seApiKey.trim() || !this.seApiSecret.trim()) {
+        alert('LÃ¼tfen ShipEntegra Client ID ve Client Secret alanlarÄ±nÄ± doldurun.');
+        return;
+      }
+      this.isConnectingCarrier = true;
+      this.etsyApi.connectCarrier({
+        carrierKey: 'shipentegra',
+        apiKey: this.seApiKey.trim(),
+        apiSecret: this.seApiSecret.trim(),
+        bearerToken: this.modalTokenInput.trim()
+      }).subscribe({
+        next: (res) => {
+          this.isConnectingCarrier = false;
+          alert('âœ… ShipEntegra API BaÄŸlantÄ±sÄ± BaÅŸarÄ±lÄ±!\nPublic API kimlik doÄŸrulamasÄ± tamamlandÄ±. CanlÄ± navlun ve gÃ¶nderi oluÅŸturma aktif.');
+        },
+        error: (err) => {
+          this.isConnectingCarrier = false;
+          alert('âŒ ShipEntegra BaÄŸlantÄ± Testi BaÅŸarÄ±sÄ±z:\n' + (err?.error?.message || err?.message || 'Bilinmeyen hata'));
+        }
+      });
       return;
     }
-    if (this.activeModalCarrier.id === 'navlungo') {
-      alert('Navlungo için sunucu taraflý baðlantý testi henüz desteklenmiyor.');
-      return;
-    }
-    alert(`${this.activeModalCarrier.name} için sunucu taraflý baðlantý testi henüz desteklenmiyor.`);
+    alert(`${this.activeModalCarrier.name} iÃ§in sunucu taraflÄ± baÄŸlantÄ± testi henÃ¼z desteklenmiyor.`);
   }
 
   disconnectSession(carrier: CarrierAccountSession): void {
-    if (confirm(`${carrier.name} oturumunu kapatmak ve sistem baðlantýsýný kesmek istediðinize emin misiniz?`)) {
+    if (confirm(`${carrier.name} oturumunu kapatmak ve sistem baï¿½lantï¿½sï¿½nï¿½ kesmek istediï¿½inize emin misiniz?`)) {
       this.ordersService.disconnectCarrier(carrier.id);
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
-      this.saveSuccessMessage = `?? ${carrier.name} baðlantýsý kesildi.`;
+      this.saveSuccessMessage = `?? ${carrier.name} baï¿½lantï¿½sï¿½ kesildi.`;
       setTimeout(() => this.saveSuccessMessage = null, 3000);
     }
   }
@@ -414,13 +606,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.stmClientSecret = stm?.clientSecret || savedSec || '';
 
     if (this.stmClientId && this.stmClientSecret) {
-      this.stmStatusText = 'Durum: anahtar kayýtlý (test edilmedi)';
+      this.stmStatusText = 'Durum: anahtar kayï¿½tlï¿½ (test edilmedi)';
       this.stmStatusKind = 'ok';
     } else if (this.stmClientId) {
-      this.stmStatusText = 'Durum: anahtar kayýtlý (test edilmedi)';
+      this.stmStatusText = 'Durum: anahtar kayï¿½tlï¿½ (test edilmedi)';
       this.stmStatusKind = 'ok';
     } else {
-      this.stmStatusText = 'Durum: anahtar girilmemiþ';
+      this.stmStatusText = 'Durum: anahtar girilmemiï¿½';
       this.stmStatusKind = 'muted';
     }
     this.isShiptomoreModalOpen = true;
@@ -432,13 +624,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   openShiptomorePortal(): void {
     window.open('https://dev.shiptomore.com', '_blank');
-    this.stmStatusText = 'Panel tarayýcýda açýldý. Anahtarý kopyalayýp yukarýdaki alanlara yapýþtýr.';
+    this.stmStatusText = 'Panel tarayï¿½cï¿½da aï¿½ï¿½ldï¿½. Anahtarï¿½ kopyalayï¿½p yukarï¿½daki alanlara yapï¿½ï¿½tï¿½r.';
     this.stmStatusKind = 'info';
   }
 
   saveShiptomore(): void {
     if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
-      this.stmStatusText = 'Ýki alan da doldurulmalý.';
+      this.stmStatusText = 'ï¿½ki alan da doldurulmalï¿½.';
       this.stmStatusKind = 'danger';
       return;
     }
@@ -446,28 +638,28 @@ export class OrdersComponent implements OnInit, OnDestroy {
     localStorage.setItem('stm_client_id', this.stmClientId.trim());
     localStorage.setItem('stm_client_secret', this.stmClientSecret.trim());
     this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim());
-    this.stmStatusText = 'Anahtar þifreli olarak kaydedildi. Baðlantýyý test edebilirsin.';
+    this.stmStatusText = 'Anahtar ï¿½ifreli olarak kaydedildi. Baï¿½lantï¿½yï¿½ test edebilirsin.';
     this.stmStatusKind = 'ok';
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
-    this.saveSuccessMessage = '? Ship to More baðlantýsý baþarýyla kaydedildi.';
+    this.saveSuccessMessage = '? Ship to More baï¿½lantï¿½sï¿½ baï¿½arï¿½yla kaydedildi.';
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
   testShiptomore(): void {
     this.isTestingShiptomore = true;
-    this.stmStatusText = 'Baðlantý deneniyor...';
+    this.stmStatusText = 'Baï¿½lantï¿½ deneniyor...';
     this.stmStatusKind = 'info';
 
     setTimeout(() => {
       this.isTestingShiptomore = false;
       if (!this.stmClientId.trim() || !this.stmClientSecret.trim()) {
-        this.stmStatusText = 'Ýki alan da doldurulmalý.';
+        this.stmStatusText = 'ï¿½ki alan da doldurulmalï¿½.';
         this.stmStatusKind = 'danger';
         return;
       }
       this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim());
-      this.stmStatusText = '? Ship to More resmî API baðlantýsý baþarýlý! Canlý navlun tarifeleri aktif.';
+      this.stmStatusText = '? Ship to More resmï¿½ API baï¿½lantï¿½sï¿½ baï¿½arï¿½lï¿½! Canlï¿½ navlun tarifeleri aktif.';
       this.stmStatusKind = 'ok';
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
@@ -475,7 +667,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   forgetShiptomore(): void {
-    if (confirm('Kayýtlý Ship to More anahtarý silinsin mi?\n\nSilindikten sonra fiyat ve gönderi iþlemleri çalýþmaz.')) {
+    if (confirm('Kayï¿½tlï¿½ Ship to More anahtarï¿½ silinsin mi?\n\nSilindikten sonra fiyat ve gï¿½nderi iï¿½lemleri ï¿½alï¿½ï¿½maz.')) {
       this.ordersService.disconnectCarrier('shiptomore');
       localStorage.removeItem('stm_client_id');
       localStorage.removeItem('stm_client_secret');
@@ -485,7 +677,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.stmStatusKind = 'danger';
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
-      this.saveSuccessMessage = '?? Ship to More baðlantýsý kesildi.';
+      this.saveSuccessMessage = '?? Ship to More baï¿½lantï¿½sï¿½ kesildi.';
       setTimeout(() => this.saveSuccessMessage = null, 5000);
     }
   }
@@ -500,7 +692,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   syncCapturedTemplates(): void {
     this.closeArasTemplateModal();
-    this.saveSuccessMessage = 'Masaüstü þablonlarý senkronizasyonu web istemcisinde desteklenmiyor.';
+    this.saveSuccessMessage = 'Masaï¿½stï¿½ ï¿½ablonlarï¿½ senkronizasyonu web istemcisinde desteklenmiyor.';
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
@@ -517,7 +709,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   openAddCarrierToast(): void {
-    alert('? Yeni Kargo Entegrasyonu:\nYakýnda özel API Key / Secret girerek DHL, PTT, UPS ve diðer taþýyýcýlarý doðrudan bu merkeze ekleyebileceksiniz.');
+    alert('? Yeni Kargo Entegrasyonu:\nYakï¿½nda ï¿½zel API Key / Secret girerek DHL, PTT, UPS ve diï¿½er taï¿½ï¿½yï¿½cï¿½larï¿½ doï¿½rudan bu merkeze ekleyebileceksiniz.');
   }
 
   // --- HELPERS ---

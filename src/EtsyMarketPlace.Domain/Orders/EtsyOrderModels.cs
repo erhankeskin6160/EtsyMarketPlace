@@ -39,6 +39,8 @@ public sealed class EtsyOrderFulfillmentItem
     public string CountryName { get; set; } = string.Empty;
     public bool HasState { get; set; } = false;
     public string Phone { get; set; } = string.Empty;
+    public bool IsAddressMissing { get; set; } = false;
+    public string AddressWarning { get; set; } = string.Empty;
 
     /// <summary>
     /// Etsy IOSS Numarası (Örn: IM3720000224). AB gümrüklerinde KDV'nin ödendiğini kanıtlar.

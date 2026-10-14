@@ -44,6 +44,10 @@ export interface CarrierAccountSession {
   portalUrl: string;
   tokenOrKey?: string;
   clientSecret?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  email?: string;
+  password?: string;
   lastUpdated?: string;
   notes?: string;
 }
@@ -59,12 +63,20 @@ export interface OrderFulfillmentItem {
   orderNumber: string;
   buyerName: string;
   buyerEmail?: string;
+  phone?: string;
+  streetAddress?: string;
+  secondAddress?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
   country: string;
   countryCode: string;
-  city?: string;
+  formattedAddress?: string;
   addressSnippet?: string;
   isAddressMissing?: boolean;
   addressWarning?: string;
+  iossNumber?: string;
+  isVatCollected?: boolean;
   exportType?: string;
   orderDate: string;
   status: 'unfulfilled' | 'shipped' | 'delivered';
@@ -82,7 +94,12 @@ export interface OrderFulfillmentItem {
   items: OrderItem[];
   selectedCarrier?: string;
   carrierServiceName?: string;
+  carrier?: string;
   trackingCode?: string;
+  trackingNumber?: string;
   barcodeNumber?: string;
+  countryName?: string;
+  labelUrl?: string;
+  labelBase64?: string;
   shippedAt?: string;
 }

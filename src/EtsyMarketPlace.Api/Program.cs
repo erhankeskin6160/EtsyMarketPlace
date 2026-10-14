@@ -83,6 +83,27 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IEtsy
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IAiListingOptimizerUseCase, EtsyMarketPlace.Application.ListingOptimization.AiListingOptimizationUseCase>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsApiClient, EtsyMarketPlace.Infrastructure.Shipping.EtsyLogisticsApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IEtsyLogisticsService, EtsyMarketPlace.Application.Shipping.EtsyLogisticsService>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShipEntegraApiClient, EtsyMarketPlace.Infrastructure.Shipping.ShipEntegraApiClient>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IArasGlobalApiClient, EtsyMarketPlace.Infrastructure.Shipping.ArasGlobalApiClient>();
+
+builder.Services.AddSingleton<EtsyMarketPlace.Domain.Orders.IOrderAddressRepository>(sp => new EtsyMarketPlace.Infrastructure.Orders.SqliteOrderAddressRepository(dbPath));
+builder.Services.AddSingleton<EtsyMarketPlace.Application.Orders.EtsyOrderService>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.Orders.IEtsyOrderFulfillmentService, EtsyMarketPlace.Application.Orders.EtsyOrderFulfillmentService>();
+
+builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.ShipmentCreationManager>(sp =>
+{
+    var manager = new EtsyMarketPlace.Application.Shipping.ShipmentCreationManager();
+    var shipEntegraApi = sp.GetService<EtsyMarketPlace.Application.Shipping.IShipEntegraApiClient>();
+    manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.ShipEntegraShipmentCreationProvider(shipEntegraApi));
+    var arasApi = sp.GetService<EtsyMarketPlace.Application.Shipping.IArasGlobalApiClient>();
+    if (arasApi != null)
+    {
+        manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.ArasGlobalShipmentCreationProvider(arasApi));
+    }
+    return manager;
+});
+builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IShipmentOrchestratorService, EtsyMarketPlace.Application.Shipping.ShipmentOrchestratorService>();
+
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.MarketResearch.IEtsyMarketApiClient, EtsyMarketPlace.Infrastructure.MarketResearch.EtsyMarketApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketResearchService, EtsyMarketPlace.Application.MarketResearch.MarketResearchService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceService, EtsyMarketPlace.Application.AiUsage.AiBalanceService>();

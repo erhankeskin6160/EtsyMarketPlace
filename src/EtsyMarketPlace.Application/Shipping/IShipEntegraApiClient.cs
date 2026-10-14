@@ -14,11 +14,21 @@ public interface IShipEntegraApiClient
     /// E-posta/şifre ile doğrudan API oturumu açar (panel ile aynı uç: /v1/auth/login).
     /// Otomatik token yenilemenin tarayıcısız yoludur.
     /// </summary>
+    /// <summary>
+    /// ShipEntegra Geliştirici API Anahtarları (Client ID ve Client Secret) ile Bearer token üretir (/v1/auth/token).
+    /// </summary>
     Task<ShipEntegraAuthTokens?> LoginAsync(
         string email,
         string password,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// ShipEntegra Geliştirici API Anahtarları (Client ID ve Client Secret) ile Bearer token üretir (/v1/auth/token).
+    /// </summary>
+    Task<ShipEntegraAuthTokens?> AuthenticateWithClientCredentialsAsync(
+        string clientId,
+        string clientSecret,
+        CancellationToken cancellationToken = default);
 
     Task<List<ShipEntegraQuoteOffer>> FetchLiveQuotesAsync(
         ShipEntegraQuoteRequest request,

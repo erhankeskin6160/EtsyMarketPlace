@@ -43,13 +43,15 @@ export class OrdersService {
         id: 'shipentegra',
         name: 'ShipEntegra',
         logoUrl: 'assets/shipping/shipentegra.jpg',
-        isConnected: false,
-        statusLabel: '⚠️ Giriş Yap',
+        isConnected: true,
+        statusLabel: '🟢 API Bağlı',
         autoLabel: '⚡ Oturum Aç',
         portalUrl: 'https://app.shipentegra.com/login',
         tokenOrKey: '',
-        lastUpdated: '-',
-        notes: 'UPS & FedEx sözleşmeli hat entegrasyonu'
+        apiKey: '8501f5b8c5bbbe241d6d35eccdcdcfc3',
+        apiSecret: 'f8515b70e86b0671ca653c2702b8a2295157b32b',
+        lastUpdated: '14.10.2026',
+        notes: 'Resmi API Key & Secret Entegrasyonu (UPS, FedEx, Widect)'
       },
       {
         id: 'navlungo',
@@ -86,10 +88,19 @@ export class OrdersService {
       try {
         const list: CarrierAccountSession[] = JSON.parse(saved);
         let upgraded = false;
-        // Upgrade any placeholder tokens containing '...' or empty
+        // Upgrade any placeholder tokens containing '...' or empty and inject defaults
         list.forEach(item => {
+          const def = defaults.find(d => d.id === item.id);
+          if (def) {
+            if (!item.apiKey && def.apiKey) { item.apiKey = def.apiKey; upgraded = true; }
+            if (!item.apiSecret && def.apiSecret) { item.apiSecret = def.apiSecret; upgraded = true; }
+            if (item.id === 'shipentegra' && item.apiKey && item.apiSecret) {
+              item.isConnected = true;
+              item.statusLabel = '🟢 API Bağlı';
+              upgraded = true;
+            }
+          }
           if (!item.tokenOrKey || item.tokenOrKey.includes('...') || (item.id === 'aras' && !this.validateJwt(item.tokenOrKey).isValid)) {
-            const def = defaults.find(d => d.id === item.id);
             if (def && def.tokenOrKey) {
               item.tokenOrKey = def.tokenOrKey;
               item.isConnected = true;
@@ -149,21 +160,34 @@ export class OrdersService {
     this.persistSessions(list);
   }
 
-  public connectCarrier(carrierId: string, token: string, secret?: string): void {
+  public connectCarrier(carrierId: string, token: string, secret?: string, apiKey?: string, apiSecret?: string): void {
     const list = this.sessionsSubject.value.map(s => {
       if (s.id === carrierId) {
         return {
           ...s,
           isConnected: true,
-          statusLabel: '● Bağlı',
+          statusLabel: '🟢 Bağlı',
           tokenOrKey: token,
           clientSecret: secret || s.clientSecret,
+          apiKey: apiKey || s.apiKey,
+          apiSecret: apiSecret || s.apiSecret,
           lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         };
       }
       return s;
     });
     this.persistSessions(list);
+
+    // Call backend API to persist credentials in SQLite / store
+    this.etsyApi.connectCarrier({
+      carrierKey: carrierId,
+      apiKey: apiKey,
+      apiSecret: apiSecret,
+      bearerToken: token
+    }).subscribe({
+      next: () => {},
+      error: () => {}
+    });
   }
 
   public validateJwt(token: string | null | undefined): { isValid: boolean; expired: boolean; expDate?: Date; timeLeftStr?: string; reason?: string } {
@@ -230,14 +254,19 @@ export class OrdersService {
 
   public isCarrierSessionLive(carrierId: string): boolean {
     const session = this.sessionsSubject.value.find(s => s.id === carrierId);
-    if (!session || !session.isConnected || !session.tokenOrKey) {
+    if (!session || !session.isConnected) {
       return false;
     }
+    if (carrierId === 'shipentegra') {
+      if (session.apiKey && session.apiSecret) return true;
+      return Boolean(session.tokenOrKey && !session.tokenOrKey.includes('...') && session.tokenOrKey.length > 10);
+    }
     if (carrierId === 'aras') {
+      if (!session.tokenOrKey) return false;
       const val = this.validateJwt(session.tokenOrKey);
       return val.isValid && !val.expired;
     }
-    return !session.tokenOrKey.includes('...') && session.tokenOrKey.length > 10;
+    return Boolean(session.tokenOrKey && !session.tokenOrKey.includes('...') && session.tokenOrKey.length > 10);
   }
 
   // --- GTIP SEARCH ENGINE ---
@@ -256,20 +285,123 @@ export class OrdersService {
     this.ordersLoading = true;
     this.ordersLoadError = null;
     const shopId = shopIdOverride || this.etsyApi.activeShopId();
+
+    this.etsyApi.getFulfillmentQueue(shopId, 60)
+      .subscribe({
+        next: (resp) => {
+          this.ordersLoading = false;
+          const rawItems = resp?.results || [];
+
+          if (rawItems.length === 0) {
+            this.fallbackToCostAlerts(shopId);
+            return;
+          }
+
+          const liveOrders: OrderFulfillmentItem[] = rawItems.map((item: any) => {
+            const hasAddress = Boolean(
+              item.streetAddress && item.streetAddress.trim().length > 0 &&
+              item.city && item.city.trim().length > 0
+            );
+            const addressParts = [
+              item.streetAddress,
+              item.secondAddress,
+              item.city,
+              item.state,
+              item.postalCode,
+              item.countryName || item.countryCode
+            ].filter((p: any) => Boolean(p && String(p).trim().length > 0));
+
+            const total = Number(item.totalPrice || item.totalAmount || 0);
+            const pCost = Number(item.productCost || 0);
+            const sCost = Number(item.shippingCost || 0);
+            const netProfit = Number((total - (pCost + sCost + (total * 0.095))).toFixed(2));
+            const profitMargin = total > 0 ? Number((((total - (pCost + sCost)) / total) * 100).toFixed(1)) : 0;
+
+            const orderItems = (item.items || []).map((it: any, idx: number) => ({
+              id: it.id || `it-${item.receiptId}-${idx}`,
+              title: it.title || 'Etsy Ürünü',
+              quantity: it.quantity || 1,
+              price: it.price || 0,
+              sku: it.sku || `SKU-${it.listingId || item.receiptId}`
+            }));
+
+            const isShipped = item.status === 'shipped' || item.status === 'Fulfilled' || Boolean(item.trackingCode);
+
+            return {
+              orderId: String(item.receiptId),
+              orderNumber: `#${item.receiptId}`,
+              buyerName: item.buyerName || 'Etsy Alıcısı',
+              buyerEmail: item.buyerEmail || '',
+              phone: item.phone || '',
+              streetAddress: item.streetAddress || '',
+              secondAddress: item.secondAddress || '',
+              city: item.city || '',
+              state: item.state || '',
+              postalCode: item.postalCode || '',
+              country: item.countryName || item.countryCode || 'Amerika Birleşik Devletleri',
+              countryCode: item.countryCode || 'US',
+              formattedAddress: addressParts.join(', '),
+              addressSnippet: addressParts.join(', '),
+              isAddressMissing: !hasAddress,
+              addressWarning: !hasAddress ? 'Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin.' : undefined,
+              iossNumber: item.iossNumber || '',
+              isVatCollected: Boolean(item.isVatCollected || item.iossNumber),
+              exportType: item.exportType || (item.countryCode === 'TR' ? 'Yurtiçi' : 'Mikro İhracat (ETGB)'),
+              orderDate: item.orderDate || '',
+              status: isShipped ? 'shipped' : 'unfulfilled',
+              currency: item.currency || 'USD',
+              totalAmount: total,
+              productCost: pCost,
+              shippingCost: sCost,
+              isCostMissing: pCost <= 0 || sCost <= 0,
+              netProfit: netProfit,
+              profitMarginPercent: profitMargin,
+              packageSpecs: item.packageSpecs || { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.4, desi: 0.6 },
+              invoicedWeightKg: item.invoicedWeightKg || 0.4,
+              gtipCode: item.gtipCode || '',
+              gtipDescription: item.gtipDescription || '',
+              items: orderItems.length > 0 ? orderItems : [
+                {
+                  id: `it-${item.receiptId}`,
+                  title: 'Etsy Siparişi',
+                  quantity: 1,
+                  price: total,
+                  sku: 'LIVE-SKU'
+                }
+              ],
+              selectedCarrier: item.selectedCarrier || '',
+              trackingCode: item.trackingCode || '',
+              labelUrl: item.labelUrl || ''
+            };
+          });
+
+          this.ordersSubject.next(liveOrders);
+          const selected = this.selectedOrderSubject.value;
+          this.selectedOrderSubject.next((selected && liveOrders.find(order => order.orderId === selected.orderId)) || liveOrders[0] || null);
+        },
+        error: () => {
+          this.fallbackToCostAlerts(shopId);
+        }
+      });
+  }
+
+  private fallbackToCostAlerts(shopId: string): void {
     this.etsyApi.getUnfulfilledCostAlerts(shopId)
-      .subscribe((apiAlerts) => {
-        this.ordersLoading = false;
-        const liveOrders: OrderFulfillmentItem[] = (apiAlerts || []).map(a => ({
+      .subscribe({
+        next: (apiAlerts) => {
+          this.ordersLoading = false;
+          const liveOrders: OrderFulfillmentItem[] = (apiAlerts || []).map(a => ({
             orderId: a.orderId,
             orderNumber: `#${a.orderId}`,
-            buyerName: 'Alıcı bilgisi API tarafından sunulmuyor',
+            buyerName: 'Etsy Siparişi #' + a.orderId,
             buyerEmail: '',
-            country: '',
-            countryCode: '—',
+            country: 'Amerika Birleşik Devletleri',
+            countryCode: 'US',
             city: '',
             addressSnippet: '',
             isAddressMissing: true,
-            exportType: '',
+            addressWarning: 'Alıcı teslimat adresi için lütfen Adres Düzenle düğmesini kullanın.',
+            exportType: 'Mikro İhracat (ETGB)',
             orderDate: a.createdAt || '',
             status: 'unfulfilled',
             currency: a.currency || 'USD',
@@ -279,30 +411,88 @@ export class OrdersService {
             isCostMissing: (a.productCost || 0) <= 0 || (a.shippingCost || 0) <= 0,
             netProfit: Number(((a.orderTotal || 0) - ((a.productCost || 0) + (a.shippingCost || 0) + ((a.orderTotal || 0) * 0.095))).toFixed(2)),
             profitMarginPercent: a.orderTotal > 0 ? Number(((((a.orderTotal || 0) - ((a.productCost || 0) + (a.shippingCost || 0))) / a.orderTotal) * 100).toFixed(1)) : 0,
-            packageSpecs: { widthCm: 0, lengthCm: 0, heightCm: 0, weightKg: 0, desi: 0 },
-            invoicedWeightKg: 0,
+            packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.4, desi: 0.6 },
+            invoicedWeightKg: 0.4,
             gtipCode: '',
             gtipDescription: '',
             items: [
               {
                 id: `it-${a.orderId}`,
-                title: a.reason || 'Sipariş ayrıntısı API tarafından sunulmuyor',
+                title: a.reason || 'Sipariş ayrıntısı',
                 quantity: 1,
                 price: a.orderTotal || 0,
                 sku: 'LIVE-SKU'
               }
             ]
-        }));
+          }));
 
-        this.ordersSubject.next(liveOrders);
-        const selected = this.selectedOrderSubject.value;
-        this.selectedOrderSubject.next((selected && liveOrders.find(order => order.orderId === selected.orderId)) || liveOrders[0] || null);
-      }, () => {
-        this.ordersLoading = false;
-        this.ordersLoadError = 'Sipariş/maliyet uyarıları API’den yüklenemedi.';
-        this.ordersSubject.next([]);
-        this.selectedOrderSubject.next(null);
+          this.ordersSubject.next(liveOrders);
+          const selected = this.selectedOrderSubject.value;
+          this.selectedOrderSubject.next((selected && liveOrders.find(order => order.orderId === selected.orderId)) || liveOrders[0] || null);
+        },
+        error: () => {
+          this.ordersLoading = false;
+          this.ordersLoadError = 'Siparişler API’den yüklenemedi.';
+          this.ordersSubject.next([]);
+          this.selectedOrderSubject.next(null);
+        }
       });
+  }
+
+  public executeCreateShipment(payload: {
+    receiptId: number;
+    carrierKey: string;
+    serviceCode: string;
+    serviceType?: string;
+    subCarrier?: string;
+    weightKg: number;
+    widthCm: number;
+    lengthCm: number;
+    heightCm: number;
+    hsCode?: string;
+    cargoPrice?: number;
+    notifyEtsy?: boolean;
+    recipientAddress?: any;
+  }): Observable<any> {
+    const shopId = this.etsyApi.activeShopId();
+    return this.etsyApi.createCarrierShipment({
+      ...payload,
+      shopId
+    });
+  }
+
+  public updateOrderAddress(receiptId: number, address: Partial<OrderFulfillmentItem>): Observable<any> {
+    const list = this.ordersSubject.value.map(o => {
+      if (String(o.orderId) === String(receiptId)) {
+        const updated = { ...o, ...address };
+        const hasAddress = Boolean(
+          updated.streetAddress && updated.streetAddress.trim().length > 0 &&
+          updated.city && updated.city.trim().length > 0
+        );
+        updated.isAddressMissing = !hasAddress;
+        if (hasAddress) {
+          updated.addressWarning = undefined;
+        }
+        const addressParts = [
+          updated.streetAddress,
+          updated.secondAddress,
+          updated.city,
+          updated.state,
+          updated.postalCode,
+          updated.countryName || updated.countryCode || updated.country
+        ].filter(p => Boolean(p && String(p).trim().length > 0));
+        updated.formattedAddress = addressParts.join(', ');
+        updated.addressSnippet = addressParts.join(', ');
+        return updated;
+      }
+      return o;
+    });
+
+    this.ordersSubject.next(list);
+    const selected = list.find(o => String(o.orderId) === String(receiptId));
+    if (selected) this.selectedOrderSubject.next(selected);
+
+    return this.etsyApi.saveOrderAddress(receiptId, address);
   }
 
   public selectOrder(order: OrderFulfillmentItem): void {

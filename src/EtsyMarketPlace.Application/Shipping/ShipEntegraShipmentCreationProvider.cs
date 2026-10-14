@@ -498,6 +498,32 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
     private async Task<string?> TryRefreshTokenAsync(ShipEntegraSettings settings, CancellationToken cancellationToken)
     {
+        // 0) API Anahtarları (Client ID & Client Secret) ile resmi token alma:
+        if (_apiClient != null && !string.IsNullOrWhiteSpace(settings.ApiKey) && !string.IsNullOrWhiteSpace(settings.ApiSecret))
+        {
+            try
+            {
+                var tokens = await _apiClient.AuthenticateWithClientCredentialsAsync(settings.ApiKey, settings.ApiSecret, cancellationToken);
+                if (tokens != null && !string.IsNullOrWhiteSpace(tokens.AccessToken))
+                {
+                    settings.BearerToken = tokens.AccessToken;
+                    settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                    if (!string.IsNullOrWhiteSpace(tokens.RefreshToken))
+                    {
+                        settings.RefreshToken = tokens.RefreshToken;
+                        settings.RefreshTokenLastUpdatedUtc = DateTime.UtcNow;
+                    }
+
+                    ShipEntegraSettingsStore.Save(settings);
+                    return tokens.AccessToken;
+                }
+            }
+            catch (Exception caught)
+            {
+                AppLog.Swallowed(caught, "ShipEntegraShipmentCreationProvider.TryRefreshTokenAsync.ClientCredentials");
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(settings.SavedEmail))
         {
             return null;

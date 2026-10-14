@@ -424,6 +424,33 @@ export class EtsyApiService {
       `${this.API_BASE}/api/etsy/orders/unfulfilled-cost-alerts?shopId=${id}`);
   }
 
+  /** Canlı Etsy API: Alıcı teslimat adresleri ve ürün satırları ile birlikte sipariş kuyruğunu getirir. */
+  getFulfillmentQueue(shopId?: string, lookbackDays: number = 45, wasShipped?: boolean): Observable<{ count: number; results: any[] }> {
+    const id = shopId || this.activeShopId();
+    let url = `${this.API_BASE}/api/etsy/orders/fulfillment-queue?shopId=${id}&lookbackDays=${lookbackDays}`;
+    if (wasShipped !== undefined && wasShipped !== null) {
+      url += `&wasShipped=${wasShipped}`;
+    }
+    return this.http.get<{ count: number; results: any[] }>(url);
+  }
+
+  /** Alıcı adresini kalıcı SQLite deposuna kaydeder. */
+  saveOrderAddress(receiptId: number, address: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/save-address?receiptId=${receiptId}`, address);
+  }
+
+  /** Seçilen kargo platformunda gönderi ve takip kodu oluşturur. */
+  createCarrierShipment(payload: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/create-shipment`, payload);
+  }
+
+  /** Kargo platformu giriş ve API kimlik bilgilerini doğrular ve kaydeder. */
+  connectCarrier(payload: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/connect-carrier`, payload);
+  }
+
+
+
   getFinancialPerformance(period: 'today' | 'this_month' | 'last_month' = 'this_month'): Observable<FinancialPerformanceDto> {
     return this.http.get<FinancialPerformanceDto>(
       `${this.API_BASE}/api/etsy/financial/performance?shopId=${this.activeShopId()}&period=${period}`);

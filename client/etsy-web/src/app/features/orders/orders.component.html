@@ -228,14 +228,59 @@
                 </div>
               </div>
               <div class="export-mode-tag">
-                {{ selectedOrder.exportType || 'IOSS yok — standart ihracat' }}
+                {{ selectedOrder.exportType || 'Standart ihracat' }}
               </div>
             </div>
 
-            <!-- Address Warning Alert -->
-            <div *ngIf="selectedOrder.isAddressMissing || selectedOrder.addressWarning" class="address-warning-banner">
-              <span class="warning-icon">⚠️</span>
-              <span>{{ selectedOrder.addressWarning || 'Alıcı adresi eksik! Aras Global gönderisi için bilgileri tamamlayın.' }}</span>
+            <!-- Tracking & Shipped Status Banner if already created -->
+            <div *ngIf="selectedOrder.trackingNumber" class="shipment-created-banner">
+              <span class="shipped-badge">✅ GÖNDERİLDİ</span>
+              <span class="tracking-code-info">Takip No: <strong>{{ selectedOrder.trackingNumber }}</strong> ({{ selectedOrder.carrier || 'Kargo' }})</span>
+              <a *ngIf="selectedOrder.labelUrl" [href]="selectedOrder.labelUrl" target="_blank" class="btn-download-label-link">📄 Etiketi İndir / Aç</a>
+            </div>
+
+            <!-- Recipient Delivery Address Card & Edit Button -->
+            <div class="delivery-address-card">
+              <div class="address-card-header">
+                <div class="address-header-left">
+                  <span class="address-icon">📍</span>
+                  <span class="address-title">ALICI TESLİMAT ADRESİ</span>
+                  <span *ngIf="selectedOrder.isAddressMissing" class="address-status-pill warn">Adres Eksik</span>
+                  <span *ngIf="!selectedOrder.isAddressMissing" class="address-status-pill ok">Doğrulandı</span>
+                </div>
+                <button type="button" class="btn-edit-address" (click)="openAddressModal()" title="Alıcı ve Teslimat Adresini Güncelle">
+                  ✏️ Adresi Düzenle
+                </button>
+              </div>
+
+              <div class="address-card-body" *ngIf="!selectedOrder.isAddressMissing">
+                <div class="addr-row">
+                  <span class="addr-label">Alıcı:</span>
+                  <span class="addr-val font-semibold">{{ selectedOrder.buyerName }}</span>
+                  <span class="addr-phone" *ngIf="selectedOrder.phone">📞 {{ selectedOrder.phone }}</span>
+                  <span class="addr-email" *ngIf="selectedOrder.buyerEmail">✉️ {{ selectedOrder.buyerEmail }}</span>
+                </div>
+                <div class="addr-row">
+                  <span class="addr-label">Cadde / Sokak:</span>
+                  <span class="addr-val">{{ selectedOrder.streetAddress }}</span>
+                  <span class="addr-sub" *ngIf="selectedOrder.secondAddress">({{ selectedOrder.secondAddress }})</span>
+                </div>
+                <div class="addr-row">
+                  <span class="addr-label">Şehir / Eyalet:</span>
+                  <span class="addr-val">{{ selectedOrder.city }}<span *ngIf="selectedOrder.state">, {{ selectedOrder.state }}</span> {{ selectedOrder.postalCode }}</span>
+                </div>
+                <div class="addr-row">
+                  <span class="addr-label">Ülke:</span>
+                  <span class="addr-val">{{ selectedOrder.country }} ({{ selectedOrder.countryCode }})</span>
+                  <span *ngIf="selectedOrder.iossNumber" class="ioss-pill">IOSS: {{ selectedOrder.iossNumber }}</span>
+                </div>
+              </div>
+
+              <!-- Address Warning Alert -->
+              <div *ngIf="selectedOrder.isAddressMissing || selectedOrder.addressWarning" class="address-warning-banner">
+                <span class="warning-icon">⚠️</span>
+                <span>{{ selectedOrder.addressWarning || 'Alıcı adresi eksik! Kargo oluşturmak için lütfen Adresi Düzenle düğmesine tıklayın.' }}</span>
+              </div>
             </div>
           </div>
 
@@ -629,7 +674,39 @@
               </div>
             </div>
 
-            <div class="form-group">
+            <!-- SHIPENTEGRA SPECIFIC CLIENT ID & SECRET -->
+            <div *ngIf="activeModalCarrier?.id === 'shipentegra'" class="shipentegra-credentials-section">
+              <div class="jwt-helper-guide" style="margin-bottom: 14px;">
+                <div class="guide-title">
+                  <span>🚀</span> <strong>ShipEntegra Public API Entegrasyonu</strong>
+                </div>
+                <p class="guide-text">
+                  Canlı kargo teklifleri ve tek tıkla gönderi oluşturma için panelden (<code>app.shipentegra.com/integrations</code>) aldığınız Client ID ve Client Secret anahtarları otomatik eşleştirilmiştir.
+                </p>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Client ID (API Key):</label>
+                <input type="text" [(ngModel)]="seApiKey" class="form-control" placeholder="Client ID girin..." />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">Client Secret (API Secret):</label>
+                <input type="password" [(ngModel)]="seApiSecret" class="form-control" placeholder="••••••••••••••••" />
+              </div>
+
+              <div class="form-group">
+                <label class="form-label">İsteğe Bağlı Session / Bearer Token:</label>
+                <textarea 
+                  [(ngModel)]="modalTokenInput" 
+                  rows="2" 
+                  placeholder="Opsiyonel: Doğrudan API Token'ı (DevTools Authorization header)..." 
+                  class="form-control modal-textarea"></textarea>
+              </div>
+            </div>
+
+            <!-- OTHER CARRIERS TOKEN INPUT -->
+            <div *ngIf="activeModalCarrier?.id !== 'shipentegra'" class="form-group">
               <label class="form-label">Bearer Token / Session Cookie / API Key:</label>
               <textarea 
                 [(ngModel)]="modalTokenInput" 
@@ -656,10 +733,11 @@
             </div>
 
             <div class="modal-actions-row">
-              <button type="button" class="btn-test-session" (click)="testCarrierConnection()">
-                ⚡ Bağlantıyı Test Et
+              <button type="button" class="btn-test-session" [disabled]="isConnectingCarrier" (click)="testCarrierConnection()">
+                <span *ngIf="!isConnectingCarrier">⚡ Bağlantıyı Test Et</span>
+                <span *ngIf="isConnectingCarrier">⏳ Test Ediliyor...</span>
               </button>
-              <button type="button" class="btn-save-session" (click)="saveCarrierSession()">
+              <button type="button" class="btn-save-session" [disabled]="isConnectingCarrier" (click)="saveCarrierSession()">
                 💾 Oturumu Kaydet & Bağlan
               </button>
             </div>
@@ -871,4 +949,86 @@
         </div>
       </div>
 
-    </div>
+    
+      <!-- MODAL 5: ADRES DÜZENLEME (ADDRESS EDIT MODAL) -->
+      <div class="modal-overlay" *ngIf="isAddressModalOpen" (click)="closeAddressModal()">
+        <div class="glass-modal address-modal-box" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="modal-title-with-logo">
+              <span class="modal-icon" style="font-size: 1.5rem;">📍</span>
+              <div>
+                <h3 class="modal-title">Alıcı Teslimat Adresini Düzenle</h3>
+                <span class="modal-sub">Etsy Siparişi #{{ selectedOrder?.orderNumber }} Alıcı & Gümrük Bilgileri</span>
+              </div>
+            </div>
+            <button class="btn-close-modal" (click)="closeAddressModal()">✕</button>
+          </div>
+
+          <div class="modal-body address-edit-body">
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Alıcı Adı Soyadı *</label>
+                <input type="text" [(ngModel)]="editAddressModel.buyerName" class="form-control" placeholder="Ad Soyad" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Telefon Numarası</label>
+                <input type="text" [(ngModel)]="editAddressModel.phone" class="form-control" placeholder="+1 555..." />
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">E-posta Adresi</label>
+                <input type="email" [(ngModel)]="editAddressModel.buyerEmail" class="form-control" placeholder="musteri@ornek.com" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">IOSS Numarası (Varsa)</label>
+                <input type="text" [(ngModel)]="editAddressModel.iossNumber" class="form-control" placeholder="IM..." />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Adres Satırı 1 (Cadde, Sokak, Kapı No) *</label>
+              <input type="text" [(ngModel)]="editAddressModel.streetAddress" class="form-control" placeholder="Örn: 742 Evergreen Terrace" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Adres Satırı 2 (Daire, Kat, Blok - İsteğe bağlı)</label>
+              <input type="text" [(ngModel)]="editAddressModel.secondAddress" class="form-control" placeholder="Apt 4B" />
+            </div>
+
+            <div class="form-row-3">
+              <div class="form-group">
+                <label class="form-label">Şehir *</label>
+                <input type="text" [(ngModel)]="editAddressModel.city" class="form-control" placeholder="Springfield" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Eyalet / Bölge</label>
+                <input type="text" [(ngModel)]="editAddressModel.state" class="form-control" placeholder="OR" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Posta Kodu *</label>
+                <input type="text" [(ngModel)]="editAddressModel.postalCode" class="form-control" placeholder="97477" />
+              </div>
+            </div>
+
+            <div class="form-row-2">
+              <div class="form-group">
+                <label class="form-label">Ülke *</label>
+                <input type="text" [(ngModel)]="editAddressModel.country" class="form-control" placeholder="Amerika Birleşik Devletleri" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Ülke Kodu (ISO-2) *</label>
+                <input type="text" [(ngModel)]="editAddressModel.countryCode" class="form-control" placeholder="US" maxlength="2" style="text-transform: uppercase;" />
+              </div>
+            </div>
+
+            <div class="modal-actions-row" style="margin-top: 16px; display: flex; gap: 10px; justify-content: flex-end;">
+              <button type="button" class="btn-cancel-modal" (click)="closeAddressModal()">İptal</button>
+              <button type="button" class="btn-save-session" (click)="saveEditedAddress()">💾 Adresi Kaydet</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+</div>

@@ -437,6 +437,76 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         };
     }
 
+    /// <summary>
+    /// ShipEntegra Geliştirici API Anahtarları (Client ID ve Client Secret) ile resmi token ucundan token alır.
+    /// </summary>
+    public async Task<ShipEntegraAuthTokens?> AuthenticateWithClientCredentialsAsync(
+        string clientId,
+        string clientSecret,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+        {
+            return null;
+        }
+
+        var endpoints = new[]
+        {
+            "https://publicapi.shipentegra.com/v1/auth/token",
+            "https://api.shipentegra.com/v1/auth/token"
+        };
+
+        var payload = new
+        {
+            clientId = clientId.Trim(),
+            clientSecret = clientSecret.Trim()
+        };
+        var jsonContent = JsonSerializer.Serialize(payload);
+
+        foreach (var endpoint in endpoints)
+        {
+            try
+            {
+                using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
+                req.Headers.TryAddWithoutValidation("Origin", "https://app.shipentegra.com");
+                req.Headers.TryAddWithoutValidation("Referer", "https://app.shipentegra.com/");
+                req.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                using var res = await _httpClient.SendAsync(req, cancellationToken);
+                var body = await res.Content.ReadAsStringAsync(cancellationToken);
+                if (!res.IsSuccessStatusCode)
+                {
+                    continue;
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("data", out var dataEl))
+                {
+                    string? access = null;
+                    string? refresh = null;
+                    if (dataEl.TryGetProperty("accessToken", out var accEl)) access = accEl.GetString();
+                    if (dataEl.TryGetProperty("refreshToken", out var refEl)) refresh = refEl.GetString();
+
+                    if (!string.IsNullOrWhiteSpace(access))
+                    {
+                        return new ShipEntegraAuthTokens
+                        {
+                            AccessToken = access,
+                            RefreshToken = refresh ?? string.Empty
+                        };
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLog.Swallowed(ex, "ShipEntegraApiClient.AuthenticateWithClientCredentialsAsync");
+            }
+        }
+
+        return null;
+    }
+
+
     public static string CleanToken(string? rawToken)
     {
         if (string.IsNullOrWhiteSpace(rawToken)) return string.Empty;
