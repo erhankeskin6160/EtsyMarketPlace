@@ -1168,3 +1168,26 @@
 .kw-gold-name { color: #f1f5f9; font-weight: 600; flex: 1; }
 .kw-gold-meta { color: #64748b; font-size: 0.72rem; }
 .kw-hint { font-size: 0.78rem; color: #64748b; }
+
+
+/* Faz 1: Takip edilen kelimeler (snapshot) */
+.tracked-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.tracked-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.tracked-main { display: flex; flex-direction: column; min-width: 170px; flex: 1; }
+.tracked-kw { color: #fff; font-weight: 700; font-size: 0.88rem; }
+.tracked-date { color: #64748b; font-size: 0.72rem; }
+.tracked-metrics { display: flex; flex-wrap: wrap; gap: 12px; font-size: 0.78rem; color: #94a3b8; }
+.tracked-metric b { color: #f1f5f9; }
+.tracked-actions { display: flex; gap: 6px; margin-left: auto; }
+.btn-apply-kw.danger { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); color: #f87171; }
+.delta-up { color: #34d399; font-size: 0.72rem; font-weight: 700; margin-left: 4px; }
+.delta-down { color: #f87171; font-size: 0.72rem; font-weight: 700; margin-left: 4px; }
