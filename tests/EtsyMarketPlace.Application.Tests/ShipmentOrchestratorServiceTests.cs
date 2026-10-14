@@ -143,6 +143,58 @@ public sealed class ShipmentOrchestratorServiceTests
     }
 
     [Fact]
+    public async Task CreateShipmentAsync_WhenRecipientAddressUsesJsonAliases_SuccessfullyBindsAndCreatesShipment()
+    {
+        // Arrange
+        var fakeProvider = new FakeShipmentCreationProvider();
+        var manager = new ShipmentCreationManager(new[] { fakeProvider });
+        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+
+        var orchestrator = new ShipmentOrchestratorService(manager, fakeLogisticsApi);
+
+        string jsonPayload = """
+        {
+            "receiptId": 303,
+            "shopId": "53236321",
+            "carrierKey": "shipentegra",
+            "notifyEtsy": false,
+            "recipientAddress": {
+                "name": "Alias Buyer",
+                "first_line": "789 Alias Rd",
+                "second_line": "Suite 2",
+                "city": "Denver",
+                "state": "CO",
+                "zip": "80201",
+                "country_iso": "US",
+                "phone": "+15559876543",
+                "email": "alias@test.com"
+            }
+        }
+        """;
+
+        var command = System.Text.Json.JsonSerializer.Deserialize<CreateCarrierShipmentCommand>(
+            jsonPayload,
+            new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+        Assert.NotNull(command);
+        Assert.NotNull(command.RecipientAddress);
+        Assert.Equal("Alias Buyer", command.RecipientAddress.BuyerName);
+        Assert.Equal("789 Alias Rd", command.RecipientAddress.StreetAddress);
+        Assert.Equal("Suite 2", command.RecipientAddress.SecondAddress);
+        Assert.Equal("80201", command.RecipientAddress.PostalCode);
+        Assert.Equal("US", command.RecipientAddress.CountryCode);
+        Assert.Equal("alias@test.com", command.RecipientAddress.BuyerEmail);
+
+        // Act
+        var result = await orchestrator.CreateShipmentAsync(command);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.True(result.Success);
+        Assert.Equal("1Z9999999999999999", result.TrackingNumber);
+    }
+
+    [Fact]
     public async Task ConnectCarrierAsync_SavesShipEntegraSettings()
     {
         // Arrange

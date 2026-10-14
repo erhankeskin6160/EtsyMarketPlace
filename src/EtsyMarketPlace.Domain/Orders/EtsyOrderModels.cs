@@ -2,6 +2,7 @@ namespace EtsyMarketPlace.Domain.Orders;
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 /// <summary>
 /// Etsy sipariş öğesi (ürün) detayları.
@@ -28,17 +29,79 @@ public sealed class EtsyOrderFulfillmentItem
 {
     public long ReceiptId { get; set; }
     public string OrderNumber => $"#{ReceiptId}";
+
+    [JsonPropertyName("buyerName")]
     public string BuyerName { get; set; } = string.Empty;
+
+    [JsonPropertyName("name")]
+    public string? NameAlias
+    {
+        get => BuyerName;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(BuyerName)) BuyerName = value.Trim(); }
+    }
+
+    [JsonPropertyName("buyerEmail")]
     public string BuyerEmail { get; set; } = string.Empty;
+
+    [JsonPropertyName("email")]
+    public string? EmailAlias
+    {
+        get => BuyerEmail;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(BuyerEmail)) BuyerEmail = value.Trim(); }
+    }
+
+    [JsonPropertyName("streetAddress")]
     public string StreetAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("first_line")]
+    public string? FirstLineAlias
+    {
+        get => StreetAddress;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(StreetAddress)) StreetAddress = value.Trim(); }
+    }
+
+    [JsonPropertyName("secondAddress")]
     public string SecondAddress { get; set; } = string.Empty;
+
+    [JsonPropertyName("second_line")]
+    public string? SecondLineAlias
+    {
+        get => SecondAddress;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(SecondAddress)) SecondAddress = value.Trim(); }
+    }
+
+    [JsonPropertyName("city")]
     public string City { get; set; } = string.Empty;
+
+    [JsonPropertyName("state")]
     public string State { get; set; } = string.Empty;
+
+    [JsonPropertyName("postalCode")]
     public string PostalCode { get; set; } = string.Empty;
+
+    [JsonPropertyName("zip")]
+    public string? ZipAlias
+    {
+        get => PostalCode;
+        set { if (!string.IsNullOrWhiteSpace(value) && string.IsNullOrWhiteSpace(PostalCode)) PostalCode = value.Trim(); }
+    }
+
+    [JsonPropertyName("countryCode")]
     public string CountryCode { get; set; } = "US";
+
+    [JsonPropertyName("country_iso")]
+    public string? CountryIsoAlias
+    {
+        get => CountryCode;
+        set { if (!string.IsNullOrWhiteSpace(value)) CountryCode = value.Trim().ToUpperInvariant(); }
+    }
+
     public string CountryName { get; set; } = string.Empty;
     public bool HasState { get; set; } = false;
+
+    [JsonPropertyName("phone")]
     public string Phone { get; set; } = string.Empty;
+
     public bool IsAddressMissing { get; set; } = false;
     public string AddressWarning { get; set; } = string.Empty;
 

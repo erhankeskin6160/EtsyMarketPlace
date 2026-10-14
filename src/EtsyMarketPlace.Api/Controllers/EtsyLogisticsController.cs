@@ -77,14 +77,27 @@ public class EtsyLogisticsController : BaseApiController
             return BadRequest(new { success = false, message = "Geçersiz gönderi oluşturma isteği." });
         }
 
-        command.ShopId = ResolveShopId(command.ShopId, _config);
-        var result = await _orchestratorService.CreateShipmentAsync(command, cancellationToken);
-        if (!result.Success)
+        try
         {
-            return BadRequest(result);
-        }
+            command.ShopId = ResolveShopId(command.ShopId, _config);
+            var result = await _orchestratorService.CreateShipmentAsync(command, cancellationToken);
+            if (!result.Success)
+            {
+                return BadRequest(result);
+            }
 
-        return Ok(result);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new CreateCarrierShipmentResult
+            {
+                Success = false,
+                ReceiptId = command.ReceiptId,
+                CarrierKey = command.CarrierKey,
+                ErrorMessage = $"Gönderi oluşturulurken sunucu hatası oluştu: {ex.Message}"
+            });
+        }
     }
 
     [HttpPost("shipping/connect-carrier")]

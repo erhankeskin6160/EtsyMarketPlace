@@ -50,12 +50,41 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             };
         }
 
-        // Alıcı adresi komut ile gelmediyse sipariş kuyruğundan çek
+        // Alıcı adresi komut ile gelmediyse veya eksikse sipariş kuyruğundan çek ve tamamla
         var order = command.RecipientAddress;
-        if (order == null && _fulfillmentService != null && !string.IsNullOrWhiteSpace(command.ShopId))
+        if (_fulfillmentService != null && !string.IsNullOrWhiteSpace(command.ShopId))
         {
-            var queue = await _fulfillmentService.GetFulfillmentQueueAsync(command.ShopId, 90, null, cancellationToken);
-            order = queue.FirstOrDefault(o => o.ReceiptId == command.ReceiptId);
+            if (order == null || string.IsNullOrWhiteSpace(order.BuyerName) || string.IsNullOrWhiteSpace(order.StreetAddress))
+            {
+                try
+                {
+                    var queue = await _fulfillmentService.GetFulfillmentQueueAsync(command.ShopId, 90, null, cancellationToken);
+                    var queueOrder = queue?.FirstOrDefault(o => o.ReceiptId == command.ReceiptId);
+                    if (queueOrder != null)
+                    {
+                        if (order == null)
+                        {
+                            order = queueOrder;
+                        }
+                        else
+                        {
+                            if (string.IsNullOrWhiteSpace(order.BuyerName)) order.BuyerName = queueOrder.BuyerName;
+                            if (string.IsNullOrWhiteSpace(order.StreetAddress)) order.StreetAddress = queueOrder.StreetAddress;
+                            if (string.IsNullOrWhiteSpace(order.SecondAddress)) order.SecondAddress = queueOrder.SecondAddress;
+                            if (string.IsNullOrWhiteSpace(order.City)) order.City = queueOrder.City;
+                            if (string.IsNullOrWhiteSpace(order.State)) order.State = queueOrder.State;
+                            if (string.IsNullOrWhiteSpace(order.PostalCode)) order.PostalCode = queueOrder.PostalCode;
+                            if (string.IsNullOrWhiteSpace(order.CountryCode) || order.CountryCode == "US") order.CountryCode = queueOrder.CountryCode;
+                            if (string.IsNullOrWhiteSpace(order.Phone)) order.Phone = queueOrder.Phone;
+                            if (string.IsNullOrWhiteSpace(order.BuyerEmail)) order.BuyerEmail = queueOrder.BuyerEmail;
+                            if (string.IsNullOrWhiteSpace(order.IossNumber)) order.IossNumber = queueOrder.IossNumber;
+                            if (order.Items == null || order.Items.Count == 0) order.Items = queueOrder.Items;
+                            if (order.TotalPrice <= 0) order.TotalPrice = queueOrder.TotalPrice;
+                        }
+                    }
+                }
+                catch { }
+            }
         }
 
         if (order == null)
@@ -83,7 +112,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             SelectedServiceCode = command.ServiceCode,
             SelectedSubCarrier = !string.IsNullOrWhiteSpace(command.SubCarrier) ? command.SubCarrier : "widect",
             ServiceType = !string.IsNullOrWhiteSpace(command.ServiceType) ? command.ServiceType : "Eco Express",
-            CargoPrice = command.CargoPrice
+            CargoPrice = command.CargoPrice,
+            NotifyEtsy = command.NotifyEtsy
         };
 
         // Kargo platformunda gönderiyi oluştur

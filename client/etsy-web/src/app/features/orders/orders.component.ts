@@ -395,8 +395,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const serviceType = quote?.serviceType || 'Express';
     const subCarrier = quote?.subCarrier || 'FedEx';
 
-    if (carrierKey === 'shiptomore' && !this.selectedOrder.phone?.trim()) {
-      alert('⚠️ Ship to More (FedEx/UPS) uluslararası gümrük beyanı için alıcı telefon numarası zorunludur.\n\nLütfen "Adresi Düzenle" butonuna tıklayarak alıcı telefonunu girin.');
+    if (carrierKey === 'shiptomore' && this.notifyEtsyOnShipment && !this.selectedOrder.phone?.trim()) {
+      alert('⚠️ Canlı Etsy gönderiminde Ship to More (FedEx/UPS) uluslararası gümrük beyanı için alıcı telefon numarası zorunludur.\n\nLütfen "Adresi Düzenle" butonuna tıklayarak alıcı telefonunu girin.');
       this.openAddressModal();
       return;
     }
@@ -422,14 +422,20 @@ export class OrdersComponent implements OnInit, OnDestroy {
       cargoPrice: quote?.priceUsd || this.selectedOrder.shippingCost,
       notifyEtsy: this.notifyEtsyOnShipment,
       recipientAddress: {
+        buyerName: this.selectedOrder.buyerName,
         name: this.selectedOrder.buyerName,
+        streetAddress: this.selectedOrder.streetAddress || '',
         first_line: this.selectedOrder.streetAddress || '',
+        secondAddress: this.selectedOrder.secondAddress || '',
         second_line: this.selectedOrder.secondAddress || '',
         city: this.selectedOrder.city || '',
         state: this.selectedOrder.state || '',
+        postalCode: this.selectedOrder.postalCode || '',
         zip: this.selectedOrder.postalCode || '',
+        countryCode: this.selectedOrder.countryCode || 'US',
         country_iso: this.selectedOrder.countryCode || 'US',
         phone: this.selectedOrder.phone || '',
+        buyerEmail: this.selectedOrder.buyerEmail || '',
         email: this.selectedOrder.buyerEmail || ''
       }
     }).subscribe({
