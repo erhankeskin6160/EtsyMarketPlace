@@ -90,6 +90,7 @@ builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShiptomoreO
 builder.Services.AddSingleton<EtsyMarketPlace.Domain.Orders.IOrderAddressRepository>(sp => new EtsyMarketPlace.Infrastructure.Orders.SqliteOrderAddressRepository(dbPath));
 builder.Services.AddSingleton<EtsyMarketPlace.Application.Orders.EtsyOrderService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Orders.IEtsyOrderFulfillmentService, EtsyMarketPlace.Application.Orders.EtsyOrderFulfillmentService>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.Orders.IAiAddressParserService, EtsyMarketPlace.Infrastructure.Orders.AiAddressParserService>();
 
 builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.ShipmentCreationManager>(sp =>
 {

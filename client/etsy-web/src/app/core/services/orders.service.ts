@@ -500,6 +500,16 @@ export class OrdersService {
     return this.etsyApi.saveOrderAddress(receiptId, address);
   }
 
+  public aiParseAddress(rawAddress: string): Observable<any> {
+    return this.etsyApi.aiParseAddress(rawAddress);
+  }
+
+  public uploadOrdersCsv(file: File): Observable<any> {
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    return this.etsyApi.uploadOrdersCsv(formData);
+  }
+
   public selectOrder(order: OrderFulfillmentItem): void {
     this.selectedOrderSubject.next(order);
   }

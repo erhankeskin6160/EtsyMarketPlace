@@ -83,6 +83,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
     iossNumber: ''
   };
 
+  // AI ADDRESS PARSER & CSV UPLOAD STATE
+  rawAddressInput: string = '';
+  isAiParsing: boolean = false;
+  aiParseSuccessMessage: string | null = null;
+  aiParseErrorMessage: string | null = null;
+  isUploadingCsv: boolean = false;
+  csvUploadSuccessMessage: string | null = null;
+  csvUploadErrorMessage: string | null = null;
+
   isShiptomoreModalOpen: boolean = false;
   stmClientId: string = '';
   stmClientSecret: string = '';
@@ -441,9 +450,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
     });
   }
 
+  formatOrderNumber(num?: string): string {
+    if (!num) return '';
+    return num.startsWith('#') ? num : `#${num}`;
+  }
+
   // --- ADDRESS MODAL ACTIONS ---
   openAddressModal(): void {
     if (!this.selectedOrder) return;
+    this.rawAddressInput = '';
+    this.aiParseSuccessMessage = null;
+    this.aiParseErrorMessage = null;
     this.editAddressModel = {
       buyerName: this.selectedOrder.buyerName || '',
       buyerEmail: this.selectedOrder.buyerEmail || '',
@@ -462,6 +479,73 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   closeAddressModal(): void {
     this.isAddressModalOpen = false;
+    this.rawAddressInput = '';
+    this.aiParseSuccessMessage = null;
+    this.aiParseErrorMessage = null;
+  }
+
+  parseAddressWithAi(): void {
+    if (!this.rawAddressInput || !this.rawAddressInput.trim()) {
+      this.aiParseErrorMessage = 'Lütfen ayrıştırılacak adres metnini yapıştırın.';
+      return;
+    }
+
+    this.isAiParsing = true;
+    this.aiParseErrorMessage = null;
+    this.aiParseSuccessMessage = null;
+
+    this.ordersService.aiParseAddress(this.rawAddressInput).subscribe({
+      next: (res: any) => {
+        this.isAiParsing = false;
+        if (!res) {
+          this.aiParseErrorMessage = 'Yapay zeka adres yanıtı oluşturamadı.';
+          return;
+        }
+
+        if (res.buyerName) this.editAddressModel.buyerName = res.buyerName;
+        if (res.phone) this.editAddressModel.phone = res.phone;
+        if (res.streetAddress) this.editAddressModel.streetAddress = res.streetAddress;
+        if (res.secondAddress) this.editAddressModel.secondAddress = res.secondAddress;
+        if (res.city) this.editAddressModel.city = res.city;
+        if (res.state) this.editAddressModel.state = res.state;
+        if (res.postalCode) this.editAddressModel.postalCode = res.postalCode;
+        if (res.country) this.editAddressModel.country = res.country;
+        if (res.countryCode) this.editAddressModel.countryCode = res.countryCode;
+
+        this.aiParseSuccessMessage = `✨ Adres ${res.source || 'AI'} motoru ile başarıyla ayrıştırıldı ve kutucuklara yerleştirildi!`;
+        setTimeout(() => this.aiParseSuccessMessage = null, 5000);
+      },
+      error: (err: any) => {
+        this.isAiParsing = false;
+        this.aiParseErrorMessage = 'Yapay zeka ayrıştırması başarısız oldu: ' + (err?.error?.message || err?.message || 'Bilinmeyen hata');
+      }
+    });
+  }
+
+  onCsvFileSelected(event: any): void {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+
+    this.isUploadingCsv = true;
+    this.csvUploadSuccessMessage = null;
+    this.csvUploadErrorMessage = null;
+
+    this.ordersService.uploadOrdersCsv(file).subscribe({
+      next: (res: any) => {
+        this.isUploadingCsv = false;
+        this.csvUploadSuccessMessage = `✅ ${res?.count || 0} sipariş adresi CSV'den başarıyla yüklendi ve eşitlendi!`;
+        this.ordersService.loadOrders();
+        setTimeout(() => this.csvUploadSuccessMessage = null, 6000);
+      },
+      error: (err: any) => {
+        this.isUploadingCsv = false;
+        this.csvUploadErrorMessage = 'CSV yükleme hatası: ' + (err?.error?.message || err?.message || 'Bilinmeyen hata');
+        setTimeout(() => this.csvUploadErrorMessage = null, 6000);
+      }
+    });
+
+    // Reset input
+    event.target.value = '';
   }
 
   saveEditedAddress(): void {

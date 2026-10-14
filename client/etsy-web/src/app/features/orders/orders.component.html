@@ -41,6 +41,18 @@
             </span>
           </button>
 
+          <!-- ETSY CSV UPLOAD BUTTON -->
+          <input #csvFileInput type="file" accept=".csv" (change)="onCsvFileSelected($event)" style="display: none;" />
+          <button 
+            class="btn-top-action btn-upload-csv" 
+            (click)="csvFileInput.click()" 
+            [disabled]="isUploadingCsv" 
+            title="Etsy Satıcı Panelinden indirilen sipariş CSV'sini yükleyerek tüm adresleri otomatik doldur">
+            <span>📥</span>
+            <span *ngIf="!isUploadingCsv">Etsy CSV Yükle</span>
+            <span *ngIf="isUploadingCsv">Yükleniyor...</span>
+          </button>
+
           <button class="btn-refresh" (click)="refreshOrders()" title="Siparişleri ve canlı kargo fiyatlarını yenile">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6"></path>
@@ -50,6 +62,14 @@
             Yenile
           </button>
         </div>
+      </div>
+
+      <!-- CSV UPLOAD FEEDBACK TOAST -->
+      <div *ngIf="csvUploadSuccessMessage" class="csv-feedback-toast success">
+        <span>{{ csvUploadSuccessMessage }}</span>
+      </div>
+      <div *ngIf="csvUploadErrorMessage" class="csv-feedback-toast error">
+        <span>{{ csvUploadErrorMessage }}</span>
       </div>
 
       <!-- 2. EXPANDABLE CARRIER ACCOUNTS HUB (CARRIERACCOUNTSHUBCONTROL PARITY) -->
@@ -958,13 +978,48 @@
               <span class="modal-icon" style="font-size: 1.5rem;">📍</span>
               <div>
                 <h3 class="modal-title">Alıcı Teslimat Adresini Düzenle</h3>
-                <span class="modal-sub">Etsy Siparişi #{{ selectedOrder?.orderNumber }} Alıcı & Gümrük Bilgileri</span>
+                <span class="modal-sub">Etsy Siparişi {{ formatOrderNumber(selectedOrder?.orderNumber) }} Alıcı & Gümrük Bilgileri</span>
               </div>
             </div>
             <button class="btn-close-modal" (click)="closeAddressModal()">✕</button>
           </div>
 
           <div class="modal-body address-edit-body">
+            <!-- 1. AI SMART AUTO-PARSER BLOCK -->
+            <div class="ai-address-smart-box">
+              <div class="ai-box-header">
+                <div class="ai-title-row">
+                  <span class="ai-sparkle-badge">🤖 ✨ YAPAY ZEKA İLE OTOMATİK DOLDUR</span>
+                  <span class="ai-sub-desc">Etsy sipariş detayından kopyaladığınız adres metnini buraya yapıştırın; tüm kutucukları anında dolduralım.</span>
+                </div>
+              </div>
+              <div class="ai-box-input-row">
+                <textarea 
+                  [(ngModel)]="rawAddressInput"
+                  class="form-control ai-raw-textarea"
+                  rows="3"
+                  placeholder="Örn: Barbara Yapana&#10;456 Oak Avenue Apt 4B&#10;Los Angeles, CA 90001, United States&#10;Tel: +1 555-0199"></textarea>
+              </div>
+              <div class="ai-box-actions-row">
+                <button 
+                  type="button" 
+                  class="btn-ai-parse" 
+                  [disabled]="isAiParsing || !rawAddressInput"
+                  (click)="parseAddressWithAi()">
+                  <span *ngIf="isAiParsing">⏳ Ayrıştırılıyor...</span>
+                  <span *ngIf="!isAiParsing">✨ Yapay Zeka ile Ayrıştır & Formu Doldur</span>
+                </button>
+                <span *ngIf="aiParseSuccessMessage" class="ai-msg-success">{{ aiParseSuccessMessage }}</span>
+                <span *ngIf="aiParseErrorMessage" class="ai-msg-error">{{ aiParseErrorMessage }}</span>
+              </div>
+            </div>
+
+            <!-- ETSY PII BILDIRIM ROZETI -->
+            <div class="etsy-pii-notice-badge">
+              ℹ️ <strong>Etsy API Güvenlik Kısıtlaması:</strong> Etsy, mağaza API anahtarınız 'Preferred Partner' kategorisinde onaylanana dek alıcı sokak adresini maskelemektedir. Yukarıdaki yapay zeka kutusuna adresi yapıştırarak veya üst menüden Etsy CSV yükleyerek eksiksiz doldurabilirsiniz. Kaydedilen adres kalıcı saklanır.
+            </div>
+
+            <!-- 2. ADDRESS FORM FIELDS -->
             <div class="form-row-2">
               <div class="form-group">
                 <label class="form-label">Alıcı Adı Soyadı *</label>
@@ -972,7 +1027,7 @@
               </div>
               <div class="form-group">
                 <label class="form-label">Telefon Numarası</label>
-                <input type="text" [(ngModel)]="editAddressModel.phone" class="form-control" placeholder="+1 555..." />
+                <input type="text" [(ngModel)]="editAddressModel.phone" class="form-control" placeholder="+1 555 123 4567" />
               </div>
             </div>
 
@@ -989,37 +1044,37 @@
 
             <div class="form-group">
               <label class="form-label">Adres Satırı 1 (Cadde, Sokak, Kapı No) *</label>
-              <input type="text" [(ngModel)]="editAddressModel.streetAddress" class="form-control" placeholder="Örn: 742 Evergreen Terrace" />
+              <input type="text" [(ngModel)]="editAddressModel.streetAddress" class="form-control" placeholder="Cadde, sokak, mahalle ve bina/kapı numarası" />
             </div>
 
             <div class="form-group">
               <label class="form-label">Adres Satırı 2 (Daire, Kat, Blok - İsteğe bağlı)</label>
-              <input type="text" [(ngModel)]="editAddressModel.secondAddress" class="form-control" placeholder="Apt 4B" />
+              <input type="text" [(ngModel)]="editAddressModel.secondAddress" class="form-control" placeholder="Daire, kat, blok, suite vb." />
             </div>
 
             <div class="form-row-3">
               <div class="form-group">
                 <label class="form-label">Şehir *</label>
-                <input type="text" [(ngModel)]="editAddressModel.city" class="form-control" placeholder="Springfield" />
+                <input type="text" [(ngModel)]="editAddressModel.city" class="form-control" placeholder="Şehir / İlçe" />
               </div>
               <div class="form-group">
                 <label class="form-label">Eyalet / Bölge</label>
-                <input type="text" [(ngModel)]="editAddressModel.state" class="form-control" placeholder="OR" />
+                <input type="text" [(ngModel)]="editAddressModel.state" class="form-control" placeholder="Eyalet kodu (Örn: CA, NY, TX)" />
               </div>
               <div class="form-group">
                 <label class="form-label">Posta Kodu *</label>
-                <input type="text" [(ngModel)]="editAddressModel.postalCode" class="form-control" placeholder="97477" />
+                <input type="text" [(ngModel)]="editAddressModel.postalCode" class="form-control" placeholder="Posta kodu" />
               </div>
             </div>
 
             <div class="form-row-2">
               <div class="form-group">
                 <label class="form-label">Ülke *</label>
-                <input type="text" [(ngModel)]="editAddressModel.country" class="form-control" placeholder="Amerika Birleşik Devletleri" />
+                <input type="text" [(ngModel)]="editAddressModel.country" class="form-control" placeholder="Ülke adı" />
               </div>
               <div class="form-group">
                 <label class="form-label">Ülke Kodu (ISO-2) *</label>
-                <input type="text" [(ngModel)]="editAddressModel.countryCode" class="form-control" placeholder="US" maxlength="2" style="text-transform: uppercase;" />
+                <input type="text" [(ngModel)]="editAddressModel.countryCode" class="form-control" placeholder="US, DE, GB vb." maxlength="2" style="text-transform: uppercase;" />
               </div>
             </div>
 
@@ -1028,6 +1083,7 @@
               <button type="button" class="btn-save-session" (click)="saveEditedAddress()">💾 Adresi Kaydet</button>
             </div>
           </div>
+
         </div>
       </div>
 

@@ -439,6 +439,16 @@ export class EtsyApiService {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/save-address?receiptId=${receiptId}`, address);
   }
 
+  /** Ham adres metnini yapay zeka ile ayrıştırıp form alanlarına dönüştürür. */
+  aiParseAddress(rawAddress: string): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/ai-parse-address`, { rawAddress });
+  }
+
+  /** Etsy sipariş CSV dosyasını sunucuya yükleyerek adresleri toplu günceller. */
+  uploadOrdersCsv(formData: FormData): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/upload-csv`, formData);
+  }
+
   /** Seçilen kargo platformunda gönderi ve takip kodu oluşturur. */
   createCarrierShipment(payload: any): Observable<any> {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/create-shipment`, payload);

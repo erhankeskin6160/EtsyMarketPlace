@@ -14,13 +14,19 @@ public class EtsyOrdersController : BaseApiController
 {
     private readonly IConfiguration _config;
     private readonly IEtsyOrderFulfillmentService _fulfillmentService;
+    private readonly IAiAddressParserService _aiAddressParserService;
+    private readonly IOrderAddressRepository? _addressRepository;
 
     public EtsyOrdersController(
         IConfiguration config,
-        IEtsyOrderFulfillmentService fulfillmentService)
+        IEtsyOrderFulfillmentService fulfillmentService,
+        IAiAddressParserService aiAddressParserService,
+        IOrderAddressRepository? addressRepository = null)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _fulfillmentService = fulfillmentService ?? throw new ArgumentNullException(nameof(fulfillmentService));
+        _aiAddressParserService = aiAddressParserService ?? throw new ArgumentNullException(nameof(aiAddressParserService));
+        _addressRepository = addressRepository;
     }
 
     [HttpGet("fulfillment-queue")]
@@ -54,5 +60,63 @@ public class EtsyOrdersController : BaseApiController
 
         await _fulfillmentService.SaveOrderAddressAsync(receiptId, updatedAddress, cancellationToken);
         return Ok(new { success = true, message = "Alıcı adresi başarıyla kaydedildi." });
+    }
+
+    [HttpPost("ai-parse-address")]
+    [EndpointSummary("Ham Adres Metnini Yapay Zeka ile Ayrıştırıp Form Alanlarına Dönüştür")]
+    public async Task<IActionResult> AiParseAddress(
+        [FromBody] RawAddressParseRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(request?.RawAddress))
+        {
+            return BadRequest(new { message = "Lütfen ayrıştırılacak adres metnini girin." });
+        }
+
+        var result = await _aiAddressParserService.ParseRawAddressAsync(request.RawAddress, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpPost("upload-csv")]
+    [EndpointSummary("Etsy Sipariş CSV Dosyasını Yükleyerek Adresleri Toplu Olarak Güncelle")]
+    public async Task<IActionResult> UploadOrdersCsv(
+        Microsoft.AspNetCore.Http.IFormFile? file,
+        [FromForm] string? csvText,
+        CancellationToken cancellationToken = default)
+    {
+        string content = string.Empty;
+
+        if (file != null && file.Length > 0)
+        {
+            using var reader = new System.IO.StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8);
+            content = await reader.ReadToEndAsync(cancellationToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(csvText))
+        {
+            content = csvText;
+        }
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return BadRequest(new { message = "Yüklenecek CSV içeriği bulunamadı." });
+        }
+
+        var records = EtsyOrderCsvParser.ParseCsv(content, source: "WebCsvUpload");
+        if (records.Count == 0)
+        {
+            return BadRequest(new { message = "CSV dosyası içinde geçerli Etsy sipariş veya adres kaydı bulunamadı." });
+        }
+
+        if (_addressRepository != null)
+        {
+            await _addressRepository.SaveBatchAsync(records, cancellationToken);
+        }
+
+        return Ok(new
+        {
+            success = true,
+            count = records.Count,
+            message = $"{records.Count} sipariş teslimat adresi CSV'den başarıyla ayrıştırıldı ve kaydedildi."
+        });
     }
 }
