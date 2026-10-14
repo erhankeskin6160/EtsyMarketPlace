@@ -51,244 +51,59 @@ export class MarketResearchComponent implements OnInit {
   searchKeyword = '3D Printed Articulated Dragon';
   limit = 25;
   sortBy = 'market_score';
-  statusText = '9 ilan listelendi. Sıralama: Pazar Puanı';
+  statusText = 'Aramaya hazır — canlı Etsy pazar verisi';
   isLoading = false;
   isGeneratingReport = false;
   aiReport = '';
   showHealthModal = false;
   toastMessage = '';
 
-  avgPriceUsd = 34.80;
-  avgFavorites = 1420;
-  topShopName = 'MythicForgeCrafts';
-  topShopSales = 14820;
-  opportunityScore = 88;
-  totalEstimatedMarketRevenue = 18450;
-  averageEstimatedMonthlySales = 52;
-  topSellerMonthlyRevenue = 3450;
-  topTags: MarketTagFrequencyDto[] = [
-    { tag: '3d printed', count: 9, usagePercentage: 100, wordCount: 2, charLength: 10, isLongTail: true, competitionLevel: 'Yüksek' },
-    { tag: 'desk organizer', count: 8, usagePercentage: 88.9, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Yüksek' },
-    { tag: 'fidget toy', count: 7, usagePercentage: 77.8, wordCount: 2, charLength: 10, isLongTail: true, competitionLevel: 'Yüksek' },
-    { tag: 'articulated dragon', count: 7, usagePercentage: 77.8, wordCount: 2, charLength: 18, isLongTail: true, competitionLevel: 'Yüksek' },
-    { tag: 'gamer gift', count: 6, usagePercentage: 66.7, wordCount: 2, charLength: 10, isLongTail: true, competitionLevel: 'Yüksek' },
-    { tag: 'office decor', count: 5, usagePercentage: 55.6, wordCount: 2, charLength: 12, isLongTail: true, competitionLevel: 'Yüksek' },
-    { tag: 'cable management', count: 4, usagePercentage: 44.4, wordCount: 2, charLength: 16, isLongTail: true, competitionLevel: 'Orta' },
-    { tag: 'mechanical toy', count: 4, usagePercentage: 44.4, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Orta' },
-    { tag: 'steampunk prop', count: 3, usagePercentage: 33.3, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Orta' },
-    { tag: 'fantasy figurine', count: 3, usagePercentage: 33.3, wordCount: 2, charLength: 16, isLongTail: true, competitionLevel: 'Orta' },
-    { tag: 'tabletop rpg', count: 3, usagePercentage: 33.3, wordCount: 2, charLength: 12, isLongTail: true, competitionLevel: 'Orta' },
-    { tag: 'resin print', count: 2, usagePercentage: 22.2, wordCount: 2, charLength: 11, isLongTail: true, competitionLevel: 'Düşük' },
-    { tag: 'cosplay helmet', count: 2, usagePercentage: 22.2, wordCount: 2, charLength: 14, isLongTail: true, competitionLevel: 'Düşük' }
-  ];
+  // NOT: Bu alanlar yalnızca canlı arama yanıtından (kpis) doldurulur;
+  // başlangıç değerleri boştur (sıfır-mock ilkesi).
+  avgPriceUsd = 0;
+  avgFavorites = 0;
+  topShopName = '';
+  topShopSales = 0;
+  opportunityScore = 0;
+  totalEstimatedMarketRevenue = 0;
+  averageEstimatedMonthlySales = 0;
+  topSellerMonthlyRevenue = 0;
+  topTags: MarketTagFrequencyDto[] = [];
+
+  /** Canlı aramada gösterilecek sonuç var mı? (KPI kartları / matris boş-durum denetimi) */
+  get hasResults(): boolean {
+    return this.items.length > 0;
+  }
 
   favSortDesc = true;
   currentImageIndex = 0;
 
-  items: MarketItem[] = [
-    {
-      id: 4188710928,
-      listingRank: 1,
-      title: 'Articulated Crystal Dragon with Moving Wings 3D Print Fidget Toy',
-      priceUsd: 39.50,
-      shopName: 'MythicForgeCrafts',
-      shopSales: 14820,
-      shopUrl: 'https://www.etsy.com/shop/MythicForgeCrafts',
-      listingUrl: 'https://www.etsy.com/listing/4188710928',
-      views: 18450,
-      favorites: 3420,
-      seoScore: 96,
-      marketScore: 94,
-      imageUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300',
-      imageUrls: [
-        'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=600',
-        'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600'
-      ],
-      description: 'Handcrafted high quality articulated crystal dragon with movable wings. Printed using premium dual-color silk PLA on Bambu Lab X1-Carbon. Perfect fantasy gift and fidget desk toy.',
-      reviewCount: 428,
-      reviewAverage: 4.9,
-      quantity: 12,
-      tags: ['crystal dragon', '3d printed dragon', 'fidget toy', 'winged dragon', 'desk decor', 'dnd gift', 'dragon sculpture', 'fantasy beast', 'mythical creature', 'adhd toy', 'bambu lab', 'flexi animal', 'gamer gift']
-    },
-    {
-      id: 4188192041,
-      listingRank: 2,
-      title: 'Minimalist Geometric Self-Watering Planter for Succulents & Cacti',
-      priceUsd: 26.00,
-      shopName: 'Botanical3DPrints',
-      shopSales: 8940,
-      shopUrl: 'https://www.etsy.com/shop/Botanical3DPrints',
-      listingUrl: 'https://www.etsy.com/listing/4188192041',
-      views: 12340,
-      favorites: 2490,
-      seoScore: 92,
-      marketScore: 89,
-      imageUrl: 'https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=300',
-      imageUrls: [
-        'https://images.unsplash.com/photo-1485955900006-10f4d324d411?w=600'
-      ],
-      description: 'Modern geometric self-watering planter pot. Features an internal water reservoir and cotton wick system to keep your succulents and houseplants thriving without root rot.',
-      reviewCount: 265,
-      reviewAverage: 4.8,
-      quantity: 25,
-      tags: ['self watering', 'succulent pot', 'geometric planter', 'minimalist decor', 'indoor planter', '3d printed pot', 'modern planter', 'plant lover gift', 'desktop plant', 'drainage pot', 'eco filament', 'home decor', 'botanical pot']
-    },
-    {
-      id: 4187920145,
-      listingRank: 3,
-      title: 'Steampunk Mechanical Skeleton Gear Desk Clock with Moving Cogs',
-      priceUsd: 89.00,
-      shopName: 'TimeWorksDesign',
-      shopSales: 5120,
-      shopUrl: 'https://www.etsy.com/shop/TimeWorksDesign',
-      listingUrl: 'https://www.etsy.com/listing/4187920145',
-      views: 9820,
-      favorites: 1850,
-      seoScore: 88,
-      marketScore: 86,
-      imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=300',
-      imageUrls: [
-        'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600'
-      ],
-      description: 'Precision 3D printed mechanical steampunk desk clock. Features exposed planetary gears, quartz movement, and rustic metallic antique brass finish.',
-      reviewCount: 180,
-      reviewAverage: 4.7,
-      quantity: 8,
-      tags: ['steampunk clock', 'mechanical clock', 'gear desk clock', 'industrial clock', 'vintage steampunk', '3d printed clock', 'engineer gift', 'skeleton clock', 'rustic home decor', 'mens gift', 'retro desk accessory', 'clockwork art', 'maker design']
-    },
-    {
-      id: 4187299104,
-      listingRank: 4,
-      title: 'Captain Jack Sparrow Functional Replica Compass with Working Needle',
-      priceUsd: 48.50,
-      shopName: 'PiratesTreasureCo',
-      shopSales: 7340,
-      shopUrl: 'https://www.etsy.com/shop/PiratesTreasureCo',
-      listingUrl: 'https://www.etsy.com/listing/4187299104',
-      views: 14200,
-      favorites: 2980,
-      seoScore: 94,
-      marketScore: 91,
-      imageUrl: 'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=300',
-      imageUrls: ['https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600'],
-      description: 'Full sized screen-accurate Jack Sparrow compass replica with rotating dial and weathered faux-leather strap. Hand-painted with acrylic wash.',
-      reviewCount: 310,
-      reviewAverage: 4.9,
-      quantity: 14,
-      tags: ['jack sparrow', 'pirate compass', 'cosplay prop', 'pirates caribbean', 'working compass', 'movie replica', 'leather compass', 'halloween prop', 'ren faire', 'pirate costume', 'dnd artifact', 'prop maker', 'nautical antique']
-    },
-    {
-      id: 4185189201,
-      listingRank: 5,
-      title: 'Arcane Jinx Fishbones Rocket Launcher 1:1 Cosplay Replica Prop',
-      priceUsd: 145.00,
-      shopName: 'ZaunWorkshop',
-      shopSales: 3200,
-      shopUrl: 'https://www.etsy.com/shop/ZaunWorkshop',
-      listingUrl: 'https://www.etsy.com/listing/4185189201',
-      views: 22100,
-      favorites: 4120,
-      seoScore: 90,
-      marketScore: 88,
-      imageUrl: 'https://images.unsplash.com/photo-1563089145-599997674d42?w=300',
-      imageUrls: ['https://images.unsplash.com/photo-1563089145-599997674d42?w=600'],
-      description: 'Life sized Jinx Fishbones rocket launcher. Lightweight hollow PLA build, LED glowing eye sockets, and movable mouth jaw. Perfect for comic con conventions.',
-      reviewCount: 95,
-      reviewAverage: 4.8,
-      quantity: 5,
-      tags: ['jinx cosplay', 'fishbones prop', 'arcane weapon', 'lol rocket launcher', 'cosplay weapon', 'gamer bedroom decor', 'comic con prop', 'league of legends', 'zaun punk', '3d printed weapon', 'led cosplay', 'halloween costume', 'gamer gift']
-    },
-    {
-      id: 4178129840,
-      listingRank: 6,
-      title: 'Fallout Pip-Boy 3000 Mk IV Wearable Bluetooth Smartwatch Dock',
-      priceUsd: 120.00,
-      shopName: 'WastelandArmory',
-      shopSales: 4100,
-      shopUrl: 'https://www.etsy.com/shop/WastelandArmory',
-      listingUrl: 'https://www.etsy.com/listing/4178129840',
-      views: 17800,
-      favorites: 3100,
-      seoScore: 86,
-      marketScore: 84,
-      imageUrl: 'https://images.unsplash.com/photo-1518770660439-4636190af475?w=300',
-      imageUrls: ['https://images.unsplash.com/photo-1518770660439-4636190af475?w=600'],
-      description: 'Wearable Pip Boy 3000 forearm cuff compatible with Apple Watch & Samsung Galaxy Watch. Features working rotating knobs and authentic vault-tec weathered patina.',
-      reviewCount: 140,
-      reviewAverage: 4.6,
-      quantity: 9,
-      tags: ['pip boy', 'fallout prop', 'vault tec', 'wearable armor', 'cosplay cuff', 'apple watch dock', 'gaming gadget', 'post apocalyptic', 'wasteland prop', 'fallout 4', 'gamer cosplay', 'halloween prop', 'scifi cuff']
-    },
-    {
-      id: 4176640192,
-      listingRank: 7,
-      title: 'Lotr Aragorn Crown of Gondor Full Size Wearable Metalized Tiara',
-      priceUsd: 65.00,
-      shopName: 'MiddleEarthArmory',
-      shopSales: 6200,
-      shopUrl: 'https://www.etsy.com/shop/MiddleEarthArmory',
-      listingUrl: 'https://www.etsy.com/listing/4176640192',
-      views: 11200,
-      favorites: 2150,
-      seoScore: 82,
-      marketScore: 80,
-      imageUrl: 'https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=300',
-      imageUrls: ['https://images.unsplash.com/photo-1579783900882-c0d3dad7b119?w=600'],
-      description: 'Coronation crown of King Elessar Telcontar. Printed in silver infused filament with antique black wax rubbing. Padded velvet interior for comfortable wear.',
-      reviewCount: 165,
-      reviewAverage: 4.8,
-      quantity: 11,
-      tags: ['aragorn crown', 'crown of gondor', 'lotr cosplay', 'king crown', 'middle earth tiara', 'wedding crown', 'fantasy tiara', 'lord of the rings', 'medieval armor', 'renaissance fair', 'cosplay armor', 'king elessar', 'fantasy prop']
-    },
-    {
-      id: 4174028911,
-      listingRank: 8,
-      title: 'Ben 10 Classic Omnitrix Watch with Sound & Pop-Up Hologram Dial',
-      priceUsd: 35.00,
-      shopName: 'HeroPropsStudio',
-      shopSales: 9400,
-      shopUrl: 'https://www.etsy.com/shop/HeroPropsStudio',
-      listingUrl: 'https://www.etsy.com/listing/4174028911',
-      views: 15400,
-      favorites: 3320,
-      seoScore: 85,
-      marketScore: 82,
-      imageUrl: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=300',
-      imageUrls: ['https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600'],
-      description: 'Accurate retro cartoon Omnitrix watch. Spring loaded pop-up ring mechanism and green LED glowing core. Adjustable silicone wrist strap included.',
-      reviewCount: 290,
-      reviewAverage: 4.7,
-      quantity: 18,
-      tags: ['omnitrix watch', 'ben 10 toy', 'alien watch', 'cartoon prop', 'nostalgia gift', 'cosplay accessory', 'green led watch', 'kids superhero', 'hero dial', 'retro cartoon', '3d printed toy', 'fidget watch', 'gamer gift']
-    },
-    {
-      id: 4168074902,
-      listingRank: 9,
-      title: 'D&D Mimic Chest Dice Box with Realistic Silicone Sharp Teeth & Tongue',
-      priceUsd: 38.00,
-      shopName: 'DiceHoardCrafts',
-      shopSales: 11500,
-      shopUrl: 'https://www.etsy.com/shop/DiceHoardCrafts',
-      listingUrl: 'https://www.etsy.com/listing/4168074902',
-      views: 19800,
-      favorites: 4200,
-      seoScore: 95,
-      marketScore: 92,
-      imageUrl: 'https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=300',
-      imageUrls: ['https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?w=600'],
-      description: 'Frightening yet cute tabletop RPG mimic treasure chest. Holds up to 5 complete polyhedral dice sets (35 dice). Glossy resin eyes and flexible silicone tongue.',
-      reviewCount: 380,
-      reviewAverage: 4.9,
-      quantity: 20,
-      tags: ['mimic dice box', 'dnd dice chest', 'dice holder', 'tabletop rpg', 'dungeon master gift', 'monstrous chest', 'polyhedral dice', 'dungeons dragons', 'd20 holder', 'pathfinder gift', 'fantasy storage', 'resin teeth', 'gamer desk']
-    }
-  ];
+  items: MarketItem[] = [];
 
   selectedItem?: MarketItem;
 
   ngOnInit(): void {
-    this.selectedItem = this.items[0];
-    this.applySort();
+    const savedKeyword = this.readSavedKeyword();
+    if (savedKeyword) {
+      this.searchKeyword = savedKeyword;
+    }
+    this.onSearch();
+  }
+
+  private readSavedKeyword(): string {
+    try {
+      return localStorage.getItem('etsy.marketResearch.lastKeyword') || '';
+    } catch {
+      return '';
+    }
+  }
+
+  private persistKeyword(keyword: string): void {
+    try {
+      localStorage.setItem('etsy.marketResearch.lastKeyword', keyword);
+    } catch {
+      // localStorage erişilemezse canlı arama akışı sürdürülür
+    }
   }
 
   onSearch(): void {
@@ -297,6 +112,7 @@ export class MarketResearchComponent implements OnInit {
       return;
     }
 
+    this.persistKeyword(this.searchKeyword.trim());
     this.isLoading = true;
     this.statusText = `"${this.searchKeyword}" için Etsy canlı pazar verileri taranıyor...`;
 
@@ -321,6 +137,9 @@ export class MarketResearchComponent implements OnInit {
           this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam bulunan: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()}`;
           this.showToastMsg(`✅ ${this.items.length} ürün ve pazar metriği başarıyla yüklendi.`);
         } else {
+          this.items = [];
+          this.selectedItem = undefined;
+          this.resetKpis();
           this.statusText = `"${this.searchKeyword}" için Etsy'de aktif ilan bulunamadı.`;
           this.showToastMsg('ℹ️ Bu anahtar kelime için aktif Etsy ilanı bulunamadı.');
         }
@@ -332,6 +151,18 @@ export class MarketResearchComponent implements OnInit {
         this.showToastMsg(`🚨 Hata: ${msg}`);
       }
     });
+  }
+
+  private resetKpis(): void {
+    this.avgPriceUsd = 0;
+    this.avgFavorites = 0;
+    this.topShopName = '';
+    this.topShopSales = 0;
+    this.opportunityScore = 0;
+    this.totalEstimatedMarketRevenue = 0;
+    this.averageEstimatedMonthlySales = 0;
+    this.topSellerMonthlyRevenue = 0;
+    this.topTags = [];
   }
 
   getSortLabel(): string {
@@ -396,6 +227,10 @@ export class MarketResearchComponent implements OnInit {
   }
 
   filterOnlyTopOpportunity(): void {
+    if (!this.hasResults) {
+      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      return;
+    }
     this.items = this.items.filter(i => i.marketScore >= 85);
     this.statusText = `Filtrelendi: Yalnızca Fırsat Skoru %85+ olan ${this.items.length} ürün gösteriliyor.`;
     this.showToastMsg(`⚡ Yüksek Fırsatlı ${this.items.length} ürün filtrelendi.`);
@@ -530,6 +365,10 @@ export class MarketResearchComponent implements OnInit {
 
   // 11. 📊 CSV Aktar
   exportCsv(): void {
+    if (this.items.length === 0) {
+      this.showToastMsg('⚠️ Dışa aktarılacak veri yok — önce canlı bir arama yapın.');
+      return;
+    }
     const headers = 'Sira;ListingId;Baslik;Fiyat_USD;Magaza;Magaza_Satisi;Favori;Goruntulenme;SEO_Puani;Pazar_Puani;Tagler\n';
     const rows = this.items.map(i => 
       `${i.listingRank};"${i.id}";"${i.title.replace(/"/g, '""')}";${i.priceUsd};"${i.shopName}";${i.shopSales};${i.favorites};${i.views};${i.seoScore};${i.marketScore};"${i.tags.join(', ')}"`
@@ -562,6 +401,7 @@ export class MarketResearchComponent implements OnInit {
 
   openImageZoom(item: MarketItem, ev: MouseEvent): void {
     ev.stopPropagation();
+    if (!item.imageUrl) return;
     window.open(item.imageUrl, '_blank');
   }
 
@@ -573,11 +413,19 @@ export class MarketResearchComponent implements OnInit {
       return;
     }
     const allTags = Array.from(new Set(this.items.flatMap(i => i.tags))).slice(0, 13);
+    if (allTags.length === 0) {
+      this.showToastMsg('⚠️ Kopyalanacak etiket bulunamadı — önce canlı bir arama yapın.');
+      return;
+    }
     navigator.clipboard.writeText(allTags.join(', '));
     this.showToastMsg(`📋 İlk 13 Ortak Altın Etiket kopyalandı!`);
   }
 
   generateAiMarketReport(): void {
+    if (!this.hasResults) {
+      this.showToastMsg('⚠️ AI raporu için önce canlı bir pazar araması yapın.');
+      return;
+    }
     this.isGeneratingReport = true;
     const kw = this.searchKeyword.trim() || 'Pazar Trendi';
     const topTagsStr = (this.topTags && this.topTags.length > 0)
@@ -687,16 +535,20 @@ export class MarketResearchComponent implements OnInit {
       return;
     }
     const base = this.selectedItem || this.items[0];
+    if (!base) {
+      this.showToastMsg('⚠️ Etiketleri aktarmak için önce canlı bir arama yapıp bir ilan seçin.');
+      return;
+    }
     const cloned: ClonedMarketListing = {
-      id: base ? base.id : Date.now(),
-      title: base ? base.title : `${this.searchKeyword} - Handmade Model`,
-      priceUsd: base ? base.priceUsd : (this.avgPriceUsd || 35.0),
+      id: base.id,
+      title: base.title,
+      priceUsd: base.priceUsd,
       tags: [...selected],
-      description: base ? base.description : '',
-      imageUrl: base ? base.imageUrl : '',
-      shopName: base ? base.shopName : '',
-      seoScore: 98,
-      marketScore: this.opportunityScore
+      description: base.description,
+      imageUrl: base.imageUrl,
+      shopName: base.shopName,
+      seoScore: base.seoScore,
+      marketScore: base.marketScore
     };
     this.aiService.setClonedListing(cloned);
     this.showToastMsg(`🚀 Seçilen ${selected.length} etiket Fast Creator'a aktarıldı, yönlendiriliyorsunuz...`);

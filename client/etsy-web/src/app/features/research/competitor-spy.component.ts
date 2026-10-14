@@ -53,6 +53,10 @@ interface CompetitorShop {
             <span class="card-label">Takip Edilen Rakip Mağazalar ({{ shops.length }})</span>
             
             <div class="shops-list">
+              <div *ngIf="shops.length === 0" class="empty-hint">
+                Henüz rakip mağaza eklenmedi. Sağ üstteki "+ Yeni Rakip Mağaza Ekle" ile takip listenizi oluşturun —
+                mağaza metrikleri canlı analiz veri kaynağı bağlandığında otomatik doldurulur.
+              </div>
               <div 
                 *ngFor="let s of shops" 
                 class="shop-card"
@@ -72,15 +76,15 @@ interface CompetitorShop {
                 <div class="shop-metrics-row">
                   <div class="mini-stat">
                     <span class="s-label">Aylık Satış:</span>
-                    <span class="s-val">{{ s.sales30d | number }} adet</span>
+                    <span class="s-val">{{ s.sales30d ? (s.sales30d | number) + ' adet' : '—' }}</span>
                   </div>
                   <div class="mini-stat">
                     <span class="s-label">Tahmini Ciro:</span>
-                    <span class="s-val revenue">&#36;{{ s.revenueEstUsd | number }}</span>
+                    <span class="s-val revenue">{{ s.revenueEstUsd ? ('$' + (s.revenueEstUsd | number)) : '—' }}</span>
                   </div>
                   <div class="mini-stat">
                     <span class="s-label">Aktif İlan:</span>
-                    <span class="s-val">{{ s.activeListings }}</span>
+                    <span class="s-val">{{ s.activeListings ? s.activeListings : '—' }}</span>
                   </div>
                 </div>
               </div>
@@ -94,18 +98,23 @@ interface CompetitorShop {
           <!-- TOP SELLER PRODUCT CARD -->
           <div class="glass-card">
             <span class="card-label">En Çok Satan Ürün Analizi</span>
+            <ng-container *ngIf="selectedShop.topItemTitle; else noTopProduct">
             <h3 class="top-product-title">{{ selectedShop.topItemTitle }}</h3>
             <div class="top-product-meta">
               <span class="price-tag">&#36;{{ selectedShop.topItemPrice.toFixed(2) }}</span>
               <span class="try-equiv">(₺{{ (selectedShop.topItemPrice * usdTryRate).toFixed(2) }})</span>
             </div>
+            </ng-container>
+            <ng-template #noTopProduct>
+              <p class="hint-text">Bu mağaza için ürün analizi henüz yok — canlı analiz veri kaynağı bağlandığında burada görünecek.</p>
+            </ng-template>
           </div>
 
           <!-- TAG SPY BOX -->
           <div class="glass-card">
             <div class="card-header-row">
               <span class="card-label">Etiket Casusu (13 Arama Etiketi)</span>
-              <button class="btn-copy-tags" (click)="copyTags(selectedShop.topItemTags)">
+              <button class="btn-copy-tags" (click)="copyTags(selectedShop.topItemTags)" [disabled]="selectedShop.topItemTags.length === 0">
                 📋 13 Etiketi Kopyala
               </button>
             </div>
@@ -115,6 +124,7 @@ interface CompetitorShop {
               <span *ngFor="let tag of selectedShop.topItemTags" class="tag-badge">
                 {{ tag }}
               </span>
+              <span *ngIf="selectedShop.topItemTags.length === 0" class="hint-text">Etiket verisi henüz yok.</span>
             </div>
 
             <div *ngIf="copiedMessage" class="toast-success">
@@ -331,6 +341,20 @@ interface CompetitorShop {
       font-weight: 600;
     }
 
+    .empty-hint {
+      padding: 14px;
+      font-size: 0.82rem;
+      color: #94a3b8;
+      background: rgba(15, 23, 42, 0.4);
+      border: 1px dashed rgba(255, 255, 255, 0.15);
+      border-radius: 10px;
+      line-height: 1.5;
+    }
+    .btn-copy-tags[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
     @media (max-width: 1024px) {
       .spy-body { flex-direction: column; }
     }
@@ -360,31 +384,9 @@ export class CompetitorSpyComponent implements OnInit {
       } catch {}
     }
 
-    // Default seed shops
-    this.shops = [
-      {
-        shopName: 'MythicForgeCrafts',
-        niche: '3D Baskı Figür & Fidget',
-        sales30d: 840,
-        revenueEstUsd: 31250,
-        activeListings: 64,
-        topItemTitle: 'Articulated Crystal Dragon with Wings 3D Print',
-        topItemPrice: 39.90,
-        topItemTags: ['crystal dragon', '3d printed dragon', 'fidget toy', 'winged dragon', 'desk decor', 'dnd gift', 'dragon sculpture', 'fantasy beast', 'mythical creature', 'adhd toy', 'bambu lab', 'flexi animal', 'gamer gift']
-      },
-      {
-        shopName: 'Botanical3DPrints',
-        niche: 'Geometrik Ev Dekoru',
-        sales30d: 520,
-        revenueEstUsd: 14500,
-        activeListings: 42,
-        topItemTitle: 'Self Watering Geometric Succulent Planter',
-        topItemPrice: 28.00,
-        topItemTags: ['succulent planter', 'geometric pot', 'self watering', 'indoor planter', '3d printed pot', 'modern home decor', 'minimalist vase', 'plant lover gift', 'desktop planter', 'boho decor', 'plant pot', 'nordic style', 'air plant holder']
-      }
-    ];
-    this.selectedShop = this.shops[0];
-    this.saveShops();
+    // Kayıtlı rakip mağaza yoksa boş liste ile başla (sıfır-mock ilkesi: örnek mağaza gösterilmez)
+    this.shops = [];
+    this.selectedShop = null;
   }
 
   private saveShops(): void {
@@ -407,20 +409,26 @@ export class CompetitorSpyComponent implements OnInit {
     const name = prompt('Takip etmek istediğiniz Etsy mağaza adını giriniz:');
     if (name && name.trim()) {
       const cleanName = name.trim();
+      if (this.shops.some(s => s.shopName.toLowerCase() === cleanName.toLowerCase())) {
+        this.copiedMessage = `ℹ️ "${cleanName}" zaten takip listesinde.`;
+        setTimeout(() => this.copiedMessage = '', 3000);
+        return;
+      }
+      // Sıfır-mock ilkesi: uydurma metrik üretilmez; canlı analiz uçları bağlandığında doldurulur.
       const newShop: CompetitorShop = {
         shopName: cleanName,
-        niche: 'Özel Trend Kategori',
-        sales30d: Math.floor(250 + Math.random() * 400),
-        revenueEstUsd: Math.floor(7500 + Math.random() * 15000),
-        activeListings: Math.floor(20 + Math.random() * 50),
-        topItemTitle: `${cleanName} - Popüler Ürün Koleksiyonu`,
-        topItemPrice: 34.00,
-        topItemTags: ['custom item', 'etsy top seller', 'handmade', 'gift idea', 'trending', 'unique', 'popular', 'best gift', 'home decor', 'accessories', 'craft', 'art', 'design']
+        niche: '—',
+        sales30d: 0,
+        revenueEstUsd: 0,
+        activeListings: 0,
+        topItemTitle: '',
+        topItemPrice: 0,
+        topItemTags: []
       };
       this.shops.unshift(newShop);
       this.selectedShop = newShop;
       this.saveShops();
-      this.copiedMessage = `✓ "${cleanName}" rakip takip merkezine eklendi ve kaydedildi!`;
+      this.copiedMessage = `✓ "${cleanName}" takip listesine eklendi — canlı metrikler veri kaynağı bağlandığında dolacak.`;
       setTimeout(() => this.copiedMessage = '', 3500);
     }
   }

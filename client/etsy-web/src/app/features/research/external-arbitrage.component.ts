@@ -42,24 +42,24 @@ interface ArbitrageItem {
       <!-- KPI METRICS STRIP -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">TARANAN ÜRÜN</span>
-          <span class="kpi-val text-blue">1,420 Ürün</span>
+          <span class="kpi-label">LİSTELENEN ÜRÜN</span>
+          <span class="kpi-val text-blue">{{ items.length }} Ürün</span>
           <span class="kpi-sub">Amazon, AliExpress, eBay</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">YÜKSEK KÂR FIRSATI</span>
-          <span class="kpi-val text-green">48 Ürün</span>
+          <span class="kpi-val text-green">{{ highMarginCount }} Ürün</span>
           <span class="kpi-sub">%150+ Net Marj</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">ORTALAMA ARBİTRAJ KÂRI</span>
-          <span class="kpi-val text-purple">+$18.40</span>
+          <span class="kpi-val text-purple">{{ items.length ? ('+$' + (avgNetProfit | number:'1.2-2')) : '—' }}</span>
           <span class="kpi-sub">Ürün Başına Net</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">ORT. TESLİMAT SÜRESİ</span>
-          <span class="kpi-val text-orange">6-9 Gün</span>
-          <span class="kpi-sub">Ekspres DDP Kargo</span>
+          <span class="kpi-val text-orange">—</span>
+          <span class="kpi-sub">Kargo verisi bağlandığında devreye girer</span>
         </div>
       </div>
 
@@ -80,6 +80,11 @@ interface ArbitrageItem {
         </div>
 
         <div class="items-grid">
+          <div *ngIf="filteredItems.length === 0" class="empty-hint">
+            {{ items.length === 0
+              ? 'Canlı arbitraj listesi şu an boş — dış pazar fiyat uçları (Amazon/AliExpress) bağlandığında fırsatlar burada listelenecek. Bu sayfa demo veri göstermez.'
+              : 'Bu filtreye uyan ürün bulunamadı.' }}
+          </div>
           <div *ngFor="let item of filteredItems" class="item-card glass-card">
             <div class="item-img-wrap">
               <img [src]="item.imageUrl" alt="Product" class="item-img" />
@@ -203,6 +208,16 @@ interface ArbitrageItem {
     }
 
     .items-section { display: flex; flex-direction: column; gap: 16px; }
+    .empty-hint {
+      grid-column: 1 / -1;
+      padding: 18px;
+      font-size: 0.85rem;
+      color: #94a3b8;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px dashed rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      line-height: 1.6;
+    }
     .section-top { display: flex; justify-content: space-between; align-items: center; }
     .section-title { font-size: 1.15rem; font-weight: 700; color: #fff; margin: 0; }
     .filter-pills {
@@ -322,44 +337,7 @@ export class ExternalArbitrageRadarComponent implements OnInit {
   marketFilter: 'ALL' | 'AliExpress' | 'Amazon' = 'ALL';
   toastMessage = '';
 
-  items: ArbitrageItem[] = [
-    {
-      id: 'arb-1',
-      title: 'Minimalist Ceramic Matcha Whisk Stand Bowl Set',
-      sourceMarket: 'AliExpress',
-      sourcePrice: 8.50,
-      sourceShippingDays: '7-10 Gün',
-      etsyAvgPrice: 34.00,
-      estimatedMargin: 198,
-      netProfitUsd: 19.40,
-      imageUrl: 'https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=500&auto=format&fit=crop&q=80',
-      category: 'Home & Kitchen'
-    },
-    {
-      id: 'arb-2',
-      title: 'Vintage Leather Handcrafted Journal Notebook',
-      sourceMarket: 'Amazon',
-      sourcePrice: 11.20,
-      sourceShippingDays: '3-5 Gün',
-      etsyAvgPrice: 38.50,
-      estimatedMargin: 165,
-      netProfitUsd: 20.80,
-      imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=500&auto=format&fit=crop&q=80',
-      category: 'Paper & Stationery'
-    },
-    {
-      id: 'arb-3',
-      title: 'Nordic Wooden Geometric Wall Hanging Shelf',
-      sourceMarket: 'AliExpress',
-      sourcePrice: 14.00,
-      sourceShippingDays: '8-12 Gün',
-      etsyAvgPrice: 49.00,
-      estimatedMargin: 180,
-      netProfitUsd: 26.50,
-      imageUrl: 'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?w=500&auto=format&fit=crop&q=80',
-      category: 'Home Decor'
-    }
-  ];
+  items: ArbitrageItem[] = [];
 
   ngOnInit(): void {}
 
@@ -368,9 +346,18 @@ export class ExternalArbitrageRadarComponent implements OnInit {
     return this.items.filter(i => i.sourceMarket === this.marketFilter);
   }
 
+  get highMarginCount(): number {
+    return this.items.filter(i => i.estimatedMargin >= 150).length;
+  }
+
+  get avgNetProfit(): number {
+    if (this.items.length === 0) return 0;
+    return this.items.reduce((acc, i) => acc + i.netProfitUsd, 0) / this.items.length;
+  }
+
   scanMarkets(): void {
-    this.toastMessage = '⚡ Çapraz pazar taraması tamamlandı: 48 yüksek marjlı ürün radarda!';
-    setTimeout(() => this.toastMessage = '', 4000);
+    this.toastMessage = '⚠️ Canlı çapraz pazar tarama servisi bu panel için henüz bağlı değil — veri kaynağı entegre edildiğinde sonuçlar otomatik listelenecek.';
+    setTimeout(() => this.toastMessage = '', 5000);
   }
 
   importToCreator(item: ArbitrageItem): void {
