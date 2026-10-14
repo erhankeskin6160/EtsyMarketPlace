@@ -33,17 +33,40 @@ public sealed class AiAddressParserService : IAiAddressParserService
         _settingsRepo = settingsRepo;
     }
 
+    private static readonly HashSet<string> EuCountryCodes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "ES", "FI",
+        "FR", "GR", "HR", "HU", "IE", "IT", "LT", "LU", "LV", "MT",
+        "NL", "PL", "PT", "RO", "SE", "SI", "SK"
+    };
+
+    public static string ResolveDefaultIossNumber(string? countryCode)
+    {
+        if (string.IsNullOrWhiteSpace(countryCode)) return string.Empty;
+        string code = countryCode.Trim().ToUpperInvariant();
+
+        if (EuCountryCodes.Contains(code))
+        {
+            return "IM3720000224"; // Resmi Etsy AB IOSS Numarası
+        }
+        if (code == "GB" || code == "UK")
+        {
+            return "370 6004 28"; // Resmi Etsy UK VAT Numarası
+        }
+        return string.Empty;
+    }
+
     public async Task<ParsedOrderAddressDto> ParseRawAddressAsync(string rawAddressText, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(rawAddressText))
         {
-            return new ParsedOrderAddressDto("", "", "", "", "", "", "", "", "", "Empty", "Metin boş.");
+            return new ParsedOrderAddressDto("", "", "", "", "", "", "", "", "", "", "", "Empty", "Metin boş.");
         }
 
         var text = rawAddressText.Trim();
 
         // 1. Telefon ve e-postayı metinden ayıkla ve adres satırlarını temizle
-        var (cleanedText, phone, _) = CleanAndExtractContact(text);
+        var (cleanedText, phone, email) = CleanAndExtractContact(text);
 
         // 2. Aktif AI API anahtarını alalım
         var (provider, apiKey, model) = await ResolveActiveAiCredentialsAsync("53236321", cancellationToken);
@@ -56,6 +79,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
                 if (aiParsed != null && (!string.IsNullOrWhiteSpace(aiParsed.StreetAddress) || !string.IsNullOrWhiteSpace(aiParsed.City)))
                 {
                     string finalPhone = !string.IsNullOrWhiteSpace(aiParsed.Phone) ? aiParsed.Phone : phone;
+                    string finalEmail = !string.IsNullOrWhiteSpace(aiParsed.BuyerEmail) ? aiParsed.BuyerEmail : email;
                     var (aiCountryName, aiCountryCode) = NormalizeCountry(aiParsed.CountryCode);
                     string state = aiParsed.State;
                     if (UsStateHelper.RequiresState(aiCountryCode) && !string.IsNullOrWhiteSpace(state))
@@ -63,9 +87,12 @@ public sealed class AiAddressParserService : IAiAddressParserService
                         var (normCode, _) = UsStateHelper.ResolveUsOrCaState(state);
                         state = normCode;
                     }
+                    string defaultIoss = ResolveDefaultIossNumber(aiCountryCode);
+                    string finalIoss = !string.IsNullOrWhiteSpace(aiParsed.IossNumber) ? aiParsed.IossNumber : defaultIoss;
 
                     return new ParsedOrderAddressDto(
                         BuyerName: aiParsed.BuyerName,
+                        BuyerEmail: finalEmail,
                         Phone: finalPhone,
                         StreetAddress: aiParsed.StreetAddress,
                         SecondAddress: aiParsed.SecondAddress,
@@ -74,6 +101,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
                         PostalCode: aiParsed.PostalCode,
                         Country: !string.IsNullOrWhiteSpace(aiParsed.Country) ? aiParsed.Country : aiCountryName,
                         CountryCode: aiCountryCode,
+                        IossNumber: finalIoss,
                         Source: $"AI:{provider}",
                         ConfidenceNote: $"{provider} modeli ile tam doğrulukla ayrıştırıldı.");
                 }
@@ -93,9 +121,11 @@ public sealed class AiAddressParserService : IAiAddressParserService
             var (normCode, _) = UsStateHelper.ResolveUsOrCaState(locState);
             locState = normCode;
         }
+        string localIoss = ResolveDefaultIossNumber(locCountryCode);
 
         return new ParsedOrderAddressDto(
             BuyerName: local.BuyerName,
+            BuyerEmail: email,
             Phone: phone,
             StreetAddress: local.StreetAddress,
             SecondAddress: local.SecondAddress,
@@ -104,6 +134,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
             PostalCode: local.PostalCode,
             Country: locCountryName,
             CountryCode: locCountryCode,
+            IossNumber: localIoss,
             Source: "LocalRuleParser",
             ConfidenceNote: "Yerel kural motoru ile ayrıştırıldı.");
     }
@@ -170,8 +201,9 @@ public sealed class AiAddressParserService : IAiAddressParserService
 
     private static string ExtractPhoneNumber(string text)
     {
-        // 1. Önce satır bazında Tel/Phone/Cep/Mobile etiketli olanları tara
         var lines = text.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+        // 1. Önce satır bazında Tel/Phone/Cep/Mobile/Tlf etiketli olanları tara
         foreach (var line in lines)
         {
             var match = Regex.Match(line, @"(?:Tel|Phone|Mobile|Tlf|Telefon|Cep|Cell|Fax)\s*[:\-\.]?\s*(\+?[\d\s\-\(\)\.]{7,25})", RegexOptions.IgnoreCase);
@@ -185,18 +217,43 @@ public sealed class AiAddressParserService : IAiAddressParserService
             }
         }
 
-        // 2. Etiketsiz genel uluslararası telefon deseni (en az 7, en çok 15 rakam)
-        var generalMatch = Regex.Match(text, @"(?:\+|00)?\d{1,3}[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}(?:[-.\s]?\d{2,4})*");
-        if (generalMatch.Success)
+        // 2. Etiketsiz durumlarda: Asla ZIP/Posta kodu ile çakışmamalı!
+        foreach (var rawLine in lines)
         {
-            string digits = Regex.Replace(generalMatch.Value, @"\D", "");
-            if (digits.Length >= 7 && digits.Length <= 15)
+            var line = rawLine.Trim();
+
+            // ZIP+4 (örn: 09464-0046 veya 90001-1234) veya açık adres/şehir satırlarını atla
+            if (Regex.IsMatch(line, @"\b(?:Apo|Fpo|Dpo|Box|PSC|Street|St|Ave|Avenue|Road|Rd|Blvd|Suite|Apt)\b", RegexOptions.IgnoreCase))
             {
-                return generalMatch.Value.Trim();
+                continue;
+            }
+
+            // ZIP+4 formatını kesinlikle dışla (5 hane - 4 hane)
+            if (Regex.IsMatch(line, @"^\d{5}-\d{4}$"))
+            {
+                continue;
+            }
+
+            // Satırın tamamı veya bir kısmı açık telefon formatında ise (+ ile başlayan, parantezli veya en az 10 basamaklı)
+            var match = Regex.Match(line, @"(?:\+|00)\d{1,4}[-.\s]?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{2,4}(?:[-.\s]?\d{2,4})?|\(\d{3}\)[-.\s]?\d{3}[-.\s]?\d{4}");
+            if (match.Success)
+            {
+                string digits = Regex.Replace(match.Value, @"\D", "");
+                if (digits.Length >= 10 && digits.Length <= 15)
+                {
+                    return match.Value.Trim();
+                }
+            }
+
+            // Eğer tüm satır sadece sayılardan ve ayırıcılardan oluşuyorsa ve en az 10 basamak ise (9 haneli ZIP+4 dışlandı)
+            string onlyDigits = Regex.Replace(line, @"\D", "");
+            if (onlyDigits.Length >= 10 && onlyDigits.Length <= 15 && Regex.IsMatch(line, @"^[\d\s\-\+\(\)\.]{10,25}$"))
+            {
+                return line;
             }
         }
 
-        return "";
+        return string.Empty;
     }
 
     private async Task<(string Provider, string ApiKey, string Model)> ResolveActiveAiCredentialsAsync(string shopId, CancellationToken ct)
@@ -262,6 +319,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
             Return ONLY a single JSON object with these EXACT keys:
             {
               "buyerName": "Recipient full name",
+              "buyerEmail": "Recipient email address if present or empty string",
               "phone": "Recipient phone number if present or empty string",
               "streetAddress": "Street address line 1 with house/building number",
               "secondAddress": "Apartment, suite, unit, floor if any or empty string",
@@ -269,7 +327,8 @@ public sealed class AiAddressParserService : IAiAddressParserService
               "state": "2-letter state/province abbreviation (e.g. CA, NY, TX) or full region",
               "postalCode": "Postal or zip code",
               "country": "Country name in English",
-              "countryCode": "2-letter ISO-3166-1 alpha-2 country code (e.g. US, GB, DE, CA)"
+              "countryCode": "2-letter ISO-3166-1 alpha-2 country code (e.g. US, GB, DE, CA)",
+              "iossNumber": "IOSS or VAT number if mentioned or empty string"
             }
             Do not include Markdown backticks or explanation. Return pure JSON only.
             """;
@@ -351,6 +410,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
             var root = doc.RootElement;
 
             string name = GetProp(root, "buyerName", "name", "recipient");
+            string email = GetProp(root, "buyerEmail", "email", "mail");
             string phone = GetProp(root, "phone", "phoneNumber", "mobile");
             string street = GetProp(root, "streetAddress", "street", "address1", "addressLine1");
             string second = GetProp(root, "secondAddress", "address2", "unit", "apt");
@@ -359,6 +419,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
             string zip = GetProp(root, "postalCode", "zip", "zipCode", "postcode");
             string country = GetProp(root, "country", "countryName");
             string code = GetProp(root, "countryCode", "isoCountryCode");
+            string ioss = GetProp(root, "iossNumber", "ioss", "vatNumber", "vat");
 
             if (string.IsNullOrWhiteSpace(code) && country.Equals("United States", StringComparison.OrdinalIgnoreCase))
             {
@@ -367,6 +428,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
 
             return new ParsedOrderAddressDto(
                 BuyerName: name,
+                BuyerEmail: email,
                 Phone: phone,
                 StreetAddress: street,
                 SecondAddress: second,
@@ -375,6 +437,7 @@ public sealed class AiAddressParserService : IAiAddressParserService
                 PostalCode: zip,
                 Country: country,
                 CountryCode: code,
+                IossNumber: ioss,
                 Source: "AI",
                 ConfidenceNote: "");
         }

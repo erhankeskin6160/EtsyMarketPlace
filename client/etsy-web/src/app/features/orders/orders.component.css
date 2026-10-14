@@ -2271,3 +2271,44 @@
   line-height: 1.4;
   margin-bottom: 12px;
 }
+
+.label-optional {
+  font-size: 0.65rem;
+  font-weight: normal;
+  color: #64748b;
+  margin-left: 4px;
+}
+
+.ioss-label-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ioss-quick-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-ioss-chip {
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #93c5fd;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+
+.btn-ioss-chip:hover {
+  background: rgba(59, 130, 246, 0.35);
+  color: #ffffff;
+  border-color: #3b82f6;
+  transform: translateY(-1px);
+}
+

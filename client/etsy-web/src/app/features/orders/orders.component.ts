@@ -503,7 +503,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
         }
 
         if (res.buyerName) this.editAddressModel.buyerName = res.buyerName;
-        if (res.phone) this.editAddressModel.phone = res.phone;
+        if (res.buyerEmail) this.editAddressModel.buyerEmail = res.buyerEmail;
+        this.editAddressModel.phone = res.phone || '';
         if (res.streetAddress) this.editAddressModel.streetAddress = res.streetAddress;
         if (res.secondAddress) this.editAddressModel.secondAddress = res.secondAddress;
         if (res.city) this.editAddressModel.city = res.city;
@@ -511,6 +512,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         if (res.postalCode) this.editAddressModel.postalCode = res.postalCode;
         if (res.country) this.editAddressModel.country = res.country;
         if (res.countryCode) this.editAddressModel.countryCode = res.countryCode;
+        if (res.iossNumber) this.editAddressModel.iossNumber = res.iossNumber;
 
         this.aiParseSuccessMessage = `✨ Adres ${res.source || 'AI'} motoru ile başarıyla ayrıştırıldı ve kutucuklara yerleştirildi!`;
         setTimeout(() => this.aiParseSuccessMessage = null, 5000);
@@ -520,6 +522,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.aiParseErrorMessage = 'Yapay zeka ayrıştırması başarısız oldu: ' + (err?.error?.message || err?.message || 'Bilinmeyen hata');
       }
     });
+  }
+
+  setEtsyIoss(val: string): void {
+    this.editAddressModel.iossNumber = val;
+  }
+
+  isEuCountry(code: string | undefined): boolean {
+    if (!code) return false;
+    const euCodes = ['AT','BE','BG','CY','CZ','DE','DK','EE','ES','FI','FR','GR','HR','HU','IE','IT','LT','LU','LV','MT','NL','PL','PT','RO','SE','SI','SK'];
+    return euCodes.includes(code.trim().toUpperCase());
   }
 
   onCsvFileSelected(event: any): void {

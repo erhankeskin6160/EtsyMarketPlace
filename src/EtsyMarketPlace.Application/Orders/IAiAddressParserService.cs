@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 public sealed record ParsedOrderAddressDto(
     string BuyerName,
+    string BuyerEmail,
     string Phone,
     string StreetAddress,
     string SecondAddress,
@@ -13,6 +14,7 @@ public sealed record ParsedOrderAddressDto(
     string PostalCode,
     string Country,
     string CountryCode,
+    string IossNumber,
     string Source,
     string ConfidenceNote);
 

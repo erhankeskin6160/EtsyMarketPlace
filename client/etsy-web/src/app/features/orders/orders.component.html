@@ -1033,12 +1033,22 @@
 
             <div class="form-row-2">
               <div class="form-group">
-                <label class="form-label">E-posta Adresi</label>
-                <input type="email" [(ngModel)]="editAddressModel.buyerEmail" class="form-control" placeholder="musteri@ornek.com" />
+                <label class="form-label">Alıcı E-posta Adresi <span class="label-optional">(İsteğe bağlı)</span></label>
+                <input type="email" [(ngModel)]="editAddressModel.buyerEmail" class="form-control" placeholder="ornek: alici@email.com (CSV veya metinden)" />
               </div>
               <div class="form-group">
-                <label class="form-label">IOSS Numarası (Varsa)</label>
-                <input type="text" [(ngModel)]="editAddressModel.iossNumber" class="form-control" placeholder="IM..." />
+                <div class="ioss-label-bar">
+                  <label class="form-label">IOSS / Vergi No <span class="label-optional">(Varsa)</span></label>
+                  <div class="ioss-quick-chips">
+                    <button type="button" class="btn-ioss-chip" (click)="setEtsyIoss('IM3720000224')" title="Resmi Etsy AB IOSS Numarasını Doldur: IM3720000224">
+                      🇪🇺 Etsy AB (IM3720000224)
+                    </button>
+                    <button type="button" class="btn-ioss-chip" (click)="setEtsyIoss('370 6004 28')" title="Resmi Etsy Birleşik Krallık VAT Numarasını Doldur">
+                      🇬🇧 UK VAT
+                    </button>
+                  </div>
+                </div>
+                <input type="text" [(ngModel)]="editAddressModel.iossNumber" class="form-control" placeholder="IM3720000224 (AB için) veya boş bırakın" />
               </div>
             </div>
 
