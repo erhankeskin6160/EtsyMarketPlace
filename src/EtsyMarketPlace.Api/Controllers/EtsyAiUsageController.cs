@@ -15,10 +15,14 @@ public class EtsyAiUsageController : ControllerBase
     }
 
     [HttpGet("stats")]
-    [EndpointSummary("Son 30 Günlük AI Token & Maliyet Özeti")]
-    public async Task<IActionResult> GetAiUsageStats([FromQuery] string? provider, CancellationToken ct)
+    [EndpointSummary("AI Token & Maliyet Özeti")]
+    public async Task<IActionResult> GetAiUsageStats(
+        [FromQuery] string? provider,
+        [FromQuery] string? period = "30d",
+        CancellationToken ct = default)
     {
-        var stats = await _repo.GetSummaryStatsAsync(provider, DateTimeOffset.UtcNow.AddDays(-30), ct);
+        var (since, until) = AiPeriodHelper.ResolveDateRange(period);
+        var stats = await _repo.GetSummaryStatsAsync(provider, since, until, cancellationToken: ct);
         return Ok(stats);
     }
 
