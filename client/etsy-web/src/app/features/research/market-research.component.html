@@ -1,4 +1,5 @@
     <div class="market-view">
+      <ng-template #kpiEmpty>—</ng-template>
       <!-- 1. HEADER (Title + AI Active Badge + Status) -->
       <div class="market-header">
         <div class="header-left">
@@ -89,8 +90,9 @@
         <div class="glass-card kpi-card">
           <span class="kpi-label">ORTALAMA FİYAT (AOV)</span>
           <div class="kpi-val text-emerald">
-            &#36;{{ avgPriceUsd | number:'1.2-2' }}
-            <span class="sub-try">(₺{{ (avgPriceUsd * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
+            <ng-container *ngIf="hasResults; else kpiEmpty">&#36;{{ avgPriceUsd | number:'1.2-2' }}
+              <span class="sub-try">(₺{{ (avgPriceUsd * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
+            </ng-container>
           </div>
           <span class="kpi-desc">Kategorideki rekabetçi satış ortalaması</span>
         </div>
@@ -98,8 +100,9 @@
         <div class="glass-card kpi-card highlight-emerald">
           <span class="kpi-label">TAHMİNİ AYLIK PAZAR CİROSU</span>
           <div class="kpi-val text-emerald">
-            &#36;{{ totalEstimatedMarketRevenue | number:'1.0-0' }} / ay
-            <span class="sub-try">(₺{{ (totalEstimatedMarketRevenue * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
+            <ng-container *ngIf="hasResults; else kpiEmpty">&#36;{{ totalEstimatedMarketRevenue | number:'1.0-0' }} / ay
+              <span class="sub-try">(₺{{ (totalEstimatedMarketRevenue * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
+            </ng-container>
           </div>
           <span class="kpi-desc">Toolsy & EverBee algoritmasıyla toplam pazar hacmi</span>
         </div>
@@ -107,7 +110,7 @@
         <div class="glass-card kpi-card">
           <span class="kpi-label">ORTALAMA AYLIK SATIŞ</span>
           <div class="kpi-val text-cyan">
-            {{ averageEstimatedMonthlySales | number:'1.0-0' }} Adet / ay
+            <ng-container *ngIf="hasResults; else kpiEmpty">{{ averageEstimatedMonthlySales | number:'1.0-0' }} Adet / ay</ng-container>
           </div>
           <span class="kpi-desc">İlan başına tahmini aylık sipariş hızı</span>
         </div>
@@ -115,7 +118,7 @@
         <div class="glass-card kpi-card">
           <span class="kpi-label">ORTALAMA FAVORİ / İLAN</span>
           <div class="kpi-val text-purple">
-            {{ avgFavorites | number:'1.0-0' }} Fav
+            <ng-container *ngIf="hasResults; else kpiEmpty">{{ avgFavorites | number:'1.0-0' }} Fav</ng-container>
           </div>
           <span class="kpi-desc">Müşteri kaydetme ve satın alma ilgisi</span>
         </div>
@@ -123,7 +126,7 @@
         <div class="glass-card kpi-card">
           <span class="kpi-label">LİDER SATICI MAĞAZA</span>
           <div class="kpi-val text-purple">
-            {{ topShopName }}
+            <ng-container *ngIf="hasResults; else kpiEmpty">{{ topShopName }}</ng-container>
           </div>
           <span class="kpi-desc">Kategori hacminin lider oyuncusu</span>
         </div>
@@ -131,7 +134,7 @@
         <div class="glass-card kpi-card highlight-orange">
           <span class="kpi-label">PAZAR FIRSAT SKORU</span>
           <div class="kpi-val text-orange">
-            %{{ opportunityScore }} / 100
+            <ng-container *ngIf="hasResults; else kpiEmpty">%{{ opportunityScore }} / 100</ng-container>
           </div>
           <span class="kpi-desc">Yüksek talep, optimize edilebilir rekabet</span>
         </div>
@@ -197,6 +200,11 @@
               </tr>
             </thead>
             <tbody>
+              <tr *ngIf="!hasResults">
+                <td colspan="11" class="empty-state-cell">
+                  {{ isLoading ? 'Etsy canlı verileri taranıyor…' : 'Henüz canlı veri yok — yukarıdan bir anahtar kelime aratın (örn. "3d printed desk organizer").' }}
+                </td>
+              </tr>
               <tr 
                 *ngFor="let item of items; let idx = index"
                 [class.selected-row]="selectedItem?.id === item.id"
@@ -205,7 +213,8 @@
                 
                 <!-- Resim Thumbnail -->
                 <td class="thumb-cell">
-                  <img [src]="item.imageUrl" alt="Thumb" class="prod-thumb" (click)="openImageZoom(item, $event)" />
+                  <img *ngIf="item.imageUrl" [src]="item.imageUrl" alt="Thumb" class="prod-thumb" (click)="openImageZoom(item, $event)" />
+                  <span *ngIf="!item.imageUrl" class="prod-thumb thumb-placeholder">📦</span>
                 </td>
 
                 <!-- Sıra -->
@@ -280,7 +289,10 @@
           <!-- Sol: Görsel Önizleme ve Slider -->
           <div class="bottom-image-box">
             <div class="image-preview-wrap">
-              <img [src]="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl" alt="Preview" class="slider-image" />
+              <img *ngIf="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl; else noPreview" [src]="selectedItem.imageUrls[currentImageIndex] || selectedItem.imageUrl" alt="Preview" class="slider-image" />
+              <ng-template #noPreview>
+                <div class="no-preview">📦 Bu ilan için görsel verisi yok</div>
+              </ng-template>
               <div class="slider-controls">
                 <button type="button" class="btn-slide" (click)="prevImage()">◀</button>
                 <span class="slide-indicator">{{ currentImageIndex + 1 }} / {{ selectedItem.imageUrls.length || 1 }}</span>
@@ -460,6 +472,11 @@ Satış Hızı: {{ selectedItem.salesVelocity || '🔥 Çok Hızlı Satan' }} | 
               </tr>
             </thead>
             <tbody>
+              <tr *ngIf="getFilteredTags().length === 0">
+                <td colspan="9" class="empty-state-cell">
+                  {{ topTags.length === 0 ? 'Etiket matrisi için önce canlı bir arama yapın.' : 'Filtreye uyan etiket bulunamadı.' }}
+                </td>
+              </tr>
               <tr 
                 *ngFor="let t of getFilteredTags(); let idx = index"
                 [class.selected-row]="isTagSelected(t.tag)"
