@@ -91,6 +91,12 @@
           <button class="btn-sub-action" (click)="openCompareModal()">
             <span>📊 Kelimeleri Karşılaştır</span>
           </button>
+          <button class="btn-sub-action" (click)="trackCurrentKeyword()" [disabled]="isTrackingKeyword">
+            <span>{{ isTrackingKeyword ? '⏳ Kaydediliyor...' : '📌 Kelimeyi Takibe Al' }}</span>
+          </button>
+          <button class="btn-sub-action" (click)="openTrackingModal()">
+            <span>📈 Takip Listesi</span>
+          </button>
         </div>
       </div>
 
@@ -656,6 +662,50 @@ Satış Hızı: {{ selectedItem.salesVelocity || '🔥 Çok Hızlı Satan' }} | 
           </div>
           <div class="modal-footer">
             <button class="btn-secondary-modal" (click)="closeCompareModal()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TRACKED KEYWORDS MODAL -->
+      <div class="modal-backdrop" *ngIf="showTrackingModal" (click)="showTrackingModal = false">
+        <div class="modal-card-analysis compare-modal-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>📈 Takip Edilen Kelimeler ({{ trackedKeywords.length }})</h3>
+            <button class="btn-close-modal" (click)="showTrackingModal = false">✕</button>
+          </div>
+          <div class="modal-body">
+            <p class="compare-hint">Her "Takibe Al" işlemi, o kelime için tarihli bir pazar anlık görüntüsü (snapshot) kaydeder. Yeni taramalarla değişim (▲/▼) otomatik hesaplanır.</p>
+
+            <div *ngIf="isLoadingTracked" class="kw-hint">Takip listesi yükleniyor…</div>
+            <div *ngIf="!isLoadingTracked && trackedKeywords.length === 0" class="kw-hint">
+              Henüz takip edilen kelime yok. Arama yaptıktan sonra "📌 Kelimeyi Takibe Al" ile ilk snapshot'ı kaydedin.
+            </div>
+
+            <div class="tracked-list" *ngIf="!isLoadingTracked">
+              <div *ngFor="let t of trackedKeywords" class="tracked-row">
+                <div class="tracked-main">
+                  <span class="tracked-kw">{{ t.item.displayName }}</span>
+                  <span class="tracked-date">{{ formatTrackedDate(t.latest?.capturedAt) }} · {{ t.snapshots.length }} tarama</span>
+                </div>
+                <div class="tracked-metrics">
+                  <span class="tracked-metric">AOV: <b>{{ '$' + (t.latest?.price ?? 0).toFixed(2) }}</b>
+                    <span [ngClass]="deltaClass(t.latest?.price, t.previous?.price)">{{ getDelta(t.latest?.price, t.previous?.price) }}</span>
+                  </span>
+                  <span class="tracked-metric">Fırsat: <b>%{{ t.latest?.opportunityScore ?? '—' }}</b>
+                    <span [ngClass]="deltaClass(t.latest?.opportunityScore, t.previous?.opportunityScore)">{{ getDelta(t.latest?.opportunityScore, t.previous?.opportunityScore) }}</span>
+                  </span>
+                  <span class="tracked-metric">İlan: <b>{{ (t.latest?.resultCount ?? 0).toLocaleString('tr-TR') }}</b></span>
+                </div>
+                <div class="tracked-actions">
+                  <button class="btn-apply-kw" (click)="applyTrackedKeyword(t.item.displayName)" title="Bu kelimeyle ana aramayı başlat">↗ Ara</button>
+                  <button class="btn-apply-kw" (click)="refreshTrackedKeyword(t.item.displayName)" title="Yeni snapshot kaydet">🔄 Güncelle</button>
+                  <button class="btn-apply-kw danger" (click)="deleteTrackedKeyword(t.item.displayName)" title="Takibi sil">🗑 Sil</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary-modal" (click)="showTrackingModal = false">Kapat</button>
           </div>
         </div>
       </div>

@@ -614,6 +614,22 @@ export class EtsyApiService {
     return this.http.delete<{ success: boolean; cleared: number }>(`${this.API_BASE}/api/etsy/batch-queue/completed`);
   }
 
+  // ── Pazar Araştırması: Kelime Takibi (Snapshot) ─────────────────────────
+  trackMarketKeyword(keyword: string): Observable<TrackedKeywordDto> {
+    return this.http.post<TrackedKeywordDto>(`${this.API_BASE}/api/etsy/market/keywords/track`, { keyword });
+  }
+
+  getTrackedMarketKeywords(): Observable<TrackedKeywordDto[]> {
+    return this.http.get<TrackedKeywordDto[]>(`${this.API_BASE}/api/etsy/market/keywords`);
+  }
+
+  deleteTrackedMarketKeyword(keyword: string): Observable<{ success: boolean }> {
+    return this.http.delete<{ success: boolean }>(`${this.API_BASE}/api/etsy/market/keywords`, {
+      params: { keyword }
+    });
+  }
+
+
   // ── Tracking Endpoints ────────────────────────────────────────────────────
   getTrackingItems(): Observable<any[]> {
     return this.http.get<any[]>(`${this.API_BASE}/api/etsy/tracking`);
@@ -796,6 +812,34 @@ export interface MarketSearchResponseDto {
   total: number;
   kpis: MarketSummaryKpisDto;
   listings: MarketListingItemDto[];
+}
+
+/** Pazar Araştırması: takip edilen kelime için tarihli KPI snapshot'ı. */
+export interface TrackingSnapshotDto {
+  id: number;
+  trackingItemId: number;
+  capturedAt: string;
+  price?: number | null;
+  currencyCode?: string;
+  favorites?: number | null;
+  opportunityScore?: number | null;
+  resultCount?: number | null;
+  sampleSize?: number | null;
+}
+
+/** Pazar Araştırması: takip edilen kelime + snapshot geçmişi (sunucu latest/previous dahil döner). */
+export interface TrackedKeywordDto {
+  item: {
+    id: number;
+    entityType: number;
+    externalKey: string;
+    displayName: string;
+    url: string;
+    createdAt: string;
+  };
+  snapshots: TrackingSnapshotDto[];
+  latest?: TrackingSnapshotDto | null;
+  previous?: TrackingSnapshotDto | null;
 }
 
 

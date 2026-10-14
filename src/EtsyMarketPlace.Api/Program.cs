@@ -115,6 +115,7 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IShipmentOrchest
 
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.MarketResearch.IEtsyMarketApiClient, EtsyMarketPlace.Infrastructure.MarketResearch.EtsyMarketApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketResearchService, EtsyMarketPlace.Application.MarketResearch.MarketResearchService>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketKeywordTrackingService, EtsyMarketPlace.Application.MarketResearch.MarketKeywordTrackingService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceService, EtsyMarketPlace.Application.AiUsage.AiBalanceService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddScoped<McpToolHandler>();

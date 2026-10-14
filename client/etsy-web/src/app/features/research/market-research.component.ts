@@ -2,7 +2,7 @@ import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { EtsyApiService, MarketTagFrequencyDto, MarketSearchResponseDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, MarketTagFrequencyDto, MarketSearchResponseDto, TrackedKeywordDto } from '../../core/services/etsy-api.service';
 import { forkJoin, of, catchError, map } from 'rxjs';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
@@ -78,6 +78,11 @@ export class MarketResearchComponent implements OnInit {
   compareInput = '';
   compareResults: CompareResult[] = [];
   isComparing = false;
+
+  showTrackingModal = false;
+  trackedKeywords: TrackedKeywordDto[] = [];
+  isLoadingTracked = false;
+  isTrackingKeyword = false;
 
   private static readonly HISTORY_KEY = 'etsy.marketResearch.history';
   private static readonly HISTORY_MAX = 8;
@@ -568,6 +573,102 @@ export class MarketResearchComponent implements OnInit {
         • <b>Tavsiye Edilen Aksiyon:</b> İlk sıralardaki ilanlardan birini "🚀 Taslağa Klonla" butonuyla aktarın ve aktif modelinizle 140 karakterlik kusursuz SEO başlığı üretin.
       `;
     }, 600);
+  }
+
+  trackCurrentKeyword(): void {
+    const kw = (this.searchKeyword || '').trim();
+    if (!kw) {
+      this.showToastMsg('⚠️ Takibe almak için önce bir kelime girin.');
+      return;
+    }
+
+    this.isTrackingKeyword = true;
+    this.etsyApi.trackMarketKeyword(kw).subscribe({
+      next: () => {
+        this.isTrackingKeyword = false;
+        this.showToastMsg(`📌 "${kw}" takibe alındı — pazar snapshot'ı kaydedildi.`);
+        if (this.showTrackingModal) {
+          this.loadTrackedKeywords();
+        }
+      },
+      error: (err) => {
+        this.isTrackingKeyword = false;
+        this.showToastMsg(`🚨 Takip kaydedilemedi: ${err?.error?.error || err?.message || 'Sunucu hatası'}`);
+      }
+    });
+  }
+
+  openTrackingModal(): void {
+    this.showTrackingModal = true;
+    this.loadTrackedKeywords();
+  }
+
+  loadTrackedKeywords(): void {
+    this.isLoadingTracked = true;
+    this.etsyApi.getTrackedMarketKeywords().subscribe({
+      next: (list) => {
+        this.isLoadingTracked = false;
+        this.trackedKeywords = list || [];
+      },
+      error: () => {
+        this.isLoadingTracked = false;
+        this.showToastMsg('🚨 Takip listesi alınamadı (sunucuya ulaşılamıyor).');
+      }
+    });
+  }
+
+  refreshTrackedKeyword(keyword: string): void {
+    this.etsyApi.trackMarketKeyword(keyword).subscribe({
+      next: () => {
+        this.showToastMsg(`🔄 "${keyword}" için yeni snapshot kaydedildi.`);
+        this.loadTrackedKeywords();
+      },
+      error: () => this.showToastMsg('🚨 Snapshot güncellenemedi.')
+    });
+  }
+
+  deleteTrackedKeyword(keyword: string): void {
+    if (!confirm(`"${keyword}" takibini ve tüm snapshot geçmişini silmek istediğinize emin misiniz?`)) {
+      return;
+    }
+
+    this.etsyApi.deleteTrackedMarketKeyword(keyword).subscribe({
+      next: () => {
+        this.trackedKeywords = this.trackedKeywords.filter(t => t.item.displayName !== keyword);
+        this.showToastMsg(`🗑 "${keyword}" takipten çıkarıldı.`);
+      },
+      error: () => this.showToastMsg('🚨 Silme başarısız.')
+    });
+  }
+
+  applyTrackedKeyword(keyword: string): void {
+    this.searchKeyword = keyword;
+    this.showTrackingModal = false;
+    this.onSearch();
+  }
+
+  formatTrackedDate(iso?: string | null): string {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit' }) + ' ' +
+      d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  getDelta(curr?: number | null, prev?: number | null): string {
+    if (curr === null || curr === undefined || prev === null || prev === undefined) return '';
+    const diff = curr - prev;
+    if (Math.abs(diff) < 0.005) return '±0';
+    const s = Math.abs(diff);
+    const txt = Number.isInteger(curr) && Number.isInteger(prev) ? s.toFixed(0) : s.toFixed(2);
+    return diff > 0 ? '▲ +' + txt : '▼ −' + txt;
+  }
+
+  deltaClass(curr?: number | null, prev?: number | null): string {
+    if (curr === null || curr === undefined || prev === null || prev === undefined) return '';
+    const diff = curr - prev;
+    if (Math.abs(diff) < 0.005) return '';
+    return diff > 0 ? 'delta-up' : 'delta-down';
   }
 
   openCompareModal(): void {
