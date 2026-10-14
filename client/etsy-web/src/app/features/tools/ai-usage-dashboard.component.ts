@@ -1,6 +1,7 @@
 import { Component, OnInit, AfterViewInit, OnDestroy, ViewChild, ElementRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { EtsyApiService, AiProviderBalanceDto } from '../../core/services/etsy-api.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { Chart, registerables } from 'chart.js';
@@ -24,7 +25,7 @@ interface UsageRecord {
 @Component({
   selector: 'app-ai-usage-dashboard',
   standalone: true,
-  imports: [CommonModule, FormsModule, AiLogoComponent],
+  imports: [CommonModule, FormsModule, RouterLink, AiLogoComponent],
   template: `
     <div class="usage-container">
       <!-- HEADER -->
@@ -43,20 +44,38 @@ interface UsageRecord {
         </div>
       </div>
 
-      <!-- BRAND SELECTOR DROPDOWN BAR -->
+      <!-- FILTER CONTROLS BAR: BRAND + PERIOD -->
       <div class="brand-selector-bar glass-card">
         <div class="selector-left">
-          <label class="selector-label">🎯 İNCELENEN YAPAY ZEKA MARKASI:</label>
-          <div class="dropdown-wrapper">
-            <div class="brand-logo-preview" *ngIf="selectedBrand !== 'ALL'">
-              <app-ai-logo [provider]="selectedBrand" [size]="20"></app-ai-logo>
+          <!-- BRAND SELECTOR -->
+          <div class="filter-item">
+            <label class="selector-label">🎯 İNCELENEN MARKA:</label>
+            <div class="dropdown-wrapper">
+              <div class="brand-logo-preview" *ngIf="selectedBrand !== 'ALL' && selectedBrand !== 'ACTIVE_ONLY'">
+                <app-ai-logo [provider]="selectedBrand" [size]="20"></app-ai-logo>
+              </div>
+              <select [(ngModel)]="selectedBrand" (change)="onBrandChange()" class="brand-dropdown">
+                <option value="ALL">🌐 Tüm Markalar (5 Sağlayıcı)</option>
+                <option value="ACTIVE_ONLY">⚡ Sadece Tanımlı Markalar (DeepSeek, Gemini)</option>
+                <option *ngFor="let p of providerBalances" [value]="p.provider">
+                  {{ p.provider }} {{ p.isActiveProvider ? '⭐ (Aktif Birincil Motor)' : (!p.isAvailable ? '⚪ (Tanımlanmadı)' : '') }}
+                </option>
+              </select>
             </div>
-            <select [(ngModel)]="selectedBrand" (change)="onBrandChange()" class="brand-dropdown">
-              <option value="ALL">🌐 Tüm Markalar (Konsolide Genel Bakış)</option>
-              <option *ngFor="let p of providerBalances" [value]="p.provider">
-                {{ p.provider }} {{ p.isActiveProvider ? '⭐ (Aktif Birincil Motor)' : '' }}
-              </option>
-            </select>
+          </div>
+
+          <!-- PERIOD SELECTOR -->
+          <div class="filter-item">
+            <label class="selector-label">📅 DÖNEM:</label>
+            <div class="dropdown-wrapper">
+              <select [(ngModel)]="selectedPeriod" (change)="onPeriodChange()" class="period-dropdown">
+                <option value="30d">🗓️ Son 30 Gün</option>
+                <option value="this_month">📅 Bu Ay (Cari Dönem)</option>
+                <option value="last_month">⏮️ Geçen Ay (Önceki Dönem)</option>
+                <option value="90d">📊 Son 90 Gün (Son 3 Ay)</option>
+                <option value="all">🌐 Tüm Zamanlar (Arşiv)</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -71,12 +90,12 @@ interface UsageRecord {
       <!-- KPI METRICS STRIP (STRICT ZERO-MOCK: ONLY LIVE/SQLITE VALUES) -->
       <div class="kpi-grid">
         <div class="kpi-card">
-          <span class="kpi-label">TOPLAM HARCANAN TOKEN</span>
+          <span class="kpi-label">HARCANAN TOKEN ({{ getPeriodLabel() }})</span>
           <span class="kpi-val text-blue">{{ displayTokens | number }}</span>
           <span class="kpi-sub">Girdi: {{ displayPromptTokens | number }} / Çıktı: {{ displayCompletionTokens | number }}</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">TOPLAM HARCANAN MALİYET ($ USD)</span>
+          <span class="kpi-label">HARCANAN MALİYET ({{ getPeriodLabel() }})</span>
           <span class="kpi-val text-green">\${{ displayCostUsd | number:'1.2-4' }}</span>
           <span class="kpi-sub">₺{{ displayCostTry | number:'1.2-2' }} TRY</span>
         </div>
@@ -88,7 +107,7 @@ interface UsageRecord {
         <div class="kpi-card">
           <span class="kpi-label">TOPLAM AI İSTEK / ÇAĞRISI</span>
           <span class="kpi-val text-purple">{{ displayCalls }} Çağrı</span>
-          <span class="kpi-sub">{{ selectedBrand === 'ALL' ? 'Tüm sağlayıcılar toplamı' : (selectedBrand + ' toplam çağrısı') }}</span>
+          <span class="kpi-sub">{{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? 'Seçili sağlayıcılar toplamı' : (selectedBrand + ' toplam çağrısı') }}</span>
         </div>
       </div>
 
@@ -99,15 +118,15 @@ interface UsageRecord {
           <div class="chart-header">
             <div>
               <h3 class="chart-title">🤖 Yapay Zeka Sağlayıcı Token Dağılımı</h3>
-              <p class="chart-subtitle">Resmi AI markalarına göre harcanan token oranları</p>
+              <p class="chart-subtitle">Seçili dönem ({{ getPeriodLabel() }}) içindeki token tüketim oranları</p>
             </div>
-            <div class="chart-tag">Canlı Tüketim</div>
+            <div class="chart-tag">{{ getPeriodLabel() }}</div>
           </div>
           <div class="chart-body">
             <canvas #tokenDonutCanvas></canvas>
             <div *ngIf="isDonutEmpty" class="chart-empty-overlay">
               <span class="empty-icon">📊</span>
-              <span>Henüz harcanan token kaydı yok (0 Token / ₺0.00 TRY)</span>
+              <span>Bu dönem için harcanan token kaydı yok (0 Token / ₺0.00 TRY)</span>
             </div>
           </div>
         </div>
@@ -117,7 +136,7 @@ interface UsageRecord {
           <div class="chart-header">
             <div>
               <h3 class="chart-title">📈 Modül Bazlı AI Tüketim Analizi</h3>
-              <p class="chart-subtitle">{{ selectedBrand === 'ALL' ? 'Tüm modüllerin token tüketimi' : (selectedBrand + ' markasının modül tüketimi') }}</p>
+              <p class="chart-subtitle">{{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? 'Tüm modüllerin token tüketimi' : (selectedBrand + ' markasının modül tüketimi') }}</p>
             </div>
             <div class="chart-tag">Modül Analitiği</div>
           </div>
@@ -125,14 +144,14 @@ interface UsageRecord {
             <canvas #moduleBarCanvas></canvas>
             <div *ngIf="isBarEmpty" class="chart-empty-overlay">
               <span class="empty-icon">📉</span>
-              <span>Henüz modül bazlı tüketim kaydı oluşmadı (0 Çağrı)</span>
+              <span>Bu dönemde modül bazlı tüketim kaydı oluşmadı (0 Çağrı)</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- SELECTED BRAND DEEP-DIVE CARD (WHEN A SPECIFIC BRAND IS SELECTED) -->
-      <div class="brand-focus-card glass-card" *ngIf="selectedBrand !== 'ALL' && selectedBrandInfo">
+      <div class="brand-focus-card glass-card" *ngIf="selectedBrand !== 'ALL' && selectedBrand !== 'ACTIVE_ONLY' && selectedBrandInfo">
         <div class="focus-header">
           <div class="focus-title-group">
             <span class="brand-avatar-box" [ngClass]="getBrandClass(selectedBrandInfo.provider)">
@@ -143,7 +162,7 @@ interface UsageRecord {
                 <h2 class="focus-brand-name">{{ selectedBrandInfo.provider }}</h2>
                 <span class="active-tag" *ngIf="selectedBrandInfo.isActiveProvider">⭐ SİSTEMİN AKTİF BİRİNCİL MOTORU</span>
                 <span class="status-pill" [class.success]="selectedBrandInfo.isAvailable">
-                  {{ selectedBrandInfo.isAvailable ? '● Çevrimiçi & Hazır' : '● Bağlantı Bekleniyor' }}
+                  {{ selectedBrandInfo.isAvailable ? '● Çevrimiçi & Hazır' : '⚪ Tanımlanmadı / Kullanılmıyor' }}
                 </span>
               </div>
               <p class="focus-model-text">
@@ -154,8 +173,11 @@ interface UsageRecord {
           </div>
 
           <div class="focus-topup-actions">
-            <a [href]="selectedBrandInfo.topUpUrl" target="_blank" rel="noopener noreferrer" class="btn-topup">
+            <a [href]="selectedBrandInfo.topUpUrl" target="_blank" rel="noopener noreferrer" class="btn-topup" *ngIf="selectedBrandInfo.isAvailable">
               💳 {{ selectedBrandInfo.provider }} Bakiye Yükle (Top Up) ↗
+            </a>
+            <a routerLink="/settings/ai-models" class="btn-topup btn-setup" *ngIf="!selectedBrandInfo.isAvailable">
+              ⚙️ {{ selectedBrandInfo.provider }} API Anahtarı Tanımla ↗
             </a>
           </div>
         </div>
@@ -163,20 +185,20 @@ interface UsageRecord {
         <div class="focus-metrics-row">
           <div class="focus-metric-box remaining-box">
             <span class="f-label">KALAN BAKİYE ($ USD)</span>
-            <span class="f-val-usd">\${{ selectedBrandInfo.totalBalanceUsd | number:'1.2-2' }}</span>
-            <span class="f-val-try">₺{{ (selectedBrandInfo.totalBalanceUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
+            <span class="f-val-usd" [class.zero-val]="!selectedBrandInfo.isAvailable">\${{ selectedBrandInfo.totalBalanceUsd | number:'1.2-2' }}</span>
+            <span class="f-val-try" [class.zero-val]="!selectedBrandInfo.isAvailable">₺{{ (selectedBrandInfo.totalBalanceUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
             <span class="f-status-msg">{{ selectedBrandInfo.statusMessage }}</span>
           </div>
 
           <div class="focus-metric-box">
-            <span class="f-label">TOPLAM HARCANAN TUTAR</span>
+            <span class="f-label">HARCANAN TUTAR ({{ getPeriodLabel() }})</span>
             <span class="f-val-cost">\${{ selectedBrandInfo.totalCostUsd | number:'1.2-4' }}</span>
             <span class="f-sub-try">₺{{ (selectedBrandInfo.totalCostUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
-            <span class="f-sub-desc">Kümülatif AI harcaması</span>
+            <span class="f-sub-desc">Dönemsel SQLite harcaması</span>
           </div>
 
           <div class="focus-metric-box">
-            <span class="f-label">KULLANILAN TOPLAM TOKEN</span>
+            <span class="f-label">KULLANILAN TOKEN ({{ getPeriodLabel() }})</span>
             <span class="f-val-num text-blue">{{ selectedBrandInfo.totalTokensUsed | number }}</span>
             <span class="f-token-detail">
               Girdi: {{ selectedBrandInfo.promptTokensUsed | number }} &nbsp;|&nbsp; Çıktı: {{ selectedBrandInfo.completionTokensUsed | number }}
@@ -193,30 +215,35 @@ interface UsageRecord {
         </div>
       </div>
 
-      <!-- ALL BRANDS CARDS GRID (WHEN 'ALL' IS SELECTED) -->
-      <div class="provider-grid" *ngIf="selectedBrand === 'ALL'">
-        <div class="glass-card provider-card" *ngFor="let p of providerBalances" [class.is-primary]="p.isActiveProvider">
+      <!-- ALL BRANDS CARDS GRID (WHEN 'ALL' OR 'ACTIVE_ONLY' IS SELECTED) -->
+      <div class="provider-grid" *ngIf="selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY'">
+        <div class="glass-card provider-card" 
+             *ngFor="let p of displayedProviderBalances" 
+             [class.is-primary]="p.isActiveProvider"
+             [class.unconfigured-card]="!p.isAvailable">
           <div class="provider-header">
             <div class="provider-badge-wrap">
               <app-ai-logo [provider]="p.provider" [size]="24"></app-ai-logo>
               <span class="provider-badge" [ngClass]="getBrandClass(p.provider)">{{ p.provider }}</span>
             </div>
             <span class="primary-indicator" *ngIf="p.isActiveProvider">⭐ Aktif Motor</span>
+            <span class="unconfigured-indicator" *ngIf="!p.isAvailable">⚪ Tanımlanmadı</span>
           </div>
 
-          <div class="card-balance-banner">
+          <div class="card-balance-banner" [class.unconfigured-banner]="!p.isAvailable">
             <div class="banner-left">
               <span class="banner-label">Kalan Bakiye:</span>
-              <span class="banner-usd">\${{ p.totalBalanceUsd | number:'1.2-2' }}</span>
+              <span class="banner-usd" [class.zero-val]="!p.isAvailable">\${{ p.totalBalanceUsd | number:'1.2-2' }}</span>
             </div>
             <div class="banner-right">
-              <span class="banner-try">₺{{ (p.totalBalanceUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
+              <span class="banner-try" [class.zero-val]="!p.isAvailable">₺{{ (p.totalBalanceUsd * exchangeRate) | number:'1.2-2' }} TRY</span>
             </div>
           </div>
 
           <p class="provider-desc">
             Model: <strong>{{ p.activeModel }}</strong><br>
             <small class="tariff-hint">{{ p.tokenUnitTariff }}</small>
+            <span class="unconfigured-hint" *ngIf="!p.isAvailable">API anahtarı tanımlanmadı. Kullanılmıyor.</span>
           </p>
 
           <div class="provider-meta">
@@ -235,8 +262,11 @@ interface UsageRecord {
           </div>
 
           <div class="card-footer-action">
-            <a [href]="p.topUpUrl" target="_blank" rel="noopener noreferrer" class="card-btn-topup">
+            <a [href]="p.topUpUrl" target="_blank" rel="noopener noreferrer" class="card-btn-topup" *ngIf="p.isAvailable">
               Bakiye Yükle (Top Up) ↗
+            </a>
+            <a routerLink="/settings/ai-models" class="card-btn-setup" *ngIf="!p.isAvailable">
+              ⚙️ Anahtar Ekle
             </a>
             <button type="button" class="btn-inspect-brand" (click)="selectBrand(p.provider)">
               Detayları İncele →
@@ -250,13 +280,14 @@ interface UsageRecord {
         <div class="table-header">
           <div>
             <h2 class="table-title">
-              {{ selectedBrand === 'ALL' ? 'Son AI Çağrı Günlüğü (Tüm Markalar - VDS SQLite)' : (selectedBrand + ' Markasına Ait Çağrı Günlüğü') }}
+              {{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? ('Son AI Çağrı Günlüğü (Tüm Markalar - ' + getPeriodLabel() + ')') : (selectedBrand + ' Markasına Ait Çağrı Günlüğü (' + getPeriodLabel() + ')') }}
             </h2>
             <p class="table-subtitle">VDS SQLite veritabanında depolanan her bir AI token tüketimi, model ve yanıt süresi</p>
           </div>
           <div class="filter-row">
             <select [(ngModel)]="selectedBrand" class="filter-select" (change)="onBrandChange()">
               <option value="ALL">Tüm Sağlayıcılar</option>
+              <option value="ACTIVE_ONLY">Sadece Tanımlı Markalar</option>
               <option *ngFor="let p of providerBalances" [value]="p.provider">{{ p.provider }}</option>
             </select>
           </div>
@@ -299,7 +330,7 @@ interface UsageRecord {
               </tr>
               <tr *ngIf="filteredHistory.length === 0">
                 <td colspan="9" class="empty-table-cell">
-                  {{ selectedBrand === 'ALL' ? 'Sistemde henüz kayıtlı AI çağrı günlüğü bulunmuyor (0 Çağrı / 0 Token).' : (selectedBrand + ' markası için henüz kayıtlı çağrı günlüğü bulunmuyor.') }}
+                  {{ selectedBrand === 'ALL' || selectedBrand === 'ACTIVE_ONLY' ? ('Seçili dönemde (' + getPeriodLabel() + ') kayıtlı AI çağrı günlüğü bulunmuyor (0 Çağrı / 0 Token).') : (selectedBrand + ' markası için bu dönemde kayıtlı çağrı günlüğü bulunmuyor.') }}
                 </td>
               </tr>
             </tbody>
@@ -371,7 +402,7 @@ interface UsageRecord {
       cursor: not-allowed;
     }
 
-    /* BRAND SELECTOR BAR */
+    /* BRAND & PERIOD SELECTOR BAR */
     .brand-selector-bar {
       display: flex;
       justify-content: space-between;
@@ -380,16 +411,24 @@ interface UsageRecord {
       border-radius: 12px;
       background: #0d1527;
       border: 1px solid rgba(59, 130, 246, 0.25);
+      flex-wrap: wrap;
+      gap: 14px;
     }
     .selector-left {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .filter-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
     }
     .dropdown-wrapper {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 8px;
     }
     .brand-logo-preview {
       display: inline-flex;
@@ -401,7 +440,7 @@ interface UsageRecord {
       border: 1px solid rgba(255, 255, 255, 0.1);
     }
     .selector-label {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       font-weight: 800;
       color: #94a3b8;
       letter-spacing: 0.5px;
@@ -411,14 +450,29 @@ interface UsageRecord {
       color: #f8fafc;
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 8px;
-      padding: 8px 16px;
-      font-size: 0.92rem;
+      padding: 8px 14px;
+      font-size: 0.88rem;
       font-weight: 700;
       cursor: pointer;
       outline: none;
-      min-width: 280px;
+      min-width: 250px;
     }
     .brand-dropdown:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
+    }
+    .period-dropdown {
+      background: #111a2e;
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      outline: none;
+    }
+    .period-dropdown:focus {
       border-color: #38bdf8;
       box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.25);
     }
@@ -597,9 +651,9 @@ interface UsageRecord {
       font-size: 0.72rem;
       padding: 3px 8px;
       border-radius: 6px;
-      background: rgba(239, 68, 68, 0.2);
-      color: #f87171;
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.15);
     }
     .status-pill.success {
       background: rgba(16, 185, 129, 0.2);
@@ -631,6 +685,15 @@ interface UsageRecord {
       transform: translateY(-1px);
       box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
     }
+    .btn-setup {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #e2e8f0;
+    }
+    .btn-setup:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
     .focus-metrics-row {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -684,6 +747,18 @@ interface UsageRecord {
       border-color: rgba(16, 185, 129, 0.4);
       background: linear-gradient(145deg, #0d1a29, #0a1120);
     }
+    .provider-card.unconfigured-card {
+      opacity: 0.72;
+      border-style: dashed;
+      border-color: rgba(255, 255, 255, 0.12);
+      background: rgba(13, 21, 39, 0.4);
+    }
+    .provider-card.unconfigured-card:hover {
+      opacity: 0.95;
+      border-style: solid;
+      border-color: rgba(148, 163, 184, 0.3);
+    }
+
     .provider-header {
       display: flex;
       justify-content: space-between;
@@ -705,6 +780,7 @@ interface UsageRecord {
     .provider-badge.openai { background: rgba(16, 185, 129, 0.2); color: #34d399; }
     .provider-badge.claude { background: rgba(217, 119, 6, 0.2); color: #fbbf24; }
     .provider-badge.grok { background: rgba(248, 250, 252, 0.15); color: #f8fafc; }
+
     .primary-indicator {
       font-size: 0.72rem;
       color: #34d399;
@@ -714,6 +790,15 @@ interface UsageRecord {
       border-radius: 12px;
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
+    .unconfigured-indicator {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
     .card-balance-banner {
       background: rgba(15, 23, 42, 0.7);
       border: 1px solid rgba(255, 255, 255, 0.05);
@@ -723,11 +808,20 @@ interface UsageRecord {
       justify-content: space-between;
       align-items: center;
     }
+    .unconfigured-banner {
+      background: rgba(15, 23, 42, 0.4);
+      border-color: rgba(255, 255, 255, 0.03);
+    }
+
     .banner-left { display: flex; flex-direction: column; }
     .banner-label { font-size: 0.68rem; color: #94a3b8; font-weight: 700; }
     .banner-usd { font-size: 1.25rem; font-weight: 800; color: #34d399; }
     .banner-right { text-align: right; }
     .banner-try { font-size: 0.88rem; font-weight: 700; color: #10b981; }
+    .zero-val {
+      color: #94a3b8 !important;
+    }
+
     .provider-desc {
       font-size: 0.8rem;
       color: #cbd5e1;
@@ -735,6 +829,14 @@ interface UsageRecord {
       line-height: 1.4;
     }
     .tariff-hint { color: #64748b; font-size: 0.72rem; }
+    .unconfigured-hint {
+      display: block;
+      color: #eab308;
+      font-size: 0.72rem;
+      margin-top: 4px;
+      font-style: italic;
+    }
+
     .provider-meta {
       display: flex;
       justify-content: space-between;
@@ -765,6 +867,24 @@ interface UsageRecord {
     .card-btn-topup:hover {
       background: #2563eb;
       color: #fff;
+    }
+    .card-btn-setup {
+      flex: 1;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      color: #94a3b8;
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .card-btn-setup:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+      border-style: solid;
     }
     .btn-inspect-brand {
       background: rgba(255, 255, 255, 0.06);
@@ -884,6 +1004,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
 
   providerBalances: AiProviderBalanceDto[] = [];
   selectedBrand: string = 'ALL';
+  selectedPeriod: string = '30d';
   selectedBrandInfo: AiProviderBalanceDto | null = null;
   activeProviderInfo: AiProviderBalanceDto | null = null;
   isLoadingBalances: boolean = false;
@@ -900,32 +1021,39 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
     return this.etsyApi.exchangeRate() || 49.38;
   }
 
+  get displayedProviderBalances(): AiProviderBalanceDto[] {
+    if (this.selectedBrand === 'ACTIVE_ONLY') {
+      return this.providerBalances.filter(p => p.isAvailable);
+    }
+    return this.providerBalances;
+  }
+
   get displayTokens(): number {
-    if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
+    if (this.selectedBrand !== 'ALL' && this.selectedBrand !== 'ACTIVE_ONLY' && this.selectedBrandInfo) {
       return this.selectedBrandInfo.totalTokensUsed || 0;
     }
-    return this.providerBalances.reduce((sum, b) => sum + (b.totalTokensUsed || 0), 0);
+    return this.displayedProviderBalances.reduce((sum, b) => sum + (b.totalTokensUsed || 0), 0);
   }
 
   get displayPromptTokens(): number {
-    if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
+    if (this.selectedBrand !== 'ALL' && this.selectedBrand !== 'ACTIVE_ONLY' && this.selectedBrandInfo) {
       return this.selectedBrandInfo.promptTokensUsed || 0;
     }
-    return this.providerBalances.reduce((sum, b) => sum + (b.promptTokensUsed || 0), 0);
+    return this.displayedProviderBalances.reduce((sum, b) => sum + (b.promptTokensUsed || 0), 0);
   }
 
   get displayCompletionTokens(): number {
-    if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
+    if (this.selectedBrand !== 'ALL' && this.selectedBrand !== 'ACTIVE_ONLY' && this.selectedBrandInfo) {
       return this.selectedBrandInfo.completionTokensUsed || 0;
     }
-    return this.providerBalances.reduce((sum, b) => sum + (b.completionTokensUsed || 0), 0);
+    return this.displayedProviderBalances.reduce((sum, b) => sum + (b.completionTokensUsed || 0), 0);
   }
 
   get displayCostUsd(): number {
-    if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
+    if (this.selectedBrand !== 'ALL' && this.selectedBrand !== 'ACTIVE_ONLY' && this.selectedBrandInfo) {
       return this.selectedBrandInfo.totalCostUsd || 0;
     }
-    return this.providerBalances.reduce((sum, b) => sum + (b.totalCostUsd || 0), 0);
+    return this.displayedProviderBalances.reduce((sum, b) => sum + (b.totalCostUsd || 0), 0);
   }
 
   get displayCostTry(): number {
@@ -933,10 +1061,10 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   get displayRemainingBalanceUsd(): number {
-    if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
+    if (this.selectedBrand !== 'ALL' && this.selectedBrand !== 'ACTIVE_ONLY' && this.selectedBrandInfo) {
       return this.selectedBrandInfo.totalBalanceUsd || 0;
     }
-    return this.providerBalances.reduce((sum, b) => sum + (b.totalBalanceUsd || 0), 0);
+    return this.displayedProviderBalances.reduce((sum, b) => sum + (b.totalBalanceUsd || 0), 0);
   }
 
   get displayRemainingBalanceTry(): number {
@@ -944,15 +1072,19 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   get displayCalls(): number {
-    if (this.selectedBrand !== 'ALL' && this.selectedBrandInfo) {
+    if (this.selectedBrand !== 'ALL' && this.selectedBrand !== 'ACTIVE_ONLY' && this.selectedBrandInfo) {
       return this.selectedBrandInfo.totalApiRequests || 0;
     }
-    return this.providerBalances.reduce((sum, b) => sum + (b.totalApiRequests || 0), 0);
+    return this.displayedProviderBalances.reduce((sum, b) => sum + (b.totalApiRequests || 0), 0);
   }
 
   get filteredHistory(): UsageRecord[] {
     if (this.selectedBrand === 'ALL') {
       return this.history;
+    }
+    if (this.selectedBrand === 'ACTIVE_ONLY') {
+      const activeProviders = this.providerBalances.filter(p => p.isAvailable).map(p => p.provider.toLowerCase());
+      return this.history.filter(h => activeProviders.some(ap => h.provider.toLowerCase().includes(ap)));
     }
     return this.history.filter(h =>
       h.provider.toLowerCase().includes(this.selectedBrand.toLowerCase()) ||
@@ -960,12 +1092,21 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
     );
   }
 
+  getPeriodLabel(): string {
+    switch (this.selectedPeriod) {
+      case 'this_month': return 'Bu Ay';
+      case 'last_month': return 'Geçen Ay';
+      case '90d': return 'Son 90 Gün';
+      case 'all': return 'Tüm Zamanlar';
+      default: return 'Son 30 Gün';
+    }
+  }
+
   ngOnInit(): void {
     this.loadData();
   }
 
   ngAfterViewInit(): void {
-    // Initial chart rendering
     setTimeout(() => this.updateCharts(), 50);
   }
 
@@ -982,7 +1123,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
 
   loadData(): void {
     this.isLoadingBalances = true;
-    this.etsyApi.getAiProviderBalances(undefined, this.exchangeRate).subscribe({
+    this.etsyApi.getAiProviderBalances(undefined, this.exchangeRate, this.selectedPeriod).subscribe({
       next: (balances) => {
         this.isLoadingBalances = false;
         if (balances && balances.length > 0) {
@@ -997,7 +1138,8 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
       }
     });
 
-    this.etsyApi.getAiUsageHistory(undefined, 100).subscribe({
+    const provFilter = (this.selectedBrand === 'ALL' || this.selectedBrand === 'ACTIVE_ONLY') ? undefined : this.selectedBrand;
+    this.etsyApi.getAiUsageHistory(provFilter, 300, this.selectedPeriod).subscribe({
       next: (hist) => {
         if (hist && hist.length > 0) {
           this.history = hist.map((h: any) => ({
@@ -1026,6 +1168,10 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
     this.updateCharts();
   }
 
+  onPeriodChange(): void {
+    this.loadData();
+  }
+
   selectBrand(brand: string): void {
     this.selectedBrand = brand;
     this.updateSelectedBrandInfo();
@@ -1033,7 +1179,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
   }
 
   private updateSelectedBrandInfo(): void {
-    if (this.selectedBrand === 'ALL') {
+    if (this.selectedBrand === 'ALL' || this.selectedBrand === 'ACTIVE_ONLY') {
       this.selectedBrandInfo = null;
     } else {
       this.selectedBrandInfo = this.providerBalances.find(b => b.provider === this.selectedBrand) || null;
@@ -1053,8 +1199,9 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
       this.donutChart = null;
     }
 
-    const labels = this.providerBalances.map(p => p.provider);
-    const data = this.providerBalances.map(p => p.totalTokensUsed || 0);
+    const displayed = this.displayedProviderBalances;
+    const labels = displayed.map(p => p.provider);
+    const data = displayed.map(p => p.totalTokensUsed || 0);
     const totalTokens = data.reduce((a, b) => a + b, 0);
 
     this.isDonutEmpty = totalTokens === 0;

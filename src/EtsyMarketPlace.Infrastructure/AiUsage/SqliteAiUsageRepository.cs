@@ -116,6 +116,7 @@ public sealed class SqliteAiUsageRepository : IAiUsageRepository
         string? providerFilter = null,
         DateTimeOffset? since = null,
         int limit = 300,
+        DateTimeOffset? until = null,
         CancellationToken cancellationToken = default)
     {
         var results = new List<AiUsageRecord>();
@@ -134,6 +135,12 @@ public sealed class SqliteAiUsageRepository : IAiUsageRepository
         {
             query += " AND created_at >= $since";
             command.Parameters.AddWithValue("$since", since.Value.ToString("o"));
+        }
+
+        if (until.HasValue)
+        {
+            query += " AND created_at < $until";
+            command.Parameters.AddWithValue("$until", until.Value.ToString("o"));
         }
 
         query += " ORDER BY created_at DESC LIMIT $limit";
@@ -167,6 +174,7 @@ public sealed class SqliteAiUsageRepository : IAiUsageRepository
     public async Task<AiUsageSummaryStats> GetSummaryStatsAsync(
         string? providerFilter = null,
         DateTimeOffset? since = null,
+        DateTimeOffset? until = null,
         CancellationToken cancellationToken = default)
     {
         var stats = new AiUsageSummaryStats
@@ -174,7 +182,7 @@ public sealed class SqliteAiUsageRepository : IAiUsageRepository
             ProviderFilter = string.IsNullOrWhiteSpace(providerFilter) ? "Tümü" : providerFilter
         };
 
-        var history = await GetHistoryAsync(providerFilter, since, limit: 10000, cancellationToken);
+        var history = await GetHistoryAsync(providerFilter, since, limit: 10000, until: until, cancellationToken: cancellationToken);
         foreach (var r in history)
         {
             stats.TotalRequests++;

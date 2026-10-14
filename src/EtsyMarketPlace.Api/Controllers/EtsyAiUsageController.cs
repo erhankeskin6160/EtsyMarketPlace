@@ -24,9 +24,14 @@ public class EtsyAiUsageController : ControllerBase
 
     [HttpGet("history")]
     [EndpointSummary("AI Model Çağrı Geçmişi")]
-    public async Task<IActionResult> GetAiUsageHistory([FromQuery] string? provider, [FromQuery] int limit = 100, CancellationToken ct = default)
+    public async Task<IActionResult> GetAiUsageHistory(
+        [FromQuery] string? provider,
+        [FromQuery] string? period = "30d",
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
     {
-        var history = await _repo.GetHistoryAsync(provider, null, Math.Clamp(limit <= 0 ? 100 : limit, 1, 300), ct);
+        var (since, until) = AiPeriodHelper.ResolveDateRange(period);
+        var history = await _repo.GetHistoryAsync(provider, since, Math.Clamp(limit <= 0 ? 100 : limit, 1, 1000), until, ct);
         return Ok(history);
     }
 
@@ -36,9 +41,10 @@ public class EtsyAiUsageController : ControllerBase
         [FromServices] IAiBalanceService balanceService,
         [FromQuery] string shopId = "53236321",
         [FromQuery] decimal exchangeRate = 40.0m,
+        [FromQuery] string? period = "30d",
         CancellationToken ct = default)
     {
-        var balances = await balanceService.GetProviderBalancesAsync(shopId, exchangeRate, ct);
+        var balances = await balanceService.GetProviderBalancesAsync(shopId, exchangeRate, period, ct);
         return Ok(balances);
     }
 

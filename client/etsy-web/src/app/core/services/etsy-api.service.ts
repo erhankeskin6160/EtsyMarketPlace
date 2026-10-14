@@ -539,17 +539,17 @@ export class EtsyApiService {
     return this.http.get<any>(url);
   }
 
-  getAiProviderBalances(shopId?: string, exchangeRate?: number): Observable<AiProviderBalanceDto[]> {
+  getAiProviderBalances(shopId?: string, exchangeRate?: number, period: string = '30d'): Observable<AiProviderBalanceDto[]> {
     const sId = shopId || this.activeShopId();
     const rate = exchangeRate || this.exchangeRate() || 40.0;
     return this.http.get<AiProviderBalanceDto[]>(
-      `${this.API_BASE}/api/etsy/ai-usage/balances?shopId=${sId}&exchangeRate=${rate}`
+      `${this.API_BASE}/api/etsy/ai-usage/balances?shopId=${encodeURIComponent(sId)}&exchangeRate=${rate}&period=${encodeURIComponent(period)}`
     );
   }
 
-  getAiUsageHistory(provider?: string, limit: number = 100): Observable<any[]> {
-    let url = `${this.API_BASE}/api/etsy/ai-usage/history?limit=${limit}`;
-    if (provider) url += `&provider=${encodeURIComponent(provider)}`;
+  getAiUsageHistory(provider?: string, limit: number = 100, period: string = '30d'): Observable<any[]> {
+    let url = `${this.API_BASE}/api/etsy/ai-usage/history?limit=${limit}&period=${encodeURIComponent(period)}`;
+    if (provider && provider !== 'ALL') url += `&provider=${encodeURIComponent(provider)}`;
     return this.http.get<any[]>(url);
   }
 

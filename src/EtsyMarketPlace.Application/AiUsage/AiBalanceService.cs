@@ -30,6 +30,7 @@ public sealed class AiBalanceService : IAiBalanceService
     public async Task<IReadOnlyList<AiProviderBalanceInfo>> GetProviderBalancesAsync(
         string shopId,
         decimal exchangeRate = 40.0m,
+        string? period = "30d",
         CancellationToken ct = default)
     {
         if (exchangeRate <= 0) exchangeRate = 40.0m;
@@ -88,8 +89,9 @@ public sealed class AiBalanceService : IAiBalanceService
             AppLog.Swallowed(ex, "AiBalanceService.ReadSettings");
         }
 
-        // 2. VDS SQLite geçmişinden kullanım kayıtlarını çek
-        var history = await _usageRepo.GetHistoryAsync(null, DateTimeOffset.UtcNow.AddDays(-30), 300, ct);
+        // 2. VDS SQLite geçmişinden seçilen periyoda göre kullanım kayıtlarını çek
+        var (since, until) = AiPeriodHelper.ResolveDateRange(period);
+        var history = await _usageRepo.GetHistoryAsync(null, since, 1000, until, ct);
 
         // 3. DeepSeek Bilgilerini Derle ve Canlı Bakiye Sorgula
         var deepSeekInfo = new AiProviderBalanceInfo

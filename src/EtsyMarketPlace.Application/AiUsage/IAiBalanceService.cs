@@ -6,5 +6,5 @@ using System.Threading.Tasks;
 
 public interface IAiBalanceService
 {
-    Task<IReadOnlyList<AiProviderBalanceInfo>> GetProviderBalancesAsync(string shopId, decimal exchangeRate = 40.0m, CancellationToken ct = default);
+    Task<IReadOnlyList<AiProviderBalanceInfo>> GetProviderBalancesAsync(string shopId, decimal exchangeRate = 40.0m, string? period = "30d", CancellationToken ct = default);
 }

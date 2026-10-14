@@ -168,4 +168,27 @@ public sealed class AiBalanceServiceTests
             }
         }
     }
+
+    [Fact]
+    public void AiPeriodHelper_ResolvesValidDateRanges()
+    {
+        var (s30, u30) = AiPeriodHelper.ResolveDateRange("30d");
+        Assert.NotNull(s30);
+        Assert.Null(u30);
+        Assert.True(s30.Value <= DateTimeOffset.UtcNow.AddDays(-29));
+
+        var (sThisMonth, uThisMonth) = AiPeriodHelper.ResolveDateRange("this_month");
+        Assert.NotNull(sThisMonth);
+        Assert.Null(uThisMonth);
+        Assert.Equal(1, sThisMonth.Value.Day);
+
+        var (sLastMonth, uLastMonth) = AiPeriodHelper.ResolveDateRange("last_month");
+        Assert.NotNull(sLastMonth);
+        Assert.NotNull(uLastMonth);
+        Assert.True(sLastMonth.Value < uLastMonth.Value);
+
+        var (sAll, uAll) = AiPeriodHelper.ResolveDateRange("all");
+        Assert.Null(sAll);
+        Assert.Null(uAll);
+    }
 }
