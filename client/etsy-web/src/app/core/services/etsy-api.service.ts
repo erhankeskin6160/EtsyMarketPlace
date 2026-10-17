@@ -746,10 +746,53 @@ export class EtsyApiService {
     });
   }
 
+  generateMarketAiReport(payload: MarketAiReportRequestDto): Observable<MarketAiReportResponseDto> {
+    const shopId = payload.shopId || this.activeShopId();
+    return this.http.post<MarketAiReportResponseDto>(`${this.API_BASE}/api/etsy/market/ai-report`, {
+      ...payload,
+      shopId
+    });
+  }
+
   // ── System Health & Version ───────────────────────────────────────────────
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
   }
+}
+
+export interface MarketAiReportRequestDto {
+  keyword: string;
+  shopId?: string;
+  averagePrice: number;
+  minPrice: number;
+  maxPrice: number;
+  medianPrice?: number;
+  averageFavorites: number;
+  averageViews: number;
+  opportunityScore: number;
+  totalEstimatedMarketRevenue: number;
+  uniqueShopCount?: number;
+  totalListings: number;
+  topShopName: string;
+  topShopSales: number;
+  topCompetitorTitles: string[];
+  topTags: string[];
+  apiKey?: string;
+  model?: string;
+  provider?: string;
+}
+
+export interface MarketAiReportResponseDto {
+  keyword: string;
+  usedAi: boolean;
+  provider: string;
+  model: string;
+  marketOverview: string;
+  pricingStrategy: string;
+  differentiationIdeas: string[];
+  recommendedKeywords: string[];
+  actionItems: string[];
+  reportHtml: string;
 }
 
 export interface MarketTagFrequencyDto {
@@ -767,11 +810,17 @@ export interface MarketSummaryKpisDto {
   averagePrice: number;
   minPrice: number;
   maxPrice: number;
+  medianPrice?: number;
   currency: string;
   averageFavorites: number;
   averageViews: number;
   topShopName: string;
   topShopSales: number;
+  uniqueShopCount?: number;
+  topShopConcentrationPct?: number;
+  freeShippingRatioPct?: number;
+  bestsellerCount?: number;
+  highOpportunityCount?: number;
   opportunityScore: number;
   totalEstimatedMarketRevenue: number;
   averageEstimatedMonthlySales: number;
@@ -797,6 +846,9 @@ export interface MarketListingItemDto {
   estimatedMonthlyRevenue: number;
   salesVelocity: string;
   conversionRateEst: number;
+  isBestseller?: boolean;
+  hasFreeShipping?: boolean;
+  isOpportunityListing?: boolean;
   tags: string[];
   materials: string[];
   imageUrl: string;

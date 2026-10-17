@@ -70,6 +70,73 @@ public class EtsyMarketController : BaseApiController
         var removed = await _marketKeywordTrackingService.DeleteKeywordAsync(keyword, cancellationToken);
         return Ok(new { success = removed });
     }
+
+    [HttpPost("ai-report")]
+    [EndpointSummary("Aranan niş ve canlı rakip verileri üzerinden AI / Akıllı Pazar Strateji Raporu üretir")]
+    public async Task<IActionResult> GenerateAiMarketReport(
+        [FromBody] MarketAiReportApiRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request == null || string.IsNullOrWhiteSpace(request.Keyword))
+        {
+            return BadRequest(new { error = "Pazar strateji raporu için keyword gereklidir." });
+        }
+
+        var resolvedShopId = ResolveShopId(request.ShopId, _config);
+        var apiKey = !string.IsNullOrWhiteSpace(request.ApiKey)
+            ? request.ApiKey.Trim()
+            : Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
+                ? hKey.ToString().Trim()
+                : _config["Gemini:ApiKey"] ?? string.Empty;
+
+        var command = new MarketAiReportCommand(
+            Keyword: request.Keyword,
+            ShopId: resolvedShopId,
+            AveragePrice: request.AveragePrice,
+            MinPrice: request.MinPrice,
+            MaxPrice: request.MaxPrice,
+            MedianPrice: request.MedianPrice,
+            AverageFavorites: request.AverageFavorites,
+            AverageViews: request.AverageViews,
+            OpportunityScore: request.OpportunityScore,
+            TotalEstimatedMarketRevenue: request.TotalEstimatedMarketRevenue,
+            UniqueShopCount: request.UniqueShopCount,
+            TotalListings: request.TotalListings,
+            TopShopName: request.TopShopName ?? "-",
+            TopShopSales: request.TopShopSales,
+            TopCompetitorTitles: request.TopCompetitorTitles,
+            TopTags: request.TopTags,
+            ApiKey: apiKey,
+            Model: request.Model,
+            Provider: request.Provider
+        );
+
+        var report = await _marketResearchService.GenerateAiMarketReportAsync(command, cancellationToken);
+        return Ok(report);
+    }
 }
 
 public sealed record TrackMarketKeywordRequest(string Keyword);
+
+public sealed class MarketAiReportApiRequest
+{
+    public string Keyword { get; set; } = string.Empty;
+    public string? ShopId { get; set; }
+    public decimal AveragePrice { get; set; }
+    public decimal MinPrice { get; set; }
+    public decimal MaxPrice { get; set; }
+    public decimal MedianPrice { get; set; }
+    public double AverageFavorites { get; set; }
+    public double AverageViews { get; set; }
+    public int OpportunityScore { get; set; }
+    public decimal TotalEstimatedMarketRevenue { get; set; }
+    public int UniqueShopCount { get; set; }
+    public int TotalListings { get; set; }
+    public string? TopShopName { get; set; }
+    public int TopShopSales { get; set; }
+    public List<string>? TopCompetitorTitles { get; set; }
+    public List<string>? TopTags { get; set; }
+    public string? ApiKey { get; set; }
+    public string? Model { get; set; }
+    public string? Provider { get; set; }
+}

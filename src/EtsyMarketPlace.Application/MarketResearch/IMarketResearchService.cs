@@ -8,4 +8,8 @@ public interface IMarketResearchService
     Task<MarketSearchResponse> SearchMarketAsync(
         MarketSearchQuery query,
         CancellationToken cancellationToken = default);
+
+    Task<MarketAiReportResultDto> GenerateAiMarketReportAsync(
+        MarketAiReportCommand command,
+        CancellationToken cancellationToken = default);
 }

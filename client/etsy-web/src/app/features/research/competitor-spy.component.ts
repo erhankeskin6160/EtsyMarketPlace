@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 
 const COMPETITOR_STORAGE_KEY = 'etsy_competitor_shops_v1';
@@ -365,10 +366,23 @@ export class CompetitorSpyComponent implements OnInit {
   selectedShop: CompetitorShop | null = null;
   copiedMessage = '';
 
-  constructor(public etsyApi: EtsyApiService) {}
+  constructor(
+    public etsyApi: EtsyApiService,
+    private route: ActivatedRoute
+  ) {}
 
   ngOnInit(): void {
     this.loadShops();
+    this.route.queryParams.subscribe(params => {
+      const targetShop = (params['shop'] || '').trim();
+      if (targetShop) {
+        this.loadShops();
+        const found = this.shops.find(s => s.shopName.toLowerCase() === targetShop.toLowerCase());
+        if (found) {
+          this.selectedShop = found;
+        }
+      }
+    });
   }
 
   private loadShops(): void {

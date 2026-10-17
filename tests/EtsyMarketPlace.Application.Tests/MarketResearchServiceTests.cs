@@ -300,4 +300,147 @@ public sealed class MarketResearchServiceTests
 
         Assert.Equal(2, fakeClient.SearchCallCount);
     }
+
+    [Fact]
+    public async Task SearchMarketAsync_RecalculatesSalesAndScoresAfterBatchEnrichment()
+    {
+        var unenrichedClient = new FakeEtsyMarketApiClient
+        {
+            RawJson = MixedCurrencySearchJson,
+            BatchRawJson = """{ "results": [] }"""
+        };
+        var enrichedClient = new FakeEtsyMarketApiClient
+        {
+            RawJson = MixedCurrencySearchJson,
+            BatchRawJson = """
+            {
+                "results": [
+                    {
+                        "listing_id": 111,
+                        "url": "https://www.etsy.com/listing/111/dragon-lamp",
+                        "tags": ["t1","t2","t3","t4","t5","t6","t7","t8","t9","t10","t11","t12","t13"],
+                        "images": [
+                            { "url_570xN": "https://i.etsystatic.com/img1.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/img2.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/img3.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/img4.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/img5.jpg" }
+                        ],
+                        "shop": {
+                            "shop_name": "DragonCrafts",
+                            "url": "https://www.etsy.com/shop/DragonCrafts",
+                            "transaction_sold_count": 8500,
+                            "review_count": 1200,
+                            "review_average": 4.95
+                        }
+                    }
+                ]
+            }
+            """
+        };
+
+        var unenrichedRes = await new MarketResearchService(unenrichedClient).SearchMarketAsync(
+            new MarketSearchQuery(Keyword: "recalc probe unenriched", Limit: 25, ShopId: "53236321"));
+        var enrichedRes = await new MarketResearchService(enrichedClient).SearchMarketAsync(
+            new MarketSearchQuery(Keyword: "recalc probe enriched", Limit: 25, ShopId: "53236321"));
+
+        var itemUnenriched = unenrichedRes.Listings.Single(l => l.Id == 111);
+        var itemEnriched = enrichedRes.Listings.Single(l => l.Id == 111);
+
+        Assert.True(itemEnriched.SeoScore > itemUnenriched.SeoScore);
+        Assert.True(itemEnriched.MarketScore > itemUnenriched.MarketScore);
+        Assert.True(itemEnriched.EstimatedMonthlySales > itemUnenriched.EstimatedMonthlySales);
+        Assert.True(itemEnriched.EstimatedMonthlyRevenue > itemUnenriched.EstimatedMonthlyRevenue);
+        Assert.Equal(49.90m, enrichedRes.Kpis.MedianPrice);
+        Assert.Equal(3, enrichedRes.Kpis.UniqueShopCount);
+    }
+
+    private sealed class FakeGeminiClient : EtsyMarketPlace.Application.ListingOptimization.IGeminiListingApiClient
+    {
+        public string? ResponseJson { get; set; }
+
+        public Task<(bool Success, string? Content, string? ErrorMessage)> GenerateOptimizationJsonAsync(
+            string systemInstruction,
+            string userPrompt,
+            string model,
+            string apiKey,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(ResponseJson))
+            {
+                return Task.FromResult<(bool, string?, string?)>((false, null, "Simulated failure"));
+            }
+            return Task.FromResult<(bool, string?, string?)>((true, ResponseJson, null));
+        }
+    }
+
+    [Fact]
+    public async Task GenerateAiMarketReportAsync_WithGeminiResponse_ReturnsAiStrategyReport()
+    {
+        var fakeMarketClient = new FakeEtsyMarketApiClient();
+        var fakeGemini = new FakeGeminiClient
+        {
+            ResponseJson = """
+            {
+                "market_overview": "Dragon lamp nişinde yüksek talep ve orta rekabet var.",
+                "pricing_strategy": "$39.90 ile giriş yapın.",
+                "differentiation_ideas": ["RGB kumandalı taban ekleyin", "Hediye kutusu sunun"],
+                "recommended_keywords": ["dragon night light", "resin dragon lamp"],
+                "action_items": ["13 etiketi tamamlayın", "Video ekleyin"]
+            }
+            """
+        };
+        var service = new MarketResearchService(fakeMarketClient, fakeGemini);
+
+        var report = await service.GenerateAiMarketReportAsync(new MarketAiReportCommand(
+            Keyword: "dragon lamp",
+            AveragePrice: 44.50m,
+            MinPrice: 19.90m,
+            MaxPrice: 89.00m,
+            MedianPrice: 42.00m,
+            OpportunityScore: 84,
+            TotalEstimatedMarketRevenue: 18500m,
+            UniqueShopCount: 18,
+            TotalListings: 25,
+            ApiKey: "test-gemini-key",
+            Model: "gemini-2.5-flash"
+        ));
+
+        Assert.True(report.UsedAi);
+        Assert.Equal("Gemini", report.Provider);
+        Assert.Contains("yüksek talep", report.MarketOverview);
+        Assert.Equal(2, report.DifferentiationIdeas.Count);
+        Assert.Equal(2, report.RecommendedKeywords.Count);
+        Assert.Contains("dragon night light", report.ReportHtml);
+    }
+
+    [Fact]
+    public async Task GenerateAiMarketReportAsync_WithoutApiKey_ReturnsDeterministicRealDataReport()
+    {
+        var fakeMarketClient = new FakeEtsyMarketApiClient();
+        var service = new MarketResearchService(fakeMarketClient);
+
+        var report = await service.GenerateAiMarketReportAsync(new MarketAiReportCommand(
+            Keyword: "wooden wall art",
+            AveragePrice: 55.00m,
+            MinPrice: 25.00m,
+            MaxPrice: 120.00m,
+            MedianPrice: 50.00m,
+            OpportunityScore: 78,
+            TotalEstimatedMarketRevenue: 24000m,
+            UniqueShopCount: 20,
+            TotalListings: 25,
+            TopShopName: "WoodCraftStudio",
+            TopShopSales: 3400,
+            TopTags: ["wall decor", "wood art", "housewarming gift"]
+        ));
+
+        Assert.False(report.UsedAi);
+        Assert.Equal("SmartMarketEngine", report.Provider);
+        Assert.Contains("wooden wall art", report.MarketOverview);
+        Assert.NotEmpty(report.DifferentiationIdeas);
+        Assert.NotEmpty(report.RecommendedKeywords);
+        Assert.NotEmpty(report.ActionItems);
+        Assert.Contains("WoodCraftStudio", report.ReportHtml);
+    }
 }

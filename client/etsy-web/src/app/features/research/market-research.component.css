@@ -193,15 +193,26 @@
     /* KPI GRID */
     .kpi-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+    }
+    @media (max-width: 1380px) {
+      .kpi-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 860px) {
+      .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
     .kpi-card {
-      padding: 14px 18px;
+      padding: 11px 14px;
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 3px;
       border-radius: 10px;
+      min-width: 0;
     }
     .kpi-card.highlight-orange {
       border-color: rgba(249, 115, 22, 0.4);
@@ -1191,3 +1202,85 @@
 .btn-apply-kw.danger { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); color: #f87171; }
 .delta-up { color: #34d399; font-size: 0.72rem; font-weight: 700; margin-left: 4px; }
 .delta-down { color: #f87171; font-size: 0.72rem; font-weight: 700; margin-left: 4px; }
+
+/* Hızlı Niş Filtre Çipleri & Satır Rozetleri */
+.quick-chip-btn {
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.quick-chip-btn:hover {
+  border-color: #38bdf8;
+  color: #fff;
+}
+.quick-chip-btn.active {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+  color: #6ee7b7;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.2);
+}
+
+.row-inline-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+.inline-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.inline-pill.opp {
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+}
+.inline-pill.best {
+  background: rgba(239, 68, 68, 0.16);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+}
+.inline-pill.ship {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+
+/* Dinamik Sağlık Denetimi & Rekabet Avantajı Kutusu */
+.check-item.ok { border-left: 3px solid #10b981; }
+.check-item.warn { border-left: 3px solid #f59e0b; }
+.check-item.bad { border-left: 3px solid #ef4444; }
+
+.competitor-gaps-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.gaps-title {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #fcd34d;
+  margin-bottom: 6px;
+}
+.gaps-list {
+  margin: 0;
+  padding-left: 18px;
+  color: #e2e8f0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.gaps-list li {
+  margin-bottom: 4px;
+}
+

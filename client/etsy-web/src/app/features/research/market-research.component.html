@@ -109,7 +109,8 @@
               <span class="sub-try">(₺{{ (avgPriceUsd * etsyApi.exchangeRate()) | number:'1.0-0' }})</span>
             </ng-container>
           </div>
-          <span class="kpi-desc">Kategorideki rekabetçi satış ortalaması</span>
+          <span class="kpi-desc" *ngIf="hasResults">Min: &#36;{{ minPriceUsd | number:'1.2-2' }} • Medyan: &#36;{{ medianPriceUsd | number:'1.2-2' }} • Max: &#36;{{ maxPriceUsd | number:'1.2-2' }}</span>
+          <span class="kpi-desc" *ngIf="!hasResults">Kategorideki rekabetçi satış ortalaması</span>
         </div>
 
         <div class="glass-card kpi-card highlight-emerald">
@@ -125,9 +126,10 @@
         <div class="glass-card kpi-card">
           <span class="kpi-label">ORTALAMA AYLIK SATIŞ</span>
           <div class="kpi-val text-cyan">
-            <ng-container *ngIf="hasResults; else kpiEmpty">{{ averageEstimatedMonthlySales | number:'1.0-0' }} Adet / ay</ng-container>
+            <ng-container *ngIf="hasResults; else kpiEmpty">{{ averageEstimatedMonthlySales | number:'1.0-1' }} Adet / ay</ng-container>
           </div>
-          <span class="kpi-desc">İlan başına tahmini aylık sipariş hızı</span>
+          <span class="kpi-desc" *ngIf="hasResults">Lider ürün cirosu: &#36;{{ topSellerMonthlyRevenue | number:'1.0-0' }}/ay</span>
+          <span class="kpi-desc" *ngIf="!hasResults">İlan başına tahmini aylık sipariş hızı</span>
         </div>
 
         <div class="glass-card kpi-card">
@@ -135,7 +137,8 @@
           <div class="kpi-val text-purple">
             <ng-container *ngIf="hasResults; else kpiEmpty">{{ avgFavorites | number:'1.0-0' }} Fav</ng-container>
           </div>
-          <span class="kpi-desc">Müşteri kaydetme ve satın alma ilgisi</span>
+          <span class="kpi-desc" *ngIf="hasResults">Ort. {{ avgViews | number:'1.0-0' }} görüntülenme • {{ totalEtsyCount | number }} toplam sonuç</span>
+          <span class="kpi-desc" *ngIf="!hasResults">Müşteri kaydetme ve satın alma ilgisi</span>
         </div>
 
         <div class="glass-card kpi-card">
@@ -143,7 +146,8 @@
           <div class="kpi-val text-purple">
             <ng-container *ngIf="hasResults; else kpiEmpty">{{ topShopName }}</ng-container>
           </div>
-          <span class="kpi-desc">Kategori hacminin lider oyuncusu</span>
+          <span class="kpi-desc" *ngIf="hasResults">{{ topShopSales | number }} mağaza satışı • {{ uniqueShopCount }} farklı mağaza</span>
+          <span class="kpi-desc" *ngIf="!hasResults">Kategori hacminin lider oyuncusu</span>
         </div>
 
         <div class="glass-card kpi-card highlight-orange">
@@ -151,7 +155,8 @@
           <div class="kpi-val text-orange">
             <ng-container *ngIf="hasResults; else kpiEmpty">%{{ opportunityScore }} / 100</ng-container>
           </div>
-          <span class="kpi-desc">Yüksek talep, optimize edilebilir rekabet</span>
+          <span class="kpi-desc" *ngIf="hasResults">🎯 {{ highOpportunityCount }} SEO fırsatı • 🚚 %{{ freeShippingRatioPct | number:'1.0-0' }} ücretsiz kargo</span>
+          <span class="kpi-desc" *ngIf="!hasResults">Yüksek talep, optimize edilebilir rekabet</span>
         </div>
       </div>
 
@@ -196,7 +201,7 @@
         </div>
 
         <div class="result-filter-bar">
-          <span class="filter-bar-title">🎛️ Sonuç Filtreleri</span>
+          <span class="filter-bar-title">🎛️ Hızlı Niş Filtreleri</span>
           <label class="filter-field">
             <span>Min $</span>
             <input type="number" min="0" placeholder="0" class="filter-input" [(ngModel)]="filterMinPrice" />
@@ -206,12 +211,21 @@
             <input type="number" min="0" placeholder="∞" class="filter-input" [(ngModel)]="filterMaxPrice" />
           </label>
           <label class="filter-field">
-            <span>Min Favori</span>
+            <span>Min Fav</span>
             <input type="number" min="0" placeholder="0" class="filter-input" [(ngModel)]="filterMinFavorites" />
           </label>
+          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyWeakSeoOpportunity" (click)="toggleWeakSeoOpportunityFilter()" title="Yüksek talep/satış alan ancak rakibin SEO puanı zayıf (<80) bıraktığı en değerli fırsat ürünleri">
+            🎯 SEO Zafiyeti Fırsatı ({{ highOpportunityCount }})
+          </button>
+          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyBestseller" (click)="toggleBestsellerFilter()" title="Aylık 35+ satış veya yüksek ciro yapan çok satan ürünler">
+            🔥 Çok Satanlar ({{ bestsellerCount }})
+          </button>
+          <button type="button" class="quick-chip-btn" [class.active]="filterOnlyFreeShipping" (click)="toggleFreeShippingFilter()" title="Ücretsiz kargo avantajı sunan ilanlar">
+            🚚 Ücretsiz Kargo
+          </button>
           <label class="filter-toggle">
             <input type="checkbox" [(ngModel)]="filterOnlyOpportunity" />
-            <span>⚡ Sadece %85+ fırsat</span>
+            <span>⚡ %85+ Pazar Puanı</span>
           </label>
           <span class="filter-count" [class.active-filter]="isFilterActive">{{ displayItems.length }} / {{ items.length }} ilan</span>
           <button type="button" class="filter-reset-btn" *ngIf="isFilterActive" (click)="resetFilters()">Filtreleri Sıfırla</button>
@@ -260,6 +274,11 @@
                 <!-- Ürün Başlığı -->
                 <td class="title-cell">
                   <span class="prod-title" [title]="item.title">{{ item.title }}</span>
+                  <div class="row-inline-badges" *ngIf="item.isOpportunityListing || item.isBestseller || item.hasFreeShipping">
+                    <span *ngIf="item.isOpportunityListing" class="inline-pill opp" title="Yüksek talep + Zayıf Rakip SEO: Bu ürünü daha iyi SEO ile geçebilirsiniz">🎯 SEO Fırsatı</span>
+                    <span *ngIf="item.isBestseller" class="inline-pill best" title="Yüksek satış hacmi">🔥 Çok Satan</span>
+                    <span *ngIf="item.hasFreeShipping" class="inline-pill ship">🚚 Ücretsiz Kargo</span>
+                  </div>
                 </td>
 
                 <!-- Fiyat -->
@@ -270,7 +289,7 @@
 
                 <!-- Tahmini Satış (EverBee Modeli) -->
                 <td class="est-sales-cell">
-                  <b>{{ (item.estimatedMonthlySales || 40) | number }} / ay</b>
+                  <b>{{ (item.estimatedMonthlySales ?? 0) | number }} / ay</b>
                   <span class="velocity-pill" [ngClass]="getVelocityClass(item.salesVelocity)">
                     {{ item.salesVelocity || '⚡ Düzenli' }}
                   </span>
@@ -278,8 +297,8 @@
 
                 <!-- Tahmini Ciro (EverBee Modeli) -->
                 <td class="est-rev-cell">
-                  <b class="text-emerald">&#36;{{ (item.estimatedMonthlyRevenue || (item.priceUsd * (item.estimatedMonthlySales || 40))) | number:'1.0-0' }} / ay</b>
-                  <span class="try-sm">₺{{ ((item.estimatedMonthlyRevenue || (item.priceUsd * (item.estimatedMonthlySales || 40))) * etsyApi.exchangeRate()) | number:'1.0-0' }}</span>
+                  <b class="text-emerald">&#36;{{ (item.estimatedMonthlyRevenue ?? (item.priceUsd * (item.estimatedMonthlySales ?? 0))) | number:'1.0-0' }} / ay</b>
+                  <span class="try-sm">₺{{ ((item.estimatedMonthlyRevenue ?? (item.priceUsd * (item.estimatedMonthlySales ?? 0))) * etsyApi.exchangeRate()) | number:'1.0-0' }}</span>
                 </td>
 
                 <!-- Mağaza -->
@@ -351,8 +370,8 @@ Mağaza Satışı: {{ selectedItem.shopSales | number }} | Yorum: {{ selectedIte
 Favori: {{ selectedItem.favorites | number }} | Görüntülenme: {{ selectedItem.views | number }} | Stok: {{ selectedItem.quantity }}
 
 💰 <strong>EVERBEE & TOOLSY GELİR TAHMİNİ:</strong>
-Aylık Tahmini Satış: {{ (selectedItem.estimatedMonthlySales || 45) | number }} Adet/ay | Aylık Tahmini Ciro: &#36;{{ (selectedItem.estimatedMonthlyRevenue || (selectedItem.priceUsd * 45)) | number:'1.0-0' }}/ay (₺{{ ((selectedItem.estimatedMonthlyRevenue || (selectedItem.priceUsd * 45)) * etsyApi.exchangeRate()) | number:'1.0-0' }})
-Satış Hızı: {{ selectedItem.salesVelocity || '🔥 Çok Hızlı Satan' }} | Tahmini Ziyaretçi Dönüşüm Oranı (CVR): %{{ selectedItem.conversionRateEst || 2.8 }}
+Aylık Tahmini Satış: {{ (selectedItem.estimatedMonthlySales ?? 0) | number }} Adet/ay | Aylık Tahmini Ciro: &#36;{{ (selectedItem.estimatedMonthlyRevenue ?? 0) | number:'1.0-0' }}/ay (₺{{ ((selectedItem.estimatedMonthlyRevenue ?? 0) * etsyApi.exchangeRate()) | number:'1.0-0' }})
+Satış Hızı: {{ selectedItem.salesVelocity || '⚡ Düzenli' }} | Tahmini Ziyaretçi Dönüşüm Oranı (CVR): %{{ selectedItem.conversionRateEst || 2.5 }}
 
 📊 <strong>SEO / PAZAR:</strong> SEO Puanı: %{{ selectedItem.seoScore }}/100 | Pazar Fırsat Puanı: %{{ selectedItem.marketScore }}/100
 
@@ -719,38 +738,38 @@ Satış Hızı: {{ selectedItem.salesVelocity || '🔥 Çok Hızlı Satan' }} | 
       <div class="modal-backdrop" *ngIf="showHealthModal" (click)="showHealthModal = false">
         <div class="modal-card-analysis" (click)="$event.stopPropagation()">
           <div class="modal-header">
-            <h3>🩺 İlan SEO & Kalite Sağlık Denetimi</h3>
+            <h3>🩺 Canlı İlan SEO & Rekabet Zafiyeti Denetimi</h3>
             <button class="btn-close-modal" (click)="showHealthModal = false">✕</button>
           </div>
-          <div class="modal-body" *ngIf="selectedItem">
+          <div class="modal-body" *ngIf="selectedItem && getHealthAudit(selectedItem) as audit">
             <div class="health-gauge-box">
-              <div class="gauge-score" [ngClass]="getScoreColorClass(selectedItem.seoScore)">
-                %{{ selectedItem.seoScore }}
+              <div class="gauge-score" [ngClass]="audit.gradeClass">
+                {{ audit.grade }} (%{{ audit.totalScore }})
               </div>
-              <div class="gauge-label">Genel Etsy SEO Sağlık Skoru</div>
+              <div class="gauge-label">
+                SEO: %{{ selectedItem.seoScore }} • Pazar Fırsatı: %{{ selectedItem.marketScore }} • {{ selectedItem.shopName }}
+              </div>
             </div>
 
             <div class="audit-checklist">
-              <div class="check-item">
-                <span class="icon">✅</span>
-                <span>Başlık Uzunluğu: <strong>{{ selectedItem.title.length }} / 140 Karakter</strong> (Kusursuz anahtar kelime yerleşimi)</span>
+              <div class="check-item" *ngFor="let chk of audit.checks" [ngClass]="chk.statusClass">
+                <span class="icon">{{ chk.icon }}</span>
+                <div>
+                  <strong>{{ chk.title }}</strong>
+                  <div style="font-size: 0.78rem; color: #94a3b8; margin-top: 2px;">{{ chk.detail }}</div>
+                </div>
               </div>
-              <div class="check-item">
-                <span class="icon">✅</span>
-                <span>Etiket Doluluğu: <strong>{{ selectedItem.tags.length }} / 13 Etiket</strong> tamamlandı.</span>
-              </div>
-              <div class="check-item">
-                <span class="icon">✅</span>
-                <span>Görsel Çözünürlüğü: <strong>2000x2000px HD</strong> formatında hazır.</span>
-              </div>
-              <div class="check-item">
-                <span class="icon">💡</span>
-                <span>Pazar Fırsat Skoru: <strong>%{{ selectedItem.marketScore }}</strong> - Bu ürünü klonlayarak hızlıca rekabete girebilirsiniz.</span>
-              </div>
+            </div>
+
+            <div class="competitor-gaps-box" *ngIf="audit.competitorGaps.length > 0">
+              <div class="gaps-title">🎯 Bu Rakibi Sıralamada Geçmek İçin Fırsatlar ({{ audit.competitorGaps.length }})</div>
+              <ul class="gaps-list">
+                <li *ngFor="let gap of audit.competitorGaps">{{ gap }}</li>
+              </ul>
             </div>
           </div>
           <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="cloneSelectedListing()">🚀 Bu İlanı Klonla & Yayınla</button>
+            <button class="btn-primary-modal" (click)="cloneSelectedListing()">🚀 Bu İlanı Klonla & Eksiklerini Kapat</button>
             <button class="btn-secondary-modal" (click)="showHealthModal = false">Kapat</button>
           </div>
         </div>

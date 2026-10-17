@@ -74,6 +74,9 @@ public sealed class MarketKeywordTrackingServiceTests
 
         public Task<MarketSearchResponse> SearchMarketAsync(MarketSearchQuery query, CancellationToken cancellationToken = default)
             => Task.FromResult(Response);
+
+        public Task<MarketAiReportResultDto> GenerateAiMarketReportAsync(MarketAiReportCommand command, CancellationToken cancellationToken = default)
+            => Task.FromResult(new MarketAiReportResultDto { Keyword = command.Keyword });
     }
 
     private static MarketSearchResponse BuildResponse(int total, decimal avgPrice, double avgFavorites, int opportunity, int sampleSize)

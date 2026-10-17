@@ -31,6 +31,24 @@ export interface MarketItem {
   estimatedMonthlyRevenue?: number;
   salesVelocity?: string;
   conversionRateEst?: number;
+  isBestseller?: boolean;
+  hasFreeShipping?: boolean;
+  isOpportunityListing?: boolean;
+}
+
+export interface HealthAuditCheckItem {
+  icon: '✅' | '⚠️' | '❌';
+  statusClass: 'ok' | 'warn' | 'bad';
+  title: string;
+  detail: string;
+}
+
+export interface HealthAuditSummary {
+  totalScore: number;
+  grade: string;
+  gradeClass: 'high' | 'mid' | 'low';
+  checks: HealthAuditCheckItem[];
+  competitorGaps: string[];
 }
 
 export interface CompareResult {
@@ -72,6 +90,9 @@ export class MarketResearchComponent implements OnInit {
   filterMaxPrice: number | null = null;
   filterMinFavorites: number | null = null;
   filterOnlyOpportunity = false;
+  filterOnlyWeakSeoOpportunity = false;
+  filterOnlyBestseller = false;
+  filterOnlyFreeShipping = false;
 
   showKeywordModal = false;
   showCompareModal = false;
@@ -90,9 +111,19 @@ export class MarketResearchComponent implements OnInit {
   // NOT: Bu alanlar yalnızca canlı arama yanıtından (kpis) doldurulur;
   // başlangıç değerleri boştur (sıfır-mock ilkesi).
   avgPriceUsd = 0;
+  minPriceUsd = 0;
+  maxPriceUsd = 0;
+  medianPriceUsd = 0;
   avgFavorites = 0;
+  avgViews = 0;
   topShopName = '';
   topShopSales = 0;
+  uniqueShopCount = 0;
+  topShopConcentrationPct = 0;
+  freeShippingRatioPct = 0;
+  bestsellerCount = 0;
+  highOpportunityCount = 0;
+  totalEtsyCount = 0;
   opportunityScore = 0;
   totalEstimatedMarketRevenue = 0;
   averageEstimatedMonthlySales = 0;
@@ -119,12 +150,23 @@ export class MarketResearchComponent implements OnInit {
     if (this.filterOnlyOpportunity) {
       list = list.filter(i => i.marketScore >= 85);
     }
+    if (this.filterOnlyWeakSeoOpportunity) {
+      list = list.filter(i => i.isOpportunityListing || ((i.estimatedMonthlySales || 0) >= 10 && i.seoScore < 80));
+    }
+    if (this.filterOnlyBestseller) {
+      list = list.filter(i => i.isBestseller || (i.estimatedMonthlySales || 0) >= 35 || i.favorites >= 200);
+    }
+    if (this.filterOnlyFreeShipping) {
+      list = list.filter(i => i.hasFreeShipping || i.priceUsd >= 35);
+    }
     return list;
   }
 
   get isFilterActive(): boolean {
     return this.filterMinPrice !== null || this.filterMaxPrice !== null
-      || this.filterMinFavorites !== null || this.filterOnlyOpportunity;
+      || this.filterMinFavorites !== null || this.filterOnlyOpportunity
+      || this.filterOnlyWeakSeoOpportunity || this.filterOnlyBestseller
+      || this.filterOnlyFreeShipping;
   }
 
   favSortDesc = true;
@@ -216,11 +258,21 @@ export class MarketResearchComponent implements OnInit {
           this.items = res.listings;
           this.selectedItem = this.items[0];
           this.currentImageIndex = 0;
+          this.totalEtsyCount = res.total || this.items.length;
           if (res.kpis) {
             this.avgPriceUsd = res.kpis.averagePrice;
+            this.minPriceUsd = res.kpis.minPrice || 0;
+            this.maxPriceUsd = res.kpis.maxPrice || 0;
+            this.medianPriceUsd = res.kpis.medianPrice || res.kpis.averagePrice || 0;
             this.avgFavorites = res.kpis.averageFavorites;
+            this.avgViews = res.kpis.averageViews || 0;
             this.topShopName = res.kpis.topShopName;
             this.topShopSales = res.kpis.topShopSales;
+            this.uniqueShopCount = res.kpis.uniqueShopCount || new Set(this.items.map(i => i.shopName)).size;
+            this.topShopConcentrationPct = res.kpis.topShopConcentrationPct || 0;
+            this.freeShippingRatioPct = res.kpis.freeShippingRatioPct || 0;
+            this.bestsellerCount = res.kpis.bestsellerCount || this.items.filter(i => i.isBestseller).length;
+            this.highOpportunityCount = res.kpis.highOpportunityCount || this.items.filter(i => i.isOpportunityListing).length;
             this.opportunityScore = res.kpis.opportunityScore;
             this.topTags = res.kpis.topTags || [];
             this.totalEstimatedMarketRevenue = res.kpis.totalEstimatedMarketRevenue || 0;
@@ -229,7 +281,7 @@ export class MarketResearchComponent implements OnInit {
           }
           this.pushHistory(this.searchKeyword.trim());
           this.lastUpdatedLabel = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-          this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam bulunan: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()} • Son güncelleme ${this.lastUpdatedLabel}`;
+          this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam Etsy havuzu: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()} • Son güncelleme ${this.lastUpdatedLabel}`;
           this.showToastMsg(`✅ ${this.items.length} ürün ve pazar metriği başarıyla yüklendi.`);
         } else {
           this.items = [];
@@ -250,9 +302,19 @@ export class MarketResearchComponent implements OnInit {
 
   private resetKpis(): void {
     this.avgPriceUsd = 0;
+    this.minPriceUsd = 0;
+    this.maxPriceUsd = 0;
+    this.medianPriceUsd = 0;
     this.avgFavorites = 0;
+    this.avgViews = 0;
     this.topShopName = '';
     this.topShopSales = 0;
+    this.uniqueShopCount = 0;
+    this.topShopConcentrationPct = 0;
+    this.freeShippingRatioPct = 0;
+    this.bestsellerCount = 0;
+    this.highOpportunityCount = 0;
+    this.totalEtsyCount = 0;
     this.opportunityScore = 0;
     this.totalEstimatedMarketRevenue = 0;
     this.averageEstimatedMonthlySales = 0;
@@ -336,12 +398,54 @@ export class MarketResearchComponent implements OnInit {
     }
   }
 
+  toggleWeakSeoOpportunityFilter(): void {
+    if (!this.hasResults) {
+      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      return;
+    }
+    this.filterOnlyWeakSeoOpportunity = !this.filterOnlyWeakSeoOpportunity;
+    if (this.filterOnlyWeakSeoOpportunity) {
+      this.showToastMsg(`🎯 Yüksek talep / zayıf rakip SEO fırsatı olan ${this.displayItems.length} ürün filtrelendi.`);
+    } else {
+      this.showToastMsg('SEO zafiyeti filtresi kaldırıldı.');
+    }
+  }
+
+  toggleBestsellerFilter(): void {
+    if (!this.hasResults) {
+      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      return;
+    }
+    this.filterOnlyBestseller = !this.filterOnlyBestseller;
+    if (this.filterOnlyBestseller) {
+      this.showToastMsg(`🔥 Çok satan (Bestseller) ${this.displayItems.length} ürün filtrelendi.`);
+    } else {
+      this.showToastMsg('Bestseller filtresi kaldırıldı.');
+    }
+  }
+
+  toggleFreeShippingFilter(): void {
+    if (!this.hasResults) {
+      this.showToastMsg('⚠️ Filtrelemek için önce canlı bir arama yapın.');
+      return;
+    }
+    this.filterOnlyFreeShipping = !this.filterOnlyFreeShipping;
+    if (this.filterOnlyFreeShipping) {
+      this.showToastMsg(`🚚 Ücretsiz kargo avantajlı ${this.displayItems.length} ürün filtrelendi.`);
+    } else {
+      this.showToastMsg('Ücretsiz kargo filtresi kaldırıldı.');
+    }
+  }
+
   resetFilters(): void {
     this.filterMinPrice = null;
     this.filterMaxPrice = null;
     this.filterMinFavorites = null;
     this.filterOnlyOpportunity = false;
-    this.showToastMsg('🎛️ Filtreler sıfırlandı.');
+    this.filterOnlyWeakSeoOpportunity = false;
+    this.filterOnlyBestseller = false;
+    this.filterOnlyFreeShipping = false;
+    this.showToastMsg('🎛️ Tüm filtreler sıfırlandı.');
   }
 
   selectItem(item: MarketItem): void {
@@ -363,6 +467,181 @@ export class MarketResearchComponent implements OnInit {
     if (score >= 88) return 'high';
     if (score >= 70) return 'mid';
     return 'low';
+  }
+
+  getHealthAudit(item?: MarketItem): HealthAuditSummary {
+    const target = item || this.selectedItem;
+    if (!target) {
+      return {
+        totalScore: 0,
+        grade: '-',
+        gradeClass: 'low',
+        checks: [],
+        competitorGaps: []
+      };
+    }
+
+    const checks: HealthAuditCheckItem[] = [];
+    const gaps: string[] = [];
+
+    // 1. Başlık Uzunluğu ve Anahtar Kelime Yerleşimi
+    const titleLen = (target.title || '').trim().length;
+    const kwLower = (this.searchKeyword || '').trim().toLowerCase();
+    const inFirst55 = kwLower.length > 0 && (target.title || '').toLowerCase().slice(0, 60).includes(kwLower);
+    if (titleLen >= 90 && titleLen <= 140) {
+      checks.push({
+        icon: '✅',
+        statusClass: 'ok',
+        title: `Başlık Uzunluğu (${titleLen} / 140 Karakter)`,
+        detail: inFirst55
+          ? 'İdeal uzunlukta ve ana anahtar kelime mobil görünümde (ilk 55 karakter) yer alıyor.'
+          : 'Uzunluk ideal ancak aranan anahtar kelime ilk 55 karakterde tam eşleşmiyor.'
+      });
+    } else if (titleLen >= 60) {
+      checks.push({
+        icon: '⚠️',
+        statusClass: 'warn',
+        title: `Başlık Uzunluğu (${titleLen} / 140 Karakter)`,
+        detail: `${140 - titleLen} karakterlik SEO alanı boş bırakılmış; ek long-tail kelimeler eklenebilir.`
+      });
+      gaps.push(`Rakip başlıkta ${140 - titleLen} karakteri boş bırakmış. Siz 120–140 karakterlik tam long-tail başlık kurgulayarak daha fazla arama sorgusu yakalayabilirsiniz.`);
+    } else {
+      checks.push({
+        icon: '❌',
+        statusClass: 'bad',
+        title: `Başlık Çok Kısa (${titleLen} / 140 Karakter)`,
+        detail: 'Başlık 60 karakterin altında; Etsy arama algoritmasında ciddi görünürlük kaybı yaşıyor.'
+      });
+      gaps.push(`Rakibin başlığı çok kısa (${titleLen} kr). İlk 55 karakterde "${this.searchKeyword}" geçen 130+ karakterlik bir başlıkla bu ilanı sıralamada kolayca geçebilirsiniz.`);
+    }
+
+    // 2. 13 Altın Etiket Doluluğu & 20 Karakter Kuralı
+    const tagCount = target.tags?.length || 0;
+    const over20Tags = (target.tags || []).filter(t => t.length > 20);
+    const multiWordTags = (target.tags || []).filter(t => t.trim().split(/\s+/).length >= 2);
+    if (tagCount >= 13 && over20Tags.length === 0) {
+      checks.push({
+        icon: '✅',
+        statusClass: 'ok',
+        title: `Etiket Doluluğu (${tagCount} / 13 Etiket)`,
+        detail: `13 altın etiket kotası tam dolu (${multiWordTags.length} tanesi long-tail/çok kelimeli).`
+      });
+    } else if (tagCount >= 9) {
+      checks.push({
+        icon: '⚠️',
+        statusClass: 'warn',
+        title: `Etiket Doluluğu (${tagCount} / 13 Etiket)`,
+        detail: `${13 - tagCount} adet etiket slotu boş bırakılmış (${multiWordTags.length} long-tail etiket mevcut).`
+      });
+      gaps.push(`Rakip ${13 - tagCount} etiket hakkını kullanmamış! Pazarın en güçlü 13 altın etiketini eksiksiz girerek indeksleme üstünlüğü sağlayın.`);
+    } else {
+      checks.push({
+        icon: '❌',
+        statusClass: 'bad',
+        title: `Eksik Etiket Kullanımı (${tagCount} / 13 Etiket)`,
+        detail: `Sadece ${tagCount} etiket kullanılmış; ${13 - tagCount} potansiyel trafik kapısı tamamen kapalı.`
+      });
+      gaps.push(`Rakip yalnızca ${tagCount}/13 etiket kullanıyor. Eksik ${13 - tagCount} etiketi ve eksik altın etiketleri ekleyerek organik trafiği doğrudan çekebilirsiniz.`);
+    }
+
+    // 3. Görsel Galeri Derinliği
+    const imgCount = target.imageUrls?.length || (target.imageUrl ? 1 : 0);
+    if (imgCount >= 5) {
+      checks.push({
+        icon: '✅',
+        statusClass: 'ok',
+        title: `Görsel Galeri Derinliği (${imgCount} / 10 Görsel)`,
+        detail: 'Çoklu açı ve detay fotoğrafları ile alıcı güveni desteklenmiş.'
+      });
+    } else if (imgCount >= 2) {
+      checks.push({
+        icon: '⚠️',
+        statusClass: 'warn',
+        title: `Görsel Sayısı Sınırlı (${imgCount} / 10 Görsel)`,
+        detail: 'Etsy dönüşüm algoritması en az 5–10 görsel (ölçek, paketleme, kullanım anı) önerir.'
+      });
+      gaps.push(`Rakip sadece ${imgCount} görsel yüklemiş. Ölçek tablosu, hediye paketi ve yaşam alanı (lifestyle) görselleriyle 8+ fotoğraf yükleyerek dönüşüm oranınızı artırın.`);
+    } else {
+      checks.push({
+        icon: '❌',
+        statusClass: 'bad',
+        title: `Yetersiz Görsel (${imgCount} / 10 Görsel)`,
+        detail: 'Tek görselli ilanlar alıcı güvenini ve dönüşüm oranını düşürür.'
+      });
+      gaps.push(`Rakip tek görselle satış yapıyor. AI Görsel Stüdyosu ile 5+ farklı sahne ve açı üreterek tıklama/satın alma oranında fark yaratın.`);
+    }
+
+    // 4. Açıklama Metni Derinliği
+    const descLen = (target.description || '').trim().length;
+    if (descLen >= 500) {
+      checks.push({
+        icon: '✅',
+        statusClass: 'ok',
+        title: `Açıklama Zenginliği (${descLen} Karakter)`,
+        detail: 'Detaylı ürün hikayesi, malzeme/ölçü bilgisi ve Google SEO indekslemesi için yeterli uzunlukta.'
+      });
+    } else if (descLen >= 200) {
+      checks.push({
+        icon: '⚠️',
+        statusClass: 'warn',
+        title: `Açıklama Orta Seviyede (${descLen} Karakter)`,
+        detail: '500+ karakterlik yapılandırılmış açıklama (SSS, boyutlar, bakım) dönüşümü artırır.'
+      });
+      gaps.push(`Rakip açıklaması kısa (${descLen} kr). Ölçü, kargo süresi ve hediye notu detaylarını içeren zengin bir açıklama yazın.`);
+    } else {
+      checks.push({
+        icon: '❌',
+        statusClass: 'bad',
+        title: `Zayıf Açıklama Metni (${descLen} Karakter)`,
+        detail: 'Açıklama çok kısa; alıcıların aklındaki soru işaretlerini gidermiyor.'
+      });
+      gaps.push(`Rakip neredeyse hiç açıklama yazmamış (${descLen} kr). Fast Creator'da Hikaye + Teknik Özellik şablonuyla güven kazanın.`);
+    }
+
+    // 5. Sosyal Kanıt, Fiyat & Dönüşüm Sinyali
+    const sales = target.estimatedMonthlySales || 0;
+    const favs = target.favorites || 0;
+    if (sales >= 20 || favs >= 80) {
+      checks.push({
+        icon: '✅',
+        statusClass: 'ok',
+        title: `Talep & Dönüşüm Sinyali (~${sales} Satış/Ay • ${favs} Favori)`,
+        detail: `Tahmini dönüşüm oranı %${target.conversionRateEst || 2.5} ve mağaza puanı ${target.reviewAverage || 4.8}★ (${target.reviewCount || 0} yorum).`
+      });
+    } else {
+      checks.push({
+        icon: '⚠️',
+        statusClass: 'warn',
+        title: `Talep & Dönüşüm Sinyali (~${sales} Satış/Ay • ${favs} Favori)`,
+        detail: `Orta/düşük etkileşim hızı; fiyat ($${target.priceUsd.toFixed(2)}) pazar ortalaması ($${this.avgPriceUsd.toFixed(2)}) ile kıyaslanmalı.`
+      });
+    }
+
+    if (target.priceUsd > this.avgPriceUsd * 1.15 && this.avgPriceUsd > 0) {
+      gaps.push(`Rakip pazar ortalamasının ($${this.avgPriceUsd.toFixed(2)}) üzerinde ($${target.priceUsd.toFixed(2)}) fiyatlandırılmış. $${(this.avgPriceUsd * 0.95).toFixed(2)} lansman fiyatıyla fiyat/performans lideri olabilirsiniz.`);
+    }
+
+    const missingGold = this.getMissingGoldTags();
+    if (missingGold.length > 0) {
+      gaps.push(`Rakip şu popüler pazar etiketlerini kullanmıyor: ${missingGold.slice(0, 4).map(t => '"' + t + '"').join(', ')}.`);
+    }
+
+    const totalScore = Math.round((target.seoScore * 0.55) + (target.marketScore * 0.45));
+    let grade = 'C';
+    let gradeClass: 'high' | 'mid' | 'low' = 'mid';
+    if (totalScore >= 90) { grade = 'A+'; gradeClass = 'high'; }
+    else if (totalScore >= 82) { grade = 'A'; gradeClass = 'high'; }
+    else if (totalScore >= 70) { grade = 'B'; gradeClass = 'mid'; }
+    else if (totalScore >= 58) { grade = 'C'; gradeClass = 'mid'; }
+    else { grade = 'D'; gradeClass = 'low'; }
+
+    return {
+      totalScore,
+      grade,
+      gradeClass,
+      checks,
+      competitorGaps: gaps
+    };
   }
 
   // ==========================================
@@ -455,8 +734,33 @@ export class MarketResearchComponent implements OnInit {
   // 5. 🕵️ Rakip Analizi
   openCompetitorAnalysisModal(): void {
     if (!this.selectedItem) return;
-    this.showToastMsg(`🕵️ ${this.selectedItem.shopName} mağazasının rakip analizi açılıyor...`);
-    this.router.navigate(['/research/competitor']);
+    const item = this.selectedItem;
+    try {
+      const storageKey = 'etsy_competitor_shops_v1';
+      const existingRaw = localStorage.getItem(storageKey);
+      const list: any[] = existingRaw ? (JSON.parse(existingRaw) || []) : [];
+      const shopEntry = {
+        shopName: item.shopName,
+        niche: this.searchKeyword || 'Genel',
+        sales30d: item.estimatedMonthlySales || Math.max(1, Math.round((item.shopSales || 0) / 24)),
+        revenueEstUsd: item.estimatedMonthlyRevenue || Math.round((item.estimatedMonthlySales || 1) * item.priceUsd),
+        activeListings: this.items.filter(x => x.shopName === item.shopName).length || 1,
+        topItemTitle: item.title,
+        topItemPrice: item.priceUsd,
+        topItemTags: item.tags || []
+      };
+      const idx = list.findIndex(s => (s.shopName || '').toLowerCase() === item.shopName.toLowerCase());
+      if (idx >= 0) {
+        list[idx] = shopEntry;
+      } else {
+        list.unshift(shopEntry);
+      }
+      localStorage.setItem(storageKey, JSON.stringify(list));
+    } catch {
+      // localStorage yazımı başarısız olsa da yönlendirme devam eder
+    }
+    this.showToastMsg(`🕵️ ${item.shopName} mağazasının rakip analizi açılıyor...`);
+    this.router.navigate(['/research/competitor'], { queryParams: { shop: item.shopName } });
   }
 
   // 6. 🏪 Mağaza Aç
@@ -501,9 +805,9 @@ export class MarketResearchComponent implements OnInit {
       this.showToastMsg('⚠️ Dışa aktarılacak (filtrelenmiş) veri yok — önce canlı bir arama yapın veya filtreleri gevşetin.');
       return;
     }
-    const headers = 'Sira;ListingId;Baslik;Fiyat_USD;Magaza;Magaza_Satisi;Favori;Goruntulenme;SEO_Puani;Pazar_Puani;Tagler\n';
+    const headers = 'Sira;ListingId;Baslik;Fiyat_USD;Magaza;Magaza_Satisi;Aylik_Tahmini_Satis;Aylik_Tahmini_Ciro_USD;Favori;Goruntulenme;SEO_Puani;Pazar_Puani;Tagler\n';
     const rows = this.displayItems.map(i => 
-      `${i.listingRank};"${i.id}";"${i.title.replace(/"/g, '""')}";${i.priceUsd};"${i.shopName}";${i.shopSales};${i.favorites};${i.views};${i.seoScore};${i.marketScore};"${i.tags.join(', ')}"`
+      `${i.listingRank};"${i.id}";"${i.title.replace(/"/g, '""')}";${i.priceUsd};"${i.shopName}";${i.shopSales};${i.estimatedMonthlySales || 0};${i.estimatedMonthlyRevenue || 0};${i.favorites};${i.views};${i.seoScore};${i.marketScore};"${i.tags.join(', ')}"`
     ).join('\n');
     
     const blob = new Blob([headers + rows], { type: 'text/csv;charset=utf-8;' });
@@ -526,8 +830,15 @@ export class MarketResearchComponent implements OnInit {
 
   sendToImageStudio(): void {
     if (this.selectedItem) {
-      this.showToastMsg(`📸 Görsel Stüdyosu açılıyor...`);
-      this.router.navigate(['/ai-studio']);
+      const activeImg = this.selectedItem.imageUrls[this.currentImageIndex] || this.selectedItem.imageUrl || '';
+      this.showToastMsg(`📸 Görsel AI Stüdyosuna aktarılıyor...`);
+      this.router.navigate(['/ai-studio'], {
+        queryParams: {
+          imageUrl: activeImg,
+          title: this.selectedItem.title,
+          listingId: this.selectedItem.id
+        }
+      });
     }
   }
 
@@ -560,19 +871,42 @@ export class MarketResearchComponent implements OnInit {
     }
     this.isGeneratingReport = true;
     const kw = this.searchKeyword.trim() || 'Pazar Trendi';
-    const topTagsStr = (this.topTags && this.topTags.length > 0)
-      ? this.topTags.slice(0, 3).map(t => `"${t.tag}"`).join(', ')
-      : Array.from(new Set(this.items.flatMap(i => i.tags))).slice(0, 3).map(t => `"${t}"`).join(', ') || '"trend", "handmade", "gift"';
-    const recPrice = (this.avgPriceUsd * 0.92).toFixed(2);
-    setTimeout(() => {
-      this.isGeneratingReport = false;
-      this.aiReport = `
-        <b>🤖 ${this.aiService.activeBadgeText()} Strateji Raporu:</b> "<b>${kw}</b>" pazarında talep yoğunluğu analiz edildi (Pazar Fırsat Skoru: <b>%${this.opportunityScore}</b>).<br/>
-        • <b>Ortalama Satış Fiyatı:</b> &#36;${this.avgPriceUsd.toFixed(2)} (₺${(this.avgPriceUsd * this.etsyApi.exchangeRate()).toFixed(0)}). Hızlı satış ve sıralama kazanımı için <b>&#36;${recPrice}</b> rekabetçi fiyatla girilmesi önerilir.<br/>
-        • <b>Kritik 3 Altın Arama Etiketi:</b> ${topTagsStr}.<br/>
-        • <b>Tavsiye Edilen Aksiyon:</b> İlk sıralardaki ilanlardan birini "🚀 Taslağa Klonla" butonuyla aktarın ve aktif modelinizle 140 karakterlik kusursuz SEO başlığı üretin.
-      `;
-    }, 600);
+    const topCompetitorTitles = this.items.slice(0, 6).map(i => i.title);
+    const topTagList = (this.topTags && this.topTags.length > 0)
+      ? this.topTags.slice(0, 15).map(t => t.tag)
+      : Array.from(new Set(this.items.flatMap(i => i.tags))).slice(0, 15);
+
+    this.etsyApi.generateMarketAiReport({
+      keyword: kw,
+      averagePrice: this.avgPriceUsd,
+      minPrice: this.minPriceUsd,
+      maxPrice: this.maxPriceUsd,
+      medianPrice: this.medianPriceUsd,
+      averageFavorites: this.avgFavorites,
+      averageViews: this.avgViews,
+      opportunityScore: this.opportunityScore,
+      totalEstimatedMarketRevenue: this.totalEstimatedMarketRevenue,
+      uniqueShopCount: this.uniqueShopCount,
+      totalListings: this.items.length,
+      topShopName: this.topShopName || '-',
+      topShopSales: this.topShopSales || 0,
+      topCompetitorTitles,
+      topTags: topTagList,
+      apiKey: this.aiService.settings().geminiApiKey || undefined,
+      model: this.aiService.activeModelName(),
+      provider: this.aiService.activeProvider()
+    }).subscribe({
+      next: (res) => {
+        this.isGeneratingReport = false;
+        this.aiReport = res.reportHtml;
+        this.showToastMsg(`✨ "${kw}" için pazar strateji raporu hazırlandı.`);
+      },
+      error: (err) => {
+        this.isGeneratingReport = false;
+        const msg = err?.error?.error || err?.message || 'Pazar raporu oluşturulamadı.';
+        this.showToastMsg(`🚨 Hata: ${msg}`);
+      }
+    });
   }
 
   trackCurrentKeyword(): void {
