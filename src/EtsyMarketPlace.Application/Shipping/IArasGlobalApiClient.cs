@@ -82,4 +82,9 @@ public interface IArasGlobalApiClient
         decimal finalPrice,
         string rawBearerToken,
         CancellationToken cancellationToken = default);
+
+    Task<string?> RefreshAccessTokenAsync(
+        string accessToken,
+        string refreshToken,
+        CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
 }

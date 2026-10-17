@@ -111,6 +111,7 @@ builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.ShipmentCreat
     }
     return manager;
 });
+builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.IShippingSessionManager, EtsyMarketPlace.Infrastructure.Shipping.PuppeteerShippingSessionManager>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Shipping.IShipmentOrchestratorService, EtsyMarketPlace.Application.Shipping.ShipmentOrchestratorService>();
 
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.MarketResearch.IEtsyMarketApiClient, EtsyMarketPlace.Infrastructure.MarketResearch.EtsyMarketApiClient>();

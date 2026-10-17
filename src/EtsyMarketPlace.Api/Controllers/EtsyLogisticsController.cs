@@ -100,6 +100,18 @@ public class EtsyLogisticsController : BaseApiController
         }
     }
 
+    [HttpGet("shipping/carrier-sessions")]
+    [EndpointSummary("Kayıtlı Kargo Firması Oturumlarını ve Aktif Bearer Token Durumlarını Getir")]
+    public async Task<IActionResult> GetCarrierSessions(CancellationToken cancellationToken = default)
+    {
+        var sessions = await _orchestratorService.GetCarrierSessionsAsync(cancellationToken);
+        return Ok(new
+        {
+            count = sessions.Count,
+            results = sessions
+        });
+    }
+
     [HttpPost("shipping/connect-carrier")]
     [EndpointSummary("Kargo Firması Giriş ve API Kimlik Bilgilerini Doğrula ve Kaydet")]
     public async Task<IActionResult> ConnectCarrier(

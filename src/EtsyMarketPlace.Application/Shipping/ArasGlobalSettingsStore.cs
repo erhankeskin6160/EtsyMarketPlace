@@ -52,18 +52,26 @@ public static class ArasGlobalSettingsStore
 
             var settings = JsonSerializer.Deserialize<ArasGlobalSettings>(json, JsonOptions) ?? new ArasGlobalSettings();
 
-            if (protectedAtRest && !string.IsNullOrWhiteSpace(settings.BearerToken))
+            if (protectedAtRest)
             {
                 var protector = ShippingSecretProtector.Current;
                 if (protector == null)
                 {
                     // Şifre çözücü yok. Şifreli metni token sanıp API'ye göndermektense temizle.
                     settings.BearerToken = string.Empty;
+                    settings.RefreshToken = string.Empty;
                     settings.TokenLastUpdatedUtc = null;
                 }
                 else
                 {
-                    settings.BearerToken = protector.Unprotect(settings.BearerToken);
+                    if (!string.IsNullOrWhiteSpace(settings.BearerToken))
+                    {
+                        settings.BearerToken = protector.Unprotect(settings.BearerToken);
+                    }
+                    if (!string.IsNullOrWhiteSpace(settings.RefreshToken))
+                    {
+                        settings.RefreshToken = protector.Unprotect(settings.RefreshToken);
+                    }
                 }
             }
 
@@ -88,9 +96,16 @@ public static class ArasGlobalSettingsStore
             var node = JsonSerializer.SerializeToNode(settings, JsonOptions) as JsonObject ?? new JsonObject();
 
             var protector = ShippingSecretProtector.Current;
-            if (protector != null && !string.IsNullOrWhiteSpace(settings.BearerToken))
+            if (protector != null && (!string.IsNullOrWhiteSpace(settings.BearerToken) || !string.IsNullOrWhiteSpace(settings.RefreshToken)))
             {
-                node["BearerToken"] = protector.Protect(settings.BearerToken);
+                if (!string.IsNullOrWhiteSpace(settings.BearerToken))
+                {
+                    node["BearerToken"] = protector.Protect(settings.BearerToken);
+                }
+                if (!string.IsNullOrWhiteSpace(settings.RefreshToken))
+                {
+                    node["RefreshToken"] = protector.Protect(settings.RefreshToken);
+                }
                 node["TokenProtected"] = true;
             }
             else

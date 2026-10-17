@@ -459,8 +459,22 @@ export class EtsyApiService {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/create-shipment`, payload);
   }
 
-  /** Kargo platformu giriş ve API kimlik bilgilerini doğrular ve kaydeder. */
-  connectCarrier(payload: any): Observable<any> {
+  /** Sunucuda kayıtlı kargo firması oturumlarını ve aktif Bearer Token durumlarını getirir (gerekirse RefreshToken ile yeniler). */
+  getShippingCarrierSessions(): Observable<{ count: number; results: any[] }> {
+    return this.http.get<{ count: number; results: any[] }>(`${this.API_BASE}/api/etsy/shipping/carrier-sessions`);
+  }
+
+  /** Kargo platformu giriş ve API kimlik bilgilerini doğrular, kaydeder veya tarayıcıdan otomatik yakalar. */
+  connectCarrier(payload: {
+    carrierKey: string;
+    apiKey?: string;
+    apiSecret?: string;
+    bearerToken?: string;
+    refreshToken?: string;
+    email?: string;
+    password?: string;
+    openBrowser?: boolean;
+  }): Observable<any> {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/connect-carrier`, payload);
   }
 

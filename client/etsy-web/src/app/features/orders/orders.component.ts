@@ -61,6 +61,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
   modalTokenInput: string = '';
   seApiKey: string = '';
   seApiSecret: string = '';
+  arasEmail: string = '';
+  arasPassword: string = '';
+  isCapturingBrowserToken: boolean = false;
+  browserCaptureStatus: string | null = null;
   isConnectingCarrier: boolean = false;
 
   // ADDRESS EDIT MODAL
@@ -719,14 +723,63 @@ export class OrdersComponent implements OnInit, OnDestroy {
       return;
     }
     this.activeModalCarrier = carrier;
+    this.browserCaptureStatus = null;
     if (carrier.id === 'shipentegra') {
       this.seApiKey = carrier.apiKey || localStorage.getItem('se_api_key') || '';
       this.seApiSecret = carrier.apiSecret || localStorage.getItem('se_api_secret') || '';
       this.modalTokenInput = carrier.tokenOrKey || '';
     } else {
       this.modalTokenInput = carrier.tokenOrKey || '';
+      if (carrier.id === 'aras') {
+        this.arasEmail = localStorage.getItem('aras_saved_email') || '';
+        // Sunucuda aktif veya yenilenebilir token varsa modal açılırken senkronize et
+        this.ordersService.syncCarrierSessionsFromServer();
+      }
     }
     this.isSessionModalOpen = true;
+  }
+
+  triggerArasBrowserCapture(openBrowser: boolean = true): void {
+    if (!this.activeModalCarrier) return;
+    if (this.arasEmail.trim()) {
+      localStorage.setItem('aras_saved_email', this.arasEmail.trim());
+    }
+
+    this.isCapturingBrowserToken = true;
+    this.browserCaptureStatus = openBrowser
+      ? '🌐 Aras Global giriş penceresi açıldı. Giriş yaptığınız anda Bearer Token otomatik yakalanacaktır...'
+      : '🔄 Kayıtlı Refresh Token / kimlik bilgileriyle Aras Global oturumu yenileniyor...';
+
+    this.ordersService.triggerCarrierBrowserLogin(
+      this.activeModalCarrier.id,
+      this.arasEmail.trim() || undefined,
+      this.arasPassword.trim() || undefined,
+      openBrowser
+    ).subscribe({
+      next: (res: any) => {
+        this.isCapturingBrowserToken = false;
+        if (res && res.bearerToken) {
+          this.modalTokenInput = res.bearerToken;
+          if (this.activeModalCarrier) {
+            this.activeModalCarrier.isConnected = true;
+            this.activeModalCarrier.tokenOrKey = res.bearerToken;
+          }
+          this.browserCaptureStatus = '✅ Aras Global Bearer Token otomatik yakalandı, şifreli olarak kaydedildi ve aktif edildi!';
+          this.loadQuotesForSelected();
+          this.calculateLiveProfit();
+          this.saveSuccessMessage = '✅ Aras Global oturum tokenı otomatik yakalandı ve canlı fiyatlar güncellendi!';
+          setTimeout(() => {
+            this.saveSuccessMessage = null;
+          }, 6000);
+        } else {
+          this.browserCaptureStatus = '⚠️ ' + (res?.message || 'Token yakalanamadı. Lütfen açılan pencerede giriş yapın veya tokenı yapıştırın.');
+        }
+      },
+      error: (err: any) => {
+        this.isCapturingBrowserToken = false;
+        this.browserCaptureStatus = '❌ Yakalama hatası: ' + (err?.error?.message || err?.message || 'Sunucuya ulaşılamadı.');
+      }
+    });
   }
 
   closeSessionModal(): void {

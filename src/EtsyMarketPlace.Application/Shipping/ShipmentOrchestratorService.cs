@@ -23,6 +23,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
     private readonly IEtsyOrderFulfillmentService? _fulfillmentService;
     private readonly EtsyOrderService? _orderService;
     private readonly IOrderAddressRepository? _addressRepository;
+    private readonly IShippingSessionManager? _sessionManager;
 
     public ShipmentOrchestratorService(
         ShipmentCreationManager creationManager,
@@ -32,7 +33,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         IEtsyOrderFulfillmentService? fulfillmentService = null,
         EtsyOrderService? orderService = null,
         IArasGlobalApiClient? arasGlobalApiClient = null,
-        IOrderAddressRepository? addressRepository = null)
+        IOrderAddressRepository? addressRepository = null,
+        IShippingSessionManager? sessionManager = null)
     {
         _creationManager = creationManager ?? throw new ArgumentNullException(nameof(creationManager));
         _logisticsApiClient = logisticsApiClient ?? throw new ArgumentNullException(nameof(logisticsApiClient));
@@ -42,6 +44,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         _orderService = orderService;
         _arasGlobalApiClient = arasGlobalApiClient;
         _addressRepository = addressRepository;
+        _sessionManager = sessionManager;
     }
 
     public async Task<CreateCarrierShipmentResult> CreateShipmentAsync(
@@ -362,13 +365,54 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 settings.BearerToken = token;
                 settings.TokenLastUpdatedUtc = DateTime.UtcNow;
             }
+            if (!string.IsNullOrWhiteSpace(command.RefreshToken))
+            {
+                settings.RefreshToken = command.RefreshToken.Trim();
+            }
             if (!string.IsNullOrWhiteSpace(command.Email)) settings.SavedEmail = command.Email.Trim();
             if (!string.IsNullOrWhiteSpace(command.Password)) settings.EncryptedPassword = command.Password.Trim();
 
             ArasGlobalSettingsStore.Save(settings);
 
-            bool isConnected = !string.IsNullOrWhiteSpace(settings.CleanToken);
-            string? snippet = isConnected && settings.CleanToken.Length > 8
+            // 1. Eğer token verilmediyse ama kayıtlı RefreshToken varsa sessizce yenilemeyi dene
+            if (string.IsNullOrWhiteSpace(token) && !command.OpenBrowser && !settings.IsTokenValid && settings.HasValidRefreshToken && _arasGlobalApiClient != null)
+            {
+                string? refreshed = await _arasGlobalApiClient.RefreshAccessTokenAsync(settings.CleanToken, settings.CleanRefreshToken, cancellationToken).ConfigureAwait(false);
+                if (!string.IsNullOrWhiteSpace(refreshed))
+                {
+                    settings = ArasGlobalSettingsStore.Load();
+                    settings.BearerToken = refreshed;
+                    settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                    ArasGlobalSettingsStore.Save(settings);
+                }
+            }
+
+            // 2. Tarayıcıdan yakalama istendiyse veya şifreyle otomatik giriş istendiyse Puppeteer ile yakala
+            if ((command.OpenBrowser || (string.IsNullOrWhiteSpace(token) && (!string.IsNullOrWhiteSpace(command.Email) || !string.IsNullOrWhiteSpace(settings.SavedEmail))))
+                && (!settings.IsTokenValid || command.OpenBrowser)
+                && _sessionManager != null)
+            {
+                string? captured = await _sessionManager.RefreshArasGlobalTokenAsync(
+                    settings.SavedEmail,
+                    settings.EncryptedPassword,
+                    showBrowser: command.OpenBrowser || string.IsNullOrWhiteSpace(settings.EncryptedPassword),
+                    ct: cancellationToken).ConfigureAwait(false);
+
+                if (!string.IsNullOrWhiteSpace(captured))
+                {
+                    settings = ArasGlobalSettingsStore.Load();
+                    if (string.IsNullOrWhiteSpace(settings.CleanToken))
+                    {
+                        settings.BearerToken = captured;
+                        settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                        ArasGlobalSettingsStore.Save(settings);
+                    }
+                }
+            }
+
+            settings = ArasGlobalSettingsStore.Load();
+            bool isConnected = settings.IsTokenValid;
+            string? snippet = !string.IsNullOrWhiteSpace(settings.CleanToken) && settings.CleanToken.Length > 8
                 ? settings.CleanToken[..4] + "..." + settings.CleanToken[^4..]
                 : null;
 
@@ -378,9 +422,12 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 CarrierKey = "aras",
                 IsConnected = isConnected,
                 TokenSnippet = snippet,
+                BearerToken = isConnected ? settings.CleanToken : null,
+                RefreshToken = settings.HasValidRefreshToken ? settings.CleanRefreshToken : null,
+                ExpiresAtUtc = settings.GetTokenExpiryUtc(),
                 Message = isConnected
-                    ? "Aras Global oturum tokenı şifreli olarak kaydedildi ve aktif edildi."
-                    : "Aras Global için geçerli bir JWT / Bearer Token girilmelidir."
+                    ? "Aras Global oturum tokenı yakalandı, şifreli olarak kaydedildi ve aktif edildi."
+                    : "Aras Global oturum tokenı yakalanamadı. Lütfen 'Tarayıcıda Giriş Yap & Yakala' butonunu kullanın veya geçerli bir Bearer Token girin."
             };
         }
 
@@ -410,6 +457,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                 CarrierKey = "navlungo",
                 IsConnected = isConnected,
                 TokenSnippet = snippet,
+                BearerToken = settings.IdToken,
                 Message = isConnected
                     ? "Navlungo oturum bilgileri başarıyla kaydedildi."
                     : "Navlungo için geçerli bir Token veya Çerez girilmelidir."
@@ -424,6 +472,90 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             Message = $"{key} kimlik bilgileri başarıyla kaydedildi."
         };
     }
+
+    public async Task<IReadOnlyList<CarrierSessionStatusDto>> GetCarrierSessionsAsync(CancellationToken ct = default)
+    {
+        var list = new List<CarrierSessionStatusDto>();
+
+        // 1. Aras Global (varsa süresi geçmiş token'ı RefreshToken ile otomatik yenile)
+        var aras = ArasGlobalSettingsStore.Load();
+        if (!aras.IsTokenValid && aras.HasValidRefreshToken && _arasGlobalApiClient != null)
+        {
+            string? refreshed = await _arasGlobalApiClient.RefreshAccessTokenAsync(aras.CleanToken, aras.CleanRefreshToken, ct).ConfigureAwait(false);
+            if (!string.IsNullOrWhiteSpace(refreshed))
+            {
+                aras.BearerToken = refreshed;
+                aras.TokenLastUpdatedUtc = DateTime.UtcNow;
+                ArasGlobalSettingsStore.Save(aras);
+            }
+        }
+        string arasClean = aras.CleanToken;
+        list.Add(new CarrierSessionStatusDto
+        {
+            CarrierKey = "aras",
+            CarrierName = "Aras Global",
+            IsConnected = aras.IsTokenValid,
+            HasRefreshToken = aras.HasValidRefreshToken,
+            BearerToken = aras.IsTokenValid ? arasClean : null,
+            TokenSnippet = arasClean.Length > 8 ? arasClean[..4] + "..." + arasClean[^4..] : null,
+            SavedEmail = aras.SavedEmail,
+            ExpiresAtUtc = aras.GetTokenExpiryUtc(),
+            UpdatedAtUtc = aras.TokenLastUpdatedUtc
+        });
+
+        // 2. ShipEntegra
+        var se = ShipEntegraSettingsStore.Load();
+        string seClean = se.CleanToken;
+        bool seConnected = se.HasValidTokenFormat || (!string.IsNullOrWhiteSpace(se.ApiKey) && !string.IsNullOrWhiteSpace(se.ApiSecret));
+        list.Add(new CarrierSessionStatusDto
+        {
+            CarrierKey = "shipentegra",
+            CarrierName = "ShipEntegra",
+            IsConnected = seConnected,
+            HasRefreshToken = !string.IsNullOrWhiteSpace(se.RefreshToken),
+            BearerToken = se.HasValidTokenFormat ? seClean : null,
+            ApiKey = se.ApiKey,
+            TokenSnippet = seClean.Length > 8 ? seClean[..4] + "..." + seClean[^4..] : null,
+            SavedEmail = se.SavedEmail,
+            ExpiresAtUtc = JwtTokenInspector.GetExpirationUtc(seClean),
+            UpdatedAtUtc = se.TokenLastUpdatedUtc
+        });
+
+        // 3. Navlungo
+        var nav = NavlungoSettingsStore.Load();
+        string navToken = (!string.IsNullOrWhiteSpace(nav.IdToken) ? nav.IdToken : nav.SessionCookie) ?? string.Empty;
+        bool navConnected = !string.IsNullOrWhiteSpace(navToken);
+        list.Add(new CarrierSessionStatusDto
+        {
+            CarrierKey = "navlungo",
+            CarrierName = "Navlungo",
+            IsConnected = navConnected,
+            HasRefreshToken = false,
+            BearerToken = navConnected ? navToken : null,
+            TokenSnippet = navToken.Length > 8 ? navToken[..4] + "..." + navToken[^4..] : null,
+            SavedEmail = nav.SavedEmail,
+            ExpiresAtUtc = null,
+            UpdatedAtUtc = nav.TokenLastUpdatedUtc
+        });
+
+        // 4. ShipToMore
+        var stm = ShiptomoreSettingsStore.Load();
+        string stmKey = stm.ClientId?.Trim() ?? string.Empty;
+        bool stmConnected = ShiptomoreSettingsStore.HasCredentials();
+        list.Add(new CarrierSessionStatusDto
+        {
+            CarrierKey = "shiptomore",
+            CarrierName = "ShipToMore",
+            IsConnected = stmConnected,
+            HasRefreshToken = false,
+            BearerToken = stmConnected ? stmKey : null,
+            ApiKey = stmKey,
+            TokenSnippet = stmKey.Length > 8 ? stmKey[..4] + "..." + stmKey[^4..] : null
+        });
+
+        return list;
+    }
+
 
     public async Task<CarrierQuotesResponseDto> GetCarrierQuotesAsync(
         CarrierQuotesQuery query,

@@ -771,31 +771,61 @@
               </div>
             </div>
 
-            <!-- OTHER CARRIERS TOKEN INPUT -->
-            <div *ngIf="activeModalCarrier?.id !== 'shipentegra'" class="form-group">
-              <label class="form-label">Bearer Token / Session Cookie / API Key:</label>
-              <textarea 
-                [(ngModel)]="modalTokenInput" 
-                rows="4" 
-                placeholder="Token veya çerez değerini yapıştırın..." 
-                class="form-control modal-textarea"></textarea>
-              <span class="form-hint">Masaüstü ve panel yetkilendirmesi için kullanılan güvenli token.</span>
+            <!-- ARAS GLOBAL AUTOMATIC BROWSER LOGIN & TOKEN CAPTURE -->
+            <div *ngIf="activeModalCarrier?.id === 'aras'" class="aras-auto-login-section" style="margin-bottom: 14px; padding: 12px; border-radius: 10px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25);">
+              <div class="guide-title" style="margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+                <span>⚡ <strong>Otomatik Giriş & Token Yakalama (F12 Gerektirmez)</strong></span>
+                <span style="font-size: 0.72rem; color: #10b981; font-weight: 600;">Access + 24s Refresh Token</span>
+              </div>
+              <p class="guide-text" style="margin-bottom: 10px;">
+                Aras Global panelinde giriş yaptığınız anda sistem <code>Authorization: Bearer</code>, <code>/Auth/Login</code> ve <code>localStorage</code> üzerinden token'ınızı otomatik yakalar ve şifreli olarak kaydeder.
+              </p>
+
+              <div class="form-row-2" style="margin-bottom: 10px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.75rem;">Telefon veya E-posta (İsteğe Bağlı):</label>
+                  <input type="text" [(ngModel)]="arasEmail" class="form-control" placeholder="5XX... veya e-posta" />
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                  <label class="form-label" style="font-size: 0.75rem;">Şifre (İsteğe Bağlı):</label>
+                  <input type="password" [(ngModel)]="arasPassword" class="form-control" placeholder="••••••••" />
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button
+                  type="button"
+                  class="btn-save-session"
+                  style="flex: 1; background: linear-gradient(135deg, #059669, #10b981); border: none;"
+                  [disabled]="isCapturingBrowserToken"
+                  (click)="triggerArasBrowserCapture(true)">
+                  <span *ngIf="!isCapturingBrowserToken">🌐 Tarayıcıda Giriş Yap &amp; Tokenı Otomatik Yakala</span>
+                  <span *ngIf="isCapturingBrowserToken">⏳ Giriş Bekleniyor &amp; Token Yakalanıyor...</span>
+                </button>
+                <button
+                  type="button"
+                  class="btn-test-session"
+                  [disabled]="isCapturingBrowserToken"
+                  (click)="triggerArasBrowserCapture(false)"
+                  title="Kayıtlı Refresh Token ile tarayıcı açmadan sessizce yenile">
+                  🔄 Sessiz Yenile
+                </button>
+              </div>
+
+              <div *ngIf="browserCaptureStatus" style="margin-top: 8px; font-size: 0.78rem; padding: 6px 10px; border-radius: 6px; background: rgba(15, 23, 42, 0.55); color: #e2e8f0;">
+                {{ browserCaptureStatus }}
+              </div>
             </div>
 
-            <!-- ARAS GLOBAL LIVE TOKEN EXTRACTION GUIDE -->
-            <div class="jwt-helper-guide" *ngIf="activeModalCarrier?.id === 'aras'">
-              <div class="guide-title">
-                <span>💡</span> <strong>Canlı Aras Global Tokenı Nasıl Alınır?</strong>
-              </div>
-              <p class="guide-text">
-                Aras Global API'sinde <code>HTTP 401 Unauthorized</code> (tahmini fiyat) almamak için tokeninizi yenileyebilirsiniz:
-              </p>
-              <ol class="guide-steps">
-                <li>Açık olan <strong>panel.arasglobalcargo.com</strong> sekmesine geçin.</li>
-                <li>Klavyeden <strong>F12</strong> tuşuna basıp Geliştirici Araçlarını açın.</li>
-                <li><strong>Application</strong> (Uygulama) &gt; <strong>Local Storage</strong> &gt; <code>token</code> değerini kopyalayın (veya <strong>Network</strong> sekmesindeki herhangi bir API isteğinden <code>Authorization: Bearer &lt;token&gt;</code> değerini alın).</li>
-                <li>Metni yukarıdaki alana yapıştırıp <strong>"Oturumu Kaydet & Bağlan"</strong> butonuna tıklayın.</li>
-              </ol>
+            <!-- OTHER CARRIERS TOKEN INPUT -->
+            <div *ngIf="activeModalCarrier?.id !== 'shipentegra'" class="form-group">
+              <label class="form-label">Bearer Token / Session Cookie / API Key (Otomatik Dolar veya Manuel Yapıştırın):</label>
+              <textarea 
+                [(ngModel)]="modalTokenInput" 
+                rows="3" 
+                placeholder="Yukarıdaki 'Tarayıcıda Giriş Yap & Tokenı Otomatik Yakala' butonuna bastığınızda burası otomatik dolar..." 
+                class="form-control modal-textarea"></textarea>
+              <span class="form-hint">Masaüstü ve web yetkilendirmesi için kullanılan güvenli JWT Bearer Token.</span>
             </div>
 
             <div class="modal-actions-row">
@@ -804,7 +834,7 @@
                 <span *ngIf="isConnectingCarrier">⏳ Test Ediliyor...</span>
               </button>
               <button type="button" class="btn-save-session" [disabled]="isConnectingCarrier" (click)="saveCarrierSession()">
-                💾 Oturumu Kaydet & Bağlan
+                💾 Oturumu Kaydet &amp; Bağlan
               </button>
             </div>
           </div>

@@ -43,8 +43,10 @@ public sealed class ConnectCarrierCommand
     public string? ApiKey { get; set; }
     public string? ApiSecret { get; set; }
     public string? BearerToken { get; set; }
+    public string? RefreshToken { get; set; }
     public string? Email { get; set; }
     public string? Password { get; set; }
+    public bool OpenBrowser { get; set; }
 }
 
 public sealed class ConnectCarrierResult
@@ -54,6 +56,23 @@ public sealed class ConnectCarrierResult
     public string Message { get; set; } = string.Empty;
     public bool IsConnected { get; set; }
     public string? TokenSnippet { get; set; }
+    public string? BearerToken { get; set; }
+    public string? RefreshToken { get; set; }
+    public DateTime? ExpiresAtUtc { get; set; }
+}
+
+public sealed class CarrierSessionStatusDto
+{
+    public string CarrierKey { get; set; } = string.Empty;
+    public string CarrierName { get; set; } = string.Empty;
+    public bool IsConnected { get; set; }
+    public bool HasRefreshToken { get; set; }
+    public string? BearerToken { get; set; }
+    public string? TokenSnippet { get; set; }
+    public string? ApiKey { get; set; }
+    public string? SavedEmail { get; set; }
+    public DateTime? UpdatedAtUtc { get; set; }
+    public DateTime? ExpiresAtUtc { get; set; }
 }
 
 public sealed class CarrierQuotesQuery
@@ -111,6 +130,7 @@ public interface IShipmentOrchestratorService
 {
     Task<CreateCarrierShipmentResult> CreateShipmentAsync(CreateCarrierShipmentCommand command, CancellationToken cancellationToken = default);
     Task<ConnectCarrierResult> ConnectCarrierAsync(ConnectCarrierCommand command, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<CarrierSessionStatusDto>> GetCarrierSessionsAsync(CancellationToken cancellationToken = default);
     Task<CarrierQuotesResponseDto> GetCarrierQuotesAsync(CarrierQuotesQuery query, CancellationToken cancellationToken = default);
     IReadOnlyList<HsCodeSearchItemDto> SearchHsCodes(string? query, int limit = 25);
 }

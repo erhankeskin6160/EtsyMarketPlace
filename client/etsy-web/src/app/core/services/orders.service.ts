@@ -21,7 +21,86 @@ export class OrdersService {
   public sessions$ = this.sessionsSubject.asObservable();
 
   constructor(private etsyApi: EtsyApiService) {
+    this.syncCarrierSessionsFromServer();
     this.loadOrders();
+  }
+
+  /** Sunucudaki Aras Global, ShipEntegra, Navlungo, ShipToMore tokenlarını Web UI ile senkronize eder. */
+  public syncCarrierSessionsFromServer(): void {
+    this.etsyApi.getShippingCarrierSessions().subscribe({
+      next: (res) => {
+        if (!res || !Array.isArray(res.results)) return;
+        const current = [...this.sessionsSubject.value];
+        let changed = false;
+
+        for (const srv of res.results) {
+          const idx = current.findIndex(c => c.id === srv.carrierKey);
+          if (idx < 0) continue;
+
+          const item = { ...current[idx] };
+          if (srv.bearerToken && srv.bearerToken.length > 20) {
+            item.tokenOrKey = srv.bearerToken;
+            item.isConnected = true;
+            item.statusLabel = '🟢 Bağlı';
+            if (srv.updatedAtUtc) {
+              const dt = new Date(srv.updatedAtUtc);
+              item.lastUpdated = dt.toLocaleDateString('tr-TR') + ' ' + dt.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+            }
+            current[idx] = item;
+            changed = true;
+          } else if (srv.carrierKey === 'aras' && !srv.isConnected) {
+            // Sunucuda Aras tokenı geçersizse yerel süresi dolmuş tokenı kontrol et
+            const localValid = this.validateJwt(item.tokenOrKey);
+            if (!localValid.isValid || localValid.expired) {
+              item.isConnected = false;
+              item.statusLabel = '⚠️ Giriş Yap';
+              current[idx] = item;
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          this.persistSessions(current);
+        }
+      },
+      error: () => {}
+    });
+  }
+
+  /** Tarayıcı üzerinden veya telefon/şifre ile Aras Global / taşıyıcı Bearer Token'ını otomatik yakalar ve kaydeder. */
+  public triggerCarrierBrowserLogin(carrierId: string, email?: string, password?: string, openBrowser: boolean = true): Observable<any> {
+    return new Observable(observer => {
+      this.etsyApi.connectCarrier({
+        carrierKey: carrierId,
+        email: email,
+        password: password,
+        openBrowser: openBrowser
+      }).subscribe({
+        next: (res) => {
+          if (res && res.bearerToken) {
+            const list = this.sessionsSubject.value.map(s => {
+              if (s.id === carrierId) {
+                return {
+                  ...s,
+                  isConnected: true,
+                  statusLabel: '🟢 Bağlı',
+                  tokenOrKey: res.bearerToken,
+                  lastUpdated: new Date().toLocaleDateString('tr-TR') + ' ' + new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+                };
+              }
+              return s;
+            });
+            this.persistSessions(list);
+          }
+          observer.next(res);
+          observer.complete();
+        },
+        error: (err) => {
+          observer.error(err);
+        }
+      });
+    });
   }
 
   // --- CARRIER ACCOUNT SESSIONS MANAGEMENT ---
@@ -186,7 +265,11 @@ export class OrdersService {
       apiSecret: apiSecret,
       bearerToken: token
     }).subscribe({
-      next: () => {},
+      next: (res) => {
+        if (res && res.bearerToken && !token) {
+          this.updateCarrierSession({ id: carrierId as any, isConnected: true, statusLabel: '🟢 Bağlı', tokenOrKey: res.bearerToken });
+        }
+      },
       error: () => {}
     });
   }

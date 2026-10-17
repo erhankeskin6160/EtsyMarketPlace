@@ -241,7 +241,7 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
                         try {
                             localStorage.clear();
                             sessionStorage.clear();
-                        } catch (Exception caught) { AppLog.Swallowed(caught); }
+                        } catch (e) {}
                     }");
                     localTok = null;
                 }
@@ -302,9 +302,14 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
 
             if (!string.IsNullOrWhiteSpace(capturedToken))
             {
+                string? capturedRefresh = await TryExtractLocalStorageTokenAsync(page, "refresh_token", "refreshToken");
                 statusCallback?.Invoke("✅ Canlı Aras Global tokeni başarıyla yakalandı ve kaydedildi!");
                 var settings = ArasGlobalSettingsStore.Load();
                 settings.BearerToken = capturedToken;
+                if (!string.IsNullOrWhiteSpace(capturedRefresh))
+                {
+                    settings.RefreshToken = capturedRefresh;
+                }
                 settings.TokenLastUpdatedUtc = DateTime.UtcNow;
                 if (!string.IsNullOrWhiteSpace(email)) settings.SavedEmail = email;
                 if (!string.IsNullOrWhiteSpace(password)) settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(password);
@@ -812,29 +817,43 @@ public sealed class PuppeteerShippingSessionManager : IShippingSessionManager
     {
         try
         {
-            // 1. Tüm localStorage ve sessionStorage alanlarını tara
+            // 1. Tüm localStorage ve sessionStorage alanlarını tara (önce 'token' ve 'accessToken', sonra genel JWT)
             string script = @"() => {
                 const jwtRegex = /ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
                 try {
+                    const direct = localStorage.getItem('token') || localStorage.getItem('accessToken');
+                    if (direct && direct.includes('eyJ')) {
+                        const m = direct.match(jwtRegex);
+                        if (m) return m[0];
+                    }
+                    const u = localStorage.getItem('user');
+                    if (u) {
+                        try {
+                            const parsed = JSON.parse(u);
+                            if (parsed && parsed.token && parsed.token.accessToken) return parsed.token.accessToken;
+                        } catch (e) {}
+                    }
                     for (let i = 0; i < localStorage.length; i++) {
                         const k = localStorage.key(i);
+                        if (k && k.toLowerCase().includes('refresh')) continue;
                         const v = localStorage.getItem(k);
                         if (v && v.includes('eyJ')) {
                             const m = v.match(jwtRegex);
                             if (m) return m[0];
                         }
                     }
-                } catch (Exception caught) { AppLog.Swallowed(caught); }
+                } catch (e) {}
                 try {
                     for (let i = 0; i < sessionStorage.length; i++) {
                         const k = sessionStorage.key(i);
+                        if (k && k.toLowerCase().includes('refresh')) continue;
                         const v = sessionStorage.getItem(k);
                         if (v && v.includes('eyJ')) {
                             const m = v.match(jwtRegex);
                             if (m) return m[0];
                         }
                     }
-                } catch (Exception caught) { AppLog.Swallowed(caught); }
+                } catch (e) {}
                 return '';
             }";
 

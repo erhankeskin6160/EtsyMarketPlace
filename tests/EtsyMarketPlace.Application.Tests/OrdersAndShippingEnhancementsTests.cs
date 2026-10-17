@@ -192,6 +192,35 @@ public sealed class OrdersAndShippingEnhancementsTests
 
         Assert.NotEmpty(quotesResult.Quotes);
         Assert.True(quotesResult.Quotes.All(q => q.PriceUsd > 0));
+
+        var sessions = await orchestrator.GetCarrierSessionsAsync();
+        Assert.Equal(4, sessions.Count);
+        Assert.Contains(sessions, s => s.CarrierKey == "aras");
+        Assert.Contains(sessions, s => s.CarrierKey == "shipentegra");
+        Assert.Contains(sessions, s => s.CarrierKey == "navlungo");
+        Assert.Contains(sessions, s => s.CarrierKey == "shiptomore");
+    }
+
+    [Fact]
+    public void ArasGlobalSettings_RefreshTokenAndValidJwt_EvaluatesCorrectly()
+    {
+        long futureExp = DateTimeOffset.UtcNow.AddMinutes(45).ToUnixTimeSeconds();
+        string payloadJson = $"{{\"sub\":\"123\",\"exp\":{futureExp}}}";
+        string payloadB64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(payloadJson))
+            .TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string validJwt = $"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.{payloadB64}.signature1234567890";
+
+        var settings = new EtsyMarketPlace.Domain.Shipping.ArasGlobalSettings
+        {
+            BearerToken = $"Bearer {validJwt}",
+            RefreshToken = "refresh_token_sample_24h_value_123456"
+        };
+
+        Assert.Equal(validJwt, settings.CleanToken);
+        Assert.True(settings.IsTokenValid);
+        Assert.False(settings.IsTokenExpired());
+        Assert.True(settings.HasValidRefreshToken);
+        Assert.Equal("refresh_token_sample_24h_value_123456", settings.CleanRefreshToken);
     }
 
     private sealed class StubLogisticsApiClient(EtsyFulfillmentReceipt receipt) : IEtsyLogisticsApiClient

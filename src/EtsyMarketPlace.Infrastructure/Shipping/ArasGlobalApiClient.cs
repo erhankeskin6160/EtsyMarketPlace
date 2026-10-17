@@ -45,6 +45,8 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         _httpClient = httpClient ?? SharedHttpClient.Instance;
     }
 
+    private const string RefreshTokenEndpoint = "/Auth/GenerateAccessTokenFromRefreshToken";
+
     /// <summary>
     /// Canlı Aras Global API'sinden fiyat hesaplama akışını başlatır ve teklifleri çeker.
     /// </summary>
@@ -54,13 +56,55 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         CancellationToken cancellationToken = default)
     {
         string cleanToken = CleanToken(rawBearerToken);
+        if (string.IsNullOrWhiteSpace(cleanToken) || JwtTokenInspector.IsExpired(cleanToken))
+        {
+            var stored = ArasGlobalSettingsStore.Load();
+            if (stored.HasValidRefreshToken)
+            {
+                string? refreshed = await RefreshAccessTokenAsync(
+                    !string.IsNullOrWhiteSpace(cleanToken) ? cleanToken : stored.CleanToken,
+                    stored.CleanRefreshToken,
+                    cancellationToken);
+                if (!string.IsNullOrWhiteSpace(refreshed))
+                {
+                    cleanToken = refreshed;
+                }
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(cleanToken))
         {
             throw new ArasGlobalTokenExpiredException("Aras Global oturum tokeni boş veya tanımsız. Lütfen geçerli bir token girin.");
         }
 
-        // 1. Adım: Fiyat hesaplamayı başlat ve ReferenceCode al
-        string referenceCode = await StartCalculationAsync(request, cleanToken, cancellationToken);
+        // 1. Adım: Fiyat hesaplamayı başlat ve ReferenceCode al (401 alınırsa RefreshToken ile 1 kez daha dene)
+        string referenceCode;
+        try
+        {
+            referenceCode = await StartCalculationAsync(request, cleanToken, cancellationToken);
+        }
+        catch (ArasGlobalTokenExpiredException)
+        {
+            var stored = ArasGlobalSettingsStore.Load();
+            if (stored.HasValidRefreshToken)
+            {
+                string? refreshed = await RefreshAccessTokenAsync(cleanToken, stored.CleanRefreshToken, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(refreshed))
+                {
+                    cleanToken = refreshed;
+                    referenceCode = await StartCalculationAsync(request, cleanToken, cancellationToken);
+                }
+                else
+                {
+                    throw;
+                }
+            }
+            else
+            {
+                throw;
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(referenceCode))
         {
             throw new InvalidOperationException("Aras Global hesaplama başlatılamadı veya referans kodu alınamadı.");
@@ -834,6 +878,84 @@ public sealed class ArasGlobalApiClient : IArasGlobalApiClient
         }
 
         return (isConcluded, offers);
+    }
+
+    public async Task<string?> RefreshAccessTokenAsync(
+        string accessToken,
+        string refreshToken,
+        CancellationToken cancellationToken = default)
+    {
+        string cleanRefresh = CleanToken(refreshToken);
+        if (string.IsNullOrWhiteSpace(cleanRefresh))
+        {
+            return null;
+        }
+
+        string cleanAccess = CleanToken(accessToken);
+        try
+        {
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, BaseUrl + RefreshTokenEndpoint);
+            ApplyHeaders(httpRequest, cleanAccess);
+
+            var payload = new
+            {
+                accessToken = cleanAccess,
+                refreshToken = cleanRefresh
+            };
+
+            httpRequest.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+            using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            string responseContent = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(responseContent))
+            {
+                return null;
+            }
+
+            using var doc = JsonDocument.Parse(responseContent);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("payload", out var payloadElem) && payloadElem.ValueKind == JsonValueKind.Object)
+            {
+                string? newToken = null;
+                if (payloadElem.TryGetProperty("token", out var tokProp) && tokProp.ValueKind == JsonValueKind.String)
+                {
+                    newToken = tokProp.GetString();
+                }
+                else if (payloadElem.TryGetProperty("accessToken", out var accProp) && accProp.ValueKind == JsonValueKind.String)
+                {
+                    newToken = accProp.GetString();
+                }
+
+                string? newRefresh = null;
+                if (payloadElem.TryGetProperty("refreshToken", out var refProp) && refProp.ValueKind == JsonValueKind.String)
+                {
+                    newRefresh = refProp.GetString();
+                }
+
+                if (!string.IsNullOrWhiteSpace(newToken) && !JwtTokenInspector.IsExpired(newToken))
+                {
+                    var settings = ArasGlobalSettingsStore.Load();
+                    settings.BearerToken = newToken.Trim();
+                    if (!string.IsNullOrWhiteSpace(newRefresh))
+                    {
+                        settings.RefreshToken = newRefresh.Trim();
+                    }
+                    settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                    ArasGlobalSettingsStore.Save(settings);
+                    return settings.CleanToken;
+                }
+            }
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, "ArasGlobalApiClient.RefreshAccessTokenAsync");
+        }
+
+        return null;
     }
 
     private static void ApplyHeaders(HttpRequestMessage req, string token)

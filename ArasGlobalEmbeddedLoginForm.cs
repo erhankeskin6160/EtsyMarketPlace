@@ -116,10 +116,14 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
             _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
             _webView.CoreWebView2.Settings.IsZoomControlEnabled = false;
 
-            // 1. Ağ yanıtlarını dinle (API /Auth/Login döndüğünde)
+            // 1. Giden API isteklerini dinle (Authorization: Bearer eyJ... başlığı ve /Auth/Login kimlik bilgileri)
+            _webView.CoreWebView2.AddWebResourceRequestedFilter("*arasglobalcargo*", CoreWebView2WebResourceContext.All);
+            _webView.CoreWebView2.WebResourceRequested += OnWebResourceRequested;
+
+            // 2. Ağ yanıtlarını dinle (API /Auth/Login veya /Auth/GenerateAccessTokenFromRefreshToken döndüğünde)
             _webView.CoreWebView2.WebResourceResponseReceived += OnWebResourceResponseReceived;
 
-            // 2. Sayfa yönlendirmelerini dinle
+            // 3. Sayfa yönlendirmelerini dinle
             _webView.CoreWebView2.NavigationCompleted += (_, e) =>
             {
                 if (e.IsSuccess)
@@ -186,6 +190,92 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
 
         await ensureTask;
     }
+
+    private void OnWebResourceRequested(object? sender, CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        if (_tokenCaptured) return;
+
+        try
+        {
+            string uri = e.Request.Uri ?? string.Empty;
+            if (!uri.Contains("arasglobalcargo", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            // 1) Giden istek başlıklarında Authorization: Bearer eyJ... kontrolü
+            foreach (var header in e.Request.Headers)
+            {
+                string val = header.Value ?? string.Empty;
+                if (val.Contains("eyJ", StringComparison.Ordinal))
+                {
+                    var match = Regex.Match(val, @"ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+");
+                    if (match.Success && !JwtTokenInspector.IsExpired(match.Value))
+                    {
+                        string captured = match.Value;
+                        BeginInvoke(new Action(async () => await CompleteLoginSuccessAsync(captured)));
+                        return;
+                    }
+                }
+            }
+
+            // 2) /Auth/Login isteğinden kullanıcı adı ve şifreyi yakala
+            if (string.Equals(e.Request.Method, "POST", StringComparison.OrdinalIgnoreCase) &&
+                uri.Contains("/Auth/Login", StringComparison.OrdinalIgnoreCase))
+            {
+                _ = TryCaptureLoginCredentialsAsync(e);
+            }
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, "ArasGlobalEmbeddedLoginForm.OnWebResourceRequested");
+        }
+    }
+
+    private async Task TryCaptureLoginCredentialsAsync(CoreWebView2WebResourceRequestedEventArgs e)
+    {
+        try
+        {
+            var content = e.Request.Content;
+            if (content == null) return;
+
+            using var reader = new StreamReader(content);
+            string body = await reader.ReadToEndAsync();
+            if (string.IsNullOrWhiteSpace(body) || body.Length > 10000) return;
+
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return;
+
+            string? user = null;
+            string? pass = null;
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                if (prop.Value.ValueKind != JsonValueKind.String) continue;
+                string name = prop.Name.ToLowerInvariant();
+                if (name is "username" or "email" or "phone" or "phonenumber" or "gsm")
+                {
+                    user = prop.Value.GetString();
+                }
+                else if (name is "password" or "pass" or "pwd")
+                {
+                    pass = prop.Value.GetString();
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(user) && !string.IsNullOrWhiteSpace(pass))
+            {
+                var settings = ArasGlobalSettingsStore.Load();
+                settings.SavedEmail = user.Trim();
+                settings.EncryptedPassword = ShippingCredentialEncryptor.Encrypt(pass);
+                ArasGlobalSettingsStore.Save(settings);
+            }
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught, "ArasGlobalEmbeddedLoginForm.TryCaptureLoginCredentialsAsync");
+        }
+    }
+
     private async void OnWebResourceResponseReceived(object? sender, CoreWebView2WebResourceResponseReceivedEventArgs e)
     {
         if (_tokenCaptured) return;
@@ -205,14 +295,10 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
 
                     if (!string.IsNullOrWhiteSpace(body) && body.Contains("eyJ"))
                     {
-                        var match = Regex.Match(body, @"ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+");
-                        if (match.Success)
+                        var (access, refresh) = ExtractTokensFromJsonOrRegex(body);
+                        if (!string.IsNullOrWhiteSpace(access) && !JwtTokenInspector.IsExpired(access))
                         {
-                            string tokenCandidate = match.Value;
-                            if (!JwtTokenInspector.IsExpired(tokenCandidate))
-                            {
-                                await CompleteLoginSuccessAsync(tokenCandidate);
-                            }
+                            await CompleteLoginSuccessAsync(access, refresh);
                         }
                     }
                 }
@@ -221,57 +307,177 @@ internal sealed class ArasGlobalEmbeddedLoginForm : Form
         catch (Exception caught) { AppLog.Swallowed(caught, "ArasGlobalEmbeddedLoginForm.OnWebResourceResponseReceived"); }
     }
 
+    private static (string? AccessToken, string? RefreshToken) ExtractTokensFromJsonOrRegex(string body)
+    {
+        string? access = null;
+        string? refresh = null;
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            if (root.TryGetProperty("payload", out var payload) && payload.ValueKind == JsonValueKind.Object)
+            {
+                if (payload.TryGetProperty("token", out var tokElem))
+                {
+                    if (tokElem.ValueKind == JsonValueKind.String)
+                    {
+                        access = tokElem.GetString();
+                    }
+                    else if (tokElem.ValueKind == JsonValueKind.Object)
+                    {
+                        if (tokElem.TryGetProperty("accessToken", out var at) && at.ValueKind == JsonValueKind.String)
+                            access = at.GetString();
+                        if (tokElem.TryGetProperty("refreshToken", out var rt) && rt.ValueKind == JsonValueKind.String)
+                            refresh = rt.GetString();
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(access) && payload.TryGetProperty("accessToken", out var pAt) && pAt.ValueKind == JsonValueKind.String)
+                {
+                    access = pAt.GetString();
+                }
+                if (string.IsNullOrWhiteSpace(refresh) && payload.TryGetProperty("refreshToken", out var pRt) && pRt.ValueKind == JsonValueKind.String)
+                {
+                    refresh = pRt.GetString();
+                }
+            }
+        }
+        catch
+        {
+            // JSON parse edilemezse regex ile devam et
+        }
+
+        if (string.IsNullOrWhiteSpace(access))
+        {
+            var match = Regex.Match(body, @"ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+");
+            if (match.Success)
+            {
+                access = match.Value;
+            }
+        }
+
+        return (access, refresh);
+    }
+
     private async Task CheckStorageTokenAsync()
     {
         if (_tokenCaptured || _webView.CoreWebView2 == null) return;
 
         try
         {
-            // localStorage içindeki token ve accessToken alanlarını oku
-            string script = @"(() => {
+            // localStorage ve sessionStorage içindeki token, refresh_token ve user objesini oku
+            const string script = @"(() => {
                 try {
-                    const t = localStorage.getItem('token') || localStorage.getItem('accessToken');
-                    if (t && t.length > 25) return t;
-                    
-                    // user objesindeki token alanını kontrol et
+                    const jwtRe = /ey[A-Za-z0-9_-]+\.ey[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
+                    let access = localStorage.getItem('token') || localStorage.getItem('accessToken') || '';
+                    let refresh = localStorage.getItem('refresh_token') || localStorage.getItem('refreshToken') || '';
+
                     const u = localStorage.getItem('user');
                     if (u) {
-                        const parsed = JSON.parse(u);
-                        if (parsed?.token?.accessToken) return parsed.token.accessToken;
+                        try {
+                            const parsed = JSON.parse(u);
+                            if (!access && parsed && parsed.token && parsed.token.accessToken) {
+                                access = parsed.token.accessToken;
+                            }
+                            if (!refresh && parsed && parsed.token && parsed.token.refreshToken) {
+                                refresh = parsed.token.refreshToken;
+                            }
+                        } catch (e) {}
                     }
-                } catch (Exception caught) { AppLog.Swallowed(caught); }
-                return '';
+
+                    if (!access) {
+                        for (let i = 0; i < localStorage.length; i++) {
+                            const k = localStorage.key(i);
+                            if (k && k.toLowerCase().includes('refresh')) continue;
+                            const v = localStorage.getItem(k);
+                            if (v && v.includes('eyJ')) {
+                                const m = v.match(jwtRe);
+                                if (m) { access = m[0]; break; }
+                            }
+                        }
+                    }
+
+                    if (!access) {
+                        for (let i = 0; i < sessionStorage.length; i++) {
+                            const k = sessionStorage.key(i);
+                            if (k && k.toLowerCase().includes('refresh')) continue;
+                            const v = sessionStorage.getItem(k);
+                            if (v && v.includes('eyJ')) {
+                                const m = v.match(jwtRe);
+                                if (m) { access = m[0]; break; }
+                            }
+                        }
+                    }
+
+                    if (!access) return '';
+                    return JSON.stringify({ accessToken: access, refreshToken: refresh });
+                } catch (e) {
+                    return '';
+                }
             })()";
 
             string jsonResult = await _webView.ExecuteScriptAsync(script);
             if (!string.IsNullOrWhiteSpace(jsonResult) && jsonResult != "null" && jsonResult != "\"\"")
             {
-                string rawToken = jsonResult.Trim('\"', ' ', '\\');
-                if (rawToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                string? unquoted = JsonSerializer.Deserialize<string>(jsonResult);
+                if (!string.IsNullOrWhiteSpace(unquoted))
                 {
-                    rawToken = rawToken.Substring(7).Trim();
-                }
+                    using var doc = JsonDocument.Parse(unquoted);
+                    string rawToken = doc.RootElement.TryGetProperty("accessToken", out var at) ? at.GetString() ?? "" : "";
+                    string rawRefresh = doc.RootElement.TryGetProperty("refreshToken", out var rt) ? rt.GetString() ?? "" : "";
 
-                if (rawToken.Length > 25 && rawToken.Contains("eyJ") && !JwtTokenInspector.IsExpired(rawToken))
-                {
-                    await CompleteLoginSuccessAsync(rawToken);
+                    rawToken = rawToken.Trim('\"', ' ', '\\');
+                    if (rawToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                    {
+                        rawToken = rawToken.Substring(7).Trim();
+                    }
+
+                    if (rawToken.Length > 25 && rawToken.Contains("eyJ"))
+                    {
+                        if (!JwtTokenInspector.IsExpired(rawToken))
+                        {
+                            await CompleteLoginSuccessAsync(rawToken, rawRefresh);
+                        }
+                        else
+                        {
+                            // Süresi dolmuş eski token varsa localStorage'dan temizle ki yeni girişi engellemesin
+                            await _webView.ExecuteScriptAsync("(() => { try { localStorage.removeItem('token'); localStorage.removeItem('accessToken'); localStorage.removeItem('user'); } catch(e){} })()");
+                        }
+                    }
                 }
             }
         }
         catch (Exception caught) { AppLog.Swallowed(caught, "ArasGlobalEmbeddedLoginForm.CheckStorageTokenAsync"); }
     }
 
-    private async Task CompleteLoginSuccessAsync(string token)
+    private async Task CompleteLoginSuccessAsync(string token, string? refreshToken = null)
     {
         if (_tokenCaptured) return;
         _tokenCaptured = true;
         _storageCheckTimer.Stop();
+
+        // Eğer refresh token henüz parametreyle gelmediyse localStorage'dan son bir kez okumayı dene
+        if (string.IsNullOrWhiteSpace(refreshToken) && _webView.CoreWebView2 != null)
+        {
+            try
+            {
+                string rfJson = await _webView.ExecuteScriptAsync("(() => { try { return localStorage.getItem('refresh_token') || (JSON.parse(localStorage.getItem('user') || '{}')?.token?.refreshToken) || ''; } catch(e){ return ''; } })()");
+                if (!string.IsNullOrWhiteSpace(rfJson) && rfJson != "null" && rfJson != "\"\"")
+                {
+                    refreshToken = rfJson.Trim('\"', ' ', '\\');
+                }
+            }
+            catch { }
+        }
 
         CapturedToken = token;
 
         // Ayarları kalıcı olarak kaydet
         var settings = ArasGlobalSettingsStore.Load();
         settings.BearerToken = token;
+        if (!string.IsNullOrWhiteSpace(refreshToken))
+        {
+            settings.RefreshToken = refreshToken.Trim();
+        }
         settings.TokenLastUpdatedUtc = DateTime.UtcNow;
         ArasGlobalSettingsStore.Save(settings);
 

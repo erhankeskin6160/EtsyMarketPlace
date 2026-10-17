@@ -72,6 +72,7 @@ public sealed class ArasGlobalQuoteOffer
 public sealed class ArasGlobalSettings
 {
     public string BearerToken { get; set; } = string.Empty;
+    public string RefreshToken { get; set; } = string.Empty;
     public DateTime? TokenLastUpdatedUtc { get; set; }
     public double DefaultWeightKg { get; set; } = 0.4;
     public double DefaultWidthCm { get; set; } = 15.0;
@@ -102,9 +103,36 @@ public sealed class ArasGlobalSettings
     }
 
     [JsonIgnore]
+    public string CleanRefreshToken
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(RefreshToken)) return string.Empty;
+            string t = RefreshToken.Trim();
+            if (t.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                t = t.Substring(7).Trim();
+            }
+            return t;
+        }
+    }
 
+    [JsonIgnore]
     public bool HasValidTokenFormat =>
         !string.IsNullOrWhiteSpace(BearerToken) && CleanToken.Length > 20 && !JwtTokenInspector.IsExpired(CleanToken);
+
+    [JsonIgnore]
+    public bool IsTokenValid => HasValidTokenFormat;
+
+    public bool IsTokenExpired() => JwtTokenInspector.IsExpired(CleanToken);
+
+    public DateTime? GetTokenExpiryUtc() => JwtTokenInspector.GetExpirationUtc(CleanToken);
+
+    [JsonIgnore]
+    public bool HasValidRefreshToken =>
+        !string.IsNullOrWhiteSpace(RefreshToken) &&
+        CleanRefreshToken.Length > 15 &&
+        (!CleanRefreshToken.StartsWith("eyJ", StringComparison.OrdinalIgnoreCase) || !JwtTokenInspector.IsExpired(CleanRefreshToken));
 }
 
 /// <summary>
