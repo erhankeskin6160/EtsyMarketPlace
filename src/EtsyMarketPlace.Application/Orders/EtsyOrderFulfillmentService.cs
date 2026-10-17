@@ -75,19 +75,23 @@ public sealed class EtsyOrderFulfillmentService : IEtsyOrderFulfillmentService
                 item.Status = "unfulfilled";
             }
 
-            // Yerel kayıtlı adres düzeltmesi varsa uygula
-            if (savedAddresses != null && savedAddresses.TryGetValue(item.ReceiptId, out var savedRecord) && !string.IsNullOrWhiteSpace(savedRecord.StreetAddress))
+            // Yerel kayıtlı adres / maliyet / GTİP / takip no düzeltmesi varsa uygula
+            if (savedAddresses != null && savedAddresses.TryGetValue(item.ReceiptId, out var savedRecord))
             {
                 EtsyOrderService.ApplyRecord(item, savedRecord);
+            }
+
+            if (receipt.WasShipped || !string.IsNullOrWhiteSpace(item.TrackingCode))
+            {
+                item.Status = "shipped";
             }
 
             // Eksik adres tespiti
             bool isMissing = string.IsNullOrWhiteSpace(item.StreetAddress) || string.IsNullOrWhiteSpace(item.City);
             item.IsAddressMissing = isMissing;
-            if (isMissing)
-            {
-                item.AddressWarning = "Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin.";
-            }
+            item.AddressWarning = isMissing
+                ? "Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin."
+                : string.Empty;
 
             queue.Add(item);
         }
@@ -105,20 +109,38 @@ public sealed class EtsyOrderFulfillmentService : IEtsyOrderFulfillmentService
             return;
         }
 
+        string gtip = !string.IsNullOrWhiteSpace(updatedAddress.GtipCode)
+            ? updatedAddress.GtipCode.Trim()
+            : (updatedAddress.Items?.FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.HsCode))?.HsCode ?? string.Empty);
+
         var record = new OrderAddressRecord(
             receiptId,
-            updatedAddress.BuyerName,
-            updatedAddress.BuyerEmail,
-            updatedAddress.Phone,
-            updatedAddress.StreetAddress,
-            updatedAddress.SecondAddress,
-            updatedAddress.City,
-            updatedAddress.State,
-            updatedAddress.PostalCode,
-            updatedAddress.CountryCode,
-            updatedAddress.CountryName,
+            updatedAddress.BuyerName ?? string.Empty,
+            updatedAddress.BuyerEmail ?? string.Empty,
+            updatedAddress.Phone ?? string.Empty,
+            updatedAddress.StreetAddress ?? string.Empty,
+            updatedAddress.SecondAddress ?? string.Empty,
+            updatedAddress.City ?? string.Empty,
+            updatedAddress.State ?? string.Empty,
+            updatedAddress.PostalCode ?? string.Empty,
+            updatedAddress.CountryCode ?? string.Empty,
+            updatedAddress.CountryName ?? string.Empty,
             "WebManual",
-            DateTime.UtcNow);
+            DateTime.UtcNow)
+        {
+            IossNumber = updatedAddress.IossNumber ?? string.Empty,
+            ProductCostUsd = updatedAddress.ProductCostUsd,
+            ShippingCostUsd = updatedAddress.ShippingCostUsd,
+            WeightKg = updatedAddress.WeightKg,
+            WidthCm = updatedAddress.WidthCm,
+            LengthCm = updatedAddress.LengthCm,
+            HeightCm = updatedAddress.HeightCm,
+            GtipCode = gtip,
+            SelectedCarrier = updatedAddress.SelectedCarrier ?? string.Empty,
+            CarrierServiceName = updatedAddress.CarrierServiceName ?? string.Empty,
+            TrackingCode = updatedAddress.TrackingCode ?? string.Empty,
+            LabelUrl = updatedAddress.LabelUrl ?? string.Empty
+        };
 
         await _addressRepository.SaveAsync(record, cancellationToken);
     }

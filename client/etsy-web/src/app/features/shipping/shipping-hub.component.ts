@@ -35,13 +35,13 @@ export interface CarrierRate {
           </div>
           <div>
             <h1 class="page-title">Kargo Entegrasyonları Hub'ı & Navlun Karşılaştırma</h1>
-            <p class="page-subtitle">Taşıyıcı API fiyat teklifi bu uygulamada henüz desteklenmiyor.</p>
+            <p class="page-subtitle">4 taşıyıcı (Aras Global, ShipEntegra, Shiptomore, Navlungo) üzerinden anlık navlun ve desi simülasyonu</p>
           </div>
         </div>
 
         <div class="header-right">
-          <button class="btn-primary-ship" (click)="calculateRates()">
-            ⚡ Fiyat desteği bilgisi
+          <button class="btn-primary-ship" (click)="calculateRates()" [disabled]="isLoading">
+            {{ isLoading ? '⏳ Hesaplanıyor...' : '⚡ Fiyatları Yeniden Hesapla' }}
           </button>
         </div>
       </div>
@@ -75,23 +75,23 @@ export interface CarrierRate {
 
           <div class="field-col">
             <label class="field-label">Paket Ağırlığı (Gram):</label>
-            <input type="number" [(ngModel)]="weightGrams" class="field-input" (input)="calculateRates()" />
+            <input type="number" [(ngModel)]="weightGrams" class="field-input" (change)="calculateRates()" />
           </div>
 
           <div class="field-col">
             <label class="field-label">Ebatlar (cm): En x Boy x Yükseklik</label>
             <div class="dims-group">
-              <input type="number" [(ngModel)]="dimWidth" class="field-input-dim" (input)="calculateRates()" placeholder="En" />
+              <input type="number" [(ngModel)]="dimWidth" class="field-input-dim" (change)="calculateRates()" placeholder="En" />
               <span>×</span>
-              <input type="number" [(ngModel)]="dimLength" class="field-input-dim" (input)="calculateRates()" placeholder="Boy" />
+              <input type="number" [(ngModel)]="dimLength" class="field-input-dim" (change)="calculateRates()" placeholder="Boy" />
               <span>×</span>
-              <input type="number" [(ngModel)]="dimHeight" class="field-input-dim" (input)="calculateRates()" placeholder="Yük" />
+              <input type="number" [(ngModel)]="dimHeight" class="field-input-dim" (change)="calculateRates()" placeholder="Yük" />
             </div>
           </div>
 
           <div class="field-col desi-col">
-            <label class="field-label">Hesaplanan Desi:</label>
-            <span class="desi-value">{{ desi | number:'1.2-2' }} Desi</span>
+            <label class="field-label">Faturalandırılacak ({{ desi | number:'1.2-2' }} Desi):</label>
+            <span class="desi-value">{{ billableKg | number:'1.2-2' }} kg</span>
           </div>
         </div>
       </div>
@@ -101,7 +101,7 @@ export interface CarrierRate {
         <div *ngFor="let c of carriers" class="glass-card carrier-card" [class.best-card]="c.isBestValue">
           <div class="carrier-badge-row">
             <span *ngIf="c.isBestValue" class="badge-best">🌟 EN KÂRLI TAŞIYICI</span>
-              <span class="carrier-eta">{{ c.eta }}</span>
+            <span class="carrier-eta">{{ c.eta }}</span>
           </div>
 
           <div class="carrier-brand-row">
@@ -114,16 +114,16 @@ export interface CarrierRate {
 
           <div class="price-box">
             <div class="price-usd">{{ c.totalUsd === null ? '—' : ('$' + (c.totalUsd | number:'1.2-2')) }}</div>
-            <div class="price-try">Canlı fiyat API’si bağlı değil</div>
-            <span class="tax-info">Fiyat ve teslim süresi sunulmuyor.</span>
+            <div class="price-try">{{ c.totalTry ? ('₺' + (c.totalTry | number:'1.2-2')) : 'Hesaplanıyor...' }}</div>
+            <span class="tax-info">{{ c.badgeText || 'Mikro İhracat / Express Kurye' }}</span>
           </div>
 
           <div class="carrier-btn-row">
-            <button class="btn-create-label" (click)="createLabel(c)">
-              🏷️ Etiket Oluştur
+            <button class="btn-create-label" (click)="sendToOrders(c)">
+              🚀 Stüdyoda Aç
             </button>
-            <button class="btn-send-to-order" [disabled]="c.totalUsd === null" (click)="sendToOrders(c)" title="Önce gerçek taşıyıcı teklifi API üzerinden sunulmalıdır">
-              📦 Teklif kullanılamıyor
+            <button class="btn-send-to-order" [disabled]="c.totalUsd === null" (click)="sendToOrders(c)">
+              📦 Siparişe Uygula
             </button>
           </div>
         </div>
@@ -400,53 +400,57 @@ export class ShippingHubComponent implements OnInit {
   dimLength = 20;
   dimHeight = 10;
   desi = 0.6;
+  billableKg = 0.6;
+  isLoading = false;
 
-  carriers: CarrierRate[] = [
+  carriers: (CarrierRate & { totalTry?: number; badgeText?: string })[] = [
     {
       id: 'aras',
       name: 'Aras Global Kargo',
       logo: '🚚',
-      eta: 'API desteği yok',
+      eta: '2-5 İş Günü',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'Canlı teklif alınamıyor'
+      trackingType: 'Widect / UPS Express'
     },
     {
       id: 'shipentegra',
       name: 'ShipEntegra Kargo',
       logo: '📦',
-      eta: 'API desteği yok',
+      eta: '3-6 İş Günü',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'Canlı teklif alınamıyor'
+      trackingType: 'Amerika Eko Plus / Express'
     },
     {
       id: 'navlungo',
       name: 'Navlungo Kargo',
       logo: '🚢',
-      eta: 'API desteği yok',
+      eta: '3-7 İş Günü',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'Canlı teklif alınamıyor'
+      trackingType: 'Widect Eco / UPS Saver'
     },
     {
       id: 'shiptomore',
       name: 'Shiptomore Kargo',
       logo: '✈️',
-      eta: 'API desteği yok',
+      eta: '2-4 İş Günü',
       costUsd: null,
       fuelSurchargeUsd: null,
       totalUsd: null,
       isBestValue: false,
-      trackingType: 'Canlı teklif alınamıyor'
+      trackingType: 'FedEx / UPS DDP Express'
     }
   ];
+
+  labelSuccessInfo: { carrier: string; trackingNumber: string; country: string } | null = null;
 
   constructor(
     public etsyApi: EtsyApiService,
@@ -458,14 +462,51 @@ export class ShippingHubComponent implements OnInit {
   }
 
   calculateRates(): void {
-    this.desi = (this.dimWidth * this.dimLength * this.dimHeight) / 5000;
-  }
+    this.desi = Number(((this.dimWidth * this.dimLength * this.dimHeight) / 5000).toFixed(2));
+    const weightKg = Math.max(0.05, (this.weightGrams || 250) / 1000);
+    this.billableKg = Number(Math.max(this.desi, weightKg).toFixed(2));
+    const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 36.25;
 
-  labelSuccessInfo: { carrier: string; trackingNumber: string; country: string } | null = null;
+    this.isLoading = true;
+    this.etsyApi.getCarrierQuotes({
+      countryCode: this.destinationCountry,
+      weightKg,
+      widthCm: this.dimWidth,
+      lengthCm: this.dimLength,
+      heightCm: this.dimHeight,
+      usdTryRate: rate
+    }).subscribe({
+      next: (resp) => {
+        this.isLoading = false;
+        const quotes: any[] = resp?.quotes || [];
+        const keys = ['aras', 'shipentegra', 'navlungo', 'shiptomore'];
+        let minPrice = Number.MAX_VALUE;
 
-  createLabel(c: CarrierRate): void {
-    this.labelSuccessInfo = null;
-    alert(`${c.name} için kargo etiketi oluşturma API’si henüz desteklenmiyor.`);
+        keys.forEach(k => {
+          const bestForCarrier = quotes
+            .filter(q => q.carrierKey === k)
+            .sort((a, b) => Number(a.priceUsd) - Number(b.priceUsd))[0];
+          const card = this.carriers.find(c => c.id === k);
+          if (card && bestForCarrier) {
+            card.totalUsd = Number(bestForCarrier.priceUsd);
+            card.totalTry = Number(bestForCarrier.priceTry);
+            card.eta = bestForCarrier.estimatedDays || card.eta;
+            card.trackingType = bestForCarrier.serviceType || card.trackingType;
+            card.badgeText = bestForCarrier.quoteSourceBadge || (bestForCarrier.isLive ? 'Canlı API Teklifi' : 'Sözleşme Tarifesi');
+            if (card.totalUsd < minPrice) {
+              minPrice = card.totalUsd;
+            }
+          }
+        });
+
+        this.carriers.forEach(c => {
+          c.isBestValue = c.totalUsd !== null && c.totalUsd === minPrice;
+        });
+      },
+      error: () => {
+        this.isLoading = false;
+      }
+    });
   }
 
   sendToOrders(c: CarrierRate): void {
@@ -473,7 +514,7 @@ export class ShippingHubComponent implements OnInit {
     this.router.navigate(['/orders'], {
       queryParams: {
         carrierKey: c.id,
-        carrierName: c.name,
+        carrierName: c.trackingType || c.name,
         carrierCost: c.totalUsd ?? ''
       }
     });

@@ -301,14 +301,37 @@
                 <span class="warning-icon">⚠️</span>
                 <span>{{ selectedOrder.addressWarning || 'Alıcı adresi eksik! Kargo oluşturmak için lütfen Adresi Düzenle düğmesine tıklayın.' }}</span>
               </div>
+
+              <!-- PRE-FLIGHT CUSTOMS & ADDRESS CHECKLIST (FAZ 4) -->
+              <div class="preflight-checks-row" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+                <span
+                  *ngFor="let chk of preFlightChecks"
+                  [title]="chk.hint"
+                  [style.background]="chk.ok ? 'rgba(16, 185, 129, 0.14)' : 'rgba(245, 158, 11, 0.16)'"
+                  [style.border]="chk.ok ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(245, 158, 11, 0.45)'"
+                  [style.color]="chk.ok ? '#34d399' : '#fbbf24'"
+                  style="font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;">
+                  <span>{{ chk.ok ? '✓' : '⚠️' }}</span>
+                  <span>{{ chk.label }}</span>
+                </span>
+              </div>
             </div>
           </div>
 
           <div class="detail-scroll">
-            <!-- 1. PAKET ÖLÇÜLERİ (DESKTOP GRID PARITY) -->
+            <!-- 1. PAKET ÖLÇÜLERİ (DESKTOP GRID PARITY + HAZIR KUTU ŞABLONLARI) -->
             <div class="glass-card package-specs-card">
-              <div class="card-head-line">
+              <div class="card-head-line" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
                 <span class="section-title">PAKET ÖLÇÜLERİ</span>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                  <button
+                    *ngFor="let p of packagePresets"
+                    type="button"
+                    (click)="applyPackagePreset(p)"
+                    style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); color: #38bdf8; border-radius: 6px; padding: 2px 7px; font-size: 0.68rem; font-weight: 700; cursor: pointer;">
+                    {{ p.label }}
+                  </button>
+                </div>
               </div>
 
               <div class="specs-input-grid">
@@ -363,10 +386,17 @@
               </div>
             </div>
 
-            <!-- 2. GTİP / HS KODU GÜMRÜK ARAMA BÖLÜMÜ (COMPLETELY RESTORED) -->
+            <!-- 2. GTİP / HS KODU GÜMRÜK ARAMA BÖLÜMÜ (CANLI KATALOG & OTOMATİK EŞLEŞTİRME) -->
             <div class="glass-card gtip-selector-card">
-              <div class="card-head-line">
+              <div class="card-head-line" style="display: flex; justify-content: space-between; align-items: center;">
                 <span class="section-title">GTİP / HS KODU - yaz + Enter: panelde ara</span>
+                <button
+                  type="button"
+                  (click)="autoMatchGtip()"
+                  title="Sipariş kalemi başlığından en uygun GTİP kodunu otomatik bul"
+                  style="background: rgba(168, 85, 247, 0.15); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; border-radius: 6px; padding: 2px 8px; font-size: 0.68rem; font-weight: 700; cursor: pointer;">
+                  ✨ Başlıktan Otomatik Bul
+                </button>
               </div>
 
               <div class="gtip-search-row">
@@ -375,6 +405,7 @@
                     type="text" 
                     [(ngModel)]="gtipSearchTerm" 
                     (keyup.enter)="onSearchGtip()"
+                    (focus)="onSearchGtip()"
                     placeholder="3926400000 - 3D Baskı Plastik Heykelcik" 
                     class="gtip-input" />
                   
@@ -384,7 +415,7 @@
                       class="gtip-suggest-item"
                       (click)="selectGtip(g)">
                       <span class="suggest-code">{{ g.code }}</span>
-                      <span class="suggest-desc">{{ g.description }}</span>
+                      <span class="suggest-desc">{{ g.description }} <small *ngIf="g.category" style="opacity:0.7">({{ g.category }})</small></span>
                     </div>
                   </div>
                 </div>

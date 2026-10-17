@@ -274,15 +274,92 @@ export class OrdersService {
     return Boolean(session.tokenOrKey && !session.tokenOrKey.includes('...') && session.tokenOrKey.length > 10);
   }
 
-  // --- GTIP SEARCH ENGINE ---
+  // --- GTIP / HS CODE CATALOG & SEARCH ENGINE ---
+  private readonly gtipCatalog: (GtipCodeItem & { keywords: string })[] = [
+    { code: '3926400000', category: '3D Baskı & Figür', description: 'Plastikten / PLA / Reçineden 3D Baskı Heykelcik, Biblolar ve Süs Eşyası', keywords: '3d print pla resin figure figurine statue decor miniature dragon bust sculpture' },
+    { code: '3926909990', category: '3D Baskı & Aparat', description: 'Plastikten Diğer Eşyalar (Stand, Tutucu, Organizer, Yedek Parça)', keywords: 'plastic holder stand mount organizer clip bracket custom 3d headset controller' },
+    { code: '9503007000', category: 'Oyuncak & Hobi', description: 'Plastik Oyuncaklar, Eklemli 3D Figürler (Articulated Fidget / Toy)', keywords: 'toy fidget articulated flexi game puzzle dice tower' },
+    { code: '9405210000', category: 'Aydınlatma & Lamba', description: 'LED Masa Lambası, Gece Lambası, Lithophane / 3D Baskı Aydınlatma', keywords: 'lamp led light nightlight lithophane lampshade chandelier' },
+    { code: '6912002510', category: 'Seramik & Kupa', description: 'Seramik / Porselen Kahve Kupası, Bardak ve Sofra Eşyası (Mug)', keywords: 'mug cup ceramic coffee tea tableware bowl plate' },
+    { code: '4420190000', category: 'Ahşap & Dekor', description: 'Ahşap Dekoratif Süs Eşyası, Lazer Kesim Duvar Dekoru ve Heykelcik', keywords: 'wood wooden laser cut sign wall art plaque box' },
+    { code: '7117199000', category: 'Takı & Aksesuar', description: 'Bijuteri, Kolye, Küpe, Bileklik ve Metal/Plastik Takılar', keywords: 'jewelry necklace earring bracelet ring pendant charm keychain' },
+    { code: '7113110000', category: 'Gümüş Takı', description: '925 Ayar Gümüş Takı ve Mücevherat (Kolye, Yüzük, Küpe)', keywords: 'silver 925 sterling ring necklace jewelry gold' },
+    { code: '6109100012', category: 'Tekstil & Giyim', description: 'Pamuklu Baskılı Tişört, Sweatshirt ve Örme Giyim Eşyası', keywords: 't-shirt shirt tee hoodie sweatshirt apparel cotton clothing' },
+    { code: '4202229000', category: 'Çanta & Cüzdan', description: 'Bez Çanta (Tote Bag), Deri/Tekstil Cüzdan ve Kılıf', keywords: 'bag tote wallet pouch purse leather case backpack' },
+    { code: '4911910040', category: 'Tablo & Poster', description: 'Basılı Sanat Posteri, Kanvas Tablo, Fotoğraf ve Sticker', keywords: 'poster print canvas art sticker decal paper bookmark card' },
+    { code: '8306290000', category: 'Metal Dekor', description: 'Adi Metalden Duvar Sanatı, Dekoratif Metal Tablo ve Heykelcik', keywords: 'metal wall art iron steel decor sculpture sign' },
+    { code: '3406000000', category: 'Mum & Kokulu Ürün', description: 'El Yapımı Soya Mumu, Dekoratif Kokulu Mum', keywords: 'candle soy wax scented aroma holder' },
+    { code: '6307909891', category: 'Ev Tekstili', description: 'Dekoratif Yastık Kılıfı, Makrome ve Dokuma Ev Tekstili', keywords: 'pillow cushion macrame tapestry textile woven rug towel' },
+    { code: '3924104000', category: 'Mutfak & Sunum', description: 'Plastik Mutfak Gereçleri, Kurabiye Kalıbı (Cookie Cutter)', keywords: 'cookie cutter kitchen coaster tray planter pot vase' }
+  ];
+
   public searchGtip(term: string): GtipCodeItem[] {
     let clean = (term || '').trim().toLowerCase();
     const dash = clean.indexOf(' - ');
     if (dash > 0) {
       clean = clean.substring(0, dash).trim();
     }
-    if (!clean) return [];
-    return [];
+    if (!clean) {
+      return this.gtipCatalog.slice(0, 8).map(({ keywords, ...rest }) => rest);
+    }
+
+    const digits = clean.replace(/\D/g, '');
+    const tokens = clean.split(/\s+/).filter(t => t.length >= 2);
+
+    return this.gtipCatalog
+      .filter(item => {
+        if (digits.length >= 2 && item.code.includes(digits)) return true;
+        if (item.description.toLowerCase().includes(clean)) return true;
+        if ((item.category ?? '').toLowerCase().includes(clean)) return true;
+        if (item.keywords.includes(clean)) return true;
+        return tokens.some(tok =>
+          item.description.toLowerCase().includes(tok) ||
+          (item.category ?? '').toLowerCase().includes(tok) ||
+          item.keywords.includes(tok)
+        );
+      })
+      .map(({ keywords, ...rest }) => rest);
+  }
+
+  public searchGtipRemote(term: string): Observable<GtipCodeItem[]> {
+    let clean = (term || '').trim();
+    const dash = clean.indexOf(' - ');
+    if (dash > 0) {
+      clean = clean.substring(0, dash).trim();
+    }
+    return new Observable<GtipCodeItem[]>(observer => {
+      const localMatches = this.searchGtip(clean);
+      this.etsyApi.searchHsCodes(clean, 20).subscribe({
+        next: (resp) => {
+          const apiItems: GtipCodeItem[] = (resp?.results || []).map((r: any) => ({
+            code: r.code,
+            category: r.category || 'Gümrük Tarife',
+            description: r.description || `${r.formattedCode || r.code} Gümrük Kodu`
+          }));
+          const merged = [...localMatches];
+          apiItems.forEach(a => {
+            if (!merged.some(m => m.code === a.code)) {
+              merged.push(a);
+            }
+          });
+          observer.next(merged.slice(0, 20));
+          observer.complete();
+        },
+        error: () => {
+          observer.next(localMatches);
+          observer.complete();
+        }
+      });
+    });
+  }
+
+  public suggestGtipForOrder(order: OrderFulfillmentItem | null): GtipCodeItem {
+    if (!order || !order.items || order.items.length === 0) {
+      return { code: '3926400000', category: '3D Baskı & Figür', description: 'Plastikten / PLA / Reçineden 3D Baskı Heykelcik, Biblolar ve Süs Eşyası' };
+    }
+    const combinedTitle = order.items.map(i => i.title || '').join(' ').toLowerCase();
+    const match = this.searchGtip(combinedTitle)[0];
+    return match || { code: '3926400000', category: '3D Baskı & Figür', description: 'Plastikten / PLA / Reçineden 3D Baskı Heykelcik, Biblolar ve Süs Eşyası' };
   }
 
   // --- ORDER RETRIEVAL & QUEUE MANAGEMENT ---
@@ -317,20 +394,32 @@ export class OrdersService {
             ].filter((p: any) => Boolean(p && String(p).trim().length > 0));
 
             const total = Number(item.totalPrice || item.totalAmount || 0);
-            const pCost = Number(item.productCost || 0);
-            const sCost = Number(item.shippingCost || 0);
+            const pCost = Number(item.productCostUsd ?? item.productCost ?? 0);
+            const sCost = Number(item.shippingCostUsd ?? item.shippingCost ?? 0);
             const netProfit = Number((total - (pCost + sCost + (total * 0.095))).toFixed(2));
-            const profitMargin = total > 0 ? Number((((total - (pCost + sCost)) / total) * 100).toFixed(1)) : 0;
+            const profitMargin = total > 0 ? Number(((netProfit / total) * 100).toFixed(1)) : 0;
 
             const orderItems = (item.items || []).map((it: any, idx: number) => ({
               id: it.id || `it-${item.receiptId}-${idx}`,
               title: it.title || 'Etsy Ürünü',
               quantity: it.quantity || 1,
               price: it.price || 0,
-              sku: it.sku || `SKU-${it.listingId || item.receiptId}`
+              sku: it.sku || `SKU-${it.listingId || item.receiptId}`,
+              imageUrl: it.imageUrl || ''
             }));
 
-            const isShipped = item.status === 'shipped' || item.status === 'Fulfilled' || Boolean(item.trackingCode);
+            const widthCm = Number(item.widthCm || item.packageSpecs?.widthCm || 15);
+            const lengthCm = Number(item.lengthCm || item.packageSpecs?.lengthCm || 20);
+            const heightCm = Number(item.heightCm || item.packageSpecs?.heightCm || 10);
+            const weightKg = Number(item.weightKg || item.totalWeightKg || item.packageSpecs?.weightKg || 0.4);
+            const desi = Number(((widthCm * lengthCm * heightCm) / 5000).toFixed(2));
+            const invoicedWeightKg = Number(Math.max(weightKg, desi).toFixed(2));
+
+            const rawGtip = item.gtipCode || (item.items && item.items[0]?.hsCode) || '';
+            const gtipMatch = rawGtip ? this.searchGtip(rawGtip)[0] : undefined;
+
+            const tracking = item.trackingCode || item.trackingNumber || '';
+            const isShipped = item.status === 'shipped' || item.status === 'Shipped' || item.status === 'Fulfilled' || Boolean(tracking);
 
             return {
               orderId: String(item.receiptId),
@@ -361,10 +450,10 @@ export class OrdersService {
               isCostMissing: pCost <= 0 || sCost <= 0,
               netProfit: netProfit,
               profitMarginPercent: profitMargin,
-              packageSpecs: item.packageSpecs || { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.4, desi: 0.6 },
-              invoicedWeightKg: item.invoicedWeightKg || 0.4,
-              gtipCode: item.gtipCode || '',
-              gtipDescription: item.gtipDescription || '',
+              packageSpecs: { widthCm, lengthCm, heightCm, weightKg, desi },
+              invoicedWeightKg,
+              gtipCode: rawGtip,
+              gtipDescription: item.gtipDescription || gtipMatch?.description || '',
               items: orderItems.length > 0 ? orderItems : [
                 {
                   id: `it-${item.receiptId}`,
@@ -375,7 +464,11 @@ export class OrdersService {
                 }
               ],
               selectedCarrier: item.selectedCarrier || '',
-              trackingCode: item.trackingCode || '',
+              carrier: item.selectedCarrier || '',
+              carrierServiceName: item.carrierServiceName || '',
+              trackingCode: tracking,
+              trackingNumber: tracking,
+              barcodeNumber: tracking || String(item.receiptId),
               labelUrl: item.labelUrl || ''
             };
           });
@@ -497,7 +590,7 @@ export class OrdersService {
     const selected = list.find(o => String(o.orderId) === String(receiptId));
     if (selected) this.selectedOrderSubject.next(selected);
 
-    return this.etsyApi.saveOrderAddress(receiptId, address);
+    return this.etsyApi.saveOrderAddress(receiptId, selected || address);
   }
 
   public aiParseAddress(rawAddress: string): Observable<any> {
@@ -569,8 +662,55 @@ export class OrdersService {
 
     this.ordersSubject.next(orders);
     const updated = orders.find(o => o.orderId === orderId);
-    if (updated) this.selectedOrderSubject.next(updated);
+    if (updated) {
+      this.selectedOrderSubject.next(updated);
+      return new Observable<boolean>(observer => {
+        this.persistOrderFulfillmentMeta(updated).subscribe({
+          next: () => {
+            observer.next(true);
+            observer.complete();
+          },
+          error: () => {
+            observer.next(false);
+            observer.complete();
+          }
+        });
+      });
+    }
     return of(true);
+  }
+
+  public persistOrderFulfillmentMeta(order: OrderFulfillmentItem): Observable<any> {
+    const receiptId = Number(String(order.orderId).replace(/\D/g, ''));
+    if (!receiptId || receiptId <= 0) {
+      return of({ success: false });
+    }
+    const payload = {
+      receiptId,
+      buyerName: order.buyerName || '',
+      buyerEmail: order.buyerEmail || '',
+      phone: order.phone || '',
+      streetAddress: order.streetAddress || '',
+      secondAddress: order.secondAddress || '',
+      city: order.city || '',
+      state: order.state || '',
+      postalCode: order.postalCode || '',
+      countryCode: order.countryCode || 'US',
+      countryName: order.country || '',
+      iossNumber: order.iossNumber || '',
+      productCostUsd: Number(order.productCost || 0),
+      shippingCostUsd: Number(order.shippingCost || 0),
+      weightKg: Number(order.packageSpecs?.weightKg || 0.4),
+      widthCm: Number(order.packageSpecs?.widthCm || 15),
+      lengthCm: Number(order.packageSpecs?.lengthCm || 20),
+      heightCm: Number(order.packageSpecs?.heightCm || 10),
+      gtipCode: order.gtipCode || '',
+      selectedCarrier: order.selectedCarrier || '',
+      carrierServiceName: order.carrierServiceName || '',
+      trackingCode: order.trackingNumber || order.trackingCode || '',
+      labelUrl: order.labelUrl || ''
+    };
+    return this.etsyApi.saveOrderFulfillmentMeta(receiptId, payload);
   }
 
   public fulfillOrder(orderId: string, carrierKey: string, carrierName: string, trackingCode: string, barcodeNumber?: string): Observable<boolean> {
@@ -580,9 +720,11 @@ export class OrdersService {
           ...order,
           status: 'shipped' as const,
           selectedCarrier: carrierKey,
+          carrier: carrierName,
           carrierServiceName: carrierName,
           trackingCode: trackingCode.trim(),
-          barcodeNumber: barcodeNumber || order.barcodeNumber || '10092370104092',
+          trackingNumber: trackingCode.trim(),
+          barcodeNumber: barcodeNumber || order.barcodeNumber || trackingCode.trim(),
           shippedAt: new Date().toISOString()
         };
       }
@@ -591,12 +733,85 @@ export class OrdersService {
 
     this.ordersSubject.next(orders);
     const updated = orders.find(o => o.orderId === orderId);
-    if (updated) this.selectedOrderSubject.next(updated);
+    if (updated) {
+      this.selectedOrderSubject.next(updated);
+      this.persistOrderFulfillmentMeta(updated).subscribe({ next: () => {}, error: () => {} });
+    }
     return of(true);
   }
 
+  public fetchLiveCarrierQuotes(
+    specs: PackageSpecs,
+    countryCode: string,
+    usdTryRate: number,
+    postalCode?: string,
+    city?: string,
+    state?: string
+  ): Observable<{ quotes: CarrierQuote[]; warningMessage?: string }> {
+    const logoMap: Record<string, string> = {
+      aras: 'assets/shipping/aras_global.png',
+      shipentegra: 'assets/shipping/shipentegra.jpg',
+      navlungo: 'assets/shipping/navlungo.png',
+      shiptomore: 'assets/shipping/shiptomore.png'
+    };
+
+    return new Observable(observer => {
+      this.etsyApi.getCarrierQuotes({
+        countryCode: countryCode || 'US',
+        postalCode: postalCode || '10001',
+        city: city || '',
+        state: state || '',
+        weightKg: specs.weightKg || 0.4,
+        widthCm: specs.widthCm || 15,
+        lengthCm: specs.lengthCm || 20,
+        heightCm: specs.heightCm || 10,
+        usdTryRate: usdTryRate > 0 ? usdTryRate : 36.25
+      }).subscribe({
+        next: (resp) => {
+          const rawQuotes = resp?.quotes || [];
+          if (rawQuotes.length === 0) {
+            observer.next({
+              quotes: this.calculateCarrierQuotes(specs, countryCode, usdTryRate),
+              warningMessage: resp?.warningMessage
+            });
+            observer.complete();
+            return;
+          }
+
+          const mapped: CarrierQuote[] = rawQuotes.map((q: any, idx: number) => ({
+            quoteId: q.serviceCode || `${q.carrierKey}-${idx}`,
+            carrierKey: q.carrierKey,
+            carrierName: q.carrierName,
+            serviceType: q.serviceType,
+            subCarrier: q.subCarrier || q.carrierName,
+            logoUrl: logoMap[q.carrierKey] || 'assets/shipping/shipentegra.jpg',
+            estimatedDays: q.estimatedDays || '3-6 İş Günü',
+            priceUsd: Number(q.priceUsd || 0),
+            priceTry: Number(q.priceTry || 0),
+            isRecommended: Boolean(q.isRecommended),
+            isLowestPrice: Boolean(q.isLowestPrice),
+            isLive: Boolean(q.isLive),
+            quoteSourceBadge: q.quoteSourceBadge || (q.isLive ? 'Canlı teklif' : 'Tahmini tarife')
+          }));
+
+          observer.next({
+            quotes: mapped,
+            warningMessage: resp?.warningMessage
+          });
+          observer.complete();
+        },
+        error: () => {
+          observer.next({
+            quotes: this.calculateCarrierQuotes(specs, countryCode, usdTryRate)
+          });
+          observer.complete();
+        }
+      });
+    });
+  }
+
   public calculateCarrierQuotes(specs: PackageSpecs, countryCode: string, usdTryRate: number): CarrierQuote[] {
-    const rate = usdTryRate > 0 ? usdTryRate : 49.13;
+    const rate = usdTryRate > 0 ? usdTryRate : 36.25;
     const desi = Number(((specs.widthCm * specs.lengthCm * specs.heightCm) / 5000).toFixed(2));
     const billable = Math.max(desi, specs.weightKg || 0.40);
     const weightStep = Math.max(1.0, Math.ceil(billable * 2.0) / 2.0);
@@ -882,565 +1097,5 @@ export class OrdersService {
     });
 
     return quotes.sort((a, b) => a.priceUsd - b.priceUsd);
-  }
-
-  // --- 15 DESKTOP PARITY ORDERS ---
-  private generateDesktopParityOrders(): OrderFulfillmentItem[] {
-    return [
-      {
-        orderId: 'ord-4188719047',
-        orderNumber: '#4188719047',
-        buyerName: 'Jamie Westenskow',
-        buyerEmail: 'jamie.westenskow@gmail.com',
-        country: 'Amerika Birleşik Devletleri',
-        countryCode: 'US',
-        city: 'Salt Lake City, UT',
-        addressSnippet: '(Sokak adresi girilmedi)',
-        isAddressMissing: true,
-        addressWarning: '⚠️ Alıcı adresi eksik! Aras Global gönderisi için bilgileri tamamlayın.',
-        exportType: 'Standart ihracat',
-        orderDate: '2026-10-02T16:20:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 39.90,
-        productCost: 8.50,
-        shippingCost: 11.50,
-        isCostMissing: false,
-        netProfit: 16.11,
-        profitMarginPercent: 40.4,
-        packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
-        invoicedWeightKg: 0.60,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Plastik Heykelcik',
-        barcodeNumber: '10092370104092',
-        items: [
-          {
-            id: 'it-101',
-            title: '3D Printed Butterfly Trainer | Colorful Safe Knife | Cosplay Display Prop',
-            quantity: 1,
-            price: 39.90,
-            sku: 'BFLY-TRN-SAFE-01',
-            imageUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=200&auto=format&fit=crop&q=80',
-            variations: ['Renk: Gece Mavisi', 'Bıçak Tipi: Güvenli Trainer']
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4188172739',
-        orderNumber: '#4188172739',
-        buyerName: 'Diane Bamber',
-        buyerEmail: 'diane.bamber@outlook.com',
-        country: 'Amerika Birleşik Devletleri',
-        countryCode: 'US',
-        city: 'Portland, OR',
-        addressSnippet: '742 Evergreen Terrace, 97201',
-        isAddressMissing: false,
-        exportType: 'Standart ihracat',
-        orderDate: '2026-10-02T13:45:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 44.50,
-        productCost: 9.00,
-        shippingCost: 0,
-        isCostMissing: true,
-        netProfit: 0,
-        profitMarginPercent: 0,
-        packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
-        invoicedWeightKg: 0.60,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Plastik Heykelcik',
-        barcodeNumber: '10092370104093',
-        items: [
-          {
-            id: 'it-102',
-            title: 'Cosplay Prop Dragon Blade | Safe Edge Plastic Display',
-            quantity: 1,
-            price: 44.50,
-            sku: 'DRG-BLD-SAFE-02',
-            imageUrl: 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&auto=format&fit=crop&q=80',
-            variations: ['Kaplama: Metalik Kırmızı']
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4187902419',
-        orderNumber: '#4187902419',
-        buyerName: 'Nathan McClements',
-        buyerEmail: 'nathan.mc@gmail.com',
-        country: 'Amerika Birleşik Devletleri',
-        countryCode: 'US',
-        city: 'Austin, TX',
-        addressSnippet: '1204 Congress Ave, 78701',
-        isAddressMissing: false,
-        exportType: 'Standart ihracat',
-        orderDate: '2026-10-02T11:10:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 39.90,
-        productCost: 8.50,
-        shippingCost: 11.50,
-        isCostMissing: false,
-        netProfit: 16.11,
-        profitMarginPercent: 40.4,
-        packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
-        invoicedWeightKg: 0.60,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Plastik Heykelcik',
-        barcodeNumber: '10092370104094',
-        items: [
-          {
-            id: 'it-103',
-            title: '3D Printed Butterfly Trainer | Colorful Safe Knife | Cosplay Display Prop',
-            quantity: 1,
-            price: 39.90,
-            sku: 'BFLY-TRN-SAFE-01',
-            variations: ['Renk: Zümrüt Yeşili']
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4187202652',
-        orderNumber: '#4187202652',
-        buyerName: 'Sandro Sobreira',
-        buyerEmail: 'sandro.sobreira@yahoo.com',
-        country: 'Amerika Birleşik Devletleri',
-        countryCode: 'US',
-        city: 'Miami, FL',
-        addressSnippet: '450 Ocean Drive, Apt 12B, 33139',
-        isAddressMissing: false,
-        exportType: 'Standart ihracat',
-        orderDate: '2026-10-02T08:30:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 49.90,
-        productCost: 10.20,
-        shippingCost: 12.00,
-        isCostMissing: false,
-        netProfit: 22.96,
-        profitMarginPercent: 46.0,
-        packageSpecs: { widthCm: 16, lengthCm: 22, heightCm: 10, weightKg: 0.45, desi: 0.70 },
-        invoicedWeightKg: 0.70,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Plastik Heykelcik',
-        barcodeNumber: '10092370104095',
-        items: [
-          {
-            id: 'it-104',
-            title: 'Articulated Crystal Dragon & Egg Set | Bambu Lab PLA Matte',
-            quantity: 1,
-            price: 49.90,
-            sku: 'DRG-EGG-SET-01'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4185170234',
-        orderNumber: '#4185170234',
-        buyerName: 'Anthony Brown',
-        buyerEmail: 'anthony.brown88@gmail.com',
-        country: 'Amerika Birleşik Devletleri',
-        countryCode: 'US',
-        city: 'Chicago, IL',
-        addressSnippet: '88 Michigan Ave, 60601',
-        isAddressMissing: false,
-        exportType: 'Standart ihracat',
-        orderDate: '2026-10-01T21:15:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 39.90,
-        productCost: 0,
-        shippingCost: 0,
-        isCostMissing: true,
-        netProfit: 0,
-        profitMarginPercent: 0,
-        packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
-        invoicedWeightKg: 0.60,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Plastik Heykelcik',
-        barcodeNumber: '10092370104096',
-        items: [
-          {
-            id: 'it-105',
-            title: '3D Printed Butterfly Trainer | Colorful Safe Knife',
-            quantity: 1,
-            price: 39.90,
-            sku: 'BFLY-TRN-SAFE-01'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4176634453',
-        orderNumber: '#4176634453',
-        buyerName: 'Inge Neuer',
-        buyerEmail: 'inge.neuer@web.de',
-        country: 'Amerika Birleşik Devletleri',
-        countryCode: 'US',
-        city: 'Boston, MA',
-        addressSnippet: 'Am Rheinufer 12, Apt 4',
-        isAddressMissing: false,
-        exportType: 'Standart ihracat',
-        orderDate: '2026-10-01T15:00:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 39.90,
-        productCost: 8.50,
-        shippingCost: 11.50,
-        isCostMissing: false,
-        netProfit: 16.11,
-        profitMarginPercent: 40.4,
-        packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
-        invoicedWeightKg: 0.60,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Plastik Heykelcik',
-        barcodeNumber: '10092370104092',
-        items: [
-          {
-            id: 'it-106',
-            title: '3D Printed Butterfly Trainer | Colorful Safe Knife | Cosplay Display Prop',
-            quantity: 1,
-            price: 39.90,
-            sku: 'BFLY-TRN-SAFE-01'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4175510291',
-        orderNumber: '#4175510291',
-        buyerName: 'Emily Watson',
-        buyerEmail: 'emily.watson@gmail.com',
-        country: 'Kanada',
-        countryCode: 'CA',
-        city: 'Toronto, ON',
-        addressSnippet: '250 Yonge Street, M5B 2L7',
-        isAddressMissing: false,
-        exportType: 'Standart ihracat',
-        orderDate: '2026-09-30T17:40:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 64.50,
-        productCost: 12.00,
-        shippingCost: 14.20,
-        isCostMissing: false,
-        netProfit: 32.17,
-        profitMarginPercent: 49.9,
-        packageSpecs: { widthCm: 18, lengthCm: 22, heightCm: 8, weightKg: 0.45, desi: 0.63 },
-        invoicedWeightKg: 0.63,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Kristal Ejderha',
-        barcodeNumber: '10092370104097',
-        items: [
-          {
-            id: 'it-107',
-            title: 'Kişiselleştirilmiş 3D Baskı Kristal Ejderha',
-            quantity: 1,
-            price: 49.50,
-            sku: '3D-DRG-MATTE-01'
-          },
-          {
-            id: 'it-108',
-            title: 'Özel Tasarım Stand Plaketi',
-            quantity: 1,
-            price: 15.00,
-            sku: '3D-STAND-NAME'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4174829103',
-        orderNumber: '#4174829103',
-        buyerName: 'Oliver Smith',
-        buyerEmail: 'oliver.smith@yahoo.co.uk',
-        country: 'Birleşik Krallık',
-        countryCode: 'GB',
-        city: 'London',
-        addressSnippet: '14 Kensington High Street, W8 4PT',
-        isAddressMissing: false,
-        exportType: 'IOSS (Vergisi Ödenmiş)',
-        orderDate: '2026-09-30T10:15:00Z',
-        status: 'shipped',
-        currency: 'USD',
-        totalAmount: 89.00,
-        productCost: 14.50,
-        shippingCost: 13.80,
-        isCostMissing: false,
-        netProfit: 52.24,
-        profitMarginPercent: 58.7,
-        packageSpecs: { widthCm: 25, lengthCm: 30, heightCm: 12, weightKg: 0.85, desi: 1.80 },
-        invoicedWeightKg: 1.80,
-        gtipCode: '9405204000',
-        gtipDescription: 'Steampunk Masa Saati',
-        barcodeNumber: '10092370104098',
-        selectedCarrier: 'shiptomore',
-        carrierServiceName: 'Shiptomore Express (DHL Express)',
-        trackingCode: 'DHL9845729104TR',
-        shippedAt: '2026-10-01T12:00:00Z',
-        items: [
-          {
-            id: 'it-109',
-            title: 'Mekanik Dişli Hareketli Steampunk Masa Saati',
-            quantity: 1,
-            price: 89.00,
-            sku: 'CLOCK-STEAMPUNK-02'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4173991204',
-        orderNumber: '#4173991204',
-        buyerName: 'Hannah Meyer',
-        buyerEmail: 'hannah.meyer@web.de',
-        country: 'Almanya',
-        countryCode: 'DE',
-        city: 'Berlin',
-        addressSnippet: 'Friedrichstraße 120, 10117',
-        isAddressMissing: false,
-        exportType: 'IOSS (Vergisi Ödenmiş)',
-        orderDate: '2026-09-29T14:20:00Z',
-        status: 'shipped',
-        currency: 'USD',
-        totalAmount: 42.00,
-        productCost: 7.20,
-        shippingCost: 11.50,
-        isCostMissing: false,
-        netProfit: 19.31,
-        profitMarginPercent: 46.0,
-        packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 5, weightKg: 0.30, desi: 0.30 },
-        invoicedWeightKg: 0.30,
-        gtipCode: '3926400000',
-        gtipDescription: 'Minimalist Duvar Dekoru',
-        barcodeNumber: '10092370104099',
-        selectedCarrier: 'aras',
-        carrierServiceName: 'Aras Global Hava Kargo',
-        trackingCode: 'ARAS89214798TR',
-        shippedAt: '2026-09-30T16:30:00Z',
-        items: [
-          {
-            id: 'it-110',
-            title: 'Geometrik Minimalist Duvar Dekoru (Set)',
-            quantity: 2,
-            price: 21.00,
-            sku: 'WALL-GEO-MINI-01'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4172810945',
-        orderNumber: '#4172810945',
-        buyerName: 'Jean Dupont',
-        buyerEmail: 'jean.dupont@orange.fr',
-        country: 'Fransa',
-        countryCode: 'FR',
-        city: 'Paris',
-        addressSnippet: '25 Rue de Rivoli, 75004',
-        isAddressMissing: false,
-        exportType: 'IOSS (Vergisi Ödenmiş)',
-        orderDate: '2026-09-28T09:10:00Z',
-        status: 'shipped',
-        currency: 'USD',
-        totalAmount: 115.00,
-        productCost: 19.00,
-        shippingCost: 15.00,
-        isCostMissing: false,
-        netProfit: 70.07,
-        profitMarginPercent: 60.9,
-        packageSpecs: { widthCm: 32, lengthCm: 40, heightCm: 15, weightKg: 1.40, desi: 3.84 },
-        invoicedWeightKg: 3.84,
-        gtipCode: '9405204000',
-        gtipDescription: 'Büyük Boy 3D Gece Lambası',
-        barcodeNumber: '10092370104100',
-        selectedCarrier: 'navlungo',
-        carrierServiceName: 'Navlungo Global (DHL Express)',
-        trackingCode: 'DHL74910284TR',
-        shippedAt: '2026-09-29T11:00:00Z',
-        items: [
-          {
-            id: 'it-111',
-            title: 'Kişiye Özel Büyük Boy 3D Gece Lambası',
-            quantity: 1,
-            price: 115.00,
-            sku: 'NIGHT-LAMP-WOOD-BIG'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4171092834',
-        orderNumber: '#4171092834',
-        buyerName: 'Lucas Rossi',
-        buyerEmail: 'lucas.rossi@libero.it',
-        country: 'İtalya',
-        countryCode: 'IT',
-        city: 'Milano',
-        addressSnippet: 'Corso Buenos Aires 45, 20124',
-        isAddressMissing: false,
-        exportType: 'IOSS (Vergisi Ödenmiş)',
-        orderDate: '2026-09-27T18:00:00Z',
-        status: 'shipped',
-        currency: 'USD',
-        totalAmount: 55.00,
-        productCost: 9.80,
-        shippingCost: 12.00,
-        isCostMissing: false,
-        netProfit: 27.97,
-        profitMarginPercent: 50.8,
-        packageSpecs: { widthCm: 20, lengthCm: 20, heightCm: 10, weightKg: 0.60, desi: 0.80 },
-        invoicedWeightKg: 0.80,
-        gtipCode: '6912002500',
-        gtipDescription: 'Modern Sukulent Saksısı',
-        barcodeNumber: '10092370104101',
-        selectedCarrier: 'shipentegra',
-        carrierServiceName: 'ShipEntegra Express (UPS)',
-        trackingCode: '1Z9999999999999999',
-        shippedAt: '2026-09-28T09:30:00Z',
-        items: [
-          {
-            id: 'it-112',
-            title: 'Modern Sukulent Saksısı (3’lü Set)',
-            quantity: 1,
-            price: 55.00,
-            sku: 'POT-SUCCULENT-TRIO'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4170881923',
-        orderNumber: '#4170881923',
-        buyerName: 'Liam O’Connor',
-        buyerEmail: 'liam.oconnor@eircom.net',
-        country: 'İrlanda',
-        countryCode: 'IE',
-        city: 'Dublin',
-        addressSnippet: '12 Grafton St, D02',
-        isAddressMissing: false,
-        exportType: 'IOSS (Vergisi Ödenmiş)',
-        orderDate: '2026-09-26T12:20:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 34.00,
-        productCost: 6.50,
-        shippingCost: 10.80,
-        isCostMissing: false,
-        netProfit: 13.47,
-        profitMarginPercent: 39.6,
-        packageSpecs: { widthCm: 12, lengthCm: 15, heightCm: 8, weightKg: 0.35, desi: 0.29 },
-        invoicedWeightKg: 0.35,
-        gtipCode: '3926400000',
-        gtipDescription: 'Plastik Masa Üstü Aksesuar',
-        barcodeNumber: '10092370104102',
-        items: [
-          {
-            id: 'it-113',
-            title: 'Minimalist Kulaklık ve Telefon Standı',
-            quantity: 1,
-            price: 34.00,
-            sku: 'STAND-DESK-MINI'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4169720184',
-        orderNumber: '#4169720184',
-        buyerName: 'Sophia Lindqvist',
-        buyerEmail: 'sophia.l@telia.se',
-        country: 'İsveç',
-        countryCode: 'SE',
-        city: 'Stockholm',
-        addressSnippet: 'Drottninggatan 50, 111 21',
-        isAddressMissing: false,
-        exportType: 'IOSS (Vergisi Ödenmiş)',
-        orderDate: '2026-09-25T16:10:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 48.00,
-        productCost: 8.00,
-        shippingCost: 13.50,
-        isCostMissing: false,
-        netProfit: 21.94,
-        profitMarginPercent: 45.7,
-        packageSpecs: { widthCm: 18, lengthCm: 25, heightCm: 10, weightKg: 0.50, desi: 0.90 },
-        invoicedWeightKg: 0.90,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Geometrik Vazo',
-        barcodeNumber: '10092370104103',
-        items: [
-          {
-            id: 'it-114',
-            title: 'Spiral Geometrik Spiral Vazo (Mat Beyaz)',
-            quantity: 1,
-            price: 48.00,
-            sku: 'VASE-SPIRAL-WHITE'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4168549102',
-        orderNumber: '#4168549102',
-        buyerName: 'Carlos Hernandez',
-        buyerEmail: 'carlos.h@telefonica.es',
-        country: 'İspanya',
-        countryCode: 'ES',
-        city: 'Madrid',
-        addressSnippet: 'Gran Vía 32, 28013',
-        isAddressMissing: false,
-        exportType: 'IOSS (Vergisi Ödenmiş)',
-        orderDate: '2026-09-24T14:40:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 39.90,
-        productCost: 8.50,
-        shippingCost: 11.50,
-        isCostMissing: false,
-        netProfit: 16.11,
-        profitMarginPercent: 40.4,
-        packageSpecs: { widthCm: 15, lengthCm: 20, heightCm: 10, weightKg: 0.40, desi: 0.60 },
-        invoicedWeightKg: 0.60,
-        gtipCode: '3926400000',
-        gtipDescription: '3D Baskı Plastik Heykelcik',
-        barcodeNumber: '10092370104104',
-        items: [
-          {
-            id: 'it-115',
-            title: '3D Printed Butterfly Trainer | Colorful Safe Knife',
-            quantity: 1,
-            price: 39.90,
-            sku: 'BFLY-TRN-SAFE-01'
-          }
-        ]
-      },
-      {
-        orderId: 'ord-4167382019',
-        orderNumber: '#4167382019',
-        buyerName: 'Chloe Bennett',
-        buyerEmail: 'chloe.bennett@optusnet.com.au',
-        country: 'Avustralya',
-        countryCode: 'AU',
-        city: 'Sydney, NSW',
-        addressSnippet: '100 George St, The Rocks 2000',
-        isAddressMissing: false,
-        exportType: 'Standart ihracat',
-        orderDate: '2026-09-23T07:15:00Z',
-        status: 'unfulfilled',
-        currency: 'USD',
-        totalAmount: 58.00,
-        productCost: 11.00,
-        shippingCost: 18.00,
-        isCostMissing: false,
-        netProfit: 23.49,
-        profitMarginPercent: 40.5,
-        packageSpecs: { widthCm: 20, lengthCm: 24, heightCm: 12, weightKg: 0.65, desi: 1.15 },
-        invoicedWeightKg: 1.15,
-        gtipCode: '3926400000',
-        gtipDescription: 'Özel Tasarım Koleksiyon Figürü',
-        barcodeNumber: '10092370104105',
-        items: [
-          {
-            id: 'it-116',
-            title: '3D Baskı Anime Cosplay Maskesi & Duvar Askısı',
-            quantity: 1,
-            price: 58.00,
-            sku: 'MASK-ANIME-WALL'
-          }
-        ]
-      }
-    ];
   }
 }

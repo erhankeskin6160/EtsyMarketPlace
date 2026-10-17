@@ -114,4 +114,28 @@ public class EtsyLogisticsController : BaseApiController
         var result = await _orchestratorService.ConnectCarrierAsync(command, cancellationToken);
         return Ok(result);
     }
+
+    [HttpPost("shipping/quotes")]
+    [EndpointSummary("4 Taşıyıcıdan (Aras Global, ShipEntegra, Shiptomore, Navlungo) Canlı ve Tarife Kargo Tekliflerini Getir")]
+    public async Task<IActionResult> GetCarrierQuotes(
+        [FromBody] CarrierQuotesQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _orchestratorService.GetCarrierQuotesAsync(query ?? new CarrierQuotesQuery(), cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("shipping/hs-codes")]
+    [EndpointSummary("GTİP / HS Gümrük Tarife Kodlarını ve ABD HTS Kataloğunu Ara")]
+    public IActionResult SearchHsCodes(
+        [FromQuery] string? query = null,
+        [FromQuery] int limit = 25)
+    {
+        var items = _orchestratorService.SearchHsCodes(query, limit);
+        return Ok(new
+        {
+            count = items.Count,
+            results = items
+        });
+    }
 }

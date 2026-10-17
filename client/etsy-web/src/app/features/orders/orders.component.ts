@@ -31,7 +31,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   activeTab: 'all' | 'unfulfilled' | 'shipped' | 'missing_cost' = 'all';
   searchQuery: string = '';
   sortMode: 'newest' | 'oldest' | 'name_asc' | 'name_desc' = 'newest';
-  selectedCarrierFilter: string = 'T�m�';
+  selectedCarrierFilter: string = 'Tümü';
 
   // CARRIER HUB TOGGLE
   isAccountsHubVisible: boolean = true;
@@ -40,6 +40,14 @@ export class OrdersComponent implements OnInit, OnDestroy {
   gtipSearchTerm: string = '';
   showGtipSuggestions: boolean = false;
   gtipResults: GtipCodeItem[] = [];
+
+  // PACKAGE PRESETS (FAZ 4)
+  readonly packagePresets = [
+    { id: 'envelope', label: '✉️ Zarf (22×15×4 • 0.15kg)', widthCm: 15, lengthCm: 22, heightCm: 4, weightKg: 0.15 },
+    { id: 'small', label: '📦 Küçük (15×15×10 • 0.25kg)', widthCm: 15, lengthCm: 15, heightCm: 10, weightKg: 0.25 },
+    { id: 'medium', label: '📦 Orta (20×20×15 • 0.50kg)', widthCm: 20, lengthCm: 20, heightCm: 15, weightKg: 0.50 },
+    { id: 'large', label: '📦 Büyük (30×25×20 • 1.20kg)', widthCm: 25, lengthCm: 30, heightCm: 20, weightKg: 1.20 }
+  ];
 
   // EDITABLE COSTS
   editableProductCost: number = 0;
@@ -51,8 +59,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   isSessionModalOpen: boolean = false;
   activeModalCarrier: CarrierAccountSession | null = null;
   modalTokenInput: string = '';
-  seApiKey: string = '8501f5b8c5bbbe241d6d35eccdcdcfc3';
-  seApiSecret: string = 'f8515b70e86b0671ca653c2702b8a2295157b32b';
+  seApiKey: string = '';
+  seApiSecret: string = '';
   isConnectingCarrier: boolean = false;
 
   // ADDRESS EDIT MODAL
@@ -130,12 +138,20 @@ export class OrdersComponent implements OnInit, OnDestroy {
     // 2. Subscribe to selected order
     const selectedSub = this.ordersService.selectedOrder$.subscribe(order => {
       if (order) {
+        const orderChanged = !this.selectedOrder || this.selectedOrder.orderId !== order.orderId;
         this.selectedOrder = order;
         this.editableProductCost = order.productCost;
         this.editableShippingCost = order.shippingCost;
+        if (!order.gtipCode) {
+          const suggested = this.ordersService.suggestGtipForOrder(order);
+          order.gtipCode = suggested.code;
+          order.gtipDescription = suggested.description;
+        }
         this.gtipSearchTerm = order.gtipCode ? `${order.gtipCode} - ${order.gtipDescription || ''}` : '';
         this.calculateLiveProfit();
-        this.loadQuotesForSelected();
+        if (orderChanged || this.carrierQuotes.length === 0) {
+          this.loadQuotesForSelected();
+        }
       }
     });
     this.subs.push(selectedSub);
@@ -151,13 +167,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
       if (params['carrierName'] && params['carrierCost']) {
         const cName = params['carrierName'];
         const cCost = parseFloat(params['carrierCost']);
+        const cKey = params['carrierKey'] || '';
         this.editableShippingCost = cCost;
         if (this.selectedOrder) {
           this.selectedOrder.shippingCost = cCost;
-          this.selectedOrder.isCostMissing = false;
+          if (cKey) this.selectedOrder.selectedCarrier = cKey;
+          this.selectedOrder.carrierServiceName = cName;
+          this.selectedOrder.isCostMissing = this.editableProductCost <= 0 || cCost <= 0;
           this.calculateLiveProfit();
         }
-        this.saveSuccessMessage = `? Kargo Hub'�ndan "${cName}" ($${cCost}) se�ildi ve sipari� maliyetine uyguland�.`;
+        this.saveSuccessMessage = `✓ Kargo Hub'ından "${cName}" ($${cCost.toFixed(2)}) seçildi ve sipariş maliyetine uygulandı.`;
         setTimeout(() => {
           this.saveSuccessMessage = null;
         }, 5000);
@@ -192,7 +211,48 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.selectedOrder || !this.selectedOrder.selectedCarrier) {
       return this.carrierQuotes.length > 0 ? this.carrierQuotes[0] : null;
     }
-    return this.carrierQuotes.find(q => q.carrierKey === this.selectedOrder?.selectedCarrier) || this.carrierQuotes[0] || null;
+    return this.carrierQuotes.find(q =>
+      q.carrierKey === this.selectedOrder?.selectedCarrier &&
+      (!this.selectedOrder?.carrierServiceName || q.serviceType === this.selectedOrder.carrierServiceName)
+    ) || this.carrierQuotes.find(q => q.carrierKey === this.selectedOrder?.selectedCarrier) || this.carrierQuotes[0] || null;
+  }
+
+  get preFlightChecks(): { label: string; ok: boolean; hint: string }[] {
+    if (!this.selectedOrder) return [];
+    const hasAddress = !this.selectedOrder.isAddressMissing;
+    const hasPhone = Boolean(this.selectedOrder.phone && this.selectedOrder.phone.trim().length >= 7);
+    const gtipDigits = (this.selectedOrder.gtipCode || '').replace(/\D/g, '');
+    const hasGtip = gtipDigits.length >= 6;
+    const isEu = this.isEuCountry(this.selectedOrder.countryCode);
+    const hasIoss = !isEu || Boolean(this.selectedOrder.iossNumber && this.selectedOrder.iossNumber.trim().length >= 8);
+
+    const checks = [
+      {
+        label: 'Teslimat Adresi',
+        ok: hasAddress,
+        hint: hasAddress ? 'Sokak, şehir ve ülke doğrulandı' : 'Sokak veya şehir eksik'
+      },
+      {
+        label: 'Alıcı Telefonu',
+        ok: hasPhone,
+        hint: hasPhone ? this.selectedOrder.phone! : 'Ekspres kurye için telefon önerilir'
+      },
+      {
+        label: 'GTİP / HS Kodu',
+        ok: hasGtip,
+        hint: hasGtip ? `${this.selectedOrder.gtipCode}` : 'Gümrük beyanı için GTİP seçin'
+      }
+    ];
+
+    if (isEu) {
+      checks.push({
+        label: 'AB IOSS Kodu',
+        ok: hasIoss,
+        hint: hasIoss ? this.selectedOrder.iossNumber! : 'AB gönderisi için IOSS (IM3720000224) eksik'
+      });
+    }
+
+    return checks;
   }
 
   // --- FILTERED ORDERS & SORT ---
@@ -243,7 +303,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   getQuoteCountForTab(tab: string): number {
-    if (tab === 'T�m�') return this.carrierQuotes.length;
+    if (tab === 'Tümü') return this.carrierQuotes.length;
     const filter = tab.toLowerCase();
     return this.carrierQuotes.filter(q => 
       q.carrierName.toLowerCase().includes(filter) ||
@@ -257,7 +317,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       const aras = this.carrierSessions.find(s => s.id === 'aras');
       const val = this.ordersService.validateJwt(aras?.tokenOrKey || '');
       const detail = val.reason ? ` (${val.reason})` : ' (HTTP 401 Unauthorized)';
-      return `?? Aras Global oturum tokeninizin s�resi doldu!${detail} G�sterilen fiyatlar yedek listedir. L�tfen panelden tokeninizi yenileyin.`;
+      return `⚠️ Aras Global oturum tokeninizin süresi doldu!${detail} Gösterilen fiyatlar yedek listedir. Lütfen panelden tokeninizi yenileyin.`;
     }
     return null;
   }
@@ -276,15 +336,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (this.activeModalCarrier.id === 'aras') {
       const val = this.ordersService.validateJwt(this.modalTokenInput);
       if (val.isValid && !val.expired) {
-        return `? Canl� ve Aktif (${val.timeLeftStr ? 'Kalan: ' + val.timeLeftStr : 'Ge�erli'})`;
+        return `🟢 Canlı ve Aktif (${val.timeLeftStr ? 'Kalan: ' + val.timeLeftStr : 'Geçerli'})`;
       }
-      return `?? ${val.reason || 'S�resi Dolmu� (HTTP 401)'}`;
+      return `⚠️ ${val.reason || 'Süresi Dolmuş (HTTP 401)'}`;
     }
-    return this.isCurrentModalTokenValid ? '? Aktif' : '?? Giri� Gerekli';
+    return this.isCurrentModalTokenValid ? '🟢 Aktif' : '⚠️ Giriş Gerekli';
   }
 
   get filteredQuotes(): CarrierQuote[] {
-    if (this.selectedCarrierFilter === 'T�m�') return this.carrierQuotes;
+    if (this.selectedCarrierFilter === 'Tümü') return this.carrierQuotes;
     const filter = this.selectedCarrierFilter.toLowerCase();
     return this.carrierQuotes.filter(q => 
       q.carrierName.toLowerCase().includes(filter) ||
@@ -306,6 +366,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.isAccountsHubVisible = !this.isAccountsHubVisible;
   }
 
+  applyPackagePreset(preset: { widthCm: number; lengthCm: number; heightCm: number; weightKg: number }): void {
+    if (!this.selectedOrder) return;
+    this.selectedOrder.packageSpecs.widthCm = preset.widthCm;
+    this.selectedOrder.packageSpecs.lengthCm = preset.lengthCm;
+    this.selectedOrder.packageSpecs.heightCm = preset.heightCm;
+    this.selectedOrder.packageSpecs.weightKg = preset.weightKg;
+    this.onDimensionChange();
+  }
+
   onDimensionChange(): void {
     if (!this.selectedOrder) return;
     this.ordersService.updatePackageSpecs(this.selectedOrder.orderId, this.selectedOrder.packageSpecs);
@@ -314,12 +383,25 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   loadQuotesForSelected(): void {
     if (!this.selectedOrder) return;
-    const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 49.13;
+    const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 36.25;
     this.carrierQuotes = this.ordersService.calculateCarrierQuotes(
       this.selectedOrder.packageSpecs,
       this.selectedOrder.countryCode,
       rate
     );
+
+    this.ordersService.fetchLiveCarrierQuotes(
+      this.selectedOrder.packageSpecs,
+      this.selectedOrder.countryCode,
+      rate,
+      this.selectedOrder.postalCode,
+      this.selectedOrder.city,
+      this.selectedOrder.state
+    ).subscribe(res => {
+      if (res && res.quotes && res.quotes.length > 0) {
+        this.carrierQuotes = res.quotes;
+      }
+    });
   }
 
   applyCarrierQuote(quote: CarrierQuote): void {
@@ -332,12 +414,22 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   // --- GTIP ENGINE ---
   onSearchGtip(): void {
-    const results = this.ordersService.searchGtip(this.gtipSearchTerm);
-    this.gtipResults = results;
+    const instant = this.ordersService.searchGtip(this.gtipSearchTerm);
+    this.gtipResults = instant;
     this.showGtipSuggestions = true;
-    if (results.length > 0 && !this.gtipSearchTerm.includes('-')) {
-      this.selectGtip(results[0]);
-    }
+
+    this.ordersService.searchGtipRemote(this.gtipSearchTerm).subscribe(results => {
+      this.gtipResults = results;
+      this.showGtipSuggestions = results.length > 0;
+    });
+  }
+
+  autoMatchGtip(): void {
+    if (!this.selectedOrder) return;
+    const best = this.ordersService.suggestGtipForOrder(this.selectedOrder);
+    this.selectGtip(best);
+    this.saveSuccessMessage = `✨ Ürün başlığına göre GTİP otomatik eşleştirildi: ${best.code} (${best.category})`;
+    setTimeout(() => this.saveSuccessMessage = null, 4000);
   }
 
   selectGtip(item: GtipCodeItem): void {
@@ -363,13 +455,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   saveCosts(): void {
     if (!this.selectedOrder) return;
-    this.ordersService.updateOrderCosts(
-      this.selectedOrder.orderId, 
-      Number(this.editableProductCost) || 0, 
-      Number(this.editableShippingCost) || 0
-    );
 
-    // Save GTIP if present
+    // Save GTIP if present before persisting to SQLite
     const dash = this.gtipSearchTerm.indexOf('-');
     const code = dash > 0 ? this.gtipSearchTerm.substring(0, dash).trim() : this.gtipSearchTerm.trim();
     const desc = dash > 0 ? this.gtipSearchTerm.substring(dash + 1).trim() : '';
@@ -377,8 +464,16 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.ordersService.updateOrderGtip(this.selectedOrder.orderId, code, desc);
     }
 
-    this.saveSuccessMessage = 'Maliyet ve GT�P de�erleri yaln�zca bu oturumda g�ncellendi; kal�c� kay�t API�de desteklenmiyor.';
-    setTimeout(() => this.saveSuccessMessage = null, 5000);
+    this.ordersService.updateOrderCosts(
+      this.selectedOrder.orderId, 
+      Number(this.editableProductCost) || 0, 
+      Number(this.editableShippingCost) || 0
+    ).subscribe(saved => {
+      this.saveSuccessMessage = saved
+        ? '✓ Maliyet, paket ölçüleri ve GTİP kalıcı olarak SQLite veritabanına kaydedildi.'
+        : '⚠️ Maliyetler bu oturumda güncellendi (sunucu kaydı sırasında bağlantı uyarısı).';
+      setTimeout(() => this.saveSuccessMessage = null, 5000);
+    });
   }
 
   // --- SHIPMENT CREATION ---
@@ -391,7 +486,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     const quote = this.selectedCarrierQuote;
     const carrierKey = quote?.carrierKey || 'shipentegra';
-    const serviceCode = quote?.serviceCode || 'STANDART';
+    const serviceCode = quote?.serviceCode || quote?.quoteId || 'STANDART';
     const serviceType = quote?.serviceType || 'Express';
     const subCarrier = quote?.subCarrier || 'FedEx';
 
@@ -443,13 +538,15 @@ export class OrdersComponent implements OnInit, OnDestroy {
         this.isGeneratingShipment = false;
         if (res && res.success) {
           if (this.selectedOrder) {
-            if (this.notifyEtsyOnShipment && res.etsyTrackingSubmitted) {
-              this.selectedOrder.status = 'shipped';
-            }
+            this.selectedOrder.status = 'shipped';
             this.selectedOrder.trackingNumber = res.trackingNumber;
+            this.selectedOrder.trackingCode = res.trackingNumber;
+            this.selectedOrder.barcodeNumber = res.trackingNumber;
             this.selectedOrder.carrier = res.carrierName || carrierKey;
+            this.selectedOrder.selectedCarrier = carrierKey;
             this.selectedOrder.labelUrl = res.labelUrl;
             this.selectedOrder.labelBase64 = res.labelBase64;
+            this.ordersService.persistOrderFulfillmentMeta(this.selectedOrder).subscribe({ next: () => {}, error: () => {} });
           }
           const etsyNote = this.notifyEtsyOnShipment
             ? (res.etsyTrackingSubmitted ? 'Etsy mağazanıza takip numarası iletildi ve sipariş kargolandı yapıldı.' : (res.etsyTrackingMessage || 'Etsy bildirimi iletilemedi.'))
@@ -606,7 +703,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
           this.selectedOrder.formattedAddress = parts.join(', ');
         }
         this.isAddressModalOpen = false;
-        this.saveSuccessMessage = '✅ Alıcı teslimat adresi başarıyla kaydedildi!';
+        this.saveSuccessMessage = '✅ Alıcı teslimat adresi kalıcı olarak SQLite veritabanına kaydedildi!';
         setTimeout(() => this.saveSuccessMessage = null, 4000);
       },
       error: (err: any) => {
@@ -623,8 +720,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
     this.activeModalCarrier = carrier;
     if (carrier.id === 'shipentegra') {
-      this.seApiKey = carrier.apiKey || localStorage.getItem('se_api_key') || '8501f5b8c5bbbe241d6d35eccdcdcfc3';
-      this.seApiSecret = carrier.apiSecret || localStorage.getItem('se_api_secret') || 'f8515b70e86b0671ca653c2702b8a2295157b32b';
+      this.seApiKey = carrier.apiKey || localStorage.getItem('se_api_key') || '';
+      this.seApiSecret = carrier.apiSecret || localStorage.getItem('se_api_secret') || '';
       this.modalTokenInput = carrier.tokenOrKey || '';
     } else {
       this.modalTokenInput = carrier.tokenOrKey || '';
@@ -660,7 +757,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.closeSessionModal();
     this.loadQuotesForSelected();
     this.calculateLiveProfit();
-    this.saveSuccessMessage = `✅ ${this.activeModalCarrier.name} bağlantısı kaydedildi!`;
+    this.saveSuccessMessage = `✅ ${this.activeModalCarrier.name} bağlantısı sunucuya kaydedildi!`;
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
@@ -688,7 +785,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         apiSecret: this.seApiSecret.trim(),
         bearerToken: this.modalTokenInput.trim()
       }).subscribe({
-        next: (res) => {
+        next: () => {
           this.isConnectingCarrier = false;
           alert('✅ ShipEntegra API Bağlantısı Başarılı!\nPublic API kimlik doğrulaması tamamlandı. Canlı navlun ve gönderi oluşturma aktif.');
         },
@@ -703,11 +800,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   disconnectSession(carrier: CarrierAccountSession): void {
-    if (confirm(`${carrier.name} oturumunu kapatmak ve sistem ba�lant�s�n� kesmek istedi�inize emin misiniz?`)) {
+    if (confirm(`${carrier.name} oturumunu kapatmak ve sistem bağlantısını kesmek istediğinize emin misiniz?`)) {
       this.ordersService.disconnectCarrier(carrier.id);
       this.loadQuotesForSelected();
       this.calculateLiveProfit();
-      this.saveSuccessMessage = `?? ${carrier.name} ba�lant�s� kesildi.`;
+      this.saveSuccessMessage = `⚠️ ${carrier.name} bağlantısı kesildi.`;
       setTimeout(() => this.saveSuccessMessage = null, 3000);
     }
   }
@@ -716,7 +813,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     const stm = this.carrierSessions.find(s => s.id === 'shiptomore');
     const savedId = localStorage.getItem('stm_client_id');
     const savedSec = localStorage.getItem('stm_client_secret');
-    this.stmClientId = stm?.apiKey || savedId || 'NhuCndOc1smCm0uBInrLByukAoV5JNRj';
+    this.stmClientId = stm?.apiKey || savedId || '';
     this.stmClientSecret = stm?.clientSecret || savedSec || '';
 
     if (this.stmClientId && this.stmClientSecret) {
@@ -837,7 +934,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   syncCapturedTemplates(): void {
     this.closeArasTemplateModal();
-    this.saveSuccessMessage = 'Masa�st� �ablonlar� senkronizasyonu web istemcisinde desteklenmiyor.';
+    this.saveSuccessMessage = 'Masaüstü şablonları senkronizasyonu web istemcisinde desteklenmiyor.';
     setTimeout(() => this.saveSuccessMessage = null, 5000);
   }
 
@@ -854,13 +951,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   openAddCarrierToast(): void {
-    alert('? Yeni Kargo Entegrasyonu:\nYak�nda �zel API Key / Secret girerek DHL, PTT, UPS ve di�er ta��y�c�lar� do�rudan bu merkeze ekleyebileceksiniz.');
+    alert('➕ Yeni Kargo Entegrasyonu:\nYakında özel API Key / Secret girerek DHL, PTT, UPS ve diğer taşıyıcıları doğrudan bu merkeze ekleyebileceksiniz.');
   }
 
   // --- HELPERS ---
   formatTry(valUsd: number): string {
-    const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 49.13;
+    const rate = this.etsyApi.exchangeRate ? this.etsyApi.exchangeRate() : 36.25;
     const tryVal = (Number(valUsd) || 0) * rate;
-    return '?' + tryVal.toFixed(2);
+    return '₺' + tryVal.toFixed(2);
   }
 }

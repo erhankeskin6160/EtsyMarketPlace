@@ -439,6 +439,11 @@ export class EtsyApiService {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/save-address?receiptId=${receiptId}`, address);
   }
 
+  /** Siparişin maliyet, paket ölçüsü, GTİP ve seçili taşıyıcı verilerini kalıcı SQLite deposuna kaydeder. */
+  saveOrderFulfillmentMeta(receiptId: number, meta: any): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/save-fulfillment-meta?receiptId=${receiptId}`, meta);
+  }
+
   /** Ham adres metnini yapay zeka ile ayrıştırıp form alanlarına dönüştürür. */
   aiParseAddress(rawAddress: string): Observable<any> {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/ai-parse-address`, { rawAddress });
@@ -457,6 +462,28 @@ export class EtsyApiService {
   /** Kargo platformu giriş ve API kimlik bilgilerini doğrular ve kaydeder. */
   connectCarrier(payload: any): Observable<any> {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/connect-carrier`, payload);
+  }
+
+  /** 4 taşıyıcıdan (Aras Global, ShipEntegra, Shiptomore, Navlungo) canlı ve tarife kargo tekliflerini getirir. */
+  getCarrierQuotes(payload: {
+    countryCode: string;
+    postalCode?: string;
+    city?: string;
+    state?: string;
+    weightKg: number;
+    widthCm: number;
+    lengthCm: number;
+    heightCm: number;
+    usdTryRate?: number;
+  }): Observable<any> {
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/shipping/quotes`, payload);
+  }
+
+  /** GTİP / HS gümrük tarife kodlarını ve ABD HTS kataloğunu arar. */
+  searchHsCodes(query: string = '', limit: number = 25): Observable<{ count: number; results: any[] }> {
+    return this.http.get<{ count: number; results: any[] }>(
+      `${this.API_BASE}/api/etsy/shipping/hs-codes?query=${encodeURIComponent(query || '')}&limit=${limit}`
+    );
   }
 
 

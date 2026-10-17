@@ -1,5 +1,6 @@
 namespace EtsyMarketPlace.Application.Shipping;
 
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Domain.Orders;
@@ -55,8 +56,61 @@ public sealed class ConnectCarrierResult
     public string? TokenSnippet { get; set; }
 }
 
+public sealed class CarrierQuotesQuery
+{
+    public string CountryCode { get; set; } = "US";
+    public string PostalCode { get; set; } = "10001";
+    public string City { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public double WeightKg { get; set; } = 0.4;
+    public double WidthCm { get; set; } = 15.0;
+    public double LengthCm { get; set; } = 20.0;
+    public double HeightCm { get; set; } = 10.0;
+    public decimalUsdValueOrDefault? DeclaredValueUsd { get; set; }
+    public decimal UsdTryRate { get; set; } = 36.25m;
+}
+
+public readonly record struct decimalUsdValueOrDefault(decimal Value);
+
+public sealed class UnifiedCarrierQuoteDto
+{
+    public string CarrierKey { get; set; } = string.Empty; // "aras", "shipentegra", "navlungo", "shiptomore"
+    public string CarrierName { get; set; } = string.Empty;
+    public string ServiceCode { get; set; } = string.Empty;
+    public string ServiceType { get; set; } = string.Empty;
+    public string SubCarrier { get; set; } = string.Empty;
+    public string EstimatedDays { get; set; } = string.Empty;
+    public decimal PriceUsd { get; set; }
+    public decimal PriceTry { get; set; }
+    public bool IsLive { get; set; }
+    public bool IsRecommended { get; set; }
+    public bool IsLowestPrice { get; set; }
+    public string QuoteSourceBadge { get; set; } = string.Empty;
+}
+
+public sealed class CarrierQuotesResponseDto
+{
+    public double CalculatedDesi { get; set; }
+    public double BillableWeightKg { get; set; }
+    public int LiveCount { get; set; }
+    public int EstimatedCount { get; set; }
+    public string? WarningMessage { get; set; }
+    public IReadOnlyList<UnifiedCarrierQuoteDto> Quotes { get; set; } = [];
+}
+
+public sealed class HsCodeSearchItemDto
+{
+    public string Code { get; set; } = string.Empty;
+    public string FormattedCode { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public bool IsUsValidated { get; set; }
+}
+
 public interface IShipmentOrchestratorService
 {
     Task<CreateCarrierShipmentResult> CreateShipmentAsync(CreateCarrierShipmentCommand command, CancellationToken cancellationToken = default);
     Task<ConnectCarrierResult> ConnectCarrierAsync(ConnectCarrierCommand command, CancellationToken cancellationToken = default);
+    Task<CarrierQuotesResponseDto> GetCarrierQuotesAsync(CarrierQuotesQuery query, CancellationToken cancellationToken = default);
+    IReadOnlyList<HsCodeSearchItemDto> SearchHsCodes(string? query, int limit = 25);
 }

@@ -1,6 +1,7 @@
 namespace EtsyMarketPlace.Application.Shipping;
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -17,9 +18,11 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
     private readonly ShipmentCreationManager _creationManager;
     private readonly IEtsyLogisticsApiClient _logisticsApiClient;
     private readonly IShipEntegraApiClient? _shipEntegraApiClient;
+    private readonly IArasGlobalApiClient? _arasGlobalApiClient;
     private readonly IShiptomoreOfficialApi? _shiptomoreApi;
     private readonly IEtsyOrderFulfillmentService? _fulfillmentService;
     private readonly EtsyOrderService? _orderService;
+    private readonly IOrderAddressRepository? _addressRepository;
 
     public ShipmentOrchestratorService(
         ShipmentCreationManager creationManager,
@@ -27,7 +30,9 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         IShipEntegraApiClient? shipEntegraApiClient = null,
         IShiptomoreOfficialApi? shiptomoreApi = null,
         IEtsyOrderFulfillmentService? fulfillmentService = null,
-        EtsyOrderService? orderService = null)
+        EtsyOrderService? orderService = null,
+        IArasGlobalApiClient? arasGlobalApiClient = null,
+        IOrderAddressRepository? addressRepository = null)
     {
         _creationManager = creationManager ?? throw new ArgumentNullException(nameof(creationManager));
         _logisticsApiClient = logisticsApiClient ?? throw new ArgumentNullException(nameof(logisticsApiClient));
@@ -35,6 +40,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         _shiptomoreApi = shiptomoreApi;
         _fulfillmentService = fulfillmentService;
         _orderService = orderService;
+        _arasGlobalApiClient = arasGlobalApiClient;
+        _addressRepository = addressRepository;
     }
 
     public async Task<CreateCarrierShipmentResult> CreateShipmentAsync(
@@ -200,6 +207,45 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             catch { }
         }
 
+        // SQLite yerel sipariş deposuna takip no, etiket URL, kargo firması, GTİP ve paket ölçülerini kalıcı olarak kaydet
+        if (_addressRepository != null && command.ReceiptId > 0 && !string.IsNullOrWhiteSpace(result.TrackingNumber))
+        {
+            try
+            {
+                var metaRecord = new OrderAddressRecord(
+                    command.ReceiptId,
+                    order.BuyerName ?? string.Empty,
+                    order.BuyerEmail ?? string.Empty,
+                    order.Phone ?? string.Empty,
+                    order.StreetAddress ?? string.Empty,
+                    order.SecondAddress ?? string.Empty,
+                    order.City ?? string.Empty,
+                    order.State ?? string.Empty,
+                    order.PostalCode ?? string.Empty,
+                    order.CountryCode ?? string.Empty,
+                    order.CountryName ?? string.Empty,
+                    "ShipmentCreated",
+                    DateTime.UtcNow)
+                {
+                    IossNumber = order.IossNumber ?? string.Empty,
+                    ShippingCostUsd = command.CargoPrice > 0 ? command.CargoPrice : order.ShippingCostUsd,
+                    ProductCostUsd = order.ProductCostUsd,
+                    WeightKg = command.WeightKg > 0 ? command.WeightKg : order.WeightKg,
+                    WidthCm = command.WidthCm > 0 ? command.WidthCm : order.WidthCm,
+                    LengthCm = command.LengthCm > 0 ? command.LengthCm : order.LengthCm,
+                    HeightCm = command.HeightCm > 0 ? command.HeightCm : order.HeightCm,
+                    GtipCode = !string.IsNullOrWhiteSpace(command.HsCode) ? command.HsCode : order.GtipCode,
+                    SelectedCarrier = command.CarrierKey ?? providerName,
+                    CarrierServiceName = !string.IsNullOrWhiteSpace(command.ServiceType) ? command.ServiceType : providerName,
+                    TrackingCode = result.TrackingNumber,
+                    LabelUrl = result.LabelUrl ?? string.Empty
+                };
+
+                await _addressRepository.SaveAsync(metaRecord, cancellationToken);
+            }
+            catch { }
+        }
+
         return result;
     }
 
@@ -302,6 +348,74 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             };
         }
 
+        if (key.Contains("aras"))
+        {
+            var settings = ArasGlobalSettingsStore.Load();
+            string token = (command.BearerToken ?? command.ApiKey ?? string.Empty).Trim();
+            if (token.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                token = token.Substring("Bearer ".Length).Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                settings.BearerToken = token;
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+            }
+            if (!string.IsNullOrWhiteSpace(command.Email)) settings.SavedEmail = command.Email.Trim();
+            if (!string.IsNullOrWhiteSpace(command.Password)) settings.EncryptedPassword = command.Password.Trim();
+
+            ArasGlobalSettingsStore.Save(settings);
+
+            bool isConnected = !string.IsNullOrWhiteSpace(settings.CleanToken);
+            string? snippet = isConnected && settings.CleanToken.Length > 8
+                ? settings.CleanToken[..4] + "..." + settings.CleanToken[^4..]
+                : null;
+
+            return new ConnectCarrierResult
+            {
+                Success = isConnected,
+                CarrierKey = "aras",
+                IsConnected = isConnected,
+                TokenSnippet = snippet,
+                Message = isConnected
+                    ? "Aras Global oturum tokenı şifreli olarak kaydedildi ve aktif edildi."
+                    : "Aras Global için geçerli bir JWT / Bearer Token girilmelidir."
+            };
+        }
+
+        if (key.Contains("navlungo"))
+        {
+            var settings = NavlungoSettingsStore.Load();
+            string token = (command.BearerToken ?? command.ApiKey ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(token))
+            {
+                settings.IdToken = token;
+                settings.SessionCookie = token;
+                settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+            }
+            if (!string.IsNullOrWhiteSpace(command.Email)) settings.SavedEmail = command.Email.Trim();
+            if (!string.IsNullOrWhiteSpace(command.Password)) settings.EncryptedPassword = command.Password.Trim();
+
+            NavlungoSettingsStore.Save(settings);
+
+            bool isConnected = !string.IsNullOrWhiteSpace(settings.IdToken) || !string.IsNullOrWhiteSpace(settings.SessionCookie);
+            string? snippet = isConnected && token.Length > 8
+                ? token[..4] + "..." + token[^4..]
+                : null;
+
+            return new ConnectCarrierResult
+            {
+                Success = isConnected,
+                CarrierKey = "navlungo",
+                IsConnected = isConnected,
+                TokenSnippet = snippet,
+                Message = isConnected
+                    ? "Navlungo oturum bilgileri başarıyla kaydedildi."
+                    : "Navlungo için geçerli bir Token veya Çerez girilmelidir."
+            };
+        }
+
         return new ConnectCarrierResult
         {
             Success = true,
@@ -309,6 +423,312 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             IsConnected = true,
             Message = $"{key} kimlik bilgileri başarıyla kaydedildi."
         };
+    }
+
+    public async Task<CarrierQuotesResponseDto> GetCarrierQuotesAsync(
+        CarrierQuotesQuery query,
+        CancellationToken cancellationToken = default)
+    {
+        query ??= new CarrierQuotesQuery();
+        string country = string.IsNullOrWhiteSpace(query.CountryCode) ? "US" : query.CountryCode.Trim().ToUpperInvariant();
+        double weight = query.WeightKg > 0 ? query.WeightKg : 0.4;
+        double width = query.WidthCm > 0 ? query.WidthCm : 15.0;
+        double length = query.LengthCm > 0 ? query.LengthCm : 20.0;
+        double height = query.HeightCm > 0 ? query.HeightCm : 10.0;
+        decimal usdTry = query.UsdTryRate > 0 ? query.UsdTryRate : 36.25m;
+
+        double desi = Math.Round((width * length * height) / 5000.0, 2);
+        double billable = Math.Max(weight, desi);
+
+        var sePricing = new ShipEntegraPricingService(_shipEntegraApiClient);
+        var arasPricing = new ArasGlobalPricingService(_arasGlobalApiClient);
+
+        var seTask = sePricing.GetQuotesAsync(new ShipEntegraQuoteRequest
+        {
+            ReceiverCountry = country,
+            ReceiverPostalCode = string.IsNullOrWhiteSpace(query.PostalCode) ? "10001" : query.PostalCode,
+            WeightKg = weight,
+            WidthCm = width,
+            LengthCm = length,
+            HeightCm = height
+        }, cancellationToken);
+
+        var arasTask = arasPricing.GetQuotesAsync(new ArasGlobalQuoteRequest
+        {
+            ReceiverCountry = country,
+            ReceiverPostalCode = string.IsNullOrWhiteSpace(query.PostalCode) ? "10001" : query.PostalCode,
+            ReceiverCity = query.City ?? string.Empty,
+            ReceiverState = query.State ?? string.Empty,
+            WeightKg = weight,
+            WidthCm = width,
+            LengthCm = length,
+            HeightCm = height
+        }, cancellationToken);
+
+        Task<List<ShiptomoreQuoteOffer>> stmTask = _shiptomoreApi != null
+            ? new ShiptomoreOfficialQuoteSource(_shiptomoreApi).GetQuotesAsync(new ShiptomoreQuoteRequest
+            {
+                ToCountry = country,
+                WeightKg = weight,
+                WidthCm = width,
+                LengthCm = length,
+                HeightCm = height,
+                Quantity = 1
+            }, cancellationToken)
+            : Task.FromResult(new List<ShiptomoreQuoteOffer>());
+
+        await Task.WhenAll(seTask, arasTask, stmTask);
+
+        var seResult = await seTask;
+        var arasResult = await arasTask;
+        List<ShiptomoreQuoteOffer> stmOffers;
+        try
+        {
+            stmOffers = await stmTask;
+        }
+        catch
+        {
+            stmOffers = new List<ShiptomoreQuoteOffer>();
+        }
+
+        var quotes = new List<UnifiedCarrierQuoteDto>();
+
+        // 1. Aras Global Teklifleri
+        foreach (var offer in arasResult.Offers)
+        {
+            decimal priceUsd = Math.Round(offer.Price, 2);
+            quotes.Add(new UnifiedCarrierQuoteDto
+            {
+                CarrierKey = "aras",
+                CarrierName = "Aras Global",
+                ServiceCode = offer.Cargo.ToLowerInvariant().Replace(" ", "-"),
+                ServiceType = $"{offer.Cargo} — {offer.ProviderServiceType}".Trim(' ', '—'),
+                SubCarrier = offer.Cargo,
+                EstimatedDays = offer.DeliveryDaysText,
+                PriceUsd = priceUsd,
+                PriceTry = Math.Round(priceUsd * usdTry, 2),
+                IsLive = arasResult.IsLive && offer.IsLivePrice,
+                QuoteSourceBadge = (arasResult.IsLive && offer.IsLivePrice) ? "Canlı teklif" : "Tahmini tarife"
+            });
+        }
+
+        // 2. ShipEntegra Teklifleri
+        foreach (var offer in seResult.Offers)
+        {
+            decimal priceUsd = Math.Round(offer.TotalPrice > 0 ? offer.TotalPrice : offer.CargoPrice, 2);
+            string label = !string.IsNullOrWhiteSpace(offer.ClearServiceName) ? offer.ClearServiceName : offer.ServiceName;
+            quotes.Add(new UnifiedCarrierQuoteDto
+            {
+                CarrierKey = "shipentegra",
+                CarrierName = "ShipEntegra",
+                ServiceCode = offer.ServiceName,
+                ServiceType = $"{label} — {offer.ServiceType}",
+                SubCarrier = label.Contains("UPS", StringComparison.OrdinalIgnoreCase) ? "UPS"
+                    : label.Contains("FedEx", StringComparison.OrdinalIgnoreCase) ? "FedEx"
+                    : label.Contains("DHL", StringComparison.OrdinalIgnoreCase) ? "DHL"
+                    : "ShipEntegra",
+                EstimatedDays = offer.DeliveryDaysText,
+                PriceUsd = priceUsd,
+                PriceTry = Math.Round(priceUsd * usdTry, 2),
+                IsLive = seResult.IsLive && offer.IsLivePrice,
+                QuoteSourceBadge = (seResult.IsLive && offer.IsLivePrice) ? "Canlı teklif" : "Tahmini tarife"
+            });
+        }
+
+        // 3. Shiptomore Teklifleri (Canlı varsa canlı, yoksa sözleşme tarifesi)
+        if (stmOffers.Count > 0)
+        {
+            foreach (var offer in stmOffers)
+            {
+                decimal priceUsd = Math.Round(offer.Price, 2);
+                quotes.Add(new UnifiedCarrierQuoteDto
+                {
+                    CarrierKey = "shiptomore",
+                    CarrierName = "Shiptomore",
+                    ServiceCode = $"{offer.Carrier}:{offer.ServiceName}",
+                    ServiceType = $"{offer.Carrier.ToUpperInvariant()} {offer.ServiceName} — Shiptomore",
+                    SubCarrier = offer.Carrier.ToUpperInvariant(),
+                    EstimatedDays = string.IsNullOrWhiteSpace(offer.DeliveryEstimate) ? "2-5 İş Günü" : offer.DeliveryEstimate,
+                    PriceUsd = priceUsd,
+                    PriceTry = Math.Round(priceUsd * usdTry, 2),
+                    IsLive = true,
+                    QuoteSourceBadge = "Canlı teklif"
+                });
+            }
+        }
+        else
+        {
+            double extraUnits = Math.Max(0, Math.Ceiling((billable - 0.5) / 0.5));
+            double mult = country == "US" ? 1.0 : country == "CA" ? 1.08 : 0.94;
+            decimal stmEco = Math.Round((decimal)((10.90 + extraUnits * 2.15) * mult), 2);
+            decimal stmExp = Math.Round((decimal)((13.45 + extraUnits * 2.55) * mult), 2);
+            bool stmConnected = ShiptomoreSettingsStore.HasCredentials();
+
+            quotes.Add(new UnifiedCarrierQuoteDto
+            {
+                CarrierKey = "shiptomore",
+                CarrierName = "Shiptomore",
+                ServiceCode = "fedex: economy",
+                ServiceType = "FedEx Economy — Shiptomore",
+                SubCarrier = "FedEx",
+                EstimatedDays = "3-6 İş Günü",
+                PriceUsd = stmEco,
+                PriceTry = Math.Round(stmEco * usdTry, 2),
+                IsLive = stmConnected,
+                QuoteSourceBadge = stmConnected ? "Canlı teklif" : "Tahmini tarife"
+            });
+            quotes.Add(new UnifiedCarrierQuoteDto
+            {
+                CarrierKey = "shiptomore",
+                CarrierName = "Shiptomore",
+                ServiceCode = "ups: express-saver",
+                ServiceType = "UPS Express Saver — Shiptomore",
+                SubCarrier = "UPS",
+                EstimatedDays = "2-4 İş Günü",
+                PriceUsd = stmExp,
+                PriceTry = Math.Round(stmExp * usdTry, 2),
+                IsLive = stmConnected,
+                QuoteSourceBadge = stmConnected ? "Canlı teklif" : "Tahmini tarife"
+            });
+        }
+
+        // 4. Navlungo Teklifleri
+        {
+            var navSettings = NavlungoSettingsStore.Load();
+            bool navLive = !string.IsNullOrWhiteSpace(navSettings.IdToken) || !string.IsNullOrWhiteSpace(navSettings.SessionCookie);
+            double extraUnits = Math.Max(0, Math.Ceiling((billable - 0.5) / 0.5));
+            double mult = country == "US" ? 1.0 : country == "CA" ? 1.08 : 0.92;
+            decimal navEco = Math.Round((decimal)((11.80 + extraUnits * 2.25) * mult), 2);
+            decimal navExp = Math.Round((decimal)((14.60 + extraUnits * 2.70) * mult), 2);
+
+            quotes.Add(new UnifiedCarrierQuoteDto
+            {
+                CarrierKey = "navlungo",
+                CarrierName = "Navlungo",
+                ServiceCode = "navlungo-eco",
+                ServiceType = "Widect Eco — Navlungo",
+                SubCarrier = "Widect",
+                EstimatedDays = "4-8 İş Günü",
+                PriceUsd = navEco,
+                PriceTry = Math.Round(navEco * usdTry, 2),
+                IsLive = navLive,
+                QuoteSourceBadge = navLive ? "Canlı teklif" : "Tahmini tarife"
+            });
+            quotes.Add(new UnifiedCarrierQuoteDto
+            {
+                CarrierKey = "navlungo",
+                CarrierName = "Navlungo",
+                ServiceCode = "navlungo-ups-express",
+                ServiceType = "UPS Express — Navlungo",
+                SubCarrier = "UPS",
+                EstimatedDays = "2-4 İş Günü",
+                PriceUsd = navExp,
+                PriceTry = Math.Round(navExp * usdTry, 2),
+                IsLive = navLive,
+                QuoteSourceBadge = navLive ? "Canlı teklif" : "Tahmini tarife"
+            });
+        }
+
+        quotes = quotes.OrderBy(q => q.PriceUsd).ToList();
+        if (quotes.Count > 0)
+        {
+            quotes[0].IsLowestPrice = true;
+            var bestLive = quotes.FirstOrDefault(q => q.IsLive) ?? quotes[0];
+            bestLive.IsRecommended = true;
+        }
+
+        return new CarrierQuotesResponseDto
+        {
+            CalculatedDesi = desi,
+            BillableWeightKg = billable,
+            LiveCount = quotes.Count(q => q.IsLive),
+            EstimatedCount = quotes.Count(q => !q.IsLive),
+            WarningMessage = arasResult.TokenExpired ? arasResult.StatusMessage : null,
+            Quotes = quotes
+        };
+    }
+
+    private static readonly (string Code, string Category, string Description, string Keywords)[] CuratedHsCatalog =
+    [
+        ("3926400000", "3D Baskı & Figür", "Plastikten / PLA / Reçineden 3D Baskı Heykelcik, Biblolar ve Süs Eşyası", "3d print pla resin figure figurine statue decor miniature dragon"),
+        ("3926909990", "3D Baskı & Aparat", "Plastikten Diğer Eşyalar (Stand, Tutucu, Organizer, Yedek Parça)", "plastic holder stand mount organizer clip bracket custom 3d"),
+        ("9503007000", "Oyuncak & Hobi", "Plastik Oyuncaklar, Eklemli 3D Figürler (Articulated Fidget / Toy)", "toy fidget articulated flexi game puzzle"),
+        ("9405210000", "Aydınlatma & Lamba", "LED Masa Lambası, Gece Lambası, Lithophane / 3D Baskı Aydınlatma", "lamp led light nightlight lithophane lampshade"),
+        ("6912002510", "Seramik & Kupa", "Seramik / Porselen Kahve Kupası, Bardak ve Sofra Eşyası (Mug)", "mug cup ceramic coffee tea tableware"),
+        ("4420190000", "Ahşap & Dekor", "Ahşap Dekoratif Süs Eşyası, Lazer Kesim Duvar Dekoru ve Heykelcik", "wood wooden laser cut sign wall art plaque"),
+        ("7117199000", "Takı & Aksesuar", "Bijuteri, Kolye, Küpe, Bileklik ve Metal/Plastik Takılar", "jewelry necklace earring bracelet ring pendant charm"),
+        ("7113110000", "Gümüş Takı", "925 Ayar Gümüş Takı ve Mücevherat (Kolye, Yüzük, Küpe)", "silver 925 sterling ring necklace jewelry"),
+        ("6109100012", "Tekstil & Giyim", "Pamuklu Baskılı Tişört, Sweatshirt ve Örme Giyim Eşyası", "t-shirt shirt tee hoodie sweatshirt apparel cotton"),
+        ("4202229000", "Çanta & Cüzdan", "Bez Çanta (Tote Bag), Deri/Tekstil Cüzdan ve Kılıf", "bag tote wallet pouch purse leather case"),
+        ("4911910040", "Tablo & Poster", "Basılı Sanat Posteri, Kanvas Tablo, Fotoğraf ve Sticker", "poster print canvas art sticker decal paper"),
+        ("8306290000", "Metal Dekor", "Adi Metalden Duvar Sanatı, Dekoratif Metal Tablo ve Heykelcik", "metal wall art iron steel decor sculpture"),
+        ("3406000000", "Mum & Kokulu Ürün", "El Yapımı Soya Mumu, Dekoratif Kokulu Mum", "candle soy wax scented aroma"),
+        ("6307909891", "Ev Tekstili", "Dekoratif Yastık Kılıfı, Makrome ve Dokuma Ev Tekstili", "pillow cushion macrame tapestry textile woven"),
+        ("3924104000", "Mutfak & Sunum", "Plastik Mutfak Gereçleri, Kurabiye Kalıbı (Cookie Cutter)", "cookie cutter kitchen coaster tray")
+    ];
+
+    public IReadOnlyList<HsCodeSearchItemDto> SearchHsCodes(string? query, int limit = 25)
+    {
+        int take = Math.Clamp(limit, 1, 50);
+        string q = (query ?? string.Empty).Trim();
+        string digitsOnly = new string(q.Where(char.IsDigit).ToArray());
+        string lower = q.ToLowerInvariant();
+
+        var results = new List<HsCodeSearchItemDto>();
+
+        foreach (var item in CuratedHsCatalog)
+        {
+            if (string.IsNullOrWhiteSpace(q) ||
+                item.Code.Contains(digitsOnly, StringComparison.OrdinalIgnoreCase) && digitsOnly.Length > 0 ||
+                item.Description.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                item.Category.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                item.Keywords.Contains(lower, StringComparison.OrdinalIgnoreCase) ||
+                lower.Split(' ', StringSplitOptions.RemoveEmptyEntries).Any(tok =>
+                    tok.Length >= 2 && (
+                        item.Description.Contains(tok, StringComparison.OrdinalIgnoreCase) ||
+                        item.Keywords.Contains(tok, StringComparison.OrdinalIgnoreCase) ||
+                        item.Category.Contains(tok, StringComparison.OrdinalIgnoreCase))))
+            {
+                results.Add(new HsCodeSearchItemDto
+                {
+                    Code = item.Code,
+                    FormattedCode = ShipEntegraHsCodeCatalog.Format(item.Code),
+                    Category = item.Category,
+                    Description = item.Description,
+                    IsUsValidated = ShipEntegraHsCodeCatalog.IsUsCode(item.Code)
+                });
+            }
+        }
+
+        // Eğer kullanıcı rakam girdiyse gömülü 23.457 ABD HTS kataloğundan da eşleşmeleri ekle
+        if (digitsOnly.Length >= 4 && results.Count < take)
+        {
+            string formattedPrefix = ShipEntegraHsCodeCatalog.Format(digitsOnly);
+            try
+            {
+                var usMatches = ShipEntegraHsCodeCatalog.AllUsCodes
+                    .Where(c => c.StartsWith(formattedPrefix, StringComparison.Ordinal))
+                    .Take(take - results.Count);
+
+                foreach (string formatted in usMatches)
+                {
+                    string rawDigits = new string(formatted.Where(char.IsDigit).ToArray());
+                    if (results.Any(r => r.Code == rawDigits)) continue;
+
+                    results.Add(new HsCodeSearchItemDto
+                    {
+                        Code = rawDigits,
+                        FormattedCode = formatted,
+                        Category = "ABD HTS Gümrük Kataloğu",
+                        Description = $"ABD Gümrük Tarife Kodu ({formatted}) — Doğrulanmış HTS",
+                        IsUsValidated = true
+                    });
+                }
+            }
+            catch { }
+        }
+
+        return results.Take(take).ToList();
     }
 
     private static string ResolveProviderName(string? carrierKey)

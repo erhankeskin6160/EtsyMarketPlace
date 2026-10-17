@@ -93,17 +93,32 @@ public sealed class EtsyOrderService
 
     private static void ApplyAddress(EtsyOrderFulfillmentItem target, EtsyOrderFulfillmentItem source)
     {
-        target.BuyerName = source.BuyerName;
-        target.BuyerEmail = source.BuyerEmail;
-        target.Phone = source.Phone;
-        target.StreetAddress = source.StreetAddress;
-        target.SecondAddress = source.SecondAddress;
-        target.City = source.City;
-        target.State = source.State;
-        target.HasState = !string.IsNullOrWhiteSpace(source.State);
-        target.PostalCode = source.PostalCode;
-        target.CountryCode = source.CountryCode;
-        target.CountryName = source.CountryName;
+        if (!string.IsNullOrWhiteSpace(source.BuyerName)) target.BuyerName = source.BuyerName;
+        if (!string.IsNullOrWhiteSpace(source.BuyerEmail)) target.BuyerEmail = source.BuyerEmail;
+        if (!string.IsNullOrWhiteSpace(source.Phone)) target.Phone = source.Phone;
+        if (!string.IsNullOrWhiteSpace(source.StreetAddress)) target.StreetAddress = source.StreetAddress;
+        if (!string.IsNullOrWhiteSpace(source.SecondAddress)) target.SecondAddress = source.SecondAddress;
+        if (!string.IsNullOrWhiteSpace(source.City)) target.City = source.City;
+        if (!string.IsNullOrWhiteSpace(source.State))
+        {
+            target.State = source.State;
+            target.HasState = true;
+        }
+        if (!string.IsNullOrWhiteSpace(source.PostalCode)) target.PostalCode = source.PostalCode;
+        if (!string.IsNullOrWhiteSpace(source.CountryCode)) target.CountryCode = source.CountryCode;
+        if (!string.IsNullOrWhiteSpace(source.CountryName)) target.CountryName = source.CountryName;
+        if (!string.IsNullOrWhiteSpace(source.IossNumber)) target.IossNumber = source.IossNumber;
+        if (source.ProductCostUsd > 0) target.ProductCostUsd = source.ProductCostUsd;
+        if (source.ShippingCostUsd > 0) target.ShippingCostUsd = source.ShippingCostUsd;
+        if (source.WeightKg > 0) target.WeightKg = source.WeightKg;
+        if (source.WidthCm > 0) target.WidthCm = source.WidthCm;
+        if (source.LengthCm > 0) target.LengthCm = source.LengthCm;
+        if (source.HeightCm > 0) target.HeightCm = source.HeightCm;
+        if (!string.IsNullOrWhiteSpace(source.GtipCode)) target.GtipCode = source.GtipCode;
+        if (!string.IsNullOrWhiteSpace(source.SelectedCarrier)) target.SelectedCarrier = source.SelectedCarrier;
+        if (!string.IsNullOrWhiteSpace(source.CarrierServiceName)) target.CarrierServiceName = source.CarrierServiceName;
+        if (!string.IsNullOrWhiteSpace(source.TrackingCode)) target.TrackingCode = source.TrackingCode;
+        if (!string.IsNullOrWhiteSpace(source.LabelUrl)) target.LabelUrl = source.LabelUrl;
     }
 
     public static void ApplyRecord(EtsyOrderFulfillmentItem target, OrderAddressRecord record)
@@ -122,6 +137,29 @@ public sealed class EtsyOrderService
         if (!string.IsNullOrWhiteSpace(record.PostalCode)) target.PostalCode = record.PostalCode;
         if (!string.IsNullOrWhiteSpace(record.CountryCode)) target.CountryCode = record.CountryCode;
         if (!string.IsNullOrWhiteSpace(record.CountryName)) target.CountryName = record.CountryName;
+        if (!string.IsNullOrWhiteSpace(record.IossNumber)) target.IossNumber = record.IossNumber;
+        if (record.ProductCostUsd > 0) target.ProductCostUsd = record.ProductCostUsd;
+        if (record.ShippingCostUsd > 0) target.ShippingCostUsd = record.ShippingCostUsd;
+        if (record.WeightKg > 0) target.WeightKg = record.WeightKg;
+        if (record.WidthCm > 0) target.WidthCm = record.WidthCm;
+        if (record.LengthCm > 0) target.LengthCm = record.LengthCm;
+        if (record.HeightCm > 0) target.HeightCm = record.HeightCm;
+        if (!string.IsNullOrWhiteSpace(record.GtipCode))
+        {
+            target.GtipCode = record.GtipCode;
+            if (target.Items != null && target.Items.Count > 0)
+            {
+                target.Items[0].HsCode = record.GtipCode;
+            }
+        }
+        if (!string.IsNullOrWhiteSpace(record.SelectedCarrier)) target.SelectedCarrier = record.SelectedCarrier;
+        if (!string.IsNullOrWhiteSpace(record.CarrierServiceName)) target.CarrierServiceName = record.CarrierServiceName;
+        if (!string.IsNullOrWhiteSpace(record.TrackingCode))
+        {
+            target.TrackingCode = record.TrackingCode;
+            target.Status = "shipped";
+        }
+        if (!string.IsNullOrWhiteSpace(record.LabelUrl)) target.LabelUrl = record.LabelUrl;
     }
 
     /// <summary>
@@ -140,7 +178,7 @@ public sealed class EtsyOrderService
             int count = 0;
             foreach (var order in _orders)
             {
-                if (saved.TryGetValue(order.ReceiptId, out var record) && !string.IsNullOrWhiteSpace(record.StreetAddress))
+                if (saved.TryGetValue(order.ReceiptId, out var record))
                 {
                     ApplyRecord(order, record);
                     _addressOverrides[order.ReceiptId] = order;

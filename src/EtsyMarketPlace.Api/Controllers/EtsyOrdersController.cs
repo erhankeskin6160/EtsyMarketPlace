@@ -59,7 +59,29 @@ public class EtsyOrdersController : BaseApiController
         }
 
         await _fulfillmentService.SaveOrderAddressAsync(receiptId, updatedAddress, cancellationToken);
-        return Ok(new { success = true, message = "Alıcı adresi başarıyla kaydedildi." });
+        return Ok(new { success = true, message = "Alıcı adresi ve sipariş bilgileri başarıyla kaydedildi." });
+    }
+
+    [HttpPost("save-fulfillment-meta")]
+    [EndpointSummary("Siparişin Maliyet, Paket Ölçüsü, GTİP ve Seçili Taşıyıcı Bilgilerini Kalıcı Olarak Kaydet")]
+    public async Task<IActionResult> SaveFulfillmentMeta(
+        [FromQuery] long receiptId,
+        [FromBody] EtsyOrderFulfillmentItem updatedMeta,
+        CancellationToken cancellationToken = default)
+    {
+        long resolvedId = receiptId > 0 ? receiptId : (updatedMeta?.ReceiptId ?? 0);
+        if (resolvedId <= 0 || updatedMeta == null)
+        {
+            return BadRequest(new { success = false, message = "Geçersiz sipariş numarası veya meta veri." });
+        }
+
+        await _fulfillmentService.SaveOrderAddressAsync(resolvedId, updatedMeta, cancellationToken);
+        return Ok(new
+        {
+            success = true,
+            receiptId = resolvedId,
+            message = "Sipariş maliyetleri, paket ölçüleri ve GTİP kodu kalıcı olarak SQLite veritabanına kaydedildi."
+        });
     }
 
     [HttpPost("ai-parse-address")]

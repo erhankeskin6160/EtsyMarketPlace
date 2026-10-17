@@ -118,8 +118,16 @@ public sealed class EtsyOrderFulfillmentItem
 
     public List<EtsyOrderItem> Items { get; set; } = new();
 
-    // Seçilen kargo ve etiket bilgisi
+    // Seçilen kargo, maliyet, paket ölçüleri ve etiket bilgisi
+    public decimal ProductCostUsd { get; set; } = 0m;
+    public decimal ShippingCostUsd { get; set; } = 0m;
+    public double WeightKg { get; set; } = 0.4;
+    public double WidthCm { get; set; } = 15.0;
+    public double LengthCm { get; set; } = 20.0;
+    public double HeightCm { get; set; } = 10.0;
+    public string GtipCode { get; set; } = string.Empty;
     public string SelectedCarrier { get; set; } = string.Empty;
+    public string CarrierServiceName { get; set; } = string.Empty;
     public string TrackingCode { get; set; } = string.Empty;
     public string LabelUrl { get; set; } = string.Empty;
 

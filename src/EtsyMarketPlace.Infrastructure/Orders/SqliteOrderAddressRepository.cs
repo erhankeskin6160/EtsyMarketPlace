@@ -61,13 +61,55 @@ public sealed class SqliteOrderAddressRepository : IOrderAddressRepository
                 country_code TEXT NOT NULL DEFAULT '',
                 country_name TEXT NOT NULL DEFAULT '',
                 source TEXT NOT NULL DEFAULT '',
-                updated_at_utc TEXT NOT NULL
+                updated_at_utc TEXT NOT NULL,
+                ioss_number TEXT NOT NULL DEFAULT '',
+                product_cost_usd REAL NOT NULL DEFAULT 0,
+                shipping_cost_usd REAL NOT NULL DEFAULT 0,
+                weight_kg REAL NOT NULL DEFAULT 0,
+                width_cm REAL NOT NULL DEFAULT 0,
+                length_cm REAL NOT NULL DEFAULT 0,
+                height_cm REAL NOT NULL DEFAULT 0,
+                gtip_code TEXT NOT NULL DEFAULT '',
+                selected_carrier TEXT NOT NULL DEFAULT '',
+                carrier_service_name TEXT NOT NULL DEFAULT '',
+                tracking_code TEXT NOT NULL DEFAULT '',
+                label_url TEXT NOT NULL DEFAULT ''
             );
 
             CREATE INDEX IF NOT EXISTS ix_order_addresses_updated 
                 ON order_addresses(updated_at_utc DESC);
             """;
         await cmd.ExecuteNonQueryAsync(cancellationToken);
+
+        string[] alterStatements =
+        [
+            "ALTER TABLE order_addresses ADD COLUMN ioss_number TEXT NOT NULL DEFAULT '';",
+            "ALTER TABLE order_addresses ADD COLUMN product_cost_usd REAL NOT NULL DEFAULT 0;",
+            "ALTER TABLE order_addresses ADD COLUMN shipping_cost_usd REAL NOT NULL DEFAULT 0;",
+            "ALTER TABLE order_addresses ADD COLUMN weight_kg REAL NOT NULL DEFAULT 0;",
+            "ALTER TABLE order_addresses ADD COLUMN width_cm REAL NOT NULL DEFAULT 0;",
+            "ALTER TABLE order_addresses ADD COLUMN length_cm REAL NOT NULL DEFAULT 0;",
+            "ALTER TABLE order_addresses ADD COLUMN height_cm REAL NOT NULL DEFAULT 0;",
+            "ALTER TABLE order_addresses ADD COLUMN gtip_code TEXT NOT NULL DEFAULT '';",
+            "ALTER TABLE order_addresses ADD COLUMN selected_carrier TEXT NOT NULL DEFAULT '';",
+            "ALTER TABLE order_addresses ADD COLUMN carrier_service_name TEXT NOT NULL DEFAULT '';",
+            "ALTER TABLE order_addresses ADD COLUMN tracking_code TEXT NOT NULL DEFAULT '';",
+            "ALTER TABLE order_addresses ADD COLUMN label_url TEXT NOT NULL DEFAULT '';"
+        ];
+
+        foreach (string sql in alterStatements)
+        {
+            try
+            {
+                await using var alterCmd = conn.CreateCommand();
+                alterCmd.CommandText = sql;
+                await alterCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+            catch
+            {
+                // Column already exists
+            }
+        }
 
         lock (_initLock)
         {
@@ -93,7 +135,9 @@ public sealed class SqliteOrderAddressRepository : IOrderAddressRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT receipt_id, buyer_name, buyer_email, phone, street_address, second_address,
-                   city, state, postal_code, country_code, country_name, source, updated_at_utc
+                   city, state, postal_code, country_code, country_name, source, updated_at_utc,
+                   ioss_number, product_cost_usd, shipping_cost_usd, weight_kg, width_cm, length_cm, height_cm,
+                   gtip_code, selected_carrier, carrier_service_name, tracking_code, label_url
             FROM order_addresses
             WHERE receipt_id = @id
             LIMIT 1;
@@ -120,7 +164,9 @@ public sealed class SqliteOrderAddressRepository : IOrderAddressRepository
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             SELECT receipt_id, buyer_name, buyer_email, phone, street_address, second_address,
-                   city, state, postal_code, country_code, country_name, source, updated_at_utc
+                   city, state, postal_code, country_code, country_name, source, updated_at_utc,
+                   ioss_number, product_cost_usd, shipping_cost_usd, weight_kg, width_cm, length_cm, height_cm,
+                   gtip_code, selected_carrier, carrier_service_name, tracking_code, label_url
             FROM order_addresses;
             """;
 
@@ -145,24 +191,40 @@ public sealed class SqliteOrderAddressRepository : IOrderAddressRepository
         cmd.CommandText = """
             INSERT INTO order_addresses (
                 receipt_id, buyer_name, buyer_email, phone, street_address, second_address,
-                city, state, postal_code, country_code, country_name, source, updated_at_utc
+                city, state, postal_code, country_code, country_name, source, updated_at_utc,
+                ioss_number, product_cost_usd, shipping_cost_usd, weight_kg, width_cm, length_cm, height_cm,
+                gtip_code, selected_carrier, carrier_service_name, tracking_code, label_url
             ) VALUES (
                 @receipt_id, @buyer_name, @buyer_email, @phone, @street_address, @second_address,
-                @city, @state, @postal_code, @country_code, @country_name, @source, @updated_at_utc
+                @city, @state, @postal_code, @country_code, @country_name, @source, @updated_at_utc,
+                @ioss_number, @product_cost_usd, @shipping_cost_usd, @weight_kg, @width_cm, @length_cm, @height_cm,
+                @gtip_code, @selected_carrier, @carrier_service_name, @tracking_code, @label_url
             )
             ON CONFLICT(receipt_id) DO UPDATE SET
                 buyer_name = CASE WHEN excluded.buyer_name <> '' THEN excluded.buyer_name ELSE order_addresses.buyer_name END,
                 buyer_email = CASE WHEN excluded.buyer_email <> '' THEN excluded.buyer_email ELSE order_addresses.buyer_email END,
                 phone = CASE WHEN excluded.phone <> '' THEN excluded.phone ELSE order_addresses.phone END,
-                street_address = excluded.street_address,
-                second_address = excluded.second_address,
-                city = excluded.city,
-                state = excluded.state,
-                postal_code = excluded.postal_code,
-                country_code = excluded.country_code,
-                country_name = excluded.country_name,
-                source = excluded.source,
-                updated_at_utc = excluded.updated_at_utc;
+                street_address = CASE WHEN excluded.street_address <> '' THEN excluded.street_address ELSE order_addresses.street_address END,
+                second_address = CASE WHEN excluded.second_address <> '' THEN excluded.second_address ELSE order_addresses.second_address END,
+                city = CASE WHEN excluded.city <> '' THEN excluded.city ELSE order_addresses.city END,
+                state = CASE WHEN excluded.state <> '' THEN excluded.state ELSE order_addresses.state END,
+                postal_code = CASE WHEN excluded.postal_code <> '' THEN excluded.postal_code ELSE order_addresses.postal_code END,
+                country_code = CASE WHEN excluded.country_code <> '' THEN excluded.country_code ELSE order_addresses.country_code END,
+                country_name = CASE WHEN excluded.country_name <> '' THEN excluded.country_name ELSE order_addresses.country_name END,
+                source = CASE WHEN excluded.source <> '' THEN excluded.source ELSE order_addresses.source END,
+                updated_at_utc = excluded.updated_at_utc,
+                ioss_number = CASE WHEN excluded.ioss_number <> '' THEN excluded.ioss_number ELSE order_addresses.ioss_number END,
+                product_cost_usd = CASE WHEN excluded.product_cost_usd > 0 THEN excluded.product_cost_usd ELSE order_addresses.product_cost_usd END,
+                shipping_cost_usd = CASE WHEN excluded.shipping_cost_usd > 0 THEN excluded.shipping_cost_usd ELSE order_addresses.shipping_cost_usd END,
+                weight_kg = CASE WHEN excluded.weight_kg > 0 THEN excluded.weight_kg ELSE order_addresses.weight_kg END,
+                width_cm = CASE WHEN excluded.width_cm > 0 THEN excluded.width_cm ELSE order_addresses.width_cm END,
+                length_cm = CASE WHEN excluded.length_cm > 0 THEN excluded.length_cm ELSE order_addresses.length_cm END,
+                height_cm = CASE WHEN excluded.height_cm > 0 THEN excluded.height_cm ELSE order_addresses.height_cm END,
+                gtip_code = CASE WHEN excluded.gtip_code <> '' THEN excluded.gtip_code ELSE order_addresses.gtip_code END,
+                selected_carrier = CASE WHEN excluded.selected_carrier <> '' THEN excluded.selected_carrier ELSE order_addresses.selected_carrier END,
+                carrier_service_name = CASE WHEN excluded.carrier_service_name <> '' THEN excluded.carrier_service_name ELSE order_addresses.carrier_service_name END,
+                tracking_code = CASE WHEN excluded.tracking_code <> '' THEN excluded.tracking_code ELSE order_addresses.tracking_code END,
+                label_url = CASE WHEN excluded.label_url <> '' THEN excluded.label_url ELSE order_addresses.label_url END;
             """;
 
         BindParameters(cmd, record);
@@ -255,6 +317,18 @@ public sealed class SqliteOrderAddressRepository : IOrderAddressRepository
         cmd.Parameters.AddWithValue("@country_name", record.CountryName ?? string.Empty);
         cmd.Parameters.AddWithValue("@source", record.Source ?? string.Empty);
         cmd.Parameters.AddWithValue("@updated_at_utc", record.UpdatedAtUtc.ToString("O", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("@ioss_number", record.IossNumber ?? string.Empty);
+        cmd.Parameters.AddWithValue("@product_cost_usd", (double)record.ProductCostUsd);
+        cmd.Parameters.AddWithValue("@shipping_cost_usd", (double)record.ShippingCostUsd);
+        cmd.Parameters.AddWithValue("@weight_kg", record.WeightKg);
+        cmd.Parameters.AddWithValue("@width_cm", record.WidthCm);
+        cmd.Parameters.AddWithValue("@length_cm", record.LengthCm);
+        cmd.Parameters.AddWithValue("@height_cm", record.HeightCm);
+        cmd.Parameters.AddWithValue("@gtip_code", record.GtipCode ?? string.Empty);
+        cmd.Parameters.AddWithValue("@selected_carrier", record.SelectedCarrier ?? string.Empty);
+        cmd.Parameters.AddWithValue("@carrier_service_name", record.CarrierServiceName ?? string.Empty);
+        cmd.Parameters.AddWithValue("@tracking_code", record.TrackingCode ?? string.Empty);
+        cmd.Parameters.AddWithValue("@label_url", record.LabelUrl ?? string.Empty);
     }
 
     private static OrderAddressRecord ReadRecord(SqliteDataReader reader)
@@ -290,6 +364,20 @@ public sealed class SqliteOrderAddressRepository : IOrderAddressRepository
             countryCode,
             countryName,
             source,
-            date);
+            date)
+        {
+            IossNumber = reader.FieldCount > 13 && !reader.IsDBNull(13) ? reader.GetString(13) : string.Empty,
+            ProductCostUsd = reader.FieldCount > 14 && !reader.IsDBNull(14) ? (decimal)reader.GetDouble(14) : 0m,
+            ShippingCostUsd = reader.FieldCount > 15 && !reader.IsDBNull(15) ? (decimal)reader.GetDouble(15) : 0m,
+            WeightKg = reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetDouble(16) : 0.0,
+            WidthCm = reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetDouble(17) : 0.0,
+            LengthCm = reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetDouble(18) : 0.0,
+            HeightCm = reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetDouble(19) : 0.0,
+            GtipCode = reader.FieldCount > 20 && !reader.IsDBNull(20) ? reader.GetString(20) : string.Empty,
+            SelectedCarrier = reader.FieldCount > 21 && !reader.IsDBNull(21) ? reader.GetString(21) : string.Empty,
+            CarrierServiceName = reader.FieldCount > 22 && !reader.IsDBNull(22) ? reader.GetString(22) : string.Empty,
+            TrackingCode = reader.FieldCount > 23 && !reader.IsDBNull(23) ? reader.GetString(23) : string.Empty,
+            LabelUrl = reader.FieldCount > 24 && !reader.IsDBNull(24) ? reader.GetString(24) : string.Empty
+        };
     }
 }
