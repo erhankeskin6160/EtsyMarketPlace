@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyBankPayoutDto } from '../../core/services/etsy-api.service';
 import { 
   PaymentLedgerEntry, 
   BankPayoutRecord, 
@@ -58,8 +58,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
   realNetProfitTry = 22077.69;
   realNetProfitUsd = 449.46;
 
-  bankPayoutsTry = 27594.89;
-  bankPayoutsUsd = 561.78;
+  bankPayoutsTry = 0;
+  bankPayoutsUsd = 0;
+  totalLedgerCount = 0;
 
   // Order List & Filtering
   orderSearchQuery = '';
@@ -607,10 +608,54 @@ export class AccountingComponent implements OnInit, OnDestroy {
             this.realNetProfitUsd = Number(realProfitUsd.toFixed(2));
             this.realNetProfitTry = Number(realProfitTry.toFixed(2));
           }
+
+          this.totalLedgerCount = perf.receiptCount || this.orders.length;
+          if (perf.bankPayoutsTRY !== undefined && perf.bankPayoutsTRY !== null) {
+            this.bankPayoutsUsd = Number(perf.bankPayoutsUSD ?? (perf.bankPayoutsTRY / rate));
+            this.bankPayoutsTry = Number(perf.bankPayoutsTRY);
+          }
         }
       },
       error: (err) => {
         console.warn('Canlı finansal performans verisi alınamadı:', err);
+      }
+    });
+
+    // 3. Canlı banka transferleri çekimi (Payouts)
+    this.etsyApi.getBankPayoutsByDateRange(start, end).subscribe({
+      next: (payouts: EtsyBankPayoutDto[]) => {
+        if (payouts && payouts.length > 0) {
+          const totalUsd = payouts.reduce((sum, p) => sum + Math.abs(Number(p.amount || 0)), 0);
+          const totalTry = payouts.reduce((sum, p) => {
+            const pRate = Number(p.exchangeRateToTry || this.liveRate || 49.30);
+            return sum + (Math.abs(Number(p.amount || 0)) * pRate);
+          }, 0);
+
+          this.bankPayoutsUsd = Number(totalUsd.toFixed(2));
+          this.bankPayoutsTry = Number(totalTry.toFixed(2));
+
+          this.bankPayoutRecords = payouts.map(p => {
+            const pDate = new Date(p.occurredAt);
+            const dateStr = `${String(pDate.getDate()).padStart(2, '0')}.${String(pDate.getMonth() + 1).padStart(2, '0')}.${String(pDate.getFullYear()).slice(-2)} ${String(pDate.getHours()).padStart(2, '0')}:${String(pDate.getMinutes()).padStart(2, '0')}`;
+            const pRate = Number(p.exchangeRateToTry || this.liveRate || 49.30);
+            const tryAmt = Math.abs(Number(p.amount || 0)) * pRate;
+            return {
+              date: dateStr,
+              refNo: `#${p.referenceId}`,
+              type: 'Banka Transferi',
+              amount: Number(tryAmt.toFixed(2)),
+              status: p.status === 'completed' ? 'Yatırıldı' : p.status,
+              note: `${p.description || 'disburse2'} (Kur: 1$ = ${pRate.toFixed(2)}₺)`
+            };
+          });
+        } else if (!this.bankPayoutsTry) {
+          this.bankPayoutsUsd = 0;
+          this.bankPayoutsTry = 0;
+          this.bankPayoutRecords = [];
+        }
+      },
+      error: (err) => {
+        console.warn('Banka transferleri çekilemedi:', err);
       }
     });
   }

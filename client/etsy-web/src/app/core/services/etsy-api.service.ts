@@ -31,6 +31,15 @@ export interface FinancialPerformanceDto {
   refunds: number;
   netProfit: number;
   netProfitMargin: number;
+  grossSalesTRY?: number;
+  netProfitTRY?: number;
+  exchangeRateUsed?: number;
+  receiptCount?: number;
+  ledgerOk?: boolean;
+  ledgerWarning?: string | null;
+  source?: string;
+  bankPayoutsUSD?: number;
+  bankPayoutsTRY?: number;
 }
 
 /** VDS: EtsyBankPayout */

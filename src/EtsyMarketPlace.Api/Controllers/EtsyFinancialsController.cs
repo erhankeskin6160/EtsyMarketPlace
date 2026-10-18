@@ -40,7 +40,7 @@ public class EtsyFinancialsController : BaseApiController
         var end = endDate ?? DateTimeOffset.UtcNow;
         var start = startDate ?? new DateTimeOffset(end.Year, end.Month, 1, 0, 0, 0, TimeSpan.Zero);
         if (start > end) return BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
-        return Ok(await _reporting.GetBankPayoutsAsync(resolvedShopId, start, end, cancellationToken));
+        return Ok(await _dashboard.GetBankPayoutsAsync(resolvedShopId, start, end, cancellationToken));
     }
 
     [HttpGet("etsy/financial/performance")]
@@ -332,6 +332,9 @@ public class EtsyFinancialsController : BaseApiController
         }
 
         await _repository.SaveSyncStateAsync(shopId, "all_desktop_data", request.PeriodEnd ?? DateTimeOffset.UtcNow, cancellationToken: cancellationToken);
+
+        // Masaüstünden yeni veriler aktarıldığında eski önbelleği anında temizle (tam parite)
+        DashboardResponseCache.Clear();
 
         return Ok(new
         {

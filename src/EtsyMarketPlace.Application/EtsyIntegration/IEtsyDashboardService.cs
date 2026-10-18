@@ -62,7 +62,9 @@ public record LiveFinancialPerformanceResult(
     bool LedgerOk,
     string? LedgerWarning,
     string Source,
-    DateTimeOffset GeneratedAt);
+    DateTimeOffset GeneratedAt,
+    decimal? BankPayoutsUSD = null,
+    decimal? BankPayoutsTRY = null);
 
 public record FinancialSummaryDashboardResult(
     string Period,
@@ -80,6 +82,12 @@ public interface IEtsyDashboardService
         string period,
         DateTimeOffset? startDate,
         DateTimeOffset? endDate,
+        CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(
+        string shopId,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
         CancellationToken cancellationToken = default);
 
     Task<DailyShopBrief> GetDailyShopBriefAsync(

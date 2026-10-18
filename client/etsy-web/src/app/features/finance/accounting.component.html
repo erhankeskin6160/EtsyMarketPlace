@@ -5,7 +5,7 @@
           <div class="title-row">
             <h1 class="page-title">Finansal Raporlama Muhasebe Paneli</h1>
             <span class="live-status-pill">
-              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: {{ orders.length }} kayıt | {{ startDate }} — {{ endDate }}
+              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: {{ orders.length }} sipariş<span *ngIf="totalLedgerCount > orders.length"> ({{ totalLedgerCount }} defter kaydı)</span> | {{ startDate }} — {{ endDate }}
             </span>
           </div>
           <p class="page-subtitle">Etsy Payment Account hareketleri, sipariş kâr marjları ve çok katmanlı maliyet denetimi</p>

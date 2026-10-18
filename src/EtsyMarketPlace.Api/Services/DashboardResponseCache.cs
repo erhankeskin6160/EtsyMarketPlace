@@ -29,4 +29,6 @@ public static class DashboardResponseCache
 
         Entries[key] = new CacheEntry(DateTimeOffset.UtcNow.Add(ttl), payload);
     }
+
+    public static void Clear() => Entries.Clear();
 }

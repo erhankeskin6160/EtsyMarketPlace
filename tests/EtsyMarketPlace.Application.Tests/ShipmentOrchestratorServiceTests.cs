@@ -239,34 +239,49 @@ public sealed class ShipmentOrchestratorServiceTests
         public Task CancelShipmentAsync(string slug, CancellationToken ct = default) => Task.CompletedTask;
     }
 
+    private sealed class FakeSecretProtector : IShippingSecretProtector
+    {
+        public string Protect(string? plainText) => string.IsNullOrEmpty(plainText) ? string.Empty : Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(plainText));
+        public string Unprotect(string? cipherText) => string.IsNullOrEmpty(cipherText) ? string.Empty : System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cipherText));
+    }
+
     [Fact]
     public async Task ConnectCarrierAsync_SavesShiptomoreCredentialsAndValidatesProviders()
     {
-        // Arrange
-        var manager = new ShipmentCreationManager();
-        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
-        var fakeShiptomoreApi = new FakeShiptomoreOfficialApi();
-
-        var orchestrator = new ShipmentOrchestratorService(
-            manager,
-            fakeLogisticsApi,
-            shiptomoreApi: fakeShiptomoreApi);
-
-        var command = new ConnectCarrierCommand
+        var prevProtector = ShippingSecretProtector.Current;
+        ShippingSecretProtector.Current = new FakeSecretProtector();
+        try
         {
-            CarrierKey = "shiptomore",
-            ApiKey = "NhuCndOc1smCm0uBInrLByukAoV5JNRj",
-            ApiSecret = "s3cr3t-test"
-        };
+            // Arrange
+            var manager = new ShipmentCreationManager();
+            var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+            var fakeShiptomoreApi = new FakeShiptomoreOfficialApi();
 
-        // Act
-        var result = await orchestrator.ConnectCarrierAsync(command);
+            var orchestrator = new ShipmentOrchestratorService(
+                manager,
+                fakeLogisticsApi,
+                shiptomoreApi: fakeShiptomoreApi);
 
-        // Assert
-        Assert.NotNull(result);
-        Assert.True(result.Success);
-        Assert.Equal("shiptomore", result.CarrierKey);
-        Assert.True(result.IsConnected);
-        Assert.Contains("ups", result.Message);
+            var command = new ConnectCarrierCommand
+            {
+                CarrierKey = "shiptomore",
+                ApiKey = "NhuCndOc1smCm0uBInrLByukAoV5JNRj",
+                ApiSecret = "s3cr3t-test"
+            };
+
+            // Act
+            var result = await orchestrator.ConnectCarrierAsync(command);
+
+            // Assert
+            Assert.NotNull(result);
+            Assert.True(result.Success);
+            Assert.Equal("shiptomore", result.CarrierKey);
+            Assert.True(result.IsConnected);
+            Assert.Contains("ups", result.Message);
+        }
+        finally
+        {
+            ShippingSecretProtector.Current = prevProtector;
+        }
     }
 }

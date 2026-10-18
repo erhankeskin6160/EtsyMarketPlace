@@ -78,6 +78,29 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         };
     }
 
+    public async Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(
+        string shopId,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        CancellationToken cancellationToken = default)
+    {
+        var payouts = await _reporting.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
+        if (payouts.Count > 0) return payouts;
+
+        try
+        {
+            var livePayouts = await _etsyClient.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
+            if (livePayouts.Count > 0)
+            {
+                await _repository.SavePayoutsAsync(livePayouts, cancellationToken);
+                return livePayouts;
+            }
+        }
+        catch { }
+
+        return payouts;
+    }
+
     public async Task<LiveFinancialPerformanceResult> GetFinancialPerformanceAsync(
         string shopId,
         string period,
@@ -86,10 +109,15 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         CancellationToken cancellationToken = default)
     {
         var (start, end) = ResolvePeriod(period, startDate, endDate);
+        var payouts = await GetBankPayoutsAsync(shopId, start, end, cancellationToken);
         var live = await _ledgerReport.GetLiveReportAsync(shopId, start, end, cancellationToken);
         if (live.LedgerOk)
         {
             var p = live.Performance;
+            var rateForPayout = p.ExchangeRateUsed ?? 49.30m;
+            var totalPayoutsUsd = payouts.Sum(x => Math.Abs(x.Amount));
+            var totalPayoutsTry = payouts.Sum(x => Math.Abs(x.Amount) * (x.ExchangeRateToTry ?? rateForPayout));
+
             return new LiveFinancialPerformanceResult(
                 GrossSales: p.GrossSales,
                 PlatformFees: p.PlatformFees,
@@ -110,10 +138,16 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
                 LedgerOk: true,
                 LedgerWarning: live.Warning,
                 Source: live.Source,
-                GeneratedAt: live.GeneratedAt);
+                GeneratedAt: live.GeneratedAt,
+                BankPayoutsUSD: totalPayoutsUsd,
+                BankPayoutsTRY: Math.Round(totalPayoutsTry, 2));
         }
 
         var legacy = await _reporting.GetFinancialPerformanceAsync(shopId, start, end, cancellationToken);
+        var legRate = legacy.ExchangeRateUsed ?? 48.25m;
+        var legPayoutsUsd = payouts.Sum(x => Math.Abs(x.Amount));
+        var legPayoutsTry = payouts.Sum(x => Math.Abs(x.Amount) * (x.ExchangeRateToTry ?? legRate));
+
         return new LiveFinancialPerformanceResult(
             GrossSales: legacy.GrossSales,
             PlatformFees: legacy.PlatformFees,
@@ -134,7 +168,9 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             LedgerOk: false,
             LedgerWarning: live.Warning,
             Source: "legacy-fallback",
-            GeneratedAt: live.GeneratedAt);
+            GeneratedAt: live.GeneratedAt,
+            BankPayoutsUSD: legPayoutsUsd,
+            BankPayoutsTRY: Math.Round(legPayoutsTry, 2));
     }
 
     public async Task<DailyShopBrief> GetDailyShopBriefAsync(

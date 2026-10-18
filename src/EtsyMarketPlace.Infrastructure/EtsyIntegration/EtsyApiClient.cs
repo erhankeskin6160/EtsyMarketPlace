@@ -103,7 +103,25 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     {
         var reference = StringValue(item, "entry_id", "ledger_entry_id", "id");
         if (string.IsNullOrWhiteSpace(reference)) return null;
-        return new EtsyBankPayout(shopId, reference, DateValue(item, "create_date", "created_timestamp", "created", "date"), LedgerAmountToUsd(item), StringValue(item, "currency", "currency_code") ?? "USD", DecimalNullable(item, "exchange_rate"), StringValue(item, "status") ?? "completed", StringValue(item, "description") ?? "Etsy payout");
+
+        var rawType = (StringValue(item, "ledger_type", "type") ?? string.Empty).ToLowerInvariant();
+        var rawRefType = (StringValue(item, "reference_type") ?? string.Empty).ToLowerInvariant();
+        var desc = (StringValue(item, "description") ?? string.Empty).ToLowerInvariant();
+
+        var isDeposit = (rawType.Contains("deposit") || rawRefType.Contains("deposit") || desc.Contains("deposit") || desc.Contains("payout") || desc.Contains("disburse"))
+                        && !desc.Contains("fee") && !rawType.Contains("fee");
+
+        if (!isDeposit) return null;
+
+        return new EtsyBankPayout(
+            shopId,
+            reference,
+            DateValue(item, "create_date", "created_timestamp", "created", "date"),
+            Math.Abs(LedgerAmountToUsd(item)),
+            StringValue(item, "currency", "currency_code") ?? "USD",
+            DecimalNullable(item, "exchange_rate"),
+            StringValue(item, "status") ?? "completed",
+            StringValue(item, "description") ?? "Etsy payout");
     }
 
     private static EtsyFinancialTransaction? ParseTransaction(JsonElement item, string shopId)
