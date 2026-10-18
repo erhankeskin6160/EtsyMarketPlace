@@ -330,7 +330,7 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
     {
         var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
         var clampedLimit = Math.Clamp(limit, 1, 100);
-        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/listings?state=active&limit={clampedLimit}&sort_on=updated&sort_order=desc&includes=Images";
+        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/active?limit={clampedLimit}&sort_on=updated&sort_order=desc&includes=Images";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Add("x-api-key", apiKeyHeader);

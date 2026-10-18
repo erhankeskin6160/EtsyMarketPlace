@@ -1007,10 +1007,11 @@ internal sealed class DashboardForm : Form
                 _lblLiveRate.Text = $"💱 Canlı Kur: 1 USD = {_liveExchangeRate:N2} ₺";
             }
 
-            // 2. KONTROL PANELİ: Bulunduğumuz Ayın 1'inden Bugüne (Bu Ay)
-            var now = DateTime.UtcNow;
-            var from = new DateTimeOffset(new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc));
-            var to = DateTimeOffset.UtcNow;
+            // 2. KONTROL PANELİ: Bulunduğumuz Ayın 1'inden Bugüne (Bu Ay) - Türkiye saat dilimi (+03:00) toleransıyla
+            var localNow = DateTime.Now;
+            var startOfMonthLocal = new DateTime(localNow.Year, localNow.Month, 1, 0, 0, 0, DateTimeKind.Local);
+            var from = new DateTimeOffset(startOfMonthLocal, TimeZoneInfo.Local.GetUtcOffset(startOfMonthLocal));
+            var to = DateTimeOffset.Now;
             var settings = EtsyApiSettingsStore.Load();
             bool hasApi = settings.HasApiCredentials && (!string.IsNullOrWhiteSpace(settings.AccessToken) || !string.IsNullOrWhiteSpace(settings.RefreshToken));
 

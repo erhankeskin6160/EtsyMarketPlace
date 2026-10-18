@@ -42,11 +42,13 @@ Chart.register(...registerables);
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">📦 AÇIK SİPARİŞ</span>
-            <span class="kpi-tag text-purple">{{ dailyBrief ? 'Güncel' : 'Veri yok' }}</span>
+            <span class="kpi-label">📦 BU AYKİ SİPARİŞ</span>
+            <span class="kpi-tag text-purple">{{ financialPerformance ? 'Canlı API' : 'Veri yok' }}</span>
           </div>
-          <div class="kpi-value text-purple">{{ dailyBrief ? (dailyBrief.unfulfilledCostAlertCount + ' adet') : '—' }}</div>
-          <div class="kpi-sub">Kargo / maliyet bekleyen siparişler</div>
+          <div class="kpi-value text-purple">
+            <ng-container *ngIf="financialPerformance; else noFinanceValue">{{ (financialPerformance.receiptCount ?? liveOrders.length) }} Sipariş</ng-container>
+          </div>
+          <div class="kpi-sub">{{ dailyBrief ? (dailyBrief.unfulfilledCostAlertCount + ' açık sipariş bekliyor') : 'Bu ayki mağaza siparişleri' }}</div>
         </div>
 
         <div class="glass-card kpi-card">
