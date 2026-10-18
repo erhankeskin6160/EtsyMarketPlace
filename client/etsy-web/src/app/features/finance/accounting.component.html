@@ -680,7 +680,7 @@
               <div class="badge-row">
                 <span class="ctx-badge gross">Ödeme: &#36;{{ selectedOrder.grandTotalUsd.toFixed(2) }}</span>
                 <span class="ctx-badge fee">Etsy Kesintisi: -&#36;{{ selectedOrder.etsyFeesUsd.toFixed(2) }}</span>
-                <span class="ctx-badge rate">Kilitli Kur: ₺{{ selectedOrder.exchangeRate.toFixed(2) }}</span>
+                <span class="ctx-badge rate" [title]="'Sipariş tarihindeki (' + selectedOrder.orderDate + ') TCMB / Piyasa Kilitli Kuru'">🔒 Kilitli Kur: ₺{{ selectedOrder.exchangeRate.toFixed(2) }}</span>
               </div>
             </div>
 

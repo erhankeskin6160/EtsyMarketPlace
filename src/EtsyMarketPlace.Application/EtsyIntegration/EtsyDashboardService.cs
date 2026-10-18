@@ -215,6 +215,13 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         var (ledgerEntries, ledgerError) = await SafeGetLedgerAsync(_etsyClient, shopId, start, end, cancellationToken);
         var costs = await _repository.GetOrderCostsAsync(shopId, cancellationToken);
 
+        // Siparişlerin kendi oluşturulma tarihlerine ait kilitli kurları dinamik hidrate et
+        if (receipts.Count > 0)
+        {
+            var distinctDates = receipts.Select(r => r.CreatedAt.UtcDateTime.Date).Distinct().ToList();
+            await HistoricalExchangeRateProvider.HydrateRatesForDatesAsync(distinctDates, cancellationToken);
+        }
+
         var rate = 49.16m;
         try
         {

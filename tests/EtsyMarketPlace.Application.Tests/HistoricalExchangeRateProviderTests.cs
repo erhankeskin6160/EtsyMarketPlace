@@ -13,9 +13,16 @@ public sealed class HistoricalExchangeRateProviderTests
     }
 
     [Fact]
-    public void GetRateForDate_UsesNearestPastRate_ForOctoberEntries()
+    public void GetRateForDate_ResolvesExactOctoberRate_DistinctFromAugust()
     {
-        Assert.Equal(48.26m, HistoricalExchangeRateProvider.GetRateForDate(new DateTime(2026, 10, 1)));
+        var oct1Rate = HistoricalExchangeRateProvider.GetRateForDate(new DateTime(2026, 10, 1));
+        var oct15Rate = HistoricalExchangeRateProvider.GetRateForDate(new DateTime(2026, 10, 15));
+        var aug30Rate = HistoricalExchangeRateProvider.GetRateForDate(new DateTime(2026, 8, 30));
+
+        Assert.Equal(49.03m, oct1Rate);
+        Assert.Equal(49.42m, oct15Rate);
+        Assert.Equal(48.26m, aug30Rate);
+        Assert.NotEqual(oct1Rate, oct15Rate);
     }
 
     [Fact]

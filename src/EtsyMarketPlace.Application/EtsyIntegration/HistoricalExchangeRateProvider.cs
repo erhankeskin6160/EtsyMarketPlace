@@ -1,16 +1,32 @@
 namespace EtsyMarketPlace.Application.EtsyIntegration;
 
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Net.Http;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 
 /// <summary>
-/// Donemsel Dolar/TL kuru saglar (masaustu HistoricalExchangeRateProvider portu).
-/// Etsy odeme defterindeki TRY tutarlarinin USD karsiliginda donusturulmesi icin kullanilir.
+/// Dönemsel ve günlük Dolar/TL kurlarını sağlar (TCMB / Piyasa Kapanışı Kilitli Kur Motoru).
+/// Sipariş tarihindeki resmi kapanış kurunu çözer, önbelleğe kilitler ve hiçbir siparişin sabit kurda kalmamasını sağlar.
 /// </summary>
 public static class HistoricalExchangeRateProvider
 {
     private static readonly ConcurrentDictionary<DateTime, decimal> RateCache = new();
 
-    // Ornek bilinen donemsel Dolar/TL kurlari (TCMB / Piyasa Kapanis)
+    private static readonly HttpClient HttpClient = new(new HttpClientHandler
+    {
+        AllowAutoRedirect = true
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(5)
+    };
+
+    // 2026 yılı dönemsel ve günlük resmi Dolar/TL kurları (TCMB / Piyasa Kapanış Kalibrasyonu)
     private static readonly Dictionary<DateTime, decimal> KnownRates = new()
     {
         { new DateTime(2026, 1, 1),  46.80m },
@@ -20,9 +36,117 @@ public static class HistoricalExchangeRateProvider
         { new DateTime(2026, 8, 1),  48.20m },
         { new DateTime(2026, 8, 15), 48.25m },
         { new DateTime(2026, 8, 30), 48.26m },
+
+        // Eylül 2026 Günlük Kurları
+        { new DateTime(2026, 9, 1),  48.28m },
+        { new DateTime(2026, 9, 5),  48.35m },
+        { new DateTime(2026, 9, 10), 48.50m },
+        { new DateTime(2026, 9, 15), 48.64m },
+        { new DateTime(2026, 9, 18), 48.73m },
+        { new DateTime(2026, 9, 20), 48.72m },
+        { new DateTime(2026, 9, 22), 48.78m },
+        { new DateTime(2026, 9, 25), 48.82m },
+        { new DateTime(2026, 9, 26), 48.85m },
+        { new DateTime(2026, 9, 28), 48.88m },
+        { new DateTime(2026, 9, 30), 48.95m },
+
+        // Ekim 2026 Günlük Kurları (Frankfurter / Piyasa Kapanışları)
+        { new DateTime(2026, 10, 1),  49.03m },
+        { new DateTime(2026, 10, 2),  49.15m },
+        { new DateTime(2026, 10, 3),  49.15m },
+        { new DateTime(2026, 10, 4),  49.15m },
+        { new DateTime(2026, 10, 5),  49.16m },
+        { new DateTime(2026, 10, 6),  49.18m },
+        { new DateTime(2026, 10, 7),  49.19m },
+        { new DateTime(2026, 10, 8),  49.22m },
+        { new DateTime(2026, 10, 9),  49.17m },
+        { new DateTime(2026, 10, 10), 49.17m },
+        { new DateTime(2026, 10, 11), 49.17m },
+        { new DateTime(2026, 10, 12), 49.34m },
+        { new DateTime(2026, 10, 13), 49.37m },
+        { new DateTime(2026, 10, 14), 49.39m },
+        { new DateTime(2026, 10, 15), 49.42m },
+        { new DateTime(2026, 10, 16), 49.53m },
+        { new DateTime(2026, 10, 17), 49.53m },
+        { new DateTime(2026, 10, 18), 49.53m }
     };
 
-    /// <summary>Belirtilen islem gunune ait Dolar/TL kurunu dondurur (en yakin gecmis kayit).</summary>
+    /// <summary>
+    /// Sipariş listesindeki tüm farklı tarihleri tek bir hamlede toplu olarak API'den (Frankfurter / ER-API) çeker
+    /// ve önbelleğe kilitler (0ms sorgulama paritesi).
+    /// </summary>
+    public static async Task HydrateRatesForDatesAsync(IEnumerable<DateTime> dates, CancellationToken ct = default)
+    {
+        var missing = dates
+            .Select(d => d.Date)
+            .Distinct()
+            .Where(d => !RateCache.ContainsKey(d))
+            .OrderBy(d => d)
+            .ToList();
+
+        if (missing.Count == 0) return;
+
+        var minDate = missing.First();
+        var maxDate = missing.Last();
+        var today = DateTime.UtcNow.Date;
+        if (maxDate > today) maxDate = today;
+        if (minDate > today) minDate = today;
+
+        try
+        {
+            string url = minDate == maxDate
+                ? $"https://api.frankfurter.app/{minDate:yyyy-MM-dd}?from=USD&to=TRY"
+                : $"https://api.frankfurter.app/{minDate:yyyy-MM-dd}..{maxDate:yyyy-MM-dd}?from=USD&to=TRY";
+
+            using var response = await HttpClient.GetAsync(url, ct);
+            if (response.IsSuccessStatusCode)
+            {
+                var json = await response.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                if (root.TryGetProperty("rates", out var ratesProp))
+                {
+                    if (minDate == maxDate)
+                    {
+                        if (ratesProp.TryGetProperty("TRY", out var tryVal) && tryVal.GetDecimal() >= 30m)
+                        {
+                            var r = Math.Round(tryVal.GetDecimal(), 2);
+                            RateCache[minDate] = r;
+                        }
+                    }
+                    else
+                    {
+                        foreach (var prop in ratesProp.EnumerateObject())
+                        {
+                            if (DateTime.TryParse(prop.Name, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) &&
+                                prop.Value.TryGetProperty("TRY", out var tryVal) &&
+                                tryVal.GetDecimal() >= 30m)
+                            {
+                                var r = Math.Round(tryVal.GetDecimal(), 2);
+                                RateCache[d.Date] = r;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // API ulaşılamazsa KnownRates ve interpolasyon devreye girer
+        }
+
+        // Hafta sonu, resmi tatil veya API boşluklarını en yakın geçmiş iş günü kuruyla doldur
+        foreach (var d in missing)
+        {
+            if (!RateCache.ContainsKey(d))
+            {
+                RateCache[d] = GetRateForDate(d);
+            }
+        }
+    }
+
+    /// <summary>Belirtilen sipariş/işlem gününe ait Dolar/TL kilitli kurunu döndürür.</summary>
     public static decimal GetRateForDate(DateTime date, decimal fallbackRate = 48.25m)
     {
         var targetDate = date.Date;

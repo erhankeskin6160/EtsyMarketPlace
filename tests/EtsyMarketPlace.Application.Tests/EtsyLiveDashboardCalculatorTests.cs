@@ -193,7 +193,7 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(20.08m, row.OffsiteAdFeeUsd);
         Assert.Equal(35.00m, row.ProductCostUsd);
         Assert.True(row.HasCostData);
-        Assert.Equal(48.26m, row.ExchangeRate);
+        Assert.Equal(49.22m, row.ExchangeRate);
         Assert.True(row.EtsyFeesUsd > 0);
         Assert.True(row.NetProfitUsd > 0);
         Assert.Equal(Math.Round(row.NetProfitUsd * row.ExchangeRate, 2), row.NetProfitTry);
@@ -265,7 +265,8 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(15.00m, row.ProductCostUsd);
         Assert.True(row.HasCostData);
         Assert.Equal(-15.00m, row.NetProfitUsd); // Negative balance / loss!
-        Assert.Equal(-723.90m, row.NetProfitTry); // -15 * 48.26 (historical rate)
+        Assert.Equal(49.22m, row.ExchangeRate); // Order date locked rate (08.10.2026)
+        Assert.Equal(-738.30m, row.NetProfitTry); // -15 * 49.22 (historical rate for 8 Oct 2026)
     }
 }
 
