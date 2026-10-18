@@ -110,6 +110,97 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 
+    public async Task<string> GetShopByNameRawJsonAsync(
+        string authShopId,
+        string targetShopName,
+        CancellationToken cancellationToken = default)
+    {
+        var (apiKeyHeader, bearerToken) = await ResolveAuthHeadersAsync(authShopId, cancellationToken);
+        var encoded = Uri.EscapeDataString(targetShopName.Trim());
+        var url = $"https://api.etsy.com/v3/application/shops?shop_name={encoded}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("x-api-key", apiKeyHeader);
+        if (!string.IsNullOrWhiteSpace(bearerToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        }
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"'{targetShopName}' mağazası Etsy'de sorgulanamadı (HTTP {(int)response.StatusCode}): {body}");
+        }
+
+        return body;
+    }
+
+    public async Task<string> GetShopByIdRawJsonAsync(
+        string authShopId,
+        long targetShopId,
+        CancellationToken cancellationToken = default)
+    {
+        var (apiKeyHeader, bearerToken) = await ResolveAuthHeadersAsync(authShopId, cancellationToken);
+        var url = $"https://api.etsy.com/v3/application/shops/{targetShopId}";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("x-api-key", apiKeyHeader);
+        if (!string.IsNullOrWhiteSpace(bearerToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        }
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Mağaza #{targetShopId} bilgisi alınamadı (HTTP {(int)response.StatusCode}): {body}");
+        }
+
+        return body;
+    }
+
+    public async Task<string> GetShopActiveListingsRawJsonAsync(
+        string authShopId,
+        long targetShopId,
+        int limit = 50,
+        CancellationToken cancellationToken = default)
+    {
+        var (apiKeyHeader, bearerToken) = await ResolveAuthHeadersAsync(authShopId, cancellationToken);
+        var clamped = Math.Clamp(limit, 1, 100);
+        var url = $"https://api.etsy.com/v3/application/shops/{targetShopId}/listings/active?limit={clamped}&sort_on=created&sort_order=desc&includes=Images";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("x-api-key", apiKeyHeader);
+        if (!string.IsNullOrWhiteSpace(bearerToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        }
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            var fallbackUrl = $"https://api.etsy.com/v3/application/shops/{targetShopId}/listings/active?limit={clamped}&sort_on=created&sort_order=desc";
+            using var fbReq = new HttpRequestMessage(HttpMethod.Get, fallbackUrl);
+            fbReq.Headers.Add("x-api-key", apiKeyHeader);
+            if (!string.IsNullOrWhiteSpace(bearerToken))
+            {
+                fbReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+            }
+
+            using var fbResp = await _httpClient.SendAsync(fbReq, cancellationToken);
+            var fbBody = await fbResp.Content.ReadAsStringAsync(cancellationToken);
+            if (!fbResp.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException($"Mağaza ürünleri alınamadı (HTTP {(int)fbResp.StatusCode}): {fbBody}");
+            }
+            return fbBody;
+        }
+
+        return await response.Content.ReadAsStringAsync(cancellationToken);
+    }
+
     /// <summary>
     /// Etsy uygulama kimlik bilgilerini çözer ve gerekirse erişim token'ını yeniler.
     /// x-api-key header değeri ile opsiyonel Bearer token döndürür.

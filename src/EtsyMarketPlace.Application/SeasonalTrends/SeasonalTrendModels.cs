@@ -1,5 +1,7 @@
 namespace EtsyMarketPlace.Application.SeasonalTrends;
 
+using System.Linq;
+
 public sealed record SeasonalTrendItem(
     string Id,
     string Icon,
@@ -13,7 +15,17 @@ public sealed record SeasonalTrendItem(
     IReadOnlyList<string> WinningTagSuggestions,
     IReadOnlyList<string> KeyNiches,
     string ActionAdvice
-);
+)
+{
+    public string EventName => Title;
+    public string PeakMonth => DateRangeDisplay;
+    public string PrepStartDate => SeasonName;
+    public int DaysLeftToPeak => Status.Contains("ZİRVE") ? 7 : (Status.Contains("HAZIRLIK") ? 35 : 90);
+    public string StatusBadge => Status;
+    public string CategoryFocus => KeyNiches != null && KeyNiches.Count > 0 ? string.Join(", ", KeyNiches.Take(3)) : SeasonName;
+    public IReadOnlyList<string> WinningTags => WinningTagSuggestions;
+    public decimal EstimatedTrafficMultiplier => Priority == 2 ? 4.2m : (Priority == 1 ? 3.5m : 2.8m);
+}
 
 public sealed record TrendNicheAnalysisResult(
     string Keyword,

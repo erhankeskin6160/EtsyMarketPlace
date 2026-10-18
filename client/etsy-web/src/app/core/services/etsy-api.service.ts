@@ -795,6 +795,21 @@ export class EtsyApiService {
     });
   }
 
+  analyzeCompetitorShop(shopNameOrUrl: string, limit: number = 50, shopId?: string): Observable<CompetitorShopAnalysisDto> {
+    const sId = shopId || this.activeShopId();
+    return this.http.get<CompetitorShopAnalysisDto>(`${this.API_BASE}/api/etsy/market/competitor`, {
+      params: {
+        shopNameOrUrl: shopNameOrUrl.trim(),
+        limit: limit.toString(),
+        shopId: sId
+      }
+    });
+  }
+
+  getSeasonalTrends(): Observable<SeasonalTrendItemDto[]> {
+    return this.http.get<SeasonalTrendItemDto[]>(`${this.API_BASE}/api/etsy/market/seasonal-trends`);
+  }
+
   // ── System Health & Version ───────────────────────────────────────────────
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
@@ -963,3 +978,85 @@ export interface DailySeriesResponse {
   topProductRevenueUsd: number;
   orderCount: number;
 }
+
+export interface CompetitorShopProfileDto {
+  shopId: number;
+  shopName: string;
+  title: string;
+  shopUrl: string;
+  iconUrl: string;
+  totalSalesCount: number;
+  activeListingsCount: number;
+  reviewAverage: number;
+  reviewCount: number;
+  createdTimestamp: number;
+  shopAgeDays: number;
+  dailySalesVelocity: number;
+  estimatedMonthlySales: number;
+  estimatedMonthlyRevenueUsd: number;
+  averagePriceUsd: number;
+  minPriceUsd: number;
+  maxPriceUsd: number;
+  medianPriceUsd: number;
+  competitorStrengthScore: number;
+  averageLqsGrade: string;
+  bestsellerCount: number;
+}
+
+export interface CompetitorListingDto {
+  listingId: number;
+  rank: number;
+  title: string;
+  priceUsd: number;
+  currency: string;
+  favorites: number;
+  views: number;
+  quantity: number;
+  estimatedMonthlySales: number;
+  estimatedMonthlyRevenueUsd: number;
+  salesVelocityBadge: string;
+  lqsGrade: string;
+  lqsScore: number;
+  tagCount: number;
+  imageCount: number;
+  descriptionLength: number;
+  tags: string[];
+  materials: string[];
+  imageUrl: string;
+  imageUrls: string[];
+  listingUrl: string;
+  description: string;
+  createdTimestamp: number;
+}
+
+export interface CompetitorFrequencyItemDto {
+  term: string;
+  count: number;
+  usagePercentage: number;
+}
+
+export interface CompetitorShopAnalysisDto {
+  found: boolean;
+  errorMessage?: string | null;
+  shop: CompetitorShopProfileDto;
+  listings: CompetitorListingDto[];
+  topTags: CompetitorFrequencyItemDto[];
+  topTitleWords: CompetitorFrequencyItemDto[];
+  aiCompetitiveGapInsight: string;
+}
+
+export interface SeasonalTrendItemDto {
+  eventName: string;
+  icon: string;
+  peakMonth: string;
+  prepStartDate: string;
+  daysLeftToPeak: number;
+  statusBadge: string;
+  statusColorHex: string;
+  categoryFocus: string;
+  highDemandKeywords: string[];
+  winningTags: string[];
+  actionAdvice: string;
+  estimatedTrafficMultiplier: number;
+}
+

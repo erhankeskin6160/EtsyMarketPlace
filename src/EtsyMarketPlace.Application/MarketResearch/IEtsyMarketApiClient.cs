@@ -16,4 +16,20 @@ public interface IEtsyMarketApiClient
         string shopId,
         IReadOnlyList<long> listingIds,
         CancellationToken cancellationToken = default);
+
+    Task<string> GetShopByNameRawJsonAsync(
+        string authShopId,
+        string targetShopName,
+        CancellationToken cancellationToken = default) => Task.FromResult("{\"count\":0,\"results\":[]}");
+
+    Task<string> GetShopByIdRawJsonAsync(
+        string authShopId,
+        long targetShopId,
+        CancellationToken cancellationToken = default) => Task.FromResult("{}");
+
+    Task<string> GetShopActiveListingsRawJsonAsync(
+        string authShopId,
+        long targetShopId,
+        int limit = 50,
+        CancellationToken cancellationToken = default) => Task.FromResult("{\"count\":0,\"results\":[]}");
 }

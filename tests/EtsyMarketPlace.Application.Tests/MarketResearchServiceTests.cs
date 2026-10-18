@@ -19,6 +19,10 @@ public sealed class MarketResearchServiceTests
         public int BatchCallCount { get; private set; }
         public List<long> LastBatchIds { get; } = new();
 
+        public string? ShopByNameRawJson { get; set; }
+        public string? ShopByIdRawJson { get; set; }
+        public string? ShopActiveListingsRawJson { get; set; }
+
         public Task<string> SearchActiveListingsRawJsonAsync(string shopId, string keyword, int limit, CancellationToken ct)
         {
             SearchCallCount++;
@@ -37,6 +41,21 @@ public sealed class MarketResearchServiceTests
             }
 
             return Task.FromResult(BatchRawJson ?? """{ "results": [] }""");
+        }
+
+        public Task<string> GetShopByNameRawJsonAsync(string authShopId, string targetShopName, CancellationToken ct)
+        {
+            return Task.FromResult(ShopByNameRawJson ?? """{ "count": 0, "results": [] }""");
+        }
+
+        public Task<string> GetShopByIdRawJsonAsync(string authShopId, long targetShopId, CancellationToken ct)
+        {
+            return Task.FromResult(ShopByIdRawJson ?? """{}""");
+        }
+
+        public Task<string> GetShopActiveListingsRawJsonAsync(string authShopId, long targetShopId, int limit, CancellationToken ct)
+        {
+            return Task.FromResult(ShopActiveListingsRawJson ?? """{ "count": 0, "results": [] }""");
         }
     }
 
@@ -443,4 +462,118 @@ public sealed class MarketResearchServiceTests
         Assert.NotEmpty(report.ActionItems);
         Assert.Contains("WoodCraftStudio", report.ReportHtml);
     }
+
+    [Fact]
+    public async Task AnalyzeCompetitorShopAsync_ParsesUrlAndCalculatesEverBeeAndLqsMetrics()
+    {
+        var fakeMarketClient = new FakeEtsyMarketApiClient
+        {
+            ShopByNameRawJson = """
+            {
+                "count": 1,
+                "results": [
+                    {
+                        "shop_id": 998877,
+                        "shop_name": "ArtisanWoodDecor",
+                        "title": "Handcrafted Wooden Wall Art & Lamps",
+                        "url": "https://www.etsy.com/shop/ArtisanWoodDecor",
+                        "icon_url_fullxfull": "https://i.etsystatic.com/shop_icon.jpg",
+                        "transaction_sold_count": 3600,
+                        "listing_active_count": 42,
+                        "review_average": 4.92,
+                        "review_count": 680,
+                        "create_date": 1680000000
+                    }
+                ]
+            }
+            """,
+            ShopActiveListingsRawJson = """
+            {
+                "count": 2,
+                "results": [
+                    {
+                        "listing_id": 5001,
+                        "title": "Personalized Wooden Wall Art Geometric Mountain Decor Large Living Room Gift",
+                        "description": "Handcrafted wooden mountain wall art made from sustainable walnut and oak wood. Ready to hang with hardware included. Perfect housewarming gift for nature lovers and modern rustic homes.",
+                        "views": 1800,
+                        "num_favorers": 340,
+                        "quantity": 10,
+                        "price": { "amount": 8500, "divisor": 100, "currency_code": "USD" },
+                        "tags": ["wood wall art", "mountain decor", "housewarming gift", "rustic wall art", "walnut wood", "living room art", "geometric wood", "nature wall decor", "custom wood sign", "modern cabin", "anniversary gift", "large wall art", "handmade decor"],
+                        "images": [
+                            { "url_570xN": "https://i.etsystatic.com/l1.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/l2.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/l3.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/l4.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/l5.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/l6.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/l7.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/l8.jpg" }
+                        ],
+                        "url": "https://www.etsy.com/listing/5001"
+                    },
+                    {
+                        "listing_id": 5002,
+                        "title": "Small Wood Coaster",
+                        "description": "Simple coaster.",
+                        "views": 90,
+                        "num_favorers": 12,
+                        "quantity": 4,
+                        "price": { "amount": 1900, "divisor": 100, "currency_code": "USD" },
+                        "tags": ["wood coaster", "housewarming gift"],
+                        "images": [
+                            { "url_570xN": "https://i.etsystatic.com/l9.jpg" }
+                        ],
+                        "url": "https://www.etsy.com/listing/5002"
+                    }
+                ]
+            }
+            """
+        };
+
+        var service = new MarketResearchService(fakeMarketClient);
+        var result = await service.AnalyzeCompetitorShopAsync(
+            shopNameOrUrl: "https://www.etsy.com/shop/ArtisanWoodDecor?ref=shop-header-name",
+            limit: 50,
+            authShopId: "53236321"
+        );
+
+        Assert.True(result.Found);
+        Assert.Equal(998877, result.Shop.ShopId);
+        Assert.Equal("ArtisanWoodDecor", result.Shop.ShopName);
+        Assert.Equal(3600, result.Shop.TotalSalesCount);
+        Assert.True(result.Shop.EstimatedMonthlyRevenueUsd > 0);
+        Assert.True(result.Shop.CompetitorStrengthScore > 0);
+        Assert.Equal(2, result.Listings.Count);
+
+        var topItem = result.Listings[0];
+        Assert.Equal(5001, topItem.ListingId);
+        Assert.Equal(85.00m, topItem.PriceUsd);
+        Assert.True(topItem.EstimatedMonthlyRevenueUsd > result.Listings[1].EstimatedMonthlyRevenueUsd);
+        Assert.StartsWith("A", topItem.LqsGrade);
+
+        Assert.NotEmpty(result.TopTags);
+        Assert.Contains(result.TopTags, t => t.Term == "housewarming gift" && t.Count == 2);
+        Assert.NotEmpty(result.TopTitleWords);
+        Assert.Contains("ArtisanWoodDecor", result.AiCompetitiveGapInsight, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void GetSeasonalTrends_ReturnsSortedYearlyEvents()
+    {
+        var fakeMarketClient = new FakeEtsyMarketApiClient();
+        var service = new MarketResearchService(fakeMarketClient);
+
+        var trends = service.GetSeasonalTrends();
+
+        Assert.NotNull(trends);
+        Assert.True(trends.Count >= 6);
+        Assert.All(trends, t =>
+        {
+            Assert.False(string.IsNullOrWhiteSpace(t.EventName));
+            Assert.NotEmpty(t.HighDemandKeywords);
+            Assert.NotEmpty(t.WinningTags);
+        });
+    }
 }
+

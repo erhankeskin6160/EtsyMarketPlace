@@ -77,6 +77,16 @@ public sealed class MarketKeywordTrackingServiceTests
 
         public Task<MarketAiReportResultDto> GenerateAiMarketReportAsync(MarketAiReportCommand command, CancellationToken cancellationToken = default)
             => Task.FromResult(new MarketAiReportResultDto { Keyword = command.Keyword });
+
+        public Task<CompetitorShopAnalysisDto> AnalyzeCompetitorShopAsync(
+            string shopNameOrUrl,
+            int limit = 50,
+            string authShopId = "53236321",
+            CancellationToken cancellationToken = default)
+            => Task.FromResult(new CompetitorShopAnalysisDto());
+
+        public IReadOnlyList<EtsyMarketPlace.Application.SeasonalTrends.SeasonalTrendItem> GetSeasonalTrends(DateTime? referenceDate = null)
+            => Array.Empty<EtsyMarketPlace.Application.SeasonalTrends.SeasonalTrendItem>();
     }
 
     private static MarketSearchResponse BuildResponse(int total, decimal avgPrice, double avgFavorites, int opportunity, int sampleSize)

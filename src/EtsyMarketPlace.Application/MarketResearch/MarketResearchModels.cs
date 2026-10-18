@@ -119,3 +119,103 @@ public sealed class MarketAiReportResultDto
     public List<string> ActionItems { get; set; } = [];
     public string ReportHtml { get; set; } = string.Empty;
 }
+
+public sealed class CompetitorShopProfileDto
+{
+    public long ShopId { get; set; }
+    public string ShopName { get; set; } = string.Empty;
+    public string ShopUrl { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string IconUrl { get; set; } = string.Empty;
+    public int TotalSales { get; set; }
+    public int TotalSalesCount => TotalSales;
+    public int ReviewCount { get; set; }
+    public decimal ReviewAverage { get; set; }
+    public int ActiveListingCount { get; set; }
+    public int ActiveListingsCount => ActiveListingCount;
+    public DateTimeOffset? CreatedDate { get; set; }
+    public int ShopAgeDays => CreatedDate.HasValue
+        ? Math.Max(1, (int)Math.Round((DateTimeOffset.UtcNow - CreatedDate.Value).TotalDays))
+        : Math.Clamp(TotalSales * 2, 30, 1800);
+    public decimal DailySalesEstimate { get; set; }
+    public decimal DailySalesVelocity => DailySalesEstimate;
+    public int EstimatedMonthlySales => (int)Math.Round(DailySalesEstimate * 30m);
+    public decimal MonthlyRevenueEstimate { get; set; }
+    public decimal EstimatedMonthlyRevenueUsd => MonthlyRevenueEstimate;
+    public decimal AveragePriceUsd { get; set; }
+    public decimal MinPriceUsd { get; set; }
+    public decimal MaxPriceUsd { get; set; }
+    public decimal MedianPriceUsd { get; set; }
+    public int CompetitorStrengthScore { get; set; }
+    public string AverageLqsGrade { get; set; } = "B";
+    public int BestsellerCount { get; set; }
+}
+
+public sealed class CompetitorListingDto
+{
+    public long Id { get; set; }
+    public long ListingId => Id;
+    public int Rank { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public decimal PriceUsd { get; set; }
+    public string Currency { get; set; } = "USD";
+    public string ListingUrl { get; set; } = string.Empty;
+    public string ImageUrl { get; set; } = string.Empty;
+    public List<string> ImageUrls { get; set; } = [];
+    public int Favorites { get; set; }
+    public int Views { get; set; }
+    public int Quantity { get; set; }
+    public int SeoScore { get; set; }
+    public string LqsGrade { get; set; } = "B";
+    public int LqsScore { get; set; }
+    public string LqsExplanation { get; set; } = string.Empty;
+    public int EstimatedMonthlySales { get; set; }
+    public decimal EstimatedMonthlyRevenue { get; set; }
+    public decimal EstimatedMonthlyRevenueUsd => EstimatedMonthlyRevenue;
+    public string SalesBadge { get; set; } = string.Empty;
+    public string SalesVelocityBadge => string.IsNullOrWhiteSpace(SalesBadge) ? "📈 İstikrarlı" : SalesBadge;
+    public int TitleCharLength { get; set; }
+    public int MissingTagCount { get; set; }
+    public int MultiWordTagCount { get; set; }
+    public int TagCount => Tags?.Count ?? 0;
+    public int ImageCount => ImageUrls?.Count > 0 ? ImageUrls.Count : (string.IsNullOrWhiteSpace(ImageUrl) ? 0 : 1);
+    public int DescriptionLength => Description?.Length ?? 0;
+    public List<string> Tags { get; set; } = [];
+    public List<string> Materials { get; set; } = [];
+    public string Description { get; set; } = string.Empty;
+}
+
+public sealed class CompetitorFrequencyItemDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string Term => Name;
+    public int Count { get; set; }
+    public decimal Percentage { get; set; }
+    public decimal UsagePercentage => Percentage;
+    public bool IsLongTail => Name.Contains(' ');
+}
+
+public sealed class CompetitorShopAnalysisDto
+{
+    public bool Found => Shop.ShopId > 0 || Listings.Count > 0 || !string.IsNullOrWhiteSpace(Shop.ShopName);
+    public string? ErrorMessage { get; set; }
+    public CompetitorShopProfileDto Shop { get; set; } = new();
+    public List<CompetitorListingDto> Listings { get; set; } = [];
+    public List<CompetitorFrequencyItemDto> TopTags { get; set; } = [];
+    public List<CompetitorFrequencyItemDto> TopTitleTerms { get; set; } = [];
+    public List<CompetitorFrequencyItemDto> TopTitleWords => TopTitleTerms;
+    public decimal MinimumPrice { get; set; }
+    public decimal MaximumPrice { get; set; }
+    public decimal AveragePrice { get; set; }
+    public decimal MedianPrice { get; set; }
+    public string PriceCurrency { get; set; } = "USD";
+    public decimal AverageFavorites { get; set; }
+    public decimal AverageViews { get; set; }
+    public int AverageSeoScore { get; set; }
+    public int CompetitorStrengthScore { get; set; }
+    public decimal EstimatedDailySalesVelocity { get; set; }
+    public decimal EstimatedMonthlyTurnover { get; set; }
+    public string AiCompetitiveGapInsight { get; set; } = string.Empty;
+    public DateTimeOffset RetrievedAtUtc { get; set; } = DateTimeOffset.UtcNow;
+}
+

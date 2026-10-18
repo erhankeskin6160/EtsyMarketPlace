@@ -7,9 +7,11 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.ListingOptimization;
+using EtsyMarketPlace.Application.SeasonalTrends;
 
 public sealed class MarketResearchService : IMarketResearchService
 {
@@ -762,5 +764,522 @@ public sealed class MarketResearchService : IMarketResearchService
         }
 
         return sb.ToString();
+    }
+
+    private static readonly HashSet<string> CompetitorStopWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "and", "the", "for", "with", "from", "your", "you", "this", "that", "a", "an", "of", "to", "in", "on", "or",
+        "ve", "ile", "icin", "bir", "bu", "da", "de", "veya"
+    };
+
+    public IReadOnlyList<SeasonalTrendItem> GetSeasonalTrends(DateTime? referenceDate = null)
+    {
+        var trendService = new SeasonalTrendService();
+        return trendService.GetActiveSeasonalTrends(referenceDate);
+    }
+
+    public async Task<CompetitorShopAnalysisDto> AnalyzeCompetitorShopAsync(
+        string shopNameOrUrl,
+        int limit = 50,
+        string authShopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        var clean = ExtractCompetitorShopIdentifier(shopNameOrUrl);
+        if (string.IsNullOrWhiteSpace(clean))
+        {
+            throw new ArgumentException("Lütfen geçerli bir rakip mağaza adı veya Etsy mağaza linki girin.");
+        }
+
+        int clampedLimit = Math.Clamp(limit, 1, 100);
+        CompetitorShopProfileDto? profile = null;
+
+        // 1. Mağaza profili sorgulama (ID veya İsim üzerinden)
+        if (long.TryParse(clean, out var parsedShopId) && parsedShopId > 0)
+        {
+            try
+            {
+                var rawShop = await _apiClient.GetShopByIdRawJsonAsync(authShopId, parsedShopId, cancellationToken);
+                profile = ParseShopProfileFromJson(rawShop, parsedShopId, clean);
+            }
+            catch { }
+        }
+        else
+        {
+            try
+            {
+                var rawSearch = await _apiClient.GetShopByNameRawJsonAsync(authShopId, clean, cancellationToken);
+                profile = ParseShopProfileFromJson(rawSearch, 0, clean);
+            }
+            catch { }
+        }
+
+        var rawListings = new List<MarketListingItemDto>();
+
+        // 2. Mağaza bulunduysa doğrudan mağazanın aktif ürünlerini çek
+        if (profile != null && profile.ShopId > 0)
+        {
+            try
+            {
+                var rawListingsJson = await _apiClient.GetShopActiveListingsRawJsonAsync(authShopId, profile.ShopId, clampedLimit, cancellationToken);
+                rawListings = ParseShopListingsJson(rawListingsJson, profile);
+            }
+            catch { }
+        }
+
+        // 3. Eğer mağaza adı bulunamadıysa veya aktif ürün listesi boş döndüyse, Pazar Arama üzerinden eşleşen mağazayı yakala
+        if (rawListings.Count == 0)
+        {
+            var fallbackSearch = await SearchMarketAsync(new MarketSearchQuery(clean, clampedLimit, "market_score", authShopId), cancellationToken);
+            if (fallbackSearch.Listings.Count > 0)
+            {
+                var matchedGroup = fallbackSearch.Listings
+                    .GroupBy(l => l.ShopName, StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(g => g.Key.Equals(clean, StringComparison.OrdinalIgnoreCase) ? 1000 : g.Count())
+                    .First();
+
+                var firstItem = matchedGroup.First();
+                profile ??= new CompetitorShopProfileDto
+                {
+                    ShopId = 0,
+                    ShopName = !string.IsNullOrWhiteSpace(firstItem.ShopName) ? firstItem.ShopName : clean,
+                    ShopUrl = !string.IsNullOrWhiteSpace(firstItem.ShopUrl) ? firstItem.ShopUrl : $"https://www.etsy.com/shop/{clean}",
+                    Title = $"{firstItem.ShopName} Etsy Store",
+                    TotalSales = firstItem.ShopSales,
+                    ReviewCount = firstItem.ReviewCount,
+                    ReviewAverage = firstItem.ReviewAverage > 0 ? firstItem.ReviewAverage : 4.9m,
+                    ActiveListingCount = matchedGroup.Count()
+                };
+
+                rawListings = matchedGroup.Key.Equals(clean, StringComparison.OrdinalIgnoreCase)
+                    ? matchedGroup.ToList()
+                    : fallbackSearch.Listings;
+            }
+        }
+
+        profile ??= new CompetitorShopProfileDto
+        {
+            ShopName = clean,
+            ShopUrl = $"https://www.etsy.com/shop/{clean}",
+            Title = clean
+        };
+
+        if (profile.ActiveListingCount <= 0)
+        {
+            profile.ActiveListingCount = rawListings.Count;
+        }
+
+        // 4. Fiyat, Günlük Satış Hızı ve Aylık Ciro Hesaplamaları
+        var priced = rawListings.Where(l => l.PriceUsd > 0).Select(l => l.PriceUsd).OrderBy(p => p).ToList();
+        decimal minPrice = priced.Count > 0 ? priced[0] : 0m;
+        decimal maxPrice = priced.Count > 0 ? priced[^1] : 0m;
+        decimal avgPrice = priced.Count > 0 ? Math.Round(priced.Average(), 2) : 0m;
+        decimal medianPrice = priced.Count > 0
+            ? (priced.Count % 2 == 0 ? Math.Round((priced[priced.Count / 2 - 1] + priced[priced.Count / 2]) / 2m, 2) : priced[priced.Count / 2])
+            : 0m;
+
+        decimal dailyVelocity = CalculateCompetitorDailySalesVelocity(profile, rawListings);
+        decimal monthlyTurnover = Math.Round(dailyVelocity * 30m * (avgPrice > 0 ? avgPrice : 25m), 2);
+        profile.DailySalesEstimate = dailyVelocity;
+        profile.MonthlyRevenueEstimate = monthlyTurnover;
+
+        // 5. Ürün Bazlı EverBee Satış/Ciro & eRank LQS Hesaplaması
+        decimal totalWeight = rawListings.Sum(l => (l.Favorites * 2.5m) + (l.Views * 0.08m) + 3m);
+        decimal shopMonthlySales = Math.Max(5m, dailyVelocity * 30m);
+
+        var competitorListings = new List<CompetitorListingDto>(rawListings.Count);
+        for (int i = 0; i < rawListings.Count; i++)
+        {
+            var item = rawListings[i];
+            decimal itemWeight = (item.Favorites * 2.5m) + (item.Views * 0.08m) + 3m;
+            decimal share = totalWeight > 0 ? itemWeight / totalWeight : (rawListings.Count > 0 ? 1m / rawListings.Count : 0m);
+            int estMonthlySales = item.PriceUsd > 0
+                ? Math.Clamp((int)Math.Round(shopMonthlySales * share), 0, (int)Math.Ceiling(shopMonthlySales))
+                : 0;
+            decimal estMonthlyRev = Math.Round(estMonthlySales * item.PriceUsd, 2);
+
+            string badge = estMonthlySales >= 15 || item.Favorites >= 150
+                ? "🔥 Best Seller"
+                : (estMonthlySales >= 5 || item.Favorites >= 30 ? "⭐ Hot Item" : "");
+
+            var (grade, lqsScore, explanation) = CalculateCompetitorLqs(item);
+            int multiWordTags = item.Tags.Count(t => t.Trim().Contains(' '));
+
+            competitorListings.Add(new CompetitorListingDto
+            {
+                Id = item.Id,
+                Rank = i + 1,
+                Title = item.Title,
+                PriceUsd = item.PriceUsd,
+                Currency = "USD",
+                ListingUrl = item.ListingUrl,
+                ImageUrl = item.ImageUrl,
+                ImageUrls = item.ImageUrls,
+                Favorites = item.Favorites,
+                Views = item.Views,
+                Quantity = item.Quantity,
+                SeoScore = item.SeoScore,
+                LqsGrade = grade,
+                LqsScore = lqsScore,
+                LqsExplanation = explanation,
+                EstimatedMonthlySales = estMonthlySales,
+                EstimatedMonthlyRevenue = estMonthlyRev,
+                SalesBadge = badge,
+                TitleCharLength = item.Title?.Length ?? 0,
+                MissingTagCount = Math.Max(0, 13 - item.Tags.Count),
+                MultiWordTagCount = multiWordTags,
+                Tags = item.Tags,
+                Materials = item.Materials,
+                Description = item.Description
+            });
+        }
+
+        // En yüksek tahmini aylık ciroya göre sırala
+        competitorListings = competitorListings
+            .OrderByDescending(l => l.EstimatedMonthlyRevenue)
+            .ThenByDescending(l => l.Favorites)
+            .Select((l, idx) => { l.Rank = idx + 1; return l; })
+            .ToList();
+
+        var topTags = BuildCompetitorFrequency(competitorListings.SelectMany(l => l.Tags), competitorListings.Count, 25);
+        var topTerms = BuildCompetitorFrequency(
+            competitorListings.SelectMany(l => TokenizeTitleWords(l.Title).Distinct(StringComparer.OrdinalIgnoreCase)),
+            competitorListings.Count,
+            25);
+
+        decimal avgFav = competitorListings.Count > 0 ? Math.Round((decimal)competitorListings.Average(l => l.Favorites), 1) : 0m;
+        decimal avgViews = competitorListings.Count > 0 ? Math.Round((decimal)competitorListings.Average(l => l.Views), 1) : 0m;
+        int avgSeo = competitorListings.Count > 0 ? (int)Math.Round(competitorListings.Average(l => l.LqsScore)) : 0;
+        int strengthScore = CalculateCompetitorStrength(profile, competitorListings, avgSeo);
+
+        profile.AveragePriceUsd = avgPrice;
+        profile.MinPriceUsd = minPrice;
+        profile.MaxPriceUsd = maxPrice;
+        profile.MedianPriceUsd = medianPrice;
+        profile.CompetitorStrengthScore = strengthScore;
+        profile.AverageLqsGrade = avgSeo >= 90 ? "A+" : (avgSeo >= 80 ? "A" : (avgSeo >= 68 ? "B" : (avgSeo >= 50 ? "C" : "D")));
+        profile.BestsellerCount = competitorListings.Count(l => l.SalesBadge.Contains("Best Seller", StringComparison.OrdinalIgnoreCase));
+
+        return new CompetitorShopAnalysisDto
+        {
+            Shop = profile,
+            Listings = competitorListings,
+            TopTags = topTags,
+            TopTitleTerms = topTerms,
+            MinimumPrice = minPrice,
+            MaximumPrice = maxPrice,
+            AveragePrice = avgPrice,
+            MedianPrice = medianPrice,
+            PriceCurrency = "USD",
+            AverageFavorites = avgFav,
+            AverageViews = avgViews,
+            AverageSeoScore = avgSeo,
+            CompetitorStrengthScore = strengthScore,
+            EstimatedDailySalesVelocity = dailyVelocity,
+            EstimatedMonthlyTurnover = monthlyTurnover,
+            AiCompetitiveGapInsight = BuildCompetitorGapInsight(profile, competitorListings, avgPrice),
+            RetrievedAtUtc = DateTimeOffset.UtcNow
+        };
+    }
+
+    private static string ExtractCompetitorShopIdentifier(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return string.Empty;
+        string trimmed = input.Trim();
+        var match = Regex.Match(trimmed, @"etsy\.com/(?:[a-z]{2}(?:-[a-z]{2})?/)?shop/([^/?#]+)", RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            return match.Groups[1].Value.Trim();
+        }
+        return trimmed.Trim('/');
+    }
+
+    private static CompetitorShopProfileDto? ParseShopProfileFromJson(string rawJson, long fallbackId, string fallbackName)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson)) return null;
+        using var doc = JsonDocument.Parse(rawJson);
+        var root = doc.RootElement;
+        var shopElem = root;
+
+        if (root.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+        {
+            if (results.GetArrayLength() == 0) return null;
+            shopElem = results[0];
+        }
+
+        long shopId = shopElem.TryGetProperty("shop_id", out var sid) && sid.TryGetInt64(out var idVal) ? idVal : fallbackId;
+        if (shopId <= 0) return null;
+
+        string shopName = shopElem.TryGetProperty("shop_name", out var sn) && !string.IsNullOrWhiteSpace(sn.GetString())
+            ? sn.GetString()!
+            : fallbackName;
+        string title = shopElem.TryGetProperty("title", out var tl) && !string.IsNullOrWhiteSpace(tl.GetString())
+            ? tl.GetString()!
+            : shopName;
+        int totalSales = shopElem.TryGetProperty("transaction_sold_count", out var sc) && sc.TryGetInt32(out var scVal) ? scVal : 0;
+        int reviewCount = shopElem.TryGetProperty("review_count", out var rc) && rc.TryGetInt32(out var rcVal) ? rcVal : 0;
+        decimal reviewAvg = 5.0m;
+        if (shopElem.TryGetProperty("review_average", out var ra))
+        {
+            reviewAvg = ra.ValueKind == JsonValueKind.Number
+                ? ra.GetDecimal()
+                : (decimal.TryParse(ra.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedRa) ? parsedRa : 5.0m);
+        }
+        int activeCount = shopElem.TryGetProperty("listing_active_count", out var ac) && ac.TryGetInt32(out var acVal) ? acVal : 0;
+
+        DateTimeOffset? createdDate = null;
+        if (shopElem.TryGetProperty("create_date", out var cd) && cd.TryGetInt64(out var epoch) && epoch > 0)
+        {
+            createdDate = DateTimeOffset.FromUnixTimeSeconds(epoch);
+        }
+
+        return new CompetitorShopProfileDto
+        {
+            ShopId = shopId,
+            ShopName = shopName,
+            ShopUrl = $"https://www.etsy.com/shop/{shopName}",
+            Title = title,
+            TotalSales = totalSales,
+            ReviewCount = reviewCount,
+            ReviewAverage = Math.Round(reviewAvg, 2),
+            ActiveListingCount = activeCount,
+            CreatedDate = createdDate
+        };
+    }
+
+    private static List<MarketListingItemDto> ParseShopListingsJson(string rawJson, CompetitorShopProfileDto profile)
+    {
+        var list = new List<MarketListingItemDto>();
+        if (string.IsNullOrWhiteSpace(rawJson)) return list;
+
+        using var doc = JsonDocument.Parse(rawJson);
+        if (!doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        {
+            return list;
+        }
+
+        int rank = 1;
+        foreach (var item in results.EnumerateArray())
+        {
+            long listingId = item.TryGetProperty("listing_id", out var lid) && lid.TryGetInt64(out var idVal) ? idVal : 0;
+            string title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? "") : "";
+            string description = item.TryGetProperty("description", out var d) ? (d.GetString() ?? "") : "";
+            int views = item.TryGetProperty("views", out var v) && v.TryGetInt32(out var vVal) ? vVal : 0;
+            int favorites = 0;
+            if (item.TryGetProperty("num_favorers", out var f))
+            {
+                favorites = f.ValueKind == JsonValueKind.Number ? f.GetInt32() : (int.TryParse(f.GetString(), out var nf) ? nf : 0);
+            }
+            int quantity = item.TryGetProperty("quantity", out var q) && q.TryGetInt32(out var qVal) ? qVal : 0;
+
+            decimal priceUsd = 0m;
+            if (item.TryGetProperty("price", out var pObj) && pObj.ValueKind == JsonValueKind.Object)
+            {
+                decimal rawAmount = 0m;
+                if (pObj.TryGetProperty("amount", out var aProp) && pObj.TryGetProperty("divisor", out var divProp))
+                {
+                    int divisor = divProp.GetInt32();
+                    if (divisor > 0) rawAmount = aProp.GetInt64() / (decimal)divisor;
+                }
+                string curr = pObj.TryGetProperty("currency_code", out var cProp) ? (cProp.GetString() ?? "USD") : "USD";
+                priceUsd = MarketCurrencyConverter.TryConvertToUsd(rawAmount, curr) ?? rawAmount;
+            }
+
+            var tags = new List<string>();
+            if (item.TryGetProperty("tags", out var tagsArr) && tagsArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var tg in tagsArr.EnumerateArray())
+                {
+                    var s = tg.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) tags.Add(s.Trim());
+                }
+            }
+
+            var materials = new List<string>();
+            if (item.TryGetProperty("materials", out var matArr) && matArr.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var mt in matArr.EnumerateArray())
+                {
+                    var s = mt.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) materials.Add(s.Trim());
+                }
+            }
+
+            var imageUrls = new List<string>();
+            var imgProp = (item.TryGetProperty("Images", out var p1) && p1.ValueKind == JsonValueKind.Array) ? p1
+                : ((item.TryGetProperty("images", out var p2) && p2.ValueKind == JsonValueKind.Array) ? p2 : default);
+            if (imgProp.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var img in imgProp.EnumerateArray())
+                {
+                    string? imgUrl = null;
+                    if (img.TryGetProperty("url_570xN", out var u570)) imgUrl = u570.GetString();
+                    else if (img.TryGetProperty("url_fullxfull", out var uFull)) imgUrl = uFull.GetString();
+                    else if (img.TryGetProperty("url_170x135", out var u170)) imgUrl = u170.GetString();
+                    if (!string.IsNullOrWhiteSpace(imgUrl)) imageUrls.Add(imgUrl.Trim());
+                }
+            }
+
+            list.Add(new MarketListingItemDto
+            {
+                Id = listingId,
+                ListingRank = rank++,
+                Title = title,
+                Description = description,
+                PriceUsd = Math.Round(priceUsd, 2),
+                Currency = "USD",
+                ShopName = profile.ShopName,
+                ShopSales = profile.TotalSales,
+                ShopUrl = profile.ShopUrl,
+                ListingUrl = listingId > 0 ? $"https://www.etsy.com/listing/{listingId}" : profile.ShopUrl,
+                Favorites = favorites,
+                Views = views,
+                Quantity = quantity,
+                Tags = tags,
+                Materials = materials,
+                ImageUrl = imageUrls.FirstOrDefault() ?? "",
+                ImageUrls = imageUrls,
+                ReviewCount = profile.ReviewCount,
+                ReviewAverage = profile.ReviewAverage
+            });
+        }
+
+        return list;
+    }
+
+    private static decimal CalculateCompetitorDailySalesVelocity(CompetitorShopProfileDto shop, List<MarketListingItemDto> listings)
+    {
+        if (shop.TotalSales > 0)
+        {
+            if (shop.CreatedDate.HasValue)
+            {
+                var days = Math.Max(30.0, (DateTimeOffset.UtcNow - shop.CreatedDate.Value).TotalDays);
+                return Math.Round((decimal)shop.TotalSales / (decimal)days, 1);
+            }
+            var estimatedDays = Math.Clamp(shop.TotalSales * 2.5, 90.0, 1800.0);
+            return Math.Round((decimal)shop.TotalSales / (decimal)estimatedDays, 1);
+        }
+
+        if (listings.Count > 0)
+        {
+            var estMonthlyFromFavs = listings.Sum(l => Math.Max(1, l.Favorites / 8));
+            return Math.Round(estMonthlyFromFavs / 30m, 1);
+        }
+
+        return 0m;
+    }
+
+    private static (string Grade, int Score, string Explanation) CalculateCompetitorLqs(MarketListingItemDto listing)
+    {
+        int score = 0;
+        int titleLen = listing.Title?.Length ?? 0;
+        if (titleLen is >= 115 and <= 140) score += 35;
+        else if (titleLen is >= 85 and < 115) score += 25;
+        else if (titleLen is >= 50 and < 85) score += 15;
+        else score += 5;
+
+        int tagCount = listing.Tags?.Count ?? 0;
+        if (tagCount >= 13) score += 35;
+        else if (tagCount >= 10) score += 25;
+        else if (tagCount >= 6) score += 15;
+        else score += 5;
+
+        if (listing.Tags != null && listing.Tags.Count > 0)
+        {
+            int multiWord = listing.Tags.Count(t => t.Trim().Contains(' '));
+            decimal ratio = (decimal)multiWord / listing.Tags.Count;
+            score += (int)Math.Round(ratio * 20m);
+        }
+
+        if (listing.Favorites > 10 || listing.Views > 50) score += 10;
+        else if (listing.Favorites > 0 || listing.Views > 0) score += 5;
+
+        score = Math.Clamp(score, 0, 100);
+        if (score >= 90) return ("A+", score, "Mükemmel SEO ve optimizasyon. Başlık ve 13 etiket eksiksiz.");
+        if (score >= 80) return ("A", score, "Güçlü listeleme. Organik sıralamada üst sıralarda yer alır.");
+        if (score >= 68) return ("B", score, "İyi. Başlık uzunluğu veya 2-3 kelimelik long-tail etiket oranı artırılabilir.");
+        if (score >= 50) return ("C", score, "Geliştirilmeli (Zayıf Karın). Eksik etiket veya kısa başlık var; kolay geçilebilir!");
+        return ("D", score, "Kritik SEO Eksikleri. Bu üründen ilham alıp 13 altın etiketle hemen öne geçebilirsiniz.");
+    }
+
+    private static int CalculateCompetitorStrength(CompetitorShopProfileDto shop, List<CompetitorListingDto> listings, int avgSeo)
+    {
+        if (listings.Count == 0) return 0;
+        decimal sales = Math.Min(25m, (decimal)Math.Log10(Math.Max(1, shop.TotalSales) + 1) * 6m);
+        decimal reviews = Math.Min(15m, shop.ReviewAverage * 2m + (decimal)Math.Log10(Math.Max(1, shop.ReviewCount) + 1) * 2m);
+        decimal favorites = Math.Min(20m, (decimal)Math.Log10(Math.Max(1.0, listings.Average(i => i.Favorites)) + 1) * 8m);
+        decimal views = Math.Min(15m, (decimal)Math.Log10(Math.Max(1.0, listings.Average(i => i.Views)) + 1) * 5m);
+        decimal seo = avgSeo * 0.25m;
+        return (int)Math.Round(Math.Clamp(sales + reviews + favorites + views + seo, 0m, 100m));
+    }
+
+    private static List<CompetitorFrequencyItemDto> BuildCompetitorFrequency(IEnumerable<string> values, int listingCount, int limit)
+    {
+        return values
+            .Select(v => v.Trim())
+            .Where(v => v.Length > 1)
+            .GroupBy(v => v, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new CompetitorFrequencyItemDto
+            {
+                Name = g.Key.ToLowerInvariant(),
+                Count = g.Count(),
+                Percentage = listingCount > 0 ? Math.Round(g.Count() * 100m / listingCount, 1) : 0m
+            })
+            .OrderByDescending(i => i.Count)
+            .ThenBy(i => i.Name, StringComparer.OrdinalIgnoreCase)
+            .Take(limit)
+            .ToList();
+    }
+
+    private static IEnumerable<string> TokenizeTitleWords(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) yield break;
+        foreach (Match m in Regex.Matches(title.ToLowerInvariant(), @"[\p{L}\p{N}]+"))
+        {
+            if (m.Value.Length > 2 && !CompetitorStopWords.Contains(m.Value))
+            {
+                yield return m.Value;
+            }
+        }
+    }
+
+    private static string BuildCompetitorGapInsight(CompetitorShopProfileDto shop, List<CompetitorListingDto> listings, decimal avgPrice)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"🎯 RAKİP AÇIĞI VE STRATEJİK DEĞERLENDİRME: {shop.ShopName.ToUpperInvariant()}");
+        sb.AppendLine(new string('─', 56));
+
+        if (avgPrice > 0)
+        {
+            sb.AppendLine($"• Fiyat Konumlandırması: Rakibin ortalama ürün fiyatı ${avgPrice:0.00}. Benzer ürünleri ${Math.Round(avgPrice * 0.88m, 2):0.00} giriş fiyatıyla veya ikili set (bundle) olarak sunarak dönüşüm oranını yakalayabilirsiniz.");
+        }
+
+        if (listings.Count > 0)
+        {
+            int lowLqsCount = listings.Count(l => l.LqsScore < 68);
+            int missingTagsCount = listings.Count(l => l.MissingTagCount > 0);
+            int shortTitleCount = listings.Count(l => l.TitleCharLength < 90);
+
+            if (lowLqsCount > 0 || missingTagsCount > 0 || shortTitleCount > 0)
+            {
+                sb.AppendLine($"• SEO Zafiyeti (Fırsat Alanı): İncelenen {listings.Count} üründen {missingTagsCount} tanesinde 13 etiket eksik, {shortTitleCount} tanesinde başlık 90 karakterden kısa ve {lowLqsCount} tanesi C/D kalite notunda. 140 karakterlik başlık ve 13 long-tail etiket kuralıyla bu rakibin trafiğini organik aramada kesebilirsiniz.");
+            }
+            else
+            {
+                sb.AppendLine("• SEO Gücü: Rakibin başlık ve etiket disiplini güçlü. Öne geçmek için doğrudan niş hediye ve kişiselleştirme (custom/personalized) long-tail etiketlerine odaklanın.");
+            }
+
+            int uniqueTags = listings.SelectMany(l => l.Tags).Distinct(StringComparer.OrdinalIgnoreCase).Count();
+            if (uniqueTags < listings.Count * 6)
+            {
+                sb.AppendLine($"• Etiket Tekrarı: Rakip tüm mağazasında yalnızca {uniqueTags} farklı etiket döndürüyor. Farklı alıcı persona ve sezon (Q4 / Hediye) etiketleri kullanarak rakibin ulaşamadığı aramaları yakalayabilirsiniz.");
+            }
+        }
+
+        if (shop.ReviewCount > 0)
+        {
+            sb.AppendLine($"• Sosyal Kanıt & Güven: {shop.ReviewCount:N0} yorum ve {shop.ReviewAverage:0.0} yıldız ortalamasına sahip. Hızlı kargo (Express DDP) ve hediye paketi seçeneğini kapak görselinde vurgulayarak fark yaratabilirsiniz.");
+        }
+
+        return sb.ToString().TrimEnd();
     }
 }

@@ -114,6 +114,36 @@ public class EtsyMarketController : BaseApiController
         var report = await _marketResearchService.GenerateAiMarketReportAsync(command, cancellationToken);
         return Ok(report);
     }
+
+    [HttpGet("competitor")]
+    [EndpointSummary("Etsy v3 Rakip Mağaza Analizi (EverBee Satış/Ciro Tahmini, eRank LQS Denetimi ve AI Strateji)")]
+    public async Task<IActionResult> AnalyzeCompetitorShop(
+        [FromQuery] string shopNameOrUrl = "",
+        [FromQuery] int limit = 50,
+        [FromQuery] string shopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopNameOrUrl))
+        {
+            return BadRequest(new { error = "Rakip mağaza adı veya Etsy mağaza URL'si gereklidir." });
+        }
+
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var result = await _marketResearchService.AnalyzeCompetitorShopAsync(
+            shopNameOrUrl: shopNameOrUrl.Trim(),
+            limit: limit,
+            authShopId: resolvedShopId,
+            cancellationToken: cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("seasonal-trends")]
+    [EndpointSummary("Yıllık E-Ticaret ve Etsy Dönemsel Trend / Q4 Takvim Radarı")]
+    public IActionResult GetSeasonalTrends()
+    {
+        var trends = _marketResearchService.GetSeasonalTrends();
+        return Ok(trends);
+    }
 }
 
 public sealed record TrackMarketKeywordRequest(string Keyword);
