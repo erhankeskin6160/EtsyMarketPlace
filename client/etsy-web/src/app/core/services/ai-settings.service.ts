@@ -49,6 +49,8 @@ export interface ClonedMarketListing {
   description?: string;
   category?: string;
   imageUrl?: string;
+  imageUrls?: string[];
+  materials?: string[];
   shopName?: string;
   seoScore?: number;
   marketScore?: number;

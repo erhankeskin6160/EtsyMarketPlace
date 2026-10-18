@@ -575,5 +575,82 @@ public sealed class MarketResearchServiceTests
             Assert.NotEmpty(t.WinningTags);
         });
     }
+
+    [Fact]
+    public async Task AnalyzeCompetitorShopAsync_EnrichesListingsWithBatchImagesAndMaterials()
+    {
+        var fakeMarketClient = new FakeEtsyMarketApiClient
+        {
+            ShopByNameRawJson = """
+            {
+                "count": 1,
+                "results": [
+                    {
+                        "shop_id": 445566,
+                        "shop_name": "LampCraftStudio",
+                        "title": "Modern Wood & Resin Lamps",
+                        "url": "https://www.etsy.com/shop/LampCraftStudio",
+                        "transaction_sold_count": 1200,
+                        "listing_active_count": 15,
+                        "review_average": 4.9,
+                        "review_count": 210,
+                        "create_date": 1680000000
+                    }
+                ]
+            }
+            """,
+            ShopActiveListingsRawJson = """
+            {
+                "count": 1,
+                "results": [
+                    {
+                        "listing_id": 7001,
+                        "title": "Custom Resin Night Light Wooden Base Lamp",
+                        "views": 640,
+                        "num_favorers": 95,
+                        "quantity": 5,
+                        "price": { "amount": 4990, "divisor": 100, "currency_code": "USD" },
+                        "tags": ["resin lamp", "night light", "wood lamp"]
+                    }
+                ]
+            }
+            """,
+            BatchRawJson = """
+            {
+                "results": [
+                    {
+                        "listing_id": 7001,
+                        "url": "https://www.etsy.com/listing/7001/custom-resin-night-light",
+                        "description": "Full detailed description from batch endpoint.",
+                        "materials": ["Walnut Wood", "Epoxy Resin", "LED Strip"],
+                        "Images": [
+                            { "url_fullxfull": "https://i.etsystatic.com/batch_full_1.jpg", "url_570xN": "https://i.etsystatic.com/batch_570_1.jpg" },
+                            { "url_fullxfull": "https://i.etsystatic.com/batch_full_2.jpg" },
+                            { "url_570xN": "https://i.etsystatic.com/batch_570_3.jpg" }
+                        ]
+                    }
+                ]
+            }
+            """
+        };
+
+        var service = new MarketResearchService(fakeMarketClient);
+        var result = await service.AnalyzeCompetitorShopAsync(
+            shopNameOrUrl: "LampCraftStudio",
+            limit: 25,
+            authShopId: "53236321"
+        );
+
+        Assert.True(result.Found);
+        Assert.Equal(1, fakeMarketClient.BatchCallCount);
+        var item = Assert.Single(result.Listings);
+        Assert.Equal(7001, item.ListingId);
+        Assert.Equal("https://i.etsystatic.com/batch_full_1.jpg", item.ImageUrl);
+        Assert.Equal(3, item.ImageUrls.Count);
+        Assert.Equal("https://www.etsy.com/listing/7001/custom-resin-night-light", item.ListingUrl);
+        Assert.Equal("Full detailed description from batch endpoint.", item.Description);
+        Assert.Equal(3, item.Materials.Count);
+        Assert.Contains("Epoxy Resin", item.Materials);
+    }
 }
 

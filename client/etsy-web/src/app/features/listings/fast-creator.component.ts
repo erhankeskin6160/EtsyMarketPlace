@@ -127,15 +127,24 @@ export class FastCreatorComponent implements OnInit {
       this.tags = [...cloned.tags];
       if (cloned.description) this.description = cloned.description;
       if (cloned.category) this.selectedCategory = cloned.category;
-      if (cloned.imageUrl) {
-        this.galleryImages = [{
-          id: 'cloned-1',
-          url: cloned.imageUrl,
-          isCover: true,
-          name: 'Klonlanan Kapak Görseli'
-        }];
+      if (cloned.materials && cloned.materials.length > 0) {
+        this.materials = cloned.materials.join(', ');
       }
-      this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 48)}..." (${cloned.shopName}) - Fiyat: $${cloned.priceUsd}`;
+
+      const allUrls = (cloned.imageUrls && cloned.imageUrls.length > 0)
+        ? cloned.imageUrls.filter(Boolean).slice(0, 10)
+        : (cloned.imageUrl ? [cloned.imageUrl] : []);
+
+      if (allUrls.length > 0) {
+        this.galleryImages = allUrls.map((url, idx) => ({
+          id: `cloned-${idx + 1}`,
+          url,
+          isCover: idx === 0,
+          name: idx === 0 ? 'Klonlanan Kapak Görseli' : `Klonlanan Görsel #${idx + 1}`
+        }));
+      }
+
+      this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 48)}..." (${cloned.shopName}) — ${allUrls.length} Fotoğraf & ${this.tags.length} Etiket Aktarıldı`;
       this.updatePriceTry();
     }
 

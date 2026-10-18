@@ -658,6 +658,9 @@ export class MarketResearchComponent implements OnInit {
       tags: [...this.selectedItem.tags],
       description: this.selectedItem.description,
       imageUrl: this.selectedItem.imageUrl,
+      imageUrls: (this.selectedItem.imageUrls && this.selectedItem.imageUrls.length > 0)
+        ? [...this.selectedItem.imageUrls]
+        : (this.selectedItem.imageUrl ? [this.selectedItem.imageUrl] : []),
       shopName: this.selectedItem.shopName,
       seoScore: this.selectedItem.seoScore,
       marketScore: this.selectedItem.marketScore
@@ -1178,6 +1181,9 @@ export class MarketResearchComponent implements OnInit {
       tags: [...selected],
       description: base.description,
       imageUrl: base.imageUrl,
+      imageUrls: (base.imageUrls && base.imageUrls.length > 0)
+        ? [...base.imageUrls]
+        : (base.imageUrl ? [base.imageUrl] : []),
       shopName: base.shopName,
       seoScore: base.seoScore,
       marketScore: base.marketScore

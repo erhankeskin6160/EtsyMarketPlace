@@ -169,7 +169,7 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
     {
         var (apiKeyHeader, bearerToken) = await ResolveAuthHeadersAsync(authShopId, cancellationToken);
         var clamped = Math.Clamp(limit, 1, 100);
-        var url = $"https://api.etsy.com/v3/application/shops/{targetShopId}/listings/active?limit={clamped}&sort_on=created&sort_order=desc&includes=Images";
+        var url = $"https://api.etsy.com/v3/application/shops/{targetShopId}/listings/active?limit={clamped}&sort_on=created&sort_order=desc";
 
         using var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Add("x-api-key", apiKeyHeader);
@@ -179,26 +179,13 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         }
 
         using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            var fallbackUrl = $"https://api.etsy.com/v3/application/shops/{targetShopId}/listings/active?limit={clamped}&sort_on=created&sort_order=desc";
-            using var fbReq = new HttpRequestMessage(HttpMethod.Get, fallbackUrl);
-            fbReq.Headers.Add("x-api-key", apiKeyHeader);
-            if (!string.IsNullOrWhiteSpace(bearerToken))
-            {
-                fbReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
-            }
-
-            using var fbResp = await _httpClient.SendAsync(fbReq, cancellationToken);
-            var fbBody = await fbResp.Content.ReadAsStringAsync(cancellationToken);
-            if (!fbResp.IsSuccessStatusCode)
-            {
-                throw new InvalidOperationException($"Mağaza ürünleri alınamadı (HTTP {(int)fbResp.StatusCode}): {fbBody}");
-            }
-            return fbBody;
+            throw new InvalidOperationException($"Mağaza ürünleri alınamadı (HTTP {(int)response.StatusCode}): {body}");
         }
 
-        return await response.Content.ReadAsStringAsync(cancellationToken);
+        return body;
     }
 
     /// <summary>

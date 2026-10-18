@@ -55,7 +55,7 @@ export interface LqsAuditCheck {
           </div>
           <div>
             <h1 class="page-title">Rakip & Trend Casusu (EverBee + eRank Intelligence)</h1>
-            <p class="page-subtitle">Canlı Etsy v3 rakip mağaza röntgeni, ürün bazlı ciro tahmini, LQS denetimi ve yıllık sezon takvimi</p>
+            <p class="page-subtitle">Canlı Etsy v3 rakip mağaza röntgeni, ürün fotoğraf galerisi, açıklama inceleyici ve tek tıkla fotoğraflı klonlama</p>
           </div>
         </div>
 
@@ -114,7 +114,7 @@ export interface LqsAuditCheck {
               [disabled]="isAnalyzing"
               (click)="analyzeShop()">
               <span *ngIf="!isAnalyzing">🚀 Mağazayı Canlı Analiz Et</span>
-              <span *ngIf="isAnalyzing">⏳ Etsy v3 Taranıyor...</span>
+              <span *ngIf="isAnalyzing">⏳ Etsy v3 & Görseller Taranıyor...</span>
             </button>
 
             <button
@@ -122,7 +122,7 @@ export interface LqsAuditCheck {
               class="btn-secondary-action"
               *ngIf="analysisResult?.found"
               (click)="saveCurrentShopToWatchlist()">
-              📌 Takip Listesine Kaydet / Güncelle
+              📌 Takip Listesine Kaydet
             </button>
 
             <button
@@ -138,7 +138,7 @@ export interface LqsAuditCheck {
               class="btn-secondary-action"
               *ngIf="analysisResult?.found && analysisResult?.shop?.shopUrl"
               (click)="openExternalUrl(analysisResult!.shop.shopUrl)">
-              🌐 Etsy'de Aç
+              🏪 Mağazayı Etsy'de Aç ↗
             </button>
           </div>
         </div>
@@ -209,8 +209,8 @@ export interface LqsAuditCheck {
           <h3>Rakip Mağazanın Röntgenini Çekin</h3>
           <p>
             Herhangi bir Etsy mağazasının adını veya linkini yukarıdaki arama çubuğuna yazıp
-            <strong>"Mağazayı Canlı Analiz Et"</strong> butonuna tıklayın. EverBee ağırlıklı aylık satış/ciro tahminleri,
-            eRank LQS kalite notları (A+..D), en çok kullanılan 25 etiket ve AI rekabet açığı raporu saniyeler içinde hazırlanır.
+            <strong>"Mağazayı Canlı Analiz Et"</strong> butonuna tıklayın. Ürünlerin tüm fotoğrafları, açıklamaları,
+            EverBee aylık satış/ciro tahminleri, eRank LQS kalite notları (A+..D) ve tek tıkla fotoğraflı klonlama saniyeler içinde hazırlanır.
           </p>
         </div>
 
@@ -263,7 +263,7 @@ export interface LqsAuditCheck {
             </div>
           </div>
 
-          <!-- MAIN WORKSPACE: LEFT PRODUCT TABLE + RIGHT SELECTED PRODUCT & INTELLIGENCE TABS -->
+          <!-- MAIN WORKSPACE: LEFT PRODUCT TABLE + RIGHT SELECTED PRODUCT GALLERY, DESCRIPTION & INTELLIGENCE -->
           <div class="workspace-split">
             <!-- LEFT: PRODUCT LISTINGS TABLE -->
             <div class="listings-panel glass-card">
@@ -303,14 +303,14 @@ export interface LqsAuditCheck {
                   <thead>
                     <tr>
                       <th>#</th>
-                      <th>Ürün</th>
+                      <th>Görsel & Ürün</th>
                       <th>Fiyat</th>
                       <th>Tah. Satış/Ay</th>
                       <th>Tah. Ciro/Ay</th>
                       <th>Favori / Gör.</th>
                       <th>Hız Rozeti</th>
                       <th>LQS</th>
-                      <th>İşlem</th>
+                      <th>İşlemler</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -320,16 +320,25 @@ export interface LqsAuditCheck {
                       (click)="selectListing(item)">
                       <td class="rank-cell">{{ item.rank }}</td>
                       <td class="product-cell">
-                        <img
-                          *ngIf="item.imageUrl"
-                          [src]="item.imageUrl"
-                          alt=""
-                          class="thumb-img" />
+                        <div class="thumb-box" (click)="openLightbox(item, 0, $event)" title="Büyütmek için tıklayın">
+                          <img
+                            *ngIf="getPrimaryImage(item)"
+                            [src]="getPrimaryImage(item)"
+                            alt=""
+                            class="thumb-img" />
+                          <div *ngIf="!getPrimaryImage(item)" class="thumb-placeholder">📷</div>
+                          <span class="thumb-count-badge" *ngIf="getItemImages(item).length > 0">
+                            {{ getItemImages(item).length }}
+                          </span>
+                        </div>
                         <div class="prod-info">
-                          <div class="prod-title" [title]="item.title">{{ item.title }}</div>
+                          <div class="prod-title" [title]="item.title">
+                            {{ item.title }}
+                          </div>
                           <div class="prod-meta">
                             <span>🏷️ {{ item.tagCount }}/13 etiket</span>
-                            <span>📷 {{ item.imageCount }} görsel</span>
+                            <span>📷 {{ getItemImages(item).length }} görsel</span>
+                            <span>📝 {{ (item.description || '').length }} krk.</span>
                           </div>
                         </div>
                       </td>
@@ -351,13 +360,22 @@ export interface LqsAuditCheck {
                         </span>
                       </td>
                       <td class="action-cell" (click)="$event.stopPropagation()">
-                        <button
-                          type="button"
-                          class="btn-clone-mini"
-                          title="Bu ürünü Hızlı İlan Oluşturucuya Klonla"
-                          (click)="cloneListingToFastCreator(item)">
-                          🚀 Klonla
-                        </button>
+                        <div class="row-action-btns">
+                          <button
+                            type="button"
+                            class="btn-etsy-mini"
+                            title="Ürünü Etsy'de Yeni Sekmede Aç"
+                            (click)="openListingOnEtsy(item)">
+                            🌐 Etsy ↗
+                          </button>
+                          <button
+                            type="button"
+                            class="btn-clone-mini"
+                            title="Bu ürünü tüm fotoğrafları, açıklaması ve 13 etiketiyle Hızlı İlan Oluşturucuya Klonla"
+                            (click)="cloneListingToFastCreator(item)">
+                            🚀 Klonla
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
@@ -365,15 +383,54 @@ export interface LqsAuditCheck {
               </div>
             </div>
 
-            <!-- RIGHT: SELECTED PRODUCT DETAIL + 3 INTELLIGENCE TABS -->
+            <!-- RIGHT: SELECTED PRODUCT SHOWCASE (GALLERY + DESCRIPTION + TAGS) + 3 INTELLIGENCE TABS -->
             <div class="intelligence-panel">
-              <!-- SELECTED LISTING QUICK CARD -->
+              <!-- SELECTED LISTING SHOWCASE CARD -->
               <div class="glass-card selected-product-card" *ngIf="selectedListing as sel">
-                <div class="sel-header">
-                  <div class="sel-thumb-wrap" *ngIf="sel.imageUrl">
-                    <img [src]="sel.imageUrl" alt="" class="sel-thumb" />
+                <div class="showcase-top-grid">
+                  <!-- LEFT: INTERACTIVE MULTI-IMAGE GALLERY -->
+                  <div class="showcase-gallery">
+                    <div class="main-img-stage" (click)="openLightbox(sel, activeImageIndex, $event)">
+                      <img
+                        *ngIf="getActiveImageUrl(sel)"
+                        [src]="getActiveImageUrl(sel)"
+                        alt="Ürün Görseli"
+                        class="main-stage-img" />
+                      <div *ngIf="!getActiveImageUrl(sel)" class="main-stage-empty">
+                        <span>📷 Görsel Bulunamadı</span>
+                      </div>
+
+                      <button
+                        type="button"
+                        class="stage-nav prev"
+                        *ngIf="getItemImages(sel).length > 1"
+                        (click)="prevImage(sel, $event)">‹</button>
+                      <button
+                        type="button"
+                        class="stage-nav next"
+                        *ngIf="getItemImages(sel).length > 1"
+                        (click)="nextImage(sel, $event)">›</button>
+
+                      <span class="stage-counter" *ngIf="getItemImages(sel).length > 0">
+                        🔍 {{ activeImageIndex + 1 }} / {{ getItemImages(sel).length }} (Büyüt)
+                      </span>
+                    </div>
+
+                    <!-- THUMBNAIL STRIP -->
+                    <div class="thumb-strip" *ngIf="getItemImages(sel).length > 1">
+                      <button
+                        type="button"
+                        *ngFor="let imgUrl of getItemImages(sel); let idx = index"
+                        class="strip-thumb-btn"
+                        [class.active]="idx === activeImageIndex"
+                        (click)="setActiveImage(idx)">
+                        <img [src]="imgUrl" alt="" class="strip-thumb-img" />
+                      </button>
+                    </div>
                   </div>
-                  <div class="sel-head-info">
+
+                  <!-- RIGHT: PRODUCT METADATA & PRIMARY ACTIONS -->
+                  <div class="showcase-info">
                     <div class="sel-badges">
                       <span class="velocity-badge" [ngClass]="getVelocityBadgeClass(sel.salesVelocityBadge)">
                         {{ sel.salesVelocityBadge }}
@@ -381,48 +438,112 @@ export interface LqsAuditCheck {
                       <span class="lqs-badge" [ngClass]="getLqsClass(sel.lqsGrade)">
                         eRank LQS: {{ sel.lqsGrade }} ({{ sel.lqsScore }}/100)
                       </span>
+                      <span class="id-pill">ID: #{{ sel.listingId }}</span>
                     </div>
-                    <h3 class="sel-title">{{ sel.title }}</h3>
+
+                    <h3 class="sel-title" (click)="openListingOnEtsy(sel)" title="Etsy'de açmak için tıklayın">
+                      {{ sel.title }} <span class="ext-arrow">↗</span>
+                    </h3>
+
                     <div class="sel-price-row">
                       <span class="sel-price">&#36;{{ sel.priceUsd | number:'1.2-2' }}</span>
                       <span class="sel-try">(≈ ₺{{ (sel.priceUsd * usdTryRate) | number:'1.0-0' }})</span>
-                      <span class="sel-est-rev">• Aylık Tah. Ciro: <strong>&#36;{{ sel.estimatedMonthlyRevenueUsd | number:'1.0-0' }}</strong></span>
+                      <span class="sel-est-rev">• Tah. Satış: <strong>{{ sel.estimatedMonthlySales }} ad/ay</strong></span>
+                      <span class="sel-est-rev">• Tah. Ciro: <strong>&#36;{{ sel.estimatedMonthlyRevenueUsd | number:'1.0-0' }}/ay</strong></span>
+                    </div>
+
+                    <div class="sel-quick-stats">
+                      <span>❤️ <strong>{{ sel.favorites | number }}</strong> Favori</span>
+                      <span>👁️ <strong>{{ sel.views | number }}</strong> Görüntülenme</span>
+                      <span>📦 <strong>{{ sel.quantity }}</strong> Stok</span>
+                      <span>📷 <strong>{{ getItemImages(sel).length }}</strong> Fotoğraf</span>
+                    </div>
+
+                    <div class="sel-actions-bar">
+                      <button
+                        type="button"
+                        class="btn-clone-primary"
+                        (click)="cloneListingToFastCreator(sel)">
+                        🚀 {{ getItemImages(sel).length }} Fotoğrafla İlan Oluşturucuya Klonla
+                      </button>
+
+                      <button
+                        type="button"
+                        class="btn-open-etsy-prominent"
+                        (click)="openListingOnEtsy(sel)">
+                        🌐 Etsy'de Ürüne Git ↗
+                      </button>
+
+                      <button
+                        type="button"
+                        class="btn-copy-tags"
+                        [disabled]="!sel.tags || sel.tags.length === 0"
+                        (click)="copyTags(sel.tags)">
+                        📋 {{ sel.tags.length }} Etiketi Kopyala
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                <div class="sel-actions-bar">
-                  <button type="button" class="btn-clone-primary" (click)="cloneListingToFastCreator(sel)">
-                    🚀 Hızlı İlan Oluşturucuya Klonla
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-copy-tags"
-                    [disabled]="!sel.tags || sel.tags.length === 0"
-                    (click)="copyTags(sel.tags)">
-                    📋 {{ sel.tags.length }} Etiketi Kopyala
-                  </button>
-                  <button
-                    type="button"
-                    class="btn-open-etsy"
-                    *ngIf="sel.listingUrl"
-                    (click)="openExternalUrl(sel.listingUrl)">
-                    🌐 İlanı Aç
-                  </button>
-                </div>
+                <!-- PRODUCT INSPECTOR TABS: 13 TAGS vs FULL DESCRIPTION -->
+                <div class="inspector-tabs-wrap">
+                  <div class="inspector-tab-header">
+                    <button
+                      type="button"
+                      class="insp-tab-btn"
+                      [class.active]="activeProductDetailTab === 'description'"
+                      (click)="activeProductDetailTab = 'description'">
+                      📝 Ürün Açıklaması ({{ (sel.description || '').length }} karakter)
+                    </button>
+                    <button
+                      type="button"
+                      class="insp-tab-btn"
+                      [class.active]="activeProductDetailTab === 'tags'"
+                      (click)="activeProductDetailTab = 'tags'">
+                      🏷️ Aktif 13 Arama Etiketi ({{ sel.tags.length }}/13) & Materyaller
+                    </button>
 
-                <!-- SELECTED ITEM 13 TAGS CLOUD -->
-                <div class="sel-tags-box">
-                  <span class="sub-box-title">Seçili Ürünün Aktif Arama Etiketleri ({{ sel.tags.length }}/13):</span>
-                  <div class="tags-cloud">
-                    <span
-                      *ngFor="let t of sel.tags"
-                      class="tag-chip"
-                      title="Tıkla: Bu etiketi Pazar Araştırmasında analiz et"
-                      (click)="navigateToMarketResearch(t)">
-                      #{{ t }}
-                    </span>
-                    <span *ngIf="sel.tags.length === 0" class="muted-text">Bu üründe etiket bulunamadı.</span>
+                    <button
+                      type="button"
+                      class="btn-mini-copy ml-auto"
+                      *ngIf="activeProductDetailTab === 'description' && sel.description"
+                      (click)="copyDescription(sel.description)">
+                      📋 Açıklamayı Kopyala
+                    </button>
+                  </div>
+
+                  <!-- TAB: PRODUCT DESCRIPTION -->
+                  <div class="inspector-tab-content" *ngIf="activeProductDetailTab === 'description'">
+                    <div class="description-reader" *ngIf="sel.description; else noDescTpl">
+                      {{ sel.description }}
+                    </div>
+                    <ng-template #noDescTpl>
+                      <div class="muted-text">Bu ürün için açıklama metni bulunamadı.</div>
+                    </ng-template>
+
+                    <div class="materials-row" *ngIf="sel.materials && sel.materials.length > 0">
+                      <span class="mat-label">🧵 Materyaller:</span>
+                      <span *ngFor="let m of sel.materials" class="mat-chip">{{ m }}</span>
+                    </div>
+                  </div>
+
+                  <!-- TAB: 13 SEARCH TAGS -->
+                  <div class="inspector-tab-content" *ngIf="activeProductDetailTab === 'tags'">
+                    <div class="tags-cloud">
+                      <span
+                        *ngFor="let t of sel.tags"
+                        class="tag-chip"
+                        title="Tıkla: Bu etiketi Pazar Araştırmasında analiz et"
+                        (click)="navigateToMarketResearch(t)">
+                        #{{ t }}
+                      </span>
+                      <span *ngIf="sel.tags.length === 0" class="muted-text">Bu üründe etiket bulunamadı.</span>
+                    </div>
+
+                    <div class="materials-row" *ngIf="sel.materials && sel.materials.length > 0">
+                      <span class="mat-label">🧵 Materyaller:</span>
+                      <span *ngFor="let m of sel.materials" class="mat-chip">{{ m }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -620,6 +741,60 @@ export interface LqsAuditCheck {
           </div>
         </div>
       </ng-container>
+
+      <!-- ========================================================= -->
+      <!-- LIGHTBOX FULL-SCREEN PRODUCT IMAGE GALLERY MODAL          -->
+      <!-- ========================================================= -->
+      <div class="lightbox-backdrop" *ngIf="lightboxListing as lb" (click)="closeLightbox()">
+        <div class="lightbox-dialog" (click)="$event.stopPropagation()">
+          <div class="lb-header">
+            <div class="lb-title-wrap">
+              <span class="lb-title">{{ lb.title }}</span>
+              <span class="lb-sub">Görsel {{ lightboxIndex + 1 }} / {{ getItemImages(lb).length }} • &#36;{{ lb.priceUsd | number:'1.2-2' }}</span>
+            </div>
+            <div class="lb-top-actions">
+              <button type="button" class="btn-open-etsy-prominent" (click)="openListingOnEtsy(lb)">
+                🌐 Etsy'de Ürüne Git ↗
+              </button>
+              <button type="button" class="btn-clone-primary" (click)="cloneListingToFastCreator(lb)">
+                🚀 {{ getItemImages(lb).length }} Fotoğrafla Klonla
+              </button>
+              <button type="button" class="btn-close-lb" (click)="closeLightbox()">✕</button>
+            </div>
+          </div>
+
+          <div class="lb-stage">
+            <button
+              type="button"
+              class="lb-nav prev"
+              *ngIf="getItemImages(lb).length > 1"
+              (click)="prevLightboxImage()">‹</button>
+
+            <img
+              *ngIf="getItemImages(lb)[lightboxIndex]"
+              [src]="getItemImages(lb)[lightboxIndex]"
+              alt=""
+              class="lb-main-img" />
+
+            <button
+              type="button"
+              class="lb-nav next"
+              *ngIf="getItemImages(lb).length > 1"
+              (click)="nextLightboxImage()">›</button>
+          </div>
+
+          <div class="lb-thumbs" *ngIf="getItemImages(lb).length > 1">
+            <button
+              type="button"
+              *ngFor="let img of getItemImages(lb); let idx = index"
+              class="lb-thumb-btn"
+              [class.active]="idx === lightboxIndex"
+              (click)="lightboxIndex = idx">
+              <img [src]="img" alt="" class="lb-thumb-img" />
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -941,7 +1116,7 @@ export interface LqsAuditCheck {
     /* Workspace split */
     .workspace-split {
       display: grid;
-      grid-template-columns: 1.25fr 1fr;
+      grid-template-columns: 1.15fr 1.05fr;
       gap: 18px;
       align-items: start;
     }
@@ -980,7 +1155,7 @@ export interface LqsAuditCheck {
     }
 
     .table-scroll {
-      max-height: 580px;
+      max-height: 680px;
       overflow-y: auto;
     }
     .spy-table {
@@ -1017,15 +1192,45 @@ export interface LqsAuditCheck {
     .product-cell {
       display: flex;
       align-items: center;
-      gap: 9px;
-      max-width: 250px;
+      gap: 10px;
+      max-width: 270px;
+    }
+    .thumb-box {
+      position: relative;
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .thumb-img {
-      width: 40px;
-      height: 40px;
-      border-radius: 6px;
+      width: 100%;
+      height: 100%;
       object-fit: cover;
-      flex-shrink: 0;
+      transition: transform 0.2s;
+    }
+    .thumb-box:hover .thumb-img {
+      transform: scale(1.1);
+    }
+    .thumb-placeholder {
+      font-size: 1.1rem;
+      color: #475569;
+    }
+    .thumb-count-badge {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      background: rgba(15, 23, 42, 0.85);
+      color: #e2e8f0;
+      font-size: 0.62rem;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 4px;
     }
     .prod-title {
       font-weight: 600;
@@ -1034,13 +1239,15 @@ export interface LqsAuditCheck {
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      line-height: 1.3;
     }
     .prod-meta {
       display: flex;
       gap: 8px;
-      font-size: 0.7rem;
+      font-size: 0.69rem;
       color: #64748b;
-      margin-top: 2px;
+      margin-top: 3px;
+      flex-wrap: wrap;
     }
     .price-cell { font-weight: 700; color: #e2e8f0; }
     .rev-cell { font-weight: 700; color: #34d399; }
@@ -1071,6 +1278,24 @@ export interface LqsAuditCheck {
     .lqs-c { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
     .lqs-d { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
 
+    .row-action-btns {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .btn-etsy-mini {
+      padding: 5px 8px;
+      background: rgba(249, 115, 22, 0.16);
+      border: 1px solid rgba(249, 115, 22, 0.4);
+      color: #fdba74;
+      border-radius: 6px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-etsy-mini:hover { background: rgba(249, 115, 22, 0.35); color: #fff; }
+
     .btn-clone-mini {
       padding: 5px 9px;
       background: rgba(99, 102, 241, 0.2);
@@ -1080,39 +1305,135 @@ export interface LqsAuditCheck {
       font-size: 0.72rem;
       font-weight: 600;
       cursor: pointer;
+      white-space: nowrap;
     }
     .btn-clone-mini:hover { background: rgba(99, 102, 241, 0.4); color: #fff; }
 
-    /* Right panel */
+    /* Right panel: Selected Product Showcase */
     .intelligence-panel {
       display: flex;
       flex-direction: column;
       gap: 16px;
     }
-    .sel-header {
-      display: flex;
-      gap: 14px;
-      margin-bottom: 12px;
+    .showcase-top-grid {
+      display: grid;
+      grid-template-columns: 215px 1fr;
+      gap: 16px;
+      margin-bottom: 14px;
     }
-    .sel-thumb {
-      width: 76px;
-      height: 76px;
-      border-radius: 10px;
+    .showcase-gallery {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .main-img-stage {
+      position: relative;
+      width: 215px;
+      height: 215px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0f172a;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      cursor: zoom-in;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .main-stage-img {
+      width: 100%;
+      height: 100%;
       object-fit: cover;
+    }
+    .main-stage-empty {
+      color: #64748b;
+      font-size: 0.78rem;
+      text-align: center;
+      padding: 12px;
+    }
+    .stage-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fff;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stage-nav.prev { left: 6px; }
+    .stage-nav.next { right: 6px; }
+    .stage-counter {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      background: rgba(15, 23, 42, 0.82);
+      color: #f8fafc;
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 3px 7px;
+      border-radius: 5px;
+    }
+    .thumb-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-bottom: 3px;
+    }
+    .strip-thumb-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      padding: 0;
+      border: 2px solid transparent;
+      background: #0f172a;
+      cursor: pointer;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .strip-thumb-btn.active {
+      border-color: #818cf8;
+    }
+    .strip-thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .showcase-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
     .sel-badges {
       display: flex;
       gap: 8px;
-      margin-bottom: 6px;
+      align-items: center;
       flex-wrap: wrap;
     }
-    .sel-title {
-      font-size: 0.92rem;
-      font-weight: 700;
-      margin: 0 0 6px 0;
-      color: #f8fafc;
-      line-height: 1.35;
+    .id-pill {
+      font-size: 0.7rem;
+      color: #94a3b8;
+      background: rgba(15, 23, 42, 0.65);
+      padding: 2px 7px;
+      border-radius: 5px;
     }
+    .sel-title {
+      font-size: 0.96rem;
+      font-weight: 700;
+      margin: 0;
+      color: #f8fafc;
+      line-height: 1.38;
+      cursor: pointer;
+    }
+    .sel-title:hover { color: #a5b4fc; }
+    .ext-arrow { font-size: 0.82rem; color: #fb923c; }
+
     .sel-price-row {
       font-size: 0.82rem;
       color: #cbd5e1;
@@ -1122,52 +1443,126 @@ export interface LqsAuditCheck {
       flex-wrap: wrap;
     }
     .sel-price {
-      font-size: 1.1rem;
+      font-size: 1.2rem;
       font-weight: 800;
       color: #34d399;
+    }
+    .sel-quick-stats {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      font-size: 0.76rem;
+      color: #94a3b8;
+      background: rgba(15, 23, 42, 0.55);
+      padding: 7px 10px;
+      border-radius: 8px;
     }
     .sel-actions-bar {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-      margin-bottom: 12px;
+      margin-top: 4px;
     }
     .btn-clone-primary {
-      padding: 8px 14px;
+      padding: 9px 14px;
       background: linear-gradient(135deg, #6366f1, #8b5cf6);
       border: none;
       color: #fff;
-      border-radius: 7px;
-      font-size: 0.78rem;
+      border-radius: 8px;
+      font-size: 0.79rem;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+    }
+    .btn-clone-primary:hover { filter: brightness(1.08); }
+
+    .btn-open-etsy-prominent {
+      padding: 9px 14px;
+      background: rgba(249, 115, 22, 0.18);
+      border: 1px solid rgba(249, 115, 22, 0.5);
+      color: #fdba74;
+      border-radius: 8px;
+      font-size: 0.79rem;
       font-weight: 700;
       cursor: pointer;
     }
+    .btn-open-etsy-prominent:hover {
+      background: rgba(249, 115, 22, 0.35);
+      color: #fff;
+    }
+
     .btn-copy-tags {
-      padding: 8px 12px;
+      padding: 9px 12px;
       background: rgba(16, 185, 129, 0.16);
       border: 1px solid rgba(16, 185, 129, 0.4);
       color: #34d399;
-      border-radius: 7px;
+      border-radius: 8px;
       font-size: 0.78rem;
       font-weight: 600;
       cursor: pointer;
     }
-    .btn-open-etsy {
-      padding: 8px 12px;
-      background: rgba(51, 65, 85, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      color: #e2e8f0;
+
+    /* Product Inspector Tabs (Description & Tags) */
+    .inspector-tabs-wrap {
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 12px;
+    }
+    .inspector-tab-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .ml-auto { margin-left: auto; }
+    .insp-tab-btn {
+      padding: 6px 12px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
       border-radius: 7px;
-      font-size: 0.78rem;
+      font-size: 0.76rem;
+      font-weight: 600;
       cursor: pointer;
     }
-    .sub-box-title {
-      font-size: 0.75rem;
+    .insp-tab-btn.active {
+      background: rgba(99, 102, 241, 0.22);
+      border-color: #818cf8;
+      color: #f8fafc;
+    }
+    .description-reader {
+      max-height: 190px;
+      overflow-y: auto;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-radius: 8px;
+      padding: 11px 13px;
+      font-size: 0.8rem;
+      line-height: 1.55;
+      color: #e2e8f0;
+      white-space: pre-wrap;
+    }
+    .materials-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 9px;
+    }
+    .mat-label {
+      font-size: 0.73rem;
       font-weight: 700;
       color: #94a3b8;
-      display: block;
-      margin-bottom: 8px;
     }
+    .mat-chip {
+      padding: 3px 8px;
+      background: rgba(56, 189, 248, 0.14);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 5px;
+      font-size: 0.72rem;
+      color: #7dd3fc;
+    }
+
     .tags-cloud {
       display: flex;
       flex-wrap: wrap;
@@ -1306,6 +1701,7 @@ export interface LqsAuditCheck {
       line-height: 1.6;
       color: #e2e8f0;
       margin: 0 0 14px 0;
+      white-space: pre-line;
     }
     .gap-metrics-grid {
       display: grid;
@@ -1428,8 +1824,117 @@ export interface LqsAuditCheck {
       color: #94a3b8;
     }
 
+    /* Lightbox Modal */
+    .lightbox-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(7, 10, 19, 0.88);
+      backdrop-filter: blur(8px);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .lightbox-dialog {
+      background: #111827;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 16px;
+      max-width: 960px;
+      width: 100%;
+      padding: 18px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65);
+    }
+    .lb-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .lb-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #f8fafc;
+      display: block;
+    }
+    .lb-sub {
+      font-size: 0.78rem;
+      color: #94a3b8;
+    }
+    .lb-top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-close-lb {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(30, 41, 59, 0.7);
+      color: #f8fafc;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .lb-stage {
+      position: relative;
+      height: 520px;
+      background: #090d16;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .lb-main-img {
+      max-width: 100%;
+      max-height: 100%;
+      object-fit: contain;
+    }
+    .lb-nav {
+      position: absolute;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+    .lb-nav.prev { left: 14px; }
+    .lb-nav.next { right: 14px; }
+    .lb-thumbs {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      justify-content: center;
+      padding-bottom: 4px;
+    }
+    .lb-thumb-btn {
+      width: 56px;
+      height: 56px;
+      border-radius: 8px;
+      padding: 0;
+      border: 2px solid transparent;
+      background: #0f172a;
+      cursor: pointer;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .lb-thumb-btn.active { border-color: #818cf8; }
+    .lb-thumb-img { width: 100%; height: 100%; object-fit: cover; }
+
     @media (max-width: 1180px) {
       .workspace-split { grid-template-columns: 1fr; }
+      .showcase-top-grid { grid-template-columns: 1fr; }
+      .main-img-stage { width: 100%; height: 260px; }
       .freq-columns { grid-template-columns: 1fr; }
     }
   `]
@@ -1437,6 +1942,7 @@ export interface LqsAuditCheck {
 export class CompetitorSpyComponent implements OnInit {
   activeMainTab: 'competitor' | 'seasonal' = 'competitor';
   activeIntelTab: 'tags' | 'gap' | 'lqs' = 'tags';
+  activeProductDetailTab: 'description' | 'tags' = 'description';
 
   shopQueryInput = '';
   sampleLimit = 50;
@@ -1448,6 +1954,10 @@ export class CompetitorSpyComponent implements OnInit {
   listings: CompetitorListingDto[] = [];
   filteredListings: CompetitorListingDto[] = [];
   selectedListing: CompetitorListingDto | null = null;
+  activeImageIndex = 0;
+
+  lightboxListing: CompetitorListingDto | null = null;
+  lightboxIndex = 0;
 
   listingSearchText = '';
   priceBandFilter: 'all' | 'under30' | '30to75' | 'over75' = 'all';
@@ -1508,7 +2018,7 @@ export class CompetitorSpyComponent implements OnInit {
 
         this.listings = res.listings || [];
         this.applyListingFilters();
-        this.selectedListing = this.filteredListings.length > 0 ? this.filteredListings[0] : null;
+        this.selectListing(this.filteredListings.length > 0 ? this.filteredListings[0] : null);
 
         // Eğer takip listesinde varsa otomatik snapshot güncelle
         const existingIdx = this.watchedShops.findIndex(
@@ -1560,12 +2070,90 @@ export class CompetitorSpyComponent implements OnInit {
 
     this.filteredListings = list;
     if (this.selectedListing && !this.filteredListings.some(x => x.listingId === this.selectedListing?.listingId)) {
-      this.selectedListing = this.filteredListings[0] || null;
+      this.selectListing(this.filteredListings[0] || null);
     }
   }
 
-  selectListing(item: CompetitorListingDto): void {
+  selectListing(item: CompetitorListingDto | null): void {
     this.selectedListing = item;
+    this.activeImageIndex = 0;
+  }
+
+  getItemImages(item: CompetitorListingDto | null): string[] {
+    if (!item) return [];
+    if (item.imageUrls && item.imageUrls.length > 0) {
+      return item.imageUrls;
+    }
+    return item.imageUrl ? [item.imageUrl] : [];
+  }
+
+  getPrimaryImage(item: CompetitorListingDto): string {
+    const imgs = this.getItemImages(item);
+    return imgs.length > 0 ? imgs[0] : '';
+  }
+
+  getActiveImageUrl(item: CompetitorListingDto): string {
+    const imgs = this.getItemImages(item);
+    if (imgs.length === 0) return '';
+    const idx = Math.min(Math.max(0, this.activeImageIndex), imgs.length - 1);
+    return imgs[idx];
+  }
+
+  setActiveImage(idx: number): void {
+    this.activeImageIndex = idx;
+  }
+
+  prevImage(item: CompetitorListingDto, ev: MouseEvent): void {
+    ev.stopPropagation();
+    const imgs = this.getItemImages(item);
+    if (imgs.length <= 1) return;
+    this.activeImageIndex = (this.activeImageIndex - 1 + imgs.length) % imgs.length;
+  }
+
+  nextImage(item: CompetitorListingDto, ev: MouseEvent): void {
+    ev.stopPropagation();
+    const imgs = this.getItemImages(item);
+    if (imgs.length <= 1) return;
+    this.activeImageIndex = (this.activeImageIndex + 1) % imgs.length;
+  }
+
+  openLightbox(item: CompetitorListingDto, index: number, ev?: MouseEvent): void {
+    if (ev) ev.stopPropagation();
+    const imgs = this.getItemImages(item);
+    if (imgs.length === 0) return;
+    this.lightboxListing = item;
+    this.lightboxIndex = Math.min(Math.max(0, index), imgs.length - 1);
+  }
+
+  closeLightbox(): void {
+    this.lightboxListing = null;
+  }
+
+  prevLightboxImage(): void {
+    if (!this.lightboxListing) return;
+    const imgs = this.getItemImages(this.lightboxListing);
+    if (imgs.length <= 1) return;
+    this.lightboxIndex = (this.lightboxIndex - 1 + imgs.length) % imgs.length;
+  }
+
+  nextLightboxImage(): void {
+    if (!this.lightboxListing) return;
+    const imgs = this.getItemImages(this.lightboxListing);
+    if (imgs.length <= 1) return;
+    this.lightboxIndex = (this.lightboxIndex + 1) % imgs.length;
+  }
+
+  openListingOnEtsy(item: CompetitorListingDto): void {
+    const url = item.listingUrl || (item.listingId > 0 ? `https://www.etsy.com/listing/${item.listingId}` : '');
+    if (url) {
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+
+  copyDescription(desc: string): void {
+    if (!desc) return;
+    navigator.clipboard.writeText(desc);
+    this.showToast('📋 Ürün açıklaması panoya kopyalandı!');
   }
 
   saveCurrentShopToWatchlist(): void {
@@ -1688,22 +2276,26 @@ export class CompetitorSpyComponent implements OnInit {
   }
 
   cloneListingToFastCreator(item: CompetitorListingDto): void {
+    const imgs = this.getItemImages(item);
     const cloned: ClonedMarketListing = {
       id: item.listingId,
       title: item.title,
       priceUsd: item.priceUsd,
       tags: [...(item.tags || [])],
       description: item.description || '',
-      imageUrl: item.imageUrl || '',
+      imageUrl: imgs[0] || item.imageUrl || '',
+      imageUrls: [...imgs],
+      materials: [...(item.materials || [])],
       shopName: this.analysisResult?.shop?.shopName || '',
       seoScore: item.lqsScore,
       marketScore: item.lqsScore
     };
     this.aiSettings.setClonedListing(cloned);
-    this.showToast(`🚀 "${item.title.slice(0, 38)}..." Hızlı İlan Oluşturucuya aktarıldı!`);
+    this.closeLightbox();
+    this.showToast(`🚀 "${item.title.slice(0, 34)}..." (${imgs.length} fotoğraf + ${cloned.tags.length} etiket) Hızlı İlan Oluşturucuya aktarıldı!`);
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
-    }, 350);
+    }, 300);
   }
 
   copyTags(tags: string[]): void {
@@ -1731,7 +2323,7 @@ export class CompetitorSpyComponent implements OnInit {
   exportCsv(): void {
     if (!this.analysisResult?.found || this.listings.length === 0) return;
     const shopName = this.analysisResult.shop.shopName;
-    const headers = ['Sira', 'ListingId', 'Baslik', 'FiyatUSD', 'TahminiAylikSatis', 'TahminiAylikCiroUSD', 'Favori', 'Goruntulenme', 'LQSNotu', 'LQSSkor', 'EtiketSayisi', 'Etiketler'];
+    const headers = ['Sira', 'ListingId', 'Baslik', 'FiyatUSD', 'TahminiAylikSatis', 'TahminiAylikCiroUSD', 'Favori', 'Goruntulenme', 'GorselSayisi', 'LQSNotu', 'LQSSkor', 'EtiketSayisi', 'EtsyUrl', 'Etiketler'];
     const rows = this.listings.map(l => [
       l.rank,
       l.listingId,
@@ -1741,9 +2333,11 @@ export class CompetitorSpyComponent implements OnInit {
       l.estimatedMonthlyRevenueUsd.toFixed(2),
       l.favorites,
       l.views,
+      this.getItemImages(l).length,
       l.lqsGrade,
       l.lqsScore,
       l.tagCount,
+      l.listingUrl,
       `"${(l.tags || []).join(', ').replace(/"/g, '""')}"`
     ]);
 
@@ -1762,6 +2356,8 @@ export class CompetitorSpyComponent implements OnInit {
 
   getListingLqsAudit(item: CompetitorListingDto): LqsAuditCheck[] {
     const titleLen = (item.title || '').length;
+    const imgCount = this.getItemImages(item).length;
+    const descLen = (item.description || '').length;
     const checks: LqsAuditCheck[] = [];
 
     checks.push({
@@ -1783,21 +2379,21 @@ export class CompetitorSpyComponent implements OnInit {
     });
 
     checks.push({
-      icon: item.imageCount >= 8 ? '✅' : (item.imageCount >= 5 ? '⚠️' : '❌'),
-      label: `Görsel Galerisi (${item.imageCount}/10 fotoğraf)`,
-      detail: item.imageCount >= 8
+      icon: imgCount >= 8 ? '✅' : (imgCount >= 5 ? '⚠️' : '❌'),
+      label: `Görsel Galerisi (${imgCount}/10 fotoğraf)`,
+      detail: imgCount >= 8
         ? 'Görsel çeşitliliği yüksek.'
         : 'Görsel sayısı yetersiz; ölçü tablosu, yaşam alanı (lifestyle) ve yakın çekim fotoğraflarla dönüşüm oranını artırın.',
-      passed: item.imageCount >= 8
+      passed: imgCount >= 8
     });
 
     checks.push({
-      icon: item.descriptionLength >= 300 ? '✅' : (item.descriptionLength >= 150 ? '⚠️' : '❌'),
-      label: `Ürün Açıklaması (${item.descriptionLength} karakter)`,
-      detail: item.descriptionLength >= 300
+      icon: descLen >= 300 ? '✅' : (descLen >= 150 ? '⚠️' : '❌'),
+      label: `Ürün Açıklaması (${descLen} karakter)`,
+      detail: descLen >= 300
         ? 'Açıklama metni Google ve Etsy SEO indekslemesi için yeterli uzunlukta.'
         : 'Açıklama çok kısa; malzeme, boyut, kargo ve hediye paketi detaylarını içeren zengin bir açıklama yazın.',
-      passed: item.descriptionLength >= 300
+      passed: descLen >= 300
     });
 
     return checks;
@@ -1827,6 +2423,7 @@ export class CompetitorSpyComponent implements OnInit {
       tags: [...(tr.winningTags || []).slice(0, 13)],
       description: tr.actionAdvice,
       imageUrl: '',
+      imageUrls: [],
       shopName: tr.eventName,
       seoScore: 95,
       marketScore: 95

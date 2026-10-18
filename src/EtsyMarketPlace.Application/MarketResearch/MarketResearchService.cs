@@ -426,14 +426,22 @@ public sealed class MarketResearchService : IMarketResearchService
                 continue;
             }
 
-            if (item.TryGetProperty("images", out var imgs) && imgs.ValueKind == JsonValueKind.Array)
+            var imgs = (item.TryGetProperty("images", out var im1) && im1.ValueKind == JsonValueKind.Array) ? im1
+                : ((item.TryGetProperty("Images", out var im2) && im2.ValueKind == JsonValueKind.Array) ? im2 : default);
+
+            if (imgs.ValueKind == JsonValueKind.Array)
             {
                 var urls = new List<string>();
                 foreach (var img in imgs.EnumerateArray())
                 {
                     string? url = null;
-                    if (img.TryGetProperty("url_570xN", out var u570)) url = u570.GetString();
-                    else if (img.TryGetProperty("url_fullxfull", out var uFull)) url = uFull.GetString();
+                    if (img.TryGetProperty("url_fullxfull", out var uFull) && !string.IsNullOrWhiteSpace(uFull.GetString()))
+                        url = uFull.GetString();
+                    else if (img.TryGetProperty("url_570xN", out var u570) && !string.IsNullOrWhiteSpace(u570.GetString()))
+                        url = u570.GetString();
+                    else if (img.TryGetProperty("url_170x135", out var u170) && !string.IsNullOrWhiteSpace(u170.GetString()))
+                        url = u170.GetString();
+
                     if (!string.IsNullOrWhiteSpace(url)) urls.Add(url.Trim());
                 }
 
@@ -442,6 +450,26 @@ public sealed class MarketResearchService : IMarketResearchService
                     target.ImageUrls = urls;
                     target.ImageUrl = urls[0];
                 }
+            }
+
+            if (string.IsNullOrWhiteSpace(target.Description) &&
+                item.TryGetProperty("description", out var descProp) &&
+                !string.IsNullOrWhiteSpace(descProp.GetString()))
+            {
+                target.Description = descProp.GetString()!;
+            }
+
+            if ((target.Materials == null || target.Materials.Count == 0) &&
+                item.TryGetProperty("materials", out var matArr) &&
+                matArr.ValueKind == JsonValueKind.Array)
+            {
+                var mats = new List<string>();
+                foreach (var mt in matArr.EnumerateArray())
+                {
+                    var s = mt.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) mats.Add(s.Trim());
+                }
+                if (mats.Count > 0) target.Materials = mats;
             }
 
             if (item.TryGetProperty("tags", out var tagsArr) && tagsArr.ValueKind == JsonValueKind.Array)
@@ -459,7 +487,10 @@ public sealed class MarketResearchService : IMarketResearchService
                 }
             }
 
-            if (item.TryGetProperty("shop", out var shopObj) && shopObj.ValueKind == JsonValueKind.Object)
+            var shopObj = (item.TryGetProperty("shop", out var sh1) && sh1.ValueKind == JsonValueKind.Object) ? sh1
+                : ((item.TryGetProperty("Shop", out var sh2) && sh2.ValueKind == JsonValueKind.Object) ? sh2 : default);
+
+            if (shopObj.ValueKind == JsonValueKind.Object)
             {
                 if (shopObj.TryGetProperty("shop_name", out var sn) && !string.IsNullOrWhiteSpace(sn.GetString()))
                 {
@@ -822,6 +853,10 @@ public sealed class MarketResearchService : IMarketResearchService
             {
                 var rawListingsJson = await _apiClient.GetShopActiveListingsRawJsonAsync(authShopId, profile.ShopId, clampedLimit, cancellationToken);
                 rawListings = ParseShopListingsJson(rawListingsJson, profile);
+                if (rawListings.Count > 0)
+                {
+                    await EnrichWithBatchDetailsAsync(authShopId, rawListings, cancellationToken);
+                }
             }
             catch { }
         }
