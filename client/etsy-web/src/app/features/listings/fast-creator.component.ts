@@ -109,6 +109,7 @@ export class FastCreatorComponent implements OnInit {
   varValues2 = 'Siyah, Beyaz, Altın';
   customVariationPricing = false;
   variationRows: VariationRow[] = [];
+  isGeneratingVariations = false;
 
   // Publish Status & Checklist
   isLivePublish = false;
@@ -144,7 +145,25 @@ export class FastCreatorComponent implements OnInit {
         }));
       }
 
-      this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 48)}..." (${cloned.shopName}) — ${allUrls.length} Fotoğraf & ${this.tags.length} Etiket Aktarıldı`;
+      if (cloned.hasVariations) {
+        this.enableVariations = true;
+        if (cloned.varType1) this.varType1 = cloned.varType1;
+        if (cloned.varValues1) this.varValues1 = cloned.varValues1;
+        if (cloned.enableVar2) {
+          this.enableVar2 = true;
+          if (cloned.varType2) this.varType2 = cloned.varType2;
+          if (cloned.varValues2) this.varValues2 = cloned.varValues2;
+        }
+        if (cloned.variationRows && cloned.variationRows.length > 0) {
+          this.variationRows = cloned.variationRows.map(r => ({ ...r }));
+          this.customVariationPricing = true;
+        } else {
+          this.rebuildVariationGrid();
+        }
+      }
+
+      const varCount = (this.variationRows && this.variationRows.length > 0) ? ` & ${this.variationRows.length} Varyasyon` : '';
+      this.clonedNotice = `Klonlanan Ürün #${cloned.id}: "${cloned.title.slice(0, 48)}..." (${cloned.shopName}) — ${allUrls.length} Fotoğraf, ${this.tags.length} Etiket${varCount} Aktarıldı`;
       this.updatePriceTry();
     }
 
@@ -740,6 +759,49 @@ export class FastCreatorComponent implements OnInit {
       row.price = p;
     });
     this.showToast(`⚡ Tüm varyasyon fiyatları $${p.toFixed(2)} olarak eşitlendi!`);
+  }
+
+  suggestAiVariations(): void {
+    const title = this.title.trim() || 'Handmade Product';
+    this.isGeneratingVariations = true;
+    const s = this.aiService.settings();
+    const cmd = {
+      listingId: 0,
+      title,
+      tags: this.tags,
+      description: this.description,
+      materials: this.materials ? this.materials.split(',').map(m => m.trim()) : [],
+      priceUsd: this.priceUsd || 25,
+      category: this.selectedCategory,
+      currentLqsScore: 80,
+      provider: s.provider,
+      apiKey: (s as any)[`${s.provider.toLowerCase()}ApiKey`] || s.geminiApiKey || s.deepSeekApiKey || '',
+      model: this.aiService.activeModelName()
+    };
+
+    this.etsyApi.improveListingLqs(cmd).subscribe({
+      next: (res) => {
+        this.isGeneratingVariations = false;
+        if (res.suggestedVariations && res.suggestedVariations.length > 0) {
+          this.enableVariations = true;
+          this.varType1 = res.suggestedVariations[0].name;
+          this.varValues1 = res.suggestedVariations[0].values.join(', ');
+          if (res.suggestedVariations.length > 1) {
+            this.enableVar2 = true;
+            this.varType2 = res.suggestedVariations[1].name;
+            this.varValues2 = res.suggestedVariations[1].values.join(', ');
+          }
+          this.rebuildVariationGrid();
+          this.showToast(`✨ ${res.provider} ile varyasyonlar oluşturuldu (${res.suggestedVariations.map(v => v.name).join(' & ')})`);
+        } else {
+          this.showToast('Varyasyon önerisi bulunamadı.');
+        }
+      },
+      error: () => {
+        this.isGeneratingVariations = false;
+        this.showToast('❌ AI varyasyon önerisi alınamadı.');
+      }
+    });
   }
 
   // --- CHECKLIST GETTERS ---

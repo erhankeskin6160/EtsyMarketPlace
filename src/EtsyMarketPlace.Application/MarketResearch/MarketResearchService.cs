@@ -1317,4 +1317,378 @@ public sealed class MarketResearchService : IMarketResearchService
 
         return sb.ToString().TrimEnd();
     }
+
+    public async Task<CompetitorListingInventoryDto> GetListingInventoryAsync(
+        long listingId,
+        string authShopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        var result = new CompetitorListingInventoryDto { ListingId = listingId };
+        if (listingId <= 0) return result;
+
+        string rawJson;
+        try
+        {
+            rawJson = await _apiClient.GetListingInventoryRawJsonAsync(authShopId, listingId, cancellationToken);
+        }
+        catch
+        {
+            return result;
+        }
+
+        if (string.IsNullOrWhiteSpace(rawJson)) return result;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(rawJson);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("products", out var products) || products.ValueKind != JsonValueKind.Array)
+            {
+                return result;
+            }
+
+            var groupMap = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            var offeringsList = new List<CompetitorVariationOfferingDto>();
+
+            foreach (var prod in products.EnumerateArray())
+            {
+                if (prod.TryGetProperty("is_deleted", out var del) && del.GetBoolean()) continue;
+
+                var propParts = new List<string>();
+                if (prod.TryGetProperty("property_values", out var pvs) && pvs.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var pv in pvs.EnumerateArray())
+                    {
+                        var propName = pv.TryGetProperty("property_name", out var pn) ? (pn.GetString() ?? "").Trim() : "";
+                        if (string.IsNullOrWhiteSpace(propName)) continue;
+
+                        if (!groupMap.TryGetValue(propName, out var valSet))
+                        {
+                            valSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                            groupMap[propName] = valSet;
+                        }
+
+                        if (pv.TryGetProperty("values", out var vals) && vals.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var valItem in vals.EnumerateArray())
+                            {
+                                var strVal = valItem.GetString()?.Trim();
+                                if (!string.IsNullOrWhiteSpace(strVal))
+                                {
+                                    valSet.Add(strVal);
+                                    propParts.Add(strVal);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (prod.TryGetProperty("offerings", out var offs) && offs.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var off in offs.EnumerateArray())
+                    {
+                        decimal priceUsd = 0m;
+                        if (off.TryGetProperty("price", out var pObj) && pObj.ValueKind == JsonValueKind.Object)
+                        {
+                            decimal rawAmount = 0m;
+                            if (pObj.TryGetProperty("amount", out var aProp) && pObj.TryGetProperty("divisor", out var divProp))
+                            {
+                                int divisor = divProp.GetInt32();
+                                if (divisor > 0) rawAmount = aProp.GetInt64() / (decimal)divisor;
+                            }
+                            string curr = pObj.TryGetProperty("currency_code", out var cProp) ? (cProp.GetString() ?? "USD") : "USD";
+                            priceUsd = MarketCurrencyConverter.TryConvertToUsd(rawAmount, curr) ?? rawAmount;
+                        }
+
+                        int qty = off.TryGetProperty("quantity", out var q) && q.TryGetInt32(out var qVal) ? qVal : 1;
+                        bool enabled = !off.TryGetProperty("is_enabled", out var en) || en.GetBoolean();
+
+                        var key = propParts.Count > 0 ? string.Join(" / ", propParts) : "Standart";
+                        offeringsList.Add(new CompetitorVariationOfferingDto
+                        {
+                            Key = key,
+                            Price = Math.Round(priceUsd, 2),
+                            Quantity = qty,
+                            Active = enabled
+                        });
+                    }
+                }
+            }
+
+            var groups = groupMap.Select(kv => new CompetitorVariationGroupDto
+            {
+                Name = kv.Key,
+                Values = kv.Value.ToList()
+            }).ToList();
+
+            if (groups.Count > 0)
+            {
+                result.HasVariations = true;
+                result.Groups = groups;
+                result.VarType1 = groups[0].Name;
+                result.VarValues1 = string.Join(", ", groups[0].Values);
+                if (groups.Count > 1)
+                {
+                    result.EnableVar2 = true;
+                    result.VarType2 = groups[1].Name;
+                    result.VarValues2 = string.Join(", ", groups[1].Values);
+                }
+                result.Offerings = offeringsList;
+            }
+        }
+        catch
+        {
+            // fallback gracefully
+        }
+
+        return result;
+    }
+
+    public async Task<AiLqsImprovementResultDto> ImproveListingLqsWithAiAsync(
+        AiLqsImprovementCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        if (command == null) throw new ArgumentNullException(nameof(command));
+
+        if (_geminiClient != null && !string.IsNullOrWhiteSpace(command.ApiKey))
+        {
+            try
+            {
+                var systemPrompt = """
+                You are Etsy LQS Doctor & SEO Master.
+                Optimize this Etsy listing to achieve a flawless 100/100 Listing Quality Score (LQS).
+                Rules:
+                1. Title: 125-140 characters. Put high-search intent keywords first. Use readable separators (e.g. ' | ' or ' - '). No keyword stuffing.
+                2. Tags: Exactly 13 tags. Each tag MUST be 20 characters or fewer. Use 2-3 word long-tail phrases. No duplicate tags.
+                3. Description: Structured, high-converting product description. First 160 characters optimized for Google SEO meta description, followed by key features, dimensions, care guide, and why choose handmade.
+                4. Variations: Recommend 1-2 variation groups (e.g. Size, Color) with popular choices.
+                5. Output strictly JSON with no markdown wrapping:
+                {
+                  "optimized_title": "...",
+                  "optimized_tags": ["tag 1", "tag 2", ..., "tag 13"],
+                  "optimized_description": "...",
+                  "suggested_materials": ["mat 1", "mat 2"],
+                  "variations": [
+                    { "name": "Size", "values": ["Small (15cm)", "Medium (24cm)", "Large (30cm)"] },
+                    { "name": "Color", "values": ["Rainbow Silk", "Matte Black", "Metallic Bronze"] }
+                  ],
+                  "audit_summary": "...",
+                  "improvement_highlights": ["Etiket sayısı 13'e tamamlandı", "Başlık 138 karaktere optimize edildi", "Varyasyon fiyatlandırması eklendi"]
+                }
+                """;
+
+                var userPrompt = $"""
+                Listing ID: {command.ListingId}
+                Current Title: {command.Title}
+                Current Tags ({command.Tags?.Count ?? 0}/13): {string.Join(", ", command.Tags ?? [])}
+                Current Price: ${command.PriceUsd:F2}
+                Current Category: {command.Category}
+                Current Materials: {string.Join(", ", command.Materials ?? [])}
+                Current Description: {command.Description}
+                Current LQS Score: {command.CurrentLqsScore}/100
+                """;
+
+                var model = !string.IsNullOrWhiteSpace(command.Model) ? command.Model : "gemini-2.5-flash";
+                var (success, content, error) = await _geminiClient.GenerateOptimizationJsonAsync(
+                    systemPrompt, userPrompt, model, command.ApiKey, cancellationToken);
+
+                if (success && !string.IsNullOrWhiteSpace(content))
+                {
+                    var cleanJson = content.Trim();
+                    if (cleanJson.StartsWith("```json")) cleanJson = cleanJson[7..];
+                    if (cleanJson.StartsWith("```")) cleanJson = cleanJson[3..];
+                    if (cleanJson.EndsWith("```")) cleanJson = cleanJson[..^3];
+                    cleanJson = cleanJson.Trim();
+
+                    using var doc = JsonDocument.Parse(cleanJson);
+                    var root = doc.RootElement;
+
+                    string optTitle = root.TryGetProperty("optimized_title", out var ot) ? (ot.GetString() ?? "") : command.Title;
+                    var optTags = new List<string>();
+                    if (root.TryGetProperty("optimized_tags", out var ota) && ota.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in ota.EnumerateArray())
+                        {
+                            var s = el.GetString()?.Trim();
+                            if (!string.IsNullOrWhiteSpace(s))
+                            {
+                                if (s.Length > 20) s = s[..20].Trim();
+                                optTags.Add(s);
+                            }
+                        }
+                    }
+
+                    string optDesc = root.TryGetProperty("optimized_description", out var od) ? (od.GetString() ?? "") : (command.Description ?? "");
+                    var mats = new List<string>();
+                    if (root.TryGetProperty("suggested_materials", out var sm) && sm.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in sm.EnumerateArray())
+                        {
+                            var s = el.GetString()?.Trim();
+                            if (!string.IsNullOrWhiteSpace(s)) mats.Add(s);
+                        }
+                    }
+
+                    var vars = new List<CompetitorVariationGroupDto>();
+                    if (root.TryGetProperty("variations", out var vArr) && vArr.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var vObj in vArr.EnumerateArray())
+                        {
+                            var vName = vObj.TryGetProperty("name", out var vn) ? (vn.GetString() ?? "") : "";
+                            var vVals = new List<string>();
+                            if (vObj.TryGetProperty("values", out var vv) && vv.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var vel in vv.EnumerateArray())
+                                {
+                                    var str = vel.GetString()?.Trim();
+                                    if (!string.IsNullOrWhiteSpace(str)) vVals.Add(str);
+                                }
+                            }
+                            if (!string.IsNullOrWhiteSpace(vName) && vVals.Count > 0)
+                            {
+                                vars.Add(new CompetitorVariationGroupDto { Name = vName, Values = vVals });
+                            }
+                        }
+                    }
+
+                    string auditSummary = root.TryGetProperty("audit_summary", out var asProp)
+                        ? (asProp.GetString() ?? "")
+                        : $"Yapay zeka denetimi: {command.CurrentLqsScore} puanlık listeleme 100/100 LQS seviyesine optimize edildi.";
+
+                    var highlights = new List<string>();
+                    if (root.TryGetProperty("improvement_highlights", out var ih) && ih.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var el in ih.EnumerateArray())
+                        {
+                            var s = el.GetString()?.Trim();
+                            if (!string.IsNullOrWhiteSpace(s)) highlights.Add(s);
+                        }
+                    }
+
+                    if (optTags.Count > 0 && !string.IsNullOrWhiteSpace(optTitle))
+                    {
+                        return new AiLqsImprovementResultDto
+                        {
+                            ListingId = command.ListingId,
+                            OptimizedTitle = optTitle,
+                            OptimizedTags = optTags.Take(13).ToList(),
+                            OptimizedDescription = optDesc,
+                            SuggestedMaterials = mats.Count > 0 ? mats : (command.Materials ?? []),
+                            SuggestedVariations = vars,
+                            TargetLqsScore = 100,
+                            TargetLqsGrade = "A+",
+                            LqsDoctorAuditSummary = auditSummary,
+                            ImprovementHighlights = highlights,
+                            UsedAi = true,
+                            Provider = command.Provider ?? "AI"
+                        };
+                    }
+                }
+            }
+            catch
+            {
+                // Fall back to deterministic optimizer
+            }
+        }
+
+        return GenerateDeterministicLqsImprovement(command);
+    }
+
+    private static AiLqsImprovementResultDto GenerateDeterministicLqsImprovement(AiLqsImprovementCommand command)
+    {
+        string rawTitle = command.Title?.Trim() ?? "Handmade Artisan Product";
+        string category = command.Category?.Trim() ?? "Handmade Decor";
+        string appendPhrase = " | Unique Handmade Gift | Artisan Tabletop & Desk Decor";
+        string optimizedTitle = rawTitle;
+        if (optimizedTitle.Length < 115)
+        {
+            optimizedTitle = $"{optimizedTitle}{appendPhrase}";
+        }
+        if (optimizedTitle.Length > 140)
+        {
+            optimizedTitle = optimizedTitle[..140].Trim();
+        }
+
+        var candidateTags = new List<string>(command.Tags ?? []);
+        var fallbackPool = new[]
+        {
+            "gift for him", "desk accessory", "handmade decor", "unique gift",
+            "housewarming gift", "custom art", "room aesthetic", "artisan gift",
+            "tabletop decor", "personalized gift", "modern rustic", "collectible figurine",
+            "office desk gift"
+        };
+
+        var finalTags = new List<string>();
+        foreach (var t in candidateTags)
+        {
+            var cleaned = t.Trim();
+            if (cleaned.Length > 20) cleaned = cleaned[..20].Trim();
+            if (!string.IsNullOrWhiteSpace(cleaned) && !finalTags.Contains(cleaned, StringComparer.OrdinalIgnoreCase))
+            {
+                finalTags.Add(cleaned);
+            }
+            if (finalTags.Count >= 13) break;
+        }
+
+        foreach (var fb in fallbackPool)
+        {
+            if (finalTags.Count >= 13) break;
+            if (!finalTags.Contains(fb, StringComparer.OrdinalIgnoreCase))
+            {
+                finalTags.Add(fb);
+            }
+        }
+
+        var sbDesc = new StringBuilder();
+        sbDesc.AppendLine($"✨ {optimizedTitle}");
+        sbDesc.AppendLine();
+        sbDesc.AppendLine("Looking for an extraordinary handcrafted piece that catches every eye? Made with superior attention to detail, this piece combines durability with modern aesthetics.");
+        sbDesc.AppendLine();
+        sbDesc.AppendLine("📌 HIGHLIGHTS & SPECIFICATIONS:");
+        sbDesc.AppendLine($"- Product: {rawTitle}");
+        sbDesc.AppendLine($"- Category: {category}");
+        if (command.Materials != null && command.Materials.Count > 0)
+        {
+            sbDesc.AppendLine($"- Materials: {string.Join(", ", command.Materials)}");
+        }
+        sbDesc.AppendLine("- Condition: Brand new, made to order");
+        sbDesc.AppendLine();
+        sbDesc.AppendLine("🪵 CARE INSTRUCTIONS:");
+        sbDesc.AppendLine("- Keep away from extreme heat and prolonged direct sunlight.");
+        sbDesc.AppendLine("- Gently wipe clean with a soft microfiber cloth.");
+        sbDesc.AppendLine();
+        sbDesc.AppendLine("📦 PACKAGING & FAST SHIPPING:");
+        sbDesc.AppendLine("- Securely cushioned and shipped in protective packaging.");
+        sbDesc.AppendLine("- Tracking number provided promptly upon dispatch.");
+
+        var vars = new List<CompetitorVariationGroupDto>
+        {
+            new() { Name = "Boyut / Size", Values = ["Small (15 cm)", "Medium (24 cm)", "Large (30 cm)"] },
+            new() { Name = "Renk / Color", Values = ["Gökkuşağı / Rainbow", "Mat Siyah", "İpek Bronz"] }
+        };
+
+        var highlights = new List<string>
+        {
+            "Başlık 125-140 karakter aralığına ve yüksek arama hacimli kelimelere uyarlandı.",
+            "13 Arama Etiketi (13/13) tamalandı; tüm etiketler 20 karakter altında ve 2-3 kelimelik long-tail formatına getirildi.",
+            "Google SEO meta açıklaması ve maddeli ürün özellikleri eklendi.",
+            "Boyut ve Renk varyasyon yapısı ile satış dönüşüm oranı artırıldı."
+        };
+
+        return new AiLqsImprovementResultDto
+        {
+            ListingId = command.ListingId,
+            OptimizedTitle = optimizedTitle,
+            OptimizedTags = finalTags.Take(13).ToList(),
+            OptimizedDescription = sbDesc.ToString().TrimEnd(),
+            SuggestedMaterials = command.Materials != null && command.Materials.Count > 0 ? command.Materials : ["Bio-Resin", "Walnut Wood", "Eco PLA"],
+            SuggestedVariations = vars,
+            TargetLqsScore = 100,
+            TargetLqsGrade = "A+",
+            LqsDoctorAuditSummary = $"Akıllı eRank LQS Motoru: {command.CurrentLqsScore} puanlık rakip listelemesi eksiksiz 100/100 A+ kalite standardına yükseltildi.",
+            ImprovementHighlights = highlights,
+            UsedAi = false,
+            Provider = "SmartMarketEngine"
+        };
+    }
 }

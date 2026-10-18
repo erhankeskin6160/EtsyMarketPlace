@@ -6,7 +6,9 @@ import {
   EtsyApiService,
   CompetitorShopAnalysisDto,
   CompetitorListingDto,
-  SeasonalTrendItemDto
+  SeasonalTrendItemDto,
+  AiLqsImprovementCommandDto,
+  AiLqsImprovementResultDto
 } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 
@@ -469,6 +471,15 @@ export interface LqsAuditCheck {
 
                       <button
                         type="button"
+                        class="btn-ai-lqs-glow"
+                        [disabled]="isImprovingLqs"
+                        (click)="improveSelectedListingLqs(sel)">
+                        <span *ngIf="!isImprovingLqs">✨ AI ile 100/100 LQS Yap</span>
+                        <span *ngIf="isImprovingLqs">⏳ LQS İyileştiriliyor...</span>
+                      </button>
+
+                      <button
+                        type="button"
                         class="btn-open-etsy-prominent"
                         (click)="openListingOnEtsy(sel)">
                         🌐 Etsy'de Ürüne Git ↗
@@ -485,7 +496,7 @@ export interface LqsAuditCheck {
                   </div>
                 </div>
 
-                <!-- PRODUCT INSPECTOR TABS: 13 TAGS vs FULL DESCRIPTION -->
+                <!-- PRODUCT INSPECTOR TABS: 13 TAGS vs FULL DESCRIPTION vs AI DOCTOR -->
                 <div class="inspector-tabs-wrap">
                   <div class="inspector-tab-header">
                     <button
@@ -501,6 +512,13 @@ export interface LqsAuditCheck {
                       [class.active]="activeProductDetailTab === 'tags'"
                       (click)="activeProductDetailTab = 'tags'">
                       🏷️ Aktif 13 Arama Etiketi ({{ sel.tags.length }}/13) & Materyaller
+                    </button>
+                    <button
+                      type="button"
+                      class="insp-tab-btn tab-ai-doctor"
+                      [class.active]="activeProductDetailTab === 'ai-doctor'"
+                      (click)="activeProductDetailTab = 'ai-doctor'">
+                      ✨ 100/100 LQS Reçetesi & Varyasyonlar
                     </button>
 
                     <button
@@ -543,6 +561,91 @@ export interface LqsAuditCheck {
                     <div class="materials-row" *ngIf="sel.materials && sel.materials.length > 0">
                       <span class="mat-label">🧵 Materyaller:</span>
                       <span *ngFor="let m of sel.materials" class="mat-chip">{{ m }}</span>
+                    </div>
+                  </div>
+
+                  <!-- TAB: 100/100 LQS AI DOCTOR -->
+                  <div class="inspector-tab-content ai-doctor-content" *ngIf="activeProductDetailTab === 'ai-doctor'">
+                    <div *ngIf="isImprovingLqs" class="ai-loading-box">
+                      <div class="spinner-ai"></div>
+                      <p>✨ <strong>{{ activeAiModelBadge }}</strong> ürünün SEO zafiyetlerini inceliyor, 13 altın arama etiketini, 140 karakterlik viral başlığı ve varyasyon baremlerini 100/100 seviyesine optimize ediyor...</p>
+                    </div>
+
+                    <div *ngIf="!isImprovingLqs && !lqsImprovementResult" class="ai-empty-prompt">
+                      <div class="empty-prompt-card">
+                        <h4>🎯 Mevcut eRank LQS Kalite Skoru: <span class="badge-lqs" [class.badge-a]="sel.lqsScore >= 80" [class.badge-b]="sel.lqsScore >= 68 && sel.lqsScore < 80" [class.badge-c]="sel.lqsScore < 68">{{ sel.lqsScore }}/100 ({{ sel.lqsGrade }})</span></h4>
+                        <p class="muted-text">Bu üründen ilham alarak organik sıralamada öne geçmek için yapay zeka ile 13 altın etiket, 140 karakterlik viral başlık ve akıllı varyasyon baremleri oluşturun.</p>
+                        <button type="button" class="btn-ai-lqs-glow large-cta" (click)="improveSelectedListingLqs(sel)">
+                          ✨ {{ activeAiModelBadge }} ile 100/100 LQS Reçetesini Başlat
+                        </button>
+                      </div>
+                    </div>
+
+                    <div *ngIf="!isImprovingLqs && lqsImprovementResult as opt" class="ai-result-view">
+                      <div class="ai-result-header">
+                        <div class="ai-header-left">
+                          <span class="badge-target-lqs">🏆 Hedef LQS: 100/100 (A+)</span>
+                          <span class="badge-provider">🤖 {{ opt.provider }}</span>
+                        </div>
+                        <button type="button" class="btn-clone-optimized-hero" (click)="cloneListingWithOptimization(sel, opt)">
+                          ✨ 100/100 AI Optimize Haliyle Klonla
+                        </button>
+                      </div>
+
+                      <div class="doctor-summary-box">
+                        <strong>🩺 LQS Doktoru Denetim Notu:</strong>
+                        <p>{{ opt.lqsDoctorAuditSummary }}</p>
+                        <ul class="highlights-list" *ngIf="opt.improvementHighlights && opt.improvementHighlights.length > 0">
+                          <li *ngFor="let h of opt.improvementHighlights">✅ {{ h }}</li>
+                        </ul>
+                      </div>
+
+                      <div class="opt-field-block">
+                        <div class="opt-field-label">
+                          <span>📝 100/100 Optimize Başlık ({{ opt.optimizedTitle.length }} Karakter):</span>
+                          <button type="button" class="btn-mini-copy" (click)="copyText(opt.optimizedTitle, 'Başlık')">📋 Kopyala</button>
+                        </div>
+                        <div class="opt-field-box">{{ opt.optimizedTitle }}</div>
+                      </div>
+
+                      <div class="opt-field-block">
+                        <div class="opt-field-label">
+                          <span>🏷️ 13 Altın Long-Tail Arama Etiketi ({{ opt.optimizedTags.length }}/13):</span>
+                          <button type="button" class="btn-mini-copy" (click)="copyTags(opt.optimizedTags)">📋 Tümünü Kopyala</button>
+                        </div>
+                        <div class="tags-cloud">
+                          <span *ngFor="let t of opt.optimizedTags" class="tag-chip opt-chip">#{{ t }}</span>
+                        </div>
+                      </div>
+
+                      <div class="opt-field-block" *ngIf="opt.suggestedVariations && opt.suggestedVariations.length > 0">
+                        <div class="opt-field-label">
+                          <span>📦 Önerilen Akıllı Varyasyonlar (Sütun 3'e Otomatik Aktarılacak):</span>
+                        </div>
+                        <div class="vars-preview-row">
+                          <div *ngFor="let v of opt.suggestedVariations" class="var-group-card">
+                            <strong>{{ v.name }}:</strong>
+                            <span>{{ v.values.join(', ') }}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div class="opt-field-block">
+                        <div class="opt-field-label">
+                          <span>📄 Google SEO & Dönüşüm Uyumlu Ürün Açıklaması:</span>
+                          <button type="button" class="btn-mini-copy" (click)="copyDescription(opt.optimizedDescription)">📋 Açıklamayı Kopyala</button>
+                        </div>
+                        <div class="description-reader opt-desc-reader">{{ opt.optimizedDescription }}</div>
+                      </div>
+
+                      <div class="ai-bottom-actions">
+                        <button type="button" class="btn-clone-optimized-hero" (click)="cloneListingWithOptimization(sel, opt)">
+                          ✨ 100/100 AI Optimize Haliyle Klonla (Tüm Bilgilerle İlan Oluşturucuya Git)
+                        </button>
+                        <button type="button" class="btn-clone-secondary" (click)="cloneListingToFastCreator(sel)">
+                          🚀 Orijinal (Ham) Rakip Haliyle Klonla
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1931,6 +2034,220 @@ export interface LqsAuditCheck {
     .lb-thumb-btn.active { border-color: #818cf8; }
     .lb-thumb-img { width: 100%; height: 100%; object-fit: cover; }
 
+    .btn-ai-lqs-glow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(168, 85, 247, 0.25));
+      border: 1px solid rgba(168, 85, 247, 0.5);
+      color: #c084fc;
+      font-weight: 600;
+      font-size: 0.84rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-ai-lqs-glow:hover {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.4), rgba(168, 85, 247, 0.4));
+      border-color: #c084fc;
+      box-shadow: 0 0 16px rgba(168, 85, 247, 0.35);
+    }
+    .btn-ai-lqs-glow.large-cta {
+      padding: 10px 20px;
+      font-size: 0.95rem;
+    }
+    .tab-ai-doctor {
+      color: #c084fc !important;
+      border-bottom-color: transparent;
+    }
+    .tab-ai-doctor.active {
+      border-bottom-color: #c084fc !important;
+      background: rgba(168, 85, 247, 0.12) !important;
+    }
+    .ai-doctor-content {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .ai-loading-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 30px 16px;
+      text-align: center;
+      color: #c7d2fe;
+    }
+    .spinner-ai {
+      width: 32px;
+      height: 32px;
+      border: 3px solid rgba(168, 85, 247, 0.2);
+      border-top-color: #c084fc;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .ai-empty-prompt {
+      padding: 18px 0;
+    }
+    .empty-prompt-card {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px dashed rgba(168, 85, 247, 0.4);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .ai-result-view {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .ai-result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: 10px;
+      padding: 10px 14px;
+    }
+    .ai-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge-target-lqs {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+    .badge-provider {
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      font-size: 0.8rem;
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .btn-clone-optimized-hero {
+      background: linear-gradient(135deg, #6366f1, #a855f7);
+      color: #fff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+    }
+    .btn-clone-optimized-hero:hover {
+      box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
+      transform: translateY(-1px);
+    }
+    .doctor-summary-box {
+      background: rgba(168, 85, 247, 0.08);
+      border-left: 3px solid #c084fc;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 14px;
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    .doctor-summary-box strong {
+      color: #c084fc;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .doctor-summary-box p {
+      margin: 0 0 6px 0;
+      color: #e2e8f0;
+    }
+    .highlights-list {
+      margin: 0;
+      padding-left: 18px;
+      color: #cbd5e1;
+      font-size: 0.84rem;
+    }
+    .highlights-list li {
+      margin-bottom: 2px;
+    }
+    .opt-field-block {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .opt-field-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #94a3b8;
+    }
+    .opt-field-box {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #f1f5f9;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+    .opt-chip {
+      background: rgba(99, 102, 241, 0.2) !important;
+      border-color: rgba(99, 102, 241, 0.4) !important;
+      color: #a5b4fc !important;
+    }
+    .vars-preview-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .var-group-card {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 0.84rem;
+      display: flex;
+      gap: 6px;
+    }
+    .var-group-card strong {
+      color: #818cf8;
+    }
+    .opt-desc-reader {
+      max-height: 200px;
+    }
+    .ai-bottom-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+    .btn-clone-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #cbd5e1;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.84rem;
+      cursor: pointer;
+    }
+    .btn-clone-secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+
     @media (max-width: 1180px) {
       .workspace-split { grid-template-columns: 1fr; }
       .showcase-top-grid { grid-template-columns: 1fr; }
@@ -1942,7 +2259,14 @@ export interface LqsAuditCheck {
 export class CompetitorSpyComponent implements OnInit {
   activeMainTab: 'competitor' | 'seasonal' = 'competitor';
   activeIntelTab: 'tags' | 'gap' | 'lqs' = 'tags';
-  activeProductDetailTab: 'description' | 'tags' = 'description';
+  activeProductDetailTab: 'description' | 'tags' | 'ai-doctor' = 'description';
+
+  isImprovingLqs = false;
+  lqsImprovementResult: AiLqsImprovementResultDto | null = null;
+
+  get activeAiModelBadge(): string {
+    return this.aiSettings.activeBadgeTextClean();
+  }
 
   shopQueryInput = '';
   sampleLimit = 50;
@@ -2077,6 +2401,8 @@ export class CompetitorSpyComponent implements OnInit {
   selectListing(item: CompetitorListingDto | null): void {
     this.selectedListing = item;
     this.activeImageIndex = 0;
+    this.lqsImprovementResult = null;
+    this.isImprovingLqs = false;
   }
 
   getItemImages(item: CompetitorListingDto | null): string[] {
@@ -2290,12 +2616,122 @@ export class CompetitorSpyComponent implements OnInit {
       seoScore: item.lqsScore,
       marketScore: item.lqsScore
     };
+
+    this.etsyApi.getCompetitorListingInventory(item.listingId).subscribe({
+      next: (inv) => {
+        if (inv && inv.hasVariations) {
+          cloned.hasVariations = true;
+          cloned.varType1 = inv.varType1;
+          cloned.varValues1 = inv.varValues1;
+          cloned.enableVar2 = inv.enableVar2;
+          cloned.varType2 = inv.varType2;
+          cloned.varValues2 = inv.varValues2;
+          if (inv.offerings && inv.offerings.length > 0) {
+            cloned.variationRows = inv.offerings.map(o => ({
+              key: o.key,
+              price: o.price,
+              quantity: o.quantity,
+              active: o.active
+            }));
+          }
+        }
+        this.finishCloning(cloned, item, imgs.length);
+      },
+      error: () => {
+        this.finishCloning(cloned, item, imgs.length);
+      }
+    });
+  }
+
+  private finishCloning(cloned: ClonedMarketListing, item: CompetitorListingDto, imgCount: number): void {
     this.aiSettings.setClonedListing(cloned);
     this.closeLightbox();
-    this.showToast(`🚀 "${item.title.slice(0, 34)}..." (${imgs.length} fotoğraf + ${cloned.tags.length} etiket) Hızlı İlan Oluşturucuya aktarıldı!`);
+    const varText = (cloned.variationRows && cloned.variationRows.length > 0) ? ` + ${cloned.variationRows.length} varyasyon` : '';
+    this.showToast(`🚀 "${item.title.slice(0, 32)}..." (${imgCount} fotoğraf + ${cloned.tags.length} etiket${varText}) İlan Oluşturucuya aktarıldı!`);
     setTimeout(() => {
       this.router.navigate(['/listings/fast-creator']);
-    }, 300);
+    }, 250);
+  }
+
+  cloneListingWithOptimization(item: CompetitorListingDto, opt: AiLqsImprovementResultDto): void {
+    const imgs = this.getItemImages(item);
+    const cloned: ClonedMarketListing = {
+      id: item.listingId,
+      title: opt.optimizedTitle || item.title,
+      priceUsd: item.priceUsd,
+      tags: [...(opt.optimizedTags && opt.optimizedTags.length > 0 ? opt.optimizedTags : (item.tags || []))],
+      description: opt.optimizedDescription || item.description || '',
+      imageUrl: imgs[0] || item.imageUrl || '',
+      imageUrls: [...imgs],
+      materials: [...(opt.suggestedMaterials && opt.suggestedMaterials.length > 0 ? opt.suggestedMaterials : (item.materials || []))],
+      shopName: this.analysisResult?.shop?.shopName || '',
+      seoScore: opt.targetLqsScore || 100,
+      marketScore: opt.targetLqsScore || 100
+    };
+
+    if (opt.suggestedVariations && opt.suggestedVariations.length > 0) {
+      cloned.hasVariations = true;
+      cloned.varType1 = opt.suggestedVariations[0].name;
+      cloned.varValues1 = opt.suggestedVariations[0].values.join(', ');
+      if (opt.suggestedVariations.length > 1) {
+        cloned.enableVar2 = true;
+        cloned.varType2 = opt.suggestedVariations[1].name;
+        cloned.varValues2 = opt.suggestedVariations[1].values.join(', ');
+      }
+      if (opt.suggestedOfferings && opt.suggestedOfferings.length > 0) {
+        cloned.variationRows = opt.suggestedOfferings.map(o => ({
+          key: o.key,
+          price: o.price,
+          quantity: o.quantity,
+          active: o.active
+        }));
+      }
+    }
+
+    this.aiSettings.setClonedListing(cloned);
+    this.closeLightbox();
+    this.showToast(`✨ 100/100 Optimize "${cloned.title.slice(0, 30)}..." (${imgs.length} fotoğraf + 13 altın etiket + varyasyonlar) İlan Oluşturucuya aktarıldı!`);
+    setTimeout(() => {
+      this.router.navigate(['/listings/fast-creator']);
+    }, 250);
+  }
+
+  improveSelectedListingLqs(sel: CompetitorListingDto): void {
+    this.isImprovingLqs = true;
+    this.activeProductDetailTab = 'ai-doctor';
+    const s = this.aiSettings.settings();
+    const apiKey = (s as any)[`${s.provider.toLowerCase()}ApiKey`] || s.geminiApiKey || s.deepSeekApiKey || '';
+    const cmd: AiLqsImprovementCommandDto = {
+      listingId: sel.listingId,
+      title: sel.title,
+      tags: sel.tags,
+      description: sel.description,
+      materials: sel.materials,
+      priceUsd: sel.priceUsd,
+      category: 'Handmade',
+      currentLqsScore: sel.lqsScore,
+      provider: s.provider,
+      apiKey: apiKey,
+      model: this.aiSettings.activeModelName()
+    };
+
+    this.etsyApi.improveListingLqs(cmd).subscribe({
+      next: (res) => {
+        this.isImprovingLqs = false;
+        this.lqsImprovementResult = res;
+        this.showToast(`✨ 100/100 LQS Reçetesi hazırlandı (${res.provider})!`);
+      },
+      error: () => {
+        this.isImprovingLqs = false;
+        this.showToast('❌ LQS iyileştirmesi oluşturulamadı.');
+      }
+    });
+  }
+
+  copyText(text: string, label: string = 'Metin'): void {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    this.showToast(`📋 ${label} panoya kopyalandı!`);
   }
 
   copyTags(tags: string[]): void {

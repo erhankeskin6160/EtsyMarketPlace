@@ -87,6 +87,12 @@ public sealed class MarketKeywordTrackingServiceTests
 
         public IReadOnlyList<EtsyMarketPlace.Application.SeasonalTrends.SeasonalTrendItem> GetSeasonalTrends(DateTime? referenceDate = null)
             => Array.Empty<EtsyMarketPlace.Application.SeasonalTrends.SeasonalTrendItem>();
+
+        public Task<CompetitorListingInventoryDto> GetListingInventoryAsync(long listingId, string authShopId = "53236321", CancellationToken cancellationToken = default)
+            => Task.FromResult(new CompetitorListingInventoryDto { ListingId = listingId });
+
+        public Task<AiLqsImprovementResultDto> ImproveListingLqsWithAiAsync(AiLqsImprovementCommand command, CancellationToken cancellationToken = default)
+            => Task.FromResult(new AiLqsImprovementResultDto { ListingId = command.ListingId });
     }
 
     private static MarketSearchResponse BuildResponse(int total, decimal avgPrice, double avgFavorites, int opportunity, int sampleSize)

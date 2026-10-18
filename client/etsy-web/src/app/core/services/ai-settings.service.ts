@@ -41,6 +41,13 @@ export interface AiOptimizationSettings {
   customModel: string;
 }
 
+export interface ClonedVariationRow {
+  key: string;
+  price: number;
+  quantity: number;
+  active: boolean;
+}
+
 export interface ClonedMarketListing {
   id: number | string;
   title: string;
@@ -54,6 +61,13 @@ export interface ClonedMarketListing {
   shopName?: string;
   seoScore?: number;
   marketScore?: number;
+  hasVariations?: boolean;
+  varType1?: string;
+  varValues1?: string;
+  enableVar2?: boolean;
+  varType2?: string;
+  varValues2?: string;
+  variationRows?: ClonedVariationRow[];
 }
 
 const STORAGE_KEY = 'etsy_ai_optimization_settings';

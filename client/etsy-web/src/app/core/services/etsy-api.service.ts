@@ -810,6 +810,17 @@ export class EtsyApiService {
     return this.http.get<SeasonalTrendItemDto[]>(`${this.API_BASE}/api/etsy/market/seasonal-trends`);
   }
 
+  getCompetitorListingInventory(listingId: number, shopId?: string): Observable<CompetitorListingInventoryDto> {
+    const sId = shopId || this.activeShopId();
+    return this.http.get<CompetitorListingInventoryDto>(`${this.API_BASE}/api/etsy/market/listing/${listingId}/inventory`, {
+      params: { shopId: sId }
+    });
+  }
+
+  improveListingLqs(command: AiLqsImprovementCommandDto): Observable<AiLqsImprovementResultDto> {
+    return this.http.post<AiLqsImprovementResultDto>(`${this.API_BASE}/api/etsy/market/listing/improve-lqs`, command);
+  }
+
   // ── System Health & Version ───────────────────────────────────────────────
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
@@ -1059,4 +1070,59 @@ export interface SeasonalTrendItemDto {
   actionAdvice: string;
   estimatedTrafficMultiplier: number;
 }
+
+export interface CompetitorVariationGroupDto {
+  name: string;
+  values: string[];
+}
+
+export interface CompetitorVariationOfferingDto {
+  key: string;
+  price: number;
+  quantity: number;
+  active: boolean;
+}
+
+export interface CompetitorListingInventoryDto {
+  listingId: number;
+  hasVariations: boolean;
+  varType1?: string;
+  varValues1?: string;
+  enableVar2?: boolean;
+  varType2?: string;
+  varValues2?: string;
+  groups: CompetitorVariationGroupDto[];
+  offerings: CompetitorVariationOfferingDto[];
+}
+
+export interface AiLqsImprovementCommandDto {
+  listingId: number;
+  title: string;
+  tags?: string[];
+  description?: string;
+  materials?: string[];
+  priceUsd: number;
+  category?: string;
+  currentLqsScore: number;
+  provider?: string;
+  apiKey?: string;
+  model?: string;
+}
+
+export interface AiLqsImprovementResultDto {
+  listingId: number;
+  optimizedTitle: string;
+  optimizedTags: string[];
+  optimizedDescription: string;
+  suggestedMaterials: string[];
+  suggestedVariations: CompetitorVariationGroupDto[];
+  suggestedOfferings: CompetitorVariationOfferingDto[];
+  targetLqsScore: number;
+  targetLqsGrade: string;
+  lqsDoctorAuditSummary: string;
+  improvementHighlights: string[];
+  usedAi: boolean;
+  provider: string;
+}
+
 

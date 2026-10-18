@@ -32,4 +32,9 @@ public interface IEtsyMarketApiClient
         long targetShopId,
         int limit = 50,
         CancellationToken cancellationToken = default) => Task.FromResult("{\"count\":0,\"results\":[]}");
+
+    Task<string> GetListingInventoryRawJsonAsync(
+        string authShopId,
+        long listingId,
+        CancellationToken cancellationToken = default) => Task.FromResult("{\"products\":[]}");
 }

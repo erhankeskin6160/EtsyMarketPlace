@@ -23,4 +23,13 @@ public interface IMarketResearchService
         CancellationToken cancellationToken = default);
 
     IReadOnlyList<SeasonalTrendItem> GetSeasonalTrends(DateTime? referenceDate = null);
+
+    Task<CompetitorListingInventoryDto> GetListingInventoryAsync(
+        long listingId,
+        string authShopId = "53236321",
+        CancellationToken cancellationToken = default) => Task.FromResult(new CompetitorListingInventoryDto { ListingId = listingId });
+
+    Task<AiLqsImprovementResultDto> ImproveListingLqsWithAiAsync(
+        AiLqsImprovementCommand command,
+        CancellationToken cancellationToken = default) => Task.FromResult(new AiLqsImprovementResultDto { ListingId = command.ListingId });
 }

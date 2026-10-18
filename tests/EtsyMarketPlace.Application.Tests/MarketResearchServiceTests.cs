@@ -57,6 +57,15 @@ public sealed class MarketResearchServiceTests
         {
             return Task.FromResult(ShopActiveListingsRawJson ?? """{ "count": 0, "results": [] }""");
         }
+
+        public string? InventoryRawJson { get; set; }
+        public int InventoryCallCount { get; private set; }
+
+        public Task<string> GetListingInventoryRawJsonAsync(string authShopId, long listingId, CancellationToken ct)
+        {
+            InventoryCallCount++;
+            return Task.FromResult(InventoryRawJson ?? """{ "products": [] }""");
+        }
     }
 
     private const string TwoItemSearchJson = """
@@ -651,6 +660,99 @@ public sealed class MarketResearchServiceTests
         Assert.Equal("Full detailed description from batch endpoint.", item.Description);
         Assert.Equal(3, item.Materials.Count);
         Assert.Contains("Epoxy Resin", item.Materials);
+    }
+
+    [Fact]
+    public async Task GetListingInventoryAsync_WithVariations_ParsesGroupsAndOfferingsCorrectly()
+    {
+        var fakeClient = new FakeEtsyMarketApiClient
+        {
+            InventoryRawJson = """
+            {
+                "products": [
+                    {
+                        "product_id": 901,
+                        "is_deleted": false,
+                        "property_values": [
+                            { "property_name": "Boyut / Size", "values": ["Small (15cm)"] },
+                            { "property_name": "Renk / Color", "values": ["Mat Siyah"] }
+                        ],
+                        "offerings": [
+                            {
+                                "price": { "amount": 1738, "divisor": 100, "currency_code": "USD" },
+                                "quantity": 8,
+                                "is_enabled": true
+                            }
+                        ]
+                    },
+                    {
+                        "product_id": 902,
+                        "is_deleted": false,
+                        "property_values": [
+                            { "property_name": "Boyut / Size", "values": ["Large (30cm)"] },
+                            { "property_name": "Renk / Color", "values": ["Rainbow Silk"] }
+                        ],
+                        "offerings": [
+                            {
+                                "price": { "amount": 2990, "divisor": 100, "currency_code": "USD" },
+                                "quantity": 5,
+                                "is_enabled": true
+                            }
+                        ]
+                    }
+                ]
+            }
+            """
+        };
+
+        var service = new MarketResearchService(fakeClient);
+        var result = await service.GetListingInventoryAsync(5555, "53236321");
+
+        Assert.True(result.HasVariations);
+        Assert.Equal(2, result.Groups.Count);
+        Assert.Equal("Boyut / Size", result.VarType1);
+        Assert.Contains("Small (15cm)", result.VarValues1);
+        Assert.Contains("Large (30cm)", result.VarValues1);
+        Assert.True(result.EnableVar2);
+        Assert.Equal("Renk / Color", result.VarType2);
+        Assert.Contains("Mat Siyah", result.VarValues2);
+        Assert.Contains("Rainbow Silk", result.VarValues2);
+        Assert.Equal(2, result.Offerings.Count);
+        Assert.Equal(17.38m, result.Offerings[0].Price);
+        Assert.Equal(29.90m, result.Offerings[1].Price);
+    }
+
+    [Fact]
+    public async Task ImproveListingLqsWithAiAsync_WithoutApiKey_ReturnsDeterministic100Lqs()
+    {
+        var fakeClient = new FakeEtsyMarketApiClient();
+        var service = new MarketResearchService(fakeClient);
+
+        var cmd = new AiLqsImprovementCommand(
+            ListingId: 12345,
+            Title: "Small Articulated Dragon",
+            Tags: ["dragon", "fidget"],
+            Description: "Short text",
+            Materials: ["PLA"],
+            PriceUsd: 18.50m,
+            Category: "Toys",
+            CurrentLqsScore: 65,
+            Provider: "Offline",
+            ApiKey: null,
+            Model: null
+        );
+
+        var result = await service.ImproveListingLqsWithAiAsync(cmd);
+
+        Assert.False(result.UsedAi);
+        Assert.Equal("SmartMarketEngine", result.Provider);
+        Assert.Equal(100, result.TargetLqsScore);
+        Assert.Equal("A+", result.TargetLqsGrade);
+        Assert.True(result.OptimizedTitle.Length >= 60 && result.OptimizedTitle.Length <= 140);
+        Assert.Equal(13, result.OptimizedTags.Count);
+        Assert.All(result.OptimizedTags, t => Assert.True(t.Length <= 20));
+        Assert.NotEmpty(result.SuggestedVariations);
+        Assert.NotEmpty(result.ImprovementHighlights);
     }
 }
 

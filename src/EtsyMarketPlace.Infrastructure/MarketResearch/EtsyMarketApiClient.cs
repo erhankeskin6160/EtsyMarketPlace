@@ -188,6 +188,31 @@ public sealed class EtsyMarketApiClient : IEtsyMarketApiClient
         return body;
     }
 
+    public async Task<string> GetListingInventoryRawJsonAsync(
+        string authShopId,
+        long listingId,
+        CancellationToken cancellationToken = default)
+    {
+        var (apiKeyHeader, bearerToken) = await ResolveAuthHeadersAsync(authShopId, cancellationToken);
+        var url = $"https://api.etsy.com/v3/application/listings/{listingId}/inventory";
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("x-api-key", apiKeyHeader);
+        if (!string.IsNullOrWhiteSpace(bearerToken))
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", bearerToken);
+        }
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return "{\"products\":[]}";
+        }
+
+        return body;
+    }
+
     /// <summary>
     /// Etsy uygulama kimlik bilgilerini çözer ve gerekirse erişim token'ını yeniler.
     /// x-api-key header değeri ile opsiyonel Bearer token döndürür.

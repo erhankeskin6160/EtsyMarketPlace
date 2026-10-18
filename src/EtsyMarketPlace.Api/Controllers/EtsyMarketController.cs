@@ -144,6 +144,33 @@ public class EtsyMarketController : BaseApiController
         var trends = _marketResearchService.GetSeasonalTrends();
         return Ok(trends);
     }
+
+    [HttpGet("listing/{listingId:long}/inventory")]
+    [EndpointSummary("Etsy v3 İlan Envanter ve Varyasyon Bilgilerini Getirir")]
+    public async Task<IActionResult> GetListingInventory(
+        [FromRoute] long listingId,
+        [FromQuery] string shopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        if (listingId <= 0) return BadRequest(new { error = "Geçersiz listingId" });
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var inventory = await _marketResearchService.GetListingInventoryAsync(listingId, resolvedShopId, cancellationToken);
+        return Ok(inventory);
+    }
+
+    [HttpPost("listing/improve-lqs")]
+    [EndpointSummary("Seçili AI Modeli veya SmartMarketEngine ile Listelemeyi 100/100 LQS Seviyesine Yükseltir")]
+    public async Task<IActionResult> ImproveListingLqs(
+        [FromBody] AiLqsImprovementCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        if (command == null || string.IsNullOrWhiteSpace(command.Title))
+        {
+            return BadRequest(new { error = "LQS denetimi için ürün başlığı gereklidir." });
+        }
+        var result = await _marketResearchService.ImproveListingLqsWithAiAsync(command, cancellationToken);
+        return Ok(result);
+    }
 }
 
 public sealed record TrackMarketKeywordRequest(string Keyword);

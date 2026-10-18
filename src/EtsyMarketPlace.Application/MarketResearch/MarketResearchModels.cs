@@ -219,3 +219,61 @@ public sealed class CompetitorShopAnalysisDto
     public DateTimeOffset RetrievedAtUtc { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class CompetitorVariationGroupDto
+{
+    public string Name { get; set; } = string.Empty;
+    public List<string> Values { get; set; } = [];
+}
+
+public sealed class CompetitorVariationOfferingDto
+{
+    public string Key { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public int Quantity { get; set; }
+    public bool Active { get; set; } = true;
+}
+
+public sealed class CompetitorListingInventoryDto
+{
+    public long ListingId { get; set; }
+    public bool HasVariations { get; set; }
+    public string? VarType1 { get; set; }
+    public string? VarValues1 { get; set; }
+    public bool EnableVar2 { get; set; }
+    public string? VarType2 { get; set; }
+    public string? VarValues2 { get; set; }
+    public List<CompetitorVariationGroupDto> Groups { get; set; } = [];
+    public List<CompetitorVariationOfferingDto> Offerings { get; set; } = [];
+}
+
+public sealed record AiLqsImprovementCommand(
+    long ListingId,
+    string Title,
+    List<string>? Tags,
+    string? Description,
+    List<string>? Materials,
+    decimal PriceUsd,
+    string? Category,
+    int CurrentLqsScore,
+    string? Provider,
+    string? ApiKey,
+    string? Model
+);
+
+public sealed class AiLqsImprovementResultDto
+{
+    public long ListingId { get; set; }
+    public string OptimizedTitle { get; set; } = string.Empty;
+    public List<string> OptimizedTags { get; set; } = [];
+    public string OptimizedDescription { get; set; } = string.Empty;
+    public List<string> SuggestedMaterials { get; set; } = [];
+    public List<CompetitorVariationGroupDto> SuggestedVariations { get; set; } = [];
+    public List<CompetitorVariationOfferingDto> SuggestedOfferings { get; set; } = [];
+    public int TargetLqsScore { get; set; } = 100;
+    public string TargetLqsGrade { get; set; } = "A+";
+    public string LqsDoctorAuditSummary { get; set; } = string.Empty;
+    public List<string> ImprovementHighlights { get; set; } = [];
+    public bool UsedAi { get; set; }
+    public string Provider { get; set; } = "SmartMarketEngine";
+}
+
