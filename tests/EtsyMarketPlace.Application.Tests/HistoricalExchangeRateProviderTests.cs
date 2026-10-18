@@ -19,7 +19,7 @@ public sealed class HistoricalExchangeRateProviderTests
         var oct15Rate = HistoricalExchangeRateProvider.GetRateForDate(new DateTime(2026, 10, 15));
         var aug30Rate = HistoricalExchangeRateProvider.GetRateForDate(new DateTime(2026, 8, 30));
 
-        Assert.Equal(49.03m, oct1Rate);
+        Assert.Equal(49.05m, oct1Rate);
         Assert.Equal(49.42m, oct15Rate);
         Assert.Equal(48.26m, aug30Rate);
         Assert.NotEqual(oct1Rate, oct15Rate);

@@ -459,6 +459,42 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return this.filteredOrders.reduce((sum, o) => sum + (o.netProfitTry || 0), 0);
   }
 
+  get latestPayoutDate(): string {
+    return this.bankPayoutRecords.length > 0 ? this.bankPayoutRecords[0].date.split(' ')[0] : '—';
+  }
+
+  get latestPayoutAmount(): number {
+    return this.bankPayoutRecords.length > 0 ? this.bankPayoutRecords[0].amount : 0;
+  }
+
+  get averagePayoutTry(): number {
+    return this.bankPayoutRecords.length > 0 ? Number((this.bankPayoutsTry / this.bankPayoutRecords.length).toFixed(2)) : 0;
+  }
+
+  get payoutRatio(): string {
+    return this.netIncomeTry > 0 ? (this.bankPayoutsTry / this.netIncomeTry * 100).toFixed(1) : '0.0';
+  }
+
+  getHistoricalRateForDate(date: Date): number {
+    const d = date.getDate();
+    const m = date.getMonth() + 1;
+    const y = date.getFullYear();
+    if (y === 2026 && m === 10) {
+      if (d >= 16) return 49.53;
+      if (d === 15) return 49.42;
+      if (d === 14) return 49.39;
+      if (d === 13) return 49.36;
+      if (d === 12) return 49.34;
+      if (d >= 9) return 49.28;
+      if (d >= 7) return 49.19;
+      if (d === 6) return 49.16;
+      if (d === 5) return 49.14;
+      if (d >= 2) return 49.15;
+      if (d === 1) return 49.05;
+    }
+    return this.liveRate || 49.25;
+  }
+
   formatDateToTr(date: Date): string {
     const d = String(date.getDate()).padStart(2, '0');
     const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -504,7 +540,16 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const day = parseInt(parts[0].trim(), 10);
       const month = parseInt(parts[1].trim(), 10) - 1;
       const year = parseInt(parts[2].trim(), 10);
-      return new Date(Date.UTC(year, month, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0));
+      if (endOfDay) {
+        // Gün sonu: 23:59:59 Türkiye saati (UTC 20:59:59) - gün sonu toleransı ile UTC 23:59:59
+        return new Date(Date.UTC(year, month, day, 23, 59, 59));
+      } else {
+        // Gün başlangıcı: 00:00:00 Türkiye saati (UTC+3) = Bir önceki gün UTC 21:00:00
+        // Böylece 1 Ekim gece yarısı saat 01:00'deki (UTC 22:00) siparişler eksiksiz dahil olur!
+        const d = new Date(Date.UTC(year, month, day, 0, 0, 0));
+        d.setUTCHours(d.getUTCHours() - 3);
+        return d;
+      }
     }
     return new Date();
   }
@@ -624,24 +669,32 @@ export class AccountingComponent implements OnInit, OnDestroy {
     // 3. Canlı banka transferleri çekimi (Payouts)
     this.etsyApi.getBankPayoutsByDateRange(start, end).subscribe({
       next: (payouts: EtsyBankPayoutDto[]) => {
-        if (payouts && payouts.length > 0) {
-          const totalUsd = payouts.reduce((sum, p) => sum + Math.abs(Number(p.amount || 0)), 0);
-          const totalTry = payouts.reduce((sum, p) => {
-            const pRate = Number(p.exchangeRateToTry || this.liveRate || 49.30);
+        // Ücret / Fee içeren satırlar kesinlikle elenir
+        const validPayouts = (payouts || []).filter(p => 
+          !p.description?.toLowerCase().includes('fee') && 
+          !p.status?.toLowerCase().includes('fee')
+        );
+
+        if (validPayouts.length > 0) {
+          const totalUsd = validPayouts.reduce((sum, p) => sum + Math.abs(Number(p.amount || 0)), 0);
+          const totalTry = validPayouts.reduce((sum, p) => {
+            const pDate = new Date(p.occurredAt);
+            const pRate = Number(p.exchangeRateToTry || this.getHistoricalRateForDate(pDate) || this.liveRate || 49.30);
             return sum + (Math.abs(Number(p.amount || 0)) * pRate);
           }, 0);
 
           this.bankPayoutsUsd = Number(totalUsd.toFixed(2));
           this.bankPayoutsTry = Number(totalTry.toFixed(2));
 
-          this.bankPayoutRecords = payouts.map(p => {
+          this.bankPayoutRecords = validPayouts.map(p => {
             const pDate = new Date(p.occurredAt);
             const dateStr = `${String(pDate.getDate()).padStart(2, '0')}.${String(pDate.getMonth() + 1).padStart(2, '0')}.${String(pDate.getFullYear()).slice(-2)} ${String(pDate.getHours()).padStart(2, '0')}:${String(pDate.getMinutes()).padStart(2, '0')}`;
-            const pRate = Number(p.exchangeRateToTry || this.liveRate || 49.30);
+            const pRate = Number(p.exchangeRateToTry || this.getHistoricalRateForDate(pDate) || this.liveRate || 49.30);
             const tryAmt = Math.abs(Number(p.amount || 0)) * pRate;
+            const refDisplay = p.referenceId.startsWith('#') ? p.referenceId : `#${p.referenceId}`;
             return {
               date: dateStr,
-              refNo: `#${p.referenceId}`,
+              refNo: refDisplay,
               type: 'Banka Transferi',
               amount: Number(tryAmt.toFixed(2)),
               status: p.status === 'completed' ? 'Yatırıldı' : p.status,

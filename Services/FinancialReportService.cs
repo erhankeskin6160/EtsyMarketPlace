@@ -1054,25 +1054,32 @@ internal sealed class FinancialReportService
                 currency));
         }
 
-        // 2. Banka transferleri
+        // 2. Banka transferleri (Fee satırları kesinlikle elenir, ReferenceDisplay ve tarihsel kilitli kur bağlanır)
         var payouts = new List<EtsyMarketPlace.Application.EtsyIntegration.EtsyBankPayout>();
         foreach (var entry in report.Entries)
         {
             var desc = entry.Description ?? "";
-            var isDeposit = entry.Type.Equals("deposit", StringComparison.OrdinalIgnoreCase) ||
+            var isDeposit = (entry.Type.Equals("deposit", StringComparison.OrdinalIgnoreCase) ||
                             desc.Contains("deposit", StringComparison.OrdinalIgnoreCase) ||
-                            desc.Contains("payout", StringComparison.OrdinalIgnoreCase);
+                            desc.Contains("payout", StringComparison.OrdinalIgnoreCase)) &&
+                            !desc.Contains("fee", StringComparison.OrdinalIgnoreCase) &&
+                            !entry.Type.Contains("fee", StringComparison.OrdinalIgnoreCase);
 
             if (isDeposit && entry.Amount != 0)
             {
-                var refId = entry.EntryId.ToString(CultureInfo.InvariantCulture);
+                var refId = entry.ReferenceId > 0 
+                    ? entry.ReferenceId.ToString(CultureInfo.InvariantCulture) 
+                    : entry.EntryId.ToString(CultureInfo.InvariantCulture);
+
+                var rate = HistoricalExchangeRateProvider.GetRateForDate(entry.CreatedAt.DateTime);
+
                 payouts.Add(new EtsyMarketPlace.Application.EtsyIntegration.EtsyBankPayout(
                     shopId,
                     refId,
                     entry.CreatedAt,
                     Math.Abs(entry.Amount),
                     currency,
-                    report.ExchangeRate,
+                    rate,
                     "completed",
                     desc));
             }

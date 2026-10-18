@@ -72,8 +72,13 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         return period?.ToLowerInvariant() switch
         {
             "today" => (now.Date, now),
-            "last_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero)),
-            null or "" or "this_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now),
+            "last_month" => (
+                new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).AddMonths(-1).ToUniversalTime(), 
+                new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime()),
+            null or "" or "this_month" => (
+                // Türkiye saat dilimi (UTC+3) ile ay başlangıcı: 1. gün 00:00 TR = Önceki ay son günü 21:00 UTC
+                new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(), 
+                now),
             _ => throw new ArgumentException("period today, this_month veya last_month olmalıdır.")
         };
     }
@@ -85,20 +90,30 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         CancellationToken cancellationToken = default)
     {
         var payouts = await _reporting.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
-        if (payouts.Count > 0) return payouts;
-
-        try
+        if (payouts.Count == 0)
         {
-            var livePayouts = await _etsyClient.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
-            if (livePayouts.Count > 0)
+            try
             {
-                await _repository.SavePayoutsAsync(livePayouts, cancellationToken);
-                return livePayouts;
+                var livePayouts = await _etsyClient.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
+                if (livePayouts.Count > 0)
+                {
+                    await _repository.SavePayoutsAsync(livePayouts, cancellationToken);
+                    payouts = livePayouts;
+                }
             }
+            catch { }
         }
-        catch { }
 
-        return payouts;
+        // Payout filtrelemesi: Kesinlikle 'fee' içeren satırlar elenmeli ve her transfer kendi gününün tarihsel kuruyla kalibre edilmeli
+        return payouts
+            .Where(p => !p.Description.Contains("fee", StringComparison.OrdinalIgnoreCase) && 
+                        !p.Status.Contains("fee", StringComparison.OrdinalIgnoreCase))
+            .Select(p =>
+            {
+                var historicalRate = HistoricalExchangeRateProvider.GetRateForDate(p.OccurredAt.DateTime);
+                return p with { ExchangeRateToTry = historicalRate };
+            })
+            .ToList();
     }
 
     public async Task<LiveFinancialPerformanceResult> GetFinancialPerformanceAsync(
@@ -114,9 +129,8 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         if (live.LedgerOk)
         {
             var p = live.Performance;
-            var rateForPayout = p.ExchangeRateUsed ?? 49.30m;
             var totalPayoutsUsd = payouts.Sum(x => Math.Abs(x.Amount));
-            var totalPayoutsTry = payouts.Sum(x => Math.Abs(x.Amount) * (x.ExchangeRateToTry ?? rateForPayout));
+            var totalPayoutsTry = payouts.Sum(x => Math.Abs(x.Amount) * (x.ExchangeRateToTry ?? HistoricalExchangeRateProvider.GetRateForDate(x.OccurredAt.DateTime)));
 
             return new LiveFinancialPerformanceResult(
                 GrossSales: p.GrossSales,

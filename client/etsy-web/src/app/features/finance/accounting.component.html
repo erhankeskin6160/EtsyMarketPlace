@@ -729,7 +729,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)</h3>
-              <p class="modal-sub">Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: <strong>₺27.594,90</strong></p>
+              <p class="modal-sub">Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: <strong>₺{{ formatNumber(bankPayoutsTry) }}</strong></p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -737,18 +737,18 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Banka Yatırımı</span>
-                <span class="box-val text-cyan">₺27.594,90</span>
-                <span class="box-sub">10 Transfer</span>
+                <span class="box-val text-cyan">₺{{ formatNumber(bankPayoutsTry) }}</span>
+                <span class="box-sub">{{ bankPayoutRecords.length }} Transfer</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">En Son Yatırılan Tarih</span>
-                <span class="box-val text-white">01.10.2026</span>
-                <span class="box-sub">Son: ₺4.359,09</span>
+                <span class="box-val text-white">{{ latestPayoutDate }}</span>
+                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Son: ₺{{ formatNumber(latestPayoutAmount) }}</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Ortalama Transfer</span>
-                <span class="box-val text-primary">₺2.759,49</span>
-                <span class="box-sub">Net Gelirin %77,5'i</span>
+                <span class="box-val text-primary">₺{{ formatNumber(averagePayoutTry) }}</span>
+                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Net Gelirin %{{ payoutRatio }}'i</span>
               </div>
             </div>
 
