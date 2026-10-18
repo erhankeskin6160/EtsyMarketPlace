@@ -5,7 +5,7 @@
           <div class="title-row">
             <h1 class="page-title">Finansal Raporlama Muhasebe Paneli</h1>
             <span class="live-status-pill">
-              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: 97 kayıt | 03.09.2026 - 03.10.2026
+              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: {{ orders.length }} kayıt | {{ startDate }} — {{ endDate }}
             </span>
           </div>
           <p class="page-subtitle">Etsy Payment Account hareketleri, sipariş kâr marjları ve çok katmanlı maliyet denetimi</p>
@@ -46,9 +46,9 @@
 
         <!-- Date Range Pickers -->
         <div class="bar-control-group dates">
-          <input type="text" [(ngModel)]="startDate" class="bar-date-input" />
+          <input type="text" [(ngModel)]="startDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" />
           <span class="date-sep">—</span>
-          <input type="text" [(ngModel)]="endDate" class="bar-date-input" />
+          <input type="text" [(ngModel)]="endDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" />
         </div>
 
         <!-- Action Buttons -->

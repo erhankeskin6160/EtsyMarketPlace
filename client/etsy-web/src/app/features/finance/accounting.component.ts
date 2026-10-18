@@ -23,9 +23,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
   isTry = true;
   activeTab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' = 'orders';
 
-  selectedDatePreset = 'last30';
-  startDate = '03.09.2026';
-  endDate = '03.10.2026';
+  selectedDatePreset = 'thisMonth';
+  startDate = '';
+  endDate = '';
   autoRateEnabled = true;
   liveRate = 49.12;
 
@@ -426,9 +426,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
   constructor(
     private etsyApi: EtsyApiService,
     private router: Router
-  ) {}
+  ) {
+    this.applyDatePreset(this.selectedDatePreset);
+  }
 
   ngOnInit(): void {
+    if (!this.startDate || !this.endDate) {
+      this.applyDatePreset(this.selectedDatePreset);
+    }
     this.filteredOrders = [...this.orders];
     this.liveRate = this.etsyApi.exchangeRate() || 49.12;
     this.loadLiveOrders();
@@ -453,23 +458,67 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return this.filteredOrders.reduce((sum, o) => sum + (o.netProfitTry || 0), 0);
   }
 
+  formatDateToTr(date: Date): string {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}.${m}.${y}`;
+  }
+
+  applyDatePreset(preset: string): void {
+    const now = new Date();
+    if (preset === 'thisMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      this.startDate = this.formatDateToTr(start);
+      this.endDate = this.formatDateToTr(now);
+    } else if (preset === 'last30') {
+      const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      this.startDate = this.formatDateToTr(start);
+      this.endDate = this.formatDateToTr(now);
+    } else if (preset === 'last7') {
+      const start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      this.startDate = this.formatDateToTr(start);
+      this.endDate = this.formatDateToTr(now);
+    } else if (preset === 'lastMonth') {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      this.startDate = this.formatDateToTr(start);
+      this.endDate = this.formatDateToTr(end);
+    } else if (preset === 'all') {
+      const start = new Date(now.getFullYear() - 2, 0, 1);
+      this.startDate = this.formatDateToTr(start);
+      this.endDate = this.formatDateToTr(now);
+    }
+  }
+
+  onCustomDateChange(): void {
+    this.selectedDatePreset = 'custom';
+    this.showToast(`📅 Özel tarih aralığı: ${this.startDate} — ${this.endDate}`);
+    this.loadLiveOrders();
+  }
+
   parseTurkishDate(str: string, endOfDay: boolean = false): Date {
     const parts = (str || '').split('.');
     if (parts.length === 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      const year = parseInt(parts[2], 10);
+      const day = parseInt(parts[0].trim(), 10);
+      const month = parseInt(parts[1].trim(), 10) - 1;
+      const year = parseInt(parts[2].trim(), 10);
       return new Date(Date.UTC(year, month, day, endOfDay ? 23 : 0, endOfDay ? 59 : 0, endOfDay ? 59 : 0));
     }
     return new Date();
   }
 
-  loadLiveOrders(): void {
+  loadLiveOrders(isManualRefresh: boolean = false): void {
+    if (isManualRefresh) {
+      this.isRefreshing = true;
+    }
     const start = this.parseTurkishDate(this.startDate, false);
     const end = this.parseTurkishDate(this.endDate, true);
 
+    // 1. Canlı sipariş listesi çekimi
     this.etsyApi.getOrderFinancialsByDateRange(start, end).subscribe({
       next: (res) => {
+        if (isManualRefresh) this.isRefreshing = false;
         if (res && res.orders && Array.isArray(res.orders) && res.orders.length > 0) {
           this.orders = res.orders.map((dto: any) => ({
             orderDate: dto.orderDate || '',
@@ -491,10 +540,77 @@ export class AccountingComponent implements OnInit, OnDestroy {
             invoiceName: dto.invoicePath
           }));
           this.filterOrders();
+          if (isManualRefresh) {
+            this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${this.orders.length} sipariş yüklendi.`);
+          }
+        } else if (isManualRefresh) {
+          this.showToast('ℹ️ Seçili dönemde sipariş kaydı bulunamadı.');
         }
       },
       error: (err) => {
+        if (isManualRefresh) this.isRefreshing = false;
         console.warn('Canlı sipariş finans dökümü alınamadı, yerel veriler korunuyor:', err);
+        if (isManualRefresh) {
+          this.showToast('⚠️ Canlı API bağlantısı sağlanamadı, yerel veriler korunuyor.');
+        }
+      }
+    });
+
+    // 2. Canlı VDS/Etsy defter KPI kartları çekimi (GEMINI.md Kural 3: Sıfır Mock, Sunucu Finans Motoru)
+    this.etsyApi.getFinancialPerformanceByDateRange(start, end).subscribe({
+      next: (perf: any) => {
+        if (perf) {
+          const rate = Number(perf.exchangeRateUsed ?? this.liveRate ?? 49.12);
+          if (perf.exchangeRateUsed && this.autoRateEnabled) {
+            this.liveRate = Number(perf.exchangeRateUsed);
+          }
+
+          const grossUsd = Number(perf.grossSalesUsd ?? perf.grossSales ?? 0);
+          const grossTry = Number(perf.grossSalesTRY ?? perf.grossSalesTry ?? (grossUsd * rate));
+
+          const feesUsd = Number(perf.platformFees ?? 0);
+          const feesTry = Number((feesUsd * rate).toFixed(2));
+
+          const innerAdsUsd = Number(perf.internalAdsCost ?? 0);
+          const innerAdsTry = Number((innerAdsUsd * rate).toFixed(2));
+
+          const offsiteAdsUsd = Number(perf.externalAdsCost ?? 0);
+          const offsiteAdsTry = Number((offsiteAdsUsd * rate).toFixed(2));
+
+          const refundsUsd = Number(perf.refunds ?? 0);
+          const refundsTry = Number((refundsUsd * rate).toFixed(2));
+
+          const netIncomeUsd = Number((grossUsd - feesUsd - innerAdsUsd - offsiteAdsUsd - refundsUsd).toFixed(2));
+          const netIncomeTry = Number((netIncomeUsd * rate).toFixed(2));
+
+          const costsUsd = Number(((perf.productCosts ?? 0) + (perf.shippingCosts ?? 0)).toFixed(2));
+          const costsTry = Number((costsUsd * rate).toFixed(2));
+
+          const realProfitUsd = Number(perf.netProfitUsd ?? perf.netProfit ?? (netIncomeUsd - costsUsd));
+          const realProfitTry = Number(perf.netProfitTRY ?? perf.netProfitTry ?? (realProfitUsd * rate));
+
+          if (grossUsd > 0 || grossTry > 0) {
+            this.grossSalesUsd = grossUsd;
+            this.grossSalesTry = Number(grossTry.toFixed(2));
+            this.etsyFeesUsd = feesUsd;
+            this.etsyFeesTry = feesTry;
+            this.innerAdsUsd = innerAdsUsd;
+            this.innerAdsTry = innerAdsTry;
+            this.offsiteAdsUsd = offsiteAdsUsd;
+            this.offsiteAdsTry = offsiteAdsTry;
+            this.refundsUsd = refundsUsd;
+            this.refundsTry = refundsTry;
+            this.netIncomeUsd = netIncomeUsd;
+            this.netIncomeTry = netIncomeTry;
+            this.productCostsUsd = costsUsd;
+            this.productCostsTry = costsTry;
+            this.realNetProfitUsd = Number(realProfitUsd.toFixed(2));
+            this.realNetProfitTry = Number(realProfitTry.toFixed(2));
+          }
+        }
+      },
+      error: (err) => {
+        console.warn('Canlı finansal performans verisi alınamadı:', err);
       }
     });
   }
@@ -520,15 +636,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   onPresetChange(): void {
-    if (this.selectedDatePreset === 'last30') {
-      this.startDate = '03.09.2026';
-      this.endDate = '03.10.2026';
-    } else if (this.selectedDatePreset === 'last7') {
-      this.startDate = '26.09.2026';
-      this.endDate = '03.10.2026';
-    } else if (this.selectedDatePreset === 'thisMonth') {
-      this.startDate = '01.10.2026';
-      this.endDate = '03.10.2026';
+    if (this.selectedDatePreset !== 'custom') {
+      this.applyDatePreset(this.selectedDatePreset);
     }
     this.showToast(`📅 Dönem güncellendi: ${this.startDate} — ${this.endDate}`);
     this.loadLiveOrders();
@@ -539,44 +648,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   refreshFromEtsy(): void {
-    this.isRefreshing = true;
-    const start = this.parseTurkishDate(this.startDate, false);
-    const end = this.parseTurkishDate(this.endDate, true);
-
-    this.etsyApi.getOrderFinancialsByDateRange(start, end).subscribe({
-      next: (res) => {
-        this.isRefreshing = false;
-        if (res && res.orders && Array.isArray(res.orders) && res.orders.length > 0) {
-          this.orders = res.orders.map((dto: any) => ({
-            orderDate: dto.orderDate || '',
-            receiptId: String(dto.receiptId),
-            orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded',
-            displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled' ? '🔴 İptal Edildi' : '🟢 Tamamlandı'),
-            buyerName: dto.buyerName || 'Misafir Müşteri',
-            productTitle: dto.productTitle || '',
-            quantity: dto.quantity || 1,
-            grandTotalUsd: dto.grandTotalUsd || 0,
-            etsyFeesUsd: dto.etsyFeesUsd || 0,
-            offsiteAdFeeUsd: dto.offsiteAdFeeUsd || 0,
-            productCostUsd: dto.productCostUsd !== undefined ? dto.productCostUsd : null,
-            netProfitUsd: dto.netProfitUsd || 0,
-            exchangeRate: dto.exchangeRate || this.liveRate,
-            netProfitTry: dto.netProfitTry || 0,
-            hasCostData: Boolean(dto.hasCostData),
-            hasInvoice: Boolean(dto.hasInvoice),
-            invoiceName: dto.invoicePath
-          }));
-          this.filterOrders();
-          this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${this.orders.length} sipariş yüklendi.`);
-        } else {
-          this.showToast('ℹ️ Seçili dönemde sipariş kaydı bulunamadı.');
-        }
-      },
-      error: (err) => {
-        this.isRefreshing = false;
-        this.showToast('⚠️ Canlı API bağlantısı sağlanamadı, yerel veriler korunuyor.');
-      }
-    });
+    this.loadLiveOrders(true);
   }
 
   openCostManager(): void {
