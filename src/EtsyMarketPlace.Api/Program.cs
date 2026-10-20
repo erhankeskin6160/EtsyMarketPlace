@@ -22,16 +22,32 @@ using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
 using EtsyMarketPlace.Infrastructure.Database.Postgres;
 using Microsoft.EntityFrameworkCore;
+using MediatR;
+using FluentValidation;
+using EtsyMarketPlace.Domain.Common;
+using EtsyMarketPlace.Infrastructure.Persistence;
+using EtsyMarketPlace.Infrastructure.Persistence.Repositories;
+using EtsyMarketPlace.Application.Common.Behaviours;
+using EtsyMarketPlace.Application.Features.Commands.Financials.ImportFullFinancials;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
-// 1. Controller Desteği & Global Validation Pipeline
+// 1. Controller Desteği & Global Validation Pipeline & MediatR Pipeline (FlowaErp CQRS)
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<ValidationFilter>();
 });
 builder.Services.AddApplicationValidation();
+builder.Services.AddValidatorsFromAssembly(typeof(ImportFullFinancialsValidator).Assembly);
+
+builder.Services.AddMediatR(cfg =>
+{
+    cfg.RegisterServicesFromAssembly(typeof(ImportFullFinancialsHandler).Assembly);
+    cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehaviour<,>));
+    cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(LoggingBehaviour<,>));
+    cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ExceptionBehaviour<,>));
+});
 
 // 2. Dependency Injection (Clean Architecture Servisleri)
 builder.Services.AddHttpClient();
@@ -72,10 +88,14 @@ var dbPath = Path.Combine(dataDir, "etsy-finance.db");
 builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
 builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyTokenStore>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
-builder.Services.AddSingleton<IEtsyIntegrationRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
-builder.Services.AddSingleton<IEtsyReportingService>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IUserRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<IShopSettingsRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+
+// PostgreSQL 16 EF Core Persistence & Unit of Work (FAZ 1: Finansal Veri Görünürlüğü)
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+builder.Services.AddScoped<EfPostgreSqlIntegrationRepository>();
+builder.Services.AddScoped<IEtsyIntegrationRepository>(services => services.GetRequiredService<EfPostgreSqlIntegrationRepository>());
+builder.Services.AddScoped<IEtsyReportingService>(services => services.GetRequiredService<EfPostgreSqlIntegrationRepository>());
 
 builder.Services.AddSingleton<IAbTestRepository>(sp => new SqliteAbTestRepository(dbPath));
 builder.Services.AddSingleton<IAiUsageRepository>(sp => new SqliteAiUsageRepository(dbPath));

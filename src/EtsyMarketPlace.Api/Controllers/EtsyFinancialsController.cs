@@ -1,7 +1,18 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Api.Services;
 using EtsyMarketPlace.Application.EtsyIntegration;
+using EtsyMarketPlace.Application.Features.Commands.Financials.ImportFullFinancials;
+using EtsyMarketPlace.Application.Features.Queries.Financials.GetBankPayouts;
+using EtsyMarketPlace.Application.Features.Queries.Financials.GetFinancialPerformance;
+using EtsyMarketPlace.Application.Features.Queries.Financials.GetMonthlyOrderSummaries;
 
 namespace EtsyMarketPlace.Api.Controllers;
 
@@ -10,6 +21,7 @@ namespace EtsyMarketPlace.Api.Controllers;
 public class EtsyFinancialsController : BaseApiController
 {
     private readonly IConfiguration _config;
+    private readonly IMediator _mediator;
     private readonly IEtsyDashboardService _dashboard;
     private readonly IEtsyReportingService _reporting;
     private readonly IEtsyFinancialAnalysisService _analysis;
@@ -18,6 +30,7 @@ public class EtsyFinancialsController : BaseApiController
 
     public EtsyFinancialsController(
         IConfiguration config,
+        IMediator mediator,
         IEtsyDashboardService dashboard,
         IEtsyReportingService reporting,
         IEtsyFinancialAnalysisService analysis,
@@ -25,6 +38,7 @@ public class EtsyFinancialsController : BaseApiController
         IEtsySynchronizationService synchronization)
     {
         _config = config;
+        _mediator = mediator;
         _dashboard = dashboard;
         _reporting = reporting;
         _analysis = analysis;
@@ -34,34 +48,76 @@ public class EtsyFinancialsController : BaseApiController
 
     [HttpGet("etsy/banking/payouts")]
     [EndpointSummary("Etsy Banka Transferleri (Payouts)")]
-    public async Task<IActionResult> GetEtsyBankPayouts([FromQuery] string shopId = "53236321", [FromQuery] DateTimeOffset? startDate = null, [FromQuery] DateTimeOffset? endDate = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetEtsyBankPayouts(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] DateTimeOffset? startDate = null,
+        [FromQuery] DateTimeOffset? endDate = null,
+        CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var end = endDate ?? DateTimeOffset.UtcNow;
         var start = startDate ?? new DateTimeOffset(end.Year, end.Month, 1, 0, 0, 0, TimeSpan.Zero);
         if (start > end) return BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
-        return Ok(await _dashboard.GetBankPayoutsAsync(resolvedShopId, start, end, cancellationToken));
+
+        var query = new GetBankPayoutsRequest
+        {
+            ShopId = resolvedShopId,
+            StartDate = start,
+            EndDate = end
+        };
+
+        var response = await _mediator.Send(query, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("etsy/financial/performance")]
     [EndpointSummary("Finansal Performans ve Kâr-Zarar Karnesi")]
-    public async Task<IActionResult> GetFinancialPerformance([FromQuery] string shopId = "53236321", [FromQuery] string period = "last_month", [FromQuery] DateTimeOffset? startDate = null, [FromQuery] DateTimeOffset? endDate = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetFinancialPerformance(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] string period = "last_month",
+        [FromQuery] DateTimeOffset? startDate = null,
+        [FromQuery] DateTimeOffset? endDate = null,
+        CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var resolvedShopId = ResolveShopId(shopId, _config);
-            var cacheKey = $"fin-ledger:{resolvedShopId}:{period}:{startDate:yyyyMMdd}:{endDate:yyyyMMdd}";
-            if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
-                return Ok(cachedPayload);
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var cacheKey = $"fin-ledger:{resolvedShopId}:{period}:{startDate:yyyyMMdd}:{endDate:yyyyMMdd}";
+        if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
+            return Ok(cachedPayload);
 
-            var performance = await _dashboard.GetFinancialPerformanceAsync(resolvedShopId, period, startDate, endDate, cancellationToken);
-            DashboardResponseCache.Set(cacheKey, performance, TimeSpan.FromMinutes(4));
-            return Ok(performance);
-        }
-        catch (Exception ex)
+        var query = new GetFinancialPerformanceRequest
         {
-            return BadRequest(new { error = ex.Message });
+            ShopId = resolvedShopId,
+            Period = period,
+            StartDate = startDate,
+            EndDate = endDate
+        };
+
+        var response = await _mediator.Send(query, cancellationToken);
+        if (response.Success && response.Data is not null)
+        {
+            DashboardResponseCache.Set(cacheKey, response.Data, TimeSpan.FromMinutes(4));
+            return Ok(response.Data);
         }
+
+        return StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet("etsy/orders/monthly-summaries")]
+    [EndpointSummary("Aylık Sipariş ve Ciro Özetleri (PostgreSQL)")]
+    public async Task<IActionResult> GetMonthlyOrderSummaries(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] int months = 12,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var query = new GetMonthlyOrderSummariesRequest
+        {
+            ShopId = resolvedShopId,
+            Months = months
+        };
+
+        var response = await _mediator.Send(query, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("etsy/financial/analysis")]
@@ -207,43 +263,32 @@ public class EtsyFinancialsController : BaseApiController
     [EndpointSummary("Masaüstü Finansal Rapor Aktarımı")]
     public async Task<IActionResult> ImportEtsyFinancialData([FromBody] EtsyFinancialImportRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.ShopId))
-            return BadRequest(new { error = "ShopId zorunludur." });
-
-        var shopId = request.ShopId.Trim();
-
-        if (request.Transactions?.Count > 0)
-            await _repository.SaveTransactionsAsync(request.Transactions, cancellationToken);
-
-        if (request.Payouts?.Count > 0)
-            await _repository.SavePayoutsAsync(request.Payouts, cancellationToken);
-
-        if (request.OrderAlerts?.Count > 0)
-            await _repository.SaveOrderAlertsAsync(request.OrderAlerts, cancellationToken);
-
-        await _repository.SaveSyncStateAsync(shopId, "financial", request.PeriodEnd ?? DateTimeOffset.UtcNow, cancellationToken: cancellationToken);
-
-        return Ok(new
+        var command = new ImportFullFinancialsRequest
         {
-            saved = true,
-            shopId,
-            transactionsCount = request.Transactions?.Count ?? 0,
-            payoutsCount = request.Payouts?.Count ?? 0,
-            alertsCount = request.OrderAlerts?.Count ?? 0
-        });
+            ShopId = request.ShopId,
+            Transactions = request.Transactions,
+            Payouts = request.Payouts,
+            OrderAlerts = request.OrderAlerts,
+            PeriodStart = request.PeriodStart,
+            PeriodEnd = request.PeriodEnd
+        };
+
+        var response = await _mediator.Send(command, cancellationToken);
+        return StatusCode(response.StatusCode, response.Success ? response.Data : response);
     }
 
     [HttpPost("etsy/orders/monthly-import")]
     [EndpointSummary("Aylık Sipariş Geçmişi Aktarımı")]
     public async Task<IActionResult> ImportMonthlyOrders([FromBody] EtsyMonthlyOrderImportRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.ShopId))
-            return BadRequest(new { error = "ShopId zorunludur." });
+        var command = new ImportFullFinancialsRequest
+        {
+            ShopId = request.ShopId,
+            MonthlyOrders = request.Summaries
+        };
 
-        if (request.Summaries?.Count > 0)
-            await _repository.SaveMonthlyOrderSummariesAsync(request.Summaries, cancellationToken);
-
-        return Ok(new { saved = true, shopId = request.ShopId, count = request.Summaries?.Count ?? 0 });
+        var response = await _mediator.Send(command, cancellationToken);
+        return StatusCode(response.StatusCode, response.Success ? response.Data : response);
     }
 
     [HttpPost("etsy/analytics/traffic-import")]
@@ -302,51 +347,36 @@ public class EtsyFinancialsController : BaseApiController
     [EndpointSummary("🌐 Masaüstü Tam Senkronizasyon (Tek Hamlede Aktarım)")]
     public async Task<IActionResult> SyncAllDesktopData([FromBody] EtsyAllDataImportRequest request, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(request.ShopId))
-            return BadRequest(new { error = "ShopId zorunludur." });
-
-        var shopId = request.ShopId.Trim();
-
-        if (request.Transactions?.Count > 0)
-            await _repository.SaveTransactionsAsync(request.Transactions, cancellationToken);
-
-        if (request.Payouts?.Count > 0)
-            await _repository.SavePayoutsAsync(request.Payouts, cancellationToken);
-
-        if (request.OrderAlerts?.Count > 0)
-            await _repository.SaveOrderAlertsAsync(request.OrderAlerts, cancellationToken);
-
-        if (request.MonthlyOrders?.Count > 0)
-            await _repository.SaveMonthlyOrderSummariesAsync(request.MonthlyOrders, cancellationToken);
-
-        if (request.TrafficRecords?.Count > 0)
-            await _repository.SaveListingTrafficDailyAsync(request.TrafficRecords, cancellationToken);
+        var command = new ImportFullFinancialsRequest
+        {
+            ShopId = request.ShopId,
+            Transactions = request.Transactions,
+            Payouts = request.Payouts,
+            OrderAlerts = request.OrderAlerts,
+            MonthlyOrders = request.MonthlyOrders,
+            TrafficRecords = request.TrafficRecords,
+            PeriodStart = request.PeriodStart,
+            PeriodEnd = request.PeriodEnd
+        };
 
         if (request.Charts?.Count > 0)
         {
-            foreach (var c in request.Charts)
-            {
-                var snap = new EtsyChartSnapshot(shopId, c.ChartType.Trim().ToLowerInvariant(), c.PeriodStart, c.PeriodEnd, c.ImagePngBase64, DateTimeOffset.UtcNow);
-                await _repository.SaveChartSnapshotAsync(snap, cancellationToken);
-            }
+            command.ChartPayloads = request.Charts.Select(c => new EtsyChartSnapshot(
+                request.ShopId.Trim(),
+                c.ChartType.Trim().ToLowerInvariant(),
+                c.PeriodStart,
+                c.PeriodEnd,
+                c.ImagePngBase64,
+                DateTimeOffset.UtcNow
+            )).ToList();
         }
 
-        await _repository.SaveSyncStateAsync(shopId, "all_desktop_data", request.PeriodEnd ?? DateTimeOffset.UtcNow, cancellationToken: cancellationToken);
+        var response = await _mediator.Send(command, cancellationToken);
 
         // Masaüstünden yeni veriler aktarıldığında eski önbelleği anında temizle (tam parite)
         DashboardResponseCache.Clear();
 
-        return Ok(new
-        {
-            saved = true,
-            shopId,
-            transactionsCount = request.Transactions?.Count ?? 0,
-            payoutsCount = request.Payouts?.Count ?? 0,
-            alertsCount = request.OrderAlerts?.Count ?? 0,
-            monthlyOrdersCount = request.MonthlyOrders?.Count ?? 0,
-            trafficCount = request.TrafficRecords?.Count ?? 0,
-            chartsCount = request.Charts?.Count ?? 0
-        });
+        return StatusCode(response.StatusCode, response.Success ? response.Data : response);
     }
 
     [HttpGet("banking/deposits")]
