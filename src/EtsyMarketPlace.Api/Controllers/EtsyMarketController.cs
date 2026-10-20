@@ -1,24 +1,23 @@
 namespace EtsyMarketPlace.Api.Controllers;
 
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using EtsyMarketPlace.Application.MarketResearch;
+using EtsyMarketPlace.Application.Features.MarketResearch;
 
 [ApiController]
 [Route("api/etsy/market")]
 public class EtsyMarketController : BaseApiController
 {
     private readonly IConfiguration _config;
-    private readonly IMarketResearchService _marketResearchService;
-    private readonly IMarketKeywordTrackingService _marketKeywordTrackingService;
+    private readonly IMediator _mediator;
 
     public EtsyMarketController(
         IConfiguration config,
-        IMarketResearchService marketResearchService,
-        IMarketKeywordTrackingService marketKeywordTrackingService)
+        IMediator mediator)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
-        _marketResearchService = marketResearchService ?? throw new ArgumentNullException(nameof(marketResearchService));
-        _marketKeywordTrackingService = marketKeywordTrackingService ?? throw new ArgumentNullException(nameof(marketKeywordTrackingService));
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     [HttpGet("search")]
@@ -38,37 +37,32 @@ public class EtsyMarketController : BaseApiController
             ShopId: resolvedShopId
         );
 
-        var result = await _marketResearchService.SearchMarketAsync(query, cancellationToken);
-        return Ok(result);
+        var response = await _mediator.Send(new SearchMarketQuery(query), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("keywords/track")]
     [EndpointSummary("Kelimeyi takibe al ve pazar anlık görüntüsü (snapshot) kaydet")]
     public async Task<IActionResult> TrackKeyword([FromBody] TrackMarketKeywordRequest request, CancellationToken cancellationToken)
     {
-        if (request == null || string.IsNullOrWhiteSpace(request.Keyword))
-        {
-            return BadRequest(new { error = "Takip için keyword gerekli." });
-        }
-
-        var history = await _marketKeywordTrackingService.TrackKeywordAsync(request.Keyword, cancellationToken);
-        return Ok(history);
+        var response = await _mediator.Send(new TrackMarketKeywordCommand(request?.Keyword ?? string.Empty), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("keywords")]
     [EndpointSummary("Takip edilen pazar kelimeleri ve snapshot geçmişleri")]
     public async Task<IActionResult> GetTrackedKeywords(CancellationToken cancellationToken)
     {
-        var list = await _marketKeywordTrackingService.GetTrackedKeywordsAsync(cancellationToken);
-        return Ok(list);
+        var response = await _mediator.Send(new GetTrackedKeywordsQuery(), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpDelete("keywords")]
     [EndpointSummary("Takip edilen kelimeyi ve tüm snapshot geçmişini sil")]
     public async Task<IActionResult> DeleteTrackedKeyword([FromQuery] string keyword, CancellationToken cancellationToken)
     {
-        var removed = await _marketKeywordTrackingService.DeleteKeywordAsync(keyword, cancellationToken);
-        return Ok(new { success = removed });
+        var response = await _mediator.Send(new DeleteTrackedKeywordCommand(keyword), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("ai-report")]
@@ -111,8 +105,8 @@ public class EtsyMarketController : BaseApiController
             Provider: request.Provider
         );
 
-        var report = await _marketResearchService.GenerateAiMarketReportAsync(command, cancellationToken);
-        return Ok(report);
+        var response = await _mediator.Send(new GenerateAiMarketReportCommand(command), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("competitor")]
@@ -123,26 +117,17 @@ public class EtsyMarketController : BaseApiController
         [FromQuery] string shopId = "53236321",
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(shopNameOrUrl))
-        {
-            return BadRequest(new { error = "Rakip mağaza adı veya Etsy mağaza URL'si gereklidir." });
-        }
-
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var result = await _marketResearchService.AnalyzeCompetitorShopAsync(
-            shopNameOrUrl: shopNameOrUrl.Trim(),
-            limit: limit,
-            authShopId: resolvedShopId,
-            cancellationToken: cancellationToken);
-        return Ok(result);
+        var response = await _mediator.Send(new AnalyzeCompetitorShopQuery(shopNameOrUrl, limit, resolvedShopId), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("seasonal-trends")]
     [EndpointSummary("Yıllık E-Ticaret ve Etsy Dönemsel Trend / Q4 Takvim Radarı")]
-    public IActionResult GetSeasonalTrends()
+    public async Task<IActionResult> GetSeasonalTrends(CancellationToken cancellationToken = default)
     {
-        var trends = _marketResearchService.GetSeasonalTrends();
-        return Ok(trends);
+        var response = await _mediator.Send(new GetSeasonalTrendsQuery(), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("listing/{listingId:long}/inventory")]
@@ -152,10 +137,9 @@ public class EtsyMarketController : BaseApiController
         [FromQuery] string shopId = "53236321",
         CancellationToken cancellationToken = default)
     {
-        if (listingId <= 0) return BadRequest(new { error = "Geçersiz listingId" });
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var inventory = await _marketResearchService.GetListingInventoryAsync(listingId, resolvedShopId, cancellationToken);
-        return Ok(inventory);
+        var response = await _mediator.Send(new GetListingInventoryQuery(listingId, resolvedShopId), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("listing/improve-lqs")]
@@ -164,12 +148,8 @@ public class EtsyMarketController : BaseApiController
         [FromBody] AiLqsImprovementCommand command,
         CancellationToken cancellationToken = default)
     {
-        if (command == null || string.IsNullOrWhiteSpace(command.Title))
-        {
-            return BadRequest(new { error = "LQS denetimi için ürün başlığı gereklidir." });
-        }
-        var result = await _marketResearchService.ImproveListingLqsWithAiAsync(command, cancellationToken);
-        return Ok(result);
+        var response = await _mediator.Send(new ImproveListingLqsCommand(command), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }
 

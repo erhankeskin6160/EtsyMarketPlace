@@ -86,10 +86,9 @@ Directory.CreateDirectory(dataDir);
 var dbPath = Path.Combine(dataDir, "etsy-finance.db");
 
 builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
-builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
-builder.Services.AddSingleton<IEtsyTokenStore>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
-builder.Services.AddSingleton<IShopSettingsRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+builder.Services.AddScoped<IShopSettingsRepository, EfPostgreSqlShopSettingsRepository>();
 
 // PostgreSQL 16 EF Core Persistence & Unit of Work (FAZ 1: Finansal Veri Görünürlüğü)
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
