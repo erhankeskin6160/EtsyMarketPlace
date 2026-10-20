@@ -21,6 +21,7 @@ public record PostgreSqlMigrationResult(
     int BankPayoutsMigrated,
     int FinancialTransactionsMigrated,
     int SyncStatesMigrated,
+    int OrderAddressesMigrated,
     string Message);
 
 /// <summary>
@@ -49,6 +50,7 @@ public sealed class PostgreSqlDataMigrator
         int payoutsMigrated = 0;
         int transactionsMigrated = 0;
         int syncStatesMigrated = 0;
+        int orderAddressesMigrated = 0;
 
         try
         {
@@ -256,12 +258,101 @@ public sealed class PostgreSqlDataMigrator
                 _logger.LogInformation("PostgreSQL Migrator: SQLite veritabanı bulunamadı ({Path}), sadece varsayılan tohumlama yapıldı.", sqlitePath);
             }
 
+            // 4. Migrate order_addresses from SQLite if order_addresses.db exists
+            string[] possibleOrderDbPaths =
+            [
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EtsyMarketPlace", "order_addresses.db"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "EtsyMarketPlace", "order_addresses.db")
+            ];
+
+            foreach (var orderDbPath in possibleOrderDbPaths)
+            {
+                if (!File.Exists(orderDbPath)) continue;
+
+                try
+                {
+                    _logger.LogInformation("PostgreSQL Migrator: Sipariş adresleri SQLite veritabanı bulundu ({Path}). Aktarım başlatılıyor...", orderDbPath);
+                    var csb = new SqliteConnectionStringBuilder
+                    {
+                        DataSource = orderDbPath,
+                        Mode = SqliteOpenMode.ReadOnly
+                    };
+
+                    await using var connection = new SqliteConnection(csb.ToString());
+                    await connection.OpenAsync(cancellationToken);
+
+                    await using var cmd = connection.CreateCommand();
+                    cmd.CommandText = @"SELECT receipt_id, buyer_name, buyer_email, phone, street_address, second_address,
+                                               city, state, postal_code, country_code, country_name, source, updated_at_utc,
+                                               ioss_number, product_cost_usd, shipping_cost_usd, weight_kg, width_cm,
+                                               length_cm, height_cm, gtip_code, selected_carrier, carrier_service_name,
+                                               tracking_code, label_url FROM order_addresses;";
+
+                    await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+                    while (await reader.ReadAsync(cancellationToken))
+                    {
+                        long receiptId = reader.GetInt64(0);
+                        if (receiptId <= 0) continue;
+
+                        var exists = await _db.OrderAddresses.AnyAsync(o => o.ReceiptId == receiptId, cancellationToken);
+                        if (!exists)
+                        {
+                            var updatedUtc = DateTime.TryParse(reader.IsDBNull(12) ? null : reader.GetString(12), out var parsedDt)
+                                ? parsedDt.ToUniversalTime()
+                                : DateTime.UtcNow;
+
+                            _db.OrderAddresses.Add(new OrderAddress
+                            {
+                                ReceiptId = receiptId,
+                                BuyerName = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                                BuyerEmail = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                                Phone = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                                StreetAddress = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                                SecondAddress = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                                City = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
+                                State = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                                PostalCode = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                                CountryCode = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                                CountryName = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
+                                Source = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
+                                UpdatedAtUtc = updatedUtc,
+                                IossNumber = reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
+                                ProductCostUsd = reader.IsDBNull(14) ? 0m : Convert.ToDecimal(reader.GetDouble(14)),
+                                ShippingCostUsd = reader.IsDBNull(15) ? 0m : Convert.ToDecimal(reader.GetDouble(15)),
+                                WeightKg = reader.IsDBNull(16) ? 0.0 : reader.GetDouble(16),
+                                WidthCm = reader.IsDBNull(17) ? 0.0 : reader.GetDouble(17),
+                                LengthCm = reader.IsDBNull(18) ? 0.0 : reader.GetDouble(18),
+                                HeightCm = reader.IsDBNull(19) ? 0.0 : reader.GetDouble(19),
+                                GtipCode = reader.IsDBNull(20) ? string.Empty : reader.GetString(20),
+                                SelectedCarrier = reader.IsDBNull(21) ? string.Empty : reader.GetString(21),
+                                CarrierServiceName = reader.IsDBNull(22) ? string.Empty : reader.GetString(22),
+                                TrackingCode = reader.IsDBNull(23) ? string.Empty : reader.GetString(23),
+                                LabelUrl = reader.IsDBNull(24) ? string.Empty : reader.GetString(24)
+                            });
+                            orderAddressesMigrated++;
+                        }
+                    }
+
+                    if (orderAddressesMigrated > 0)
+                    {
+                        await _db.SaveChangesAsync(cancellationToken);
+                        _logger.LogInformation("PostgreSQL: {Count} sipariş teslimat adresi SQLite'tan aktarıldı.", orderAddressesMigrated);
+                    }
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("SQLite order_addresses tablosu okunamadı ({Path}): {Msg}", orderDbPath, ex.Message);
+                }
+            }
+
             return new PostgreSqlMigrationResult(
                 usersSeeded,
                 shopsSeeded,
                 payoutsMigrated,
                 transactionsMigrated,
                 syncStatesMigrated,
+                orderAddressesMigrated,
                 "PostgreSQL veri tohumlama ve aktarım başarıyla tamamlandı.");
         }
         catch (Exception ex)
@@ -273,6 +364,7 @@ public sealed class PostgreSqlDataMigrator
                 payoutsMigrated,
                 transactionsMigrated,
                 syncStatesMigrated,
+                orderAddressesMigrated,
                 $"Hata: {ex.Message}");
         }
     }
