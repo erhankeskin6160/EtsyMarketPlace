@@ -5,24 +5,31 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using MediatR;
 using EtsyMarketPlace.Application.Shipping;
+using EtsyMarketPlace.Application.Features.Logistics.Commands.ConnectCarrier;
+using EtsyMarketPlace.Application.Features.Logistics.Commands.CreateCarrierShipment;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.GetCarrierQuotes;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.GetCarrierSessions;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.GetReadinessStates;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.GetSellerTaxonomyNodes;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.GetShippingProfiles;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.SearchHsCodes;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.SearchSellerTaxonomyNodes;
 
 [ApiController]
 [Route("api/etsy")]
 public class EtsyLogisticsController : BaseApiController
 {
     private readonly IConfiguration _config;
-    private readonly IEtsyLogisticsService _logisticsService;
-    private readonly IShipmentOrchestratorService _orchestratorService;
+    private readonly IMediator _mediator;
 
     public EtsyLogisticsController(
         IConfiguration config,
-        IEtsyLogisticsService logisticsService,
-        IShipmentOrchestratorService orchestratorService)
+        IMediator mediator)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
-        _logisticsService = logisticsService ?? throw new ArgumentNullException(nameof(logisticsService));
-        _orchestratorService = orchestratorService ?? throw new ArgumentNullException(nameof(orchestratorService));
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     [HttpGet("shipping-profiles")]
@@ -32,12 +39,9 @@ public class EtsyLogisticsController : BaseApiController
         CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var profiles = await _logisticsService.GetShippingProfilesAsync(resolvedShopId, cancellationToken);
-        return Ok(new
-        {
-            count = profiles.Count,
-            results = profiles
-        });
+        var request = new GetShippingProfilesRequest { ShopId = resolvedShopId };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("readiness-states")]
@@ -47,12 +51,9 @@ public class EtsyLogisticsController : BaseApiController
         CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var states = await _logisticsService.GetReadinessStatesAsync(resolvedShopId, cancellationToken);
-        return Ok(new
-        {
-            count = states.Count,
-            results = states
-        });
+        var request = new GetReadinessStatesRequest { ShopId = resolvedShopId };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("taxonomy/nodes")]
@@ -62,12 +63,9 @@ public class EtsyLogisticsController : BaseApiController
         CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var nodes = await _logisticsService.GetSellerTaxonomyNodesAsync(resolvedShopId, cancellationToken);
-        return Ok(new
-        {
-            count = nodes.Count,
-            results = nodes
-        });
+        var request = new GetSellerTaxonomyNodesRequest { ShopId = resolvedShopId };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("taxonomy/search")]
@@ -79,12 +77,14 @@ public class EtsyLogisticsController : BaseApiController
         CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var nodes = await _logisticsService.SearchSellerTaxonomyNodesAsync(resolvedShopId, q, limit, cancellationToken);
-        return Ok(new
+        var request = new SearchSellerTaxonomyNodesRequest
         {
-            count = nodes.Count,
-            results = nodes
-        });
+            ShopId = resolvedShopId,
+            Query = q,
+            Limit = limit
+        };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("shipping/create-shipment")]
@@ -98,39 +98,19 @@ public class EtsyLogisticsController : BaseApiController
             return BadRequest(new { success = false, message = "Geçersiz gönderi oluşturma isteği." });
         }
 
-        try
-        {
-            command.ShopId = ResolveShopId(command.ShopId, _config);
-            var result = await _orchestratorService.CreateShipmentAsync(command, cancellationToken);
-            if (!result.Success)
-            {
-                return BadRequest(result);
-            }
-
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new CreateCarrierShipmentResult
-            {
-                Success = false,
-                ReceiptId = command.ReceiptId,
-                CarrierKey = command.CarrierKey,
-                ErrorMessage = $"Gönderi oluşturulurken sunucu hatası oluştu: {ex.Message}"
-            });
-        }
+        command.ShopId = ResolveShopId(command.ShopId, _config);
+        var request = new CreateCarrierShipmentRequest { Command = command };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("shipping/carrier-sessions")]
     [EndpointSummary("Kayıtlı Kargo Firması Oturumlarını ve Aktif Bearer Token Durumlarını Getir")]
     public async Task<IActionResult> GetCarrierSessions(CancellationToken cancellationToken = default)
     {
-        var sessions = await _orchestratorService.GetCarrierSessionsAsync(cancellationToken);
-        return Ok(new
-        {
-            count = sessions.Count,
-            results = sessions
-        });
+        var request = new GetCarrierSessionsRequest();
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("shipping/connect-carrier")]
@@ -144,8 +124,9 @@ public class EtsyLogisticsController : BaseApiController
             return BadRequest(new { success = false, message = "Kargo firması belirtilmelidir." });
         }
 
-        var result = await _orchestratorService.ConnectCarrierAsync(command, cancellationToken);
-        return Ok(result);
+        var request = new ConnectCarrierRequest { Command = command };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("shipping/quotes")]
@@ -154,21 +135,20 @@ public class EtsyLogisticsController : BaseApiController
         [FromBody] CarrierQuotesQuery query,
         CancellationToken cancellationToken = default)
     {
-        var result = await _orchestratorService.GetCarrierQuotesAsync(query ?? new CarrierQuotesQuery(), cancellationToken);
-        return Ok(result);
+        var request = new GetCarrierQuotesRequest { Query = query ?? new CarrierQuotesQuery() };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("shipping/hs-codes")]
     [EndpointSummary("GTİP / HS Gümrük Tarife Kodlarını ve ABD HTS Kataloğunu Ara")]
-    public IActionResult SearchHsCodes(
+    public async Task<IActionResult> SearchHsCodes(
         [FromQuery] string? query = null,
-        [FromQuery] int limit = 25)
+        [FromQuery] int limit = 25,
+        CancellationToken cancellationToken = default)
     {
-        var items = _orchestratorService.SearchHsCodes(query, limit);
-        return Ok(new
-        {
-            count = items.Count,
-            results = items
-        });
+        var request = new SearchHsCodesRequest { Query = query, Limit = limit };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

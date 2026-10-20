@@ -316,8 +316,19 @@ CREATE TABLE IF NOT EXISTS order_addresses (
     weight_kg NUMERIC(10, 3) NOT NULL DEFAULT 0,
     width_cm NUMERIC(10, 2) NOT NULL DEFAULT 0,
     length_cm NUMERIC(10, 2) NOT NULL DEFAULT 0,
-    height_cm NUMERIC(10, 2) NOT NULL DEFAULT 0
+    height_cm NUMERIC(10, 2) NOT NULL DEFAULT 0,
+    gtip_code VARCHAR(50) NOT NULL DEFAULT '',
+    selected_carrier VARCHAR(50) NOT NULL DEFAULT '',
+    carrier_service_name VARCHAR(100) NOT NULL DEFAULT '',
+    tracking_code VARCHAR(100) NOT NULL DEFAULT '',
+    label_url TEXT NOT NULL DEFAULT ''
 );
+
+ALTER TABLE order_addresses ADD COLUMN IF NOT EXISTS gtip_code VARCHAR(50) NOT NULL DEFAULT '';
+ALTER TABLE order_addresses ADD COLUMN IF NOT EXISTS selected_carrier VARCHAR(50) NOT NULL DEFAULT '';
+ALTER TABLE order_addresses ADD COLUMN IF NOT EXISTS carrier_service_name VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE order_addresses ADD COLUMN IF NOT EXISTS tracking_code VARCHAR(100) NOT NULL DEFAULT '';
+ALTER TABLE order_addresses ADD COLUMN IF NOT EXISTS label_url TEXT NOT NULL DEFAULT '';
 
 -- 22. Tracking Items (Kargo Takip Öğeleri)
 CREATE TABLE IF NOT EXISTS tracking_items (

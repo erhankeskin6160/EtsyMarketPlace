@@ -1,32 +1,35 @@
 namespace EtsyMarketPlace.Api.Controllers;
 
 using System;
+using System.IO;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
+using MediatR;
 using EtsyMarketPlace.Application.Orders;
 using EtsyMarketPlace.Domain.Orders;
+using EtsyMarketPlace.Application.Features.Orders.Commands.AiParseAddress;
+using EtsyMarketPlace.Application.Features.Orders.Commands.SaveFulfillmentMeta;
+using EtsyMarketPlace.Application.Features.Orders.Commands.SaveOrderAddress;
+using EtsyMarketPlace.Application.Features.Orders.Commands.UploadOrdersCsv;
+using EtsyMarketPlace.Application.Features.Orders.Queries.GetFulfillmentQueue;
 
 [ApiController]
 [Route("api/etsy/orders")]
 public class EtsyOrdersController : BaseApiController
 {
     private readonly IConfiguration _config;
-    private readonly IEtsyOrderFulfillmentService _fulfillmentService;
-    private readonly IAiAddressParserService _aiAddressParserService;
-    private readonly IOrderAddressRepository? _addressRepository;
+    private readonly IMediator _mediator;
 
     public EtsyOrdersController(
         IConfiguration config,
-        IEtsyOrderFulfillmentService fulfillmentService,
-        IAiAddressParserService aiAddressParserService,
-        IOrderAddressRepository? addressRepository = null)
+        IMediator mediator)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
-        _fulfillmentService = fulfillmentService ?? throw new ArgumentNullException(nameof(fulfillmentService));
-        _aiAddressParserService = aiAddressParserService ?? throw new ArgumentNullException(nameof(aiAddressParserService));
-        _addressRepository = addressRepository;
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     [HttpGet("fulfillment-queue")]
@@ -38,12 +41,15 @@ public class EtsyOrdersController : BaseApiController
         CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var orders = await _fulfillmentService.GetFulfillmentQueueAsync(resolvedShopId, lookbackDays, wasShipped, cancellationToken);
-        return Ok(new
+        var request = new GetFulfillmentQueueRequest
         {
-            count = orders.Count,
-            results = orders
-        });
+            ShopId = resolvedShopId,
+            LookbackDays = lookbackDays,
+            WasShipped = wasShipped
+        };
+
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("save-address")]
@@ -53,13 +59,16 @@ public class EtsyOrdersController : BaseApiController
         [FromBody] EtsyOrderFulfillmentItem updatedAddress,
         CancellationToken cancellationToken = default)
     {
-        if (receiptId <= 0 || updatedAddress == null)
+        var request = new SaveOrderAddressRequest
         {
-            return BadRequest(new { message = "Geçersiz sipariş numarası veya adres bilgisi." });
-        }
+            ReceiptId = receiptId,
+            UpdatedAddress = updatedAddress
+        };
 
-        await _fulfillmentService.SaveOrderAddressAsync(receiptId, updatedAddress, cancellationToken);
-        return Ok(new { success = true, message = "Alıcı adresi ve sipariş bilgileri başarıyla kaydedildi." });
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success
+            ? Ok(new { success = true, message = response.Message, data = response.Data })
+            : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("save-fulfillment-meta")]
@@ -70,18 +79,21 @@ public class EtsyOrdersController : BaseApiController
         CancellationToken cancellationToken = default)
     {
         long resolvedId = receiptId > 0 ? receiptId : (updatedMeta?.ReceiptId ?? 0);
-        if (resolvedId <= 0 || updatedMeta == null)
+        var request = new SaveFulfillmentMetaRequest
         {
-            return BadRequest(new { success = false, message = "Geçersiz sipariş numarası veya meta veri." });
-        }
+            ReceiptId = resolvedId,
+            UpdatedMeta = updatedMeta
+        };
 
-        await _fulfillmentService.SaveOrderAddressAsync(resolvedId, updatedMeta, cancellationToken);
-        return Ok(new
-        {
-            success = true,
-            receiptId = resolvedId,
-            message = "Sipariş maliyetleri, paket ölçüleri ve GTİP kodu kalıcı olarak SQLite veritabanına kaydedildi."
-        });
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success
+            ? Ok(new
+            {
+                success = true,
+                receiptId = resolvedId,
+                message = response.Message
+            })
+            : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("ai-parse-address")]
@@ -90,19 +102,19 @@ public class EtsyOrdersController : BaseApiController
         [FromBody] RawAddressParseRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request?.RawAddress))
+        var parseRequest = new AiParseAddressRequest
         {
-            return BadRequest(new { message = "Lütfen ayrıştırılacak adres metnini girin." });
-        }
+            RawAddress = request?.RawAddress ?? string.Empty
+        };
 
-        var result = await _aiAddressParserService.ParseRawAddressAsync(request.RawAddress, cancellationToken);
-        return Ok(result);
+        var response = await _mediator.Send(parseRequest, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("upload-csv")]
     [EndpointSummary("Etsy Sipariş CSV Dosyasını Yükleyerek Adresleri Toplu Olarak Güncelle")]
     public async Task<IActionResult> UploadOrdersCsv(
-        Microsoft.AspNetCore.Http.IFormFile? file,
+        IFormFile? file,
         [FromForm] string? csvText,
         CancellationToken cancellationToken = default)
     {
@@ -110,7 +122,7 @@ public class EtsyOrdersController : BaseApiController
 
         if (file != null && file.Length > 0)
         {
-            using var reader = new System.IO.StreamReader(file.OpenReadStream(), System.Text.Encoding.UTF8);
+            using var reader = new StreamReader(file.OpenReadStream(), Encoding.UTF8);
             content = await reader.ReadToEndAsync(cancellationToken);
         }
         else if (!string.IsNullOrWhiteSpace(csvText))
@@ -129,16 +141,19 @@ public class EtsyOrdersController : BaseApiController
             return BadRequest(new { message = "CSV dosyası içinde geçerli Etsy sipariş veya adres kaydı bulunamadı." });
         }
 
-        if (_addressRepository != null)
+        var request = new UploadOrdersCsvRequest
         {
-            await _addressRepository.SaveBatchAsync(records, cancellationToken);
-        }
+            Records = records
+        };
 
-        return Ok(new
-        {
-            success = true,
-            count = records.Count,
-            message = $"{records.Count} sipariş teslimat adresi CSV'den başarıyla ayrıştırıldı ve kaydedildi."
-        });
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success
+            ? Ok(new
+            {
+                success = true,
+                count = records.Count,
+                message = response.Message
+            })
+            : StatusCode(response.StatusCode, response);
     }
 }

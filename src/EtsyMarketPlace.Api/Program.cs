@@ -127,8 +127,9 @@ builder.Services.AddHttpClient<EtsyMarketPlace.Application.Shipping.IShiptomoreO
 EtsyMarketPlace.Application.Shipping.ShippingSecretProtector.Current =
     new EtsyMarketPlace.Infrastructure.Shipping.DpapiShippingSecretProtector();
 
-builder.Services.AddSingleton<EtsyMarketPlace.Domain.Orders.IOrderAddressRepository>(sp => new EtsyMarketPlace.Infrastructure.Orders.SqliteOrderAddressRepository(dbPath));
-builder.Services.AddSingleton<EtsyMarketPlace.Application.Orders.EtsyOrderService>();
+// PostgreSQL 16 EF Core Sipariş & Adres Deposu (FAZ 2: Kargo & Lojistik)
+builder.Services.AddScoped<EtsyMarketPlace.Domain.Orders.IOrderAddressRepository, EtsyMarketPlace.Infrastructure.Persistence.Repositories.EfPostgreSqlOrderAddressRepository>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.Orders.EtsyOrderService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Orders.IEtsyOrderFulfillmentService, EtsyMarketPlace.Application.Orders.EtsyOrderFulfillmentService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Orders.IAiAddressParserService, EtsyMarketPlace.Infrastructure.Orders.AiAddressParserService>();
 

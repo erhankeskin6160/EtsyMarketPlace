@@ -29,6 +29,7 @@ public class EtsyMarketPlaceDbContext : DbContext
     public DbSet<ShopCarrierSession> ShopCarrierSessions => Set<ShopCarrierSession>();
     public DbSet<ShopAiSetting> ShopAiSettings => Set<ShopAiSetting>();
     public DbSet<ChartSnapshot> ChartSnapshots => Set<ChartSnapshot>();
+    public DbSet<OrderAddress> OrderAddresses => Set<OrderAddress>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -343,6 +344,41 @@ public class EtsyMarketPlaceDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ShopId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // 17. OrderAddress
+        modelBuilder.Entity<OrderAddress>(entity =>
+        {
+            entity.ToTable("order_addresses");
+            entity.HasKey(e => e.ReceiptId);
+            entity.Property(e => e.ReceiptId).HasColumnName("receipt_id");
+            entity.Property(e => e.BuyerName).HasColumnName("buyer_name").HasMaxLength(255).HasDefaultValue(string.Empty);
+            entity.Property(e => e.BuyerEmail).HasColumnName("buyer_email").HasMaxLength(255).HasDefaultValue(string.Empty);
+            entity.Property(e => e.Phone).HasColumnName("phone").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.StreetAddress).HasColumnName("street_address").HasColumnType("text").HasDefaultValue(string.Empty);
+            entity.Property(e => e.SecondAddress).HasColumnName("second_address").HasColumnType("text").HasDefaultValue(string.Empty);
+            entity.Property(e => e.City).HasColumnName("city").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.State).HasColumnName("state").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.PostalCode).HasColumnName("postal_code").HasMaxLength(50).HasDefaultValue(string.Empty);
+            entity.Property(e => e.CountryCode).HasColumnName("country_code").HasMaxLength(10).HasDefaultValue(string.Empty);
+            entity.Property(e => e.CountryName).HasColumnName("country_name").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.Source).HasColumnName("source").HasMaxLength(50).HasDefaultValue(string.Empty);
+            entity.Property(e => e.UpdatedAtUtc).HasColumnName("updated_at_utc").HasColumnType("timestamp with time zone");
+
+            entity.Property(e => e.IossNumber).HasColumnName("ioss_number").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.ProductCostUsd).HasColumnName("product_cost_usd").HasPrecision(18, 4).HasDefaultValue(0m);
+            entity.Property(e => e.ShippingCostUsd).HasColumnName("shipping_cost_usd").HasPrecision(18, 4).HasDefaultValue(0m);
+            entity.Property(e => e.WeightKg).HasColumnName("weight_kg").HasDefaultValue(0.0);
+            entity.Property(e => e.WidthCm).HasColumnName("width_cm").HasDefaultValue(0.0);
+            entity.Property(e => e.LengthCm).HasColumnName("length_cm").HasDefaultValue(0.0);
+            entity.Property(e => e.HeightCm).HasColumnName("height_cm").HasDefaultValue(0.0);
+            entity.Property(e => e.GtipCode).HasColumnName("gtip_code").HasMaxLength(50).HasDefaultValue(string.Empty);
+            entity.Property(e => e.SelectedCarrier).HasColumnName("selected_carrier").HasMaxLength(50).HasDefaultValue(string.Empty);
+            entity.Property(e => e.CarrierServiceName).HasColumnName("carrier_service_name").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.TrackingCode).HasColumnName("tracking_code").HasMaxLength(100).HasDefaultValue(string.Empty);
+            entity.Property(e => e.LabelUrl).HasColumnName("label_url").HasColumnType("text").HasDefaultValue(string.Empty);
+
+            entity.HasIndex(e => e.UpdatedAtUtc);
         });
     }
 }
