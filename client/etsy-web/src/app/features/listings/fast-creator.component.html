@@ -216,12 +216,14 @@
                 </div>
 
                 <select class="std-select" [(ngModel)]="selectedCategoryCombo" (ngModelChange)="onTaxonomyComboChange($event)">
-                  <option [value]="selectedTaxonomyId + '|' + selectedCategory">
+                  <option *ngIf="selectedTaxonomyId > 0 && selectedCategory" [value]="selectedTaxonomyId + '|' + selectedCategory">
                     ⭐ Aktif Seçili: #{{ selectedTaxonomyId }} - {{ selectedCategory }}
                   </option>
-                  <option *ngFor="let cat of filteredCategories" [value]="cat.id + '|' + cat.path">
-                    #{{ cat.id }} - {{ cat.path }}
-                  </option>
+                  <ng-container *ngFor="let cat of filteredCategories">
+                    <option *ngIf="cat.id !== selectedTaxonomyId" [value]="cat.id + '|' + cat.path">
+                      #{{ cat.id }} - {{ cat.path }}
+                    </option>
+                  </ng-container>
                 </select>
                 <div *ngIf="filteredCategories.length === 0 && !isLoadingCategories" style="font-size: 0.75rem; color: #ef4444; margin-top: 4px;">
                   Aramanıza uygun kategori bulunamadı. Lütfen farklı bir terim aratın.

@@ -34,6 +34,7 @@ export interface MarketItem {
   isBestseller?: boolean;
   hasFreeShipping?: boolean;
   isOpportunityListing?: boolean;
+  taxonomyId?: number;
 }
 
 export interface HealthAuditCheckItem {
@@ -663,7 +664,8 @@ export class MarketResearchComponent implements OnInit {
         : (this.selectedItem.imageUrl ? [this.selectedItem.imageUrl] : []),
       shopName: this.selectedItem.shopName,
       seoScore: this.selectedItem.seoScore,
-      marketScore: this.selectedItem.marketScore
+      marketScore: this.selectedItem.marketScore,
+      taxonomyId: this.selectedItem.taxonomyId
     };
     this.aiService.setClonedListing(cloned);
     this.showToastMsg(`🚀 #${this.selectedItem.id} ürünü Fast Creator'a klonlandı, yönlendiriliyorsunuz...`);

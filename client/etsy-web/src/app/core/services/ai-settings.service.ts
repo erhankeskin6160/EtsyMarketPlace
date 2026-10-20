@@ -55,6 +55,7 @@ export interface ClonedMarketListing {
   tags: string[];
   description?: string;
   category?: string;
+  taxonomyId?: number;
   imageUrl?: string;
   imageUrls?: string[];
   materials?: string[];

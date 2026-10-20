@@ -17,4 +17,10 @@ public interface IEtsyLogisticsService
     Task<IReadOnlyList<EtsyTaxonomyNodeItemDto>> GetSellerTaxonomyNodesAsync(
         string shopId,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<EtsyTaxonomyNodeItemDto>> SearchSellerTaxonomyNodesAsync(
+        string shopId,
+        string query,
+        int limit = 100,
+        CancellationToken cancellationToken = default);
 }

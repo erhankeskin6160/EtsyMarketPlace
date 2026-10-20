@@ -2614,7 +2614,8 @@ export class CompetitorSpyComponent implements OnInit {
       materials: [...(item.materials || [])],
       shopName: this.analysisResult?.shop?.shopName || '',
       seoScore: item.lqsScore,
-      marketScore: item.lqsScore
+      marketScore: item.lqsScore,
+      taxonomyId: item.taxonomyId
     };
 
     this.etsyApi.getCompetitorListingInventory(item.listingId).subscribe({

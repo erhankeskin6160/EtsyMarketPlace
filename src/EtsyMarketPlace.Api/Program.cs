@@ -70,6 +70,12 @@ builder.Services.AddSingleton<IAiUsageRepository>(sp => new SqliteAiUsageReposit
 builder.Services.AddSingleton<IBatchQueueRepository>(sp => new SqliteBatchQueueRepository(dbPath));
 builder.Services.AddSingleton<ITrackingRepository>(sp => new SqliteTrackingRepository(dbPath));
 builder.Services.AddSingleton<IShopPerformanceHistoryRepository>(sp => new SqliteShopPerformanceHistoryRepository(dbPath));
+builder.Services.AddSingleton<EtsyMarketPlace.Application.Taxonomy.IEtsyTaxonomyRepository>(sp =>
+{
+    var repo = new EtsyMarketPlace.Infrastructure.Taxonomy.SqliteEtsyTaxonomyRepository(dbPath);
+    repo.InitializeAsync().GetAwaiter().GetResult();
+    return repo;
+});
 
 builder.Services.AddSingleton(sp => new JwtTokenService(builder.Configuration["Jwt:Secret"]));
 builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisService>();

@@ -387,6 +387,11 @@ export class EtsyApiService {
     return this.http.get<{ count: number; results: EtsyTaxonomyItemDto[] }>(`${this.API_BASE}/api/etsy/taxonomy/nodes?shopId=${encodeURIComponent(id)}`);
   }
 
+  searchSellerTaxonomy(query: string, shopId?: string, limit: number = 100): Observable<{ count: number; results: EtsyTaxonomyItemDto[] }> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<{ count: number; results: EtsyTaxonomyItemDto[] }>(`${this.API_BASE}/api/etsy/taxonomy/search?shopId=${encodeURIComponent(id)}&q=${encodeURIComponent(query)}&limit=${limit}`);
+  }
+
   getAiSettings(shopId?: string): Observable<GetAiSettingsResponseDto> {
     const id = shopId || this.activeShopId();
     return this.http.get<GetAiSettingsResponseDto>(`${this.API_BASE}/api/settings/ai?shopId=${id}`);
@@ -1025,6 +1030,7 @@ export interface CompetitorShopProfileDto {
 
 export interface CompetitorListingDto {
   listingId: number;
+  taxonomyId?: number;
   rank: number;
   title: string;
   priceUsd: number;

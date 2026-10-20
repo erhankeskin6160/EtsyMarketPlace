@@ -82,6 +82,7 @@ public sealed class MarketListingItemDto
     public int ReviewCount { get; set; }
     public decimal ReviewAverage { get; set; }
     public int Quantity { get; set; }
+    public long TaxonomyId { get; set; }
 }
 
 public sealed record MarketAiReportCommand(
@@ -165,6 +166,7 @@ public sealed class CompetitorListingDto
     public int Favorites { get; set; }
     public int Views { get; set; }
     public int Quantity { get; set; }
+    public long TaxonomyId { get; set; }
     public int SeoScore { get; set; }
     public string LqsGrade { get; set; } = "B";
     public int LqsScore { get; set; }

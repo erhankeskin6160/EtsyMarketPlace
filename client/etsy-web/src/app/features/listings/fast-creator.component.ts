@@ -128,6 +128,7 @@ export class FastCreatorComponent implements OnInit {
       this.tags = [...cloned.tags];
       if (cloned.description) this.description = cloned.description;
       if (cloned.category) this.selectedCategory = cloned.category;
+      if (cloned.taxonomyId && cloned.taxonomyId > 0) { this.selectedTaxonomyId = cloned.taxonomyId; }
       if (cloned.materials && cloned.materials.length > 0) {
         this.materials = cloned.materials.join(', ');
       }
@@ -220,14 +221,21 @@ export class FastCreatorComponent implements OnInit {
       next: (res) => {
         this.isLoadingCategories = false;
         this.categoriesList = res?.results || [];
-        this.filterCategories();
-        if (this.selectedTaxonomyId > 0 && !this.selectedCategory) {
+        if (this.selectedTaxonomyId > 0) {
           const match = this.categoriesList.find(c => c.id === this.selectedTaxonomyId);
           if (match) {
             this.selectedCategory = match.path;
             this.selectedCategoryCombo = `${match.id}|${match.path}`;
           }
+        } else if (this.selectedCategory) {
+          const match = this.categoriesList.find(c => c.path.toLowerCase() === this.selectedCategory.toLowerCase() || c.name.toLowerCase() === this.selectedCategory.toLowerCase());
+          if (match) {
+            this.selectedTaxonomyId = match.id;
+            this.selectedCategory = match.path;
+            this.selectedCategoryCombo = `${match.id}|${match.path}`;
+          }
         }
+        this.filterCategories();
       },
       error: () => {
         this.isLoadingCategories = false;
@@ -237,13 +245,23 @@ export class FastCreatorComponent implements OnInit {
 
   filterCategories(): void {
     const q = (this.categorySearchTerm || '').trim().toLowerCase();
+    let baseList: EtsyTaxonomyItemDto[] = [];
     if (!q) {
-      this.filteredCategories = this.categoriesList.slice(0, 80);
+      baseList = this.categoriesList.slice(0, 100);
     } else {
-      this.filteredCategories = this.categoriesList
+      baseList = this.categoriesList
         .filter(c => c.name.toLowerCase().includes(q) || c.path.toLowerCase().includes(q))
-        .slice(0, 150);
+        .slice(0, 200);
     }
+
+    if (this.selectedTaxonomyId > 0) {
+      const selectedItem = this.categoriesList.find(c => c.id === this.selectedTaxonomyId);
+      if (selectedItem && !baseList.some(c => c.id === this.selectedTaxonomyId)) {
+        baseList.unshift(selectedItem);
+      }
+    }
+
+    this.filteredCategories = baseList;
   }
 
   selectCategoryItem(cat: EtsyTaxonomyItemDto): void {
@@ -475,6 +493,7 @@ export class FastCreatorComponent implements OnInit {
           }
         }
         this.selectedCategoryCombo = `${this.selectedTaxonomyId}|${this.selectedCategory}`;
+        this.filterCategories();
         this.showToast(res.message);
       },
       error: (err) => {
@@ -501,6 +520,7 @@ export class FastCreatorComponent implements OnInit {
     this.selectedTaxonomyId = alt.taxonomyId;
     this.selectedCategory = alt.categoryPath;
     this.selectedCategoryCombo = `${alt.taxonomyId}|${alt.categoryPath}`;
+    this.filterCategories();
     this.showToast(`📌 Kategori güncellendi: #${alt.taxonomyId} ${alt.categoryPath}`);
   }
 

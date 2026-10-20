@@ -1,6 +1,10 @@
 namespace EtsyMarketPlace.Api.Controllers;
 
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using EtsyMarketPlace.Application.Shipping;
 
 [ApiController]
@@ -59,6 +63,23 @@ public class EtsyLogisticsController : BaseApiController
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var nodes = await _logisticsService.GetSellerTaxonomyNodesAsync(resolvedShopId, cancellationToken);
+        return Ok(new
+        {
+            count = nodes.Count,
+            results = nodes
+        });
+    }
+
+    [HttpGet("taxonomy/search")]
+    [EndpointSummary("Etsy Resmi Satıcı Kategori Ağacında Arama Yap")]
+    public async Task<IActionResult> SearchSellerTaxonomyNodes(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] string q = "",
+        [FromQuery] int limit = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var nodes = await _logisticsService.SearchSellerTaxonomyNodesAsync(resolvedShopId, q, limit, cancellationToken);
         return Ok(new
         {
             count = nodes.Count,

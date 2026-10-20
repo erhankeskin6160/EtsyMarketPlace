@@ -84,6 +84,7 @@ public sealed class MarketResearchService : IMarketResearchService
         {
             long listingId = item.TryGetProperty("listing_id", out var lid) ? lid.GetInt64() : 0;
             long itemShopId = item.TryGetProperty("shop_id", out var sid) ? sid.GetInt64() : 0;
+            long taxonomyId = item.TryGetProperty("taxonomy_id", out var tx) && tx.TryGetInt64(out var txVal) ? txVal : 0;
             string title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? "") : "";
             string description = item.TryGetProperty("description", out var d) ? (d.GetString() ?? "") : "";
             int views = item.TryGetProperty("views", out var v) ? v.GetInt32() : 0;
@@ -230,7 +231,8 @@ public sealed class MarketResearchService : IMarketResearchService
                 ReviewCount = reviewCount,
                 ReviewAverage = reviewAverage,
                 Quantity = quantity,
-                HasFreeShipping = hasFreeShipping
+                HasFreeShipping = hasFreeShipping,
+                TaxonomyId = taxonomyId
             });
         }
 
@@ -450,6 +452,10 @@ public sealed class MarketResearchService : IMarketResearchService
                     target.ImageUrls = urls;
                     target.ImageUrl = urls[0];
                 }
+            }
+            if (target.TaxonomyId <= 0 && item.TryGetProperty("taxonomy_id", out var bTx) && bTx.TryGetInt64(out var bTxVal))
+            {
+                target.TaxonomyId = bTxVal;
             }
 
             if (string.IsNullOrWhiteSpace(target.Description) &&
@@ -952,6 +958,7 @@ public sealed class MarketResearchService : IMarketResearchService
                 Favorites = item.Favorites,
                 Views = item.Views,
                 Quantity = item.Quantity,
+                TaxonomyId = item.TaxonomyId,
                 SeoScore = item.SeoScore,
                 LqsGrade = grade,
                 LqsScore = lqsScore,

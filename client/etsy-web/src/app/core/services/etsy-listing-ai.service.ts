@@ -871,8 +871,10 @@ OFFICIAL ETSY TAXONOMY RULES:
     - 943: Home & Living > Kitchen & Dining > Drinkware > Mugs
     - 992: Home & Living > Outdoor & Gardening > Planters & Pots
   * Art & Collectibles:
-    - 1239: Art & Collectibles > Sculptures > Busts & Statues
-    - 1238: Art & Collectibles > Sculptures > Figurines
+    - 130: Art & Collectibles > Sculpture > Figurines
+    - 69: Art & Collectibles > Collectibles > Figurines & Knick Knacks
+    - 2869: Home & Living > Home Decor > Home Accents > Statues
+    - 6785: Craft Supplies & Tools > Blanks > Figurines > Monsters & Fantasy
     - 1215: Art & Collectibles > Prints > Digital Prints
   * Craft Supplies & Tools:
     - 68: Craft Supplies & Tools > Digital
@@ -1307,16 +1309,17 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     // 3. 3D Print / Figurines
     if (text.includes('3d') || text.includes('baskı') || text.includes('print') || text.includes('figür') || text.includes('ejderha') || text.includes('dragon') || text.includes('fidget')) {
       return {
-        taxonomyId: 1238,
-        categoryPath: 'Art & Collectibles > Sculptures > Figurines',
+        taxonomyId: 130,
+        categoryPath: 'Art & Collectibles > Sculpture > Figurines',
         confidenceScore: 92,
         reasoning: '3D baskı, figür veya minyatür terimleri Etsy Sculptures & Figurines dalıyla eşleşti.',
         providerUsed: 'Yerel Kural Motoru',
         isLive: false,
-        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #1238 Art & Collectibles > Sculptures > Figurines`,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #130 Art & Collectibles > Sculpture > Figurines`,
         inputSources: sources,
         alternatives: [
-          { taxonomyId: 1239, categoryPath: 'Art & Collectibles > Sculptures > Busts & Statues', confidenceScore: 85 },
+          { taxonomyId: 69, categoryPath: 'Art & Collectibles > Collectibles > Figurines & Knick Knacks', confidenceScore: 85 },
+          { taxonomyId: 6785, categoryPath: 'Craft Supplies & Tools > Blanks > Figurines > Monsters & Fantasy', confidenceScore: 80 },
           { taxonomyId: 68, categoryPath: 'Craft Supplies & Tools > Digital', confidenceScore: 75 }
         ]
       };
@@ -1358,13 +1361,13 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
 
     // Default Fallback
     return {
-      taxonomyId: 1239,
+      taxonomyId: 130,
       categoryPath: 'Art & Collectibles > Sculptures > Busts & Statues',
       confidenceScore: 75,
       reasoning: 'Genel el sanatı ve tasarım ürün dalı seçildi.',
       providerUsed: 'Yerel Kural Motoru',
       isLive: false,
-      message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #1239 Art & Collectibles`,
+      message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #130 Art & Collectibles > Sculpture > Figurines`,
       inputSources: sources,
       alternatives: [
         { taxonomyId: 1054, categoryPath: 'Home & Living > Home Decor > Wall Decor', confidenceScore: 70 }
