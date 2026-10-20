@@ -86,6 +86,7 @@ Directory.CreateDirectory(dataDir);
 var dbPath = Path.Combine(dataDir, "etsy-finance.db");
 
 builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
+builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
 builder.Services.AddScoped<IShopSettingsRepository, EfPostgreSqlShopSettingsRepository>();
