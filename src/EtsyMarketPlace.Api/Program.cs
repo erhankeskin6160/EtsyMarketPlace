@@ -88,7 +88,7 @@ var dbPath = Path.Combine(dataDir, "etsy-finance.db");
 builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
 builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddSingleton<IEtsyTokenStore>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
-builder.Services.AddSingleton<IUserRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
+builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
 builder.Services.AddSingleton<IShopSettingsRepository>(services => services.GetRequiredService<SqliteEtsyIntegrationStore>());
 
 // PostgreSQL 16 EF Core Persistence & Unit of Work (FAZ 1: Finansal Veri Görünürlüğü)
@@ -97,10 +97,11 @@ builder.Services.AddScoped<EfPostgreSqlIntegrationRepository>();
 builder.Services.AddScoped<IEtsyIntegrationRepository>(services => services.GetRequiredService<EfPostgreSqlIntegrationRepository>());
 builder.Services.AddScoped<IEtsyReportingService>(services => services.GetRequiredService<EfPostgreSqlIntegrationRepository>());
 
-builder.Services.AddSingleton<IAbTestRepository>(sp => new SqliteAbTestRepository(dbPath));
-builder.Services.AddSingleton<IAiUsageRepository>(sp => new SqliteAiUsageRepository(dbPath));
-builder.Services.AddSingleton<IBatchQueueRepository>(sp => new SqliteBatchQueueRepository(dbPath));
-builder.Services.AddSingleton<ITrackingRepository>(sp => new SqliteTrackingRepository(dbPath));
+// PostgreSQL 16 EF Core Repositories (FAZ 4: İlanlar, A/B Testleri, Batch Queue, AI Usage & Tracking)
+builder.Services.AddScoped<IAbTestRepository, EfPostgreSqlAbTestRepository>();
+builder.Services.AddScoped<IAiUsageRepository, EfPostgreSqlAiUsageRepository>();
+builder.Services.AddScoped<IBatchQueueRepository, EfPostgreSqlBatchQueueRepository>();
+builder.Services.AddScoped<ITrackingRepository, EfPostgreSqlTrackingRepository>();
 builder.Services.AddSingleton<IShopPerformanceHistoryRepository>(sp => new SqliteShopPerformanceHistoryRepository(dbPath));
 builder.Services.AddSingleton<EtsyMarketPlace.Application.Taxonomy.IEtsyTaxonomyRepository>(sp =>
 {

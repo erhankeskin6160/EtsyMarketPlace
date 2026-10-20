@@ -1,20 +1,29 @@
-using Microsoft.AspNetCore.Mvc;
-using EtsyMarketPlace.Api.Models;
-using EtsyMarketPlace.Application.Auth;
-
 namespace EtsyMarketPlace.Api.Controllers;
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using MediatR;
+using EtsyMarketPlace.Application.Auth;
+using EtsyMarketPlace.Application.Features.Admin.Commands.ToggleUserStatus;
+using EtsyMarketPlace.Application.Features.Admin.Commands.UpdateUser;
+using EtsyMarketPlace.Application.Features.Admin.Queries.GetAllUsers;
+using EtsyMarketPlace.Application.Features.Admin.Queries.GetAuditLogs;
+using EtsyMarketPlace.Application.Features.Admin.Queries.GetSystemStats;
 
 [ApiController]
 [Route("api/admin")]
 public class AdminController : ControllerBase
 {
-    private readonly IUserRepository _userRepo;
+    private readonly IMediator _mediator;
     private readonly JwtTokenService _jwtService;
 
-    public AdminController(IUserRepository userRepo, JwtTokenService jwtService)
+    public AdminController(IMediator mediator, JwtTokenService jwtService)
     {
-        _userRepo = userRepo;
-        _jwtService = jwtService;
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _jwtService = jwtService ?? throw new ArgumentNullException(nameof(jwtService));
     }
 
     private (bool IsValid, string? AdminId, string? AdminName) ValidateAdmin()
@@ -36,9 +45,9 @@ public class AdminController : ControllerBase
         var (isAdmin, _, _) = ValidateAdmin();
         if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
 
-        var users = await _userRepo.GetAllUsersAsync(cancellationToken);
-        var dtos = users.Select(u => new UserDto(u.Id, u.Username, u.Email, u.Role, u.AssignedShopIds, u.MonthlyAiTokenQuota, u.UsedAiTokens, u.IsActive, u.CreatedAt.ToString("O"), u.LastLoginAt?.ToString("O"))).ToList();
-        return Ok(dtos);
+        var request = new GetAllUsersRequest();
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPut("users/{id}")]
@@ -48,25 +57,17 @@ public class AdminController : ControllerBase
         var (isAdmin, adminId, adminName) = ValidateAdmin();
         if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
 
-        var existingUser = await _userRepo.GetByIdAsync(id, cancellationToken);
-        if (existingUser == null)
+        var cmd = new UpdateUserCommandRequest
         {
-            return NotFound(new { error = "Kullanıcı bulunamadı." });
-        }
-
-        var updated = existingUser with
-        {
-            Email = request.Email.Trim().ToLowerInvariant(),
-            Role = request.Role,
-            AssignedShopIds = request.AssignedShopIds ?? existingUser.AssignedShopIds,
-            MonthlyAiTokenQuota = request.MonthlyAiTokenQuota,
-            IsActive = request.IsActive
+            Id = id,
+            Request = request,
+            AdminId = adminId,
+            AdminName = adminName,
+            RemoteIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
         };
 
-        await _userRepo.UpdateUserAsync(updated, cancellationToken);
-        await _userRepo.AddAuditLogAsync(new AuditLogEntry(0, adminId ?? "admin", adminName ?? "Admin", "UpdateUser", $"Kullanıcı güncellendi: {existingUser.Username} ({updated.Role})", HttpContext.Connection.RemoteIpAddress?.ToString(), DateTimeOffset.UtcNow), cancellationToken);
-
-        return Ok(new { success = true, message = "Kullanıcı başarıyla güncellendi." });
+        var response = await _mediator.Send(cmd, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("users/{id}/toggle-status")]
@@ -76,17 +77,16 @@ public class AdminController : ControllerBase
         var (isAdmin, adminId, adminName) = ValidateAdmin();
         if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
 
-        var existingUser = await _userRepo.GetByIdAsync(id, cancellationToken);
-        if (existingUser == null)
+        var cmd = new ToggleUserStatusRequest
         {
-            return NotFound(new { error = "Kullanıcı bulunamadı." });
-        }
+            Id = id,
+            AdminId = adminId,
+            AdminName = adminName,
+            RemoteIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString()
+        };
 
-        var updated = existingUser with { IsActive = !existingUser.IsActive };
-        await _userRepo.UpdateUserAsync(updated, cancellationToken);
-        await _userRepo.AddAuditLogAsync(new AuditLogEntry(0, adminId ?? "admin", adminName ?? "Admin", "ToggleStatus", $"Kullanıcı durumu değiştirildi: {existingUser.Username} (Aktif: {updated.IsActive})", HttpContext.Connection.RemoteIpAddress?.ToString(), DateTimeOffset.UtcNow), cancellationToken);
-
-        return Ok(new { success = true, isActive = updated.IsActive });
+        var response = await _mediator.Send(cmd, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("audit-logs")]
@@ -96,9 +96,9 @@ public class AdminController : ControllerBase
         var (isAdmin, _, _) = ValidateAdmin();
         if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
 
-        var logs = await _userRepo.GetAuditLogsAsync(Math.Clamp(limit, 1, 500), cancellationToken);
-        var dtos = logs.Select(l => new AuditLogDto(l.Id, l.UserId, l.Username, l.Action, l.Details, l.IpAddress, l.Timestamp.ToString("O"))).ToList();
-        return Ok(dtos);
+        var request = new GetAuditLogsRequest { Limit = limit };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("system-stats")]
@@ -108,14 +108,8 @@ public class AdminController : ControllerBase
         var (isAdmin, _, _) = ValidateAdmin();
         if (!isAdmin) return StatusCode(StatusCodes.Status403Forbidden);
 
-        var users = await _userRepo.GetAllUsersAsync(cancellationToken);
-        var logs = await _userRepo.GetAuditLogsAsync(1000, cancellationToken);
-
-        var totalUsers = users.Count;
-        var activeUsers = users.Count(u => u.IsActive);
-        var totalShops = users.SelectMany(u => u.AssignedShopIds).Distinct().Count();
-        var totalUsedTokens = users.Sum(u => (long)u.UsedAiTokens);
-
-        return Ok(new SystemStatsDto(totalUsers, activeUsers, totalShops, totalUsedTokens, logs.Count));
+        var request = new GetSystemStatsRequest();
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

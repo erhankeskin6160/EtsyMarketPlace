@@ -1,64 +1,69 @@
+namespace EtsyMarketPlace.Api.Controllers;
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using EtsyMarketPlace.Application.BatchQueue;
 using EtsyMarketPlace.Api.Models;
-
-namespace EtsyMarketPlace.Api.Controllers;
+using EtsyMarketPlace.Application.Features.BatchQueue.Commands.ClearCompletedBatch;
+using EtsyMarketPlace.Application.Features.BatchQueue.Commands.EnqueueBatchItems;
+using EtsyMarketPlace.Application.Features.BatchQueue.Commands.ProcessBatchItem;
+using EtsyMarketPlace.Application.Features.BatchQueue.Queries.GetBatchQueue;
 
 [ApiController]
 [Route("api/etsy/batch-queue")]
 public class EtsyBatchQueueController : ControllerBase
 {
-    private readonly IBatchQueueRepository _repo;
+    private readonly IMediator _mediator;
 
-    public EtsyBatchQueueController(IBatchQueueRepository repo)
+    public EtsyBatchQueueController(IMediator mediator)
     {
-        _repo = repo;
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     [HttpGet("")]
     [EndpointSummary("Batch Kuyruğundaki İlanları Getir")]
     public async Task<IActionResult> GetBatchQueue([FromQuery] string? status, CancellationToken ct)
     {
-        var items = string.Equals(status, "Pending", StringComparison.OrdinalIgnoreCase)
-            ? await _repo.GetPendingAsync(100, ct)
-            : await _repo.GetAllAsync(200, ct);
-        return Ok(items);
+        var request = new GetBatchQueueRequest { Status = status };
+        var response = await _mediator.Send(request, ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("enqueue")]
     [EndpointSummary("Toplu Optimizasyon Kuyruğuna İlan Ekle")]
     public async Task<IActionResult> EnqueueBatchItems([FromBody] BatchEnqueueRequest request, CancellationToken ct)
     {
-        var enqueued = await _repo.EnqueueBatchAsync(request.Items, ct);
-        return Ok(enqueued);
+        var cmd = new EnqueueBatchItemsRequest { Items = request?.Items ?? [] };
+        var response = await _mediator.Send(cmd, ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("{id}/process")]
     [EndpointSummary("Batch Kuyruk Öğesini İşlenmiş Olarak Güncelle")]
     public async Task<IActionResult> ProcessBatchItem(long id, [FromBody] BatchProcessRequest req, CancellationToken ct)
     {
-        var existing = await _repo.GetByIdAsync(id, ct);
-        if (existing == null) return NotFound();
-
-        var updated = existing with
+        var cmd = new ProcessBatchItemRequest
         {
-            OptimizedTitle = req.OptimizedTitle ?? existing.OptimizedTitle,
-            OptimizedDescription = req.OptimizedDescription ?? existing.OptimizedDescription,
-            OptimizedTags = req.OptimizedTags ?? existing.OptimizedTags,
+            Id = id,
+            OptimizedTitle = req.OptimizedTitle,
+            OptimizedDescription = req.OptimizedDescription,
+            OptimizedTags = req.OptimizedTags,
             OverallScore = req.OverallScore,
-            Status = req.Status,
-            ProcessedAt = DateTimeOffset.UtcNow
+            Status = req.Status
         };
-
-        var result = await _repo.UpdateItemAsync(updated, ct);
-        return Ok(result);
+        var response = await _mediator.Send(cmd, ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpDelete("completed")]
     [EndpointSummary("Tamamlanan Kuyruk Öğelerini Temizle")]
     public async Task<IActionResult> ClearCompletedBatch(CancellationToken ct)
     {
-        var count = await _repo.ClearCompletedAsync(ct);
-        return Ok(new { success = true, cleared = count });
+        var request = new ClearCompletedBatchRequest();
+        var response = await _mediator.Send(request, ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }
