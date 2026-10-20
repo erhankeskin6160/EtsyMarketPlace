@@ -20,6 +20,8 @@ using EtsyMarketPlace.Infrastructure.Database.Migrations;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using EtsyMarketPlace.Infrastructure.ShopPerformance;
 using EtsyMarketPlace.Infrastructure.Tracking;
+using EtsyMarketPlace.Infrastructure.Database.Postgres;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
@@ -37,6 +39,15 @@ builder.Services.AddSingleton<IBankDepositService, BankDepositService>();
 builder.Services.AddSingleton<ListingOptimizationService>();
 builder.Services.Configure<EtsyIntegrationOptions>(builder.Configuration.GetSection("EtsyIntegration"));
 builder.Services.Configure<EtsyApiOptions>(builder.Configuration.GetSection("Etsy"));
+
+// 2.1. PostgreSQL Entity Framework Core DbContext Kaydı
+var pgConnectionString = builder.Configuration.GetConnectionString("PostgreSql")
+    ?? "Host=localhost;Port=5432;Database=etsy_marketplace_db;Username=postgres;Password=";
+
+builder.Services.AddDbContext<EtsyMarketPlaceDbContext>(options =>
+{
+    options.UseNpgsql(pgConnectionString);
+});
 
 var dataProtectionPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -145,6 +156,20 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// 4.1. PostgreSQL Otomatik Tablo Başlatıcı
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<EtsyMarketPlaceDbContext>();
+        await db.Database.EnsureCreatedAsync();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "PostgreSQL otomatik oluşturma uyarısı (Postgres henüz aktif olmayabilir): {Message}", ex.Message);
+    }
+}
 
 // 5. Güvenlik Middleware'i
 app.Use(async (context, next) =>
