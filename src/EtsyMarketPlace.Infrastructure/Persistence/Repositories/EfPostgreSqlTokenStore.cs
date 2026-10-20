@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using EtsyMarketPlace.Application.EtsyIntegration;
+using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using EtsyMarketPlace.Domain.Entities;
 using EtsyMarketPlace.Infrastructure.Database.Postgres;
 
@@ -19,15 +20,32 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
     private readonly EtsyMarketPlaceDbContext _context;
     private readonly IDataProtector _protector;
     private readonly ILogger<EfPostgreSqlTokenStore> _logger;
+    private readonly SqliteEtsyIntegrationStore? _fallbackStore;
 
     public EfPostgreSqlTokenStore(
         EtsyMarketPlaceDbContext context,
         IDataProtectionProvider protectionProvider,
-        ILogger<EfPostgreSqlTokenStore> logger)
+        ILogger<EfPostgreSqlTokenStore> logger,
+        SqliteEtsyIntegrationStore? fallbackStore = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _protector = protectionProvider.CreateProtector("EtsyMarketPlace.EtsyOAuthToken.v2");
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _fallbackStore = fallbackStore;
+    }
+
+    private static bool IsDatabaseUnavailableException(Exception ex)
+    {
+        for (var current = ex; current != null; current = current.InnerException)
+        {
+            if (current is Npgsql.NpgsqlException ||
+                current is System.Net.Sockets.SocketException ||
+                current is TimeoutException)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     public async Task<EtsyOAuthToken?> GetAsync(string shopId, CancellationToken cancellationToken = default)
@@ -40,7 +58,10 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
                 .AsNoTracking()
                 .FirstOrDefaultAsync(t => t.ShopId == shopId.Trim(), cancellationToken);
 
-            if (entity is null) return null;
+            if (entity is null)
+            {
+                return _fallbackStore != null ? await _fallbackStore.GetAsync(shopId, cancellationToken) : null;
+            }
 
             string accessToken = UnprotectOrRaw(entity.AccessToken);
             string refreshToken = UnprotectOrRaw(entity.RefreshToken);
@@ -51,10 +72,15 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
                 new DateTimeOffset(entity.AccessTokenExpiresAt, TimeSpan.Zero),
                 entity.TokenType ?? "Bearer");
         }
+        catch (Exception ex) when (IsDatabaseUnavailableException(ex))
+        {
+            _logger.LogWarning(ex, "PostgreSQL çevrimdışı, OAuth token SQLite yedeğinden alınıyor (ShopId: {ShopId})", shopId);
+            return _fallbackStore != null ? await _fallbackStore.GetAsync(shopId, cancellationToken) : null;
+        }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "PostgreSQL'den OAuth token alınırken hata oluştu (ShopId: {ShopId}): {Message}", shopId, ex.Message);
-            return null;
+            return _fallbackStore != null ? await _fallbackStore.GetAsync(shopId, cancellationToken) : null;
         }
     }
 
@@ -109,10 +135,21 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
             await _context.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Etsy OAuth token PostgreSQL'e başarıyla kaydedildi (ShopId: {ShopId})", normalizedShopId);
         }
+        catch (Exception ex) when (IsDatabaseUnavailableException(ex))
+        {
+            _logger.LogWarning(ex, "PostgreSQL çevrimdışı, OAuth token SQLite yedeğine kaydediliyor (ShopId: {ShopId})", shopId);
+            if (_fallbackStore != null)
+                await _fallbackStore.SaveAsync(shopId, token, cancellationToken);
+            else
+                throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "PostgreSQL'e OAuth token kaydedilirken hata oluştu (ShopId: {ShopId}): {Message}", shopId, ex.Message);
-            throw;
+            if (_fallbackStore != null)
+                await _fallbackStore.SaveAsync(shopId, token, cancellationToken);
+            else
+                throw;
         }
     }
 
