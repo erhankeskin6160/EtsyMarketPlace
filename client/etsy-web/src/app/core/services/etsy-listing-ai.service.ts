@@ -845,52 +845,74 @@ Your task is to accurately determine the single best official Etsy taxonomy cate
 3. Product Description (features, materials, size, intended use)
 
 OFFICIAL ETSY TAXONOMY RULES:
-- Etsy listing taxonomy requires selecting a specific leaf category node from one of the official Etsy root departments:
-  * Bags & Purses:
-    - 132: Bags & Purses > Handbags > Shoulder Bags
-    - 134: Bags & Purses > Handbags > Tote Bags
-    - 133: Bags & Purses > Handbags > Crossbody Bags
-    - 138: Bags & Purses > Handbags > Clutches & Evening Bags
-    - 140: Bags & Purses > Backpacks
-    - 142: Bags & Purses > Wallets & Money Clips
-  * Jewelry:
-    - 204: Jewelry > Necklaces
-    - 211: Jewelry > Necklaces > Pendants
-    - 220: Jewelry > Rings
-    - 187: Jewelry > Earrings
-    - 172: Jewelry > Bracelets
-  * Clothing:
-    - 270: Clothing > Unisex Adult Clothing > Tops & Tees > T-shirts
-    - 283: Clothing > Women's Clothing > Dresses
-    - 288: Clothing > Unisex Adult Clothing > Hoodies & Sweatshirts
-  * Home & Living:
-    - 1041: Home & Living > Lighting > Lamps
-    - 1042: Home & Living > Lighting > Night Lights
-    - 1054: Home & Living > Home Decor > Wall Decor
-    - 1063: Home & Living > Home Decor > Candleholders
-    - 943: Home & Living > Kitchen & Dining > Drinkware > Mugs
-    - 992: Home & Living > Outdoor & Gardening > Planters & Pots
-  * Art & Collectibles:
-    - 130: Art & Collectibles > Sculpture > Figurines
-    - 69: Art & Collectibles > Collectibles > Figurines & Knick Knacks
-    - 2869: Home & Living > Home Decor > Home Accents > Statues
-    - 6785: Craft Supplies & Tools > Blanks > Figurines > Monsters & Fantasy
-    - 1215: Art & Collectibles > Prints > Digital Prints
-  * Craft Supplies & Tools:
-    - 68: Craft Supplies & Tools > Digital
-    - 590: Craft Supplies & Tools > Patterns & How To
-  * Accessories:
-    - 22: Accessories > Hats & Caps
-    - 62: Accessories > Keychains
-  * Electronics & Accessories:
-    - 2079: Electronics & Accessories > Audio > Headphone & Headset Stands
-    - 651: Electronics & Accessories > Cases & Covers > Phone Cases
+- Etsy taxonomy requires selecting an official leaf category node from one of the 15 official Etsy root departments:
+  1. Accessories
+  2. Art & Collectibles
+  3. Bags & Purses
+  4. Bath & Beauty
+  5. Books, Movies & Music
+  6. Clothing
+  7. Craft Supplies & Tools
+  8. Electronics & Accessories
+  9. Home & Living
+  10. Jewelry
+  11. Paper & Party Supplies
+  12. Pet Supplies
+  13. Shoes
+  14. Toys & Games
+  15. Weddings
+
+COMMON VERIFIED OFFICIAL ETSY LEAF CATEGORIES:
+* Art & Collectibles / 3D Models / Statues:
+  - 130: Art & Collectibles > Sculpture > Figurines
+  - 69: Art & Collectibles > Collectibles > Figurines & Knick Knacks
+  - 128: Art & Collectibles > Sculpture
+  - 129: Art & Collectibles > Sculpture > Art Objects
+  - 119: Art & Collectibles > Prints
+  - 2078: Art & Collectibles > Prints > Digital Prints
+* Craft Supplies & Tools / 3D Blanks & Files:
+  - 6785: Craft Supplies & Tools > Blanks > Figurines > Monsters & Fantasy
+  - 6782: Craft Supplies & Tools > Blanks > Figurines > Animal & Natural Shapes
+  - 6446: Craft Supplies & Tools > Blanks > Figurines
+  - 12380: Craft Supplies & Tools > Patterns & How To > Craft Machine Files > 3D Printer Files
+* Home & Living:
+  - 1041: Home & Living > Lighting > Lamps
+  - 1042: Home & Living > Lighting > Night Lights
+  - 1054: Home & Living > Home Decor > Wall Decor
+  - 1063: Home & Living > Home Decor > Candleholders
+  - 943: Home & Living > Kitchen & Dining > Drinkware > Mugs
+  - 992: Home & Living > Outdoor & Gardening > Planters & Pots
+* Bags & Purses:
+  - 132: Bags & Purses > Handbags > Shoulder Bags
+  - 134: Bags & Purses > Handbags > Tote Bags
+  - 133: Bags & Purses > Handbags > Crossbody Bags
+  - 136: Bags & Purses > Backpacks
+  - 197: Bags & Purses > Wallets & Money Clips > Wallets
+* Jewelry:
+  - 204: Jewelry > Necklaces
+  - 211: Jewelry > Necklaces > Pendants
+  - 220: Jewelry > Rings
+  - 187: Jewelry > Earrings
+  - 172: Jewelry > Bracelets
+* Clothing:
+  - 449: Clothing > Men's Clothing > Shirts & Tees > T-shirts
+  - 559: Clothing > Women's Clothing > Tops & Tees > T-shirts
+  - 505: Clothing > Women's Clothing > Dresses
+  - 506: Clothing > Women's Clothing > Hoodies & Sweatshirts
+* Accessories:
+  - 25: Accessories > Hats & Head Coverings > Hats & Caps
+  - 165: Accessories > Keychains & Lanyards > Keychains
+* Electronics & Accessories:
+  - 2079: Electronics & Accessories > Audio > Headphone & Headset Stands
+  - 651: Electronics & Accessories > Cases & Covers > Phone Cases
 
 CRITICAL INSTRUCTIONS:
-1. Examine the actual physical item. If it is a handbag or purse (e.g. "El yapımı kadın çantası" or bag image), do NOT classify it as 3D print or home decor. Categorize it under Bags & Purses (e.g., taxonomy_id 132: Bags & Purses > Handbags > Shoulder Bags).
-2. If an image is provided, carefully inspect the visual textures, stitching, hardware, materials, and form factor.
-3. Provide a clear 'reasoning' in Turkish explaining how the visual cues, title, or description led to this taxonomy choice.
-4. Suggest 2-3 realistic alternatives in 'alternatives' array.
+1. Examine the actual physical item. If it is a 3D dragon, figurine or monster statue, categorize under Art & Collectibles > Sculpture > Figurines (130) or Craft Supplies & Tools > Blanks > Figurines > Monsters & Fantasy (6785).
+2. If it is a lamp/night light, categorize under Home & Living > Lighting > Lamps (1041) or Night Lights (1042).
+3. If it is a handbag/purse, do NOT classify as 3D print or decor; categorize under Bags & Purses (e.g. 132, 134).
+4. If an image is provided, carefully inspect the visual shape, form, textures, and function.
+5. Provide a clear 'reasoning' in Turkish explaining why this Etsy taxonomy was selected.
+6. Suggest 2-3 realistic alternatives in 'alternatives' array with verified IDs.
 
 You MUST respond ONLY with a single valid JSON object matching this schema:
 {

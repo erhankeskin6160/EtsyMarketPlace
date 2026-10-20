@@ -67,6 +67,8 @@ export class FastCreatorComponent implements OnInit {
   categoriesList: EtsyTaxonomyItemDto[] = [];
   filteredCategories: EtsyTaxonomyItemDto[] = [];
   categorySearchTerm = '';
+  selectedDepartment = '';
+  departmentsList: Array<{ name: string; count: number; icon: string }> = [];
   isLoadingCategories = false;
   shippingProfile = '';
   shippingProfilesList: Array<{ id: number; title: string; minDays?: number; maxDays?: number }> = [];
@@ -215,17 +217,145 @@ export class FastCreatorComponent implements OnInit {
     this.loadLogisticsData();
   }
 
+  private readonly TR_TO_EN_TAXONOMY_MAP: Record<string, string[]> = {
+    'lamba': ['lamp', 'lighting', 'lights'],
+    'ışık': ['light', 'lighting'],
+    'abajur': ['lamp', 'lighting'],
+    'gece lambası': ['night lights', 'lighting'],
+    'ejderha': ['dragon', 'monsters & fantasy', 'fantasy', 'figurines', 'sculpture'],
+    'figür': ['figurines', 'sculpture', 'collectibles'],
+    'biblo': ['figurines', 'knick knacks', 'sculpture'],
+    'heykel': ['sculpture', 'statues', 'figurines', 'art objects'],
+    'yüzük': ['rings', 'solitaire rings', 'band rings'],
+    'kolye': ['necklaces', 'pendants', 'pendant necklaces'],
+    'küpe': ['earrings', 'drop & dangle earrings', 'stud earrings'],
+    'bileklik': ['bracelets', 'charm bracelets'],
+    'takı': ['jewelry'],
+    'çanta': ['bags & purses', 'handbags', 'shoulder bags', 'tote bags', 'crossbody bags', 'backpacks'],
+    'omuz çantası': ['shoulder bags'],
+    'sırt çantası': ['backpacks'],
+    'el çantası': ['top handle bags', 'clutches & evening bags'],
+    'bez çanta': ['tote bags'],
+    'cüzdan': ['wallets', 'money clips', 'wallets & money clips'],
+    'tişört': ['t-shirts', 'tops & tees'],
+    'gömlek': ['dress shirts', 'button downs', 'oxfords'],
+    'elbise': ['dresses'],
+    'sweatshirt': ['sweatshirts', 'hoodies & sweatshirts'],
+    'kapüşonlu': ['hoodies', 'hoodies & sweatshirts'],
+    'şapka': ['hats & caps', 'hats & head coverings'],
+    'bere': ['beanies', 'hats & caps'],
+    'ayakkabı': ['shoes', 'boots', 'sneakers'],
+    'terlik': ['slippers'],
+    'kupa': ['mugs', 'drinkware'],
+    'bardak': ['drinkware', 'tumblers', 'glassware'],
+    'mum': ['candles', 'candleholders'],
+    'mumluk': ['candleholders'],
+    'vazo': ['vases', 'vessels'],
+    'saksı': ['planters & pots', 'planters'],
+    'yastık': ['pillows', 'cushions'],
+    'kırlent': ['pillow covers', 'pillows'],
+    'tablo': ['paintings', 'prints', 'canvas'],
+    'resim': ['paintings', 'prints', 'drawing & illustration'],
+    'duvar': ['wall decor', 'wall hangings'],
+    'poster': ['posters', 'music & movie posters', 'prints'],
+    'anahtarlık': ['keychains', 'keychains & lanyards'],
+    'oyuncak': ['toys', 'games', 'puzzles'],
+    'bebek': ['dolls', 'baby'],
+    'çocuk': ['kids', 'child'],
+    'evcil': ['pet supplies', 'pet'],
+    'köpek': ['dog', 'pet supplies'],
+    'kedi': ['cat', 'pet supplies'],
+    'düğün': ['weddings', 'bridal'],
+    'kırtasiye': ['paper & party supplies', 'stationery'],
+    'defter': ['journals & notebooks', 'blank books'],
+    'kart': ['greeting cards', 'invitations'],
+    'dijital': ['digital', 'digital prints', 'craft machine files'],
+    '3d': ['3d printer files', 'figurines', 'sculpture', 'monsters & fantasy'],
+    'stl': ['3d printer files', 'digital']
+  };
+
+  private readonly DEPT_ICONS: Record<string, string> = {
+    'Home & Living': '🏠',
+    'Craft Supplies & Tools': '🎨',
+    'Clothing': '👕',
+    'Toys & Games': '🧸',
+    'Bath & Beauty': '🧼',
+    'Shoes': '👟',
+    'Paper & Party Supplies': '🎉',
+    'Weddings': '💍',
+    'Electronics & Accessories': '🔌',
+    'Books, Movies & Music': '📚',
+    'Accessories': '🧢',
+    'Art & Collectibles': '🖼️',
+    'Jewelry': '💎',
+    'Pet Supplies': '🐾',
+    'Bags & Purses': '👜'
+  };
+
+  getDepartmentIcon(deptName: string): string {
+    return this.DEPT_ICONS[deptName] || '📁';
+  }
+
+  extractDepartments(): void {
+    const counts = new Map<string, number>();
+    for (const cat of this.categoriesList) {
+      const dept = cat.path.split(' > ')[0]?.trim();
+      if (dept) {
+        counts.set(dept, (counts.get(dept) || 0) + 1);
+      }
+    }
+    this.departmentsList = Array.from(counts.entries())
+      .map(([name, count]) => ({
+        name,
+        count,
+        icon: this.getDepartmentIcon(name)
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  clearCategorySearch(): void {
+    this.categorySearchTerm = '';
+    this.filterCategories();
+  }
+
+  expandSearchTerms(rawQ: string): string[] {
+    if (!rawQ) return [];
+    const lower = rawQ.toLowerCase().trim();
+    const terms = new Set<string>();
+    terms.add(lower);
+
+    if (this.TR_TO_EN_TAXONOMY_MAP[lower]) {
+      this.TR_TO_EN_TAXONOMY_MAP[lower].forEach(t => terms.add(t.toLowerCase()));
+    }
+
+    const words = lower.split(/\s+/);
+    for (const word of words) {
+      if (word.length >= 2) {
+        terms.add(word);
+        if (this.TR_TO_EN_TAXONOMY_MAP[word]) {
+          this.TR_TO_EN_TAXONOMY_MAP[word].forEach(t => terms.add(t.toLowerCase()));
+        }
+      }
+    }
+
+    return Array.from(terms);
+  }
+
   loadCategories(): void {
     this.isLoadingCategories = true;
     this.etsyApi.getSellerTaxonomy().subscribe({
       next: (res) => {
         this.isLoadingCategories = false;
         this.categoriesList = res?.results || [];
+        this.extractDepartments();
+
         if (this.selectedTaxonomyId > 0) {
           const match = this.categoriesList.find(c => c.id === this.selectedTaxonomyId);
           if (match) {
             this.selectedCategory = match.path;
             this.selectedCategoryCombo = `${match.id}|${match.path}`;
+            const dept = match.path.split(' > ')[0]?.trim();
+            if (dept) this.selectedDepartment = dept;
           }
         } else if (this.selectedCategory) {
           const match = this.categoriesList.find(c => c.path.toLowerCase() === this.selectedCategory.toLowerCase() || c.name.toLowerCase() === this.selectedCategory.toLowerCase());
@@ -233,6 +363,8 @@ export class FastCreatorComponent implements OnInit {
             this.selectedTaxonomyId = match.id;
             this.selectedCategory = match.path;
             this.selectedCategoryCombo = `${match.id}|${match.path}`;
+            const dept = match.path.split(' > ')[0]?.trim();
+            if (dept) this.selectedDepartment = dept;
           }
         }
         this.filterCategories();
@@ -244,16 +376,30 @@ export class FastCreatorComponent implements OnInit {
   }
 
   filterCategories(): void {
-    const q = (this.categorySearchTerm || '').trim().toLowerCase();
-    let baseList: EtsyTaxonomyItemDto[] = [];
-    if (!q) {
-      baseList = this.categoriesList.slice(0, 100);
-    } else {
-      baseList = this.categoriesList
-        .filter(c => c.name.toLowerCase().includes(q) || c.path.toLowerCase().includes(q))
-        .slice(0, 200);
+    const rawQ = (this.categorySearchTerm || '').trim().toLowerCase();
+    const queryTerms = this.expandSearchTerms(rawQ);
+    const dept = this.selectedDepartment;
+
+    let filtered = this.categoriesList;
+
+    // 1. Bölüm filtresi
+    if (dept) {
+      filtered = filtered.filter(c => c.path.startsWith(dept + ' > ') || c.path === dept);
     }
 
+    // 2. Arama terimleri filtresi (TR & EN)
+    if (queryTerms.length > 0) {
+      filtered = filtered.filter(c => {
+        const p = c.path.toLowerCase();
+        const n = c.name.toLowerCase();
+        return queryTerms.some(term => p.includes(term) || n.includes(term));
+      });
+    }
+
+    // 3. Gösterim listesi (bölüm seçiliyse veya arama yapılıyorsa ilk 300, yoksa ilk 250)
+    let baseList = filtered.slice(0, 300);
+
+    // Aktif seçili olan kategori listede yoksa en başa ekle (kullanıcı seçimini kaybetmesin)
     if (this.selectedTaxonomyId > 0) {
       const selectedItem = this.categoriesList.find(c => c.id === this.selectedTaxonomyId);
       if (selectedItem && !baseList.some(c => c.id === this.selectedTaxonomyId)) {
@@ -468,6 +614,59 @@ export class FastCreatorComponent implements OnInit {
     });
   }
 
+  groundTaxonomyRecommendation(res: CategoryAiSuggestion): CategoryAiSuggestion {
+    if (!this.categoriesList || this.categoriesList.length === 0) return res;
+
+    // 1. Doğrudan ID eşleşmesi
+    let match = this.categoriesList.find(c => c.id === res.taxonomyId);
+    if (match) {
+      res.taxonomyId = match.id;
+      res.categoryPath = match.path;
+    } else if (res.categoryPath) {
+      // 2. Kategori yolu (path) tam veya yaprak adıyla eşleşme
+      const cleanPath = res.categoryPath.toLowerCase().trim();
+      const leafName = cleanPath.split('>').pop()?.trim() || cleanPath;
+
+      match = this.categoriesList.find(c => c.path.toLowerCase() === cleanPath);
+      if (!match) {
+        match = this.categoriesList.find(c => c.name.toLowerCase() === leafName || c.path.toLowerCase().endsWith('> ' + leafName));
+      }
+    }
+
+    // 3. Eğer AI bilinmeyen bir ID döndürdüyse, ürün başlığı ve açıklamasındaki anahtar kelimelerden tespit et
+    if (!match) {
+      const searchTerms = this.expandSearchTerms(`${this.title} ${this.description}`);
+      for (const term of searchTerms) {
+        match = this.categoriesList.find(c => c.name.toLowerCase() === term || c.path.toLowerCase().includes(term));
+        if (match) break;
+      }
+    }
+
+    if (match) {
+      res.taxonomyId = match.id;
+      res.categoryPath = match.path;
+    }
+
+    // Alternatifleri de resmi taksonomi listesiyle doğrula
+    if (res.alternatives && res.alternatives.length > 0) {
+      res.alternatives = res.alternatives.map(alt => {
+        const altMatch = this.categoriesList.find(c => c.id === alt.taxonomyId) ||
+                         this.categoriesList.find(c => c.path.toLowerCase() === alt.categoryPath.toLowerCase()) ||
+                         this.categoriesList.find(c => c.name.toLowerCase() === alt.categoryPath.split('>').pop()?.trim().toLowerCase());
+        if (altMatch) {
+          return {
+            taxonomyId: altMatch.id,
+            categoryPath: altMatch.path,
+            confidenceScore: alt.confidenceScore
+          };
+        }
+        return alt;
+      }).filter(alt => alt.taxonomyId > 0);
+    }
+
+    return res;
+  }
+
   suggestAiCategory(): void {
     const title = this.title.trim();
     const desc = this.description.trim();
@@ -482,19 +681,22 @@ export class FastCreatorComponent implements OnInit {
     this.listingAiService.suggestCategoryMultimodal(title, desc, images).subscribe({
       next: res => {
         this.isGeneratingCategory = false;
-        this.selectedTaxonomyId = res.taxonomyId;
-        this.selectedCategory = res.categoryPath;
-        this.categoryAiResult = res;
-        this.categoryAlternatives = res.alternatives || [];
-        if (this.categoriesList.length > 0) {
-          const match = this.categoriesList.find(c => c.id === res.taxonomyId);
-          if (match) {
-            this.selectedCategory = match.path;
-          }
+        const grounded = this.groundTaxonomyRecommendation(res);
+
+        this.selectedTaxonomyId = grounded.taxonomyId;
+        this.selectedCategory = grounded.categoryPath;
+        this.categoryAiResult = grounded;
+        this.categoryAlternatives = grounded.alternatives || [];
+        this.selectedCategoryCombo = `${grounded.taxonomyId}|${grounded.categoryPath}`;
+
+        // İlgili bölümü otomatik seç
+        const dept = grounded.categoryPath.split(' > ')[0]?.trim();
+        if (dept && this.departmentsList.some(d => d.name === dept)) {
+          this.selectedDepartment = dept;
         }
-        this.selectedCategoryCombo = `${this.selectedTaxonomyId}|${this.selectedCategory}`;
+
         this.filterCategories();
-        this.showToast(res.message);
+        this.showToast(grounded.message || `✨ AI Kategoriyi belirledi: #${grounded.taxonomyId} ${grounded.categoryPath}`);
       },
       error: (err) => {
         this.isGeneratingCategory = false;
@@ -508,9 +710,15 @@ export class FastCreatorComponent implements OnInit {
     if (val.includes('|')) {
       const parts = val.split('|');
       const id = parseInt(parts[0], 10);
-      const path = parts[1];
+      const path = parts.slice(1).join('|');
       if (id > 0) this.selectedTaxonomyId = id;
-      if (path) this.selectedCategory = path;
+      if (path) {
+        this.selectedCategory = path;
+        const dept = path.split(' > ')[0]?.trim();
+        if (dept && !this.selectedDepartment) {
+          this.selectedDepartment = dept;
+        }
+      }
     } else {
       this.selectedCategory = val;
     }
@@ -520,6 +728,12 @@ export class FastCreatorComponent implements OnInit {
     this.selectedTaxonomyId = alt.taxonomyId;
     this.selectedCategory = alt.categoryPath;
     this.selectedCategoryCombo = `${alt.taxonomyId}|${alt.categoryPath}`;
+
+    const dept = alt.categoryPath.split(' > ')[0]?.trim();
+    if (dept && this.departmentsList.some(d => d.name === dept)) {
+      this.selectedDepartment = dept;
+    }
+
     this.filterCategories();
     this.showToast(`📌 Kategori güncellendi: #${alt.taxonomyId} ${alt.categoryPath}`);
   }

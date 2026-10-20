@@ -170,9 +170,9 @@
               </div>
               <!-- Active Selection Ribbon -->
               <div class="tax-ribbon-row">
-                <div class="tax-tag-pill">
-                  <span class="tax-num">#{{ selectedTaxonomyId || 1239 }}</span>
-                  <span class="tax-path">{{ selectedCategory }}</span>
+                <div class="tax-tag-pill" [class.has-selection]="selectedTaxonomyId > 0">
+                  <span class="tax-num" *ngIf="selectedTaxonomyId > 0">#{{ selectedTaxonomyId }}</span>
+                  <span class="tax-path">{{ selectedCategory || 'Henüz kategori seçilmedi (AI ile belirleyebilir veya aşağıdan arayabilirsiniz)' }}</span>
                 </div>
                 <div *ngIf="categoryAiResult" class="tax-conf-badge" [class.badge-live]="categoryAiResult.isLive">
                   <span class="dot">●</span> %{{ categoryAiResult.confidenceScore }} Doğruluk
@@ -193,31 +193,55 @@
                 <p class="reasoning-body">{{ categoryAiResult?.reasoning }}</p>
               </div>
 
+              <!-- Taxonomy Explorer Filter Grid (Ana Bölüm + Akıllı Arama) -->
+              <div class="tax-filter-grid">
+                <!-- 1. Ana Bölüm Seçici -->
+                <div class="field-wrap">
+                  <label class="sub-label">📂 Ana Bölüm (15 Kategori):</label>
+                  <select class="std-select dept-select" [(ngModel)]="selectedDepartment" (ngModelChange)="filterCategories()">
+                    <option value="">📁 Tüm Bölümler ({{ categoriesList.length }} Kategori)</option>
+                    <option *ngFor="let dept of departmentsList" [value]="dept.name">
+                      {{ dept.icon }} {{ dept.name }} ({{ dept.count }})
+                    </option>
+                  </select>
+                </div>
+
+                <!-- 2. Akıllı Canlı Arama (TR / EN) -->
+                <div class="field-wrap">
+                  <label class="sub-label">🔍 Canlı Arama (TR / EN):</label>
+                  <div class="search-input-inner">
+                    <input
+                      type="text"
+                      [(ngModel)]="categorySearchTerm"
+                      (ngModelChange)="filterCategories()"
+                      placeholder="Örn: lamba, ejderha, yüzük, çanta, lamp, figurine, mug..."
+                      class="std-input search-input"
+                    />
+                    <button *ngIf="categorySearchTerm" type="button" class="btn-clear-search" (click)="clearCategorySearch()" title="Aramayı Temizle">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Kategori Sayacı & Durum Çubuğu -->
+              <div class="tax-status-strip">
+                <span class="status-count">
+                  🌿 <strong>{{ filteredCategories.length }}</strong> kategori listeleniyor
+                  <span *ngIf="selectedDepartment">({{ selectedDepartment }} bölümünde)</span>
+                  <span *ngIf="categorySearchTerm">("{{ categorySearchTerm }}" araması için)</span>
+                </span>
+                <span *ngIf="selectedTaxonomyId > 0" class="status-selected">
+                  ⭐ Seçili: <strong>#{{ selectedTaxonomyId }}</strong> {{ selectedCategory.split('>').pop()?.trim() }}
+                </span>
+              </div>
+
               <!-- Taxonomy Combo / Selector -->
               <div class="field-wrap full tax-select-wrap">
-                <div class="tax-header-bar" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <label style="margin-bottom: 0;">Etsy Taxonomy Ağacı (Resmi Dökümantasyon):</label>
-                  <span class="tax-badge" style="font-size: 0.75rem; color: #94a3b8; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08);">
-                    <span *ngIf="isLoadingCategories">⏳ Yükleniyor...</span>
-                    <span *ngIf="!isLoadingCategories">🌿 {{ categoriesList.length }} resmi kategori</span>
-                  </span>
-                </div>
-
-                <!-- Canlı Kategori Filtresi / Arama -->
-                <div class="tax-search-box" style="position: relative; margin-bottom: 8px;">
-                  <input
-                    type="text"
-                    [(ngModel)]="categorySearchTerm"
-                    (ngModelChange)="filterCategories()"
-                    placeholder="🔍 Kategori ara (Örn: Lamp, Skull, T-Shirt, Bag, Jewelry, Mug)..."
-                    class="std-input"
-                    style="font-size: 0.82rem; padding: 6px 10px;"
-                  />
-                </div>
-
-                <select class="std-select" [(ngModel)]="selectedCategoryCombo" (ngModelChange)="onTaxonomyComboChange($event)">
-                  <option *ngIf="selectedTaxonomyId > 0 && selectedCategory" [value]="selectedTaxonomyId + '|' + selectedCategory">
-                    ⭐ Aktif Seçili: #{{ selectedTaxonomyId }} - {{ selectedCategory }}
+                <select class="std-select main-category-select" [(ngModel)]="selectedCategoryCombo" (ngModelChange)="onTaxonomyComboChange($event)">
+                  <option *ngIf="selectedTaxonomyId > 0 && selectedCategory" [value]="selectedTaxonomyId + '|' + selectedCategory" class="opt-active-sticky">
+                    ⭐ AKTİF SEÇİLİ: #{{ selectedTaxonomyId }} - {{ selectedCategory }}
+                  </option>
+                  <option *ngIf="!selectedTaxonomyId" value="" disabled selected>
+                    -- Lütfen bir kategori seçin (veya AI Kategori Belirle butonunu kullanın) --
                   </option>
                   <ng-container *ngFor="let cat of filteredCategories">
                     <option *ngIf="cat.id !== selectedTaxonomyId" [value]="cat.id + '|' + cat.path">
@@ -225,8 +249,8 @@
                     </option>
                   </ng-container>
                 </select>
-                <div *ngIf="filteredCategories.length === 0 && !isLoadingCategories" style="font-size: 0.75rem; color: #ef4444; margin-top: 4px;">
-                  Aramanıza uygun kategori bulunamadı. Lütfen farklı bir terim aratın.
+                <div *ngIf="filteredCategories.length === 0 && !isLoadingCategories" class="tax-no-results">
+                  ⚠️ "{{ categorySearchTerm }}" aramasına veya seçili bölüme uygun kategori bulunamadı. Lütfen aramayı temizleyin veya başka bir kelime deneyin.
                 </div>
               </div>
 
