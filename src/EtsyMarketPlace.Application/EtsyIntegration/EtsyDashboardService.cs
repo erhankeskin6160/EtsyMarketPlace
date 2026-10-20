@@ -104,16 +104,17 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             catch { }
         }
 
-        // Payout filtrelemesi: Kesinlikle 'fee' içeren satırlar elenmeli ve her transfer kendi gününün tarihsel kuruyla kalibre edilmeli
-        return payouts
+        // Payout filtrelemesi: 'fee' içeren satırlar elenir, mükerrer transferler deduplicate edilir ve tarihsel kur bağlanır
+        var validPayouts = payouts
             .Where(p => !p.Description.Contains("fee", StringComparison.OrdinalIgnoreCase) && 
                         !p.Status.Contains("fee", StringComparison.OrdinalIgnoreCase))
             .Select(p =>
             {
                 var historicalRate = HistoricalExchangeRateProvider.GetRateForDate(p.OccurredAt.DateTime);
                 return p with { ExchangeRateToTry = historicalRate };
-            })
-            .ToList();
+            });
+
+        return DeduplicatePayouts(validPayouts);
     }
 
     public async Task<LiveFinancialPerformanceResult> GetFinancialPerformanceAsync(
@@ -425,5 +426,31 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
 
         var latestRate = payouts.FirstOrDefault(p => p.ExchangeRateToTry.HasValue && p.ExchangeRateToTry.Value > 30)?.ExchangeRateToTry ?? 49.00m;
         return _bankService.CalculateMonthlyDeposits(depositEntries, start, now, _ => latestRate, latestRate);
+    }
+
+    private static List<EtsyBankPayout> DeduplicatePayouts(IEnumerable<EtsyBankPayout> source)
+    {
+        var list = source.OrderByDescending(p => p.OccurredAt).ToList();
+        var result = new List<EtsyBankPayout>();
+        foreach (var payout in list)
+        {
+            var existingIndex = result.FindIndex(existing =>
+                Math.Abs((existing.OccurredAt - payout.OccurredAt).TotalMinutes) < 2.0 &&
+                Math.Abs(existing.Amount - payout.Amount) < 0.25m);
+
+            if (existingIndex < 0)
+            {
+                result.Add(payout);
+            }
+            else
+            {
+                // Eğer yeni payout 12 haneli kanonik entry_id ise (2 ile başlayan), 11 haneli disburse ref yerine tercih et
+                if (payout.ReferenceId.Length >= result[existingIndex].ReferenceId.Length && payout.ReferenceId.StartsWith("2"))
+                {
+                    result[existingIndex] = payout;
+                }
+            }
+        }
+        return result;
     }
 }

@@ -669,11 +669,28 @@ export class AccountingComponent implements OnInit, OnDestroy {
     // 3. Canlı banka transferleri çekimi (Payouts)
     this.etsyApi.getBankPayoutsByDateRange(start, end).subscribe({
       next: (payouts: EtsyBankPayoutDto[]) => {
-        // Ücret / Fee içeren satırlar kesinlikle elenir
-        const validPayouts = (payouts || []).filter(p => 
+        // Ücret / Fee içeren satırlar elenir ve aynı dakika & benzer tutardaki mükerrer transferler deduplicate edilir
+        const feeFiltered = (payouts || []).filter(p => 
           !p.description?.toLowerCase().includes('fee') && 
           !p.status?.toLowerCase().includes('fee')
         );
+
+        const validPayouts: EtsyBankPayoutDto[] = [];
+        for (const p of feeFiltered) {
+          const pTime = new Date(p.occurredAt).getTime();
+          const pAmt = Math.abs(Number(p.amount || 0));
+          const existingIdx = validPayouts.findIndex(ex => {
+            const exTime = new Date(ex.occurredAt).getTime();
+            const exAmt = Math.abs(Number(ex.amount || 0));
+            return Math.abs(exTime - pTime) < 120000 && Math.abs(exAmt - pAmt) < 0.25;
+          });
+
+          if (existingIdx < 0) {
+            validPayouts.push(p);
+          } else if ((p.referenceId?.length || 0) >= (validPayouts[existingIdx].referenceId?.length || 0) && p.referenceId?.startsWith('2')) {
+            validPayouts[existingIdx] = p;
+          }
+        }
 
         if (validPayouts.length > 0) {
           const totalUsd = validPayouts.reduce((sum, p) => sum + Math.abs(Number(p.amount || 0)), 0);

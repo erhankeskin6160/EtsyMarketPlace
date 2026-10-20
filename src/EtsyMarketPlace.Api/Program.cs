@@ -48,6 +48,7 @@ builder.Services.AddDbContext<EtsyMarketPlaceDbContext>(options =>
 {
     options.UseNpgsql(pgConnectionString);
 });
+builder.Services.AddScoped<EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator>();
 
 var dataProtectionPath = Path.Combine(
     Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -170,6 +171,10 @@ using (var scope = app.Services.CreateScope())
     {
         var db = scope.ServiceProvider.GetRequiredService<EtsyMarketPlaceDbContext>();
         await db.Database.MigrateAsync();
+
+        var migrator = scope.ServiceProvider.GetRequiredService<EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator>();
+        var migrationRes = await migrator.MigrateAndSeedAsync();
+        app.Logger.LogInformation("PostgreSQL Veri Tohumlama ve Göç: {Message}", migrationRes.Message);
     }
     catch (Exception ex)
     {
@@ -215,6 +220,7 @@ app.UseSwaggerUI(c =>
 
 // 6. Controller Rotalarını Eşle
 app.MapControllers();
+app.MapPost("/api/system/migrate-postgres", async (EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator migrator) => Results.Ok(await migrator.MigrateAndSeedAsync()));
 
 app.Run();
 

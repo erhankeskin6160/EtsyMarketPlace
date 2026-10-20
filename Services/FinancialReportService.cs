@@ -1067,9 +1067,7 @@ internal sealed class FinancialReportService
 
             if (isDeposit && entry.Amount != 0)
             {
-                var refId = entry.ReferenceId > 0 
-                    ? entry.ReferenceId.ToString(CultureInfo.InvariantCulture) 
-                    : entry.EntryId.ToString(CultureInfo.InvariantCulture);
+                var refId = entry.EntryId.ToString(CultureInfo.InvariantCulture);
 
                 var rate = HistoricalExchangeRateProvider.GetRateForDate(entry.CreatedAt.DateTime);
 
