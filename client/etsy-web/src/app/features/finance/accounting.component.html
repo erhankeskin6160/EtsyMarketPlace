@@ -906,6 +906,16 @@
               </table>
             </div>
 
+            <div class="drilldown-footnote">
+              💡 [ Muhasebe Kuralı: Gerçek Net Kâr = Etsy Net Hakediş - Toplam Sipariş Maliyeti (Kargo + Ürün + Fatura). ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
       <!-- 4. DRILLDOWN MODAL: SATIŞ VE GELİR ANALİZİ (BRÜT SATIŞ) -->
       <div class="modal-backdrop" *ngIf="showSalesModal" (click)="closeModals()">
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
@@ -1303,4 +1313,3 @@
         {{ toastMessage }}
       </div>
     </div>
-  `,
