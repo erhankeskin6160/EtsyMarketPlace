@@ -1,17 +1,24 @@
-using Microsoft.AspNetCore.Mvc;
-using EtsyMarketPlace.Application.AiUsage;
-
 namespace EtsyMarketPlace.Api.Controllers;
+
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc;
+using MediatR;
+using EtsyMarketPlace.Application.AiUsage;
+using EtsyMarketPlace.Application.Features.AiUsage.Commands.RecordAiUsage;
+using EtsyMarketPlace.Application.Features.AiUsage.Queries.GetAiUsageHistory;
+using EtsyMarketPlace.Application.Features.AiUsage.Queries.GetAiUsageStats;
 
 [ApiController]
 [Route("api/etsy/ai-usage")]
 public class EtsyAiUsageController : ControllerBase
 {
-    private readonly IAiUsageRepository _repo;
+    private readonly IMediator _mediator;
 
-    public EtsyAiUsageController(IAiUsageRepository repo)
+    public EtsyAiUsageController(IMediator mediator)
     {
-        _repo = repo;
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     [HttpGet("stats")]
@@ -21,9 +28,9 @@ public class EtsyAiUsageController : ControllerBase
         [FromQuery] string? period = "30d",
         CancellationToken ct = default)
     {
-        var (since, until) = AiPeriodHelper.ResolveDateRange(period);
-        var stats = await _repo.GetSummaryStatsAsync(provider, since, until, cancellationToken: ct);
-        return Ok(stats);
+        var request = new GetAiUsageStatsRequest { Provider = provider, Period = period };
+        var response = await _mediator.Send(request, ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("history")]
@@ -34,9 +41,9 @@ public class EtsyAiUsageController : ControllerBase
         [FromQuery] int limit = 100,
         CancellationToken ct = default)
     {
-        var (since, until) = AiPeriodHelper.ResolveDateRange(period);
-        var history = await _repo.GetHistoryAsync(provider, since, Math.Clamp(limit <= 0 ? 100 : limit, 1, 1000), until, ct);
-        return Ok(history);
+        var request = new GetAiUsageHistoryRequest { Provider = provider, Period = period, Limit = limit };
+        var response = await _mediator.Send(request, ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("balances")]
@@ -56,7 +63,8 @@ public class EtsyAiUsageController : ControllerBase
     [EndpointSummary("Yeni AI Çağrı Kaydı Ekle")]
     public async Task<IActionResult> RecordAiUsage([FromBody] AiUsageRecord record, CancellationToken ct)
     {
-        var saved = await _repo.SaveUsageAsync(record, ct);
-        return Ok(saved);
+        var request = new RecordAiUsageRequest { Record = record };
+        var response = await _mediator.Send(request, ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

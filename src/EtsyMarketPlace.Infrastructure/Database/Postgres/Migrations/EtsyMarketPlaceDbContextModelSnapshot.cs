@@ -22,6 +22,96 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.AiUsageRecordEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("CompletionTokens")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("completion_tokens");
+
+                    b.Property<decimal>("CostTry")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("cost_try");
+
+                    b.Property<decimal>("CostUsd")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("cost_usd");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ModelName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("")
+                        .HasColumnName("model_name");
+
+                    b.Property<string>("ModuleName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasDefaultValue("")
+                        .HasColumnName("module_name");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<int>("PromptTokens")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("prompt_tokens");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Başarılı")
+                        .HasColumnName("status");
+
+                    b.Property<int>("TotalTokens")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("total_tokens");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("Provider");
+
+                    b.ToTable("ai_usage_history", (string)null);
+                });
+
             modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.AppUser", b =>
                 {
                     b.Property<string>("Id")
@@ -205,6 +295,154 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                     b.ToTable("bank_payouts", (string)null);
                 });
 
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.BatchQueueItemEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AbTestExperimentId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("ab_test_experiment_id");
+
+                    b.Property<string>("AbTestStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("ab_test_status");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasDefaultValue("")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<bool>("IsSyncedToEtsy")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_synced_to_etsy");
+
+                    b.Property<string>("Issues")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("issues");
+
+                    b.Property<string>("ListingId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("")
+                        .HasColumnName("listing_id");
+
+                    b.Property<string>("OptimizedDescription")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("optimized_description");
+
+                    b.Property<string>("OptimizedMaterials")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("optimized_materials");
+
+                    b.Property<string>("OptimizedTags")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("optimized_tags");
+
+                    b.Property<string>("OptimizedTitle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("optimized_title");
+
+                    b.Property<string>("OriginalDescription")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("original_description");
+
+                    b.Property<string>("OriginalTags")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("original_tags");
+
+                    b.Property<string>("OriginalTitle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("original_title");
+
+                    b.Property<int>("OverallScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("overall_score");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("RiskWarnings")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("risk_warnings");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Pending")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime?>("SyncedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("synced_at");
+
+                    b.Property<string>("TargetKeyword")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasDefaultValue("")
+                        .HasColumnName("target_keyword");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("batch_queue_items", (string)null);
+                });
+
             modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.ChartSnapshot", b =>
                 {
                     b.Property<string>("ShopId")
@@ -353,6 +591,146 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                     b.HasIndex("ShopId", "OccurredAt");
 
                     b.ToTable("financial_transactions", (string)null);
+                });
+
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.ListingAbTest", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("AfterFavorites")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("after_favorites");
+
+                    b.Property<int>("AfterSales")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("after_sales");
+
+                    b.Property<int>("AfterViews")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("after_views");
+
+                    b.Property<int>("BeforeFavorites")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("before_favorites");
+
+                    b.Property<int>("BeforeSales")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("before_sales");
+
+                    b.Property<int>("BeforeViews")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("before_views");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_date");
+
+                    b.Property<string>("ExperimentName")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasDefaultValue("")
+                        .HasColumnName("experiment_name");
+
+                    b.Property<string>("ListingId")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("")
+                        .HasColumnName("listing_id");
+
+                    b.Property<string>("ListingTitle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasDefaultValue("")
+                        .HasColumnName("listing_title");
+
+                    b.Property<DateTime>("StartDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Active")
+                        .HasColumnName("status");
+
+                    b.Property<string>("VariantADescription")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("variant_a_description");
+
+                    b.Property<string>("VariantATags")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("variant_a_tags");
+
+                    b.Property<string>("VariantATitle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("variant_a_title");
+
+                    b.Property<string>("VariantBDescription")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("variant_b_description");
+
+                    b.Property<string>("VariantBTags")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("[]")
+                        .HasColumnName("variant_b_tags");
+
+                    b.Property<string>("VariantBTitle")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("variant_b_title");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("ListingId");
+
+                    b.ToTable("listing_ab_tests", (string)null);
                 });
 
             modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.ListingAiAudit", b =>
@@ -1028,6 +1406,128 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                     b.ToTable("sync_states", (string)null);
                 });
 
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.TrackingItemEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("display_name");
+
+                    b.Property<int>("EntityType")
+                        .HasColumnType("integer")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("ExternalKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("external_key");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType", "ExternalKey")
+                        .IsUnique();
+
+                    b.ToTable("tracking_items", (string)null);
+                });
+
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.TrackingSnapshotEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CapturedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("captured_at");
+
+                    b.Property<int?>("CompetitionScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("competition_score");
+
+                    b.Property<string>("CurrencyCode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("")
+                        .HasColumnName("currency_code");
+
+                    b.Property<int?>("DemandScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("demand_score");
+
+                    b.Property<int?>("Favorites")
+                        .HasColumnType("integer")
+                        .HasColumnName("favorites");
+
+                    b.Property<int?>("MarketScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("market_score");
+
+                    b.Property<int?>("OpportunityScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("opportunity_score");
+
+                    b.Property<decimal?>("Price")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("price");
+
+                    b.Property<decimal?>("ReviewAverage")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("review_average");
+
+                    b.Property<int?>("ReviewCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("review_count");
+
+                    b.Property<int?>("SeoScore")
+                        .HasColumnType("integer")
+                        .HasColumnName("seo_score");
+
+                    b.Property<int?>("ShopSales")
+                        .HasColumnType("integer")
+                        .HasColumnName("shop_sales");
+
+                    b.Property<long>("TrackingItemId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("tracking_item_id");
+
+                    b.Property<int?>("Views")
+                        .HasColumnType("integer")
+                        .HasColumnName("views");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TrackingItemId");
+
+                    b.ToTable("tracking_snapshots", (string)null);
+                });
+
             modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.BankPayout", b =>
                 {
                     b.HasOne("EtsyMarketPlace.Domain.Entities.ShopConnection", "Shop")
@@ -1171,6 +1671,17 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                     b.Navigation("Shop");
                 });
 
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.TrackingSnapshotEntity", b =>
+                {
+                    b.HasOne("EtsyMarketPlace.Domain.Entities.TrackingItemEntity", "TrackingItem")
+                        .WithMany("Snapshots")
+                        .HasForeignKey("TrackingItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TrackingItem");
+                });
+
             modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.ShopConnection", b =>
                 {
                     b.Navigation("AiSetting");
@@ -1196,6 +1707,11 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                     b.Navigation("SyncStates");
 
                     b.Navigation("TelegramSetting");
+                });
+
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.TrackingItemEntity", b =>
+                {
+                    b.Navigation("Snapshots");
                 });
 #pragma warning restore 612, 618
         }

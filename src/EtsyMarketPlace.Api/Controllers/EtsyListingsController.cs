@@ -1,44 +1,44 @@
+namespace EtsyMarketPlace.Api.Controllers;
+
+using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using MediatR;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Application.ListingOptimization;
-
-namespace EtsyMarketPlace.Api.Controllers;
+using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
+using EtsyMarketPlace.Application.Features.Listings.Commands.CreateListing;
+using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListing;
+using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListingState;
+using EtsyMarketPlace.Application.Features.Listings.Queries.GetListingAudits;
+using EtsyMarketPlace.Application.Features.Listings.Queries.GetShopListings;
 
 [ApiController]
 [Route("api/etsy")]
 public class EtsyListingsController : BaseApiController
 {
     private readonly IConfiguration _config;
-    private readonly IEtsyListingService _listingService;
-    private readonly IAiListingOptimizerUseCase _aiOptimizer;
-    private readonly IFastListingPublishService _publishService;
+    private readonly IMediator _mediator;
 
     public EtsyListingsController(
         IConfiguration config,
-        IEtsyListingService listingService,
-        IAiListingOptimizerUseCase aiOptimizer,
-        IFastListingPublishService publishService)
+        IMediator mediator)
     {
-        _config = config;
-        _listingService = listingService;
-        _aiOptimizer = aiOptimizer;
-        _publishService = publishService;
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     [HttpGet("shop/listings")]
     [EndpointSummary("Mağazanın Aktif Listinglerini ve Yapısal SEO Analizini Getir")]
     public async Task<IActionResult> GetShopListings([FromQuery] string shopId = "53236321", [FromQuery] int limit = 50, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var resolvedShopId = ResolveShopId(shopId, _config);
-            var items = await _listingService.GetShopListingsAsync(resolvedShopId, limit, cancellationToken);
-            return Ok(items);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var request = new GetShopListingsRequest { ShopId = resolvedShopId, Limit = limit };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("listings/{listingId}/ai-optimize")]
@@ -49,39 +49,39 @@ public class EtsyListingsController : BaseApiController
         [FromBody] OptimizeListingApiRequest request,
         CancellationToken cancellationToken)
     {
-        try
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
+            ? request.ShopId.Trim()
+            : ResolveShopId(shopId, _config);
+
+        var apiKey = !string.IsNullOrWhiteSpace(request?.ApiKey)
+            ? request.ApiKey.Trim()
+            : Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
+                ? hKey.ToString().Trim()
+                : _config["Gemini:ApiKey"] ?? string.Empty;
+
+        var command = new OptimizeListingCommandDto(
+            resolvedShopId,
+            request?.Title,
+            request?.Description,
+            request?.Tags,
+            request?.TargetKeyword,
+            request?.DescriptionStyle,
+            request?.FocusKeywords,
+            request?.TargetBuyerPersona,
+            request?.Tone,
+            request?.Model,
+            apiKey,
+            request?.Provider);
+
+        var req = new AiOptimizeListingRequest
         {
-            var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
-                ? request.ShopId.Trim()
-                : ResolveShopId(shopId, _config);
+            ListingId = listingId,
+            ShopId = resolvedShopId,
+            Command = command
+        };
 
-            var apiKey = !string.IsNullOrWhiteSpace(request?.ApiKey)
-                ? request.ApiKey.Trim()
-                : Request.Headers.TryGetValue("X-Gemini-Api-Key", out var hKey) && !string.IsNullOrWhiteSpace(hKey)
-                    ? hKey.ToString().Trim()
-                    : _config["Gemini:ApiKey"] ?? string.Empty;
-
-            var command = new OptimizeListingCommandDto(
-                resolvedShopId,
-                request?.Title,
-                request?.Description,
-                request?.Tags,
-                request?.TargetKeyword,
-                request?.DescriptionStyle,
-                request?.FocusKeywords,
-                request?.TargetBuyerPersona,
-                request?.Tone,
-                request?.Model,
-                apiKey,
-                request?.Provider);
-
-            var result = await _aiOptimizer.OptimizeListingAsync(listingId, resolvedShopId, command, cancellationToken);
-            return Ok(result);
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { success = false, message = $"AI optimizasyon hatası: {ex.Message}" });
-        }
+        var response = await _mediator.Send(req, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPut("listings/{listingId}")]
@@ -91,28 +91,23 @@ public class EtsyListingsController : BaseApiController
         [FromBody] UpdateListingApiRequest request,
         CancellationToken cancellationToken)
     {
-        try
-        {
-            var resolvedShopId = ResolveShopId(request.ShopId, _config);
-            var reqDto = new UpdateListingRequestDto(
-                resolvedShopId,
-                request.Title,
-                request.Description,
-                request.Tags,
-                request.Materials);
+        var resolvedShopId = ResolveShopId(request.ShopId, _config);
+        var reqDto = new UpdateListingRequestDto(
+            resolvedShopId,
+            request.Title,
+            request.Description,
+            request.Tags,
+            request.Materials);
 
-            var result = await _listingService.UpdateListingAsync(resolvedShopId, listingId, reqDto, cancellationToken);
-            return Ok(new
-            {
-                success = true,
-                listingId = result.ListingId,
-                message = result.Message
-            });
-        }
-        catch (Exception ex)
+        var req = new UpdateListingCommandRequest
         {
-            return BadRequest(new { error = ex.Message });
-        }
+            ListingId = listingId,
+            ShopId = resolvedShopId,
+            Dto = reqDto
+        };
+
+        var response = await _mediator.Send(req, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("listings")]
@@ -142,13 +137,9 @@ public class EtsyListingsController : BaseApiController
             VariationGroups: request.VariationGroups?.Select(g => new ListingVariationGroupInput(g.Name, g.Values)).ToList()
         );
 
-        var result = await _publishService.PublishListingAsync(command, cancellationToken);
-        if (!result.Success)
-        {
-            return BadRequest(new { error = result.Message });
-        }
-
-        return Ok(result);
+        var req = new CreateListingCommandRequest { Command = command };
+        var response = await _mediator.Send(req, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPatch("listings/{listingId:long}/state")]
@@ -159,22 +150,16 @@ public class EtsyListingsController : BaseApiController
         [FromQuery] string shopId = "53236321",
         CancellationToken cancellationToken = default)
     {
-        try
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var req = new UpdateListingStateCommandRequest
         {
-            var resolvedShopId = ResolveShopId(shopId, _config);
-            var result = await _listingService.UpdateListingStateAsync(resolvedShopId, listingId, request.State, cancellationToken);
-            return Ok(new
-            {
-                success = true,
-                listingId,
-                state = result.State,
-                message = result.Message
-            });
-        }
-        catch (Exception ex)
-        {
-            return BadRequest(new { error = ex.Message });
-        }
+            ListingId = listingId,
+            ShopId = resolvedShopId,
+            State = request.State
+        };
+
+        var response = await _mediator.Send(req, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("listings/audits")]
@@ -182,7 +167,8 @@ public class EtsyListingsController : BaseApiController
     public async Task<IActionResult> GetListingAudits([FromQuery] string shopId = "53236321", CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var audits = await _listingService.GetListingAuditsAsync(resolvedShopId, cancellationToken);
-        return Ok(audits);
+        var request = new GetListingAuditsRequest { ShopId = resolvedShopId };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }
