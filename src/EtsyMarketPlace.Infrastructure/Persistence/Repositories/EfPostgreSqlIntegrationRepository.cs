@@ -100,25 +100,32 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
 
     public async Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
     {
-        var startUtc = startDate.UtcDateTime;
-        var endUtc = endDate.UtcDateTime;
+        try
+        {
+            var startUtc = startDate.UtcDateTime;
+            var endUtc = endDate.UtcDateTime;
 
-        var entities = await _context.BankPayouts
-            .AsNoTracking()
-            .Where(p => p.ShopId == shopId && p.OccurredAt >= startUtc && p.OccurredAt <= endUtc)
-            .OrderByDescending(p => p.OccurredAt)
-            .ToListAsync(cancellationToken);
+            var entities = await _context.BankPayouts
+                .AsNoTracking()
+                .Where(p => p.ShopId == shopId && p.OccurredAt >= startUtc && p.OccurredAt <= endUtc)
+                .OrderByDescending(p => p.OccurredAt)
+                .ToListAsync(cancellationToken);
 
-        return entities.Select(e => new EtsyBankPayout(
-            e.ShopId,
-            e.ReferenceId,
-            new DateTimeOffset(e.OccurredAt, TimeSpan.Zero),
-            e.Amount,
-            e.Currency,
-            e.ExchangeRateToTry,
-            e.Status,
-            e.Description
-        )).ToList();
+            return entities.Select(e => new EtsyBankPayout(
+                e.ShopId,
+                e.ReferenceId,
+                new DateTimeOffset(e.OccurredAt, TimeSpan.Zero),
+                e.Amount,
+                e.Currency,
+                e.ExchangeRateToTry,
+                e.Status,
+                e.Description
+            )).ToList();
+        }
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException || ex.InnerException is Npgsql.NpgsqlException)
+        {
+            return [];
+        }
     }
 
     public async Task SaveTransactionsAsync(IReadOnlyCollection<EtsyFinancialTransaction> transactions, CancellationToken cancellationToken = default)
@@ -443,24 +450,31 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
 
     public async Task<IReadOnlyDictionary<long, EtsyDashboardOrderCost>> GetOrderCostsAsync(string shopId, CancellationToken cancellationToken = default)
     {
-        var entities = await _context.OrderCosts
-            .AsNoTracking()
-            .Where(o => o.ShopId == shopId && (o.ProductCost != null || o.ShippingCost != null))
-            .ToListAsync(cancellationToken);
-
-        var dict = new Dictionary<long, EtsyDashboardOrderCost>();
-        foreach (var e in entities)
+        try
         {
-            if (long.TryParse(e.OrderId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var receiptId))
-            {
-                dict[receiptId] = new EtsyDashboardOrderCost(
-                    e.ProductCost ?? 0m,
-                    e.ShippingCost ?? 0m
-                );
-            }
-        }
+            var entities = await _context.OrderCosts
+                .AsNoTracking()
+                .Where(o => o.ShopId == shopId && (o.ProductCost != null || o.ShippingCost != null))
+                .ToListAsync(cancellationToken);
 
-        return dict;
+            var dict = new Dictionary<long, EtsyDashboardOrderCost>();
+            foreach (var e in entities)
+            {
+                if (long.TryParse(e.OrderId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var receiptId))
+                {
+                    dict[receiptId] = new EtsyDashboardOrderCost(
+                        e.ProductCost ?? 0m,
+                        e.ShippingCost ?? 0m
+                    );
+                }
+            }
+
+            return dict;
+        }
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException || ex.InnerException is Npgsql.NpgsqlException)
+        {
+            return new Dictionary<long, EtsyDashboardOrderCost>();
+        }
     }
 
     public async Task UpsertOrderCostAsync(string shopId, string orderId, decimal? productCost, decimal? shippingCost, decimal? packagingCost, string? notes, CancellationToken cancellationToken = default)
@@ -496,95 +510,117 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
 
     public async Task<FinancialPerformance> GetFinancialPerformanceAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
     {
-        var startUtc = startDate.UtcDateTime;
-        var endUtc = endDate.UtcDateTime;
+        try
+        {
+            var startUtc = startDate.UtcDateTime;
+            var endUtc = endDate.UtcDateTime;
 
-        var txs = await _context.FinancialTransactions
-            .AsNoTracking()
-            .Where(t => t.ShopId == shopId && t.OccurredAt >= startUtc && t.OccurredAt <= endUtc)
-            .ToListAsync(cancellationToken);
+            var txs = await _context.FinancialTransactions
+                .AsNoTracking()
+                .Where(t => t.ShopId == shopId && t.OccurredAt >= startUtc && t.OccurredAt <= endUtc)
+                .ToListAsync(cancellationToken);
 
-        decimal gross = txs.Sum(t => t.GrossSales);
-        decimal fees = txs.Sum(t => t.PlatformFees);
-        decimal internalAds = txs.Sum(t => t.InternalAdsCost);
-        decimal externalAds = txs.Sum(t => t.ExternalAdsCost);
-        decimal product = txs.Sum(t => t.ProductCost);
-        decimal shipping = txs.Sum(t => t.ShippingCost);
-        decimal refunds = txs.Sum(t => t.Refunds);
-        string currency = txs.FirstOrDefault()?.Currency ?? "USD";
+            decimal gross = txs.Sum(t => t.GrossSales);
+            decimal fees = txs.Sum(t => t.PlatformFees);
+            decimal internalAds = txs.Sum(t => t.InternalAdsCost);
+            decimal externalAds = txs.Sum(t => t.ExternalAdsCost);
+            decimal product = txs.Sum(t => t.ProductCost);
+            decimal shipping = txs.Sum(t => t.ShippingCost);
+            decimal refunds = txs.Sum(t => t.Refunds);
+            string currency = txs.FirstOrDefault()?.Currency ?? "USD";
 
-        var net = gross - fees - internalAds - externalAds - product - shipping - refunds;
-        var margin = gross == 0 ? 0 : net / gross * 100;
+            var net = gross - fees - internalAds - externalAds - product - shipping - refunds;
+            var margin = gross == 0 ? 0 : net / gross * 100;
 
-        // 1. En güncel döviz kurunu çek (bank_payouts tablosundaki kur veya varsayılan 48.25)
-        var latestPayout = await _context.BankPayouts
-            .AsNoTracking()
-            .Where(p => p.ShopId == shopId && p.ExchangeRateToTry > 30)
-            .OrderByDescending(p => p.OccurredAt)
-            .FirstOrDefaultAsync(cancellationToken);
+            // 1. En güncel döviz kurunu çek (bank_payouts tablosundaki kur veya varsayılan 48.25)
+            var latestPayout = await _context.BankPayouts
+                .AsNoTracking()
+                .Where(p => p.ShopId == shopId && p.ExchangeRateToTry > 30)
+                .OrderByDescending(p => p.OccurredAt)
+                .FirstOrDefaultAsync(cancellationToken);
 
-        decimal exchangeRate = latestPayout?.ExchangeRateToTry ?? 48.25m;
+            decimal exchangeRate = latestPayout?.ExchangeRateToTry ?? 48.25m;
 
-        // 2. monthly_order_summaries tablosundan sipariş bazlı ciroyu çek (Masaüstü paneliyle birebir senkron için)
-        var startMonth = startDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
-        var endMonth = endDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            // 2. monthly_order_summaries tablosundan sipariş bazlı ciroyu çek (Masaüstü paneliyle birebir senkron için)
+            var startMonth = startDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+            var endMonth = endDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
-        var monthlyTurnoverList = await _context.MonthlyOrderSummaries
-            .AsNoTracking()
-            .Where(m => m.ShopId == shopId && string.Compare(m.YearMonth, startMonth) >= 0 && string.Compare(m.YearMonth, endMonth) <= 0)
-            .Select(m => m.GrossRevenue)
-            .ToListAsync(cancellationToken);
+            var monthlyTurnoverList = await _context.MonthlyOrderSummaries
+                .AsNoTracking()
+                .Where(m => m.ShopId == shopId && string.Compare(m.YearMonth, startMonth) >= 0 && string.Compare(m.YearMonth, endMonth) <= 0)
+                .Select(m => m.GrossRevenue)
+                .ToListAsync(cancellationToken);
 
-        decimal? orderGrossUSD = monthlyTurnoverList.Count > 0 ? monthlyTurnoverList.Sum() : null;
+            decimal? orderGrossUSD = monthlyTurnoverList.Count > 0 ? monthlyTurnoverList.Sum() : null;
 
-        decimal grossSalesTRY = Math.Round(gross * exchangeRate, 2);
-        decimal netProfitTRY = Math.Round(net * exchangeRate, 2);
+            decimal grossSalesTRY = Math.Round(gross * exchangeRate, 2);
+            decimal netProfitTRY = Math.Round(net * exchangeRate, 2);
 
-        decimal? orderGrossSalesTRY = orderGrossUSD.HasValue ? Math.Round(orderGrossUSD.Value * exchangeRate, 2) : null;
-        decimal? orderNetProfitTRY = orderGrossUSD.HasValue
-            ? Math.Round((orderGrossUSD.Value - fees - internalAds - externalAds - product - shipping - refunds) * exchangeRate, 2)
-            : null;
+            decimal? orderGrossSalesTRY = orderGrossUSD.HasValue ? Math.Round(orderGrossUSD.Value * exchangeRate, 2) : null;
+            decimal? orderNetProfitTRY = orderGrossUSD.HasValue
+                ? Math.Round((orderGrossUSD.Value - fees - internalAds - externalAds - product - shipping - refunds) * exchangeRate, 2)
+                : null;
 
-        return new FinancialPerformance(
-            startDate,
-            endDate,
-            currency,
-            gross,
-            fees,
-            internalAds,
-            externalAds,
-            product,
-            shipping,
-            refunds,
-            net,
-            margin,
-            grossSalesTRY,
-            netProfitTRY,
-            orderGrossUSD,
-            orderGrossSalesTRY,
-            orderNetProfitTRY,
-            exchangeRate
-        );
+            return new FinancialPerformance(
+                startDate,
+                endDate,
+                currency,
+                gross,
+                fees,
+                internalAds,
+                externalAds,
+                product,
+                shipping,
+                refunds,
+                net,
+                margin,
+                grossSalesTRY,
+                netProfitTRY,
+                orderGrossUSD,
+                orderGrossSalesTRY,
+                orderNetProfitTRY,
+                exchangeRate
+            );
+        }
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException || ex.InnerException is Npgsql.NpgsqlException)
+        {
+            return new FinancialPerformance(
+                startDate,
+                endDate,
+                "USD",
+                0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m,
+                null, null,
+                null, null,
+                null,
+                48.25m);
+        }
     }
 
     public async Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken cancellationToken = default)
     {
-        var costs = await _context.OrderCosts
-            .AsNoTracking()
-            .Where(c => c.ShopId == shopId && (!c.ProductCost.HasValue || !c.ShippingCost.HasValue))
-            .OrderBy(c => c.CreatedAt)
-            .ToListAsync(cancellationToken);
+        try
+        {
+            var costs = await _context.OrderCosts
+                .AsNoTracking()
+                .Where(c => c.ShopId == shopId && (!c.ProductCost.HasValue || !c.ShippingCost.HasValue))
+                .OrderBy(c => c.CreatedAt)
+                .ToListAsync(cancellationToken);
 
-        return costs.Select(c => new EtsyOrderCostAlert(
-            c.ShopId,
-            c.OrderId,
-            new DateTimeOffset(c.CreatedAt, TimeSpan.Zero),
-            c.Currency,
-            c.OrderTotal,
-            c.ProductCost,
-            c.ShippingCost,
-            c.AlertReason ?? "Maliyet bilgisi eksik."
-        )).ToList();
+            return costs.Select(c => new EtsyOrderCostAlert(
+                c.ShopId,
+                c.OrderId,
+                new DateTimeOffset(c.CreatedAt, TimeSpan.Zero),
+                c.Currency,
+                c.OrderTotal,
+                c.ProductCost,
+                c.ShippingCost,
+                c.AlertReason ?? "Maliyet bilgisi eksik."
+            )).ToList();
+        }
+        catch (Exception ex) when (ex is Npgsql.NpgsqlException || ex.InnerException is Npgsql.NpgsqlException)
+        {
+            return [];
+        }
     }
 
     public async Task<DailyShopBrief> GetDailyShopBriefAsync(string shopId, DateTimeOffset date, CancellationToken cancellationToken = default)

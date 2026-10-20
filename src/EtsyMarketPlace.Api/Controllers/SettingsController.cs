@@ -1,26 +1,24 @@
+namespace EtsyMarketPlace.Api.Controllers;
+
 using Microsoft.AspNetCore.Mvc;
+using MediatR;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Application.EtsyIntegration;
-using EtsyMarketPlace.Application.ShopPerformance;
-
-namespace EtsyMarketPlace.Api.Controllers;
+using EtsyMarketPlace.Application.Features.Settings;
 
 [ApiController]
 [Route("api")]
 public class SettingsController : BaseApiController
 {
     private readonly IConfiguration _config;
-    private readonly IShopSettingsRepository _settingsRepo;
-    private readonly IShopPerformanceHistoryRepository _perfRepo;
+    private readonly IMediator _mediator;
 
     public SettingsController(
         IConfiguration config,
-        IShopSettingsRepository settingsRepo,
-        IShopPerformanceHistoryRepository perfRepo)
+        IMediator mediator)
     {
-        _config = config;
-        _settingsRepo = settingsRepo;
-        _perfRepo = perfRepo;
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
     }
 
     [HttpGet("settings/ai")]
@@ -28,12 +26,8 @@ public class SettingsController : BaseApiController
     public async Task<IActionResult> GetAiSettings([FromQuery] string shopId = "53236321", CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var json = await _settingsRepo.GetAiSettingsJsonAsync(resolvedShopId, cancellationToken);
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return Ok(new { exists = false, settingsJson = "{}" });
-        }
-        return Ok(new { exists = true, settingsJson = json });
+        var response = await _mediator.Send(new GetAiSettingsRequest(resolvedShopId), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("settings/ai")]
@@ -41,12 +35,8 @@ public class SettingsController : BaseApiController
     public async Task<IActionResult> SaveAiSettings([FromBody] SaveAiSettingsApiRequest request, CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(request.ShopId, _config);
-        if (string.IsNullOrWhiteSpace(request.SettingsJson))
-        {
-            return BadRequest(new { error = "Ayarlar boş olamaz." });
-        }
-        await _settingsRepo.SaveAiSettingsJsonAsync(resolvedShopId, request.SettingsJson, cancellationToken);
-        return Ok(new { success = true, message = "AI ayarları ve API anahtarları veritabanına başarıyla kaydedildi!" });
+        var response = await _mediator.Send(new SaveAiSettingsCommandRequest(resolvedShopId, request.SettingsJson), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("etsy/settings/credentials")]
@@ -54,29 +44,20 @@ public class SettingsController : BaseApiController
     public async Task<IActionResult> GetEtsyAppCredentials([FromQuery] string shopId = "53236321", CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var creds = await _settingsRepo.GetEtsyAppCredentialsAsync(resolvedShopId, cancellationToken);
-        if (creds is not null)
-            return Ok(creds);
-
         var cfgKey = _config["Etsy:ApiKey"] ?? string.Empty;
         var cfgSecret = _config["Etsy:SharedSecret"] ?? string.Empty;
         var redirectUri = _config["Etsy:RedirectUri"] ?? "http://localhost:4200/settings/etsy-api";
-        static string Mask(string s) => string.IsNullOrWhiteSpace(s) ? "" : (s.Length <= 8 ? "****" : $"{s[..4]}...{s[^4..]}");
 
-        return Ok(new EtsyAppCredentialsRecord(
-            resolvedShopId,
-            Mask(cfgKey),
-            Mask(cfgSecret),
-            redirectUri,
-            DateTimeOffset.UtcNow));
+        var response = await _mediator.Send(new GetEtsyCredentialsRequest(resolvedShopId, cfgKey, cfgSecret, redirectUri), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("etsy/settings/credentials")]
     [EndpointSummary("Etsy App Geliştirici Anahtarlarını Kaydet (Şifreli)")]
     public async Task<IActionResult> SaveEtsyAppCredentials([FromBody] SaveEtsyAppCredentialsRequest request, CancellationToken cancellationToken = default)
     {
-        var saved = await _settingsRepo.SaveEtsyAppCredentialsAsync(request, cancellationToken);
-        return Ok(saved);
+        var response = await _mediator.Send(new SaveEtsyCredentialsCommandRequest(request), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("etsy/settings/telegram")]
@@ -84,16 +65,16 @@ public class SettingsController : BaseApiController
     public async Task<IActionResult> GetTelegramSettings([FromQuery] string shopId = "53236321", CancellationToken ct = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var settings = await _settingsRepo.GetTelegramSettingsAsync(resolvedShopId, ct);
-        return Ok(settings ?? new TelegramShopSettings(resolvedShopId, "", "", false, true, true, true, DateTimeOffset.UtcNow));
+        var response = await _mediator.Send(new GetTelegramSettingsRequest(resolvedShopId), ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("etsy/settings/telegram")]
     [EndpointSummary("Mağaza Telegram Ayarlarını Kaydet (Şifreli)")]
     public async Task<IActionResult> SaveTelegramSettings([FromBody] SaveTelegramSettingsRequest request, CancellationToken ct = default)
     {
-        var saved = await _settingsRepo.SaveTelegramSettingsAsync(request, ct);
-        return Ok(saved);
+        var response = await _mediator.Send(new SaveTelegramSettingsCommandRequest(request), ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("etsy/settings/carrier-sessions")]
@@ -101,23 +82,23 @@ public class SettingsController : BaseApiController
     public async Task<IActionResult> GetCarrierSessions([FromQuery] string shopId = "53236321", CancellationToken ct = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var sessions = await _settingsRepo.GetCarrierSessionsAsync(resolvedShopId, ct);
-        return Ok(sessions);
+        var response = await _mediator.Send(new GetCarrierSessionsRequest(resolvedShopId), ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpPost("etsy/settings/carrier-sessions")]
     [EndpointSummary("Kargo Taşıyıcı Oturumunu Kaydet (Şifreli)")]
     public async Task<IActionResult> SaveCarrierSession([FromBody] SaveCarrierSessionRequest request, CancellationToken ct = default)
     {
-        var saved = await _settingsRepo.SaveCarrierSessionAsync(request, ct);
-        return Ok(saved);
+        var response = await _mediator.Send(new SaveCarrierSessionCommandRequest(request), ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
     [HttpGet("etsy/shop/performance")]
     [EndpointSummary("Mağaza Performans Geçmişini Getir")]
     public async Task<IActionResult> GetShopPerformanceHistory([FromQuery] long shopId = 53236321, CancellationToken ct = default)
     {
-        var history = await _perfRepo.GetByShopAsync(shopId, ct);
-        return Ok(history);
+        var response = await _mediator.Send(new GetShopPerformanceHistoryRequest(shopId), ct);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

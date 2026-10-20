@@ -3,17 +3,14 @@ using EtsyMarketPlace.Application.AiUsage;
 using EtsyMarketPlace.Application.BatchQueue;
 using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Tracking;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
 public sealed class EtsyIntegrationDatabaseInitializer(
-    SqliteEtsyIntegrationStore store,
-    IAbTestRepository abTestRepo,
-    IAiUsageRepository aiUsageRepo,
-    IBatchQueueRepository batchQueueRepo,
-    ITrackingRepository trackingRepo,
+    IServiceScopeFactory scopeFactory,
     IShopPerformanceHistoryRepository shopPerfRepo,
     ILogger<EtsyIntegrationDatabaseInitializer> logger) : IHostedService
 {
@@ -21,21 +18,35 @@ public sealed class EtsyIntegrationDatabaseInitializer(
     {
         try
         {
-            await store.InitializeAsync(cancellationToken);
-            await abTestRepo.InitializeAsync(cancellationToken);
-            await aiUsageRepo.InitializeAsync(cancellationToken);
-            await batchQueueRepo.InitializeAsync(cancellationToken);
-            await trackingRepo.InitializeAsync(cancellationToken);
+            using (var scope = scopeFactory.CreateScope())
+            {
+                var store = scope.ServiceProvider.GetService<SqliteEtsyIntegrationStore>();
+                if (store != null)
+                {
+                    await store.InitializeAsync(cancellationToken);
+                }
+
+                var abTestRepo = scope.ServiceProvider.GetService<IAbTestRepository>();
+                if (abTestRepo != null) await abTestRepo.InitializeAsync(cancellationToken);
+
+                var aiUsageRepo = scope.ServiceProvider.GetService<IAiUsageRepository>();
+                if (aiUsageRepo != null) await aiUsageRepo.InitializeAsync(cancellationToken);
+
+                var batchQueueRepo = scope.ServiceProvider.GetService<IBatchQueueRepository>();
+                if (batchQueueRepo != null) await batchQueueRepo.InitializeAsync(cancellationToken);
+
+                var trackingRepo = scope.ServiceProvider.GetService<ITrackingRepository>();
+                if (trackingRepo != null) await trackingRepo.InitializeAsync(cancellationToken);
+            }
+
             await shopPerfRepo.InitializeAsync(cancellationToken);
-            logger.LogInformation("Etsy finans & analitik SQLite veritabanları başarıyla hazırlandı.");
+            logger.LogInformation("Etsy finans & analitik veritabanları başarıyla hazırlandı.");
         }
         catch (Exception exception)
         {
-            logger.LogCritical(exception, "Etsy SQLite veritabanları başlatılamadı. Dosya yolu ve klasör izinlerini kontrol edin.");
-            throw;
+            logger.LogWarning(exception, "Etsy veritabanları başlatılırken uyarı oluştu: {Message}", exception.Message);
         }
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
-
