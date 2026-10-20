@@ -172,8 +172,20 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
         }
 
         // 2. Canlı Etsy API: GET /v3/application/seller-taxonomy/nodes
-        var json = await _apiClient.GetRawSellerTaxonomyNodesJsonAsync(shopId, cancellationToken);
-        if (string.IsNullOrWhiteSpace(json)) return [];
+        string? json = null;
+        try
+        {
+            json = await _apiClient.GetRawSellerTaxonomyNodesJsonAsync(shopId, cancellationToken);
+        }
+        catch
+        {
+            // API çağrısı başarısız olursa (örn. offline veya yetkisiz), sessizce yakala
+        }
+
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return TaxonomyCache.TryGetValue("all", out var inMem) ? inMem : [];
+        }
 
         using var doc = JsonDocument.Parse(json);
         var list = new List<EtsyTaxonomyNodeItemDto>();
@@ -210,7 +222,24 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
         int limit = 100,
         CancellationToken cancellationToken = default)
     {
-        // Önce veritabanının / önbelleğin dolu olduğundan emin ol
+        // 1. Önce doğrudan SQLite veritabanında ara (en hızlı ve güvenli)
+        if (_taxonomyRepository != null)
+        {
+            try
+            {
+                var dbResults = await _taxonomyRepository.SearchAsync(query, limit, cancellationToken);
+                if (dbResults.Count > 0)
+                {
+                    return dbResults.Select(n => new EtsyTaxonomyNodeItemDto(n.Id, n.Name, n.Path)).ToList();
+                }
+            }
+            catch
+            {
+                // Fallback
+            }
+        }
+
+        // 2. SQLite boş veya sonuçsuz ise ağacı çekmeyi / tohumlamayı dene
         await GetSellerTaxonomyNodesAsync(shopId, cancellationToken);
 
         if (_taxonomyRepository != null)
@@ -218,7 +247,10 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
             try
             {
                 var dbResults = await _taxonomyRepository.SearchAsync(query, limit, cancellationToken);
-                return dbResults.Select(n => new EtsyTaxonomyNodeItemDto(n.Id, n.Name, n.Path)).ToList();
+                if (dbResults.Count > 0)
+                {
+                    return dbResults.Select(n => new EtsyTaxonomyNodeItemDto(n.Id, n.Name, n.Path)).ToList();
+                }
             }
             catch
             {
