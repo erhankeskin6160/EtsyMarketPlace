@@ -4,10 +4,12 @@
 [CmdletBinding()]
 param(
     [string]$BaseUrl = "http://localhost:5263",
-    [string]$ShopId = "53236321"
+    [string]$ShopId = "53236321",
+    [string]$ApiKey = "etsy-vds-sync-key-2026"
 )
 
 $ErrorActionPreference = "Continue"
+$headers = @{ "X-Api-Key" = $ApiKey }
 
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Cyan
@@ -20,7 +22,7 @@ Write-Host ""
 # 1. Veritabanı Göçü ve Temel Tohumlama (app_users, shop_connections, bank_payouts, financial_transactions, sync_states, order_addresses)
 Write-Host "[1/9] 🔄 Sistem Göçü ve SQLite Tohumlaması Yapılıyor..." -ForegroundColor Cyan
 try {
-    $res1 = Invoke-RestMethod -Uri "$BaseUrl/api/system/migrate-postgres" -Method Post -TimeoutSec 30
+    $res1 = Invoke-RestMethod -Uri "$BaseUrl/api/system/migrate-postgres" -Method Post -Headers $headers -TimeoutSec 30
     Write-Host "   ✅ Başarılı: $($res1.message)" -ForegroundColor Green
     Write-Host "      • Kullanıcı: $($res1.usersSeeded) | Mağaza: $($res1.shopConnectionsSeeded)" -ForegroundColor Gray
     Write-Host "      • Payouts: $($res1.bankPayoutsMigrated) | Transactions: $($res1.financialTransactionsMigrated)" -ForegroundColor Gray
@@ -35,7 +37,7 @@ try {
         shopId = $ShopId
         settingsJson = '{"Provider":"Gemini","Model":"gemini-1.5-pro","AutoOptimize":true,"Temperature":0.7}'
     } | ConvertTo-Json
-    $resAi = Invoke-RestMethod -Uri "$BaseUrl/api/settings/ai" -Method Post -Body $bodyAi -ContentType "application/json"
+    $resAi = Invoke-RestMethod -Uri "$BaseUrl/api/settings/ai" -Method Post -Headers $headers -Body $bodyAi -ContentType "application/json"
     Write-Host "   ✅ shop_ai_settings tablosu başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ AI ayarları kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -52,7 +54,7 @@ try {
         enableDailyReport = $true
         enableStockAlerts = $true
     } | ConvertTo-Json
-    $resTg = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/settings/telegram" -Method Post -Body $bodyTg -ContentType "application/json"
+    $resTg = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/settings/telegram" -Method Post -Headers $headers -Body $bodyTg -ContentType "application/json"
     Write-Host "   ✅ shop_telegram_settings tablosu başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ Telegram ayarları kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -67,7 +69,7 @@ try {
         sharedSecret = "etsy_live_secret_482910"
         redirectUri = "http://localhost:4200/settings/etsy-api"
     } | ConvertTo-Json
-    $resCreds = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/settings/credentials" -Method Post -Body $bodyCreds -ContentType "application/json"
+    $resCreds = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/settings/credentials" -Method Post -Headers $headers -Body $bodyCreds -ContentType "application/json"
     Write-Host "   ✅ etsy_app_credentials tablosu başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ Credentials kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -82,7 +84,7 @@ try {
         sessionToken = "eyJhY2Nlc3NfdG9rZW4iOiJ5dXJ0aWNpX3Rlc3Rfc2Vzc2lvbl85OTIifQ=="
         expiresAt = (Get-Date).AddMonths(3).ToString("o")
     } | ConvertTo-Json
-    $resCarrier = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/settings/carrier-sessions" -Method Post -Body $bodyCarrier -ContentType "application/json"
+    $resCarrier = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/settings/carrier-sessions" -Method Post -Headers $headers -Body $bodyCarrier -ContentType "application/json"
     Write-Host "   ✅ shop_carrier_sessions tablosu başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ Kargo oturumu kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -105,7 +107,7 @@ try {
         variantBFavorites = 24
         variantBOrders = 7
     } | ConvertTo-Json
-    $resAb = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/ab-tests" -Method Post -Body $bodyAb -ContentType "application/json"
+    $resAb = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/ab-tests" -Method Post -Headers $headers -Body $bodyAb -ContentType "application/json"
     Write-Host "   ✅ listing_ab_tests tablosu başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ A/B test kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -126,7 +128,7 @@ try {
             }
         )
     } | ConvertTo-Json -Depth 5
-    $resQueue = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/batch-queue/enqueue" -Method Post -Body $bodyQueue -ContentType "application/json"
+    $resQueue = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/batch-queue/enqueue" -Method Post -Headers $headers -Body $bodyQueue -ContentType "application/json"
     Write-Host "   ✅ batch_queue_items tablosu başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ Batch kuyruğu kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -148,7 +150,7 @@ try {
         dailyViewVelocity = 12.4
         dailyFavoriteVelocity = 2.1
     } | ConvertTo-Json
-    $resTrack = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/tracking/capture" -Method Post -Body $bodyTrack -ContentType "application/json"
+    $resTrack = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/tracking/capture" -Method Post -Headers $headers -Body $bodyTrack -ContentType "application/json"
     Write-Host "   ✅ tracking_items ve tracking_snapshots tabloları başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ Takip verisi kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow
@@ -251,7 +253,7 @@ try {
         )
     } | ConvertTo-Json -Depth 10
 
-    $resSync = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/sync-all" -Method Post -Body $bodySync -ContentType "application/json"
+    $resSync = Invoke-RestMethod -Uri "$BaseUrl/api/etsy/sync-all" -Method Post -Headers $headers -Body $bodySync -ContentType "application/json"
     Write-Host "   ✅ monthly_order_summaries, order_costs, listing_traffic_daily ve chart_snapshots başarıyla dolduruldu!" -ForegroundColor Green
 } catch {
     Write-Host "   ⚠️ sync-all kaydedilemedi: $($_.Exception.Message)" -ForegroundColor Yellow

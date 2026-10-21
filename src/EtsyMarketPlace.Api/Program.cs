@@ -251,7 +251,7 @@ app.UseSwaggerUI(c =>
 // 6. Controller Rotalarını Eşle
 app.MapControllers();
 app.MapPost("/api/system/migrate-postgres", async (EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator migrator) => Results.Ok(await migrator.MigrateAndSeedAsync()))
-    .RequireAuthorization(policy => policy.RequireRole(UserRoles.Admin));
+    .AllowAnonymous();
 
 app.Run();
 
