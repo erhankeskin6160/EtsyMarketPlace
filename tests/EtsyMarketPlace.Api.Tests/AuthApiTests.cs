@@ -6,13 +6,15 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-public class AuthApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class AuthApiTests : IClassFixture<ApiTestFactory>
 {
-    private readonly HttpClient _client;
+    private readonly HttpClient _anonymousClient;
+    private readonly HttpClient _authenticatedClient;
 
-    public AuthApiTests(WebApplicationFactory<Program> factory)
+    public AuthApiTests(ApiTestFactory factory)
     {
-        _client = factory.CreateClient();
+        _anonymousClient = factory.CreateClient();
+        _authenticatedClient = TestAuthHelper.CreateAuthenticatedClient(factory);
     }
 
     [Fact]
@@ -23,7 +25,7 @@ public class AuthApiTests : IClassFixture<WebApplicationFactory<Program>>
             Encoding.UTF8,
             "application/json");
 
-        var response = await _client.PostAsync("/api/auth/login", content);
+        var response = await _anonymousClient.PostAsync("/api/auth/login", content);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -35,14 +37,26 @@ public class AuthApiTests : IClassFixture<WebApplicationFactory<Program>>
             Encoding.UTF8,
             "application/json");
 
-        var response = await _client.PostAsync("/api/auth/register", content);
+        var response = await _authenticatedClient.PostAsync("/api/auth/register", content);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task PostRegister_WithoutToken_ReturnsUnauthorized()
+    {
+        var content = new StringContent(
+            JsonSerializer.Serialize(new { username = "testuser", email = "test@example.com", password = "1234567" }),
+            Encoding.UTF8,
+            "application/json");
+
+        var response = await _anonymousClient.PostAsync("/api/auth/register", content);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]
     public async Task GetCurrentUser_WithoutAuthorizationHeader_ReturnsUnauthorized()
     {
-        var response = await _client.GetAsync("/api/auth/me");
+        var response = await _anonymousClient.GetAsync("/api/auth/me");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

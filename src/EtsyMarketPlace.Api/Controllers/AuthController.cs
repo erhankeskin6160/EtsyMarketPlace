@@ -4,6 +4,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
 using EtsyMarketPlace.Application.Auth;
@@ -25,6 +26,7 @@ public class AuthController : ControllerBase
         _jwtService = jwtService ?? throw new ArgumentNullException(nameof(jwtService));
     }
 
+    [AllowAnonymous]
     [HttpPost("login")]
     [EndpointSummary("Kullanıcı Girişi")]
     public async Task<IActionResult> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
@@ -40,8 +42,9 @@ public class AuthController : ControllerBase
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
+    [Authorize(Roles = UserRoles.Admin)]
     [HttpPost("register")]
-    [EndpointSummary("Yeni Kullanıcı Kaydı")]
+    [EndpointSummary("Yeni Kullanıcı Kaydı (yalnız yönetici)")]
     public async Task<IActionResult> Register([FromBody] RegisterRequest request, CancellationToken cancellationToken)
     {
         var req = new RegisterUserRequest

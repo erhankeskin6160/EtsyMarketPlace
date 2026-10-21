@@ -4,6 +4,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
 using EtsyMarketPlace.Application.Auth;
@@ -13,6 +14,7 @@ using EtsyMarketPlace.Application.Features.Admin.Queries.GetAllUsers;
 using EtsyMarketPlace.Application.Features.Admin.Queries.GetAuditLogs;
 using EtsyMarketPlace.Application.Features.Admin.Queries.GetSystemStats;
 
+[Authorize(Roles = EtsyMarketPlace.Application.Auth.UserRoles.Admin)]
 [ApiController]
 [Route("api/admin")]
 public class AdminController : ControllerBase
