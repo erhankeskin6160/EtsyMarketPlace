@@ -27,6 +27,12 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    private static DateTimeOffset ToUtcOffset(DateTime dt)
+    {
+        var utc = dt.Kind == DateTimeKind.Local ? dt.ToUniversalTime() : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
+        return new DateTimeOffset(utc, TimeSpan.Zero);
+    }
+
     public async Task<AppUserRecord?> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
         var entity = await _context.Users
@@ -144,7 +150,7 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
             e.Action,
             e.Details,
             e.IpAddress,
-            new DateTimeOffset(e.Timestamp, TimeSpan.Zero))).ToList();
+            ToUtcOffset(e.Timestamp))).ToList();
     }
 
     private static AppUserRecord ToRecord(DomainUser u)
@@ -170,7 +176,7 @@ public sealed class EfPostgreSqlUserRepository : IUserRepository
             u.MonthlyAiTokenQuota,
             u.UsedAiTokens,
             u.IsActive,
-            new DateTimeOffset(u.CreatedAt, TimeSpan.Zero),
-            u.LastLoginAt.HasValue ? new DateTimeOffset(u.LastLoginAt.Value, TimeSpan.Zero) : null);
+            ToUtcOffset(u.CreatedAt),
+            u.LastLoginAt.HasValue ? ToUtcOffset(u.LastLoginAt.Value) : null);
     }
 }
