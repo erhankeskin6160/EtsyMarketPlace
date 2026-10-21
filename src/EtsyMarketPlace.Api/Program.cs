@@ -58,7 +58,7 @@ builder.Services.Configure<EtsyApiOptions>(builder.Configuration.GetSection("Ets
 
 // 2.1. PostgreSQL Entity Framework Core DbContext Kaydı
 var pgConnectionString = builder.Configuration.GetConnectionString("PostgreSql")
-    ?? "Host=localhost;Port=5432;Database=etsy_marketplace_db;Username=postgres;Password=";
+    ?? "Host=localhost;Port=5432;Database=etsy_marketplace_db;Username=postgres;Password=admin123";
 
 builder.Services.AddDbContext<EtsyMarketPlaceDbContext>(options =>
 {
