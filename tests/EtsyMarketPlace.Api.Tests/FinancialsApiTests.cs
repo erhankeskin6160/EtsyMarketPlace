@@ -4,13 +4,22 @@ using System.Net;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-public class FinancialsApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class FinancialsApiTests : IClassFixture<ApiTestFactory>
 {
     private readonly HttpClient _client;
+    private readonly HttpClient _anonymousClient;
 
-    public FinancialsApiTests(WebApplicationFactory<Program> factory)
+    public FinancialsApiTests(ApiTestFactory factory)
     {
-        _client = factory.CreateClient();
+        _anonymousClient = factory.CreateClient();
+        _client = TestAuthHelper.CreateAuthenticatedClient(factory);
+    }
+
+    [Fact]
+    public async Task GetPayouts_WithoutToken_ReturnsUnauthorized()
+    {
+        var response = await _anonymousClient.GetAsync("/api/etsy/banking/payouts?shopId=53236321");
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
     [Fact]

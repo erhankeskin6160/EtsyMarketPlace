@@ -6,13 +6,13 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-public class ListingsApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class ListingsApiTests : IClassFixture<ApiTestFactory>
 {
     private readonly HttpClient _client;
 
-    public ListingsApiTests(WebApplicationFactory<Program> factory)
+    public ListingsApiTests(ApiTestFactory factory)
     {
-        _client = factory.CreateClient();
+        _client = TestAuthHelper.CreateAuthenticatedClient(factory);
     }
 
     [Fact]

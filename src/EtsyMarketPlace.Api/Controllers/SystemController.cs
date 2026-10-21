@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EtsyMarketPlace.Api.Controllers;
 
+[AllowAnonymous]
 [ApiController]
 [Route("")]
 public class SystemController : ControllerBase

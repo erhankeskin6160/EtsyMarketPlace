@@ -13,6 +13,10 @@ using EtsyMarketPlace.Application.ShopPerformance;
 using EtsyMarketPlace.Application.Tracking;
 using EtsyMarketPlace.Infrastructure.AbTesting;
 using EtsyMarketPlace.Api.Filters;
+using EtsyMarketPlace.Api.Security;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using EtsyMarketPlace.Application.Common.Validation;
 using EtsyMarketPlace.Infrastructure.AiUsage;
 using EtsyMarketPlace.Infrastructure.BatchQueue;
@@ -39,6 +43,23 @@ builder.Services.AddControllers(options =>
     options.Filters.Add<ValidationFilter>();
 });
 builder.Services.AddApplicationValidation();
+
+// 1.1. Kimlik doğrulama (P0): JWT Bearer + X-Api-Key (makine-makine) ve varsayılan zorunlu politika.
+builder.Services.AddAuthentication("Multi")
+    .AddPolicyScheme("Multi", "JWT Bearer veya X-Api-Key", options =>
+    {
+        options.ForwardDefaultSelector = context =>
+            context.Request.Headers.ContainsKey(ApiKeyAuthenticationHandler.HeaderName) ? "ApiKey" : "Bearer";
+    })
+    .AddScheme<AuthenticationSchemeOptions, BearerAuthenticationHandler>("Bearer", null)
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>("ApiKey", null);
+
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
 builder.Services.AddValidatorsFromAssembly(typeof(ImportFullFinancialsValidator).Assembly);
 
 builder.Services.AddMediatR(cfg =>
@@ -110,7 +131,8 @@ builder.Services.AddSingleton<EtsyMarketPlace.Application.Taxonomy.IEtsyTaxonomy
     return repo;
 });
 
-builder.Services.AddSingleton(sp => new JwtTokenService(builder.Configuration["Jwt:Secret"]));
+var jwtSigningSecret = JwtSecretProvider.Resolve(builder.Configuration, dataDir);
+builder.Services.AddSingleton(new JwtTokenService(jwtSigningSecret));
 builder.Services.AddScoped<IEtsyFinancialAnalysisService, EtsyFinancialAnalysisService>();
 builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationService>();
 builder.Services.AddScoped<IEtsyLedgerReportService, EtsyLedgerReportService>();
@@ -204,35 +226,21 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// 5. Güvenlik Middleware'i
-app.Use(async (context, next) =>
+// 5. Güvenlik Hattı: proxy başlıkları → (opsiyonel) HTTPS/HSTS → CORS → kimlik doğrulama → yetkilendirme
+app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
-    if (context.Request.Path.StartsWithSegments("/mcp") || context.Request.Path.StartsWithSegments("/api/etsy"))
-    {
-        if (context.Request.Path.Value?.EndsWith(".png", StringComparison.OrdinalIgnoreCase) == true)
-        {
-            await next();
-            return;
-        }
-
-        var configuredKey = app.Configuration["Security:ApiKey"];
-        if (!string.IsNullOrWhiteSpace(configuredKey))
-        {
-            var providedKey = context.Request.Headers["X-Api-Key"].ToString();
-            var expected = Encoding.UTF8.GetBytes(configuredKey);
-            var actual = Encoding.UTF8.GetBytes(providedKey);
-            if (expected.Length != actual.Length || !CryptographicOperations.FixedTimeEquals(expected, actual))
-            {
-                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                await context.Response.WriteAsJsonAsync(new { error = "API anahtarı geçersiz veya eksik." });
-                return;
-            }
-        }
-    }
-    await next();
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 
+if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
+{
+    app.UseHsts();
+    app.UseHttpsRedirection();
+}
+
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
@@ -242,7 +250,8 @@ app.UseSwaggerUI(c =>
 
 // 6. Controller Rotalarını Eşle
 app.MapControllers();
-app.MapPost("/api/system/migrate-postgres", async (EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator migrator) => Results.Ok(await migrator.MigrateAndSeedAsync()));
+app.MapPost("/api/system/migrate-postgres", async (EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator migrator) => Results.Ok(await migrator.MigrateAndSeedAsync()))
+    .RequireAuthorization(policy => policy.RequireRole(UserRoles.Admin));
 
 app.Run();
 

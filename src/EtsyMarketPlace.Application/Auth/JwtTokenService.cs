@@ -11,12 +11,15 @@ public sealed class JwtTokenService
     private readonly string _issuer = "EtsyMarketPlace.Api";
     private readonly string _audience = "EtsyMarketPlace.Web";
 
-    public JwtTokenService(string? secret = null)
+    public JwtTokenService(string? secret)
     {
-        var validSecret = string.IsNullOrWhiteSpace(secret)
-            ? "EtsyMarketPlace_Enterprise_Secure_Secret_Key_2026_Gemini_Spark_JWT!"
-            : secret;
-        _key = Encoding.UTF8.GetBytes(validSecret.PadRight(32, '!'));
+        if (string.IsNullOrWhiteSpace(secret) || secret.Trim().Length < 32)
+        {
+            throw new ArgumentException(
+                "JWT imza anahtarı zorunludur ve en az 32 karakter olmalıdır.", nameof(secret));
+        }
+
+        _key = Encoding.UTF8.GetBytes(secret.Trim());
     }
 
     public string GenerateToken(AppUser user, TimeSpan? lifetime = null)
