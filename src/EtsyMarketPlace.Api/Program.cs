@@ -34,6 +34,7 @@ using EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 using EtsyMarketPlace.Application.Common.Behaviours;
 using EtsyMarketPlace.Application.Features.Commands.Financials.ImportFullFinancials;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
 
