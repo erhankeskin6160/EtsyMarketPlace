@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Domain.Common;
 namespace EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 
 using System;
@@ -88,7 +89,7 @@ public sealed class EfPostgreSqlAiUsageRepository : IAiUsageRepository
         return entities.Select(e => new AiUsageRecord
         {
             Id = e.Id,
-            Timestamp = new DateTimeOffset(e.CreatedAt, TimeSpan.Zero),
+            Timestamp = e.CreatedAt.ToUtcOffset(),
             ModuleName = e.ModuleName,
             Provider = e.Provider,
             ModelName = e.ModelName,

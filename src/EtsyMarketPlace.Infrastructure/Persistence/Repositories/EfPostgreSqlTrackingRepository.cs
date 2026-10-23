@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Domain.Common;
 namespace EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 
 using System;
@@ -79,7 +80,7 @@ public sealed class EfPostgreSqlTrackingRepository : ITrackingRepository
             item.ExternalKey,
             item.DisplayName,
             item.Url,
-            new DateTimeOffset(item.CreatedAt, TimeSpan.Zero));
+            item.CreatedAt.ToUtcOffset());
     }
 
     public async Task<IReadOnlyList<TrackingItem>> GetItemsAsync(CancellationToken cancellationToken = default)
@@ -95,7 +96,7 @@ public sealed class EfPostgreSqlTrackingRepository : ITrackingRepository
             e.ExternalKey,
             e.DisplayName,
             e.Url,
-            new DateTimeOffset(e.CreatedAt, TimeSpan.Zero))).ToList();
+            e.CreatedAt.ToUtcOffset())).ToList();
     }
 
     public async Task<IReadOnlyList<TrackingSnapshot>> GetSnapshotsAsync(long trackingItemId, CancellationToken cancellationToken = default)
@@ -109,7 +110,7 @@ public sealed class EfPostgreSqlTrackingRepository : ITrackingRepository
         return snapshots.Select(s => new TrackingSnapshot(
             s.Id,
             s.TrackingItemId,
-            new DateTimeOffset(s.CapturedAt, TimeSpan.Zero),
+            s.CapturedAt.ToUtcOffset(),
             s.Price,
             s.CurrencyCode,
             s.Favorites,

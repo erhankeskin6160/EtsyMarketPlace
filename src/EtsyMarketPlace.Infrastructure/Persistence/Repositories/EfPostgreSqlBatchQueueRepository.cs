@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Domain.Common;
 namespace EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 
 using System;
@@ -165,7 +166,7 @@ public sealed class EfPostgreSqlBatchQueueRepository : IBatchQueueRepository
 
         return new BatchQueueItem(
             e.Id,
-            new DateTimeOffset(e.CreatedAt, TimeSpan.Zero),
+            e.CreatedAt.ToUtcOffset(),
             e.ListingId,
             e.OriginalTitle,
             e.OriginalDescription,
@@ -180,10 +181,10 @@ public sealed class EfPostgreSqlBatchQueueRepository : IBatchQueueRepository
             DeserializeList(e.OptimizedMaterials),
             DeserializeList(e.RiskWarnings),
             DeserializeList(e.Issues),
-            e.ProcessedAt.HasValue ? new DateTimeOffset(e.ProcessedAt.Value, TimeSpan.Zero) : null,
+            e.ProcessedAt.HasValue ? e.ProcessedAt.Value.ToUtcOffset() : null,
             e.ErrorMessage,
             e.IsSyncedToEtsy,
-            e.SyncedAt.HasValue ? new DateTimeOffset(e.SyncedAt.Value, TimeSpan.Zero) : null,
+            e.SyncedAt.HasValue ? e.SyncedAt.Value.ToUtcOffset() : null,
             e.AbTestExperimentId,
             e.AbTestStatus);
     }

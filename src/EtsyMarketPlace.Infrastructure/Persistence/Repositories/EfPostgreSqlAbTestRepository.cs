@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Domain.Common;
 namespace EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 
 using System;
@@ -161,7 +162,7 @@ public sealed class EfPostgreSqlAbTestRepository : IAbTestRepository
 
         return new ListingAbTestExperiment(
             e.Id,
-            new DateTimeOffset(e.CreatedAt, TimeSpan.Zero),
+            e.CreatedAt.ToUtcOffset(),
             e.ListingId,
             e.ListingTitle,
             e.ExperimentName,
@@ -171,8 +172,8 @@ public sealed class EfPostgreSqlAbTestRepository : IAbTestRepository
             bTags,
             e.VariantADescription,
             e.VariantBDescription,
-            new DateTimeOffset(e.StartDate, TimeSpan.Zero),
-            e.EndDate.HasValue ? new DateTimeOffset(e.EndDate.Value, TimeSpan.Zero) : null,
+            e.StartDate.ToUtcOffset(),
+            e.EndDate.HasValue ? e.EndDate.Value.ToUtcOffset() : null,
             status,
             e.BeforeViews,
             e.BeforeFavorites,

@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Domain.Common;
 namespace EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 
 using System;
@@ -74,7 +75,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 entity.NotifyOnOrders,
                 entity.NotifyOnStock,
                 entity.DailyBriefEnabled,
-                new DateTimeOffset(entity.UpdatedAt, TimeSpan.Zero));
+                entity.UpdatedAt.ToUtcOffset());
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
         {
@@ -136,7 +137,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 existing.NotifyOnOrders,
                 existing.NotifyOnStock,
                 existing.DailyBriefEnabled,
-                new DateTimeOffset(existing.UpdatedAt, TimeSpan.Zero));
+                existing.UpdatedAt.ToUtcOffset());
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
         {
@@ -168,7 +169,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 e.AccountNo,
                 e.ServiceLevel,
                 e.IsConnected,
-                new DateTimeOffset(e.UpdatedAt, TimeSpan.Zero)
+                e.UpdatedAt.ToUtcOffset()
             )).ToList();
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
@@ -226,7 +227,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 existing.AccountNo,
                 existing.ServiceLevel,
                 existing.IsConnected,
-                new DateTimeOffset(existing.UpdatedAt, TimeSpan.Zero));
+                existing.UpdatedAt.ToUtcOffset());
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
         {
@@ -255,7 +256,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 MaskSecret(UnprotectOrRaw(entity.EncryptedKeystring)),
                 MaskSecret(UnprotectOrRaw(entity.EncryptedSharedSecret)),
                 entity.RedirectUri,
-                new DateTimeOffset(entity.UpdatedAt, TimeSpan.Zero));
+                entity.UpdatedAt.ToUtcOffset());
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
         {
@@ -335,7 +336,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 MaskSecret(UnprotectOrRaw(existing.EncryptedKeystring)),
                 MaskSecret(UnprotectOrRaw(existing.EncryptedSharedSecret)),
                 existing.RedirectUri,
-                new DateTimeOffset(existing.UpdatedAt, TimeSpan.Zero));
+                existing.UpdatedAt.ToUtcOffset());
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
         {
@@ -372,7 +373,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 e.Provider,
                 e.Model,
                 e.ResultJson,
-                new DateTimeOffset(e.AuditedAt, TimeSpan.Zero)
+                e.AuditedAt.ToUtcOffset()
             )).ToList();
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))

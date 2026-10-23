@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Domain.Common;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -53,7 +54,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             .FirstOrDefaultAsync(s => s.ShopId == shopId && s.DataType == dataType, cancellationToken);
 
         return syncState?.LastCursorAt.HasValue == true
-            ? new DateTimeOffset(syncState.LastCursorAt.Value, TimeSpan.Zero)
+            ? syncState.LastCursorAt.Value.ToUtcOffset()
             : null;
     }
 
@@ -114,7 +115,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             return entities.Select(e => new EtsyBankPayout(
                 e.ShopId,
                 e.ReferenceId,
-                new DateTimeOffset(e.OccurredAt, TimeSpan.Zero),
+                e.OccurredAt.ToUtcOffset(),
                 e.Amount,
                 e.Currency,
                 e.ExchangeRateToTry,
@@ -444,7 +445,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             start,
             end,
             entity.ImagePngBase64,
-            new DateTimeOffset(entity.UpdatedAt, TimeSpan.Zero)
+            entity.UpdatedAt.ToUtcOffset()
         );
     }
 
@@ -609,7 +610,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             return costs.Select(c => new EtsyOrderCostAlert(
                 c.ShopId,
                 c.OrderId,
-                new DateTimeOffset(c.CreatedAt, TimeSpan.Zero),
+                c.CreatedAt.ToUtcOffset(),
                 c.Currency,
                 c.OrderTotal,
                 c.ProductCost,

@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
+using EtsyMarketPlace.Domain.Common;
 using EtsyMarketPlace.Domain.Entities;
 using EtsyMarketPlace.Infrastructure.Database.Postgres;
 
@@ -69,7 +70,7 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
             return new EtsyOAuthToken(
                 accessToken,
                 refreshToken,
-                new DateTimeOffset(entity.AccessTokenExpiresAt, TimeSpan.Zero),
+                entity.AccessTokenExpiresAt.ToUtcOffset(),
                 entity.TokenType ?? "Bearer");
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
