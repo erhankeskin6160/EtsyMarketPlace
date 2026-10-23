@@ -1,9 +1,28 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, of, throwError, forkJoin } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService } from './etsy-api.service';
+
+export interface AiDescriptionContext {
+  productTitle?: string;
+  preliminaryNotes?: string;
+  materials?: string;
+  category?: string;
+  tags?: string[];
+  variationsSummary?: string;
+  toneStyle?: 'artisan' | 'specs' | 'gift';
+  emojiStyle?: 'vibrant' | 'minimal';
+}
+
+export interface DescriptionVariantsResult {
+  variantA: string;
+  variantB: string;
+  isLive: boolean;
+  provider: string;
+  message: string;
+}
 
 export interface CompleteListingAiResult {
   title: string;
@@ -312,8 +331,14 @@ export class EtsyListingAiService {
   /**
    * Generates a persuasive, structured product description.
    */
-  public suggestDescription(userInput: string, materials?: string): Observable<AiFieldResult<string>> {
-    const cleanInput = (userInput || '').trim();
+  /**
+   * Generates a persuasive, structured product description honoring seller specs, dual units, and tone.
+   */
+  public suggestDescription(inputOrContext: string | AiDescriptionContext, materials?: string): Observable<AiFieldResult<string>> {
+    const ctx: AiDescriptionContext = typeof inputOrContext === 'string'
+      ? { productTitle: inputOrContext, preliminaryNotes: inputOrContext, materials }
+      : { ...inputOrContext, materials: inputOrContext.materials || materials };
+
     const settings = this.aiSettings.settings();
     const provider = settings.provider;
     const isStrict = settings.strictNeverOffline;
@@ -330,9 +355,9 @@ export class EtsyListingAiService {
       const activeModel = this.getActiveModel(settings);
       let callObs: Observable<string>;
       if (provider === 'DeepSeek') {
-        callObs = this.callDeepSeekForDescription(cleanInput, activeApiKey, activeModel, materials);
+        callObs = this.callDeepSeekForDescription(ctx, activeApiKey, activeModel);
       } else {
-        callObs = this.callGeminiForDescription(cleanInput, activeApiKey, activeModel, materials);
+        callObs = this.callGeminiForDescription(ctx, activeApiKey, activeModel);
       }
 
       return callObs.pipe(
@@ -340,7 +365,7 @@ export class EtsyListingAiService {
           value: desc,
           isLive: true,
           provider: `${provider} (${activeModel})`,
-          message: `✨ ${provider} ikna edici ürün açıklamasını canlı üretti!`
+          message: `✨ ${provider} satıcı ön bilgilerinizi ve ölçülerinizi koruyarak profesyonel açıklamayı canlı üretti!`
         })),
         catchError(err => {
           console.warn(`[EtsyListingAiService] Canlı ${provider} açıklama hatası:`, err);
@@ -348,10 +373,10 @@ export class EtsyListingAiService {
             const detail = this.formatAiErrorMessage(provider, activeModel, err);
             return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
-          const desc = this.generateRuleBasedDescription(cleanInput, materials);
+          const desc = this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
           const msg = isSilentFallback
             ? `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline açıklama oluşturuldu).`
-            : `⚡ Akıllı Kural Motoru ile zengin ürün açıklaması hazırlandı.`;
+            : `⚡ Akıllı Kural Motoru ile ön bilgileriniz korunarak zengin ürün açıklaması hazırlandı.`;
           return of({
             value: desc,
             isLive: false,
@@ -362,13 +387,38 @@ export class EtsyListingAiService {
       );
     }
 
-    const desc = this.generateRuleBasedDescription(cleanInput, materials);
+    const desc = this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
     return of({
       value: desc,
       isLive: false,
       provider: provider === 'Offline' ? 'Offline Kural Motoru' : `${provider} (Offline Kural)`,
-      message: `⚡ Akıllı Kural Motoru ile zengin ürün açıklaması hazırlandı.`
+      message: `⚡ Akıllı Kural Motoru ile ön bilgileriniz korunarak zengin ürün açıklaması hazırlandı.`
     });
+  }
+
+  /**
+   * Generates both Variant A (Artisan Story) and Variant B (Specs Heavy) for A/B comparison.
+   */
+  public suggestDescriptionVariants(inputOrContext: string | AiDescriptionContext, materials?: string): Observable<DescriptionVariantsResult> {
+    const ctx: AiDescriptionContext = typeof inputOrContext === 'string'
+      ? { productTitle: inputOrContext, preliminaryNotes: inputOrContext, materials }
+      : { ...inputOrContext, materials: inputOrContext.materials || materials };
+
+    const ctxA: AiDescriptionContext = { ...ctx, toneStyle: 'artisan' };
+    const ctxB: AiDescriptionContext = { ...ctx, toneStyle: 'specs' };
+
+    return forkJoin({
+      a: this.suggestDescription(ctxA),
+      b: this.suggestDescription(ctxB)
+    }).pipe(
+      map(({ a, b }) => ({
+        variantA: a.value,
+        variantB: b.value,
+        isLive: a.isLive || b.isLive,
+        provider: a.provider,
+        message: '✨ Hem Hikaye (A) hem de Madde Madde (B) açıklama varyantları başarıyla hazırlandı!'
+      }))
+    );
   }
 
   /**
@@ -610,25 +660,55 @@ CRITICAL ETSY RULES:
     );
   }
 
-  private callDeepSeekForDescription(input: string, apiKey: string, model: string, materials?: string): Observable<string> {
+  private buildDescriptionPrompts(ctx: AiDescriptionContext): { systemInstruction: string; userPrompt: string } {
+    const tone = ctx.toneStyle || 'artisan';
+    const isMinimalEmoji = ctx.emojiStyle === 'minimal';
+    const materials = ctx.materials || 'Handcrafted, Eco-Friendly, Premium Materials';
+
+    const systemInstruction = `You are an elite Etsy listing copywriter and SEO architect specializing in high-converting descriptions for the Etsy global marketplace.
+
+CRITICAL LANGUAGE RULE:
+The seller's input or notes may be in Turkish or rough shorthand (e.g. 'Boyut: 20x15cm, Renk: Buz Mavisi LED, Ahsap meşe taban'). You must understand all Turkish details, but the entire final output MUST BE 100% IN NATURAL, ELEGANT, HIGH-CONVERTING ENGLISH. NEVER output Turkish sentences.
+
+STRICT SPECIFICATION & REFERENCE COMPLIANCE RULES:
+1. MANDATORY SELLER MEASUREMENTS (DUAL UNITS):
+   - You MUST extract and preserve ALL seller-provided measurements, dimensions, heights, widths, and weights.
+   - For every metric measurement (cm/mm/kg), you MUST provide the metric value followed by the approximate imperial inches/lbs equivalent in parentheses: e.g. "Height: 25 cm (~9.8 inches)", "Width: 15 cm (~5.9 inches)".
+   - NEVER invent contradictory measurements or discard the seller's numbers!
+2. EXACT COLORS, LIGHTING & FINISHES:
+   - Accurately translate and prominently showcase the seller's exact color shades, LED lighting colors (e.g. Ice Blue LED, Warm Amber), wood stains, and stone types in the Key Features section.
+3. FIRST 160 CHARACTERS SEO HOOK:
+   - The opening 1-2 sentences must immediately state the primary product concept and keywords naturally for Etsy and Google Search snippet indexing.
+4. ORDER & PERSONALIZATION GUIDANCE:
+   - If variations or personalization details are mentioned, include a clear 3-step '✍️ How to Order / Personalize' section.
+5. TRUST & SHIPPING GUARANTEE:
+   - Include secure tracked express shipping and 100% satisfaction / safe delivery guarantee.
+6. FORMAT & TONE:
+   - Tone: ${tone === 'specs' ? 'Specs-First & Clear Bullet Points (focus on dimensions, technical features, package contents)' : (tone === 'gift' ? 'Gift & Emotional Occasions (focus on gift-giving, celebrations, keepsakes)' : 'Artisan Story & Premium Craftsmanship (focus on handmade uniqueness, aesthetics, and story)')}.
+   - Emoji style: ${isMinimalEmoji ? 'Minimalist — use clean bullet points (•) and no emoji clutter' : 'Vibrant & Modern — use clean, tasteful emojis (🌟, 📏, ✨, 🎁, 🧵, 🚚)'}.`;
+
+    const userPrompt = `PRODUCT TITLE: "${ctx.productTitle || 'Handcrafted Artisan Product'}"
+CATEGORY: "${ctx.category || 'Handmade Crafts'}"
+MATERIALS: "${materials}"
+${ctx.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${ctx.variationsSummary}"\n` : ''}${ctx.tags && ctx.tags.length > 0 ? `SEO KEYWORDS: "${ctx.tags.join(', ')}"\n` : ''}
+CRITICAL SELLER PRELIMINARY NOTES & REFERENCE SPECIFICATIONS:
+"""
+${ctx.preliminaryNotes || 'No specific preliminary notes provided. Generate a complete, compelling product description.'}
+"""`;
+
+    return { systemInstruction, userPrompt };
+  }
+
+  private callDeepSeekForDescription(ctx: AiDescriptionContext, apiKey: string, model: string): Observable<string> {
     const normalizedModel = this.normalizeDeepSeekModelName(model);
     const url = 'https://api.deepseek.com/chat/completions';
-    const systemInstruction = `You are a top Etsy copywriter. Write a persuasive, beautifully structured product description in ENGLISH tailored for Etsy US and international shoppers.
-CRITICAL LANGUAGE RULE: The seller's input may be in Turkish or rough notes. You must understand the Turkish details, but the entire generated description MUST BE 100% IN NATURAL, ENGAGING ENGLISH. NEVER output Turkish sentences.
-Include:
-- Catchy hook & opening summary
-- Highlighted Key Features (bullet points)
-- Materials & Specifications (${materials || 'Handcrafted, Eco-friendly'})
-- Sizing / Dimensions & Care instructions
-- Gift packaging options
-- Friendly shop closing.
-Format with clean emojis and line breaks.`;
+    const { systemInstruction, userPrompt } = this.buildDescriptionPrompts(ctx);
 
     const body: any = {
       model: normalizedModel,
       messages: [
         { role: 'system', content: systemInstruction },
-        { role: 'user', content: `Product: "${input || 'Handcrafted Artisan Product'}". Materials: "${materials || ''}"` }
+        { role: 'user', content: userPrompt }
       ],
       max_tokens: 2500
     };
@@ -646,7 +726,7 @@ Format with clean emojis and line breaks.`;
         if (res?.usage) {
           this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Açıklama Üretimi)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
         }
-        return res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(input, materials);
+        return res?.choices?.[0]?.message?.content?.trim() || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
       })
     );
   }
@@ -769,23 +849,14 @@ CRITICAL ETSY RULES:
     );
   }
 
-  private callGeminiForDescription(input: string, apiKey: string, model: string, materials?: string): Observable<string> {
+  private callGeminiForDescription(ctx: AiDescriptionContext, apiKey: string, model: string): Observable<string> {
     const activeModel = this.resolveGeminiModel(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const systemInstruction = `You are a top Etsy copywriter. Write a persuasive, beautifully structured product description in ENGLISH tailored for Etsy US and international shoppers.
-CRITICAL LANGUAGE RULE: The seller's input may be in Turkish or rough notes. You must understand the Turkish details, but the entire generated description MUST BE 100% IN NATURAL, ENGAGING ENGLISH. NEVER output Turkish sentences.
-Include:
-- Catchy hook & opening summary
-- Highlighted Key Features (bullet points)
-- Materials & Specifications (${materials || 'Handcrafted, Eco-friendly'})
-- Sizing / Dimensions & Care instructions
-- Gift packaging options
-- Friendly shop closing.
-Format with clean emojis and line breaks.`;
+    const { systemInstruction, userPrompt } = this.buildDescriptionPrompts(ctx);
 
     const body = {
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: 'user', parts: [{ text: `Product: "${input || 'Handcrafted Artisan Product'}". Materials: "${materials || ''}"` }] }],
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.5,
         maxOutputTokens: 2500
@@ -797,7 +868,7 @@ Format with clean emojis and line breaks.`;
         if (res?.usageMetadata) {
           this.trackAiUsage('Google Gemini', activeModel, 'Hızlı Ürün Listeleme (Açıklama Üretimi)', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
         }
-        return res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || this.generateRuleBasedDescription(input, materials);
+        return res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || this.generateRuleBasedDescription(ctx.productTitle || '', ctx.materials, ctx.preliminaryNotes);
       })
     );
   }
@@ -1591,37 +1662,55 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     ];
   }
 
-  private generateRuleBasedDescription(userInput: string, materials?: string): string {
-    const lower = (userInput || '').toLowerCase().trim();
-
-    if (lower.includes('çanta') || lower.includes('bag') || lower.includes('purse') || lower.includes('tote')) {
-      return `✨ Artisan Handcrafted Women's Handbag — Timeless Elegance & Daily Practicality!\n\n` +
-        `Expertly designed for daily versatility and refined style, this handcrafted bag combines premium artisan stitching with lightweight durability. The spacious interior and comfortable shoulder strap make it the perfect everyday companion from office to weekend outings.\n\n` +
-        `🌿 Key Highlights & Features:\n` +
-        `• 100% Handcrafted with high-density durable reinforced stitching\n` +
-        `• Adjustable and detachable comfortable shoulder strap\n` +
-        `• Secure zippered inner compartments for phone, wallet, keys, and cosmetics\n` +
-        `• Materials: ${materials || 'Genuine Artisan Leather / Premium Cotton Canvas & Brass Hardware'}\n` +
-        `• Dimensions: Approx. 11.0" x 7.8" x 3.2" (28 x 20 x 8 cm) — Ideal compact daily size\n\n` +
-        `🎁 Gift-Ready & Sustainable Packaging:\n` +
-        `Shipped in an eco-friendly protective dust bag with optional premium gift wrapping. A wonderful keepsake gift for her, birthdays, bridesmaids, or Mother's Day!`;
-    }
-
-    if (lower.includes('kolye') || lower.includes('takı') || lower.includes('necklace') || lower.includes('jewelry') || lower.includes('yüzük')) {
-      return `💎 Dainty 925 Sterling Silver Pendant Necklace — Minimalist Everyday Sparkle!\n\n` +
-        `Handcrafted with exquisite precision and finished with anti-tarnish protective plating for everlasting shine and comfort on sensitive skin.\n\n` +
-        `✨ Specifications & Details:\n` +
-        `• Material: ${materials || '925 Solid Sterling Silver, Hypoallergenic & Nickel-Free'}\n` +
-        `• Chain Length: 18 inches + 2-inch extender (45 cm + 5 cm adjustable)\n` +
-        `• Includes complimentary signature velvet jewelry pouch and microfiber polishing cloth!`;
-    }
-
-    return `🌟 Unique Handcrafted Artisan Creation — Made with Passion & Precision!\n\n` +
-      `Add a touch of elegance to your home or delight someone special with this custom handcrafted masterpiece. Each piece is individually crafted for long-lasting beauty and aesthetic charm.\n\n` +
-      `✨ Details & Specifications:\n` +
-      `• Materials: ${materials || 'Premium Eco-Friendly, Handpicked High-Quality Materials'}\n` +
-      `• Fast, secure tracked shipping in protective gift-ready packaging\n` +
-      `• Feel free to message our workshop for custom personalization requests!`;
+  private generateRuleBasedDescription(userInput: string, materials?: string, preliminaryNotes?: string): string {
+    const combined = `${userInput || ''} ${preliminaryNotes || ''}`.trim();
+    const lower = combined.toLowerCase();
+
+    // Extract seller dimension notes if present
+    let customSizeLine = '';
+    const sizeMatch = combined.match(/(?:boyut|ölçü|ebat|size|dimension|height|width|cm|mm|inch)[^.\n,]*/i);
+    if (sizeMatch && sizeMatch[0]) {
+      customSizeLine = `\n• 📏 Sizing & Custom Dimensions: ${sizeMatch[0].trim()}`;
+    }
+
+    // Extract seller color notes if present
+    let customColorLine = '';
+    const colorMatch = combined.match(/(?:renk|color|led|işık|shade)[^.\n,]*/i);
+    if (colorMatch && colorMatch[0]) {
+      customColorLine = `\n• 🎨 Color & Aesthetic Details: ${colorMatch[0].trim()}`;
+    }
+
+    if (lower.includes('çanta') || lower.includes('bag') || lower.includes('purse') || lower.includes('tote')) {
+      return `✨ Artisan Handcrafted Women's Handbag — Timeless Elegance & Daily Practicality!\n\n` +
+        `Expertly designed for daily versatility and refined style, this handcrafted bag combines premium artisan stitching with lightweight durability. The spacious interior and comfortable shoulder strap make it the perfect everyday companion from office to weekend outings.\n\n` +
+        `🌿 Key Highlights & Features:` +
+        customSizeLine + customColorLine +
+        `\n• 100% Handcrafted with high-density durable reinforced stitching` +
+        `\n• Adjustable and detachable comfortable shoulder strap` +
+        `\n• Secure zippered inner compartments for phone, wallet, keys, and cosmetics` +
+        `\n• Materials: ${materials || 'Genuine Artisan Leather / Premium Cotton Canvas & Brass Hardware'}` +
+        `\n• Dimensions: Approx. 11.0" x 7.8" x 3.2" (28 x 20 x 8 cm) — Ideal compact daily size\n\n` +
+        `🎁 Gift-Ready & Sustainable Packaging:\n` +
+        `Shipped in an eco-friendly protective dust bag with optional premium gift wrapping. A wonderful keepsake gift for her, birthdays, bridesmaids, or Mother's Day!`;
+    }
+
+    if (lower.includes('kolye') || lower.includes('takı') || lower.includes('necklace') || lower.includes('jewelry') || lower.includes('yüzük')) {
+      return `💎 Dainty 925 Sterling Silver Pendant Necklace — Minimalist Everyday Sparkle!\n\n` +
+        `Handcrafted with exquisite precision and finished with anti-tarnish protective plating for everlasting shine and comfort on sensitive skin.\n\n` +
+        `✨ Specifications & Details:` +
+        customSizeLine + customColorLine +
+        `\n• Material: ${materials || '925 Solid Sterling Silver, Hypoallergenic & Nickel-Free'}` +
+        `\n• Chain Length: 18 inches + 2-inch extender (45 cm + 5 cm adjustable)` +
+        `\n• Includes complimentary signature velvet jewelry pouch and microfiber polishing cloth!`;
+    }
+
+    return `🌟 Unique Handcrafted Artisan Creation — Made with Passion & Precision!\n\n` +
+      `Add a touch of elegance to your home or delight someone special with this custom handcrafted masterpiece. Each piece is individually crafted for long-lasting beauty and aesthetic charm.\n\n` +
+      `✨ Details & Specifications:` +
+      customSizeLine + customColorLine +
+      `\n• Materials: ${materials || 'Premium Eco-Friendly, Handpicked High-Quality Materials'}` +
+      `\n• Fast, secure tracked shipping in protective gift-ready packaging` +
+      `\n• Feel free to message our workshop for custom personalization requests!`;
   }
 
   private generateRuleBasedComplete(userInput: string, materials?: string): CompleteListingAiResult {
