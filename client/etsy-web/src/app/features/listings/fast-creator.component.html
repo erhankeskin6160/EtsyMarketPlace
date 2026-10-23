@@ -367,79 +367,28 @@
             <div class="block-header-flex">
               <span class="block-label">📄 Ürün Açıklaması</span>
               <div class="desc-header-actions">
-                <button *ngIf="hasBackupNotes" type="button" class="btn-desc-tool backup" (click)="restoreOriginalNotes()" title="AI açıklama yerine yazdığınız orijinal ilk notları geri getirir">
+                <button *ngIf="hasBackupNotes" type="button" class="btn-desc-restore" (click)="restoreOriginalNotes()" title="Yazdığınız orijinal ilk notları geri getirir">
                   ↩️ Notlarıma Dön
                 </button>
-                <button type="button" class="btn-desc-tool tags" [disabled]="isGeneratingTags" (click)="fillTagsFromNotes()" title="Açıklama ve başlıktan 13 SEO etiketini doldurur">
-                  🏷️ 13 Tag Üret
-                </button>
-                <button type="button" class="btn-desc-tool variants" [class.btn-loading]="isLoadingVariants" [disabled]="isLoadingVariants || isGeneratingDesc" (click)="suggestAiDescriptionVariants()" title="A/B testi için 2 farklı stratejik açıklama (Hikaye ve Madde Madde) üretir">
-                  <span *ngIf="isLoadingVariants" class="spin-disc-inline">⏳</span>
-                  <span>{{ isLoadingVariants ? 'Hazırlanıyor...' : '⚡ A/B Varyantı' }}</span>
-                </button>
-                <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingDesc || isGeneratingAll" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="suggestAiDescription()" title="Ön bilgilerinizi, boyut ve renkleri harfiyen koruyarak açıklama üretir">
+                <button type="button" class="btn-ai-field-action" [class.btn-loading]="isGeneratingDesc || isGeneratingAll" [disabled]="isGeneratingDesc || isGeneratingAll" (click)="suggestAiDescription()" title="Ön bilgilerinizi, boyut ve renkleri koruyarak profesyonel Etsy açıklaması üretir">
                   <span *ngIf="isGeneratingDesc" class="spin-disc-inline">⏳</span>
                   <app-ai-logo *ngIf="!isGeneratingDesc" [provider]="aiService.activeProvider()" [size]="13"></app-ai-logo>
                   <span>{{ (isGeneratingDesc || isGeneratingAll) ? 'Yazılıyor...' : 'AI Açıklama Üret' }}</span>
                 </button>
               </div>
             </div>
-
-            <!-- Quick Spec Chips & Tone Toolbar -->
-            <div class="desc-spec-chips-bar">
-              <div class="chips-left">
-                <span class="chips-label">Hızlı Ön Bilgi:</span>
-                <button type="button" class="spec-chip-btn" (click)="insertSpecChip('size')" title="Boyut/Ölçü Ön Bilgi Şablonu Ekle">📏 + Boyut</button>
-                <button type="button" class="spec-chip-btn" (click)="insertSpecChip('color')" title="Renk & Işık Ön Bilgi Şablonu Ekle">🎨 + Renk</button>
-                <button type="button" class="spec-chip-btn" (click)="insertSpecChip('box')" title="Kutu İçeriği Şablonu Ekle">🎁 + Kutu</button>
-                <button type="button" class="spec-chip-btn" (click)="insertSpecChip('personalization')" title="Kişiselleştirme Şablonu Ekle">✍️ + Kişiselleştirme</button>
-                <button type="button" class="spec-chip-btn" (click)="insertSpecChip('power')" title="USB/Güç Şablonu Ekle">🔌 + Güç</button>
-              </div>
-              <div class="chips-right">
-                <select class="desc-tone-select" [(ngModel)]="selectedTone" title="Yapay Zeka Açıklama Yazım Tonu">
-                  <option value="artisan">🌟 Lüks &amp; Hikaye</option>
-                  <option value="specs">⚡ Net &amp; Madde Madde</option>
-                  <option value="gift">🎁 Hediye Odaklı</option>
-                </select>
-                <button type="button" class="btn-emoji-toggle" (click)="toggleEmojiStyle()" [title]="selectedEmojiStyle === 'vibrant' ? 'Modern Emojili Aktif' : 'Minimal Madde İmleri Aktif'">
-                  {{ selectedEmojiStyle === 'vibrant' ? '🌟 Emojili' : '• Minimal' }}
-                </button>
-              </div>
-            </div>
-
             <div class="ai-input-wrap">
               <div *ngIf="isGeneratingDesc || isGeneratingAll" class="ai-field-loading-overlay">
                 <span class="spin-disc">✨</span>
-                <span class="ai-overlay-text">{{ aiService.activeProvider() }} Satıcı Ölçü ve Ön Bilgilerinizi Koruyarak Açıklama Yazıyor...</span>
+                <span class="ai-overlay-text">{{ aiService.activeProvider() }} Boyut, Renk ve Ön Bilgilerinizi Koruyarak Açıklama Yazıyor...</span>
                 <div class="ai-shimmer-bar"></div>
               </div>
               <textarea 
                 class="std-textarea desc-area" 
                 rows="6" 
                 [(ngModel)]="description" 
-                placeholder="Ön Bilgiler &amp; Ölçüler: Boyut: 25cm x 15cm, Renk: Buz Mavisi LED ışıklı, İskandinav rün kabartmalı meşe ahşap taban... (Buraya girdiğiniz tüm boyut, renk ve teknik ön bilgiler yapay zeka tarafından çift birimle (cm/inch) harfiyen korunur)">
+                placeholder="Ön bilgi veya taslak yazabilirsiniz (Örn: Boyut: 25cm x 15cm, Renk: Buz Mavisi LED ışıklı, Meşe taban... Yapay zeka bu ölçü ve renkleri harfiyen korur)">
               </textarea>
-            </div>
-
-            <!-- Live Quality Score Bar below Textarea -->
-            <div class="desc-quality-panel" *ngIf="description.trim().length > 0">
-              <div class="quality-header">
-                <div class="qh-left">
-                  <span class="quality-title">Etsy Açıklama Kalite Skoru:</span>
-                  <span class="quality-score-badge" [ngClass]="getQualityBadgeClass()">
-                    {{ descriptionQualityScore.score }}/100
-                  </span>
-                </div>
-                <span class="word-counter">{{ wordCount }} kelime ({{ description.length }} karakter)</span>
-              </div>
-              <div class="quality-progress-bar">
-                <div class="quality-progress-fill" [style.width.%]="descriptionQualityScore.score" [ngClass]="getQualityBadgeClass()"></div>
-              </div>
-              <div class="quality-checklist-chips">
-                <span *ngFor="let check of descriptionQualityScore.checks" class="check-chip" [class.passed]="check.passed" [title]="check.tip">
-                  {{ check.passed ? '✅' : '⚪' }} {{ check.label }}
-                </span>
-              </div>
             </div>
           </div>
 
@@ -876,35 +825,4 @@
     </div>
   </div>
 
-  <!-- A/B DESCRIPTION VARIANT COMPARISON MODAL -->
-  <div *ngIf="isVariantModalOpen" class="variant-modal-backdrop" (click)="closeVariantModal()">
-    <div class="variant-modal-card" (click)="$event.stopPropagation()">
-      <div class="variant-modal-header">
-        <div class="vm-title-wrap">
-          <div class="vm-badge">⚡ A/B TEST STRATEJİSİ</div>
-          <h3>Açıklama Varyantları Karşılaştırması</h3>
-          <p>Yapay zeka ön bilgilerinizi ve ölçülerinizi koruyarak 2 farklı stratejik açıklama hazırladı. Beğendiğinizi seçin:</p>
-        </div>
-        <button type="button" class="btn-close-modal" (click)="closeVariantModal()">✕</button>
-      </div>
-      <div class="variant-modal-body">
-        <!-- Variant A -->
-        <div class="variant-col">
-          <div class="vc-header">
-            <span class="vc-badge artisan">🌟 Varyant A: Lüks &amp; Hikaye Odaklı</span>
-            <button type="button" class="btn-select-variant" (click)="applyVariant(variantA)">Bu Varyantı Seç</button>
-          </div>
-          <div class="vc-text-preview">{{ variantA }}</div>
-        </div>
-        <!-- Variant B -->
-        <div class="variant-col">
-          <div class="vc-header">
-            <span class="vc-badge specs">⚡ Varyant B: Net &amp; Madde Madde (Specs)</span>
-            <button type="button" class="btn-select-variant" (click)="applyVariant(variantB)">Bu Varyantı Seç</button>
-          </div>
-          <div class="vc-text-preview">{{ variantB }}</div>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>

@@ -55,8 +55,6 @@ export interface FastCreatorDraft {
   isLivePublish: boolean;
   savedAt: string;
   originalNotesBackup?: string;
-  selectedTone?: 'artisan' | 'specs' | 'gift';
-  selectedEmojiStyle?: 'vibrant' | 'minimal';
 }
 
 export interface VariationRow {
@@ -159,15 +157,9 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   private readonly DRAFT_STORAGE_KEY = 'etsy_fast_creator_draft_v1';
   private autoSaveTimer: any = null;
 
-  // --- AI DESCRIPTION ENHANCEMENT SUITE ---
+  // Orijinal satıcı notları yedeği
   originalNotesBackup = '';
-  hasBackupNotes = false;
-  selectedTone: 'artisan' | 'specs' | 'gift' = 'artisan';
-  selectedEmojiStyle: 'vibrant' | 'minimal' = 'vibrant';
-  isVariantModalOpen = false;
-  isLoadingVariants = false;
-  variantA = '';
-  variantB = '';
+  hasBackupNotes = false;
 
   ngOnInit(): void {
     const cloned = this.aiService.clonedListing();
@@ -329,8 +321,6 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         isLivePublish: this.isLivePublish,
         savedAt: timeStr,
         originalNotesBackup: this.originalNotesBackup,
-        selectedTone: this.selectedTone,
-        selectedEmojiStyle: this.selectedEmojiStyle
       };
 
       try {
@@ -403,8 +393,6 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.originalNotesBackup = draft.originalNotesBackup;
         this.hasBackupNotes = true;
       }
-      if (draft.selectedTone) this.selectedTone = draft.selectedTone;
-      if (draft.selectedEmojiStyle) this.selectedEmojiStyle = draft.selectedEmojiStyle;
       this.hasRestoredDraft = true;
 
       this.updatePriceTry();
@@ -769,11 +757,6 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.draftSavedAt = '';
     this.originalNotesBackup = '';
     this.hasBackupNotes = false;
-    this.selectedTone = 'artisan';
-    this.selectedEmojiStyle = 'vibrant';
-    this.isVariantModalOpen = false;
-    this.variantA = '';
-    this.variantB = '';
 
     // 1. Ürün & SEO Bilgileri
     this.title = '';
@@ -993,99 +976,12 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     });
   }
 
-  // --- AI DESCRIPTION & SPECIFICATION ENGINE ---
-
-  get descriptionQualityScore(): { score: number; checks: Array<{ label: string; passed: boolean; tip: string }> } {
-    const text = (this.description || '').trim();
-    if (!text) {
-      return {
-        score: 0,
-        checks: [
-          { label: 'Boyut & Ölçü (cm/in)', passed: false, tip: 'Ölçü bilgisi (cm, mm, inç) ekleyin' },
-          { label: 'Renk & Görsel Detay', passed: false, tip: 'Renk ve ışık/yüzey bilgisi ekleyin' },
-          { label: 'Malzeme & Bakım', passed: false, tip: 'Kullanılan malzeme ve temizlik/bakım ekleyin' },
-          { label: 'Kargo & Paketleme', passed: false, tip: 'Paketleme ve güvenli kargo garantisi ekleyin' },
-          { label: 'Zengin Uzunluk (>80 kelime)', passed: false, tip: 'En az 80 kelime zengin açıklama oluşturun' }
-        ]
-      };
-    }
-
-    const lower = text.toLowerCase();
-    const words = text.split(/\s+/).filter(Boolean).length;
-
-    const hasSize = /\b(cm|mm|inch|inches|boyut|ebat|ölçü|yükseklik|genişlik|çap|height|width|depth|diameter|dimension|approx)\b/i.test(lower);
-    const hasColor = /\b(renk|color|led|mavi|blue|black|siyah|white|beyaz|gold|altın|ahşap|wood|amber|green|yeşil|red|kırmızı|grey|gri|stone|taş|finish)\b/i.test(lower);
-    const hasMaterialCare = /\b(malzeme|material|care|bakım|clean|silin|wipe|handmade|handcrafted|resin|crystal|oak|meşe|cotton|leather|deri)\b/i.test(lower);
-    const hasShippingGift = /\b(kargo|ship|shipping|package|paket|gift|hediye|box|kutu|guarantee|garanti|delivery)\b/i.test(lower);
-    const hasGoodLength = words >= 80;
-
-    let score = 0;
-    if (hasSize) score += 25;
-    if (hasColor) score += 20;
-    if (hasMaterialCare) score += 20;
-    if (hasShippingGift) score += 15;
-    if (hasGoodLength) score += 20;
-
-    return {
-      score,
-      checks: [
-        { label: 'Boyut & Ölçü', passed: hasSize, tip: 'Ölçü bilgisi (cm/inç) yer alıyor' },
-        { label: 'Renk & Detay', passed: hasColor, tip: 'Renk ve görsel ton bilgisi yer alıyor' },
-        { label: 'Malzeme & Bakım', passed: hasMaterialCare, tip: 'Malzeme ve bakım ipuçları yer alıyor' },
-        { label: 'Kargo & Paket', passed: hasShippingGift, tip: 'Kargo ve paketleme garantisi yer alıyor' },
-        { label: `${words} Kelime`, passed: hasGoodLength, tip: words >= 80 ? 'Zengin içerik uzunluğu' : 'Daha zengin açıklama önerilir (80+ kelime)' }
-      ]
-    };
-  }
-
-  get wordCount(): number {
-    return (this.description || '').trim().split(/\s+/).filter(Boolean).length;
-  }
-
-  getQualityBadgeClass(): string {
-    const s = this.descriptionQualityScore.score;
-    if (s >= 80) return 'score-high';
-    if (s >= 50) return 'score-medium';
-    return 'score-low';
-  }
-
-  insertSpecChip(type: 'size' | 'color' | 'box' | 'personalization' | 'power'): void {
-    let snippet = '';
-    switch (type) {
-      case 'size':
-        snippet = '\n• Boyut / Ölçüler: 25 cm yükseklik x 15 cm genişlik';
-        break;
-      case 'color':
-        snippet = '\n• Renk & Işık: Buz Mavisi LED ışık, Doğal Kristal, Koyu Ahşap Taban';
-        break;
-      case 'box':
-        snippet = '\n• Kutu İçeriği: 1x Özel Tasarım Ürün, 1x USB Kablosu, 1x Koruyucu Hediye Kutusu';
-        break;
-      case 'personalization':
-        snippet = '\n• Kişiselleştirme: Ahşap tabana ücretsiz isim, tarih veya özel simge kazınabilir';
-        break;
-      case 'power':
-        snippet = '\n• Güç & Bağlantı: 5V USB Bağlantılı, Pratik Açma-Kapama Düğmeli';
-        break;
-    }
-
-    if (!this.description.trim()) {
-      this.description = snippet.trim();
-    } else {
-      this.description = this.description.trim() + '\n' + snippet.trim();
-    }
-    this.showToast('📋 Ön bilgi şablonu eklendi! Kendi ürününüze göre düzenleyebilirsiniz.');
-  }
+  // --- AI AÇIKLAMA MOTORU (ÖN BİLGİ & BOYUT/RENK KORUMA) ---
 
   restoreOriginalNotes(): void {
     if (!this.originalNotesBackup) return;
     this.description = this.originalNotesBackup;
     this.showToast('↩️ Orijinal ham notlarınız geri yüklendi!');
-  }
-
-  toggleEmojiStyle(): void {
-    this.selectedEmojiStyle = this.selectedEmojiStyle === 'vibrant' ? 'minimal' : 'vibrant';
-    this.showToast(`Emoji Stili: ${this.selectedEmojiStyle === 'vibrant' ? 'Modern Emojili 🌟' : 'Minimal Madde İmleri •'}`);
   }
 
   suggestAiDescription(): void {
@@ -1097,7 +993,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Save backup of original notes before AI replaces it
+    // Kullanıcının yazdığı orijinal notları yedekle
     if (descText && !this.originalNotesBackup) {
       this.originalNotesBackup = descText;
       this.hasBackupNotes = true;
@@ -1111,9 +1007,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       materials: this.materials.trim(),
       category: this.selectedCategory,
       tags: this.tags,
-      variationsSummary,
-      toneStyle: this.selectedTone,
-      emojiStyle: this.selectedEmojiStyle
+      variationsSummary
     };
 
     this.isGeneratingDesc = true;
@@ -1126,81 +1020,6 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.isGeneratingDesc = false;
         this.showToast(err?.message || '❌ Canlı AI açıklama önerisi oluşturulamadı.');
-      }
-    });
-  }
-
-  suggestAiDescriptionVariants(): void {
-    const descText = this.description.trim();
-    const titleText = this.title.trim();
-
-    if (!descText && !titleText) {
-      this.showToast('⚠️ Lütfen önce ürün başlığı veya açıklama alanına bir ürün adı/özelliği yazın.');
-      return;
-    }
-
-    if (descText && !this.originalNotesBackup) {
-      this.originalNotesBackup = descText;
-      this.hasBackupNotes = true;
-    }
-
-    const variationsSummary = this.getVariationsSummary();
-    const context: AiDescriptionContext = {
-      productTitle: titleText || descText,
-      preliminaryNotes: descText,
-      materials: this.materials.trim(),
-      category: this.selectedCategory,
-      tags: this.tags,
-      variationsSummary,
-      toneStyle: this.selectedTone,
-      emojiStyle: this.selectedEmojiStyle
-    };
-
-    this.isLoadingVariants = true;
-    this.listingAiService.suggestDescriptionVariants(context).subscribe({
-      next: res => {
-        this.isLoadingVariants = false;
-        this.variantA = res.variantA;
-        this.variantB = res.variantB;
-        this.isVariantModalOpen = true;
-        this.showToast(res.message);
-      },
-      error: (err) => {
-        this.isLoadingVariants = false;
-        this.showToast(err?.message || '❌ Varyant üretimi başarısız oldu.');
-      }
-    });
-  }
-
-  applyVariant(variantText: string): void {
-    if (!variantText) return;
-    this.description = variantText;
-    this.isVariantModalOpen = false;
-    this.showToast('🎉 Seçilen açıklama varyantı forma uygulandı!');
-  }
-
-  closeVariantModal(): void {
-    this.isVariantModalOpen = false;
-  }
-
-  fillTagsFromNotes(): void {
-    const raw = `${this.title} ${this.description} ${this.materials}`.trim();
-    if (!raw) {
-      this.showToast('⚠️ Lütfen önce başlık veya açıklama alanına birkaç kelime girin.');
-      return;
-    }
-    this.isGeneratingTags = true;
-    this.listingAiService.suggestTags(this.title.trim() || this.description.trim()).subscribe({
-      next: res => {
-        this.isGeneratingTags = false;
-        if (res.value && res.value.length > 0) {
-          this.tags = res.value.slice(0, 13);
-          this.showToast('✨ Açıklama ve başlığınızdan 13 SEO etiketi başarıyla üretildi!');
-        }
-      },
-      error: () => {
-        this.isGeneratingTags = false;
-        this.showToast('Etiket önerisi oluşturulamadı.');
       }
     });
   }
@@ -1242,7 +1061,6 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.description = res.description;
         if (res.materials) this.materials = res.materials;
 
-        // If user already has images in gallery, also refine category using vision
         const images = this.galleryImages.map(img => img.url).filter(u => !!u);
         if (images.length > 0) {
           this.suggestAiCategory();
