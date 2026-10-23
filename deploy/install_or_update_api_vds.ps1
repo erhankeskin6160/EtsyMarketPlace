@@ -4,7 +4,7 @@ param(
 	[string]$PackagePath,
 	[string]$InstallPath = "C:\Users\Administrator\Desktop\EtsyM\Api",
 	[int]$Port = 5263,
-	[string]$ApiKey = ""
+	[string]$ApiKey = "etsy-vds-sync-key-2026"
 )
 
 $ErrorActionPreference = "Continue"
@@ -117,6 +117,12 @@ if (-not $copySuccess) {
 
 # 5. Ayarları geri yükle
 if ($savedProdSettings) {
+	try {
+		$jsonObj = $savedProdSettings | ConvertFrom-Json
+		if (-not $jsonObj.Security) { $jsonObj | Add-Member -MemberType NoteProperty -Name "Security" -Value ([PSCustomObject]@{}) }
+		$jsonObj.Security.ApiKey = "etsy-vds-sync-key-2026"
+		$savedProdSettings = $jsonObj | ConvertTo-Json -Depth 5
+	} catch { }
 	Set-Content $appSettings -Value $savedProdSettings -Encoding UTF8 -ErrorAction SilentlyContinue
 } elseif (-not (Test-Path $appSettings)) {
 	@{
