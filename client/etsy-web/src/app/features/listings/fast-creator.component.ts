@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, inject, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -25,6 +25,37 @@ export interface CreatorTemplate {
   materials: string;
 }
 
+export interface FastCreatorDraft {
+  listingType: 'physical' | 'digital';
+  priceUsd: number | null;
+  priceTry: number;
+  quantity: number | null;
+  title: string;
+  selectedCategory: string;
+  selectedTaxonomyId: number;
+  selectedCategoryCombo: string;
+  selectedDepartment: string;
+  shippingProfile: string;
+  selectedShippingProfileId: number | null;
+  readinessState: string;
+  selectedReadinessStateId: number | null;
+  tags: string[];
+  description: string;
+  materials: string;
+  galleryImages: GalleryImage[];
+  enableVariations: boolean;
+  varType1: string;
+  varValues1: string;
+  enableVar2: boolean;
+  varType2: string;
+  varValues2: string;
+  customVariationPricing: boolean;
+  variationRows: VariationRow[];
+  selectedTemplateId: string;
+  isLivePublish: boolean;
+  savedAt: string;
+}
+
 export interface VariationRow {
   key: string;
   price: number;
@@ -39,7 +70,7 @@ export interface VariationRow {
   templateUrl: './fast-creator.component.html',
   styleUrls: ['./fast-creator.component.css']
 })
-export class FastCreatorComponent implements OnInit {
+export class FastCreatorComponent implements OnInit, OnDestroy {
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   listingAiService = inject(EtsyListingAiService);
@@ -120,6 +151,10 @@ export class FastCreatorComponent implements OnInit {
   isSavingDraft = false;
   successMessage = '';
   clonedNotice = '';
+  hasRestoredDraft = false;
+  draftSavedAt = '';
+  private readonly DRAFT_STORAGE_KEY = 'etsy_fast_creator_draft_v1';
+  private autoSaveTimer: any = null;
 
   ngOnInit(): void {
     const cloned = this.aiService.clonedListing();
@@ -203,6 +238,18 @@ export class FastCreatorComponent implements OnInit {
       }
     });
 
+    if (!cloned) {
+      const hasRouteParams = !!(this.route.snapshot.queryParams['title'] || this.route.snapshot.queryParams['category']);
+      if (!hasRouteParams) {
+        this.loadDraftFromStorage();
+      }
+    }
+
+    // Auto-save timer: arka planda her 4 saniyede bir formu otomatik yedekler
+    this.autoSaveTimer = setInterval(() => {
+      this.saveDraftToStorage();
+    }, 4000);
+
     this.rebuildVariationGrid();
     this.loadLogisticsData();
   }
@@ -215,6 +262,161 @@ export class FastCreatorComponent implements OnInit {
 
   refreshLogistics(): void {
     this.loadLogisticsData();
+  }
+
+  @HostListener('window:beforeunload')
+  onBeforeUnload(): void {
+    this.saveDraftToStorage();
+  }
+
+  ngOnDestroy(): void {
+    if (this.autoSaveTimer) {
+      clearInterval(this.autoSaveTimer);
+      this.autoSaveTimer = null;
+    }
+    this.saveDraftToStorage();
+  }
+
+  saveDraftToStorage(): void {
+    if (!this.hasAnyDraftContent()) {
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      const draft: FastCreatorDraft = {
+        listingType: this.listingType,
+        priceUsd: this.priceUsd,
+        priceTry: this.priceTry,
+        quantity: this.quantity,
+        title: this.title,
+        selectedCategory: this.selectedCategory,
+        selectedTaxonomyId: this.selectedTaxonomyId,
+        selectedCategoryCombo: this.selectedCategoryCombo,
+        selectedDepartment: this.selectedDepartment,
+        shippingProfile: this.shippingProfile,
+        selectedShippingProfileId: this.selectedShippingProfileId,
+        readinessState: this.readinessState,
+        selectedReadinessStateId: this.selectedReadinessStateId,
+        tags: this.tags,
+        description: this.description,
+        materials: this.materials,
+        galleryImages: this.galleryImages,
+        enableVariations: this.enableVariations,
+        varType1: this.varType1,
+        varValues1: this.varValues1,
+        enableVar2: this.enableVar2,
+        varType2: this.varType2,
+        varValues2: this.varValues2,
+        customVariationPricing: this.customVariationPricing,
+        variationRows: this.variationRows,
+        selectedTemplateId: this.selectedTemplateId,
+        isLivePublish: this.isLivePublish,
+        savedAt: timeStr
+      };
+
+      try {
+        localStorage.setItem(this.DRAFT_STORAGE_KEY, JSON.stringify(draft));
+        this.draftSavedAt = timeStr;
+      } catch (storageError) {
+        // QuotaExceeded: base64 buyuk resimleri bosaltarak metin ve diger verileri koru
+        const safeImages = this.galleryImages.map(img => ({
+          ...img,
+          url: img.url.startsWith('data:') ? '' : img.url
+        }));
+        const slimDraft = { ...draft, galleryImages: safeImages };
+        localStorage.setItem(this.DRAFT_STORAGE_KEY, JSON.stringify(slimDraft));
+        this.draftSavedAt = timeStr;
+      }
+    } catch (e) {
+      console.warn('FastCreator draft autosave failed:', e);
+    }
+  }
+
+  loadDraftFromStorage(): boolean {
+    try {
+      const raw = localStorage.getItem(this.DRAFT_STORAGE_KEY);
+      if (!raw) return false;
+
+      const draft: FastCreatorDraft = JSON.parse(raw);
+      if (!draft) return false;
+
+      const hasContent = !!(
+        draft.title?.trim() ||
+        (draft.priceUsd !== null && draft.priceUsd !== undefined && draft.priceUsd > 0) ||
+        (draft.tags && draft.tags.length > 0) ||
+        draft.description?.trim() ||
+        draft.materials?.trim() ||
+        (draft.galleryImages && draft.galleryImages.length > 0) ||
+        (draft.enableVariations && draft.variationRows && draft.variationRows.length > 0)
+      );
+
+      if (!hasContent) return false;
+
+      this.listingType = draft.listingType || 'physical';
+      this.priceUsd = draft.priceUsd ?? null;
+      this.priceTry = draft.priceTry || 0;
+      this.quantity = draft.quantity ?? 15;
+      this.title = draft.title || '';
+      this.selectedCategory = draft.selectedCategory || '';
+      this.selectedTaxonomyId = draft.selectedTaxonomyId || 0;
+      this.selectedCategoryCombo = draft.selectedCategoryCombo || '';
+      this.selectedDepartment = draft.selectedDepartment || '';
+      this.shippingProfile = draft.shippingProfile || '';
+      this.selectedShippingProfileId = draft.selectedShippingProfileId ?? null;
+      this.readinessState = draft.readinessState || '';
+      this.selectedReadinessStateId = draft.selectedReadinessStateId ?? null;
+      this.tags = Array.isArray(draft.tags) ? [...draft.tags] : [];
+      this.description = draft.description || '';
+      this.materials = draft.materials || '';
+      this.galleryImages = Array.isArray(draft.galleryImages) ? [...draft.galleryImages] : [];
+      this.enableVariations = !!draft.enableVariations;
+      this.varType1 = draft.varType1 || 'Boyut / Size';
+      this.varValues1 = draft.varValues1 || '';
+      this.enableVar2 = !!draft.enableVar2;
+      this.varType2 = draft.varType2 || 'Renk / Color';
+      this.varValues2 = draft.varValues2 || '';
+      this.customVariationPricing = !!draft.customVariationPricing;
+      this.variationRows = Array.isArray(draft.variationRows) ? [...draft.variationRows] : [];
+      this.selectedTemplateId = draft.selectedTemplateId || '';
+      this.isLivePublish = !!draft.isLivePublish;
+      this.draftSavedAt = draft.savedAt || '';
+      this.hasRestoredDraft = true;
+
+      this.updatePriceTry();
+      if (this.enableVariations && this.variationRows.length === 0) {
+        this.rebuildVariationGrid();
+      }
+
+      return true;
+    } catch (e) {
+      console.warn('FastCreator load draft error:', e);
+      return false;
+    }
+  }
+
+  clearDraftFromStorage(): void {
+    try {
+      localStorage.removeItem(this.DRAFT_STORAGE_KEY);
+      this.hasRestoredDraft = false;
+      this.draftSavedAt = '';
+    } catch (e) {
+      console.warn('FastCreator clear draft error:', e);
+    }
+  }
+
+  private hasAnyDraftContent(): boolean {
+    return !!(
+      this.title?.trim() ||
+      (this.priceUsd !== null && this.priceUsd !== undefined && this.priceUsd > 0) ||
+      this.tags.length > 0 ||
+      this.description?.trim() ||
+      this.materials?.trim() ||
+      this.galleryImages.length > 0 ||
+      (this.enableVariations && this.variationRows.length > 0)
+    );
   }
 
   private readonly TR_TO_EN_TAXONOMY_MAP: Record<string, string[]> = {
@@ -540,6 +742,10 @@ export class FastCreatorComponent implements OnInit {
   }
 
   resetForm(): void {
+    this.clearDraftFromStorage();
+    this.hasRestoredDraft = false;
+    this.draftSavedAt = '';
+
     // 1. Ürün & SEO Bilgileri
     this.title = '';
     this.priceUsd = null;
@@ -1188,6 +1394,8 @@ export class FastCreatorComponent implements OnInit {
       next: (res) => {
         this.isSavingDraft = false;
         if (res && res.success) {
+          this.clearDraftFromStorage();
+          this.hasRestoredDraft = false;
           this.createdListingResult = res;
           this.isPublishSuccessModalOpen = true;
           const varCount = (res as any).variationsCount || 0;

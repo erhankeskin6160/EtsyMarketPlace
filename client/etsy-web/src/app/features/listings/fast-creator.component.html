@@ -69,6 +69,13 @@
     <button type="button" class="btn-dismiss-cloned" (click)="clearCloned()">Temizle</button>
   </div>
 
+  <!-- DRAFT RESTORED BANNER -->
+  <div *ngIf="hasRestoredDraft && !clonedNotice" class="draft-restored-banner">
+    <div class="draft-badge">💾 KAYDEDİLMİŞ TASLAK YÜKLENDİ</div>
+    <div class="draft-info">Önceki oturumunuzdaki ürün bilgileri kurtarıldı. (Son Kayıt: {{ draftSavedAt || 'Şimdi' }})</div>
+    <button type="button" class="btn-dismiss-draft" (click)="resetForm()" title="Taslağı Sil ve Formu Sıfırla">Temizle</button>
+  </div>
+
   <!-- SUCCESS TOAST BANNER -->
   <div *ngIf="successMessage" class="success-toast-banner">
     {{ successMessage }}
