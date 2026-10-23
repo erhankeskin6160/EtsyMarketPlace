@@ -95,7 +95,7 @@ public sealed class PostgreSqlDataMigrator
             DomainUser? adminUser = await _db.Users.FirstOrDefaultAsync(u => u.Username == "admin", cancellationToken);
             if (adminUser is null)
             {
-                var (hash, salt) = PasswordHasher.HashPassword("Admin123!");
+                var (hash, salt) = PasswordHasher.HashPassword("Admin123*!");
                 adminUser = new DomainUser
                 {
                     Id = Guid.NewGuid().ToString("N"),
