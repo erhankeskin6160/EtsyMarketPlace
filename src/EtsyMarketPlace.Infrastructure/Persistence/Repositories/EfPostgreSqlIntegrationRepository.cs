@@ -465,7 +465,9 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
                 {
                     dict[receiptId] = new EtsyDashboardOrderCost(
                         e.ProductCost ?? 0m,
-                        e.ShippingCost ?? 0m
+                        e.ShippingCost ?? 0m,
+                        1.00m,
+                        e.AlertReason
                     );
                 }
             }

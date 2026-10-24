@@ -225,11 +225,19 @@ public static class EtsyLiveDashboardCalculator
             var etsyFees = 0m;
             var offsiteAdFee = 0m;
             decimal? productCost = null;
+            decimal? unitProductCost = null;
+            decimal? actualShippingCost = null;
+            decimal? packagingCost = null;
+            string? costNotes = null;
             var hasCost = false;
 
             if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
             {
-                productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost, 2);
+                productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
+                unitProductCost = orderCost.ProductCost;
+                actualShippingCost = orderCost.ShippingCost;
+                packagingCost = orderCost.PackagingCost > 0 ? orderCost.PackagingCost : 1.00m;
+                costNotes = orderCost.Notes;
                 hasCost = true;
             }
 
@@ -308,7 +316,11 @@ public static class EtsyLiveDashboardCalculator
                 netProfitTry,
                 hasCost,
                 false,
-                null));
+                null,
+                unitProductCost,
+                actualShippingCost,
+                packagingCost,
+                costNotes));
         }
 
         return rows.OrderByDescending(r => r.CreatedAt).ToList();
@@ -370,7 +382,7 @@ public sealed record EtsyDashboardReceipt(
 
 public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount);
 
-public sealed record EtsyDashboardOrderCost(decimal ProductCost, decimal ShippingCost);
+public sealed record EtsyDashboardOrderCost(decimal ProductCost, decimal ShippingCost, decimal PackagingCost = 0m, string? Notes = null);
 
 public sealed record EtsyDashboardOrderRow(
     long ReceiptId,
@@ -409,6 +421,10 @@ public sealed record EtsyOrderFinancialDetail(
     decimal NetProfitTry,
     bool HasCostData,
     bool HasInvoice,
-    string? InvoicePath = null);
+    string? InvoicePath = null,
+    decimal? UnitProductCostUsd = null,
+    decimal? ActualShippingCostUsd = null,
+    decimal? PackagingCostUsd = null,
+    string? CostNotes = null);
 
 public sealed record EtsyDailySeries(string[] Labels, decimal[] GrossSales, decimal[] NetProfit);

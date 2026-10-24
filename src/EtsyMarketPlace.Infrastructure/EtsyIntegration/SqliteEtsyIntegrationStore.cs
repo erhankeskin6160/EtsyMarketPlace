@@ -318,7 +318,7 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await EnsureInitializedAsync(cancellationToken);
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT order_id, product_cost, shipping_cost FROM order_costs WHERE shop_id=$shopId AND (product_cost IS NOT NULL OR shipping_cost IS NOT NULL);";
+        command.CommandText = "SELECT order_id, product_cost, shipping_cost, alert_reason FROM order_costs WHERE shop_id=$shopId AND (product_cost IS NOT NULL OR shipping_cost IS NOT NULL);";
         command.Parameters.AddWithValue("$shopId", shopId);
         var result = new Dictionary<long, EtsyDashboardOrderCost>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -329,7 +329,8 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
 
             var productCost = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
             var shippingCost = reader.IsDBNull(2) ? 0m : Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
-            result[orderId] = new EtsyDashboardOrderCost(productCost, shippingCost);
+            var notes = reader.IsDBNull(3) ? null : reader.GetString(3);
+            result[orderId] = new EtsyDashboardOrderCost(productCost, shippingCost, 1.00m, notes);
         }
 
         return result;

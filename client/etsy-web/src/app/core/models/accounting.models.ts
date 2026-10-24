@@ -68,6 +68,10 @@ export interface OrderFinancialRow {
   hasCostData: boolean;
   hasInvoice: boolean;
   invoiceName?: string;
+  unitProductCostUsd?: number | null;
+  actualShippingCostUsd?: number | null;
+  packagingCostUsd?: number | null;
+  costNotes?: string | null;
 }
 
 export interface ForecastKpiSummary {

@@ -1061,9 +1061,19 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   editOrderCost(order: OrderFinancialRow): void {
     this.selectedOrder = order;
-    this.costModalProduction = order.productCostUsd ? Number((order.productCostUsd * 0.6).toFixed(2)) : 18.5;
-    this.costModalShipping = order.productCostUsd ? Number((order.productCostUsd * 0.3).toFixed(2)) : 7.8;
-    this.costModalPackaging = order.productCostUsd ? Number((order.productCostUsd * 0.1).toFixed(2)) : 1.5;
+    if (order.actualShippingCostUsd !== undefined && order.actualShippingCostUsd !== null && order.actualShippingCostUsd > 0) {
+      this.costModalShipping = order.actualShippingCostUsd;
+      this.costModalProduction = order.unitProductCostUsd !== undefined && order.unitProductCostUsd !== null ? order.unitProductCostUsd : 10.0;
+      this.costModalPackaging = order.packagingCostUsd !== undefined && order.packagingCostUsd !== null ? order.packagingCostUsd : 1.0;
+    } else if (order.productCostUsd && order.productCostUsd > 0) {
+      this.costModalShipping = Number(Math.max(0, order.productCostUsd - 11.0).toFixed(2));
+      this.costModalProduction = 10.0;
+      this.costModalPackaging = 1.0;
+    } else {
+      this.costModalProduction = 10.0;
+      this.costModalShipping = 16.60;
+      this.costModalPackaging = 1.0;
+    }
     this.showCostModal = true;
     this.closeContextMenu();
   }
