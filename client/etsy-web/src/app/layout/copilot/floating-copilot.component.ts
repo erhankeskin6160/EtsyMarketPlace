@@ -82,6 +82,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
                 <span>💬 {{ s.messages.length }} mesaj</span>
                 <span>•</span>
                 <span>{{ formatSessionDate(s.updatedAt) }}</span>
+                <span *ngIf="isGeneratingSession(s.id)" class="session-running-badge">
+                  <span class="pulsing-dot"></span> Yanıt üretiliyor...
+                </span>
               </div>
             </div>
             <button class="btn-del-session" (click)="deleteSession($event, s.id)" title="Bu sohbeti sil">🗑️</button>
@@ -458,6 +461,29 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       font-size: 0.68rem;
       color: #94a3b8;
       margin-top: 3px;
+      flex-wrap: wrap;
+    }
+    .session-running-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #38bdf8;
+      font-weight: 600;
+      font-size: 0.68rem;
+      background: rgba(14, 165, 233, 0.15);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .session-running-badge .pulsing-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background-color: #38bdf8;
+      animation: pulse-dot 1.2s infinite ease-in-out;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 0.3; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
     }
     .btn-del-session {
       background: transparent;
@@ -893,7 +919,15 @@ export class FloatingCopilotComponent implements OnInit {
   @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;
 
   isOpen = false;
-  isThinking = false;
+  generatingSessionIds = new Set<string>();
+
+  get isThinking(): boolean {
+    return this.activeSession ? this.generatingSessionIds.has(this.activeSession.id) : false;
+  }
+
+  isGeneratingSession(sessionId: string): boolean {
+    return this.generatingSessionIds.has(sessionId);
+  }
   isDraggingOver = false;
   userInput = '';
   previewImageUrl: string | null = null;
@@ -1174,10 +1208,11 @@ export class FloatingCopilotComponent implements OnInit {
 
   async selectSession(s: CopilotChatSession): Promise<void> {
     this.syncCurrentSession();
-    this.activeSession = s;
-    this.messages = s.messages || [];
-    this.assistantAi.setConversationHistory(s.conversationHistory || []);
-    this.sessionStorage.setActiveSessionId(s.id);
+    const freshSession = (await this.sessionStorage.getSession(s.id)) || s;
+    this.activeSession = freshSession;
+    this.messages = freshSession.messages || [];
+    this.assistantAi.setConversationHistory(freshSession.conversationHistory || []);
+    this.sessionStorage.setActiveSessionId(freshSession.id);
     this.isHistoryOpen = false;
     setTimeout(() => this.scrollToBottom(), 50);
   }
@@ -1291,14 +1326,18 @@ Size nasıl yardımcı olabilirim?<br>
 
     if ((!text && attachmentsToSend.length === 0) || this.isThinking) return;
 
+    if (!this.activeSession) return;
+    const targetSession = this.activeSession;
+    const targetSessionId = targetSession.id;
+
     // Auto-derive session title if it's the first message
-    if (this.activeSession && (!this.activeSession.title || this.activeSession.title === 'Yeni Sohbet')) {
+    if (!targetSession.title || targetSession.title === 'Yeni Sohbet') {
       let derivedTitle = text || (attachmentsToSend.length > 0 ? attachmentsToSend[0].name : 'Ürün İncelemesi');
       derivedTitle = derivedTitle.replace(/\.(png|jpg|jpeg|webp|gif|pdf|xlsx|csv)$/i, '').trim();
       if (derivedTitle.length > 32) {
         derivedTitle = derivedTitle.substring(0, 30) + '...';
       }
-      this.activeSession.title = derivedTitle;
+      targetSession.title = derivedTitle;
     }
 
     const displayText = text || (attachmentsToSend.length === 1 
@@ -1314,37 +1353,61 @@ Size nasıl yardımcı olabilirim?<br>
     });
     this.syncCurrentSession();
 
+    // Snapshot this session's history before initiating background LLM call
+    const sessionHistorySnapshot = targetSession.conversationHistory ? [...targetSession.conversationHistory] : [];
+
     this.userInput = '';
     this.clearAttachments();
-    this.isThinking = true;
+    this.generatingSessionIds.add(targetSessionId);
+    this.refreshSavedSessionsList();
     setTimeout(() => this.scrollToBottom(), 50);
 
-    this.assistantAi.generateResponse(displayText, attachmentsToSend).subscribe({
-      next: (replyHtml: string) => {
-        this.isThinking = false;
-        this.messages.push({
+    this.assistantAi.generateResponse(displayText, attachmentsToSend, sessionHistorySnapshot).subscribe({
+      next: (res) => {
+        this.generatingSessionIds.delete(targetSessionId);
+        const assistantMsg: AssistantChatMessage = {
           sender: 'assistant',
-          text: replyHtml,
+          text: res.replyHtml,
           time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
           provider: this.activeProvider,
           model: this.activeModel
-        });
-        this.syncCurrentSession();
-        this.refreshSavedSessionsList();
-        setTimeout(() => this.scrollToBottom(), 50);
+        };
+
+        if (this.activeSession && this.activeSession.id === targetSessionId) {
+          this.messages.push(assistantMsg);
+          this.activeSession.conversationHistory = res.updatedHistory;
+          this.assistantAi.setConversationHistory(res.updatedHistory);
+          this.syncCurrentSession();
+          this.refreshSavedSessionsList();
+          setTimeout(() => this.scrollToBottom(), 50);
+        } else {
+          // LLM completed in background while user switched to another session!
+          // Persist directly to the target session in IndexedDB without disturbing active view
+          this.sessionStorage.appendMessageToSession(targetSessionId, assistantMsg, res.updatedHistory).then(() => {
+            this.refreshSavedSessionsList();
+          });
+        }
       },
       error: () => {
-        this.isThinking = false;
-        this.messages.push({
+        this.generatingSessionIds.delete(targetSessionId);
+        const errorMsg: AssistantChatMessage = {
           sender: 'assistant',
           text: 'Üzgünüm, yanıt oluşturulurken bir bağlantı gecikmesi oluştu. Lütfen tekrar deneyiniz.',
           time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
           provider: this.activeProvider,
           model: this.activeModel
-        });
-        this.syncCurrentSession();
-        this.refreshSavedSessionsList();
-        setTimeout(() => this.scrollToBottom(), 50);
+        };
+
+        if (this.activeSession && this.activeSession.id === targetSessionId) {
+          this.messages.push(errorMsg);
+          this.syncCurrentSession();
+          this.refreshSavedSessionsList();
+          setTimeout(() => this.scrollToBottom(), 50);
+        } else {
+          this.sessionStorage.appendMessageToSession(targetSessionId, errorMsg).then(() => {
+            this.refreshSavedSessionsList();
+          });
+        }
       }
     });
   }

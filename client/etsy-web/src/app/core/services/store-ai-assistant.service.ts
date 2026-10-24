@@ -24,6 +24,15 @@ export interface AssistantChatMessage {
   attachments?: ChatAttachment[];
 }
 
+export interface AiResponseResult {
+  replyHtml: string;
+  updatedHistory: {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    attachments?: ChatAttachment[];
+  }[];
+}
+
 export interface LiveToolContext {
   keyword: string;
   marketResult?: MarketSearchResponseDto | null;
@@ -324,7 +333,11 @@ export class StoreAiAssistantService {
    * Main multi-LLM dispatch method. Calls the currently active AI model configured in AiSettingsService,
    * injecting live store metrics, live market search & carrier shipping tool results, and attached files.
    */
-  public generateResponse(userPrompt: string, attachments?: ChatAttachment[]): Observable<string> {
+  public generateResponse(
+    userPrompt: string,
+    attachments?: ChatAttachment[],
+    sessionHistory?: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
+  ): Observable<AiResponseResult> {
     return this.detectAndExecuteTools(userPrompt, attachments).pipe(
       switchMap(toolContext => {
         const settings = this.aiSettings.settings();
@@ -341,51 +354,69 @@ export class StoreAiAssistantService {
         // Prepare text prompt augmented with extracted documents/tables
         const augmentedPrompt = this.augmentPromptWithAttachments(userPrompt, attachments);
 
-        // Append user input
-        this.conversationHistory.push({
+        // Session-isolated history snapshot
+        let history = sessionHistory ? [...sessionHistory] : [...this.conversationHistory];
+        history.push({
           role: 'user',
           content: augmentedPrompt,
           attachments
         });
-        if (this.conversationHistory.length > 20) {
-          this.conversationHistory = this.conversationHistory.slice(-20);
+        if (history.length > 20) {
+          history = history.slice(-20);
+        }
+
+        if (!sessionHistory) {
+          this.conversationHistory = [...history];
         }
 
         // Check API Key
         const apiKey = this.getApiKeyForProvider(provider, settings);
         if (!apiKey || apiKey.trim().length === 0 || provider === 'Offline') {
           const intelligentReply = this.generateDynamicDataReply(userPrompt, snap, provider, activeModel, attachments, toolContext);
-          this.conversationHistory.push({ role: 'assistant', content: intelligentReply });
-          return of(intelligentReply);
+          const updatedHistory = [...history, { role: 'assistant' as const, content: intelligentReply }];
+          if (!sessionHistory) {
+            this.conversationHistory = updatedHistory;
+          }
+          return of({
+            replyHtml: intelligentReply,
+            updatedHistory
+          });
         }
 
-        let reply$: Observable<string>;
+        let reply$: Observable<AiResponseResult>;
         switch (provider) {
           case 'DeepSeek':
-            reply$ = this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments, toolContext);
+            reply$ = this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
             break;
           case 'OpenAI':
-            reply$ = this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments, toolContext);
+            reply$ = this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
             break;
           case 'Claude':
-            reply$ = this.callClaude(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments, toolContext);
+            reply$ = this.callClaude(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
             break;
           case 'Grok':
-            reply$ = this.callGrok(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments, toolContext);
+            reply$ = this.callGrok(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
             break;
           case 'Gemini':
           default:
-            reply$ = this.callGemini(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments, toolContext);
+            reply$ = this.callGemini(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
             break;
         }
 
         return reply$.pipe(
-          map(replyText => {
+          map(res => {
+            let replyText = res.replyHtml;
             if (toolContext && (toolContext.marketResult || toolContext.shippingResult)) {
               const badge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,0.12);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#38bdf8;"><span>⚡</span><span><strong>Canlı Modüller Çalıştırıldı:</strong> Pazar Analizi ("${toolContext.keyword}") & Taşıyıcı Kargo Motoru Entegre Edildi</span></div><br>`;
-              return badge + replyText;
+              replyText = badge + replyText;
             }
-            return replyText;
+            if (!sessionHistory) {
+              this.conversationHistory = res.updatedHistory;
+            }
+            return {
+              replyHtml: replyText,
+              updatedHistory: res.updatedHistory
+            };
           })
         );
       })
@@ -434,15 +465,16 @@ export class StoreAiAssistantService {
     apiKey: string,
     model: string,
     snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
     attachments?: ChatAttachment[],
     toolContext?: LiveToolContext | null
-  ): Observable<string> {
+  ): Observable<AiResponseResult> {
     const normalizedModel = this.normalizeDeepSeekModel(model);
     const url = 'https://api.deepseek.com/chat/completions';
 
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...this.conversationHistory.map(m => ({
+      ...history.map(m => ({
         role: m.role === 'assistant' ? 'assistant' : 'user',
         content: m.content
       }))
@@ -469,16 +501,20 @@ export class StoreAiAssistantService {
         }
         const text = res?.choices?.[0]?.message?.content?.trim();
         if (text) {
-          this.conversationHistory.push({ role: 'assistant', content: text });
-          return this.formatMarkdown(text);
+          return {
+            replyHtml: this.formatMarkdown(text),
+            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+          };
         }
         throw new Error('Boş DeepSeek yanıtı');
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] DeepSeek API hatası, canlı mağaza zekası devrede:', err);
         const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'DeepSeek', normalizedModel, attachments, toolContext);
-        this.conversationHistory.push({ role: 'assistant', content: fallback });
-        return of(fallback);
+        return of({
+          replyHtml: fallback,
+          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
+        });
       })
     );
   }
@@ -490,18 +526,19 @@ export class StoreAiAssistantService {
     apiKey: string,
     model: string,
     snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
     attachments?: ChatAttachment[],
     toolContext?: LiveToolContext | null
-  ): Observable<string> {
+  ): Observable<AiResponseResult> {
     const url = 'https://api.openai.com/v1/chat/completions';
     const imageAttachments = (attachments || []).filter(a => a.type === 'image' && Boolean(a.dataUrl));
 
     // Construct messages with multimodal vision content
     const messages: any[] = [{ role: 'system', content: systemPrompt }];
 
-    for (let i = 0; i < this.conversationHistory.length; i++) {
-      const turn = this.conversationHistory[i];
-      if (turn.role === 'user' && i === this.conversationHistory.length - 1 && imageAttachments.length > 0) {
+    for (let i = 0; i < history.length; i++) {
+      const turn = history[i];
+      if (turn.role === 'user' && i === history.length - 1 && imageAttachments.length > 0) {
         // Last user turn with image attachments
         const contentParts: any[] = [{ type: 'text', text: turn.content }];
         for (const img of imageAttachments) {
@@ -538,16 +575,20 @@ export class StoreAiAssistantService {
         }
         const text = res?.choices?.[0]?.message?.content?.trim();
         if (text) {
-          this.conversationHistory.push({ role: 'assistant', content: text });
-          return this.formatMarkdown(text);
+          return {
+            replyHtml: this.formatMarkdown(text),
+            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+          };
         }
         throw new Error('Boş OpenAI yanıtı');
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] OpenAI API hatası, canlı mağaza zekası devrede:', err);
         const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'OpenAI', model, attachments, toolContext);
-        this.conversationHistory.push({ role: 'assistant', content: fallback });
-        return of(fallback);
+        return of({
+          replyHtml: fallback,
+          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
+        });
       })
     );
   }
@@ -559,15 +600,16 @@ export class StoreAiAssistantService {
     apiKey: string,
     model: string,
     snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
     attachments?: ChatAttachment[],
     toolContext?: LiveToolContext | null
-  ): Observable<string> {
+  ): Observable<AiResponseResult> {
     const url = 'https://api.anthropic.com/v1/messages';
     const imageAttachments = (attachments || []).filter(a => a.type === 'image' && Boolean(a.dataUrl));
     const pdfAttachments = (attachments || []).filter(a => a.type === 'pdf' && Boolean(a.dataUrl));
 
     const messages: any[] = [];
-    const historyWithoutSystem = this.conversationHistory.filter(m => m.role !== 'system');
+    const historyWithoutSystem = history.filter(m => m.role !== 'system');
 
     for (let i = 0; i < historyWithoutSystem.length; i++) {
       const turn = historyWithoutSystem[i];
@@ -632,16 +674,20 @@ export class StoreAiAssistantService {
         }
         const text = res?.content?.[0]?.text?.trim();
         if (text) {
-          this.conversationHistory.push({ role: 'assistant', content: text });
-          return this.formatMarkdown(text);
+          return {
+            replyHtml: this.formatMarkdown(text),
+            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+          };
         }
         throw new Error('Boş Claude yanıtı');
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] Claude API hatası, canlı mağaza zekası devrede:', err);
         const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Claude', model, attachments, toolContext);
-        this.conversationHistory.push({ role: 'assistant', content: fallback });
-        return of(fallback);
+        return of({
+          replyHtml: fallback,
+          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
+        });
       })
     );
   }
@@ -653,13 +699,14 @@ export class StoreAiAssistantService {
     apiKey: string,
     model: string,
     snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
     attachments?: ChatAttachment[],
     toolContext?: LiveToolContext | null
-  ): Observable<string> {
+  ): Observable<AiResponseResult> {
     const url = 'https://api.x.ai/v1/chat/completions';
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...this.conversationHistory.map(m => ({
+      ...history.map(m => ({
         role: m.role === 'assistant' ? 'assistant' : 'user',
         content: m.content
       }))
@@ -684,16 +731,20 @@ export class StoreAiAssistantService {
         }
         const text = res?.choices?.[0]?.message?.content?.trim();
         if (text) {
-          this.conversationHistory.push({ role: 'assistant', content: text });
-          return this.formatMarkdown(text);
+          return {
+            replyHtml: this.formatMarkdown(text),
+            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+          };
         }
         throw new Error('Boş Grok yanıtı');
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] Grok API hatası, canlı mağaza zekası devrede:', err);
         const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Grok', model, attachments, toolContext);
-        this.conversationHistory.push({ role: 'assistant', content: fallback });
-        return of(fallback);
+        return of({
+          replyHtml: fallback,
+          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
+        });
       })
     );
   }
@@ -705,16 +756,17 @@ export class StoreAiAssistantService {
     apiKey: string,
     model: string,
     snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
     attachments?: ChatAttachment[],
     toolContext?: LiveToolContext | null
-  ): Observable<string> {
+  ): Observable<AiResponseResult> {
     const modelName = model || 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
 
     const geminiHistory: any[] = [];
-    for (let i = 0; i < this.conversationHistory.length; i++) {
-      const turn = this.conversationHistory[i];
-      const isLatestTurn = i === this.conversationHistory.length - 1;
+    for (let i = 0; i < history.length; i++) {
+      const turn = history[i];
+      const isLatestTurn = i === history.length - 1;
       const parts: any[] = [{ text: turn.content }];
 
       // Attach visual/pdf parts to latest turn
@@ -760,16 +812,20 @@ export class StoreAiAssistantService {
         }
         const text = res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (text) {
-          this.conversationHistory.push({ role: 'assistant', content: text });
-          return this.formatMarkdown(text);
+          return {
+            replyHtml: this.formatMarkdown(text),
+            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+          };
         }
         throw new Error('Boş Gemini yanıtı');
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] Gemini API hatası, canlı mağaza zekası devrede:', err);
         const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Google Gemini', modelName, attachments, toolContext);
-        this.conversationHistory.push({ role: 'assistant', content: fallback });
-        return of(fallback);
+        return of({
+          replyHtml: fallback,
+          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
+        });
       })
     );
   }

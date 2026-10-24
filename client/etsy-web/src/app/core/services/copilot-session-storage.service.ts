@@ -147,6 +147,27 @@ export class CopilotSessionStorageService {
     }
   }
 
+  public async appendMessageToSession(
+    sessionId: string,
+    message: AssistantChatMessage,
+    history?: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
+  ): Promise<void> {
+    try {
+      const session = await this.getSession(sessionId);
+      if (session) {
+        session.messages = session.messages || [];
+        session.messages.push(message);
+        if (history && history.length > 0) {
+          session.conversationHistory = history;
+        }
+        session.updatedAt = Date.now();
+        await this.saveSession(session);
+      }
+    } catch (err) {
+      console.warn('[CopilotSessionStorage] Failed to append message to session:', sessionId, err);
+    }
+  }
+
   public createNewSession(initialTitle = 'Yeni Sohbet'): CopilotChatSession {
     const now = Date.now();
     const id = 'sess_' + now + '_' + Math.random().toString(36).substring(2, 7);
