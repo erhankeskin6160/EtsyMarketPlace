@@ -5,6 +5,7 @@ import { StoreAiAssistantService, AssistantChatMessage, ChatAttachment } from '.
 import { CopilotSessionStorageService, CopilotChatSession } from '../../core/services/copilot-session-storage.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { Router } from '@angular/router';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 @Component({
@@ -938,6 +939,7 @@ export class FloatingCopilotComponent implements OnInit {
   public aiSettings = inject(AiSettingsService);
   public etsyApi = inject(EtsyApiService);
   public sessionStorage = inject(CopilotSessionStorageService);
+  public router = inject(Router);
 
   activeSession: CopilotChatSession | null = null;
   savedSessions: CopilotChatSession[] = [];
@@ -953,6 +955,11 @@ export class FloatingCopilotComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    if (typeof window !== 'undefined') {
+      (window as any).__copilotNavigate = (route: string) => {
+        this.router.navigateByUrl(route);
+      };
+    }
     await this.loadActiveSession();
     await this.refreshSavedSessionsList();
   }

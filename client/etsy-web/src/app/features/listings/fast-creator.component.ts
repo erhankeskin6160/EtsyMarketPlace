@@ -269,6 +269,12 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.loadLogisticsData();
   }
 
+  @HostListener('window:copilot_draft_updated')
+  onCopilotDraftUpdated(): void {
+    this.loadDraftFromStorage();
+    this.clonedNotice = '✨ Yapay Zeka Asistanı tarafından hazırlanan ürün taslağı forma aktarıldı!';
+  }
+
   @HostListener('window:beforeunload')
   onBeforeUnload(): void {
     this.saveDraftToStorage();

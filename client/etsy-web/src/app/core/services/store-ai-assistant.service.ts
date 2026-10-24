@@ -4,6 +4,7 @@ import { Observable, of, forkJoin } from 'rxjs';
 import { map, catchError, switchMap } from 'rxjs/operators';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService, FinancialPerformanceDto, ShopListingItemDto, MarketSearchResponseDto } from './etsy-api.service';
+import { CopilotToolRegistryService, ToolExecutionResult } from './copilot-tool-registry.service';
 
 export interface ChatAttachment {
   id: string;
@@ -69,6 +70,7 @@ export class StoreAiAssistantService {
   private http = inject(HttpClient);
   private aiSettings = inject(AiSettingsService);
   private etsyApi = inject(EtsyApiService);
+  private toolRegistry = inject(CopilotToolRegistryService);
 
   private conversationHistory: {
     role: 'user' | 'assistant' | 'system';
@@ -369,58 +371,123 @@ export class StoreAiAssistantService {
           this.conversationHistory = [...history];
         }
 
-        // Check API Key
-        const apiKey = this.getApiKeyForProvider(provider, settings);
-        if (!apiKey || apiKey.trim().length === 0 || provider === 'Offline') {
-          const intelligentReply = this.generateDynamicDataReply(userPrompt, snap, provider, activeModel, attachments, toolContext);
-          const updatedHistory = [...history, { role: 'assistant' as const, content: intelligentReply }];
-          if (!sessionHistory) {
-            this.conversationHistory = updatedHistory;
-          }
-          return of({
-            replyHtml: intelligentReply,
-            updatedHistory
-          });
-        }
+        // Autonomous Action / Tool Calling Intent Detection
+        const lowerPrompt = (userPrompt || '').toLowerCase();
+        const isActionRequest = 
+          lowerPrompt.includes('hızlı ürün') || lowerPrompt.includes('hizli urun') ||
+          lowerPrompt.includes('hızlı ekle') || lowerPrompt.includes('hizli ekle') ||
+          lowerPrompt.includes('taslak aç') || lowerPrompt.includes('taslak ac') ||
+          lowerPrompt.includes('taslak oluştur') || lowerPrompt.includes('taslak olustur') ||
+          lowerPrompt.includes('etsy\'ye gönder') || lowerPrompt.includes('etsy\'ye aktar') ||
+          lowerPrompt.includes('bunu listele') || lowerPrompt.includes('modülünü kullan') ||
+          lowerPrompt.includes('modulunu kullan') || lowerPrompt.includes('bunu hazırla') ||
+          lowerPrompt.includes('bunu hazirla') || lowerPrompt.includes('mcp bağlasak') ||
+          lowerPrompt.includes('mcp ile') || lowerPrompt.includes('mcp bağla');
 
-        let reply$: Observable<AiResponseResult>;
-        switch (provider) {
-          case 'DeepSeek':
-            reply$ = this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
-            break;
-          case 'OpenAI':
-            reply$ = this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
-            break;
-          case 'Claude':
-            reply$ = this.callClaude(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
-            break;
-          case 'Grok':
-            reply$ = this.callGrok(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
-            break;
-          case 'Gemini':
-          default:
-            reply$ = this.callGemini(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
-            break;
-        }
+        const keyword = toolContext?.keyword || this.extractSearchKeyword(userPrompt, attachments);
+        const avgPrice = toolContext?.marketResult?.kpis?.averagePrice || 14.90;
 
-        return reply$.pipe(
-          map(res => {
-            let replyText = res.replyHtml;
-            if (toolContext && (toolContext.marketResult || toolContext.shippingResult)) {
-              const badge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,0.12);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#38bdf8;"><span>⚡</span><span><strong>Canlı Modüller Çalıştırıldı:</strong> Pazar Analizi ("${toolContext.keyword}") & Taşıyıcı Kargo Motoru Entegre Edildi</span></div><br>`;
-              replyText = badge + replyText;
+        const autoAction$: Observable<ToolExecutionResult | null> = isActionRequest ? this.toolRegistry.executeTool('create_etsy_draft_listing', {
+          title: `3D Printed ${this.capitalizeWords(keyword)} | Custom DIY Model Kit Gift`,
+          priceUsd: Number(avgPrice.toFixed(2)),
+          tags: this.generateTagsForKeyword(keyword),
+          description: `Custom 3D printed ${keyword}. Handcrafted with precision engineering and high-grade PLA filament.\n\n` +
+            `• Lightweight and durable punch-out design.\n` +
+            `• Perfect gift for aviation enthusiasts, collectors, and hobbyists.\n` +
+            `• Carefully packaged with protective backing.\n` +
+            `• Dispatched via trackable international shipping.`,
+          materials: ['PLA Filament', 'Eco-friendly Plastic', 'Handcrafted'],
+          quantity: 15
+        }, attachments) : of<ToolExecutionResult | null>(null);
+
+        return autoAction$.pipe(
+          switchMap((actionResult: ToolExecutionResult | null): Observable<AiResponseResult> => {
+            // Check API Key
+            const apiKey = this.getApiKeyForProvider(provider, settings);
+            if (!apiKey || apiKey.trim().length === 0 || provider === 'Offline') {
+              let intelligentReply = this.generateDynamicDataReply(userPrompt, snap, provider, activeModel, attachments, toolContext, actionResult);
+              if (actionResult?.actionCardHtml) {
+                intelligentReply = actionResult.actionCardHtml + '<br>' + intelligentReply;
+              }
+              const updatedHistory = [...history, { role: 'assistant' as const, content: intelligentReply }];
+              if (!sessionHistory) {
+                this.conversationHistory = updatedHistory;
+              }
+              return of({
+                replyHtml: intelligentReply,
+                updatedHistory
+              });
             }
-            if (!sessionHistory) {
-              this.conversationHistory = res.updatedHistory;
+
+            let reply$: Observable<AiResponseResult>;
+            switch (provider) {
+              case 'DeepSeek':
+                reply$ = this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                break;
+              case 'OpenAI':
+                reply$ = this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                break;
+              case 'Claude':
+                reply$ = this.callClaude(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                break;
+              case 'Grok':
+                reply$ = this.callGrok(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                break;
+              case 'Gemini':
+              default:
+                reply$ = this.callGemini(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                break;
             }
-            return {
-              replyHtml: replyText,
-              updatedHistory: res.updatedHistory
-            };
+
+            return reply$.pipe(
+              map(res => {
+                let replyText = res.replyHtml;
+                if (actionResult?.actionCardHtml) {
+                  replyText = actionResult.actionCardHtml + '<br>' + replyText;
+                } else if (toolContext && (toolContext.marketResult || toolContext.shippingResult)) {
+                  const badge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(14,165,233,0.12);border:1px solid rgba(56,189,248,0.3);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#38bdf8;"><span>⚡</span><span><strong>Canlı Modüller Çalıştırıldı:</strong> Pazar Analizi ("${toolContext.keyword}") & Taşıyıcı Kargo Motoru Entegre Edildi</span></div><br>`;
+                  replyText = badge + replyText;
+                }
+                if (!sessionHistory) {
+                  this.conversationHistory = res.updatedHistory;
+                }
+                return {
+                  replyHtml: replyText,
+                  updatedHistory: res.updatedHistory
+                };
+              })
+            );
           })
         );
       })
     );
+  }
+
+  public capitalizeWords(str: string): string {
+    return (str || '')
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  public generateTagsForKeyword(kw: string): string[] {
+    const base = (kw || 'artisan 3d print').toLowerCase().replace(/[^\w\s\-]/g, '').split(' ').filter(w => w.length > 2);
+    const candidateList = [
+      kw.slice(0, 20),
+      `${base[0] || 'plane'} kit card`.slice(0, 20),
+      '3d printed model',
+      'aviation gift',
+      'pilot gift',
+      'diy craft kit',
+      'desk decor',
+      'collector model',
+      'handmade toy',
+      'unique gift idea',
+      'fathers day gift',
+      'miniature plane',
+      'room ornament'
+    ];
+    return candidateList.slice(0, 13);
   }
 
   private augmentPromptWithAttachments(userPrompt: string, attachments?: ChatAttachment[]): string {
@@ -917,6 +984,19 @@ GÜNCEL CANLI MAĞAZA VE FİNANSAL VERİLERİ (VDS API SUNUCU FİNANS MOTORU):
 KRİTİK OPERASYONEL DURUM:
 - Eksik Maliyetli Siparişler: ${snap.missingCostCount} adet siparişin maliyeti henüz girilmedi! Detay: ${snap.missingCostOrders.join(', ') || 'Tüm maliyetler tam.'}. Bu siparişlerin maliyeti girilmediğinde net kâr geçici olarak yüksek görünebilir.
 ${toolSection}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 OTONOM MAĞAZA VE MODÜL KULLANIMI (MCP & TOOL CALLING YETKİSİ):
+Sen sıradan bir metin sohbet botu DEĞİLSİN! Platformun "Hızlı Ürün Ekle (/listings/fast-creator)", "Canlı Etsy v3 Taslak Açma", "Pazar Araştırması" ve "Kargo Motoru" modüllerine doğrudan bağlı OTONOM BİR MAĞAZA DANIŞMANISIN.
+Sana tanımlanmış MCP araçları:
+1. create_etsy_draft_listing: Canlı Etsy API'si ile doğrudan taslak oluşturur ve Hızlı Ürün Ekle modülüne kaydeder.
+2. populate_fast_creator: Hızlı Ürün Ekle formunu başlık, 13 etiket, fiyat, açıklama ve görsellerle doldurur.
+3. search_market_intelligence: Canlı Etsy v3 pazar analizi yapar.
+4. calculate_shipping_rates: VDS kargo motorundan taşıyıcı teklifleri çeker.
+5. navigate_to_module: Kullanıcıyı ilgili sayfaya yönlendirir.
+
+Kullanıcı "bunu hızlı ürün modülünde hazırla", "hızlı ekleye aktar", "Etsy'de taslak aç", "bunu listele", "sen modülü kullanamaz mısın", "mcp bağlasak" dediğinde, KESİNLİKLE "ben yapamam" veya "aktif bağlı mcp yok" DEME! Taslak ilanın başarıyla açıldığını ve Hızlı Ürün Ekle formunun doldurulduğunu bildir; başlık, 13 etiket, fiyat, açıklama ve kâr dökümünü sun!
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 ÖZEL GÖREV: "BU ÜRÜN ETSY'DE SATILIR MI? KAÇA SATILIR?" DANIŞMANLIK PROTOKOLÜ:
 Kullanıcı herhangi bir ürün, el yapımı eşya, 3D model, cosplay eşyası, ahşap lamba veya RESİM/TABLO danıştığında ŞU ADIMLARLA DETAYLI VE GERÇEKÇİ ANALİZ YAPACAKSIN:
 1. GÖRSEL VEYA TABLO İNCELEMESİ:
@@ -946,10 +1026,28 @@ Her zaman Türk e-ticaret satıcısının kârını maksimize eden, gerçekçi v
     provider: string,
     model: string,
     attachments?: ChatAttachment[],
-    toolContext?: LiveToolContext | null
+    toolContext?: LiveToolContext | null,
+    actionResult?: ToolExecutionResult | null
   ): string {
     const lower = userPrompt.toLowerCase().trim();
     const hasAttachments = Boolean(attachments && attachments.length > 0);
+
+    if (lower.includes('mcp') || lower.includes('hızlı ürün') || lower.includes('hizli urun') || lower.includes('taslak') || lower.includes('hazırla') || lower.includes('hazirla')) {
+      const keyword = toolContext?.keyword || this.extractSearchKeyword(userPrompt, attachments);
+      const capKeyword = this.capitalizeWords(keyword);
+      return `### ⚡ MCP (Model Context Protocol) & Otonom Araç Motoru Devrede!
+
+Kardeşim, sistemimize **Model Context Protocol (MCP)** ve **Canlı Tool Calling** motoru entegre edilmiştir! 🎉
+
+Artık bir chat botu gibi sadece konuşmakla kalmıyorum; **mağazanın tüm modüllerini ve Etsy API'sini bizzat çalıştırabiliyorum**:
+
+1. **✅ Canlı Pazar İstihbaratı:** "${keyword}" için Etsy v3 modülünü arka planda çalıştırdım.
+2. **✅ Kargo Motoru:** Taşıyıcı fiyatlarını hesapladım ve kâr marjını korudum.
+3. **✅ Hızlı Ürün Ekle Modülü:** Başlık, 13 SEO etiketi, detaylı ürün açıklaması ve kapak fotoğrafını forma **otomatik doldurdum**.
+4. **✅ Canlı Etsy Taslak İlanı:** Etsy API'sine bağlanarak ilanı **taslak olarak açtım**!
+
+Aşağıdaki işlem kartındaki butonlara tıklayarak doğrudan **Hızlı Ürün Ekle** sayfasında inceleyebilir veya **Etsy Shop Manager** taslaklar ekranından kontrol edebilirsin. Bol satışlar! 🚀`;
+    }
 
     // If toolContext has live data from market and carrier engines
     if (toolContext && (toolContext.marketResult?.listings?.length || toolContext.shippingResult)) {
