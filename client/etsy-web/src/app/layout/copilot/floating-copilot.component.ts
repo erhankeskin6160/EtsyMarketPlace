@@ -83,12 +83,13 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
           <div class="typing-dots">
             <span></span><span></span><span></span>
           </div>
-          <span class="thinking-text">{{ activeProvider }} düşünüyor ve mağazanızı analiz ediyor...</span>
+          <span class="thinking-text">{{ assistantAi.liveToolStatus() || (activeProvider + ' düşünüyor ve mağazanızı analiz ediyor...') }}</span>
         </div>
       </div>
 
       <!-- QUICK ACTION CHIPS -->
       <div class="quick-prompts">
+        <button class="q-chip" (click)="askLiveMarketAnalysis()">⚡ Canlı Pazar & Kargo Modülü</button>
         <button class="q-chip" (click)="askNetProfit()">💰 Net Kâr & Durum</button>
         <button class="q-chip" (click)="askMissingCosts()">⚠️ Eksik Maliyet</button>
         <button class="q-chip" (click)="askProductViability()">🔍 Bu Ürün Satılır mı?</button>
@@ -629,7 +630,7 @@ export class FloatingCopilotComponent implements OnInit {
 
   pendingAttachments: ChatAttachment[] = [];
 
-  private assistantAi = inject(StoreAiAssistantService);
+  public assistantAi = inject(StoreAiAssistantService);
   public aiSettings = inject(AiSettingsService);
   public etsyApi = inject(EtsyApiService);
 
@@ -887,6 +888,10 @@ Size nasıl yardımcı olabilirim?<br>
   sendPrompt(promptText: string): void {
     this.userInput = promptText;
     this.sendMessage();
+  }
+
+  askLiveMarketAnalysis(): void {
+    this.sendPrompt("Bu ürün Etsy'de kaça satılır ve canlı kargo teklifleri nedir? Pazar araştırması ve kargo motorunu çalıştırır mısın?");
   }
 
   askNetProfit(): void {
