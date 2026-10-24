@@ -376,19 +376,25 @@ public sealed class McpServerService : IMcpServerService
 
         if (statusFilter == "completed")
             filtered = orders.Where(o => string.Equals(o.OrderStatus, "completed", StringComparison.OrdinalIgnoreCase));
-        else if (statusFilter == "canceled" || statusFilter == "cancelled")
-            filtered = orders.Where(o => string.Equals(o.OrderStatus, "canceled", StringComparison.OrdinalIgnoreCase) || string.Equals(o.OrderStatus, "cancelled", StringComparison.OrdinalIgnoreCase));
+        else if (statusFilter == "canceled" || statusFilter == "cancelled" || statusFilter == "refunded")
+            filtered = orders.Where(o => string.Equals(o.OrderStatus, "canceled", StringComparison.OrdinalIgnoreCase) || string.Equals(o.OrderStatus, "cancelled", StringComparison.OrdinalIgnoreCase) || string.Equals(o.OrderStatus, "refunded", StringComparison.OrdinalIgnoreCase));
         else if (statusFilter == "missing_cost")
-            filtered = orders.Where(o => !o.HasCostData && !string.Equals(o.OrderStatus, "canceled", StringComparison.OrdinalIgnoreCase));
+            filtered = orders.Where(o => !o.HasCostData && !string.Equals(o.OrderStatus, "canceled", StringComparison.OrdinalIgnoreCase) && !string.Equals(o.OrderStatus, "refunded", StringComparison.OrdinalIgnoreCase));
 
         var list = filtered.Take(Math.Clamp(limit, 1, 250)).ToList();
-        var missingCostTotal = orders.Count(o => !o.HasCostData && !string.Equals(o.OrderStatus, "canceled", StringComparison.OrdinalIgnoreCase));
+        var missingCostTotal = orders.Count(o => !o.HasCostData && !string.Equals(o.OrderStatus, "canceled", StringComparison.OrdinalIgnoreCase) && !string.Equals(o.OrderStatus, "refunded", StringComparison.OrdinalIgnoreCase));
+        var crossPeriodRefundCount = orders.Count(o => string.Equals(o.CostNotes, "cross_period_refund", StringComparison.OrdinalIgnoreCase));
+        var activePeriodOrderCount = orders.Count - crossPeriodRefundCount;
 
         var payload = new
         {
             period,
             statusFilter,
-            totalOrdersInPeriod = orders.Count,
+            totalOrdersInPeriod = activePeriodOrderCount,
+            crossPeriodRefundsInLedger = crossPeriodRefundCount,
+            crossPeriodRefundExplanation = crossPeriodRefundCount > 0
+                ? "Bu dönemde oluşturulan siparişlerde iptal/iade yoktur; listedeki iade kaydı önceki bir ayda verilen siparişin bu ayki Etsy Ödeme Defteri (Payment Account Ledger) bakiyesinden düşülen nakit iadesidir."
+                : null,
             missingCostOrdersInPeriod = missingCostTotal,
             returnedCount = list.Count,
             totalOrderProfitUsd = result.TotalOrderProfitUsd,

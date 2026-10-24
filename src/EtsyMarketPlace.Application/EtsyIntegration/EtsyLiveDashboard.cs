@@ -20,6 +20,8 @@ public static class EtsyLiveDashboardCalculator
         decimal exchangeRate = 49.16m)
     {
         var offsiteAdsMap = BuildOffsiteAdsMap(ledgerFees);
+        var refundEntries = BuildRefundEntries(ledgerFees);
+        var receiptIdsInPeriod = new HashSet<long>(receipts.Select(r => r.ReceiptId));
         var rows = new List<EtsyDashboardOrderRow>();
 
         foreach (var receipt in receipts)
@@ -36,6 +38,10 @@ public static class EtsyLiveDashboardCalculator
             var discountAmt = receipt.DiscountAmt;
             var tax = receipt.TaxCost;
             var refundedAmt = receipt.RefundedAmount;
+            if (refundedAmt <= 0 && refundEntries.TryGetValue(receipt.ReceiptId, out var ledgerRefundInfo))
+            {
+                refundedAmt = ledgerRefundInfo.AmountUsd;
+            }
 
             if (receipt.CurrencyCode.Equals("TRY", StringComparison.OrdinalIgnoreCase) && exchangeRate > 0)
             {
@@ -117,6 +123,7 @@ public static class EtsyLiveDashboardCalculator
                 isCanceled));
         }
 
+        AppendCrossPeriodRefundRows(rows, refundEntries, receiptIdsInPeriod, orderCosts, exchangeRate);
         return rows.OrderByDescending(r => r.CreatedAt).ToList();
     }
 
@@ -180,6 +187,8 @@ public static class EtsyLiveDashboardCalculator
         decimal exchangeRate = 49.16m)
     {
         var offsiteAdsMap = BuildOffsiteAdsMap(ledgerFees);
+        var refundEntries = BuildRefundEntries(ledgerFees);
+        var receiptIdsInPeriod = new HashSet<long>(receipts.Select(r => r.ReceiptId));
         var rows = new List<EtsyOrderFinancialDetail>();
 
         foreach (var receipt in receipts)
@@ -200,6 +209,10 @@ public static class EtsyLiveDashboardCalculator
             var discountAmt = receipt.DiscountAmt;
             var tax = receipt.TaxCost;
             var refundedAmt = receipt.RefundedAmount;
+            if (refundedAmt <= 0 && refundEntries.TryGetValue(receipt.ReceiptId, out var ledgerRefundInfo))
+            {
+                refundedAmt = ledgerRefundInfo.AmountUsd;
+            }
 
             if (receipt.CurrencyCode.Equals("TRY", StringComparison.OrdinalIgnoreCase) && orderSpecificRate > 0)
             {
@@ -323,6 +336,7 @@ public static class EtsyLiveDashboardCalculator
                 costNotes));
         }
 
+        AppendCrossPeriodRefundRows(rows, refundEntries, receiptIdsInPeriod, orderCosts, exchangeRate);
         return rows.OrderByDescending(r => r.CreatedAt).ToList();
     }
 
@@ -357,6 +371,123 @@ public static class EtsyLiveDashboardCalculator
 
         return map;
     }
+
+    private sealed record LedgerRefundInfo(long ReferenceId, decimal AmountUsd, DateTimeOffset CreatedAt, string? Description);
+
+    private static Dictionary<long, LedgerRefundInfo> BuildRefundEntries(IReadOnlyList<EtsyDashboardLedgerFee> entries)
+    {
+        var map = new Dictionary<long, LedgerRefundInfo>();
+        if (entries is null) return map;
+
+        var syntheticIndex = 1L;
+        foreach (var entry in entries)
+        {
+            if (!string.Equals(entry.Type, "refund", StringComparison.OrdinalIgnoreCase)) continue;
+            var amt = Math.Abs(entry.Amount);
+            if (amt <= 0) continue;
+
+            var receiptId = entry.ReferenceId;
+            if (receiptId <= 0 && !string.IsNullOrWhiteSpace(entry.Description))
+            {
+                var match = Regex.Match(entry.Description, @"#?(\d{9,11})");
+                if (match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
+                {
+                    receiptId = parsed;
+                }
+            }
+
+            if (receiptId <= 0)
+            {
+                receiptId = 9000000000L + syntheticIndex++;
+            }
+
+            var created = entry.CreatedAt ?? DateTimeOffset.UtcNow;
+            if (map.TryGetValue(receiptId, out var existing))
+            {
+                map[receiptId] = existing with { AmountUsd = existing.AmountUsd + amt };
+            }
+            else
+            {
+                map[receiptId] = new LedgerRefundInfo(receiptId, amt, created, entry.Description);
+            }
+        }
+
+        return map;
+    }
+
+    private static void AppendCrossPeriodRefundRows(
+        List<EtsyDashboardOrderRow> rows,
+        Dictionary<long, LedgerRefundInfo> refundEntries,
+        HashSet<long> receiptIdsInPeriod,
+        IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
+        decimal exchangeRate)
+    {
+        // BuildOrderRows sadece aktif dönem siparişlerini (receipts) listeler;
+        // önceki dönem iadesi detay tablosuna (BuildDetailedOrderRows) eklenir.
+    }
+
+    private static void AppendCrossPeriodRefundRows(
+        List<EtsyOrderFinancialDetail> rows,
+        Dictionary<long, LedgerRefundInfo> refundEntries,
+        HashSet<long> receiptIdsInPeriod,
+        IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
+        decimal exchangeRate)
+    {
+        foreach (var kvp in refundEntries)
+        {
+            if (receiptIdsInPeriod.Contains(kvp.Key)) continue;
+
+            var info = kvp.Value;
+            var refundRate = HistoricalExchangeRateProvider.GetRateForDate(info.CreatedAt.UtcDateTime, exchangeRate);
+            var refundUsd = Math.Round(info.AmountUsd, 2);
+            var refundTry = Math.Round(refundUsd * refundRate, 2);
+            var refundDate = info.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+
+            decimal? productCost = null;
+            var hasCost = false;
+            if (orderCosts != null && orderCosts.TryGetValue(info.ReferenceId, out var orderCost))
+            {
+                productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
+                hasCost = true;
+            }
+
+            var descTitle = !string.IsNullOrWhiteSpace(info.Description)
+                ? $"Önceki Dönem Sipariş İadesi ({info.Description})"
+                : $"Önceki Dönem Sipariş İadesi (#{info.ReferenceId})";
+
+            rows.Add(new EtsyOrderFinancialDetail(
+                ReceiptId: info.ReferenceId,
+                CreatedAt: info.CreatedAt,
+                OrderDate: refundDate,
+                OrderStatus: "refunded",
+                DisplayStatus: "↩️ İade (Önceki Dönem)",
+                BuyerName: "Ödeme Defteri Kesintisi",
+                ProductTitle: descTitle,
+                ListingId: 0L,
+                Quantity: 1,
+                GrandTotalUsd: refundUsd,
+                SubtotalUsd: refundUsd,
+                ShippingCostUsd: 0m,
+                DiscountAmtUsd: 0m,
+                TaxUsd: 0m,
+                TransactionFeeUsd: 0m,
+                PaymentFeeUsd: 0m,
+                RegulatoryFeeUsd: 0m,
+                EtsyFeesUsd: 0m,
+                OffsiteAdFeeUsd: 0m,
+                ProductCostUsd: productCost,
+                NetProfitUsd: -refundUsd,
+                ExchangeRate: Math.Round(refundRate, 2),
+                NetProfitTry: -refundTry,
+                HasCostData: hasCost,
+                HasInvoice: false,
+                InvoicePath: null,
+                UnitProductCostUsd: null,
+                ActualShippingCostUsd: null,
+                PackagingCostUsd: null,
+                CostNotes: "cross_period_refund"));
+        }
+    }
 }
 
 public sealed record EtsyDashboardReceiptItem(string Title, long ListingId, int Quantity);
@@ -380,7 +511,7 @@ public sealed record EtsyDashboardReceipt(
     string? BuyerEmail = null,
     string? Status = null);
 
-public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount);
+public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount, DateTimeOffset? CreatedAt = null);
 
 public sealed record EtsyDashboardOrderCost(decimal ProductCost, decimal ShippingCost, decimal PackagingCost = 0m, string? Notes = null);
 

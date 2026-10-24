@@ -395,7 +395,9 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         }
 
         // Masaustu MapEntry ile ayni siniflandirma: tur alanlarindan veya aciklamadan "offsite" gecen kayitlar dis reklam kesintisidir.
-        var kind = rawType.Contains("offsite") || rawReferenceType.Contains("offsite") || lowerDescription.Contains("offsite")
+        var kind = EtsyLedgerFinancialEngine.ClassifyEntry(rawType, rawReferenceType, lowerDescription);
+        var createdAt = DateValue(item, "create_date", "created_timestamp", "created");
+        var _unusedLegacyKind = (rawType.Contains("offsite") || rawReferenceType.Contains("offsite") || lowerDescription.Contains("offsite"))
             ? "offsite_ads"
             : rawType;
 
@@ -403,7 +405,8 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             kind,
             referenceId,
             description,
-            LedgerAmountToUsd(item));
+            LedgerAmountToUsd(item),
+            createdAt);
     }
 
     private static EtsyLedgerEntryDetail? ParseLedgerEntryDetail(JsonElement item, string shopId)

@@ -290,11 +290,12 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
 
         var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledgerEntries, costs, rate);
 
+        var activeOrderRows = rows.Where(r => !string.Equals(r.CostNotes, "cross_period_refund", StringComparison.OrdinalIgnoreCase)).ToList();
         return new OrderFinancialsDashboardResult(
             Orders: rows,
             Count: rows.Count,
-            TotalOrderProfitUsd: rows.Sum(r => r.NetProfitUsd),
-            TotalOrderProfitTry: rows.Sum(r => r.NetProfitTry),
+            TotalOrderProfitUsd: activeOrderRows.Sum(r => r.NetProfitUsd),
+            TotalOrderProfitTry: activeOrderRows.Sum(r => r.NetProfitTry),
             ExchangeRateUsed: rate,
             LedgerOk: ledgerError is null,
             LedgerWarning: ledgerError);

@@ -84,7 +84,57 @@ public sealed class McpServerServiceTests
             "53236321");
 
         Assert.False(result.IsError);
+        Assert.False(result.IsError);
         Assert.Contains("ShopListing", result.Content.First().Text);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_AppendsCrossPeriodRefundRow_WhenLedgerHasRefundForPriorMonthReceipt()
+    {
+        var octOrderDate = new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero);
+        var refundDate = new DateTimeOffset(2026, 10, 14, 15, 30, 0, TimeSpan.Zero);
+
+        var receipts = new List<EtsyDashboardReceipt>
+        {
+            new(
+                ReceiptId: 4073688891L,
+                CreatedAt: octOrderDate,
+                IsPaid: true,
+                IsCanceled: false,
+                IsFromOffsiteAds: false,
+                CurrencyCode: "USD",
+                GrandTotal: 78.66m,
+                Subtotal: 78.66m,
+                ShippingCost: 0m,
+                DiscountAmt: 0m,
+                TaxCost: 0m,
+                RefundedAmount: 0m,
+                Items: new[] { new EtsyDashboardReceiptItem("Ben 10 Classic Omnitrix", 1001L, 1) },
+                BuyerName: "Ashley")
+        };
+
+        var ledgerFees = new List<EtsyDashboardLedgerFee>
+        {
+            new(
+                Type: "refund",
+                ReferenceId: 4011223344L,
+                Description: "Refund for Order #4011223344",
+                Amount: -102.97m,
+                CreatedAt: refundDate)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            receipts,
+            ledgerFees,
+            new Dictionary<long, EtsyDashboardOrderCost>(),
+            49.24m);
+
+        Assert.Equal(2, rows.Count);
+        var crossPeriodRow = rows.Single(r => r.ReceiptId == 4011223344L);
+        Assert.Equal("refunded", crossPeriodRow.OrderStatus);
+        Assert.Equal("cross_period_refund", crossPeriodRow.CostNotes);
+        Assert.Equal(102.97m, crossPeriodRow.GrandTotalUsd);
+        Assert.Equal(-102.97m, crossPeriodRow.NetProfitUsd);
     }
 
     private static McpServerService CreateSut()

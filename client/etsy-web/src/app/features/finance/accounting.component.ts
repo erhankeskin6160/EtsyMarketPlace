@@ -444,11 +444,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   get missingCostCount(): number {
-    return this.orders.filter(o => !o.hasCostData && o.orderStatus !== 'canceled').length;
+    return this.orders.filter(o => !o.hasCostData && o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund').length;
   }
 
   get canceledOrderCount(): number {
-    return this.filteredOrders.filter(o => o.orderStatus === 'canceled').length;
+    return this.filteredOrders.filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded').length;
   }
 
   get totalOrderProfitUsd(): number {
@@ -487,11 +487,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }> = [];
 
   get completedOrderCount(): number {
-    return this.orders.filter(o => o.orderStatus !== 'canceled').length;
+    return this.orders.filter(o => o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund').length;
   }
 
   get totalCanceledCount(): number {
-    return this.orders.filter(o => o.orderStatus === 'canceled').length;
+    return this.orders.filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded').length;
   }
 
   get averageOrderValueUsd(): number {
@@ -576,7 +576,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   rebuildDynamicBreakdowns(): void {
-    const activeOrders = this.orders.filter(o => o.orderStatus !== 'canceled');
+    const activeOrders = this.orders.filter(o => o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund');
 
     // 1. Siparis & Kargo Maliyet Kayitlari (Modal 2)
     this.orderCostShippingRecords = activeOrders.map(o => {
@@ -646,6 +646,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
 
     // 5. Iade ve Geri Odeme Kayitlari (Modal 8)
+    if (this.refundRecords.length === 0 && this.refundsUsd > 0) {
+      this.refundRecords = [{ date: this.endDate, receiptId: 'DEFTER', buyer: 'Etsy Ödeme Defteri', item: 'Önceki Dönem Sipariş İadesi (Bu Ayın Bakiyesinden Düşüldü)', refundUsd: this.refundsUsd, refundTry: this.refundsTry, reason: 'Önceki Dönem Sipariş İadesi (Ödeme Defteri Kesintisi)', feeRefundedUsd: 0 }];
+    }
     this.refundRecords = this.orders
       .filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded')
       .map(o => {
@@ -657,11 +660,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
           item: o.productTitle,
           refundUsd: o.grandTotalUsd,
           refundTry: Number((o.grandTotalUsd * rate).toFixed(2)),
-          reason: 'Sipariş İptali / Tam İade',
+          reason: o.costNotes === 'cross_period_refund' ? 'Önceki Dönem Sipariş İadesi (Ödeme Defteri Kesintisi)' : 'Sipariş İptali / Tam İade',
           feeRefundedUsd: o.etsyFeesUsd
         };
       });
 
+    if (this.refundRecords.length === 0 && this.refundsUsd > 0) {
+      this.refundRecords = [{ date: this.endDate, receiptId: 'DEFTER', buyer: 'Etsy Ödeme Defteri', item: 'Önceki Dönem Sipariş İadesi (Bu Ayın Bakiyesinden Düşüldü)', refundUsd: this.refundsUsd, refundTry: this.refundsTry, reason: 'Önceki Dönem Sipariş İadesi (Ödeme Defteri Kesintisi)', feeRefundedUsd: 0 }];
+    }
     // 6. Gercek Net Kar & Bilanco Analizi Tablosu (Modal 3)
     this.balanceBreakdownRecords = [
       { type: 'Gelir', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: this.netIncomeTry, status: '🟢 Net', isPositive: true, explanation: 'Komisyon, reklam ve iadeler sonrası platformdan kalan net hakediş' },
@@ -895,14 +901,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
             orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded',
             displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled' ? '🔴 İptal Edildi' : '🟢 Tamamlandı'),
             buyerName: dto.buyerName || 'Misafir Müşteri',
-            productTitle: dto.productTitle || '',
+            productTitle: dto.productTitle || dto.title || '',
             quantity: dto.quantity || 1,
             grandTotalUsd: dto.grandTotalUsd || 0,
             etsyFeesUsd: dto.etsyFeesUsd || 0,
             offsiteAdFeeUsd: dto.offsiteAdFeeUsd || 0,
             productCostUsd: dto.productCostUsd !== undefined ? dto.productCostUsd : null,
             netProfitUsd: dto.netProfitUsd || 0,
-            exchangeRate: dto.exchangeRate || this.liveRate,
+            exchangeRate: dto.exchangeRate || dto.exchangeRateUsed || this.liveRate,
             netProfitTry: dto.netProfitTry || 0,
             hasCostData: Boolean(dto.hasCostData),
             hasInvoice: Boolean(dto.hasInvoice),
@@ -1166,11 +1172,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
     if (this.orderCostFilter === 'completed') {
       result = result.filter(o => o.orderStatus === 'completed');
     } else if (this.orderCostFilter === 'canceled') {
-      result = result.filter(o => o.orderStatus === 'canceled');
+      result = result.filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded');
     } else if (this.orderCostFilter === 'hasCost') {
       result = result.filter(o => o.hasCostData);
     } else if (this.orderCostFilter === 'missingCost') {
-      result = result.filter(o => !o.hasCostData && o.orderStatus !== 'canceled');
+      result = result.filter(o => !o.hasCostData && o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund');
     } else if (this.orderCostFilter === 'hasInvoice') {
       result = result.filter(o => o.hasInvoice);
     }
