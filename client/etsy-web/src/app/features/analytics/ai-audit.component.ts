@@ -47,13 +47,32 @@ export class AiAuditComponent implements OnInit {
   riskWarnings: string[] = [];
   checklist: string[] = [];
   aiScoreAfter: number | null = null;
-  aiModelUsed = 'gemini-2.5-flash-lite';
-  aiProviderUsed = 'Gemini (Canlı API)';
+  aiModelUsed = '';
+  aiProviderUsed = '';
   newTagInput = '';
 
   // AI Settings Dialog
   showSettingsModal = false;
-  selectedAiModel = 'gemini-2.5-flash-lite';
+  get selectedAiModel(): string {
+    return this.aiSettings.activeBadgeTextClean();
+  }
+
+  getActiveApiKey(): string {
+    const s = this.aiSettings.settings();
+    switch (s.provider) {
+      case 'Gemini': return (s.geminiApiKey || '').trim();
+      case 'DeepSeek': return (s.deepSeekApiKey || '').trim();
+      case 'OpenAI': return (s.openAiApiKey || '').trim();
+      case 'Claude': return (s.claudeApiKey || '').trim();
+      case 'Grok': return (s.grokApiKey || '').trim();
+      default: return '';
+    }
+  }
+
+  openGlobalAiModelHub(): void {
+    this.showSettingsModal = false;
+    this.aiSettings.openAiSettingsModal();
+  }
   focusKeywords = '';
   targetBuyerPersona = 'Hediye arayanlar, düğün ve özel gün alıcıları, estetik ev dekorasyonu sevenler';
   aiTone = 'Profesyonel & İkna Edici';
@@ -161,7 +180,8 @@ export class AiAuditComponent implements OnInit {
       this.riskWarnings = [...(listing.riskWarnings || [])];
       this.checklist = [];
       this.aiScoreAfter = null;
-      this.aiModelUsed = this.selectedAiModel;
+      this.aiModelUsed = this.aiSettings.activeModelName();
+      this.aiProviderUsed = `${this.aiSettings.activeProvider()} (Canlı API)`;
     }
   }
 
@@ -205,7 +225,7 @@ export class AiAuditComponent implements OnInit {
     this.afterDescription = audit.optimizedDescription || descDraft || '';
     this.aiScoreAfter = scoreAfter > 0 ? scoreAfter : null;
     this.aiModelUsed = audit.aiModel || audit.model || parsedResult?.ExecutedModel || this.selectedAiModel;
-    this.aiProviderUsed = audit.provider || parsedResult?.ExecutedProvider || 'Gemini (Canlı API)';
+    this.aiProviderUsed = audit.provider || parsedResult?.ExecutedProvider || `${this.aiSettings.activeProvider()} (Canlı API)`;
 
     if (audit.riskWarningsJson) {
       try {
@@ -287,15 +307,15 @@ export class AiAuditComponent implements OnInit {
 
     const settings = this.aiSettings.settings();
     const isStrict = settings.strictNeverOffline;
-    const apiKey = settings.geminiApiKey ? settings.geminiApiKey.trim() : '';
+    const apiKey = this.getActiveApiKey();
 
-    if (isStrict && !apiKey && settings.provider === 'Gemini') {
-      this.showToast('⚠️ Canlı AI Zorunlu aktif fakat Gemini API anahtarı boş. Lütfen üst menüdeki Gemini butonundan anahtarınızı kaydedin.', 'error');
+    if (isStrict && !apiKey && settings.provider !== 'Offline') {
+      this.showToast(`⚠️ Canlı AI Zorunlu aktif fakat ${settings.provider} API anahtarı boş. Lütfen üst menüdeki AI Model Merkezinden anahtarınızı kaydedin.`, 'error');
       return;
     }
 
     this.isAuditingSelected = true;
-    this.showToast(`${this.selectedListing.listingId} nolu ilan Gemini ile optimize ediliyor...`, 'info');
+    this.showToast(`${this.selectedListing.listingId} nolu ilan ${this.aiSettings.activeBadgeTextClean()} ile optimize ediliyor...`, 'info');
 
     const payload = {
       shopId: this.etsyApi.activeShopId(),
@@ -305,7 +325,7 @@ export class AiAuditComponent implements OnInit {
       focusKeywords: this.focusKeywords,
       targetBuyerPersona: this.targetBuyerPersona,
       tone: this.aiTone,
-      model: this.selectedAiModel || settings.geminiModel || 'gemini-2.5-flash',
+      model: this.aiSettings.activeModelName(),
       apiKey: apiKey,
       provider: settings.provider
     };
@@ -322,7 +342,7 @@ export class AiAuditComponent implements OnInit {
           this.checklist = res.checklist || [];
           this.aiScoreAfter = res.seoScoreAfter;
           this.aiModelUsed = res.aiModel || res.model || this.selectedAiModel;
-          this.aiProviderUsed = res.provider || 'Gemini (Canlı API)';
+          this.aiProviderUsed = res.provider || `${this.aiSettings.activeProvider()} (Canlı API)`;
 
           // Update in-memory item
           if (this.selectedListing) {
@@ -374,7 +394,7 @@ export class AiAuditComponent implements OnInit {
       return;
     }
 
-    if (!confirm(`${targets.length} adet ilan sırayla Gemini AI ile denetlenecek ve optimize edilecek. Devam edilsin mi?`)) {
+    if (!confirm(`${targets.length} adet ilan sırayla ${this.aiSettings.activeBadgeTextClean()} ile denetlenecek ve optimize edilecek. Devam edilsin mi?`)) {
       return;
     }
 
@@ -383,10 +403,10 @@ export class AiAuditComponent implements OnInit {
 
     const settings = this.aiSettings.settings();
     const isStrict = settings.strictNeverOffline;
-    const apiKey = settings.geminiApiKey ? settings.geminiApiKey.trim() : '';
+    const apiKey = this.getActiveApiKey();
 
-    if (isStrict && !apiKey && settings.provider === 'Gemini') {
-      this.showToast('⚠️ Canlı AI Zorunlu aktif fakat Gemini API anahtarı boş. Lütfen üst menüdeki Gemini butonundan anahtarınızı kaydedin.', 'error');
+    if (isStrict && !apiKey && settings.provider !== 'Offline') {
+      this.showToast(`⚠️ Canlı AI Zorunlu aktif fakat ${settings.provider} API anahtarı boş. Lütfen üst menüdeki AI Model Merkezinden anahtarınızı kaydedin.`, 'error');
       return;
     }
 
@@ -408,7 +428,7 @@ export class AiAuditComponent implements OnInit {
         focusKeywords: this.focusKeywords,
         targetBuyerPersona: this.targetBuyerPersona,
         tone: this.aiTone,
-        model: this.selectedAiModel || settings.geminiModel || 'gemini-2.5-flash',
+        model: this.aiSettings.activeModelName(),
         apiKey: apiKey,
         provider: settings.provider
       };

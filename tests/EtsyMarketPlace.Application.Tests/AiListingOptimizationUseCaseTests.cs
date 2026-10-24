@@ -130,4 +130,51 @@ public class AiListingOptimizationUseCaseTests
         Assert.Equal("Gemini (Canlı API)", result.Provider);
         Assert.Single(fakeRepo.SavedAudits);
     }
+
+    [Fact]
+    public async Task OptimizeListingAsync_WhenDeepSeekConfigured_PreservesActiveProviderAndModel()
+    {
+        var aiJsonResponse = """
+        {
+            "title_suggestions": ["3D Printed Horror Mask Prop Hand-Painted Cosplay"],
+            "tag_suggestions": ["horror mask", "cosplay prop", "3d printed mask", "movie prop", "halloween mask", "collector mask", "gamer gift", "wall art mask", "resin prop", "custom mask", "costume mask", "scary mask", "gift for him"],
+            "material_suggestions": ["PLA Filament", "Acrylic Paint"],
+            "description_draft": "Hand-painted 3D printed cosplay mask...",
+            "current_seo_score": 84,
+            "optimized_seo_score": 97,
+            "seo_critique": "Optimized with DeepSeek-V4-Flash.",
+            "risk_warnings": []
+        }
+        """;
+
+        var fakeAi = new FakeGeminiListingApiClient
+        {
+            Success = true,
+            ContentToReturn = aiJsonResponse
+        };
+        var fakeRepo = new FakeShopSettingsRepository();
+        var ruleOptimizer = new ListingOptimizationService();
+        var useCase = new AiListingOptimizationUseCase(fakeAi, ruleOptimizer, fakeRepo);
+
+        var cmd = new OptimizeListingCommandDto(
+            ShopId: "53236321",
+            Title: "Horror Mask",
+            Description: "3D printed mask",
+            Tags: new[] { "mask" },
+            TargetKeyword: "horror mask",
+            DescriptionStyle: "Storytelling",
+            FocusKeywords: null,
+            TargetBuyerPersona: null,
+            Tone: null,
+            Model: "DeepSeek-V4-Flash",
+            ApiKey: "sk-deepseek-test",
+            Provider: "DeepSeek");
+
+        var result = await useCase.OptimizeListingAsync("4390353802", "53236321", cmd);
+
+        Assert.True(result.Success);
+        Assert.Equal("DeepSeek (Canlı API)", result.Provider);
+        Assert.Equal("DeepSeek-V4-Flash", result.AiModel);
+        Assert.Single(fakeRepo.SavedAudits);
+    }
 }

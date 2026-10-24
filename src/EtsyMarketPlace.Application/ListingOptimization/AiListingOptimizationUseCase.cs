@@ -41,6 +41,59 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
 
         var apiKey = command?.ApiKey?.Trim() ?? string.Empty;
         var requestedProvider = command?.Provider?.Trim();
+        var requestedModel = command?.Model?.Trim();
+        if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(requestedProvider))
+        {
+            try
+            {
+                var savedJson = await _settingsRepo.GetAiSettingsJsonAsync(shopId, cancellationToken);
+                if (!string.IsNullOrWhiteSpace(savedJson))
+                {
+                    using var settingsDoc = JsonDocument.Parse(savedJson);
+                    var sRoot = settingsDoc.RootElement;
+                    if (string.IsNullOrWhiteSpace(requestedProvider) &&
+                        sRoot.TryGetProperty("provider", out var pEl) &&
+                        pEl.ValueKind == JsonValueKind.String)
+                    {
+                        requestedProvider = pEl.GetString()?.Trim();
+                    }
+
+                    var prov = requestedProvider ?? "Gemini";
+                    if (string.IsNullOrWhiteSpace(apiKey))
+                    {
+                        var keyProp = prov.ToLowerInvariant() switch
+                        {
+                            "deepseek" => "deepSeekApiKey",
+                            "openai" => "openAiApiKey",
+                            "claude" => "claudeApiKey",
+                            "grok" => "grokApiKey",
+                            _ => "geminiApiKey"
+                        };
+                        if (sRoot.TryGetProperty(keyProp, out var kEl) && kEl.ValueKind == JsonValueKind.String)
+                        {
+                            apiKey = kEl.GetString()?.Trim() ?? string.Empty;
+                        }
+                    }
+
+                    if (string.IsNullOrWhiteSpace(requestedModel))
+                    {
+                        var modelProp = prov.ToLowerInvariant() switch
+                        {
+                            "deepseek" => "deepSeekModel",
+                            "openai" => "openAiModel",
+                            "claude" => "claudeModel",
+                            "grok" => "grokModel",
+                            _ => "geminiModel"
+                        };
+                        if (sRoot.TryGetProperty(modelProp, out var mEl) && mEl.ValueKind == JsonValueKind.String)
+                        {
+                            requestedModel = mEl.GetString()?.Trim();
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
         var isOfflineRequested = string.Equals(requestedProvider, "Offline", StringComparison.OrdinalIgnoreCase);
 
         string resolvedProvider;
@@ -58,8 +111,22 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
 
         if (!isOfflineRequested && !string.IsNullOrWhiteSpace(apiKey))
         {
-            var rawModel = !string.IsNullOrWhiteSpace(command?.Model) ? command.Model : "gemini-2.5-flash";
-            var geminiModel = EtsyAiModelNormalizer.NormalizeGeminiTextModel(rawModel);
+            var activeProviderName = string.IsNullOrWhiteSpace(requestedProvider) ? "Gemini" : requestedProvider;
+            var isGeminiProvider = activeProviderName.Contains("Gemini", StringComparison.OrdinalIgnoreCase);
+            var rawModel = !string.IsNullOrWhiteSpace(requestedModel)
+                ? requestedModel
+                : activeProviderName.ToLowerInvariant() switch
+                {
+                    "deepseek" => "DeepSeek-V4-Flash",
+                    "openai" => "gpt-4o",
+                    "claude" => "claude-3-7-sonnet-20250219",
+                    "grok" => "grok-3",
+                    _ => "gemini-2.5-flash"
+                };
+            var geminiModel = isGeminiProvider
+                ? EtsyAiModelNormalizer.NormalizeGeminiTextModel(rawModel)
+                : rawModel;
+
 
             var systemInstruction = ListingDraftInstructionBuilder.BuildSystemInstruction();
             var userPrompt = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input);
@@ -149,7 +216,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
             checklist.Add("13 Etsy etiket alanının tamamı Gemini ile dolduruldu.");
             checklist.Add("Açıklama satış odaklı ve Etsy SEO uyumlu olarak baştan yazıldı.");
 
-            resolvedProvider = "Gemini (Canlı API)";
+            resolvedProvider = $"{activeProviderName} (Canlı API)";
             resolvedModel = geminiModel;
         }
         else
