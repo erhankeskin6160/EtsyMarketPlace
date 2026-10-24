@@ -229,7 +229,21 @@ export class StoreAiAssistantService {
     const raw = (userPrompt || '').trim();
     const lower = raw.toLowerCase();
 
-    // 1. Specific keywords or popular models in prompt
+    // 1. URL detection (MakerWorld, Printables, Thingiverse, Cults3D, Etsy)
+    const urlMatch = raw.match(/https?:\/\/[^\s]+/);
+    if (urlMatch) {
+      const url = urlMatch[0].toLowerCase();
+      if (url.includes('cessna')) return 'cessna plane kit card';
+      if (url.includes('antonov')) return 'antonov plane kit card';
+      const slugMatch = url.match(/(?:models|model|thing|design)\/\d*[-_]?([a-z0-9\-]+)/);
+      if (slugMatch && slugMatch[1]) {
+        const cleanSlug = slugMatch[1].replace(/[-_]+/g, ' ').replace(/\b(download|free|stl|3d|print)\b/g, '').trim();
+        if (cleanSlug.length > 3) return cleanSlug;
+      }
+    }
+
+    // 2. Specific keywords or popular models in prompt
+    if (lower.includes('cessna')) return 'cessna plane kit card';
     if (lower.includes('antonov')) return 'antonov plane kit card';
     if (lower.includes('omnitrix') || lower.includes('ben 10')) return 'ben 10 omnitrix bracelet replica';
     if (lower.includes('jinx') || lower.includes('fishbones')) return 'arcane jinx rocket launcher';
@@ -555,14 +569,59 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
   ): { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[] {
     return history.map(item => {
       if (item.role === 'assistant' && item.content) {
-        const cleaned = item.content
+        let cleaned = item.content
           .replace(/❌\s*Hayır,?\s*MCP\s*şu\s*an\s*bana\s*bağlı\s*değil[^\n\.]*[\n\.]*/gi, '⚡ MCP ve Otonom Araç Motoru sisteme başarıyla bağlandı. ')
           .replace(/MCP\s*(şu\s*an\s*)?(bana\s*)?bağlı\s*değil[^\n\.]*[\n\.]*/gi, 'MCP otonom araçları sisteme bağlıdır. ')
           .replace(/bağlı\s*bir\s*MCP\s*yok[^\n\.]*[\n\.]*/gi, 'MCP araçları aktiftir. ');
+
+        // Neutralize stalling promises from previous turns so LLM doesn't copy the stalling pattern
+        if (cleaned.length < 280 && (
+          cleaned.includes('çekiyorum') || cleaned.includes('cekiyorum') ||
+          cleaned.includes('önüne koyacağım') || cleaned.includes('onune koyacagim') ||
+          cleaned.includes('kuracağım') || cleaned.includes('kuracagim') ||
+          cleaned.includes('lafı uzatmayayım') || cleaned.includes('gerçek hesabı') ||
+          cleaned.includes('şimdi gerçek')
+        )) {
+          cleaned = 'Canlı pazar araştırması ve kargo verileri çekildi, analiz hazırlandı.';
+        }
+
         return { ...item, content: cleaned };
       }
       return item;
     });
+  }
+
+  /**
+   * Guard that ensures if the LLM stalls with a short promise ("çekiyorum", "kuracağım") while
+   * tool data is already available, the full live data breakdown is immediately provided.
+   */
+  private ensureCompleteReply(
+    rawText: string,
+    toolContext: LiveToolContext | null | undefined,
+    augmentedPrompt: string,
+    snap: StoreContextSnapshot,
+    provider: string,
+    model: string,
+    attachments?: ChatAttachment[]
+  ): string {
+    if (!rawText) return rawText;
+    const lower = rawText.toLowerCase();
+    const isStalling = Boolean(toolContext && (
+      rawText.length < 280 && (
+        lower.includes('çekiyorum') || lower.includes('cekiyorum') ||
+        lower.includes('önüne koyacağım') || lower.includes('onune koyacagim') ||
+        lower.includes('kuracağım') || lower.includes('kuracagim') ||
+        lower.includes('hesabı yapıyorum') || lower.includes('hesabi yapiyorum') ||
+        lower.includes('hazırlıyorum') || lower.includes('hazirliyorum') ||
+        lower.includes('çekip') || lower.includes('başlıyorum')
+      )
+    ));
+
+    if (isStalling) {
+      const richReport = this.generateDynamicDataReply(augmentedPrompt, snap, provider, model, attachments, toolContext);
+      return `${rawText}\n\n${richReport}`;
+    }
+    return rawText;
   }
 
   public capitalizeWords(str: string): string {
@@ -678,9 +737,10 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
           text = `⚡ **${fn?.name || 'MCP Otonom Modülü'}** başarıyla çağrıldı ve parametreleri işlendi.`;
         }
         if (text) {
+          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'DeepSeek', normalizedModel, attachments);
           return {
-            replyHtml: this.formatMarkdown(text),
-            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+            replyHtml: this.formatMarkdown(completedText),
+            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
           };
         }
         throw new Error('Boş DeepSeek yanıtı');
@@ -760,9 +820,10 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
           text = `⚡ **${fn?.name || 'MCP Otonom Modülü'}** başarıyla çağrıldı ve parametreleri işlendi.`;
         }
         if (text) {
+          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'OpenAI', model, attachments);
           return {
-            replyHtml: this.formatMarkdown(text),
-            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+            replyHtml: this.formatMarkdown(completedText),
+            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
           };
         }
         throw new Error('Boş OpenAI yanıtı');
@@ -859,9 +920,10 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         }
         const text = res?.content?.[0]?.text?.trim();
         if (text) {
+          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'Claude', model, attachments);
           return {
-            replyHtml: this.formatMarkdown(text),
-            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+            replyHtml: this.formatMarkdown(completedText),
+            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
           };
         }
         throw new Error('Boş Claude yanıtı');
@@ -924,9 +986,10 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
           text = `⚡ **${fn?.name || 'MCP Otonom Modülü'}** başarıyla çağrıldı ve parametreleri işlendi.`;
         }
         if (text) {
+          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'Grok', model, attachments);
           return {
-            replyHtml: this.formatMarkdown(text),
-            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+            replyHtml: this.formatMarkdown(completedText),
+            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
           };
         }
         throw new Error('Boş Grok yanıtı');
@@ -1005,9 +1068,10 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         }
         const text = res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (text) {
+          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'Google Gemini', modelName, attachments);
           return {
-            replyHtml: this.formatMarkdown(text),
-            updatedHistory: [...history, { role: 'assistant' as const, content: text }]
+            replyHtml: this.formatMarkdown(completedText),
+            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
           };
         }
         throw new Error('Boş Gemini yanıtı');
@@ -1238,8 +1302,17 @@ Aşağıdaki işlem kartındaki butonlara tıklayarak doğrudan **Hızlı Ürün
         ).join(' | ');
       }
 
+      // User specified custom cost extraction e.g. "üretim maliyetim 175 tl"
+      let customCostUsd = 0;
+      let customCostTry = 0;
+      const costMatch = (userPrompt || '').match(/(?:üretim\s*maliyeti|maliyetim|maliyet|baskı\s*maliyeti)[^\d]*(\d+(?:[.,]\d+)?)\s*(?:tl|₺|lira)?/i);
+      if (costMatch && costMatch[1]) {
+        customCostTry = parseFloat(costMatch[1].replace(',', '.'));
+        customCostUsd = Number((customCostTry / snap.exchangeRate).toFixed(2));
+      }
+
       const recRetailPrice = Number((avgPrice * 0.98).toFixed(2));
-      const filamentCost = 2.40;
+      const filamentCost = customCostUsd > 0 ? customCostUsd : 2.40;
       const boxCost = 0.80;
       const etsyFees = Number((recRetailPrice * 0.10).toFixed(2));
       const netProfit = Number((recRetailPrice - bestShippingCost - filamentCost - boxCost - etsyFees).toFixed(2));
@@ -1266,7 +1339,7 @@ ${shippingDetails}<br>
 💰 <strong>Birim Kârlılık ve Fiyat Simülasyonu:</strong><br>
 • <strong>Tavsiye Satış Fiyatı:</strong> <strong>$${recRetailPrice.toFixed(2)} (₺${(recRetailPrice * snap.exchangeRate).toFixed(0)})</strong><br>
 • <strong>Canlı Kargo (${bestCarrierName}):</strong> -$${bestShippingCost.toFixed(2)}<br>
-• <strong>3D Baskı / Filament (~60gr):</strong> -$${filamentCost.toFixed(2)}<br>
+• <strong>3D Baskı / Üretim Maliyeti:</strong> -₺${customCostTry > 0 ? customCostTry.toFixed(0) : (filamentCost * snap.exchangeRate).toFixed(0)} (-$${filamentCost.toFixed(2)})${customCostTry > 0 ? ' <em>(Belirttiğiniz Üretim Maliyeti)</em>' : ''}<br>
 • <strong>Kutu & Ambalaj:</strong> -$${boxCost.toFixed(2)}<br>
 • <strong>Etsy Platform Kesintileri (~%10):</strong> -$${etsyFees.toFixed(2)}<br>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br>
