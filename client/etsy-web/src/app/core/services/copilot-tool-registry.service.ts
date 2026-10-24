@@ -624,7 +624,29 @@ export class CopilotToolRegistryService {
         shipments = parsed.payload?.results || parsed.results || [];
       } else {
         const direct = JSON.parse(rawText);
-        shipments = direct.payload?.results || direct.results || (Array.isArray(direct) ? direct : []);
+        if (direct.data?.orders && Array.isArray(direct.data.orders)) {
+          // ShipEntegra format
+          shipments = direct.data.orders.map((o: any) => {
+            const sentPrice = Number(o.sentegra_price) || 0;
+            const clearPrice = Number(o.us_clearance_activities_total) || 0;
+            const totalUsd = Number((sentPrice + clearPrice).toFixed(2));
+            const courier = o.se_courier || o.pref_carrier || o.my_courier || 'ShipEntegra';
+            const tracking = o.se_tracking_number || o.my_tracking_number || '';
+            return {
+              receiverName: o.ship_to_name,
+              externalOrderId: o.order_id,
+              shipmentCostUsd: totalUsd,
+              shipmentCost: Number((totalUsd * liveRate).toFixed(2)),
+              exchangeRate: liveRate,
+              supplierName: courier,
+              trackingNumber: tracking,
+              products: [{ productName: o.content_en || o.name || '3D Model' }],
+              noteDetail: `ShipEntegra (${courier.toUpperCase()}) Takip: ${tracking || 'Yok'} [Navlun: $${sentPrice}${clearPrice > 0 ? ' + Gümrük: $' + clearPrice : ''}]`
+            };
+          });
+        } else {
+          shipments = direct.payload?.results || direct.results || (Array.isArray(direct) ? direct : []);
+        }
       }
     } catch {
       // Regex extraction fallback
@@ -668,46 +690,53 @@ export class CopilotToolRegistryService {
           const addCostTry = Number(s.additionalServiceTotalCost || 0);
           const totalTry = sCostTry + addCostTry;
           const rate = Number(s.exchangeRate) > 0 ? Number(s.exchangeRate) : liveRate;
-          const shippingUsd = Number((totalTry / rate).toFixed(2));
+          const shippingUsd = s.shipmentCostUsd !== undefined ? Number(s.shipmentCostUsd) : Number((totalTry / rate).toFixed(2));
           const supplier = s.supplierName || 'Kargo';
-          const extId = s.externalId || s.customerSpecialCode || '—';
+          const extId = s.externalId || s.customerSpecialCode || s.trackingNumber || s.externalOrderId || '—';
+          const externalOrderId = String(s.externalOrderId || '').trim();
+          const isDirectReceipt = /^\d+$/.test(externalOrderId);
 
-          if (!rName && !pName) continue;
+          if (!rName && !pName && !isDirectReceipt) continue;
 
-          const dedupeKey = `${rName.toLowerCase()}_${totalTry.toFixed(0)}`;
+          const dedupeKey = `${rName.toLowerCase()}_${shippingUsd.toFixed(2)}`;
           if (processedKeys.has(dedupeKey)) continue;
           processedKeys.add(dedupeKey);
 
-          // Fuzzy match against orders
-          const matchedOrder = orders.find((o: any) => {
-            const bName = (o.buyerName || '').toLowerCase().trim();
-            const rNameLower = rName.toLowerCase();
-            const oTitle = (o.productTitle || '').toLowerCase();
-            const pNameLower = pName.toLowerCase();
+          // Direct receipt match first
+          let matchedOrder = isDirectReceipt ? orders.find((o: any) => String(o.receiptId) === externalOrderId) : null;
 
-            if (rNameLower.length > 2 && (bName.includes(rNameLower) || rNameLower.includes(bName))) {
-              return true;
-            }
+          if (!matchedOrder) {
+            // Fuzzy match against orders
+            matchedOrder = orders.find((o: any) => {
+              const bName = (o.buyerName || '').toLowerCase().trim();
+              const rNameLower = rName.toLowerCase();
+              const oTitle = (o.productTitle || '').toLowerCase();
+              const pNameLower = pName.toLowerCase();
 
-            // Substring words check
-            const rWords: string[] = rNameLower.split(/\s+/).filter((w: string) => w.length >= 3);
-            const bWords: string[] = bName.split(/\s+/).filter((w: string) => w.length >= 3);
-            const commonWords: string[] = rWords.filter((w: string) => bWords.includes(w));
-            if (commonWords.length >= 2) return true;
+              if (rNameLower.length > 2 && (bName.includes(rNameLower) || rNameLower.includes(bName))) {
+                return true;
+              }
 
-            // Product keywords check
-            if (pNameLower.length > 5) {
-              const pWords: string[] = pNameLower.split(/[\s,]+/).filter((w: string) => w.length >= 4);
-              const hasKeyword = pWords.some((w: string) => oTitle.includes(w));
-              if (hasKeyword && commonWords.length >= 1) return true;
-            }
+              // Substring words check
+              const rWords: string[] = rNameLower.split(/\s+/).filter((w: string) => w.length >= 3);
+              const bWords: string[] = bName.split(/\s+/).filter((w: string) => w.length >= 3);
+              const commonWords: string[] = rWords.filter((w: string) => bWords.includes(w));
+              if (commonWords.length >= 2 || (rWords.length === 1 && commonWords.length === 1)) return true;
 
-            return false;
-          });
+              // Product keywords check
+              if (pNameLower.length > 5) {
+                const pWords: string[] = pNameLower.split(/[\s,]+/).filter((w: string) => w.length >= 4);
+                const hasKeyword = pWords.some((w: string) => oTitle.includes(w));
+                if (hasKeyword && commonWords.length >= 1) return true;
+              }
 
-          if (matchedOrder && totalTry > 0) {
+              return false;
+            });
+          }
+
+          if (matchedOrder && shippingUsd > 0) {
             const receiptId = String(matchedOrder.receiptId);
-            const noteText = `${supplier} Kargo: ${totalTry.toFixed(2)} TL (Kur: ${rate.toFixed(2)} = ${shippingUsd})`;
+            const noteText = s.noteDetail || `${supplier} Kargo: ${totalTry.toFixed(2)} TL (Kur: ${rate.toFixed(2)} = $${shippingUsd})`;
 
             matchedUpdates.push({
               receiptId,
@@ -723,8 +752,8 @@ export class CopilotToolRegistryService {
             saveOps$.push(
               this.etsyApi.saveOrderCost(receiptId, {
                 shippingCost: shippingUsd,
-                productCost: matchedOrder.productCostUsd ? Number(Math.max(0, matchedOrder.productCostUsd - shippingUsd).toFixed(2)) : 12.00,
-                packagingCost: 1.00,
+                productCost: matchedOrder.productCostUsd && matchedOrder.productCostUsd > 0 ? matchedOrder.productCostUsd : 10.00,
+                packagingCost: matchedOrder.packagingCostUsd && matchedOrder.packagingCostUsd > 0 ? matchedOrder.packagingCostUsd : 1.00,
                 notes: noteText
               }).pipe(catchError(e => of({ error: e })))
             );
@@ -736,7 +765,7 @@ export class CopilotToolRegistryService {
               costTry: totalTry,
               shippingCostUsd: shippingUsd,
               status: s.shipmentStatus || 'Draft',
-              reason: totalTry === 0 ? 'Kargo maliyeti 0/hesaplanamadı' : 'Etsy sipariş geçmişinde bu alıcı adına kayıt bulunamadı (Test/Örnek gönderi)'
+              reason: shippingUsd === 0 ? 'Kargo maliyeti 0/hesaplanamadı' : 'Etsy sipariş geçmişinde bu alıcı adına kayıt bulunamadı (Test/Örnek gönderi)'
             });
           }
         }
