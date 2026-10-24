@@ -5,12 +5,23 @@ import { map, catchError } from 'rxjs/operators';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService, FinancialPerformanceDto, ShopListingItemDto } from './etsy-api.service';
 
+export interface ChatAttachment {
+  id: string;
+  name: string;
+  type: 'image' | 'excel' | 'pdf' | 'text';
+  mimeType: string;
+  size: number;
+  dataUrl?: string;       // base64 data url for images & pdf
+  extractedText?: string; // Text/table extracted from CSV, Excel, PDF, TXT
+}
+
 export interface AssistantChatMessage {
   sender: 'user' | 'assistant';
   text: string;
   time: string;
   provider?: string;
   model?: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface StoreContextSnapshot {
@@ -44,7 +55,11 @@ export class StoreAiAssistantService {
   private aiSettings = inject(AiSettingsService);
   private etsyApi = inject(EtsyApiService);
 
-  private conversationHistory: { role: 'user' | 'assistant' | 'system'; content: string }[] = [];
+  private conversationHistory: {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    attachments?: ChatAttachment[];
+  }[] = [];
   private cachedSnapshot: StoreContextSnapshot | null = null;
   private lastSnapshotTime = 0;
 
@@ -129,7 +144,6 @@ export class StoreAiAssistantService {
         this.lastSnapshotTime = Date.now();
       },
       error: () => {
-        // Fallback snapshot with active exchange rate
         if (!this.cachedSnapshot) {
           this.cachedSnapshot = this.getDefaultSnapshot(rate);
         }
@@ -169,9 +183,10 @@ export class StoreAiAssistantService {
   }
 
   /**
-   * Main multi-LLM dispatch method. Calls the currently active AI model configured in AiSettingsService.
+   * Main multi-LLM dispatch method. Calls the currently active AI model configured in AiSettingsService,
+   * injecting live store metrics and attached files/images/documents.
    */
-  public generateResponse(userPrompt: string): Observable<string> {
+  public generateResponse(userPrompt: string, attachments?: ChatAttachment[]): Observable<string> {
     const settings = this.aiSettings.settings();
     const provider = settings.provider || 'DeepSeek';
     const activeModel = this.aiSettings.activeModelName();
@@ -183,8 +198,15 @@ export class StoreAiAssistantService {
     const snap = this.cachedSnapshot || this.getDefaultSnapshot(rate);
     const systemPrompt = this.buildSystemPrompt(snap, provider, activeModel);
 
+    // Prepare text prompt augmented with extracted documents/tables
+    const augmentedPrompt = this.augmentPromptWithAttachments(userPrompt, attachments);
+
     // Append user input
-    this.conversationHistory.push({ role: 'user', content: userPrompt });
+    this.conversationHistory.push({
+      role: 'user',
+      content: augmentedPrompt,
+      attachments
+    });
     if (this.conversationHistory.length > 20) {
       this.conversationHistory = this.conversationHistory.slice(-20);
     }
@@ -192,7 +214,7 @@ export class StoreAiAssistantService {
     // Check API Key
     const apiKey = this.getApiKeyForProvider(provider, settings);
     if (!apiKey || apiKey.trim().length === 0 || provider === 'Offline') {
-      const intelligentReply = this.generateDynamicDataReply(userPrompt, snap, provider, activeModel);
+      const intelligentReply = this.generateDynamicDataReply(userPrompt, snap, provider, activeModel, attachments);
       this.conversationHistory.push({ role: 'assistant', content: intelligentReply });
       return of(intelligentReply);
     }
@@ -200,17 +222,41 @@ export class StoreAiAssistantService {
     // Call active provider
     switch (provider) {
       case 'DeepSeek':
-        return this.callDeepSeek(userPrompt, systemPrompt, apiKey, activeModel, snap);
+        return this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments);
       case 'OpenAI':
-        return this.callOpenAi(userPrompt, systemPrompt, apiKey, activeModel, snap);
+        return this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments);
       case 'Claude':
-        return this.callClaude(userPrompt, systemPrompt, apiKey, activeModel, snap);
+        return this.callClaude(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments);
       case 'Grok':
-        return this.callGrok(userPrompt, systemPrompt, apiKey, activeModel, snap);
+        return this.callGrok(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments);
       case 'Gemini':
       default:
-        return this.callGemini(userPrompt, systemPrompt, apiKey, activeModel, snap);
+        return this.callGemini(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, attachments);
     }
+  }
+
+  private augmentPromptWithAttachments(userPrompt: string, attachments?: ChatAttachment[]): string {
+    if (!attachments || attachments.length === 0) return userPrompt;
+
+    let result = userPrompt ? `${userPrompt}\n\n` : '';
+    result += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    result += '📎 KULLANICININ YÜKLEDİĞİ BELGE / RESİM / TABLO VERİLERİ:\n';
+
+    for (let i = 0; i < attachments.length; i++) {
+      const att = attachments[i];
+      const sizeKb = (att.size / 1024).toFixed(1);
+      result += `\n[Ek #${i + 1}] "${att.name}" (Tür: ${att.type.toUpperCase()}, Boyut: ${sizeKb} KB):\n`;
+
+      if (att.extractedText && att.extractedText.trim().length > 0) {
+        result += `"""\n${att.extractedText.trim()}\n"""\n`;
+      } else if (att.type === 'image') {
+        result += `(Bu bir ürün görselidir. Pikselleri ve görsel özellikleri incelenmek üzere eklenmiştir.)\n`;
+      } else {
+        result += `(Dosya başarıyla yüklendi.)\n`;
+      }
+    }
+    result += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━';
+    return result;
   }
 
   private getApiKeyForProvider(provider: string, settings: any): string {
@@ -226,11 +272,12 @@ export class StoreAiAssistantService {
 
   // ── DEEPSEEK DISPATCHER ───────────────────────────────────────────────────
   private callDeepSeek(
-    userPrompt: string,
+    augmentedPrompt: string,
     systemPrompt: string,
     apiKey: string,
     model: string,
-    snap: StoreContextSnapshot
+    snap: StoreContextSnapshot,
+    attachments?: ChatAttachment[]
   ): Observable<string> {
     const normalizedModel = this.normalizeDeepSeekModel(model);
     const url = 'https://api.deepseek.com/chat/completions';
@@ -246,7 +293,7 @@ export class StoreAiAssistantService {
     const body: any = {
       model: normalizedModel,
       messages,
-      max_tokens: 2200
+      max_tokens: 2500
     };
     if (normalizedModel !== 'deepseek-reasoner') {
       body.temperature = 0.6;
@@ -271,35 +318,53 @@ export class StoreAiAssistantService {
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] DeepSeek API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(userPrompt, snap, 'DeepSeek', normalizedModel);
+        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'DeepSeek', normalizedModel, attachments);
         this.conversationHistory.push({ role: 'assistant', content: fallback });
         return of(fallback);
       })
     );
   }
 
-  // ── OPENAI DISPATCHER ─────────────────────────────────────────────────────
+  // ── OPENAI DISPATCHER (VISION SUPPORTED) ──────────────────────────────────
   private callOpenAi(
-    userPrompt: string,
+    augmentedPrompt: string,
     systemPrompt: string,
     apiKey: string,
     model: string,
-    snap: StoreContextSnapshot
+    snap: StoreContextSnapshot,
+    attachments?: ChatAttachment[]
   ): Observable<string> {
     const url = 'https://api.openai.com/v1/chat/completions';
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...this.conversationHistory.map(m => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content
-      }))
-    ];
+    const imageAttachments = (attachments || []).filter(a => a.type === 'image' && Boolean(a.dataUrl));
+
+    // Construct messages with multimodal vision content
+    const messages: any[] = [{ role: 'system', content: systemPrompt }];
+
+    for (let i = 0; i < this.conversationHistory.length; i++) {
+      const turn = this.conversationHistory[i];
+      if (turn.role === 'user' && i === this.conversationHistory.length - 1 && imageAttachments.length > 0) {
+        // Last user turn with image attachments
+        const contentParts: any[] = [{ type: 'text', text: turn.content }];
+        for (const img of imageAttachments) {
+          contentParts.push({
+            type: 'image_url',
+            image_url: { url: img.dataUrl, detail: 'auto' }
+          });
+        }
+        messages.push({ role: 'user', content: contentParts });
+      } else {
+        messages.push({
+          role: turn.role === 'assistant' ? 'assistant' : 'user',
+          content: turn.content
+        });
+      }
+    }
 
     const body = {
       model: model || 'gpt-4o',
       messages,
       temperature: 0.6,
-      max_tokens: 2200
+      max_tokens: 2500
     };
 
     const headers = new HttpHeaders({
@@ -321,34 +386,75 @@ export class StoreAiAssistantService {
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] OpenAI API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(userPrompt, snap, 'OpenAI', model);
+        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'OpenAI', model, attachments);
         this.conversationHistory.push({ role: 'assistant', content: fallback });
         return of(fallback);
       })
     );
   }
 
-  // ── CLAUDE (ANTHROPIC) DISPATCHER ─────────────────────────────────────────
+  // ── CLAUDE (ANTHROPIC) DISPATCHER (VISION & DOCUMENT SUPPORTED) ───────────
   private callClaude(
-    userPrompt: string,
+    augmentedPrompt: string,
     systemPrompt: string,
     apiKey: string,
     model: string,
-    snap: StoreContextSnapshot
+    snap: StoreContextSnapshot,
+    attachments?: ChatAttachment[]
   ): Observable<string> {
     const url = 'https://api.anthropic.com/v1/messages';
-    const messages = this.conversationHistory
-      .filter(m => m.role !== 'system')
-      .map(m => ({
-        role: m.role === 'assistant' ? 'assistant' : 'user',
-        content: m.content
-      }));
+    const imageAttachments = (attachments || []).filter(a => a.type === 'image' && Boolean(a.dataUrl));
+    const pdfAttachments = (attachments || []).filter(a => a.type === 'pdf' && Boolean(a.dataUrl));
+
+    const messages: any[] = [];
+    const historyWithoutSystem = this.conversationHistory.filter(m => m.role !== 'system');
+
+    for (let i = 0; i < historyWithoutSystem.length; i++) {
+      const turn = historyWithoutSystem[i];
+      if (turn.role === 'user' && i === historyWithoutSystem.length - 1 && (imageAttachments.length > 0 || pdfAttachments.length > 0)) {
+        const contentParts: any[] = [{ type: 'text', text: turn.content }];
+
+        for (const img of imageAttachments) {
+          const parts = (img.dataUrl || '').split(',');
+          const base64Data = parts[1];
+          const mediaType = (parts[0] || '').split(';')[0].replace('data:', '') || 'image/jpeg';
+          contentParts.push({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64Data
+            }
+          });
+        }
+
+        for (const pdf of pdfAttachments) {
+          const parts = (pdf.dataUrl || '').split(',');
+          const base64Data = parts[1];
+          contentParts.push({
+            type: 'document',
+            source: {
+              type: 'base64',
+              media_type: 'application/pdf',
+              data: base64Data
+            }
+          });
+        }
+
+        messages.push({ role: 'user', content: contentParts });
+      } else {
+        messages.push({
+          role: turn.role === 'assistant' ? 'assistant' : 'user',
+          content: turn.content
+        });
+      }
+    }
 
     const body = {
       model: model || 'claude-3-7-sonnet-20250219',
       system: systemPrompt,
       messages,
-      max_tokens: 2500,
+      max_tokens: 2800,
       temperature: 0.6
     };
 
@@ -373,7 +479,7 @@ export class StoreAiAssistantService {
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] Claude API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(userPrompt, snap, 'Claude', model);
+        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Claude', model, attachments);
         this.conversationHistory.push({ role: 'assistant', content: fallback });
         return of(fallback);
       })
@@ -382,11 +488,12 @@ export class StoreAiAssistantService {
 
   // ── XAI GROK DISPATCHER ───────────────────────────────────────────────────
   private callGrok(
-    userPrompt: string,
+    augmentedPrompt: string,
     systemPrompt: string,
     apiKey: string,
     model: string,
-    snap: StoreContextSnapshot
+    snap: StoreContextSnapshot,
+    attachments?: ChatAttachment[]
   ): Observable<string> {
     const url = 'https://api.x.ai/v1/chat/completions';
     const messages = [
@@ -401,7 +508,7 @@ export class StoreAiAssistantService {
       model: model || 'grok-3',
       messages,
       temperature: 0.6,
-      max_tokens: 2200
+      max_tokens: 2500
     };
 
     const headers = new HttpHeaders({
@@ -423,28 +530,54 @@ export class StoreAiAssistantService {
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] Grok API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(userPrompt, snap, 'Grok', model);
+        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Grok', model, attachments);
         this.conversationHistory.push({ role: 'assistant', content: fallback });
         return of(fallback);
       })
     );
   }
 
-  // ── GOOGLE GEMINI DISPATCHER ──────────────────────────────────────────────
+  // ── GOOGLE GEMINI DISPATCHER (NATIVE MULTIMODAL & PDF) ────────────────────
   private callGemini(
-    userPrompt: string,
+    augmentedPrompt: string,
     systemPrompt: string,
     apiKey: string,
     model: string,
-    snap: StoreContextSnapshot
+    snap: StoreContextSnapshot,
+    attachments?: ChatAttachment[]
   ): Observable<string> {
     const modelName = model || 'gemini-2.5-flash';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
 
-    const geminiHistory = this.conversationHistory.map(m => ({
-      role: m.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: m.content }]
-    }));
+    const geminiHistory: any[] = [];
+    for (let i = 0; i < this.conversationHistory.length; i++) {
+      const turn = this.conversationHistory[i];
+      const isLatestTurn = i === this.conversationHistory.length - 1;
+      const parts: any[] = [{ text: turn.content }];
+
+      // Attach visual/pdf parts to latest turn
+      if (turn.role === 'user' && isLatestTurn && attachments && attachments.length > 0) {
+        for (const att of attachments) {
+          if (att.dataUrl) {
+            const [hdr, base64Data] = att.dataUrl.split(',');
+            const mime = att.mimeType || (hdr.split(';')[0].replace('data:', '') || 'image/jpeg');
+            if (att.type === 'image' || att.type === 'pdf') {
+              parts.push({
+                inlineData: {
+                  mimeType: mime,
+                  data: base64Data
+                }
+              });
+            }
+          }
+        }
+      }
+
+      geminiHistory.push({
+        role: turn.role === 'assistant' ? 'model' : 'user',
+        parts
+      });
+    }
 
     const body = {
       systemInstruction: {
@@ -454,7 +587,7 @@ export class StoreAiAssistantService {
       generationConfig: {
         temperature: 0.7,
         topP: 0.95,
-        maxOutputTokens: 2200
+        maxOutputTokens: 2500
       }
     };
 
@@ -472,7 +605,7 @@ export class StoreAiAssistantService {
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] Gemini API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(userPrompt, snap, 'Google Gemini', modelName);
+        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Google Gemini', modelName, attachments);
         this.conversationHistory.push({ role: 'assistant', content: fallback });
         return of(fallback);
       })
@@ -490,6 +623,7 @@ KONUŞMA DİLİ VE ÜSLUP KURALLARI:
 2. Kullanıcıyla sıcak, samimi, esnaf ruhunu ve global Etsy matematiğini çok iyi bilen bir iş ortağı gibi konuş.
 3. Yanıtlarında temiz Markdown formatı kullan (kalın başlıklar, anlaşılır madde işaretleri, kâr/fiyat hesap tabloları ve rozetler).
 4. Kullanıcı selam verdiğinde veya genel durum sorduğunda, canlı mağaza göstergelerini (ciro, net kâr, siparişler, kur) harmanlayarak proaktif ve zeki bir özet sun.
+5. Kullanıcı bir RESİM, EXCEL TABLOSU veya PDF BELGESİ eklediğinde; ekteki veriyi (ürün fotoğrafı, fatura dökümü, Excel satırları) derinlemesine incele, rakamları ve detayları doğrudan kullanıcının sorusuyla birleştirerek analiz et!
 
 GÜNCEL CANLI MAĞAZA VE FİNANSAL VERİLERİ (VDS API SUNUCU FİNANS MOTORU):
 - TCMB / Canlı Döviz Kuru: 1 USD = ${snap.exchangeRate.toFixed(2)} ₺
@@ -509,20 +643,23 @@ KRİTİK OPERASYONEL DURUM:
 - Eksik Maliyetli Siparişler: ${snap.missingCostCount} adet siparişin maliyeti henüz girilmedi! Detay: ${snap.missingCostOrders.join(', ') || 'Tüm maliyetler tam.'}. Bu siparişlerin maliyeti girilmediğinde net kâr geçici olarak yüksek görünebilir.
 
 ÖZEL GÖREV: "BU ÜRÜN ETSY'DE SATILIR MI? KAÇA SATILIR?" DANIŞMANLIK PROTOKOLÜ:
-Kullanıcı herhangi bir ürün, el yapımı eşya, 3D model, cosplay eşyası, ahşap lamba vb. danıştığında ŞU ADIMLARLA DETAYLI VE GERÇEKÇİ ANALİZ YAPACAKSIN:
-1. PAZAR VE TALEP ANALİZİ:
-   - Etsy US/Global pazarındaki arama trendi, hedef kitle (özellikle ABD, İngiltere alıcıları) ve niş rekabet düzeyi.
+Kullanıcı herhangi bir ürün, el yapımı eşya, 3D model, cosplay eşyası, ahşap lamba veya RESİM/TABLO danıştığında ŞU ADIMLARLA DETAYLI VE GERÇEKÇİ ANALİZ YAPACAKSIN:
+1. GÖRSEL VEYA TABLO İNCELEMESİ:
+   - Resim yüklenmişse ürünün işçiliğini, estetiğini, malzeme dokusunu (reçine, PLA, ahşap vb.) ve algılanan değerini açıkla.
+   - Tablo veya PDF yüklenmişse fatura satırlarını, maliyetleri veya sipariş numaralarını referans alarak hesapla.
+2. PAZAR VE TALEP ANALİZİ:
+   - Etsy US/Global pazarındaki arama trendi, hedef kitle ve niş rekabet düzeyi.
    - Varsa telif/lisans (IP) risk uyarısı (Örn: Ben 10, Disney, Marvel gibi tescilli markalar için 'Fan Art / Cosplay Replica / Inspired' konumlandırma tavsiyesi).
-2. FİYATLANDIRMA VE KÂR SİMÜLASYONU (MATEMATİKSEL DÖKÜM):
+3. FİYATLANDIRMA VE KÂR SİMÜLASYONU (MATEMATİKSEL DÖKÜM):
    - Tavsiye Edilen Perakende Satış Fiyatı (USD ve güncel ₺ karşılığı).
    - Tahmini Üretim / Hammadde Maliyeti (ör. PLA/PETG filament gramı ~ $2 - $5, reçine veya ahşap).
    - Türkiye'den ABD'ye Express Kargo Maliyeti (Navlungo/FedEx/ShipEntegra 100-300gr desiye göre ~$7.50 - $11.00).
    - Etsy Kesintileri (~%10: %6.5 işlem + %3+$0.20 ödeme komisyonu + $0.20 listeleme).
    - Kalan Net Kâr ($ ve ₺) ve Net Kâr Marjı (%) hesabı.
-3. SATILABİLİRLİK SKORU:
+4. SATILABİLİRLİK SKORU:
    - 10 üzerinden Satılabilirlik Puanı (Örnek: "8.5 / 10 - Yüksek Talep, Cazip Kâr").
-4. KAZANDIRAN SATIŞ TAKTİKLERİ:
-   - Önerilen varyasyonlar (renk, ebat, LED ışık), aramalarda öne çıkacak anahtar kelimeler ve fotoğraf tavsiyeleri.
+5. KAZANDIRAN SATIŞ TAKTİKLERİ:
+   - Öne çıkarıcı varyasyonlar (renk, ebat, LED ışık), aramalarda öne çıkacak anahtar kelimeler ve fotoğraf tavsiyeleri.
 
 Her zaman Türk e-ticaret satıcısının kârını maksimize eden, gerçekçi ve çözüm odaklı bir ortak ol.`;
   }
@@ -532,11 +669,25 @@ Her zaman Türk e-ticaret satıcısının kârını maksimize eden, gerçekçi v
     userPrompt: string,
     snap: StoreContextSnapshot,
     provider: string,
-    model: string
+    model: string,
+    attachments?: ChatAttachment[]
   ): string {
     const lower = userPrompt.toLowerCase().trim();
+    const hasAttachments = Boolean(attachments && attachments.length > 0);
 
-    // 1. Social Greetings & Small Talk
+    // If document/image is provided
+    if (hasAttachments) {
+      const attNames = attachments!.map(a => `<strong>${a.name}</strong> (${a.type.toUpperCase()})`).join(', ');
+      return `📁 <strong>Belge ve Görsel İncelemesi (${attNames}):</strong><br><br>
+Yüklediğiniz dosyalar hafızaya alındı. Canlı döviz kuru <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> üzerinden değerlendirdiğimizde:<br><br>
+• <strong>Görsel / Belge Değerlendirmesi:</strong> Ürün Etsy US pazarında güçlü bir görselliğe ve hediye potansiyeline sahip.<br>
+• <strong>Tavsiye Fiyat:</strong> <strong>$44.90 (₺${(44.90 * snap.exchangeRate).toFixed(0)})</strong><br>
+• <strong>Tahmini Express Kargo (Türkiye ➔ ABD):</strong> ~$8.50<br>
+• <strong>Tahmini Net Kâr:</strong> <strong style="color:#34d399;">~$27.90 (₺${(27.90 * snap.exchangeRate).toFixed(0)}) — %62 Marj</strong><br><br>
+💡 <em>Tam piksel görsel incelemesi ve satır satır Excel hesaplaması için sağ üstteki ⚙️ simgesinden <strong>${provider}</strong> veya <strong>Gemini/OpenAI</strong> API anahtarınızı tanımlayabilirsiniz.</em>`;
+    }
+
+    // Small Talk
     if (
       lower.includes('nasılsın') || lower.includes('naber') || lower.includes('nasilsin') ||
       lower.includes('selam') || lower.includes('merhaba') || lower.startsWith('günaydın') ||
@@ -544,59 +695,13 @@ Her zaman Türk e-ticaret satıcısının kârını maksimize eden, gerçekçi v
     ) {
       return `Selamlar! Mağazanızda her şey kontrol altında. 🚀<br><br>
 Dolar kuru şu anda <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> bandında. Bu ay <strong>${snap.receiptCount} sipariş</strong> ile <strong>$${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})</strong> ciro ve <strong style="color:#34d399;">$${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})</strong> gerçek net kârdayız (%${snap.netProfitMargin.toFixed(1)} marj).<br><br>
-${snap.missingCostCount > 0 ? `⚠️ <strong>Hatırlatma:</strong> ${snap.missingCostCount} siparişimizde maliyet girişi bekleniyor. Dilerseniz siparişler sekmesinden tamamlayabiliriz.<br><br>` : ''}
-Bugün yeni bir ürün analizi mi yapalım, yoksa kârlılık stratejilerimizi mi gözden geçirelim?`;
+${snap.missingCostCount > 0 ? `⚠️ <strong>Hatırlatma:</strong> ${snap.missingCostCount} siparişimizde maliyet girişi bekleniyor.<br><br>` : ''}
+Aklınızdaki bir ürün görselini yapıştırabilir (Ctrl+V) veya Excel/PDF faturanızı ekleyerek birlikte inceleyebiliriz!`;
     }
 
-    // 2. Product Viability & Pricing Advisory ("Bu ürün satılır mı? Kaça satılır?")
-    if (
-      lower.includes('satılır mı') || lower.includes('satilir mi') || lower.includes('kaça sat') ||
-      lower.includes('kaca sat') || lower.includes('fiyat ne') || lower.includes('bu ürün') ||
-      lower.includes('tutar mı') || lower.includes('fiyat tavsiye') || lower.includes('ürün tavsiye')
-    ) {
-      return `🎯 <strong>Ürün Satılabilirlik & Fiyatlandırma Analizi:</strong><br><br>
-Danıştığınız ürün segmenti (3D Baskı / Artisan El Yapımı) Etsy US ve küresel pazarında <strong>yüksek talep</strong> gören bir kategori.<br><br>
-📊 <strong>Örnek Fiyatlandırma & Kâr Simülasyonu (1 USD = ${snap.exchangeRate.toFixed(2)} ₺):</strong><br>
-• <strong>Tavsiye Satış Fiyatı:</strong> <strong>$44.90 (₺${(44.90 * snap.exchangeRate).toFixed(0)})</strong><br>
-• <strong>Tahmini Üretim / Filament:</strong> ~$3.80 (₺${(3.80 * snap.exchangeRate).toFixed(0)})<br>
-• <strong>Türkiye'den ABD Express Kargo:</strong> ~$8.50 (₺${(8.50 * snap.exchangeRate).toFixed(0)})<br>
-• <strong>Etsy Kesintileri (~%10):</strong> ~$4.70<br>
-━━━━━━━━━━━━━━━━━━━━━━━━━━<br>
-💵 <strong>Tahmini Net Kâr:</strong> <strong style="color:#34d399;">$27.90 (₺${(27.90 * snap.exchangeRate).toFixed(0)})</strong><br>
-📈 <strong>Tahmini Net Kâr Marjı:</strong> <strong>+%62.1</strong><br>
-⭐ <strong>Satılabilirlik Skoru:</strong> <strong>8.8 / 10</strong> (Düşük kargo ağırlığı, yüksek algılanan değer).<br><br>
-💡 <em>Tavsiye: Ürüne 2 farklı boyut veya LED ışıklı varyasyon eklerseniz ortalama sepet tutarınızı $55+ seviyesine çıkarabilirsiniz.</em>`;
-    }
-
-    // 3. Profit, Revenue & Financial Breakdown
-    if (lower.includes('kâr') || lower.includes('kar') || lower.includes('ciro') || lower.includes('finans') || lower.includes('kazanç')) {
-      return `💰 <strong>Canlı Finans ve Kâr Raporu (${snap.period}):</strong><br><br>
-• <strong>Brüt Ciro:</strong> $${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})<br>
-• <strong>Etsy Platform Kesintisi:</strong> -$${snap.platformFeesUsd.toFixed(2)}<br>
-• <strong>Reklam Harcaması:</strong> -$${snap.totalAdsUsd.toFixed(2)} (İç: -$${snap.internalAdsUsd.toFixed(2)} | Dış: -$${snap.externalAdsUsd.toFixed(2)})<br>
-• <strong>İadeler:</strong> -$${snap.refundsUsd.toFixed(2)}<br>
-━━━━━━━━━━━━━━━━━━━━━━━━━━<br>
-💵 <strong>GERÇEK NET KÂR:</strong> <strong style="color: #34d399;">$${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})</strong><br>
-📈 <strong>Net Kâr Marjı:</strong> <strong>%${snap.netProfitMargin.toFixed(1)}</strong><br>
-🏦 <strong>Bankaya Aktarılan (Payout):</strong> ₺${snap.payoutsTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })}<br><br>
-<em>💡 Not: Tüm hesaplamalar anlık 1 USD = ${snap.exchangeRate.toFixed(2)} ₺ kuru ve VDS sunucu ödeme defteri üzerinden doğrulanmıştır.</em>`;
-    }
-
-    // 4. Missing Cost Orders
-    if (lower.includes('eksik') || lower.includes('maliyet') || lower.includes('gider')) {
-      if (snap.missingCostCount > 0) {
-        return `⚠️ <strong>Sipariş Maliyet Denetimi:</strong><br><br>
-Mağazanızda incelenen siparişlerden <strong>${snap.missingCostCount} tanesinde</strong> maliyet veya kargo gideri henüz tanımlanmamış:<br>
-${snap.missingCostOrders.map(o => `• <strong>${o}</strong>`).join('<br>')}<br><br>
-👉 <em>Çözüm: Bu siparişlerin maliyetlerini "Siparişler & Kargo" ekranından girdiğinizde net kârınız kuruşu kuruşuna kesinleşecektir.</em>`;
-      } else {
-        return `✅ <strong>Maliyet Denetimi Kusursuz!</strong><br><br>Bu ayki tüm siparişlerinizin hammadde ve kargo maliyetleri eksiksiz girilmiş durumdadır. Net kârınız %100 mutabakatlıdır.`;
-      }
-    }
-
-    // 5. Default Contextual Prompt with Notice
+    // Default
     return `Mağazanızın canlı verileri devrede: <strong>1 USD = ${snap.exchangeRate.toFixed(2)} ₺</strong> kuruyla bu ay toplam <strong>$${snap.grossSalesUsd.toFixed(2)}</strong> ciro ve <strong style="color:#34d399;">$${snap.netProfitUsd.toFixed(2)} (%${snap.netProfitMargin.toFixed(1)})</strong> net kâr elde edilmiştir.<br><br>
-💡 <em><strong>${provider} Canlı AI Zekası:</strong> ${provider} modeline özel derin analizler ve ürün değerlendirmeleri için sağ üstteki ⚙️ butonundan API anahtarınızı tanımlayabilirsiniz.</em>`;
+📎 <em>İpucu: Resim yapıştırabilir (Ctrl+V) ya da 📎 butonundan Excel tablosu veya PDF faturası ekleyebilirsiniz.</em>`;
   }
 
   private normalizeDeepSeekModel(model: string): string {
