@@ -218,6 +218,8 @@ public class EtsyFinancialsController : BaseApiController
             request.Notes,
             cancellationToken);
 
+        DashboardResponseCache.Clear();
+
         return Ok(new { success = true, receiptId, updated = true });
     }
 
