@@ -1504,7 +1504,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       .map(m => {
         return m
           .replace(/[&]/g, ' and ')
-          .replace(/[\/\\|_+()[\]{}*•"':;.,!?]/g, ' ')
+          .replace(/[\/\\|_+()[\]{}*•"':;.,!?\-–—]/g, ' ')
           .replace(/\s+/g, ' ')
           .trim();
       })

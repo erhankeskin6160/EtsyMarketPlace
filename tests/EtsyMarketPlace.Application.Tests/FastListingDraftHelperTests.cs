@@ -148,16 +148,35 @@ public sealed class FastListingDraftHelperTests
             Assert.DoesNotContain("%", mat);
             Assert.DoesNotContain("!", mat);
             Assert.DoesNotContain(",", mat);
+            Assert.DoesNotContain("-", mat);
             Assert.True(mat.Length <= 45);
         }
 
         // Check Turkish transliteration
         Assert.Contains(sanitized, m => m.Contains("Ahsap Gumus Dogal Tas"));
-        Assert.Contains(sanitized, m => m.Contains("Resin PLA Acrylic Paint UV-cured"));
+        Assert.Contains(sanitized, m => m.Contains("Resin PLA Acrylic Paint UV cured"));
         Assert.Contains(sanitized, m => m.Contains("Handmade 100 Cotton Linen"));
 
         // Duplicates removed
         Assert.Equal(3, sanitized.Count);
+    }
+
+    [Fact]
+    public void SanitizeMaterials_ConvertsHyphensToSpaces_ForEtsyCompliance()
+    {
+        var rawMaterials = new List<string>
+        {
+            "Eco-friendly Plastic",
+            "3D-Printed PLA",
+            "Bio-degradable Resin"
+        };
+
+        var sanitized = FastListingDraftHelper.SanitizeMaterials(rawMaterials);
+
+        Assert.Equal(3, sanitized.Count);
+        Assert.Equal("Eco friendly Plastic", sanitized[0]);
+        Assert.Equal("3D Printed PLA", sanitized[1]);
+        Assert.Equal("Bio degradable Resin", sanitized[2]);
     }
 
     [Fact]

@@ -243,8 +243,9 @@ public static class FastListingDraftHelper
             .Replace('.', ' ')
             .Replace('!', ' ')
             .Replace('?', ' ')
-            .Replace('–', '-')
-            .Replace('—', '-');
+            .Replace('-', ' ')
+            .Replace('–', ' ')
+            .Replace('—', ' ');
 
         // 3. Normalize FormD to decompose any other accented characters
         var normalized = mapped.Normalize(System.Text.NormalizationForm.FormD);
@@ -258,24 +259,24 @@ public static class FastListingDraftHelper
                 continue;
             }
 
-            // Etsy allows ONLY letters, digits, spaces, and hyphens
-            if (char.IsLetterOrDigit(ch) || ch == ' ' || ch == '-')
+            // Etsy allows ONLY letters, digits, and spaces in materials (hyphens trigger 400 invalid_characters)
+            if (char.IsLetterOrDigit(ch) || ch == ' ')
             {
                 builder.Append(ch);
             }
         }
 
-        // 4. Collapse multiple spaces and trim edge hyphens/spaces
+        // 4. Collapse multiple spaces and trim spaces
         var collapsed = string.Join(
             ' ',
             builder
                 .ToString()
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            .Trim('-', ' ');
+            .Trim();
 
         return collapsed.Length <= maxChars
             ? collapsed
-            : collapsed[..maxChars].TrimEnd('-', ' ');
+            : collapsed[..maxChars].TrimEnd();
     }
 
     /// <summary>

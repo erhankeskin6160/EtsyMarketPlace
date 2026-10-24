@@ -492,7 +492,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
             `• Perfect gift for aviation enthusiasts, collectors, and hobbyists.\n` +
             `• Carefully packaged with protective backing.\n` +
             `• Dispatched via trackable international shipping.`,
-          materials: ['PLA Filament', 'Eco-friendly Plastic', 'Handcrafted'],
+          materials: ['PLA Filament', 'Eco friendly Plastic', 'Handcrafted'],
           quantity: 15
         }, attachments) : of<ToolExecutionResult | null>(null);
 

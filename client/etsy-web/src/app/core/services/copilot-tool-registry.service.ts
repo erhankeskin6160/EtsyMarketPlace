@@ -227,7 +227,10 @@ export class CopilotToolRegistryService {
       quantity: Number(args.quantity) || 15,
       taxonomyId: Number(args.taxonomyId) > 0 ? Number(args.taxonomyId) : 1042,
       tags,
-      materials: Array.isArray(args.materials) ? args.materials : ['PLA Filament', 'Plastic'],
+      materials: (Array.isArray(args.materials) ? args.materials : (typeof args.materials === 'string' ? args.materials.split(/[,;\n]/) : ['PLA Filament', 'Plastic']))
+        .map((m: any) => String(m || '').replace(/[\/\\|_+()[\]{}*•"':;.,!?\-–—]/g, ' ').replace(/\s+/g, ' ').trim())
+        .filter((m: string) => m.length > 0)
+        .slice(0, 13),
       whoMade: 'i_did',
       whenMade: 'made_to_order',
       state: 'draft',
