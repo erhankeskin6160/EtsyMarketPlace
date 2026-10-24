@@ -445,23 +445,24 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
               });
             }
 
+            const sanitizedHistory = this.sanitizeHistoryForLlm(history);
             let reply$: Observable<AiResponseResult>;
             switch (provider) {
               case 'DeepSeek':
-                reply$ = this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                reply$ = this.callDeepSeek(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
                 break;
               case 'OpenAI':
-                reply$ = this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                reply$ = this.callOpenAi(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
                 break;
               case 'Claude':
-                reply$ = this.callClaude(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                reply$ = this.callClaude(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
                 break;
               case 'Grok':
-                reply$ = this.callGrok(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                reply$ = this.callGrok(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
                 break;
               case 'Gemini':
               default:
-                reply$ = this.callGemini(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, history, attachments, toolContext);
+                reply$ = this.callGemini(augmentedPrompt, systemPrompt, apiKey, activeModel, snap, sanitizedHistory, attachments, toolContext);
                 break;
             }
 
@@ -487,6 +488,25 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         );
       })
     );
+  }
+
+  /**
+   * Sanitizes conversation history before feeding to LLM APIs, removing obsolete
+   * or hallucinated statements where the assistant previously claimed it had no tools or MCP.
+   */
+  private sanitizeHistoryForLlm(
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
+  ): { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[] {
+    return history.map(item => {
+      if (item.role === 'assistant' && item.content) {
+        const cleaned = item.content
+          .replace(/❌\s*Hayır,?\s*MCP\s*şu\s*an\s*bana\s*bağlı\s*değil[^\n\.]*[\n\.]*/gi, '⚡ MCP ve Otonom Araç Motoru sisteme başarıyla bağlandı. ')
+          .replace(/MCP\s*(şu\s*an\s*)?(bana\s*)?bağlı\s*değil[^\n\.]*[\n\.]*/gi, 'MCP otonom araçları sisteme bağlıdır. ')
+          .replace(/bağlı\s*bir\s*MCP\s*yok[^\n\.]*[\n\.]*/gi, 'MCP araçları aktiftir. ');
+        return { ...item, content: cleaned };
+      }
+      return item;
+    });
   }
 
   public capitalizeWords(str: string): string {
