@@ -219,9 +219,13 @@ export class StoreAiAssistantService {
   }
 
   /**
-   * Automatically detects product keywords from user query or attachments.
+   * Automatically detects product keywords from user query, attachments, or conversation history.
    */
-  private extractSearchKeyword(userPrompt: string, attachments?: ChatAttachment[]): string {
+  private extractSearchKeyword(
+    userPrompt: string,
+    attachments?: ChatAttachment[],
+    sessionHistory?: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
+  ): string {
     const raw = (userPrompt || '').trim();
     const lower = raw.toLowerCase();
 
@@ -272,19 +276,49 @@ export class StoreAiAssistantService {
       }
     }
 
-    // 5. Default fallback to 3D print kit card niche
+    // 5. Check previous conversation history (for follow-up turns like "evet sonuç ne")
+    if (sessionHistory && sessionHistory.length > 0) {
+      const reversed = [...sessionHistory].reverse();
+      for (const turn of reversed) {
+        if (turn.attachments && turn.attachments.length > 0) {
+          for (const att of turn.attachments) {
+            const cleanName = (att.name || '')
+              .replace(/\.(png|jpg|jpeg|webp|gif|pdf|xlsx|xls|csv|txt)$/i, '')
+              .replace(/[_\-]+/g, ' ')
+              .replace(/\b(media|image|img|screenshot|foto|resim|belge|dosya|\d{5,})\b/gi, '')
+              .trim();
+            if (cleanName.length >= 3) {
+              return cleanName;
+            }
+          }
+        }
+        const histLower = (turn.content || '').toLowerCase();
+        if (histLower.includes('antonov')) return 'antonov plane kit card';
+        if (histLower.includes('omnitrix') || histLower.includes('ben 10')) return 'ben 10 omnitrix bracelet replica';
+        if (histLower.includes('jinx')) return 'arcane jinx rocket launcher';
+        if (histLower.includes('kit card')) return 'airplane kit card 3d print';
+        if (histLower.includes('uçak')) return 'airplane kit card 3d print';
+      }
+    }
+
+    // 6. Default fallback to 3D print kit card niche
     return '3d printed kit card';
   }
 
   /**
-   * Analyzes the user intent, and if it's a product inquiry or includes an attachment,
-   * automatically calls our live Market Search API and Carrier Shipping Quotes API.
+   * Analyzes the user intent, and if it's a product inquiry, follow-up query ("evet sonuç ne"),
+   * or includes an attachment, automatically calls our live Market Search API and Carrier Shipping Quotes API.
    */
-  public detectAndExecuteTools(userPrompt: string, attachments?: ChatAttachment[]): Observable<LiveToolContext | null> {
-    const lower = (userPrompt || '').toLowerCase();
+  public detectAndExecuteTools(
+    userPrompt: string,
+    attachments?: ChatAttachment[],
+    sessionHistory?: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
+  ): Observable<LiveToolContext | null> {
+    const raw = (userPrompt || '').trim();
+    const lower = raw.toLowerCase();
     const hasAttachments = Boolean(attachments && attachments.length > 0);
 
-    const isMarketInquiry = 
+    const isDirectInquiry = 
       lower.includes('satılır mı') || lower.includes('satilir mi') ||
       lower.includes('kaça satılır') || lower.includes('kaca satilir') ||
       lower.includes('kaça') || lower.includes('kaca') ||
@@ -296,11 +330,33 @@ export class StoreAiAssistantService {
       lower.includes('kazanirim') || lower.includes('marj') ||
       lower.includes('tavsiye') || hasAttachments;
 
-    if (!isMarketInquiry) {
+    // Detect follow-up queries: e.g. "evet sonuç ne", "ne çıktı", "sonuçları ver", "bekliyorum", "hadi", "çek bakalım"
+    const isFollowUp = 
+      lower.includes('sonuç ne') || lower.includes('sonuc ne') ||
+      lower.includes('ne çıktı') || lower.includes('ne cikti') ||
+      lower.includes('çıktı mı') || lower.includes('cikti mi') ||
+      lower.includes('sonuç') || lower.includes('sonuc') ||
+      lower.includes('sonuçları') || lower.includes('sonuclari') ||
+      lower.includes('bekliyorum') || lower.includes('hadi') ||
+      lower.includes('getir') || lower.includes('çek bakalım') || lower.includes('cek bakalim') ||
+      lower.includes('devam et') || (lower.includes('evet') && lower.length < 25);
+
+    // Check if previous assistant message promised live retrieval
+    const historyList = sessionHistory || this.conversationHistory;
+    const lastAssistantMsg = historyList && historyList.length > 0
+      ? [...historyList].reverse().find(m => m.role === 'assistant')
+      : null;
+    const prevPromised = lastAssistantMsg
+      ? (lastAssistantMsg.content.includes('çekiyorum') || lastAssistantMsg.content.includes('cekiyorum') ||
+         lastAssistantMsg.content.includes('araştırıyorum') || lastAssistantMsg.content.includes('hesaplıyorum') ||
+         lastAssistantMsg.content.includes('pazar ve kargo'))
+      : false;
+
+    if (!isDirectInquiry && !isFollowUp && !prevPromised) {
       return of(null);
     }
 
-    const keyword = this.extractSearchKeyword(userPrompt, attachments);
+    const keyword = this.extractSearchKeyword(userPrompt, attachments, historyList);
     const rate = this.etsyApi.exchangeRate() || 49.73;
 
     this.liveToolStatus.set(`🔍 Canlı Pazar Analizi ("${keyword}") ve Kargo Teklif Motoru sorgulanıyor...`);
@@ -340,7 +396,7 @@ export class StoreAiAssistantService {
     attachments?: ChatAttachment[],
     sessionHistory?: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
   ): Observable<AiResponseResult> {
-    return this.detectAndExecuteTools(userPrompt, attachments).pipe(
+    return this.detectAndExecuteTools(userPrompt, attachments, sessionHistory).pipe(
       switchMap(toolContext => {
         const settings = this.aiSettings.settings();
         const provider = settings.provider || 'DeepSeek';
@@ -978,8 +1034,9 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     if (toolContext) {
       toolSection = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🚨 CANLI MODÜL ÇIKTILARI (SİSTEM TARAFINDAN ARKA PLANDA ÇALIŞTIRILMIŞTIR):
-Bu veriler genel tahmin değildir! Doğrudan platformumuzun Etsy v3 Canlı Pazar Arama Modülü ve Taşıyıcı Kargo Motorundan (Navlungo/ShipEntegra/Aras) çekilmiştir. Yanıtında bu somut rakamları, canlı rakipleri ve kargo tekliflerini MUTLAKA referans vererek açıkla!
+🚨 CANLI MODÜL ÇIKTILARI (SİSTEM TARAFINDAN ARKA PLANDA ÇALIŞTIRILMIŞ VE ÖNÜNE KOYULMUŞTUR):
+Bu veriler genel tahmin değildir! Doğrudan platformumuzun Etsy v3 Canlı Pazar Arama Modülü ve Taşıyıcı Kargo Motorundan (Navlungo/ShipEntegra/Aras) ÇEKİLMİŞ VE HAZIRLANMIŞTIR.
+KESİN VE TAVİZSİZ TALİMAT: Asla "hemen çekiyorum", "araştırıyorum", "bakıyorum", "önüne koyacağım" diyerek lafı erteleme veya yarım bırakma! Veriler ZATEN AŞAĞIDA MEVCUTTUR. Doğrudan bu somut rakamları, canlı rakipleri, kargo tekliflerini ve net kâr dökümünü EKSİKSİZ TABLOLARLA VE MADDE MADDE HEMEN ŞİMDİ KULLANICIYA SUN!
 `;
 
       if (toolContext.marketResult) {

@@ -105,13 +105,18 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
           <!-- ATTACHMENTS IN USER MESSAGE -->
           <div *ngIf="msg.attachments && msg.attachments.length > 0" class="msg-attachments-wrap">
-            <div *ngFor="let att of msg.attachments" class="msg-att-item">
-              <img 
-                *ngIf="att.type === 'image' && att.dataUrl" 
-                [src]="att.dataUrl" 
-                class="msg-att-img" 
-                (click)="openImageModal(att.dataUrl)"
-                title="Görseli büyüt" />
+            <div *ngFor="let att of msg.attachments" class="att-card" [ngClass]="att.type">
+              <div *ngIf="att.type === 'image' && att.dataUrl" class="att-img-card" (click)="openImageModal(att.dataUrl)" title="Tam boyutta büyütmek için tıklayın">
+                <div class="att-img-viewport">
+                  <img [src]="att.dataUrl" class="att-thumb-contain" alt="Ekli Görsel" />
+                  <span class="att-zoom-badge">🔍 Büyüt</span>
+                </div>
+                <div class="att-card-footer">
+                  <span class="att-name-label" [title]="att.name">{{ att.name || 'Görsel.png' }}</span>
+                  <span class="att-size-label">{{ (att.size / 1024).toFixed(0) }} KB</span>
+                </div>
+              </div>
+
               <div *ngIf="att.type !== 'image'" class="msg-att-doc">
                 <span class="doc-icon">{{ att.type === 'excel' ? '📊' : (att.type === 'pdf' ? '📄' : '📝') }}</span>
                 <span class="doc-name">{{ att.name }}</span>
@@ -659,20 +664,86 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
     .msg-attachments-wrap {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 10px;
       margin-bottom: 8px;
     }
-    .msg-att-img {
-      max-width: 140px;
-      max-height: 100px;
-      object-fit: cover;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      cursor: pointer;
-      transition: transform 0.2s;
+    .att-card {
+      max-width: 100%;
     }
-    .msg-att-img:hover {
-      transform: scale(1.05);
+    .att-img-card {
+      display: flex;
+      flex-direction: column;
+      width: 190px;
+      background: #090e1a;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .att-img-card:hover {
+      transform: translateY(-2px);
+      border-color: #38bdf8;
+      box-shadow: 0 6px 18px rgba(56, 189, 248, 0.25);
+    }
+    .att-img-viewport {
+      width: 100%;
+      height: 120px;
+      position: relative;
+      background: #050811;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 4px;
+    }
+    .att-thumb-contain {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain; /* NEVER CROPS OR DISTORTS - KESİNLİKLE KIRPMAZ VEYA BOZMAZ */
+      display: block;
+      border-radius: 4px;
+    }
+    .att-zoom-badge {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      color: #38bdf8;
+      font-size: 0.65rem;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .att-img-card:hover .att-zoom-badge {
+      opacity: 1;
+    }
+    .att-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      background: #0f172a;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.68rem;
+    }
+    .att-name-label {
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #e2e8f0;
+      font-weight: 500;
+    }
+    .att-size-label {
+      color: #94a3b8;
     }
     .msg-att-doc {
       display: inline-flex;
