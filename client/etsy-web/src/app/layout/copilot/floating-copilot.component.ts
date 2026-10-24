@@ -1193,9 +1193,9 @@ export class FloatingCopilotComponent implements OnInit {
     // 3. EXCEL (.xlsx, .xls)
     if (name.endsWith('.xlsx') || name.endsWith('.xls') || mime.includes('spreadsheet') || mime.includes('excel')) {
       const reader = new FileReader();
-      reader.onload = (e: any) => {
+      reader.onload = async (e: any) => {
         const buffer = e.target.result as ArrayBuffer;
-        const extracted = this.extractTextFromBinary(buffer, file.name);
+        const extracted = await this.extractTextFromBinary(buffer, file.name);
         this.pendingAttachments.push({
           id: 'att_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
           name: file.name,
@@ -1614,8 +1614,64 @@ Size nasıl yardımcı olabilirim?<br>
     return `[PDF Belgesi Eklendi: ${fileName}]`;
   }
 
-  private extractTextFromBinary(buffer: ArrayBuffer, fileName: string): string {
+  private async extractTextFromBinary(buffer: ArrayBuffer, fileName: string): Promise<string> {
     try {
+      const zipEntries = await this.readZipEntries(buffer);
+      const sharedStringsXml = zipEntries.get('xl/sharedStrings.xml') || '';
+      const sheetXml = zipEntries.get('xl/worksheets/sheet1.xml') || '';
+      if (sheetXml) {
+        const sharedStrings: string[] = [];
+        const siRegex = /<si[^>]*>([\s\S]*?)<\/si>/g;
+        let siMatch;
+        while ((siMatch = siRegex.exec(sharedStringsXml)) !== null) {
+          const tRegex = /<t[^>]*>([\s\S]*?)<\/t>/g;
+          let tMatch;
+          const parts: string[] = [];
+          while ((tMatch = tRegex.exec(siMatch[1])) !== null) {
+            parts.push(tMatch[1]);
+          }
+          sharedStrings.push(parts.join(''));
+        }
+        const rows: string[][] = [];
+        const rowRegex = /<row[^>]*>([\s\S]*?)<\/row>/g;
+        let rMatch;
+        while ((rMatch = rowRegex.exec(sheetXml)) !== null) {
+          const rowCells: string[] = [];
+          const cRegex = /<c\s+([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
+          let cMatch;
+          while ((cMatch = cRegex.exec(rMatch[1])) !== null) {
+            const attrs = cMatch[1] || '';
+            const inner = cMatch[2] || '';
+            const typeMatch = attrs.match(/\bt="([^"]+)"/);
+            const cellType = typeMatch ? typeMatch[1] : '';
+            const vMatch = inner.match(/<v[^>]*>([\s\S]*?)<\/v>/);
+            const tMatch = inner.match(/<t[^>]*>([\s\S]*?)<\/t>/);
+            let val = '';
+            if (cellType === 's' && vMatch) {
+              const idx = parseInt(vMatch[1], 10);
+              val = sharedStrings[idx] ?? vMatch[1];
+            } else if (tMatch) {
+              val = tMatch[1];
+            } else if (vMatch) {
+              val = vMatch[1];
+            }
+            rowCells.push(val.replace(/\|/g, '/').trim());
+          }
+          if (rowCells.some(c => c.length > 0)) {
+            rows.push(rowCells);
+          }
+        }
+        if (rows.length > 0) {
+          const header = rows[0];
+          let md = `[Excel Tablosu: ${fileName} — Toplam ${rows.length - 1} Satır]\n`;
+          md += '| ' + header.join(' | ') + ' |\n';
+          md += '| ' + header.map(() => '---').join(' | ') + ' |\n';
+          for (let i = 1; i < Math.min(rows.length, 60); i++) {
+            md += '| ' + rows[i].join(' | ') + ' |\n';
+          }
+          return md.substring(0, 8000);
+        }
+      }
       const decoder = new TextDecoder('utf-8', { fatal: false });
       const raw = decoder.decode(buffer);
 
@@ -1635,5 +1691,55 @@ Size nasıl yardımcı olabilirim?<br>
       }
     } catch {}
     return `[Excel Belgesi Eklendi: ${fileName}]`;
+  }
+
+  private async readZipEntries(buffer: ArrayBuffer): Promise<Map<string, string>> {
+    const result = new Map<string, string>();
+    const bytes = new Uint8Array(buffer);
+    const view = new DataView(buffer);
+    const decoder = new TextDecoder('utf-8');
+
+    let eocdOffset = -1;
+    for (let i = bytes.length - 22; i >= 0; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) {
+        eocdOffset = i;
+        break;
+      }
+    }
+    if (eocdOffset < 0) return result;
+
+    const cdCount = view.getUint16(eocdOffset + 10, true);
+    let cdOffset = view.getUint32(eocdOffset + 16, true);
+
+    for (let entry = 0; entry < cdCount; entry++) {
+      if (view.getUint32(cdOffset, true) !== 0x02014b50) break;
+      const compression = view.getUint16(cdOffset + 10, true);
+      const compSize = view.getUint32(cdOffset + 20, true);
+      const nameLen = view.getUint16(cdOffset + 28, true);
+      const extraLen = view.getUint16(cdOffset + 30, true);
+      const commentLen = view.getUint16(cdOffset + 32, true);
+      const localHeaderOffset = view.getUint32(cdOffset + 42, true);
+      const entryName = decoder.decode(bytes.subarray(cdOffset + 46, cdOffset + 46 + nameLen));
+      cdOffset += 46 + nameLen + extraLen + commentLen;
+
+      if (!entryName.endsWith('.xml')) continue;
+      const localNameLen = view.getUint16(localHeaderOffset + 26, true);
+      const localExtraLen = view.getUint16(localHeaderOffset + 28, true);
+      const dataStart = localHeaderOffset + 30 + localNameLen + localExtraLen;
+      const compData = bytes.subarray(dataStart, dataStart + compSize);
+
+      if (compression === 0) {
+        result.set(entryName, decoder.decode(compData));
+      } else if (compression === 8 && typeof DecompressionStream !== 'undefined') {
+        const ds = new DecompressionStream('deflate-raw');
+        const writer = ds.writable.getWriter();
+        writer.write(compData);
+        writer.close();
+        const resp = new Response(ds.readable);
+        const text = await resp.text();
+        result.set(entryName, text);
+      }
+    }
+    return result;
   }
 }

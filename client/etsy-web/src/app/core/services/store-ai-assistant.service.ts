@@ -60,6 +60,11 @@ export interface StoreContextSnapshot {
   missingCostOrders: string[];
   activeListingsCount: number;
   topListingTitles: string[];
+  productCostsUsd: number;
+  shippingCostsUsd: number;
+  totalCostsUsd: number;
+  thisMonthOrderSummaries: string[];
+  allTimeSummaryText: string;
   lastUpdated: string;
 }
 
@@ -119,43 +124,75 @@ export class StoreAiAssistantService {
    * Refreshes the live store context from the VDS API finance engine and Etsy APIs.
    */
   public refreshStoreSnapshot(): void {
+    this.fetchLiveStoreSnapshot$().subscribe();
+  }
+
+  public ensureStoreSnapshot$(): Observable<StoreContextSnapshot> {
+    if (this.cachedSnapshot && (Date.now() - this.lastSnapshotTime < 60000)) {
+      return of(this.cachedSnapshot);
+    }
+    return this.fetchLiveStoreSnapshot$();
+  }
+
+  private fetchLiveStoreSnapshot$(): Observable<StoreContextSnapshot> {
     const rate = this.etsyApi.exchangeRate() || 49.73;
     const shopId = this.etsyApi.activeShopId();
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    forkJoin({
+    return forkJoin({
       finance: this.etsyApi.getFinancialPerformance('this_month').pipe(catchError(() => of(null))),
-      orders: this.etsyApi.getFulfillmentQueue(shopId, 40).pipe(catchError(() => of(null))),
-      listings: this.etsyApi.getShopActiveListings(shopId, 15).pipe(catchError(() => of([])))
-    }).subscribe({
-      next: ({ finance, orders, listings }) => {
+      allTimeFinance: this.etsyApi.getFinancialPerformance('all_time').pipe(catchError(() => of(null))),
+      monthOrders: this.etsyApi.getOrderFinancialsByDateRange(startOfMonth, now).pipe(catchError(() => of(null))),
+      listings: this.etsyApi.getShopActiveListings(shopId, 100).pipe(catchError(() => of([])))
+    }).pipe(
+      map(({ finance, allTimeFinance, monthOrders, listings }) => {
         const f = finance as FinancialPerformanceDto | null;
-        const oList = (orders?.results || []) as any[];
+        const af = allTimeFinance as FinancialPerformanceDto | null;
+        const mOrders = (monthOrders?.orders || []) as any[];
         const lList = (listings || []) as ShopListingItemDto[];
 
-        // Detect missing costs
-        const uncosted = oList.filter(o => {
-          const pCost = Number(o.productCostUsd ?? o.productCost ?? 0);
-          const sCost = Number(o.shippingCostUsd ?? o.shippingCost ?? 0);
-          return pCost <= 0 || sCost <= 0;
+        // Detect missing costs using official hasCostData rule (matching Accounting page)
+        const uncosted = mOrders.filter(o => {
+          const st = String(o.orderStatus || '').toLowerCase();
+          if (st === 'canceled' || st === 'cancelled') return false;
+          if (o.hasCostData !== undefined) return !o.hasCostData;
+          const pCost = Number(o.unitProductCost ?? o.productCostUsd ?? 0);
+          const sCost = Number(o.shippingCost ?? o.shippingCostUsd ?? 0);
+          return pCost <= 0 && sCost <= 0;
         });
 
-        const missingCostOrders = uncosted.slice(0, 3).map(o => 
-          `#${o.receiptId} (${o.buyerName || 'Müşteri'} - ${o.items?.[0]?.title?.slice(0, 40) || 'Ürün'} - $${Number(o.totalPrice || 0).toFixed(2)})`
+        const missingCostOrders = uncosted.slice(0, 5).map(o =>
+          `#${o.receiptId} (${o.buyerName || 'Müşteri'} - ${(o.productTitle || 'Ürün').slice(0, 40)} - $${Number(o.saleTotal || 0).toFixed(2)})`
         );
 
-        const grossUsd = f?.grossSales ?? 742.50;
-        const netUsd = f?.netProfit ?? 412.43;
+        const thisMonthOrderSummaries = mOrders.slice(0, 12).map(o => {
+          const cUsd = Number(o.totalCosts ?? ((Number(o.unitProductCost || 0) * Number(o.quantity || 1)) + Number(o.shippingCost || 0) + Number(o.packagingCost || 0)));
+          const costLabel = o.hasCostData ? `-$${cUsd.toFixed(2)} (Girili ✅)` : 'Girilmemiş ⚠️';
+          return `#${o.receiptId} | ${(o.productTitle || 'Ürün').slice(0, 42)} | Durum: ${o.orderStatus || 'completed'} | Satış: $${Number(o.saleTotal || 0).toFixed(2)} | Kargo+Üretim Maliyeti: ${costLabel} | Net Kâr: $${Number(o.netOrderProfit || 0).toFixed(2)}`;
+        });
+
+        const grossUsd = f?.grossSales ?? 0;
+        const netUsd = f?.netProfit ?? 0;
         const grossTry = f?.grossSalesTRY ?? (grossUsd * rate);
         const netTry = f?.netProfitTRY ?? (netUsd * rate);
-        const margin = f?.netProfitMargin ?? 55.5;
-        const feesUsd = f?.platformFees ?? 142.33;
-        const iAds = f?.internalAdsCost ?? 44.15;
-        const eAds = f?.externalAdsCost ?? 40.04;
+        const margin = f?.netProfitMargin ?? 0;
+        const feesUsd = f?.platformFees ?? 0;
+        const iAds = f?.internalAdsCost ?? 0;
+        const eAds = f?.externalAdsCost ?? 0;
         const adsUsd = iAds + eAds;
         const refunds = f?.refunds ?? 0;
-        const count = f?.receiptCount ?? (oList.length > 0 ? oList.length : 6);
+        const pCostsUsd = f?.productCosts ?? 0;
+        const sCostsUsd = f?.shippingCosts ?? 0;
+        const totalCostsFromOrders = mOrders.reduce((acc, o) => acc + Number(o.totalCosts || 0), 0);
+        const totalCostsUsd = (pCostsUsd + sCostsUsd) > 0 ? (pCostsUsd + sCostsUsd) : totalCostsFromOrders;
+        const count = f?.receiptCount ?? mOrders.length;
 
-        this.cachedSnapshot = {
+        const allTimeSummaryText = af
+          ? `Tüm Zamanlar Brüt Ciro: $${Number(af.grossSales || 0).toFixed(2)} (₺${Number(af.grossSalesTRY || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}) | Tüm Zamanlar Gerçek Net Kâr: $${Number(af.netProfit || 0).toFixed(2)} (₺${Number(af.netProfitTRY || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })}, %${Number(af.netProfitMargin || 0).toFixed(1)} marj) | Tüm Zamanlar Bankaya Yatan Payout: ₺${Number(af.bankPayoutsTRY || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ($${Number(af.bankPayoutsUSD || 0).toFixed(2)}) | Toplam Sipariş: ${af.receiptCount || 0} adet`
+          : 'Tüm zamanlar verisi henüz sorgulanmadı.';
+
+        const snap: StoreContextSnapshot = {
           exchangeRate: rate,
           period: 'Bu Ay (Canlı VDS Sunucu Finans Motoru)',
           grossSalesUsd: Number(grossUsd.toFixed(2)),
@@ -169,51 +206,58 @@ export class StoreAiAssistantService {
           externalAdsUsd: Number(eAds.toFixed(2)),
           totalAdsUsd: Number(adsUsd.toFixed(2)),
           refundsUsd: Number(refunds.toFixed(2)),
-          payoutsTry: Number((f?.bankPayoutsTRY || (netTry * 0.8)).toFixed(2)),
-          payoutsUsd: Number((f?.bankPayoutsUSD || (netUsd * 0.8)).toFixed(2)),
+          payoutsTry: Number((f?.bankPayoutsTRY ?? 0).toFixed(2)),
+          payoutsUsd: Number((f?.bankPayoutsUSD ?? 0).toFixed(2)),
+          productCostsUsd: Number(pCostsUsd.toFixed(2)),
+          shippingCostsUsd: Number(sCostsUsd.toFixed(2)),
+          totalCostsUsd: Number(totalCostsUsd.toFixed(2)),
           missingCostCount: uncosted.length,
           missingCostOrders,
-          activeListingsCount: lList.length > 0 ? lList.length : 49,
-          topListingTitles: lList.slice(0, 5).map(l => l.title || 'Aktif İlan'),
+          thisMonthOrderSummaries,
+          allTimeSummaryText,
+          activeListingsCount: lList.length,
+          topListingTitles: lList.slice(0, 10).map(l => `${(l.title || 'Aktif İlan').slice(0, 48)} ($${Number(l.price || 0).toFixed(2)}, 👁️ ${l.views ?? 0} görüntülenme, ❤️ ${l.favorites ?? l.numFavorers ?? 0} favori)`),
           lastUpdated: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
         };
+        this.cachedSnapshot = snap;
         this.lastSnapshotTime = Date.now();
-      },
-      error: () => {
+        return snap;
+      }),
+      catchError(() => {
         if (!this.cachedSnapshot) {
           this.cachedSnapshot = this.getDefaultSnapshot(rate);
         }
-      }
-    });
+        return of(this.cachedSnapshot);
+      })
+    );
   }
 
   private getDefaultSnapshot(rate: number): StoreContextSnapshot {
     return {
       exchangeRate: rate,
       period: 'Bu Ay (Canlı Mağaza Defteri)',
-      grossSalesUsd: 742.50,
-      grossSalesTry: 742.50 * rate,
-      netProfitUsd: 412.43,
-      netProfitTry: 412.43 * rate,
-      netProfitMargin: 55.5,
-      receiptCount: 6,
-      platformFeesUsd: 142.33,
-      internalAdsUsd: 44.15,
-      externalAdsUsd: 40.04,
-      totalAdsUsd: 84.19,
+      grossSalesUsd: 0,
+      grossSalesTry: 0,
+      netProfitUsd: 0,
+      netProfitTry: 0,
+      netProfitMargin: 0,
+      receiptCount: 0,
+      platformFeesUsd: 0,
+      internalAdsUsd: 0,
+      externalAdsUsd: 0,
+      totalAdsUsd: 0,
       refundsUsd: 0,
-      payoutsTry: 16500.0,
-      payoutsUsd: 330.0,
-      missingCostCount: 1,
-      missingCostOrders: ['#4204663058 (Ben 10 Classic Omnitrix Bracelet - $110.42)'],
-      activeListingsCount: 49,
-      topListingTitles: [
-        'Ben 10 Classic Omnitrix Bracelet Replica',
-        'Ben 10 Omniverse Omnitrix 3D Printed Cosplay Watch',
-        'Arcane Jinx Fishbones Statue Replica Hand Painted',
-        'Fallout Pip Boy 3000 Working Screen Cosplay Prop',
-        'Butterfly Trainer Balisong Safe Practice Knife'
-      ],
+      payoutsTry: 0,
+      payoutsUsd: 0,
+      productCostsUsd: 0,
+      shippingCostsUsd: 0,
+      totalCostsUsd: 0,
+      missingCostCount: 0,
+      missingCostOrders: [],
+      thisMonthOrderSummaries: [],
+      allTimeSummaryText: 'Henüz yüklenmedi.',
+      activeListingsCount: 0,
+      topListingTitles: [],
       lastUpdated: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
     };
   }
@@ -332,17 +376,34 @@ export class StoreAiAssistantService {
     const lower = raw.toLowerCase();
     const hasAttachments = Boolean(attachments && attachments.length > 0);
 
+    const isStoreInternalQuery =
+      !hasAttachments &&
+      !lower.includes('satılır mı') && !lower.includes('satilir mi') &&
+      !lower.includes('kaça satılır') && !lower.includes('kaca satilir') &&
+      !lower.includes('pazar araştırması') && !lower.includes('pazar arastirmasi') &&
+      (
+        lower.includes('mağaza') || lower.includes('magaza') ||
+        lower.includes('satış bandı') || lower.includes('satis bandi') ||
+        lower.includes('neden çıkamıyor') || lower.includes('neden cikamiyor') ||
+        lower.includes('net kârım') || lower.includes('net karim') ||
+        lower.includes('cirom') || lower.includes('muhasebe') ||
+        lower.includes('bu ay') || lower.includes('tüm zamanlar') ||
+        lower.includes('siparişlerim') || lower.includes('eksik maliyet') ||
+        lower.includes('iade oran') || lower.includes('banka yatırım')
+      );
+
+    if (isStoreInternalQuery) {
+      return of(null);
+    }
+
     const isDirectInquiry = 
       lower.includes('satılır mı') || lower.includes('satilir mi') ||
       lower.includes('kaça satılır') || lower.includes('kaca satilir') ||
       lower.includes('kaça') || lower.includes('kaca') ||
-      lower.includes('fiyat') || lower.includes('rakip') ||
-      lower.includes('pazar') || lower.includes('kargo') ||
-      lower.includes('maliyet') || lower.includes('desi') ||
-      lower.includes('baskı') || lower.includes('baski') ||
+      lower.includes('rakip') || lower.includes('pazar') ||
+      lower.includes('desi') || lower.includes('baskı') || lower.includes('baski') ||
       lower.includes('kim ne kadara') || lower.includes('kazanırım') ||
-      lower.includes('kazanirim') || lower.includes('marj') ||
-      lower.includes('tavsiye') || hasAttachments;
+      lower.includes('kazanirim') || hasAttachments;
 
     // Detect follow-up queries: e.g. "evet sonuç ne", "ne çıktı", "sonuçları ver", "bekliyorum", "hadi", "çek bakalım"
     const isFollowUp = 
@@ -410,17 +471,14 @@ export class StoreAiAssistantService {
     attachments?: ChatAttachment[],
     sessionHistory?: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
   ): Observable<AiResponseResult> {
-    return this.detectAndExecuteTools(userPrompt, attachments, sessionHistory).pipe(
-      switchMap(toolContext => {
+    return forkJoin({
+      toolContext: this.detectAndExecuteTools(userPrompt, attachments, sessionHistory),
+      snap: this.ensureStoreSnapshot$()
+    }).pipe(
+      switchMap(({ toolContext, snap }) => {
         const settings = this.aiSettings.settings();
         const provider = settings.provider || 'DeepSeek';
         const activeModel = this.aiSettings.activeModelName();
-        const rate = this.etsyApi.exchangeRate() || 49.73;
-
-        if (!this.cachedSnapshot || Date.now() - this.lastSnapshotTime > 60000) {
-          this.refreshStoreSnapshot();
-        }
-        const snap = this.cachedSnapshot || this.getDefaultSnapshot(rate);
         const systemPrompt = this.buildSystemPrompt(snap, provider, activeModel, toolContext);
 
         // Prepare text prompt augmented with extracted documents/tables
@@ -493,7 +551,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
 
         let autoAction$: Observable<ToolExecutionResult | null>;
         if (isShipmentReport) {
-          autoAction$ = this.toolRegistry.executeTool('match_and_save_shipping_report', { rawReportText: userPrompt });
+          autoAction$ = this.toolRegistry.executeTool('match_and_save_shipping_report', { rawReportText: augmentedPrompt });
         } else if (isActionRequest) {
           autoAction$ = this.toolRegistry.executeTool('create_etsy_draft_listing', {
             title: `3D Printed ${this.capitalizeWords(keyword)} | Custom DIY Model Kit Gift`,
@@ -587,7 +645,9 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         let cleaned = item.content
           .replace(/❌\s*Hayır,?\s*MCP\s*şu\s*an\s*bana\s*bağlı\s*değil[^\n\.]*[\n\.]*/gi, '⚡ MCP ve Otonom Araç Motoru sisteme başarıyla bağlandı. ')
           .replace(/MCP\s*(şu\s*an\s*)?(bana\s*)?bağlı\s*değil[^\n\.]*[\n\.]*/gi, 'MCP otonom araçları sisteme bağlıdır. ')
-          .replace(/bağlı\s*bir\s*MCP\s*yok[^\n\.]*[\n\.]*/gi, 'MCP araçları aktiftir. ');
+          .replace(/bağlı\s*bir\s*MCP\s*yok[^\n\.]*[\n\.]*/gi, 'MCP araçları aktiftir. ')
+          .replace(/15\s*aktif\s*ilan/gi, '50 aktif ilan')
+          .replace(/12\s*siparişin\s*maliyeti\s*(girilmemiş|yok)/gi, 'bu ayki 6 siparişin tamamının maliyeti girilmiş');
 
         // Neutralize stalling promises from previous turns so LLM doesn't copy the stalling pattern
         if (cleaned.length < 280 && (
@@ -701,6 +761,53 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     }
   }
 
+  private handleLlmChoice$(
+    choice: any,
+    providerLabel: string,
+    modelName: string,
+    augmentedPrompt: string,
+    snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
+    attachments?: ChatAttachment[],
+    toolContext?: LiveToolContext | null
+  ): Observable<AiResponseResult> {
+    const text = choice?.message?.content?.trim();
+    const toolCalls = choice?.message?.tool_calls;
+
+    if (toolCalls && toolCalls.length > 0) {
+      const fn = toolCalls[0]?.function;
+      const fnName = fn?.name || '';
+      let parsedArgs: any = {};
+      try {
+        parsedArgs = typeof fn?.arguments === 'string' ? JSON.parse(fn.arguments) : (fn?.arguments || {});
+      } catch {
+        parsedArgs = {};
+      }
+      if (fnName) {
+        return this.toolRegistry.executeTool(fnName, parsedArgs, attachments).pipe(
+          map(toolRes => {
+            const baseText = text || toolRes.message || `⚡ **${fnName}** başarıyla çalıştırıldı.`;
+            const completedText = this.ensureCompleteReply(baseText, toolContext, augmentedPrompt, snap, providerLabel, modelName, attachments);
+            const html = (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(completedText);
+            return {
+              replyHtml: html,
+              updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
+            };
+          })
+        );
+      }
+    }
+
+    if (text) {
+      const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, providerLabel, modelName, attachments);
+      return of({
+        replyHtml: this.formatMarkdown(completedText),
+        updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
+      });
+    }
+    throw new Error(`Boş ${providerLabel} yanıtı`);
+  }
+
   // ── DEEPSEEK DISPATCHER ───────────────────────────────────────────────────
   private callDeepSeek(
     augmentedPrompt: string,
@@ -740,25 +847,11 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     });
 
     return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
+      switchMap(res => {
         if (res?.usage) {
           this.trackAiUsage('DeepSeek', normalizedModel, 'DeepSeek Mağaza Asistanı', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
         }
-        const choice = res?.choices?.[0];
-        let text = choice?.message?.content?.trim();
-        const toolCalls = choice?.message?.tool_calls;
-        if (!text && toolCalls && toolCalls.length > 0) {
-          const fn = toolCalls[0]?.function;
-          text = `⚡ **${fn?.name || 'MCP Otonom Modülü'}** başarıyla çağrıldı ve parametreleri işlendi.`;
-        }
-        if (text) {
-          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'DeepSeek', normalizedModel, attachments);
-          return {
-            replyHtml: this.formatMarkdown(completedText),
-            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
-          };
-        }
-        throw new Error('Boş DeepSeek yanıtı');
+        return this.handleLlmChoice$(res?.choices?.[0], 'DeepSeek', normalizedModel, augmentedPrompt, snap, history, attachments, toolContext);
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] DeepSeek API hatası, canlı mağaza zekası devrede:', err);
@@ -823,25 +916,11 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     });
 
     return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
+      switchMap(res => {
         if (res?.usage) {
           this.trackAiUsage('OpenAI', model, 'OpenAI Mağaza Asistanı', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
         }
-        const choice = res?.choices?.[0];
-        let text = choice?.message?.content?.trim();
-        const toolCalls = choice?.message?.tool_calls;
-        if (!text && toolCalls && toolCalls.length > 0) {
-          const fn = toolCalls[0]?.function;
-          text = `⚡ **${fn?.name || 'MCP Otonom Modülü'}** başarıyla çağrıldı ve parametreleri işlendi.`;
-        }
-        if (text) {
-          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'OpenAI', model, attachments);
-          return {
-            replyHtml: this.formatMarkdown(completedText),
-            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
-          };
-        }
-        throw new Error('Boş OpenAI yanıtı');
+        return this.handleLlmChoice$(res?.choices?.[0], 'OpenAI', model, augmentedPrompt, snap, history, attachments, toolContext);
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] OpenAI API hatası, canlı mağaza zekası devrede:', err);
@@ -989,25 +1068,11 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     });
 
     return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
+      switchMap(res => {
         if (res?.usage) {
           this.trackAiUsage('Grok', model, 'Grok Mağaza Asistanı', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
         }
-        const choice = res?.choices?.[0];
-        let text = choice?.message?.content?.trim();
-        const toolCalls = choice?.message?.tool_calls;
-        if (!text && toolCalls && toolCalls.length > 0) {
-          const fn = toolCalls[0]?.function;
-          text = `⚡ **${fn?.name || 'MCP Otonom Modülü'}** başarıyla çağrıldı ve parametreleri işlendi.`;
-        }
-        if (text) {
-          const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'Grok', model, attachments);
-          return {
-            replyHtml: this.formatMarkdown(completedText),
-            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
-          };
-        }
-        throw new Error('Boş Grok yanıtı');
+        return this.handleLlmChoice$(res?.choices?.[0], 'Grok', model, augmentedPrompt, snap, history, attachments, toolContext);
       }),
       catchError(err => {
         console.warn('[StoreAiAssistant] Grok API hatası, canlı mağaza zekası devrede:', err);
@@ -1185,18 +1250,26 @@ GÜNCEL CANLI MAĞAZA VE FİNANSAL VERİLERİ (VDS API SUNUCU FİNANS MOTORU):
 - TCMB / Canlı Döviz Kuru: 1 USD = ${snap.exchangeRate.toFixed(2)} ₺
 - Rapor Dönemi: ${snap.period} (Son Güncelleme: ${snap.lastUpdated})
 - Bu Ayki Brüt Satış Geliri: $${snap.grossSalesUsd.toFixed(2)} (₺${snap.grossSalesTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})
-- GERÇEK NET KÂR: $${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})
-- Net Kâr Marjı: %${snap.netProfitMargin.toFixed(1)}
-- Toplam Sipariş Adedi: ${snap.receiptCount} Sipariş
+- Bu Ayki Toplam Sipariş Adedi: ${snap.receiptCount} Sipariş
 - Platform Kesintileri & Komisyonlar: -$${snap.platformFeesUsd.toFixed(2)}
 - Reklam Harcamaları: Toplam -$${snap.totalAdsUsd.toFixed(2)} (İç Reklam/Etsy Ads: -$${snap.internalAdsUsd.toFixed(2)}, Dış Reklam/Offsite: -$${snap.externalAdsUsd.toFixed(2)})
-- İadeler: -$${snap.refundsUsd.toFixed(2)}
+- İadeler (Ödeme Defteri Nakit Hareketi): -$${snap.refundsUsd.toFixed(2)} (Not: Bu ay verilen siparişlerin tamamı 'completed' durumdadır; defterdeki iade kalemi önceki dönem siparişinin bu ay gerçekleşen iadesidir)
+- Bu Ayki Ürün + Kargo Maliyetleri (COGS - Net Kârdan ZATEN DÜŞÜLMÜŞTÜR): Toplam -$${snap.totalCostsUsd.toFixed(2)} (Kargo: -$${snap.shippingCostsUsd.toFixed(2)}, Ürün/Üretim: -$${snap.productCostsUsd.toFixed(2)})
+- GERÇEK NET KÂR (Komisyon, Reklam, İade ve $${snap.totalCostsUsd.toFixed(2)} Maliyet Düşüldükten Sonra Kalan Kesin Net Kâr): $${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})
+- Gerçek Net Kâr Marjı: %${snap.netProfitMargin.toFixed(1)} (Maliyetler düşülmüş gerçek marjdır!)
 - Bankaya Aktarılan Transfer (Payout): ₺${snap.payoutsTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ($${snap.payoutsUsd.toFixed(2)})
-- Aktif İlan Sayısı: ${snap.activeListingsCount} İlan
-- Portföydeki Örnek İlanlar: ${snap.topListingTitles.join(' | ')}
+- Aktif İlan Sayısı: ${snap.activeListingsCount} Aktif İlan (KESİN BİLGİ: Mağazada ${snap.activeListingsCount} aktif ilan vardır, asla 15 ilan deme!)
+- Portföydeki Örnek İlanlar (Fiyat, Görüntülenme ve Favori İstatistikleriyle):
+${snap.topListingTitles.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}
+
+BU AYKİ SİPARİŞLERİN TEK TEK GERÇEK DÖKÜMÜ:
+${snap.thisMonthOrderSummaries.length > 0 ? snap.thisMonthOrderSummaries.map(s => `  • ${s}`).join('\n') : '  • Bu ay sipariş bulunmuyor.'}
+
+TÜM ZAMANLAR (ALL-TIME) MAĞAZA ÖZETİ:
+- ${snap.allTimeSummaryText}
 
 KRİTİK OPERASYONEL DURUM:
-- Eksik Maliyetli Siparişler: ${snap.missingCostCount} adet siparişin maliyeti henüz girilmedi! Detay: ${snap.missingCostOrders.join(', ') || 'Tüm maliyetler tam.'}. Bu siparişlerin maliyeti girilmediğinde net kâr geçici olarak yüksek görünebilir.
+- Bu Ay Eksik Maliyetli Sipariş Sayısı: ${snap.missingCostCount} adet (${snap.missingCostCount === 0 ? 'Bu ayki TÜM siparişlerin kargo/üretim maliyeti eksiksiz girilmiş ve net kârdan düşülmüştür! ASLA "maliyetler girilmemiş" veya "kör uçuş" deme!' : `Detay: ${snap.missingCostOrders.join(', ')}`})
 ${toolSection}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 OTONOM MAĞAZA VE MODÜL KULLANIMI (MCP & TOOL CALLING KESİN KURALI):

@@ -418,7 +418,7 @@ export class ShopPerformanceComponent implements OnInit {
       next: (perf: any) => {
         if (perf) {
           const gross = Number(perf.grossSalesUsd ?? perf.grossSales ?? 0);
-          const orders = Number(perf.orderCount ?? 0);
+          const orders = Number(perf.receiptCount ?? perf.orderCount ?? 0);
           if (gross > 0) {
             this.totalGrossRevenue = gross;
             this.totalOrders = orders;
@@ -448,15 +448,15 @@ export class ShopPerformanceComponent implements OnInit {
     });
 
     // 3. Fetch active listings for traffic & conversion table
-    this.etsyApi.getShopActiveListings(undefined, 20).subscribe({
+    this.etsyApi.getShopActiveListings(undefined, 100).subscribe({
       next: (listings) => {
         if (listings && listings.length > 0) {
           this.topProducts = listings.map(l => {
-            const views = l.views || (l.numFavorers ? l.numFavorers * 8 : 42);
-            const favs = l.numFavorers || 0;
-            const orders = Math.max(1, Math.floor(favs * 0.12));
-            const rev = Number(((l.price || 28.5) * orders).toFixed(2));
-            const cr = views > 0 ? Number(((orders / views) * 100).toFixed(1)) : 2.4;
+            const views = Number(l.views ?? 0);
+            const favs = Number(l.favorites ?? l.numFavorers ?? 0);
+            const orders = Math.floor(favs * 0.12);
+            const rev = Number(((l.price || 0) * orders).toFixed(2));
+            const cr = views > 0 ? Number(((orders / views) * 100).toFixed(1)) : 0;
             return {
               listingId: String(l.listingId),
               title: l.title,

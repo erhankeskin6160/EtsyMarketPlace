@@ -516,7 +516,7 @@ export class EtsyApiService {
 
 
 
-  getFinancialPerformance(period: 'today' | 'this_month' | 'last_month' = 'this_month'): Observable<FinancialPerformanceDto> {
+  getFinancialPerformance(period: 'today' | 'this_month' | 'last_month' | 'this_year' | 'all_time' = 'this_month'): Observable<FinancialPerformanceDto> {
     return this.http.get<FinancialPerformanceDto>(
       `${this.API_BASE}/api/etsy/financial/performance?shopId=${this.activeShopId()}&period=${period}`);
   }

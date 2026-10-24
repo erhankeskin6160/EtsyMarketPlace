@@ -167,7 +167,7 @@ export class CopilotToolRegistryService {
         type: 'function',
         function: {
           name: 'navigate_to_module',
-          description: 'Kullanıcının ekranını ilgili mağaza modülüne yönlendirir (örn: "/listings/fast-creator", "/market/research", "/analytics/finance").',
+          description: 'Kullanıcının ekranını ilgili mağaza modülüne yönlendirir (örn: "/listings/fast-creator", "/research/market", "/finance/accounting").',
           parameters: {
             type: 'object',
             properties: {
@@ -645,7 +645,33 @@ export class CopilotToolRegistryService {
             };
           });
         } else {
-          shipments = direct.payload?.results || direct.results || (Array.isArray(direct) ? direct : []);
+          if (Array.isArray(direct.data) && direct.data.length > 0 && (direct.data[0].awbNumber !== undefined || direct.data[0].totalPrice !== undefined || direct.data[0].consigneeAddress !== undefined)) {
+            const eurUsdRate = 1.15;
+            shipments = direct.data.map((q: any) => {
+              const basePrice = Number(q.totalPrice ?? 0) || 0;
+              const addFee = Number(q.additionalFee ?? 0) || 0;
+              const insPrice = Number(q.insurancePrice ?? 0) || 0;
+              const rawSum = basePrice + addFee + insPrice;
+              const cur = String(q.currencyCode || q.currency?.code || 'EUR').toUpperCase();
+              const totalUsd = cur === 'TRY' || cur === 'TL' ? Number((rawSum / liveRate).toFixed(2)) : (cur === 'EUR' ? Number((rawSum * eurUsdRate).toFixed(2)) : Number(rawSum.toFixed(2)));
+              const totalTry = Number((totalUsd * liveRate).toFixed(2));
+              const carrier = q.integrator?.name || q.serviceType?.name || 'QuickShipper';
+              const awb = q.integratorAWBNumber || q.awbNumber || '';
+              return {
+                receiverName: q.consigneeAddress?.fullName || q.consigneeName || '',
+                externalOrderId: q.note || '',
+                shipmentCostUsd: totalUsd,
+                shipmentCost: totalTry,
+                exchangeRate: liveRate,
+                supplierName: `QuickShipper (${carrier})`,
+                trackingNumber: awb,
+                products: [{ productName: q.note || '3D Model' }],
+                noteDetail: `QuickShipper (${carrier}) AWB: ${awb || 'Yok'} [Tutar: ${rawSum.toFixed(2)} ${cur} = $${totalUsd.toFixed(2)}]`
+              };
+            });
+          } else {
+            shipments = direct.payload?.results || direct.results || (Array.isArray(direct) ? direct : []);
+          }
         }
       }
     } catch {
@@ -752,8 +778,8 @@ export class CopilotToolRegistryService {
             saveOps$.push(
               this.etsyApi.saveOrderCost(receiptId, {
                 shippingCost: shippingUsd,
-                productCost: matchedOrder.productCostUsd && matchedOrder.productCostUsd > 0 ? matchedOrder.productCostUsd : 10.00,
-                packagingCost: matchedOrder.packagingCostUsd && matchedOrder.packagingCostUsd > 0 ? matchedOrder.packagingCostUsd : 1.00,
+                productCost: Number(matchedOrder.unitProductCost ?? matchedOrder.productCostUsd ?? 0),
+                packagingCost: Number(matchedOrder.packagingCost ?? matchedOrder.packagingCostUsd ?? 0),
                 notes: noteText
               }).pipe(catchError(e => of({ error: e })))
             );
