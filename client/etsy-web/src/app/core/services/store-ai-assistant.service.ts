@@ -77,6 +77,22 @@ export class StoreAiAssistantService {
     this.conversationHistory = [];
   }
 
+  public getConversationHistory(): {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    attachments?: ChatAttachment[];
+  }[] {
+    return [...this.conversationHistory];
+  }
+
+  public setConversationHistory(history: {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    attachments?: ChatAttachment[];
+  }[]): void {
+    this.conversationHistory = history ? [...history] : [];
+  }
+
   public getActiveProvider(): string {
     return this.aiSettings.activeProvider();
   }

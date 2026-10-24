@@ -2,6 +2,7 @@ import { Component, OnInit, ElementRef, ViewChild, HostListener, inject } from '
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { StoreAiAssistantService, AssistantChatMessage, ChatAttachment } from '../../core/services/store-ai-assistant.service';
+import { CopilotSessionStorageService, CopilotChatSession } from '../../core/services/copilot-session-storage.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
@@ -39,17 +40,52 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       <div class="window-header">
         <div class="header-info">
           <app-ai-logo [provider]="activeProvider" [size]="22"></app-ai-logo>
-          <div>
-            <h4 class="copilot-title">{{ activeProvider }} AI Mağaza Asistanı</h4>
+          <div class="header-titles">
+            <h4 class="copilot-title" [title]="activeSession?.title || (activeProvider + ' AI Asistanı')">
+              {{ activeSession?.title || (activeProvider + ' AI Asistanı') }}
+            </h4>
             <span class="copilot-sub">
-              {{ activeModel }} • Canlı Mağaza Zekası (1$ = {{ (etsyApi.exchangeRate() || 49.73).toFixed(2) }} ₺)
+              {{ activeModel }} • 1$ = {{ (etsyApi.exchangeRate() || 49.73).toFixed(2) }} ₺
             </span>
           </div>
         </div>
         <div class="header-actions">
+          <button class="btn-new-chat" (click)="startNewChat()" title="Yeni Sohbet Başlat">
+            <span class="btn-plus">＋</span>
+            <span class="btn-text">Yeni</span>
+          </button>
+          <button class="btn-icon" [class.active]="isHistoryOpen" (click)="toggleHistoryDrawer()" title="Geçmiş Sohbetler">📜</button>
           <button class="btn-icon" (click)="openAiSettingsModal()" title="Yapay Zeka & Model Ayarları (DeepSeek, OpenAI, Claude, Grok, Gemini)">⚙️</button>
-          <button class="btn-icon" (click)="clearChat()" title="Sohbeti Temizle">🗑️</button>
+          <button class="btn-icon" (click)="clearChat()" title="Sohbeti Temizle (/clear)">🗑️</button>
           <button class="btn-close" (click)="toggleOpen()" title="Kapat">×</button>
+        </div>
+      </div>
+
+      <!-- SOHBET GEÇMİŞİ ÇEKMECESİ (HISTORY DRAWER) -->
+      <div class="history-drawer" *ngIf="isHistoryOpen">
+        <div class="history-drawer-header">
+          <span class="history-drawer-title">📜 Geçmiş Sohbetler ({{ savedSessions.length }})</span>
+          <button class="btn-close-drawer" (click)="toggleHistoryDrawer()" title="Kapat">✕</button>
+        </div>
+        <div class="history-list">
+          <div *ngIf="savedSessions.length === 0" class="history-empty">
+            Henüz kayıtlı geçmiş sohbetiniz yok.
+          </div>
+          <div 
+            *ngFor="let s of savedSessions" 
+            class="history-card"
+            [class.active]="s.id === activeSession?.id"
+            (click)="selectSession(s)">
+            <div class="history-card-body">
+              <div class="history-card-title">{{ s.title }}</div>
+              <div class="history-card-sub">
+                <span>💬 {{ s.messages.length }} mesaj</span>
+                <span>•</span>
+                <span>{{ formatSessionDate(s.updatedAt) }}</span>
+              </div>
+            </div>
+            <button class="btn-del-session" (click)="deleteSession($event, s.id)" title="Bu sohbeti sil">🗑️</button>
+          </div>
         </div>
       </div>
 
@@ -255,30 +291,61 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       display: flex;
       align-items: center;
       gap: 12px;
+      overflow: hidden;
+      max-width: 58%;
+    }
+    .header-titles {
+      overflow: hidden;
     }
     .copilot-title {
       margin: 0;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       font-weight: 700;
       color: #f8fafc;
       letter-spacing: -0.2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .copilot-sub {
       display: block;
-      font-size: 0.73rem;
+      font-size: 0.72rem;
       color: #94a3b8;
       margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .header-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
+    }
+    .btn-new-chat {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(56, 189, 248, 0.25));
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      color: #38bdf8;
+      border-radius: 8px;
+      padding: 4px 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-new-chat:hover {
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.45), rgba(56, 189, 248, 0.45));
+      border-color: #38bdf8;
+      color: #fff;
+      transform: scale(1.03);
     }
     .btn-icon, .btn-close {
       background: transparent;
       border: none;
       color: #94a3b8;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       cursor: pointer;
       padding: 4px 6px;
       border-radius: 6px;
@@ -287,6 +354,124 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
     .btn-icon:hover, .btn-close:hover {
       color: #f8fafc;
       background: rgba(255, 255, 255, 0.1);
+    }
+    .btn-icon.active {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+
+    /* History Drawer */
+    .history-drawer {
+      position: absolute;
+      top: 61px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(11, 17, 32, 0.98);
+      backdrop-filter: blur(12px);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      animation: fadeIn 0.2s ease-out;
+      border-bottom-left-radius: 16px;
+      border-bottom-right-radius: 16px;
+    }
+    .history-drawer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(15, 23, 42, 0.7);
+    }
+    .history-drawer-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+    .btn-close-drawer {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .btn-close-drawer:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
+    }
+    .history-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .history-empty {
+      padding: 30px 16px;
+      text-align: center;
+      color: #64748b;
+      font-size: 0.82rem;
+    }
+    .history-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #151f32;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .history-card:hover {
+      background: #1e293b;
+      border-color: rgba(56, 189, 248, 0.3);
+      transform: translateX(2px);
+    }
+    .history-card.active {
+      border-color: #6366f1;
+      background: rgba(99, 102, 241, 0.15);
+    }
+    .history-card-body {
+      flex: 1;
+      overflow: hidden;
+      margin-right: 8px;
+    }
+    .history-card-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #f1f5f9;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: block;
+    }
+    .history-card-sub {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68rem;
+      color: #94a3b8;
+      margin-top: 3px;
+    }
+    .btn-del-session {
+      background: transparent;
+      border: none;
+      color: #64748b;
+      font-size: 0.85rem;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .btn-del-session:hover {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.15);
     }
 
     .messages-container {
@@ -718,7 +903,11 @@ export class FloatingCopilotComponent implements OnInit {
   public assistantAi = inject(StoreAiAssistantService);
   public aiSettings = inject(AiSettingsService);
   public etsyApi = inject(EtsyApiService);
+  public sessionStorage = inject(CopilotSessionStorageService);
 
+  activeSession: CopilotChatSession | null = null;
+  savedSessions: CopilotChatSession[] = [];
+  isHistoryOpen = false;
   messages: AssistantChatMessage[] = [];
 
   get activeProvider(): string {
@@ -729,8 +918,9 @@ export class FloatingCopilotComponent implements OnInit {
     return this.assistantAi.getActiveModel();
   }
 
-  ngOnInit(): void {
-    this.initWelcomeMessage();
+  async ngOnInit(): Promise<void> {
+    await this.loadActiveSession();
+    await this.refreshSavedSessionsList();
   }
 
   /**
@@ -933,6 +1123,92 @@ export class FloatingCopilotComponent implements OnInit {
     }
   }
 
+  async loadActiveSession(): Promise<void> {
+    const activeId = this.sessionStorage.getActiveSessionId();
+    if (activeId) {
+      const existing = await this.sessionStorage.getSession(activeId);
+      if (existing && existing.messages && existing.messages.length > 0) {
+        this.activeSession = existing;
+        this.messages = existing.messages;
+        this.assistantAi.setConversationHistory(existing.conversationHistory || []);
+        return;
+      }
+    }
+
+    const all = await this.sessionStorage.getAllSessions();
+    if (all.length > 0 && all[0].messages && all[0].messages.length > 0) {
+      this.activeSession = all[0];
+      this.messages = all[0].messages;
+      this.assistantAi.setConversationHistory(all[0].conversationHistory || []);
+      this.sessionStorage.setActiveSessionId(all[0].id);
+      return;
+    }
+
+    this.startNewChat(false);
+  }
+
+  async refreshSavedSessionsList(): Promise<void> {
+    this.savedSessions = await this.sessionStorage.getAllSessions();
+  }
+
+  toggleHistoryDrawer(): void {
+    this.isHistoryOpen = !this.isHistoryOpen;
+    if (this.isHistoryOpen) {
+      this.refreshSavedSessionsList();
+    }
+  }
+
+  startNewChat(savePrevious = true): void {
+    if (savePrevious && this.activeSession && this.messages.length > 0) {
+      this.syncCurrentSession();
+    }
+
+    this.assistantAi.resetConversation();
+    this.clearAttachments();
+    this.activeSession = this.sessionStorage.createNewSession('Yeni Sohbet');
+    this.initWelcomeMessage();
+    this.syncCurrentSession();
+    this.refreshSavedSessionsList();
+    this.isHistoryOpen = false;
+  }
+
+  async selectSession(s: CopilotChatSession): Promise<void> {
+    this.syncCurrentSession();
+    this.activeSession = s;
+    this.messages = s.messages || [];
+    this.assistantAi.setConversationHistory(s.conversationHistory || []);
+    this.sessionStorage.setActiveSessionId(s.id);
+    this.isHistoryOpen = false;
+    setTimeout(() => this.scrollToBottom(), 50);
+  }
+
+  async deleteSession(e: Event, id: string): Promise<void> {
+    e.stopPropagation();
+    await this.sessionStorage.deleteSession(id);
+    if (this.activeSession?.id === id) {
+      this.startNewChat(false);
+    } else {
+      await this.refreshSavedSessionsList();
+    }
+  }
+
+  formatSessionDate(ts: number): string {
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+  }
+
+  private syncCurrentSession(): void {
+    if (!this.activeSession) return;
+    this.activeSession.messages = [...this.messages];
+    this.activeSession.conversationHistory = this.assistantAi.getConversationHistory();
+    this.activeSession.updatedAt = Date.now();
+    this.sessionStorage.saveSession(this.activeSession);
+  }
+
   private initWelcomeMessage(): void {
     const rate = this.etsyApi.exchangeRate() || 49.73;
     const now = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -964,10 +1240,13 @@ Size nasıl yardımcı olabilirim?<br>
     this.aiSettings.isAiModalOpen.set(true);
   }
 
-  clearChat(): void {
+  async clearChat(): Promise<void> {
+    if (this.activeSession) {
+      await this.sessionStorage.deleteSession(this.activeSession.id);
+    }
     this.assistantAi.resetConversation();
     this.clearAttachments();
-    this.initWelcomeMessage();
+    this.startNewChat(false);
   }
 
   sendPrompt(promptText: string): void {
@@ -1003,7 +1282,24 @@ Size nasıl yardımcı olabilirim?<br>
     const text = this.userInput.trim();
     const attachmentsToSend = [...this.pendingAttachments];
 
+    // Command Check: /clear, /temizle, clear
+    if (text.toLowerCase() === '/clear' || text.toLowerCase() === '/temizle' || text.toLowerCase() === 'clear') {
+      this.userInput = '';
+      this.clearChat();
+      return;
+    }
+
     if ((!text && attachmentsToSend.length === 0) || this.isThinking) return;
+
+    // Auto-derive session title if it's the first message
+    if (this.activeSession && (!this.activeSession.title || this.activeSession.title === 'Yeni Sohbet')) {
+      let derivedTitle = text || (attachmentsToSend.length > 0 ? attachmentsToSend[0].name : 'Ürün İncelemesi');
+      derivedTitle = derivedTitle.replace(/\.(png|jpg|jpeg|webp|gif|pdf|xlsx|csv)$/i, '').trim();
+      if (derivedTitle.length > 32) {
+        derivedTitle = derivedTitle.substring(0, 30) + '...';
+      }
+      this.activeSession.title = derivedTitle;
+    }
 
     const displayText = text || (attachmentsToSend.length === 1 
       ? `📎 ${attachmentsToSend[0].name} dosyasını inceler misin?` 
@@ -1016,6 +1312,7 @@ Size nasıl yardımcı olabilirim?<br>
       time: now,
       attachments: attachmentsToSend
     });
+    this.syncCurrentSession();
 
     this.userInput = '';
     this.clearAttachments();
@@ -1032,6 +1329,8 @@ Size nasıl yardımcı olabilirim?<br>
           provider: this.activeProvider,
           model: this.activeModel
         });
+        this.syncCurrentSession();
+        this.refreshSavedSessionsList();
         setTimeout(() => this.scrollToBottom(), 50);
       },
       error: () => {
@@ -1043,6 +1342,8 @@ Size nasıl yardımcı olabilirim?<br>
           provider: this.activeProvider,
           model: this.activeModel
         });
+        this.syncCurrentSession();
+        this.refreshSavedSessionsList();
         setTimeout(() => this.scrollToBottom(), 50);
       }
     });
