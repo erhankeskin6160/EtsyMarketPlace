@@ -1061,18 +1061,15 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
   editOrderCost(order: OrderFinancialRow): void {
     this.selectedOrder = order;
-    if (order.actualShippingCostUsd !== undefined && order.actualShippingCostUsd !== null && order.actualShippingCostUsd > 0) {
-      this.costModalShipping = order.actualShippingCostUsd;
-      this.costModalProduction = order.unitProductCostUsd !== undefined && order.unitProductCostUsd !== null ? order.unitProductCostUsd : 10.0;
-      this.costModalPackaging = order.packagingCostUsd !== undefined && order.packagingCostUsd !== null ? order.packagingCostUsd : 1.0;
-    } else if (order.productCostUsd && order.productCostUsd > 0) {
-      this.costModalShipping = Number(Math.max(0, order.productCostUsd - 11.0).toFixed(2));
-      this.costModalProduction = 10.0;
-      this.costModalPackaging = 1.0;
+    if (order.hasCostData) {
+      this.costModalShipping = order.actualShippingCostUsd ?? 0;
+      this.costModalProduction = order.unitProductCostUsd ?? 0;
+      this.costModalPackaging = order.packagingCostUsd ?? 0;
     } else {
-      this.costModalProduction = 10.0;
-      this.costModalShipping = 16.60;
-      this.costModalPackaging = 1.0;
+      // Kesinlikle varsayılan veya sahte tahmin rakamı yok! Veritabanında maliyet yoksa form tamamen 0 / boş başlar.
+      this.costModalProduction = 0;
+      this.costModalShipping = 0;
+      this.costModalPackaging = 0;
     }
     this.showCostModal = true;
     this.closeContextMenu();
