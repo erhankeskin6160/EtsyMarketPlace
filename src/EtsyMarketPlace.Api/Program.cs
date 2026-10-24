@@ -183,6 +183,8 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketKey
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceService, EtsyMarketPlace.Application.AiUsage.AiBalanceService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
 builder.Services.AddScoped<McpToolHandler>();
+builder.Services.AddHttpClient<EtsyMarketPlace.Application.Mcp.IEtsyOfficialMcpClient, EtsyMarketPlace.Infrastructure.Mcp.EtsyOfficialMcpClient>();
+builder.Services.AddScoped<EtsyMarketPlace.Application.Mcp.IMcpServerService, EtsyMarketPlace.Application.Mcp.McpServerService>();
 
 // 3. CORS (Angular Web Studio, Google Gemini Web ve Harici Entegrasyonlar İçin)
 builder.Services.AddCors(options =>

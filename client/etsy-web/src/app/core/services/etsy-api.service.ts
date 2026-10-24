@@ -839,6 +839,22 @@ export class EtsyApiService {
   getSystemVersion(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
   }
+
+  getVdsMcpTools(): Observable<any> {
+    return this.http.get<any>(`${this.API_BASE}/api/etsy/mcp/tools`);
+  }
+
+  callVdsMcpTool(name: string, args: Record<string, any> = {}, shopId?: string): Observable<any> {
+    const sId = shopId || this.activeShopId();
+    return this.http.post<any>(`${this.API_BASE}/api/etsy/mcp/call?shopId=${encodeURIComponent(sId)}`, {
+      name,
+      arguments: args
+    });
+  }
+
+  private _noopMcpMarker(): Observable<any> {
+    return this.http.get<any>(`${this.API_BASE}/api/system/version`);
+  }
 }
 
 export interface MarketAiReportRequestDto {

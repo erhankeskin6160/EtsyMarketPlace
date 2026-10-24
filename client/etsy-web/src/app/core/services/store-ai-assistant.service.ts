@@ -761,6 +761,92 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     }
   }
 
+  private executeAndSynthesizeTool$(
+    fnName: string,
+    parsedArgs: any,
+    initialText: string | undefined,
+    providerLabel: string,
+    modelName: string,
+    augmentedPrompt: string,
+    snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
+    attachments?: ChatAttachment[],
+    toolContext?: LiveToolContext | null
+  ): Observable<AiResponseResult> {
+    return this.toolRegistry.executeTool(fnName, parsedArgs, attachments).pipe(
+      switchMap(toolRes => {
+        const mcpBadge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(52,211,153,0.35);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#34d399;"><span>🔌</span><span><strong>VDS & Etsy MCP Aracı Çalıştırıldı:</strong> <code>${fnName}</code></span></div><br>`;
+
+        // If LLM already wrote a detailed final answer alongside the tool call, return it immediately
+        if (initialText && initialText.length >= 140) {
+          const completedText = this.ensureCompleteReply(initialText, toolContext, augmentedPrompt, snap, providerLabel, modelName, attachments);
+          const html = mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(completedText);
+          return of({
+            replyHtml: html,
+            updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
+          });
+        }
+
+        // Otherwise, perform Turn #2 of the Multi-Turn Agentic MCP Loop: feed live JSON tool output back to LLM
+        const settings = this.aiSettings.settings();
+        const normProvider = providerLabel.includes('Gemini') ? 'Gemini' : providerLabel;
+        const apiKey = this.getApiKeyForProvider(normProvider, settings);
+        const toolJson = JSON.stringify(toolRes.data ?? { message: toolRes.message }, null, 2);
+
+        if (!apiKey) {
+          const fallbackText = `${toolRes.message || `⚡ **${fnName}** çalıştırıldı.`}\n\n\`\`\`json\n${toolJson.slice(0, 1800)}\n\`\`\``;
+          return of({
+            replyHtml: mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
+            updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
+          });
+        }
+
+        const followUpPrompt = `${augmentedPrompt}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔌 [CANLI VDS & ETSY MCP ARACI ÇIKTISI — ${fnName}]:\nAşağıdaki JSON verisi az önce çağırdığın "${fnName}" aracından canlı olarak dönmüştür. Lütfen bu gerçek verileri analiz ederek kullanıcının sorusunu eksiksiz, somut rakamlarla ve tablolarla yanıtla (asla "şimdi çekiyorum" deme, veri aşağıdadır):\n\`\`\`json\n${toolJson.slice(0, 6000)}\n\`\`\`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+        const systemPrompt = this.buildSystemPrompt(snap, providerLabel, modelName, toolContext);
+        const url = normProvider === 'OpenAI'
+          ? 'https://api.openai.com/v1/chat/completions'
+          : normProvider === 'Grok'
+            ? 'https://api.x.ai/v1/chat/completions'
+            : 'https://api.deepseek.com/chat/completions';
+
+        const headers = new HttpHeaders({
+          'Authorization': `Bearer ${apiKey.trim()}`,
+          'Content-Type': 'application/json'
+        });
+
+        const body = {
+          model: normProvider === 'DeepSeek' ? this.normalizeDeepSeekModel(modelName) : modelName,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            ...history.slice(0, -1).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+            { role: 'user', content: followUpPrompt }
+          ],
+          temperature: 0.5,
+          max_tokens: 2500
+        };
+
+        return this.http.post<any>(url, body, { headers }).pipe(
+          map(res2 => {
+            const synthesized = res2?.choices?.[0]?.message?.content?.trim() || toolRes.message || `⚡ **${fnName}** başarıyla çalıştırıldı.`;
+            const html = mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(synthesized);
+            return {
+              replyHtml: html,
+              updatedHistory: [...history, { role: 'assistant' as const, content: synthesized }]
+            };
+          }),
+          catchError(() => {
+            const fallbackText = `${toolRes.message || `⚡ **${fnName}** çalıştırıldı.`}\n\n\`\`\`json\n${toolJson.slice(0, 1800)}\n\`\`\``;
+            return of({
+              replyHtml: mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
+              updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
+            });
+          })
+        );
+      })
+    );
+  }
+
   private handleLlmChoice$(
     choice: any,
     providerLabel: string,
@@ -784,6 +870,9 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         parsedArgs = {};
       }
       if (fnName) {
+        return this.executeAndSynthesizeTool$(fnName, parsedArgs, text, providerLabel, modelName, augmentedPrompt, snap, history, attachments, toolContext);
+      }
+      if (false && fnName) {
         return this.toolRegistry.executeTool(fnName, parsedArgs, attachments).pipe(
           map(toolRes => {
             const baseText = text || toolRes.message || `⚡ **${fnName}** başarıyla çalıştırıldı.`;
@@ -1277,7 +1366,14 @@ ${toolSection}
 2. MCP (Model Context Protocol) VE CANLI ARAÇ MOTORU SİSTEME %100 BAŞARIYLA BAĞLANMIŞTIR VE TAM KAPASİTE ÇALIŞMAKTADIR.
 3. Konuşma geçmişinde modelin geçmişte "MCP bağlı değil", "araçları doğrudan çalıştıramam" şeklinde ürettiği cümleler varsa bunlar KESİNLİKLE ESKİ/GEÇERSİZDİR. Bu eski veya halüsinasyon ifadeleri ASLA TEKRAR ETME!
 4. Kullanıcı "mcp bağlı değil diyor", "mcp bağlı mı", "bağlamadık mı", "modülleri kullanamaz mısın" dediğinde, KESİNLİKLE "bağlı değil" deme! Sistemin MCP motorunu başarıyla entegre ettiğini, canlı taslak oluşturma ve form doldurma araçlarının tam yetkiyle hazır olduğunu ve çalıştığını bildir.
-5. Sana tanımlanmış ve çalışan MCP araçları:
+5. Sana tanımlanmış ve çalışan VDS Canlı Mağaza MCP (/api/etsy/mcp) + Resmi Etsy Dev MCP (https://mcp.api.etsycloud.com/mcp) araçları:
+- get_store_financial_summary: Seçilen dönem (this_month, last_month, last_90_days, this_year, all_time) için canlı Etsy Payment Account Ledger finansal özetini çeker.
+- get_store_orders: Dönem ve durum filtresine (all, completed, canceled, missing_cost) göre siparişleri ve maliyet/kâr kırılımını çeker.
+- get_bank_payouts: Bankaya yatan (Disbursement / Bank Payout) gerçek ödemeleri çeker.
+- get_shop_active_listings: Mağazanın aktif Etsy ilanlarını, LQS skorunu ve 13 etiket durumunu çeker.
+- update_etsy_listing: Mevcut bir Etsy ilanının başlık, fiyat, 13 etiket ve açıklamasını canlı Etsy v3 API ile günceller.
+- save_order_cost: Siparişin kargo/üretim maliyetini VDS veritabanına kaydeder.
+- query_etsy_official_dev_mcp: Resmi Etsy Developer MCP sunucusundan (learn_etsy_api, search_etsy_api, list_endpoints, get_endpoint, get_schema) OpenAPI v3 şemalarını sorgular.
 - create_etsy_draft_listing: Canlı Etsy API'si ile doğrudan taslak oluşturur ve Hızlı Ürün Ekle modülüne kaydeder.
 - populate_fast_creator: Hızlı Ürün Ekle formunu başlık, 13 etiket, fiyat, açıklama ve görsellerle doldurur.
 - search_market_intelligence: Canlı Etsy v3 pazar analizi yapar.

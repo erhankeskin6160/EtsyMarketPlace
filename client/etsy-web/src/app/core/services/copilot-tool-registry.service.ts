@@ -166,6 +166,126 @@ export class CopilotToolRegistryService {
       {
         type: 'function',
         function: {
+          name: 'get_store_financial_summary',
+          description: 'VDS Canlı Mağaza MCP Sunucusundan seçilen dönem (this_month, last_month, last_90_days, this_year, all_time) için canlı Etsy Payment Account Ledger finansal özetini (Brüt Satış, Etsy Komisyonları, Etsy Ads, Offsite Ads, İadeler, Maliyetler, Gerçek Net Kâr ve Net Marj %) çeker.',
+          parameters: {
+            type: 'object',
+            properties: {
+              period: {
+                type: 'string',
+                enum: ['this_month', 'last_month', 'last_90_days', 'this_year', 'all_time'],
+                description: 'Sorgulanacak finansal dönem (varsayılan: this_month)'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_store_orders',
+          description: 'VDS Canlı Mağaza MCP Sunucusundan belirtilen dönem ve durum filtresine (all, completed, canceled, missing_cost) göre mağazanın gerçek siparişlerini, kargo/üretim maliyetlerini, iade durumlarını ve sipariş bazlı net kâr kırılımını çeker.',
+          parameters: {
+            type: 'object',
+            properties: {
+              period: {
+                type: 'string',
+                enum: ['this_month', 'last_month', 'last_90_days', 'this_year', 'all_time'],
+                description: 'Dönem (varsayılan: this_month)'
+              },
+              statusFilter: {
+                type: 'string',
+                enum: ['all', 'completed', 'canceled', 'missing_cost'],
+                description: 'Sipariş durumu filtresi (varsayılan: all)'
+              },
+              limit: {
+                type: 'number',
+                description: 'Döndürülecek maksimum sipariş sayısı (varsayılan: 50)'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_bank_payouts',
+          description: 'VDS Canlı Mağaza MCP Sunucusundan Etsy\'nin banka hesabına yatırdığı (Disbursement / Bank Payout) gerçek ödemeleri (TL ve USD) çeker.',
+          parameters: {
+            type: 'object',
+            properties: {
+              monthsBack: {
+                type: 'number',
+                description: 'Geriye dönük kaç aylık banka ödemesi çekileceği (varsayılan: 6)'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'get_shop_active_listings',
+          description: 'VDS Canlı Mağaza MCP Sunucusundan mağazanın aktif Etsy ilanlarını, fiyatlarını, görüntülenme (views), favori (numFavorers), LQS kalite skorunu ve 13 etiket durumunu çeker.',
+          parameters: {
+            type: 'object',
+            properties: {
+              searchKeyword: {
+                type: 'string',
+                description: 'İlan başlığında veya etiketlerinde aranacak opsiyonel kelime'
+              },
+              limit: {
+                type: 'number',
+                description: 'Döndürülecek ilan sayısı (varsayılan: 50)'
+              }
+            }
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'update_etsy_listing',
+          description: 'Canlı Etsy v3 API ve VDS MCP üzerinden mevcut bir ilanın başlığını, fiyatını, 13 etiketini, açıklamasını veya stok adedini doğrudan günceller.',
+          parameters: {
+            type: 'object',
+            properties: {
+              listingId: { type: 'number', description: 'Güncellenecek Etsy ilan numarası (Listing ID)' },
+              title: { type: 'string', description: 'Yeni SEO uyumlu başlık' },
+              priceUsd: { type: 'number', description: 'Yeni satış fiyatı (USD)' },
+              tags: { type: 'array', items: { type: 'string' }, description: 'Yeni 13 adet etiket' },
+              description: { type: 'string', description: 'Yeni ürün açıklaması' },
+              quantity: { type: 'number', description: 'Yeni stok adedi' }
+            },
+            required: ['listingId']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'query_etsy_official_dev_mcp',
+          description: 'Resmi Etsy Developer MCP Sunucusuna (https://mcp.api.etsycloud.com/mcp) bağlanarak Etsy OpenAPI v3 dokümantasyonunu, endpoint şemalarını ve resmi kuralları sorgular.',
+          parameters: {
+            type: 'object',
+            properties: {
+              officialTool: {
+                type: 'string',
+                enum: ['learn_etsy_api', 'search_etsy_api', 'list_endpoints', 'get_endpoint', 'get_schema'],
+                description: 'Çağrılacak resmi Etsy Dev MCP aracı'
+              },
+              query: {
+                type: 'string',
+                description: 'Aranacak konu, endpoint yolu veya şema adı (örn: updateListing, ShopReceipt, PaymentAccountLedgerEntry)'
+              }
+            },
+            required: ['officialTool']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'navigate_to_module',
           description: 'Kullanıcının ekranını ilgili mağaza modülüne yönlendirir (örn: "/listings/fast-creator", "/research/market", "/finance/accounting").',
           parameters: {
@@ -208,6 +328,14 @@ export class CopilotToolRegistryService {
       case 'save_order_cost':
         return this.handleSaveOrderCost(args);
 
+      case 'get_store_financial_summary':
+      case 'get_store_orders':
+      case 'get_bank_payouts':
+      case 'get_shop_active_listings':
+      case 'update_etsy_listing':
+      case 'query_etsy_official_dev_mcp':
+        return this.handleVdsMcpCall(toolName, args);
+
       case 'navigate_to_module':
         return this.handleNavigate(args);
 
@@ -222,6 +350,39 @@ export class CopilotToolRegistryService {
   }
 
   // ── TOOL HANDLERS ─────────────────────────────────────────────────────────
+
+  private handleVdsMcpCall(toolName: string, args: any): Observable<ToolExecutionResult> {
+    return this.etsyApi.callVdsMcpTool(toolName, args || {}).pipe(
+      map(res => {
+        const isError = Boolean(res?.isError);
+        const textContent = res?.content?.[0]?.text || '';
+        let parsedData = res?.structuredData;
+        if (!parsedData && textContent) {
+          try {
+            parsedData = JSON.parse(textContent);
+          } catch {
+            parsedData = textContent;
+          }
+        }
+        return {
+          toolName,
+          success: !isError,
+          data: parsedData ?? res,
+          message: isError
+            ? `VDS MCP Hatası (${toolName}): ${textContent}`
+            : `VDS & Etsy MCP Aracı (${toolName}) canlı veriyi başarıyla getirdi.`
+        };
+      }),
+      catchError(err => {
+        return of({
+          toolName,
+          success: false,
+          data: { error: err?.message || 'VDS MCP bağlantı hatası' },
+          message: `VDS MCP çağrısı başarısız: ${err?.message || 'Bilinmeyen hata'}`
+        });
+      })
+    );
+  }
 
   private handleCreateEtsyDraft(args: any, attachments?: ChatAttachment[]): Observable<ToolExecutionResult> {
     const rate = this.etsyApi.exchangeRate() || 49.73;
