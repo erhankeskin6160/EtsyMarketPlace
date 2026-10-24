@@ -66,7 +66,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         return !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
     }
 
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, Task<IReadOnlyList<JsonElement>> Task)> _ledgerWindowCache = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, Task<IReadOnlyList<JsonElement>> Task)> _ledgerWindowCache = new();
 
     private async Task<IReadOnlyList<T>> GetPagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken)
         where T : class
@@ -93,6 +93,21 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         DateTimeOffset endDate,
         CancellationToken cancellationToken)
     {
+        // Ana thread uzerinde tek bir kez API anahtarini coz (EF Core DbContext thread-safety korunur)
+        var apiKeyHeader = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
+
+        // Tarihsel kurlari parse oncesinde tek seferde hidrate et
+        try
+        {
+            await HistoricalExchangeRateProvider.HydrateRatesForDatesAsync(
+                new[] { startDate.UtcDateTime.Date, endDate.UtcDateTime.Date },
+                cancellationToken);
+        }
+        catch
+        {
+            // Kur API'si ulasilamazsa varsayilan kurlarla devam edilir
+        }
+
         var windows = new List<(DateTimeOffset Start, DateTimeOffset End)>();
         var currentFrom = startDate;
         while (currentFrom < endDate)
@@ -111,7 +126,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         if (windows.Count == 1)
         {
             var (wStart, wEnd) = windows[0];
-            return await GetCachedLedgerWindowAsync(routeTemplate, shopId, wStart, wEnd, cancellationToken);
+            return await GetCachedLedgerWindowAsync(routeTemplate, shopId, apiKeyHeader, wStart, wEnd, cancellationToken);
         }
 
         var windowResults = new IReadOnlyList<JsonElement>[windows.Count];
@@ -121,7 +136,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             await semaphore.WaitAsync(cancellationToken);
             try
             {
-                windowResults[index] = await GetCachedLedgerWindowAsync(routeTemplate, shopId, window.Start, window.End, cancellationToken);
+                windowResults[index] = await GetCachedLedgerWindowAsync(routeTemplate, shopId, apiKeyHeader, window.Start, window.End, cancellationToken);
             }
             finally
             {
@@ -153,13 +168,14 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     private async Task<IReadOnlyList<JsonElement>> GetCachedLedgerWindowAsync(
         string routeTemplate,
         string shopId,
+        string apiKeyHeader,
         DateTimeOffset windowStart,
         DateTimeOffset windowEnd,
         CancellationToken cancellationToken)
     {
         var minUnix = windowStart.ToUnixTimeSeconds();
         var maxUnix = windowEnd.ToUnixTimeSeconds();
-        var cacheKey = $"{shopId}:{minUnix}:{maxUnix}";
+        var cacheKey = $"{_options.ApiBaseUrl}:{shopId}:{minUnix}:{maxUnix}";
         var now = DateTimeOffset.UtcNow;
 
         if (_ledgerWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
@@ -168,7 +184,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         }
 
         var ttl = windowEnd < now.AddDays(-2) ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(15);
-        var task = FetchRawWindowElementsAsync(routeTemplate, shopId, minUnix, maxUnix, cancellationToken);
+        var task = FetchRawWindowElementsAsync(routeTemplate, shopId, apiKeyHeader, minUnix, maxUnix, cancellationToken);
         _ledgerWindowCache[cacheKey] = (now.Add(ttl), task);
 
         try
@@ -185,13 +201,13 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     private async Task<IReadOnlyList<JsonElement>> FetchRawWindowElementsAsync(
         string routeTemplate,
         string shopId,
+        string apiKeyHeader,
         long minUnix,
         long maxUnix,
         CancellationToken cancellationToken)
     {
         var elements = new List<JsonElement>();
         const int limit = 100;
-        var apiKeyHeader = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
         var route = string.Format(CultureInfo.InvariantCulture, routeTemplate, Uri.EscapeDataString(shopId));
 
         for (var offset = 0; ; offset += limit)

@@ -399,31 +399,31 @@
                   <div class="bar-wrap">
                     <div class="bar gross-bar" style="height: 85%;"></div>
                   </div>
-                  <span class="bar-lbl">Brüt Satış<br><strong>₺54.608</strong></span>
+                  <span class="bar-lbl">Brüt Satış<br><strong>₺{{ formatNumber(grossSalesTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar fees-bar" style="height: 25%;"></div>
                   </div>
-                  <span class="bar-lbl">Kesintiler<br><strong>₺12.783</strong></span>
+                  <span class="bar-lbl">Kesintiler<br><strong>₺{{ formatNumber(etsyFeesTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar ads-bar" style="height: 12%;"></div>
                   </div>
-                  <span class="bar-lbl">Reklamlar<br><strong>₺4.334</strong></span>
+                  <span class="bar-lbl">Reklamlar<br><strong>₺{{ formatNumber(totalAdsTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar costs-bar" style="height: 28%;"></div>
                   </div>
-                  <span class="bar-lbl">Maliyetler<br><strong>₺13.524</strong></span>
+                  <span class="bar-lbl">Maliyetler<br><strong>₺{{ formatNumber(productCostsTry) }}</strong></span>
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
                     <div class="bar profit-bar" style="height: 48%;"></div>
                   </div>
-                  <span class="bar-lbl">Net Kâr<br><strong>₺22.077</strong></span>
+                  <span class="bar-lbl">Net Kâr<br><strong>₺{{ formatNumber(realNetProfitTry) }}</strong></span>
                 </div>
               </div>
             </div>
@@ -434,26 +434,26 @@
                 <div class="expense-row">
                   <span class="exp-dot orange"></span>
                   <span class="exp-name">Ürün & Kargo Maliyetleri</span>
-                  <span class="exp-pct">%41.5</span>
-                  <span class="exp-val">₺13.524,10</span>
+                  <span class="exp-pct">%{{ expenseCostPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(productCostsTry) }}</span>
                 </div>
                 <div class="expense-row">
                   <span class="exp-dot yellow"></span>
                   <span class="exp-name">Etsy Komisyon & İşlem Ücreti</span>
-                  <span class="exp-pct">%39.2</span>
-                  <span class="exp-val">₺12.783,71</span>
+                  <span class="exp-pct">%{{ expenseFeesPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(etsyFeesTry) }}</span>
                 </div>
                 <div class="expense-row">
                   <span class="exp-dot red"></span>
                   <span class="exp-name">Offsite & Etsy Ads Reklamları</span>
-                  <span class="exp-pct">%13.4</span>
-                  <span class="exp-val">₺4.334,59</span>
+                  <span class="exp-pct">%{{ expenseAdsPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(totalAdsTry) }}</span>
                 </div>
                 <div class="expense-row">
                   <span class="exp-dot purple"></span>
                   <span class="exp-name">Müşteri İadeleri</span>
-                  <span class="exp-pct">%5.9</span>
-                  <span class="exp-val">₺1.888,14</span>
+                  <span class="exp-pct">%{{ expenseRefundsPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(refundsTry) }}</span>
                 </div>
               </div>
             </div>
@@ -503,6 +503,38 @@
 
         <!-- TAB 3: DÖNEMSEL MUHASEBE -->
         <div *ngIf="activeTab === 'period'" class="tab-pane">
+          <div class="glass-table-wrapper">
+            <table class="glass-table">
+              <thead>
+                <tr>
+                  <th>Dönem (Ay / Yıl)</th>
+                  <th>Sipariş</th>
+                  <th>Brüt Satış</th>
+                  <th>Etsy Kesintisi</th>
+                  <th>Dış Reklam</th>
+                  <th>Sipariş Maliyeti</th>
+                  <th>Banka Yatırımı</th>
+                  <th>Gerçek Net Kâr</th>
+                  <th>Kâr Marjı</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let p of periodSummaries">
+                  <td><strong>{{ p.periodLabel }}</strong></td>
+                  <td>{{ p.orderCount }} Adet</td>
+                  <td class="text-success">₺{{ formatNumber(p.grossTry) }}</td>
+                  <td class="text-warning">-₺{{ formatNumber(p.feesTry) }}</td>
+                  <td class="text-danger">-₺{{ formatNumber(p.adsTry) }}</td>
+                  <td class="text-warning">-₺{{ formatNumber(p.costsTry) }}</td>
+                  <td class="text-primary">₺{{ formatNumber(p.payoutsTry) }}</td>
+                  <td class="text-emerald"><strong>₺{{ formatNumber(p.realProfitTry) }}</strong></td>
+                  <td><span class="margin-pill">%{{ p.grossTry > 0 ? (p.realProfitTry / p.grossTry * 100).toFixed(1) : '0.0' }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div *ngIf="false" class="tab-pane">
           <div class="glass-table-wrapper">
             <table class="glass-table">
               <thead>
@@ -638,25 +670,25 @@
           </div>
           <div class="modal-body">
             <div class="rec-section">
-              <h4>1️⃣ Siparişlerin Toplam Katkı Kârı: <span class="text-success">₺24.756,89 ($507,17)</span></h4>
-              <p>• Tek tek 10 adet siparişten elde edilen doğrudan ürün operasyon kârıdır.</p>
+              <h4>1️⃣ Siparişlerin Toplam Katkı Kârı: <span class="text-success">₺{{ formatNumber(totalOrderProfitTry) }} (${{ formatNumber(totalOrderProfitUsd) }})</span></h4>
+              <p>• Tek tek {{ orders.length }} adet siparişten elde edilen doğrudan ürün operasyon kârıdır.</p>
               <p>• Henüz mağaza geneline ait olan reklamlar ve genel giderler bundan düşülmemiştir.</p>
             </div>
 
             <div class="rec-section">
               <h4>2️⃣ Mağaza Geneline Ait Giderler (Siparişten Bağımsız):</h4>
               <ul>
-                <li>📢 <strong>Etsy Ads İç Reklam:</strong> <span class="text-danger">-₺404,30</span></li>
-                <li>🌐 <strong>Offsite Ads Dış Reklam:</strong> <span class="text-orange">-₺3.930,29</span></li>
-                <li>↩️ <strong>Dönemsel İadeler:</strong> <span class="text-danger">-₺1.888,14</span></li>
-                <li>⚠️ <strong>1 siparişin (#4174201942)</strong> maliyeti girilmediği için geçici olarak yüksek görünmektedir.</li>
+                <li>📢 <strong>Etsy Ads İç Reklam:</strong> <span class="text-danger">-₺{{ formatNumber(innerAdsTry) }} (-${{ formatNumber(innerAdsUsd) }})</span></li>
+                <li>🌐 <strong>Offsite Ads Dış Reklam:</strong> <span class="text-orange">-₺{{ formatNumber(offsiteAdsTry) }} (-${{ formatNumber(offsiteAdsUsd) }})</span></li>
+                <li>↩️ <strong>Dönemsel İadeler:</strong> <span class="text-danger">-₺{{ formatNumber(refundsTry) }} (-${{ formatNumber(refundsUsd) }})</span></li>
+                <li *ngIf="missingCostCount > 0">⚠️ <strong>{{ missingCostCount }} siparişin</strong> maliyeti henüz girilmemiştir.</li>
               </ul>
             </div>
 
             <div class="rec-divider"></div>
 
             <div class="rec-final">
-              <h4>🏛️ Üst Karttaki GERÇEK NET KÂR: <span class="text-emerald">₺22.077,69 ($449,46)</span></h4>
+              <h4>🏛️ Üst Karttaki GERÇEK NET KÂR: <span class="text-emerald">₺{{ formatNumber(realNetProfitTry) }} (${{ formatNumber(realNetProfitUsd) }})</span></h4>
               <p>(Tüm mağaza reklamları, iadeler ve genel giderler düşüldükten sonra banka hesabınıza ve cebinize kalan nihai kârdır.)</p>
             </div>
           </div>
@@ -796,7 +828,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>📦 Sipariş & Kargo Maliyet Analizi</h3>
-              <p class="modal-sub">Toplam Sipariş Maliyeti (COGS): <strong>₺13.524,10</strong> | Kargo Harcamaları ve Fatura Durumu</p>
+              <p class="modal-sub">Toplam Sipariş Maliyeti (COGS): <strong>₺{{ formatNumber(productCostsTry) }}</strong> (${{ formatNumber(productCostsUsd) }}) | Kargo Harcamaları ve Fatura Durumu</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -804,18 +836,18 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Kargo Maliyeti</span>
-                <span class="box-val text-warning">₺8.126,93</span>
-                <span class="box-sub">Maliyetin %60,1'i</span>
+                <span class="box-val text-warning">₺{{ formatNumber(totalShippingCostTry) }}</span>
+                <span class="box-sub">Maliyetin %{{ shippingCostSharePct }}'i</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Üretim / Hammadde</span>
-                <span class="box-val text-primary">₺5.397,16</span>
+                <span class="box-val text-primary">₺{{ formatNumber(totalProductionCostTry) }}</span>
                 <span class="box-sub">Filament & 3D Yazıcı Payı</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Paketleme & Fatura</span>
-                <span class="box-val text-emerald">₺0,00</span>
-                <span class="box-sub">1 Fatura Kayıtlı</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(totalPackagingCostTry) }}</span>
+                <span class="box-sub">{{ invoiceOrderCount }} Fatura Kayıtlı</span>
               </div>
             </div>
 
@@ -859,7 +891,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>💵 Gerçek Net Kâr & Bilanço Analizi</h3>
-              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>₺22.077,69</strong></p>
+              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>₺{{ formatNumber(realNetProfitTry) }}</strong> (${{ formatNumber(realNetProfitUsd) }})</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -867,18 +899,18 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Etsy Net Gelir</span>
-                <span class="box-val text-primary">₺35.601,79</span>
+                <span class="box-val text-primary">₺{{ formatNumber(netIncomeTry) }}</span>
                 <span class="box-sub">Platform Hakedişi</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Ürün Maliyeti</span>
-                <span class="box-val text-danger">-₺13.524,10</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(productCostsTry) }}</span>
                 <span class="box-sub">Kargo, Hammadde & Paketleme</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Gerçek Net Kâr</span>
-                <span class="box-val text-emerald">₺22.077,69</span>
-                <span class="box-sub">%40,4 Net Kâr Marjı</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(realNetProfitTry) }}</span>
+                <span class="box-sub">%{{ realProfitMarginPct }} Net Kâr Marjı</span>
               </div>
             </div>
 
@@ -925,7 +957,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🟢 Satış ve Gelir Analizi (Brüt Satış)</h3>
-              <p class="modal-sub">Dönem Toplam Brüt Satış: <strong>₺54.608,24</strong> ($1.111,73 USD) | 10 İşlem</p>
+              <p class="modal-sub">Dönem Toplam Brüt Satış: <strong>₺{{ formatNumber(grossSalesTry) }}</strong> (${{ formatNumber(grossSalesUsd) }} USD) | {{ orders.length }} İşlem</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -933,18 +965,18 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Brüt Satış</span>
-                <span class="box-val text-emerald">₺54.608,24</span>
-                <span class="box-sub">$1.111,73 USD</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
+                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Sipariş Sayısı</span>
-                <span class="box-val text-primary">10 Sipariş</span>
-                <span class="box-sub">9 Başarılı, 1 İptal</span>
+                <span class="box-val text-primary">{{ orders.length }} Sipariş</span>
+                <span class="box-sub">{{ completedOrderCount }} Başarılı, {{ totalCanceledCount }} İptal</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Ortalama Sepet Tutarı (AOV)</span>
-                <span class="box-val text-emerald">₺5.460,82</span>
-                <span class="box-sub">$111,17 USD / Sipariş</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(averageOrderValueTry) }}</span>
+                <span class="box-sub">${{ formatNumber(averageOrderValueUsd) }} USD / Sipariş</span>
               </div>
             </div>
 
@@ -991,7 +1023,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🏷️ Etsy Komisyon & Kesinti Analizi</h3>
-              <p class="modal-sub">Etsy Tarafından Kesilen Toplam Komisyon ve Masraflar: <strong>-₺12.783,71</strong> (-$260,25 USD)</p>
+              <p class="modal-sub">Etsy Tarafından Kesilen Toplam Komisyon ve Masraflar: <strong>-₺{{ formatNumber(etsyFeesTry) }}</strong> (-${{ formatNumber(etsyFeesUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -999,17 +1031,17 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Kesinti Tutarı</span>
-                <span class="box-val text-warning">-₺12.783,71</span>
-                <span class="box-sub">-$260,25 USD</span>
+                <span class="box-val text-warning">-₺{{ formatNumber(etsyFeesTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(etsyFeesUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Komisyon / Brüt Satış Oranı</span>
-                <span class="box-val text-orange">%23,41</span>
+                <span class="box-val text-orange">%{{ feeToGrossRatioPct }}</span>
                 <span class="box-sub">Standart Komisyon + KDV</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">KDV Tevkifatı (TR %20)</span>
-                <span class="box-val text-danger">₺1.383,22</span>
+                <span class="box-val text-danger">₺{{ formatNumber(estimatedVatTry) }}</span>
                 <span class="box-sub">Kesintiler Üzerinden KDV</span>
               </div>
             </div>
@@ -1055,7 +1087,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>📢 Etsy Ads İç Reklam Analizi</h3>
-              <p class="modal-sub">Etsy Arama İçi Tıklama Başı Sponsorlu Reklam Harcamaları: <strong>-₺404,30</strong> (-$8,23 USD)</p>
+              <p class="modal-sub">Etsy Arama İçi Tıklama Başı Sponsorlu Reklam Harcamaları: <strong>-₺{{ formatNumber(innerAdsTry) }}</strong> (-${{ formatNumber(innerAdsUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1063,8 +1095,8 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Reklam Harcaması</span>
-                <span class="box-val text-danger">-₺404,30</span>
-                <span class="box-sub">-$8,23 USD</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(innerAdsTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(innerAdsUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Reklam Kaynaklı Gelir</span>
@@ -1121,7 +1153,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🌐 Offsite Ads Dış Reklam Analizi</h3>
-              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-₺3.930,29</strong> (-$80,01 USD)</p>
+              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-₺{{ formatNumber(offsiteAdsTry) }}</strong> (-${{ formatNumber(offsiteAdsUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1129,13 +1161,13 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Dış Reklam Kesintisi</span>
-                <span class="box-val text-orange">-₺3.930,29</span>
-                <span class="box-sub">-$80,01 USD</span>
+                <span class="box-val text-orange">-₺{{ formatNumber(offsiteAdsTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(offsiteAdsUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Dış Reklam Satış Adedi</span>
-                <span class="box-val text-primary">4 Sipariş</span>
-                <span class="box-sub">Toplam Satışın %40'ı</span>
+                <span class="box-val text-primary">{{ offsiteAdsRecords.length }} Sipariş</span>
+                <span class="box-sub">Toplam Satışın %{{ offsiteOrderSharePct }}'i</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Komisyon Oranı</span>
@@ -1187,7 +1219,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>🔴 İade ve Geri Ödeme Analizi</h3>
-              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-₺1.888,14</strong> (-$38,44 USD)</p>
+              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-₺{{ formatNumber(refundsTry) }}</strong> (-${{ formatNumber(refundsUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1195,13 +1227,13 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam İade Tutarı</span>
-                <span class="box-val text-danger">-₺1.888,14</span>
-                <span class="box-sub">-$38,44 USD</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(refundsTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(refundsUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">İade Edilen Sipariş Sayısı</span>
-                <span class="box-val text-danger">1 Sipariş</span>
-                <span class="box-sub">İade Oranı: %3,46</span>
+                <span class="box-val text-danger">{{ refundRecords.length }} Sipariş</span>
+                <span class="box-sub">İade Oranı: %{{ refundRatioPct }}</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Geri Alınan Etsy Komisyonu</span>
@@ -1253,7 +1285,7 @@
           <div class="modal-header">
             <div class="drilldown-title-box">
               <h3>💎 Etsy Net Gelir & Platform Hakediş Analizi</h3>
-              <p class="modal-sub">Tüm Platform Kesintileri ve İadeler Sonrası Saf Etsy Hakedişi: <strong>₺35.601,79</strong> ($724,80 USD)</p>
+              <p class="modal-sub">Tüm Platform Kesintileri ve İadeler Sonrası Saf Etsy Hakedişi: <strong>₺{{ formatNumber(netIncomeTry) }}</strong> (${{ formatNumber(netIncomeUsd) }} USD)</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1261,18 +1293,18 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Brüt Satış Geliri</span>
-                <span class="box-val text-emerald">₺54.608,24</span>
-                <span class="box-sub">$1.111,73 USD</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
+                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Platform Giderleri Toplamı</span>
-                <span class="box-val text-danger">-₺19.006,45</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(etsyFeesTry + innerAdsTry + offsiteAdsTry + refundsTry) }}</span>
                 <span class="box-sub">Komisyon, Reklam & İadeler</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Etsy Net Hakediş</span>
-                <span class="box-val text-primary">₺35.601,79</span>
-                <span class="box-sub">$724,80 USD</span>
+                <span class="box-val text-primary">₺{{ formatNumber(netIncomeTry) }}</span>
+                <span class="box-sub">${{ formatNumber(netIncomeUsd) }} USD</span>
               </div>
             </div>
 

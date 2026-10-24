@@ -475,6 +475,329 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return this.netIncomeTry > 0 ? (this.bankPayoutsTry / this.netIncomeTry * 100).toFixed(1) : '0.0';
   }
 
+  periodSummaries: Array<{
+    periodLabel: string;
+    orderCount: number;
+    grossTry: number;
+    feesTry: number;
+    adsTry: number;
+    costsTry: number;
+    payoutsTry: number;
+    realProfitTry: number;
+  }> = [];
+
+  get completedOrderCount(): number {
+    return this.orders.filter(o => o.orderStatus !== 'canceled').length;
+  }
+
+  get totalCanceledCount(): number {
+    return this.orders.filter(o => o.orderStatus === 'canceled').length;
+  }
+
+  get averageOrderValueUsd(): number {
+    const active = this.completedOrderCount;
+    return active > 0 ? Number((this.grossSalesUsd / active).toFixed(2)) : 0;
+  }
+
+  get averageOrderValueTry(): number {
+    const active = this.completedOrderCount;
+    return active > 0 ? Number((this.grossSalesTry / active).toFixed(2)) : 0;
+  }
+
+  get feeToGrossRatioPct(): string {
+    return this.grossSalesTry > 0 ? (this.etsyFeesTry / this.grossSalesTry * 100).toFixed(1) : '0.0';
+  }
+
+  get estimatedVatTry(): number {
+    return Number((this.etsyFeesTry * (0.20 / 1.20)).toFixed(2));
+  }
+
+  get offsiteOrderSharePct(): string {
+    return this.orders.length > 0 ? (this.offsiteAdsRecords.length / this.orders.length * 100).toFixed(1) : '0.0';
+  }
+
+  get refundRatioPct(): string {
+    return this.grossSalesTry > 0 ? (this.refundsTry / this.grossSalesTry * 100).toFixed(1) : '0.0';
+  }
+
+  get realProfitMarginPct(): string {
+    return this.grossSalesTry > 0 ? (this.realNetProfitTry / this.grossSalesTry * 100).toFixed(1) : '0.0';
+  }
+
+  get totalShippingCostTry(): number {
+    return Number(this.orders.filter(o => o.orderStatus !== 'canceled').reduce((sum, o) => {
+      const shipUsd = o.actualShippingCostUsd != null ? o.actualShippingCostUsd : ((o.productCostUsd || 0) * 0.635);
+      return sum + (shipUsd * (o.exchangeRate || this.liveRate));
+    }, 0).toFixed(2));
+  }
+
+  get totalProductionCostTry(): number {
+    return Number(this.orders.filter(o => o.orderStatus !== 'canceled').reduce((sum, o) => {
+      const prodUsd = o.unitProductCostUsd != null ? o.unitProductCostUsd : ((o.productCostUsd || 0) * 0.28);
+      return sum + (prodUsd * (o.exchangeRate || this.liveRate));
+    }, 0).toFixed(2));
+  }
+
+  get totalPackagingCostTry(): number {
+    const rem = this.productCostsTry - this.totalShippingCostTry - this.totalProductionCostTry;
+    return Number(Math.max(0, rem).toFixed(2));
+  }
+
+  get shippingCostSharePct(): string {
+    return this.productCostsTry > 0 ? (this.totalShippingCostTry / this.productCostsTry * 100).toFixed(1) : '0.0';
+  }
+
+  get invoiceOrderCount(): number {
+    return this.orders.filter(o => o.hasInvoice).length;
+  }
+
+  get totalAdsTry(): number {
+    return Number((this.innerAdsTry + this.offsiteAdsTry).toFixed(2));
+  }
+
+  get totalExpensesTry(): number {
+    return Math.max(1, this.etsyFeesTry + this.innerAdsTry + this.offsiteAdsTry + this.refundsTry + this.productCostsTry);
+  }
+
+  get expenseCostPct(): string {
+    return (this.productCostsTry / this.totalExpensesTry * 100).toFixed(1);
+  }
+
+  get expenseFeesPct(): string {
+    return (this.etsyFeesTry / this.totalExpensesTry * 100).toFixed(1);
+  }
+
+  get expenseAdsPct(): string {
+    return ((this.innerAdsTry + this.offsiteAdsTry) / this.totalExpensesTry * 100).toFixed(1);
+  }
+
+  get expenseRefundsPct(): string {
+    return (this.refundsTry / this.totalExpensesTry * 100).toFixed(1);
+  }
+
+  rebuildDynamicBreakdowns(): void {
+    const activeOrders = this.orders.filter(o => o.orderStatus !== 'canceled');
+
+    // 1. Siparis & Kargo Maliyet Kayitlari (Modal 2)
+    this.orderCostShippingRecords = activeOrders.map(o => {
+      const rate = o.exchangeRate || this.liveRate || 49.25;
+      const totalUsd = o.productCostUsd || 0;
+      const shipUsd = o.actualShippingCostUsd != null ? o.actualShippingCostUsd : (totalUsd * 0.635);
+      return {
+        date: (o.orderDate || '').split(' ')[0],
+        receiptId: o.receiptId,
+        qty: `${o.quantity} Ad`,
+        shippingCostTry: Number((shipUsd * rate).toFixed(2)),
+        invoice: o.hasInvoice ? 'Fatura' : '—',
+        title: o.productTitle
+      };
+    });
+
+    // 2. Satis ve Gelir Analizi Kayitlari (Modal 4)
+    this.salesRecords = this.orders.map(o => {
+      const rate = o.exchangeRate || this.liveRate || 49.25;
+      const isCanceled = o.orderStatus === 'canceled' || o.orderStatus === 'refunded';
+      return {
+        date: o.orderDate,
+        receiptId: o.receiptId,
+        buyer: o.buyerName,
+        item: o.productTitle,
+        amount: isCanceled ? 0 : o.grandTotalUsd,
+        tryAmount: isCanceled ? 0 : Number((o.grandTotalUsd * rate).toFixed(2)),
+        paymentType: isCanceled ? 'canceled' : 'payment_gross'
+      };
+    });
+
+    // 3. Etsy Komisyon & Kesinti Analizi Kayitlari (Modal 5)
+    const countLabel = `${this.completedOrderCount} İşlem`;
+    const txUsd = Number((this.etsyFeesUsd * 0.44).toFixed(2));
+    const txTry = Number((this.etsyFeesTry * 0.44).toFixed(2));
+    const procUsd = Number((this.etsyFeesUsd * 0.34).toFixed(2));
+    const procTry = Number((this.etsyFeesTry * 0.34).toFixed(2));
+    const regUsd = Number((this.etsyFeesUsd * 0.06).toFixed(2));
+    const regTry = Number((this.etsyFeesTry * 0.06).toFixed(2));
+    const vatUsd = Number((this.etsyFeesUsd - txUsd - procUsd - regUsd).toFixed(2));
+    const vatTry = Number((this.etsyFeesTry - txTry - procTry - regTry).toFixed(2));
+    const offsiteOrders = this.orders.filter(o => (o.offsiteAdFeeUsd || 0) > 0);
+    const offsiteBaseUsd = Number(offsiteOrders.reduce((s, o) => s + o.grandTotalUsd, 0).toFixed(2));
+
+    this.feesRecords = [
+      { type: 'İşlem Komisyonu (%6.5)', count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: txUsd, feeTry: txTry, note: 'Etsy Transaction Fee (%6.5)' },
+      { type: 'Ödeme İşleme (Processing)', count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: procUsd, feeTry: procTry, note: 'Etsy Payments Processing Fee (%6.5 + 3₺)' },
+      { type: 'Düzenleyici İşletme Ücreti', count: countLabel, baseUsd: this.grossSalesUsd, feeUsd: regUsd, feeTry: regTry, note: 'Regulatory Operating Fee (TR %1.1)' },
+      { type: 'Etsy Kesinti KDV (VAT)', count: 'Tüm Kesintiler', baseUsd: 0, feeUsd: vatUsd, feeTry: vatTry, note: '%20 Türkiye KDV Tevkifatı' },
+      { type: 'Offsite Ads Dış Reklam Kesintisi', count: `${offsiteOrders.length} Satış`, baseUsd: offsiteBaseUsd, feeUsd: this.offsiteAdsUsd, feeTry: this.offsiteAdsTry, note: '%12-%15 Offsite Ads komisyonu' },
+      { type: 'Etsy Ads Tıklama Harcaması', count: 'Dönem Toplamı', baseUsd: 0, feeUsd: this.innerAdsUsd, feeTry: this.innerAdsTry, note: 'Arama içi sponsorlu reklam harcaması' }
+    ];
+
+    // 4. Offsite Ads Dis Reklam Kayitlari (Modal 7)
+    this.offsiteAdsRecords = offsiteOrders.map(o => {
+      const rate = o.exchangeRate || this.liveRate || 49.25;
+      const pct = o.grandTotalUsd > 0 ? Math.round((o.offsiteAdFeeUsd / o.grandTotalUsd) * 100) : 15;
+      return {
+        receiptId: o.receiptId,
+        buyer: o.buyerName,
+        saleAmountUsd: o.grandTotalUsd,
+        rate: `%${pct}`,
+        feeUsd: o.offsiteAdFeeUsd,
+        feeTry: Number((o.offsiteAdFeeUsd * rate).toFixed(2)),
+        channel: 'Google / Sosyal Medya Reklamları'
+      };
+    });
+
+    // 5. Iade ve Geri Odeme Kayitlari (Modal 8)
+    this.refundRecords = this.orders
+      .filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded')
+      .map(o => {
+        const rate = o.exchangeRate || this.liveRate || 49.25;
+        return {
+          date: o.orderDate,
+          receiptId: o.receiptId,
+          buyer: o.buyerName,
+          item: o.productTitle,
+          refundUsd: o.grandTotalUsd,
+          refundTry: Number((o.grandTotalUsd * rate).toFixed(2)),
+          reason: 'Sipariş İptali / Tam İade',
+          feeRefundedUsd: o.etsyFeesUsd
+        };
+      });
+
+    // 6. Gercek Net Kar & Bilanco Analizi Tablosu (Modal 3)
+    this.balanceBreakdownRecords = [
+      { type: 'Gelir', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: this.netIncomeTry, status: '🟢 Net', isPositive: true, explanation: 'Komisyon, reklam ve iadeler sonrası platformdan kalan net hakediş' },
+      { type: 'Kargo', name: 'Kargo Gönderimleri', detail: `${this.completedOrderCount} Gönderi`, amount: -this.totalShippingCostTry, status: '', isPositive: false, explanation: 'Siparişlerin müşterilere kargolanma ve lojistik maliyeti (ShipEntegra / QuickShipper)' },
+      { type: 'Üretim', name: '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -this.totalProductionCostTry, status: '', isPositive: false, explanation: 'Üretimde harcanan hammadde ve 3D yazıcı amortismanı' },
+      { type: 'Paket', name: 'Paketleme & Fatura', detail: `${this.invoiceOrderCount} Fatura`, amount: -this.totalPackagingCostTry, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' },
+      { type: 'KÂR', name: 'GERÇEK NET KÂR', detail: 'Saf Kâr', amount: this.realNetProfitTry, status: '🟢 Kâr', isPositive: true, explanation: 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' }
+    ];
+
+    // 7. Etsy Net Gelir Mutabakat Tablosu (Modal 9)
+    const stdFeesUsd = Number((this.etsyFeesUsd - vatUsd).toFixed(2));
+    const stdFeesTry = Number((this.etsyFeesTry - vatTry).toFixed(2));
+    this.netIncomeRecords = [
+      { category: 'Brüt Satış Geliri', amountUsd: this.grossSalesUsd, amountTry: this.grossSalesTry, isPositive: true, note: 'Müşterilerden tahsil edilen toplam sipariş tutarı' },
+      { category: 'Etsy Standart Komisyon & İşlem Ücreti', amountUsd: -stdFeesUsd, amountTry: -stdFeesTry, isPositive: false, note: 'Transaction, listing, processing & regulatory fee' },
+      { category: 'Offsite Ads Dış Reklam Kesintisi', amountUsd: -this.offsiteAdsUsd, amountTry: -this.offsiteAdsTry, isPositive: false, note: 'Dış arama motoru ve sosyal medya reklam payı' },
+      { category: 'Etsy Ads Arama İçi Reklam', amountUsd: -this.innerAdsUsd, amountTry: -this.innerAdsTry, isPositive: false, note: 'Etsy içi tıklama başı reklam harcaması' },
+      { category: 'Etsy Kesinti KDV (VAT)', amountUsd: -vatUsd, amountTry: -vatTry, isPositive: false, note: 'Kesintilere uygulanan resmî KDV tevkifatı' },
+      { category: 'İadeler ve İptaller (Refunds)', amountUsd: -this.refundsUsd, amountTry: -this.refundsTry, isPositive: false, note: 'İade edilen sipariş tutarı' },
+      { category: 'NET HAKEDİŞ (ETSY NET GELİR)', amountUsd: this.netIncomeUsd, amountTry: this.netIncomeTry, isPositive: true, note: 'Banka hesabına aktarılmaya hazır nihai platform bakiyesi' }
+    ];
+
+    // 8. Odeme Defteri Kayitlari (Ledger Entries Tab 5)
+    const entries: any[] = [];
+    let runningBal = 0;
+    const chronoOrders = [...this.orders].reverse();
+    for (const o of chronoOrders) {
+      const rate = o.exchangeRate || this.liveRate || 49.25;
+      const netOrderUsd = Number((o.grandTotalUsd - o.etsyFeesUsd - (o.offsiteAdFeeUsd || 0)).toFixed(2));
+      runningBal = Number((runningBal + netOrderUsd).toFixed(2));
+      entries.push({
+        id: `TX-${o.receiptId}`,
+        entryDate: o.orderDate,
+        transactionType: o.orderStatus === 'canceled' ? 'refund' : 'PAYMENT',
+        typeDisplay: o.orderStatus === 'canceled' ? 'İade / İptal' : 'Sipariş Tahsilatı',
+        title: `Payment for Order #${o.receiptId} (${o.buyerName})`,
+        orderNumber: `#${o.receiptId}`,
+        grossAmount: o.grandTotalUsd,
+        feeAmount: -Number((o.etsyFeesUsd + (o.offsiteAdFeeUsd || 0)).toFixed(2)),
+        netAmount: o.orderStatus === 'canceled' ? -o.grandTotalUsd : netOrderUsd,
+        currency: 'USD',
+        netAmountTry: Number(((o.orderStatus === 'canceled' ? -o.grandTotalUsd : netOrderUsd) * rate).toFixed(2)),
+        runningBalance: Math.max(0, runningBal)
+      });
+    }
+    if (entries.length > 0) {
+      this.ledgerEntries = entries.reverse();
+    }
+
+    // 9. Donemsel Muhasebe Aylik Gruplama (Tab 3)
+    const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+    const map = new Map<string, { sortKey: number; label: string; count: number; gross: number; fees: number; ads: number; costs: number; payouts: number; profit: number }>();
+
+    for (const o of this.orders) {
+      const dPart = (o.orderDate || '').split(' ')[0];
+      const parts = dPart.split('.');
+      if (parts.length === 3) {
+        const m = parseInt(parts[1], 10);
+        let y = parseInt(parts[2], 10);
+        if (y < 100) y += 2000;
+        if (!isNaN(m) && !isNaN(y) && m >= 1 && m <= 12) {
+          const key = `${y}-${String(m).padStart(2, '0')}`;
+          const rate = o.exchangeRate || this.liveRate || 49.25;
+          if (!map.has(key)) {
+            map.set(key, {
+              sortKey: y * 100 + m,
+              label: `${monthNames[m - 1]} ${y}`,
+              count: 0,
+              gross: 0,
+              fees: 0,
+              ads: 0,
+              costs: 0,
+              payouts: 0,
+              profit: 0
+            });
+          }
+          const bucket = map.get(key)!;
+          bucket.count += 1;
+          if (o.orderStatus !== 'canceled') {
+            const gTry = o.grandTotalUsd * rate;
+            const fTry = o.etsyFeesUsd * rate;
+            const aTry = (o.offsiteAdFeeUsd || 0) * rate;
+            const cTry = (o.productCostUsd || 0) * rate;
+            bucket.gross += gTry;
+            bucket.fees += fTry;
+            bucket.ads += aTry;
+            bucket.costs += cTry;
+            bucket.profit += o.netProfitTry || (gTry - fTry - aTry - cTry);
+          }
+        }
+      }
+    }
+
+    for (const p of this.bankPayoutRecords) {
+      const dPart = (p.date || '').split(' ')[0];
+      const parts = dPart.split('.');
+      if (parts.length === 3) {
+        const m = parseInt(parts[1], 10);
+        let y = parseInt(parts[2], 10);
+        if (y < 100) y += 2000;
+        if (!isNaN(m) && !isNaN(y) && m >= 1 && m <= 12) {
+          const key = `${y}-${String(m).padStart(2, '0')}`;
+          if (!map.has(key)) {
+            map.set(key, {
+              sortKey: y * 100 + m,
+              label: `${monthNames[m - 1]} ${y}`,
+              count: 0,
+              gross: 0,
+              fees: 0,
+              ads: 0,
+              costs: 0,
+              payouts: 0,
+              profit: 0
+            });
+          }
+          map.get(key)!.payouts += p.amount;
+        }
+      }
+    }
+
+    this.periodSummaries = Array.from(map.values())
+      .sort((a, b) => b.sortKey - a.sortKey)
+      .map(b => ({
+        periodLabel: b.label,
+        orderCount: b.count,
+        grossTry: Number(b.gross.toFixed(2)),
+        feesTry: Number(b.fees.toFixed(2)),
+        adsTry: Number(b.ads.toFixed(2)),
+        costsTry: Number(b.costs.toFixed(2)),
+        payoutsTry: Number(b.payouts.toFixed(2)),
+        realProfitTry: Number(b.profit.toFixed(2))
+      }));
+  }
+  private _unusedPayoutHelper(): void {
+  }
+
   getHistoricalRateForDate(date: Date): number {
     const d = date.getDate();
     const m = date.getMonth() + 1;
@@ -583,9 +906,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
             netProfitTry: dto.netProfitTry || 0,
             hasCostData: Boolean(dto.hasCostData),
             hasInvoice: Boolean(dto.hasInvoice),
-            invoiceName: dto.invoicePath
+            invoiceName: dto.invoicePath,
+            unitProductCostUsd: dto.unitProductCostUsd !== undefined ? dto.unitProductCostUsd : undefined,
+            actualShippingCostUsd: dto.actualShippingCostUsd !== undefined ? dto.actualShippingCostUsd : undefined,
+            packagingCostUsd: dto.packagingCostUsd !== undefined ? dto.packagingCostUsd : undefined,
+            costNotes: dto.costNotes || undefined
           }));
           this.filterOrders();
+          this.rebuildDynamicBreakdowns();
           if (isManualRefresh) {
             this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${this.orders.length} sipariş yüklendi.`);
           }
@@ -655,6 +983,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
           }
 
           this.totalLedgerCount = perf.receiptCount || this.orders.length;
+          this.rebuildDynamicBreakdowns();
           if (perf.bankPayoutsTRY !== undefined && perf.bankPayoutsTRY !== null) {
             this.bankPayoutsUsd = Number(perf.bankPayoutsUSD ?? (perf.bankPayoutsTRY / rate));
             this.bankPayoutsTry = Number(perf.bankPayoutsTRY);
@@ -683,7 +1012,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
             const exTime = new Date(ex.occurredAt).getTime();
             const exAmt = Math.abs(Number(ex.amount || 0));
             const diffMs = Math.abs(exTime - pTime);
-            return (diffMs < 120000 || Math.abs(diffMs - 10800000) < 120000) && Math.abs(exAmt - pAmt) < 0.25;
+            const isSameOrTimezoneShifted = diffMs < 120000 || Math.abs(diffMs - 10800000) < 120000;
+            return isSameOrTimezoneShifted && Math.abs(exAmt - pAmt) < 0.25;
           });
 
           if (existingIdx < 0) {
@@ -720,6 +1050,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
             };
           });
         } else if (!this.bankPayoutsTry) {
+          this.bankPayoutsUsd = 0;
+          this.bankPayoutsTry = 0;
+          this.bankPayoutRecords = [];
+        }
+        this.rebuildDynamicBreakdowns();
+        if (false) {
           this.bankPayoutsUsd = 0;
           this.bankPayoutsTry = 0;
           this.bankPayoutRecords = [];
@@ -1080,6 +1416,10 @@ export class AccountingComponent implements OnInit, OnDestroy {
     if (this.selectedOrder) {
       const totalCost = Number((this.costModalProduction + this.costModalShipping + this.costModalPackaging).toFixed(2));
       this.selectedOrder.productCostUsd = totalCost;
+      this.selectedOrder.unitProductCostUsd = this.costModalProduction;
+      this.selectedOrder.actualShippingCostUsd = this.costModalShipping;
+      this.selectedOrder.packagingCostUsd = this.costModalPackaging;
+      this.rebuildDynamicBreakdowns();
       this.selectedOrder.hasCostData = true;
       this.selectedOrder.netProfitUsd = Number((this.selectedOrder.grandTotalUsd - this.selectedOrder.etsyFeesUsd - this.selectedOrder.offsiteAdFeeUsd - totalCost).toFixed(2));
       this.selectedOrder.netProfitTry = Number((this.selectedOrder.netProfitUsd * this.selectedOrder.exchangeRate).toFixed(2));
