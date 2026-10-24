@@ -22,8 +22,14 @@ export class CopilotSessionStorageService {
   private readonly DB_VERSION = 1;
   private readonly STORE_NAME = 'chat_sessions';
   private readonly ACTIVE_ID_KEY = 'etsy_copilot_active_session_id';
+  private readonly BACKUP_PREFIX = 'etsy_copilot_backup_';
 
   private dbPromise: Promise<IDBDatabase> | null = null;
+  /**
+   * Synchronous in-memory session cache to completely eliminate race conditions
+   * between user message typing and asynchronous background LLM callbacks.
+   */
+  private sessionCache = new Map<string, CopilotChatSession>();
 
   constructor() {
     this.initDb().catch(err => {
@@ -80,28 +86,49 @@ export class CopilotSessionStorageService {
   public async getAllSessions(): Promise<CopilotChatSession[]> {
     try {
       const db = await this.initDb();
-      return new Promise((resolve, reject) => {
+      const idbList: CopilotChatSession[] = await new Promise((resolve, reject) => {
         const tx = db.transaction(this.STORE_NAME, 'readonly');
         const store = tx.objectStore(this.STORE_NAME);
         const req = store.getAll();
 
-        req.onsuccess = () => {
-          const list = (req.result || []) as CopilotChatSession[];
-          list.sort((a, b) => b.updatedAt - a.updatedAt);
-          resolve(list);
-        };
+        req.onsuccess = () => resolve((req.result || []) as CopilotChatSession[]);
         req.onerror = () => reject(req.error);
       });
+
+      // Merge with in-memory cache to ensure zero lag
+      const mergedMap = new Map<string, CopilotChatSession>();
+      for (const s of idbList) {
+        mergedMap.set(s.id, s);
+      }
+      for (const [id, cached] of this.sessionCache.entries()) {
+        const existing = mergedMap.get(id);
+        if (!existing || cached.updatedAt >= existing.updatedAt) {
+          mergedMap.set(id, cached);
+        }
+      }
+
+      const list = Array.from(mergedMap.values());
+      list.sort((a, b) => b.updatedAt - a.updatedAt);
+      return list;
     } catch (err) {
-      console.warn('[CopilotSessionStorage] IndexedDB read error:', err);
-      return [];
+      console.warn('[CopilotSessionStorage] IndexedDB read error, falling back to cache:', err);
+      const list = Array.from(this.sessionCache.values());
+      list.sort((a, b) => b.updatedAt - a.updatedAt);
+      return list;
     }
   }
 
   public async getSession(id: string): Promise<CopilotChatSession | null> {
+    // 1. Check synchronous in-memory cache first (prevents race conditions)
+    if (this.sessionCache.has(id)) {
+      const cached = this.sessionCache.get(id)!;
+      return JSON.parse(JSON.stringify(cached));
+    }
+
+    // 2. Check IndexedDB
     try {
       const db = await this.initDb();
-      return new Promise((resolve, reject) => {
+      const session = await new Promise<CopilotChatSession | null>((resolve, reject) => {
         const tx = db.transaction(this.STORE_NAME, 'readonly');
         const store = tx.objectStore(this.STORE_NAME);
         const req = store.get(id);
@@ -109,16 +136,44 @@ export class CopilotSessionStorageService {
         req.onsuccess = () => resolve(req.result || null);
         req.onerror = () => reject(req.error);
       });
+
+      if (session) {
+        this.sessionCache.set(id, JSON.parse(JSON.stringify(session)));
+        return session;
+      }
     } catch (err) {
-      console.warn('[CopilotSessionStorage] Failed to get session:', err);
-      return null;
+      console.warn('[CopilotSessionStorage] Failed to get session from IDB:', err);
     }
+
+    // 3. Fallback to LocalStorage backup
+    try {
+      const backupRaw = localStorage.getItem(this.BACKUP_PREFIX + id);
+      if (backupRaw) {
+        const backupSession = JSON.parse(backupRaw) as CopilotChatSession;
+        this.sessionCache.set(id, backupSession);
+        return backupSession;
+      }
+    } catch {}
+
+    return null;
   }
 
   public async saveSession(session: CopilotChatSession): Promise<void> {
+    if (!session || !session.id) return;
+
+    // 1. Synchronously update in-memory cache immediately
+    const cloned = JSON.parse(JSON.stringify(session));
+    this.sessionCache.set(session.id, cloned);
+
+    // 2. Immediate LocalStorage backup (safeguards against browser reload during LLM generation)
+    try {
+      localStorage.setItem(this.BACKUP_PREFIX + session.id, JSON.stringify(cloned));
+    } catch {}
+
+    // 3. Persist to IndexedDB
     try {
       const db = await this.initDb();
-      return new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(this.STORE_NAME, 'readwrite');
         const store = tx.objectStore(this.STORE_NAME);
         const req = store.put(session);
@@ -127,14 +182,19 @@ export class CopilotSessionStorageService {
         req.onerror = () => reject(req.error);
       });
     } catch (err) {
-      console.warn('[CopilotSessionStorage] Failed to save session:', err);
+      console.warn('[CopilotSessionStorage] Failed to save session to IDB:', err);
     }
   }
 
   public async deleteSession(id: string): Promise<void> {
+    this.sessionCache.delete(id);
+    try {
+      localStorage.removeItem(this.BACKUP_PREFIX + id);
+    } catch {}
+
     try {
       const db = await this.initDb();
-      return new Promise((resolve, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const tx = db.transaction(this.STORE_NAME, 'readwrite');
         const store = tx.objectStore(this.STORE_NAME);
         const req = store.delete(id);
@@ -179,6 +239,7 @@ export class CopilotSessionStorageService {
       messages: [],
       conversationHistory: []
     };
+    this.sessionCache.set(id, JSON.parse(JSON.stringify(session)));
     this.setActiveSessionId(id);
     return session;
   }

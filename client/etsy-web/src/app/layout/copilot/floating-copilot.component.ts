@@ -55,7 +55,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
             <span class="btn-plus">＋</span>
             <span class="btn-text">Yeni</span>
           </button>
-          <button class="btn-icon" [class.active]="isHistoryOpen" (click)="toggleHistoryDrawer()" title="Geçmiş Sohbetler">📜</button>
+          <button class="btn-icon" [class.active]="isHistoryOpen" (click)="toggleHistoryDrawer()" title="Geçmiş Sohbetler">
+            📜<span *ngIf="savedSessions.length > 0" class="history-count-badge">{{ savedSessions.length }}</span>
+          </button>
           <button class="btn-icon" (click)="openAiSettingsModal()" title="Yapay Zeka & Model Ayarları (DeepSeek, OpenAI, Claude, Grok, Gemini)">⚙️</button>
           <button class="btn-icon" (click)="clearChat()" title="Sohbeti Temizle (/clear)">🗑️</button>
           <button class="btn-close" (click)="toggleOpen()" title="Kapat">×</button>
@@ -79,6 +81,9 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
             (click)="selectSession(s)">
             <div class="history-card-body">
               <div class="history-card-title">{{ s.title }}</div>
+              <div *ngIf="getLastUserQuery(s)" class="history-card-preview">
+                ❓ {{ getLastUserQuery(s) }}
+              </div>
               <div class="history-card-sub">
                 <span>💬 {{ s.messages.length }} mesaj</span>
                 <span>•</span>
@@ -454,6 +459,25 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       overflow: hidden;
       text-overflow: ellipsis;
       display: block;
+    }
+    .history-card-preview {
+      font-size: 0.72rem;
+      color: #93c5fd;
+      margin-top: 2px;
+      margin-bottom: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .history-count-badge {
+      display: inline-block;
+      margin-left: 3px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.15);
+      border-radius: 10px;
+      padding: 0 4px;
     }
     .history-card-sub {
       display: flex;
@@ -1169,14 +1193,26 @@ export class FloatingCopilotComponent implements OnInit {
     if (activeId) {
       const existing = await this.sessionStorage.getSession(activeId);
       if (existing && existing.messages && existing.messages.length > 0) {
-        this.activeSession = existing;
-        this.messages = existing.messages;
-        this.assistantAi.setConversationHistory(existing.conversationHistory || []);
-        return;
+        const hasUserMessages = existing.messages.some(m => m.sender === 'user');
+        if (hasUserMessages) {
+          this.activeSession = existing;
+          this.messages = existing.messages;
+          this.assistantAi.setConversationHistory(existing.conversationHistory || []);
+          return;
+        }
       }
     }
 
     const all = await this.sessionStorage.getAllSessions();
+    const sessionWithUser = all.find(s => s.messages && s.messages.some(m => m.sender === 'user'));
+    if (sessionWithUser) {
+      this.activeSession = sessionWithUser;
+      this.messages = sessionWithUser.messages;
+      this.assistantAi.setConversationHistory(sessionWithUser.conversationHistory || []);
+      this.sessionStorage.setActiveSessionId(sessionWithUser.id);
+      return;
+    }
+
     if (all.length > 0 && all[0].messages && all[0].messages.length > 0) {
       this.activeSession = all[0];
       this.messages = all[0].messages;
@@ -1186,6 +1222,15 @@ export class FloatingCopilotComponent implements OnInit {
     }
 
     this.startNewChat(false);
+  }
+
+  getLastUserQuery(s: CopilotChatSession): string {
+    if (!s || !s.messages) return '';
+    const userMsgs = s.messages.filter(m => m.sender === 'user');
+    if (userMsgs.length === 0) return '';
+    const last = userMsgs[userMsgs.length - 1].text || '';
+    const cleaned = last.replace(/<[^>]*>/g, '').trim();
+    return cleaned.length > 36 ? cleaned.slice(0, 34) + '...' : cleaned;
   }
 
   async refreshSavedSessionsList(): Promise<void> {
@@ -1352,12 +1397,14 @@ Size nasıl yardımcı olabilirim?<br>
       : `📎 ${attachmentsToSend.length} adet ekli belge/resim inceler misin?`);
 
     const now = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    this.messages.push({
+    const userMsg: AssistantChatMessage = {
       sender: 'user',
       text: displayText,
       time: now,
       attachments: attachmentsToSend
-    });
+    };
+    this.messages.push(userMsg);
+    targetSession.messages = [...this.messages];
     this.syncCurrentSession();
 
     // Snapshot this session's history before initiating background LLM call
