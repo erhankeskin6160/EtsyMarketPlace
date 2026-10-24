@@ -467,8 +467,16 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
           this.conversationHistory = [...history];
         }
 
-        // Autonomous Action / Tool Calling Intent Detection (skip if user is asking inquiry about MCP)
-        const isActionRequest = !isMcpInquiry && (
+        // 1. Shipment Report / Order Cost Match Intent Detection
+        const isShipmentReport = !isMcpInquiry && (
+          lowerPrompt.includes('get user shipment report') ||
+          (lowerPrompt.includes('shipmentcost') && lowerPrompt.includes('receivername')) ||
+          (lowerPrompt.includes('kargo maliyet') && (lowerPrompt.includes('gir') || lowerPrompt.includes('isle') || lowerPrompt.includes('işle') || lowerPrompt.includes('kaydet') || lowerPrompt.includes('rapor') || lowerPrompt.includes('gercek') || lowerPrompt.includes('gerçek'))) ||
+          (lowerPrompt.includes('kargo') && lowerPrompt.includes('maliyet') && (lowerPrompt.includes('müşteri') || lowerPrompt.includes('musteri') || lowerPrompt.includes('ürün') || lowerPrompt.includes('urun')))
+        );
+
+        // 2. Draft Listing Action Intent Detection
+        const isActionRequest = !isShipmentReport && !isMcpInquiry && (
           lowerPrompt.includes('hızlı ürün') || lowerPrompt.includes('hizli urun') ||
           lowerPrompt.includes('hızlı ekle') || lowerPrompt.includes('hizli ekle') ||
           lowerPrompt.includes('taslak aç') || lowerPrompt.includes('taslak ac') ||
@@ -483,18 +491,25 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         const keyword = toolContext?.keyword || this.extractSearchKeyword(userPrompt, attachments);
         const avgPrice = toolContext?.marketResult?.kpis?.averagePrice || 14.90;
 
-        const autoAction$: Observable<ToolExecutionResult | null> = isActionRequest ? this.toolRegistry.executeTool('create_etsy_draft_listing', {
-          title: `3D Printed ${this.capitalizeWords(keyword)} | Custom DIY Model Kit Gift`,
-          priceUsd: Number(avgPrice.toFixed(2)),
-          tags: this.generateTagsForKeyword(keyword),
-          description: `Custom 3D printed ${keyword}. Handcrafted with precision engineering and high-grade PLA filament.\n\n` +
-            `• Lightweight and durable punch-out design.\n` +
-            `• Perfect gift for aviation enthusiasts, collectors, and hobbyists.\n` +
-            `• Carefully packaged with protective backing.\n` +
-            `• Dispatched via trackable international shipping.`,
-          materials: ['PLA Filament', 'Eco friendly Plastic', 'Handcrafted'],
-          quantity: 15
-        }, attachments) : of<ToolExecutionResult | null>(null);
+        let autoAction$: Observable<ToolExecutionResult | null>;
+        if (isShipmentReport) {
+          autoAction$ = this.toolRegistry.executeTool('match_and_save_shipping_report', { rawReportText: userPrompt });
+        } else if (isActionRequest) {
+          autoAction$ = this.toolRegistry.executeTool('create_etsy_draft_listing', {
+            title: `3D Printed ${this.capitalizeWords(keyword)} | Custom DIY Model Kit Gift`,
+            priceUsd: Number(avgPrice.toFixed(2)),
+            tags: this.generateTagsForKeyword(keyword),
+            description: `Custom 3D printed ${keyword}. Handcrafted with precision engineering and high-grade PLA filament.\n\n` +
+              `• Lightweight and durable punch-out design.\n` +
+              `• Perfect gift for aviation enthusiasts, collectors, and hobbyists.\n` +
+              `• Carefully packaged with protective backing.\n` +
+              `• Dispatched via trackable international shipping.`,
+            materials: ['PLA Filament', 'Eco friendly Plastic', 'Handcrafted'],
+            quantity: 15
+          }, attachments);
+        } else {
+          autoAction$ = of<ToolExecutionResult | null>(null);
+        }
 
         return autoAction$.pipe(
           switchMap((actionResult: ToolExecutionResult | null): Observable<AiResponseResult> => {
@@ -1147,7 +1162,15 @@ KARGO SEÇİM KURALI:
 `;
     }
 
-    return `SENİN KİMLİĞİN VE ROLÜN:
+    return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨 GERÇEK KARGO VE SİPARİŞ MALİYETLERİ İŞLEME KURALI:
+1. Kullanıcı bir kargo raporu (JSON veya sevkiyat listesi) paylaştığında;
+   Sistem bu raporu otomatik olarak inceleyip müşteri adları (örn: Luis Miguel Barrajon Gigante, Inge Neuer) ve ürün adlarıyla canlı Etsy sipariş geçmişini eşleştirir ve hesaplanan gerçek kargo maliyetlerini VDS API veritabanına doğrudan kaydeder.
+2. ASLA "marketplaceOrderId: null olduğu için otomatik yazamıyorum" veya "sen bana sipariş ID ver ben yazayım" deme! Sistem müşteri adından ve ürün adından otomatik akıllı eşleştirme yapabilmektedir.
+3. Yanıtında eşleşen ve veritabanına başarıyla kaydedilen siparişleri (Sipariş No, Alıcı Adı, Kargo Tutarı $ / ₺), varsa test/örnek kayıtları net ve şeffaf bir dille kullanıcıya raporla.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SENİN KİMLİĞİN VE ROLÜN:
 Sen EtsyMarketPlace Enterprise platformunun resmi, zeki ve samimi "Kıdemli E-Ticaret ve Mağaza Danışmanı / Kurucu Ortak Asistanı"sın.
 Şu anda kullanıcının tercihi olan aktif yapay zeka altyapısı (${provider} - ${model}) üzerinde çalışıyorsun.
 

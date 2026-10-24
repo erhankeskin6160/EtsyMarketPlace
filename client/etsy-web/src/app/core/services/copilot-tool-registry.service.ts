@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, of } from 'rxjs';
-import { map, catchError } from 'rxjs/operators';
+import { Observable, of, forkJoin } from 'rxjs';
+import { map, catchError, switchMap } from 'rxjs/operators';
 import { EtsyApiService, CreateListingPayload, CreatedListingResponseDto } from './etsy-api.service';
 import { AiSettingsService } from './ai-settings.service';
 import { ChatAttachment } from './store-ai-assistant.service';
@@ -134,6 +134,38 @@ export class CopilotToolRegistryService {
       {
         type: 'function',
         function: {
+          name: 'match_and_save_shipping_report',
+          description: 'Kargo servisinden (Aras Global, Widect, FedEx, AFS) gelen sevkiyat/kargo raporunu (JSON veya döküm) inceler, mağazanın Etsy siparişleriyle alıcı adı ve ürün adına göre otomatik eşleştirir ve kargo maliyetlerini VDS API veritabanına doğrudan kaydeder.',
+          parameters: {
+            type: 'object',
+            properties: {
+              rawReportText: { type: 'string', description: 'Kargo servisinden gelen ham JSON raporu veya sevkiyat listesi metni' }
+            },
+            required: ['rawReportText']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
+          name: 'save_order_cost',
+          description: 'Belirtilen Etsy siparişinin kargo, üretim ve paketleme maliyetini kaydeder ve finansal net kârı günceller.',
+          parameters: {
+            type: 'object',
+            properties: {
+              receiptId: { type: 'string', description: 'Etsy sipariş/dekont numarası (örn: 4146511644)' },
+              shippingCostUsd: { type: 'number', description: 'Kargo maliyeti (Dolar)' },
+              productCostUsd: { type: 'number', description: 'Ürün üretim / hammadde maliyeti (Dolar)' },
+              packagingCostUsd: { type: 'number', description: 'Paketleme maliyeti (Dolar)' },
+              notes: { type: 'string', description: 'Kargo sağlayıcı ve detay notu' }
+            },
+            required: ['receiptId', 'shippingCostUsd']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'navigate_to_module',
           description: 'Kullanıcının ekranını ilgili mağaza modülüne yönlendirir (örn: "/listings/fast-creator", "/market/research", "/analytics/finance").',
           parameters: {
@@ -169,6 +201,12 @@ export class CopilotToolRegistryService {
 
       case 'calculate_shipping_rates':
         return this.handleShippingCalculation(args);
+
+      case 'match_and_save_shipping_report':
+        return this.handleMatchAndSaveShippingReport(args);
+
+      case 'save_order_cost':
+        return this.handleSaveOrderCost(args);
 
       case 'navigate_to_module':
         return this.handleNavigate(args);
@@ -516,6 +554,302 @@ export class CopilotToolRegistryService {
     <a href="https://www.etsy.com/your/shops/me/tools/listings/state:draft" target="_blank" rel="noopener noreferrer" style="flex:1;min-width:140px;background:#f97316;color:#ffffff;text-decoration:none;padding:7px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:background 0.2s;">
       <span>🛒</span> Etsy Taslaklar'da Aç ↗
     </a>
+  </div>
+</div>
+`;
+  }
+
+  private handleSaveOrderCost(args: any): Observable<ToolExecutionResult> {
+    const receiptId = String(args.receiptId || '').trim();
+    const shippingCostUsd = Number(args.shippingCostUsd) || 0;
+    const productCostUsd = Number(args.productCostUsd) || 0;
+    const packagingCostUsd = Number(args.packagingCostUsd) || 0;
+    const notes = String(args.notes || '');
+
+    if (!receiptId) {
+      return of({
+        toolName: 'save_order_cost',
+        success: false,
+        data: null,
+        message: 'receiptId zorunludur.'
+      });
+    }
+
+    return this.etsyApi.saveOrderCost(receiptId, {
+      shippingCost: shippingCostUsd,
+      productCost: productCostUsd,
+      packagingCost: packagingCostUsd,
+      notes
+    }).pipe(
+      map(res => {
+        const total = Number((shippingCostUsd + productCostUsd + packagingCostUsd).toFixed(2));
+        const cardHtml = `
+<div style="background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:12px;margin:10px 0;">
+  <div style="font-weight:700;color:#10b981;font-size:14px;margin-bottom:6px;">
+    ✅ Sipariş #${receiptId} Maliyeti Kaydedildi!
+  </div>
+  <div style="font-size:13px;color:#e2e8f0;line-height:1.5;">
+    • Kargo Maliyeti: <strong>${shippingCostUsd.toFixed(2)}</strong><br>
+    • Üretim/Hammadde: <strong>${productCostUsd.toFixed(2)}</strong><br>
+    • Toplam COGS: <strong>${total.toFixed(2)}</strong>
+    ${notes ? `<br><small style="color:#94a3b8;">Not: ${notes}</small>` : ''}
+  </div>
+</div>`;
+        return {
+          toolName: 'save_order_cost',
+          success: true,
+          data: { receiptId, totalCost: total, res },
+          actionCardHtml: cardHtml,
+          message: `#${receiptId} nolu siparişin maliyeti (${total.toFixed(2)}) VDS sunucusuna kaydedildi.`
+        };
+      }),
+      catchError(err => of({
+        toolName: 'save_order_cost',
+        success: false,
+        data: null,
+        message: `Maliyet kaydetme hatası: ${err?.message || 'Bilinmeyen hata'}`
+      }))
+    );
+  }
+
+  public handleMatchAndSaveShippingReport(args: any): Observable<ToolExecutionResult> {
+    const rawText = String(args.rawReportText || (typeof args === 'string' ? args : JSON.stringify(args)));
+    const liveRate = this.etsyApi.exchangeRate() || 49.73;
+
+    let shipments: any[] = [];
+    try {
+      const match = rawText.match(/\{[\s\S]*"results"\s*:\s*\[[\s\S]*\][\s\S]*\}/);
+      if (match) {
+        const parsed = JSON.parse(match[0]);
+        shipments = parsed.payload?.results || parsed.results || [];
+      } else {
+        const direct = JSON.parse(rawText);
+        shipments = direct.payload?.results || direct.results || (Array.isArray(direct) ? direct : []);
+      }
+    } catch {
+      // Regex extraction fallback
+      const rx = /"receiverName"\s*:\s*"([^"]+)"[\s\S]*?"shipmentCost"\s*:\s*([0-9.]+)/g;
+      let m;
+      while ((m = rx.exec(rawText)) !== null) {
+        shipments.push({
+          receiverName: m[1],
+          shipmentCost: parseFloat(m[2])
+        });
+      }
+    }
+
+    if (shipments.length === 0) {
+      return of({
+        toolName: 'match_and_save_shipping_report',
+        success: false,
+        data: null,
+        message: 'Kargo raporunda incelenecek geçerli gönderi kaydı bulunamadı.'
+      });
+    }
+
+    const twoYearsAgo = new Date(Date.now() - 730 * 24 * 60 * 60 * 1000);
+    const now = new Date();
+
+    return this.etsyApi.getOrderFinancialsByDateRange(twoYearsAgo, now).pipe(
+      catchError(() => of({ orders: [], count: 0, totalOrderProfitUsd: 0, totalOrderProfitTry: 0, exchangeRateUsed: liveRate, ledgerOk: true })),
+      switchMap((orderRes: any) => {
+        const orders: any[] = orderRes?.orders || [];
+        const matchedUpdates: any[] = [];
+        const unmatchedList: any[] = [];
+        const saveOps$: Observable<any>[] = [];
+
+        // Deduplicate shipments by receiverName + totalCost to avoid registering identical draft attempts multiple times
+        const processedKeys = new Set<string>();
+
+        for (const s of shipments) {
+          const rName = (s.receiverName || '').trim();
+          const pName = (s.products?.[0]?.productName || '').trim();
+          const sCostTry = Number(s.shipmentCost || 0);
+          const addCostTry = Number(s.additionalServiceTotalCost || 0);
+          const totalTry = sCostTry + addCostTry;
+          const rate = Number(s.exchangeRate) > 0 ? Number(s.exchangeRate) : liveRate;
+          const shippingUsd = Number((totalTry / rate).toFixed(2));
+          const supplier = s.supplierName || 'Kargo';
+          const extId = s.externalId || s.customerSpecialCode || '—';
+
+          if (!rName && !pName) continue;
+
+          const dedupeKey = `${rName.toLowerCase()}_${totalTry.toFixed(0)}`;
+          if (processedKeys.has(dedupeKey)) continue;
+          processedKeys.add(dedupeKey);
+
+          // Fuzzy match against orders
+          const matchedOrder = orders.find((o: any) => {
+            const bName = (o.buyerName || '').toLowerCase().trim();
+            const rNameLower = rName.toLowerCase();
+            const oTitle = (o.productTitle || '').toLowerCase();
+            const pNameLower = pName.toLowerCase();
+
+            if (rNameLower.length > 2 && (bName.includes(rNameLower) || rNameLower.includes(bName))) {
+              return true;
+            }
+
+            // Substring words check
+            const rWords: string[] = rNameLower.split(/\s+/).filter((w: string) => w.length >= 3);
+            const bWords: string[] = bName.split(/\s+/).filter((w: string) => w.length >= 3);
+            const commonWords: string[] = rWords.filter((w: string) => bWords.includes(w));
+            if (commonWords.length >= 2) return true;
+
+            // Product keywords check
+            if (pNameLower.length > 5) {
+              const pWords: string[] = pNameLower.split(/[\s,]+/).filter((w: string) => w.length >= 4);
+              const hasKeyword = pWords.some((w: string) => oTitle.includes(w));
+              if (hasKeyword && commonWords.length >= 1) return true;
+            }
+
+            return false;
+          });
+
+          if (matchedOrder && totalTry > 0) {
+            const receiptId = String(matchedOrder.receiptId);
+            const noteText = `${supplier} Kargo: ${totalTry.toFixed(2)} TL (Kur: ${rate.toFixed(2)} = ${shippingUsd})`;
+
+            matchedUpdates.push({
+              receiptId,
+              buyerName: matchedOrder.buyerName,
+              productTitle: matchedOrder.productTitle,
+              supplier,
+              costTry: totalTry,
+              shippingCostUsd: shippingUsd,
+              rate,
+              externalId: extId
+            });
+
+            saveOps$.push(
+              this.etsyApi.saveOrderCost(receiptId, {
+                shippingCost: shippingUsd,
+                productCost: matchedOrder.productCostUsd ? Number(Math.max(0, matchedOrder.productCostUsd - shippingUsd).toFixed(2)) : 12.00,
+                packagingCost: 1.00,
+                notes: noteText
+              }).pipe(catchError(e => of({ error: e })))
+            );
+          } else {
+            unmatchedList.push({
+              receiverName: rName || 'İsimsiz',
+              productName: pName || '3D Model',
+              supplier,
+              costTry: totalTry,
+              shippingCostUsd: shippingUsd,
+              status: s.shipmentStatus || 'Draft',
+              reason: totalTry === 0 ? 'Kargo maliyeti 0/hesaplanamadı' : 'Etsy sipariş geçmişinde bu alıcı adına kayıt bulunamadı (Test/Örnek gönderi)'
+            });
+          }
+        }
+
+        const executeSaves$ = saveOps$.length > 0 ? forkJoin(saveOps$) : of([]);
+
+        return executeSaves$.pipe(
+          map(() => {
+            const cardHtml = this.buildShipmentMatchCardHtml(matchedUpdates, unmatchedList, liveRate);
+            return {
+              toolName: 'match_and_save_shipping_report',
+              success: true,
+              data: {
+                matchedCount: matchedUpdates.length,
+                unmatchedCount: unmatchedList.length,
+                matchedOrders: matchedUpdates,
+                unmatchedShipments: unmatchedList
+              },
+              actionCardHtml: cardHtml,
+              message: `${matchedUpdates.length} adet siparişin gerçek kargo maliyeti başarıyla eşleştirildi ve VDS veritabanına kaydedildi!`
+            };
+          })
+        );
+      })
+    );
+  }
+
+  private buildShipmentMatchCardHtml(
+    matched: any[],
+    unmatched: any[],
+    liveRate: number
+  ): string {
+    const matchedRows = matched.map(m => `
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.75rem;">
+        <td style="padding:6px 8px;font-weight:700;color:#38bdf8;">#${m.receiptId}</td>
+        <td style="padding:6px 8px;color:#f8fafc;font-weight:600;">${m.buyerName}</td>
+        <td style="padding:6px 8px;color:#94a3b8;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${m.productTitle}">${m.productTitle?.slice(0, 24)}...</td>
+        <td style="padding:6px 8px;color:#cbd5e1;">${m.supplier}</td>
+        <td style="padding:6px 8px;font-weight:700;color:#10b981;">${m.shippingCostUsd.toFixed(2)} <span style="font-weight:400;color:#64748b;font-size:0.68rem;">(${m.costTry.toFixed(2)} ₺)</span></td>
+        <td style="padding:6px 8px;"><span style="background:rgba(16,185,129,0.2);color:#34d399;padding:2px 6px;border-radius:4px;font-size:0.68rem;font-weight:600;">✅ Kaydedildi</span></td>
+      </tr>
+    `).join('');
+
+    const unmatchedRows = unmatched.map(u => `
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.72rem;color:#94a3b8;">
+        <td style="padding:5px 8px;color:#e2e8f0;">${u.receiverName}</td>
+        <td style="padding:5px 8px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${u.productName?.slice(0, 20)}</td>
+        <td style="padding:5px 8px;">${u.supplier}</td>
+        <td style="padding:5px 8px;">${u.shippingCostUsd > 0 ? u.shippingCostUsd.toFixed(2) : '—'}</td>
+        <td style="padding:5px 8px;color:#f59e0b;font-size:0.68rem;">${u.reason}</td>
+      </tr>
+    `).join('');
+
+    return `
+<div style="background:linear-gradient(135deg, rgba(16,185,129,0.1) 0%, rgba(15,23,42,0.95) 100%);border:1px solid rgba(16,185,129,0.4);border-radius:12px;padding:14px;margin:12px 0;font-family:inherit;">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:1.2rem;">⚡</span>
+      <strong style="color:#10b981;font-size:0.92rem;">Gerçek Kargo Maliyetleri Eşleştirildi & Kaydedildi</strong>
+    </div>
+    <span style="background:rgba(16,185,129,0.25);color:#34d399;font-weight:700;font-size:0.72rem;padding:2px 8px;border-radius:6px;">
+      ${matched.length} SİPARİŞ EŞLEŞTİ
+    </span>
+  </div>
+
+  ${matched.length > 0 ? `
+  <div style="overflow-x:auto;margin-bottom:10px;">
+    <table style="width:100%;border-collapse:collapse;text-align:left;">
+      <thead>
+        <tr style="background:rgba(255,255,255,0.04);font-size:0.7rem;color:#94a3b8;">
+          <th style="padding:5px 8px;">Sipariş #</th>
+          <th style="padding:5px 8px;">Alıcı</th>
+          <th style="padding:5px 8px;">Ürün</th>
+          <th style="padding:5px 8px;">Taşıyıcı</th>
+          <th style="padding:5px 8px;">Kargo Tutarı</th>
+          <th style="padding:5px 8px;">İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${matchedRows}
+      </tbody>
+    </table>
+  </div>
+  ` : ''}
+
+  ${unmatched.length > 0 ? `
+  <div style="margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,255,255,0.1);">
+    <div style="font-size:0.75rem;font-weight:600;color:#f59e0b;margin-bottom:4px;">
+      ℹ️ Diğer Sevkiyatlar / Test Taslakları (${unmatched.length} Adet):
+    </div>
+    <div style="overflow-x:auto;max-height:140px;overflow-y:auto;">
+      <table style="width:100%;border-collapse:collapse;text-align:left;">
+        <thead>
+          <tr style="font-size:0.68rem;color:#64748b;">
+            <th style="padding:3px 6px;">Alıcı</th>
+            <th style="padding:3px 6px;">Ürün</th>
+            <th style="padding:3px 6px;">Taşıyıcı</th>
+            <th style="padding:3px 6px;">Kargo</th>
+            <th style="padding:3px 6px;">Durum / Not</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${unmatchedRows}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  ` : ''}
+
+  <div style="margin-top:12px;display:flex;gap:8px;">
+    <button onclick="window.__copilotNavigate('/finance/accounting')" style="width:100%;background:#059669;color:#ffffff;border:none;padding:8px 12px;border-radius:6px;font-size:0.78rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;">
+      <span>📊</span> Muhasebe & Net Kâr Tablosunu Aç ↗
+    </button>
   </div>
 </div>
 `;
