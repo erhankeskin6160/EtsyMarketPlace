@@ -786,16 +786,16 @@
       <div class="success-info-grid">
         <div class="info-card">
           <span class="info-card-label">Ürün Başlığı</span>
-          <span class="info-card-val">{{ title }}</span>
+          <span class="info-card-val">{{ createdListingResult?.title || title }}</span>
         </div>
         <div class="info-card-split">
           <div class="info-card">
             <span class="info-card-label">Fiyat</span>
-            <span class="info-card-val highlight-green">${{ (priceUsd || 0).toFixed(2) }} (₺{{ ((priceUsd || 0) * usdTryRate).toFixed(2) }})</span>
+            <span class="info-card-val highlight-green">${{ (createdListingResult?.price || priceUsd || 0).toFixed(2) }} (₺{{ (((createdListingResult?.price || priceUsd || 0)) * usdTryRate).toFixed(2) }})</span>
           </div>
           <div class="info-card">
             <span class="info-card-label">Stok</span>
-            <span class="info-card-val">{{ quantity }} Adet</span>
+            <span class="info-card-val">{{ createdListingResult?.quantity || quantity || 15 }} Adet</span>
           </div>
           <div class="info-card">
             <span class="info-card-label">Yüklenen Görseller</span>
@@ -819,7 +819,7 @@
           🛍️ Etsy Listing Editor'de Aç & İncele ↗
         </a>
         <button type="button" class="btn-modal-dismiss" (click)="closeSuccessModal()">
-          Tamam
+          ➕ Yeni Ürün Ekle (Kapat)
         </button>
       </div>
     </div>
