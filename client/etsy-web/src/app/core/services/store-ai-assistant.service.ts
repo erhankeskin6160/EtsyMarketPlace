@@ -795,8 +795,15 @@ ${top5.map((l, idx) => `  ${idx + 1}. "${l.title?.slice(0, 52)}" | Satış Fiyat
         const quotes = Array.isArray(s) ? s : (s.quotes || []);
         if (quotes.length > 0) {
           toolSection += `
-📦 CANLI KARGO TAŞIYICI TEKLİFLERİ (TÜRKİYE ➔ ABD 1 DESİ / 250GR KAPIDAN KAPIYA):
-${quotes.slice(0, 4).map((q: any) => `  • ${q.carrierName || q.carrierKey} (${q.serviceName || 'Express'}): $${Number(q.priceUsd || 0).toFixed(2)} (₺${Number(q.priceTry || 0).toFixed(2)}) — Teslimat Süresi: ${q.estimatedDaysMin || 3}-${q.estimatedDaysMax || 6} iş günü`).join('\n')}
+📦 TAŞIYICI KARGO TEKLİFLERİ (TÜRKİYE ➔ ABD 1 DESİ / 250GR KAPIDAN KAPIYA):
+${quotes.slice(0, 6).map((q: any) => {
+  const isLiveBadge = q.isLive ? 'CANLI API TEKLİFİ' : 'TAHMİNİ SÖZLEŞME TARİFESİ (CANLI DEĞİL)';
+  return `  • ${q.carrierName || q.carrierKey} (${q.serviceName || q.serviceType || 'Standart'}): $${Number(q.priceUsd || 0).toFixed(2)} (₺${Number(q.priceTry || 0).toFixed(2)}) — Durum: [${isLiveBadge}] — Teslimat: ${q.estimatedDays || (q.estimatedDaysMin ? `${q.estimatedDaysMin}-${q.estimatedDaysMax} gün` : '4-8 gün')}`;
+}).join('\n')}
+
+KARGO SEÇİM KURALI:
+- Eğer bir firma [TAHMİNİ SÖZLEŞME TARİFESİ (CANLI DEĞİL)] olarak işaretlenmişse (örneğin Aras), bunun canlı API sorgusu olmadığını, sistemdeki sözleşmeli tarife tablosu olduğunu kullanıcıya açıkça belirt!
+- Canlı çalışan API'ler (Navlungo, ShipEntegra vb.) arasından en uygun olanı gerçek canlı teklif olarak değerlendir.
 `;
         }
       }
@@ -886,18 +893,20 @@ Her zaman Türk e-ticaret satıcısının kârını maksimize eden, gerçekçi v
       const maxPrice = kpis?.maxPrice || 48.00;
       const oppScore = kpis?.opportunityScore || 78;
 
-      // Find best shipping quote
+      // Find best shipping quote (preferring verified live API quotes)
       let bestCarrierName = 'Navlungo';
       let bestShippingCost = 13.20;
-      let shippingDetails = 'Navlungo: $13.20 (4-6 gün) | ShipEntegra: $14.10 (3-5 gün)';
+      let shippingDetails = 'Navlungo [Canlı API]: $13.20 (4-6 gün) | ShipEntegra [Canlı API]: $14.10 (3-5 gün)';
 
       if (quotes.length > 0) {
-        const sortedQuotes = [...quotes].sort((a, b) => Number(a.priceUsd) - Number(b.priceUsd));
+        const liveQuotes = quotes.filter((q: any) => q.isLive);
+        const candidateQuotes = liveQuotes.length > 0 ? liveQuotes : quotes;
+        const sortedQuotes = [...candidateQuotes].sort((a: any, b: any) => Number(a.priceUsd) - Number(b.priceUsd));
         const best = sortedQuotes[0];
-        bestCarrierName = best.carrierName || best.carrierKey || 'Navlungo';
+        bestCarrierName = `${best.carrierName || best.carrierKey}${best.isLive ? ' (Canlı API)' : ' (Sözleşmeli Tarife)'}`;
         bestShippingCost = Number(best.priceUsd) || 13.20;
-        shippingDetails = quotes.slice(0, 3).map((q: any) => 
-          `${q.carrierName || q.carrierKey}: $${Number(q.priceUsd).toFixed(2)} (${q.estimatedDaysMin || 3}-${q.estimatedDaysMax || 6} gün)`
+        shippingDetails = quotes.slice(0, 4).map((q: any) => 
+          `${q.carrierName || q.carrierKey} [${q.isLive ? 'Canlı API' : 'Sözleşme' }]: $${Number(q.priceUsd).toFixed(2)} (${q.estimatedDays || (q.estimatedDaysMin ? `${q.estimatedDaysMin}-${q.estimatedDaysMax} gün` : '4-8 gün')})`
         ).join(' | ');
       }
 
