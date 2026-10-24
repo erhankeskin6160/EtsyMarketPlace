@@ -28,9 +28,9 @@ public static class EtsyLedgerFinancialEngine
         // 1) Etsy banka transferi / depozito (ucret degilse)
         if ((raw.Contains("deposit") || rawRef.Contains("deposit") ||
              raw.Contains("payout") || rawRef.Contains("payout") ||
-             raw.Contains("disbursement") || rawRef.Contains("disbursement") ||
+             raw.Contains("disburse") || rawRef.Contains("disburse") ||
              raw.Contains("transfer") || rawRef.Contains("transfer") ||
-             desc.Contains("deposit") || desc.Contains("payout") || desc.Contains("disbursement") ||
+             desc.Contains("deposit") || desc.Contains("payout") || desc.Contains("disburse") ||
              desc.Contains("transfer") || desc.Contains("yatırılan") || desc.Contains("banka") || desc.Contains("hesaba"))
             && !raw.Contains("fee") && !rawRef.Contains("fee") && !desc.Contains("fee"))
         {

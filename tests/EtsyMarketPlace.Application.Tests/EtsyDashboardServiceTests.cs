@@ -217,4 +217,32 @@ public sealed class EtsyDashboardServiceTests
         Assert.Equal("12345", res.Orders[0].ReceiptId);
         Assert.Equal(100m, res.Orders[0].TotalUsd);
     }
+
+    [Fact]
+    public async Task GetBankPayoutsAsync_DeduplicatesThreeHourTimezoneShiftedDuplicates()
+    {
+        var reporting = new FakeReportingService();
+        var baseTime = new DateTimeOffset(2026, 10, 20, 11, 1, 14, TimeSpan.Zero);
+        reporting.Payouts.Add(new EtsyBankPayout("53236321", "30484091539", baseTime, 17.72m, "USD", 49.53m, "completed", "disburse2"));
+        reporting.Payouts.Add(new EtsyBankPayout("53236321", "209643922802", baseTime.AddHours(3), 17.72m, "USD", 49.53m, "completed", "disburse2"));
+
+        var ledger = new FakeLedgerReportService { LedgerOk = true };
+        var etsyClient = new FakeEtsyDataClient();
+        var repo = new FakeIntegrationRepository();
+        var bank = new BankDepositService();
+
+        var service = new EtsyDashboardService(reporting, ledger, etsyClient, repo, bank);
+        var payouts = await service.GetBankPayoutsAsync("53236321", baseTime.AddDays(-1), baseTime.AddDays(1));
+
+        Assert.Single(payouts);
+        Assert.Equal("209643922802", payouts[0].ReferenceId);
+        Assert.Equal(17.72m, payouts[0].Amount);
+    }
+
+    [Fact]
+    public void ClassifyEntry_ClassifiesDisburse2AsDeposit()
+    {
+        var category = EtsyLedgerFinancialEngine.ClassifyEntry("disburse2", "shop_payment", "disburse2");
+        Assert.Equal("deposit", category);
+    }
 }

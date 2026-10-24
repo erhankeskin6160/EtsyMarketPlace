@@ -66,7 +66,162 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         return !string.IsNullOrWhiteSpace(sharedSecret) ? $"{keystring.Trim()}:{sharedSecret.Trim()}" : keystring.Trim();
     }
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, Task<IReadOnlyList<JsonElement>> Task)> _ledgerWindowCache = new();
+
     private async Task<IReadOnlyList<T>> GetPagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken)
+        where T : class
+    {
+        if (routeTemplate.Contains("payment-account/ledger-entries", StringComparison.OrdinalIgnoreCase))
+        {
+            var rawItems = await GetRawLedgerItemsChunkedAsync(routeTemplate, shopId, startDate, endDate, cancellationToken);
+            var parsedResults = new List<T>(rawItems.Count);
+            foreach (var item in rawItems)
+            {
+                var parsed = parser(item, shopId);
+                if (parsed is not null) parsedResults.Add(parsed);
+            }
+            return parsedResults;
+        }
+
+        return await GetSingleRangePagedAsync(routeTemplate, shopId, startDate, endDate, parser, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<JsonElement>> GetRawLedgerItemsChunkedAsync(
+        string routeTemplate,
+        string shopId,
+        DateTimeOffset startDate,
+        DateTimeOffset endDate,
+        CancellationToken cancellationToken)
+    {
+        var windows = new List<(DateTimeOffset Start, DateTimeOffset End)>();
+        var currentFrom = startDate;
+        while (currentFrom < endDate)
+        {
+            var currentTo = currentFrom.AddDays(30);
+            if (currentTo > endDate) currentTo = endDate;
+            windows.Add((currentFrom, currentTo));
+            currentFrom = currentTo.AddSeconds(1);
+        }
+
+        if (windows.Count == 0)
+        {
+            windows.Add((startDate, endDate));
+        }
+
+        if (windows.Count == 1)
+        {
+            var (wStart, wEnd) = windows[0];
+            return await GetCachedLedgerWindowAsync(routeTemplate, shopId, wStart, wEnd, cancellationToken);
+        }
+
+        var windowResults = new IReadOnlyList<JsonElement>[windows.Count];
+        using var semaphore = new SemaphoreSlim(4, 4);
+        var tasks = windows.Select(async (window, index) =>
+        {
+            await semaphore.WaitAsync(cancellationToken);
+            try
+            {
+                windowResults[index] = await GetCachedLedgerWindowAsync(routeTemplate, shopId, window.Start, window.End, cancellationToken);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+
+        var combined = new List<JsonElement>();
+        var seenEntryIds = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var batch in windowResults)
+        {
+            if (batch is null) continue;
+            foreach (var item in batch)
+            {
+                var entryId = StringValue(item, "entry_id", "ledger_entry_id", "id");
+                if (!string.IsNullOrWhiteSpace(entryId))
+                {
+                    if (!seenEntryIds.Add(entryId)) continue;
+                }
+                combined.Add(item);
+            }
+        }
+
+        return combined;
+    }
+
+    private async Task<IReadOnlyList<JsonElement>> GetCachedLedgerWindowAsync(
+        string routeTemplate,
+        string shopId,
+        DateTimeOffset windowStart,
+        DateTimeOffset windowEnd,
+        CancellationToken cancellationToken)
+    {
+        var minUnix = windowStart.ToUnixTimeSeconds();
+        var maxUnix = windowEnd.ToUnixTimeSeconds();
+        var cacheKey = $"{shopId}:{minUnix}:{maxUnix}";
+        var now = DateTimeOffset.UtcNow;
+
+        if (_ledgerWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
+        {
+            return await cached.Task;
+        }
+
+        var ttl = windowEnd < now.AddDays(-2) ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(15);
+        var task = FetchRawWindowElementsAsync(routeTemplate, shopId, minUnix, maxUnix, cancellationToken);
+        _ledgerWindowCache[cacheKey] = (now.Add(ttl), task);
+
+        try
+        {
+            return await task;
+        }
+        catch
+        {
+            _ledgerWindowCache.TryRemove(cacheKey, out _);
+            throw;
+        }
+    }
+
+    private async Task<IReadOnlyList<JsonElement>> FetchRawWindowElementsAsync(
+        string routeTemplate,
+        string shopId,
+        long minUnix,
+        long maxUnix,
+        CancellationToken cancellationToken)
+    {
+        var elements = new List<JsonElement>();
+        const int limit = 100;
+        var apiKeyHeader = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
+        var route = string.Format(CultureInfo.InvariantCulture, routeTemplate, Uri.EscapeDataString(shopId));
+
+        for (var offset = 0; ; offset += limit)
+        {
+            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}?limit={limit}&offset={offset}&min_created={minUnix}&max_created={maxUnix}";
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.Add("X-Etsy-Shop-Id", shopId);
+            request.Headers.Add("x-api-key", apiKeyHeader);
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw await CreateApiExceptionAsync(response, cancellationToken);
+
+            using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken)
+                ?? throw new InvalidOperationException("Etsy API boş yanıt döndürdü.");
+            if (!document.RootElement.TryGetProperty("results", out var items) || items.ValueKind != JsonValueKind.Array)
+                break;
+
+            var count = 0;
+            foreach (var item in items.EnumerateArray())
+            {
+                count++;
+                elements.Add(item.Clone());
+            }
+            if (count < limit) break;
+        }
+
+        return elements;
+    }
+
+    private async Task<IReadOnlyList<T>> GetSingleRangePagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken)
         where T : class
     {
         var results = new List<T>();

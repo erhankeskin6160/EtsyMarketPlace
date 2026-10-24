@@ -90,18 +90,24 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         CancellationToken cancellationToken = default)
     {
         var payouts = await _reporting.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
-        if (payouts.Count == 0)
+        try
         {
-            try
+            var livePayouts = await _etsyClient.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
+            if (livePayouts.Count > 0)
             {
-                var livePayouts = await _etsyClient.GetBankPayoutsAsync(shopId, startDate, endDate, cancellationToken);
-                if (livePayouts.Count > 0)
-                {
-                    await _repository.SavePayoutsAsync(livePayouts, cancellationToken);
-                    payouts = livePayouts;
-                }
+                await _repository.SavePayoutsAsync(livePayouts, cancellationToken);
+                payouts = payouts.Concat(livePayouts).ToList();
             }
-            catch { }
+        }
+        catch
+        {
+            // Canlı API'ye ulaşılamazsa yerel veritabanı kayıtları kullanılır
+        }
+
+        if (payouts.Count > 0)
+        {
+            var distinctDates = payouts.Select(p => p.OccurredAt.UtcDateTime.Date).Distinct().ToList();
+            await HistoricalExchangeRateProvider.HydrateRatesForDatesAsync(distinctDates, cancellationToken);
         }
 
         // Payout filtrelemesi: 'fee' içeren satırlar elenir, mükerrer transferler deduplicate edilir ve tarihsel kur bağlanır
@@ -435,8 +441,11 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         foreach (var payout in list)
         {
             var existingIndex = result.FindIndex(existing =>
-                Math.Abs((existing.OccurredAt - payout.OccurredAt).TotalMinutes) < 2.0 &&
-                Math.Abs(existing.Amount - payout.Amount) < 0.25m);
+            {
+                var diffMinutes = Math.Abs((existing.OccurredAt - payout.OccurredAt).TotalMinutes);
+                var isSameTimeOrTzShift = diffMinutes < 2.0 || Math.Abs(diffMinutes - 180.0) < 2.0;
+                return isSameTimeOrTzShift && Math.Abs(existing.Amount - payout.Amount) < 0.25m;
+            });
 
             if (existingIndex < 0)
             {

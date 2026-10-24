@@ -682,7 +682,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
           const existingIdx = validPayouts.findIndex(ex => {
             const exTime = new Date(ex.occurredAt).getTime();
             const exAmt = Math.abs(Number(ex.amount || 0));
-            return Math.abs(exTime - pTime) < 120000 && Math.abs(exAmt - pAmt) < 0.25;
+            const diffMs = Math.abs(exTime - pTime);
+            return (diffMs < 120000 || Math.abs(diffMs - 10800000) < 120000) && Math.abs(exAmt - pAmt) < 0.25;
           });
 
           if (existingIdx < 0) {
