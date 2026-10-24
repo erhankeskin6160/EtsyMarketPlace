@@ -761,6 +761,76 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     }
   }
 
+  private synthesizeCombinedTools$(
+    combinedNames: string,
+    combinedData: any[],
+    actionCardHtml: string | undefined,
+    initialText: string | undefined,
+    providerLabel: string,
+    modelName: string,
+    augmentedPrompt: string,
+    snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
+    attachments?: ChatAttachment[],
+    toolContext?: LiveToolContext | null
+  ): Observable<AiResponseResult> {
+    const mcpBadge = `<div style="display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(52,211,153,0.35);border-radius:6px;padding:4px 10px;margin-bottom:12px;font-size:0.75rem;color:#34d399;"><span>⚡</span><span><strong>Canlı Mağaza & Etsy Verisi Çekildi:</strong> <code>${combinedNames}</code></span></div><br>`;
+    const settings = this.aiSettings.settings();
+    const normProvider = providerLabel.includes('Gemini') ? 'Gemini' : providerLabel;
+    const apiKey = this.getApiKeyForProvider(normProvider, settings);
+    const toolJson = JSON.stringify(combinedData, null, 2);
+
+    if (!apiKey) {
+      const fallbackText = `⚡ **${combinedNames}** çalıştırıldı.\n\n\`\`\`json\n${toolJson.slice(0, 2000)}\n\`\`\``;
+      return of({
+        replyHtml: mcpBadge + (actionCardHtml ? actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
+        updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
+      });
+    }
+
+    const followUpPrompt = `${augmentedPrompt}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ [CANLI MAĞAZA & ETSY VERİ ÇIKTILARI — ${combinedNames}]:\nAşağıdaki JSON verileri az önce kendi zekanla çağırdığın araçlardan canlı olarak dönmüştür. Lütfen bu gerçek verileri analiz ederek kullanıcının sorusunu eksiksiz, somut rakamlarla ve tablolarla yanıtla (kullanıcıya teknik araç/MCP terimleri kullanmadan doğal bir danışman gibi anlat):\n\`\`\`json\n${toolJson.slice(0, 7500)}\n\`\`\`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
+    const systemPrompt = this.buildSystemPrompt(snap, providerLabel, modelName, toolContext);
+    const url = normProvider === 'OpenAI'
+      ? 'https://api.openai.com/v1/chat/completions'
+      : normProvider === 'Grok'
+        ? 'https://api.x.ai/v1/chat/completions'
+        : 'https://api.deepseek.com/chat/completions';
+
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${apiKey.trim()}`,
+      'Content-Type': 'application/json'
+    });
+
+    const body = {
+      model: normProvider === 'DeepSeek' ? this.normalizeDeepSeekModel(modelName) : modelName,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...history.slice(0, -1).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+        { role: 'user', content: followUpPrompt }
+      ],
+      temperature: 0.5,
+      max_tokens: 2500
+    };
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res2 => {
+        const synthesized = res2?.choices?.[0]?.message?.content?.trim() || initialText || `⚡ **${combinedNames}** başarıyla çalıştırıldı.`;
+        return {
+          replyHtml: mcpBadge + (actionCardHtml ? actionCardHtml + '<br>' : '') + this.formatMarkdown(synthesized),
+          updatedHistory: [...history, { role: 'assistant' as const, content: synthesized }]
+        };
+      }),
+      catchError(() => {
+        const fallbackText = `⚡ **${combinedNames}** çalıştırıldı.\n\n\`\`\`json\n${toolJson.slice(0, 2000)}\n\`\`\``;
+        return of({
+          replyHtml: mcpBadge + (actionCardHtml ? actionCardHtml + '<br>' : '') + this.formatMarkdown(fallbackText),
+          updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
+        });
+      })
+    );
+  }
+
   private executeAndSynthesizeTool$(
     fnName: string,
     parsedArgs: any,
@@ -861,6 +931,62 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     const toolCalls = choice?.message?.tool_calls;
 
     if (toolCalls && toolCalls.length > 0) {
+      const parsedCalls = toolCalls
+        .map((tc: any) => {
+          const fn = tc?.function;
+          const fnName = fn?.name || '';
+          let parsedArgs: any = {};
+          try {
+            parsedArgs = typeof fn?.arguments === 'string' ? JSON.parse(fn.arguments) : (fn?.arguments || {});
+          } catch {
+            parsedArgs = {};
+          }
+          return { fnName, parsedArgs };
+        })
+        .filter((c: any) => Boolean(c.fnName));
+
+      if (parsedCalls.length === 1) {
+        return this.executeAndSynthesizeTool$(
+          parsedCalls[0].fnName,
+          parsedCalls[0].parsedArgs,
+          text,
+          providerLabel,
+          modelName,
+          augmentedPrompt,
+          snap,
+          history,
+          attachments,
+          toolContext
+        );
+      } else if (parsedCalls.length > 1) {
+        return forkJoin<any[]>(
+          parsedCalls.map((c: any) => this.toolRegistry.executeTool(c.fnName, c.parsedArgs, attachments))
+        ).pipe(
+          switchMap((results: any[]) => {
+            const combinedNames = parsedCalls.map((c: any) => c.fnName).join(', ');
+            const combinedData = results.map((r, i) => ({
+              tool: parsedCalls[i].fnName,
+              arguments: parsedCalls[i].parsedArgs,
+              result: r.data ?? r.message
+            }));
+            return this.synthesizeCombinedTools$(
+              combinedNames,
+              combinedData,
+              results.find(r => Boolean(r.actionCardHtml))?.actionCardHtml,
+              text,
+              providerLabel,
+              modelName,
+              augmentedPrompt,
+              snap,
+              history,
+              attachments,
+              toolContext
+            );
+          })
+        );
+      }
+    }
+    if (false && toolCalls && toolCalls.length > 0) {
       const fn = toolCalls[0]?.function;
       const fnName = fn?.name || '';
       let parsedArgs: any = {};
@@ -1379,6 +1505,16 @@ ${toolSection}
 - search_market_intelligence: Canlı Etsy v3 pazar analizi yapar.
 - calculate_shipping_rates: VDS kargo motorundan taşıyıcı teklifleri çeker.
 - navigate_to_module: Kullanıcıyı ilgili sayfaya yönlendirir.
+
+6. OTONOM NİYET KARAR KURALI (KULLANICI ASLA 'MCP KULLAN' DEMEZ!):
+- Son kullanıcı bir mağaza sahibidir; teknik terim bilmez ve sana "MCP aracını çalıştır" veya "fonksiyon çağır" DEMEZ!
+- Kullanıcı doğal günlük dille soru sorar:
+  • "Geçen ay ne kadar kazandık?", "Son 3 ayda durumumuz ne?", "Bu yıl toplam ciromuz ne?" dediğinde -> KENDİ ZEKANLA 'get_store_financial_summary' aracını ilgili dönemle ('last_month', 'last_90_days', 'this_year') HİÇ SORMADAN ÇAĞIR!
+  • "Hangi ilanlarım daha çok favori alıyor?", "İlanlarımın etiketlerinde veya SEO puanında eksik var mı?" dediğinde -> KENDİ ZEKANLA 'get_shop_active_listings' aracını ÇAĞIR!
+  • "Bankama yatan ödemeler ne zaman ve kaç TL yattı?" dediğinde -> KENDİ ZEKANLA 'get_bank_payouts' aracını ÇAĞIR!
+  • "Siparişlerimde zarar ettiğim veya maliyeti eksik olan var mı?" dediğinde -> KENDİ ZEKANLA 'get_store_orders' aracını ÇAĞIR!
+  • "Şu ilanın fiyatını/başlığını/etiketlerini güncelle" dediğinde -> KENDİ ZEKANLA 'update_etsy_listing' aracını ÇAĞIR!
+- Cevap verirken kullanıcıya "MCP aracını çağırdım, JSON döndü" gibi yazılımcı dili kullanma; doğrudan canlı verileri çekip sıcak ve uzman bir mağaza ortağı gibi sonucu anlat!
 
 Kullanıcı "bunu hızlı ürün modülünde hazırla", "hızlı ekleye aktar", "Etsy'de taslak aç", "bunu listele", "sen modülü kullanamaz mısın", "mcp bağlasak", "mcp bağlı değil diyor" dediğinde, KESİNLİKLE "ben yapamam" veya "aktif bağlı mcp yok" DEME! Taslak ilanın başarıyla açıldığını ve Hızlı Ürün Ekle formunun doldurulduğunu bildir; başlık, 13 etiket, fiyat, açıklama ve kâr dökümünü sun!
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

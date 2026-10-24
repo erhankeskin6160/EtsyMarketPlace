@@ -167,7 +167,7 @@ export class CopilotToolRegistryService {
         type: 'function',
         function: {
           name: 'get_store_financial_summary',
-          description: 'VDS Canlı Mağaza MCP Sunucusundan seçilen dönem (this_month, last_month, last_90_days, this_year, all_time) için canlı Etsy Payment Account Ledger finansal özetini (Brüt Satış, Etsy Komisyonları, Etsy Ads, Offsite Ads, İadeler, Maliyetler, Gerçek Net Kâr ve Net Marj %) çeker.',
+          description: 'OTONOM FİNANS MOTORU: Kullanıcı doğal dille "geçen ay ne kazandık?", "son 3 ayda durum ne?", "bu yıl toplam kârımız ne?", "tüm zamanlar ciromuz ve kesintilerimiz ne kadar?" veya dönem karşılaştırması sorduğunda HİÇ SORMADAN doğrudan bu aracı çağır. Seçilen dönem (this_month, last_month, last_90_days, this_year, all_time) için canlı Etsy Payment Account Ledger finansal özetini (Brüt Satış, Komisyon, Reklam, İade, Maliyet, Gerçek Net Kâr ve Marj %) getirir.',
           parameters: {
             type: 'object',
             properties: {
@@ -184,7 +184,7 @@ export class CopilotToolRegistryService {
         type: 'function',
         function: {
           name: 'get_store_orders',
-          description: 'VDS Canlı Mağaza MCP Sunucusundan belirtilen dönem ve durum filtresine (all, completed, canceled, missing_cost) göre mağazanın gerçek siparişlerini, kargo/üretim maliyetlerini, iade durumlarını ve sipariş bazlı net kâr kırılımını çeker.',
+          description: 'OTONOM SİPARİŞ & MALİYET DENETÇİSİ: Kullanıcı doğal dille "siparişlerimde durum ne?", "hangi siparişten ne kadar kâr ettik?", "zarar ettiğim veya maliyeti girilmemiş sipariş var mı?", "iptal/iade olan siparişler hangileri?" diye sorduğunda doğrudan bu aracı çağır.',
           parameters: {
             type: 'object',
             properties: {
@@ -210,7 +210,7 @@ export class CopilotToolRegistryService {
         type: 'function',
         function: {
           name: 'get_bank_payouts',
-          description: 'VDS Canlı Mağaza MCP Sunucusundan Etsy\'nin banka hesabına yatırdığı (Disbursement / Bank Payout) gerçek ödemeleri (TL ve USD) çeker.',
+          description: 'OTONOM BANKA ÖDEMELERİ (PAYOUT) SORGULAYICI: Kullanıcı doğal dille "bankama ne kadar para yattı?", "Etsy ödemeleri ne zaman hesaba geçti?", "yatan paralarla kârım neden farklı?" diye sorduğunda doğrudan bu aracı çağır.',
           parameters: {
             type: 'object',
             properties: {
@@ -226,7 +226,7 @@ export class CopilotToolRegistryService {
         type: 'function',
         function: {
           name: 'get_shop_active_listings',
-          description: 'VDS Canlı Mağaza MCP Sunucusundan mağazanın aktif Etsy ilanlarını, fiyatlarını, görüntülenme (views), favori (numFavorers), LQS kalite skorunu ve 13 etiket durumunu çeker.',
+          description: 'OTONOM İLAN & SEO/LQS DENETÇİSİ: Kullanıcı doğal dille "hangi ilanlarım zayıf?", "en çok görüntülenen veya favori alan ürünlerim hangileri?", "ilanlarımda eksik etiket var mı?", "fiyatlarım nasıl?" diye sorduğunda doğrudan bu aracı çağır.',
           parameters: {
             type: 'object',
             properties: {
