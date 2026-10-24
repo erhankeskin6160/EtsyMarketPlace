@@ -334,6 +334,91 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
       text-align: right;
     }
 
+    /* Table & Formatting Enhancements */
+    .copilot-table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      margin: 10px 0;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(15, 23, 42, 0.75);
+    }
+    .copilot-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.76rem;
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+    .copilot-table th {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      font-weight: 700;
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+    .copilot-table td {
+      padding: 7px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .copilot-table tr:last-child td {
+      border-bottom: none;
+    }
+    .copilot-table tr:hover td {
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .copilot-h2 {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: #38bdf8;
+      margin: 12px 0 6px 0;
+    }
+    .copilot-h3 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #f8fafc;
+      margin: 10px 0 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 3px;
+    }
+    .copilot-h4 {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      margin: 8px 0 3px 0;
+    }
+    .copilot-quote {
+      border-left: 3px solid #6366f1;
+      background: rgba(99, 102, 241, 0.1);
+      margin: 8px 0;
+      padding: 6px 12px;
+      border-radius: 0 6px 6px 0;
+      font-style: italic;
+      color: #cbd5e1;
+    }
+    .copilot-list {
+      margin: 4px 0;
+      padding-left: 20px;
+    }
+    .copilot-list li {
+      margin-bottom: 3px;
+      color: #e2e8f0;
+    }
+    .copilot-hr {
+      border: none;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      margin: 12px 0;
+    }
+    .copilot-inline-code {
+      background: rgba(255, 255, 255, 0.1);
+      color: #38bdf8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-family: monospace;
+    }
+
     /* Message Attachments */
     .msg-attachments-wrap {
       display: flex;

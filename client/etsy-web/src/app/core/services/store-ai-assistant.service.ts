@@ -976,11 +976,142 @@ Aklınızdaki bir ürün görselini yapıştırabilir (Ctrl+V) veya Excel/PDF fa
   }
 
   private formatMarkdown(raw: string): string {
-    return raw
+    if (!raw) return '';
+
+    // 1. Parse Markdown Tables
+    const lines = raw.split('\n');
+    const processedLines: string[] = [];
+    let inTable = false;
+    let tableHeaders: string[] = [];
+    let tableRows: string[][] = [];
+
+    const flushTable = () => {
+      if (tableHeaders.length > 0) {
+        let tableHtml = '<div class="copilot-table-wrap"><table class="copilot-table"><thead><tr>';
+        for (const th of tableHeaders) {
+          tableHtml += `<th>${this.formatInline(th.trim())}</th>`;
+        }
+        tableHtml += '</tr></thead><tbody>';
+        for (const row of tableRows) {
+          tableHtml += '<tr>';
+          for (let i = 0; i < tableHeaders.length; i++) {
+            const cell = row[i] !== undefined ? row[i].trim() : '';
+            tableHtml += `<td>${this.formatInline(cell)}</td>`;
+          }
+          tableHtml += '</tr>';
+        }
+        tableHtml += '</tbody></table></div>';
+        processedLines.push(tableHtml);
+      }
+      inTable = false;
+      tableHeaders = [];
+      tableRows = [];
+    };
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      const isTableRow = line.startsWith('|') && line.endsWith('|') && line.includes('|');
+
+      if (isTableRow) {
+        if (!inTable) {
+          // Check if next line is separator
+          const nextLine = (lines[i + 1] || '').trim();
+          if (nextLine.startsWith('|') && /^\|[\s-:]+(\|[\s-:]+)+\|$/.test(nextLine)) {
+            inTable = true;
+            tableHeaders = line.split('|').slice(1, -1);
+            i++; // skip separator
+            continue;
+          }
+        } else {
+          const isSeparator = /^\|[\s-:]+(\|[\s-:]+)+\|$/.test(line);
+          if (!isSeparator) {
+            const cells = line.split('|').slice(1, -1);
+            tableRows.push(cells);
+            continue;
+          }
+        }
+      }
+
+      if (inTable) {
+        flushTable();
+      }
+
+      processedLines.push(lines[i]);
+    }
+
+    if (inTable) {
+      flushTable();
+    }
+
+    // 2. Process non-table blocks (headings, hr, blockquotes, lists)
+    let output = '';
+    let inList = false;
+
+    for (let i = 0; i < processedLines.length; i++) {
+      const line = processedLines[i];
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith('<div class="copilot-table-wrap">')) {
+        if (inList) { output += '</ul>'; inList = false; }
+        output += trimmed;
+        continue;
+      }
+
+      if (trimmed === '---' || trimmed === '***') {
+        if (inList) { output += '</ul>'; inList = false; }
+        output += '<hr class="copilot-hr">';
+        continue;
+      }
+
+      if (trimmed.startsWith('### ')) {
+        if (inList) { output += '</ul>'; inList = false; }
+        output += `<h4 class="copilot-h4">${this.formatInline(trimmed.slice(4))}</h4>`;
+        continue;
+      }
+
+      if (trimmed.startsWith('## ')) {
+        if (inList) { output += '</ul>'; inList = false; }
+        output += `<h3 class="copilot-h3">${this.formatInline(trimmed.slice(3))}</h3>`;
+        continue;
+      }
+
+      if (trimmed.startsWith('# ')) {
+        if (inList) { output += '</ul>'; inList = false; }
+        output += `<h2 class="copilot-h2">${this.formatInline(trimmed.slice(2))}</h2>`;
+        continue;
+      }
+
+      if (trimmed.startsWith('> ')) {
+        if (inList) { output += '</ul>'; inList = false; }
+        output += `<blockquote class="copilot-quote">${this.formatInline(trimmed.slice(2))}</blockquote>`;
+        continue;
+      }
+
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        if (!inList) { output += '<ul class="copilot-list">'; inList = true; }
+        output += `<li>${this.formatInline(trimmed.slice(2))}</li>`;
+        continue;
+      }
+
+      if (inList) { output += '</ul>'; inList = false; }
+
+      if (trimmed.length === 0) {
+        output += '<br>';
+      } else {
+        output += this.formatInline(trimmed) + '<br>';
+      }
+    }
+
+    if (inList) { output += '</ul>'; }
+
+    return output;
+  }
+
+  private formatInline(text: string): string {
+    return text
+      .replace(/`([^`]+)`/g, '<code class="copilot-inline-code">$1</code>')
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/\n\n/g, '<br><br>')
-      .replace(/\n/g, '<br>');
+      .replace(/\*(.*?)\*/g, '<em>$1</em>');
   }
 
   private trackAiUsage(
