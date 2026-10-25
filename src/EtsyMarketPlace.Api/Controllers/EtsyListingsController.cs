@@ -133,7 +133,7 @@ public class EtsyListingsController : BaseApiController
             WhoMade: request.WhoMade,
             WhenMade: request.WhenMade,
             Images: request.Images?.Select(i => new ListingImageInput(i.DataUrl, i.Url, i.Rank)).ToList(),
-            Variations: request.Variations?.Select(v => new ListingVariationInput(v.Key, v.Price, v.Quantity, v.Active)).ToList(),
+            Variations: request.Variations?.Select(v => new ListingVariationInput(v.Key, v.Price, v.Quantity, v.Active, v.ImageRank)).ToList(),
             VariationGroups: request.VariationGroups?.Select(g => new ListingVariationGroupInput(g.Name, g.Values)).ToList()
         );
 

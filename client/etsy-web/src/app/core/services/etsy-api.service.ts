@@ -104,6 +104,7 @@ export interface CreateListingVariationPayload {
   price: number;
   quantity: number;
   active?: boolean;
+  imageRank?: number;
 }
 
 export interface CreateListingVariationGroupPayload {
@@ -144,6 +145,7 @@ export interface CreatedListingResponseDto {
   state: string;
   uploadedImages: number;
   message: string;
+  variationImagesCount?: number;
 }
 
 export interface GetAiSettingsResponseDto {

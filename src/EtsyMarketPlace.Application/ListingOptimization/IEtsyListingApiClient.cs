@@ -10,7 +10,7 @@ public interface IEtsyListingApiClient
         CreateDraftListingRawRequest rawRequest,
         CancellationToken cancellationToken = default);
 
-    Task<bool> UploadListingImageAsync(
+    Task<(bool Success, long ImageId)> UploadListingImageAsync(
         string shopId,
         long listingId,
         byte[] imageBytes,
@@ -18,10 +18,16 @@ public interface IEtsyListingApiClient
         int rank,
         CancellationToken cancellationToken = default);
 
-    Task<(bool Success, string? ErrorMessage)> UpdateListingInventoryAsync(
+    Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(
         string shopId,
         long listingId,
         EtsyInventoryPayload payload,
+        CancellationToken cancellationToken = default);
+
+    Task<(bool Success, string? ErrorMessage, int Count)> UpdateVariationImagesAsync(
+        string shopId,
+        long listingId,
+        IReadOnlyList<EtsyVariationImageItem> variationImages,
         CancellationToken cancellationToken = default);
 
     Task<bool> SetListingStateAsync(

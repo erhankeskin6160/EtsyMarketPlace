@@ -65,6 +65,7 @@ export interface VariationRow {
   price: number;
   quantity: number;
   active: boolean;
+  imageRank?: number;
 }
 
 @Component({
@@ -1389,7 +1390,40 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       row.price = p;
     });
     this.onVariationRowChange();
-    this.showToast(`⚡ Tüm varyasyon fiyatları ${p.toFixed(2)}${p.toFixed(2)} olarak eşitlendi!`);
+    this.showToast(`⚡ Tüm varyasyon fiyatları ${p.toFixed(2)} olarak eşitlendi!`);
+  }
+
+  getSelectedImageForRank(rank?: number): GalleryImage | undefined {
+    if (!rank || rank < 1 || rank > this.galleryImages.length) return undefined;
+    return this.galleryImages[rank - 1];
+  }
+
+  autoAssignVariationImages(): void {
+    if (!this.variationRows || this.variationRows.length === 0) return;
+    if (!this.galleryImages || this.galleryImages.length === 0) {
+      this.showToast('⚠️ Önce galeriye en az bir görsel yükleyin.');
+      return;
+    }
+
+    let assigned = 0;
+    this.variationRows.forEach((r, idx) => {
+      if (idx < this.galleryImages.length) {
+        r.imageRank = idx + 1;
+        assigned++;
+      }
+    });
+
+    this.saveDraftToStorage();
+    this.showToast(`🎨 ${assigned} varyasyona galeri görselleri sırayla otomatik eşleştirildi!`);
+  }
+
+  clearVariationImages(): void {
+    if (!this.variationRows || this.variationRows.length === 0) return;
+    this.variationRows.forEach(r => {
+      r.imageRank = undefined;
+    });
+    this.saveDraftToStorage();
+    this.showToast('✕ Tüm varyasyon görsel eşleştirmeleri temizlendi.');
   }
 
   suggestAiVariations(): void {
@@ -1470,6 +1504,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     title?: string;
     price?: number;
     quantity?: number;
+    variationImagesCount?: number;
   } | null = null;
   isPublishSuccessModalOpen = false;
   isActivatingListing = false;
@@ -1531,7 +1566,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
           key: r.key,
           price: r.price,
           quantity: r.quantity,
-          active: r.active
+          active: r.active,
+          imageRank: r.imageRank
         }))
       : undefined;
 

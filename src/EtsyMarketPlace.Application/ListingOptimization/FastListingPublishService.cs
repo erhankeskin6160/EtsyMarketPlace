@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 
 public sealed class FastListingPublishService : IFastListingPublishService
 {
@@ -127,6 +128,7 @@ public sealed class FastListingPublishService : IFastListingPublishService
 
         // 4. Görselleri Sırayla Yükleme
         int uploadedImageCount = 0;
+        var rankToImageId = new Dictionary<int, long>();
         if (command.Images != null && command.Images.Count > 0)
         {
             int rank = 1;
@@ -153,11 +155,15 @@ public sealed class FastListingPublishService : IFastListingPublishService
 
                     if (imageBytes != null && imageBytes.Length > 0)
                     {
-                        var uploadSuccess = await _apiClient.UploadListingImageAsync(
+                        var (uploadSuccess, imageId) = await _apiClient.UploadListingImageAsync(
                             shopId, createdListingId, imageBytes, fileName, rank, cancellationToken);
                         if (uploadSuccess)
                         {
                             uploadedImageCount++;
+                            if (imageId > 0)
+                            {
+                                rankToImageId[rank] = imageId;
+                            }
                         }
                     }
                 }
@@ -172,6 +178,7 @@ public sealed class FastListingPublishService : IFastListingPublishService
         // 5. Varyasyonları ve Envanteri Hazırlayıp Güncelleme
         int uploadedVariationCount = 0;
         string? variationErrorMessage = null;
+        string? inventoryResponseJson = null;
 
         if (command.Variations != null && command.Variations.Count > 0)
         {
@@ -184,12 +191,13 @@ public sealed class FastListingPublishService : IFastListingPublishService
 
                 if (inventoryPayload != null && inventoryPayload.Products.Count > 0)
                 {
-                    var (success, error) = await _apiClient.UpdateListingInventoryAsync(
+                    var (success, error, resJson) = await _apiClient.UpdateListingInventoryAsync(
                         shopId, createdListingId, inventoryPayload, cancellationToken);
 
                     if (success)
                     {
                         uploadedVariationCount = inventoryPayload.Products.Count;
+                        inventoryResponseJson = resJson;
                     }
                     else
                     {
@@ -200,6 +208,61 @@ public sealed class FastListingPublishService : IFastListingPublishService
             catch (Exception ex)
             {
                 variationErrorMessage = $"Varyasyon hazırlama hatası: {ex.Message}";
+            }
+        }
+
+        // 5.1 Varyasyon Görsellerini Bağlama (POST /v3/application/shops/{shop_id}/listings/{listing_id}/variation-images)
+        int variationImagesCount = 0;
+        if (uploadedVariationCount > 0 && command.Variations != null && rankToImageId.Count > 0)
+        {
+            try
+            {
+                var valueIdMap = ParseInventoryValueMap(inventoryResponseJson);
+                long? targetPropertyId = null;
+                var variationImagesList = new List<EtsyVariationImageItem>();
+                var seenValueIds = new HashSet<long>();
+
+                foreach (var varItem in command.Variations)
+                {
+                    if (varItem.ImageRank.HasValue && rankToImageId.TryGetValue(varItem.ImageRank.Value, out var imgId))
+                    {
+                        bool found = valueIdMap.TryGetValue(varItem.Key, out var matchedPropVal);
+                        if (!found && varItem.Key.Contains('/'))
+                        {
+                            var parts = varItem.Key.Split('/');
+                            found = valueIdMap.TryGetValue(parts[0].Trim(), out matchedPropVal) ||
+                                    (parts.Length > 1 && valueIdMap.TryGetValue(parts[1].Trim(), out matchedPropVal));
+                        }
+
+                        if (found && matchedPropVal.ValueId > 0)
+                        {
+                            if (targetPropertyId == null)
+                            {
+                                targetPropertyId = matchedPropVal.PropertyId;
+                            }
+
+                            if (matchedPropVal.PropertyId == targetPropertyId.Value && !seenValueIds.Contains(matchedPropVal.ValueId))
+                            {
+                                seenValueIds.Add(matchedPropVal.ValueId);
+                                variationImagesList.Add(new EtsyVariationImageItem(matchedPropVal.PropertyId, matchedPropVal.ValueId, imgId));
+                            }
+                        }
+                    }
+                }
+
+                if (variationImagesList.Count > 0)
+                {
+                    var (varImgSuccess, varImgError, count) = await _apiClient.UpdateVariationImagesAsync(
+                        shopId, createdListingId, variationImagesList, cancellationToken);
+                    if (varImgSuccess)
+                    {
+                        variationImagesCount = count;
+                    }
+                }
+            }
+            catch
+            {
+                // Varyasyon görsel bağlama hatası ilanı durdurmaz
             }
         }
 
@@ -222,7 +285,9 @@ public sealed class FastListingPublishService : IFastListingPublishService
         }
 
         var message = uploadedVariationCount > 0
-            ? $"İlan ({finalState}) ve {uploadedVariationCount} varyasyon başarıyla oluşturuldu."
+            ? (variationImagesCount > 0
+                ? $"İlan ({finalState}), {uploadedVariationCount} varyasyon ve {variationImagesCount} varyasyon görseli başarıyla bağlandı."
+                : $"İlan ({finalState}) ve {uploadedVariationCount} varyasyon başarıyla oluşturuldu.")
             : (variationErrorMessage != null
                 ? $"İlan oluşturuldu ancak varyasyonlar eklenemedi: {variationErrorMessage}"
                 : $"İlan ({finalState}) başarıyla oluşturuldu.");
@@ -235,7 +300,8 @@ public sealed class FastListingPublishService : IFastListingPublishService
             UploadedImages: uploadedImageCount,
             VariationsCount: uploadedVariationCount,
             VariationError: variationErrorMessage,
-            Message: message
+            Message: message,
+            VariationImagesCount: variationImagesCount
         );
     }
 
@@ -392,4 +458,61 @@ public sealed class FastListingPublishService : IFastListingPublishService
             VariationError: null,
             Message: message
         );
+
+    private static Dictionary<string, (long PropertyId, long ValueId)> ParseInventoryValueMap(string? inventoryJson)
+    {
+        var map = new Dictionary<string, (long PropertyId, long ValueId)>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(inventoryJson)) return map;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(inventoryJson);
+            if (!doc.RootElement.TryGetProperty("products", out var productsElem) || productsElem.ValueKind != JsonValueKind.Array)
+            {
+                return map;
+            }
+
+            foreach (var prod in productsElem.EnumerateArray())
+            {
+                if (!prod.TryGetProperty("property_values", out var propsElem) || propsElem.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var prop in propsElem.EnumerateArray())
+                {
+                    long propId = 0;
+                    if (prop.TryGetProperty("property_id", out var pidElem))
+                    {
+                        propId = pidElem.GetInt64();
+                    }
+
+                    if (prop.TryGetProperty("values", out var valuesElem) &&
+                        prop.TryGetProperty("value_ids", out var vidsElem) &&
+                        valuesElem.ValueKind == JsonValueKind.Array &&
+                        vidsElem.ValueKind == JsonValueKind.Array)
+                    {
+                        var valList = valuesElem.EnumerateArray().Select(v => v.GetString()).ToList();
+                        var idList = vidsElem.EnumerateArray().Select(i => i.GetInt64()).ToList();
+
+                        for (int i = 0; i < Math.Min(valList.Count, idList.Count); i++)
+                        {
+                            var vName = valList[i];
+                            var vId = idList[i];
+                            if (!string.IsNullOrWhiteSpace(vName) && vId > 0 && propId > 0)
+                            {
+                                map[vName.Trim()] = (propId, vId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fallback parse error
+        }
+
+        return map;
+    }
 }

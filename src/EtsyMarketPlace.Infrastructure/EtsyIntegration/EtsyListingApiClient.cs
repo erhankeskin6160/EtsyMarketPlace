@@ -154,7 +154,7 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
         return (createdListingId, listingUrl);
     }
 
-    public async Task<bool> UploadListingImageAsync(
+    public async Task<(bool Success, long ImageId)> UploadListingImageAsync(
         string shopId,
         long listingId,
         byte[] imageBytes,
@@ -180,10 +180,30 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
         req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         using var res = await client.SendAsync(req, ct);
-        return res.IsSuccessStatusCode;
+        if (!res.IsSuccessStatusCode)
+        {
+            return (false, 0);
+        }
+
+        long imageId = 0;
+        try
+        {
+            var resJson = await res.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(resJson);
+            if (doc.RootElement.TryGetProperty("listing_image_id", out var imgIdProp))
+            {
+                imageId = imgIdProp.GetInt64();
+            }
+        }
+        catch
+        {
+            // parsing fallback
+        }
+
+        return (true, imageId);
     }
 
-    public async Task<(bool Success, string? ErrorMessage)> UpdateListingInventoryAsync(
+    public async Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(
         string shopId,
         long listingId,
         EtsyInventoryPayload payload,
@@ -205,11 +225,50 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
         using var res = await client.SendAsync(req, ct);
         if (res.IsSuccessStatusCode)
         {
-            return (true, null);
+            var successBody = await res.Content.ReadAsStringAsync(ct);
+            return (true, null, successBody);
         }
 
         var errorBody = await res.Content.ReadAsStringAsync(ct);
-        return (false, $"Etsy Envanter Reddi (HTTP {(int)res.StatusCode}): {errorBody}");
+        return (false, $"Etsy Envanter Reddi (HTTP {(int)res.StatusCode}): {errorBody}", null);
+    }
+
+    public async Task<(bool Success, string? ErrorMessage, int Count)> UpdateVariationImagesAsync(
+        string shopId,
+        long listingId,
+        IReadOnlyList<EtsyVariationImageItem> variationImages,
+        CancellationToken ct)
+    {
+        if (variationImages == null || variationImages.Count == 0)
+        {
+            return (true, null, 0);
+        }
+
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);
+        var client = _httpClient;
+        var varImgUrl = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/{listingId}/variation-images";
+
+        var payload = new EtsyUpdateVariationImagesRequest
+        {
+            VariationImages = variationImages.ToList()
+        };
+        var jsonString = JsonSerializer.Serialize(payload, JsonOptions);
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, varImgUrl)
+        {
+            Content = new StringContent(jsonString, Encoding.UTF8, "application/json")
+        };
+        req.Headers.Add("x-api-key", apiKeyHeader);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var res = await client.SendAsync(req, ct);
+        if (res.IsSuccessStatusCode)
+        {
+            return (true, null, variationImages.Count);
+        }
+
+        var errorBody = await res.Content.ReadAsStringAsync(ct);
+        return (false, $"Etsy Varyasyon Görsel Reddi (HTTP {(int)res.StatusCode}): {errorBody}", 0);
     }
 
     public async Task<bool> SetListingStateAsync(

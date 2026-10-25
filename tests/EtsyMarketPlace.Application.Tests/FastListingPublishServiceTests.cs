@@ -21,13 +21,22 @@ public sealed class FastListingPublishServiceTests
         public Task<(long ListingId, string Url)> CreateDraftListingAsync(string shopId, CreateDraftListingRawRequest raw, CancellationToken ct) =>
             Task.FromResult((CreatedListingId, CreatedUrl));
 
-        public Task<bool> UploadListingImageAsync(string shopId, long listingId, byte[] imageBytes, string fileName, int rank, CancellationToken ct) =>
-            Task.FromResult(true);
+        public List<EtsyVariationImageItem> LastVariationImages { get; private set; } = new();
 
-        public Task<(bool Success, string? ErrorMessage)> UpdateListingInventoryAsync(string shopId, long listingId, EtsyInventoryPayload payload, CancellationToken ct)
+        public Task<(bool Success, long ImageId)> UploadListingImageAsync(string shopId, long listingId, byte[] imageBytes, string fileName, int rank, CancellationToken ct) =>
+            Task.FromResult((true, 500000L + rank));
+
+        public Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(string shopId, long listingId, EtsyInventoryPayload payload, CancellationToken ct)
         {
             LastInventoryPayload = payload;
-            return Task.FromResult((UpdateInventorySuccess, UpdateInventoryError));
+            var fakeInventoryResponse = "{\"products\":[{\"property_values\":[{\"property_id\":513,\"values\":[\"Small\",\"Medium\",\"Red\",\"Blue\"],\"value_ids\":[101,102,201,202]}]}]}";
+            return Task.FromResult((UpdateInventorySuccess, UpdateInventoryError, (string?)fakeInventoryResponse));
+        }
+
+        public Task<(bool Success, string? ErrorMessage, int Count)> UpdateVariationImagesAsync(string shopId, long listingId, IReadOnlyList<EtsyVariationImageItem> variationImages, CancellationToken ct)
+        {
+            LastVariationImages = variationImages.ToList();
+            return Task.FromResult((true, (string?)null, variationImages.Count));
         }
 
         public Task<bool> SetListingStateAsync(string shopId, long listingId, string state, CancellationToken ct) =>
@@ -192,5 +201,51 @@ public sealed class FastListingPublishServiceTests
         Assert.False(result.Success);
         Assert.Contains("Başlık", result.Message);
         Assert.Null(fakeClient.LastInventoryPayload);
+    }
+
+    [Fact]
+    public async Task PublishListingAsync_WhenVariationImagesProvided_CallsUpdateVariationImages()
+    {
+        // Arrange
+        var fakeClient = new FakeEtsyListingApiClient();
+        using var httpClient = new HttpClient();
+        var service = new FastListingPublishService(fakeClient, httpClient);
+
+        var command = new FastListingPublishCommand(
+            ShopId: "test-shop",
+            Title: "Handmade Product With Variation Images",
+            Description: "Quality item",
+            Price: 20m,
+            Quantity: 10,
+            TaxonomyId: 1042,
+            ShippingProfileId: 123456,
+            ReadinessStateId: 789,
+            IsDigital: false,
+            Tags: new[] { "handmade" },
+            Materials: new[] { "Cotton" },
+            State: "draft",
+            Images: new[]
+            {
+                new ListingImageInput("data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", null, 1),
+                new ListingImageInput("data:image/jpeg;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", null, 2)
+            },
+            Variations: new[]
+            {
+                new ListingVariationInput("Small", 15m, 5, true, ImageRank: 1),
+                new ListingVariationInput("Medium", 25m, 5, true, ImageRank: 2)
+            }
+        );
+
+        // Act
+        var result = await service.PublishListingAsync(command);
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal(2, result.VariationImagesCount);
+        Assert.Equal(2, fakeClient.LastVariationImages.Count);
+        Assert.Equal(500001L, fakeClient.LastVariationImages[0].ImageId);
+        Assert.Equal(101L, fakeClient.LastVariationImages[0].ValueId);
+        Assert.Equal(500002L, fakeClient.LastVariationImages[1].ImageId);
+        Assert.Equal(102L, fakeClient.LastVariationImages[1].ValueId);
     }
 }

@@ -591,19 +591,39 @@
                     <button type="button" class="btn-sync-price" (click)="syncBasePriceToVariations()">
                       ⚡ Fiyatı Eşitle (${{ (priceUsd || 0).toFixed(2) }})
                     </button>
+                    <div class="toolbar-right-actions">
+                      <button type="button" class="btn-auto-img" (click)="autoAssignVariationImages()" title="Galerideki görselleri sırasıyla varyasyonlara bağlar">
+                        🎨 Görselleri Eşleştir
+                      </button>
+                      <button type="button" class="btn-clear-img" (click)="clearVariationImages()" title="Görsel bağlantılarını temizler">
+                        ✕ Temizle
+                      </button>
+                    </div>
                   </div>
                   <div class="matrix-table-wrap">
                     <table class="matrix-table">
                       <thead>
                         <tr>
                           <th>Varyasyon</th>
-                          <th style="width: 70px;">Fiyat ($)</th>
-                          <th style="width: 60px;">Stok</th>
+                          <th style="width: 105px;">Görsel</th>
+                          <th style="width: 65px;">Fiyat ($)</th>
+                          <th style="width: 55px;">Stok</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr *ngFor="let r of variationRows">
                           <td class="var-key-cell">{{ r.key }}</td>
+                          <td class="var-img-cell">
+                            <div class="var-img-selector">
+                              <img *ngIf="getSelectedImageForRank(r.imageRank) as selImg" [src]="selImg.url" class="var-img-thumb" alt="Thumb" />
+                              <select class="grid-img-select" [(ngModel)]="r.imageRank" (ngModelChange)="saveDraftToStorage()">
+                                <option [ngValue]="undefined">- Yok -</option>
+                                <option *ngFor="let img of galleryImages; let i = index" [ngValue]="i + 1">
+                                  #{{ i + 1 }} {{ img.isCover ? '⭐' : '' }}
+                                </option>
+                              </select>
+                            </div>
+                          </td>
                           <td>
                             <input type="number" step="0.5" [(ngModel)]="r.price" (ngModelChange)="onVariationRowChange()" class="grid-input" />
                           </td>
@@ -807,6 +827,10 @@
           <div class="info-card">
             <span class="info-card-label">Yüklenen Görseller</span>
             <span class="info-card-val">{{ createdListingResult?.uploadedImages || galleryImages.length }} Adet</span>
+          </div>
+          <div class="info-card" *ngIf="createdListingResult?.variationImagesCount">
+            <span class="info-card-label">Varyasyon Görselleri</span>
+            <span class="info-card-val highlight-purple">🎨 {{ createdListingResult?.variationImagesCount }} Bağlandı</span>
           </div>
         </div>
       </div>

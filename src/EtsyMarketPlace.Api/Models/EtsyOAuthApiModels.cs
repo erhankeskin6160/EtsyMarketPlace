@@ -62,7 +62,8 @@ public sealed record ListingVariationDto(
     string Key,
     decimal Price,
     int Quantity,
-    bool Active = true);
+    bool Active = true,
+    int? ImageRank = null);
 
 public sealed record ListingVariationGroupDto(
     string Name,

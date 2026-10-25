@@ -12,8 +12,21 @@ public sealed record ListingVariationInput(
     string Key,
     decimal Price,
     int Quantity,
-    bool Active
+    bool Active,
+    int? ImageRank = null
 );
+
+public sealed record EtsyVariationImageItem(
+    [property: System.Text.Json.Serialization.JsonPropertyName("property_id")] long PropertyId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("value_id")] long ValueId,
+    [property: System.Text.Json.Serialization.JsonPropertyName("image_id")] long ImageId
+);
+
+public sealed class EtsyUpdateVariationImagesRequest
+{
+    [System.Text.Json.Serialization.JsonPropertyName("variation_images")]
+    public required List<EtsyVariationImageItem> VariationImages { get; init; }
+}
 
 public sealed record ListingVariationGroupInput(
     string Name,
@@ -48,7 +61,8 @@ public sealed record FastListingPublishResult(
     int UploadedImages,
     int VariationsCount,
     string? VariationError,
-    string Message
+    string Message,
+    int VariationImagesCount = 0
 );
 
 public sealed record CreateDraftListingRawRequest(

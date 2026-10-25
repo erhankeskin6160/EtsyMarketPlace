@@ -19,11 +19,14 @@ public class EtsyListingServiceTests
         public Task<(long ListingId, string Url)> CreateDraftListingAsync(string shopId, CreateDraftListingRawRequest raw, CancellationToken ct) =>
             Task.FromResult((123L, "url"));
 
-        public Task<bool> UploadListingImageAsync(string shopId, long listingId, byte[] imageBytes, string fileName, int rank, CancellationToken ct) =>
-            Task.FromResult(true);
+        public Task<(bool Success, long ImageId)> UploadListingImageAsync(string shopId, long listingId, byte[] imageBytes, string fileName, int rank, CancellationToken ct) =>
+            Task.FromResult((true, 12345L));
 
-        public Task<(bool Success, string? ErrorMessage)> UpdateListingInventoryAsync(string shopId, long listingId, EtsyInventoryPayload payload, CancellationToken ct) =>
-            Task.FromResult((true, (string?)null));
+        public Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(string shopId, long listingId, EtsyInventoryPayload payload, CancellationToken ct) =>
+            Task.FromResult((true, (string?)null, (string?)null));
+
+        public Task<(bool Success, string? ErrorMessage, int Count)> UpdateVariationImagesAsync(string shopId, long listingId, IReadOnlyList<EtsyVariationImageItem> variationImages, CancellationToken ct) =>
+            Task.FromResult((true, (string?)null, variationImages?.Count ?? 0));
 
         public Task<bool> SetListingStateAsync(string shopId, long listingId, string state, CancellationToken ct) =>
             Task.FromResult(SetStateSuccess);
