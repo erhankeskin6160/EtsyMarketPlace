@@ -1338,6 +1338,15 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     }
   }
 
+  setVarType(groupIndex: number, typeName: string): void {
+    if (groupIndex === 1) {
+      this.varType1 = typeName;
+    } else {
+      this.varType2 = typeName;
+    }
+    this.rebuildVariationGrid();
+  }
+
   rebuildVariationGrid(): void {
     if (!this.enableVariations) {
       this.variationRows = [];

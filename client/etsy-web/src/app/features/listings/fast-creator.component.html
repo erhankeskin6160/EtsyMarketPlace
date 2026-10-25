@@ -554,13 +554,40 @@
 
             <div *ngIf="enableVariations" class="var-options-box">
               <div class="field-wrap">
-                <label>1. Varyasyon Tipi:</label>
-                <select class="std-select" [(ngModel)]="varType1" (change)="rebuildVariationGrid()">
-                  <option value="Boyut / Size">Boyut / Size</option>
-                  <option value="Renk / Color">Renk / Color</option>
-                  <option value="Materyal / Material">Materyal / Material</option>
-                </select>
-                <input type="text" class="std-input var-input" [(ngModel)]="varValues1" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Small, Medium, Large" />
+                <div class="field-header-row">
+                  <label>1. Varyasyon Tipi:</label>
+                  <div class="quick-preset-chips">
+                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Renk / Color'" (click)="setVarType(1, 'Renk / Color')">🎨 Renk</button>
+                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Boyut / Size'" (click)="setVarType(1, 'Boyut / Size')">📏 Boyut</button>
+                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Materyal / Material'" (click)="setVarType(1, 'Materyal / Material')">🪵 Materyal</button>
+                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Stil / Style'" (click)="setVarType(1, 'Stil / Style')">✨ Stil</button>
+                    <button type="button" class="preset-chip" [class.active]="varType1 === 'Desen / Pattern'" (click)="setVarType(1, 'Desen / Pattern')">📐 Desen</button>
+                  </div>
+                </div>
+                <div class="var-type-input-box">
+                  <input
+                    type="text"
+                    list="varType1Presets"
+                    class="std-input var-type-input"
+                    [(ngModel)]="varType1"
+                    (input)="rebuildVariationGrid()"
+                    (blur)="rebuildVariationGrid()"
+                    placeholder="Varyasyon tipi yazın veya seçin (Örn: Renk, Boyut, Desen, Finish...)"
+                  />
+                  <datalist id="varType1Presets">
+                    <option value="Renk / Color"></option>
+                    <option value="Boyut / Size"></option>
+                    <option value="Materyal / Material"></option>
+                    <option value="Stil / Style"></option>
+                    <option value="Desen / Pattern"></option>
+                    <option value="Paketleme / Packaging"></option>
+                    <option value="Kapasite / Capacity"></option>
+                    <option value="Model / Design"></option>
+                    <option value="Bitiş / Finish"></option>
+                    <option value="Seçenek / Option"></option>
+                  </datalist>
+                </div>
+                <input type="text" class="std-input var-input" [(ngModel)]="varValues1" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Small, Medium, Large (Virgülle ayırın)" />
               </div>
 
               <!-- 2. Varyasyon Grubu -->
@@ -570,13 +597,40 @@
               </label>
 
               <div *ngIf="enableVar2" class="field-wrap">
-                <label>2. Varyasyon Tipi:</label>
-                <select class="std-select" [(ngModel)]="varType2" (change)="rebuildVariationGrid()">
-                  <option value="Renk / Color">Renk / Color</option>
-                  <option value="Paketleme / Packaging">Paketleme / Packaging</option>
-                  <option value="Stil / Style">Stil / Style</option>
-                </select>
-                <input type="text" class="std-input var-input" [(ngModel)]="varValues2" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Siyah, Beyaz, Altın" />
+                <div class="field-header-row">
+                  <label>2. Varyasyon Tipi:</label>
+                  <div class="quick-preset-chips">
+                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Renk / Color'" (click)="setVarType(2, 'Renk / Color')">🎨 Renk</button>
+                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Paketleme / Packaging'" (click)="setVarType(2, 'Paketleme / Packaging')">📦 Paketleme</button>
+                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Stil / Style'" (click)="setVarType(2, 'Stil / Style')">✨ Stil</button>
+                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Desen / Pattern'" (click)="setVarType(2, 'Desen / Pattern')">📐 Desen</button>
+                    <button type="button" class="preset-chip" [class.active]="varType2 === 'Bitiş / Finish'" (click)="setVarType(2, 'Bitiş / Finish')">✨ Finish</button>
+                  </div>
+                </div>
+                <div class="var-type-input-box">
+                  <input
+                    type="text"
+                    list="varType2Presets"
+                    class="std-input var-type-input"
+                    [(ngModel)]="varType2"
+                    (input)="rebuildVariationGrid()"
+                    (blur)="rebuildVariationGrid()"
+                    placeholder="2. Varyasyon tipi yazın veya seçin (Örn: Paketleme, Stil, Renk...)"
+                  />
+                  <datalist id="varType2Presets">
+                    <option value="Renk / Color"></option>
+                    <option value="Paketleme / Packaging"></option>
+                    <option value="Stil / Style"></option>
+                    <option value="Desen / Pattern"></option>
+                    <option value="Boyut / Size"></option>
+                    <option value="Materyal / Material"></option>
+                    <option value="Kapasite / Capacity"></option>
+                    <option value="Model / Design"></option>
+                    <option value="Bitiş / Finish"></option>
+                    <option value="Seçenek / Option"></option>
+                  </datalist>
+                </div>
+                <input type="text" class="std-input var-input" [(ngModel)]="varValues2" (input)="rebuildVariationGrid()" (blur)="rebuildVariationGrid()" placeholder="Siyah, Beyaz, Altın (Virgülle ayırın)" />
               </div>
 
               <!-- Custom Pricing & Stock Grid -->

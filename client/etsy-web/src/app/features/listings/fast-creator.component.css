@@ -2474,3 +2474,71 @@ input:checked + .slider:before {
   color: #c084fc !important;
   font-weight: 700;
 }
+
+
+/* Custom & Autocomplete Variation Type Inputs */
+.field-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.quick-preset-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.preset-chip {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid #334155;
+  color: #94a3b8;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+  line-height: 1.2;
+}
+
+.preset-chip:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #6366f1;
+  color: #a5b4fc;
+}
+
+.preset-chip.active {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #818cf8;
+  color: #e0e7ff;
+  font-weight: 600;
+}
+
+.var-type-input-box {
+  position: relative;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.var-type-input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  color: #f1f5f9;
+  font-weight: 500;
+  transition: border-color 0.15s;
+}
+
+.var-type-input:focus {
+  border-color: #818cf8;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.2);
+}

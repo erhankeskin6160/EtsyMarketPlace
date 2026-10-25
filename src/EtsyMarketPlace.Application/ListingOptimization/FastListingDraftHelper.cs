@@ -30,7 +30,7 @@ public static class FastListingDraftHelper
         }
 
         var lower = selected.ToLowerInvariant();
-        if (lower.Contains("boyut") || lower.Contains("size"))
+        if (lower.Contains("boyut") || lower.Contains("size") || lower.Contains("beden") || lower.Contains("ölçü"))
         {
             return ("Size", targetPropertyId);
         }
@@ -40,7 +40,7 @@ public static class FastListingDraftHelper
             return ("Color", targetPropertyId);
         }
 
-        if (lower.Contains("malzeme") || lower.Contains("material"))
+        if (lower.Contains("malzeme") || lower.Contains("material") || lower.Contains("materyal"))
         {
             return ("Material", targetPropertyId);
         }
@@ -50,7 +50,57 @@ public static class FastListingDraftHelper
             return ("Style", targetPropertyId);
         }
 
-        return ("Custom", targetPropertyId);
+        if (lower.Contains("desen") || lower.Contains("pattern"))
+        {
+            return ("Pattern", targetPropertyId);
+        }
+
+        if (lower.Contains("paket") || lower.Contains("packaging"))
+        {
+            return ("Packaging", targetPropertyId);
+        }
+
+        if (lower.Contains("kapasite") || lower.Contains("capacity"))
+        {
+            return ("Capacity", targetPropertyId);
+        }
+
+        if (lower.Contains("tasarım") || lower.Contains("design") || lower.Contains("model"))
+        {
+            return ("Design", targetPropertyId);
+        }
+
+        if (lower.Contains("bitiş") || lower.Contains("finish"))
+        {
+            return ("Finish", targetPropertyId);
+        }
+
+        if (lower.Contains("özel") || lower.Contains("custom") || lower == "random text")
+        {
+            return ("Custom", targetPropertyId);
+        }
+
+        var cleanName = CleanVariationPropertyName(selected);
+        return string.IsNullOrWhiteSpace(cleanName) ? ("Custom", targetPropertyId) : (cleanName, targetPropertyId);
+    }
+
+    public static string CleanVariationPropertyName(string? raw, int maxChars = 45)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "Custom";
+        var trimmed = raw.Trim();
+        if (trimmed.Contains('/'))
+        {
+            var parts = trimmed.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1]))
+            {
+                trimmed = parts[1].Trim();
+            }
+            else if (parts.Length > 0)
+            {
+                trimmed = parts[0].Trim();
+            }
+        }
+        return trimmed.Length <= maxChars ? trimmed : trimmed[..maxChars].Trim();
     }
 
     public const int MaxMaterialsCount = 13;

@@ -16,6 +16,11 @@ public sealed class FastListingDraftHelperTests
     [InlineData(null, "Custom", 513)]
     [InlineData("", "Custom", 513)]
     [InlineData("Random Text", "Custom", 513)]
+    [InlineData("Desen / Pattern", "Pattern", 513)]
+    [InlineData("Paketleme / Packaging", "Packaging", 513)]
+    [InlineData("Kapasite / Capacity", "Capacity", 513)]
+    [InlineData("Bitiş / Finish", "Finish", 513)]
+    [InlineData("Aroma", "Aroma", 513)]
     public void ParseVariationType_CorrectlyIdentifiesPropertyId(string? input, string expectedName, long expectedPropertyId)
     {
         var (name, propertyId) = FastListingDraftHelper.ParseVariationType(input, 1);
