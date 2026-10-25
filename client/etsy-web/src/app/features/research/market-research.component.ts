@@ -288,9 +288,15 @@ export class MarketResearchComponent implements OnInit {
             this.averageEstimatedMonthlySales = res.kpis.averageEstimatedMonthlySales || 0;
             this.topSellerMonthlyRevenue = res.kpis.topSellerMonthlyRevenue || 0;
           }
-          this.pushHistory(this.searchKeyword.trim());
+          const historyTerm = res.targetListingId ? (res.keyword || `#${res.targetListingId}`) : this.searchKeyword.trim();
+          this.pushHistory(historyTerm);
           this.lastUpdatedLabel = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-          this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam Etsy havuzu: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()} • Son güncelleme ${this.lastUpdatedLabel}`;
+          if (res.targetListingId) {
+            const compCount = Math.max(0, this.items.length - 1);
+            this.statusText = `🎯 Hedef ürün (#${res.targetListingId}) ve ${compCount} rakip pazar ilanı inceleniyor. (Niş: "${res.keyword}") • Son güncelleme ${this.lastUpdatedLabel}`;
+          } else {
+            this.statusText = `"${this.searchKeyword}" için ${this.items.length} canlı Etsy ilanı getirildi (Toplam Etsy havuzu: ${res.total.toLocaleString()}). Sıralama: ${this.getSortLabel()} • Son güncelleme ${this.lastUpdatedLabel}`;
+          }
           this.showToastMsg(`✅ ${this.items.length} ürün ve pazar metriği başarıyla yüklendi.`);
         } else {
           this.items = [];

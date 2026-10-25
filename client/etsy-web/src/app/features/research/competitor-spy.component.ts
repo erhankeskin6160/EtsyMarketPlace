@@ -2340,6 +2340,12 @@ export class CompetitorSpyComponent implements OnInit {
           return;
         }
 
+        const isListingUrl = /etsy\.com\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?listing\/(\d+)/i.test(query);
+        if (isListingUrl && res.shop && res.shop.shopName) {
+          this.shopQueryInput = res.shop.shopName;
+          this.showToast(`🎯 Ürün linkinden mağaza tespit edildi: "${res.shop.shopName}" (${(res.shop.totalSalesCount || 0).toLocaleString()} satış)`);
+        }
+
         this.listings = res.listings || [];
         this.applyListingFilters();
         this.selectListing(this.filteredListings.length > 0 ? this.filteredListings[0] : null);

@@ -74,13 +74,21 @@ public sealed class MarketResearchService : IMarketResearchService
                 // En iyi çaba: hedef ilan doğrudan batch ucundan çekilemezse arama türetilen kelimeyle devam eder.
             }
 
-            if (string.IsNullOrWhiteSpace(fallbackKeyword) && targetListing != null)
+            // Eğer URL'den açık bir arama terimi (ga_search_query veya q) gelmediyse ve sadece uzun bir slug varsa,
+            // veya fallbackKeyword 4 kelimeden uzunsa, hedef ilanın etiketlerinden daha niş ve kaliteli bir pazar arama terimi seç.
+            bool hasExplicitSearchQuery = !string.IsNullOrWhiteSpace(fallbackKeyword) && Regex.IsMatch(query.Keyword, @"[?&](?:ga_search_query|q)=", RegexOptions.IgnoreCase);
+            if (!hasExplicitSearchQuery && targetListing != null)
             {
                 if (targetListing.Tags.Count > 0)
                 {
                     fallbackKeyword = targetListing.Tags[0];
                 }
-                else if (!string.IsNullOrWhiteSpace(targetListing.Title))
+                else if (!string.IsNullOrWhiteSpace(fallbackKeyword) && fallbackKeyword.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 4)
+                {
+                    var slugWords = fallbackKeyword.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(4);
+                    fallbackKeyword = string.Join(" ", slugWords);
+                }
+                else if (string.IsNullOrWhiteSpace(fallbackKeyword) && !string.IsNullOrWhiteSpace(targetListing.Title))
                 {
                     var titleWords = targetListing.Title.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(4);
                     fallbackKeyword = string.Join(" ", titleWords);
