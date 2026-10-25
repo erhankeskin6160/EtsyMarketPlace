@@ -8,6 +8,7 @@ import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-s
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 
 export interface MarketItem {
+  isTargetListing?: boolean;
   id: number;
   listingRank: number;
   title: string;
@@ -250,14 +251,21 @@ export class MarketResearchComponent implements OnInit {
 
     this.persistKeyword(this.searchKeyword.trim());
     this.isLoading = true;
-    this.statusText = `"${this.searchKeyword}" için Etsy canlı pazar verileri taranıyor...`;
+    const isListingUrl = /etsy\.com\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?listing\/(\d+)/i.test(this.searchKeyword) || /^#?\d{7,14}$/.test(this.searchKeyword.trim());
+    this.statusText = isListingUrl
+      ? '🎯 Etsy ürün linki tespit edildi. Ürün detayları çekiliyor ve niş pazar rekabeti analiz ediliyor...'
+      : `"${this.searchKeyword}" için Etsy canlı pazar verileri taranıyor...`;
 
     this.etsyApi.searchMarket(this.searchKeyword, this.limit, this.sortBy).subscribe({
       next: (res) => {
         this.isLoading = false;
         if (res && res.listings && res.listings.length > 0) {
           this.items = res.listings;
-          this.selectedItem = this.items[0];
+          this.selectedItem = this.items.find(i => i.isTargetListing) ?? this.items[0];
+          if (res.targetListingId) {
+            const compCount = Math.max(0, this.items.length - 1);
+            this.statusText = `🎯 Hedef ürün (#${res.targetListingId}) ve ${compCount} rakip ürün pazar analizi yüklendi.`;
+          }
           this.currentImageIndex = 0;
           this.totalEtsyCount = res.total || this.items.length;
           if (res.kpis) {

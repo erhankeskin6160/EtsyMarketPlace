@@ -41,7 +41,7 @@
               type="text" 
               [(ngModel)]="searchKeyword" 
               (keyup.enter)="onSearch()"
-              placeholder="Etsy pazarında aranacak kelime: örn. 3d printed desk organizer, cosplay helmet, resin lamp..." 
+              placeholder="Etsy pazarında kelime (örn: flexi starfish, resin lamp) veya ürün linki (https://www.etsy.com/listing/...)" 
               class="search-input" />
           </div>
           <div class="filter-wrap">
@@ -274,7 +274,8 @@
                 <!-- Ürün Başlığı -->
                 <td class="title-cell">
                   <span class="prod-title" [title]="item.title">{{ item.title }}</span>
-                  <div class="row-inline-badges" *ngIf="item.isOpportunityListing || item.isBestseller || item.hasFreeShipping">
+                  <div class="row-inline-badges" *ngIf="item.isTargetListing || item.isOpportunityListing || item.isBestseller || item.hasFreeShipping">
+                    <span *ngIf="item.isTargetListing" class="inline-pill target" title="Kullanıcının girdiği hedef ürün">🎯 Hedef İlan</span>
                     <span *ngIf="item.isOpportunityListing" class="inline-pill opp" title="Yüksek talep + Zayıf Rakip SEO: Bu ürünü daha iyi SEO ile geçebilirsiniz">🎯 SEO Fırsatı</span>
                     <span *ngIf="item.isBestseller" class="inline-pill best" title="Yüksek satış hacmi">🔥 Çok Satan</span>
                     <span *ngIf="item.hasFreeShipping" class="inline-pill ship">🚚 Ücretsiz Kargo</span>

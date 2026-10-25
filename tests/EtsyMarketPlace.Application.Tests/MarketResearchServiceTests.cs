@@ -754,5 +754,159 @@ public sealed class MarketResearchServiceTests
         Assert.NotEmpty(result.SuggestedVariations);
         Assert.NotEmpty(result.ImprovementHighlights);
     }
+
+    [Fact]
+    public void TryExtractEtsyListingInfo_WithFullUrlAndSearchQuery_ExtractsIdAndSearchKeyword()
+    {
+        var url = "https://www.etsy.com/listing/1869519659/flexi-starfish-fidget-toy-3d-printed?ls=a&ga_order=most_relevant&ga_search_query=Flexi+Playful+Star&ref=sc_gallery-1-2";
+        bool result = MarketResearchService.TryExtractEtsyListingInfo(url, out long listingId, out string fallbackKeyword);
+
+        Assert.True(result);
+        Assert.Equal(1869519659L, listingId);
+        Assert.Equal("Flexi Playful Star", fallbackKeyword);
+    }
+
+    [Fact]
+    public void TryExtractEtsyListingInfo_WithSlugOnly_ExtractsIdAndSlugKeywords()
+    {
+        var url = "https://www.etsy.com/listing/1869519659/flexi-starfish-fidget-toy-3d-printed";
+        bool result = MarketResearchService.TryExtractEtsyListingInfo(url, out long listingId, out string fallbackKeyword);
+
+        Assert.True(result);
+        Assert.Equal(1869519659L, listingId);
+        Assert.Equal("flexi starfish fidget toy 3d printed", fallbackKeyword);
+    }
+
+    [Fact]
+    public void TryExtractEtsyListingInfo_WithDirectId_ExtractsId()
+    {
+        bool r1 = MarketResearchService.TryExtractEtsyListingInfo("1869519659", out long id1, out _);
+        Assert.True(r1);
+        Assert.Equal(1869519659L, id1);
+
+        bool r2 = MarketResearchService.TryExtractEtsyListingInfo("#1869519659", out long id2, out _);
+        Assert.True(r2);
+        Assert.Equal(1869519659L, id2);
+
+        bool r3 = MarketResearchService.TryExtractEtsyListingInfo("leather wallet", out _, out _);
+        Assert.False(r3);
+    }
+
+    [Fact]
+    public async Task SearchMarketAsync_WhenListingUrlPassed_FetchesTargetAndPinsAtRank1()
+    {
+        var fakeClient = new FakeEtsyMarketApiClient
+        {
+            BatchRawJson = """
+            {
+                "results": [
+                    {
+                        "listing_id": 1869519659,
+                        "shop_id": 777,
+                        "title": "Flexi Starfish Fidget Toy 3D Printed",
+                        "description": "Amazing flexible starfish desk toy.",
+                        "views": 1500,
+                        "num_favorers": 350,
+                        "quantity": 25,
+                        "price": { "amount": 1499, "divisor": 100, "currency_code": "USD" },
+                        "tags": ["flexi starfish", "fidget toy", "3d print"],
+                        "materials": ["PLA"],
+                        "images": [{ "url_570xN": "https://img.etsy.com/starfish.jpg" }],
+                        "shop": { "shop_name": "FlexiPrints", "transaction_sold_count": 800, "review_count": 120, "review_average": 4.95 }
+                    }
+                ]
+            }
+            """,
+            RawJson = """
+            {
+                "count": 1,
+                "results": [
+                    {
+                        "listing_id": 999111,
+                        "shop_id": 888,
+                        "title": "Competitor Starfish Fidget",
+                        "description": "Competitor item",
+                        "views": 200,
+                        "num_favorers": 45,
+                        "quantity": 10,
+                        "price": { "amount": 1299, "divisor": 100, "currency_code": "USD" },
+                        "tags": ["flexi starfish"],
+                        "materials": ["PLA"],
+                        "images": [{ "url_570xN": "https://img.etsy.com/comp.jpg" }],
+                        "shop": { "shop_name": "OtherShop", "transaction_sold_count": 100, "review_count": 10, "review_average": 4.8 }
+                    }
+                ]
+            }
+            """
+        };
+
+        var service = new MarketResearchService(fakeClient);
+        var url = "https://www.etsy.com/listing/1869519659/flexi-starfish-fidget-toy-3d-printed?ga_search_query=Flexi+Starfish";
+
+        var response = await service.SearchMarketAsync(new MarketSearchQuery(url, 10, "market_score", "53236321"));
+
+        Assert.NotNull(response);
+        Assert.Equal(1869519659L, response.TargetListingId);
+        Assert.Equal(2, response.Listings.Count);
+
+        var first = response.Listings[0];
+        Assert.Equal(1869519659L, first.Id);
+        Assert.True(first.IsTargetListing);
+        Assert.Equal(1, first.ListingRank);
+        Assert.Equal("Flexi Starfish Fidget Toy 3D Printed", first.Title);
+        Assert.Equal(14.99m, first.PriceUsd);
+
+        var second = response.Listings[1];
+        Assert.Equal(999111L, second.Id);
+        Assert.False(second.IsTargetListing);
+        Assert.Equal(2, second.ListingRank);
+    }
+
+    [Fact]
+    public async Task AnalyzeCompetitorShopAsync_WhenListingUrlPassed_ResolvesShopFromListing()
+    {
+        var fakeClient = new FakeEtsyMarketApiClient
+        {
+            BatchRawJson = """
+            {
+                "results": [
+                    {
+                        "listing_id": 1869519659,
+                        "shop_id": 777,
+                        "title": "Flexi Starfish",
+                        "shop": { "shop_name": "FlexiMasterShop" }
+                    }
+                ]
+            }
+            """,
+            ShopByNameRawJson = """
+            {
+                "count": 1,
+                "results": [
+                    {
+                        "shop_id": 777,
+                        "shop_name": "FlexiMasterShop",
+                        "title": "Flexi Master Official",
+                        "transaction_sold_count": 5400,
+                        "review_count": 920,
+                        "review_average": 4.96,
+                        "listing_active_count": 42
+                    }
+                ]
+            }
+            """
+        };
+
+        var service = new MarketResearchService(fakeClient);
+        var url = "https://www.etsy.com/listing/1869519659/flexi-starfish-fidget-toy-3d-printed";
+
+        var result = await service.AnalyzeCompetitorShopAsync(url, 10, "53236321");
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Shop);
+        Assert.Equal("FlexiMasterShop", result.Shop.ShopName);
+        Assert.Equal(777L, result.Shop.ShopId);
+        Assert.Equal(5400, result.Shop.TotalSales);
+    }
 }
 

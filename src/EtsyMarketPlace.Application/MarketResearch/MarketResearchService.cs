@@ -50,6 +50,51 @@ public sealed class MarketResearchService : IMarketResearchService
             return cachedEntry.Response;
         }
 
+        bool isListingUrl = TryExtractEtsyListingInfo(keyword, out long targetListingId, out string fallbackKeyword);
+        MarketListingItemDto? targetListing = null;
+
+        if (isListingUrl && targetListingId > 0)
+        {
+            try
+            {
+                var batchBody = await _apiClient.GetListingsBatchRawJsonAsync(query.ShopId, new[] { targetListingId }, cancellationToken);
+                using var batchDoc = JsonDocument.Parse(batchBody);
+                if (batchDoc.RootElement.TryGetProperty("results", out var bResults) && bResults.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var bItem in bResults.EnumerateArray())
+                    {
+                        targetListing = ParseSingleListingJson(bItem);
+                        targetListing.IsTargetListing = true;
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                // En iyi çaba: hedef ilan doğrudan batch ucundan çekilemezse arama türetilen kelimeyle devam eder.
+            }
+
+            if (string.IsNullOrWhiteSpace(fallbackKeyword) && targetListing != null)
+            {
+                if (targetListing.Tags.Count > 0)
+                {
+                    fallbackKeyword = targetListing.Tags[0];
+                }
+                else if (!string.IsNullOrWhiteSpace(targetListing.Title))
+                {
+                    var titleWords = targetListing.Title.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(4);
+                    fallbackKeyword = string.Join(" ", titleWords);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(fallbackKeyword))
+            {
+                fallbackKeyword = targetListingId.ToString();
+            }
+
+            keyword = fallbackKeyword;
+        }
+
         string body;
         try
         {
@@ -57,6 +102,12 @@ public sealed class MarketResearchService : IMarketResearchService
         }
         catch (Exception ex)
         {
+            if (targetListing != null)
+            {
+                var singleResponse = CreateSingleListingResponse(targetListing, keyword);
+                StoreInCache(cacheKey, singleResponse);
+                return singleResponse;
+            }
             throw new InvalidOperationException($"Pazar arama API hatası: {ex.Message}", ex);
         }
 
@@ -68,172 +119,35 @@ public sealed class MarketResearchService : IMarketResearchService
             totalCount = c;
         }
 
-        if (!root.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+        var listings = new List<MarketListingItemDto>();
+        if (root.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in results.EnumerateArray())
+            {
+                var parsed = ParseSingleListingJson(item);
+                if (parsed.Id > 0)
+                {
+                    listings.Add(parsed);
+                }
+            }
+        }
+
+        if (targetListing != null)
+        {
+            listings.RemoveAll(l => l.Id == targetListing.Id);
+            listings.Insert(0, targetListing);
+        }
+
+        if (listings.Count == 0)
         {
             return new MarketSearchResponse
             {
                 Keyword = keyword,
+                TargetListingId = isListingUrl && targetListingId > 0 ? targetListingId : null,
                 Total = 0,
                 Kpis = new MarketSummaryKpisDto(),
                 Listings = []
             };
-        }
-
-        var listings = new List<MarketListingItemDto>();
-        foreach (var item in results.EnumerateArray())
-        {
-            long listingId = item.TryGetProperty("listing_id", out var lid) ? lid.GetInt64() : 0;
-            long itemShopId = item.TryGetProperty("shop_id", out var sid) ? sid.GetInt64() : 0;
-            long taxonomyId = item.TryGetProperty("taxonomy_id", out var tx) && tx.TryGetInt64(out var txVal) ? txVal : 0;
-            string title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? "") : "";
-            string description = item.TryGetProperty("description", out var d) ? (d.GetString() ?? "") : "";
-            int views = item.TryGetProperty("views", out var v) ? v.GetInt32() : 0;
-
-            int favorites = 0;
-            if (item.TryGetProperty("num_favorers", out var f))
-            {
-                favorites = f.ValueKind == JsonValueKind.Number ? f.GetInt32() : (int.TryParse(f.GetString(), out var nf) ? nf : 0);
-            }
-            else if (item.TryGetProperty("favorites", out var favProp))
-            {
-                favorites = favProp.ValueKind == JsonValueKind.Number ? favProp.GetInt32() : (int.TryParse(favProp.GetString(), out var nf) ? nf : 0);
-            }
-
-            int quantity = item.TryGetProperty("quantity", out var q) ? q.GetInt32() : 0;
-
-            decimal price = 0;
-            string currency = "USD";
-            if (item.TryGetProperty("price", out var pObj) && pObj.ValueKind == JsonValueKind.Object)
-            {
-                decimal rawAmount = 0;
-                if (pObj.TryGetProperty("amount", out var aProp) && pObj.TryGetProperty("divisor", out var divProp))
-                {
-                    var divisor = divProp.GetInt32();
-                    if (divisor > 0) rawAmount = aProp.GetInt64() / (decimal)divisor;
-                }
-                if (pObj.TryGetProperty("currency_code", out var cProp)) currency = cProp.GetString() ?? "USD";
-
-                // Etsy fiyatları satıcının para biriminde döner (USD, EUR, TRY, IDR...);
-                // KPI ve tahmin motoru USD ile çalıştığı için fiyat burada normalize edilir.
-                price = MarketCurrencyConverter.TryConvertToUsd(rawAmount, currency) ?? 0;
-            }
-
-            var tags = new List<string>();
-            if (item.TryGetProperty("tags", out var tagsArr) && tagsArr.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var tg in tagsArr.EnumerateArray())
-                {
-                    var str = tg.GetString();
-                    if (!string.IsNullOrWhiteSpace(str)) tags.Add(str.Trim());
-                }
-            }
-
-            var materials = new List<string>();
-            if (item.TryGetProperty("materials", out var matArr) && matArr.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var mt in matArr.EnumerateArray())
-                {
-                    var str = mt.GetString();
-                    if (!string.IsNullOrWhiteSpace(str)) materials.Add(str.Trim());
-                }
-            }
-
-            var imageUrls = new List<string>();
-            var imgProp = (item.TryGetProperty("Images", out var p1) && p1.ValueKind == JsonValueKind.Array) ? p1
-                : ((item.TryGetProperty("images", out var p2) && p2.ValueKind == JsonValueKind.Array) ? p2 : default);
-
-            if (imgProp.ValueKind == JsonValueKind.Array)
-            {
-                foreach (var img in imgProp.EnumerateArray())
-                {
-                    string? imgUrl = null;
-                    if (img.TryGetProperty("url_570xN", out var u570)) imgUrl = u570.GetString();
-                    else if (img.TryGetProperty("url_fullxfull", out var uFull)) imgUrl = uFull.GetString();
-                    else if (img.TryGetProperty("url_170x135", out var u170)) imgUrl = u170.GetString();
-                    else if (img.TryGetProperty("url_75x75", out var u75)) imgUrl = u75.GetString();
-
-                    if (!string.IsNullOrWhiteSpace(imgUrl)) imageUrls.Add(imgUrl.Trim());
-                }
-            }
-            var primaryImg = imageUrls.FirstOrDefault() ?? "";
-
-            string shopName = $"Shop {itemShopId}";
-            int shopSales = 0;
-            int reviewCount = 0;
-            decimal reviewAverage = 5.0m;
-            string shopUrl = itemShopId > 0 ? $"https://www.etsy.com/shop/{shopName}" : "";
-
-            var shopObj = (item.TryGetProperty("Shop", out var s1) && s1.ValueKind == JsonValueKind.Object) ? s1
-                : ((item.TryGetProperty("shop", out var s2) && s2.ValueKind == JsonValueKind.Object) ? s2 : default);
-
-            if (shopObj.ValueKind == JsonValueKind.Object)
-            {
-                if (shopObj.TryGetProperty("shop_name", out var sn) && !string.IsNullOrWhiteSpace(sn.GetString()))
-                {
-                    shopName = sn.GetString()!;
-                    shopUrl = $"https://www.etsy.com/shop/{shopName}";
-                }
-                if (shopObj.TryGetProperty("transaction_sold_count", out var sc))
-                {
-                    shopSales = sc.GetInt32();
-                }
-                if (shopObj.TryGetProperty("review_count", out var rc))
-                {
-                    reviewCount = rc.GetInt32();
-                }
-                if (shopObj.TryGetProperty("review_average", out var ra))
-                {
-                    reviewAverage = ra.ValueKind == JsonValueKind.Number ? ra.GetDecimal() : (decimal.TryParse(ra.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var rav) ? rav : 5.0m);
-                }
-                if (shopObj.TryGetProperty("url", out var su) && !string.IsNullOrWhiteSpace(su.GetString()))
-                {
-                    shopUrl = su.GetString()!;
-                }
-            }
-            else if (item.TryGetProperty("shop_name", out var itemSn) && !string.IsNullOrWhiteSpace(itemSn.GetString()))
-            {
-                shopName = itemSn.GetString()!;
-                shopUrl = $"https://www.etsy.com/shop/{shopName}";
-            }
-
-            bool hasFreeShipping = false;
-            if (item.TryGetProperty("has_free_shipping", out var hfs) && (hfs.ValueKind == JsonValueKind.True || hfs.ValueKind == JsonValueKind.False))
-            {
-                hasFreeShipping = hfs.GetBoolean();
-            }
-            else if (price >= 35m || tags.Any(tg => tg.Contains("free shipping", StringComparison.OrdinalIgnoreCase)))
-            {
-                hasFreeShipping = true;
-            }
-
-            string listingUrl = item.TryGetProperty("url", out var u) && !string.IsNullOrWhiteSpace(u.GetString())
-                ? u.GetString()!
-                : $"https://www.etsy.com/listing/{listingId}";
-
-            listings.Add(new MarketListingItemDto
-            {
-                Id = listingId,
-                ListingRank = 0,
-                Title = title,
-                PriceUsd = price,
-                Currency = currency,
-                ShopName = shopName,
-                ShopSales = shopSales,
-                ShopUrl = shopUrl,
-                ListingUrl = listingUrl,
-                Favorites = favorites,
-                Views = views,
-                Tags = tags,
-                Materials = materials,
-                ImageUrl = primaryImg,
-                ImageUrls = imageUrls,
-                Description = description,
-                ReviewCount = reviewCount,
-                ReviewAverage = reviewAverage,
-                Quantity = quantity,
-                HasFreeShipping = hasFreeShipping,
-                TaxonomyId = taxonomyId
-            });
         }
 
         // Görsel, etiket ve mağaza bilgisi aktif arama yanıtında eksik gelebilir; Etsy'nin toplu ilan ucuyla
@@ -344,15 +258,15 @@ public sealed class MarketResearchService : IMarketResearchService
 
         IEnumerable<MarketListingItemDto> sorted = query.SortBy switch
         {
-            "estimated_revenue" => listings.OrderByDescending(x => x.EstimatedMonthlyRevenue),
-            "estimated_sales" => listings.OrderByDescending(x => x.EstimatedMonthlySales),
-            "seo_score" => listings.OrderByDescending(x => x.SeoScore),
-            "favorites" => listings.OrderByDescending(x => x.Favorites),
-            "views" => listings.OrderByDescending(x => x.Views),
-            "shop_sales" => listings.OrderByDescending(x => x.ShopSales),
-            "price_asc" => listings.OrderBy(x => x.PriceUsd),
-            "price_desc" => listings.OrderByDescending(x => x.PriceUsd),
-            _ => listings.OrderByDescending(x => x.MarketScore)
+            "estimated_revenue" => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.EstimatedMonthlyRevenue),
+            "estimated_sales" => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.EstimatedMonthlySales),
+            "seo_score" => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.SeoScore),
+            "favorites" => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.Favorites),
+            "views" => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.Views),
+            "shop_sales" => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.ShopSales),
+            "price_asc" => listings.OrderByDescending(x => x.IsTargetListing).ThenBy(x => x.PriceUsd),
+            "price_desc" => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.PriceUsd),
+            _ => listings.OrderByDescending(x => x.IsTargetListing).ThenByDescending(x => x.MarketScore)
         };
 
         var finalList = sorted.ToList();
@@ -364,6 +278,7 @@ public sealed class MarketResearchService : IMarketResearchService
         var response = new MarketSearchResponse
         {
             Keyword = keyword,
+            TargetListingId = isListingUrl && targetListingId > 0 ? targetListingId : null,
             Total = Math.Max(totalCount, finalList.Count),
             Kpis = kpis,
             Listings = finalList
@@ -821,6 +736,38 @@ public sealed class MarketResearchService : IMarketResearchService
         string authShopId = "53236321",
         CancellationToken cancellationToken = default)
     {
+        if (TryExtractEtsyListingInfo(shopNameOrUrl, out long parsedListingId, out _))
+        {
+            try
+            {
+                var rawBatch = await _apiClient.GetListingsBatchRawJsonAsync(authShopId, new[] { parsedListingId }, cancellationToken);
+                using var batchDoc = JsonDocument.Parse(rawBatch);
+                if (batchDoc.RootElement.TryGetProperty("results", out var bResults) && bResults.ValueKind == JsonValueKind.Array && bResults.GetArrayLength() > 0)
+                {
+                    var firstListing = bResults[0];
+                    var shopObj = (firstListing.TryGetProperty("Shop", out var s1) && s1.ValueKind == JsonValueKind.Object) ? s1
+                        : ((firstListing.TryGetProperty("shop", out var s2) && s2.ValueKind == JsonValueKind.Object) ? s2 : default);
+
+                    if (shopObj.ValueKind == JsonValueKind.Object && shopObj.TryGetProperty("shop_name", out var sn) && !string.IsNullOrWhiteSpace(sn.GetString()))
+                    {
+                        shopNameOrUrl = sn.GetString()!;
+                    }
+                    else if (shopObj.ValueKind == JsonValueKind.Object && shopObj.TryGetProperty("shop_id", out var sid))
+                    {
+                        shopNameOrUrl = sid.ToString();
+                    }
+                    else if (firstListing.TryGetProperty("shop_id", out var fsid))
+                    {
+                        shopNameOrUrl = fsid.ToString();
+                    }
+                }
+            }
+            catch
+            {
+                // En iyi çaba: ürün üzerinden mağaza çözümlenemezse girdi olduğu gibi işlenir.
+            }
+        }
+
         var clean = ExtractCompetitorShopIdentifier(shopNameOrUrl);
         if (string.IsNullOrWhiteSpace(clean))
         {
@@ -1698,4 +1645,261 @@ public sealed class MarketResearchService : IMarketResearchService
             Provider = "SmartMarketEngine"
         };
     }
+
+    /// <summary>
+    /// Girdi metninin bir Etsy ürün URL'si (veya listing_id) olup olmadığını tespit eder.
+    /// URL içindeki listing_id ve anahtar kelime ipuçlarını (ga_search_query, q veya URL slug) çıkarır.
+    /// </summary>
+    public static bool TryExtractEtsyListingInfo(string? input, out long listingId, out string fallbackKeyword)
+    {
+        listingId = 0;
+        fallbackKeyword = string.Empty;
+        if (string.IsNullOrWhiteSpace(input)) return false;
+
+        var trimmed = input.Trim();
+
+        var match = Regex.Match(
+            trimmed,
+            @"etsy\.com/(?:[a-z]{2}(?:-[a-z]{2})?/)?listing/(\d+)(?:/([^/?#]+))?",
+            RegexOptions.IgnoreCase);
+
+        if (match.Success)
+        {
+            if (long.TryParse(match.Groups[1].Value, out listingId) && listingId > 0)
+            {
+                var qMatch = Regex.Match(trimmed, @"[?&](?:ga_search_query|q)=([^&#]+)", RegexOptions.IgnoreCase);
+                if (qMatch.Success)
+                {
+                    var decoded = Uri.UnescapeDataString(qMatch.Groups[1].Value.Replace('+', ' ')).Trim();
+                    if (!string.IsNullOrWhiteSpace(decoded))
+                    {
+                        fallbackKeyword = decoded;
+                        return true;
+                    }
+                }
+
+                if (match.Groups[2].Success)
+                {
+                    var slug = match.Groups[2].Value.Trim();
+                    if (!string.IsNullOrWhiteSpace(slug))
+                    {
+                        var words = slug.Replace('-', ' ').Replace('_', ' ').Trim();
+                        if (!string.IsNullOrWhiteSpace(words))
+                        {
+                            fallbackKeyword = words;
+                            return true;
+                        }
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        var idCandidate = trimmed.TrimStart('#');
+        if (idCandidate.Length >= 7 && idCandidate.Length <= 14 && long.TryParse(idCandidate, out var directId) && directId > 0)
+        {
+            listingId = directId;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Ham Etsy API JSON nesnesinden (active listing veya batch listing) MarketListingItemDto üretir.
+    /// </summary>
+    public static MarketListingItemDto ParseSingleListingJson(JsonElement item)
+    {
+        long listingId = item.TryGetProperty("listing_id", out var lid) ? lid.GetInt64() : 0;
+        long itemShopId = item.TryGetProperty("shop_id", out var sid) ? sid.GetInt64() : 0;
+        long taxonomyId = item.TryGetProperty("taxonomy_id", out var tx) && tx.TryGetInt64(out var txVal) ? txVal : 0;
+        string title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? "") : "";
+        string description = item.TryGetProperty("description", out var d) ? (d.GetString() ?? "") : "";
+        int views = item.TryGetProperty("views", out var v) ? v.GetInt32() : 0;
+
+        int favorites = 0;
+        if (item.TryGetProperty("num_favorers", out var f))
+        {
+            favorites = f.ValueKind == JsonValueKind.Number ? f.GetInt32() : (int.TryParse(f.GetString(), out var nf) ? nf : 0);
+        }
+        else if (item.TryGetProperty("favorites", out var favProp))
+        {
+            favorites = favProp.ValueKind == JsonValueKind.Number ? favProp.GetInt32() : (int.TryParse(favProp.GetString(), out var nf) ? nf : 0);
+        }
+
+        int quantity = item.TryGetProperty("quantity", out var q) ? q.GetInt32() : 0;
+
+        decimal price = 0;
+        string currency = "USD";
+        if (item.TryGetProperty("price", out var pObj) && pObj.ValueKind == JsonValueKind.Object)
+        {
+            decimal rawAmount = 0;
+            if (pObj.TryGetProperty("amount", out var aProp) && pObj.TryGetProperty("divisor", out var divProp))
+            {
+                var divisor = divProp.GetInt32();
+                if (divisor > 0) rawAmount = aProp.GetInt64() / (decimal)divisor;
+            }
+            if (pObj.TryGetProperty("currency_code", out var cProp)) currency = cProp.GetString() ?? "USD";
+
+            price = MarketCurrencyConverter.TryConvertToUsd(rawAmount, currency) ?? 0;
+        }
+
+        var tags = new List<string>();
+        if (item.TryGetProperty("tags", out var tagsArr) && tagsArr.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var tg in tagsArr.EnumerateArray())
+            {
+                var str = tg.GetString();
+                if (!string.IsNullOrWhiteSpace(str)) tags.Add(str.Trim());
+            }
+        }
+
+        var materials = new List<string>();
+        if (item.TryGetProperty("materials", out var matArr) && matArr.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var mt in matArr.EnumerateArray())
+            {
+                var str = mt.GetString();
+                if (!string.IsNullOrWhiteSpace(str)) materials.Add(str.Trim());
+            }
+        }
+
+        var imageUrls = new List<string>();
+        var imgProp = (item.TryGetProperty("Images", out var p1) && p1.ValueKind == JsonValueKind.Array) ? p1
+            : ((item.TryGetProperty("images", out var p2) && p2.ValueKind == JsonValueKind.Array) ? p2 : default);
+
+        if (imgProp.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var img in imgProp.EnumerateArray())
+            {
+                string? imgUrl = null;
+                if (img.TryGetProperty("url_570xN", out var u570)) imgUrl = u570.GetString();
+                else if (img.TryGetProperty("url_fullxfull", out var uFull)) imgUrl = uFull.GetString();
+                else if (img.TryGetProperty("url_170x135", out var u170)) imgUrl = u170.GetString();
+                else if (img.TryGetProperty("url_75x75", out var u75)) imgUrl = u75.GetString();
+
+                if (!string.IsNullOrWhiteSpace(imgUrl)) imageUrls.Add(imgUrl.Trim());
+            }
+        }
+        var primaryImg = imageUrls.FirstOrDefault() ?? "";
+
+        string shopName = $"Shop {itemShopId}";
+        int shopSales = 0;
+        int reviewCount = 0;
+        decimal reviewAverage = 5.0m;
+        string shopUrl = itemShopId > 0 ? $"https://www.etsy.com/shop/{shopName}" : "";
+
+        var shopObj = (item.TryGetProperty("Shop", out var s1) && s1.ValueKind == JsonValueKind.Object) ? s1
+            : ((item.TryGetProperty("shop", out var s2) && s2.ValueKind == JsonValueKind.Object) ? s2 : default);
+
+        if (shopObj.ValueKind == JsonValueKind.Object)
+        {
+            if (shopObj.TryGetProperty("shop_name", out var sn) && !string.IsNullOrWhiteSpace(sn.GetString()))
+            {
+                shopName = sn.GetString()!;
+                shopUrl = $"https://www.etsy.com/shop/{shopName}";
+            }
+            if (shopObj.TryGetProperty("transaction_sold_count", out var sc))
+            {
+                shopSales = sc.GetInt32();
+            }
+            if (shopObj.TryGetProperty("review_count", out var rc))
+            {
+                reviewCount = rc.GetInt32();
+            }
+            if (shopObj.TryGetProperty("review_average", out var ra))
+            {
+                reviewAverage = ra.ValueKind == JsonValueKind.Number ? ra.GetDecimal() : (decimal.TryParse(ra.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var rav) ? rav : 5.0m);
+            }
+            if (shopObj.TryGetProperty("url", out var su) && !string.IsNullOrWhiteSpace(su.GetString()))
+            {
+                shopUrl = su.GetString()!;
+            }
+        }
+        else if (item.TryGetProperty("shop_name", out var itemSn) && !string.IsNullOrWhiteSpace(itemSn.GetString()))
+        {
+            shopName = itemSn.GetString()!;
+            shopUrl = $"https://www.etsy.com/shop/{shopName}";
+        }
+
+        bool hasFreeShipping = false;
+        if (item.TryGetProperty("has_free_shipping", out var hfs) && (hfs.ValueKind == JsonValueKind.True || hfs.ValueKind == JsonValueKind.False))
+        {
+            hasFreeShipping = hfs.GetBoolean();
+        }
+        else if (price >= 35m || tags.Any(tg => tg.Contains("free shipping", StringComparison.OrdinalIgnoreCase)))
+        {
+            hasFreeShipping = true;
+        }
+
+        string listingUrl = item.TryGetProperty("url", out var u) && !string.IsNullOrWhiteSpace(u.GetString())
+            ? u.GetString()!
+            : $"https://www.etsy.com/listing/{listingId}";
+
+        return new MarketListingItemDto
+        {
+            Id = listingId,
+            ListingRank = 0,
+            Title = title,
+            PriceUsd = price,
+            Currency = currency,
+            ShopName = shopName,
+            ShopSales = shopSales,
+            ShopUrl = shopUrl,
+            ListingUrl = listingUrl,
+            Favorites = favorites,
+            Views = views,
+            Tags = tags,
+            Materials = materials,
+            ImageUrl = primaryImg,
+            ImageUrls = imageUrls,
+            Description = description,
+            ReviewCount = reviewCount,
+            ReviewAverage = reviewAverage,
+            Quantity = quantity,
+            HasFreeShipping = hasFreeShipping,
+            TaxonomyId = taxonomyId
+        };
+    }
+
+    private static MarketSearchResponse CreateSingleListingResponse(MarketListingItemDto targetListing, string keyword)
+    {
+        targetListing.ListingRank = 1;
+        targetListing.IsTargetListing = true;
+        RecalculateListingMetrics(targetListing, keyword);
+
+        var kpis = new MarketSummaryKpisDto
+        {
+            TotalListings = 1,
+            Currency = "USD",
+            AveragePrice = targetListing.PriceUsd,
+            MinPrice = targetListing.PriceUsd,
+            MaxPrice = targetListing.PriceUsd,
+            MedianPrice = targetListing.PriceUsd,
+            AverageFavorites = targetListing.Favorites,
+            AverageViews = targetListing.Views,
+            TotalEstimatedMarketRevenue = targetListing.EstimatedMonthlyRevenue,
+            AverageEstimatedMonthlySales = targetListing.EstimatedMonthlySales,
+            TopSellerMonthlyRevenue = targetListing.EstimatedMonthlyRevenue,
+            FreeShippingRatioPct = targetListing.HasFreeShipping ? 100 : 0,
+            BestsellerCount = targetListing.IsBestseller ? 1 : 0,
+            HighOpportunityCount = targetListing.IsOpportunityListing ? 1 : 0,
+            UniqueShopCount = 1,
+            TopShopName = targetListing.ShopName,
+            TopShopSales = targetListing.ShopSales,
+            TopShopConcentrationPct = 100,
+            OpportunityScore = 75
+        };
+
+        return new MarketSearchResponse
+        {
+            Keyword = keyword,
+            TargetListingId = targetListing.Id,
+            Total = 1,
+            Kpis = kpis,
+            Listings = [targetListing]
+        };
+    }
+
 }

@@ -97,7 +97,7 @@ export interface LqsAuditCheck {
               class="shop-input"
               [(ngModel)]="shopQueryInput"
               (keyup.enter)="analyzeShop()"
-              placeholder="Rakip Etsy mağaza adı veya linki girin (Örn: CaitlynMinimalist veya https://www.etsy.com/shop/...)" />
+              placeholder="Rakip Etsy mağaza adı, mağaza linki veya ürün linki girin (Örn: CaitlynMinimalist veya https://www.etsy.com/listing/...)" />
           </div>
 
           <div class="search-controls">
@@ -2319,7 +2319,7 @@ export class CompetitorSpyComponent implements OnInit {
   analyzeShop(overrideQuery?: string): void {
     const query = (overrideQuery ?? this.shopQueryInput ?? '').trim();
     if (!query) {
-      this.showToast('⚠️ Lütfen analiz edilecek Etsy mağaza adını veya mağaza linkini girin.');
+      this.showToast('⚠️ Lütfen analiz edilecek Etsy mağaza adını, mağaza linkini veya ürün linkini girin.');
       return;
     }
 

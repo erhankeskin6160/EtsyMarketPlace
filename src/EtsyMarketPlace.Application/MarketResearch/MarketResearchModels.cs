@@ -12,6 +12,7 @@ public sealed record MarketSearchQuery(
 public sealed class MarketSearchResponse
 {
     public string Keyword { get; set; } = string.Empty;
+    public long? TargetListingId { get; set; }
     public int Total { get; set; }
     public MarketSummaryKpisDto Kpis { get; set; } = new();
     public List<MarketListingItemDto> Listings { get; set; } = [];
@@ -83,6 +84,7 @@ public sealed class MarketListingItemDto
     public decimal ReviewAverage { get; set; }
     public int Quantity { get; set; }
     public long TaxonomyId { get; set; }
+    public bool IsTargetListing { get; set; }
 }
 
 public sealed record MarketAiReportCommand(

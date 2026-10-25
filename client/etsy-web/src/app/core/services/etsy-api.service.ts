@@ -943,6 +943,7 @@ export interface MarketListingItemDto {
   estimatedMonthlyRevenue: number;
   salesVelocity: string;
   conversionRateEst: number;
+  isTargetListing?: boolean;
   isBestseller?: boolean;
   hasFreeShipping?: boolean;
   isOpportunityListing?: boolean;
@@ -957,6 +958,7 @@ export interface MarketListingItemDto {
 }
 
 export interface MarketSearchResponseDto {
+  targetListingId?: number | null;
   keyword: string;
   total: number;
   kpis: MarketSummaryKpisDto;
