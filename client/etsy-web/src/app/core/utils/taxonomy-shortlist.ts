@@ -43,6 +43,7 @@ export function tokenizeTaxonomyText(text: string): string[] {
   if (!text) return [];
   return text
     .replace(/İ/g, 'i')
+    .replace(/I/g, 'ı')
     .toLowerCase()
     .replace(/[^a-z0-9çğıöşüâîû]+/gi, ' ')
     .split(/\s+/)
@@ -51,7 +52,7 @@ export function tokenizeTaxonomyText(text: string): string[] {
 }
 
 function expandWithSynonyms(text: string, synonyms: Record<string, string[]>): string[] {
-  const lower = (text || '').replace(/İ/g, 'i').toLowerCase();
+  const lower = (text || '').replace(/İ/g, 'i').replace(/I/g, 'ı').toLowerCase();
   const extra: string[] = [];
   for (const [trKey, enTerms] of Object.entries(synonyms)) {
     // Çok kelimeli anahtarlar (örn. "gece lambası") ifade olarak, tek kelimeliler kelime başı olarak aranır

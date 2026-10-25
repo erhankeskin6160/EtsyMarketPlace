@@ -34,6 +34,13 @@ describe('taxonomy-shortlist', () => {
     expect(list[0].id).toBe(132);
   });
 
+  it('handles Turkish uppercase dotless I (IŞIK -> ışık)', () => {
+    const tokens = tokenizeTaxonomyText('MASA LAMBASI IŞIK');
+    expect(tokens.includes('ışık')).toBeTrue();
+    const list = buildTaxonomyShortlist(nodes, 'IŞIK VE LAMBA', '', { 'ışık': ['lighting'], 'lamba': ['lamps'] });
+    expect(list[0].id).toBe(12351);
+  });
+
   it('returns empty list when there is no text', () => {
     expect(buildTaxonomyShortlist(nodes, '', '')).toEqual([]);
   });

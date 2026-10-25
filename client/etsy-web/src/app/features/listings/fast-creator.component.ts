@@ -579,7 +579,10 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
             if (dept) this.selectedDepartment = dept;
           }
         } else if (this.selectedCategory) {
-          const match = this.categoriesList.find(c => c.path.toLowerCase() === this.selectedCategory.toLowerCase() || c.name.toLowerCase() === this.selectedCategory.toLowerCase());
+          const norm = (s: string) => (s || '').toLowerCase().replace(/\s*>\s*/g, ' > ').trim();
+          const selNorm = norm(this.selectedCategory);
+          const leaf = taxonomyLeafName(this.selectedCategory);
+          const match = this.categoriesList.find(c => norm(c.path) === selNorm || norm(c.name) === selNorm || (leaf && taxonomyLeafName(c.path) === leaf));
           if (match) {
             this.selectedTaxonomyId = match.id;
             this.selectedCategory = match.path;
@@ -865,27 +868,33 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     if (!list || list.length === 0) return res;
 
     const resolve = (id: number, path: string): EtsyTaxonomyItemDto | undefined => {
-      const cleanPath = (path || '').toLowerCase().trim();
+      const norm = (s: string) => (s || '').toLowerCase().replace(/\s*>\s*/g, ' > ').trim();
+      const cleanPath = norm(path);
       const leaf = taxonomyLeafName(path);
       const byId = id > 0 ? list.find(c => c.id === id) : undefined;
 
-      // 1. ID + path tutarlı
-      if (byId && (!cleanPath || byId.path.toLowerCase() === cleanPath || taxonomyLeafName(byId.path) === leaf)) {
+      // 1. ID canlı aday listesindeyse (AI'ya verdiğimiz resmi liste) ve ID veritabanında varsa → en güvenilir eşleşme
+      if (byId && candidates.some(c => c.id === byId.id)) {
         return byId;
       }
-      // 2. Tam path eşleşmesi
+      // 2. ID + path / yaprak adı tutarlı
+      if (byId && (!cleanPath || norm(byId.path) === cleanPath || taxonomyLeafName(byId.path) === leaf)) {
+        return byId;
+      }
+      // 3. Tam path eşleşmesi (normalize edilmiş)
       if (cleanPath) {
-        const exact = list.find(c => c.path.toLowerCase() === cleanPath);
+        const exact = list.find(c => norm(c.path) === cleanPath);
         if (exact) return exact;
-        // 3. Yaprak adı eşleşmesi — önce AI'ya gönderilen adaylar içinde
+        // 4. Yaprak adı eşleşmesi — önce AI'ya gönderilen adaylar içinde, sonra tüm listede
         if (leaf) {
           const leafMatch = candidates.find(c => taxonomyLeafName(c.path) === leaf)
-            ?? list.find(c => c.name.toLowerCase() === leaf || taxonomyLeafName(c.path) === leaf);
+            ?? list.find(c => norm(c.name) === leaf || taxonomyLeafName(c.path) === leaf);
           if (leafMatch) return leafMatch;
         }
       }
-      // 4. ID, AI'ya gönderdiğimiz gerçek aday listesindeyse güven
-      if (byId && candidates.some(c => c.id === byId.id)) return byId;
+      // 5. Herhangi bir geçerli ID eşleşmesi
+      if (byId) return byId;
+
       return undefined;
     };
 
@@ -1133,10 +1142,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         this.description = res.description;
         if (res.materials) this.materials = res.materials;
 
-        const images = this.galleryImages.map(img => img.url).filter(u => !!u);
-        if (images.length > 0) {
-          this.suggestAiCategory();
-        }
+        // Üretilen başlık ve açıklamayla resmi Etsy taksonomi eşleştirmesini tetikle
+        this.suggestAiCategory();
 
         this.showToast(res.summaryMessage);
       },
