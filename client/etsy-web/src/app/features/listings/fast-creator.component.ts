@@ -1284,9 +1284,49 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.showToast('➕ Üretilen görsel 10\'lu galeriye eklendi!');
   }
 
-  // --- VARIATIONS LOGIC ---
+  // --- VARIATIONS & PRICING LOCK LOGIC ---
+  get isVariationPricingActive(): boolean {
+    return this.enableVariations && this.customVariationPricing && this.variationRows && this.variationRows.length > 0;
+  }
+
+  get minVariationPrice(): number {
+    if (!this.variationRows || this.variationRows.length === 0) return this.priceUsd || 0;
+    const active = this.variationRows.filter(r => (r.active !== false) && r.price > 0);
+    return active.length > 0 ? Math.min(...active.map(r => r.price)) : (this.priceUsd || 0);
+  }
+
+  get totalVariationStock(): number {
+    if (!this.variationRows || this.variationRows.length === 0) return this.quantity || 0;
+    return this.variationRows
+      .filter(r => r.active !== false)
+      .reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+  }
+
+  onVariationRowChange(): void {
+    if (this.isVariationPricingActive) {
+      const minP = this.minVariationPrice;
+      if (minP > 0) {
+        this.priceUsd = minP;
+        this.updatePriceTry();
+      }
+      const totalQ = this.totalVariationStock;
+      if (totalQ > 0) {
+        this.quantity = totalQ;
+      }
+    }
+  }
+
+  onVariationPricingToggle(): void {
+    if (this.isVariationPricingActive) {
+      this.onVariationRowChange();
+    }
+  }
+
   onVariationsToggled(): void {
     this.rebuildVariationGrid();
+    if (this.isVariationPricingActive) {
+      this.onVariationRowChange();
+    }
   }
 
   rebuildVariationGrid(): void {
@@ -1330,6 +1370,9 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         active: true
       };
     });
+    if (this.isVariationPricingActive) {
+      this.onVariationRowChange();
+    }
   }
 
   syncBasePriceToVariations(): void {
@@ -1337,7 +1380,8 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     this.variationRows.forEach(row => {
       row.price = p;
     });
-    this.showToast(`⚡ Tüm varyasyon fiyatları $${p.toFixed(2)} olarak eşitlendi!`);
+    this.onVariationRowChange();
+    this.showToast(`⚡ Tüm varyasyon fiyatları ${p.toFixed(2)}${p.toFixed(2)} olarak eşitlendi!`);
   }
 
   suggestAiVariations(): void {
@@ -1388,7 +1432,9 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     return this.title.trim().length > 0 && this.title.length <= 140;
   }
   get isPriceReady(): boolean {
-    return (this.priceUsd ?? 0) > 0 && (this.quantity ?? 0) > 0;
+    const currentPrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd ?? 0);
+    const currentQuantity = this.isVariationPricingActive ? this.totalVariationStock : (this.quantity ?? 0);
+    return currentPrice > 0 && currentQuantity > 0;
   }
   get isImagesReady(): boolean {
     return this.galleryImages.length > 0;
@@ -1516,11 +1562,14 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         ]
       : undefined;
 
+    const effectivePrice = this.isVariationPricingActive ? this.minVariationPrice : (this.priceUsd || 39.90);
+    const effectiveQuantity = this.isVariationPricingActive ? this.totalVariationStock : (this.quantity || 15);
+
     const payload = {
       title: this.title.trim(),
       description: this.description.trim() || 'Handmade custom design artisan product.',
-      price: this.priceUsd || 39.90,
-      quantity: this.quantity || 15,
+      price: effectivePrice,
+      quantity: effectiveQuantity,
       taxonomyId: this.selectedTaxonomyId > 0 ? this.selectedTaxonomyId : 1042,
       shippingProfileId,
       readinessStateId,

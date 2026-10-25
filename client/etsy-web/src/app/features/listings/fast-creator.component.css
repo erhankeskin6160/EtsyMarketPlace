@@ -2356,3 +2356,36 @@ input:checked + .slider:before {
   background: rgba(245, 158, 11, 0.25);
   color: #ffffff;
 }
+
+
+/* Locked Input Styling for Variations */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.lock-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+  letter-spacing: 0.2px;
+}
+
+.input-locked {
+  background-color: rgba(30, 41, 59, 0.6) !important;
+  color: #94a3b8 !important;
+  border-color: rgba(148, 163, 184, 0.25) !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
+.locked-hint {
+  color: #f59e0b !important;
+  font-size: 11px;
+}

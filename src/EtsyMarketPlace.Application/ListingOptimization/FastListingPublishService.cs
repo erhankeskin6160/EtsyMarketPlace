@@ -68,11 +68,34 @@ public sealed class FastListingPublishService : IFastListingPublishService
         var sanitizedMaterials = FastListingDraftHelper.SanitizeMaterials(command.Materials);
 
         // 3. Taslak İlan Oluşturma (POST /v3/application/shops/{shop_id}/listings)
+        // Varyasyonlara özel fiyat ve stok girildiyse, Etsy v3 kuralları gereği kök seviyedeki fiyat
+        // en düşük aktif varyasyon fiyatı (taban fiyat), kök stok ise tüm varyasyonların toplamıdır.
+        decimal effectivePrice = command.Price;
+        int effectiveQuantity = Math.Max(1, command.Quantity);
+
+        if (command.Variations != null && command.Variations.Count > 0)
+        {
+            var activeVars = command.Variations.Where(v => v.Active).ToList();
+            if (activeVars.Count > 0)
+            {
+                var minVarPrice = activeVars.Where(v => v.Price > 0).Select(v => v.Price).DefaultIfEmpty(0).Min();
+                if (minVarPrice > 0)
+                {
+                    effectivePrice = minVarPrice;
+                }
+                var totalVarQty = activeVars.Sum(v => v.Quantity);
+                if (totalVarQty > 0)
+                {
+                    effectiveQuantity = totalVarQty;
+                }
+            }
+        }
+
         var rawDraftRequest = new CreateDraftListingRawRequest(
             Title: command.Title.Trim(),
             Description: string.IsNullOrWhiteSpace(command.Description) ? "Handmade artisan item." : command.Description.Trim(),
-            Price: command.Price,
-            Quantity: Math.Max(1, command.Quantity),
+            Price: effectivePrice > 0 ? effectivePrice : command.Price,
+            Quantity: effectiveQuantity,
             TaxonomyId: command.TaxonomyId > 0 ? command.TaxonomyId : 1042,
             Type: command.IsDigital ? "download" : "physical",
             State: command.State.Equals("active", StringComparison.OrdinalIgnoreCase) ? "active" : "draft",
