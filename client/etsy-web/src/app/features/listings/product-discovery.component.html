@@ -1,0 +1,556 @@
+<div class="discovery-container">
+  
+  <!-- TOAST NOTIFICATION -->
+  <div class="toast-popup" *ngIf="toastMessage">
+    <span>{{ toastMessage }}</span>
+  </div>
+
+  <!-- HEADER & TOOLBAR (Matching Desktop "Etsy Urun Bul ve Listing Hazirla") -->
+  <header class="discovery-header glass-card">
+    <div class="header-top-row">
+      <div class="header-title-box">
+        <h1 class="header-title">
+          <span class="header-icon">🎯</span> Etsy Ürün Bul ve Listing Hazırla
+        </h1>
+        <p class="header-subtitle">
+          Rakip ürünü analiz edin, 1-Tık Full AI ile klonlayıp geliştirin ve doğrudan mağazanıza taslak ekleyin.
+        </p>
+      </div>
+
+      <div class="ai-model-pill">
+        <span class="pulsing-dot">●</span>
+        <span class="ai-label">Aktif Model:</span>
+        <span class="ai-name">{{ activeAiModel() }}</span>
+      </div>
+    </div>
+
+    <!-- TOOLBAR CONTROLS (Row 1 & Row 2) -->
+    <div class="toolbar-grid">
+      <!-- ROW 1: Anahtar Kelime + Arama + Aksiyonlar -->
+      <div class="toolbar-row">
+        <div class="field-group flex-3">
+          <label class="field-label">Anahtar Kelime:</label>
+          <div class="input-with-icon">
+            <span class="icon">🔍</span>
+            <input 
+              type="text" 
+              class="toolbar-input"
+              [(ngModel)]="keywordInput"
+              (keyup.enter)="searchEtsy()"
+              placeholder="Örn: 3d cosplay prop, miniature figure, wall art..." />
+          </div>
+        </div>
+
+        <div class="field-group flex-1">
+          <label class="field-label">Adet:</label>
+          <input 
+            type="number" 
+            class="toolbar-input text-center" 
+            [(ngModel)]="limitInput" 
+            min="10" 
+            max="100" 
+            step="10" />
+        </div>
+
+        <div class="button-group flex-auto">
+          <button class="btn btn-search" (click)="searchEtsy()" [disabled]="isLoading">
+            <span *ngIf="!isLoading">🔍 Etsy'de Ara</span>
+            <span *ngIf="isLoading" class="spinner">⏳ Aranıyor...</span>
+          </button>
+
+          <button class="btn btn-autopilot" (click)="generateFullAutoPilotListing()" [disabled]="isGeneratingFullAi || (!selectedItem && !draftTitle)">
+            <span *ngIf="!isGeneratingFullAi">🚀 1-Tık Full AI Listing</span>
+            <span *ngIf="isGeneratingFullAi" class="spinner">⚡ Hazırlanıyor...</span>
+          </button>
+
+          <button class="btn btn-save-draft" (click)="saveDraftToEtsy()" [disabled]="isSavingDraft || !draftTitle">
+            <span *ngIf="!isSavingDraft">💾 Etsy Taslak Ekle</span>
+            <span *ngIf="isSavingDraft" class="spinner">💾 Gönderiliyor...</span>
+          </button>
+
+          <button class="btn btn-fast-transfer" (click)="transferToFastCreator()" [disabled]="!draftTitle" title="Hızlı Ürün Ekleme (AI) sayfasına tüm verileri aktar">
+            <span>⚡ Hızlı Ürün Ekle'ye Aktar</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ROW 2: Etsy Listing Linki + Linkten Al + Görsel Stüdyosu -->
+      <div class="toolbar-row">
+        <div class="field-group flex-4">
+          <label class="field-label">Etsy Listing Linki / Ürün No:</label>
+          <div class="input-with-icon">
+            <span class="icon">🔗</span>
+            <input 
+              type="text" 
+              class="toolbar-input highlight-input"
+              [(ngModel)]="listingLinkInput"
+              (keyup.enter)="importListingLink()"
+              placeholder="Örn: https://www.etsy.com/listing/1869519659/flexi-starfish-fidget-toy-3d-printed..." />
+          </div>
+        </div>
+
+        <div class="button-group flex-auto">
+          <button class="btn btn-import-link" (click)="importListingLink()" [disabled]="isImporting">
+            <span *ngIf="!isImporting">🔗 Linkten Al</span>
+            <span *ngIf="isImporting" class="spinner">⏳ Çekiliyor...</span>
+          </button>
+
+          <button class="btn btn-secondary" (click)="activeTab = 'prompts'">
+            <span>✨ AI Görsel Promptlar</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATUS BAR -->
+    <div class="status-bar">
+      <span class="status-indicator">ℹ️</span>
+      <span class="status-text">{{ statusText }}</span>
+    </div>
+  </header>
+
+  <!-- MAIN PRODUCT TABLE (Matching Desktop Grid) -->
+  <section class="grid-section glass-card">
+    <div class="table-header-strip">
+      <span class="table-title">📋 Pazar & Rakip İlanları ({{ items.length }} İlan)</span>
+      <span class="table-hint">💡 Düzenlemek ve klonlamak istediğiniz ürünün satırına tıklayın.</span>
+    </div>
+
+    <div class="table-responsive">
+      <table class="discovery-table">
+        <thead>
+          <tr>
+            <th class="col-thumb">Resim</th>
+            <th class="col-opp">Fırsat</th>
+            <th class="col-title">Ürün Fikri</th>
+            <th class="col-id">Rakip Listing</th>
+            <th class="col-price">Fiyat</th>
+            <th class="col-shop">Mağaza</th>
+            <th class="col-sales">Mağaza Satışı</th>
+            <th class="col-fav">Favori</th>
+            <th class="col-views">Görüntülenme</th>
+            <th class="col-seo">SEO</th>
+            <th class="col-tags">Tagler</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr 
+            *ngFor="let item of items" 
+            [class.selected-row]="selectedItem?.id === item.id"
+            [class.target-row]="item.isTargetListing"
+            (click)="selectItem(item)">
+            
+            <!-- Resim -->
+            <td class="col-thumb">
+              <img 
+                *ngIf="item.imageUrl" 
+                [src]="item.imageUrl" 
+                alt="Thumb" 
+                class="prod-thumb"
+                (click)="$event.stopPropagation(); openZoom(item.imageUrl)" />
+              <span *ngIf="!item.imageUrl" class="thumb-empty">📦</span>
+            </td>
+
+            <!-- Fırsat -->
+            <td class="col-opp">
+              <span *ngIf="item.isTargetListing" class="pill pill-target">🎯 Hedef</span>
+              <span *ngIf="!item.isTargetListing && item.isOpportunityListing" class="pill pill-opp">⚡ Fırsat</span>
+              <span *ngIf="!item.isTargetListing && item.isBestseller" class="pill pill-best">🔥 Çok Satan</span>
+              <span *ngIf="!item.isTargetListing && !item.isOpportunityListing && !item.isBestseller" class="pill pill-neutral">Standart</span>
+            </td>
+
+            <!-- Ürün Fikri -->
+            <td class="col-title">
+              <div class="title-text" [title]="item.title">{{ item.title }}</div>
+            </td>
+
+            <!-- Rakip Listing ID Link -->
+            <td class="col-id">
+              <a 
+                [href]="item.listingUrl" 
+                target="_blank" 
+                class="listing-link-pill" 
+                (click)="$event.stopPropagation()"
+                title="Etsy'de Aç">
+                #{{ item.id }} ↗
+              </a>
+            </td>
+
+            <!-- Fiyat -->
+            <td class="col-price">
+              <div class="price-usd">${{ item.priceUsd.toFixed(2) }}</div>
+              <div class="price-try">₺{{ (item.priceUsd * etsyApi.exchangeRate()).toFixed(0) }}</div>
+            </td>
+
+            <!-- Mağaza -->
+            <td class="col-shop">
+              <a [href]="item.shopUrl" target="_blank" class="shop-link" (click)="$event.stopPropagation()">
+                {{ item.shopName }}
+              </a>
+            </td>
+
+            <!-- Mağaza Satışı -->
+            <td class="col-sales">
+              <span class="badge-number">{{ item.shopSales | number }}</span>
+            </td>
+
+            <!-- Favori -->
+            <td class="col-fav">
+              <span class="fav-count">❤️ {{ item.favorites | number }}</span>
+            </td>
+
+            <!-- Görüntülenme -->
+            <td class="col-views">
+              <span>👁️ {{ item.views | number }}</span>
+            </td>
+
+            <!-- SEO -->
+            <td class="col-seo">
+              <span class="seo-badge" [class.seo-good]="item.seoScore >= 80" [class.seo-mid]="item.seoScore < 80">
+                {{ item.seoScore }}/100
+              </span>
+            </td>
+
+            <!-- Tagler -->
+            <td class="col-tags">
+              <div class="mini-tags-wrap">
+                <span *ngFor="let t of item.tags.slice(0, 3)" class="mini-tag">{{ t }}</span>
+                <span *ngIf="item.tags.length > 3" class="mini-tag-more">+{{ item.tags.length - 3 }}</span>
+              </div>
+            </td>
+          </tr>
+
+          <!-- EMPTY STATE -->
+          <tr *ngIf="items.length === 0 && !isLoading && !isImporting">
+            <td colspan="11" class="empty-state">
+              <div class="empty-box">
+                <span class="empty-icon">🔍</span>
+                <h3>Henüz listelenen ürün yok</h3>
+                <p>Yukarıdaki arama kutusuna bir anahtar kelime girin veya doğrudan bir Etsy ürün linki yapıştırıp "Linkten Al" butonuna basın.</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- BOTTOM DUAL WORKSPACE: DRAFT & CLONER EDITOR -->
+  <section class="workspace-section glass-card">
+    <div class="workspace-grid">
+      
+      <!-- LEFT PANEL: Image Preview & Quick Actions -->
+      <div class="left-preview-panel">
+        <div class="preview-card">
+          <div class="image-slider-box">
+            <img 
+              *ngIf="selectedItem?.imageUrls?.[currentImageIndex] || selectedItem?.imageUrl; else noImageTemplate" 
+              [src]="selectedItem?.imageUrls?.[currentImageIndex] || selectedItem?.imageUrl" 
+              alt="Preview" 
+              class="active-preview-img"
+              (click)="openZoom(selectedItem?.imageUrls?.[currentImageIndex] || selectedItem?.imageUrl || '')" />
+            
+            <ng-template #noImageTemplate>
+              <div class="no-img-box">
+                <span>📦</span>
+                <p>Görsel Seçilmedi</p>
+              </div>
+            </ng-template>
+
+            <!-- SLIDER CONTROLS -->
+            <div class="slider-bar" *ngIf="(selectedItem?.imageUrls?.length || 0) > 1">
+              <button class="slider-btn" (click)="prevImage()">◀</button>
+              <span class="slider-counter">{{ currentImageIndex + 1 }} / {{ selectedItem?.imageUrls?.length }}</span>
+              <button class="slider-btn" (click)="nextImage()">▶</button>
+            </div>
+          </div>
+
+          <!-- QUICK ACTION BUTTONS (Matching Desktop Left Panel) -->
+          <div class="left-action-buttons">
+            <button class="btn btn-full-ai-sidebar" (click)="generateFullAutoPilotListing()" [disabled]="isGeneratingFullAi || (!selectedItem && !draftTitle)">
+              <span>🚀 1-Tık Full AI</span>
+            </button>
+
+            <button class="btn btn-ai-image-sidebar" (click)="activeTab = 'prompts'">
+              <span>✨ AI Görsel Üret</span>
+            </button>
+
+            <button 
+              class="btn btn-copy-url" 
+              *ngIf="selectedItem?.imageUrl" 
+              (click)="copyToClipboard(selectedItem?.imageUrl || '', 'Görsel Linki')">
+              <span>📋 Görsel URL Kopyala</span>
+            </button>
+          </div>
+
+          <!-- LQS SUMMARY PILL -->
+          <div class="lqs-preview-badge">
+            <span class="lqs-label">Tahmini Kalite:</span>
+            <span class="lqs-value" [class.lqs-perfect]="targetLqsScore >= 95">{{ targetLqsScore }}/100 ({{ targetLqsGrade }})</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT PANEL: Tabbed Workspace -->
+      <div class="right-tabs-panel">
+        <!-- TAB HEADERS -->
+        <div class="tab-header-strip">
+          <button class="tab-btn" [class.active]="activeTab === 'seo'" (click)="activeTab = 'seo'">
+            <span>⚡ Başlık & SEO Açıklama</span>
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'tags'" (click)="activeTab = 'tags'">
+            <span>🏷️ 13 Tag & Materyaller ({{ draftTags.length }}/13)</span>
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'shipping'" (click)="activeTab = 'shipping'">
+            <span>💧 Fiyat & Kargo Ayarları</span>
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'prompts'" (click)="activeTab = 'prompts'">
+            <span>🎨 AI Görsel / Promptlar</span>
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'lqs'" (click)="activeTab = 'lqs'">
+            <span>📊 Kalite Karnesi (LQS)</span>
+          </button>
+        </div>
+
+        <!-- TAB CONTENT 1: BAŞLIK & SEO AÇIKLAMA -->
+        <div class="tab-content" *ngIf="activeTab === 'seo'">
+          <div class="form-section">
+            <div class="field-header">
+              <label class="form-label">Etsy SEO Başlığı (Maks. 140 Karakter):</label>
+              <span class="char-counter" [class.char-warning]="draftTitle.length > 130" [class.char-danger]="draftTitle.length > 140">
+                {{ draftTitle.length }} / 140 Karakter
+              </span>
+            </div>
+            <input 
+              type="text" 
+              class="form-control title-input" 
+              [(ngModel)]="draftTitle" 
+              maxlength="140"
+              placeholder="Etsy mağazanız için arama odaklı, net ve yüksek hacimli SEO başlığı..." />
+          </div>
+
+          <div class="form-section">
+            <div class="field-header">
+              <label class="form-label">Satış Odaklı Açıklama (Biçimlendirilmiş):</label>
+              <div class="desc-actions">
+                <button class="btn-micro btn-template" (click)="applyDescriptionTemplate()">
+                  <span>📐 Şablonla Paragrafla</span>
+                </button>
+                <button class="btn-micro btn-ai-desc" (click)="generateDescriptionWithAi()" [disabled]="isGeneratingDesc">
+                  <span *ngIf="!isGeneratingDesc">✨ AI Açıklama Yenile</span>
+                  <span *ngIf="isGeneratingDesc">⏳ Yazılıyor...</span>
+                </button>
+              </div>
+            </div>
+            <textarea 
+              class="form-control desc-textarea" 
+              rows="12" 
+              [(ngModel)]="draftDescription"
+              placeholder="Ürününüzün tüm detaylarını içeren, ferah paragraflı ve Etsy alıcılarını ikna eden açıklama metni..."></textarea>
+          </div>
+        </div>
+
+        <!-- TAB CONTENT 2: 13 TAG & MATERYALLER -->
+        <div class="tab-content" *ngIf="activeTab === 'tags'">
+          <div class="form-section">
+            <div class="field-header">
+              <label class="form-label">13 Altın Etsy Etiketi (Tags):</label>
+              <div class="desc-actions">
+                <button class="btn-micro" (click)="copyCompetitorTags()">
+                  <span>📋 Rakibin 13 Tagini Kopyala</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- TAG CHIPS WRAP -->
+            <div class="tags-container">
+              <div *ngFor="let tg of draftTags; let idx = index" class="tag-chip">
+                <span class="tag-text">{{ tg }}</span>
+                <span class="tag-len">{{ tg.length }}/20</span>
+                <button class="tag-delete-btn" (click)="removeTag(idx)" title="Etiketi Sil">✕</button>
+              </div>
+              <div *ngIf="draftTags.length === 0" class="no-tags-hint">
+                Henüz etiket eklenmedi. Yukarıdan rakip etiketlerini kopyalayabilir veya aşağıdan yazabilirsiniz.
+              </div>
+            </div>
+
+            <!-- ADD NEW TAG INPUT -->
+            <div class="add-tag-box" *ngIf="draftTags.length < 13">
+              <input 
+                type="text" 
+                class="form-control" 
+                [(ngModel)]="newTagInput" 
+                (keyup.enter)="addTag()"
+                maxlength="20"
+                placeholder="Yeni etiket yazıp Enter'a basın (maks. 20 karakter)..." />
+              <button class="btn btn-secondary" (click)="addTag()" [disabled]="!newTagInput.trim()">+ Ekle</button>
+            </div>
+            <div class="tag-info-bar">
+              <span [class.text-success]="draftTags.length === 13">
+                Toplam: {{ draftTags.length }} / 13 Etiket
+              </span>
+              <span>⚠️ Kural: Her etiket en fazla 20 karakter olmalıdır.</span>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label class="form-label">Materyaller / Malzemeler (Virgülle ayırın):</label>
+            <input 
+              type="text" 
+              class="form-control" 
+              [(ngModel)]="draftMaterials" 
+              placeholder="Örn: PLA, Resin, Acrylic, Matte Finish, Premium Wood..." />
+          </div>
+        </div>
+
+        <!-- TAB CONTENT 3: FİYAT & KARGO AYARLARI -->
+        <div class="tab-content" *ngIf="activeTab === 'shipping'">
+          <div class="form-row-2">
+            <div class="form-section">
+              <label class="form-label">Satış Fiyatı (USD):</label>
+              <div class="input-with-currency">
+                <span class="currency-symbol">$</span>
+                <input 
+                  type="number" 
+                  class="form-control" 
+                  [(ngModel)]="draftPriceUsd" 
+                  step="0.5" 
+                  min="1" />
+              </div>
+              <span class="field-hint">Yaklaşık: ₺{{ (draftPriceUsd * etsyApi.exchangeRate()).toFixed(2) }} TRY</span>
+            </div>
+
+            <div class="form-section">
+              <label class="form-label">Miktar / Stok:</label>
+              <input 
+                type="number" 
+                class="form-control" 
+                [(ngModel)]="draftQuantity" 
+                min="1" />
+            </div>
+          </div>
+
+          <div class="form-section">
+            <label class="form-label">Kargo Profili:</label>
+            <select class="form-control select-control" [(ngModel)]="draftShippingProfileId">
+              <option [ngValue]="null">Varsayılan Mağaza Kargo Profili</option>
+              <option *ngFor="let p of shippingProfiles" [ngValue]="p.shipping_profile_id">
+                {{ p.title }} (ID: {{ p.shipping_profile_id }})
+              </option>
+            </select>
+          </div>
+
+          <div class="form-row-3">
+            <div class="form-section">
+              <label class="form-label">Kim Yaptı? (Who Made):</label>
+              <select class="form-control select-control" [(ngModel)]="draftWhoMade">
+                <option value="i_did">Ben Yaptım (i_did)</option>
+                <option value="someone_else">Ekibim / Başkası</option>
+              </select>
+            </div>
+
+            <div class="form-section">
+              <label class="form-label">Ne Zaman? (When Made):</label>
+              <select class="form-control select-control" [(ngModel)]="draftWhenMade">
+                <option value="made_to_order">Sipariş Üzerine (Made to Order)</option>
+                <option value="2020_2024">2020 - 2026 Arası</option>
+              </select>
+            </div>
+
+            <div class="form-section">
+              <label class="form-label">İlan Türü:</label>
+              <select class="form-control select-control" [(ngModel)]="draftIsDigital">
+                <option [ngValue]="false">Fiziksel Ürün (Kargo ile)</option>
+                <option [ngValue]="true">Dijital Ürün (Anında İndirme)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB CONTENT 4: AI GÖRSEL PROMPTLAR -->
+        <div class="tab-content" *ngIf="activeTab === 'prompts'">
+          <div class="prompts-intro">
+            <h4>🎨 AI Ürün Görseli Promptları (Midjourney / FLUX / DALL-E)</h4>
+            <p>Bu ürün fikri için profesyonel e-ticaret fotoğrafı stüdyo promptları:</p>
+          </div>
+
+          <div class="prompt-cards-list">
+            <div *ngFor="let pr of imagePrompts; let pIdx = index" class="prompt-card">
+              <div class="prompt-header">
+                <span class="prompt-badge">Stil #{{ pIdx + 1 }}</span>
+                <button class="btn-micro" (click)="copyToClipboard(pr, 'AI Görsel Promptu')">📋 Kopyala</button>
+              </div>
+              <p class="prompt-text">{{ pr }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB CONTENT 5: KALİTE KARNESİ (LQS) -->
+        <div class="tab-content" *ngIf="activeTab === 'lqs'">
+          <div class="lqs-full-box">
+            <div class="lqs-score-circle">
+              <span class="circle-val">{{ targetLqsScore }}</span>
+              <span class="circle-max">/100</span>
+              <span class="circle-grade">Not: {{ targetLqsGrade }}</span>
+            </div>
+
+            <div class="lqs-checks-list">
+              <h4>🎯 Etsy LQS Kalite Kontrol Tablosu:</h4>
+              <div class="check-item" [class.passed]="draftTitle.length >= 80 && draftTitle.length <= 140">
+                <span class="icon">{{ draftTitle.length >= 80 && draftTitle.length <= 140 ? '✅' : '⚠️' }}</span>
+                <span>Başlık 80 - 140 karakter aralığında (Şu an: {{ draftTitle.length }} karakter)</span>
+              </div>
+              <div class="check-item" [class.passed]="draftTags.length === 13">
+                <span class="icon">{{ draftTags.length === 13 ? '✅' : '⚠️' }}</span>
+                <span>13 adet altın etiket eksiksiz tanımlanmış (Şu an: {{ draftTags.length }} / 13)</span>
+              </div>
+              <div class="check-item" [class.passed]="draftDescription.length >= 500">
+                <span class="icon">{{ draftDescription.length >= 500 ? '✅' : '⚠️' }}</span>
+                <span>Açıklama 500+ karakter ve ferah paragraflara sahip (Şu an: {{ draftDescription.length }} karakter)</span>
+              </div>
+              <div class="check-item" [class.passed]="(selectedItem?.imageUrls?.length || 0) >= 5">
+                <span class="icon">{{ (selectedItem?.imageUrls?.length || 0) >= 5 ? '✅' : '⚠️' }}</span>
+                <span>En az 5 ürün görseli mevcut (Şu an: {{ selectedItem?.imageUrls?.length || 0 }} görsel)</span>
+              </div>
+              <div class="check-item passed">
+                <span class="icon">✅</span>
+                <span>Fiyat ve stok bilgileri kurala uygun tanımlandı</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SUCCESS MODAL FOR ETSY DRAFT CREATION -->
+  <div class="modal-overlay" *ngIf="showSuccessModal">
+    <div class="modal-card">
+      <div class="modal-icon">🎉</div>
+      <h2 class="modal-title">Etsy Taslağınız Başarıyla Oluşturuldu!</h2>
+      <p class="modal-desc">
+        İlanınız <strong>#{{ createdListingId }}</strong> numarasıyla resmi olarak Etsy mağazanızın taslaklarına eklendi.
+      </p>
+
+      <div class="modal-actions">
+        <a [href]="createdListingUrl" target="_blank" class="btn btn-primary">
+          <span>↗️ Etsy Panelinde İncele & Yayınla</span>
+        </a>
+        <button class="btn btn-secondary" (click)="showSuccessModal = false">
+          <span>Kapat</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- IMAGE ZOOM MODAL -->
+  <div class="modal-overlay" *ngIf="zoomedImageUrl" (click)="closeZoom()">
+    <div class="zoom-box" (click)="$event.stopPropagation()">
+      <img [src]="zoomedImageUrl" alt="Zoom" class="zoomed-img" />
+      <button class="zoom-close-btn" (click)="closeZoom()">✕</button>
+    </div>
+  </div>
+
+</div>

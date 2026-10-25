@@ -955,6 +955,7 @@ export interface MarketListingItemDto {
   reviewCount: number;
   reviewAverage: number;
   quantity: number;
+  taxonomyId?: number;
 }
 
 export interface MarketSearchResponseDto {
