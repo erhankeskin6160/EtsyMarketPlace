@@ -4,6 +4,7 @@ import { Observable, of, throwError, forkJoin } from 'rxjs';
 import { map, catchError } from 'rxjs/operators';
 import { AiSettingsService } from './ai-settings.service';
 import { EtsyApiService } from './etsy-api.service';
+import { TaxonomyNodeLike } from '../utils/taxonomy-shortlist';
 
 export interface AiDescriptionContext {
   productTitle?: string;
@@ -143,11 +144,15 @@ export class EtsyListingAiService {
    * - Product Images (Base64 inlineData or URL)
    * - Product Description
    * Or any combination / all 3 simultaneously.
+   *
+   * candidates: Canlı Etsy Seller Taxonomy API listesinden ürüne göre seçilmiş gerçek kategori adayları.
+   * Verilirse AI'dan YALNIZCA bu listeden seçim yapması istenir (uydurma taxonomy_id önlenir).
    */
   public suggestCategoryMultimodal(
     title?: string,
     description?: string,
-    images?: string[]
+    images?: string[],
+    candidates: TaxonomyNodeLike[] = []
   ): Observable<CategoryAiSuggestion> {
     const cleanTitle = (title || '').trim();
     const cleanDesc = (description || '').trim();
@@ -172,14 +177,14 @@ export class EtsyListingAiService {
     // 1. Google Gemini Live Vision & Text
     if (provider === 'Gemini' && settings.geminiApiKey && settings.geminiApiKey.trim().length > 10) {
       const activeModel = this.resolveGeminiModel(settings.geminiModel || 'gemini-2.5-flash');
-      return this.callGeminiForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.geminiApiKey.trim(), activeModel, inputSources).pipe(
+      return this.callGeminiForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.geminiApiKey.trim(), activeModel, inputSources, candidates).pipe(
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı Gemini kategori hatası:', err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'Gemini yanıt vermedi';
             return throwError(() => new Error(`❌ Canlı Gemini Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
           }
-          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
       );
     }
@@ -187,14 +192,14 @@ export class EtsyListingAiService {
     // 2. OpenAI GPT-4o / GPT-4o-mini Vision & Text
     if (provider === 'OpenAI' && settings.openAiApiKey && settings.openAiApiKey.trim().length > 10) {
       const activeModel = settings.openAiModel || 'gpt-4o';
-      return this.callOpenAiForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.openAiApiKey.trim(), activeModel, inputSources).pipe(
+      return this.callOpenAiForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.openAiApiKey.trim(), activeModel, inputSources, candidates).pipe(
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı OpenAI kategori hatası:', err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'OpenAI yanıt vermedi';
             return throwError(() => new Error(`❌ Canlı OpenAI Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
           }
-          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
       );
     }
@@ -202,14 +207,14 @@ export class EtsyListingAiService {
     // 3. Anthropic Claude 3.5 / 3.7 Vision & Text
     if (provider === 'Claude' && settings.claudeApiKey && settings.claudeApiKey.trim().length > 10) {
       const activeModel = settings.claudeModel || 'claude-3-7-sonnet';
-      return this.callClaudeForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.claudeApiKey.trim(), activeModel, inputSources).pipe(
+      return this.callClaudeForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.claudeApiKey.trim(), activeModel, inputSources, candidates).pipe(
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı Claude kategori hatası:', err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'Claude yanıt vermedi';
             return throwError(() => new Error(`❌ Canlı Claude Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
           }
-          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
       );
     }
@@ -217,14 +222,14 @@ export class EtsyListingAiService {
     // 4. xAI Grok Vision & Text
     if (provider === 'Grok' && settings.grokApiKey && settings.grokApiKey.trim().length > 10) {
       const activeModel = settings.grokModel || 'grok-3';
-      return this.callGrokForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.grokApiKey.trim(), activeModel, inputSources).pipe(
+      return this.callGrokForCategoryMultimodal(cleanTitle, cleanDesc, coverImage, settings.grokApiKey.trim(), activeModel, inputSources, candidates).pipe(
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı Grok kategori hatası:', err);
           if (isStrict) {
             const detail = err?.error?.error?.message || err?.message || 'Grok yanıt vermedi';
             return throwError(() => new Error(`❌ Canlı Grok Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
           }
-          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
       );
     }
@@ -232,14 +237,14 @@ export class EtsyListingAiService {
     // 5. DeepSeek (DeepSeek Chat / Reasoner)
     if (provider === 'DeepSeek' && settings.deepSeekApiKey && settings.deepSeekApiKey.trim().length > 10) {
       const activeModel = settings.deepSeekModel || 'DeepSeek-V4-Flash';
-      return this.callDeepSeekForCategory(cleanTitle, cleanDesc, settings.deepSeekApiKey.trim(), activeModel, inputSources).pipe(
+      return this.callDeepSeekForCategory(cleanTitle, cleanDesc, settings.deepSeekApiKey.trim(), activeModel, inputSources, candidates).pipe(
         catchError(err => {
           console.warn('[EtsyListingAiService] Canlı DeepSeek kategori hatası:', err);
           if (isStrict) {
             const detail = this.formatAiErrorMessage('DeepSeek', activeModel, err);
             return throwError(() => new Error(`❌ Canlı DeepSeek Kategori Hatası: ${detail}. 'Canlı AI Zorunlu' seçili olduğundan çevrimdışı motora geçilmedi.`));
           }
-          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback));
+          return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, isSilentFallback, candidates));
         })
       );
     }
@@ -249,7 +254,7 @@ export class EtsyListingAiService {
     }
 
     // Offline Fallback
-    return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, false));
+    return of(this.suggestOfflineCategoryDetailed(cleanTitle, cleanDesc, inputSources, false, candidates));
   }
 
   /**
@@ -933,57 +938,14 @@ OFFICIAL ETSY TAXONOMY RULES:
   14. Toys & Games
   15. Weddings
 
-COMMON VERIFIED OFFICIAL ETSY LEAF CATEGORIES:
-* Art & Collectibles / 3D Models / Statues:
-  - 130: Art & Collectibles > Sculpture > Figurines
-  - 69: Art & Collectibles > Collectibles > Figurines & Knick Knacks
-  - 128: Art & Collectibles > Sculpture
-  - 129: Art & Collectibles > Sculpture > Art Objects
-  - 119: Art & Collectibles > Prints
-  - 2078: Art & Collectibles > Prints > Digital Prints
-* Craft Supplies & Tools / 3D Blanks & Files:
-  - 6785: Craft Supplies & Tools > Blanks > Figurines > Monsters & Fantasy
-  - 6782: Craft Supplies & Tools > Blanks > Figurines > Animal & Natural Shapes
-  - 6446: Craft Supplies & Tools > Blanks > Figurines
-  - 12380: Craft Supplies & Tools > Patterns & How To > Craft Machine Files > 3D Printer Files
-* Home & Living:
-  - 1041: Home & Living > Lighting > Lamps
-  - 1042: Home & Living > Lighting > Night Lights
-  - 1054: Home & Living > Home Decor > Wall Decor
-  - 1063: Home & Living > Home Decor > Candleholders
-  - 943: Home & Living > Kitchen & Dining > Drinkware > Mugs
-  - 992: Home & Living > Outdoor & Gardening > Planters & Pots
-* Bags & Purses:
-  - 132: Bags & Purses > Handbags > Shoulder Bags
-  - 134: Bags & Purses > Handbags > Tote Bags
-  - 133: Bags & Purses > Handbags > Crossbody Bags
-  - 136: Bags & Purses > Backpacks
-  - 197: Bags & Purses > Wallets & Money Clips > Wallets
-* Jewelry:
-  - 204: Jewelry > Necklaces
-  - 211: Jewelry > Necklaces > Pendants
-  - 220: Jewelry > Rings
-  - 187: Jewelry > Earrings
-  - 172: Jewelry > Bracelets
-* Clothing:
-  - 449: Clothing > Men's Clothing > Shirts & Tees > T-shirts
-  - 559: Clothing > Women's Clothing > Tops & Tees > T-shirts
-  - 505: Clothing > Women's Clothing > Dresses
-  - 506: Clothing > Women's Clothing > Hoodies & Sweatshirts
-* Accessories:
-  - 25: Accessories > Hats & Head Coverings > Hats & Caps
-  - 165: Accessories > Keychains & Lanyards > Keychains
-* Electronics & Accessories:
-  - 2079: Electronics & Accessories > Audio > Headphone & Headset Stands
-  - 651: Electronics & Accessories > Cases & Covers > Phone Cases
-
 CRITICAL INSTRUCTIONS:
-1. Examine the actual physical item. If it is a 3D dragon, figurine or monster statue, categorize under Art & Collectibles > Sculpture > Figurines (130) or Craft Supplies & Tools > Blanks > Figurines > Monsters & Fantasy (6785).
-2. If it is a lamp/night light, categorize under Home & Living > Lighting > Lamps (1041) or Night Lights (1042).
-3. If it is a handbag/purse, do NOT classify as 3D print or decor; categorize under Bags & Purses (e.g. 132, 134).
+1. The user message contains "RESMİ ETSY KATEGORİ ADAYLARI" — real nodes fetched live from the Etsy Seller Taxonomy API (format "id: path").
+   When this list is present, taxonomy_id and every alternative MUST be copied EXACTLY (id and path) from that list. NEVER invent or recall IDs from memory.
+2. If no candidate list is present, return the best official category_path you know; set taxonomy_id to 0 if you are not certain of the exact official ID.
+3. Examine the actual physical item and its primary function (e.g. a headphone stand with LED lights is a headphone stand, not a lamp).
 4. If an image is provided, carefully inspect the visual shape, form, textures, and function.
-5. Provide a clear 'reasoning' in Turkish explaining why this Etsy taxonomy was selected.
-6. Suggest 2-3 realistic alternatives in 'alternatives' array with verified IDs.
+5. Provide a clear 'reasoning' in Turkish explaining why this Etsy taxonomy was selected. The reasoning MUST be consistent with the chosen taxonomy_id.
+6. Suggest 2-3 realistic alternatives in 'alternatives' array (from the candidate list when present).
 
 You MUST respond ONLY with a single valid JSON object matching this schema:
 {
@@ -996,7 +958,7 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
   ]
 }`;
 
-  private buildTaxonomyUserPrompt(title?: string, desc?: string, hasImage?: boolean): string {
+  private buildTaxonomyUserPrompt(title?: string, desc?: string, hasImage?: boolean, candidates: TaxonomyNodeLike[] = []): string {
     let p = 'Lütfen aşağıdaki ürün bilgilerini Etsy resmi dökümantasyonundaki Seller Taxonomy ağacına göre sınıflandırın:\n';
     if (title && title.trim()) {
       p += `Ürün Başlığı: "${title.trim()}"\n`;
@@ -1006,6 +968,11 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     }
     if (hasImage) {
       p += `[Görsel Sağlandı]: Ürünün fiziksel fotoğrafı iletilmiştir. Görseldeki şekli, malzemeyi, dikiş/tasarım detaylarını ve kullanım amacını analiz ederek en uygun yaprak kategoriyi seçiniz.\n`;
+    }
+    if (candidates.length > 0) {
+      p += '\nRESMİ ETSY KATEGORİ ADAYLARI (canlı Etsy Seller Taxonomy API\'den, "id: path"):\n';
+      p += candidates.map(c => `${c.id}: ${c.path}`).join('\n');
+      p += '\n\nKURAL: taxonomy_id, category_path ve alternatives YALNIZCA yukarıdaki listeden birebir kopyalanmalıdır. Listede olmayan ID uydurmayın.\n';
     }
     return p;
   }
@@ -1045,10 +1012,11 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     coverImage: string | null,
     apiKey: string,
     model: string,
-    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
+    candidates: TaxonomyNodeLike[] = []
   ): Observable<CategoryAiSuggestion> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage, candidates);
 
     const parts: any[] = [{ text: userPromptText }];
     if (coverImage && coverImage.startsWith('data:')) {
@@ -1082,8 +1050,8 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
         const parsed = this.parseTaxonomyJsonResponse(rawText);
         const sourcesText = this.formatInputSourcesDescription(sources);
         return {
-          taxonomyId: parsed.taxonomy_id || 132,
-          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          taxonomyId: Number(parsed.taxonomy_id) || 0,
+          categoryPath: String(parsed.category_path || ''),
           confidenceScore: parsed.confidence_score || 95,
           reasoning: parsed.reasoning || 'Ürün başlığı ve görsel analizi doğrultusunda belirlendi.',
           providerUsed: `Google Gemini (${model})`,
@@ -1106,10 +1074,11 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     coverImage: string | null,
     apiKey: string,
     model: string,
-    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
+    candidates: TaxonomyNodeLike[] = []
   ): Observable<CategoryAiSuggestion> {
     const url = 'https://api.openai.com/v1/chat/completions';
-    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage, candidates);
     const userContent: any[] = [{ type: 'text', text: userPromptText }];
 
     if (coverImage) {
@@ -1141,8 +1110,8 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
         const parsed = this.parseTaxonomyJsonResponse(rawText);
         const sourcesText = this.formatInputSourcesDescription(sources);
         return {
-          taxonomyId: parsed.taxonomy_id || 132,
-          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          taxonomyId: Number(parsed.taxonomy_id) || 0,
+          categoryPath: String(parsed.category_path || ''),
           confidenceScore: parsed.confidence_score || 95,
           reasoning: parsed.reasoning || 'OpenAI analizi doğrultusunda belirlendi.',
           providerUsed: `OpenAI (${model})`,
@@ -1165,10 +1134,11 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     coverImage: string | null,
     apiKey: string,
     model: string,
-    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
+    candidates: TaxonomyNodeLike[] = []
   ): Observable<CategoryAiSuggestion> {
     const url = 'https://api.anthropic.com/v1/messages';
-    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage, candidates);
     const userContent: any[] = [];
 
     if (coverImage && coverImage.startsWith('data:')) {
@@ -1207,8 +1177,8 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
         const parsed = this.parseTaxonomyJsonResponse(rawText);
         const sourcesText = this.formatInputSourcesDescription(sources);
         return {
-          taxonomyId: parsed.taxonomy_id || 132,
-          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          taxonomyId: Number(parsed.taxonomy_id) || 0,
+          categoryPath: String(parsed.category_path || ''),
           confidenceScore: parsed.confidence_score || 95,
           reasoning: parsed.reasoning || 'Claude Vision analizi doğrultusunda belirlendi.',
           providerUsed: `Claude (${model})`,
@@ -1231,10 +1201,11 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     coverImage: string | null,
     apiKey: string,
     model: string,
-    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
+    candidates: TaxonomyNodeLike[] = []
   ): Observable<CategoryAiSuggestion> {
     const url = 'https://api.x.ai/v1/chat/completions';
-    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage);
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, sources.hasImage, candidates);
     const userContent: any[] = [{ type: 'text', text: userPromptText }];
 
     if (coverImage) {
@@ -1265,8 +1236,8 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
         const parsed = this.parseTaxonomyJsonResponse(rawText);
         const sourcesText = this.formatInputSourcesDescription(sources);
         return {
-          taxonomyId: parsed.taxonomy_id || 132,
-          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          taxonomyId: Number(parsed.taxonomy_id) || 0,
+          categoryPath: String(parsed.category_path || ''),
           confidenceScore: parsed.confidence_score || 95,
           reasoning: parsed.reasoning || 'xAI Grok analizi doğrultusunda belirlendi.',
           providerUsed: `xAI Grok (${model})`,
@@ -1288,11 +1259,12 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     desc: string,
     apiKey: string,
     model: string,
-    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean }
+    sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
+    candidates: TaxonomyNodeLike[] = []
   ): Observable<CategoryAiSuggestion> {
     const normalizedModel = this.normalizeDeepSeekModelName(model);
     const url = 'https://api.deepseek.com/chat/completions';
-    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, false);
+    const userPromptText = this.buildTaxonomyUserPrompt(title, desc, false, candidates);
 
     const body: any = {
       model: normalizedModel,
@@ -1320,8 +1292,8 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
         const parsed = this.parseTaxonomyJsonResponse(rawText);
         const sourcesText = this.formatInputSourcesDescription(sources);
         return {
-          taxonomyId: parsed.taxonomy_id || 132,
-          categoryPath: parsed.category_path || 'Bags & Purses > Handbags > Shoulder Bags',
+          taxonomyId: Number(parsed.taxonomy_id) || 0,
+          categoryPath: String(parsed.category_path || ''),
           confidenceScore: parsed.confidence_score || 95,
           reasoning: parsed.reasoning || 'DeepSeek derin mantık analizi ile belirlendi.',
           providerUsed: `DeepSeek (${model})`,
@@ -1342,10 +1314,27 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
     title: string,
     desc: string,
     sources: { hasTitle: boolean; hasImage: boolean; hasDescription: boolean },
-    isFallbackFromError: boolean
+    isFallbackFromError: boolean,
+    candidates: TaxonomyNodeLike[] = []
   ): CategoryAiSuggestion {
     const text = `${title} ${desc}`.toLowerCase();
     const sourcesText = this.formatInputSourcesDescription(sources);
+
+    // 0. Canlı Etsy taksonomisinden puanlanmış aday listesi varsa sabit ID'ler yerine onu kullan
+    if (candidates.length > 0) {
+      const [best, ...rest] = candidates;
+      return {
+        taxonomyId: best.id,
+        categoryPath: best.path,
+        confidenceScore: 70,
+        reasoning: 'Ürün başlığı/açıklamasındaki anahtar kelimeler canlı Etsy Seller Taxonomy listesinde en yüksek puanı alan kategoriyle eşleşti.',
+        providerUsed: isFallbackFromError ? 'Yerel Kural Motoru (Fallback)' : 'Yerel Kural Motoru',
+        isLive: false,
+        message: `⚡ Yerel Taksonomi Motoru ${sourcesText}: #${best.id} ${best.path}`,
+        inputSources: sources,
+        alternatives: rest.slice(0, 3).map((c, i) => ({ taxonomyId: c.id, categoryPath: c.path, confidenceScore: 65 - i * 5 }))
+      };
+    }
 
     // 1. Bags & Purses
     if (text.includes('çanta') || text.includes('bag') || text.includes('purse') || text.includes('omuz çantası') || text.includes('handbag')) {

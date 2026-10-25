@@ -6,6 +6,9 @@ import { EtsyApiService, EtsyTaxonomyItemDto } from '../../core/services/etsy-ap
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
+import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
+import { Observable, of } from 'rxjs';
+import { catchError, map, switchMap, tap } from 'rxjs/operators';
 
 export interface GalleryImage {
   id: string;
@@ -850,57 +853,93 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     });
   }
 
-  groundTaxonomyRecommendation(res: CategoryAiSuggestion): CategoryAiSuggestion {
-    if (!this.categoriesList || this.categoriesList.length === 0) return res;
+  /**
+   * AI yanıtını canlı Etsy taksonomisine karşı KATI doğrular.
+   * - ID gerçek listede var ve yaprak adı AI'nın path'iyle tutarlıysa → kabul
+   * - Aksi halde path / yaprak adı eşleşmesi (önce AI'ya gönderilen adaylar içinde)
+   * - AI'ya gönderilen aday listesindeki ID → kabul
+   * - Hiçbiri tutmazsa: kısa listenin 1. adayı "düşük güven" uyarısıyla (başlık kelimeleriyle körlemesine arama YOK)
+   */
+  groundTaxonomyRecommendation(res: CategoryAiSuggestion, candidates: EtsyTaxonomyItemDto[] = []): CategoryAiSuggestion {
+    const list = this.categoriesList;
+    if (!list || list.length === 0) return res;
 
-    // 1. Doğrudan ID eşleşmesi
-    let match = this.categoriesList.find(c => c.id === res.taxonomyId);
-    if (match) {
-      res.taxonomyId = match.id;
-      res.categoryPath = match.path;
-    } else if (res.categoryPath) {
-      // 2. Kategori yolu (path) tam veya yaprak adıyla eşleşme
-      const cleanPath = res.categoryPath.toLowerCase().trim();
-      const leafName = cleanPath.split('>').pop()?.trim() || cleanPath;
+    const resolve = (id: number, path: string): EtsyTaxonomyItemDto | undefined => {
+      const cleanPath = (path || '').toLowerCase().trim();
+      const leaf = taxonomyLeafName(path);
+      const byId = id > 0 ? list.find(c => c.id === id) : undefined;
 
-      match = this.categoriesList.find(c => c.path.toLowerCase() === cleanPath);
-      if (!match) {
-        match = this.categoriesList.find(c => c.name.toLowerCase() === leafName || c.path.toLowerCase().endsWith('> ' + leafName));
+      // 1. ID + path tutarlı
+      if (byId && (!cleanPath || byId.path.toLowerCase() === cleanPath || taxonomyLeafName(byId.path) === leaf)) {
+        return byId;
       }
-    }
-
-    // 3. Eğer AI bilinmeyen bir ID döndürdüyse, ürün başlığı ve açıklamasındaki anahtar kelimelerden tespit et
-    if (!match) {
-      const searchTerms = this.expandSearchTerms(`${this.title} ${this.description}`);
-      for (const term of searchTerms) {
-        match = this.categoriesList.find(c => c.name.toLowerCase() === term || c.path.toLowerCase().includes(term));
-        if (match) break;
-      }
-    }
-
-    if (match) {
-      res.taxonomyId = match.id;
-      res.categoryPath = match.path;
-    }
-
-    // Alternatifleri de resmi taksonomi listesiyle doğrula
-    if (res.alternatives && res.alternatives.length > 0) {
-      res.alternatives = res.alternatives.map(alt => {
-        const altMatch = this.categoriesList.find(c => c.id === alt.taxonomyId) ||
-                         this.categoriesList.find(c => c.path.toLowerCase() === alt.categoryPath.toLowerCase()) ||
-                         this.categoriesList.find(c => c.name.toLowerCase() === alt.categoryPath.split('>').pop()?.trim().toLowerCase());
-        if (altMatch) {
-          return {
-            taxonomyId: altMatch.id,
-            categoryPath: altMatch.path,
-            confidenceScore: alt.confidenceScore
-          };
+      // 2. Tam path eşleşmesi
+      if (cleanPath) {
+        const exact = list.find(c => c.path.toLowerCase() === cleanPath);
+        if (exact) return exact;
+        // 3. Yaprak adı eşleşmesi — önce AI'ya gönderilen adaylar içinde
+        if (leaf) {
+          const leafMatch = candidates.find(c => taxonomyLeafName(c.path) === leaf)
+            ?? list.find(c => c.name.toLowerCase() === leaf || taxonomyLeafName(c.path) === leaf);
+          if (leafMatch) return leafMatch;
         }
-        return alt;
-      }).filter(alt => alt.taxonomyId > 0);
+      }
+      // 4. ID, AI'ya gönderdiğimiz gerçek aday listesindeyse güven
+      if (byId && candidates.some(c => c.id === byId.id)) return byId;
+      return undefined;
+    };
+
+    const match = resolve(res.taxonomyId, res.categoryPath);
+    if (match) {
+      res.taxonomyId = match.id;
+      res.categoryPath = match.path;
+    } else if (candidates.length > 0) {
+      const fallback = candidates[0];
+      const aiSaid = res.categoryPath || (res.taxonomyId ? `#${res.taxonomyId}` : 'geçersiz yanıt');
+      res.taxonomyId = fallback.id;
+      res.categoryPath = fallback.path;
+      res.confidenceScore = Math.min(res.confidenceScore || 40, 40);
+      res.reasoning = `⚠️ AI'nın önerdiği kategori (${aiSaid}) resmi Etsy listesinde doğrulanamadı; anahtar kelimelere göre en uygun resmi kategori önerildi, lütfen kontrol edin. ${res.reasoning || ''}`.trim();
+      res.message = `⚠️ Düşük güven: AI kategorisi doğrulanamadı, en yakın resmi kategori seçildi: #${fallback.id} ${fallback.path}`;
+    } else {
+      // Doğrulanamadı ve aday yok → seçim yapılmasın
+      res.taxonomyId = 0;
+    }
+
+    // Alternatifleri de aynı katı kuralla doğrula; doğrulanamayanları ve tekrarları at
+    const seen = new Set<number>([res.taxonomyId]);
+    res.alternatives = (res.alternatives || [])
+      .map(alt => {
+        const m = resolve(alt.taxonomyId, alt.categoryPath);
+        return m ? { taxonomyId: m.id, categoryPath: m.path, confidenceScore: alt.confidenceScore } : null;
+      })
+      .filter((alt): alt is TaxonomyCandidateItem => !!alt && !seen.has(alt.taxonomyId) && !!seen.add(alt.taxonomyId));
+
+    // Alternatif yoksa kısa listeden tamamla
+    if (res.alternatives.length === 0 && candidates.length > 0) {
+      res.alternatives = candidates
+        .filter(c => !seen.has(c.id))
+        .slice(0, 3)
+        .map((c, i) => ({ taxonomyId: c.id, categoryPath: c.path, confidenceScore: 60 - i * 5 }));
     }
 
     return res;
+  }
+
+  /** Canlı Etsy taksonomisi henüz yüklenmediyse önce yükler (AI'ya gerçek aday listesi verebilmek için). */
+  private ensureTaxonomyLoaded(): Observable<EtsyTaxonomyItemDto[]> {
+    if (this.categoriesList.length > 0) return of(this.categoriesList);
+    return this.etsyApi.getSellerTaxonomy().pipe(
+      map(res => res?.results || []),
+      tap(results => {
+        if (results.length > 0 && this.categoriesList.length === 0) {
+          this.categoriesList = results;
+          this.extractDepartments();
+          this.filterCategories();
+        }
+      }),
+      catchError(() => of([] as EtsyTaxonomyItemDto[]))
+    );
   }
 
   suggestAiCategory(): void {
@@ -914,10 +953,25 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     }
 
     this.isGeneratingCategory = true;
-    this.listingAiService.suggestCategoryMultimodal(title, desc, images).subscribe({
+    let candidates: EtsyTaxonomyItemDto[] = [];
+
+    this.ensureTaxonomyLoaded().pipe(
+      switchMap(taxonomy => {
+        // Canlı Etsy listesinden ürüne en alakalı gerçek kategoriler → AI yalnız bunlardan seçer
+        candidates = buildTaxonomyShortlist(taxonomy, title, desc, this.TR_TO_EN_TAXONOMY_MAP, 80);
+        return this.listingAiService.suggestCategoryMultimodal(title, desc, images, candidates);
+      })
+    ).subscribe({
       next: res => {
         this.isGeneratingCategory = false;
-        const grounded = this.groundTaxonomyRecommendation(res);
+        const grounded = this.groundTaxonomyRecommendation(res, candidates);
+
+        if (!grounded.taxonomyId) {
+          this.categoryAiResult = grounded;
+          this.categoryAlternatives = grounded.alternatives || [];
+          this.showToast('⚠️ AI geçerli bir resmi Etsy kategorisi döndürmedi. Lütfen listeden manuel seçin veya başlığı detaylandırıp tekrar deneyin.');
+          return;
+        }
 
         this.selectedTaxonomyId = grounded.taxonomyId;
         this.selectedCategory = grounded.categoryPath;
