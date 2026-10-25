@@ -25,6 +25,12 @@ export interface DescriptionVariantsResult {
   message: string;
 }
 
+export interface CompleteListingOptions {
+  preliminaryNotes?: string;
+  variationsSummary?: string;
+  category?: string;
+}
+
 export interface CompleteListingAiResult {
   title: string;
   category: string;
@@ -429,7 +435,11 @@ export class EtsyListingAiService {
   /**
    * Generates all listing fields (Title, Category, Tags, Description) in a single unified execution.
    */
-  public generateCompleteListing(userInput: string, materials?: string): Observable<CompleteListingAiResult> {
+  public generateCompleteListing(
+    userInput: string,
+    materials?: string,
+    options?: CompleteListingOptions
+  ): Observable<CompleteListingAiResult> {
     const cleanInput = (userInput || '').trim();
     const settings = this.aiSettings.settings();
     const provider = settings.provider;
@@ -447,15 +457,15 @@ export class EtsyListingAiService {
       const activeModel = this.getActiveModel(settings);
       let callObs: Observable<any>;
       if (provider === 'DeepSeek') {
-        callObs = this.callDeepSeekForComplete(cleanInput, activeApiKey, activeModel, materials);
+        callObs = this.callDeepSeekForComplete(cleanInput, activeApiKey, activeModel, materials, options);
       } else {
-        callObs = this.callGeminiForComplete(cleanInput, activeApiKey, activeModel, materials);
+        callObs = this.callGeminiForComplete(cleanInput, activeApiKey, activeModel, materials, options);
       }
 
       return callObs.pipe(
         map(res => ({
           title: this.normalizeTitleLength(res.title),
-          category: res.category || this.detectCategoryFromKeywords(cleanInput),
+          category: res.category || options?.category || this.detectCategoryFromKeywords(cleanInput),
           tags: this.normalizeTagsList(res.tags),
           description: res.description,
           materials: res.materials || materials || 'Handcrafted, Premium Materials',
@@ -469,7 +479,7 @@ export class EtsyListingAiService {
             const detail = this.formatAiErrorMessage(provider, activeModel, err);
             return throwError(() => new Error(`❌ Canlı AI API Hatası (${provider} - ${activeModel}): ${detail}. 'Canlı AI Zorunlu' seçili olduğundan offline kural motoruna geçilmedi.`));
           }
-          const ruleRes = this.generateRuleBasedComplete(cleanInput, materials);
+          const ruleRes = this.generateRuleBasedComplete(cleanInput, materials, options);
           if (isSilentFallback) {
             ruleRes.summaryMessage = `⚡ Akıllı Kural Motoru (Canlı AI yanıt veremedi, offline şablon listelemesi oluşturuldu).`;
           }
@@ -478,7 +488,7 @@ export class EtsyListingAiService {
       );
     }
 
-    return of(this.generateRuleBasedComplete(cleanInput, materials));
+    return of(this.generateRuleBasedComplete(cleanInput, materials, options));
   }
 
   private formatAiErrorMessage(provider: string, model: string, err: any): string {
@@ -565,8 +575,8 @@ export class EtsyListingAiService {
     return this.generateRuleBasedTags(fallbackInput);
   }
 
-  private parseCompleteListingJsonResponse(raw: string, fallbackInput: string, materials?: string): any {
-    if (!raw) return this.generateRuleBasedComplete(fallbackInput, materials);
+  private parseCompleteListingJsonResponse(raw: string, fallbackInput: string, materials?: string, options?: CompleteListingOptions): any {
+    if (!raw) return this.generateRuleBasedComplete(fallbackInput, materials, options);
     let clean = raw.trim();
     if (clean.startsWith('```json')) clean = clean.substring(7);
     else if (clean.startsWith('```')) clean = clean.substring(3);
@@ -582,7 +592,7 @@ export class EtsyListingAiService {
     try {
       return JSON.parse(clean);
     } catch {
-      return this.generateRuleBasedComplete(fallbackInput, materials);
+      return this.generateRuleBasedComplete(fallbackInput, materials, options);
     }
   }
 
@@ -736,25 +746,41 @@ ${ctx.preliminaryNotes || 'No specific preliminary notes provided. Generate a co
     );
   }
 
-  private callDeepSeekForComplete(input: string, apiKey: string, model: string, materials?: string): Observable<any> {
+  private callDeepSeekForComplete(input: string, apiKey: string, model: string, materials?: string, options?: CompleteListingOptions): Observable<any> {
     const normalizedModel = this.normalizeDeepSeekModelName(model);
     const url = 'https://api.deepseek.com/chat/completions';
-    const systemInstruction = `You are an elite Etsy listing architect. Return ONLY a valid JSON object.
-CRITICAL LANGUAGE RULE: The seller's input may be in Turkish (e.g. 'El yapımı kadın çantası'). You must understand the Turkish product concept, but ALL output fields MUST BE 100% IN ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
+    const systemInstruction = `You are an elite Etsy listing architect and master copywriter. Return ONLY a valid JSON object.
+CRITICAL LANGUAGE RULE: The seller's input or preliminary notes may be in Turkish or rough notes. You must understand all details, but ALL output fields MUST BE 100% IN ELEGANT, HIGH-CONVERTING ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
+
+CRITICAL SELLER NOTES & SPECIFICATIONS RULE:
+If preliminary seller notes, custom variations, dimensions, glow/color options, or special features are provided:
+1. You MUST extract, preserve, and prominently showcase them in the generated "description" (under key features, available options, or specifications).
+2. For metric measurements, provide approximate imperial equivalents in parentheses (e.g. 15 cm (~5.9 inches)).
+3. NEVER discard, contradict, or ignore the seller's specific product notes!
+
 Fields schema:
 {
   "title": "English SEO title up to 140 chars, first 55 chars mobile-optimized",
   "category": "Matching Etsy Taxonomy breadcrumb e.g. Bags & Purses > Handbags > Shoulder Bags",
   "tags": ["array of exactly 13 lowercase English tags each max 20 chars"],
-  "description": "Engaging formatted product description in English with emojis and bullet points",
+  "description": "Engaging formatted product description in English with emojis, bullet points, and all seller-specified features/notes included",
   "materials": "Comma-separated list of materials used in English"
 }`;
+
+    const userPrompt = `PRODUCT TITLE / CONCEPT: "${input || 'Handmade Artisan Item'}"
+MATERIALS: "${materials || ''}"
+${options?.category ? `CATEGORY: "${options.category}"\n` : ''}${options?.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${options.variationsSummary}"\n` : ''}CRITICAL SELLER PRELIMINARY NOTES & REFERENCE SPECIFICATIONS:
+"""
+${options?.preliminaryNotes || 'No specific preliminary notes provided.'}
+"""
+
+Optimize this complete Etsy listing (Title, Category, 13 Tags, Description, Materials). Make sure the description incorporates all preliminary notes and options above!`;
 
     const body: any = {
       model: normalizedModel,
       messages: [
         { role: 'system', content: systemInstruction },
-        { role: 'user', content: `Optimize this listing for: "${input || 'Handmade Artisan Item'}". Materials: "${materials || ''}"` }
+        { role: 'user', content: userPrompt }
       ],
       max_tokens: 3500
     };
@@ -773,7 +799,7 @@ Fields schema:
           this.trackAiUsage('DeepSeek', normalizedModel, 'Hızlı Ürün Listeleme (Tam Paket)', res.usage.prompt_tokens, res.usage.completion_tokens, res.usage.total_tokens);
         }
         const raw = res?.choices?.[0]?.message?.content || '{}';
-        return this.parseCompleteListingJsonResponse(raw, input, materials);
+        return this.parseCompleteListingJsonResponse(raw, input, materials, options);
       })
     );
   }
@@ -878,23 +904,39 @@ CRITICAL ETSY RULES:
     );
   }
 
-  private callGeminiForComplete(input: string, apiKey: string, model: string, materials?: string): Observable<any> {
+  private callGeminiForComplete(input: string, apiKey: string, model: string, materials?: string, options?: CompleteListingOptions): Observable<any> {
     const activeModel = this.resolveGeminiModel(model);
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(activeModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-    const systemInstruction = `You are an elite Etsy listing architect. Return ONLY a valid JSON object.
-CRITICAL LANGUAGE RULE: The seller's input may be in Turkish (e.g. 'El yapımı kadın çantası'). You must understand the Turkish product concept, but ALL output fields MUST BE 100% IN ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
+    const systemInstruction = `You are an elite Etsy listing architect and master copywriter. Return ONLY a valid JSON object.
+CRITICAL LANGUAGE RULE: The seller's input or preliminary notes may be in Turkish or rough notes. You must understand all details, but ALL output fields MUST BE 100% IN ELEGANT, HIGH-CONVERTING ENGLISH for the global Etsy marketplace. NEVER output Turkish text.
+
+CRITICAL SELLER NOTES & SPECIFICATIONS RULE:
+If preliminary seller notes, custom variations, dimensions, glow/color options, or special features are provided:
+1. You MUST extract, preserve, and prominently showcase them in the generated "description" (under key features, available options, or specifications).
+2. For metric measurements, provide approximate imperial equivalents in parentheses (e.g. 15 cm (~5.9 inches)).
+3. NEVER discard, contradict, or ignore the seller's specific product notes!
+
 Fields schema:
 {
   "title": "English SEO title up to 140 chars, first 55 chars mobile-optimized",
   "category": "Matching Etsy Taxonomy breadcrumb e.g. Bags & Purses > Handbags > Shoulder Bags",
   "tags": ["array of exactly 13 lowercase English tags each max 20 chars"],
-  "description": "Engaging formatted product description in English with emojis and bullet points",
+  "description": "Engaging formatted product description in English with emojis, bullet points, and all seller-specified features/notes included",
   "materials": "Comma-separated list of materials used in English"
 }`;
 
+    const userPrompt = `PRODUCT TITLE / CONCEPT: "${input || 'Handmade Artisan Item'}"
+MATERIALS: "${materials || ''}"
+${options?.category ? `CATEGORY: "${options.category}"\n` : ''}${options?.variationsSummary ? `AVAILABLE OPTIONS & VARIATIONS: "${options.variationsSummary}"\n` : ''}CRITICAL SELLER PRELIMINARY NOTES & REFERENCE SPECIFICATIONS:
+"""
+${options?.preliminaryNotes || 'No specific preliminary notes provided.'}
+"""
+
+Optimize this complete Etsy listing (Title, Category, 13 Tags, Description, Materials). Make sure the description incorporates all preliminary notes and options above!`;
+
     const body = {
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      contents: [{ role: 'user', parts: [{ text: `Optimize this listing for: "${input || 'Handmade Artisan Item'}". Materials: "${materials || ''}"` }] }],
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
       generationConfig: {
         temperature: 0.4,
         maxOutputTokens: 3500,
@@ -908,7 +950,7 @@ Fields schema:
           this.trackAiUsage('Google Gemini', activeModel, 'Hızlı Ürün Listeleme (Tam Paket)', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
         }
         const raw = res?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-        return JSON.parse(raw);
+        return this.parseCompleteListingJsonResponse(raw, input, materials, options);
       })
     );
   }
@@ -1702,12 +1744,12 @@ You MUST respond ONLY with a single valid JSON object matching this schema:
       `\n• Feel free to message our workshop for custom personalization requests!`;
   }
 
-  private generateRuleBasedComplete(userInput: string, materials?: string): CompleteListingAiResult {
+  private generateRuleBasedComplete(userInput: string, materials?: string, options?: CompleteListingOptions): CompleteListingAiResult {
     const cleanInput = (userInput || '').trim();
     const title = this.generateRuleBasedTitle(cleanInput);
-    const category = this.detectCategoryFromKeywords(cleanInput);
+    const category = options?.category || this.detectCategoryFromKeywords(cleanInput);
     const tags = this.generateRuleBasedTags(cleanInput);
-    const description = this.generateRuleBasedDescription(cleanInput, materials);
+    const description = this.generateRuleBasedDescription(cleanInput, materials, options?.preliminaryNotes);
 
     return {
       title,

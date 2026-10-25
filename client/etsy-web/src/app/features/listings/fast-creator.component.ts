@@ -1127,13 +1127,21 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       return;
     }
 
+    // Kullanıcının açıklamadaki ham notlarını koru ve yedekle
     if (descInput && !this.originalNotesBackup) {
       this.originalNotesBackup = descInput;
       this.hasBackupNotes = true;
     }
 
+    const sellerNotes = descInput || this.originalNotesBackup || '';
+    const variationsSummary = this.getVariationsSummary();
+
     this.isGeneratingAll = true;
-    this.listingAiService.generateCompleteListing(input, this.materials).subscribe({
+    this.listingAiService.generateCompleteListing(input, this.materials, {
+      preliminaryNotes: sellerNotes,
+      variationsSummary,
+      category: this.selectedCategory
+    }).subscribe({
       next: res => {
         this.isGeneratingAll = false;
         this.title = res.title;
