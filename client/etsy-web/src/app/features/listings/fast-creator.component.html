@@ -244,17 +244,16 @@
               <!-- Taxonomy Combo / Selector -->
               <div class="field-wrap full tax-select-wrap">
                 <select class="std-select main-category-select" [(ngModel)]="selectedCategoryCombo" (ngModelChange)="onTaxonomyComboChange($event)">
-                  <option *ngIf="selectedTaxonomyId > 0 && selectedCategory" [value]="selectedTaxonomyId + '|' + selectedCategory" class="opt-active-sticky">
-                    ⭐ AKTİF SEÇİLİ: #{{ selectedTaxonomyId }} - {{ selectedCategory }}
-                  </option>
                   <option *ngIf="!selectedTaxonomyId" value="" disabled selected>
                     -- Lütfen bir kategori seçin (veya AI Kategori Belirle butonunu kullanın) --
                   </option>
-                  <ng-container *ngFor="let cat of filteredCategories">
-                    <option *ngIf="cat.id !== selectedTaxonomyId" [value]="cat.id + '|' + cat.path">
-                      #{{ cat.id }} - {{ cat.path }}
-                    </option>
-                  </ng-container>
+                  <!-- Seçili (AI veya kullanıcı) kategori listede kendi konumunda vurgulanır; ayrı yapışkan satır yok -->
+                  <option
+                    *ngFor="let cat of filteredCategories; trackBy: trackByTaxonomyId"
+                    [value]="cat.id + '|' + cat.path"
+                    [class.opt-active-sticky]="cat.id === selectedTaxonomyId">
+                    {{ cat.id === selectedTaxonomyId ? '⭐ ' : '' }}#{{ cat.id }} - {{ cat.path }}
+                  </option>
                 </select>
                 <div *ngIf="filteredCategories.length === 0 && !isLoadingCategories" class="tax-no-results">
                   ⚠️ "{{ categorySearchTerm }}" aramasına veya seçili bölüme uygun kategori bulunamadı. Lütfen aramayı temizleyin veya başka bir kelime deneyin.

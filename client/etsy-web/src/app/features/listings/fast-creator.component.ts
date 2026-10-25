@@ -619,13 +619,25 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
     // Aktif seçili olan kategori listede yoksa en başa ekle (kullanıcı seçimini kaybetmesin)
     if (this.selectedTaxonomyId > 0) {
-      const selectedItem = this.categoriesList.find(c => c.id === this.selectedTaxonomyId);
+      const selectedItem: EtsyTaxonomyItemDto | undefined =
+        this.categoriesList.find(c => c.id === this.selectedTaxonomyId)
+        ?? (this.selectedCategory
+          ? { id: this.selectedTaxonomyId, path: this.selectedCategory, name: this.selectedCategory.split('>').pop()?.trim() || this.selectedCategory }
+          : undefined);
       if (selectedItem && !baseList.some(c => c.id === this.selectedTaxonomyId)) {
         baseList.unshift(selectedItem);
+      }
+      // Combo değeri, listede render edilen option değeriyle birebir aynı olmalı (aksi halde select boş görünür)
+      if (selectedItem) {
+        this.selectedCategoryCombo = `${selectedItem.id}|${selectedItem.path}`;
       }
     }
 
     this.filteredCategories = baseList;
+  }
+
+  trackByTaxonomyId(_: number, cat: EtsyTaxonomyItemDto): number {
+    return cat.id;
   }
 
   selectCategoryItem(cat: EtsyTaxonomyItemDto): void {
