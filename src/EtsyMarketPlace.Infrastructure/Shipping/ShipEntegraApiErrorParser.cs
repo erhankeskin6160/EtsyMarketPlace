@@ -61,4 +61,32 @@ public static class ShipEntegraApiErrorParser
             return null;
         }
     }
+
+    /// <summary>
+    /// Verilen hata kodunun veya açıklamasının kimlik doğrulama/yetki/token süresiyle ilgili olup olmadığını belirler.
+    /// Canlı örnek: ERR.00000.1125 ("You are not authorized to perform this action."), ERR.12015.1035 ("Yetkisiz API istemcisi").
+    /// </summary>
+    public static bool IsAuthOrExpiredError(string code, string? description)
+    {
+        if (string.Equals(code, "ERR.00000.1125", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(code, "ERR.12015.1035", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(code, "ERR.12015.002", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(description))
+        {
+            if (description.Contains("not authorized", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains("unauthorized", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains("yetkisiz", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains("token expired", StringComparison.OrdinalIgnoreCase) ||
+                description.Contains("oturum", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

@@ -365,6 +365,12 @@ public sealed class ShipEntegraApiClient : IShipEntegraApiClient
         ShipEntegraBusinessException? businessError =
             ShipEntegraApiErrorParser.TryParse(responseBody, (int)response.StatusCode);
 
+        if (businessError != null && ShipEntegraApiErrorParser.IsAuthOrExpiredError(businessError.Code, businessError.Description))
+        {
+            throw new ShipEntegraTokenExpiredException(
+                $"ShipEntegra yetkilendirme hatası: {businessError.Description} ({businessError.Code}). Oturum süreniz dolmuş olabilir.");
+        }
+
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
         {
             if (businessError != null)

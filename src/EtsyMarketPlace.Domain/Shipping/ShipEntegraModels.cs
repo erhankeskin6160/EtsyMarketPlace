@@ -115,8 +115,19 @@ public sealed class ShipEntegraSettings
 
     [JsonIgnore]
 
-    public bool HasValidTokenFormat =>
-        !string.IsNullOrWhiteSpace(BearerToken) && CleanToken.Length > 20;
+    public bool HasValidTokenFormat
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(BearerToken) || CleanToken.Length <= 20) return false;
+            var exp = JwtTokenInspector.GetExpirationUtc(CleanToken);
+            if (exp.HasValue)
+            {
+                return DateTime.UtcNow < exp.Value;
+            }
+            return true;
+        }
+    }
 }
 
 /// <summary>

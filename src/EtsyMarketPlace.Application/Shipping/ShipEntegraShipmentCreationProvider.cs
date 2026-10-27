@@ -56,7 +56,8 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
         var settings = _settingsProvider();
         string token = settings.CleanToken;
 
-        if (string.IsNullOrWhiteSpace(token) || token.Length <= 20)
+        bool isTokenExpired = !string.IsNullOrWhiteSpace(token) && JwtTokenInspector.IsExpired(token);
+        if (string.IsNullOrWhiteSpace(token) || token.Length <= 20 || isTokenExpired)
         {
             string? fresh = await TryRefreshTokenAsync(settings, cancellationToken);
             if (!string.IsNullOrWhiteSpace(fresh))
@@ -356,7 +357,8 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
         var settings = _settingsProvider();
         string token = settings.CleanToken;
-        if (string.IsNullOrWhiteSpace(token) || token.Length <= 20)
+        bool isTokenExpired = !string.IsNullOrWhiteSpace(token) && JwtTokenInspector.IsExpired(token);
+        if (string.IsNullOrWhiteSpace(token) || token.Length <= 20 || isTokenExpired)
         {
             string? fresh = await TryRefreshTokenAsync(settings, cancellationToken);
             if (!string.IsNullOrWhiteSpace(fresh))
@@ -531,12 +533,13 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
         // 1) API ile doğrudan giriş: tarayıcısız, en hızlı ve en güvenilir yol.
         if (_apiClient != null &&
-            !string.IsNullOrWhiteSpace(settings.EncryptedPassword) &&
-            _passwordDecryptor != null)
+            !string.IsNullOrWhiteSpace(settings.EncryptedPassword))
         {
             try
             {
-                string pass = _passwordDecryptor(settings.EncryptedPassword);
+                string pass = _passwordDecryptor != null
+                    ? _passwordDecryptor(settings.EncryptedPassword)
+                    : settings.EncryptedPassword;
                 if (!string.IsNullOrWhiteSpace(pass))
                 {
                     var tokens = await _apiClient.LoginAsync(settings.SavedEmail, pass, cancellationToken);

@@ -1,4 +1,4 @@
-namespace EtsyMarketPlace.Application.Shipping;
+﻿namespace EtsyMarketPlace.Application.Shipping;
 
 using System;
 using System.Collections.Generic;
@@ -273,7 +273,9 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             if (!string.IsNullOrWhiteSpace(command.Email)) settings.SavedEmail = command.Email.Trim();
             if (!string.IsNullOrWhiteSpace(command.Password)) settings.EncryptedPassword = command.Password.Trim();
 
-            // Eğer API Key ve Secret varsa resmi endpoint'ten token almaya çalış
+            string? authWarning = null;
+
+            // EÄŸer API Key ve Secret varsa resmi endpoint'ten token almaya Ã§alÄ±ÅŸ
             if (_shipEntegraApiClient != null && !string.IsNullOrWhiteSpace(settings.ApiKey) && !string.IsNullOrWhiteSpace(settings.ApiSecret))
             {
                 try
@@ -289,26 +291,67 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                             settings.RefreshTokenLastUpdatedUtc = DateTime.UtcNow;
                         }
                     }
+                    else
+                    {
+                        authWarning = "API AnahtarlarÄ±nÄ±z kaydedildi ancak ShipEntegra 'Yetkisiz API istemcisi (ERR.12015.1035)' yanÄ±tÄ± verdi. ShipEntegra panelinden API yetkinizi kontrol ediniz veya doÄŸrudan web oturum token'Ä±nÄ±zÄ± giriniz.";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    authWarning = $"API AnahtarÄ± ile token alÄ±nÄ±rken hata oluÅŸtu: {ex.Message}";
+                }
+            }
+
+            // EÄŸer token yoksa veya sÃ¼resi dolmuÅŸsa ve e-posta/ÅŸifre varsa LoginAsync dene
+            if ((string.IsNullOrWhiteSpace(settings.BearerToken) || JwtTokenInspector.IsExpired(settings.CleanToken)) &&
+                _shipEntegraApiClient != null && !string.IsNullOrWhiteSpace(settings.SavedEmail) && !string.IsNullOrWhiteSpace(settings.EncryptedPassword))
+            {
+                try
+                {
+                    var tokens = await _shipEntegraApiClient.LoginAsync(settings.SavedEmail, settings.EncryptedPassword, cancellationToken);
+                    if (tokens != null && !string.IsNullOrWhiteSpace(tokens.AccessToken))
+                    {
+                        settings.BearerToken = tokens.AccessToken;
+                        settings.TokenLastUpdatedUtc = DateTime.UtcNow;
+                        if (!string.IsNullOrWhiteSpace(tokens.RefreshToken))
+                        {
+                            settings.RefreshToken = tokens.RefreshToken;
+                            settings.RefreshTokenLastUpdatedUtc = DateTime.UtcNow;
+                        }
+                        authWarning = null;
+                    }
                 }
                 catch { }
             }
 
             ShipEntegraSettingsStore.Save(settings);
 
-            bool isConnected = settings.HasValidTokenFormat || (!string.IsNullOrWhiteSpace(settings.ApiKey) && !string.IsNullOrWhiteSpace(settings.ApiSecret));
+            bool isConnected = settings.HasValidTokenFormat;
             string? snippet = settings.HasValidTokenFormat
                 ? (settings.CleanToken.Length > 8 ? settings.CleanToken[..4] + "..." + settings.CleanToken[^4..] : "***")
                 : (!string.IsNullOrWhiteSpace(settings.ApiKey) ? settings.ApiKey[..4] + "..." : null);
 
+            string message;
+            if (isConnected)
+            {
+                message = "ShipEntegra baÄŸlantÄ±sÄ± ve aktif oturum token'Ä± baÅŸarÄ±yla kaydedildi ve doÄŸrulandÄ±.";
+            }
+            else if (!string.IsNullOrWhiteSpace(authWarning))
+            {
+                message = authWarning;
+            }
+            else
+            {
+                message = "ShipEntegra ayarlarÄ± kaydedildi ancak geÃ§erli bir oturum token'Ä± bulunamadÄ±. LÃ¼tfen geÃ§erli bir web oturum token'Ä± giriniz.";
+            }
+
             return new ConnectCarrierResult
             {
-                Success = true,
+                Success = isConnected || !string.IsNullOrWhiteSpace(settings.ApiKey) || !string.IsNullOrWhiteSpace(settings.SavedEmail),
                 CarrierKey = "shipentegra",
                 IsConnected = isConnected,
                 TokenSnippet = snippet,
-                Message = isConnected
-                    ? "ShipEntegra bağlantısı başarıyla kaydedildi ve doğrulandı."
-                    : "ShipEntegra ayarları kaydedildi. Lütfen geçerli bir token veya API anahtarı sağlayın."
+                Message = message
             };
         }
 
@@ -506,7 +549,9 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         // 2. ShipEntegra
         var se = ShipEntegraSettingsStore.Load();
         string seClean = se.CleanToken;
-        bool seConnected = se.HasValidTokenFormat || (!string.IsNullOrWhiteSpace(se.ApiKey) && !string.IsNullOrWhiteSpace(se.ApiSecret));
+        DateTime? seExpiry = JwtTokenInspector.GetExpirationUtc(seClean);
+        bool seIsExpired = seExpiry.HasValue ? DateTime.UtcNow >= seExpiry.Value : (string.IsNullOrWhiteSpace(seClean) || seClean.Length <= 20);
+        bool seConnected = !string.IsNullOrWhiteSpace(seClean) && !seIsExpired;
         list.Add(new CarrierSessionStatusDto
         {
             CarrierKey = "shipentegra",
