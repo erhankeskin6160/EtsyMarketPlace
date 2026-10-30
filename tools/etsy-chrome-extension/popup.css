@@ -7,7 +7,7 @@
 }
 
 body {
-  width: 380px;
+  width: 440px;
   min-height: 520px;
   background: #090d16;
   color: #f1f5f9;
@@ -251,7 +251,7 @@ body {
 }
 
 .order-list-container {
-  max-height: 190px;
+  max-height: 220px;
   overflow-y: auto;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -266,12 +266,32 @@ body {
   background: #1e293b;
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 6px;
-  padding: 7px 9px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  font-size: 11px;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.order-item-card:hover {
+  background: #273549;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.order-item-card.expanded {
+  background: #192338;
+  border-color: rgba(56, 189, 248, 0.4);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.order-card-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  font-size: 11px;
   gap: 8px;
+  width: 100%;
 }
 
 .order-item-card .order-id {
@@ -283,6 +303,105 @@ body {
 .order-item-card .buyer-name {
   color: #ffffff;
   font-weight: 600;
+}
+
+.order-toggle-icon {
+  font-size: 9px;
+  color: #94a3b8;
+  transition: transform 0.2s ease;
+  margin-left: 4px;
+}
+
+.order-item-card.expanded .order-toggle-icon {
+  transform: rotate(180deg);
+  color: #38bdf8;
+}
+
+/* Expanded Diagnostics & Full Details Pane */
+.order-details-pane {
+  display: none;
+  background: rgba(15, 23, 42, 0.95);
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  padding: 9px 10px;
+  margin-top: 4px;
+  animation: fadeInPane 0.2s ease-out;
+}
+
+.order-item-card.expanded .order-details-pane {
+  display: block;
+}
+
+@keyframes fadeInPane {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.diag-grid {
+  display: grid;
+  grid-template-columns: 85px 1fr;
+  row-gap: 4px;
+  font-size: 10px;
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+
+.diag-lbl {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.diag-val {
+  color: #f1f5f9;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.diag-val.highlight {
+  color: #34d399;
+  font-weight: 700;
+}
+
+.diag-source-box {
+  background: rgba(2, 6, 23, 0.85);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 9.5px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.diag-source-header {
+  font-weight: 700;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+
+.btn-card-copy {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #cbd5e1;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.btn-card-copy:hover {
+  background: #334155;
+  color: #ffffff;
+  border-color: #38bdf8;
 }
 
 .empty-state {

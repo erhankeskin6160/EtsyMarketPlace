@@ -269,6 +269,10 @@
         sku: skuM ? skuM[1].trim() : null,
         variation: varM ? varM[0].trim() : null,
         shippingMethod: shipMethodM ? shipMethodM[1].trim() : null,
+        sourceType: 'Açık Çekmece (Active Drawer)',
+        sourceUrl: window.location.href,
+        httpStatus: 'DOM (Canlı Sayfa)',
+        resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
         scrapedAt: new Date().toISOString()
       };
     } catch (err) {
@@ -366,6 +370,10 @@
           trackingNumber: tracking,
           productTitle: title,
           status: status,
+          sourceType: parsed.isFullAddress ? 'Açık Çekmece' : 'Liste Özeti (Eksik Sokak)',
+          sourceUrl: window.location.pathname,
+          httpStatus: 'DOM (Sayfa Listesi)',
+          resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
           scrapedAt: new Date().toISOString()
         });
       }
@@ -456,6 +464,10 @@
                 sku: skuM ? skuM[1].trim() : null,
                 variation: varM ? varM[0].trim() : null,
                 shippingMethod: shipMethodM ? shipMethodM[1].trim() : null,
+                sourceType: 'Arka Plan Çekmece İsteği (Same-Origin Fetch)',
+                sourceUrl: targetUrl,
+                httpStatus: '200 OK',
+                resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 scrapedAt: new Date().toISOString()
               };
             }

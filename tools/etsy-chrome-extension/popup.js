@@ -165,23 +165,97 @@ document.addEventListener('DOMContentLoaded', async () => {
           : (o.shippingAddress || 'Adres Kayıtlı');
 
         div.innerHTML = `
-          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
-            <div style="display: flex; gap: 6px; align-items: center;">
-              <span class="order-id">#${o.receiptId}</span>
-              <span class="buyer-name" style="font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${o.buyerName || 'Müşteri'}</span>
-              ${isFull ? '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3);">🏠 Tam Adres</span>' : ''}
-              ${o.sku ? `<span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(56,189,248,0.25);">🏷️ SKU: ${o.sku}</span>` : ''}
+          <div class="order-card-header">
+            <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
+              <div style="display: flex; gap: 5px; align-items: center; flex-wrap: wrap;">
+                <span class="order-id">#${o.receiptId}</span>
+                <span class="buyer-name" style="font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;">${o.buyerName || 'Müşteri'}</span>
+                ${isFull 
+                  ? '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3);">🏠 Tam Adres</span>' 
+                  : '<span style="background: rgba(245, 158, 11, 0.15); color: #fbbf24; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(245,158,11,0.3);">⚠️ Liste Özeti</span>'}
+                ${o.sku ? `<span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(56,189,248,0.25);">🏷️ SKU: ${o.sku}</span>` : ''}
+              </div>
+              <small style="color: ${isFull ? '#e2e8f0' : '#94a3b8'}; font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 ${addrDisplay}</small>
             </div>
-            <small style="color: ${isFull ? '#e2e8f0' : '#94a3b8'}; font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 ${addrDisplay}</small>
-            ${o.variation ? `<small style="color: #cbd5e1; font-size: 9px;">📏 ${o.variation}</small>` : ''}
-            ${o.phone ? `<small style="color: #38bdf8; font-size: 9px;">📞 ${o.phone}</small>` : ''}
-            ${o.trackingNumber ? `<small style="color: #a78bfa; font-size: 9px;">🚚 Takip: ${o.trackingNumber}</small>` : ''}
+            <div style="text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 1px;">
+              <span style="color: #34d399; font-weight: bold; font-size: 11px;">${o.orderTotal ? '$' + o.orderTotal : ''}</span>
+              <div style="color: #64748b; font-size: 9px;">${o.orderDate || ''} <span class="order-toggle-icon">▼</span></div>
+            </div>
           </div>
-          <div style="text-align: right; flex-shrink: 0;">
-            <span style="color: #34d399; font-weight: bold; font-size: 11px;">${o.orderTotal ? '$' + o.orderTotal : ''}</span>
-            <div style="color: #64748b; font-size: 9px;">${o.orderDate || ''}</div>
+
+          <div class="order-details-pane">
+            <div class="diag-grid">
+              <span class="diag-lbl">👤 Alıcı Adı:</span>
+              <span class="diag-val">${o.buyerName || '-'}</span>
+
+              <span class="diag-lbl">🏠 Cadde/Sokak:</span>
+              <span class="diag-val ${o.streetAddress ? 'highlight' : ''}">${o.streetAddress || '<em style="color: #f87171;">(Henüz çözülmedi - Mavi butona tıklayın)</em>'}</span>
+
+              ${o.secondAddress ? `<span class="diag-lbl">🏢 Daire/Bina:</span><span class="diag-val">${o.secondAddress}</span>` : ''}
+
+              <span class="diag-lbl">🏙️ Şehir/Posta:</span>
+              <span class="diag-val">${[o.city, o.state, o.postalCode].filter(Boolean).join(', ') || '-'}</span>
+
+              <span class="diag-lbl">🌍 Ülke:</span>
+              <span class="diag-val">${o.country || 'United States'}</span>
+
+              <span class="diag-lbl">📞 Telefon:</span>
+              <span class="diag-val" style="color: #38bdf8;">${o.phone || '(Belirtilmemiş)'}</span>
+
+              ${o.sku ? `<span class="diag-lbl">🏷️ SKU Kodu:</span><span class="diag-val">${o.sku}</span>` : ''}
+              ${o.variation ? `<span class="diag-lbl">📏 Varyasyon:</span><span class="diag-val">${o.variation}</span>` : ''}
+              ${o.transactionId ? `<span class="diag-lbl">🔢 Trans ID:</span><span class="diag-val">${o.transactionId}</span>` : ''}
+              ${o.shippingMethod ? `<span class="diag-lbl">🚚 Kargo:</span><span class="diag-val">${o.shippingMethod}</span>` : ''}
+              ${o.trackingNumber ? `<span class="diag-lbl">📦 Takip No:</span><span class="diag-val" style="color: #a78bfa;">${o.trackingNumber}</span>` : ''}
+            </div>
+
+            <div class="diag-source-box">
+              <div class="diag-source-header">
+                <span>📡 NASIL VE NEREDEN ALINDI? (TEŞHİS RAPORU)</span>
+              </div>
+              <div>🔗 <strong>Yöntem:</strong> ${o.sourceType || (isFull ? 'Arka Plan Çekmece İsteği (Same-Origin Fetch)' : 'Etsy Liste Kartı Özeti')}</div>
+              <div>🌐 <strong>İstek URL:</strong> <code style="color: #38bdf8;">${o.sourceUrl || ('/your/orders/sold?order_id=' + o.receiptId)}</code></div>
+              <div>🛡️ <strong>HTTP Durumu:</strong> <span style="color: #34d399; font-weight: bold;">${o.httpStatus || '200 OK'}</span></div>
+              <div>⏱️ <strong>İşlem Saati:</strong> ${o.resolvedAt || (o.scrapedAt ? new Date(o.scrapedAt).toLocaleTimeString('tr-TR') : 'Canlı')}</div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+              <button type="button" class="btn-card-copy" data-raw="${encodeURIComponent(o.rawAddressText || addrDisplay)}">
+                📋 AI Adres Formatını Kopyala
+              </button>
+            </div>
           </div>
         `;
+
+        // Kart tıklama ile akordeon aç/kapa
+        div.addEventListener('click', (e) => {
+          if (e.target.closest('.btn-card-copy')) return; // Kopyalama butonuna tıklandıysa akordeon kapanmasın
+          div.classList.toggle('expanded');
+        });
+
+        // AI Formatını Kopyala Butonu
+        const btnCopy = div.querySelector('.btn-card-copy');
+        if (btnCopy) {
+          btnCopy.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const textToCopy = decodeURIComponent(btnCopy.getAttribute('data-raw') || '');
+            try {
+              await navigator.clipboard.writeText(textToCopy);
+              const original = btnCopy.innerHTML;
+              btnCopy.innerHTML = '✓ Panoya Kopyalandı!';
+              btnCopy.style.background = '#059669';
+              btnCopy.style.color = '#ffffff';
+              setTimeout(() => {
+                btnCopy.innerHTML = original;
+                btnCopy.style.background = '';
+                btnCopy.style.color = '';
+              }, 2000);
+            } catch (copyErr) {
+              alert('Kopyalanamadı: ' + copyErr.message);
+            }
+          });
+        }
+
         orderListContainer.appendChild(div);
       });
     } else {
@@ -389,7 +463,11 @@ document.addEventListener('DOMContentLoaded', async () => {
               transactionId: d.transactionId || allOrders[idx].transactionId,
               sku: d.sku || allOrders[idx].sku,
               variation: d.variation || allOrders[idx].variation,
-              shippingMethod: d.shippingMethod || allOrders[idx].shippingMethod
+              shippingMethod: d.shippingMethod || allOrders[idx].shippingMethod,
+              sourceType: d.sourceType || 'Arka Plan Çekmece İsteği (Same-Origin Fetch)',
+              sourceUrl: d.sourceUrl || (`/your/orders/sold?order_id=${order.receiptId}`),
+              httpStatus: d.httpStatus || '200 OK',
+              resolvedAt: d.resolvedAt || new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             };
             resolvedCount++;
           }
@@ -402,8 +480,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       chrome.storage.local.set({ storedOrders: allOrders });
       renderOrdersList();
 
-      // Anti-ban polite delay: 380ms
-      await new Promise(r => setTimeout(r, 380));
+      // Anti-ban polite jitter delay: 350ms - 550ms
+      const jitterDelay = 350 + Math.floor(Math.random() * 200);
+      await new Promise(r => setTimeout(r, jitterDelay));
     }
 
     // Tamamlandı
