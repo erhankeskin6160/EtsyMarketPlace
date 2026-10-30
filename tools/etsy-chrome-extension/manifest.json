@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Etsy MarketPlace Satıcı Asistanı (Copilot)",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Etsy Mağazası için Fon Rezervi Senkronizasyonu, Sipariş ve Müşteri Kargo Bilgisi Aktarıcısı (VDS Köprüsü)",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
     "*://*.etsy.com/*",

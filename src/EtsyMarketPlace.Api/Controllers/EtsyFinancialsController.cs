@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Api.Services;
@@ -401,6 +402,7 @@ public class EtsyFinancialsController : BaseApiController
     }
 
     [HttpGet("etsy/financial/payment-reserve-snapshot")]
+    [AllowAnonymous]
     [EndpointSummary("Etsy Canlı Ödeme Rezervi ve Bakiye Durumunu Getir")]
     public async Task<IActionResult> GetPaymentReserveSnapshot(
         [FromQuery] string shopId = "53236321",
@@ -412,6 +414,7 @@ public class EtsyFinancialsController : BaseApiController
     }
 
     [HttpPost("etsy/financial/payment-reserve-snapshot")]
+    [AllowAnonymous]
     [EndpointSummary("Etsy Canlı Ödeme Rezervi ve Bakiye Durumunu Kaydet / Senkronize Et")]
     public async Task<IActionResult> SavePaymentReserveSnapshot(
         [FromBody] EtsyPaymentReserveSnapshotDto snapshot,
@@ -422,5 +425,55 @@ public class EtsyFinancialsController : BaseApiController
         var normalized = snapshot with { ShopId = resolvedShopId, UpdatedAt = DateTimeOffset.UtcNow };
         var response = await _mediator.Send(new SavePaymentReserveSnapshotCommand(normalized), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+
+    public record ExtensionOrderSyncItem(
+        string ReceiptId,
+        string BuyerName,
+        string? ShippingAddress,
+        string? ProductTitle,
+        decimal? OrderTotal,
+        string? Currency,
+        string? TrackingCode);
+
+    public record ExtensionOrdersSyncRequest(
+        string ShopId,
+        IReadOnlyList<ExtensionOrderSyncItem> Orders);
+
+    [HttpPost("etsy/orders/sync-from-extension")]
+    [AllowAnonymous]
+    [EndpointSummary("Chrome Extension üzerinden Sipariş ve Müşteri Bilgilerini Kaydet")]
+    public async Task<IActionResult> SyncOrdersFromExtension(
+        [FromBody] ExtensionOrdersSyncRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request?.Orders == null || request.Orders.Count == 0)
+            return BadRequest(new { error = "Sipariş listesi boş olamaz." });
+
+        var resolvedShopId = ResolveShopId(request.ShopId, _config);
+        var updated = 0;
+
+        foreach (var order in request.Orders)
+        {
+            if (!string.IsNullOrWhiteSpace(order.ReceiptId))
+            {
+                var note = $"Müşteri: {order.BuyerName}";
+                if (!string.IsNullOrWhiteSpace(order.ShippingAddress))
+                    note += $" | Adres: {order.ShippingAddress}";
+
+                await _repository.UpsertOrderCostAsync(
+                    resolvedShopId,
+                    order.ReceiptId,
+                    null,
+                    null,
+                    null,
+                    note,
+                    cancellationToken);
+                updated++;
+            }
+        }
+
+        return Ok(new { success = true, updatedCount = updated, message = $"{updated} sipariş VDS'e başarıyla aktarıldı." });
     }
 }

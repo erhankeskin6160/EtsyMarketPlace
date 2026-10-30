@@ -4,8 +4,6 @@
 (function () {
   'use strict';
 
-  console.log('🛡️ Etsy MarketPlace Copilot Content Script devrede.');
-
   // Sayfa Türünü Belirleme
   function getPageType() {
     const url = window.location.href;
@@ -78,114 +76,83 @@
     }
   }
 
-  // 2. SİPARİŞ & MÜŞTERİ ADI / ADRES BİLGİSİNİ OKUMA
+  // 2. SİPARİŞ & MÜŞTERİ ADI / ADRES BİLGİSİNİ OKUMA (Gelişmiş Algoritma)
   function parseOrdersOnPage() {
     const orders = [];
     try {
-      // Etsy sipariş paneli kartları / satırları
-      const orderElements = document.querySelectorAll(
-        '[data-receipt-id], [data-order-id], .panel-body-row, .receipt-label-panel, tr[data-testid="order-row"]'
-      );
+      const text = document.body.innerText;
 
-      if (orderElements && orderElements.length > 0) {
-        orderElements.forEach((el) => {
-          const receiptId = el.getAttribute('data-receipt-id') || el.getAttribute('data-order-id') || '';
-          const text = el.innerText;
+      // Desen 1: Sipariş Numarası ve Etsy ibaresi (Örn: 43855798710 (Etsy))
+      const orderRegex = /(\d{9,12})\s*(?:\(Etsy\)|#)/g;
+      let match;
+      while ((match = orderRegex.exec(text)) !== null) {
+        const id = match[1];
+        if (orders.some(o => o.receiptId === id)) continue;
 
-          // Müşteri adı tespiti
-          const customerMatch = text.match(/Ship to\s*[\r\n]+([^\n\r]+)/i) 
-                             || text.match(/Buyer:\s*([^\n\r]+)/i)
-                             || text.match(/Müşteri:\s*([^\n\r]+)/i);
+        const startIndex = Math.max(0, match.index - 150);
+        const endIndex = Math.min(text.length, match.index + 600);
+        const block = text.substring(startIndex, endIndex);
 
-          const buyerName = customerMatch ? customerMatch[1].trim() : 'Bilinmeyen Müşteri';
+        // Müşteri Adı ve Adresi
+        const shipToMatch = block.match(/Ship to\s*[\r\n]+([^\n\r]+)(?:[\r\n]+([^\n\r]+))?/i);
+        let buyerName = shipToMatch ? shipToMatch[1].trim() : '';
+        let address = shipToMatch && shipToMatch[2] ? shipToMatch[2].trim() : '';
 
-          // Sipariş no
-          const idMatch = text.match(/#\s*(\d{8,12})/);
-          const finalId = receiptId || (idMatch ? idMatch[1] : '');
+        // Eğer Ship to bloğu bulunamazsa üst satırlardaki müşteri ismini ara
+        if (!buyerName || buyerName.length < 2) {
+          const nameBeforeId = block.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)[\s\r\n]+\d{9,12}/);
+          buyerName = nameBeforeId ? nameBeforeId[1].trim() : 'Etsy Müşterisi';
+        }
 
-          if (finalId) {
-            orders.push({
-              receiptId: finalId,
-              buyerName: buyerName,
-              summary: text.substring(0, 180),
-              scrapedAt: new Date().toISOString()
-            });
-          }
+        // Tutar
+        const totalMatch = block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
+        const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : null;
+
+        // Kargo Takip Kodu
+        const trackMatch = block.match(/(\d{12,24})[\s\r\n]+Shipped/i)
+                        || block.match(/Shipped[\s\r\n]+(\d{12,24})/i);
+        const tracking = trackMatch ? trackMatch[1].trim() : null;
+
+        // Ürün Adı
+        const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
+                        || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
+        const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
+
+        orders.push({
+          receiptId: id,
+          buyerName: buyerName,
+          shippingAddress: address,
+          orderTotal: total,
+          trackingNumber: tracking,
+          productTitle: title,
+          scrapedAt: new Date().toISOString()
         });
       }
 
-      // Yedek: Eğer spesifik DOM kartları bulunamazsa sayfa genelindeki sipariş no ve müşteri desenlerini tara
-      if (orders.length === 0) {
-        const bodyText = document.body.innerText;
-        const matches = [...bodyText.matchAll(/#\s*(\d{10})/g)];
-        matches.forEach((m) => {
-          const id = m[1];
-          if (!orders.some(o => o.receiptId === id)) {
-            orders.push({
-              receiptId: id,
-              buyerName: 'Etsy Müşterisi',
-              summary: 'Sipariş No: #' + id,
-              scrapedAt: new Date().toISOString()
-            });
-          }
-        });
-      }
+      // Desen 2: Standart linkler (a[href*="order_id="])
+      const orderLinks = document.querySelectorAll('a[href*="order_id="]');
+      orderLinks.forEach(link => {
+        const href = link.getAttribute('href') || '';
+        const m = href.match(/order_id=(\d+)/);
+        if (m && !orders.some(o => o.receiptId === m[1])) {
+          orders.push({
+            receiptId: m[1],
+            buyerName: link.innerText.trim() || 'Etsy Müşterisi',
+            shippingAddress: '',
+            orderTotal: null,
+            trackingNumber: null,
+            productTitle: 'Etsy Siparişi',
+            scrapedAt: new Date().toISOString()
+          });
+        }
+      });
     } catch (err) {
       console.error('Siparişler okunamadı:', err);
     }
     return orders;
   }
 
-  // 3. ETİKETLERİ VE SİPARİŞ KARTLARINA BUTON ENJEKTE ETME (İsteğe bağlı konfor)
-  function injectOrderActionButtons() {
-    if (getPageType() !== 'orders') return;
-
-    const cards = document.querySelectorAll('[data-receipt-id], .receipt-label-panel');
-    cards.forEach((card) => {
-      if (card.querySelector('.etsy-copilot-btn')) return;
-
-      const receiptId = card.getAttribute('data-receipt-id') || '';
-      const btn = document.createElement('button');
-      btn.className = 'etsy-copilot-btn';
-      btn.innerText = '⚡ VDS\'e Aktar';
-      btn.style.cssText = 'background: #4f46e5; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer; margin: 4px;';
-
-      btn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        btn.innerText = '⏳ Aktarılıyor...';
-
-        const customerText = card.innerText;
-        const customerMatch = customerText.match(/Ship to\s*[\r\n]+([^\n\r]+)/i);
-        const buyer = customerMatch ? customerMatch[1].trim() : 'Müşteri';
-
-        try {
-          const response = await fetch('http://localhost:5263/api/etsy/orders/' + receiptId + '/cost?shopId=53236321', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ notes: `VDS Copilot ile aktarıldı: ${buyer}` })
-          });
-          if (response.ok) {
-            btn.innerText = '✅ VDS\'te!';
-            btn.style.background = '#10b981';
-          } else {
-            btn.innerText = '⚠️ Hata';
-            btn.style.background = '#ef4444';
-          }
-        } catch (err) {
-          btn.innerText = '⚠️ Bağlantı Yok';
-          btn.style.background = '#f59e0b';
-        }
-      });
-
-      card.appendChild(btn);
-    });
-  }
-
-  // Sayfa yüklendiğinde butonları ekle
-  setTimeout(injectOrderActionButtons, 2000);
-
-  // Mesaj Dinleyici (Popup veya Background ile iletişim)
+  // 3. MESAJ DİNLEYİCİ
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const pageType = getPageType();
 

@@ -53,12 +53,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       const response = await fetch(`${config.apiUrl}/api/etsy/financial/payment-reserve-snapshot?shopId=${config.shopId}`, {
         method: 'GET'
       });
-      if (response.ok) {
+      // 200 veya 401 dahi gelse sunucu oradadır ve Kestrel çalışıyordur
+      if (response.status === 200 || response.status === 401) {
         apiStatusPill.className = 'api-status-pill';
         apiStatusText.innerText = 'VDS Canlı';
         return true;
       } else {
-        throw new Error('API Yanıt Vermedi');
+        throw new Error('HTTP ' + response.status);
       }
     } catch (err) {
       apiStatusPill.className = 'api-status-pill error';
@@ -94,56 +95,82 @@ document.addEventListener('DOMContentLoaded', async () => {
   let scrapedFinance = null;
   let scrapedOrders = [];
 
-  if (activeTab && activeTab.url && activeTab.url.includes('etsy.com')) {
-    chrome.tabs.sendMessage(activeTab.id, { action: 'GET_PAGE_DATA' }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.success) {
-        finDetectBanner.innerText = '⚠️ Sayfa algılanamadı veya Etsy sekmesinde değilsiniz.';
-        ordDetectBanner.innerText = '⚠️ Etsy Sipariş sekmesi algılanamadı.';
-        return;
-      }
+  async function loadDataFromPage() {
+    if (!activeTab || !activeTab.url || !activeTab.url.includes('etsy.com')) {
+      finDetectBanner.innerText = '⚠️ Lütfen Etsy Mağaza sekmesini açın.';
+      ordDetectBanner.innerText = '⚠️ Lütfen Etsy Mağaza sekmesini açın.';
+      return;
+    }
 
-      // Finans Sekmesindeyse
-      if (response.pageType === 'finance' && response.financeData) {
-        scrapedFinance = response.financeData;
-        finCurrent.innerText = `${scrapedFinance.currentBalanceTry} ₺`;
-        finReserve.innerText = `${scrapedFinance.pendingBalanceTry} ₺`;
-        finTotal.innerText = `${scrapedFinance.totalFundsTry} ₺`;
-        finPct.innerText = `%${scrapedFinance.reservePercent}`;
-        finDate.innerText = scrapedFinance.reevaluationDate;
-
-        finDetectBanner.className = 'page-detect-banner success';
-        finDetectBanner.innerText = '✅ Etsy Ödeme Hesabı algılandı! Veriler hazır.';
-      } else if (response.pageType !== 'finance') {
-        finDetectBanner.innerText = 'ℹ️ Etsy Ödeme / Finans sayfasında değilsiniz.';
-      }
-
-      // Siparişler Sekmesindeyse
-      if (response.pageType === 'orders' && response.ordersData) {
-        scrapedOrders = response.ordersData;
-        orderCount.innerText = scrapedOrders.length;
-        ordDetectBanner.className = 'page-detect-banner success';
-        ordDetectBanner.innerText = `✅ Etsy Siparişler sayfası algılandı (${scrapedOrders.length} sipariş bulundu).`;
-
-        if (scrapedOrders.length > 0) {
-          orderListContainer.innerHTML = '';
-          scrapedOrders.forEach((o) => {
-            const div = document.createElement('div');
-            div.className = 'order-item-card';
-            div.innerHTML = `
-              <span class="order-id">#${o.receiptId}</span>
-              <span class="buyer-name">${o.buyerName}</span>
-            `;
-            orderListContainer.appendChild(div);
-          });
+    // Mesaj göndermeyi dene; başarısız olursa content.js'i sayfaya programatik olarak enjekte et ve tekrar dene
+    function queryContentScript() {
+      chrome.tabs.sendMessage(activeTab.id, { action: 'GET_PAGE_DATA' }, async (response) => {
+        if (chrome.runtime.lastError || !response || !response.success) {
+          // Sayfaya henüz content script enjekte edilmemiş olabilir (sayfa yenilenmediyse)
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: activeTab.id },
+              files: ['content.js']
+            });
+            // Tekrar dene
+            setTimeout(queryContentScript, 300);
+          } catch (scriptErr) {
+            finDetectBanner.innerText = '⚠️ Sayfa algılanamadı. Lütfen Etsy sekmesini 1 kez yenileyin (F5).';
+            ordDetectBanner.innerText = '⚠️ Sayfa algılanamadı. Lütfen Etsy sekmesini 1 kez yenileyin (F5).';
+          }
+          return;
         }
-      } else if (response.pageType !== 'orders') {
-        ordDetectBanner.innerText = 'ℹ️ Etsy Siparişler sayfasında değilsiniz.';
-      }
-    });
-  } else {
-    finDetectBanner.innerText = '⚠️ Lütfen Etsy Mağaza sekmesini açın.';
-    ordDetectBanner.innerText = '⚠️ Lütfen Etsy Mağaza sekmesini açın.';
+
+        // Finans Sekmesindeyse
+        if (response.pageType === 'finance' && response.financeData) {
+          scrapedFinance = response.financeData;
+          finCurrent.innerText = `${scrapedFinance.currentBalanceTry} ₺`;
+          finReserve.innerText = `${scrapedFinance.pendingBalanceTry} ₺`;
+          finTotal.innerText = `${scrapedFinance.totalFundsTry} ₺`;
+          finPct.innerText = `%${scrapedFinance.reservePercent}`;
+          finDate.innerText = scrapedFinance.reevaluationDate;
+
+          finDetectBanner.className = 'page-detect-banner success';
+          finDetectBanner.innerText = '✅ Etsy Ödeme Hesabı algılandı! Veriler hazır.';
+        } else if (response.pageType !== 'finance') {
+          finDetectBanner.innerText = 'ℹ️ Etsy Ödeme / Finans sayfasında değilsiniz.';
+        }
+
+        // Siparişler Sekmesindeyse
+        if (response.pageType === 'orders' && response.ordersData) {
+          scrapedOrders = response.ordersData;
+          orderCount.innerText = scrapedOrders.length;
+          ordDetectBanner.className = 'page-detect-banner success';
+          ordDetectBanner.innerText = `✅ Etsy Siparişler sayfası algılandı (${scrapedOrders.length} sipariş bulundu).`;
+
+          if (scrapedOrders.length > 0) {
+            orderListContainer.innerHTML = '';
+            scrapedOrders.forEach((o) => {
+              const div = document.createElement('div');
+              div.className = 'order-item-card';
+              div.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 2px;">
+                  <span class="order-id">#${o.receiptId}</span>
+                  <span class="buyer-name" style="font-size: 11px; font-weight: bold;">👤 ${o.buyerName}</span>
+                  <small style="color: #94a3b8; font-size: 9.5px;">📍 ${o.shippingAddress || 'Adres hazır'}</small>
+                </div>
+                <div style="text-align: right;">
+                  <span style="color: #34d399; font-weight: bold; font-size: 11px;">${o.orderTotal ? '$' + o.orderTotal : ''}</span>
+                </div>
+              `;
+              orderListContainer.appendChild(div);
+            });
+          }
+        } else if (response.pageType !== 'orders') {
+          ordDetectBanner.innerText = 'ℹ️ Etsy Siparişler sayfasında değilsiniz.';
+        }
+      });
+    }
+
+    queryContentScript();
   }
+
+  await loadDataFromPage();
 
   // 5. FİNANS SENKRONİZASYON BUTONU
   btnSyncFinance.addEventListener('click', async () => {
@@ -200,26 +227,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnSyncOrders.innerText = '⏳ Siparişler Aktarılıyor...';
     ordResultBox.style.display = 'none';
 
-    let successCount = 0;
-    for (const order of scrapedOrders) {
-      try {
-        const res = await fetch(`${config.apiUrl}/api/etsy/orders/${order.receiptId}/cost?shopId=${config.shopId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ notes: `VDS Copilot: ${order.buyerName}` })
-        });
-        if (res.ok) successCount++;
-      } catch (err) {
-        console.error('Sipariş aktarma hatası:', err);
+    try {
+      const payload = {
+        shopId: config.shopId,
+        orders: scrapedOrders
+      };
+
+      const res = await fetch(`${config.apiUrl}/api/etsy/orders/sync-from-extension`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        ordResultBox.className = 'result-box success';
+        ordResultBox.innerText = `✅ ${data.updatedCount || scrapedOrders.length} sipariş ve müşteri VDS'e başarıyla aktarıldı!`;
+      } else {
+        // Fallback: tek tek maliyet endpoint'ine yolla
+        let successCount = 0;
+        for (const order of scrapedOrders) {
+          const singleRes = await fetch(`${config.apiUrl}/api/etsy/orders/${order.receiptId}/cost?shopId=${config.shopId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ notes: `Müşteri: ${order.buyerName} | Adres: ${order.shippingAddress}` })
+          });
+          if (singleRes.ok) successCount++;
+        }
+        ordResultBox.className = successCount > 0 ? 'result-box success' : 'result-box error';
+        ordResultBox.innerText = `✅ ${successCount} / ${scrapedOrders.length} sipariş VDS'e aktarıldı!`;
       }
+    } catch (err) {
+      ordResultBox.className = 'result-box error';
+      ordResultBox.innerText = `⚠️ Hata: ${err.message}`;
+    } finally {
+      ordResultBox.style.display = 'block';
+      btnSyncOrders.disabled = false;
+      btnSyncOrders.innerText = '📥 Müşteri & Siparişleri VDS\'e Aktar';
     }
-
-    ordResultBox.className = successCount > 0 ? 'result-box success' : 'result-box error';
-    ordResultBox.innerText = `✅ ${successCount} / ${scrapedOrders.length} sipariş VDS'e başarıyla aktarıldı!`;
-    ordResultBox.style.display = 'block';
-
-    btnSyncOrders.disabled = false;
-    btnSyncOrders.innerText = '📥 Müşteri & Siparişleri VDS\'e Aktar';
   });
 
   // 7. AYARLARI KAYDET BUTONU
@@ -231,7 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.set({ apiUrl: newApi, shopId: newShop, autoSync: newAuto }, () => {
       config = { apiUrl: newApi, shopId: newShop, autoSync: newAuto };
       setResultBox.className = 'result-box success';
-      setResultBox.innerText = '✅ Ayarlar başarıyla kaydedildi!';
+      setResultBox.innerText = '✅ Ayarlar kaydedildi!';
       setResultBox.style.display = 'block';
       checkApiHealth();
       setTimeout(() => { setResultBox.style.display = 'none'; }, 2500);
