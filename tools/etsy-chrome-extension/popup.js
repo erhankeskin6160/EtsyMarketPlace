@@ -45,15 +45,35 @@ document.addEventListener('DOMContentLoaded', async () => {
   const btnUsePublicIp = document.getElementById('btnUsePublicIp');
   const setResultBox = document.getElementById('setResultBox');
 
-  // 1. AYARLARI VE HAFIZAYI YÜKLE
+  // 1. AYARLARI VE HAFIZAYI YÜKLE & KİRLİ HAFIZAYI TEMİZLE (Sanitize)
   let config = await new Promise((resolve) => {
     chrome.storage.local.get(['apiUrl', 'apiKey', 'shopId', 'autoSync', 'storedOrders'], (res) => {
+      const rawStored = Array.isArray(res.storedOrders) ? res.storedOrders : [];
+      // SADECE 10 HANELİ KANONİK ETSY SİPARİŞ NUMARALARINI TUT
+      // 11 haneli sahte ID'leri ve duplikeleri ayıkla
+      const cleanMap = new Map();
+      rawStored.forEach(o => {
+        const id = String(o.receiptId || '').trim();
+        if (/^\d{10}$/.test(id)) {
+          if (!cleanMap.has(id)) {
+            cleanMap.set(id, o);
+          } else {
+            const ex = cleanMap.get(id);
+            if (!ex.isFullAddress && o.isFullAddress) {
+              cleanMap.set(id, o);
+            }
+          }
+        }
+      });
+      const cleanStored = Array.from(cleanMap.values());
+      chrome.storage.local.set({ storedOrders: cleanStored });
+
       resolve({
         apiUrl: res.apiUrl || 'http://localhost:5263',
         apiKey: res.apiKey || 'etsy-vds-sync-key-2026',
         shopId: res.shopId || '53236321',
         autoSync: !!res.autoSync,
-        storedOrders: Array.isArray(res.storedOrders) ? res.storedOrders : []
+        storedOrders: cleanStored
       });
     });
   });
@@ -226,7 +246,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               <div>⏱️ <strong>İşlem Saati:</strong> ${o.resolvedAt || (o.scrapedAt ? new Date(o.scrapedAt).toLocaleTimeString('tr-TR') : 'Canlı')}</div>
             </div>
 
-            <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+            <div style="display: flex; justify-content: flex-end; margin-top: 6px; gap: 6px; flex-wrap: wrap;">
+              <button type="button" class="btn-card-deepseek" data-id="${o.receiptId}" data-raw="${encodeURIComponent(o.rawAddressText || addrDisplay)}" style="background: rgba(168, 85, 247, 0.2); border: 1px solid rgba(168, 85, 247, 0.4); color: #c084fc; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; transition: all 0.2s;">
+                🤖 DeepSeek AI ile Doğrula
+              </button>
               <button type="button" class="btn-card-copy" data-raw="${encodeURIComponent(o.rawAddressText || addrDisplay)}">
                 📋 AI Adres Formatını Kopyala
               </button>
@@ -236,9 +259,72 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Kart tıklama ile akordeon aç/kapa
         div.addEventListener('click', (e) => {
-          if (e.target.closest('.btn-card-copy')) return; // Kopyalama butonuna tıklandıysa akordeon kapanmasın
+          if (e.target.closest('.btn-card-copy') || e.target.closest('.btn-card-deepseek')) return;
           div.classList.toggle('expanded');
         });
+
+        // DeepSeek AI ile Ayrıştır Butonu
+        const btnDeepSeek = div.querySelector('.btn-card-deepseek');
+        if (btnDeepSeek) {
+          btnDeepSeek.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const textToParse = decodeURIComponent(btnDeepSeek.getAttribute('data-raw') || '');
+            if (!textToParse) {
+              alert('Ayrıştırılacak adres metni bulunamadı.');
+              return;
+            }
+
+            const originalHtml = btnDeepSeek.innerHTML;
+            btnDeepSeek.disabled = true;
+            btnDeepSeek.innerHTML = '⏳ DeepSeek Çözüyor...';
+
+            try {
+              const parseRes = await fetch(`${config.apiUrl}/api/etsy/orders/ai-parse-address`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Api-Key': config.apiKey || 'etsy-vds-sync-key-2026'
+                },
+                body: JSON.stringify({ rawAddress: textToParse })
+              });
+
+              if (parseRes.ok) {
+                const resData = await parseRes.json();
+                const idx = allOrders.findIndex(order => String(order.receiptId).trim() === String(o.receiptId).trim());
+                if (idx !== -1 && resData) {
+                  allOrders[idx] = {
+                    ...allOrders[idx],
+                    buyerName: resData.buyerName || allOrders[idx].buyerName,
+                    streetAddress: resData.streetAddress || allOrders[idx].streetAddress,
+                    secondAddress: resData.secondAddress || allOrders[idx].secondAddress,
+                    city: resData.city || allOrders[idx].city,
+                    state: resData.state || allOrders[idx].state,
+                    postalCode: resData.postalCode || allOrders[idx].postalCode,
+                    country: resData.countryCode || allOrders[idx].country,
+                    phone: resData.phone || allOrders[idx].phone,
+                    isFullAddress: Boolean(resData.streetAddress || allOrders[idx].streetAddress),
+                    sourceType: 'DeepSeek AI Ayrıştırma (VDS)',
+                    resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                  };
+
+                  chrome.storage.local.set({ storedOrders: allOrders });
+                  renderOrdersList();
+                }
+                btnDeepSeek.innerHTML = '✓ DeepSeek Onayladı!';
+                btnDeepSeek.style.background = 'rgba(16, 185, 129, 0.3)';
+                btnDeepSeek.style.color = '#34d399';
+              } else {
+                alert(`VDS AI Hatası: HTTP ${parseRes.status}`);
+                btnDeepSeek.innerHTML = originalHtml;
+                btnDeepSeek.disabled = false;
+              }
+            } catch (err) {
+              alert(`Bağlantı Hatası: ${err.message}`);
+              btnDeepSeek.innerHTML = originalHtml;
+              btnDeepSeek.disabled = false;
+            }
+          });
+        }
 
         // AI Formatını Kopyala Butonu
         const btnCopy = div.querySelector('.btn-card-copy');
@@ -325,10 +411,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
           }
           
-          // Hafızadaki siparişler ile bu sayfadaki siparişleri birleştir (Tekilleştir)
+          // Hafızadaki siparişler ile bu sayfadaki siparişleri birleştir (Tekilleştir - strictly 10 digits)
           let addedCount = 0;
           currentPageOrders.forEach(co => {
-            const idx = allOrders.findIndex(o => o.receiptId === co.receiptId);
+            const coId = String(co.receiptId || '').trim();
+            if (!/^\d{10}$/.test(coId)) return; // 10 hane haricindeki bozuk kayıtları engelle
+            const idx = allOrders.findIndex(o => String(o.receiptId).trim() === coId);
             if (idx === -1) {
               allOrders.push(co);
               addedCount++;

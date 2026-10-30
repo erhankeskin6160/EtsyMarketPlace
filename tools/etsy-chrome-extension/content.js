@@ -111,18 +111,22 @@
 
   function extractCleanAddressLines(textBlock) {
     if (!textBlock) return [];
+    let linesSource = textBlock;
     const m = textBlock.match(/Ship to|Shipped to|Gönderim adresi|Teslimat adresi/i);
-    if (!m) return [];
+    if (m) {
+      linesSource = textBlock.substring(m.index + m[0].length);
+    }
 
-    const afterShipTo = textBlock.substring(m.index + m[0].length);
-    const rawLines = afterShipTo.split(/[\r\n]+/);
+    const rawLines = linesSource.split(/[\r\n]+/);
     const cleanLines = [];
 
     for (let i = 0; i < rawLines.length; i++) {
       const line = rawLines[i].trim();
       if (!line) continue;
-      // Copy address butonu metnini ve varyantlarını adres satırından ayıkla
-      if (/^Copy(?:\s+address)?$/i.test(line) || /^Adresi\s*kopyala$/i.test(line)) continue;
+      // Rozetleri ve buton metinlerini adres satırından kesinlikle ayıkla
+      if (/^(?:Marked as gift|Gift message|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping)$/i.test(line)) {
+        continue;
+      }
       if (isStopLine(line)) break;
       cleanLines.push(line);
       // Makul maksimum adres satırı 6'dır (Ad, Cadde1, Cadde2, Şehir/Eyalet/Zip, Ülke, Tel)
@@ -287,56 +291,63 @@
   function findOrderContainers() {
     const list = [];
     const seenIds = new Set();
-    const candidateNodes = Array.from(document.querySelectorAll('a, span, p, div, b, strong, td, th'));
 
-    for (const node of candidateNodes) {
-      if (node.children.length > 2) continue;
-      const text = (node.textContent || '').trim();
-      const m = text.match(/#(\d{9,12})\b/) 
-             || text.match(/\b(\d{9,12})\s*\(Etsy\)/i)
-             || (node.href && node.href.match(/[?&]order_id=(\d{9,12})\b/));
+    // 1. ÖNCELİK: Kanonik Sipariş Linkleri: <a href="...order_id=4210985421...">
+    // Etsy her sipariş kartına tam olarak 1 adet kanonik detay linki koyar.
+    const orderLinks = Array.from(document.querySelectorAll('a[href*="order_id="]'));
+
+    for (const a of orderLinks) {
+      const href = a.getAttribute('href') || a.href || '';
+      // Sadece 10 haneli gerçek Etsy sipariş numarasını al (Kesinlikle 11 hane vb. almaz!)
+      const m = href.match(/[?&]order_id=(\d{10})\b/);
       if (!m) continue;
       const id = m[1];
       if (seenIds.has(id)) continue;
 
-      // Bu sipariş ID'sinin bağlı olduğu en dar ve izole kapsayıcı kartı bul
-      let current = node.parentElement;
-      let bestContainer = current;
-
-      while (current && current !== document.body && current.tagName !== 'BODY') {
-        const cText = current.innerText || '';
-        const orderIds = (cText.match(/(\d{9,12})\s*(?:\(Etsy\)|#)/g) || []).map(x => x.replace(/\D/g, ''));
-        const uniqueIds = Array.from(new Set(orderIds));
-
-        // Eğer bu ebeveyn birden fazla sipariş içeriyorsa, sınırı aştık demektir.
-        // Bir önceki seviye (bestContainer) bu siparişe ait izole karttır!
-        if (uniqueIds.length > 1) {
+      // Bu sipariş linkinin içinde bulunduğu en yakın kart kapsayıcısını bul
+      let card = a.closest('tr, [data-order-id], [data-receipt-id], .panel, div[class*="order"], div[class*="wt-card"], fieldset') || a.parentElement;
+      while (card && card !== document.body) {
+        // Eğer bu seviyede birden fazla sipariş linki varsa, liste seviyesine çıktık demektir
+        const otherOrderLinks = Array.from(card.querySelectorAll('a[href*="order_id="]'))
+          .map(l => (l.getAttribute('href') || l.href || '').match(/[?&]order_id=(\d{10})\b/)?.[1])
+          .filter(Boolean);
+        const uniqueLinks = Array.from(new Set(otherOrderLinks));
+        if (uniqueLinks.length > 1) {
           break;
         }
 
-        bestContainer = current;
-
-        // Standart Etsy kart sınırları
-        if (current.tagName === 'TR' || 
-            current.hasAttribute('data-order-id') || 
-            current.hasAttribute('data-receipt-id') ||
-            /panel|order-card|wt-card/i.test(current.className || '')) {
+        if (card.tagName === 'TR' || card.hasAttribute('data-order-id') || /panel|order-card/i.test(card.className || '')) {
           break;
         }
-
-        current = current.parentElement;
+        if (!card.parentElement || card.parentElement === document.body) break;
+        card = card.parentElement;
       }
 
-      if (bestContainer && !seenIds.has(id)) {
+      seenIds.add(id);
+      list.push({ id, element: card });
+    }
+
+    // 2. FALLBACK: Eğer sayfada href linki bulunamazsa metin üzerinden strictly 10 hane ara
+    if (list.length === 0) {
+      const candidateNodes = Array.from(document.querySelectorAll('span, a, p, div, strong, b'));
+      for (const node of candidateNodes) {
+        if (node.children.length > 2) continue;
+        const text = (node.textContent || '').trim();
+        const m = text.match(/#(\d{10})\b/) || text.match(/\b(\d{10})\s*\(Etsy\)/i);
+        if (!m) continue;
+        const id = m[1];
+        if (seenIds.has(id)) continue;
+
+        let card = node.closest('tr, [data-order-id], [data-receipt-id], .panel, div[class*="order"], div[class*="wt-card"]') || node.parentElement;
         seenIds.add(id);
-        list.push({ id, element: bestContainer });
+        list.push({ id, element: card });
       }
     }
 
     return list;
   }
 
-  // 4.1 SİPARİŞ LİSTESİ AYIKLAMA (DOM Kapsayıcı İzolasyonlu)
+  // 4.1 SİPARİŞ LİSTESİ AYIKLAMA (DOM Kapsayıcı İzolasyonlu & .wt-content-toggle__body Destekli)
   function parseOrdersOnPage() {
     const ordersMap = new Map();
 
@@ -356,7 +367,12 @@
           const el = item.element;
           const block = el.innerText || '';
 
-          const lines = extractCleanAddressLines(block);
+          // DevTools'ta keşfettiğimiz doğrudan adres kutusunu bul: .wt-content-toggle__body
+          const addrBody = el.querySelector('.wt-content-toggle__body')
+                        || el.parentElement?.querySelector('.wt-content-toggle__body');
+          const addressText = addrBody ? (addrBody.innerText || '') : '';
+
+          const lines = extractCleanAddressLines(addressText || block);
           const parsed = parseAddressFieldsFromLines(lines);
 
           // Tutar ve Para Birimi (Öncelikle sipariş ID'sinin yanındaki fiyata odaklan)
@@ -365,7 +381,7 @@
           else if (block.includes('EUR') || block.includes('€')) currency = 'EUR';
           else if (block.includes('GBP') || block.includes('£')) currency = 'GBP';
 
-          const priceMatch = block.match(/#\d{9,12}[^\n\r]*(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i)
+          const priceMatch = block.match(/#\d{10}[^\n\r]*(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i)
                           || block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
           const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
 
@@ -373,7 +389,7 @@
           let buyerName = parsed.buyerName;
           if (!buyerName || /^Etsy/i.test(buyerName)) {
             // #receiptId'nin hemen üzerindeki satırı ara
-            const nameMatch = block.match(/([A-Za-z\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{9,12}/);
+            const nameMatch = block.match(/([A-Za-z\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{10}/);
             if (nameMatch) {
               const candidate = nameMatch[1].trim();
               if (candidate && !/Select all|Ordered|Order/i.test(candidate)) {
@@ -433,7 +449,7 @@
             trackingNumber: tracking,
             productTitle: title,
             status: status,
-            sourceType: parsed.isFullAddress ? 'Açık Çekmece' : 'Liste Özeti (İzole Kart)',
+            sourceType: parsed.isFullAddress ? 'Açık Çekmece' : (addrBody ? 'Canlı Kart (.wt-content-toggle__body)' : 'Liste Özeti (İzole Kart)'),
             sourceUrl: window.location.pathname,
             httpStatus: 'DOM (Canlı İzole Kart)',
             resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -633,57 +649,61 @@
     try {
       const buttonsToClick = new Set();
 
-      // 1. Her bir izole sipariş kartı kapsayıcısının içindeki toggle butonlarını ara
+      // 1. DevTools'ta tespit edilen .wt-content-toggle butonlarını her kart içinde ara
       const containers = findOrderContainers();
       for (const item of containers) {
         const el = item.element;
-        // Bu kartın içindeki collapsed butonu bul
-        const btn = el.querySelector('button[aria-expanded="false"], [role="button"][aria-expanded="false"]');
-        if (btn) {
-          buttonsToClick.add(btn);
-        } else {
-          // Kart içindeki Ship to başlığının yanındaki butonu ara
-          const shipToEl = Array.from(el.querySelectorAll('*')).find(child => {
-            const t = (child.textContent || '').trim();
-            return /^Ship to$/i.test(t) || /^Teslimat adresi$/i.test(t) || /^Gönderim adresi$/i.test(t);
-          });
-          if (shipToEl) {
-            const nearBtn = shipToEl.parentElement?.querySelector('button, [role="button"]')
-                         || shipToEl.parentElement?.parentElement?.querySelector('button, [role="button"]');
-            if (nearBtn && nearBtn.getAttribute('aria-expanded') !== 'true') {
-              buttonsToClick.add(nearBtn);
+        // Karttaki toggle body'nin durumunu kontrol et
+        const addrBody = el.querySelector('.wt-content-toggle__body')
+                      || el.parentElement?.querySelector('.wt-content-toggle__body');
+        const isAlreadyVisible = addrBody && addrBody.getAttribute('aria-hidden') === 'false';
+
+        if (!isAlreadyVisible) {
+          const btn = el.querySelector('button.wt-content-toggle, button[aria-controls*="wt-content-toggle"], button[aria-expanded="false"]')
+                   || el.parentElement?.querySelector('button.wt-content-toggle, button[aria-controls*="wt-content-toggle"], button[aria-expanded="false"]');
+          if (btn) {
+            buttonsToClick.add(btn);
+          } else {
+            // Kart içindeki Ship to başlığının yanındaki butonu ara
+            const shipToEl = Array.from(el.querySelectorAll('*')).find(child => {
+              const t = (child.textContent || '').trim();
+              return /^Ship to$/i.test(t) || /^Teslimat adresi$/i.test(t) || /^Gönderim adresi$/i.test(t);
+            });
+            if (shipToEl) {
+              const nearBtn = shipToEl.parentElement?.querySelector('button, [role="button"]')
+                           || shipToEl.parentElement?.parentElement?.querySelector('button, [role="button"]');
+              if (nearBtn) {
+                buttonsToClick.add(nearBtn);
+              }
             }
           }
         }
       }
 
-      // 2. Eğer kart izolasyonundan buton bulunamadıysa genel arama yap (Fallback)
+      // 2. Fallback: Sayfadaki tüm button.wt-content-toggle veya button[aria-controls*="wt-content-toggle"] butonlarını bul
       if (buttonsToClick.size === 0) {
-        const collapsedButtons = Array.from(document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]'));
-        for (const btn of collapsedButtons) {
-          const parentContext = btn.closest('tr, [data-order-id], .panel, div[class*="order"], td, div') || btn.parentElement;
-          if (parentContext && /Ship to|Teslimat|Gönderim/i.test(parentContext.innerText || '')) {
-            buttonsToClick.add(btn);
-          }
+        const toggleButtons = Array.from(document.querySelectorAll('button.wt-content-toggle, button[aria-controls*="wt-content-toggle"], button[aria-expanded="false"]'));
+        for (const btn of toggleButtons) {
+          buttonsToClick.add(btn);
         }
       }
 
-      console.log(`[Etsy Copilot] Açılacak ${buttonsToClick.size} inline Ship to butonu tespit edildi.`);
+      console.log(`[Etsy Copilot] Açılacak ${buttonsToClick.size} inline .wt-content-toggle butonu tespit edildi.`);
 
-      // Hepsini sırayla ve güvenli gecikmeyle tıkla (sayfa donmasın, React re-render etsin)
+      // Hepsini sırayla ve güvenli gecikmeyle tıkla
       for (const btn of buttonsToClick) {
         try {
           btn.click();
           await new Promise(r => setTimeout(r, 120));
         } catch (e) {
-          console.warn('Inline chevron tıklanırken hata:', e);
+          console.warn('Inline toggle tıklanırken hata:', e);
         }
       }
 
-      // React / DOM güncellemelerinin oturması için bekleme
-      await new Promise(r => setTimeout(r, 400));
+      // DOM güncellemelerinin oturması için bekleme
+      await new Promise(r => setTimeout(r, 450));
 
-      // Şimdi sayfadaki tüm siparişleri izole DOM ile tam açık adreslerle tara
+      // Şimdi sayfadaki tüm siparişleri .wt-content-toggle__body ile tam açık adreslerle tara
       const orders = parseOrdersOnPage();
       return orders;
     } catch (err) {
