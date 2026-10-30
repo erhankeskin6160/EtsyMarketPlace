@@ -1077,33 +1077,42 @@
                   placeholder="Örn: Barbara Yapana&#10;456 Oak Avenue Apt 4B&#10;Los Angeles, CA 90001, United States&#10;Tel: +1 555-0199"></textarea>
               </div>
               <div class="ai-box-actions-row">
-                <button 
-                  type="button" 
-                  class="btn-ai-parse" 
-                  [disabled]="isAiParsing || !rawAddressInput"
-                  (click)="parseAddressWithAi()">
-                  <span *ngIf="isAiParsing">⏳ Ayrıştırılıyor...</span>
-                  <span *ngIf="!isAiParsing">✨ Yapay Zeka ile Ayrıştır & Formu Doldur</span>
-                </button>
-                <button 
-                  type="button" 
-                  class="btn-ai-load-db" 
-                  style="background: #1e293b; border: 1px solid #475569; color: #cbd5e1; padding: 7px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;"
-                  title="Sipariş için VDS / DB'ye kaydedilen müşteri ve adres metnini yapay zeka kutusuna doldur"
-                  (click)="fillRawAddressFromSelectedOrder()">
-                  🔄 DB'deki Metni Getir
-                </button>
-                <button 
-                  type="button" 
-                  class="btn-ai-clear" 
-                  [disabled]="!rawAddressInput"
-                  style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 7px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
-                  title="Yapay zeka kutusundaki metni temizle"
-                  (click)="clearRawAddressInput()">
-                  🗑️ Temizle
-                </button>
-                <span *ngIf="aiParseSuccessMessage" class="ai-msg-success">{{ aiParseSuccessMessage }}</span>
-                <span *ngIf="aiParseErrorMessage" class="ai-msg-error">{{ aiParseErrorMessage }}</span>
+                <div class="ai-buttons-group">
+                  <button 
+                    type="button" 
+                    class="btn-ai-parse" 
+                    [disabled]="isAiParsing || !rawAddressInput"
+                    (click)="parseAddressWithAi()">
+                    <span *ngIf="isAiParsing">⏳ Ayrıştırılıyor...</span>
+                    <span *ngIf="!isAiParsing">✨ Yapay Zeka ile Ayrıştır</span>
+                  </button>
+                  <button 
+                    type="button" 
+                    class="btn-ai-paste" 
+                    title="Panoda kopyalanan adresi tek tıkla yapıştır ve otomatik ayrıştır"
+                    (click)="pasteFromClipboard()">
+                    📋 Panodan Yapıştır
+                  </button>
+                  <button 
+                    type="button" 
+                    class="btn-ai-load-db" 
+                    title="Sipariş için VDS / DB'ye kaydedilen müşteri ve adres metnini yapay zeka kutusuna doldur"
+                    (click)="fillRawAddressFromSelectedOrder()">
+                    🔄 DB'den Getir
+                  </button>
+                  <button 
+                    type="button" 
+                    class="btn-ai-clear" 
+                    [disabled]="!rawAddressInput"
+                    title="Yapay zeka kutusundaki metni temizle"
+                    (click)="clearRawAddressInput()">
+                    🗑️ Temizle
+                  </button>
+                </div>
+                <div class="ai-messages-group" *ngIf="aiParseSuccessMessage || aiParseErrorMessage">
+                  <span *ngIf="aiParseSuccessMessage" class="ai-msg-success">{{ aiParseSuccessMessage }}</span>
+                  <span *ngIf="aiParseErrorMessage" class="ai-msg-error">{{ aiParseErrorMessage }}</span>
+                </div>
               </div>
             </div>
 

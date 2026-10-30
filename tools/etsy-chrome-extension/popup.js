@@ -394,7 +394,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // 5.5 ÇEKMECELERİ AÇMADAN DERİN TAM ADRES ÇÖZÜCÜ (Polite Rate-Limited Background Resolver)
+  // 5.5 ÇEKMECELERİ AÇMADAN DERİN TAM ADRES ÇÖZÜCÜ (Otomatik Inline Chevron Genişletici + Fallback)
   btnResolveFullAddresses.addEventListener('click', async () => {
     if (!activeTab || !activeTab.id || !activeTab.url || !activeTab.url.includes('etsy.com')) {
       alert('Lütfen Etsy Siparişler sayfasında olduğunuzdan emin olun.');
@@ -406,95 +406,140 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const pendingOrders = allOrders.filter(o => !o.isFullAddress);
-    if (pendingOrders.length === 0) {
-      ordResultBox.className = 'result-box success';
-      ordResultBox.innerText = `✅ Listedeki tüm (${allOrders.length}) siparişin tam açık sokak ve posta adresi zaten hazır!`;
-      ordResultBox.style.display = 'block';
-      return;
-    }
-
     btnResolveFullAddresses.disabled = true;
     btnSyncOrders.disabled = true;
     resolveProgressBox.style.display = 'block';
     ordResultBox.style.display = 'none';
 
+    resolveProgressText.innerText = '⏳ [1/2] Sayfadaki siparişlerin adres kutuları (Ship to) otomatik açılıyor...';
+    resolveProgressPct.innerText = '25%';
+    resolveProgressBar.style.width = '25%';
+
     let resolvedCount = 0;
-    const totalToResolve = pendingOrders.length;
 
-    for (let i = 0; i < totalToResolve; i++) {
-      const order = pendingOrders[i];
-      const pct = Math.round((i / totalToResolve) * 100);
-      resolveProgressText.innerText = `⏳ [${i + 1}/${totalToResolve}] #${order.receiptId} tam adresi çözülüyor...`;
-      resolveProgressPct.innerText = `${pct}%`;
-      resolveProgressBar.style.width = `${pct}%`;
-
-      try {
-        const res = await new Promise((resolve) => {
-          chrome.tabs.sendMessage(activeTab.id, {
-            action: 'FETCH_ORDER_FULL_ADDRESS',
-            receiptId: order.receiptId
-          }, (response) => {
-            if (chrome.runtime.lastError || !response) {
-              resolve(null);
-            } else {
-              resolve(response);
-            }
-          });
+    // AŞAMA 1: Sayfadaki tüm inline chevronları tıkla ve tam adresleri DOM'dan anında oku
+    try {
+      const pageRes = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(activeTab.id, { action: 'EXPAND_AND_PARSE_PAGE_ORDERS' }, (resp) => {
+          if (chrome.runtime.lastError || !resp || !resp.success) {
+            resolve(null);
+          } else {
+            resolve(resp);
+          }
         });
+      });
 
-        if (res && res.success && res.data) {
-          const d = res.data;
-          const idx = allOrders.findIndex(o => o.receiptId === order.receiptId);
+      if (pageRes && pageRes.data && Array.isArray(pageRes.data)) {
+        pageRes.data.forEach((po) => {
+          const idx = allOrders.findIndex(o => o.receiptId === po.receiptId);
           if (idx !== -1) {
+            const wasFull = allOrders[idx].isFullAddress;
             allOrders[idx] = {
               ...allOrders[idx],
-              buyerName: d.buyerName || allOrders[idx].buyerName,
-              streetAddress: d.streetAddress || allOrders[idx].streetAddress,
-              secondAddress: d.secondAddress || allOrders[idx].secondAddress,
-              city: d.city || allOrders[idx].city,
-              state: d.state || allOrders[idx].state,
-              postalCode: d.postalCode || allOrders[idx].postalCode,
-              country: d.country || allOrders[idx].country,
-              phone: d.phone || allOrders[idx].phone,
-              rawAddressText: d.rawAddressText || allOrders[idx].rawAddressText,
-              shippingAddress: d.shippingAddress || allOrders[idx].shippingAddress,
-              isFullAddress: Boolean(d.isFullAddress || d.streetAddress),
-              transactionId: d.transactionId || allOrders[idx].transactionId,
-              sku: d.sku || allOrders[idx].sku,
-              variation: d.variation || allOrders[idx].variation,
-              shippingMethod: d.shippingMethod || allOrders[idx].shippingMethod,
-              sourceType: d.sourceType || 'Arka Plan Çekmece İsteği (Same-Origin Fetch)',
-              sourceUrl: d.sourceUrl || (`/your/orders/sold?order_id=${order.receiptId}`),
-              httpStatus: d.httpStatus || '200 OK',
-              resolvedAt: d.resolvedAt || new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              ...po,
+              sourceType: po.isFullAddress ? 'Canlı Sayfa (Inline Chevron Açıldı)' : (allOrders[idx].sourceType || 'Liste Özeti'),
+              sourceUrl: po.sourceUrl || activeTab.url,
+              httpStatus: 'DOM (Canlı Sayfa)',
+              resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
             };
-            resolvedCount++;
+            if (!wasFull && po.isFullAddress) resolvedCount++;
+          } else {
+            allOrders.push(po);
+            if (po.isFullAddress) resolvedCount++;
           }
-        }
-      } catch (err) {
-        console.error('Tam adres çözümleme hatası:', order.receiptId, err);
+        });
       }
+    } catch (pageErr) {
+      console.warn('Inline chevron açılırken hata:', pageErr);
+    }
 
-      // Her siparişten sonra arayüzü ve kalıcı hafızayı güncelle
-      chrome.storage.local.set({ storedOrders: allOrders });
-      renderOrdersList();
+    // Arayüzü ve depolamayı hemen güncelle
+    chrome.storage.local.set({ storedOrders: allOrders });
+    renderOrdersList();
 
-      // Anti-ban polite jitter delay: 350ms - 550ms
-      const jitterDelay = 350 + Math.floor(Math.random() * 200);
-      await new Promise(r => setTimeout(r, jitterDelay));
+    // AŞAMA 2: Eğer hafızada hala adresi çözülmemiş başka siparişler varsa arka plandan çöz
+    const pendingOrders = allOrders.filter(o => !o.isFullAddress);
+    const totalPending = pendingOrders.length;
+
+    if (totalPending > 0) {
+      resolveProgressText.innerText = `⏳ [2/2] Kalan ${totalPending} sipariş arka planda taranıyor...`;
+      resolveProgressPct.innerText = '60%';
+      resolveProgressBar.style.width = '60%';
+
+      for (let i = 0; i < totalPending; i++) {
+        const order = pendingOrders[i];
+        const pct = 60 + Math.round(((i + 1) / totalPending) * 38);
+        resolveProgressText.innerText = `⏳ [${i + 1}/${totalPending}] #${order.receiptId} adresi sorgulanıyor...`;
+        resolveProgressPct.innerText = `${pct}%`;
+        resolveProgressBar.style.width = `${pct}%`;
+
+        try {
+          const res = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(activeTab.id, {
+              action: 'FETCH_ORDER_FULL_ADDRESS',
+              receiptId: order.receiptId
+            }, (response) => {
+              if (chrome.runtime.lastError || !response) {
+                resolve(null);
+              } else {
+                resolve(response);
+              }
+            });
+          });
+
+          if (res && res.success && res.data) {
+            const d = res.data;
+            const idx = allOrders.findIndex(o => o.receiptId === order.receiptId);
+            if (idx !== -1) {
+              allOrders[idx] = {
+                ...allOrders[idx],
+                buyerName: d.buyerName || allOrders[idx].buyerName,
+                streetAddress: d.streetAddress || allOrders[idx].streetAddress,
+                secondAddress: d.secondAddress || allOrders[idx].secondAddress,
+                city: d.city || allOrders[idx].city,
+                state: d.state || allOrders[idx].state,
+                postalCode: d.postalCode || allOrders[idx].postalCode,
+                country: d.country || allOrders[idx].country,
+                phone: d.phone || allOrders[idx].phone,
+                rawAddressText: d.rawAddressText || allOrders[idx].rawAddressText,
+                shippingAddress: d.shippingAddress || allOrders[idx].shippingAddress,
+                isFullAddress: Boolean(d.isFullAddress || d.streetAddress),
+                transactionId: d.transactionId || allOrders[idx].transactionId,
+                sku: d.sku || allOrders[idx].sku,
+                variation: d.variation || allOrders[idx].variation,
+                shippingMethod: d.shippingMethod || allOrders[idx].shippingMethod,
+                sourceType: d.sourceType || 'Arka Plan Çekmece İsteği (Same-Origin Fetch)',
+                sourceUrl: d.sourceUrl || (`/your/orders/sold?order_id=${order.receiptId}`),
+                httpStatus: d.httpStatus || '200 OK',
+                resolvedAt: d.resolvedAt || new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+              };
+              resolvedCount++;
+            }
+          }
+        } catch (err) {
+          console.error('Tam adres çözümleme hatası:', order.receiptId, err);
+        }
+
+        chrome.storage.local.set({ storedOrders: allOrders });
+        renderOrdersList();
+
+        // Anti-ban polite jitter delay: 350ms - 550ms
+        const jitterDelay = 350 + Math.floor(Math.random() * 200);
+        await new Promise(r => setTimeout(r, jitterDelay));
+      }
     }
 
     // Tamamlandı
     chrome.storage.local.set({ storedOrders: allOrders });
     renderOrdersList();
 
-    resolveProgressText.innerText = `✅ Tamamlandı! ${resolvedCount} siparişin tam adresi başarıyla çekildi.`;
+    const fullCount = allOrders.filter(o => o.isFullAddress).length;
+    resolveProgressText.innerText = `✅ Tamamlandı! ${fullCount} siparişin tam adresi başarıyla çekildi.`;
     resolveProgressPct.innerText = '100%';
     resolveProgressBar.style.width = '100%';
 
     ordResultBox.className = 'result-box success';
-    ordResultBox.innerText = `🎯 Toplam ${allOrders.filter(o => o.isFullAddress).length} / ${allOrders.length} siparişin tam açık sokak ve posta adresi hazır! Şimdi "📥 Müşteri & Siparişleri VDS'e Aktar" butonuna basabilirsiniz.`;
+    ordResultBox.innerText = `🎯 Toplam ${fullCount} / ${allOrders.length} siparişin tam açık sokak ve posta adresi hazır! Şimdi "📥 Müşteri & Siparişleri VDS'e Aktar" butonuna basabilirsiniz.`;
     ordResultBox.style.display = 'block';
 
     btnResolveFullAddresses.disabled = false;

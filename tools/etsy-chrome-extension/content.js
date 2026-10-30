@@ -121,6 +121,8 @@
     for (let i = 0; i < rawLines.length; i++) {
       const line = rawLines[i].trim();
       if (!line) continue;
+      // Copy address butonu metnini ve varyantlarını adres satırından ayıkla
+      if (/^Copy(?:\s+address)?$/i.test(line) || /^Adresi\s*kopyala$/i.test(line)) continue;
       if (isStopLine(line)) break;
       cleanLines.push(line);
       // Makul maksimum adres satırı 6'dır (Ad, Cadde1, Cadde2, Şehir/Eyalet/Zip, Ülke, Tel)
@@ -484,6 +486,83 @@
     }
   }
 
+  // 6.5 TÜM SİPARİŞLERİN SHIP TO INLINE ÇEKMECELERİNİ AÇ VE TAM ADRESLERİ DERLE
+  async function expandAndParseAllInlineOrders() {
+    try {
+      // 1. Sayfadaki aria-expanded="false" butonlarını tara
+      const collapsedButtons = Array.from(document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]'));
+
+      // 2. Metni "Ship to" olan elementlerin yakınındaki chevron butonlarını tara
+      const allElements = Array.from(document.querySelectorAll('span, div, p, label, td, th, button'));
+      const shipToHeaders = allElements.filter(el => {
+        const t = (el.textContent || '').trim();
+        return /^Ship to$/i.test(t) || /^Teslimat adresi$/i.test(t) || /^Gönderim adresi$/i.test(t);
+      });
+
+      const buttonsToClick = new Set();
+
+      // Collapsed butonlardan Ship to ile ilişkili olanları ekle
+      for (const btn of collapsedButtons) {
+        const parentContext = btn.closest('tr, [data-order-id], .panel, div[class*="order"], td, div') || btn.parentElement;
+        if (parentContext && /Ship to|Teslimat|Gönderim/i.test(parentContext.innerText || '')) {
+          buttonsToClick.add(btn);
+        }
+      }
+
+      // Ship to başlıklarının yanındaki toggle/chevron butonlarını ekle
+      for (const st of shipToHeaders) {
+        const parent = st.parentElement;
+        const grandParent = parent ? parent.parentElement : null;
+        const btn = (parent && parent.querySelector('button, [role="button"]')) ||
+                    (grandParent && grandParent.querySelector('button, [role="button"]'));
+        if (btn) {
+          const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+          if (!isExpanded) {
+            buttonsToClick.add(btn);
+          }
+        }
+      }
+
+      // Eğer hala buton bulunamadıysa SVG chevron içeren ve küçük butonları tara
+      if (buttonsToClick.size === 0) {
+        const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'));
+        for (const btn of allButtons) {
+          const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+          if (isExpanded) continue;
+          const container = btn.closest('tr, [data-order-id], .panel, div[class*="order"], td');
+          if (container && /Ship to/i.test(container.innerText || '')) {
+            const svgs = btn.querySelectorAll('svg');
+            if (svgs.length > 0 && (btn.innerText || '').trim().length <= 2) {
+              buttonsToClick.add(btn);
+            }
+          }
+        }
+      }
+
+      console.log(`[Etsy Copilot] Açılacak ${buttonsToClick.size} inline Ship to butonu tespit edildi.`);
+
+      // Hepsini sırayla ve güvenli gecikmeyle tıkla (sayfa donmasın, React re-render etsin)
+      for (const btn of buttonsToClick) {
+        try {
+          btn.click();
+          await new Promise(r => setTimeout(r, 100));
+        } catch (e) {
+          console.warn('Inline chevron tıklanırken hata:', e);
+        }
+      }
+
+      // React / DOM güncellemelerinin oturması için bekleme
+      await new Promise(r => setTimeout(r, 350));
+
+      // Şimdi sayfadaki tüm siparişleri tam açık adreslerle tara
+      const orders = parseOrdersOnPage();
+      return orders;
+    } catch (err) {
+      console.error('expandAndParseAllInlineOrders hatası:', err);
+      return parseOrdersOnPage();
+    }
+  }
+
   // 7. MESAJ DİNLEYİCİ
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const pageType = getPageType();
@@ -514,6 +593,15 @@
     if (request.action === 'PARSE_ORDERS') {
       const ords = parseOrdersOnPage();
       sendResponse({ success: true, data: ords });
+      return true;
+    }
+
+    if (request.action === 'EXPAND_AND_PARSE_PAGE_ORDERS') {
+      expandAndParseAllInlineOrders().then(ords => {
+        sendResponse({ success: true, data: ords });
+      }).catch(err => {
+        sendResponse({ success: false, error: err ? err.message : 'Bilinmeyen hata' });
+      });
       return true;
     }
 

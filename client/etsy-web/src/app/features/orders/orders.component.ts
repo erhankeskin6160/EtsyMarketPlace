@@ -575,23 +575,59 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   // --- ADDRESS MODAL ACTIONS ---
+  sanitizeBuyerName(name?: string): string {
+    if (!name) return '';
+    const trimmed = name.trim();
+    if (/^Etsy\s*Sipari[sş]i\s*#|^#\d+/i.test(trimmed) || /^Etsy\s*Al[ıi]c[ıi]s[ıi]/i.test(trimmed) || /^Etsy\s*M[uü][sş]terisi/i.test(trimmed)) {
+      return '';
+    }
+    return trimmed;
+  }
+
+  async pasteFromClipboard(): Promise<void> {
+    try {
+      if (!navigator.clipboard || !navigator.clipboard.readText) {
+        alert('Tarayıcınız panodan otomatik okumayı desteklemiyor veya izin verilmedi. Lütfen metni kutuya Ctrl+V ile yapıştırın.');
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        this.rawAddressInput = text.trim();
+        this.aiParseSuccessMessage = '✓ Panodaki adres yapıştırıldı ve ayrıştırılıyor...';
+        this.parseAddressWithAi();
+      } else {
+        this.aiParseErrorMessage = '⚠️ Panoda yapıştırılacak metin bulunamadı.';
+      }
+    } catch (e: any) {
+      alert('Panoya erişim izni verilmedi: ' + (e?.message || 'Lütfen kutuya manuel Ctrl+V ile yapıştırın.'));
+    }
+  }
+
   fillRawAddressFromSelectedOrder(): void {
     const order = this.selectedOrder;
     if (!order) return;
-    const addrParts = [
-      order.buyerName,
-      order.streetAddress,
-      order.secondAddress,
-      [order.city, order.state, order.postalCode].filter(Boolean).join(', '),
-      order.country || order.countryCode,
-      order.phone ? `Tel: ${order.phone}` : ''
-    ].filter(p => Boolean(p && String(p).trim().length > 0));
+    const cleanBuyer = this.sanitizeBuyerName(order.buyerName);
+    const hasAddressDetails = Boolean(order.streetAddress || order.city || order.postalCode || order.phone);
 
-    this.rawAddressInput = order.rawAddressText?.trim() 
-      || (addrParts.length > 0 ? addrParts.join('\n') : '')
-      || order.formattedAddress 
-      || order.addressSnippet 
-      || '';
+    // Eğer sokak veya şehir bilgisi yoksa sahte veya yalnız alıcı adını yapay zeka kutusuna tek başına basma
+    if (!hasAddressDetails && !order.rawAddressText) {
+      this.rawAddressInput = '';
+    } else {
+      const addrParts = [
+        cleanBuyer,
+        order.streetAddress,
+        order.secondAddress,
+        [order.city, order.state, order.postalCode].filter(Boolean).join(', '),
+        order.country || order.countryCode,
+        order.phone ? `Tel: ${order.phone}` : ''
+      ].filter(p => Boolean(p && String(p).trim().length > 0));
+
+      this.rawAddressInput = order.rawAddressText?.trim() 
+        || (addrParts.length > 0 ? addrParts.join('\n') : '')
+        || order.formattedAddress 
+        || order.addressSnippet 
+        || '';
+    }
 
     const rId = Number(order.orderId);
     if (rId && !isNaN(rId)) {
@@ -600,8 +636,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
           if (res && res.success && res.data) {
             const db = res.data;
             if (db.streetAddress || db.city || db.phone) {
+              const cleanDbBuyer = this.sanitizeBuyerName(db.buyerName) || cleanBuyer;
               const dbLines = [
-                db.buyerName || order.buyerName,
+                cleanDbBuyer,
                 db.streetAddress,
                 db.secondAddress,
                 [db.city, db.state, db.postalCode].filter(Boolean).join(', '),
@@ -631,8 +668,10 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.fillRawAddressFromSelectedOrder();
     this.aiParseSuccessMessage = null;
     this.aiParseErrorMessage = null;
+
+    const cleanBuyer = this.sanitizeBuyerName(order.buyerName);
     this.editAddressModel = {
-      buyerName: order.buyerName || '',
+      buyerName: cleanBuyer,
       buyerEmail: order.buyerEmail || '',
       phone: order.phone || '',
       streetAddress: order.streetAddress || '',
@@ -648,7 +687,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     if (!this.editAddressModel.streetAddress && this.rawAddressInput) {
       const lines = this.rawAddressInput.split('\n').map(l => l.trim()).filter(Boolean);
       if (lines.length >= 2) {
-        if (!this.editAddressModel.buyerName) this.editAddressModel.buyerName = lines[0];
+        if (!this.editAddressModel.buyerName) this.editAddressModel.buyerName = this.sanitizeBuyerName(lines[0]);
         const remaining = lines.slice(1);
 
         const pIdx = remaining.findIndex(l => /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}|Tel:/i.test(l));
@@ -693,7 +732,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
           if (res && res.success && res.data) {
             const db = res.data;
             if (db.streetAddress || db.city || db.phone) {
-              if (db.buyerName) this.editAddressModel.buyerName = db.buyerName;
+              const cleanDbBuyer = this.sanitizeBuyerName(db.buyerName);
+              if (cleanDbBuyer) this.editAddressModel.buyerName = cleanDbBuyer;
               if (db.streetAddress) this.editAddressModel.streetAddress = db.streetAddress;
               if (db.secondAddress) this.editAddressModel.secondAddress = db.secondAddress;
               if (db.city) this.editAddressModel.city = db.city;
