@@ -68,8 +68,8 @@
       </div>
 
       <div class="orders-summary-bar">
-        <span>Sayfada Bulunan Sipariş:</span>
-        <strong id="orderCount">0</strong>
+        <span>Sayfada: <strong id="orderCount" class="text-white">0</strong></span>
+        <span>Hafızadaki Toplam: <strong id="totalMemoryCount" class="text-cyan">0</strong></span>
       </div>
 
       <div class="order-list-container" id="orderListContainer">
@@ -80,6 +80,18 @@
         📥 Müşteri & Siparişleri VDS'e Aktar
       </button>
 
+      <div class="export-actions-grid">
+        <button class="btn-action secondary" id="btnExportCsv" title="Tüm siparişleri Excel uyumlu CSV olarak bilgisayara indir">
+          📄 CSV İndir
+        </button>
+        <button class="btn-action secondary" id="btnCopyJson" title="JSON formatında panoya kopyala">
+          📋 JSON Kopyala
+        </button>
+        <button class="btn-action secondary danger" id="btnClearMemory" title="Hafızadaki sipariş listesini sıfırla">
+          🗑️ Temizle
+        </button>
+      </div>
+
       <div class="result-box" id="ordResultBox" style="display: none;"></div>
     </main>
 
@@ -87,9 +99,21 @@
     <main class="tab-pane" id="tab-settings">
       <div class="settings-form">
         <div class="form-group">
+          <label>Hızlı Bağlantı:</label>
+          <div class="quick-connect-row">
+            <button type="button" class="btn-chip" id="btnUseLocalhost">🖥️ VDS İçi (localhost)</button>
+            <button type="button" class="btn-chip" id="btnUsePublicIp">🌐 Sabit IP (5.180.81.148)</button>
+          </div>
+        </div>
+
+        <div class="form-group">
           <label>VDS API Adresi:</label>
           <input type="text" id="cfgApiUrl" value="http://localhost:5263" class="input-text">
-          <small class="hint">VDS içindeyseniz 'http://localhost:5263', dışarıdan bağlanıyorsanız 'http://5.180.81.148:5263' yazın.</small>
+        </div>
+
+        <div class="form-group">
+          <label>API Güvenlik Anahtarı (X-Api-Key):</label>
+          <input type="text" id="cfgApiKey" value="etsy-vds-sync-key-2026" class="input-text">
         </div>
 
         <div class="form-group">

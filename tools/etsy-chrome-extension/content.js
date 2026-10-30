@@ -76,60 +76,86 @@
     }
   }
 
-  // 2. SİPARİŞ & MÜŞTERİ ADI / ADRES BİLGİSİNİ OKUMA (Gelişmiş Algoritma)
+  // 2. SİPARİŞ & MÜŞTERİ BİLGİLERİNİ DETAYLI AYIKLAMA (DOM + Regex Hibrit Algoritması)
   function parseOrdersOnPage() {
     const orders = [];
     try {
       const text = document.body.innerText;
 
-      // Desen 1: Sipariş Numarası ve Etsy ibaresi (Örn: 43855798710 (Etsy))
+      // Desen 1: Sipariş ID ve Etsy ibaresi (Örn: 43855798710 (Etsy) veya #345678912)
       const orderRegex = /(\d{9,12})\s*(?:\(Etsy\)|#)/g;
       let match;
+
       while ((match = orderRegex.exec(text)) !== null) {
         const id = match[1];
         if (orders.some(o => o.receiptId === id)) continue;
 
-        const startIndex = Math.max(0, match.index - 150);
-        const endIndex = Math.min(text.length, match.index + 600);
+        // Sipariş ID'sinin etrafındaki 900 karakterlik metin bloğunu analiz et
+        const startIndex = Math.max(0, match.index - 200);
+        const endIndex = Math.min(text.length, match.index + 700);
         const block = text.substring(startIndex, endIndex);
 
-        // Müşteri Adı ve Adresi
-        const shipToMatch = block.match(/Ship to\s*[\r\n]+([^\n\r]+)(?:[\r\n]+([^\n\r]+))?/i);
+        // A. Müşteri Adı ve Teslimat Adresi
+        const shipToMatch = block.match(/Ship to\s*[\r\n]+([^\n\r]+)(?:[\r\n]+([^\n\r]+))?(?:[\r\n]+([^\n\r]+))?/i);
         let buyerName = shipToMatch ? shipToMatch[1].trim() : '';
-        let address = shipToMatch && shipToMatch[2] ? shipToMatch[2].trim() : '';
+        let addressLine1 = shipToMatch && shipToMatch[2] ? shipToMatch[2].trim() : '';
+        let addressLine2 = shipToMatch && shipToMatch[3] ? shipToMatch[3].trim() : '';
+        let fullAddress = [addressLine1, addressLine2].filter(Boolean).join(', ');
 
-        // Eğer Ship to bloğu bulunamazsa üst satırlardaki müşteri ismini ara
+        // Alternatif Müşteri Adı (Ship to bulunamadıysa)
         if (!buyerName || buyerName.length < 2) {
           const nameBeforeId = block.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)[\s\r\n]+\d{9,12}/);
           buyerName = nameBeforeId ? nameBeforeId[1].trim() : 'Etsy Müşterisi';
         }
 
-        // Tutar
+        // B. Sipariş Tarihi
+        const dateMatch = block.match(/(?:Ordered|Order date)[\s:]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?)/i)
+                       || block.match(/([A-Za-z]{3}\s+\d{1,2},\s*\d{4})/);
+        const orderDate = dateMatch ? dateMatch[1].trim() : '';
+
+        // C. Tutar ve Para Birimi
+        let currency = 'USD';
+        if (block.includes('TL') || block.includes('₺')) currency = 'TRY';
+        else if (block.includes('EUR') || block.includes('€')) currency = 'EUR';
+        else if (block.includes('GBP') || block.includes('£')) currency = 'GBP';
+
         const totalMatch = block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
         const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : null;
 
-        // Kargo Takip Kodu
-        const trackMatch = block.match(/(\d{12,24})[\s\r\n]+Shipped/i)
-                        || block.match(/Shipped[\s\r\n]+(\d{12,24})/i);
+        // D. Kargo Takip Kodu ve Kargo Firması
+        const trackMatch = block.match(/(\d{12,30})[\s\r\n]+Shipped/i)
+                        || block.match(/Shipped[\s\r\n]+(?:via\s+[A-Za-z]+\s+)?(\d{10,30})/i)
+                        || block.match(/Tracking:\s*([A-Za-z0-9]+)/i);
         const tracking = trackMatch ? trackMatch[1].trim() : null;
 
-        // Ürün Adı
+        // E. Satın Alınan Ürün Adı
         const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
                         || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
         const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
 
+        // F. Sipariş Durumu
+        let status = 'Completed';
+        if (block.includes('In transit') || block.includes('Shipped')) {
+          status = 'Shipped';
+        } else if (block.includes('Not shipped') || block.includes('Processing')) {
+          status = 'Processing';
+        }
+
         orders.push({
           receiptId: id,
           buyerName: buyerName,
-          shippingAddress: address,
+          shippingAddress: fullAddress || 'Teslimat Adresi Kayıtlı',
           orderTotal: total,
+          currency: currency,
+          orderDate: orderDate,
           trackingNumber: tracking,
           productTitle: title,
+          status: status,
           scrapedAt: new Date().toISOString()
         });
       }
 
-      // Desen 2: Standart linkler (a[href*="order_id="])
+      // Desen 2: Linklerden sipariş yakalama (href*="order_id=")
       const orderLinks = document.querySelectorAll('a[href*="order_id="]');
       orderLinks.forEach(link => {
         const href = link.getAttribute('href') || '';
@@ -140,14 +166,17 @@
             buyerName: link.innerText.trim() || 'Etsy Müşterisi',
             shippingAddress: '',
             orderTotal: null,
+            currency: 'USD',
+            orderDate: '',
             trackingNumber: null,
             productTitle: 'Etsy Siparişi',
+            status: 'Completed',
             scrapedAt: new Date().toISOString()
           });
         }
       });
     } catch (err) {
-      console.error('Siparişler okunamadı:', err);
+      console.error('Siparişler ayıklanırken hata:', err);
     }
     return orders;
   }
