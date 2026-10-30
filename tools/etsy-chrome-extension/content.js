@@ -87,7 +87,10 @@
     /Select all/i,
     /Action needed/i,
     /Download/i,
-    /Etsy Payments/i
+    /Etsy Payments/i,
+    /Rezervde/i,
+    /Doğrulandı/i,
+    /Standart Kargo/i
   ];
 
   function isStopLine(line) {
@@ -96,11 +99,22 @@
     return STOP_PATTERNS.some(p => p.test(t));
   }
 
-  function extractCleanAddressLines(textBlock) {
-    const shipToIdx = textBlock.search(/Ship to/i);
-    if (shipToIdx === -1) return [];
+  // HTML'den satır sonlarını koruyarak metin ayıklama (DOMParser unrendered document düzeltmesi)
+  function htmlToText(rawHtml) {
+    if (!rawHtml) return '';
+    const prepared = rawHtml
+      .replace(/<br\s*[\/]?>/gi, '\n')
+      .replace(/<\/(p|div|li|tr|h\d|section|article)>/gi, '\n');
+    const doc = new DOMParser().parseFromString(prepared, 'text/html');
+    return doc.body ? (doc.body.textContent || '') : '';
+  }
 
-    const afterShipTo = textBlock.substring(shipToIdx + 7);
+  function extractCleanAddressLines(textBlock) {
+    if (!textBlock) return [];
+    const m = textBlock.match(/Ship to|Shipped to|Gönderim adresi|Teslimat adresi/i);
+    if (!m) return [];
+
+    const afterShipTo = textBlock.substring(m.index + m[0].length);
     const rawLines = afterShipTo.split(/[\r\n]+/);
     const cleanLines = [];
 
@@ -374,7 +388,71 @@
 
   observer.observe(document.body, { childList: true, subtree: true });
 
-  // 6. MESAJ DİNLEYİCİ
+  // 6. ÇEKMECELERİ AÇMADAN ARKA PLANDA DERİN TAM ADRES ÇÖZÜCÜ
+  async function fetchSingleOrderFullAddress(receiptId) {
+    if (!receiptId) return null;
+
+    try {
+      // 1. Önce sayfadaki mevcut açık çekmece bu siparişe mi ait bak
+      const openDrawer = parseOpenDrawerOrder();
+      if (openDrawer && String(openDrawer.receiptId) === String(receiptId) && openDrawer.isFullAddress) {
+        return openDrawer;
+      }
+
+      // 2. Arka planda Etsy sipariş detayını kullanıcı oturumu çerezleriyle oku
+      const targetUrls = [
+        `/your/orders/sold?order_id=${receiptId}`,
+        `/your/orders/sold/all?order_id=${receiptId}`
+      ];
+
+      for (const targetUrl of targetUrls) {
+        try {
+          const res = await fetch(targetUrl, {
+            credentials: 'include',
+            headers: {
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+          });
+
+          if (!res.ok) continue;
+
+          const html = await res.text();
+          const cleanText = htmlToText(html);
+          const lines = extractCleanAddressLines(cleanText);
+
+          if (lines.length >= 2) {
+            const parsed = parseAddressFieldsFromLines(lines);
+            if (parsed.isFullAddress || lines.length >= 3) {
+              return {
+                receiptId: String(receiptId),
+                buyerName: parsed.buyerName,
+                shippingAddress: [parsed.streetAddress, parsed.secondAddress, parsed.city, parsed.state, parsed.postalCode, parsed.country].filter(Boolean).join(', '),
+                streetAddress: parsed.streetAddress,
+                secondAddress: parsed.secondAddress,
+                city: parsed.city,
+                state: parsed.state,
+                postalCode: parsed.postalCode,
+                country: parsed.country,
+                phone: parsed.phone,
+                rawAddressText: parsed.rawAddressText,
+                isFullAddress: Boolean(parsed.isFullAddress || parsed.streetAddress),
+                scrapedAt: new Date().toISOString()
+              };
+            }
+          }
+        } catch (innerErr) {
+          console.warn(`URL denemesi başarısız (${targetUrl}):`, innerErr);
+        }
+      }
+
+      return null;
+    } catch (err) {
+      console.error('fetchSingleOrderFullAddress genel hatası:', receiptId, err);
+      return null;
+    }
+  }
+
+  // 7. MESAJ DİNLEYİCİ
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     const pageType = getPageType();
 
@@ -405,6 +483,16 @@
       const ords = parseOrdersOnPage();
       sendResponse({ success: true, data: ords });
       return true;
+    }
+
+    if (request.action === 'FETCH_ORDER_FULL_ADDRESS') {
+      const receiptId = request.receiptId;
+      fetchSingleOrderFullAddress(receiptId).then(addressData => {
+        sendResponse({ success: !!addressData, data: addressData });
+      }).catch(err => {
+        sendResponse({ success: false, error: err ? err.message : 'Bilinmeyen hata' });
+      });
+      return true; // Asenkron yanıt için true dönmeli
     }
 
     return true;

@@ -22,7 +22,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   const ordDetectBanner = document.getElementById('ordDetectBanner');
   const orderCount = document.getElementById('orderCount');
   const totalMemoryCount = document.getElementById('totalMemoryCount');
+  const fullAddressCount = document.getElementById('fullAddressCount');
   const orderListContainer = document.getElementById('orderListContainer');
+  const btnResolveFullAddresses = document.getElementById('btnResolveFullAddresses');
+  const resolveProgressBox = document.getElementById('resolveProgressBox');
+  const resolveProgressText = document.getElementById('resolveProgressText');
+  const resolveProgressPct = document.getElementById('resolveProgressPct');
+  const resolveProgressBar = document.getElementById('resolveProgressBar');
   const btnSyncOrders = document.getElementById('btnSyncOrders');
   const btnExportCsv = document.getElementById('btnExportCsv');
   const btnCopyJson = document.getElementById('btnCopyJson');
@@ -142,6 +148,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderOrdersList() {
     orderCount.innerText = currentPageOrders.length;
     totalMemoryCount.innerText = allOrders.length;
+
+    const fullCount = allOrders.filter(o => o.isFullAddress).length;
+    if (fullAddressCount) {
+      fullAddressCount.innerText = `${fullCount}/${allOrders.length}`;
+    }
 
     if (allOrders.length > 0) {
       orderListContainer.innerHTML = '';
@@ -305,6 +316,104 @@ document.addEventListener('DOMContentLoaded', async () => {
       btnSyncFinance.disabled = false;
       btnSyncFinance.innerText = '⚡ Finans & Rezervi VDS\'e Aktar';
     }
+  });
+
+  // 5.5 ÇEKMECELERİ AÇMADAN DERİN TAM ADRES ÇÖZÜCÜ (Polite Rate-Limited Background Resolver)
+  btnResolveFullAddresses.addEventListener('click', async () => {
+    if (!activeTab || !activeTab.id || !activeTab.url || !activeTab.url.includes('etsy.com')) {
+      alert('Lütfen Etsy Siparişler sayfasında olduğunuzdan emin olun.');
+      return;
+    }
+
+    if (allOrders.length === 0) {
+      alert('Hafızada sipariş bulunamadı. Lütfen Etsy siparişler sayfasını yenileyin (F5).');
+      return;
+    }
+
+    const pendingOrders = allOrders.filter(o => !o.isFullAddress);
+    if (pendingOrders.length === 0) {
+      ordResultBox.className = 'result-box success';
+      ordResultBox.innerText = `✅ Listedeki tüm (${allOrders.length}) siparişin tam açık sokak ve posta adresi zaten hazır!`;
+      ordResultBox.style.display = 'block';
+      return;
+    }
+
+    btnResolveFullAddresses.disabled = true;
+    btnSyncOrders.disabled = true;
+    resolveProgressBox.style.display = 'block';
+    ordResultBox.style.display = 'none';
+
+    let resolvedCount = 0;
+    const totalToResolve = pendingOrders.length;
+
+    for (let i = 0; i < totalToResolve; i++) {
+      const order = pendingOrders[i];
+      const pct = Math.round((i / totalToResolve) * 100);
+      resolveProgressText.innerText = `⏳ [${i + 1}/${totalToResolve}] #${order.receiptId} tam adresi çözülüyor...`;
+      resolveProgressPct.innerText = `${pct}%`;
+      resolveProgressBar.style.width = `${pct}%`;
+
+      try {
+        const res = await new Promise((resolve) => {
+          chrome.tabs.sendMessage(activeTab.id, {
+            action: 'FETCH_ORDER_FULL_ADDRESS',
+            receiptId: order.receiptId
+          }, (response) => {
+            if (chrome.runtime.lastError || !response) {
+              resolve(null);
+            } else {
+              resolve(response);
+            }
+          });
+        });
+
+        if (res && res.success && res.data) {
+          const d = res.data;
+          const idx = allOrders.findIndex(o => o.receiptId === order.receiptId);
+          if (idx !== -1) {
+            allOrders[idx] = {
+              ...allOrders[idx],
+              buyerName: d.buyerName || allOrders[idx].buyerName,
+              streetAddress: d.streetAddress || allOrders[idx].streetAddress,
+              secondAddress: d.secondAddress || allOrders[idx].secondAddress,
+              city: d.city || allOrders[idx].city,
+              state: d.state || allOrders[idx].state,
+              postalCode: d.postalCode || allOrders[idx].postalCode,
+              country: d.country || allOrders[idx].country,
+              phone: d.phone || allOrders[idx].phone,
+              rawAddressText: d.rawAddressText || allOrders[idx].rawAddressText,
+              shippingAddress: d.shippingAddress || allOrders[idx].shippingAddress,
+              isFullAddress: Boolean(d.isFullAddress || d.streetAddress)
+            };
+            resolvedCount++;
+          }
+        }
+      } catch (err) {
+        console.error('Tam adres çözümleme hatası:', order.receiptId, err);
+      }
+
+      // Her siparişten sonra arayüzü ve kalıcı hafızayı güncelle
+      chrome.storage.local.set({ storedOrders: allOrders });
+      renderOrdersList();
+
+      // Anti-ban polite delay: 380ms
+      await new Promise(r => setTimeout(r, 380));
+    }
+
+    // Tamamlandı
+    chrome.storage.local.set({ storedOrders: allOrders });
+    renderOrdersList();
+
+    resolveProgressText.innerText = `✅ Tamamlandı! ${resolvedCount} siparişin tam adresi başarıyla çekildi.`;
+    resolveProgressPct.innerText = '100%';
+    resolveProgressBar.style.width = '100%';
+
+    ordResultBox.className = 'result-box success';
+    ordResultBox.innerText = `🎯 Toplam ${allOrders.filter(o => o.isFullAddress).length} / ${allOrders.length} siparişin tam açık sokak ve posta adresi hazır! Şimdi "📥 Müşteri & Siparişleri VDS'e Aktar" butonuna basabilirsiniz.`;
+    ordResultBox.style.display = 'block';
+
+    btnResolveFullAddresses.disabled = false;
+    btnSyncOrders.disabled = false;
   });
 
   // 6. SİPARİŞLERİ VDS'E AKTARMA BUTONU (Toplu & Güvenli)
