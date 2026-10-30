@@ -170,8 +170,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               <span class="order-id">#${o.receiptId}</span>
               <span class="buyer-name" style="font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${o.buyerName || 'Müşteri'}</span>
               ${isFull ? '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3);">🏠 Tam Adres</span>' : ''}
+              ${o.sku ? `<span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(56,189,248,0.25);">🏷️ SKU: ${o.sku}</span>` : ''}
             </div>
             <small style="color: ${isFull ? '#e2e8f0' : '#94a3b8'}; font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 ${addrDisplay}</small>
+            ${o.variation ? `<small style="color: #cbd5e1; font-size: 9px;">📏 ${o.variation}</small>` : ''}
             ${o.phone ? `<small style="color: #38bdf8; font-size: 9px;">📞 ${o.phone}</small>` : ''}
             ${o.trackingNumber ? `<small style="color: #a78bfa; font-size: 9px;">🚚 Takip: ${o.trackingNumber}</small>` : ''}
           </div>
@@ -383,7 +385,11 @@ document.addEventListener('DOMContentLoaded', async () => {
               phone: d.phone || allOrders[idx].phone,
               rawAddressText: d.rawAddressText || allOrders[idx].rawAddressText,
               shippingAddress: d.shippingAddress || allOrders[idx].shippingAddress,
-              isFullAddress: Boolean(d.isFullAddress || d.streetAddress)
+              isFullAddress: Boolean(d.isFullAddress || d.streetAddress),
+              transactionId: d.transactionId || allOrders[idx].transactionId,
+              sku: d.sku || allOrders[idx].sku,
+              variation: d.variation || allOrders[idx].variation,
+              shippingMethod: d.shippingMethod || allOrders[idx].shippingMethod
             };
             resolvedCount++;
           }
@@ -511,6 +517,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       'Posta_Kodu', 
       'Ulke', 
       'Telefon', 
+      'SKU',
+      'Varyasyon',
+      'Islem_ID',
+      'Kargo_Yontemi',
       'Tutar', 
       'Para_Birimi', 
       'Tarih', 
@@ -529,6 +539,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       `"${(o.postalCode || '').replace(/"/g, '""')}"`,
       `"${(o.country || 'United States').replace(/"/g, '""')}"`,
       `"${(o.phone || '').replace(/"/g, '""')}"`,
+      `"${(o.sku || '').replace(/"/g, '""')}"`,
+      `"${(o.variation || '').replace(/"/g, '""')}"`,
+      `"${(o.transactionId || '').replace(/"/g, '""')}"`,
+      `"${(o.shippingMethod || '').replace(/"/g, '""')}"`,
       o.orderTotal || 0,
       `"${o.currency || 'USD'}"`,
       `"${o.orderDate || ''}"`,

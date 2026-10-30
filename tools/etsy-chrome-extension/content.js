@@ -246,6 +246,12 @@
       const parsed = parseAddressFieldsFromLines(lines);
       if (!parsed.isFullAddress && lines.length < 3) return null;
 
+      // Çekmecedeki SKU, Varyasyon, Transaction ID ve Kargo Yöntemi
+      const transM = text.match(/Transaction ID:\s*(\d+)/i);
+      const skuM = text.match(/SKU:\s*([^\r\n]+)/i);
+      const varM = text.match(/(?:Height|Size|Color|Style|Boyut|Renk|Ölçü):\s*([^\r\n]+)/i);
+      const shipMethodM = text.match(/Selected by buyer[\s\r\n]+([^\r\n]+)/i);
+
       return {
         receiptId: drawerOrderId,
         buyerName: parsed.buyerName,
@@ -259,6 +265,10 @@
         phone: parsed.phone,
         rawAddressText: parsed.rawAddressText,
         isFullAddress: true,
+        transactionId: transM ? transM[1].trim() : null,
+        sku: skuM ? skuM[1].trim() : null,
+        variation: varM ? varM[0].trim() : null,
+        shippingMethod: shipMethodM ? shipMethodM[1].trim() : null,
         scrapedAt: new Date().toISOString()
       };
     } catch (err) {
@@ -420,6 +430,12 @@
           const cleanText = htmlToText(html);
           const lines = extractCleanAddressLines(cleanText);
 
+          // Çekmecedeki SKU, Varyasyon, Transaction ID ve Kargo Yöntemi
+          const transM = cleanText.match(/Transaction ID:\s*(\d+)/i);
+          const skuM = cleanText.match(/SKU:\s*([^\r\n]+)/i);
+          const varM = cleanText.match(/(?:Height|Size|Color|Style|Boyut|Renk|Ölçü):\s*([^\r\n]+)/i);
+          const shipMethodM = cleanText.match(/Selected by buyer[\s\r\n]+([^\r\n]+)/i);
+
           if (lines.length >= 2) {
             const parsed = parseAddressFieldsFromLines(lines);
             if (parsed.isFullAddress || lines.length >= 3) {
@@ -436,6 +452,10 @@
                 phone: parsed.phone,
                 rawAddressText: parsed.rawAddressText,
                 isFullAddress: Boolean(parsed.isFullAddress || parsed.streetAddress),
+                transactionId: transM ? transM[1].trim() : null,
+                sku: skuM ? skuM[1].trim() : null,
+                variation: varM ? varM[0].trim() : null,
+                shippingMethod: shipMethodM ? shipMethodM[1].trim() : null,
                 scrapedAt: new Date().toISOString()
               };
             }
