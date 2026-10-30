@@ -1432,7 +1432,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
       this.rebuildDynamicBreakdowns();
       this.selectedOrder.hasCostData = true;
       this.selectedOrder.netProfitUsd = Number((this.selectedOrder.grandTotalUsd - this.selectedOrder.etsyFeesUsd - this.selectedOrder.offsiteAdFeeUsd - totalCost).toFixed(2));
-      this.selectedOrder.netProfitTry = Number((this.selectedOrder.netProfitUsd * this.selectedOrder.exchangeRate).toFixed(2));
+      const rateToUse = this.selectedOrder.effectiveExchangeRate || this.selectedOrder.exchangeRate;
+      this.selectedOrder.netProfitTry = Number((this.selectedOrder.netProfitUsd * rateToUse).toFixed(2));
 
       // Recalculate KPIs from all completed orders
       const active = this.orders.filter(o => o.orderStatus !== 'canceled');

@@ -725,10 +725,6 @@
                   <span><strong>Etsy Ödeme Hesabı Net Hak Edişi (Maliyetsiz):</strong></span>
                   <span style="color: #34d399; font-weight: 700; font-size: 13px;">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry) }} <small style="color: #94a3b8;">(&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0)).toFixed(2) }})</small></span>
                 </div>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 4px; display: flex; justify-content: space-between;">
-                  <span>TCMB Brüt Karşılığı: ₺{{ formatNumber((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0)) * selectedOrder.exchangeRate) }}</span>
-                  <span style="color: #f59e0b;" *ngIf="selectedOrder.fxConversionFeeTry">Etsy %2.5 Döviz Çevrim Kesintisi: -₺{{ formatNumber(selectedOrder.fxConversionFeeTry) }}</span>
-                </div>
               </div>
               <div class="ctx-row" style="margin-top: 8px; font-size: 11px; color: #a1a1aa; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 4px;" *ngIf="selectedOrder.costNotes">
                 <strong>📦 Taşıyıcı / Takip Notu:</strong> {{ selectedOrder.costNotes }}
@@ -761,13 +757,9 @@
                 <span>Hesaplanan Net Kâr ($):</span>
                 <strong class="text-success">&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)).toFixed(2) }}</strong>
               </div>
-              <div class="calc-row highlight" *ngIf="selectedOrder.effectiveExchangeRate">
-                <span>Gerçek Kasa Net Kârı (Etsy %2.5 FX Kesintili ₺):</span>
-                <strong class="text-cyan">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * selectedOrder.effectiveExchangeRate).toFixed(2) }}</strong>
-              </div>
               <div class="calc-row highlight">
-                <span>Resmi Muhasebe / TCMB Kârı (₺):</span>
-                <strong class="text-emerald">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * selectedOrder.exchangeRate).toFixed(2) }}</strong>
+                <span>Hesaplanan Net Kâr (₺):</span>
+                <strong class="text-emerald">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)).toFixed(2) }}</strong>
               </div>
             </div>
           </div>
