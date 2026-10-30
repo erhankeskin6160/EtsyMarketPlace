@@ -375,9 +375,7 @@
                     Net Kâr (₺)
                   </th>
                   <th (click)="sortOrders('hasCostData')" class="sortable-th" [class.active-sort]="sortColumn === 'hasCostData'" title="Maliyet Giriş Durumuna Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'hasCostData'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Maliyet
-                  </th>
+                    <span class="sort-badge" *ngIf="sortColumn === 'hasCostData'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>Maliyet & Düzenle</th>
                   <th (click)="sortOrders('hasInvoice')" class="sortable-th" [class.active-sort]="sortColumn === 'hasInvoice'" title="Fatura Durumuna Göre Sırala">
                     <span class="sort-badge" *ngIf="sortColumn === 'hasInvoice'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
                     Kargo Faturası
@@ -413,14 +411,22 @@
                     {{ o.netProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(o.netProfitTry))) : (o.orderStatus === 'canceled' && !o.hasCostData ? '₺0,00' : ('₺' + formatNumber(o.netProfitTry))) }}
                   </td>
                   <td class="cost-flag-cell">
-                    <span 
-                      class="cost-status-pill" 
-                      [class.has-cost]="o.hasCostData" 
-                      [class.no-cost]="!o.hasCostData && o.orderStatus !== 'canceled'"
-                      [class.canceled-pill]="o.orderStatus === 'canceled'"
-                      (click)="editOrderCost(o)">
-                      {{ o.orderStatus === 'canceled' ? (o.hasCostData ? '🔴 İptal (Maliyetli)' : '🔴 İptal') : (o.hasCostData ? '✅ Girildi' : '⚠️ Eksik') }}
-                    </span>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span 
+                        class="cost-status-pill" 
+                        [class.has-cost]="o.hasCostData" 
+                        [class.no-cost]="!o.hasCostData && o.orderStatus !== 'canceled'"
+                        [class.canceled-pill]="o.orderStatus === 'canceled'"
+                        (click)="editOrderCost(o)">
+                        {{ o.orderStatus === 'canceled' ? (o.hasCostData ? '🔴 İptal (Maliyetli)' : '🔴 İptal') : (o.hasCostData ? '✅ Girildi' : '⚠️ Eksik') }}
+                      </span>
+                      <button 
+                        class="btn-edit-cost" 
+                        (click)="editOrderCost(o)" 
+                        title="Bu siparişin ürün, kargo ve paketleme maliyetini düzenle">
+                        ✏️ Düzenle
+                      </button>
+                    </div>
                   </td>
                   <td class="invoice-cell">
                     <button 

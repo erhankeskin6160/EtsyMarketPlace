@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Etsy Satıcı Asistanı (Copilot)</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="copilot-container">
+    <!-- Üst Başlık -->
+    <header class="copilot-header">
+      <div class="header-brand">
+        <span class="brand-icon">🛡️</span>
+        <div>
+          <h1 class="brand-title">Etsy Copilot</h1>
+          <span class="brand-sub">VDS Güvenli Satıcı Köprüsü</span>
+        </div>
+      </div>
+      <div class="api-status-pill" id="apiStatusPill">
+        <span class="status-dot"></span>
+        <span id="apiStatusText">VDS Kontrol...</span>
+      </div>
+    </header>
+
+    <!-- Sekmeler -->
+    <nav class="copilot-nav">
+      <button class="nav-tab active" data-tab="finance">💰 Finans & Rezerv</button>
+      <button class="nav-tab" data-tab="orders">📦 Sipariş & Müşteri</button>
+      <button class="nav-tab" data-tab="settings">⚙️ Ayarlar</button>
+    </nav>
+
+    <!-- SEKME 1: FİNANS & FON REZERVİ -->
+    <main class="tab-pane active" id="tab-finance">
+      <div class="card-status-box">
+        <div class="status-row">
+          <span class="lbl">Kullanılabilir Bakiye:</span>
+          <strong class="val text-emerald" id="finCurrent">-50.35 ₺</strong>
+        </div>
+        <div class="status-row">
+          <span class="lbl">Rezervedeki Fon (<span id="finPct">%75</span>):</span>
+          <strong class="val text-warning" id="finReserve">28,479.09 ₺</strong>
+        </div>
+        <div class="status-row">
+          <span class="lbl">Toplam Etsy Fonu:</span>
+          <strong class="val text-cyan" id="finTotal">28,428.74 ₺</strong>
+        </div>
+        <div class="status-row highlight">
+          <span class="lbl">Sonraki Denetim / İnceleme:</span>
+          <span class="val text-white" id="finDate">30 Kasım (Nov 30)</span>
+        </div>
+      </div>
+
+      <div class="page-detect-banner" id="finDetectBanner">
+        🔍 Etsy Finans sekmesi aranıyor...
+      </div>
+
+      <button class="btn-action primary" id="btnSyncFinance">
+        ⚡ Finans & Rezervi VDS'e Aktar
+      </button>
+
+      <div class="result-box" id="finResultBox" style="display: none;"></div>
+    </main>
+
+    <!-- SEKME 2: SİPARİŞ & MÜŞTERİ BİLGİSİ -->
+    <main class="tab-pane" id="tab-orders">
+      <div class="page-detect-banner" id="ordDetectBanner">
+        🔍 Etsy Siparişler sekmesi aranıyor...
+      </div>
+
+      <div class="orders-summary-bar">
+        <span>Sayfada Bulunan Sipariş:</span>
+        <strong id="orderCount">0</strong>
+      </div>
+
+      <div class="order-list-container" id="orderListContainer">
+        <div class="empty-state">Henüz siparişler listelenmedi. Etsy 'Orders' sayfasını açın.</div>
+      </div>
+
+      <button class="btn-action success" id="btnSyncOrders">
+        📥 Müşteri & Siparişleri VDS'e Aktar
+      </button>
+
+      <div class="result-box" id="ordResultBox" style="display: none;"></div>
+    </main>
+
+    <!-- SEKME 3: AYARLAR -->
+    <main class="tab-pane" id="tab-settings">
+      <div class="settings-form">
+        <div class="form-group">
+          <label>VDS API Adresi:</label>
+          <input type="text" id="cfgApiUrl" value="http://localhost:5263" class="input-text">
+          <small class="hint">VDS içindeyseniz 'http://localhost:5263', dışarıdan bağlanıyorsanız 'http://5.180.81.148:5263' yazın.</small>
+        </div>
+
+        <div class="form-group">
+          <label>Mağaza ID (Shop ID):</label>
+          <input type="text" id="cfgShopId" value="53236321" class="input-text">
+        </div>
+
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="cfgAutoSync">
+            <span>Ödeme sekmesi açıldığında otomatik senkronize et</span>
+          </label>
+        </div>
+
+        <button class="btn-action primary" id="btnSaveSettings">
+          💾 Ayarları Kaydet
+        </button>
+
+        <div class="result-box" id="setResultBox" style="display: none;"></div>
+      </div>
+    </main>
+
+    <!-- Alt Bilgi -->
+    <footer class="copilot-footer">
+      <span>🛡️ Sıfır Bot Riski • İzole MV3 Mimarisi</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

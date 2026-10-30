@@ -1,0 +1,33 @@
+{
+  "manifest_version": 3,
+  "name": "Etsy MarketPlace Satıcı Asistanı (Copilot)",
+  "version": "1.0.0",
+  "description": "Etsy Mağazası için Fon Rezervi Senkronizasyonu, Sipariş ve Müşteri Kargo Bilgisi Aktarıcısı (VDS Köprüsü)",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "*://*.etsy.com/*",
+    "http://localhost:5263/*",
+    "http://5.180.81.148:5263/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Etsy Satıcı Asistanı (Copilot)"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.etsy.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

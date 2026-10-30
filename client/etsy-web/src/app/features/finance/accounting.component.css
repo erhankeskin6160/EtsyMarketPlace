@@ -501,6 +501,9 @@
       overflow: hidden;
       max-width: 580px;
       width: 90%;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
       animation: modal-pop 0.2s ease-out;
     }
     @keyframes modal-pop {
@@ -523,7 +526,15 @@
       font-size: 1.1rem;
       cursor: pointer;
     }
-    .modal-body { padding: 20px; font-size: 0.84rem; line-height: 1.5; color: #cbd5e1; }
+    .modal-body {
+      padding: 20px;
+      font-size: 0.84rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+      overflow-y: auto;
+      flex: 1;
+      max-height: calc(90vh - 125px);
+    }
     .rec-section { margin-bottom: 14px; }
     .rec-section h4 { margin: 0 0 6px 0; font-size: 0.9rem; color: #fff; }
     .rec-section p, .rec-section ul { margin: 4px 0; }
@@ -536,6 +547,10 @@
       padding: 14px 20px;
       background: #151c2c;
       border-top: 1px solid rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
+      position: sticky;
+      bottom: 0;
+      z-index: 10;
     }
     .btn-primary-modal {
       background: #4f46e5;
@@ -1027,4 +1042,30 @@
 
 .form-group.full-width {
   grid-column: span 2;
+}
+
+.cost-modal-card {
+  max-width: 620px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.btn-edit-cost {
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  color: #a5b4fc;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-edit-cost:hover {
+  background: #6366f1;
+  color: white;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
 }
