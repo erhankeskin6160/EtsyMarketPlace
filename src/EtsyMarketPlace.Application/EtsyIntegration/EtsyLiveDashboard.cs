@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace EtsyMarketPlace.Application.EtsyIntegration;
@@ -303,6 +303,11 @@ public static class EtsyLiveDashboardCalculator
             var netProfitTry = Math.Round(netProfitUsd * orderSpecificRate, 2);
             var orderDate = receipt.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
 
+            var effectiveExchangeRate = Math.Round(orderSpecificRate * 0.975m, 2);
+            var etsyNetPayoutUsd = isCanceled ? 0m : Math.Round(grandTotal - etsyFees - offsiteAdFee, 2);
+            var etsyNetPayoutTry = isCanceled ? 0m : Math.Round(etsyNetPayoutUsd * (orderSpecificRate * 0.975m), 2);
+            var fxConversionFeeTry = isCanceled ? 0m : Math.Round((etsyNetPayoutUsd * orderSpecificRate) - etsyNetPayoutTry, 2);
+
             rows.Add(new EtsyOrderFinancialDetail(
                 receipt.ReceiptId,
                 receipt.CreatedAt,
@@ -333,7 +338,11 @@ public static class EtsyLiveDashboardCalculator
                 unitProductCost,
                 actualShippingCost,
                 packagingCost,
-                costNotes));
+                costNotes,
+                effectiveExchangeRate,
+                etsyNetPayoutUsd,
+                etsyNetPayoutTry,
+                fxConversionFeeTry));
         }
 
         AppendCrossPeriodRefundRows(rows, refundEntries, receiptIdsInPeriod, orderCosts, exchangeRate);
@@ -485,7 +494,11 @@ public static class EtsyLiveDashboardCalculator
                 UnitProductCostUsd: null,
                 ActualShippingCostUsd: null,
                 PackagingCostUsd: null,
-                CostNotes: "cross_period_refund"));
+                CostNotes: "cross_period_refund",
+                EffectiveExchangeRate: Math.Round(refundRate * 0.975m, 2),
+                EtsyNetPayoutUsd: -refundUsd,
+                EtsyNetPayoutTry: Math.Round(-refundUsd * (refundRate * 0.975m), 2),
+                FxConversionFeeTry: Math.Round((-refundUsd * refundRate) - Math.Round(-refundUsd * (refundRate * 0.975m), 2), 2)));
         }
     }
 }
@@ -556,6 +569,10 @@ public sealed record EtsyOrderFinancialDetail(
     decimal? UnitProductCostUsd = null,
     decimal? ActualShippingCostUsd = null,
     decimal? PackagingCostUsd = null,
-    string? CostNotes = null);
+    string? CostNotes = null,
+    decimal? EffectiveExchangeRate = null,
+    decimal? EtsyNetPayoutUsd = null,
+    decimal? EtsyNetPayoutTry = null,
+    decimal? FxConversionFeeTry = null);
 
 public sealed record EtsyDailySeries(string[] Labels, decimal[] GrossSales, decimal[] NetProfit);

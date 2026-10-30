@@ -1,4 +1,4 @@
-<div class="accounting-view">
+﻿<div class="accounting-view">
       <!-- 1. TOP HEADER & DESKTOP CONTROLS -->
       <div class="accounting-header">
         <div class="header-left">
@@ -361,8 +361,8 @@
                   <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-success' : 'text-danger'">
                     {{ o.netProfitUsd < 0 ? ('-$' + Math.abs(o.netProfitUsd).toFixed(2)) : (o.orderStatus === 'canceled' && !o.hasCostData ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2))) }}
                   </td>
-                  <td class="rate-cell">₺{{ o.exchangeRate.toFixed(2) }}</td>
-                  <td class="profit-try-cell" [ngClass]="o.netProfitTry >= 0 ? 'text-emerald' : 'text-danger'">
+                  <td class="rate-cell" [title]="'TCMB Kilitli Kuru: ₺' + o.exchangeRate.toFixed(2) + (o.effectiveExchangeRate ? ('\nEtsy Fiili Kuru (%2.5 FX Kesintili): ₺' + o.effectiveExchangeRate.toFixed(2)) : '') + (o.etsyNetPayoutTry ? ('\nEtsy Net Hak Ediş: ₺' + formatNumber(o.etsyNetPayoutTry)) : '')">₺{{ o.exchangeRate.toFixed(2) }}</td>
+                  <td class="profit-try-cell" [ngClass]="o.netProfitTry >= 0 ? 'text-emerald' : 'text-danger'" [title]="'Resmi Muhasebe Kârı: ₺' + formatNumber(o.netProfitTry) + (o.effectiveExchangeRate && o.netProfitUsd ? ('\nFiili Kasa Kârı: ₺' + formatNumber(o.netProfitUsd * o.effectiveExchangeRate)) : '')">
                     {{ o.netProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(o.netProfitTry))) : (o.orderStatus === 'canceled' && !o.hasCostData ? '₺0,00' : ('₺' + formatNumber(o.netProfitTry))) }}
                   </td>
                   <td class="cost-flag-cell">
@@ -712,7 +712,23 @@
               <div class="badge-row">
                 <span class="ctx-badge gross">Ödeme: &#36;{{ selectedOrder.grandTotalUsd.toFixed(2) }}</span>
                 <span class="ctx-badge fee">Etsy Kesintisi: -&#36;{{ selectedOrder.etsyFeesUsd.toFixed(2) }}</span>
-                <span class="ctx-badge rate" [title]="'Sipariş tarihindeki (' + selectedOrder.orderDate + ') TCMB / Piyasa Kilitli Kuru'">🔒 Kilitli Kur: ₺{{ selectedOrder.exchangeRate.toFixed(2) }}</span>
+                <span class="ctx-badge ads" *ngIf="selectedOrder.offsiteAdFeeUsd > 0" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                  Dış Reklam: -&#36;{{ selectedOrder.offsiteAdFeeUsd.toFixed(2) }}
+                </span>
+                <span class="ctx-badge rate" [title]="'Sipariş tarihindeki (' + selectedOrder.orderDate + ') TCMB / Piyasa Kilitli Kuru'">🔒 TCMB Kuru: ₺{{ selectedOrder.exchangeRate.toFixed(2) }}</span>
+                <span class="ctx-badge rate" *ngIf="selectedOrder.effectiveExchangeRate" [title]="'Etsy %2.5 döviz çevrim kesintisi sonrası fiili banka kuru'" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+                  🏦 Etsy Fiili Kuru: ₺{{ selectedOrder.effectiveExchangeRate.toFixed(2) }}
+                </span>
+              </div>
+              <div class="etsy-payout-box" *ngIf="selectedOrder.etsyNetPayoutTry" style="margin-top: 10px; padding: 8px 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; font-size: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span><strong>Etsy Ödeme Hesabı Net Hak Edişi (Maliyetsiz):</strong></span>
+                  <span style="color: #34d399; font-weight: 700; font-size: 13px;">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry) }} <small style="color: #94a3b8;">(&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0)).toFixed(2) }})</small></span>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 4px; display: flex; justify-content: space-between;">
+                  <span>TCMB Brüt Karşılığı: ₺{{ formatNumber((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0)) * selectedOrder.exchangeRate) }}</span>
+                  <span style="color: #f59e0b;" *ngIf="selectedOrder.fxConversionFeeTry">Etsy %2.5 Döviz Çevrim Kesintisi: -₺{{ formatNumber(selectedOrder.fxConversionFeeTry) }}</span>
+                </div>
               </div>
               <div class="ctx-row" style="margin-top: 8px; font-size: 11px; color: #a1a1aa; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 4px;" *ngIf="selectedOrder.costNotes">
                 <strong>📦 Taşıyıcı / Takip Notu:</strong> {{ selectedOrder.costNotes }}
@@ -745,8 +761,12 @@
                 <span>Hesaplanan Net Kâr ($):</span>
                 <strong class="text-success">&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)).toFixed(2) }}</strong>
               </div>
+              <div class="calc-row highlight" *ngIf="selectedOrder.effectiveExchangeRate">
+                <span>Gerçek Kasa Net Kârı (Etsy %2.5 FX Kesintili ₺):</span>
+                <strong class="text-cyan">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * selectedOrder.effectiveExchangeRate).toFixed(2) }}</strong>
+              </div>
               <div class="calc-row highlight">
-                <span>Hesaplanan Net Kâr (₺):</span>
+                <span>Resmi Muhasebe / TCMB Kârı (₺):</span>
                 <strong class="text-emerald">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * selectedOrder.exchangeRate).toFixed(2) }}</strong>
               </div>
             </div>

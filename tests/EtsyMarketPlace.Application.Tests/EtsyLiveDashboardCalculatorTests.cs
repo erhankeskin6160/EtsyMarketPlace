@@ -1,4 +1,4 @@
-namespace EtsyMarketPlace.Application.Tests;
+﻿namespace EtsyMarketPlace.Application.Tests;
 
 using System;
 using System.Collections.Generic;
@@ -267,6 +267,47 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(-15.00m, row.NetProfitUsd); // Negative balance / loss!
         Assert.Equal(49.22m, row.ExchangeRate); // Order date locked rate (08.10.2026)
         Assert.Equal(-738.30m, row.NetProfitTry); // -15 * 49.22 (historical rate for 8 Oct 2026)
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_CalculatesEffectiveExchangeRateAndEtsyNetPayout_AccountingForEtsyFxSpread()
+    {
+        var receipt = new EtsyDashboardReceipt(
+            4187202652,
+            new DateTimeOffset(2026, 10, 8, 10, 0, 0, TimeSpan.Zero),
+            true,
+            false,
+            false,
+            "USD",
+            149.99m,
+            149.99m,
+            0m,
+            0m,
+            0m,
+            0m,
+            new[] { new EtsyDashboardReceiptItem("Custom Omnitrix", 112233, 1) },
+            "Sandro Sobreira",
+            556677,
+            "sandro@example.com",
+            "Completed");
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            new[] { receipt },
+            Array.Empty<EtsyDashboardLedgerFee>(),
+            NoCosts(),
+            48.80m);
+
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.NotNull(row.EffectiveExchangeRate);
+        Assert.Equal(Math.Round(row.ExchangeRate * 0.975m, 2), row.EffectiveExchangeRate);
+        Assert.NotNull(row.EtsyNetPayoutUsd);
+        var expectedNetUsd = Math.Round(row.GrandTotalUsd - row.EtsyFeesUsd - row.OffsiteAdFeeUsd, 2);
+        Assert.Equal(expectedNetUsd, row.EtsyNetPayoutUsd);
+        Assert.NotNull(row.EtsyNetPayoutTry);
+        Assert.Equal(Math.Round(expectedNetUsd * (row.ExchangeRate * 0.975m), 2), row.EtsyNetPayoutTry);
+        Assert.NotNull(row.FxConversionFeeTry);
+        Assert.True(row.FxConversionFeeTry > 0);
     }
 }
 

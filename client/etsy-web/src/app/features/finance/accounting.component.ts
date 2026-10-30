@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+﻿import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -916,7 +916,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
             unitProductCostUsd: dto.unitProductCostUsd !== undefined ? dto.unitProductCostUsd : undefined,
             actualShippingCostUsd: dto.actualShippingCostUsd !== undefined ? dto.actualShippingCostUsd : undefined,
             packagingCostUsd: dto.packagingCostUsd !== undefined ? dto.packagingCostUsd : undefined,
-            costNotes: dto.costNotes || undefined
+            costNotes: dto.costNotes || undefined,
+            effectiveExchangeRate: dto.effectiveExchangeRate || (dto.exchangeRate ? Number((dto.exchangeRate * 0.975).toFixed(2)) : undefined),
+            etsyNetPayoutUsd: dto.etsyNetPayoutUsd !== undefined ? dto.etsyNetPayoutUsd : (dto.grandTotalUsd ? Number((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)).toFixed(2)) : undefined),
+            etsyNetPayoutTry: dto.etsyNetPayoutTry !== undefined ? dto.etsyNetPayoutTry : (dto.grandTotalUsd && dto.exchangeRate ? Number(((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)) * (dto.exchangeRate * 0.975)).toFixed(2)) : undefined),
+            fxConversionFeeTry: dto.fxConversionFeeTry !== undefined ? dto.fxConversionFeeTry : undefined
           }));
           this.filterOrders();
           this.rebuildDynamicBreakdowns();
