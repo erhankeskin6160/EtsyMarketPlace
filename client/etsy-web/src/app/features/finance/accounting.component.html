@@ -87,6 +87,53 @@
         </button>
       </div>
 
+      
+      <!-- LIVE ETSY PAYMENT RESERVE & FUNDS BAR (VDS SYNC SNAPSHOT) -->
+      <div class="reserve-status-banner">
+        <div class="reserve-banner-left">
+          <div class="reserve-badge-pill">
+            <span class="live-pulse-dot"></span>
+            <strong>Etsy Ödeme Hesabı & Fon Rezervi (VDS Canlı)</strong>
+          </div>
+          <p class="reserve-sub-text">
+            Etsy Kuralı: Fonlar <strong>{{ reserveSnapshot.reserveHoldDays }} gün</strong> süreyle rezerve tutulur. Sonraki denetim / inceleme: <strong>{{ reserveSnapshot.reevaluationDate || '30 Kasım' }}</strong>
+          </p>
+        </div>
+
+        <div class="reserve-metrics-group">
+          <!-- Kullanılabilir Bakiye -->
+          <div class="reserve-metric-box">
+            <span class="metric-lbl">Kullanılabilir (Deposit):</span>
+            <span class="metric-val" [ngClass]="reserveSnapshot.currentBalanceTry >= 0 ? 'text-success' : 'text-danger'">
+              ₺{{ formatNumber(reserveSnapshot.currentBalanceTry) }}
+            </span>
+          </div>
+
+          <!-- Rezervedeki Para -->
+          <div class="reserve-metric-box">
+            <span class="metric-lbl">Rezervedeki Fon (%{{ reserveSnapshot.reservePercent }}):</span>
+            <span class="metric-val text-warning">
+              ₺{{ formatNumber(reserveSnapshot.pendingBalanceTry) }}
+            </span>
+          </div>
+
+          <!-- Toplam Etsy Fonu -->
+          <div class="reserve-metric-box">
+            <span class="metric-lbl">Toplam Etsy Hesabı:</span>
+            <span class="metric-val text-cyan">
+              ₺{{ formatNumber(reserveSnapshot.totalFundsTry) }}
+            </span>
+          </div>
+
+          <!-- Denetim ve Senkron Butonu -->
+          <div class="reserve-action-box">
+            <button class="btn-sync-reserve" (click)="openSyncModal()" title="VDS 1-Tık Senkron Yer İmi ve Rezerv Ayarları">
+              <span class="sync-icon">⚡</span> VDS Senkronizasyonu
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- 2. NINE FINANCIAL KPI CARDS (Matching FinancialReportForm.cs Image 2) -->
       <div class="kpi-grid-9">
         <!-- 1. Brüt Satış -->
@@ -761,6 +808,14 @@
                 <span>Hesaplanan Net Kâr (₺):</span>
                 <strong class="text-emerald">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)).toFixed(2) }}</strong>
               </div>
+              <div class="calc-row reserve-calc-row">
+                <span>🔒 Rezerve Blokesi (%{{ reserveSnapshot.reservePercent }} - {{ reserveSnapshot.reserveHoldDays }} Gün):</span>
+                <strong class="text-warning">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * (reserveSnapshot.reservePercent / 100)).toFixed(2) }}</strong>
+              </div>
+              <div class="calc-row reserve-calc-row">
+                <span>🔓 Kullanılabilir Bakiye (%{{ 100 - reserveSnapshot.reservePercent }}):</span>
+                <strong class="text-cyan">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * ((100 - reserveSnapshot.reservePercent) / 100)).toFixed(2) }}</strong>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -1359,4 +1414,67 @@
       <div class="toast-notification" *ngIf="toastMessage">
         {{ toastMessage }}
       </div>
-    </div>
+    
+      <!-- MODAL: VDS 1-TIK SENKRON VE FON REZERVİ AYARLARI -->
+      <div class="modal-backdrop" *ngIf="showSyncModal" (click)="closeModals()">
+        <div class="modal-card sync-modal-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>⚡ Etsy Fon Rezervi & VDS Canlı Köprüsü (Sıfır Ban Riski)</h3>
+              <p class="modal-sub">Etsy mağazanız VDS'te açıkken, tek bir tıkla bakiye ve rezerv verisini anında buraya aktarın.</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <!-- VDS 1-Click Bookmarklet Step -->
+            <div class="sync-step-box">
+              <h4 class="step-title">1. VDS Chrome İçin 1-Tık Senkron Yer İmi (Bookmarklet)</h4>
+              <p class="step-desc">
+                Bu yöntem <strong>%100 güvenlidir</strong> ve sıfır ban riski taşır; çünkü Etsy sunucularına harici hiçbir istek yapmaz, sadece VDS Chrome'da açık olan sekmenizdeki rakamları okuyup yerel VDS API'nize kaydeder.
+              </p>
+              <div class="bookmarklet-action-row">
+                <button class="btn-copy-bookmarklet" (click)="copyBookmarkletCode()">
+                  📋 1-Tık Senkron Kodunu Kopyala
+                </button>
+                <span class="bookmarklet-hint">VDS Chrome'da Yer İmleri çubuğuna sağ tıklayın -> 'Sayfa Ekle' deyin ve URL alanına bu kodu yapıştırın. Etsy Finance sekmesindeyken tıklamanız yeterlidir.</span>
+              </div>
+            </div>
+
+            <!-- Manual Value Override -->
+            <div class="sync-step-box">
+              <h4 class="step-title">2. Değerleri Doğrudan Güncelleme (Manuel Düzenleme)</h4>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>Kullanılabilir Bakiye (₺):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.currentBalanceTry" step="0.01" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Rezervedeki Para (₺):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.pendingBalanceTry" step="0.01" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Rezerv Oranı (%):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.reservePercent" min="0" max="100" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Rezerv Tutma Süresi (Gün):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.reserveHoldDays" class="form-input" />
+                </div>
+                <div class="form-group full-width">
+                  <label>Sonraki Etsy Denetim / İnceleme Tarihi:</label>
+                  <input type="text" [(ngModel)]="reserveSnapshot.reevaluationDate" placeholder="Örn: November 30" class="form-input" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn-cancel" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="saveReserveSnapshotManual()" [disabled]="isSavingReserve">
+              💾 {{ isSavingReserve ? 'Kaydediliyor...' : 'Değerleri Kaydet' }}
+            </button>
+          </div>
+        </div>
+      </div>
+</div>

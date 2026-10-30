@@ -503,4 +503,15 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
         if (s.Length <= 8) return "****";
         return $"{s[..4]}...{s[^4..]}";
     }
+
+    public async Task<string?> GetPaymentReserveSnapshotJsonAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        return _fallbackStore != null ? await _fallbackStore.GetPaymentReserveSnapshotJsonAsync(shopId, cancellationToken) : null;
+    }
+
+    public async Task SavePaymentReserveSnapshotJsonAsync(string shopId, string snapshotJson, CancellationToken cancellationToken = default)
+    {
+        if (_fallbackStore != null)
+            await _fallbackStore.SavePaymentReserveSnapshotJsonAsync(shopId, snapshotJson, cancellationToken);
+    }
 }

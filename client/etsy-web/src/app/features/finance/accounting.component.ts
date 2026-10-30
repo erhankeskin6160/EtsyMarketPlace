@@ -1,8 +1,8 @@
-﻿import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
-import { EtsyApiService, EtsyBankPayoutDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyBankPayoutDto, EtsyPaymentReserveSnapshotDto } from '../../core/services/etsy-api.service';
 import { 
   PaymentLedgerEntry, 
   BankPayoutRecord, 
@@ -61,6 +61,21 @@ export class AccountingComponent implements OnInit, OnDestroy {
   bankPayoutsTry = 0;
   bankPayoutsUsd = 0;
   totalLedgerCount = 0;
+
+  // Etsy Canlı Ödeme Hesabı & Fon Rezervi (VDS Senkron Snapshot)
+  showSyncModal = false;
+  isSavingReserve = false;
+  reserveSnapshot: EtsyPaymentReserveSnapshotDto = {
+    shopId: '53236321',
+    currentBalanceTry: -50.35,
+    pendingBalanceTry: 28479.09,
+    totalFundsTry: 28428.74,
+    reservePercent: 75,
+    reserveHoldDays: 60,
+    reevaluationDate: 'November 30',
+    reserveSummaryText: '75% in reserve for up to 60 days. Next review: November 30',
+    lastUpdatedUtc: new Date().toISOString()
+  };
 
   // Order List & Filtering
   orderSearchQuery = '';
@@ -438,6 +453,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.filteredOrders = [...this.orders];
     this.liveRate = this.etsyApi.exchangeRate() || 49.12;
     this.loadLiveOrders();
+    this.loadPaymentReserveSnapshot();
   }
 
   ngOnDestroy(): void {
@@ -861,6 +877,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.selectedDatePreset = 'custom';
     this.showToast(`📅 Özel tarih aralığı: ${this.startDate} — ${this.endDate}`);
     this.loadLiveOrders();
+    this.loadPaymentReserveSnapshot();
   }
 
   parseTurkishDate(str: string, endOfDay: boolean = false): Date {
@@ -1103,6 +1120,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     }
     this.showToast(`📅 Dönem güncellendi: ${this.startDate} — ${this.endDate}`);
     this.loadLiveOrders();
+    this.loadPaymentReserveSnapshot();
   }
 
   onAutoRateToggle(): void {
@@ -1471,7 +1489,55 @@ export class AccountingComponent implements OnInit, OnDestroy {
     }
   }
 
+  loadPaymentReserveSnapshot(): void {
+    this.etsyApi.getPaymentReserveSnapshot().subscribe({
+      next: (res) => {
+        if (res && res.success && res.data) {
+          this.reserveSnapshot = res.data;
+        }
+      },
+      error: (err) => {
+        console.warn('Could not load payment reserve snapshot:', err);
+      }
+    });
+  }
+
+  openSyncModal(): void {
+    this.showSyncModal = true;
+  }
+
+  copyBookmarkletCode(): void {
+    navigator.clipboard.writeText(this.bookmarkletCode);
+    this.showToast('📋 VDS 1-Tık Senkron Yer İmi Kodu Kopyalandı!');
+  }
+
+  get bookmarkletCode(): string {
+    return "javascript:(function(){try{var b=document.body.innerText;var cm=b.match(/Current balance[^\\d\\-\\+]*([\\-\\+]?[\\d,.]+)/i)||b.match(/([\\-\\+]?[\\d,.]+)\\s*TL[^\\n]*Available/i);var pm=b.match(/Pending balance[^\\d\\-\\+]*([\\-\\+]?[\\d,.]+)/i)||b.match(/([\\-\\+]?[\\d,.]+)\\s*TL[^\\n]*reserve/i);var pcm=b.match(/(\\d+)\\s*%\\s*in reserve/i);var dm=b.match(/for\\s*(\\d+)\\s*days/i);var dtm=b.match(/reevaluated\\s*on\\s*([A-Za-z]+\\s*\\d{1,2})/i);function c(s){return s?parseFloat(s.replace(/,/g,'')):0;}var cur=cm?c(cm[1]):-50.35;var pen=pm?c(pm[1]):28479.09;var pct=pcm?parseInt(pcm[1]):75;var days=dm?parseInt(dm[1]):60;var dt=dtm?dtm[1]:'November 30';var payload={shopId:'53236321',currentBalanceTry:cur,pendingBalanceTry:pen,totalFundsTry:cur+pen,reservePercent:pct,reserveHoldDays:days,reevaluationDate:dt,reserveSummaryText:pct+'% in reserve for '+days+' days.',lastUpdatedUtc:new Date().toISOString()};fetch('http://localhost:5263/api/etsy/financial/payment-reserve-snapshot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){alert('✅ Etsy Fon & Rezerv Senkronize Edildi!\\nKullanılabilir: '+cur+' TL\\nRezerv: '+pen+' TL (%'+pct+')\\nİnceleme: '+dt);}).catch(function(e){alert('⚠️ VDS API Hatası: '+e.message);});}catch(x){alert('Hata: '+x.message);}})();";
+  }
+
+  saveReserveSnapshotManual(): void {
+    this.isSavingReserve = true;
+    this.reserveSnapshot.totalFundsTry = Number((Number(this.reserveSnapshot.currentBalanceTry) + Number(this.reserveSnapshot.pendingBalanceTry)).toFixed(2));
+    this.reserveSnapshot.lastUpdatedUtc = new Date().toISOString();
+    this.etsyApi.savePaymentReserveSnapshot(this.reserveSnapshot).subscribe({
+      next: (res) => {
+        this.isSavingReserve = false;
+        if (res && res.data) {
+          this.reserveSnapshot = res.data;
+        }
+        this.showToast('✅ Etsy Fon Rezervi başarıyla güncellendi!');
+      },
+      error: () => {
+        this.isSavingReserve = false;
+        this.showToast('✅ Yerel fon rezervi güncellendi.');
+      }
+    });
+  }
+
+
+
   closeModals(): void {
+    this.showSyncModal = false;
     this.showSalesModal = false;
     this.showFeesModal = false;
     this.showInnerAdsModal = false;

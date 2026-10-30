@@ -49,6 +49,8 @@ public class AiListingOptimizationUseCaseTests
         public Task<EtsyAppCredentialsRecord> SaveEtsyAppCredentialsAsync(SaveEtsyAppCredentialsRequest request, CancellationToken ct) => Task.FromResult<EtsyAppCredentialsRecord>(null!);
         public Task<string?> GetAiSettingsJsonAsync(string shopId, CancellationToken ct) => Task.FromResult<string?>(null);
         public Task SaveAiSettingsJsonAsync(string shopId, string settingsJson, CancellationToken ct) => Task.CompletedTask;
+        public Task<string?> GetPaymentReserveSnapshotJsonAsync(string shopId, CancellationToken ct = default) => Task.FromResult<string?>(null);
+        public Task SavePaymentReserveSnapshotJsonAsync(string shopId, string json, CancellationToken ct = default) => Task.CompletedTask;
     }
 
     [Fact]

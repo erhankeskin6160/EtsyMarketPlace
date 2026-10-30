@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Application.Features.Financials;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -397,5 +398,29 @@ public class EtsyFinancialsController : BaseApiController
         var resolvedShopId = ResolveShopId(shopId, _config);
         var summary = await _dashboard.GetRealFinancialSummaryAsync(resolvedShopId, cancellationToken);
         return Ok(summary);
+    }
+
+    [HttpGet("etsy/financial/payment-reserve-snapshot")]
+    [EndpointSummary("Etsy Canlı Ödeme Rezervi ve Bakiye Durumunu Getir")]
+    public async Task<IActionResult> GetPaymentReserveSnapshot(
+        [FromQuery] string shopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var response = await _mediator.Send(new GetPaymentReserveSnapshotQuery(resolvedShopId), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPost("etsy/financial/payment-reserve-snapshot")]
+    [EndpointSummary("Etsy Canlı Ödeme Rezervi ve Bakiye Durumunu Kaydet / Senkronize Et")]
+    public async Task<IActionResult> SavePaymentReserveSnapshot(
+        [FromBody] EtsyPaymentReserveSnapshotDto snapshot,
+        CancellationToken cancellationToken = default)
+    {
+        if (snapshot == null) return BadRequest(new { error = "Snapshot boş olamaz." });
+        var resolvedShopId = ResolveShopId(snapshot.ShopId, _config);
+        var normalized = snapshot with { ShopId = resolvedShopId, UpdatedAt = DateTimeOffset.UtcNow };
+        var response = await _mediator.Send(new SavePaymentReserveSnapshotCommand(normalized), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }

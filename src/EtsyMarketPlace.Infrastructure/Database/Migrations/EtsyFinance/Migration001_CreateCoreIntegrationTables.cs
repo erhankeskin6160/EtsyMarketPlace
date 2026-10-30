@@ -159,5 +159,11 @@ public sealed class Migration001_CreateCoreIntegrationTables : SqlMigration
             settings_json TEXT NOT NULL DEFAULT '',
             updated_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS shop_payment_reserve (
+            shop_id TEXT PRIMARY KEY,
+            snapshot_json TEXT NOT NULL DEFAULT '',
+            updated_at TEXT NOT NULL
+        );
         """;
 }

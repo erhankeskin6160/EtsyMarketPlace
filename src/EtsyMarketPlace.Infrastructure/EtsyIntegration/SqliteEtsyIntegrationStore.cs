@@ -1272,6 +1272,52 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         return $"{secret[..4]}...{secret[^4..]}";
     }
 
+    public async Task<string?> GetPaymentReserveSnapshotJsonAsync(string shopId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT snapshot_json FROM shop_payment_reserve WHERE shop_id = $shop_id LIMIT 1;";
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        try
+        {
+            var result = await command.ExecuteScalarAsync(cancellationToken);
+            return result?.ToString();
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task SavePaymentReserveSnapshotJsonAsync(string shopId, string snapshotJson, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var createCmd = connection.CreateCommand();
+        createCmd.CommandText = """
+            CREATE TABLE IF NOT EXISTS shop_payment_reserve (
+                shop_id TEXT PRIMARY KEY,
+                snapshot_json TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL
+            );
+            """;
+        await createCmd.ExecuteNonQueryAsync(cancellationToken);
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO shop_payment_reserve(shop_id, snapshot_json, updated_at)
+            VALUES($shop_id, $json, $updated_at)
+            ON CONFLICT(shop_id) DO UPDATE SET
+                snapshot_json = excluded.snapshot_json,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$shop_id", shopId);
+        command.Parameters.AddWithValue("$json", snapshotJson);
+        command.Parameters.AddWithValue("$updated_at", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     public ValueTask DisposeAsync()
     {
         _schemaLock.Dispose();

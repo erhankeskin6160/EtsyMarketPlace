@@ -55,6 +55,19 @@ export interface EtsyBankPayoutDto {
 }
 
 /** VDS: EtsySyncResult */
+/** VDS: Canlı Etsy Payment Reserve & Bakiye Snapshot (Sıfır Ban Riskli Yer İmi & VDS Köprüsü) */
+export interface EtsyPaymentReserveSnapshotDto {
+  shopId: string;
+  currentBalanceTry: number;
+  pendingBalanceTry: number;
+  totalFundsTry: number;
+  reservePercent: number;
+  reserveHoldDays: number;
+  reevaluationDate?: string;
+  reserveSummaryText?: string;
+  lastUpdatedUtc?: string;
+}
+
 export interface EtsySyncResultDto {
   shopId: string;
   startedAt: string;
@@ -582,6 +595,15 @@ export class EtsyApiService {
 
   getBankDeposits(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/banking/deposits`);
+  }
+
+  getPaymentReserveSnapshot(shopId?: string): Observable<{ success: boolean; data: EtsyPaymentReserveSnapshotDto; message?: string }> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<{ success: boolean; data: EtsyPaymentReserveSnapshotDto; message?: string }>(`${this.API_BASE}/api/etsy/financial/payment-reserve-snapshot?shopId=${id}`);
+  }
+
+  savePaymentReserveSnapshot(snapshot: EtsyPaymentReserveSnapshotDto): Observable<{ success: boolean; data: EtsyPaymentReserveSnapshotDto; message?: string }> {
+    return this.http.post<{ success: boolean; data: EtsyPaymentReserveSnapshotDto; message?: string }>(`${this.API_BASE}/api/etsy/financial/payment-reserve-snapshot`, snapshot);
   }
 
   // Admin Endpoints

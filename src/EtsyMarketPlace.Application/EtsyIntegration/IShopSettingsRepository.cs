@@ -85,4 +85,6 @@ public interface IShopSettingsRepository
     Task SaveListingAuditAsync(SaveListingAuditRecordRequest request, CancellationToken cancellationToken = default);
     Task<string?> GetAiSettingsJsonAsync(string shopId, CancellationToken cancellationToken = default);
     Task SaveAiSettingsJsonAsync(string shopId, string settingsJson, CancellationToken cancellationToken = default);
+    Task<string?> GetPaymentReserveSnapshotJsonAsync(string shopId, CancellationToken cancellationToken = default);
+    Task SavePaymentReserveSnapshotJsonAsync(string shopId, string snapshotJson, CancellationToken cancellationToken = default);
 }

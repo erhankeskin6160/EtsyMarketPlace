@@ -39,6 +39,8 @@ public sealed class AiBalanceServiceTests
         public Task<EtsyAppCredentialsRecord> SaveEtsyAppCredentialsAsync(SaveEtsyAppCredentialsRequest request, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<IReadOnlyList<SavedListingAuditRecord>> GetListingAuditsAsync(string shopId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<SavedListingAuditRecord>>([]);
         public Task SaveListingAuditAsync(SaveListingAuditRecordRequest request, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<string?> GetPaymentReserveSnapshotJsonAsync(string shopId, CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task SavePaymentReserveSnapshotJsonAsync(string shopId, string json, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class FakeHttpMessageHandler : HttpMessageHandler
