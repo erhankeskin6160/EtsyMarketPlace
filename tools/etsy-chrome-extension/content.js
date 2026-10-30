@@ -283,7 +283,60 @@
     }
   }
 
-  // 4. SİPARİŞ LİSTESİ AYIKLAMA (Hem Liste Hem Drawer Entegre)
+  // 4. SİPARİŞ KARTLARINI DOM SEVİYESİNDE İZOLE ETME
+  function findOrderContainers() {
+    const list = [];
+    const seenIds = new Set();
+    const candidateNodes = Array.from(document.querySelectorAll('a, span, p, div, b, strong, td, th'));
+
+    for (const node of candidateNodes) {
+      if (node.children.length > 2) continue;
+      const text = (node.textContent || '').trim();
+      const m = text.match(/#(\d{9,12})\b/) 
+             || text.match(/\b(\d{9,12})\s*\(Etsy\)/i)
+             || (node.href && node.href.match(/[?&]order_id=(\d{9,12})\b/));
+      if (!m) continue;
+      const id = m[1];
+      if (seenIds.has(id)) continue;
+
+      // Bu sipariş ID'sinin bağlı olduğu en dar ve izole kapsayıcı kartı bul
+      let current = node.parentElement;
+      let bestContainer = current;
+
+      while (current && current !== document.body && current.tagName !== 'BODY') {
+        const cText = current.innerText || '';
+        const orderIds = (cText.match(/(\d{9,12})\s*(?:\(Etsy\)|#)/g) || []).map(x => x.replace(/\D/g, ''));
+        const uniqueIds = Array.from(new Set(orderIds));
+
+        // Eğer bu ebeveyn birden fazla sipariş içeriyorsa, sınırı aştık demektir.
+        // Bir önceki seviye (bestContainer) bu siparişe ait izole karttır!
+        if (uniqueIds.length > 1) {
+          break;
+        }
+
+        bestContainer = current;
+
+        // Standart Etsy kart sınırları
+        if (current.tagName === 'TR' || 
+            current.hasAttribute('data-order-id') || 
+            current.hasAttribute('data-receipt-id') ||
+            /panel|order-card|wt-card/i.test(current.className || '')) {
+          break;
+        }
+
+        current = current.parentElement;
+      }
+
+      if (bestContainer && !seenIds.has(id)) {
+        seenIds.add(id);
+        list.push({ id, element: bestContainer });
+      }
+    }
+
+    return list;
+  }
+
+  // 4.1 SİPARİŞ LİSTESİ AYIKLAMA (DOM Kapsayıcı İzolasyonlu)
   function parseOrdersOnPage() {
     const ordersMap = new Map();
 
@@ -294,90 +347,179 @@
         ordersMap.set(drawerOrder.receiptId, drawerOrder);
       }
 
-      const text = document.body.innerText;
+      // 2. DOM Seviyesinde İzole Sipariş Kartlarını Bul
+      const containers = findOrderContainers();
 
-      // 2. Ana tablodaki tüm sipariş kartlarını tara
-      const orderRegex = /(\d{9,12})\s*(?:\(Etsy\)|#)/g;
-      let match;
+      if (containers.length > 0) {
+        for (const item of containers) {
+          const id = item.id;
+          const el = item.element;
+          const block = el.innerText || '';
 
-      while ((match = orderRegex.exec(text)) !== null) {
-        const id = match[1];
+          const lines = extractCleanAddressLines(block);
+          const parsed = parseAddressFieldsFromLines(lines);
 
-        // Sipariş ID'sinin etrafındaki 800 karakterlik metin bloğu
-        const startIndex = Math.max(0, match.index - 200);
-        const endIndex = Math.min(text.length, match.index + 800);
-        const block = text.substring(startIndex, endIndex);
+          // Tutar ve Para Birimi (Öncelikle sipariş ID'sinin yanındaki fiyata odaklan)
+          let currency = 'USD';
+          if (block.includes('TL') || block.includes('₺')) currency = 'TRY';
+          else if (block.includes('EUR') || block.includes('€')) currency = 'EUR';
+          else if (block.includes('GBP') || block.includes('£')) currency = 'GBP';
 
-        const lines = extractCleanAddressLines(block);
-        const parsed = parseAddressFieldsFromLines(lines);
+          const priceMatch = block.match(/#\d{9,12}[^\n\r]*(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i)
+                          || block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
+          const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
 
-        // Tutar ve Para Birimi
-        let currency = 'USD';
-        if (block.includes('TL') || block.includes('₺')) currency = 'TRY';
-        else if (block.includes('EUR') || block.includes('€')) currency = 'EUR';
-        else if (block.includes('GBP') || block.includes('£')) currency = 'GBP';
+          // Alıcı Adı: Ship to içinde yoksa, kartın üst başlığından çek
+          let buyerName = parsed.buyerName;
+          if (!buyerName || /^Etsy/i.test(buyerName)) {
+            // #receiptId'nin hemen üzerindeki satırı ara
+            const nameMatch = block.match(/([A-Za-z\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{9,12}/);
+            if (nameMatch) {
+              const candidate = nameMatch[1].trim();
+              if (candidate && !/Select all|Ordered|Order/i.test(candidate)) {
+                buyerName = candidate;
+              }
+            }
+          }
 
-        const totalMatch = block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
-        const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : null;
+          // Kargo Takip Kodu
+          const trackMatch = block.match(/(\d{12,30})[\s\r\n]+Shipped/i)
+                          || block.match(/Shipped[\s\r\n]+(?:via\s+[A-Za-z]+\s+)?(\d{10,30})/i)
+                          || block.match(/Tracking:\s*([A-Za-z0-9]+)/i);
+          const tracking = trackMatch ? trackMatch[1].trim() : null;
 
-        // Kargo Takip Kodu
-        const trackMatch = block.match(/(\d{12,30})[\s\r\n]+Shipped/i)
-                        || block.match(/Shipped[\s\r\n]+(?:via\s+[A-Za-z]+\s+)?(\d{10,30})/i)
-                        || block.match(/Tracking:\s*([A-Za-z0-9]+)/i);
-        const tracking = trackMatch ? trackMatch[1].trim() : null;
+          // Ürün Adı
+          const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
+                          || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
+          const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
 
-        // Ürün Adı
-        const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
-                        || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
-        const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
+          // Sipariş Tarihi
+          const dateMatch = block.match(/(?:Ordered|Order date)[\s:]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?)/i)
+                         || block.match(/([A-Za-z]{3}\s+\d{1,2},\s*\d{4})/);
+          const orderDate = dateMatch ? dateMatch[1].trim() : '';
 
-        // Sipariş Tarihi
-        const dateMatch = block.match(/(?:Ordered|Order date)[\s:]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?)/i)
-                       || block.match(/([A-Za-z]{3}\s+\d{1,2},\s*\d{4})/);
-        const orderDate = dateMatch ? dateMatch[1].trim() : '';
+          let status = 'Completed';
+          if (block.includes('In transit') || block.includes('Shipped')) status = 'Shipped';
+          else if (block.includes('Not shipped') || block.includes('Processing')) status = 'Processing';
 
-        let status = 'Completed';
-        if (block.includes('In transit') || block.includes('Shipped')) status = 'Shipped';
-        else if (block.includes('Not shipped') || block.includes('Processing')) status = 'Processing';
+          // Eğer drawer'dan zaten tam adres alındıysa ezme
+          const existing = ordersMap.get(id);
+          if (existing && existing.isFullAddress) {
+            if (total != null) existing.orderTotal = total;
+            if (tracking) existing.trackingNumber = tracking;
+            if (title && title !== 'Etsy Ürünü') existing.productTitle = title;
+            if (orderDate) existing.orderDate = orderDate;
+            continue;
+          }
 
-        // Eğer drawer'dan zaten tam adres alındıysa, eksik liste kartı ile ezme!
-        const existing = ordersMap.get(id);
-        if (existing && existing.isFullAddress) {
-          // Sadece eksik olabilecek genel alanları doldur
-          if (total) existing.orderTotal = total;
-          if (tracking) existing.trackingNumber = tracking;
-          if (title && title !== 'Etsy Ürünü') existing.productTitle = title;
-          if (orderDate) existing.orderDate = orderDate;
-          continue;
+          const fullAddrSnippet = [parsed.streetAddress, parsed.secondAddress, parsed.city, parsed.state, parsed.postalCode, parsed.country].filter(Boolean).join(', ');
+
+          ordersMap.set(id, {
+            receiptId: id,
+            buyerName: buyerName || 'Etsy Müşterisi',
+            shippingAddress: fullAddrSnippet || [parsed.city, parsed.state].filter(Boolean).join(', ') || 'Adres Kayıtlı',
+            streetAddress: parsed.streetAddress,
+            secondAddress: parsed.secondAddress,
+            city: parsed.city,
+            state: parsed.state,
+            postalCode: parsed.postalCode,
+            country: parsed.country,
+            phone: parsed.phone,
+            rawAddressText: parsed.rawAddressText,
+            isFullAddress: parsed.isFullAddress,
+            orderTotal: total,
+            currency: currency,
+            orderDate: orderDate,
+            trackingNumber: tracking,
+            productTitle: title,
+            status: status,
+            sourceType: parsed.isFullAddress ? 'Açık Çekmece' : 'Liste Özeti (İzole Kart)',
+            sourceUrl: window.location.pathname,
+            httpStatus: 'DOM (Canlı İzole Kart)',
+            resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            scrapedAt: new Date().toISOString()
+          });
         }
+      } else {
+        // Fallback: Eğer DOM element izolasyonu bulunamazsa metin taraması yap (ASLA geriye gitmeden!)
+        const text = document.body.innerText;
+        const orderRegex = /(\d{9,12})\s*(?:\(Etsy\)|#)/g;
+        let match;
 
-        const fullAddrSnippet = [parsed.streetAddress, parsed.secondAddress, parsed.city, parsed.state, parsed.postalCode, parsed.country].filter(Boolean).join(', ');
+        while ((match = orderRegex.exec(text)) !== null) {
+          const id = match[1];
+          // Geriye ASLA gitme: startIndex doğrudan sipariş numarasının başladığı yerdir
+          const startIndex = match.index;
+          const nextOrderMatch = text.substring(match.index + 10).search(/(\d{9,12})\s*(?:\(Etsy\)|#)/);
+          const cardLength = nextOrderMatch > 0 ? Math.min(nextOrderMatch, 1200) : 1000;
+          const endIndex = Math.min(text.length, match.index + cardLength);
+          const block = text.substring(startIndex, endIndex);
 
-        ordersMap.set(id, {
-          receiptId: id,
-          buyerName: parsed.buyerName || 'Etsy Müşterisi',
-          shippingAddress: fullAddrSnippet || [parsed.city, parsed.state].filter(Boolean).join(', ') || 'Adres Kayıtlı',
-          streetAddress: parsed.streetAddress,
-          secondAddress: parsed.secondAddress,
-          city: parsed.city,
-          state: parsed.state,
-          postalCode: parsed.postalCode,
-          country: parsed.country,
-          phone: parsed.phone,
-          rawAddressText: parsed.rawAddressText,
-          isFullAddress: parsed.isFullAddress,
-          orderTotal: total,
-          currency: currency,
-          orderDate: orderDate,
-          trackingNumber: tracking,
-          productTitle: title,
-          status: status,
-          sourceType: parsed.isFullAddress ? 'Açık Çekmece' : 'Liste Özeti (Eksik Sokak)',
-          sourceUrl: window.location.pathname,
-          httpStatus: 'DOM (Sayfa Listesi)',
-          resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          scrapedAt: new Date().toISOString()
-        });
+          const lines = extractCleanAddressLines(block);
+          const parsed = parseAddressFieldsFromLines(lines);
+
+          let currency = 'USD';
+          if (block.includes('TL') || block.includes('₺')) currency = 'TRY';
+          else if (block.includes('EUR') || block.includes('€')) currency = 'EUR';
+          else if (block.includes('GBP') || block.includes('£')) currency = 'GBP';
+
+          const totalMatch = block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
+          const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, '')) : null;
+
+          const trackMatch = block.match(/(\d{12,30})[\s\r\n]+Shipped/i)
+                          || block.match(/Shipped[\s\r\n]+(?:via\s+[A-Za-z]+\s+)?(\d{10,30})/i)
+                          || block.match(/Tracking:\s*([A-Za-z0-9]+)/i);
+          const tracking = trackMatch ? trackMatch[1].trim() : null;
+
+          const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
+                          || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
+          const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
+
+          const dateMatch = block.match(/(?:Ordered|Order date)[\s:]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?)/i)
+                         || block.match(/([A-Za-z]{3}\s+\d{1,2},\s*\d{4})/);
+          const orderDate = dateMatch ? dateMatch[1].trim() : '';
+
+          let status = 'Completed';
+          if (block.includes('In transit') || block.includes('Shipped')) status = 'Shipped';
+          else if (block.includes('Not shipped') || block.includes('Processing')) status = 'Processing';
+
+          const existing = ordersMap.get(id);
+          if (existing && existing.isFullAddress) {
+            if (total != null) existing.orderTotal = total;
+            if (tracking) existing.trackingNumber = tracking;
+            if (title && title !== 'Etsy Ürünü') existing.productTitle = title;
+            if (orderDate) existing.orderDate = orderDate;
+            continue;
+          }
+
+          const fullAddrSnippet = [parsed.streetAddress, parsed.secondAddress, parsed.city, parsed.state, parsed.postalCode, parsed.country].filter(Boolean).join(', ');
+
+          ordersMap.set(id, {
+            receiptId: id,
+            buyerName: parsed.buyerName || 'Etsy Müşterisi',
+            shippingAddress: fullAddrSnippet || [parsed.city, parsed.state].filter(Boolean).join(', ') || 'Adres Kayıtlı',
+            streetAddress: parsed.streetAddress,
+            secondAddress: parsed.secondAddress,
+            city: parsed.city,
+            state: parsed.state,
+            postalCode: parsed.postalCode,
+            country: parsed.country,
+            phone: parsed.phone,
+            rawAddressText: parsed.rawAddressText,
+            isFullAddress: parsed.isFullAddress,
+            orderTotal: total,
+            currency: currency,
+            orderDate: orderDate,
+            trackingNumber: tracking,
+            productTitle: title,
+            status: status,
+            sourceType: parsed.isFullAddress ? 'Açık Çekmece' : 'Liste Özeti (Fallback)',
+            sourceUrl: window.location.pathname,
+            httpStatus: 'DOM (Sayfa Listesi)',
+            resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            scrapedAt: new Date().toISOString()
+          });
+        }
       }
     } catch (err) {
       console.error('Siparişler taranırken hata:', err);
@@ -489,52 +631,39 @@
   // 6.5 TÜM SİPARİŞLERİN SHIP TO INLINE ÇEKMECELERİNİ AÇ VE TAM ADRESLERİ DERLE
   async function expandAndParseAllInlineOrders() {
     try {
-      // 1. Sayfadaki aria-expanded="false" butonlarını tara
-      const collapsedButtons = Array.from(document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]'));
-
-      // 2. Metni "Ship to" olan elementlerin yakınındaki chevron butonlarını tara
-      const allElements = Array.from(document.querySelectorAll('span, div, p, label, td, th, button'));
-      const shipToHeaders = allElements.filter(el => {
-        const t = (el.textContent || '').trim();
-        return /^Ship to$/i.test(t) || /^Teslimat adresi$/i.test(t) || /^Gönderim adresi$/i.test(t);
-      });
-
       const buttonsToClick = new Set();
 
-      // Collapsed butonlardan Ship to ile ilişkili olanları ekle
-      for (const btn of collapsedButtons) {
-        const parentContext = btn.closest('tr, [data-order-id], .panel, div[class*="order"], td, div') || btn.parentElement;
-        if (parentContext && /Ship to|Teslimat|Gönderim/i.test(parentContext.innerText || '')) {
-          buttonsToClick.add(btn);
-        }
-      }
-
-      // Ship to başlıklarının yanındaki toggle/chevron butonlarını ekle
-      for (const st of shipToHeaders) {
-        const parent = st.parentElement;
-        const grandParent = parent ? parent.parentElement : null;
-        const btn = (parent && parent.querySelector('button, [role="button"]')) ||
-                    (grandParent && grandParent.querySelector('button, [role="button"]'));
+      // 1. Her bir izole sipariş kartı kapsayıcısının içindeki toggle butonlarını ara
+      const containers = findOrderContainers();
+      for (const item of containers) {
+        const el = item.element;
+        // Bu kartın içindeki collapsed butonu bul
+        const btn = el.querySelector('button[aria-expanded="false"], [role="button"][aria-expanded="false"]');
         if (btn) {
-          const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-          if (!isExpanded) {
-            buttonsToClick.add(btn);
+          buttonsToClick.add(btn);
+        } else {
+          // Kart içindeki Ship to başlığının yanındaki butonu ara
+          const shipToEl = Array.from(el.querySelectorAll('*')).find(child => {
+            const t = (child.textContent || '').trim();
+            return /^Ship to$/i.test(t) || /^Teslimat adresi$/i.test(t) || /^Gönderim adresi$/i.test(t);
+          });
+          if (shipToEl) {
+            const nearBtn = shipToEl.parentElement?.querySelector('button, [role="button"]')
+                         || shipToEl.parentElement?.parentElement?.querySelector('button, [role="button"]');
+            if (nearBtn && nearBtn.getAttribute('aria-expanded') !== 'true') {
+              buttonsToClick.add(nearBtn);
+            }
           }
         }
       }
 
-      // Eğer hala buton bulunamadıysa SVG chevron içeren ve küçük butonları tara
+      // 2. Eğer kart izolasyonundan buton bulunamadıysa genel arama yap (Fallback)
       if (buttonsToClick.size === 0) {
-        const allButtons = Array.from(document.querySelectorAll('button, [role="button"]'));
-        for (const btn of allButtons) {
-          const isExpanded = btn.getAttribute('aria-expanded') === 'true';
-          if (isExpanded) continue;
-          const container = btn.closest('tr, [data-order-id], .panel, div[class*="order"], td');
-          if (container && /Ship to/i.test(container.innerText || '')) {
-            const svgs = btn.querySelectorAll('svg');
-            if (svgs.length > 0 && (btn.innerText || '').trim().length <= 2) {
-              buttonsToClick.add(btn);
-            }
+        const collapsedButtons = Array.from(document.querySelectorAll('button[aria-expanded="false"], [role="button"][aria-expanded="false"]'));
+        for (const btn of collapsedButtons) {
+          const parentContext = btn.closest('tr, [data-order-id], .panel, div[class*="order"], td, div') || btn.parentElement;
+          if (parentContext && /Ship to|Teslimat|Gönderim/i.test(parentContext.innerText || '')) {
+            buttonsToClick.add(btn);
           }
         }
       }
@@ -545,16 +674,16 @@
       for (const btn of buttonsToClick) {
         try {
           btn.click();
-          await new Promise(r => setTimeout(r, 100));
+          await new Promise(r => setTimeout(r, 120));
         } catch (e) {
           console.warn('Inline chevron tıklanırken hata:', e);
         }
       }
 
       // React / DOM güncellemelerinin oturması için bekleme
-      await new Promise(r => setTimeout(r, 350));
+      await new Promise(r => setTimeout(r, 400));
 
-      // Şimdi sayfadaki tüm siparişleri tam açık adreslerle tara
+      // Şimdi sayfadaki tüm siparişleri izole DOM ile tam açık adreslerle tara
       const orders = parseOrdersOnPage();
       return orders;
     } catch (err) {

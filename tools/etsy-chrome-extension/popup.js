@@ -164,6 +164,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           ? `${o.streetAddress}, ${o.city || ''} ${o.state || ''} ${o.postalCode || ''}`.trim()
           : (o.shippingAddress || 'Adres Kayıtlı');
 
+        const formattedTotal = (o.orderTotal != null && !isNaN(Number(o.orderTotal)))
+          ? (o.currency === 'TRY' ? `${Number(o.orderTotal).toFixed(2)} ₺` : `$${Number(o.orderTotal).toFixed(2)}`)
+          : '';
+
         div.innerHTML = `
           <div class="order-card-header">
             <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
@@ -178,7 +182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               <small style="color: ${isFull ? '#e2e8f0' : '#94a3b8'}; font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 ${addrDisplay}</small>
             </div>
             <div style="text-align: right; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 1px;">
-              <span style="color: #34d399; font-weight: bold; font-size: 11px;">${o.orderTotal ? '$' + o.orderTotal : ''}</span>
+              <span style="color: #34d399; font-weight: bold; font-size: 11px;">${formattedTotal}</span>
               <div style="color: #64748b; font-size: 9px;">${o.orderDate || ''} <span class="order-toggle-icon">▼</span></div>
             </div>
           </div>
@@ -187,6 +191,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="diag-grid">
               <span class="diag-lbl">👤 Alıcı Adı:</span>
               <span class="diag-val">${o.buyerName || '-'}</span>
+
+              <span class="diag-lbl">💰 Sipariş Tutarı:</span>
+              <span class="diag-val" style="color: #34d399; font-weight: bold;">${formattedTotal || '-'}</span>
 
               <span class="diag-lbl">🏠 Cadde/Sokak:</span>
               <span class="diag-val ${o.streetAddress ? 'highlight' : ''}">${o.streetAddress || '<em style="color: #f87171;">(Henüz çözülmedi - Mavi butona tıklayın)</em>'}</span>
