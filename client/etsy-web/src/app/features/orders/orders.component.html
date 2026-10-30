@@ -1093,6 +1093,15 @@
                   (click)="fillRawAddressFromSelectedOrder()">
                   🔄 DB'deki Metni Getir
                 </button>
+                <button 
+                  type="button" 
+                  class="btn-ai-clear" 
+                  [disabled]="!rawAddressInput"
+                  style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #fca5a5; padding: 7px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                  title="Yapay zeka kutusundaki metni temizle"
+                  (click)="clearRawAddressInput()">
+                  🗑️ Temizle
+                </button>
                 <span *ngIf="aiParseSuccessMessage" class="ai-msg-success">{{ aiParseSuccessMessage }}</span>
                 <span *ngIf="aiParseErrorMessage" class="ai-msg-error">{{ aiParseErrorMessage }}</span>
               </div>

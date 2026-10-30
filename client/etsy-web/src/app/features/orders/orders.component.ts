@@ -582,8 +582,9 @@ export class OrdersComponent implements OnInit, OnDestroy {
       order.buyerName,
       order.streetAddress,
       order.secondAddress,
-      [order.city, order.state, order.postalCode].filter(Boolean).join(' '),
-      order.country || order.countryCode
+      [order.city, order.state, order.postalCode].filter(Boolean).join(', '),
+      order.country || order.countryCode,
+      order.phone ? `Tel: ${order.phone}` : ''
     ].filter(p => Boolean(p && String(p).trim().length > 0));
 
     this.rawAddressInput = order.rawAddressText?.trim() 
@@ -591,6 +592,37 @@ export class OrdersComponent implements OnInit, OnDestroy {
       || order.formattedAddress 
       || order.addressSnippet 
       || '';
+
+    const rId = Number(order.orderId);
+    if (rId && !isNaN(rId)) {
+      this.ordersService.getOrderAddress(rId).subscribe({
+        next: (res: any) => {
+          if (res && res.success && res.data) {
+            const db = res.data;
+            if (db.streetAddress || db.city || db.phone) {
+              const dbLines = [
+                db.buyerName || order.buyerName,
+                db.streetAddress,
+                db.secondAddress,
+                [db.city, db.state, db.postalCode].filter(Boolean).join(', '),
+                db.countryName || order.country,
+                db.phone ? `Tel: ${db.phone}` : ''
+              ].filter(p => Boolean(p && String(p).trim().length > 0));
+
+              this.rawAddressInput = dbLines.join('\n');
+              this.aiParseSuccessMessage = '✓ Veritabanındaki tam adres getirildi.';
+            }
+          }
+        },
+        error: () => {}
+      });
+    }
+  }
+
+  clearRawAddressInput(): void {
+    this.rawAddressInput = '';
+    this.aiParseSuccessMessage = null;
+    this.aiParseErrorMessage = null;
   }
 
   openAddressModal(): void {
@@ -652,6 +684,43 @@ export class OrdersComponent implements OnInit, OnDestroy {
     }
 
     this.isAddressModalOpen = true;
+
+    // DB'de kayıtlı adres varsa otomatik çek ve yapay zeka kutusuna doldur
+    const rId = Number(order.orderId);
+    if (rId && !isNaN(rId)) {
+      this.ordersService.getOrderAddress(rId).subscribe({
+        next: (res: any) => {
+          if (res && res.success && res.data) {
+            const db = res.data;
+            if (db.streetAddress || db.city || db.phone) {
+              if (db.buyerName) this.editAddressModel.buyerName = db.buyerName;
+              if (db.streetAddress) this.editAddressModel.streetAddress = db.streetAddress;
+              if (db.secondAddress) this.editAddressModel.secondAddress = db.secondAddress;
+              if (db.city) this.editAddressModel.city = db.city;
+              if (db.state) this.editAddressModel.state = db.state;
+              if (db.postalCode) this.editAddressModel.postalCode = db.postalCode;
+              if (db.countryName) this.editAddressModel.country = db.countryName;
+              if (db.countryCode) this.editAddressModel.countryCode = db.countryCode;
+              if (db.phone) this.editAddressModel.phone = db.phone;
+              if (db.iossNumber) this.editAddressModel.iossNumber = db.iossNumber;
+
+              const dbLines = [
+                this.editAddressModel.buyerName,
+                this.editAddressModel.streetAddress,
+                this.editAddressModel.secondAddress,
+                [this.editAddressModel.city, this.editAddressModel.state, this.editAddressModel.postalCode].filter(Boolean).join(', '),
+                this.editAddressModel.country,
+                this.editAddressModel.phone ? `Tel: ${this.editAddressModel.phone}` : ''
+              ].filter(p => Boolean(p && String(p).trim().length > 0));
+
+              this.rawAddressInput = dbLines.join('\n');
+              this.aiParseSuccessMessage = '✓ Veritabanındaki tam adres otomatik yüklendi.';
+            }
+          }
+        },
+        error: () => {}
+      });
+    }
   }
 
   closeAddressModal(): void {

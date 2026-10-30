@@ -52,6 +52,21 @@ public class EtsyOrdersController : BaseApiController
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 
+    [HttpGet("{receiptId}/address")]
+    [EndpointSummary("Siparişin Veritabanında Kayıtlı Adres ve Ham Metin Detayını Getir")]
+    public async Task<IActionResult> GetOrderAddress(
+        [FromRoute] long receiptId,
+        [FromServices] EtsyMarketPlace.Domain.Orders.IOrderAddressRepository addressRepository,
+        CancellationToken cancellationToken = default)
+    {
+        if (receiptId <= 0) return BadRequest("Geçersiz receiptId.");
+        var record = await addressRepository.GetByReceiptIdAsync(receiptId, cancellationToken);
+        if (record == null)
+            return Ok(new { success = false, message = "Kayıtlı adres bulunamadı", data = (object?)null });
+
+        return Ok(new { success = true, data = record });
+    }
+
     [HttpPost("save-address")]
     [EndpointSummary("Siparişin Alıcı Teslimat Adresini Kalıcı Olarak Güncelle")]
     public async Task<IActionResult> SaveOrderAddress(

@@ -643,6 +643,10 @@ export class OrdersService {
     });
   }
 
+  public getOrderAddress(receiptId: number): Observable<any> {
+    return this.etsyApi.getOrderAddress(receiptId);
+  }
+
   public updateOrderAddress(receiptId: number, address: Partial<OrderFulfillmentItem>): Observable<any> {
     const list = this.ordersSubject.value.map(o => {
       if (String(o.orderId) === String(receiptId)) {

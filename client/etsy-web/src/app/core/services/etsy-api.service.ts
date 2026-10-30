@@ -464,6 +464,11 @@ export class EtsyApiService {
   }
 
   /** Alıcı adresini kalıcı SQLite deposuna kaydeder. */
+  /** Siparişin veritabanında (SQLite/PostgreSQL) kayıtlı tam adresini getirir. */
+  getOrderAddress(receiptId: number): Observable<any> {
+    return this.http.get<any>(`${this.API_BASE}/api/etsy/orders/${receiptId}/address`);
+  }
+
   saveOrderAddress(receiptId: number, address: any): Observable<any> {
     return this.http.post<any>(`${this.API_BASE}/api/etsy/orders/save-address?receiptId=${receiptId}`, address);
   }
