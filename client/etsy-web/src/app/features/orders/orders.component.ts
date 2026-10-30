@@ -575,23 +575,42 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   // --- ADDRESS MODAL ACTIONS ---
+  fillRawAddressFromSelectedOrder(): void {
+    const order = this.selectedOrder;
+    if (!order) return;
+    const addrParts = [
+      order.buyerName,
+      order.streetAddress,
+      order.secondAddress,
+      [order.city, order.state, order.postalCode].filter(Boolean).join(' '),
+      order.country || order.countryCode
+    ].filter(p => Boolean(p && String(p).trim().length > 0));
+
+    this.rawAddressInput = order.rawAddressText?.trim() 
+      || (addrParts.length > 0 ? addrParts.join('\n') : '')
+      || order.formattedAddress 
+      || order.addressSnippet 
+      || '';
+  }
+
   openAddressModal(): void {
-    if (!this.selectedOrder) return;
-    this.rawAddressInput = '';
+    const order = this.selectedOrder;
+    if (!order) return;
+    this.fillRawAddressFromSelectedOrder();
     this.aiParseSuccessMessage = null;
     this.aiParseErrorMessage = null;
     this.editAddressModel = {
-      buyerName: this.selectedOrder.buyerName || '',
-      buyerEmail: this.selectedOrder.buyerEmail || '',
-      phone: this.selectedOrder.phone || '',
-      streetAddress: this.selectedOrder.streetAddress || '',
-      secondAddress: this.selectedOrder.secondAddress || '',
-      city: this.selectedOrder.city || '',
-      state: this.selectedOrder.state || '',
-      postalCode: this.selectedOrder.postalCode || '',
-      country: this.selectedOrder.country || 'Amerika Birleşik Devletleri',
-      countryCode: this.selectedOrder.countryCode || 'US',
-      iossNumber: this.selectedOrder.iossNumber || ''
+      buyerName: order.buyerName || '',
+      buyerEmail: order.buyerEmail || '',
+      phone: order.phone || '',
+      streetAddress: order.streetAddress || '',
+      secondAddress: order.secondAddress || '',
+      city: order.city || '',
+      state: order.state || '',
+      postalCode: order.postalCode || '',
+      country: order.country || 'Amerika Birleşik Devletleri',
+      countryCode: order.countryCode || 'US',
+      iossNumber: order.iossNumber || ''
     };
     this.isAddressModalOpen = true;
   }

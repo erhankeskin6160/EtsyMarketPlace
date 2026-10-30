@@ -160,6 +160,7 @@ public sealed class EtsyOrderService
             target.Status = "shipped";
         }
         if (!string.IsNullOrWhiteSpace(record.LabelUrl)) target.LabelUrl = record.LabelUrl;
+        target.RawAddressText = $"{target.BuyerName}\n{target.StreetAddress}\n{target.City} {target.State} {target.PostalCode}\n{target.CountryName}".Trim();
     }
 
     /// <summary>

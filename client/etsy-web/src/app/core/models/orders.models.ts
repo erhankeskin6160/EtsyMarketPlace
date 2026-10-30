@@ -71,6 +71,7 @@ export interface OrderFulfillmentItem {
   postalCode?: string;
   country: string;
   countryCode: string;
+  rawAddressText?: string;
   formattedAddress?: string;
   addressSnippet?: string;
   isAddressMissing?: boolean;

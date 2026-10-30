@@ -29,6 +29,7 @@ public class EtsyFinancialsController : BaseApiController
     private readonly IEtsyFinancialAnalysisService _analysis;
     private readonly IEtsyIntegrationRepository _repository;
     private readonly IEtsySynchronizationService _synchronization;
+    private readonly EtsyMarketPlace.Domain.Orders.IOrderAddressRepository? _addressRepository;
 
     public EtsyFinancialsController(
         IConfiguration config,
@@ -37,7 +38,8 @@ public class EtsyFinancialsController : BaseApiController
         IEtsyReportingService reporting,
         IEtsyFinancialAnalysisService analysis,
         IEtsyIntegrationRepository repository,
-        IEtsySynchronizationService synchronization)
+        IEtsySynchronizationService synchronization,
+        EtsyMarketPlace.Domain.Orders.IOrderAddressRepository? addressRepository = null)
     {
         _config = config;
         _mediator = mediator;
@@ -46,6 +48,7 @@ public class EtsyFinancialsController : BaseApiController
         _analysis = analysis;
         _repository = repository;
         _synchronization = synchronization;
+        _addressRepository = addressRepository;
     }
 
     [HttpGet("etsy/banking/payouts")]
@@ -470,6 +473,47 @@ public class EtsyFinancialsController : BaseApiController
                     null,
                     note,
                     cancellationToken);
+
+                if (_addressRepository != null && long.TryParse(order.ReceiptId, out var rId))
+                {
+                    var city = "";
+                    var state = "";
+                    var postalCode = "";
+                    var addr = order.ShippingAddress?.Trim() ?? "";
+
+                    if (!string.IsNullOrWhiteSpace(addr))
+                    {
+                        var parts = addr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        if (parts.Length > 0) city = parts[0];
+                        if (parts.Length > 1)
+                        {
+                            var stateZip = parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                            if (stateZip.Length > 0) state = stateZip[0];
+                            if (stateZip.Length > 1) postalCode = stateZip[1];
+                        }
+                    }
+
+                    var addrRecord = new EtsyMarketPlace.Domain.Orders.OrderAddressRecord(
+                        rId,
+                        order.BuyerName ?? "",
+                        "",
+                        "",
+                        addr,
+                        "",
+                        city,
+                        state,
+                        postalCode,
+                        order.Currency == "TRY" ? "TR" : "US",
+                        order.Currency == "TRY" ? "Türkiye" : "Amerika Birleşik Devletleri",
+                        "EtsyExtension",
+                        DateTime.UtcNow)
+                    {
+                        TrackingCode = order.TrackingNumber ?? string.Empty
+                    };
+
+                    await _addressRepository.SaveAsync(addrRecord, cancellationToken);
+                }
+
                 updated++;
             }
         }

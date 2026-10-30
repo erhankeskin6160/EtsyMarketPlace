@@ -507,6 +507,7 @@ export class OrdersService {
             return {
               orderId: String(item.receiptId),
               orderNumber: `#${item.receiptId}`,
+              rawAddressText: item.rawAddressText || '',
               buyerName: item.buyerName || 'Etsy Alıcısı',
               buyerEmail: item.buyerEmail || '',
               phone: item.phone || '',

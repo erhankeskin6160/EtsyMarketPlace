@@ -131,6 +131,9 @@ public sealed class EtsyOrderFulfillmentItem
     public string TrackingCode { get; set; } = string.Empty;
     public string LabelUrl { get; set; } = string.Empty;
 
+    [JsonPropertyName("rawAddressText")]
+    public string RawAddressText { get; set; } = string.Empty;
+
     public string FormattedAddress =>
         $"{StreetAddress}{(string.IsNullOrWhiteSpace(SecondAddress) ? "" : $", {SecondAddress}")}\n{PostalCode} {City}{(string.IsNullOrWhiteSpace(State) ? "" : $", {State}")}\n{CountryName}";
 
