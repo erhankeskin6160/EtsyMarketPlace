@@ -612,6 +612,45 @@ export class OrdersComponent implements OnInit, OnDestroy {
       countryCode: order.countryCode || 'US',
       iossNumber: order.iossNumber || ''
     };
+    // Eğer sokak adresi boşsa ama rawAddressInput içinde satırlar varsa formu anında otomatik ayrıştır
+    if (!this.editAddressModel.streetAddress && this.rawAddressInput) {
+      const lines = this.rawAddressInput.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length >= 2) {
+        if (!this.editAddressModel.buyerName) this.editAddressModel.buyerName = lines[0];
+        const remaining = lines.slice(1);
+
+        const pIdx = remaining.findIndex(l => /(?:\+?\d{1,3}[\s-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}|Tel:/i.test(l));
+        if (pIdx !== -1) {
+          this.editAddressModel.phone = remaining[pIdx].replace(/^Tel:\s*/i, '');
+          remaining.splice(pIdx, 1);
+        }
+
+        const cIdx = remaining.findIndex(l => /^(?:United States|USA|Canada|United Kingdom|Turkey|Türkiye)$/i.test(l));
+        if (cIdx !== -1) {
+          this.editAddressModel.country = remaining[cIdx];
+          remaining.splice(cIdx, 1);
+        }
+
+        const csIdx = remaining.findIndex(l => /[A-Za-z\s.-]+,\s*[A-Z]{2}/.test(l));
+        if (csIdx !== -1) {
+          const m = remaining[csIdx].match(/([A-Za-z\s.-]+),\s*([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?/);
+          if (m) {
+            this.editAddressModel.city = m[1].trim();
+            this.editAddressModel.state = m[2].trim().toUpperCase();
+            if (m[3]) this.editAddressModel.postalCode = m[3].trim();
+          }
+          remaining.splice(csIdx, 1);
+        }
+
+        if (remaining.length > 0) {
+          this.editAddressModel.streetAddress = remaining[0];
+          if (remaining.length > 1) {
+            this.editAddressModel.secondAddress = remaining.slice(1).join(', ');
+          }
+        }
+      }
+    }
+
     this.isAddressModalOpen = true;
   }
 

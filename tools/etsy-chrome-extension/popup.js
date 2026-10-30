@@ -148,14 +148,21 @@ document.addEventListener('DOMContentLoaded', async () => {
       allOrders.forEach((o) => {
         const div = document.createElement('div');
         div.className = 'order-item-card';
+        const isFull = !!o.isFullAddress;
+        const addrDisplay = o.streetAddress 
+          ? `${o.streetAddress}, ${o.city || ''} ${o.state || ''} ${o.postalCode || ''}`.trim()
+          : (o.shippingAddress || 'Adres Kayıtlı');
+
         div.innerHTML = `
           <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
             <div style="display: flex; gap: 6px; align-items: center;">
               <span class="order-id">#${o.receiptId}</span>
               <span class="buyer-name" style="font-size: 11px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${o.buyerName || 'Müşteri'}</span>
+              ${isFull ? '<span style="background: rgba(16, 185, 129, 0.2); color: #34d399; font-size: 8.5px; padding: 1px 4px; border-radius: 4px; border: 1px solid rgba(16,185,129,0.3);">🏠 Tam Adres</span>' : ''}
             </div>
-            <small style="color: #94a3b8; font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 ${o.shippingAddress || 'Adres Kayıtlı'}</small>
-            ${o.trackingNumber ? `<small style="color: #38bdf8; font-size: 9px;">🚚 Takip: ${o.trackingNumber}</small>` : ''}
+            <small style="color: ${isFull ? '#e2e8f0' : '#94a3b8'}; font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">📍 ${addrDisplay}</small>
+            ${o.phone ? `<small style="color: #38bdf8; font-size: 9px;">📞 ${o.phone}</small>` : ''}
+            ${o.trackingNumber ? `<small style="color: #a78bfa; font-size: 9px;">🚚 Takip: ${o.trackingNumber}</small>` : ''}
           </div>
           <div style="text-align: right; flex-shrink: 0;">
             <span style="color: #34d399; font-weight: bold; font-size: 11px;">${o.orderTotal ? '$' + o.orderTotal : ''}</span>
@@ -212,6 +219,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Siparişler Sayfası
         if (response.pageType === 'orders' && response.ordersData) {
           currentPageOrders = response.ordersData;
+
+          // Eğer açık çekmece / detay paneli varsa tam adresle hafızayı güncelle
+          if (response.drawerOrder && response.drawerOrder.isFullAddress) {
+            const dOrder = response.drawerOrder;
+            const dIdx = allOrders.findIndex(o => o.receiptId === dOrder.receiptId);
+            if (dIdx !== -1) {
+              allOrders[dIdx] = { ...allOrders[dIdx], ...dOrder, isFullAddress: true };
+            } else {
+              allOrders.unshift(dOrder);
+            }
+          }
           
           // Hafızadaki siparişler ile bu sayfadaki siparişleri birleştir (Tekilleştir)
           let addedCount = 0;
@@ -374,17 +392,41 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const headers = ['Siparis_No', 'Musteri_Adi', 'Teslimat_Adresi', 'Tutar', 'Para_Birimi', 'Tarih', 'Kargo_Takip_No', 'Urun_Adi', 'Durum'];
+    const headers = [
+      'Siparis_No', 
+      'Musteri_Adi', 
+      'Cadde_Sokak_Adresi', 
+      'Daire_Bina', 
+      'Sehir', 
+      'Eyalet', 
+      'Posta_Kodu', 
+      'Ulke', 
+      'Telefon', 
+      'Tutar', 
+      'Para_Birimi', 
+      'Tarih', 
+      'Kargo_Takip_No', 
+      'Urun_Adi', 
+      'Durum', 
+      'Adres_Tipi'
+    ];
     const rows = list.map(o => [
       `"${o.receiptId || ''}"`,
       `"${(o.buyerName || '').replace(/"/g, '""')}"`,
-      `"${(o.shippingAddress || '').replace(/"/g, '""')}"`,
+      `"${(o.streetAddress || o.shippingAddress || '').replace(/"/g, '""')}"`,
+      `"${(o.secondAddress || '').replace(/"/g, '""')}"`,
+      `"${(o.city || '').replace(/"/g, '""')}"`,
+      `"${(o.state || '').replace(/"/g, '""')}"`,
+      `"${(o.postalCode || '').replace(/"/g, '""')}"`,
+      `"${(o.country || 'United States').replace(/"/g, '""')}"`,
+      `"${(o.phone || '').replace(/"/g, '""')}"`,
       o.orderTotal || 0,
       `"${o.currency || 'USD'}"`,
       `"${o.orderDate || ''}"`,
       `"${o.trackingNumber || ''}"`,
       `"${(o.productTitle || '').replace(/"/g, '""')}"`,
-      `"${o.status || 'Completed'}"`
+      `"${o.status || 'Completed'}"`,
+      `"${o.isFullAddress ? 'Tam Cadde Adresi (Detay)' : 'Liste Ozeti'}"`
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');

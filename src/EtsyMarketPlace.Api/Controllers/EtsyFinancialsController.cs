@@ -435,6 +435,15 @@ public class EtsyFinancialsController : BaseApiController
         string ReceiptId,
         string BuyerName,
         string? ShippingAddress,
+        string? StreetAddress,
+        string? SecondAddress,
+        string? City,
+        string? State,
+        string? PostalCode,
+        string? Country,
+        string? Phone,
+        string? RawAddressText,
+        bool? IsFullAddress,
         string? ProductTitle,
         decimal? OrderTotal,
         string? Currency,
@@ -476,39 +485,56 @@ public class EtsyFinancialsController : BaseApiController
 
                 if (_addressRepository != null && long.TryParse(order.ReceiptId, out var rId))
                 {
-                    var city = "";
-                    var state = "";
-                    var postalCode = "";
-                    var addr = order.ShippingAddress?.Trim() ?? "";
+                    var street = !string.IsNullOrWhiteSpace(order.StreetAddress)
+                        ? order.StreetAddress
+                        : (order.ShippingAddress?.Trim() ?? "");
+                    var second = order.SecondAddress ?? "";
+                    var city = order.City ?? "";
+                    var state = order.State ?? "";
+                    var postalCode = order.PostalCode ?? "";
+                    var country = !string.IsNullOrWhiteSpace(order.Country) ? order.Country : (order.Currency == "TRY" ? "Türkiye" : "Amerika Birleşik Devletleri");
+                    var countryCode = order.Currency == "TRY" ? "TR" : "US";
+                    var phone = order.Phone ?? "";
 
-                    if (!string.IsNullOrWhiteSpace(addr))
+                    if (string.IsNullOrWhiteSpace(city) && !string.IsNullOrWhiteSpace(order.ShippingAddress))
                     {
-                        var parts = addr.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        var parts = order.ShippingAddress.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                         if (parts.Length > 0) city = parts[0];
                         if (parts.Length > 1)
                         {
                             var stateZip = parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                            if (stateZip.Length > 0) state = stateZip[0];
-                            if (stateZip.Length > 1) postalCode = stateZip[1];
+                            if (stateZip.Length > 0 && stateZip[0] != "Order") state = stateZip[0];
+                            if (stateZip.Length > 1 && stateZip[1] != "in") postalCode = stateZip[1];
                         }
                     }
+
+                    var rawText = !string.IsNullOrWhiteSpace(order.RawAddressText)
+                        ? order.RawAddressText
+                        : string.Join("\n", new[] {
+                            order.BuyerName,
+                            street,
+                            second,
+                            $"{city}, {state} {postalCode}".Trim(),
+                            country,
+                            string.IsNullOrWhiteSpace(phone) ? "" : $"Tel: {phone}"
+                        }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
                     var addrRecord = new EtsyMarketPlace.Domain.Orders.OrderAddressRecord(
                         rId,
                         order.BuyerName ?? "",
                         "",
-                        "",
-                        addr,
-                        "",
+                        phone,
+                        street,
+                        second,
                         city,
                         state,
                         postalCode,
-                        order.Currency == "TRY" ? "TR" : "US",
-                        order.Currency == "TRY" ? "Türkiye" : "Amerika Birleşik Devletleri",
+                        countryCode,
+                        country,
                         "EtsyExtension",
                         DateTime.UtcNow)
                     {
-                        TrackingCode = order.TrackingNumber ?? string.Empty
+                        TrackingCode = order.TrackingCode ?? string.Empty
                     };
 
                     await _addressRepository.SaveAsync(addrRecord, cancellationToken);
