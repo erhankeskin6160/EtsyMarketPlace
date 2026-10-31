@@ -1,4 +1,4 @@
-// Etsy Copilot v2.2.0 — Katman 1: Salt-Okunur MAIN World React Fiber, Preact/Backbone & Etsy.Context Okuyucu
+// Etsy Copilot v2.3.0 — Katman 1: Salt-Okunur MAIN World React Fiber, Preact/Backbone & Etsy.Context Okuyucu
 // GÜVENLİK GARANTİSİ (Anti-Ban / DataDome Uyumlu):
 // - window.fetch, XMLHttpRequest veya herhangi bir tarayıcı prototipine KESİNLİKLE DOKUNMAZ.
 // - Sayfada kalıcı global değişken veya event listener bırakmaz.
@@ -33,7 +33,7 @@
 
     const diagnostics = {
       layer: 'react-reader.main',
-      version: '2.2.0',
+      version: '2.3.0',
       fiberNodesVisited: 0,
       fiberDetected: false,
       reduxStoresFound: 0,

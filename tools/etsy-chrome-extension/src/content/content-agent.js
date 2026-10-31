@@ -1,4 +1,4 @@
-// Etsy Copilot v2.2.0 — Katman 2: Dil ve Google-Çeviri Bağımsız Yapısal DOM & Inline Accordion Ajanı
+// Etsy Copilot v2.3.0 — Katman 2: Dil ve Google-Çeviri Bağımsız Yapısal DOM & Inline Accordion Ajanı
 // - "Ship to" / İngilizce metin aramasına BAĞIMLI DEĞİLDİR; varsa başlığı ve gizli .wt-content-toggle__body HTML'ini de çözer.
 // - Google Çeviri (<font dir="auto">) ve parçalı "#<a>4210985421</a>" metin düğümlerini birleştirerek okur.
 // - Çekmece açıkken arka plandaki <main aria-hidden="true"> kartlarını kaybetmez; hem listeyi hem çekmeceyi eşzamanlı okur.
@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
 
-  const AGENT_VERSION = '2.2.0';
+  const AGENT_VERSION = '2.3.0';
 
   if (typeof root.__etsyCopilotV2Cleanup === 'function') {
     try { root.__etsyCopilotV2Cleanup(); } catch {}
@@ -452,11 +452,11 @@
     // 2. Toggle butonunu bul:
     // Öncelik 1: aria-controls / aria-expanded / .wt-content-toggle (idAnchor'dan sonra gelen)
     // Öncelik 2: Kendi metni veya ebeveyn başlığı "Ship to / Shipped to / Şuraya gönder / Gönderim" içeren ("Ship today" hariç!) buton/link
-    // Öncelik 3: Sağ kargo sütunu içindeki aksiyon-dışı chevron <button>
+    // Öncelik 3: Sağ kargo sütunu içindeki chevron/ok içeren buton veya ilk aksiyon-dışı buton
     const shipHeadingHintRe = /(?:\bShip\s*to\b(?!\s*(?:day|today))|\bShipped\s*to\b|\bShipping\s*address\b|\bDelivery\s*address\b|Şuraya\s*gönder|Gönderim|Teslimat|Kargo\s*adresi)/i;
     const searchScope = result.rightColumnEl || cardEl;
 
-    const ariaToggles = Array.from(cardEl.querySelectorAll('[aria-controls], [aria-expanded], .wt-content-toggle, a[class*="toggle"]'))
+    const ariaToggles = Array.from(cardEl.querySelectorAll('[aria-controls], [aria-expanded], .wt-content-toggle, [data-wt-content-toggle], a[class*="toggle"]'))
       .filter((btn) => isFollowingInDom(idAnchor, btn))
       .filter((btn) => collectUniqueOrderIds(btn).size === 0 && !isMenuOrActionBtn(btn))
       .filter((btn) => !(idLineEl && idLineEl.contains && idLineEl.contains(btn)));
@@ -474,7 +474,10 @@
         .filter((btn) => {
           const ownTxt = extractInlineText(btn);
           const parentTxt = btn.parentElement ? extractInlineText(btn.parentElement) : '';
-          return shipHeadingHintRe.test(ownTxt) || (parentTxt.length <= 120 && shipHeadingHintRe.test(parentTxt));
+          const hasChevronHint = /[▾▼⌄⌃^]/.test(ownTxt)
+            || (typeof btn.className === 'string' && /chevron|toggle|arrow|expand/i.test(btn.className))
+            || Boolean(btn.querySelector && btn.querySelector('svg, [class*="chevron" i], [class*="arrow" i]'));
+          return shipHeadingHintRe.test(ownTxt) || (parentTxt.length <= 140 && shipHeadingHintRe.test(parentTxt)) || (hasChevronHint && shipHeadingHintRe.test(parentTxt));
         })
         .sort((a, b) => extractInlineText(a).length - extractInlineText(b).length);
 
@@ -1112,7 +1115,8 @@
   }
 
   /**
-   * Ana iş parçacığını bloklamadan (requestAnimationFrame gruplarıyla) kapalı adres akordeonlarını açar.
+   * Ana iş parçacığını bloklamadan ve DataDome bot alarmı vermeden insani aralıklarla (65ms)
+   * kapalı satır içi adres akordeonlarını güvenle açar.
    */
   async function expandAllInlineAccordions(doc) {
     const targetDoc = doc || (typeof document !== 'undefined' ? document : null);
@@ -1127,27 +1131,50 @@
     for (const { id, idAnchor, cardEl } of isolated) {
       if (fullIdsBefore.has(id)) continue; // Zaten tam adresi açık olan kartı ASLA kapatma!
       const zone = locateFulfillmentZone(cardEl, idAnchor, targetDoc);
-      if (!zone.toggleBtn) continue;
+      let btn = zone.toggleBtn;
 
-      const ariaExp = zone.toggleBtn.getAttribute('aria-expanded');
+      if (!btn && cardEl.querySelectorAll) {
+        // Fallback: Kart içinde "Ship to" içeren başlığın yanındaki butonu veya chevron butonunu bul
+        const following = Array.from(cardEl.querySelectorAll('button, [role="button"], a.wt-btn, a[class*="toggle"], summary'))
+          .filter((b) => isFollowingInDom(idAnchor, b) && !isMenuOrActionBtn(b) && collectUniqueOrderIds(b).size === 0);
+        btn = following.find((b) => {
+          const p = b.parentElement ? extractInlineText(b.parentElement) : '';
+          const hasChevron = /[▾▼⌄⌃^]/.test(b.textContent || '')
+            || (typeof b.className === 'string' && /chevron|toggle|arrow/i.test(b.className))
+            || Boolean(b.querySelector && b.querySelector('svg'));
+          return /(?:\bShip\s*to\b|\bShipped\s*to\b|Şuraya\s*gönder|Gönderim)/i.test(p) || hasChevron;
+        }) || null;
+      }
+
+      if (!btn) continue;
+
+      const ariaExp = btn.getAttribute ? btn.getAttribute('aria-expanded') : null;
       if (ariaExp === 'false' || ariaExp === null) {
-        toClick.push(zone.toggleBtn);
+        toClick.push(btn);
       }
     }
 
-    const BATCH = 10;
-    for (let i = 0; i < toClick.length; i += BATCH) {
-      const batch = toClick.slice(i, i + BATCH);
-      await new Promise((resolve) => {
-        const runner = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn) => setTimeout(fn, 16);
-        runner(() => {
-          for (const btn of batch) {
-            try { btn.click(); } catch {}
-          }
-          resolve();
-        });
-      });
-      await new Promise((r) => setTimeout(r, 80));
+    function safeTriggerClick(el) {
+      if (!el) return;
+      try {
+        if (typeof MouseEvent !== 'undefined') {
+          el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+          el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+        }
+        el.click();
+        if (typeof MouseEvent !== 'undefined') {
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }
+      } catch {
+        try { el.click(); } catch {}
+      }
+    }
+
+    for (let i = 0; i < toClick.length; i++) {
+      safeTriggerClick(toClick[i]);
+      if (i < toClick.length - 1) {
+        await new Promise((r) => setTimeout(r, 65));
+      }
     }
 
     // Açılan panellerin DOM'a yerleşmesini bekle (maks 1200ms)
@@ -1155,10 +1182,10 @@
     while (toClick.length > 0 && Date.now() - start < 1200) {
       const allReady = toClick.every((btn) => !btn.isConnected || btn.getAttribute('aria-expanded') === 'true');
       if (allReady) break;
-      await new Promise((r) => setTimeout(r, 90));
+      await new Promise((r) => setTimeout(r, 70));
     }
     if (toClick.length > 0) {
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 120));
     }
 
     const extracted = extractOrdersFromDom(targetDoc);

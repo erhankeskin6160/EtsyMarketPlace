@@ -1,4 +1,4 @@
-// Etsy Copilot v2.2.0 — Katman 3: Durumsuz (Stateless) MV3 Service Worker Orkestratörü
+// Etsy Copilot v2.3.0 — Katman 3: Durumsuz (Stateless) MV3 Service Worker Orkestratörü
 // KURAL: Hiçbir global değişkende durum tutulmaz; tüm durum chrome.storage.local üzerinden okunur/yazılır.
 
 import {
@@ -32,13 +32,14 @@ const EMPTY_STATE = Object.freeze({
 });
 
 async function loadSettings() {
-  const res = await chrome.storage.local.get([STORAGE_KEYS.SETTINGS, 'apiUrl', 'apiKey', 'shopId', 'autoSync']);
+  const res = await chrome.storage.local.get([STORAGE_KEYS.SETTINGS, 'apiUrl', 'apiKey', 'shopId', 'autoSync', 'autoExpandAddresses']);
   const saved = res[STORAGE_KEYS.SETTINGS] || {};
   return {
     apiUrl: saved.apiUrl || res.apiUrl || DEFAULT_SETTINGS.apiUrl,
     apiKey: saved.apiKey || res.apiKey || DEFAULT_SETTINGS.apiKey,
     shopId: saved.shopId || res.shopId || DEFAULT_SETTINGS.shopId,
-    autoSyncFinance: Boolean(saved.autoSyncFinance ?? res.autoSync ?? DEFAULT_SETTINGS.autoSyncFinance)
+    autoSyncFinance: Boolean(saved.autoSyncFinance ?? res.autoSync ?? DEFAULT_SETTINGS.autoSyncFinance),
+    autoExpandAddresses: Boolean(saved.autoExpandAddresses ?? res.autoExpandAddresses ?? DEFAULT_SETTINGS.autoExpandAddresses)
   };
 }
 
@@ -193,8 +194,11 @@ async function scanActiveEtsyTab(explicitTabId, expandInlineFirst = false) {
 
   let domResponse = null;
   let clickedInlineToggles = 0;
+  const settings = await loadSettings();
+  const shouldExpand = expandInlineFirst || Boolean(settings.autoExpandAddresses !== false);
+
   try {
-    if (expandInlineFirst) {
+    if (shouldExpand) {
       const expandRes = await chrome.tabs.sendMessage(tab.id, { action: ACTIONS.CA_EXPAND_INLINE_ADDRESSES });
       clickedInlineToggles = expandRes?.diagnostics?.clickedInlineToggles || 0;
       if (clickedInlineToggles > 0) {
@@ -202,7 +206,7 @@ async function scanActiveEtsyTab(explicitTabId, expandInlineFirst = false) {
       }
     }
     domResponse = await chrome.tabs.sendMessage(tab.id, { action: ACTIONS.CA_EXTRACT_STRUCTURAL });
-    if (domResponse?.diagnostics && expandInlineFirst) {
+    if (domResponse?.diagnostics && shouldExpand) {
       domResponse.diagnostics.clickedInlineToggles = clickedInlineToggles;
     }
   } catch (err) {

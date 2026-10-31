@@ -68,6 +68,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const cfgApiUrl = document.getElementById('cfgApiUrl');
   const cfgApiKey = document.getElementById('cfgApiKey');
   const cfgShopId = document.getElementById('cfgShopId');
+  const cfgAutoExpand = document.getElementById('cfgAutoExpand');
   const cfgAutoSync = document.getElementById('cfgAutoSync');
   const btnPresetLocal = document.getElementById('btnPresetLocal');
   const btnPresetRemote = document.getElementById('btnPresetRemote');
@@ -285,6 +286,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     cfgApiUrl.value = healthRes.settings.apiUrl;
     cfgApiKey.value = healthRes.settings.apiKey;
     cfgShopId.value = healthRes.settings.shopId;
+    if (cfgAutoExpand) {
+      cfgAutoExpand.checked = Boolean(healthRes.settings.autoExpandAddresses !== false);
+    }
     cfgAutoSync.checked = Boolean(healthRes.settings.autoSyncFinance);
   }
   if (healthRes?.health?.online) {
@@ -477,6 +481,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         apiUrl: cfgApiUrl.value.trim() || 'http://localhost:5263',
         apiKey: cfgApiKey.value.trim() || 'etsy-vds-sync-key-2026',
         shopId: cfgShopId.value.trim() || '53236321',
+        autoExpandAddresses: cfgAutoExpand ? cfgAutoExpand.checked : true,
         autoSyncFinance: cfgAutoSync.checked
       }
     });
