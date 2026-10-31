@@ -1,4 +1,4 @@
-namespace EtsyMarketPlace.Application.ListingOptimization;
+﻿namespace EtsyMarketPlace.Application.ListingOptimization;
 
 using System;
 using System.Collections.Generic;
@@ -223,7 +223,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
         {
             if (!isOfflineRequested && !string.IsNullOrWhiteSpace(requestedProvider) && requestedProvider.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("⚠️ Canlı Gemini API anahtarı girilmemiş. Lütfen üst bardaki AI Ayarlarından Gemini API anahtarınızı kaydediniz veya Offline seçiniz.");
+                riskWarnings.Add("CanlÄ± Gemini API anahtarÄ± girilmediÄŸi iÃ§in yerel kural motoru (Fallback) kullanÄ±ldÄ±.");
             }
 
             var offlineResult = _ruleOptimizer.Optimize(input);
