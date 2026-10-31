@@ -48,9 +48,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Ortak Alıcı Adı Doğrulayıcısı (Dosya/Modül Kapsamı)
   function isInvalidBuyerName(name) {
     if (!name) return true;
-    const t = String(name).replace(/[▾▼]/g, '').trim();
+    const t = String(name).replace(/[▾▼⌄⌃]/g, '').trim();
     if (t.length < 2) return true;
     if (/^\d+$/.test(t)) return true;
+    if (/[\r\n]/.test(t)) return true;
     
     // Sipariş ID, (Etsy), para birimi ve tutar içeren metinler
     if (/\b\d{9,12}\b/.test(t)) return true;
@@ -59,10 +60,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Kupon kodları ve indirimler
     if (/\b(?:Shop coupon|coupon|\d+%\s*off)\b/i.test(t)) return true;
-    if (/^[A-F0-9]{12,35}$/i.test(t)) return true;
+    if (/^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}$/i.test(t)) return true;
     
-    // Navigasyon / Arayüz / GDPR / Menü öğeleri
-    if (/^(?:Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Ma[ğg]aza\s*Müdürü|Ma[ğg]aza\s*müdürü\s*menüsü|Aramak|Kontrol\s*Panel[iı]?|[İI]lanlar|Mesajlar|Sipari[şs]ler|[İI]statistikler|Pazarlama|Finans|Uygulamalar|Ayarlar|Privacy\s*Settings|Help\s*requests?|Dashboard|Activity)$/i.test(t)) return true;
+    // Navigasyon / Arayüz / GDPR / Alıcı Menüsü öğeleri
+    if (/^(?:Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Ma[ğg]aza\s*Müdürü|Ma[ğg]aza\s*müdürü\s*menüsü|Aramak|Kontrol\s*Panel[iı]?|[İI]lanlar|Mesajlar|Sipari[şs]ler|[İI]statistikler|Pazarlama|Finans|Uygulamalar|Ayarlar|Privacy\s*Settings|Help\s*requests?|Dashboard|Activity|Order\s*history|See\s*order\s*history|Message\s*buyer|Contact\s*buyer|Add\s*a\s*private\s*note|Complete\s*order|More\s*actions|Ship\s*to|Shipped\s*to)$/i.test(t)) return true;
     
     // Durum, termin ve kargo ifadeleri
     return /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|deselect\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*|action\s*needed.*|unread\s*messages?.*|messages?.*|standard\s*shipping.*|order\s*in\s*reserve.*|rezervde.*|doğrulandı.*|usps\s*verified.*|pre-transit.*|in\s*transit.*|delivered.*|shipped.*|selected\s*by\s*buyer.*)$/i.test(t);
@@ -83,20 +84,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
           }
 
-          // Eğer sipariş 4203494262 ise ve adı bozuksa bilinen gerçek adını ata
-          if (id === '4203494262' && isInvalidBuyerName(o.buyerName)) {
-            o.buyerName = 'Cindy Nguyen';
-            o.city = o.city || 'Arlington';
-            o.state = o.state || 'TX';
-          } else if (isInvalidBuyerName(o.buyerName)) {
+          if (isInvalidBuyerName(o.buyerName)) {
             o.buyerName = 'Etsy Müşterisi';
-            o.isFullAddress = false;
           }
 
           // Eğer streetAddress kupon kodu veya sipariş başlığı ise temizle
-          if (o.streetAddress && (/^[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i.test(o.streetAddress) || /Shop coupon/i.test(o.streetAddress) || /\(\d+%\s*off\)/i.test(o.streetAddress) || /#\d{9,12}/.test(o.streetAddress) || /\(Etsy\)/i.test(o.streetAddress))) {
+          if (o.streetAddress && (/^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i.test(o.streetAddress) || /Shop coupon/i.test(o.streetAddress) || /\(\d+%\s*off\)/i.test(o.streetAddress) || /#\d{9,12}/.test(o.streetAddress) || /\(Etsy\)/i.test(o.streetAddress))) {
             o.streetAddress = '';
             o.isFullAddress = false;
+          }
+
+          o.isFullAddress = Boolean(o.streetAddress && (o.city || o.state));
+          const recomputedAddr = [o.streetAddress, o.secondAddress, o.city, o.state, o.postalCode, o.country].filter(Boolean).join(', ');
+          if (recomputedAddr) {
+            o.shippingAddress = recomputedAddr;
           }
 
           if (!cleanMap.has(id)) {
@@ -222,24 +223,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Eğer mevcut kayıt zaten tam açık adrese sahipse ve gelen kayıt kapalı liste özeti ise
     // mevcut tam adres bilgilerini koru (ezilme önleme!)
-    const keepExistingAddress = existing.isFullAddress && !incoming.isFullAddress;
+    const keepExistingAddress = Boolean(existing.isFullAddress && !incoming.isFullAddress);
 
-    // Alıcı Adı: Eğer existing ismi geçersiz ise (örn: "Help requests"), keepExistingAddress olsa dahi incoming ile ez!
     const existingBuyerInvalid = isInvalidBuyerName(existing.buyerName);
     const incomingBuyerInvalid = isInvalidBuyerName(incoming.buyerName);
 
-    let resolvedBuyer = incoming.buyerName;
-    if (keepExistingAddress && !existingBuyerInvalid) {
-      resolvedBuyer = existing.buyerName;
-    } else if (existingBuyerInvalid && !incomingBuyerInvalid) {
+    let resolvedBuyer = 'Etsy Müşterisi';
+    if (!incomingBuyerInvalid && (incoming.isFullAddress || !keepExistingAddress || existingBuyerInvalid)) {
       resolvedBuyer = incoming.buyerName;
     } else if (!existingBuyerInvalid) {
       resolvedBuyer = existing.buyerName;
+    } else if (!incomingBuyerInvalid) {
+      resolvedBuyer = incoming.buyerName;
     }
 
+    const streetAddress = keepExistingAddress ? existing.streetAddress : (incoming.streetAddress || existing.streetAddress || '');
+    const secondAddress = keepExistingAddress ? existing.secondAddress : (incoming.secondAddress || existing.secondAddress || '');
+    const city = keepExistingAddress ? existing.city : (incoming.city || existing.city || '');
+    const state = keepExistingAddress ? existing.state : (incoming.state || existing.state || '');
+    const postalCode = keepExistingAddress ? existing.postalCode : (incoming.postalCode || existing.postalCode || '');
+    const country = keepExistingAddress ? (existing.country || incoming.country) : (incoming.country || existing.country || 'United States');
+    const phone = keepExistingAddress ? (existing.phone || incoming.phone) : (incoming.phone || existing.phone || '');
+    const rawAddressText = keepExistingAddress
+      ? (existing.rawAddressText || incoming.rawAddressText || '')
+      : (incoming.rawAddressText || existing.rawAddressText || '');
+    const isFullAddress = Boolean(existing.isFullAddress || incoming.isFullAddress);
+    const recomputedShipping = [streetAddress, secondAddress, city, state, postalCode, country].filter(Boolean).join(', ');
+
     return {
-      ...incoming,
       ...existing,
+      ...incoming,
       orderTotal: incoming.orderTotal != null ? incoming.orderTotal : existing.orderTotal,
       currency: incoming.currency || existing.currency,
       trackingNumber: incoming.trackingNumber || existing.trackingNumber,
@@ -247,18 +260,22 @@ document.addEventListener('DOMContentLoaded', async () => {
       orderDate: incoming.orderDate || existing.orderDate,
       status: incoming.status || existing.status,
       iossNumber: incoming.iossNumber || existing.iossNumber,
+      sku: incoming.sku || existing.sku || null,
+      variation: incoming.variation || existing.variation || null,
+      transactionId: incoming.transactionId || existing.transactionId || null,
+      shippingMethod: incoming.shippingMethod || existing.shippingMethod || null,
       // Adres alanları
       buyerName: resolvedBuyer || 'Etsy Müşterisi',
-      shippingAddress: keepExistingAddress ? existing.shippingAddress : (incoming.shippingAddress || existing.shippingAddress),
-      streetAddress: keepExistingAddress ? existing.streetAddress : (incoming.streetAddress || existing.streetAddress),
-      secondAddress: keepExistingAddress ? existing.secondAddress : (incoming.secondAddress || existing.secondAddress),
-      city: keepExistingAddress ? existing.city : (incoming.city || existing.city),
-      state: keepExistingAddress ? existing.state : (incoming.state || existing.state),
-      postalCode: keepExistingAddress ? existing.postalCode : (incoming.postalCode || existing.postalCode),
-      country: keepExistingAddress ? existing.country : (incoming.country || existing.country),
-      phone: keepExistingAddress ? existing.phone : (incoming.phone || existing.phone),
-      rawAddressText: keepExistingAddress ? existing.rawAddressText : (incoming.rawAddressText || existing.rawAddressText),
-      isFullAddress: Boolean(existing.isFullAddress || incoming.isFullAddress),
+      shippingAddress: recomputedShipping || incoming.shippingAddress || existing.shippingAddress || 'Adres Kayıtlı',
+      streetAddress,
+      secondAddress,
+      city,
+      state,
+      postalCode,
+      country,
+      phone,
+      rawAddressText,
+      isFullAddress,
       sourceType: incoming.isFullAddress ? incoming.sourceType : (existing.sourceType || incoming.sourceType)
     };
   }
@@ -278,9 +295,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const div = document.createElement('div');
         div.className = 'order-item-card';
         const isFull = !!o.isFullAddress;
+        const summaryLocation = [o.city, [o.state, o.postalCode].filter(Boolean).join(' '), o.country].filter(Boolean).join(', ');
         const addrDisplay = o.streetAddress 
-          ? `${o.streetAddress}, ${o.city || ''} ${o.state || ''} ${o.postalCode || ''}`.trim()
-          : (o.shippingAddress || 'Adres Kayıtlı');
+          ? `${o.streetAddress}${o.secondAddress ? ', ' + o.secondAddress : ''}, ${[o.city, o.state, o.postalCode].filter(Boolean).join(' ')}`.trim()
+          : (summaryLocation || o.shippingAddress || 'Adres Kayıtlı');
 
         const formattedTotal = (o.orderTotal != null && !isNaN(Number(o.orderTotal)))
           ? (o.currency === 'TRY' ? `${Number(o.orderTotal).toFixed(2)} ₺` : `$${Number(o.orderTotal).toFixed(2)}`)
@@ -514,7 +532,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const dOrder = response.drawerOrder;
             const dIdx = allOrders.findIndex(o => o.receiptId === dOrder.receiptId);
             if (dIdx !== -1) {
-              allOrders[dIdx] = { ...allOrders[dIdx], ...dOrder, isFullAddress: true };
+              allOrders[dIdx] = mergeOrderRecord(allOrders[dIdx], { ...dOrder, isFullAddress: true });
             } else {
               allOrders.unshift(dOrder);
             }

@@ -90,7 +90,7 @@
     /^Items?\b/i,
     /Shop coupon/i,
     /\(\d+%\s*off\)/i,
-    /^[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i,
+    /^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i,
     /#\d{9,12}/,
     /\(Etsy\)/i,
     /Buyer expects delivery/i,
@@ -127,7 +127,7 @@
     if (!rawHtml) return '';
     const prepared = rawHtml
       .replace(/<br\s*[\/]?>/gi, '\n')
-      .replace(/<\/(p|div|li|tr|h\d|section|article)>/gi, '\n');
+      .replace(/<\/(p|div|li|tr|h\d|section|article|address)>/gi, '\n');
     const doc = new DOMParser().parseFromString(prepared, 'text/html');
     return doc.body ? (doc.body.textContent || '') : '';
   }
@@ -135,8 +135,8 @@
   function extractCleanAddressLines(textBlock, requireShipTo = false) {
     if (!textBlock) return [];
     let linesSource = textBlock;
-    // Kelime sınırı ile kesin eşleşme: "Ship today" gibi termin bildirimleriyle ASLA eşleşmez!
-    const m = textBlock.match(/\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b/i);
+    // Kelime sınırı + negatif lookahead ile kesin eşleşme: "Ship today" ile ASLA eşleşmez!
+    const m = textBlock.match(/\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?![ \t]*\b(?:day|today)\b)/i);
     if (m) {
       linesSource = textBlock.substring(m.index + m[0].length);
     } else if (requireShipTo) {
@@ -147,16 +147,16 @@
     const cleanLines = [];
 
     for (let i = 0; i < rawLines.length; i++) {
-      let line = rawLines[i].replace(/[▾▼]/g, '').trim();
+      let line = rawLines[i].replace(/[▾▼⌄⌃]/g, '').trim();
       if (!line) continue;
       // Salt sembol veya boşluk karakterlerini atla
-      if (/^[▾▼\s\-_–—]+$/.test(line)) continue;
+      if (/^[▾▼⌄⌃\s\-_–—]+$/.test(line)) continue;
       // Kupon kodlarını, sipariş numaralarını veya (Etsy)US$... metinlerini ASLA adres satırı yapma
-      if (/^[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i.test(line) || /Shop coupon/i.test(line) || /\(\d+%\s*off\)/i.test(line) || /\(Etsy\)/i.test(line) || /#\d{9,12}/.test(line)) {
+      if (/^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i.test(line) || /Shop coupon/i.test(line) || /\(\d+%\s*off\)/i.test(line) || /\(Etsy\)/i.test(line) || /#\d{9,12}/.test(line)) {
         continue;
       }
-      // Rozetleri, termin bildirimlerini ve buton metinlerini adres satırından kesinlikle ayıkla
-      if (/^(?:Marked as gift|Gift message|Gift message available|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping|VAT Collected|Ship by.*|Selected by buyer.*|No tracking.*|Select all.*|Deselect all.*|Help requests?.*|Action needed.*)$/i.test(line)) {
+      // Rozetleri, menü öğelerini, termin bildirimlerini ve buton metinlerini adres satırından kesinlikle ayıkla
+      if (/^(?:Marked as gift|Gift message|Gift message available|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping|VAT Collected|Ship by.*|Selected by buyer.*|No tracking.*|Select all.*|Deselect all.*|Help requests?.*|Action needed.*|Order history|See order history|Message buyer|Contact buyer|Add a private note|Complete order|More actions)$/i.test(line)) {
         continue;
       }
       // Gecikme / süre / relatif tarih bildirimlerini asla adres satırı veya alıcı adı yapma (Örn: "1 days ago", "1 day ago", "day", "days", "ago", "today", "yesterday", "overdue")
@@ -184,24 +184,41 @@
 
   function isInvalidBuyerName(name) {
     if (!name) return true;
-    const t = String(name).replace(/[▾▼]/g, '').trim();
+    const t = String(name).replace(/[▾▼⌄⌃]/g, '').trim();
     if (t.length < 2) return true;
     if (/^\d+$/.test(t)) return true;
+    // Çok satırlı sızıntıları reddet
+    if (/[\r\n]/.test(t)) return true;
     
     // Sipariş ID, (Etsy), para birimi ve tutar içeren metinler
     if (/\b\d{9,12}\b/.test(t)) return true;
     if (/\(Etsy\)/i.test(t)) return true;
     if (/(?:US\$|\$|₺|EUR|€|TL)\s*[\d,.]+/i.test(t)) return true;
     
-    // Kupon kodları ve indirimler
+    // Kupon kodları ve indirimler (en az 1 rakam ve 1 harf içeren uzun hex kodlar)
     if (/\b(?:Shop coupon|coupon|\d+%\s*off)\b/i.test(t)) return true;
-    if (/^[A-F0-9]{12,35}$/i.test(t)) return true;
+    if (/^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}$/i.test(t)) return true;
     
-    // Navigasyon / Arayüz / GDPR / Menü öğeleri
-    if (/^(?:Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Ma[ğg]aza\s*Müdürü|Ma[ğg]aza\s*müdürü\s*menüsü|Aramak|Kontrol\s*Panel[iı]?|[İI]lanlar|Mesajlar|Sipari[şs]ler|[İI]statistikler|Pazarlama|Finans|Uygulamalar|Ayarlar|Privacy\s*Settings|Help\s*requests?|Dashboard|Activity)$/i.test(t)) return true;
+    // Navigasyon / Arayüz / GDPR / Alıcı Menüsü öğeleri
+    if (/^(?:Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Ma[ğg]aza\s*Müdürü|Ma[ğg]aza\s*müdürü\s*menüsü|Aramak|Kontrol\s*Panel[iı]?|[İI]lanlar|Mesajlar|Sipari[şs]ler|[İI]statistikler|Pazarlama|Finans|Uygulamalar|Ayarlar|Privacy\s*Settings|Help\s*requests?|Dashboard|Activity|Order\s*history|See\s*order\s*history|Message\s*buyer|Contact\s*buyer|Add\s*a\s*private\s*note|Complete\s*order|More\s*actions|Ship\s*to|Shipped\s*to)$/i.test(t)) return true;
     
     // Durum, termin ve kargo ifadeleri
     return /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|deselect\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*|action\s*needed.*|unread\s*messages?.*|messages?.*|standard\s*shipping.*|order\s*in\s*reserve.*|rezervde.*|doğrulandı.*|usps\s*verified.*|pre-transit.*|in\s*transit.*|delivered.*|shipped.*|selected\s*by\s*buyer.*)$/i.test(t);
+  }
+
+  function looksLikeAddressLine(line) {
+    if (!line) return false;
+    const t = line.trim();
+    if (COUNTRY_REGEX.test(t)) return true;
+    if (/^(?:Tel|Phone|Mobile|Telefon|Cep)\s*[:\-\.]/i.test(t)) return true;
+    if (/^[\+\d\(\)\s\.\-]{7,22}$/.test(t) && t.replace(/\D/g, '').length >= 7) return true;
+    if (/^(?:P\.?\s*O\.?\s*Box|PSC\s+\d|CMR\s+\d|UNIT\s+\d|APT\.?\s+\w|STE\.?\s+\w|SUITE\s+\w)/i.test(t)) return true;
+    if (/^\d{1,6}\s+[A-Za-z]/.test(t)) return true;
+    if (/^[A-Za-z\u00C0-\u017F \t.'-]+,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?$/i.test(t)) return true;
+    if (/^[A-Za-z\u00C0-\u017F \t.'-]+?\s+[A-Z]{2}\s+\d{5}(?:-\d{4})?$/i.test(t)) return true;
+    if (/^(?:[A-Z]{1,2}-)?\d{4,5}\s+[A-Za-z\u00C0-\u017F\s.-]+$/i.test(t)) return true;
+    if (/^[A-Za-z\s.-]+,\s*[A-Z]{2}\s+[A-Z]\d[A-Z]\s*\d[A-Z]\d$/i.test(t)) return true;
+    return false;
   }
 
   function parseAddressFieldsFromLines(lines, rawBlock) {
@@ -221,13 +238,17 @@
       };
     }
 
-    // İlk geçerli alıcı adı adayını belirle (day, help requests, sayılar veya durdurma kelimeleri hariç)
+    // İlk geçerli alıcı adı adayını belirle (sokak/şehir satırlarını yanlışlıkla alıcı adı yapma!)
     let buyerName = '';
     let startIdx = 0;
     for (let i = 0; i < lines.length; i++) {
       const cand = lines[i].trim();
       if (!cand || isInvalidBuyerName(cand)) {
         continue;
+      }
+      if (looksLikeAddressLine(cand)) {
+        startIdx = i;
+        break;
       }
       buyerName = cand;
       startIdx = i + 1;
@@ -293,11 +314,16 @@
     }
 
     // 4. ŞEHİR / EYALET / POSTA KODU FORMATLARI
-    // A) US: "Port Charlotte, FL 33952-8113" veya "Arlington, TX 76014" veya "Port Charlotte, FL"
-    const usCityStateIdx = remaining.findIndex(l => /^[A-Za-z\s.-]+,\s*[A-Z]{2}(?:\s+\d{5}(?:-\d{4})?)?$/i.test(l.trim()));
+    // A) US: "Port Charlotte, FL 33952-8113", "Dyess AFB, TX", "O'Fallon, MO" veya askeri "Apo AE 09464-0045"
+    const usCommaRegex = /^([A-Za-z\u00C0-\u017F \t.'-]+),\s*([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?$/i;
+    const usSpaceZipRegex = /^([A-Za-z\u00C0-\u017F \t.'-]+?)\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i;
+    const usCityStateIdx = remaining.findIndex(l => {
+      const t = l.trim();
+      return usCommaRegex.test(t) || usSpaceZipRegex.test(t);
+    });
     if (usCityStateIdx !== -1) {
       const csLine = remaining[usCityStateIdx].trim();
-      const m = csLine.match(/^([A-Za-z\s.-]+),\s*([A-Z]{2})(?:\s+(\d{5}(?:-\d{4})?))?/i);
+      const m = csLine.match(usCommaRegex) || csLine.match(usSpaceZipRegex);
       if (m) {
         city = m[1].trim();
         state = m[2].trim().toUpperCase();
@@ -425,16 +451,16 @@
 
       // Alıcı adını doğrudan çekmecedeki Ship to veya kullanıcı profil kutusundan yakala
       let drawerBuyerName = '';
-      // A) Ship to altındaki ilk satır (Örn: Jessica Benson, Cindy Nguyen)
-      const shipToBlock = text.match(/\b(?:Ship\s+to|Shipped\s+to)\b\s*[\r\n]+([A-Za-z\u00C0-\u017F\s.'-]+)/i);
+      // A) Ship to altındaki ilk tekil satır (Örn: Jessica Benson, Cindy Nguyen)
+      const shipToBlock = text.match(/\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?![ \t]*\b(?:day|today)\b)[ \t:]*[▾▼⌄⌃]?[ \t]*[\r\n]+[ \t]*([^\r\n▾▼⌄⌃]+)/i);
       if (shipToBlock && !isInvalidBuyerName(shipToBlock[1])) {
-        drawerBuyerName = shipToBlock[1].replace(/[▾▼]/g, '').trim();
+        drawerBuyerName = shipToBlock[1].replace(/[▾▼⌄⌃]/g, '').trim();
       }
       // B) Profil kutusundaki başlık (Örn: jessica benson ▾)
       if (!drawerBuyerName) {
-        const profileBtn = drawerEl.querySelector('button[aria-label*="buyer"], [class*="buyer-name"], h2, h3, a[href*="/sold/buyer/"]');
+        const profileBtn = drawerEl.querySelector('button[aria-label*="buyer" i], [class*="buyer-name"], h2, h3, a[href*="/sold/buyer/"], a[href*="/people/"]');
         if (profileBtn) {
-          const cand = (profileBtn.textContent || '').replace(/[▾▼]/g, '').trim();
+          const cand = (profileBtn.textContent || '').replace(/[▾▼⌄⌃]/g, '').trim();
           if (!isInvalidBuyerName(cand)) drawerBuyerName = cand;
         }
       }
@@ -449,8 +475,8 @@
       if (!finalBuyerName || isInvalidBuyerName(finalBuyerName)) return null;
 
       const transM = text.match(/Transaction ID:\s*(\d+)/i);
-      const skuM = text.match(/SKU:\s*([^\r\n]+)/i);
-      const varM = text.match(/(?:Height|Size|Color|Style|Boyut|Renk|Ölçü):\s*([^\r\n]+)/i);
+      const skuM = text.match(/\bSKU(?:\s*:|\s+)\s*([^\r\n]+)/i);
+      const varM = text.match(/\b(?:Personalization|Height|Size|Color|Style|Material|Option|Boyut|Renk|Ölçü|Kişiselleştirme)\s*:\s*([^\r\n]+)/i);
       const shipMethodM = text.match(/Selected by buyer[\s\r\n]+([^\r\n]+)/i);
 
       return {
@@ -517,6 +543,29 @@
     return Boolean(body.offsetHeight || (body.getClientRects && body.getClientRects().length > 0));
   }
 
+  function findShipToHeading(rootEl) {
+    if (!rootEl || typeof rootEl.querySelectorAll !== 'function') return null;
+    const all = Array.from(rootEl.querySelectorAll('div, span, button, h1, h2, h3, h4, h5, h6, p, strong, b, dt, label'));
+    const exactMatches = all.filter(el => {
+      if (el.closest && el.closest('a[href*="/listing/"]')) return false;
+      const t = (el.textContent || '').replace(/[▾▼⌄⌃]/g, '').trim();
+      return /^(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi):?$/i.test(t);
+    });
+    if (exactMatches.length > 0) {
+      return exactMatches.find(el => !exactMatches.some(other => other !== el && el.contains(other))) || exactMatches[0];
+    }
+    const prefixMatches = all.filter(el => {
+      if (el.closest && el.closest('a[href*="/listing/"]')) return false;
+      const t = (el.textContent || '').replace(/[▾▼⌄⌃]/g, '').trim();
+      if (t.length > 120 || /#\d{9,12}/.test(t)) return false;
+      return /^(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?![ \t]*\b(?:day|today)\b)/i.test(t);
+    });
+    if (prefixMatches.length > 0) {
+      return prefixMatches.sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)[0];
+    }
+    return null;
+  }
+
   function findOrderContainers() {
     const list = [];
     const seenIds = new Set();
@@ -537,6 +586,10 @@
       while ((textNode = walker.nextNode())) {
         const parent = textNode.parentElement;
         if (!parent || !isNodeVisible(parent)) continue;
+        // Açık yan çekmece (drawer) içindeki ID'leri liste kartı sanma
+        if (parent.closest('aside, [role="dialog"], [data-region="order-drawer"], [class*="order-drawer" i], [class*="panel--flyout" i]')) {
+          continue;
+        }
 
         const val = textNode.nodeValue || '';
         const m = val.match(/#(\d{9,12})\b/) || val.match(/\b(\d{9,12})\s*\(Etsy\)/i);
@@ -552,6 +605,7 @@
     const attrElements = Array.from(document.querySelectorAll('[data-order-id], [data-receipt-id], a[href*="order_id="], a[href*="receipt_id="]'));
     for (const el of attrElements) {
       if (!isNodeVisible(el)) continue;
+      if (el.closest('aside, [role="dialog"], [data-region="order-drawer"], [class*="order-drawer" i], [class*="panel--flyout" i]')) continue;
       const dId = el.getAttribute('data-order-id') || el.getAttribute('data-receipt-id') || '';
       const href = el.getAttribute('href') || el.href || '';
       const m = dId.match(/^(\d{9,12})$/) || href.match(/[?&](?:order|receipt)_id=(\d{9,12})\b/);
@@ -565,7 +619,6 @@
     for (const hit of matchedHits) {
       const id = hit.id;
       if (seenIds.has(id)) continue;
-      // Kendi çocuklarında da aynı ID geçiyorsa, leaf düğümü beklemek için üst düğümü atla
       const hasChildWithId = Array.from(hit.node.children).some(ch => (ch.textContent || '').includes(id));
       if (!hasChildWithId) {
         seenIds.add(id);
@@ -573,8 +626,7 @@
       }
     }
 
-    // 4. Kart Kapsayıcısı İzolasyonu (Zorunlu Değişmez: Bir kartta TAM 1 adet tekil sipariş ID'si olmalı)
-    // DİKKAT: .panel-body veya .wt-card gibi jenerik alt sınıflar sağdaki "Ship to" sütununu kestiği için listeye ALINMAZ!
+    // 4. Kart Kapsayıcısı İzolasyonu (Zorunlu Değişmez: Bir kartta TAM 1 adet tekil sipariş ID'si olmalı ve sağ Ship to sütununu kapsamalı)
     const knownCardSelectors = [
       '[data-region="order-card"]',
       '[class*="order-card"]',
@@ -588,13 +640,14 @@
       const node = item.node;
       const id = item.id;
 
-      // Ata tırmanışı: Kartın hem sol ID/başlık bilgilerini hem de sağ sütundaki "Ship to" alanını kapsamasını sağla
+      // Ata tırmanışı: Sol sütundaki müşteri menüsüne (.wt-content-toggle__body) takılmadan sağdaki "Ship to" sütununu kapsayana dek çık!
       let curr = node.parentElement;
       let best = node.parentElement || node;
+      let reachedShipTo = Boolean(findShipToHeading(best));
 
       while (curr && curr !== document.body && curr.tagName !== 'MAIN' && curr.id !== 'root' && curr.id !== 'content') {
-        // Sayfa seviyesi navigasyon/başlık/sekme gördüğü anda tırmanmayı kesinlikle durdur!
-        if (curr.querySelector('nav, [role="tablist"], [role="navigation"], .wt-tabs, .action-needed')) {
+        // Sayfa seviyesi navigasyon, arama çubuğu veya sağ filtre radyo butonları gördüğü an dur
+        if (curr.querySelector('nav, [role="tablist"], [role="navigation"], .wt-tabs, .action-needed, input[type="search"], input[placeholder*="Search" i], input[type="radio"]')) {
           break;
         }
 
@@ -602,12 +655,21 @@
         if (ids.size > 1) {
           break; // Başka bir siparişle birleştiği an dur!
         }
+
+        const currText = curr.textContent || '';
+        // Tarih grubu başlığına ("Ordered Oct 16, 2026 1 Select all") veya toplu işlem çubuğuna çıktıysa dur
+        if (/\b(?:Select\s+all|Deselect\s+all|Tümünü\s+seç|Complete\s+order|More\s+actions)\b/i.test(currText)) {
+          break;
+        }
+
         if (ids.size === 1 && ids.has(id)) {
           best = curr;
-          // Eğer bu ata elemanı hem ID'yi hem de Ship to / kargo alanını içine almışsa, tam sipariş satırına ulaşılmıştır!
-          const text = curr.textContent || '';
-          if (/\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi)\b/i.test(text) || curr.querySelector('.wt-content-toggle__body, [class*="ship-to"]')) {
+          if (reachedShipTo) {
+            // Ship to kapsandıktan sonra dış beyaz kart kabuğunu da içine alıp güvenle dur
             break;
+          }
+          if (findShipToHeading(curr)) {
+            reachedShipTo = true;
           }
         }
         curr = curr.parentElement;
@@ -615,8 +677,8 @@
 
       let cardEl = best;
 
-      // İkincil kontrol: Eğer yukarıdaki tırmanış çok derinde kaldıysa bilinen kart seçicileriyle genişlet
-      if (cardEl && !/\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi)\b/i.test(cardEl.textContent || '')) {
+      // İkincil kontrol: Eğer yukarıdaki tırmanış Ship to'ya ulaşamadıysa bilinen kart seçicileriyle genişlet
+      if (cardEl && !findShipToHeading(cardEl)) {
         const broaderCard = cardEl.closest(knownCardSelectors.join(', '));
         if (broaderCard && containsExactlyOne(broaderCard, id)) {
           cardEl = broaderCard;
@@ -631,41 +693,99 @@
     return list;
   }
 
-  // 4.1 İZOLE KART İÇİNDEKİ SHIP-TO ELEMANLARINI HEDEFLEME
+  // 4.1 İZOLE KART İÇİNDEKİ SAĞ SHIP-TO SÜTUNUNU VE CHEVRON BUTONUNU HEDEFLEME
+  function isActionOrMenuButton(btn) {
+    if (!btn) return true;
+    const popupAttr = (btn.getAttribute('aria-haspopup') || '').toLowerCase();
+    if (popupAttr === 'menu' || (popupAttr === 'true' && !btn.classList.contains('wt-content-toggle'))) {
+      return true;
+    }
+    const label = [
+      btn.getAttribute('aria-label') || '',
+      btn.getAttribute('title') || '',
+      btn.textContent || ''
+    ].join(' ').trim();
+    return /\b(?:more\s*actions|order\s*actions|complete\s*order|message\s*buyer|contact\s*buyer|order\s*history|add\s*a\s*private\s*note|print|cancel|refund|copy(?:\s+address)?)\b/i.test(label);
+  }
+
   function resolveCardShipTo(cardEl) {
     if (!cardEl || typeof cardEl.querySelectorAll !== 'function') return null;
 
-    // 1. SADECE buton veya tıklanabilir toggle adaylarını filtrele (S1-c)
-    // Negatif lookahead ile Ship today / day bildirimlerini kesinlikle dışla
-    const buttonCandidates = Array.from(cardEl.querySelectorAll('button, [role="button"], [aria-expanded], a.wt-btn, a[class*="toggle"]'));
-    const toggleBtn = buttonCandidates
-      .filter(el => /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?!\s*(?:day|today))/i.test((el.textContent || '').trim()))
-      .sort((a, b) => (a.textContent || '').trim().length - (b.textContent || '').trim().length)[0] || null;
+    const shipToHeading = findShipToHeading(cardEl);
+    if (!shipToHeading) return null;
 
+    // 1. Sağdaki "Ship to" kargo sütununu izole et: #siparişNo içeren sol sütunla ASLA birleşmez!
+    let shipToColumn = shipToHeading;
+    let parent = shipToHeading.parentElement;
+    while (parent && parent !== cardEl && cardEl.contains(parent)) {
+      if (uniqueOrderIds(parent).size > 0) {
+        break; // Sol sütun (#orderId) ile birleşmeden hemen önce dur!
+      }
+      if (parent.querySelector('[aria-haspopup="menu"], [aria-label*="More actions" i], [aria-label*="Order actions" i], [aria-label*="Complete order" i]')) {
+        break; // En sağdaki dikey işlem ikonları sütunuyla birleşmeden dur!
+      }
+      shipToColumn = parent;
+      parent = parent.parentElement;
+    }
+
+    // 2. Toggle butonunu bul: Hem "Ship to" metnini saran butonu hem de sağındaki metinsiz SVG chevron (⌄) butonunu yakala
+    let toggleBtn = null;
+    const wrappingBtn = shipToHeading.closest('button, [role="button"], [aria-expanded], a.wt-content-toggle, a[class*="toggle"]');
+    if (wrappingBtn && cardEl.contains(wrappingBtn) && uniqueOrderIds(wrappingBtn).size === 0 && !isActionOrMenuButton(wrappingBtn)) {
+      toggleBtn = wrappingBtn;
+    }
+
+    if (!toggleBtn) {
+      let row = shipToHeading.parentElement;
+      for (let depth = 0; depth < 3 && row && shipToColumn.contains(row); depth++) {
+        const rowBtns = Array.from(row.querySelectorAll('button, [role="button"], [aria-expanded], a.wt-content-toggle'))
+          .filter(b => uniqueOrderIds(b).size === 0 && !isActionOrMenuButton(b));
+        if (rowBtns.length > 0) {
+          toggleBtn = rowBtns.find(b => b.hasAttribute('aria-expanded') || b.hasAttribute('aria-controls') || b.classList.contains('wt-content-toggle'))
+                   || rowBtns.find(b => {
+                        const t = (b.textContent || '').replace(/[▾▼⌄⌃]/g, '').trim();
+                        return t === '' || /^(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)$/i.test(t);
+                      })
+                   || rowBtns[0];
+          break;
+        }
+        row = row.parentElement;
+      }
+    }
+
+    // 3. Adres çekmece gövdesini SADECE aria-controls veya izole sağ Ship-to sütunu içinde ara (Sol müşteri menüsünü ASLA alma!)
     let addrBody = null;
-
     if (toggleBtn) {
       const controlsId = toggleBtn.getAttribute('aria-controls');
       if (controlsId) {
-        // Kart kapsamında ara; document'ta bulunursa kart içinde olduğunu doğrula (S1-d)
-        addrBody = cardEl.querySelector('#' + CSS.escape(controlsId)) || document.getElementById(controlsId);
-        if (addrBody && !cardEl.contains(addrBody)) {
+        const escapedId = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape(controlsId) : controlsId;
+        addrBody = cardEl.querySelector('#' + escapedId) || document.getElementById(controlsId);
+        if (addrBody && (!cardEl.contains(addrBody) || uniqueOrderIds(addrBody).size > 0)) {
           addrBody = null;
         }
       }
     }
 
-    if (!addrBody) {
-      addrBody = cardEl.querySelector('.wt-content-toggle__body, [id*="wt-content-toggle"], .ship-to-summary');
+    if (!addrBody && shipToColumn) {
+      addrBody = shipToColumn.querySelector('.wt-content-toggle__body, [id*="wt-content-toggle"], .ship-to-summary, address');
     }
 
-    // 2. Semantik Açık/Kapalı Kontrolü (S1-a)
-    const isExpanded = isDrawerOpen(toggleBtn, addrBody);
+    // 4. Semantik ve içerik tabanlı açık/kapalı kontrolü (Zaten açık olan adresi tekrar tıklayıp kapatmayı önle)
+    const colVisibleText = shipToColumn ? (shipToColumn.innerText || '') : '';
+    const visLines = extractCleanAddressLines(colVisibleText, true);
+    const visParsed = parseAddressFieldsFromLines(visLines, colVisibleText);
 
-    return { toggleBtn, addrBody, isExpanded };
+    let isExpanded = false;
+    if (toggleBtn && toggleBtn.hasAttribute && toggleBtn.hasAttribute('aria-expanded')) {
+      isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true' || Boolean(visParsed.isFullAddress);
+    } else {
+      isExpanded = Boolean(visParsed.isFullAddress) || isDrawerOpen(toggleBtn, addrBody);
+    }
+
+    return { toggleBtn, addrBody, shipToColumn, isExpanded };
   }
 
-  // 4.2 SİPARİŞ LİSTESİ AYIKLAMA (İzole DOM & .wt-content-toggle__body innerHTML Koruması)
+  // 4.2 SİPARİŞ LİSTESİ AYIKLAMA (İzole Sağ Ship-to Sütunu + Tek Satırlı Müşteri Adı Garantisi)
   function parseOrdersOnPage() {
     const ordersMap = new Map();
 
@@ -683,26 +803,54 @@
         for (const item of containers) {
           const id = item.id;
           const el = item.element;
-          const block = el.innerText || '';
+          const block = el.innerText || htmlToText(el.innerHTML);
 
-          // Doğrudan adres kutusunu bul: .wt-content-toggle__body
+          // İzole sağ Ship-to sütununu ve varsa adres çekmecesini çöz
           const shipToInfo = resolveCardShipTo(el);
-          const addrBody = shipToInfo ? shipToInfo.addrBody : (el.querySelector('.wt-content-toggle__body') || el.parentElement?.querySelector('.wt-content-toggle__body'));
-          
-          // visibility: hidden durumunda innerText boş dönebileceği için innerHTML -> htmlToText kullan
-          let addressText = '';
+          const addrBody = shipToInfo ? shipToInfo.addrBody : null;
+          const colText = (shipToInfo && shipToInfo.shipToColumn)
+            ? (shipToInfo.shipToColumn.innerText || htmlToText(shipToInfo.shipToColumn.innerHTML))
+            : '';
+
+          // Katman 1: Sağ Ship-to sütunundaki görünür metin (Kapalıysa Özet: "Cindy Nguyen / Arlington, TX"; Açıksa Tam Adres!)
+          const summarySource = colText || block;
+          const summaryLines = extractCleanAddressLines(summarySource, true);
+          const summaryParsed = parseAddressFieldsFromLines(summaryLines, summarySource);
+
+          // Katman 2: Eğer gizli/açık .wt-content-toggle__body içinde tam sokak adresi varsa birleştir
+          let parsed = summaryParsed;
           if (addrBody) {
-            addressText = addrBody.innerText || htmlToText(addrBody.innerHTML);
+            const bodyText = addrBody.innerText || htmlToText(addrBody.innerHTML);
+            const bodyLines = extractCleanAddressLines(bodyText, false);
+            if (bodyLines.length > 0) {
+              const bodyParsed = parseAddressFieldsFromLines(bodyLines, bodyText);
+              if (bodyParsed.isFullAddress) {
+                const mergedBuyer = !isInvalidBuyerName(bodyParsed.buyerName) ? bodyParsed.buyerName : summaryParsed.buyerName;
+                parsed = {
+                  ...bodyParsed,
+                  buyerName: mergedBuyer,
+                  rawAddressText: [
+                    mergedBuyer,
+                    bodyParsed.streetAddress,
+                    bodyParsed.secondAddress,
+                    [bodyParsed.postalCode, bodyParsed.city, bodyParsed.state].filter(Boolean).join(' '),
+                    bodyParsed.country,
+                    bodyParsed.phone ? `Tel: ${bodyParsed.phone}` : '',
+                    bodyParsed.iossNumber ? `IOSS: ${bodyParsed.iossNumber}` : ''
+                  ].filter(Boolean).join('\n')
+                };
+              } else if (!summaryParsed.city && (bodyParsed.city || bodyParsed.state)) {
+                parsed = {
+                  ...summaryParsed,
+                  ...bodyParsed,
+                  buyerName: !isInvalidBuyerName(bodyParsed.buyerName) ? bodyParsed.buyerName : summaryParsed.buyerName
+                };
+              }
+            }
           }
 
-          // Eğer addrBody bulunamadıysa kart bloğundan rastgele metinleri değil SADECE "Ship to" sonrasını ara!
-          const lines = addressText 
-            ? extractCleanAddressLines(addressText) 
-            : extractCleanAddressLines(block, true); // requireShipTo = true!
-          const parsed = parseAddressFieldsFromLines(lines, block);
-
           // Kupon kodu veya sipariş ID'sinin yanlışlıkla cadde adresi olmasını engelle
-          if (parsed.streetAddress && (/^[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i.test(parsed.streetAddress) || /Shop coupon/i.test(parsed.streetAddress) || /#\d{9,12}/.test(parsed.streetAddress) || /\(Etsy\)/i.test(parsed.streetAddress))) {
+          if (parsed.streetAddress && (/^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i.test(parsed.streetAddress) || /Shop coupon/i.test(parsed.streetAddress) || /\(\d+%\s*off\)/i.test(parsed.streetAddress) || /#\d{9,12}/.test(parsed.streetAddress) || /\(Etsy\)/i.test(parsed.streetAddress))) {
             parsed.streetAddress = '';
             parsed.isFullAddress = false;
           }
@@ -717,38 +865,52 @@
                           || block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
           const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
 
-          // Alıcı Adı
-          let buyerName = parsed.buyerName ? parsed.buyerName.replace(/[▾▼]/g, '').trim() : '';
+          // Alıcı Adı (Kesinlikle tek satır yakalama — üst/alt satırlardaki Select all veya şehir adını yutmaz!)
+          let buyerName = parsed.buyerName ? parsed.buyerName.replace(/[▾▼⌄⌃]/g, '').trim() : '';
           if (isInvalidBuyerName(buyerName)) {
-            // 1. Ship to başlığı altındaki ilk alıcı adını yakala (Örn: Ship to ▾\nCindy Nguyen)
-            const shipToNameMatch = block.match(/\b(?:Ship\s+to|Shipped\s+to)\b\s*[▾▼]?\s*[\r\n]+([A-Za-z\u00C0-\u017F\s.'-]+)/i);
+            // 1. Ship to başlığı altındaki ilk satırı yakala (Örn: Ship to\nCindy Nguyen veya Ship to\ndaymsleftnut)
+            const shipToSource = colText || block;
+            const shipToNameMatch = shipToSource.match(/\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?![ \t]*\b(?:day|today)\b)[ \t:]*[▾▼⌄⌃]?[ \t]*[\r\n]+[ \t]*([^\r\n▾▼⌄⌃]+)/i);
             if (shipToNameMatch) {
-              const candidate = shipToNameMatch[1].replace(/[▾▼]/g, '').trim();
-              if (!isInvalidBuyerName(candidate)) {
+              const candidate = shipToNameMatch[1].replace(/[▾▼⌄⌃]/g, '').trim();
+              if (!isInvalidBuyerName(candidate) && !looksLikeAddressLine(candidate)) {
                 buyerName = candidate;
               }
             }
-            // 2. Karttaki müşteri adını (#\d{9,12} öncesindeki başlık) yakala (Örn: Marie Cindy, jessica benson)
+            // 2. Sol sütunda #siparişNo satırının hemen üstündeki tekil satırı yakala (Örn: Damien Panico ▾, Marie Cindy ▾)
             if (isInvalidBuyerName(buyerName)) {
-              const nameMatch = block.match(/([A-Za-z\u00C0-\u017F\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{9,12}/);
+              const nameMatch = block.match(/(?:^|[\r\n])[ \t]*([^\r\n▾▼⌄⌃#]+?)[ \t]*[▾▼⌄⌃]?[ \t]*[\r\n]+[ \t]*#\d{9,12}\b/);
               if (nameMatch) {
-                const candidate = nameMatch[1].replace(/[▾▼]/g, '').trim();
-                if (!isInvalidBuyerName(candidate)) {
+                const candidate = nameMatch[1].replace(/[▾▼⌄⌃]/g, '').trim();
+                if (!isInvalidBuyerName(candidate) && !looksLikeAddressLine(candidate)) {
                   buyerName = candidate;
                 }
               }
             }
-            // 3. Eğer hala geçersizse karttaki alıcı linklerini veya butonlarını ara
+            // 3. Kart içindeki alıcı profili linki veya butonu
             if (isInvalidBuyerName(buyerName)) {
-              const buyerLink = el.querySelector('a[href*="/your/orders/sold/buyer/"], a[href*="buyer="], [class*="buyer-name"], button[aria-label*="buyer"]');
+              const buyerLink = el.querySelector('a[href*="/your/orders/sold/buyer/"], a[href*="/people/"], a[href*="buyer_id="], a[href*="buyer="], [class*="buyer-name"], button[aria-label*="buyer" i]');
               if (buyerLink && buyerLink.textContent?.trim()) {
-                const cand = buyerLink.textContent.replace(/[▾▼]/g, '').trim();
-                if (!isInvalidBuyerName(cand)) {
+                const cand = buyerLink.textContent.replace(/[▾▼⌄⌃]/g, '').trim();
+                if (!isInvalidBuyerName(cand) && !looksLikeAddressLine(cand)) {
                   buyerName = cand;
                 }
               }
             }
           }
+
+          // parsed.rawAddressText alıcı adını içermiyorsa başına ekle
+          if (buyerName && !isInvalidBuyerName(buyerName) && parsed.rawAddressText && !parsed.rawAddressText.startsWith(buyerName)) {
+            parsed.rawAddressText = `${buyerName}\n${parsed.rawAddressText}`;
+          }
+
+          // Kart Üzerindeki SKU, Varyasyon ve Kargo Yöntemi (Örn: "SKU 5", "Personalization: 7.5 inches 19 cm")
+          const skuM = block.match(/\bSKU(?:\s*:|\s+)\s*([^\r\n]+)/i);
+          const cardSku = skuM ? skuM[1].trim() : null;
+          const varM = block.match(/\b(?:Personalization|Height|Size|Color|Style|Material|Option|Boyut|Renk|Ölçü|Kişiselleştirme)\s*:\s*([^\r\n]+)/i);
+          const cardVariation = varM ? varM[0].trim() : null;
+          const shipMethodM = block.match(/\b(Standard Shipping|Express Shipping|Priority Mail|Expedited Shipping)(?:[^\r\n]*)/i);
+          const cardShipMethod = shipMethodM ? shipMethodM[1].trim() : null;
 
           // Kargo Takip Kodu
           const trackMatch = block.match(/(\d{12,30})[\s\r\n]+Shipped/i)
@@ -783,13 +945,16 @@
             status = 'Processing';
           }
 
-          // Eğer drawer'dan zaten tam adres alındıysa ezme
+          // Eğer drawer'dan zaten tam adres alındıysa ezme, eksik meta alanları tamamla
           const existing = ordersMap.get(id);
           if (existing && existing.isFullAddress) {
             if (total != null) existing.orderTotal = total;
             if (tracking) existing.trackingNumber = tracking;
             if (title && title !== 'Etsy Ürünü') existing.productTitle = title;
             if (orderDate) existing.orderDate = orderDate;
+            if (cardSku && !existing.sku) existing.sku = cardSku;
+            if (cardVariation && !existing.variation) existing.variation = cardVariation;
+            if (cardShipMethod && !existing.shippingMethod) existing.shippingMethod = cardShipMethod;
             if (parsed.iossNumber && !existing.iossNumber) existing.iossNumber = parsed.iossNumber;
             continue;
           }
@@ -810,13 +975,16 @@
             iossNumber: parsed.iossNumber,
             rawAddressText: parsed.rawAddressText,
             isFullAddress: parsed.isFullAddress,
+            sku: cardSku,
+            variation: cardVariation,
+            shippingMethod: cardShipMethod,
             orderTotal: total,
             currency: currency,
             orderDate: orderDate,
             trackingNumber: tracking,
             productTitle: title,
             status: status,
-            sourceType: parsed.isFullAddress ? 'Açık Çekmece' : (addrBody ? 'Canlı Kart (.wt-content-toggle__body)' : 'Liste Özeti (İzole Kart)'),
+            sourceType: parsed.isFullAddress ? 'Canlı Kart (Tam Adres)' : 'Liste Özeti (İzole Kart)',
             sourceUrl: window.location.pathname,
             httpStatus: 'DOM (Canlı İzole Kart)',
             resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -906,8 +1074,8 @@
           const lines = extractCleanAddressLines(cleanText, true);
 
           const transM = cleanText.match(/Transaction ID:\s*(\d+)/i);
-          const skuM = cleanText.match(/SKU:\s*([^\r\n]+)/i);
-          const varM = cleanText.match(/(?:Height|Size|Color|Style|Boyut|Renk|Ölçü):\s*([^\r\n]+)/i);
+          const skuM = cleanText.match(/\bSKU(?:\s*:|\s+)\s*([^\r\n]+)/i);
+          const varM = cleanText.match(/\b(?:Personalization|Height|Size|Color|Style|Material|Option|Boyut|Renk|Ölçü|Kişiselleştirme)\s*:\s*([^\r\n]+)/i);
           const shipMethodM = cleanText.match(/Selected by buyer[\s\r\n]+([^\r\n]+)/i);
 
           if (lines.length >= 2) {
@@ -969,7 +1137,7 @@
       // Güvenli Fallback: Yalnızca sipariş kartları içinde kalan Ship to butonlarını topla (Asla sayfa menülerini tıklama!)
       if (buttonsToClick.size === 0) {
         const toggleButtons = Array.from(document.querySelectorAll('button.wt-content-toggle, button[aria-controls*="wt-content-toggle"]'))
-          .filter(btn => /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?!\s*(?:day|today))/i.test((btn.textContent || '').trim()));
+          .filter(btn => /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?![ \t]*\b(?:day|today)\b)/i.test((btn.textContent || '').trim()));
         for (const btn of toggleButtons) {
           buttonsToClick.add(btn);
         }
@@ -991,6 +1159,7 @@
       const startTime = Date.now();
       while (Date.now() - startTime < 1500) {
         const allOpened = Array.from(buttonsToClick).every(btn => {
+          if (!btn.isConnected) return true;
           if (btn.getAttribute('aria-expanded') === 'true') return true;
           const cid = btn.getAttribute('aria-controls');
           const body = cid ? document.getElementById(cid) : null;
