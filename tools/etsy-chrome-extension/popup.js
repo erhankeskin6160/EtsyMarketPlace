@@ -276,7 +276,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       phone,
       rawAddressText,
       isFullAddress,
-      sourceType: incoming.isFullAddress ? incoming.sourceType : (existing.sourceType || incoming.sourceType)
+      sourceType: keepExistingAddress ? (existing.sourceType || incoming.sourceType) : (incoming.sourceType || existing.sourceType)
     };
   }
 
@@ -483,7 +483,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
-    const EXPECTED_SCRIPT_VERSION = '1.4.0';
+    const EXPECTED_SCRIPT_VERSION = '1.4.1';
     let retryCount = 0;
     const maxRetries = 3;
     let upgradedStaleScript = false;

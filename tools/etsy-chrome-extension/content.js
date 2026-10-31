@@ -1,10 +1,10 @@
-// Etsy MarketPlace Satıcı Asistanı (Copilot) - Content Script v1.4.0
+// Etsy MarketPlace Satıcı Asistanı (Copilot) - Content Script v1.4.1
 // Sıfır ban riski: Yalnızca pasif DOM okuma ve kullanıcı tetiklemeli aktarım.
 
 (function () {
   'use strict';
 
-  const SCRIPT_VERSION = '1.4.0';
+  const SCRIPT_VERSION = '1.4.1';
 
   if (typeof window.__etsyCopilotCleanup === 'function') {
     try { window.__etsyCopilotCleanup(); } catch {}
@@ -119,7 +119,9 @@
     /Pre-transit/i,
     /In transit/i,
     /Delivered/i,
-    /Canceled/i
+    /Canceled/i,
+    /Complete\s*order/i,
+    /More\s*actions/i
   ];
 
   function isStopLine(line) {
@@ -146,56 +148,38 @@
     return doc.body ? (doc.body.textContent || '') : '';
   }
 
-  const BLOCK_LEVEL_TAGS = new Set(['DIV', 'P', 'LI', 'TR', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'SECTION', 'ARTICLE', 'ADDRESS', 'ASIDE', 'NAV', 'HEADER', 'DT', 'DD', 'BLOCKQUOTE', 'BUTTON']);
+  function findShipToAfterText(textBlock) {
+    if (!textBlock) return null;
+    const re = /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)(?:(?=Shipping|Caret)|(?![A-Za-z]))(?![ \t]*\b(?:day|today)\b)/gi;
+    const matches = [...textBlock.matchAll(re)];
+    if (matches.length === 0) return null;
 
-  // Canlı DOM düğümünden görünür metni alır; 1px clip ile gizlenen .wt-screen-reader-only ve <svg><title> gürültüsünü kesinlikle dışlar!
-  function getCleanVisibleText(el) {
-    if (!el) return '';
-    let out = '';
-    const walk = (n) => {
-      if (!n) return;
-      if (n.nodeType === 3) {
-        out += n.nodeValue || '';
-        return;
+    // Öncelik 1: Sondan başa doğru başlık satırı olan "Ship to" eşleşmesini seç (İlan başlığındaki "Ship to You" veya çekmece üst özeti "Ship to City, ST" elenir!)
+    for (let i = matches.length - 1; i >= 0; i--) {
+      const m = matches[i];
+      const after = textBlock.substring(m.index + m[0].length);
+      const headingTrail = after.match(/^(?:[ \t:▾▼⌄⌃]|Caret\s*(?:down|up)|Shipping\s*destination)*[\r\n]+/i);
+      if (headingTrail) {
+        return after.substring(headingTrail[0].length);
       }
-      if (n.nodeType !== 1) return;
-      const tag = (n.tagName || '').toUpperCase();
-      if (tag === 'SVG' || tag === 'STYLE' || tag === 'SCRIPT' || tag === 'NOSCRIPT') return;
-      if (n.classList && (n.classList.contains('wt-screen-reader-only') || n.classList.contains('sr-only'))) return;
-      if (n.hasAttribute && n.hasAttribute('hidden')) return;
-      if (n.classList && n.classList.contains('wt-content-toggle__body') && n.getAttribute && n.getAttribute('aria-hidden') === 'true') return;
-      if (typeof n.checkVisibility === 'function' && !n.checkVisibility({ checkVisibilityCSS: true })) return;
+    }
 
-      if (tag === 'BR') {
-        out += '\n';
-        return;
-      }
-      const isBlock = BLOCK_LEVEL_TAGS.has(tag);
-      if (isBlock) out += '\n';
-      for (const ch of (n.childNodes || [])) walk(ch);
-      if (isBlock) out += '\n';
-    };
-    walk(el);
-    return out.replace(/\n{3,}/g, '\n\n');
+    // Öncelik 2: Son eşleşmeden sonrası
+    const last = matches[matches.length - 1];
+    return textBlock.substring(last.index + last[0].length);
   }
 
   function extractCleanAddressLines(textBlock, requireShipTo = false) {
     if (!textBlock) return [];
     let linesSource = textBlock;
-    // Öncelik 1: Tek başına satır başlığı olan "Ship to" (Ürün başlıklarındaki "Ready to Ship to You" veya çekmece üst özeti "Ship to Port Charlotte, FL" ile ASLA karışmaz!)
-    const standaloneMatch = textBlock.match(/(?:^|[\r\n])[ \t]*(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)[ \t:▾▼⌄⌃]*(?=[\r\n]|$)/i);
-    // Öncelik 2: Satır başında yer alan "Ship to" ("Ship today" hariç)
-    const lineStartMatch = !standaloneMatch
-      ? textBlock.match(/(?:^|[\r\n])[ \t]*(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?![ \t]*\b(?:day|today)\b)[ \t:▾▼⌄⌃]*/i)
-      : null;
-    const m = standaloneMatch || lineStartMatch;
-    if (m) {
-      linesSource = textBlock.substring(m.index + m[0].length);
+    const afterShipTo = findShipToAfterText(textBlock);
+    if (afterShipTo !== null) {
+      linesSource = afterShipTo;
     } else if (requireShipTo) {
       return [];
     }
 
-    const rawLines = linesSource.split(/[\r\n]+/);
+    const rawLines = linesSource.split(/[\r\n\t]+/);
     const cleanLines = [];
 
     for (let i = 0; i < rawLines.length; i++) {
@@ -203,19 +187,24 @@
       if (!line) continue;
       // Salt sembol veya boşluk karakterlerini atla
       if (/^[▾▼⌄⌃\s\-_–—]+$/.test(line)) continue;
+      // Ekran okuyucu ikon başlıklarını atla (henüz adres başlamadan "Caret down" / "Copy address" gelebilir)
+      if (/^(?:Caret\s*down|Caret\s*up|Shipping\s*destination|Copy(?:\s+address)?|Adresi\s*kopyala)$/i.test(line)) {
+        continue;
+      }
+      // ÖNCE durdurma sınırı kontrolü: Adres bloğunun altındaki "Order in reserve", "USPS Verified", "Complete order", "More actions" vb. görüldüğü an KESİNLİKLE DUR!
+      if (isStopLine(line)) break;
       // Kupon kodlarını, sipariş numaralarını veya (Etsy)US$... metinlerini ASLA adres satırı yapma
       if (/^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}(?:\s*\(\d+%\s*off\))?$/i.test(line) || /Shop coupon/i.test(line) || /\(\d+%\s*off\)/i.test(line) || /\(Etsy\)/i.test(line) || /#\d{9,12}/.test(line)) {
         continue;
       }
-      // Rozetleri, menü öğelerini, termin bildirimlerini ve buton metinlerini adres satırından kesinlikle ayıkla
-      if (/^(?:Marked as gift|Gift message|Gift message available|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping|VAT Collected|Ship by.*|Selected by buyer.*|No tracking.*|Select all.*|Deselect all.*|Help requests?.*|Action needed.*|Order history|See order history|Message buyer|Contact buyer|Add a private note|Complete order|More actions)$/i.test(line)) {
+      // Rozetleri, menü öğelerini ve termin bildirimlerini adres satırından ayıkla
+      if (/^(?:Hediye|Help requests?.*|Order history|See order history|Message buyer|Contact buyer|Add a private note|Ship by.*)$/i.test(line)) {
         continue;
       }
-      // Gecikme / süre / relatif tarih bildirimlerini asla adres satırı veya alıcı adı yapma (Örn: "1 days ago", "1 day ago", "day", "days", "ago", "today", "yesterday", "overdue")
+      // Gecikme / süre / relatif tarih bildirimlerini asla adres satırı veya alıcı adı yapma
       if (/^(?:\d+\s+)?days?\s*(?:ago)?$/i.test(line) || /^(?:day|days|ago|today|yesterday|overdue)$/i.test(line) || /^\d+$/i.test(line)) {
         continue;
       }
-      if (isStopLine(line)) break;
       cleanLines.push(line);
       // Makul maksimum adres satırı 6'dır (Ad, Cadde1, Cadde2, Şehir/Eyalet/Zip, Ülke, Tel)
       if (cleanLines.length >= 6) break;
@@ -251,8 +240,8 @@
     if (/\b(?:Shop coupon|coupon|\d+%\s*off)\b/i.test(t)) return true;
     if (/^(?=.*\d)(?=.*[A-F])[A-F0-9]{12,35}$/i.test(t)) return true;
     
-    // Navigasyon / Arayüz / GDPR / Alıcı Menüsü öğeleri
-    if (/^(?:Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Ma[ğg]aza\s*Müdürü|Ma[ğg]aza\s*müdürü\s*menüsü|Aramak|Kontrol\s*Panel[iı]?|[İI]lanlar|Mesajlar|Sipari[şs]ler|[İI]statistikler|Pazarlama|Finans|Uygulamalar|Ayarlar|Privacy\s*Settings|Help\s*requests?|Dashboard|Activity|Order\s*history|See\s*order\s*history|Message\s*buyer|Contact\s*buyer|Add\s*a\s*private\s*note|Complete\s*order|More\s*actions|Ship\s*to|Shipped\s*to)$/i.test(t)) return true;
+    // Navigasyon / Arayüz / GDPR / Alıcı Menüsü / Ekran Okuyucu öğeleri
+    if (/^(?:Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Ma[ğg]aza\s*Müdürü|Ma[ğg]aza\s*müdürü\s*menüsü|Aramak|Kontrol\s*Panel[iı]?|[İI]lanlar|Mesajlar|Sipari[şs]ler|[İI]statistikler|Pazarlama|Finans|Uygulamalar|Ayarlar|Privacy\s*Settings|Help\s*requests?|Dashboard|Activity|Order\s*history|See\s*order\s*history|Message\s*buyer|Contact\s*buyer|Add\s*a\s*private\s*note|Complete\s*order|More\s*actions|Caret\s*down|Caret\s*up|Shipping\s*destination|Ship\s*to|Shipped\s*to)$/i.test(t)) return true;
     
     // Durum, termin ve kargo ifadeleri
     return /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|deselect\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*|action\s*needed.*|unread\s*messages?.*|messages?.*|standard\s*shipping.*|order\s*in\s*reserve.*|rezervde.*|doğrulandı.*|usps\s*verified.*|pre-transit.*|in\s*transit.*|delivered.*|shipped.*|selected\s*by\s*buyer.*)$/i.test(t);
@@ -491,7 +480,7 @@
       // Çekmece DOM'da izole bir panel olarak bulunamazsa ASLA tüm body'yi okuma!
       if (!drawerEl) return null;
 
-      const text = getCleanVisibleText(drawerEl) || drawerEl.innerText || htmlToText(drawerEl.innerHTML);
+      const text = drawerEl.innerText || htmlToText(drawerEl.innerHTML);
 
       let drawerOrderId = urlOrderMatch ? urlOrderMatch[1] : null;
       if (!drawerOrderId) {
@@ -503,10 +492,12 @@
 
       // Alıcı adını doğrudan çekmecedeki Ship to başlığının altındaki ilk satırdan veya kullanıcı profil kutusundan yakala
       let drawerBuyerName = '';
-      // A) Tek başına satır başlığı olan Ship to altındaki ilk tekil satır (Örn: Jessica Benson, Cindy Nguyen)
-      const shipToBlock = text.match(/(?:^|[\r\n])[ \t]*(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)[ \t:▾▼⌄⌃]*[\r\n]+[ \t]*([^\r\n▾▼⌄⌃]+)/i);
-      if (shipToBlock && !isInvalidBuyerName(shipToBlock[1]) && !looksLikeAddressLine(shipToBlock[1])) {
-        drawerBuyerName = shipToBlock[1].replace(/[▾▼⌄⌃]/g, '').trim();
+      const drawerAfterShipTo = findShipToAfterText(text);
+      if (drawerAfterShipTo) {
+        const firstCand = (drawerAfterShipTo.split(/[\r\n\t]+/).map(s => s.replace(/[▾▼⌄⌃]/g, '').trim()).find(Boolean)) || '';
+        if (!isInvalidBuyerName(firstCand) && !looksLikeAddressLine(firstCand)) {
+          drawerBuyerName = firstCand;
+        }
       }
       // B) Profil kutusundaki başlık (Örn: jessica benson ▾)
       if (!drawerBuyerName) {
@@ -708,7 +699,7 @@
       'tr.order-row',
       '[data-testid*="order-card"]'
     ];
-    const shipToTextRegex = /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?![ \t]*\b(?:day|today)\b)/i;
+    const shipToTextRegex = /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)(?:(?=Shipping|Caret)|(?![A-Za-z]))(?![ \t]*\b(?:day|today)\b)/i;
 
     for (const item of uniqueHits) {
       const node = item.node;
@@ -720,14 +711,14 @@
         cardEl = null;
       }
 
-      // Öncelik 2: Güvenli ata tırmanışı (Kart içindeki Complete order / More actions / Select all metinlerinde ASLA kırılmaz!)
+      // Öncelik 2: Güvenli ata tırmanışı (bc67fe4 ile birebir kanıtlanmış durdurma sınırı: kart içi radio/input/buton metinlerinde ASLA kırılmaz!)
       if (!cardEl || cardEl === document.body || cardEl.tagName === 'MAIN' || cardEl.id === 'root' || cardEl.id === 'content') {
         let curr = node.parentElement;
         let best = node.parentElement || node;
 
         while (curr && curr !== document.body && curr.tagName !== 'MAIN' && curr.id !== 'root' && curr.id !== 'content') {
-          // Yalnızca sayfa seviyesi navigasyon, arama kutusu veya sağ filtre radyo butonları gördüğünde dur!
-          if (curr.querySelector('nav, [role="tablist"], [role="navigation"], .wt-tabs, .action-needed, input[type="search"], input[placeholder*="Search" i], input[type="radio"]')) {
+          // Yalnızca sayfa seviyesi navigasyon, üst sekme veya Action needed bandı gördüğünde dur!
+          if (curr.querySelector('nav, [role="tablist"], [role="navigation"], .wt-tabs, .action-needed')) {
             break;
           }
 
@@ -850,8 +841,8 @@
 
     const addrBody = candidateBodies[0] || null;
 
-    // 4. Semantik ve içerik tabanlı açık/kapalı kontrolü
-    const colVisibleText = (shipToColumn ? getCleanVisibleText(shipToColumn) : getCleanVisibleText(cardEl)) || '';
+    // 4. Semantik ve içerik tabanlı açık/kapalı kontrolü (Doğal innerText: display:contents alt ağaçlarını asla düşürmez!)
+    const colVisibleText = (shipToColumn ? shipToColumn.innerText : cardEl.innerText) || '';
     const visLines = extractCleanAddressLines(colVisibleText, true);
     const visParsed = parseAddressFieldsFromLines(visLines, colVisibleText);
 
@@ -883,13 +874,20 @@
         for (const item of containers) {
           const id = item.id;
           const el = item.element;
-          const block = getCleanVisibleText(el) || el.innerText || htmlToText(el.innerHTML);
+          const block = el.innerText || htmlToText(el.innerHTML);
 
           // İzole sağ Ship-to sütununu ve tüm adres çekmece adaylarını çöz
           const shipToInfo = resolveCardShipTo(el);
-          const candidateBodies = shipToInfo ? (shipToInfo.candidateBodies || []) : [];
+          const candidateBodies = shipToInfo ? [...(shipToInfo.candidateBodies || [])] : [];
+          if (el.parentElement && containsExactlyOne(el.parentElement, id)) {
+            for (const pb of el.parentElement.querySelectorAll('.wt-content-toggle__body, [id*="wt-content-toggle"], .ship-to-summary, address')) {
+              if (uniqueOrderIds(pb).size === 0 && !candidateBodies.includes(pb)) {
+                candidateBodies.push(pb);
+              }
+            }
+          }
           const colText = (shipToInfo && shipToInfo.shipToColumn)
-            ? (getCleanVisibleText(shipToInfo.shipToColumn) || shipToInfo.shipToColumn.innerText || htmlToText(shipToInfo.shipToColumn.innerHTML))
+            ? (shipToInfo.shipToColumn.innerText || htmlToText(shipToInfo.shipToColumn.innerHTML))
             : '';
 
           // Katman 1: Sağ Ship-to sütunundan ve tam kart bloğundan "Ship to" sonrası görünür metni çöz
@@ -916,7 +914,7 @@
           let parsed = summaryParsed;
           let matchedAddrBody = null;
           for (const bodyEl of candidateBodies) {
-            const bodyText = getCleanVisibleText(bodyEl) || htmlToText(bodyEl.innerHTML);
+            const bodyText = bodyEl.innerText || htmlToText(bodyEl.innerHTML);
             const bodyLines = extractCleanAddressLines(bodyText, false);
             if (bodyLines.length === 0) continue;
 
@@ -965,28 +963,29 @@
                           || block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
           const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
 
-          // Alıcı Adı (Kesinlikle tek satır yakalama)
+          // Alıcı Adı (Kesinlikle tek satır yakalama — \t ve \n ayrımlarına dayanıklı!)
           let buyerName = parsed.buyerName ? parsed.buyerName.replace(/[▾▼⌄⌃]/g, '').trim() : '';
           if (isInvalidBuyerName(buyerName)) {
-            // 1. Tek başına satır başlığı olan Ship to altındaki ilk satırı yakala
+            // 1. Ship to başlığı altındaki ilk geçerli satırı yakala
             for (const src of [colText, block]) {
-              if (!src) continue;
-              const shipToNameMatch = src.match(/(?:^|[\r\n])[ \t]*(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)[ \t:▾▼⌄⌃]*[\r\n]+[ \t]*([^\r\n▾▼⌄⌃]+)/i);
-              if (shipToNameMatch) {
-                const candidate = shipToNameMatch[1].replace(/[▾▼⌄⌃]/g, '').trim();
-                if (!isInvalidBuyerName(candidate) && !looksLikeAddressLine(candidate)) {
-                  buyerName = candidate;
-                  break;
-                }
+              const afterShip = findShipToAfterText(src);
+              if (!afterShip) continue;
+              const candLines = afterShip.split(/[\r\n\t]+/).map(s => s.replace(/[▾▼⌄⌃]/g, '').trim()).filter(Boolean);
+              const validAfter = candLines.find(c => !isInvalidBuyerName(c) && !looksLikeAddressLine(c));
+              if (validAfter) {
+                buyerName = validAfter;
+                break;
               }
             }
             // 2. Sol sütunda #siparişNo satırının hemen üstündeki tekil satırı yakala (Örn: Damien Panico ▾, Marie Cindy ▾)
             if (isInvalidBuyerName(buyerName)) {
-              const nameMatch = block.match(/(?:^|[\r\n])[ \t]*([^\r\n▾▼⌄⌃#]+?)[ \t]*[▾▼⌄⌃]?[ \t]*[\r\n]+[ \t]*#\d{9,12}\b/);
-              if (nameMatch) {
-                const candidate = nameMatch[1].replace(/[▾▼⌄⌃]/g, '').trim();
-                if (!isInvalidBuyerName(candidate) && !looksLikeAddressLine(candidate)) {
-                  buyerName = candidate;
+              const tokens = block.split(/[\r\n\t]+/).map(s => s.replace(/[▾▼⌄⌃]/g, '').trim()).filter(Boolean);
+              const idTokenIdx = tokens.findIndex(t => t.includes(`#${id}`) || new RegExp(`\\b${id}\\b`).test(t));
+              for (let k = idTokenIdx - 1; k >= 0 && k >= idTokenIdx - 3; k--) {
+                const cand = tokens[k];
+                if (!isInvalidBuyerName(cand) && !looksLikeAddressLine(cand)) {
+                  buyerName = cand;
+                  break;
                 }
               }
             }
@@ -1093,7 +1092,7 @@
             status: status,
             sourceType: parsed.isFullAddress
               ? (matchedAddrBody ? 'Canlı Kart (.wt-content-toggle__body)' : 'Canlı Kart (Açık Ship to)')
-              : 'Liste Özeti (İzole Kart)',
+              : `Liste Özeti (İzole Kart | ${el.tagName} | ${block.length}ch)`,
             sourceUrl: window.location.pathname,
             httpStatus: 'DOM (Canlı İzole Kart)',
             resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
