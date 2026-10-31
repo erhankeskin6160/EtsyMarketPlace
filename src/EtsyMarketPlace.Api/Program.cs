@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using EtsyMarketPlace.Api.Services;
@@ -242,14 +242,14 @@ if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
 }
 
 app.UseCors();
-app.UseAuthentication();
-app.UseAuthorization();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "EtsyMarketPlace API v1");
     c.RoutePrefix = "swagger";
 });
+app.UseAuthentication();
+app.UseAuthorization();
 
 // 6. Controller Rotalarını Eşle
 app.MapControllers();
