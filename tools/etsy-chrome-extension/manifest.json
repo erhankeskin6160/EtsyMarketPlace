@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Etsy MarketPlace Satıcı Asistanı (Copilot v2)",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Etsy Mağazası için React Bellek + Yapısal DOM Tabanlı Sipariş, Müşteri Adresi ve Fon Rezervi VDS Köprüsü (Sıfır Bot Riski)",
   "icons": {
     "16": "icons/icon-16.png",
@@ -21,7 +21,7 @@
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "Etsy Copilot v2.1.0 — VDS Satıcı Köprüsü",
+    "default_title": "Etsy Copilot v2.2.0 — VDS Satıcı Köprüsü",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",

@@ -1,4 +1,4 @@
-// Etsy Copilot v2.1.0 — Katman 1: Salt-Okunur MAIN World React Fiber & Etsy.Context Okuyucu
+// Etsy Copilot v2.2.0 — Katman 1: Salt-Okunur MAIN World React Fiber, Preact/Backbone & Etsy.Context Okuyucu
 // GÜVENLİK GARANTİSİ (Anti-Ban / DataDome Uyumlu):
 // - window.fetch, XMLHttpRequest veya herhangi bir tarayıcı prototipine KESİNLİKLE DOKUNMAZ.
 // - Sayfada kalıcı global değişken veya event listener bırakmaz.
@@ -33,7 +33,7 @@
 
     const diagnostics = {
       layer: 'react-reader.main',
-      version: '2.1.0',
+      version: '2.2.0',
       fiberNodesVisited: 0,
       fiberDetected: false,
       reduxStoresFound: 0,
@@ -60,7 +60,7 @@
         diagnostics.etsyContextTopKeys = Object.keys(ctxData).slice(0, 35);
         const seenCtx = new WeakSet();
         const scanContext = (obj, depth) => {
-          if (!obj || typeof obj !== 'object' || depth > 5 || seenCtx.has(obj)) return;
+          if (!obj || typeof obj !== 'object' || depth > 8 || seenCtx.has(obj)) return;
           seenCtx.add(obj);
           if (Array.isArray(obj)) {
             if (obj.length > 20 && obj[0] && typeof obj[0] === 'object' && 'id' in obj[0] && 'name' in obj[0] && ('code' in obj[0] || 'iso_country_code' in obj[0])) {
@@ -286,7 +286,13 @@
 
         let curr = el;
         let rowEl = el;
-        while (curr && curr !== doc.body && curr.tagName !== 'MAIN') {
+        while (curr && curr !== doc.body && curr.tagName !== 'MAIN' && curr.id !== 'root' && curr.id !== 'content') {
+          if (curr.querySelector && curr.querySelector('#nav-subnav, .action-needed, input[placeholder*="Search" i], input[placeholder*="Ara" i], input[type="search"]')) {
+            break;
+          }
+          if (curr.querySelectorAll && curr.querySelectorAll('[role="tab"]').length >= 3) {
+            break;
+          }
           const ids = countIdsInElement(curr);
           if (ids.size > 1) break;
           if (isDrawerAnchor && curr.querySelector && curr.querySelector('input[type="checkbox"]')) break;
@@ -620,8 +626,16 @@
       '_owner', '_debugOwner', '_debugSource', '_debugHookTypes', '__proto__'
     ]);
 
+    const PRIORITY_OBJECT_KEYS = new Set([
+      'orders', 'receipts', 'initial_data', 'initialData', 'data', 'states', 'state',
+      'entities', 'orm', 'buyers', 'users', 'addresses', 'shippingAddresses', 'destinations',
+      'fulfillment', 'to_address', 'toAddress', 'shipping_address', 'shippingAddress',
+      'transactions', 'items', 'line_items', 'lineItems', 'results', 'shop', 'payload',
+      'records', 'byId', 'models', 'attributes', 'collection', 'order', 'receipt'
+    ]);
+
     function inspectJsValue(val, contextOrderId, depth, entitiesLookup) {
-      if (!val || typeof val !== 'object' || depth > 8) return;
+      if (!val || typeof val !== 'object' || depth > 12) return;
       if (val instanceof Node || val === win || val === doc || skippedArrays.has(val)) return;
       if (visitedObjects.has(val)) {
         // Aynı nesne farklı bir sipariş bağlamında değilse tekrar tarama; ancak doğrudan adres nesnesiyse ve contextOrderId varsa uygula
@@ -645,7 +659,7 @@
       }
 
       if (Array.isArray(val)) {
-        const limit = Math.min(val.length, 150);
+        const limit = Math.min(val.length, 200);
         for (let i = 0; i < limit; i++) {
           inspectJsValue(val[i], contextOrderId, depth + 1, entitiesLookup);
         }
@@ -655,7 +669,7 @@
       if (val instanceof Map) {
         let count = 0;
         for (const [mk, mv] of val.entries()) {
-          if (++count > 150) break;
+          if (++count > 200) break;
           const nextCtx = /^\d{9,12}$/.test(String(mk)) ? String(mk) : contextOrderId;
           inspectJsValue(mv, nextCtx, depth + 1, entitiesLookup);
         }
@@ -676,11 +690,23 @@
         }
       }
 
-      const keys = Object.keys(val);
-      const keyLimit = Math.min(keys.length, 90);
-      for (let i = 0; i < keyLimit; i++) {
-        const k = keys[i];
+      const rawKeys = Object.keys(val);
+      // Etsy.Context.data yüzlerce feature-flag anahtarı içerdiğinden öncelikli veri/sipariş anahtarlarını her zaman en başta tara!
+      const prioritizedKeys = [];
+      const otherKeys = [];
+      for (let i = 0; i < rawKeys.length; i++) {
+        const k = rawKeys[i];
         if (SKIPPED_OBJECT_KEYS.has(k)) continue;
+        if (PRIORITY_OBJECT_KEYS.has(k) || /^\d{9,12}$/.test(k)) {
+          prioritizedKeys.push(k);
+        } else {
+          otherKeys.push(k);
+        }
+      }
+      const orderedKeys = prioritizedKeys.length > 0 ? prioritizedKeys.concat(otherKeys) : otherKeys;
+      const keyLimit = Math.min(orderedKeys.length, depth <= 3 ? 600 : 200);
+      for (let i = 0; i < keyLimit; i++) {
+        const k = orderedKeys[i];
         let childVal;
         try {
           childVal = val[k];
@@ -735,12 +761,19 @@
       ...drawerRowScopes.map((d) => [d.id, d.rowEl])
     ];
     for (const [orderId, rowEl] of allRowEntries) {
-      const descendants = [rowEl, ...Array.from(rowEl.querySelectorAll('a, button, address, [id*="toggle"], div, span')).slice(0, 150)];
+      const descendants = [rowEl, ...Array.from(rowEl.querySelectorAll('a, button, address, [id*="toggle"], div, span')).slice(0, 180)];
       for (const domNode of descendants) {
         const directProps = getPropsFromDom(domNode);
         if (directProps) {
           diagnostics.fiberDetected = true;
           inspectJsValue(directProps, orderId, 0, null);
+        }
+
+        // Salt-okunur Preact / Backbone / Marionette DOM model bağlarını da kontrol et
+        for (const altKey of ['__k', '__preactattr_', '_component', '_model', 'model', '__backboneView', 'view']) {
+          if (domNode && altKey in domNode && domNode[altKey] && typeof domNode[altKey] === 'object') {
+            inspectJsValue(domNode[altKey], orderId, 0, null);
+          }
         }
 
         let fiber = getFiberFromDom(domNode);

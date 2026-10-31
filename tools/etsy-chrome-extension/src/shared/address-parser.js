@@ -1,4 +1,4 @@
-// Etsy Copilot v2.0.0 — Evrensel Adres, Para Birimi ve Ülke Ayrıştırıcı (Content Script + Node Test Uyumlu)
+// Etsy Copilot v2.2.0 — Evrensel Adres, Para Birimi ve Ülke Ayrıştırıcı (Content Script + Node Test Uyumlu)
 // Sıfır Mock İlkesi: Hiçbir sabit/uydurma adres veya bakiye üretmez.
 
 (function (root) {
@@ -185,7 +185,7 @@
     if (HEADING_PREFIX_PATTERNS.test(t)) return true;
     if (NOISE_OR_STOP_LINE_PATTERNS.some((p) => p.test(t))) return true;
     if (resolveCountryName(t)) return true;
-    if (/^(?:Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Mağaza\s*Müdürü|Siparişler|İlanlar|Mesajlar|Finans|Ayarlar|Quantity\s*\d*|Adet\s*\d*|SKU\b.*|Personalization\b.*|Height\b.*|Size\b.*|Color\b.*|Order\s*history|Message\s*buyer|Add\s*a\s*private\s*note|Print\s*shipping\s*label|day|days|ago|today|yesterday|overdue|\d+\s*days?\s*ago)$/i.test(t)) {
+    if (/^(?:Action\s*needed|Help\s*requests?|Unread\s*messages?|Ship\s*today|Reset|Sort|View|Gizlilik\s*Ayarlar[ıi]|Yard[ıi]m\s*Al[ıi]n|Mağaza\s*Müdürü|Siparişler|İlanlar|Mesajlar|Finans|Ayarlar|Quantity\s*\d*|Adet\s*\d*|SKU\b.*|Personalization\b.*|Height\b.*|Size\b.*|Color\b.*|Order\s*history|Message\s*buyer|Add\s*a\s*private\s*note|Print\s*shipping\s*label|day|days|ago|today|yesterday|overdue|\d+\s*(?:days?\s*ago|Overdue|Ship\s*today|Help\s*requests?))$/i.test(t)) {
       return true;
     }
     return false;
