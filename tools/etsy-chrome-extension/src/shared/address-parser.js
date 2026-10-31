@@ -144,13 +144,20 @@
     /\bIOSS\s+number\b/i,
     /\bMake\s+sure\s+to\s+write\b/i,
     /\bSelected\s+by\s+buyer\b/i,
+    /\bAlıcı\s+tarafından\s+seçildi\b/i,
     /\bMarked\s+as\s+gift\b/i,
+    /\bHediye\s+olarak\s+işaretlendi\b/i,
     /\bPre-transit\b/i,
     /\bIn\s+transit\b/i,
-    /\bDelivered\b/i
+    /\bDelivered\b/i,
+    /\bTeslim\s+edildi\b/i,
+    /\bUpdate\s+progress\b/i,
+    /\bAdd\s+a\s+private\s+note\b/i,
+    /\bOnly\s+you\s+can\s+see\s+this\s+note\b/i,
+    /\bNo\s+messages\s+about\s+this\s+order\b/i
   ];
 
-  const HEADING_PREFIX_PATTERNS = /^(?:Ship\s*to|Shipped\s*to|Shipping\s*address|Delivery\s*address|Gönderim\s*adresi|Teslimat\s*adresi|Şuraya\s*gönder(?:in)?|Gönderilecek\s*adres|Kargo\s*adresi|Alıcı\s*adresi|Caret\s*(?:down|up)|Shipping\s*destination|Copy(?:\s+address)?|Adresi\s*kopyala)\s*:?$/i;
+  const HEADING_PREFIX_PATTERNS = /^(?:Ship\s*to|Shipped\s*to|Shipping\s*address|Delivery\s*address|Gönderim\s*adresi|Teslimat\s*adresi|Şuraya\s*gönder(?:in|ildi)?|Gönderilecek\s*adres|Gönderildiği\s*yer|Kargo\s*adresi|Alıcı\s*adresi|Caret\s*(?:down|up)|Shipping\s*destination|Copy(?:\s+address)?|Adresi\s*kopyala)\s*:?$/i;
 
   function resolveCountryName(input, dynamicCountryMap) {
     if (input == null || input === '') return '';
@@ -395,9 +402,22 @@
     }
 
     // 7. Geriye kalan satırlar: Cadde 1 ve Cadde 2 (Daire / Bina)
+    // Kapalı uluslararası özet koruması: Yalnızca tek satır kaldıysa, rakam/sokak belirteci yoksa ve şehir henüz boşsa bu satır özet şehirdir (sokak değil!)
     let streetAddress = '';
     let secondAddress = '';
-    if (remaining.length > 0) {
+    if (
+      remaining.length === 1 &&
+      !city &&
+      !postalCode &&
+      !/\d/.test(remaining[0]) &&
+      !/\b(?:Box|PO\s*Box|Street|St|Road|Rd|Avenue|Ave|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct|Way|Str|Straße|Strasse|Rue|Via|Calle|Sokak|Cadde|Mah)\b/i.test(remaining[0])
+    ) {
+      const summaryParts = remaining[0].split(',').map((p) => p.trim()).filter(Boolean);
+      city = summaryParts[0] || remaining[0];
+      if (summaryParts.length >= 2 && !state) {
+        state = summaryParts[1];
+      }
+    } else if (remaining.length > 0) {
       streetAddress = remaining[0];
       if (remaining.length > 1) {
         secondAddress = remaining.slice(1).join(', ');

@@ -1,6 +1,15 @@
-// Etsy Copilot v2.0.0 — Katman 4: Reaktif Popup Görünüm Denetleyicisi (Sıfır Mock Veri)
+// Etsy Copilot v2.1.0 — Katman 4: Reaktif Popup Görünüm Denetleyicisi (Sıfır Mock Veri)
 
 import { ACTIONS, STORAGE_KEYS } from '../shared/contracts.js';
+
+async function getCurrentWindowActiveTabId() {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    return tab?.id || null;
+  } catch {
+    return null;
+  }
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -286,8 +295,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     apiStatusText.textContent = 'VDS Bağlantı Yok';
   }
 
-  // 2. Aktif Sekmeyi Çift Motorla (React Fiber + Yapısal DOM) Tara
-  const scanRes = await chrome.runtime.sendMessage({ action: ACTIONS.SW_SCAN_ACTIVE_TAB });
+  // 2. Aktif Penceredeki Aktif Sekmeyi Çift Motorla (React Fiber + Yapısal DOM) Tara
+  const initialTabId = await getCurrentWindowActiveTabId();
+  const scanRes = await chrome.runtime.sendMessage({
+    action: ACTIONS.SW_SCAN_ACTIVE_TAB,
+    tabId: initialTabId
+  });
   if (scanRes?.state) {
     appState = scanRes.state;
   }
@@ -299,8 +312,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     activateTab('orders');
     const reactFull = appState.livePageOrders.filter((o) => o.dataLayer === 'react-fiber' && o.isFullAddress).length;
     const totalFull = appState.livePageOrders.filter((o) => o.isFullAddress).length;
+    const namedCount = appState.livePageOrders.filter((o) => o.buyerName && o.buyerName !== 'Etsy Müşterisi').length;
     ordDetectBanner.className = 'detect-banner ok';
-    ordDetectBanner.textContent = `✅ ${appState.livePageOrders.length} sipariş okundu (${totalFull} Tam Adres${reactFull > 0 ? ` • ${reactFull} React Bellek` : ''}).`;
+    ordDetectBanner.textContent = `✅ ${appState.livePageOrders.length} sipariş okundu (${totalFull} Tam Adres • ${namedCount} Müşteri${reactFull > 0 ? ` • ${reactFull} React Bellek` : ''}).`;
   } else if (appState.pageType === 'finance') {
     activateTab('finance');
     finDetectBanner.className = 'detect-banner ok';
@@ -319,7 +333,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     btnResolveAddresses.textContent = '⏳ Satır içi adres panelleri açılıyor ve React belleği okunuyor...';
     ordResultBox.className = 'feedback-box hidden';
 
-    const res = await chrome.runtime.sendMessage({ action: ACTIONS.SW_RESOLVE_FULL_ADDRESSES });
+    const targetTabId = await getCurrentWindowActiveTabId();
+    const res = await chrome.runtime.sendMessage({
+      action: ACTIONS.SW_RESOLVE_FULL_ADDRESSES,
+      tabId: targetTabId
+    });
     btnResolveAddresses.disabled = false;
     btnResolveAddresses.textContent = '🎯 Satır İçi Açık Adresleri Çöz & Yenile';
 
@@ -331,12 +349,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderOrders();
 
       const full = appState.livePageOrders.filter((o) => o.isFullAddress).length;
+      const clicked = res?.diagnostics?.structuralDom?.clickedInlineToggles || 0;
       showFeedback(
         ordResultBox,
         full > 0,
         full > 0
-          ? `🎯 Sayfadaki ${full}/${appState.livePageOrders.length} siparişin tam sokak adresi çözüldü!`
-          : 'ℹ️ Sayfada açılabilir satır içi adres paneli bulunamadı; herhangi bir siparişe tıklayarak çekmeceden tam adres yakalayabilirsiniz.'
+          ? `🎯 Sayfadaki ${full}/${appState.livePageOrders.length} siparişin tam sokak adresi çözüldü!${clicked > 0 ? ` (${clicked} panel açıldı)` : ''}`
+          : 'ℹ️ Bu sayfadaki siparişlerde açılabilir satır içi sokak paneli bulunamadı; herhangi bir siparişe tıklayarak çekmeceden tam adres yakalayabilirsiniz.'
       );
     } else {
       showFeedback(ordResultBox, false, `⚠️ ${res?.message || res?.error || 'Adres çözümleme başarısız.'}`);
@@ -439,7 +458,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 9. Arşivi Sıfırla ve Yeniden Tara
   btnClearStore.addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ action: ACTIONS.SW_CLEAR_ARCHIVE });
-    const fresh = await chrome.runtime.sendMessage({ action: ACTIONS.SW_SCAN_ACTIVE_TAB });
+    const tabId = await getCurrentWindowActiveTabId();
+    const fresh = await chrome.runtime.sendMessage({ action: ACTIONS.SW_SCAN_ACTIVE_TAB, tabId });
     if (fresh?.state) appState = fresh.state;
     renderOrders();
     renderFinance();

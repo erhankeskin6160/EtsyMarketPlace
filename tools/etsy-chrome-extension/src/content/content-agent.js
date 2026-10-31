@@ -1,12 +1,12 @@
-// Etsy Copilot v2.0.0 — Katman 2: Dil ve Google-Çeviri Bağımsız Yapısal DOM & Inline Accordion Ajanı
+// Etsy Copilot v2.1.0 — Katman 2: Dil ve Google-Çeviri Bağımsız Yapısal DOM & Inline Accordion Ajanı
 // - "Ship to" / İngilizce metin aramasına BAĞIMLI DEĞİLDİR.
-// - Google Çeviri (<font dir="auto">) metin parçalamasını birleştirerek okur.
-// - Kart sınırlarını sipariş numarası + tekil checkbox + aria-controls / geometri ile matematiksel olarak izole eder.
+// - Google Çeviri (<font dir="auto">) ve parçalı "#<a>4210985421</a>" metin düğümlerini birleştirerek okur.
+// - Çekmece açıkken arka plandaki <main aria-hidden="true"> kartlarını kaybetmez; hem listeyi hem çekmeceyi eşzamanlı okur.
 
 (function (root) {
   'use strict';
 
-  const AGENT_VERSION = '2.0.0';
+  const AGENT_VERSION = '2.1.0';
 
   if (typeof root.__etsyCopilotV2Cleanup === 'function') {
     try { root.__etsyCopilotV2Cleanup(); } catch {}
@@ -46,8 +46,9 @@
   const IGNORED_TAGS = new Set(['SVG', 'SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
 
   /**
-   * Google Çeviri'nin <font dir="auto"> sarmallarını düzleştirerek blok bazlı temiz satırlar üretir.
-   * includeHiddenPanels=true olduğunda kapalı .wt-content-toggle__body içindeki tam adres metnini de okur!
+   * Google Çeviri'nin <font dir="auto"> sarmallarını ve parçalı inline etiketleri düzleştirerek blok bazlı temiz satırlar üretir.
+   * ÖNEMLİ: Çekmece (Drawer) açıkken Etsy arka plandaki <main> kapsayıcısına aria-hidden="true" koyar;
+   * bu yüzden kapsayıcı elementlerde aria-hidden nedeniyle okuma KESİNLİKLE iptal edilmez!
    */
   function extractStructuredLines(el, includeHiddenPanels = false) {
     if (!el) return [];
@@ -64,13 +65,24 @@
 
       const tag = (node.tagName || '').toUpperCase();
       if (IGNORED_TAGS.has(tag)) return;
+      if (node.id === 'gdpr-privacy-settings') return;
 
       const cls = typeof node.className === 'string' ? node.className : '';
-      if (/\b(?:wt-screen-reader-only|screen-reader-only|sr-only|goog-te-spinner)\b/i.test(cls)) {
+      if (/\b(?:wt-screen-reader-only|screen-reader-only|sr-only|goog-te-spinner|wt-menu__body|wt-tooltip__content|wt-popover__content)\b/i.test(cls)) {
         return;
       }
-      if (!includeHiddenPanels && node.getAttribute && node.getAttribute('aria-hidden') === 'true') {
-        return;
+
+      const role = node.getAttribute ? (node.getAttribute('role') || '').toLowerCase() : '';
+      if (role === 'menu' || role === 'tooltip') return;
+
+      // Yalnızca kapalı modal/overlay pencereleri veya dekoratif ikonları atla; <main aria-hidden="true"> veya kart kapsayıcılarını ASLA atlama!
+      if (node !== el && node.getAttribute && node.getAttribute('aria-hidden') === 'true') {
+        if (role === 'dialog' || /\b(?:wt-overlay|wt-icon)\b/i.test(cls) || node.hasAttribute('data-wt-overlay')) {
+          return;
+        }
+        if (!includeHiddenPanels && /\bwt-content-toggle__body\b/i.test(cls)) {
+          return;
+        }
       }
 
       if (tag === 'BR') {
@@ -100,9 +112,41 @@
     return extractStructuredLines(el, false).join(' ').replace(/[▾▼⌄⌃]/g, '').replace(/\s{2,}/g, ' ').trim();
   }
 
+  function isElementHiddenCss(el, doc) {
+    let cur = el;
+    const stopNode = doc ? doc.body : null;
+    while (cur && cur !== stopNode && cur.nodeType === 1) {
+      if (cur.hasAttribute && cur.hasAttribute('hidden')) return true;
+      if (cur.id === 'gdpr-privacy-settings') return true;
+      const ariaHidden = cur.getAttribute && cur.getAttribute('aria-hidden') === 'true';
+      if (ariaHidden) {
+        const cls = typeof cur.className === 'string' ? cur.className : '';
+        const role = (cur.getAttribute('role') || '').toLowerCase();
+        if (role === 'dialog' || /\bwt-overlay\b/i.test(cls) || cur.hasAttribute('data-wt-overlay')) {
+          return true;
+        }
+      }
+      const inlineStyle = (cur.getAttribute && cur.getAttribute('style')) || '';
+      if (/display\s*:\s*none|visibility\s*:\s*hidden/i.test(inlineStyle)) return true;
+      if (typeof getComputedStyle === 'function') {
+        try {
+          const st = getComputedStyle(cur);
+          if (st && (st.display === 'none' || st.visibility === 'hidden')) return true;
+        } catch {}
+      }
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+
+  const DRAWER_CONTAINER_SELECTOR = 'aside, [role="dialog"], [aria-modal="true"], .wt-overlay, [data-wt-overlay], [data-region*="order-drawer" i], [data-region*="drawer" i], [class*="order-drawer" i], [class*="panel--flyout" i], [class*="flyout" i]';
+
   function isInsideDrawer(el) {
     if (!el || !el.closest) return false;
-    return Boolean(el.closest('aside, [role="dialog"], [data-region="order-drawer"], [class*="order-drawer" i], [class*="panel--flyout" i]'));
+    const hit = el.closest(DRAWER_CONTAINER_SELECTOR);
+    if (!hit) return false;
+    // Eğer .wt-overlay bütün sayfayı sarmalıyorsa (içinde >1 sipariş varsa) bu bir çekmece değil ana kapsayıcıdır
+    return collectUniqueOrderIds(hit).size <= 1;
   }
 
   function collectUniqueOrderIds(el) {
@@ -110,49 +154,90 @@
     if (!el) return ids;
     const raw = (el.textContent || '').replace(/\u00A0/g, ' ');
     for (const m of raw.matchAll(/#\s*(\d{9,12})\b/g)) ids.add(m[1]);
-    for (const m of raw.matchAll(/\b(\d{9,12})\s*\(\s*Etsy\s*\)/gi)) ids.add(m[1]);
+    for (const m of raw.matchAll(/\b(\d{9,12})\s*(?:\(\s*Etsy\s*\)|via\s+Etsy\b)/gi)) ids.add(m[1]);
     return ids;
+  }
+
+  function matchOrderIdOnCompactElement(el) {
+    if (!el || !el.tagName) return null;
+    const tag = el.tagName.toUpperCase();
+    if (IGNORED_TAGS.has(tag)) return null;
+
+    if (tag === 'A') {
+      const href = el.getAttribute && el.getAttribute('href');
+      const hm = href && href.match(/[?&]order_id=(\d{9,12})\b/);
+      if (hm) {
+        const t = (el.textContent || '').replace(/\s+/g, '').trim();
+        if (t.includes(hm[1]) && t.length <= 80) return hm[1];
+      }
+    }
+
+    const norm = (el.textContent || '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!norm || norm.length > 180) return null;
+    const m = norm.match(/#\s*(\d{9,12})\b/) || norm.match(/\b(\d{9,12})\s*(?:\(\s*Etsy\s*\)|via\s+Etsy\b)/i);
+    return m ? m[1] : null;
+  }
+
+  /**
+   * P-Minimal (En İç Yaprak) Sipariş Çapası Keşfi:
+   * Etsy "#<a href='...'>4210985421</a> (Etsy)" şeklinde metin düğümlerini böldüğünde bile
+   * dış kapsayıcı div'leri DEĞİL, doğrudan en içteki yaprak sipariş satırını/linkini yakalar!
+   */
+  function findMinimalOrderAnchors(doc) {
+    const listAnchors = [];
+    const drawerAnchors = [];
+    if (!doc || !doc.body) return { listAnchors, drawerAnchors };
+
+    const candidates = doc.body.querySelectorAll('*');
+    for (const el of candidates) {
+      const id = matchOrderIdOnCompactElement(el);
+      if (!id) continue;
+
+      // P-Minimality: Alt ağaçtaki (descendant) herhangi bir element aynı sipariş ID'sini eşliyorsa üst kapsayıcıyı atla!
+      const descendants = el.querySelectorAll ? el.querySelectorAll('*') : (el.children || []);
+      let descendantMatches = false;
+      for (let i = 0; i < descendants.length; i++) {
+        if (matchOrderIdOnCompactElement(descendants[i]) === id) {
+          descendantMatches = true;
+          break;
+        }
+      }
+      if (descendantMatches) continue;
+      if (isElementHiddenCss(el, doc)) continue;
+
+      const lineCtx = ((el.parentElement ? el.parentElement.textContent : el.textContent) || '')
+        .replace(/\u00A0/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 180);
+
+      const viaEtsyDrawer = /\bvia\s+Etsy\b|\bEtsy\s+(?:üzerinden|aracılığıyla)\b/i.test(lineCtx);
+      if (viaEtsyDrawer || isInsideDrawer(el)) {
+        drawerAnchors.push({ id, el });
+      } else {
+        listAnchors.push({ id, el });
+      }
+    }
+
+    return { listAnchors, drawerAnchors };
   }
 
   /**
    * Matematiksel Sipariş Kartı İzolasyonu:
-   * 1. #4204665088 (veya Google Çeviri boşluklu "# 4204665088") metin düğümünden başlar.
+   * 1. En iç yaprak #4210985421 çapasından başlar (asla dış kart div'inden başlamaz!).
    * 2. Yukarı tırmanırken:
    *    - 2. bir sipariş ID'si görürse durur.
-   *    - Mevcut kapsayıcı zaten ürün linkini (a[href*="/listing/"]) VEYA adres panelini içeriyorsa
-   *      ve bir üst kapsayıcı "Select all" gibi 2. bir checkbox ekliyorsa tam sipariş satırında durur!
+   *    - Mevcut kapsayıcı zaten ürün/adres alanlarını içeriyorsa ve üst kapsayıcı "Select all" gibi 2. checkbox ekliyorsa durur!
    */
   function isolateOrderCards(doc) {
     const cards = [];
     const seen = new Set();
     if (!doc || !doc.body) return cards;
 
-    const anchors = [];
-    const walker = doc.createTreeWalker(doc.body, 4 /* SHOW_TEXT */);
-    let tn;
-    while ((tn = walker.nextNode())) {
-      const txt = (tn.nodeValue || '').replace(/\u00A0/g, ' ');
-      const m = txt.match(/#\s*(\d{9,12})\b/) || txt.match(/\b(\d{9,12})\s*\(\s*Etsy\s*\)/i);
-      if (!m) continue;
-      const parent = tn.parentElement;
-      if (!parent || isInsideDrawer(parent)) continue;
-      anchors.push({ id: m[1], el: parent });
-    }
+    const { listAnchors } = findMinimalOrderAnchors(doc);
 
-    // Yedek: eğer Google Çeviri "#" ile rakamı 2 ayrı <font> etiketine böldüyse
-    if (anchors.length === 0) {
-      const candidates = doc.querySelectorAll('a, span, div, strong');
-      for (const el of candidates) {
-        if (isInsideDrawer(el) || el.children.length > 4) continue;
-        const txt = (el.textContent || '').replace(/\u00A0/g, ' ');
-        const m = txt.match(/#\s*(\d{9,12})\b/) || txt.match(/\b(\d{9,12})\s*\(\s*Etsy\s*\)/i);
-        if (m) anchors.push({ id: m[1], el });
-      }
-    }
-
-    for (const anchor of anchors) {
+    for (const anchor of listAnchors) {
       if (seen.has(anchor.id)) continue;
-      seen.add(anchor.id);
 
       let curr = anchor.el;
       let best = anchor.el;
@@ -165,10 +250,15 @@
         if (ids.size > 1) break;
 
         if (ids.size === 1 && ids.has(anchor.id)) {
-          // Eğer best zaten hem ürün/fiyat hem sağ sütunu kapsıyorsa ve curr tarih grubu "Select all" checkbox'ını ekliyorsa dur
-          const bestHasListing = Boolean(best.querySelector && (best.querySelector('a[href*="/listing/"], img') || best.querySelector('[aria-controls], [aria-expanded], address')));
+          const bestHasContent = Boolean(
+            best.querySelector && (
+              best.querySelector('a[href*="/listing/"], img')
+              || best.querySelector('[aria-controls], [aria-expanded], address')
+              || extractStructuredLines(best, false).length >= 5
+            )
+          );
           const currCheckboxes = curr.querySelectorAll ? curr.querySelectorAll('input[type="checkbox"]').length : 0;
-          if (bestHasListing && currCheckboxes >= 2) {
+          if (bestHasContent && currCheckboxes >= 2) {
             break;
           }
           best = curr;
@@ -176,6 +266,8 @@
         curr = curr.parentElement;
       }
 
+      // Eğer aynı sipariş ID'si hem listede hem portal çekmecede geçiyorsa ve bu kopya çekmece kopyasıysa (checkbox yok ama daha önce checkbox'lı kart eklendiyse) seen korur
+      seen.add(anchor.id);
       cards.push({ id: anchor.id, idAnchor: anchor.el, cardEl: best });
     }
 
@@ -197,10 +289,17 @@
     return Boolean(refNode.compareDocumentPosition(targetNode) & 4 /* DOCUMENT_POSITION_FOLLOWING */);
   }
 
+  function isPureIconToolbar(container) {
+    if (!container || !container.querySelectorAll) return false;
+    const btns = Array.from(container.querySelectorAll('button, [role="button"]'));
+    if (btns.length < 2) return false;
+    return btns.every((b) => extractInlineText(b).length === 0);
+  }
+
   /**
    * Dil-Bağımsız Sağ Kargo Sütunu ve Adres Paneli Çözücü:
-   * 1) DOM sırası (idAnchor ve ürün görselinden SONRA gelen sağ sütun),
-   * 2) aria-controls / aria-expanded / React chevron <button> yapısal bağı ile çalışır.
+   * 1) DOM sırası (yaprak idAnchor ve ürün görselinden SONRA gelen sağ sütun),
+   * 2) aria-controls / aria-expanded / "Ship to" başlık satırı chevron <button> yapısal bağı ile çalışır.
    */
   function locateFulfillmentZone(cardEl, idAnchor, doc) {
     const result = {
@@ -210,18 +309,28 @@
     };
     if (!cardEl || !cardEl.querySelectorAll) return result;
 
-    const idCol = idAnchor ? idAnchor.parentElement : null;
-    const productImg = cardEl.querySelector('img');
+    // idLineEl yalnızca kısa "#4210985421 (Etsy) US$128.40" satırı olabilir; asla tüm kartı kapsayamaz!
+    let idLineEl = idAnchor;
+    if (idAnchor && idAnchor.parentElement && cardEl.contains(idAnchor.parentElement)) {
+      const pText = (idAnchor.parentElement.textContent || '').replace(/\s+/g, ' ').trim();
+      if (pText.length <= 140 && !(idAnchor.parentElement.querySelector && idAnchor.parentElement.querySelector('img, button[aria-controls]'))) {
+        idLineEl = idAnchor.parentElement;
+      }
+    }
+
+    const productImg = cardEl.querySelector('a[href*="/listing/"] img, img[src*="etsystatic"]') || cardEl.querySelector('img');
 
     // 1. Önce Sağ Kargo Sütununu (rightColumnEl) DOM sırası ve yapısal dışlama ile kesin olarak izole et
     const allContainers = Array.from(cardEl.querySelectorAll('div, section, td'));
     const candidateCols = allContainers.filter((d) => {
       if (collectUniqueOrderIds(d).size > 0) return false;
-      if (d.querySelector && d.querySelector('img, input[type="checkbox"], a[href*="/listing/"]')) return false;
+      if (d.querySelector && d.querySelector('input[type="checkbox"], a[href*="/listing/"]')) return false;
+      if (productImg && d.contains && d.contains(productImg)) return false;
       if (!isFollowingInDom(idAnchor, d)) return false;
       if (productImg && !isFollowingInDom(productImg, d)) return false;
-      const lines = extractStructuredLines(d, false);
-      if (lines.length < 2 || lines.length > 16) return false;
+      if (isPureIconToolbar(d)) return false;
+      const lines = extractStructuredLines(d, true);
+      if (lines.length < 2 || lines.length > 28) return false;
       // Ürün varyasyon / SKU bloğunu dışla
       if (lines.some((l) => /^(?:Quantity|Adet|Miktar)\s*\d+$/i.test(l) || /^(?:SKU|Stok\s*Kodu)\b/i.test(l))) {
         return false;
@@ -232,26 +341,40 @@
     const topRightCols = candidateCols.filter((c) => !candidateCols.some((other) => other !== c && other.contains(c)));
     if (topRightCols.length > 0) {
       result.rightColumnEl = topRightCols.sort((a, b) => {
-        const linesA = extractStructuredLines(a, false).length;
-        const linesB = extractStructuredLines(b, false).length;
+        const linesA = extractStructuredLines(a, true).length;
+        const linesB = extractStructuredLines(b, true).length;
         return linesB - linesA;
       })[0];
     }
 
-    // 2. Toggle butonunu bul: Önce aria-controls / aria-expanded, yoksa sağ kargo sütunu içindeki React chevron <button>
+    // 2. Toggle butonunu bul:
+    // Öncelik 1: aria-controls / aria-expanded / .wt-content-toggle (idAnchor'dan sonra gelen)
+    // Öncelik 2: Kendi metni veya ebeveyn başlığı "Ship to / Shipped to / Şuraya gönder / Gönderim" içeren chevron buton
+    // Öncelik 3: Sağ kargo sütunu içindeki aksiyon-dışı chevron <button>
+    const shipHeadingHintRe = /\b(?:Ship\s*to|Shipped\s*to|Shipping\s*address|Delivery\s*address|Şuraya\s*gönder|Gönderim|Teslimat|Kargo\s*adresi)\b/i;
     const searchScope = result.rightColumnEl || cardEl;
-    const ariaToggles = Array.from(searchScope.querySelectorAll('button[aria-controls], button[aria-expanded], .wt-content-toggle, [role="button"][aria-expanded]'))
+
+    const ariaToggles = Array.from(cardEl.querySelectorAll('button[aria-controls], button[aria-expanded], .wt-content-toggle, [role="button"][aria-expanded]'))
+      .filter((btn) => isFollowingInDom(idAnchor, btn))
       .filter((btn) => collectUniqueOrderIds(btn).size === 0 && !isMenuOrActionBtn(btn))
-      .filter((btn) => !(idCol && idCol.contains(btn)));
+      .filter((btn) => !(idLineEl && idLineEl.contains && idLineEl.contains(btn)));
 
     result.toggleBtn = ariaToggles.find((b) => b.hasAttribute('aria-controls')) || ariaToggles[0] || null;
 
-    if (!result.toggleBtn && result.rightColumnEl) {
-      const plainButtons = Array.from(result.rightColumnEl.querySelectorAll('button, [role="button"]'))
-        .filter((btn) => collectUniqueOrderIds(btn).size === 0 && !isMenuOrActionBtn(btn));
-      if (plainButtons.length > 0) {
-        result.toggleBtn = plainButtons[0];
-      }
+    if (!result.toggleBtn) {
+      const allFollowingBtns = Array.from(searchScope.querySelectorAll('button, [role="button"]'))
+        .filter((btn) => isFollowingInDom(idAnchor, btn))
+        .filter((btn) => collectUniqueOrderIds(btn).size === 0 && !isMenuOrActionBtn(btn))
+        .filter((btn) => !(idLineEl && idLineEl.contains && idLineEl.contains(btn)))
+        .filter((btn) => !(btn.parentElement && isPureIconToolbar(btn.parentElement)));
+
+      const shipHeaderBtn = allFollowingBtns.find((btn) => {
+        const ownTxt = extractInlineText(btn);
+        const parentTxt = btn.parentElement ? extractInlineText(btn.parentElement) : '';
+        return shipHeadingHintRe.test(ownTxt) || (parentTxt.length <= 80 && shipHeadingHintRe.test(parentTxt));
+      });
+
+      result.toggleBtn = shipHeaderBtn || (result.rightColumnEl ? allFollowingBtns[0] : null) || null;
     }
 
     const addPanel = (el) => {
@@ -266,6 +389,14 @@
         const byId = doc.getElementById(ctrlId);
         if (byId && cardEl.contains(byId)) addPanel(byId);
       }
+      // Eğer buton bir başlık satırının (ship-hdr) içindeyse hemen sonraki kardeş div tam adres kutusudur!
+      const hdrParent = result.toggleBtn.parentElement;
+      if (hdrParent && hdrParent !== cardEl && hdrParent.nextElementSibling && cardEl.contains(hdrParent.nextElementSibling)) {
+        addPanel(hdrParent.nextElementSibling);
+      }
+      if (result.toggleBtn.nextElementSibling && cardEl.contains(result.toggleBtn.nextElementSibling)) {
+        addPanel(result.toggleBtn.nextElementSibling);
+      }
     }
 
     for (const p of (result.rightColumnEl || cardEl).querySelectorAll('address, .wt-content-toggle__body, [id*="wt-content-toggle"], [class*="ship-to" i], [data-testid*="address" i]')) {
@@ -279,7 +410,7 @@
         let p = seed.parentElement;
         let col = seed;
         while (p && p !== cardEl && cardEl.contains(p)) {
-          if (collectUniqueOrderIds(p).size > 0 || (p.querySelector && p.querySelector('img, input[type="checkbox"], a[href*="/listing/"]'))) {
+          if (collectUniqueOrderIds(p).size > 0 || (p.querySelector && p.querySelector('input[type="checkbox"], a[href*="/listing/"]'))) {
             break;
           }
           col = p;
@@ -325,11 +456,15 @@
 
   function extractMoneyFromCardLines(lines, orderId) {
     const parser = getParser();
-    const joined = lines.join('\n');
     const idEscaped = orderId.replace(/\D/g, '');
-    const idLine = lines.find((l) => l.includes(idEscaped)) || joined;
+    const idLine = lines.find((l) => l.includes(idEscaped)) || '';
+    // Kargo satırındaki "(US$0.00)" parantez içi ücretsiz kargo tutarının sipariş toplamını ezmesini engelle
+    const sanitizedJoined = lines
+      .map((l) => l.replace(/\b(?:Standard|Standart|Express|Expedited|Priority)[^\n(]*\([^)]*\)/gi, ''))
+      .join('\n');
 
-    for (const source of [idLine, joined]) {
+    for (const source of [idLine, sanitizedJoined]) {
+      if (!source) continue;
       const m = source.match(/(ABD\s*\$|US\s*\$|\$|€|£|₺|TRY|TL|EUR|GBP|USD)\s*([\d.,]+)/i)
         || source.match(/([\d.,]+)\s*(₺|TL|TRY|EUR|€|USD|\$)/i);
       if (m) {
@@ -351,23 +486,20 @@
     const isInvalid = (s) => (parser ? parser.isInvalidPersonName(s) : !s);
     const isStreet = (s) => (parser ? parser.looksLikeStreetOrCityLine(s) : false);
 
-    // 1. Sol sütunda doğrudan alıcı menü butonu veya profil linki
-    if (idAnchor) {
-      let scope = idAnchor.parentElement;
-      for (let depth = 0; depth < 3 && scope && cardEl.contains(scope); depth++) {
-        const btns = Array.from(scope.querySelectorAll('button, a[href*="/people/"], a[href*="buyer"], [aria-haspopup="true"], [aria-haspopup="menu"]'));
-        for (const b of btns) {
-          if (collectUniqueOrderIds(b).size > 0) continue;
-          const t = extractInlineText(b);
-          if (!isInvalid(t) && !isStreet(t)) return t;
-        }
-        scope = scope.parentElement;
+    // 1. Kart içinde DOM sırasına göre #siparişNo çapasından HEMEN ÖNCE gelen alıcı butonu/linki (Örn: "jessica benson ▾", "Damien Panico ▾")
+    if (cardEl && cardEl.querySelectorAll && idAnchor) {
+      const interactivePreceding = Array.from(cardEl.querySelectorAll('button, a[href*="/people/"], a[href*="buyer"], [aria-haspopup="true"], [aria-haspopup="menu"], .wt-menu__trigger'))
+        .filter((el) => !el.contains(idAnchor) && collectUniqueOrderIds(el).size === 0 && isFollowingInDom(el, idAnchor));
+
+      for (let i = interactivePreceding.length - 1; i >= 0; i--) {
+        const t = extractInlineText(interactivePreceding[i]);
+        if (!isInvalid(t) && !isStreet(t)) return t;
       }
     }
 
-    // 2. Satır dizisinde #siparişNo satırının hemen üstündeki geçerli kişi adı satırı (Örn: "Damien Panico", "Marie Cindy")
-    const idLineIdx = cardLines.findIndex((l) => new RegExp(`#\\s*${orderId}\\b|\\b${orderId}\\s*\\(`, 'i').test(l));
-    for (let k = idLineIdx - 1; k >= 0 && k >= idLineIdx - 3; k--) {
+    // 2. Satır dizisinde #siparişNo satırının üstündeki geçerli kişi adı satırı
+    const idLineIdx = cardLines.findIndex((l) => l.includes(orderId));
+    for (let k = idLineIdx - 1; k >= 0 && k >= idLineIdx - 6; k--) {
       const cand = cardLines[k].replace(/[▾▼⌄⌃]/g, '').trim();
       if (!isInvalid(cand) && !isStreet(cand)) {
         return cand;
@@ -380,22 +512,23 @@
   function sliceAddressLinesFromColumn(colLines) {
     if (!Array.isArray(colLines) || colLines.length === 0) return [];
 
-    // Bilinen İngilizce/Türkçe kargo başlığı varsa hemen sonrasından kes
-    const headingRe = /^(?:Ship\s*to|Shipped\s*to|Shipping\s*address|Gönderim\s*adresi|Teslimat\s*adresi|Şuraya\s*gönder(?:in)?|Gönderilecek\s*adres|Kargo\s*adresi|Alıcı)\s*:?$/i;
+    // Bilinen İngilizce/Türkçe kargo başlığı varsa EN SONUNCUSUNUN hemen sonrasından kes
+    const headingRe = /^(?:Ship\s*to|Shipped\s*to|Shipping\s*address|Delivery\s*address|Gönderim\s*adresi|Teslimat\s*adresi|Şuraya\s*gönder(?:in|ildi)?|Gönderilecek\s*adres|Gönderildiği\s*yer|Kargo\s*adresi|Alıcı)\s*:?$/i;
     for (let i = colLines.length - 1; i >= 0; i--) {
-      if (headingRe.test(colLines[i].replace(/[▾▼⌄⌃]/g, '').trim())) {
+      const cleaned = colLines[i].replace(/[▾▼⌄⌃^]/g, '').trim();
+      if (headingRe.test(cleaned)) {
         return colLines.slice(i + 1);
       }
     }
 
-    // Dil-bağımsız yapısal kesim: Sağ sütunun üstündeki "No tracking" / "Ship by..." / "Ordered..." / "Standard Shipping"
-    // meta satırlarını atla; geriye kalan bölüm doğrudan [Alıcı, Sokak, Şehir/Eyalet, Ülke, Tel] bloğudur!
+    // Dil-bağımsız yapısal kesim: Sağ sütunun üstündeki kargo durum / tarih / taşıyıcı / takip no satırlarını atla
     let start = 0;
     while (start < colLines.length) {
       const l = colLines[start];
       if (
-        /\b(?:No\s+tracking|Takip\s+(?:numarası\s+)?yok|Ship\s+by|kargoya\s+verin|Ordered\s+|sipariş\s+edildi|Standard\s+Shipping|Standart\s+Kargo|Express\s+Shipping|Priority\s+Mail|Shipped|Pre-transit|In\s+transit|Delivered|\d+\s+days?\s+ago|gün\s+önce|Overdue|Gecikmiş)\b/i.test(l)
+        /\b(?:No\s+tracking|Takip\s+(?:numarası\s+)?yok|Ship\s+by|kargoya\s+verin|Ordered\s+|sipariş\s+edildi|Standard\s+Shipping|Standart\s+Kargo|Express\s+Shipping|Priority\s+Mail|Expedited\s+Shipping|Shipped|Completed?|Tamamland[ıi]|Pre-transit|In\s+transit|Out\s+for\s+delivery|Delivered|Teslim\s+edildi|\d+\s+days?\s+ago|gün\s+önce|Overdue|Gecikmiş|USPS|FedEx|UPS|DHL|ShipEntegra|Royal\s+Mail|Canada\s+Post)\b/i.test(l)
         || /\(\s*(?:ABD\s*\$|US\s*\$|\$|€|₺)[\d.,]+\s*\)/i.test(l)
+        || /^[A-Z0-9]{10,30}$/i.test(l.replace(/\s+/g, ''))
       ) {
         start++;
         continue;
@@ -462,12 +595,21 @@
         }
       }
 
-      // 3. Yedek: Kart satırları içinden başlık sonrası ayıklama
+      // 3. Yedek: Kartta "Ship to / Gönderim adresi" başlığı varsa başlık sonrasını dene (başlık yoksa tüm kartı parseAddressLines'a verip #siparişNo satırında kesilmesine izin verme!)
       if (!bestAddr || (!bestAddr.isFullAddress && !bestAddr.city && !bestAddr.recipientName)) {
-        const fallbackLines = sliceAddressLinesFromColumn(cardLines);
-        const fallbackParsed = parser.parseAddressLines(fallbackLines, cardText);
-        if (fallbackParsed.isFullAddress || (!bestAddr?.city && fallbackParsed.city)) {
-          bestAddr = fallbackParsed;
+        const headingRe = /^(?:Ship\s*to|Shipped\s*to|Shipping\s*address|Delivery\s*address|Gönderim\s*adresi|Teslimat\s*adresi|Şuraya\s*gönder(?:in|ildi)?|Gönderilecek\s*adres|Gönderildiği\s*yer|Kargo\s*adresi)\s*:?$/i;
+        let lastHeadingIdx = -1;
+        for (let hi = cardLines.length - 1; hi >= 0; hi--) {
+          if (headingRe.test(cardLines[hi].replace(/[▾▼⌄⌃^]/g, '').trim())) {
+            lastHeadingIdx = hi;
+            break;
+          }
+        }
+        if (lastHeadingIdx !== -1) {
+          const fallbackParsed = parser.parseAddressLines(cardLines.slice(lastHeadingIdx + 1), cardText);
+          if (fallbackParsed.isFullAddress || (!bestAddr?.city && (fallbackParsed.city || fallbackParsed.recipientName))) {
+            bestAddr = fallbackParsed;
+          }
         }
       }
 
@@ -547,61 +689,147 @@
         toggleButtonsFound,
         panelsFound,
         fullAddressDomCount: orders.filter((o) => o.isFullAddress).length,
-        drawerOpen: Boolean(drawerOrder)
+        summaryCityCount: orders.filter((o) => Boolean(o.city)).length,
+        realBuyerCount: orders.filter((o) => o.buyerName && o.buyerName !== 'Etsy Müşterisi').length,
+        drawerOpen: Boolean(drawerOrder),
+        drawerDetectedId: drawerOrder ? drawerOrder.receiptId : null
       }
     };
   }
 
   /**
-   * Açık yan sipariş çekmecesini (<aside> / [role="dialog"]) yapısal olarak okur.
+   * Açık yan sipariş çekmecesini (<aside>, [role="dialog"], .wt-overlay, "#4210985421 via Etsy" veya ?order_id=...) yapısal olarak okur.
    */
-  function extractOpenDrawerOrder(doc) {
+  function extractOpenDrawerOrder(doc, urlHint) {
     const parser = getParser();
     const targetDoc = doc || (typeof document !== 'undefined' ? document : null);
-    if (!targetDoc || !parser) return null;
+    if (!targetDoc || !targetDoc.body || !parser) return null;
 
-    const drawers = Array.from(targetDoc.querySelectorAll('aside, [role="dialog"], [data-region="order-drawer"], [class*="order-drawer" i], [class*="panel--flyout" i]'));
-    for (const dr of drawers) {
-      if (dr.getAttribute && dr.getAttribute('aria-hidden') === 'true') continue;
+    const candidateContainers = [];
+    const addCandidate = (el) => {
+      if (!el || el === targetDoc.body || el.tagName === 'MAIN') return;
+      if (isElementHiddenCss(el, targetDoc)) return;
+      if (!candidateContainers.includes(el)) candidateContainers.push(el);
+    };
+
+    // Yöntem 1: Bilinen çekmece / overlay / dialog kapsayıcıları
+    for (const dr of targetDoc.querySelectorAll(DRAWER_CONTAINER_SELECTOR)) {
+      if (collectUniqueOrderIds(dr).size === 1) {
+        addCandidate(dr);
+      }
+    }
+
+    // Yöntem 2: "#4210985421 via Etsy" çapasından yukarıya tekil sipariş tırmanışı (Etsy Mission Control gerçek çekmece imzası!)
+    const { drawerAnchors, listAnchors } = findMinimalOrderAnchors(targetDoc);
+    const climbDrawerAnchor = (anchorEl, orderId) => {
+      let curr = anchorEl;
+      let best = anchorEl;
+      while (curr && curr !== targetDoc.body && curr.tagName !== 'MAIN' && curr.id !== 'root' && curr.id !== 'content') {
+        const ids = collectUniqueOrderIds(curr);
+        if (ids.size > 1) break;
+        if (curr.querySelector && curr.querySelector('input[type="checkbox"]')) break;
+        // Arka plandaki liste kartıyla birleşmemesi için aynı ID'nin "(Etsy)" liste satırını içeriyorsa dur
+        const rawTxt = (curr.textContent || '').replace(/\u00A0/g, ' ');
+        if (new RegExp(`${orderId}\\s*\\(\\s*Etsy\\s*\\)`, 'i').test(rawTxt) && /\bvia\s+Etsy\b/i.test(rawTxt)) {
+          break;
+        }
+        if (ids.size === 1 && ids.has(orderId)) best = curr;
+        curr = curr.parentElement;
+      }
+      return best;
+    };
+
+    for (const da of drawerAnchors) {
+      addCandidate(climbDrawerAnchor(da.el, da.id));
+    }
+
+    // Yöntem 3: URL'de ?order_id=4210985421 varsa checkbox içermeyen ikincil çapayı çekmece olarak tırman
+    const currentUrl = String(urlHint || (targetDoc.location && targetDoc.location.href) || (typeof location !== 'undefined' ? location.href : '') || '');
+    const urlOrderMatch = currentUrl.match(/[?&]order_id=(\d{9,12})\b/);
+    if (urlOrderMatch) {
+      const targetId = urlOrderMatch[1];
+      for (const la of [...drawerAnchors, ...listAnchors]) {
+        if (la.id !== targetId) continue;
+        const climbed = climbDrawerAnchor(la.el, targetId);
+        if (climbed && !(climbed.querySelector && climbed.querySelector('input[type="checkbox"]'))) {
+          addCandidate(climbed);
+        }
+      }
+    }
+
+    const standaloneShipHeadingRe = /^(?:Ship\s*to|Shipped\s*to|Shipping\s*address|Delivery\s*address|Gönderim\s*adresi|Teslimat\s*adresi|Şuraya\s*gönder(?:in|ildi)?|Gönderilecek\s*adres|Kargo\s*adresi)\s*:?$/i;
+
+    for (const dr of candidateContainers) {
       const ids = collectUniqueOrderIds(dr);
       if (ids.size !== 1) continue;
       const receiptId = Array.from(ids)[0];
 
-      const drLines = extractStructuredLines(dr, false);
+      const drLines = extractStructuredLines(dr, true);
       const drText = drLines.join('\n');
 
-      // Önce <address> etiketi varsa onu dene, yoksa başlık sonrası kes
       let parsed = null;
+      // 1) <address> etiketi varsa dene
       const addrTag = dr.querySelector ? dr.querySelector('address') : null;
       if (addrTag) {
-        parsed = parser.parseAddressLines(extractStructuredLines(addrTag, false), drText);
+        parsed = parser.parseAddressLines(extractStructuredLines(addrTag, true), drText);
       }
+
+      // 2) Çekmecenin altındaki müstakil "Ship to" başlığının kendi yerel kutusunu (ebeveynini) dene (sağdaki "Selected by buyer" sütunuyla karışmasını %100 önler!)
+      if (!parsed || !parsed.isFullAddress) {
+        const subBlocks = Array.from(dr.querySelectorAll('div, section, td'));
+        for (let i = subBlocks.length - 1; i >= 0; i--) {
+          const sbLines = extractStructuredLines(subBlocks[i], true);
+          if (sbLines.length >= 4 && sbLines.length <= 14 && standaloneShipHeadingRe.test(sbLines[0].replace(/[▾▼⌄⌃^]/g, '').trim())) {
+            const candidate = parser.parseAddressLines(sbLines.slice(1), drText);
+            if (candidate.isFullAddress) {
+              parsed = candidate;
+              break;
+            }
+          }
+        }
+      }
+
+      // 3) Tüm çekmece satırlarında son "Ship to" başlığından sonrasını kes
       if (!parsed || !parsed.isFullAddress) {
         const sliced = sliceAddressLinesFromColumn(drLines);
         parsed = parser.parseAddressLines(sliced, drText);
       }
+
       if (!parsed || !parsed.isFullAddress) continue;
 
+      const orderFromMatch = drText.match(/Order\s+from\s+([^\r\n]+)/i);
+      const buyerAcc = orderFromMatch && !parser.isInvalidPersonName(orderFromMatch[1].trim())
+        ? orderFromMatch[1].trim()
+        : '';
+
       const { amount: orderTotal, currency } = extractMoneyFromCardLines(drLines, receiptId);
+      const orderDate = extractOrderDateFromLines(drLines);
       const txMatch = drText.match(/(?:Transaction\s*ID|İşlem\s*Kimliği)\s*:\s*(\d{7,14})/i);
       const skuLine = drLines.find((l) => /^(?:SKU|Stok\s*Kodu)\b/i.test(l));
 
+      let productTitle = '';
+      const listingLink = dr.querySelector ? dr.querySelector('a[href*="/listing/"]') : null;
+      if (listingLink) productTitle = extractInlineText(listingLink);
+
       return {
         receiptId,
-        buyerName: parsed.recipientName || 'Etsy Müşterisi',
+        buyerName: parsed.recipientName || buyerAcc || 'Etsy Müşterisi',
         recipientName: parsed.recipientName,
+        buyerAccountName: buyerAcc,
         streetAddress: parsed.streetAddress,
         secondAddress: parsed.secondAddress,
         city: parsed.city,
         state: parsed.state,
         postalCode: parsed.postalCode,
-        country: parsed.country || 'United States',
+        country: parsed.country || (parsed.state ? 'United States' : ''),
         phone: parsed.phone,
         iossNumber: parsed.iossNumber,
         rawAddressText: parsed.rawAddressText,
         isFullAddress: true,
+        productTitle,
         orderTotal,
         currency,
+        orderDate,
         transactionId: txMatch ? txMatch[1] : '',
         sku: skuLine ? skuLine.replace(/^(?:SKU|Stok\s*Kodu)\s*:?\s*/i, '').trim() : '',
         dataLayer: 'structural-dom',
@@ -799,6 +1027,7 @@
     AGENT_VERSION,
     detectPageType,
     extractStructuredLines,
+    findMinimalOrderAnchors,
     isolateOrderCards,
     extractOrdersFromDom,
     extractOpenDrawerOrder,

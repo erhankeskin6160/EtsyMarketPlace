@@ -1,4 +1,4 @@
-// Etsy Copilot v2.0.0 — Katman 1: Salt-Okunur MAIN World React Fiber & Etsy.Context Okuyucu
+// Etsy Copilot v2.1.0 — Katman 1: Salt-Okunur MAIN World React Fiber & Etsy.Context Okuyucu
 // GÜVENLİK GARANTİSİ (Anti-Ban / DataDome Uyumlu):
 // - window.fetch, XMLHttpRequest veya herhangi bir tarayıcı prototipine KESİNLİKLE DOKUNMAZ.
 // - Sayfada kalıcı global değişken veya event listener bırakmaz.
@@ -33,13 +33,17 @@
 
     const diagnostics = {
       layer: 'react-reader.main',
+      version: '2.1.0',
       fiberNodesVisited: 0,
       fiberDetected: false,
       reduxStoresFound: 0,
       countriesLoaded: 0,
       domOrderAnchors: 0,
+      drawerAnchors: 0,
       ordersMatched: 0,
       fullAddressesMatched: 0,
+      etsyContextTopKeys: [],
+      firstAnchorFrameworkKeys: [],
       sampleOrderKeys: [],
       sampleAddressKeys: []
     };
@@ -47,17 +51,20 @@
     // 1. window.Etsy.Context içinden ülke tablosu ve mağaza kimliğini çöz
     const countryById = { ...FALLBACK_ETSY_COUNTRY_IDS };
     const countryByCode = { ...ISO_COUNTRIES };
+    const skippedArrays = new WeakSet();
     let detectedShopId = null;
 
     try {
       const ctxData = win.Etsy && win.Etsy.Context ? win.Etsy.Context.data : null;
       if (ctxData && typeof ctxData === 'object') {
+        diagnostics.etsyContextTopKeys = Object.keys(ctxData).slice(0, 35);
         const seenCtx = new WeakSet();
         const scanContext = (obj, depth) => {
-          if (!obj || typeof obj !== 'object' || depth > 4 || seenCtx.has(obj)) return;
+          if (!obj || typeof obj !== 'object' || depth > 5 || seenCtx.has(obj)) return;
           seenCtx.add(obj);
           if (Array.isArray(obj)) {
             if (obj.length > 20 && obj[0] && typeof obj[0] === 'object' && 'id' in obj[0] && 'name' in obj[0] && ('code' in obj[0] || 'iso_country_code' in obj[0])) {
+              skippedArrays.add(obj);
               for (const c of obj) {
                 if (c && c.id != null && c.name) {
                   countryById[Number(c.id)] = String(c.name);
@@ -192,36 +199,111 @@
     function countIdsInElement(el) {
       const set = new Set();
       if (!el) return set;
-      const txt = el.textContent || '';
+      const txt = (el.textContent || '').replace(/\u00A0/g, ' ');
       for (const m of txt.matchAll(/#\s*(\d{9,12})\b/g)) set.add(m[1]);
-      for (const m of txt.matchAll(/\b(\d{9,12})\s*\(\s*Etsy\s*\)/gi)) set.add(m[1]);
+      for (const m of txt.matchAll(/\b(\d{9,12})\s*(?:\(\s*Etsy\s*\)|via\s+Etsy\b)/gi)) set.add(m[1]);
       return set;
     }
 
-    try {
-      const walker = doc.createTreeWalker(doc.body, 4 /* NodeFilter.SHOW_TEXT */);
-      let tn;
-      while ((tn = walker.nextNode())) {
-        const v = tn.nodeValue || '';
-        const m = v.match(/#\s*(\d{9,12})\b/) || v.match(/\b(\d{9,12})\s*\(\s*Etsy\s*\)/i);
-        if (!m) continue;
-        const id = m[1];
-        const parent = tn.parentElement;
-        if (!parent || visibleOrderRows.has(id)) continue;
+    function isCssHidden(el) {
+      let cur = el;
+      while (cur && cur !== doc.body) {
+        if (cur.hasAttribute && cur.hasAttribute('hidden')) return true;
+        if (cur.id === 'gdpr-privacy-settings') return true;
+        if (typeof win.getComputedStyle === 'function') {
+          try {
+            const st = win.getComputedStyle(cur);
+            if (st && (st.display === 'none' || st.visibility === 'hidden')) return true;
+          } catch {}
+        }
+        cur = cur.parentElement;
+      }
+      return false;
+    }
 
-        let curr = parent;
-        let rowEl = parent;
+    function matchOrderIdOnCompactElement(el) {
+      if (!el || !el.tagName) return null;
+      const tag = el.tagName.toUpperCase();
+      if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'TEMPLATE' || tag === 'SVG') return null;
+
+      if (tag === 'A') {
+        const href = el.getAttribute && el.getAttribute('href');
+        const hm = href && href.match(/[?&]order_id=(\d{9,12})\b/);
+        if (hm) {
+          const t = (el.textContent || '').replace(/\s+/g, '').trim();
+          if (t.includes(hm[1]) && t.length <= 80) return hm[1];
+        }
+      }
+
+      const norm = (el.textContent || '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!norm || norm.length > 180) return null;
+      const m = norm.match(/#\s*(\d{9,12})\b/) || norm.match(/\b(\d{9,12})\s*(?:\(\s*Etsy\s*\)|via\s+Etsy\b)/i);
+      return m ? m[1] : null;
+    }
+
+    const drawerRowScopes = [];
+    try {
+      // P-minimal (en iç yaprak) sipariş çapası keşfi: "#" ve "<a>4210985421</a>" veya Google Çeviri "<font>" sarmallarında bile tam yaprak elementi bulur!
+      const allEls = doc.body.querySelectorAll('*');
+      const minimalAnchors = [];
+      for (const el of allEls) {
+        const id = matchOrderIdOnCompactElement(el);
+        if (!id) continue;
+        const descendants = el.querySelectorAll ? el.querySelectorAll('*') : (el.children || []);
+        let descendantAlsoMatches = false;
+        for (let i = 0; i < descendants.length; i++) {
+          if (matchOrderIdOnCompactElement(descendants[i]) === id) {
+            descendantAlsoMatches = true;
+            break;
+          }
+        }
+        if (descendantAlsoMatches) continue;
+        if (isCssHidden(el)) continue;
+        minimalAnchors.push({ id, el });
+      }
+
+      // İlk çapanın ve atalarının JS framework özelliklerini tanılamaya kaydet
+      if (minimalAnchors.length > 0) {
+        const fwSet = new Set();
+        let probe = minimalAnchors[0].el;
+        let steps = 0;
+        while (probe && steps < 10) {
+          steps++;
+          for (const k of Object.keys(probe)) {
+            if (k.startsWith('__') || k.startsWith('_react') || k.startsWith('jQuery') || k.startsWith('$')) {
+              fwSet.add(k.replace(/\$[a-z0-9]+$/i, '$*'));
+            }
+          }
+          probe = probe.parentElement;
+        }
+        diagnostics.firstAnchorFrameworkKeys = Array.from(fwSet).slice(0, 15);
+      }
+
+      for (const { id, el } of minimalAnchors) {
+        const ctxText = ((el.parentElement ? el.parentElement.textContent : el.textContent) || '').replace(/\s+/g, ' ').slice(0, 160);
+        const isDrawerAnchor = /\bvia\s+Etsy\b|\bEtsy\s+(?:üzerinden|aracılığıyla)\b/i.test(ctxText)
+          || Boolean(el.closest && el.closest('aside, [role="dialog"], [aria-modal="true"], .wt-overlay, [data-wt-overlay], [data-region*="drawer" i], [class*="drawer" i], [class*="flyout" i]'));
+
+        let curr = el;
+        let rowEl = el;
         while (curr && curr !== doc.body && curr.tagName !== 'MAIN') {
           const ids = countIdsInElement(curr);
           if (ids.size > 1) break;
+          if (isDrawerAnchor && curr.querySelector && curr.querySelector('input[type="checkbox"]')) break;
           if (ids.size === 1 && ids.has(id)) rowEl = curr;
           curr = curr.parentElement;
         }
-        visibleOrderRows.set(id, rowEl);
+
+        if (isDrawerAnchor) {
+          drawerRowScopes.push({ id, rowEl });
+        } else if (!visibleOrderRows.has(id)) {
+          visibleOrderRows.set(id, rowEl);
+        }
       }
     } catch {}
 
     diagnostics.domOrderAnchors = visibleOrderRows.size;
+    diagnostics.drawerAnchors = drawerRowScopes.length;
 
     // 3. Nesne şekillerinden (Address / Buyer / Transaction / Order) alan çıkarıcılar
     function getFiberFromDom(el) {
@@ -531,9 +613,16 @@
     const visitedObjects = new WeakSet();
     const discoveredStores = new Set();
 
+    const SKIPPED_OBJECT_KEYS = new Set([
+      'children', 'ownerDocument', 'view', 'window', 'document', 'parentNode', 'parentElement',
+      'firstChild', 'lastChild', 'nextSibling', 'previousSibling',
+      'return', 'child', 'sibling', 'alternate', 'stateNode',
+      '_owner', '_debugOwner', '_debugSource', '_debugHookTypes', '__proto__'
+    ]);
+
     function inspectJsValue(val, contextOrderId, depth, entitiesLookup) {
-      if (!val || typeof val !== 'object' || depth > 7) return;
-      if (val instanceof Node || val === win || val === doc) return;
+      if (!val || typeof val !== 'object' || depth > 8) return;
+      if (val instanceof Node || val === win || val === doc || skippedArrays.has(val)) return;
       if (visitedObjects.has(val)) {
         // Aynı nesne farklı bir sipariş bağlamında değilse tekrar tarama; ancak doğrudan adres nesnesiyse ve contextOrderId varsa uygula
         if (contextOrderId && looksLikeAddressObject(val)) {
@@ -556,7 +645,7 @@
       }
 
       if (Array.isArray(val)) {
-        const limit = Math.min(val.length, 120);
+        const limit = Math.min(val.length, 150);
         for (let i = 0; i < limit; i++) {
           inspectJsValue(val[i], contextOrderId, depth + 1, entitiesLookup);
         }
@@ -566,8 +655,8 @@
       if (val instanceof Map) {
         let count = 0;
         for (const [mk, mv] of val.entries()) {
-          if (++count > 120) break;
-          const nextCtx = /^\d{9,12}$/.test(String(mk)) && visibleOrderRows.has(String(mk)) ? String(mk) : contextOrderId;
+          if (++count > 150) break;
+          const nextCtx = /^\d{9,12}$/.test(String(mk)) ? String(mk) : contextOrderId;
           inspectJsValue(mv, nextCtx, depth + 1, entitiesLookup);
         }
         return;
@@ -588,10 +677,10 @@
       }
 
       const keys = Object.keys(val);
-      const keyLimit = Math.min(keys.length, 80);
+      const keyLimit = Math.min(keys.length, 90);
       for (let i = 0; i < keyLimit; i++) {
         const k = keys[i];
-        if (k.startsWith('_') || k === 'children' || k === 'ownerDocument' || k === 'view') continue;
+        if (SKIPPED_OBJECT_KEYS.has(k)) continue;
         let childVal;
         try {
           childVal = val[k];
@@ -599,7 +688,7 @@
           continue;
         }
         if (!childVal || typeof childVal !== 'object') continue;
-        const keyAsOrderId = (/^\d{9,12}$/.test(k) && visibleOrderRows.has(k)) ? k : activeOrderId;
+        const keyAsOrderId = /^\d{9,12}$/.test(k) ? k : activeOrderId;
         inspectJsValue(childVal, keyAsOrderId, depth + 1, entitiesLookup);
       }
     }
@@ -627,10 +716,26 @@
       }
     }
 
-    // 4. AŞAMA A: Ekrandaki her izole sipariş kartının alt DOM düğümlerinden Fiber / Props okuma (kesin contextOrderId ile!)
+    // 4. AŞAMA A0: window.Etsy.Context.data ve sayfa global state depolarını doğrudan tara
+    try {
+      if (win.Etsy && win.Etsy.Context && win.Etsy.Context.data) {
+        inspectReduxState(win.Etsy.Context.data);
+      }
+      for (const gk of ['__INITIAL_STATE__', '__PRELOADED_STATE__', '__NEXT_DATA__']) {
+        if (win[gk] && typeof win[gk] === 'object') {
+          inspectReduxState(win[gk]);
+        }
+      }
+    } catch {}
+
+    // 4. AŞAMA A: Ekrandaki her izole sipariş kartının (ve açık çekmecenin) alt DOM düğümlerinden Fiber / Props okuma
     const visitedFibers = new WeakSet();
-    for (const [orderId, rowEl] of visibleOrderRows.entries()) {
-      const descendants = [rowEl, ...Array.from(rowEl.querySelectorAll('a, button, address, [id*="toggle"], div, span')).slice(0, 140)];
+    const allRowEntries = [
+      ...Array.from(visibleOrderRows.entries()),
+      ...drawerRowScopes.map((d) => [d.id, d.rowEl])
+    ];
+    for (const [orderId, rowEl] of allRowEntries) {
+      const descendants = [rowEl, ...Array.from(rowEl.querySelectorAll('a, button, address, [id*="toggle"], div, span')).slice(0, 150)];
       for (const domNode of descendants) {
         const directProps = getPropsFromDom(domNode);
         if (directProps) {
@@ -640,12 +745,11 @@
 
         let fiber = getFiberFromDom(domNode);
         let climb = 0;
-        while (fiber && climb < 18) {
+        while (fiber && climb < 22) {
           climb++;
           diagnostics.fiberDetected = true;
           // Ata fiber'ın DOM düğümü birden fazla sipariş içeriyorsa sipariş bağlamından çık
           if (fiber.stateNode instanceof Element && countIdsInElement(fiber.stateNode).size > 1) {
-            // Yalnızca Redux Provider store kontrolü yap ve dur
             if (fiber.memoizedProps && fiber.memoizedProps.store) {
               inspectJsValue(fiber.memoizedProps.store, null, 0, null);
             }
@@ -655,6 +759,9 @@
             visitedFibers.add(fiber);
             diagnostics.fiberNodesVisited++;
             if (fiber.memoizedProps) inspectJsValue(fiber.memoizedProps, orderId, 0, null);
+            if (fiber.stateNode && typeof fiber.stateNode === 'object' && !(fiber.stateNode instanceof Node)) {
+              inspectJsValue(fiber.stateNode, orderId, 0, null);
+            }
             inspectFiberHooks(fiber, orderId);
           }
           fiber = fiber.return;
@@ -662,16 +769,22 @@
       }
     }
 
-    // 5. AŞAMA B: Sayfa kök React konteynerinden üstten-aşağıya Fiber & Redux Store taraması
-    const rootCandidates = Array.from(doc.querySelectorAll('body, body > div, main, main > div, #root, #content, [id*="mission"], [id*="app"]'));
+    // 5. AŞAMA B: Sayfadaki tüm derin React 16/17/18 kök konteynerlerinden üstten-aşağıya Fiber & Redux Store taraması
+    const rootCandidates = [
+      doc.body,
+      ...Array.from(doc.querySelectorAll('main, aside, [role="dialog"], .wt-overlay, #root, #content, [id*="mission"], [id*="app"], [data-appelement], div')).slice(0, 600)
+    ].filter(Boolean);
     const rootFibers = new Set();
 
     for (const rc of rootCandidates) {
       const rf = getRootContainerFiber(rc);
       if (rf) rootFibers.add(rf.current || rf);
       let f = getFiberFromDom(rc);
-      while (f && f.return) f = f.return;
-      if (f) rootFibers.add(f);
+      if (f) {
+        let guard = 0;
+        while (f.return && guard++ < 80) f = f.return;
+        rootFibers.add(f);
+      }
     }
 
     const MAX_FIBER_WALK = 25000;

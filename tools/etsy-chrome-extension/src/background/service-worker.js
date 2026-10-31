@@ -1,4 +1,4 @@
-// Etsy Copilot v2.0.0 — Katman 3: Durumsuz (Stateless) MV3 Service Worker Orkestratörü
+// Etsy Copilot v2.1.0 — Katman 3: Durumsuz (Stateless) MV3 Service Worker Orkestratörü
 // KURAL: Hiçbir global değişkende durum tutulmaz; tüm durum chrome.storage.local üzerinden okunur/yazılır.
 
 import {
@@ -192,11 +192,19 @@ async function scanActiveEtsyTab(explicitTabId, expandInlineFirst = false) {
   }
 
   let domResponse = null;
+  let clickedInlineToggles = 0;
   try {
     if (expandInlineFirst) {
-      await chrome.tabs.sendMessage(tab.id, { action: ACTIONS.CA_EXPAND_INLINE_ADDRESSES });
+      const expandRes = await chrome.tabs.sendMessage(tab.id, { action: ACTIONS.CA_EXPAND_INLINE_ADDRESSES });
+      clickedInlineToggles = expandRes?.diagnostics?.clickedInlineToggles || 0;
+      if (clickedInlineToggles > 0) {
+        await new Promise((r) => setTimeout(r, 120));
+      }
     }
     domResponse = await chrome.tabs.sendMessage(tab.id, { action: ACTIONS.CA_EXTRACT_STRUCTURAL });
+    if (domResponse?.diagnostics && expandInlineFirst) {
+      domResponse.diagnostics.clickedInlineToggles = clickedInlineToggles;
+    }
   } catch (err) {
     return {
       ok: false,
