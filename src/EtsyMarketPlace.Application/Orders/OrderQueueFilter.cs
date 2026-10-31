@@ -24,7 +24,7 @@ public static class OrderQueueFilter
     /// </summary>
     public static bool IsShipped(EtsyOrderFulfillmentItem? order)
     {
-        if (order == null)
+        if (order == null || string.Equals(order.TrackingCode?.Trim(), "No tracking", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }

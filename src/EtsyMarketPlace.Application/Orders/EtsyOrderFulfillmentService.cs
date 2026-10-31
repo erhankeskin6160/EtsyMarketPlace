@@ -60,20 +60,24 @@ public sealed class EtsyOrderFulfillmentService : IEtsyOrderFulfillmentService
         {
             var item = EtsyFulfillmentQueuePolicy.ToQueueItem(receipt);
 
-            // Takip no ve gönderim durumu
+            // Takip no ve gönderim durumu: "No tracking" takip kodu sayılamaz
             if (receipt.TrackingCodes != null && receipt.TrackingCodes.Count > 0)
             {
-                item.TrackingCode = receipt.TrackingCodes[0];
+                var candidate = receipt.TrackingCodes[0]?.Trim();
+                if (!string.IsNullOrWhiteSpace(candidate) && !candidate.Equals("No tracking", StringComparison.OrdinalIgnoreCase))
+                {
+                    item.TrackingCode = candidate;
+                }
+                else
+                {
+                    item.TrackingCode = string.Empty;
+                }
             }
 
-            if (receipt.WasShipped || !string.IsNullOrWhiteSpace(item.TrackingCode))
-            {
-                item.Status = "shipped";
-            }
-            else
-            {
-                item.Status = "unfulfilled";
-            }
+            bool hasValidTracking = !string.IsNullOrWhiteSpace(item.TrackingCode) &&
+                                    !string.Equals(item.TrackingCode.Trim(), "No tracking", StringComparison.OrdinalIgnoreCase);
+
+            item.Status = hasValidTracking ? "shipped" : "unfulfilled";
 
             // Yerel kayıtlı adres / maliyet / GTİP / takip no düzeltmesi varsa uygula
             if (savedAddresses != null && savedAddresses.TryGetValue(item.ReceiptId, out var savedRecord))
@@ -81,10 +85,12 @@ public sealed class EtsyOrderFulfillmentService : IEtsyOrderFulfillmentService
                 EtsyOrderService.ApplyRecord(item, savedRecord);
             }
 
-            if (receipt.WasShipped || !string.IsNullOrWhiteSpace(item.TrackingCode))
-            {
-                item.Status = "shipped";
-            }
+            // Kural: "New" siparişleri ve "Completed" olup takip kodu olmayan siparişler kesinlikle Bekleyen (unfulfilled) sekmesindedir.
+            // Sadece ve sadece gerçek, geçerli bir kargo takip numarası olanlar Gönderildi (shipped) sekmesine geçer.
+            bool finalHasValidTracking = !string.IsNullOrWhiteSpace(item.TrackingCode) &&
+                                         !string.Equals(item.TrackingCode.Trim(), "No tracking", StringComparison.OrdinalIgnoreCase);
+
+            item.Status = finalHasValidTracking ? "shipped" : "unfulfilled";
 
             // Eksik adres tespiti
             bool isMissing = string.IsNullOrWhiteSpace(item.StreetAddress) || string.IsNullOrWhiteSpace(item.City);

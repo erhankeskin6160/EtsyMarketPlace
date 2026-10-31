@@ -142,8 +142,12 @@
     for (let i = 0; i < rawLines.length; i++) {
       const line = rawLines[i].trim();
       if (!line) continue;
-      // Rozetleri ve buton metinlerini adres satırından kesinlikle ayıkla
-      if (/^(?:Marked as gift|Gift message|Gift message available|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping|VAT Collected|Ship by.*|Selected by buyer.*)$/i.test(line)) {
+      // Rozetleri, termin bildirimlerini ve buton metinlerini adres satırından kesinlikle ayıkla
+      if (/^(?:Marked as gift|Gift message|Gift message available|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping|VAT Collected|Ship by.*|Selected by buyer.*|No tracking.*|Select all.*|Deselect all.*)$/i.test(line)) {
+        continue;
+      }
+      // Gecikme / süre / relatif tarih bildirimlerini asla adres satırı veya alıcı adı yapma (Örn: "1 days ago", "1 day ago", "day", "days", "ago", "today", "yesterday", "overdue")
+      if (/^(?:\d+\s+)?days?\s*(?:ago)?$/i.test(line) || /^(?:day|days|ago|today|yesterday|overdue)$/i.test(line) || /^\d+$/i.test(line)) {
         continue;
       }
       if (isStopLine(line)) break;
@@ -182,24 +186,20 @@
       };
     }
 
-    const buyerName = lines[0] || '';
-    let phone = '';
-    let country = '';
-    let city = '';
-    let state = '';
-    let postalCode = '';
-    let streetAddress = '';
-    let secondAddress = '';
-    let iossNumber = '';
-
-    // IOSS / VAT numarasını tespit et (Örn: IM3720000224)
-    const combinedBlock = (rawBlock || '') + ' ' + lines.join(' ');
-    const iossM = combinedBlock.match(/\b(IM\d{10})\b/i);
-    if (iossM) {
-      iossNumber = iossM[1].toUpperCase();
+    // İlk geçerli alıcı adı adayını belirle (day, days, ago, sayılar veya durdurma kelimeleri hariç)
+    let buyerName = '';
+    let startIdx = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const cand = lines[i].trim();
+      if (!cand) continue;
+      if (/^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*)$/i.test(cand) || /^\d+$/.test(cand) || cand.length < 2) {
+        continue;
+      }
+      buyerName = cand;
+      startIdx = i + 1;
+      break;
     }
-
-    const remaining = lines.slice(1);
+    const remaining = lines.slice(startIdx);
 
     // 1. SIKI TELEFON TESPİTİ (Kesinlikle IOSS/vergi metinlerini veya harf içeren paragrafları almaz!)
     const phoneIdx = remaining.findIndex(l => {
@@ -561,12 +561,25 @@
 
           // Alıcı Adı
           let buyerName = parsed.buyerName;
-          if (!buyerName || /^Etsy/i.test(buyerName)) {
+          const isInvalidBuyer = !buyerName || /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*)$/i.test(buyerName.trim()) || /^\d+$/.test(buyerName.trim()) || buyerName.trim().length < 2;
+
+          if (isInvalidBuyer) {
+            // 1. Karttaki müşteri adını (#\d{10} öncesindeki başlık) yakala (Örn: Marie Cindy, jessica benson)
             const nameMatch = block.match(/([A-Za-z\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{10}/);
             if (nameMatch) {
               const candidate = nameMatch[1].trim();
-              if (candidate && !/Select all|Ordered|Order/i.test(candidate)) {
+              if (candidate && !/^(?:Select all|Ordered|Order|Ship by|day|days|ago|today|yesterday|overdue)$/i.test(candidate) && candidate.length >= 2) {
                 buyerName = candidate;
+              }
+            }
+            // 2. Eğer hala geçersizse karttaki alıcı linklerini veya butonlarını ara
+            if (!buyerName || /^(?:day|days|ago|select\s*all|etsy.*)$/i.test(buyerName)) {
+              const buyerLink = el.querySelector('a[href*="/your/orders/sold/buyer/"], a[href*="buyer="], [class*="buyer-name"], button[aria-label*="buyer"]');
+              if (buyerLink && buyerLink.textContent?.trim()) {
+                const cand = buyerLink.textContent.trim();
+                if (!/^(?:day|days|ago|select\s*all)$/i.test(cand) && cand.length >= 2) {
+                  buyerName = cand;
+                }
               }
             }
           }
@@ -575,21 +588,23 @@
           const trackMatch = block.match(/(\d{12,30})[\s\r\n]+Shipped/i)
                           || block.match(/Shipped[\s\r\n]+(?:via\s+[A-Za-z]+\s+)?(\d{10,30})/i)
                           || block.match(/Tracking:\s*([A-Za-z0-9]+)/i);
-          const tracking = trackMatch ? trackMatch[1].trim() : null;
+          let tracking = trackMatch ? trackMatch[1].trim() : null;
+          if (tracking && /^(?:no[\s_-]?tracking|none)$/i.test(tracking)) {
+            tracking = null;
+          }
 
-          // Ürün Adı
-          const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
-                          || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
-          const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
-
-          // Sipariş Tarihi
-          const dateMatch = block.match(/(?:Ordered|Order date)[\s:]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?)/i)
-                         || block.match(/([A-Za-z]{3}\s+\d{1,2},\s*\d{4})/);
-          const orderDate = dateMatch ? dateMatch[1].trim() : '';
-
-          let status = 'Completed';
-          if (block.includes('In transit') || block.includes('Shipped')) status = 'Shipped';
-          else if (block.includes('Not shipped') || block.includes('Processing')) status = 'Processing';
+          // Sipariş Durumu
+          let status = 'Processing';
+          const hasTracking = Boolean(tracking && tracking.length >= 6);
+          if (hasTracking && (block.includes('In transit') || block.includes('Shipped'))) {
+            status = 'Shipped';
+          } else if (block.includes('Completed') && !hasTracking) {
+            status = 'Processing'; // Completed fakat No tracking -> Bekleyen!
+          } else if (block.includes('In transit') || block.includes('Shipped')) {
+            status = hasTracking ? 'Shipped' : 'Processing';
+          } else if (block.includes('Not shipped') || block.includes('Processing') || block.includes('New')) {
+            status = 'Processing';
+          }
 
           // Eğer drawer'dan zaten tam adres alındıysa ezme
           const existing = ordersMap.get(id);
@@ -668,7 +683,7 @@
         });
       }
     } catch (e) {
-      if (!isContextValid()) {
+      if (!isContextValid() || (e && e.message && e.message.includes('context invalidated'))) {
         try { observer.disconnect(); } catch {}
       }
     }

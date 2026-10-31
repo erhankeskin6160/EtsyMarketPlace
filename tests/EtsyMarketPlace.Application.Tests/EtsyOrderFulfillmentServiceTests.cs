@@ -180,4 +180,72 @@ public sealed class EtsyOrderFulfillmentServiceTests
         Assert.Equal("10003", order.PostalCode);
         Assert.False(order.IsAddressMissing);
     }
+
+    [Fact]
+    public async Task GetFulfillmentQueueAsync_WhenWasShippedTrue_OrNoTracking_RemainsUnfulfilled()
+    {
+        // Arrange: Etsy'de "Completed" işaretlenmiş fakat kargo takip kodu olmayan sipariş
+        var fakeClient = new FakeEtsyLogisticsApiClient
+        {
+            Receipts = new List<EtsyFulfillmentReceipt>
+            {
+                new(
+                    ReceiptId: 301,
+                    BuyerName: "Completed Without Tracking Buyer",
+                    BuyerEmail: "completed@example.com",
+                    Phone: "",
+                    StreetAddress: "456 Oak St",
+                    SecondAddress: "",
+                    City: "Seattle",
+                    State: "WA",
+                    PostalCode: "98101",
+                    CountryCode: "US",
+                    CountryName: "United States",
+                    IossNumber: "",
+                    TotalPrice: 75.00m,
+                    Currency: "USD",
+                    CreatedAt: DateTimeOffset.UtcNow.AddDays(-1),
+                    WasShipped: true, // Etsy'de completed olarak işaretli
+                    TrackingCodes: new List<string> { "No tracking" }, // Takip kodu yok
+                    Lines: new List<EtsyFulfillmentLine>()),
+                new(
+                    ReceiptId: 302,
+                    BuyerName: "Shipped With Valid Tracking Buyer",
+                    BuyerEmail: "valid@example.com",
+                    Phone: "",
+                    StreetAddress: "789 Pine St",
+                    SecondAddress: "",
+                    City: "Miami",
+                    State: "FL",
+                    PostalCode: "33101",
+                    CountryCode: "US",
+                    CountryName: "United States",
+                    IossNumber: "",
+                    TotalPrice: 120.00m,
+                    Currency: "USD",
+                    CreatedAt: DateTimeOffset.UtcNow.AddDays(-1),
+                    WasShipped: true,
+                    TrackingCodes: new List<string> { "9400111899223197632145" }, // Gerçek takip no
+                    Lines: new List<EtsyFulfillmentLine>())
+            }
+        };
+
+        var service = new EtsyOrderFulfillmentService(fakeClient);
+
+        // Act
+        var result = await service.GetFulfillmentQueueAsync("53236321", 45);
+
+        // Assert
+        Assert.Equal(2, result.Count);
+
+        // 301 nolu sipariş No tracking olduğu için Bekleyen (unfulfilled) olmalıdır
+        var unfulfilledOrder = Assert.Single(result, o => o.ReceiptId == 301);
+        Assert.Equal("unfulfilled", unfulfilledOrder.Status);
+        Assert.True(string.IsNullOrWhiteSpace(unfulfilledOrder.TrackingCode));
+
+        // 302 nolu sipariş gerçek takip kodu olduğu için Gönderildi (shipped) olmalıdır
+        var shippedOrder = Assert.Single(result, o => o.ReceiptId == 302);
+        Assert.Equal("shipped", shippedOrder.Status);
+        Assert.Equal("9400111899223197632145", shippedOrder.TrackingCode);
+    }
 }

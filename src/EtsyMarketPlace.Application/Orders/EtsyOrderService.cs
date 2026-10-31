@@ -117,7 +117,8 @@ public sealed class EtsyOrderService
         if (!string.IsNullOrWhiteSpace(source.GtipCode)) target.GtipCode = source.GtipCode;
         if (!string.IsNullOrWhiteSpace(source.SelectedCarrier)) target.SelectedCarrier = source.SelectedCarrier;
         if (!string.IsNullOrWhiteSpace(source.CarrierServiceName)) target.CarrierServiceName = source.CarrierServiceName;
-        if (!string.IsNullOrWhiteSpace(source.TrackingCode)) target.TrackingCode = source.TrackingCode;
+        if (!string.IsNullOrWhiteSpace(source.TrackingCode) && !string.Equals(source.TrackingCode.Trim(), "No tracking", StringComparison.OrdinalIgnoreCase)) target.TrackingCode = source.TrackingCode.Trim();
+        else if (string.Equals(source.TrackingCode?.Trim(), "No tracking", StringComparison.OrdinalIgnoreCase)) target.TrackingCode = string.Empty;
         if (!string.IsNullOrWhiteSpace(source.LabelUrl)) target.LabelUrl = source.LabelUrl;
     }
 
@@ -154,7 +155,7 @@ public sealed class EtsyOrderService
         }
         if (!string.IsNullOrWhiteSpace(record.SelectedCarrier)) target.SelectedCarrier = record.SelectedCarrier;
         if (!string.IsNullOrWhiteSpace(record.CarrierServiceName)) target.CarrierServiceName = record.CarrierServiceName;
-        if (!string.IsNullOrWhiteSpace(record.TrackingCode))
+        if (!string.IsNullOrWhiteSpace(record.TrackingCode) && !string.Equals(record.TrackingCode.Trim(), "No tracking", StringComparison.OrdinalIgnoreCase))
         {
             target.TrackingCode = record.TrackingCode;
             target.Status = "shipped";

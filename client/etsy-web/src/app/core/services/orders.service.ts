@@ -501,14 +501,20 @@ export class OrdersService {
             const rawGtip = item.gtipCode || (item.items && item.items[0]?.hsCode) || '';
             const gtipMatch = rawGtip ? this.searchGtip(rawGtip)[0] : undefined;
 
-            const tracking = item.trackingCode || item.trackingNumber || '';
-            const isShipped = item.status === 'shipped' || item.status === 'Shipped' || item.status === 'Fulfilled' || Boolean(tracking);
+            const rawTracking = (item.trackingCode || item.trackingNumber || '').trim();
+            const hasValidTracking = Boolean(rawTracking && !/^no[\s_-]?tracking$/i.test(rawTracking) && rawTracking.toLowerCase() !== 'none');
+            const tracking = hasValidTracking ? rawTracking : '';
+            const isShipped = hasValidTracking && (item.status === 'shipped' || item.status === 'Shipped' || item.status === 'Fulfilled' || Boolean(item.wasShipped));
+            const rawBuyer = (item.buyerName || '').trim();
+            const isInvalidBuyer = !rawBuyer || /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all)$/i.test(rawBuyer) || rawBuyer.length < 2;
+            const cleanBuyerName = !isInvalidBuyer ? rawBuyer : 'Etsy Alıcısı';
+
 
             return {
               orderId: String(item.receiptId),
               orderNumber: `#${item.receiptId}`,
               rawAddressText: item.rawAddressText || '',
-              buyerName: item.buyerName || 'Etsy Alıcısı',
+              buyerName: cleanBuyerName,
               buyerEmail: item.buyerEmail || '',
               phone: item.phone || '',
               streetAddress: item.streetAddress || '',

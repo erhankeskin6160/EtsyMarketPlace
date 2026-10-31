@@ -61,6 +61,7 @@ public class SyncExtensionOrdersHandler(
             string tracking = !string.IsNullOrWhiteSpace(order.TrackingCode)
                 ? order.TrackingCode.Trim()
                 : (!string.IsNullOrWhiteSpace(order.TrackingNumber) ? order.TrackingNumber.Trim() : string.Empty);
+            if (string.Equals(tracking, "No tracking", StringComparison.OrdinalIgnoreCase) || string.Equals(tracking, "no-tracking", StringComparison.OrdinalIgnoreCase)) tracking = string.Empty;
 
             // 4. Veri ezilme koruması ile adres belirleme
             var existingRecord = await addressRepository.GetByReceiptIdAsync(rId, cancellationToken);
@@ -110,9 +111,15 @@ public class SyncExtensionOrdersHandler(
                     : (order.Phone?.Trim() ?? string.Empty);
             }
 
+            string rawBuyer = order.BuyerName?.Trim() ?? string.Empty;
+            bool isInvalidBuyer = string.IsNullOrWhiteSpace(rawBuyer) ||
+                System.Text.RegularExpressions.Regex.IsMatch(rawBuyer, @"^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) ||
+                rawBuyer.Length < 2;
+            string effectiveBuyer = !isInvalidBuyer ? rawBuyer : (existingRecord?.BuyerName ?? string.Empty);
+
             var addrRecord = new OrderAddressRecord(
                 rId,
-                order.BuyerName ?? (existingRecord?.BuyerName ?? string.Empty),
+                effectiveBuyer,
                 existingRecord?.BuyerEmail ?? string.Empty,
                 phone,
                 street,
