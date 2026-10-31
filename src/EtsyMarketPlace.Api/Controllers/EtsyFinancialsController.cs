@@ -1,4 +1,4 @@
-using EtsyMarketPlace.Application.Features.Financials;
+﻿using EtsyMarketPlace.Application.Features.Financials;
 using EtsyMarketPlace.Application.Features.Orders.Commands.SyncExtensionOrders;
 using System;
 using System.Collections.Generic;
@@ -432,14 +432,4 @@ public class EtsyFinancialsController : BaseApiController
     }
 
 
-    [HttpPost("etsy/orders/sync-from-extension")]
-    [AllowAnonymous]
-    [EndpointSummary("Chrome Extension üzerinden Sipariş ve Müşteri Bilgilerini Kaydet (Thin Controller)")]
-    public async Task<IActionResult> SyncOrdersFromExtension(
-        [FromBody] SyncExtensionOrdersRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var response = await _mediator.Send(request, cancellationToken);
-        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
-    }
 }

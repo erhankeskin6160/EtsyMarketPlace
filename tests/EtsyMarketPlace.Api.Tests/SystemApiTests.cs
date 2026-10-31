@@ -1,4 +1,4 @@
-namespace EtsyMarketPlace.Api.Tests;
+﻿namespace EtsyMarketPlace.Api.Tests;
 
 using System.Net;
 using System.Text.Json;
@@ -53,5 +53,12 @@ public class SystemApiTests : IClassFixture<WebApplicationFactory<Program>>
 
         Assert.Equal("2.4.0", root.GetProperty("version").GetString());
         Assert.Equal("Online", root.GetProperty("status").GetString());
+    }
+    [Fact]
+    public async Task GetSwaggerJson_ReturnsOk()
+    {
+        var response = await _client.GetAsync("/swagger/v1/swagger.json");
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, $"Swagger failed with {response.StatusCode}: {body}");
     }
 }

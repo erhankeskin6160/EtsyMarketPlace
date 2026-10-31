@@ -1,3 +1,4 @@
+﻿using Microsoft.AspNetCore.Authorization;
 namespace EtsyMarketPlace.Api.Controllers;
 
 using System;
@@ -128,6 +129,7 @@ public class EtsyOrdersController : BaseApiController
     }
 
     [HttpPost("sync-from-extension")]
+    [AllowAnonymous]
     [EndpointSummary("Chrome Extension üzerinden Sipariş ve Müşteri Bilgilerini Kaydet (Thin Controller)")]
     public async Task<IActionResult> SyncOrdersFromExtension(
         [FromBody] SyncExtensionOrdersRequest request,
