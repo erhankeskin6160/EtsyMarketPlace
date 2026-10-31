@@ -201,6 +201,22 @@
     }
     const remaining = lines.slice(startIdx);
 
+    let phone = '';
+    let country = '';
+    let city = '';
+    let state = '';
+    let postalCode = '';
+    let streetAddress = '';
+    let secondAddress = '';
+    let iossNumber = '';
+
+    // IOSS / VAT numarasını tespit et (Örn: IM3720000224)
+    const combinedBlock = (rawBlock || '') + ' ' + lines.join(' ');
+    const iossM = combinedBlock.match(/\b(IM\d{10})\b/i);
+    if (iossM) {
+      iossNumber = iossM[1].toUpperCase();
+    }
+
     // 1. SIKI TELEFON TESPİTİ (Kesinlikle IOSS/vergi metinlerini veya harf içeren paragrafları almaz!)
     const phoneIdx = remaining.findIndex(l => {
       const clean = l.trim();
@@ -406,24 +422,34 @@
     const list = [];
     const seenIds = new Set();
 
-    const orderLinks = Array.from(document.querySelectorAll('a[href*="order_id="]'));
+    // 1. Linkler ve butonlar üzerinden ara (Hem klasik order_id= hem SCLC hem data-order-id)
+    const orderLinks = Array.from(document.querySelectorAll('a[href*="order_id="], a[href*="/orders/"], a[href*="receipt_id="], a[data-order-id], button[data-order-id]'));
 
     for (const a of orderLinks) {
       const href = a.getAttribute('href') || a.href || '';
-      const m = href.match(/[?&]order_id=(\d{10})\b/);
+      const dataId = a.getAttribute('data-order-id') || a.getAttribute('data-receipt-id') || '';
+      const text = a.textContent || '';
+      const m = href.match(/[?&]order_id=(\d{9,12})\b/)
+             || href.match(/\/orders\/(?:sclc|sold)?\/?(?:all|new|completed)?\/?(\d{9,12})\b/i)
+             || dataId.match(/^(\d{9,12})$/)
+             || text.match(/#?(\d{10})\b/);
       if (!m) continue;
       const id = m[1];
       if (seenIds.has(id)) continue;
 
-      // Linkten yukarı tırman: Kapsayıcı içindeki 10 basamaklı FARKLI sipariş ID sayısı
-      // TAM 1 olduğu sürece tırmanmaya devam et (Böylece sol ürün ve sağ ship to sütununun
-      // ikisini birden kapsayan EN GENİŞ tekil kart yakalanır, üst liste düzeyine taşmaz!)
+      // Linkten yukarı tırman: Kapsayıcı içindeki farklı sipariş ID sayısı TAM 1 olduğu sürece tırman
       let curr = a.parentElement;
       let prevCard = a.parentElement || a;
 
       while (curr && curr !== document.body) {
-        const orderIdsInside = Array.from(curr.querySelectorAll('a[href*="order_id="]'))
-          .map(l => (l.getAttribute('href') || l.href || '').match(/[?&]order_id=(\d{10})\b/)?.[1])
+        const orderIdsInside = Array.from(curr.querySelectorAll('a, button, span, strong'))
+          .map(l => {
+            const h = l.getAttribute('href') || l.href || '';
+            const d = l.getAttribute('data-order-id') || '';
+            const t = (l.textContent || '').trim();
+            const hit = h.match(/[?&]order_id=(\d{9,12})\b/) || d.match(/^(\d{9,12})$/) || t.match(/#(\d{10})\b/);
+            return hit ? hit[1] : null;
+          })
           .filter(Boolean);
         const distinctInside = new Set(orderIdsInside);
 
@@ -431,7 +457,6 @@
           prevCard = curr;
           curr = curr.parentElement;
         } else if (distinctInside.size > 1) {
-          // Birden fazla siparişi içeren dış listeye çıktık, hemen önceki tekil kartta dur!
           break;
         } else {
           curr = curr.parentElement;
@@ -442,11 +467,10 @@
       list.push({ id, element: prevCard });
     }
 
-    // Fallback: Link bulunamadıysa metin üzerinden strictly 10 hane ara
+    // Fallback: Linklerden kart bulunamadıysa metin üzerinden strictly 10 hane ara
     if (list.length === 0) {
       const candidateNodes = Array.from(document.querySelectorAll('span, a, p, div, strong, b'));
       for (const node of candidateNodes) {
-        if (node.children.length > 2) continue;
         const text = (node.textContent || '').trim();
         const m = text.match(/#(\d{10})\b/) || text.match(/\b(\d{10})\s*\(Etsy\)/i);
         if (!m) continue;
@@ -476,7 +500,7 @@
 
   // 4.1 İZOLE KART İÇİNDEKİ SHIP-TO ELEMANLARINI HEDEFLEME
   function resolveCardShipTo(cardEl) {
-    if (!cardEl) return null;
+    if (!cardEl || typeof cardEl.querySelectorAll !== 'function') return null;
 
     // 1. Ship to başlığını ara
     const shipToHeader = Array.from(cardEl.querySelectorAll('p, div, span, h3, h4, h5, h6, strong, b')).find(el => {
@@ -592,6 +616,16 @@
           if (tracking && /^(?:no[\s_-]?tracking|none)$/i.test(tracking)) {
             tracking = null;
           }
+
+          // Ürün Adı
+          const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
+                          || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
+          const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
+
+          // Sipariş Tarihi
+          const dateMatch = block.match(/(?:Ordered|Order date)[\s:]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?)/i)
+                         || block.match(/([A-Za-z]{3}\s+\d{1,2},\s*\d{4})/);
+          const orderDate = dateMatch ? dateMatch[1].trim() : '';
 
           // Sipariş Durumu
           let status = 'Processing';
