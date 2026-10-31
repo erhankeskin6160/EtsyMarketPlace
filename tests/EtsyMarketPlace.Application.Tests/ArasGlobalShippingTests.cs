@@ -9,6 +9,7 @@ using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Domain.Shipping;
 using Xunit;
 
+[Collection("SecretProtector")]
 public sealed class ArasGlobalShippingTests
 {
     [Fact]

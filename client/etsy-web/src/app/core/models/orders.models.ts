@@ -74,6 +74,7 @@ export interface OrderFulfillmentItem {
   rawAddressText?: string;
   formattedAddress?: string;
   addressSnippet?: string;
+  hasAddress?: boolean;
   isAddressMissing?: boolean;
   addressWarning?: string;
   iossNumber?: string;

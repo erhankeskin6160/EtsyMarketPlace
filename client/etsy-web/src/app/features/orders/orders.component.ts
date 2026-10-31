@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -126,7 +126,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   constructor(
     public ordersService: OrdersService,
     private etsyApi: EtsyApiService,
-    private route: ActivatedRoute
+    private route: ActivatedRoute,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit(): void {
@@ -637,6 +638,34 @@ export class OrdersComponent implements OnInit, OnDestroy {
             const db = res.data;
             if (db.streetAddress || db.city || db.phone) {
               const cleanDbBuyer = this.sanitizeBuyerName(db.buyerName) || cleanBuyer;
+
+              // Form modelini doğrudan doldur
+              if (this.editAddressModel) {
+                if (cleanDbBuyer) this.editAddressModel.buyerName = cleanDbBuyer;
+                if (db.streetAddress) this.editAddressModel.streetAddress = db.streetAddress;
+                if (db.secondAddress) this.editAddressModel.secondAddress = db.secondAddress;
+                if (db.city) this.editAddressModel.city = db.city;
+                if (db.state) this.editAddressModel.state = db.state;
+                if (db.postalCode) this.editAddressModel.postalCode = db.postalCode;
+                if (db.countryName) this.editAddressModel.country = db.countryName;
+                if (db.countryCode) this.editAddressModel.countryCode = db.countryCode;
+                if (db.phone) this.editAddressModel.phone = db.phone;
+                if (db.iossNumber) this.editAddressModel.iossNumber = db.iossNumber;
+              }
+
+              // Seçili sipariş nesnesi ve liste senkronizasyonu
+              order.streetAddress = db.streetAddress || order.streetAddress;
+              order.secondAddress = db.secondAddress || order.secondAddress;
+              order.city = db.city || order.city;
+              order.state = db.state || order.state;
+              order.postalCode = db.postalCode || order.postalCode;
+              order.country = db.countryName || order.country;
+              order.countryCode = db.countryCode || order.countryCode;
+              order.phone = db.phone || order.phone;
+              order.iossNumber = db.iossNumber || order.iossNumber;
+              order.hasAddress = Boolean(order.streetAddress && order.city);
+              order.isAddressMissing = !order.hasAddress;
+
               const dbLines = [
                 cleanDbBuyer,
                 db.streetAddress,
@@ -647,7 +676,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
               ].filter(p => Boolean(p && String(p).trim().length > 0));
 
               this.rawAddressInput = dbLines.join('\n');
-              this.aiParseSuccessMessage = '✓ Veritabanındaki tam adres getirildi.';
+              this.aiParseSuccessMessage = '✓ Veritabanındaki tam adres getirildi ve kutucuklar dolduruldu.';
+              this.cdr.detectChanges();
             }
           }
         },
@@ -755,6 +785,11 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
               this.rawAddressInput = dbLines.join('\n');
               this.aiParseSuccessMessage = '✓ Veritabanındaki tam adres otomatik yüklendi.';
+              order.streetAddress = this.editAddressModel.streetAddress;
+              order.city = this.editAddressModel.city;
+              order.hasAddress = Boolean(order.streetAddress && order.city);
+              order.isAddressMissing = !order.hasAddress;
+              this.cdr.detectChanges();
             }
           }
         },
