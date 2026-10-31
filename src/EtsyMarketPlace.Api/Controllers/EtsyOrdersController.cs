@@ -14,6 +14,7 @@ using EtsyMarketPlace.Domain.Orders;
 using EtsyMarketPlace.Application.Features.Orders.Commands.AiParseAddress;
 using EtsyMarketPlace.Application.Features.Orders.Commands.SaveFulfillmentMeta;
 using EtsyMarketPlace.Application.Features.Orders.Commands.SaveOrderAddress;
+using EtsyMarketPlace.Application.Features.Orders.Commands.SyncExtensionOrders;
 using EtsyMarketPlace.Application.Features.Orders.Commands.UploadOrdersCsv;
 using EtsyMarketPlace.Application.Features.Orders.Queries.GetFulfillmentQueue;
 
@@ -123,6 +124,16 @@ public class EtsyOrdersController : BaseApiController
         };
 
         var response = await _mediator.Send(parseRequest, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPost("sync-from-extension")]
+    [EndpointSummary("Chrome Extension üzerinden Sipariş ve Müşteri Bilgilerini Kaydet (Thin Controller)")]
+    public async Task<IActionResult> SyncOrdersFromExtension(
+        [FromBody] SyncExtensionOrdersRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _mediator.Send(request, cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 

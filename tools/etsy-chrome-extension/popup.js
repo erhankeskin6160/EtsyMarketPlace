@@ -165,6 +165,40 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentPageOrders = [];
   let allOrders = [...config.storedOrders];
 
+  function mergeOrderRecord(existing, incoming) {
+    if (!existing) return incoming;
+    if (!incoming) return existing;
+
+    // Eğer mevcut kayıt zaten tam açık adrese sahipse ve gelen kayıt kapalı liste özeti ise
+    // mevcut tam adres bilgilerini koru (ezilme önleme!)
+    const keepExistingAddress = existing.isFullAddress && !incoming.isFullAddress;
+
+    return {
+      ...incoming,
+      ...existing,
+      orderTotal: incoming.orderTotal != null ? incoming.orderTotal : existing.orderTotal,
+      currency: incoming.currency || existing.currency,
+      trackingNumber: incoming.trackingNumber || existing.trackingNumber,
+      productTitle: incoming.productTitle && incoming.productTitle !== 'Etsy Ürünü' ? incoming.productTitle : existing.productTitle,
+      orderDate: incoming.orderDate || existing.orderDate,
+      status: incoming.status || existing.status,
+      iossNumber: incoming.iossNumber || existing.iossNumber,
+      // Adres alanları
+      buyerName: (keepExistingAddress ? existing.buyerName : incoming.buyerName) || existing.buyerName || incoming.buyerName,
+      shippingAddress: keepExistingAddress ? existing.shippingAddress : (incoming.shippingAddress || existing.shippingAddress),
+      streetAddress: keepExistingAddress ? existing.streetAddress : (incoming.streetAddress || existing.streetAddress),
+      secondAddress: keepExistingAddress ? existing.secondAddress : (incoming.secondAddress || existing.secondAddress),
+      city: keepExistingAddress ? existing.city : (incoming.city || existing.city),
+      state: keepExistingAddress ? existing.state : (incoming.state || existing.state),
+      postalCode: keepExistingAddress ? existing.postalCode : (incoming.postalCode || existing.postalCode),
+      country: keepExistingAddress ? existing.country : (incoming.country || existing.country),
+      phone: keepExistingAddress ? existing.phone : (incoming.phone || existing.phone),
+      rawAddressText: keepExistingAddress ? existing.rawAddressText : (incoming.rawAddressText || existing.rawAddressText),
+      isFullAddress: Boolean(existing.isFullAddress || incoming.isFullAddress),
+      sourceType: incoming.isFullAddress ? incoming.sourceType : (existing.sourceType || incoming.sourceType)
+    };
+  }
+
   function renderOrdersList() {
     orderCount.innerText = currentPageOrders.length;
     totalMemoryCount.innerText = allOrders.length;
@@ -225,6 +259,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
               <span class="diag-lbl">🌍 Ülke:</span>
               <span class="diag-val">${o.country || 'United States'}</span>
+
+              ${o.iossNumber ? `<span class="diag-lbl">🇪🇺 IOSS / Vergi No:</span><span class="diag-val" style="color: #38bdf8; font-weight: bold;">${o.iossNumber}</span>` : ''}
 
               <span class="diag-lbl">📞 Telefon:</span>
               <span class="diag-val" style="color: #38bdf8;">${o.phone || '(Belirtilmemiş)'}</span>
@@ -421,8 +457,8 @@ document.addEventListener('DOMContentLoaded', async () => {
               allOrders.push(co);
               addedCount++;
             } else {
-              // Mevcut siparişin daha detaylı bilgilerini güncelle
-              allOrders[idx] = { ...allOrders[idx], ...co };
+              // Mevcut siparişin daha detaylı bilgilerini güncelle (ezilme önleme!)
+              allOrders[idx] = mergeOrderRecord(allOrders[idx], co);
             }
           });
 
@@ -529,15 +565,14 @@ document.addEventListener('DOMContentLoaded', async () => {
           const idx = allOrders.findIndex(o => o.receiptId === po.receiptId);
           if (idx !== -1) {
             const wasFull = allOrders[idx].isFullAddress;
-            allOrders[idx] = {
-              ...allOrders[idx],
+            allOrders[idx] = mergeOrderRecord(allOrders[idx], {
               ...po,
               sourceType: po.isFullAddress ? 'Canlı Sayfa (Inline Chevron Açıldı)' : (allOrders[idx].sourceType || 'Liste Özeti'),
               sourceUrl: po.sourceUrl || activeTab.url,
               httpStatus: 'DOM (Canlı Sayfa)',
               resolvedAt: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-            };
-            if (!wasFull && po.isFullAddress) resolvedCount++;
+            });
+            if (!wasFull && allOrders[idx].isFullAddress) resolvedCount++;
           } else {
             allOrders.push(po);
             if (po.isFullAddress) resolvedCount++;
@@ -658,7 +693,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const payload = {
         shopId: config.shopId,
-        orders: ordersToSync
+        orders: ordersToSync.map(o => ({
+          ...o,
+          trackingCode: o.trackingNumber || o.trackingCode || '',
+          trackingNumber: o.trackingNumber || o.trackingCode || '',
+          iossNumber: o.iossNumber || ''
+        }))
       };
 
       // Toplu aktarım endpoint'i
@@ -736,6 +776,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       'Posta_Kodu', 
       'Ulke', 
       'Telefon', 
+      'IOSS_No',
       'SKU',
       'Varyasyon',
       'Islem_ID',
@@ -758,6 +799,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       `"${(o.postalCode || '').replace(/"/g, '""')}"`,
       `"${(o.country || 'United States').replace(/"/g, '""')}"`,
       `"${(o.phone || '').replace(/"/g, '""')}"`,
+      `"${(o.iossNumber || '').replace(/"/g, '""')}"`,
       `"${(o.sku || '').replace(/"/g, '""')}"`,
       `"${(o.variation || '').replace(/"/g, '""')}"`,
       `"${(o.transactionId || '').replace(/"/g, '""')}"`,

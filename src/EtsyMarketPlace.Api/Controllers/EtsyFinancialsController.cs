@@ -1,4 +1,5 @@
 using EtsyMarketPlace.Application.Features.Financials;
+using EtsyMarketPlace.Application.Features.Orders.Commands.SyncExtensionOrders;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -431,119 +432,14 @@ public class EtsyFinancialsController : BaseApiController
     }
 
 
-    public record ExtensionOrderSyncItem(
-        string ReceiptId,
-        string BuyerName,
-        string? ShippingAddress,
-        string? StreetAddress,
-        string? SecondAddress,
-        string? City,
-        string? State,
-        string? PostalCode,
-        string? Country,
-        string? Phone,
-        string? RawAddressText,
-        bool? IsFullAddress,
-        string? ProductTitle,
-        decimal? OrderTotal,
-        string? Currency,
-        string? TrackingCode);
-
-    public record ExtensionOrdersSyncRequest(
-        string ShopId,
-        IReadOnlyList<ExtensionOrderSyncItem> Orders);
-
     [HttpPost("etsy/orders/sync-from-extension")]
     [AllowAnonymous]
-    [EndpointSummary("Chrome Extension üzerinden Sipariş ve Müşteri Bilgilerini Kaydet")]
+    [EndpointSummary("Chrome Extension üzerinden Sipariş ve Müşteri Bilgilerini Kaydet (Thin Controller)")]
     public async Task<IActionResult> SyncOrdersFromExtension(
-        [FromBody] ExtensionOrdersSyncRequest request,
+        [FromBody] SyncExtensionOrdersRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (request?.Orders == null || request.Orders.Count == 0)
-            return BadRequest(new { error = "Sipariş listesi boş olamaz." });
-
-        var resolvedShopId = ResolveShopId(request.ShopId, _config);
-        var updated = 0;
-
-        foreach (var order in request.Orders)
-        {
-            if (!string.IsNullOrWhiteSpace(order.ReceiptId))
-            {
-                var note = $"Müşteri: {order.BuyerName}";
-                if (!string.IsNullOrWhiteSpace(order.ShippingAddress))
-                    note += $" | Adres: {order.ShippingAddress}";
-
-                await _repository.UpsertOrderCostAsync(
-                    resolvedShopId,
-                    order.ReceiptId,
-                    null,
-                    null,
-                    null,
-                    note,
-                    cancellationToken);
-
-                if (_addressRepository != null && long.TryParse(order.ReceiptId, out var rId))
-                {
-                    var street = !string.IsNullOrWhiteSpace(order.StreetAddress)
-                        ? order.StreetAddress
-                        : (order.ShippingAddress?.Trim() ?? "");
-                    var second = order.SecondAddress ?? "";
-                    var city = order.City ?? "";
-                    var state = order.State ?? "";
-                    var postalCode = order.PostalCode ?? "";
-                    var country = !string.IsNullOrWhiteSpace(order.Country) ? order.Country : (order.Currency == "TRY" ? "Türkiye" : "Amerika Birleşik Devletleri");
-                    var countryCode = order.Currency == "TRY" ? "TR" : "US";
-                    var phone = order.Phone ?? "";
-
-                    if (string.IsNullOrWhiteSpace(city) && !string.IsNullOrWhiteSpace(order.ShippingAddress))
-                    {
-                        var parts = order.ShippingAddress.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                        if (parts.Length > 0) city = parts[0];
-                        if (parts.Length > 1)
-                        {
-                            var stateZip = parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                            if (stateZip.Length > 0 && stateZip[0] != "Order") state = stateZip[0];
-                            if (stateZip.Length > 1 && stateZip[1] != "in") postalCode = stateZip[1];
-                        }
-                    }
-
-                    var rawText = !string.IsNullOrWhiteSpace(order.RawAddressText)
-                        ? order.RawAddressText
-                        : string.Join("\n", new[] {
-                            order.BuyerName,
-                            street,
-                            second,
-                            $"{city}, {state} {postalCode}".Trim(),
-                            country,
-                            string.IsNullOrWhiteSpace(phone) ? "" : $"Tel: {phone}"
-                        }.Where(s => !string.IsNullOrWhiteSpace(s)));
-
-                    var addrRecord = new EtsyMarketPlace.Domain.Orders.OrderAddressRecord(
-                        rId,
-                        order.BuyerName ?? "",
-                        "",
-                        phone,
-                        street,
-                        second,
-                        city,
-                        state,
-                        postalCode,
-                        countryCode,
-                        country,
-                        "EtsyExtension",
-                        DateTime.UtcNow)
-                    {
-                        TrackingCode = order.TrackingCode ?? string.Empty
-                    };
-
-                    await _addressRepository.SaveAsync(addrRecord, cancellationToken);
-                }
-
-                updated++;
-            }
-        }
-
-        return Ok(new { success = true, updatedCount = updated, message = $"{updated} sipariş VDS'e başarıyla aktarıldı." });
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 }
