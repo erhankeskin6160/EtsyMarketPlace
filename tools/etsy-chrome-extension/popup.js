@@ -533,7 +533,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (allOrders.length === 0) {
-      alert('Hafızada sipariş bulunamadı. Lütfen Etsy siparişler sayfasını yenileyin (F5).');
+      // Hafızada sipariş yoksa önce sayfadan canlı tarama yapmayı dene
+      const scanRes = await new Promise((resolve) => {
+        chrome.tabs.sendMessage(activeTab.id, { action: 'PARSE_ORDERS' }, (resp) => {
+          if (chrome.runtime.lastError || !resp || !resp.success) resolve(null);
+          else resolve(resp);
+        });
+      });
+
+      if (scanRes && Array.isArray(scanRes.data) && scanRes.data.length > 0) {
+        scanRes.data.forEach(co => {
+          const coId = String(co.receiptId || '').trim();
+          if (/^\d{10}$/.test(coId)) {
+            const idx = allOrders.findIndex(o => String(o.receiptId).trim() === coId);
+            if (idx === -1) allOrders.push(co);
+            else allOrders[idx] = mergeOrderRecord(allOrders[idx], co);
+          }
+        });
+        chrome.storage.local.set({ storedOrders: allOrders });
+        renderOrdersList();
+      }
+    }
+
+    if (allOrders.length === 0) {
+      alert('Hafızada veya sayfada sipariş bulunamadı. Lütfen Etsy siparişler sayfasını yenileyin (F5).');
       return;
     }
 

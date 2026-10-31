@@ -131,7 +131,8 @@
   function extractCleanAddressLines(textBlock) {
     if (!textBlock) return [];
     let linesSource = textBlock;
-    const m = textBlock.match(/Ship to|Shipped to|Gönderim adresi|Teslimat adresi/i);
+    // Kelime sınırı ile kesin eşleşme: "Ship today" gibi termin bildirimleriyle ASLA eşleşmez!
+    const m = textBlock.match(/\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b/i);
     if (m) {
       linesSource = textBlock.substring(m.index + m[0].length);
     }
@@ -140,10 +141,12 @@
     const cleanLines = [];
 
     for (let i = 0; i < rawLines.length; i++) {
-      const line = rawLines[i].trim();
+      let line = rawLines[i].replace(/[▾▼]/g, '').trim();
       if (!line) continue;
+      // Salt sembol veya boşluk karakterlerini atla
+      if (/^[▾▼\s\-_–—]+$/.test(line)) continue;
       // Rozetleri, termin bildirimlerini ve buton metinlerini adres satırından kesinlikle ayıkla
-      if (/^(?:Marked as gift|Gift message|Gift message available|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping|VAT Collected|Ship by.*|Selected by buyer.*|No tracking.*|Select all.*|Deselect all.*)$/i.test(line)) {
+      if (/^(?:Marked as gift|Gift message|Gift message available|Hediye|USPS Verified|Doğrulandı|Copy(?:\s+address)?|Adresi\s*kopyala|Order in reserve|Rezervde|View order|Print shipping|Standard Shipping|VAT Collected|Ship by.*|Selected by buyer.*|No tracking.*|Select all.*|Deselect all.*|Help requests?.*|Action needed.*)$/i.test(line)) {
         continue;
       }
       // Gecikme / süre / relatif tarih bildirimlerini asla adres satırı veya alıcı adı yapma (Örn: "1 days ago", "1 day ago", "day", "days", "ago", "today", "yesterday", "overdue")
@@ -417,82 +420,94 @@
     }
   }
 
-  // 4. SİPARİŞ KARTLARINI DOM SEVİYESİNDE İZOLE ETME (Ağaç Tırmanma ve Tekil ID Garantisi)
+  // 4. SİPARİŞ KARTLARINI DOM SEVİYESİNDE İZOLE ETME (Leaf Node & Kart Sınırı Garantisi)
   function findOrderContainers() {
     const list = [];
     const seenIds = new Set();
 
-    // 1. Linkler ve butonlar üzerinden ara (Hem klasik order_id= hem SCLC hem data-order-id)
-    const orderLinks = Array.from(document.querySelectorAll('a[href*="order_id="], a[href*="/orders/"], a[href*="receipt_id="], a[data-order-id], button[data-order-id]'));
+    // 1. Sayfadaki potansiyel tüm sipariş düğümlerini (Link, Buton, Span, Strong, P, Div, TD vb.) tara
+    const candidateSelector = 'a[href*="order_id="], a[href*="/orders/"], a[href*="receipt_id="], [data-order-id], [data-receipt-id], button, span, strong, b, p, div, td';
+    const allCandidates = Array.from(document.querySelectorAll(candidateSelector));
 
-    for (const a of orderLinks) {
-      const href = a.getAttribute('href') || a.href || '';
-      const dataId = a.getAttribute('data-order-id') || a.getAttribute('data-receipt-id') || '';
-      const text = a.textContent || '';
-      const m = href.match(/[?&]order_id=(\d{9,12})\b/)
-             || href.match(/\/orders\/(?:sclc|sold)?\/?(?:all|new|completed)?\/?(\d{9,12})\b/i)
-             || dataId.match(/^(\d{9,12})$/)
-             || text.match(/#?(\d{10})\b/);
-      if (!m) continue;
-      const id = m[1];
-      if (seenIds.has(id)) continue;
+    const matchedNodes = [];
 
-      // Linkten yukarı tırman: Kapsayıcı içindeki farklı sipariş ID sayısı TAM 1 olduğu sürece tırman
-      let curr = a.parentElement;
-      let prevCard = a.parentElement || a;
+    for (const el of allCandidates) {
+      const href = el.getAttribute('href') || el.href || '';
+      const dataId = el.getAttribute('data-order-id') || el.getAttribute('data-receipt-id') || '';
+      const text = (el.textContent || '').trim();
 
-      while (curr && curr !== document.body) {
-        const orderIdsInside = Array.from(curr.querySelectorAll('a, button, span, strong'))
-          .map(l => {
-            const h = l.getAttribute('href') || l.href || '';
-            const d = l.getAttribute('data-order-id') || '';
-            const t = (l.textContent || '').trim();
-            const hit = h.match(/[?&]order_id=(\d{9,12})\b/) || d.match(/^(\d{9,12})$/) || t.match(/#(\d{10})\b/);
-            return hit ? hit[1] : null;
-          })
-          .filter(Boolean);
-        const distinctInside = new Set(orderIdsInside);
+      let orderId = null;
 
-        if (distinctInside.size === 1) {
-          prevCard = curr;
-          curr = curr.parentElement;
-        } else if (distinctInside.size > 1) {
-          break;
-        } else {
-          curr = curr.parentElement;
+      // A) URL parametresi veya path üzerinden 10 haneli sipariş ID'si
+      const hrefMatch = href.match(/[?&](?:order|receipt)_id=(\d{10})\b/)
+                     || href.match(/\/orders\/(?:sclc|sold)?\/?(?:all|new|completed)?\/?(\d{10})\b/i);
+      if (hrefMatch) {
+        orderId = hrefMatch[1];
+      } else if (/^\d{10}$/.test(dataId)) {
+        orderId = dataId;
+      } else {
+        // B) Metin içinde #4210985421 veya 4210985421 (Etsy)
+        const textMatch = text.match(/#(\d{10})\b/) || text.match(/\b(\d{10})\s*\(Etsy\)/i);
+        if (textMatch) {
+          orderId = textMatch[1];
         }
       }
 
-      seenIds.add(id);
-      list.push({ id, element: prevCard });
+      if (orderId && !seenIds.has(orderId)) {
+        // Kendi çocuklarında da aynı ID geçiyorsa, bu üst kapsayıcıdır; en derin yaprak düğümü (leaf) beklemek için atla
+        const hasChildWithId = Array.from(el.children).some(ch => (ch.textContent || '').includes(orderId));
+        if (!hasChildWithId) {
+          seenIds.add(orderId);
+          matchedNodes.push({ id: orderId, node: el });
+        }
+      }
     }
 
-    // Fallback: Linklerden kart bulunamadıysa metin üzerinden strictly 10 hane ara
-    if (list.length === 0) {
-      const candidateNodes = Array.from(document.querySelectorAll('span, a, p, div, strong, b'));
-      for (const node of candidateNodes) {
-        const text = (node.textContent || '').trim();
-        const m = text.match(/#(\d{10})\b/) || text.match(/\b(\d{10})\s*\(Etsy\)/i);
-        if (!m) continue;
-        const id = m[1];
-        if (seenIds.has(id)) continue;
+    // 2. Bulunan her yaprak sipariş düğümü için izole kart kapsayıcısını bul
+    const knownCardSelectors = [
+      '[data-region="order-card"]',
+      '[class*="order-card"]',
+      '[class*="OrderCard"]',
+      '.wt-card',
+      '.panel-body',
+      'tr[data-order-id]',
+      'tr.order-row',
+      '[data-testid*="order-card"]'
+    ];
 
+    for (const item of matchedNodes) {
+      const node = item.node;
+      const id = item.id;
+
+      // Öncelik 1: closest bilinen kart seçicileri
+      let cardEl = node.closest(knownCardSelectors.join(', '));
+
+      // Eğer kart bulunamadıysa veya body/main/root seviyesine ulaştıysa, güvenli tırman
+      if (!cardEl || cardEl === document.body || cardEl.tagName === 'MAIN' || cardEl.id === 'root' || cardEl.id === 'content') {
         let curr = node.parentElement;
-        let prevCard = node.parentElement || node;
-        while (curr && curr !== document.body) {
-          const ids = (curr.innerText || '').match(/#(\d{10})\b/g) || [];
-          const distinct = new Set(ids);
-          if (distinct.size <= 1) {
-            prevCard = curr;
-            curr = curr.parentElement;
-          } else {
+        let best = node.parentElement || node;
+
+        while (curr && curr !== document.body && curr.tagName !== 'MAIN' && curr.id !== 'root' && curr.id !== 'content') {
+          // Sayfa seviyesi navigasyon/başlık/sekme gördüğü anda tırmanmayı kesinlikle durdur!
+          if (curr.querySelector('nav, header, [role="tablist"], .wt-tabs, .action-needed')) {
             break;
           }
-        }
 
-        seenIds.add(id);
-        list.push({ id, element: prevCard });
+          // Kapsayıcıda başka bir sipariş ID'si tespit edilirse dur
+          const currText = curr.textContent || '';
+          const allIds = currText.match(/#(\d{10})\b/g) || [];
+          const distinct = new Set(allIds);
+          if (distinct.size > 1) {
+            break;
+          }
+
+          best = curr;
+          curr = curr.parentElement;
+        }
+        cardEl = best;
       }
+
+      list.push({ id, element: cardEl });
     }
 
     return list;
@@ -502,24 +517,29 @@
   function resolveCardShipTo(cardEl) {
     if (!cardEl || typeof cardEl.querySelectorAll !== 'function') return null;
 
-    // 1. Ship to başlığını ara
-    const shipToHeader = Array.from(cardEl.querySelectorAll('p, div, span, h3, h4, h5, h6, strong, b')).find(el => {
+    // 1. Ship to başlığını veya butonunu ara (Ok karakterlerini tolere eder, Ship today ile ASLA eşleşmez)
+    const shipToHeader = Array.from(cardEl.querySelectorAll('button, p, div, span, h3, h4, h5, h6, strong, b, [role="button"]')).find(el => {
       const t = (el.textContent || '').trim();
-      return /^(?:Ship to|Shipped to|Gönderim adresi|Teslimat adresi)$/i.test(t);
+      return /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b/i.test(t) && !/today/i.test(t);
     });
 
     let toggleBtn = null;
     let addrBody = null;
 
     if (shipToHeader) {
-      const parent = shipToHeader.parentElement;
-      const grandParent = parent ? parent.parentElement : null;
+      // Eğer bulunan eleman doğrudan buton ise kendisi toggle butonudur
+      if (shipToHeader.tagName === 'BUTTON' || shipToHeader.getAttribute('role') === 'button' || shipToHeader.classList.contains('wt-btn')) {
+        toggleBtn = shipToHeader;
+      } else {
+        const parent = shipToHeader.parentElement;
+        const grandParent = parent ? parent.parentElement : null;
 
-      toggleBtn = (parent && parent.querySelector('button, [role="button"]'))
-               || (grandParent && grandParent.querySelector('button, [role="button"]'))
-               || cardEl.querySelector('button[aria-controls*="wt-content-toggle"], button.wt-content-toggle, button[class*="wt-content-toggle"]');
+        toggleBtn = (parent && parent.querySelector('button, [role="button"]'))
+                 || (grandParent && grandParent.querySelector('button, [role="button"]'))
+                 || cardEl.querySelector('button[aria-controls*="wt-content-toggle"], button.wt-content-toggle, button[class*="wt-content-toggle"], button[aria-expanded]');
+      }
     } else {
-      toggleBtn = cardEl.querySelector('button[aria-controls*="wt-content-toggle"], button.wt-content-toggle, button[class*="wt-content-toggle"]');
+      toggleBtn = cardEl.querySelector('button[aria-controls*="wt-content-toggle"], button.wt-content-toggle, button[class*="wt-content-toggle"], button[aria-expanded]');
     }
 
     if (toggleBtn) {
@@ -530,11 +550,11 @@
     }
 
     if (!addrBody) {
-      addrBody = cardEl.querySelector('.wt-content-toggle__body');
+      addrBody = cardEl.querySelector('.wt-content-toggle__body, [id*="wt-content-toggle"], .ship-to-summary');
     }
 
     const isExpanded = addrBody 
-      ? (addrBody.getAttribute('aria-hidden') === 'false' || addrBody.style.visibility === 'visible' || addrBody.classList.contains('wt-content-toggle__body--open'))
+      ? (addrBody.getAttribute('aria-hidden') === 'false' || addrBody.style.visibility === 'visible' || addrBody.classList.contains('wt-content-toggle__body--open') || addrBody.style.display !== 'none')
       : (toggleBtn ? toggleBtn.getAttribute('aria-expanded') === 'true' : false);
 
     return { toggleBtn, addrBody, isExpanded };
@@ -584,23 +604,33 @@
           const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
 
           // Alıcı Adı
-          let buyerName = parsed.buyerName;
-          const isInvalidBuyer = !buyerName || /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*)$/i.test(buyerName.trim()) || /^\d+$/.test(buyerName.trim()) || buyerName.trim().length < 2;
+          let buyerName = parsed.buyerName ? parsed.buyerName.replace(/[▾▼]/g, '').trim() : '';
+          const isInvalidBuyer = !buyerName || /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*)$/i.test(buyerName.trim()) || /^\d+$/.test(buyerName.trim()) || buyerName.trim().length < 2;
 
           if (isInvalidBuyer) {
             // 1. Karttaki müşteri adını (#\d{10} öncesindeki başlık) yakala (Örn: Marie Cindy, jessica benson)
-            const nameMatch = block.match(/([A-Za-z\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{10}/);
+            const nameMatch = block.match(/([A-Za-z\u00C0-\u017F\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{10}/);
             if (nameMatch) {
-              const candidate = nameMatch[1].trim();
-              if (candidate && !/^(?:Select all|Ordered|Order|Ship by|day|days|ago|today|yesterday|overdue)$/i.test(candidate) && candidate.length >= 2) {
+              const candidate = nameMatch[1].replace(/[▾▼]/g, '').trim();
+              if (candidate && !/^(?:Select all|Ordered|Order|Ship by|day|days|ago|today|yesterday|overdue|action\s*needed)$/i.test(candidate) && candidate.length >= 2) {
                 buyerName = candidate;
               }
             }
-            // 2. Eğer hala geçersizse karttaki alıcı linklerini veya butonlarını ara
+            // 2. Ship to başlığı altındaki ilk alıcı adını yakala (Örn: Ship to ▾\nJessica Benson)
+            if (!buyerName || /^(?:day|days|ago|select\s*all|etsy.*)$/i.test(buyerName)) {
+              const shipToNameMatch = block.match(/\b(?:Ship\s+to|Shipped\s+to)\b\s*[▾▼]?\s*[\r\n]+([A-Za-z\u00C0-\u017F\s.'-]+)/i);
+              if (shipToNameMatch) {
+                const candidate = shipToNameMatch[1].replace(/[▾▼]/g, '').trim();
+                if (candidate && !/^(?:Select all|Ordered|Order|Ship by|day|days|ago|today|yesterday|overdue|order\s*in\s*reserve)$/i.test(candidate) && candidate.length >= 2) {
+                  buyerName = candidate;
+                }
+              }
+            }
+            // 3. Eğer hala geçersizse karttaki alıcı linklerini veya butonlarını ara
             if (!buyerName || /^(?:day|days|ago|select\s*all|etsy.*)$/i.test(buyerName)) {
               const buyerLink = el.querySelector('a[href*="/your/orders/sold/buyer/"], a[href*="buyer="], [class*="buyer-name"], button[aria-label*="buyer"]');
               if (buyerLink && buyerLink.textContent?.trim()) {
-                const cand = buyerLink.textContent.trim();
+                const cand = buyerLink.textContent.replace(/[▾▼]/g, '').trim();
                 if (!/^(?:day|days|ago|select\s*all)$/i.test(cand) && cand.length >= 2) {
                   buyerName = cand;
                 }
@@ -620,7 +650,8 @@
           // Ürün Adı
           const titleMatch = block.match(/Shop coupon[\s\r\n]+([^\n\r]+)/i) 
                           || block.match(/\(Etsy\)[^\n\r]*[\r\n]+([^\n\r]+)/i);
-          const title = titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü';
+          const titleLink = el.querySelector('a[href*="/listing/"], [class*="listing-title"], [class*="item-title"]');
+          let title = titleLink && titleLink.textContent?.trim() ? titleLink.textContent.trim() : (titleMatch ? titleMatch[1].trim() : 'Etsy Ürünü');
 
           // Sipariş Tarihi
           const dateMatch = block.match(/(?:Ordered|Order date)[\s:]*([A-Za-z]{3,9}\s+\d{1,2}(?:,\s*\d{4})?)/i)
