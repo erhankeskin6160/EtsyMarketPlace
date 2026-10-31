@@ -49,12 +49,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   let config = await new Promise((resolve) => {
     chrome.storage.local.get(['apiUrl', 'apiKey', 'shopId', 'autoSync', 'storedOrders'], (res) => {
       const rawStored = Array.isArray(res.storedOrders) ? res.storedOrders : [];
-      // SADECE 10 HANELİ KANONİK ETSY SİPARİŞ NUMARALARINI TUT
-      // 11 haneli sahte ID'leri ve duplikeleri ayıkla
+      // SADECE 9-12 HANELİ KANONİK ETSY SİPARİŞ NUMARALARINI TUT
       const cleanMap = new Map();
       rawStored.forEach(o => {
         const id = String(o.receiptId || '').trim();
-        if (/^\d{10}$/.test(id)) {
+        if (/^\d{9,12}$/.test(id)) {
           if (!cleanMap.has(id)) {
             cleanMap.set(id, o);
           } else {
@@ -451,7 +450,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           let addedCount = 0;
           currentPageOrders.forEach(co => {
             const coId = String(co.receiptId || '').trim();
-            if (!/^\d{10}$/.test(coId)) return; // 10 hane haricindeki bozuk kayıtları engelle
+            if (!/^\d{9,12}$/.test(coId)) return; // 9-12 hane haricindeki bozuk kayıtları engelle
             const idx = allOrders.findIndex(o => String(o.receiptId).trim() === coId);
             if (idx === -1) {
               allOrders.push(co);
@@ -544,7 +543,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (scanRes && Array.isArray(scanRes.data) && scanRes.data.length > 0) {
         scanRes.data.forEach(co => {
           const coId = String(co.receiptId || '').trim();
-          if (/^\d{10}$/.test(coId)) {
+          if (/^\d{9,12}$/.test(coId)) {
             const idx = allOrders.findIndex(o => String(o.receiptId).trim() === coId);
             if (idx === -1) allOrders.push(co);
             else allOrders[idx] = mergeOrderRecord(allOrders[idx], co);

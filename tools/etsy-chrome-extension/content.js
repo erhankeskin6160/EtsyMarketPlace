@@ -420,50 +420,97 @@
     }
   }
 
-  // 4. SİPARİŞ KARTLARINI DOM SEVİYESİNDE İZOLE ETME (Leaf Node & Kart Sınırı Garantisi)
+  // 4. SİPARİŞ KARTLARINI DOM SEVİYESİNDE İZOLE ETME (TreeWalker, Görünürlük & Invariant Garantisi)
+  function isNodeVisible(el) {
+    if (!el) return false;
+    if (typeof el.checkVisibility === 'function') {
+      return el.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true });
+    }
+    return el.offsetParent !== null || el.tagName === 'BODY';
+  }
+
+  function uniqueOrderIds(el) {
+    const s = new Set();
+    if (!el) return s;
+    const t = el.textContent || '';
+    for (const m of t.matchAll(/#(\d{9,12})\b/g)) s.add(m[1]);
+    for (const m of t.matchAll(/\b(\d{9,12})\s*\(Etsy\)/gi)) s.add(m[1]);
+    return s;
+  }
+
+  function containsExactlyOne(el, id) {
+    if (!el) return false;
+    const ids = uniqueOrderIds(el);
+    return ids.size === 1 && ids.has(id);
+  }
+
+  function isDrawerOpen(btn, body) {
+    if (btn && btn.hasAttribute && btn.hasAttribute('aria-expanded')) {
+      return btn.getAttribute('aria-expanded') === 'true';
+    }
+    if (!body) return false;
+    if (body.getAttribute && body.getAttribute('aria-hidden') === 'true') return false;
+    if (body.classList && body.classList.contains('wt-content-toggle__body--open')) return true;
+    return Boolean(body.offsetHeight || (body.getClientRects && body.getClientRects().length > 0));
+  }
+
   function findOrderContainers() {
     const list = [];
     const seenIds = new Set();
+    const matchedHits = [];
 
-    // 1. Sayfadaki potansiyel tüm sipariş düğümlerini (Link, Buton, Span, Strong, P, Div, TD vb.) tara
-    const candidateSelector = 'a[href*="order_id="], a[href*="/orders/"], a[href*="receipt_id="], [data-order-id], [data-receipt-id], button, span, strong, b, p, div, td';
-    const allCandidates = Array.from(document.querySelectorAll(candidateSelector));
+    // 1. Ağaç Gezintisi (TreeWalker): Bellek ve layout thrashing üretmeden yalnızca metin düğümlerini tara (O(N))
+    try {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+        acceptNode: (n) => {
+          const val = n.nodeValue || '';
+          return (/#\d{9,12}\b|\b\d{9,12}\s*\(Etsy\)/i.test(val))
+            ? NodeFilter.FILTER_ACCEPT
+            : NodeFilter.FILTER_REJECT;
+        }
+      });
 
-    const matchedNodes = [];
+      let textNode;
+      while ((textNode = walker.nextNode())) {
+        const parent = textNode.parentElement;
+        if (!parent || !isNodeVisible(parent)) continue;
 
-    for (const el of allCandidates) {
-      const href = el.getAttribute('href') || el.href || '';
-      const dataId = el.getAttribute('data-order-id') || el.getAttribute('data-receipt-id') || '';
-      const text = (el.textContent || '').trim();
-
-      let orderId = null;
-
-      // A) URL parametresi veya path üzerinden 10 haneli sipariş ID'si
-      const hrefMatch = href.match(/[?&](?:order|receipt)_id=(\d{10})\b/)
-                     || href.match(/\/orders\/(?:sclc|sold)?\/?(?:all|new|completed)?\/?(\d{10})\b/i);
-      if (hrefMatch) {
-        orderId = hrefMatch[1];
-      } else if (/^\d{10}$/.test(dataId)) {
-        orderId = dataId;
-      } else {
-        // B) Metin içinde #4210985421 veya 4210985421 (Etsy)
-        const textMatch = text.match(/#(\d{10})\b/) || text.match(/\b(\d{10})\s*\(Etsy\)/i);
-        if (textMatch) {
-          orderId = textMatch[1];
+        const val = textNode.nodeValue || '';
+        const m = val.match(/#(\d{9,12})\b/) || val.match(/\b(\d{9,12})\s*\(Etsy\)/i);
+        if (m) {
+          matchedHits.push({ id: m[1], node: parent });
         }
       }
+    } catch (twErr) {
+      console.warn('[Etsy Copilot] TreeWalker taraması hatası:', twErr);
+    }
 
-      if (orderId && !seenIds.has(orderId)) {
-        // Kendi çocuklarında da aynı ID geçiyorsa, bu üst kapsayıcıdır; en derin yaprak düğümü (leaf) beklemek için atla
-        const hasChildWithId = Array.from(el.children).some(ch => (ch.textContent || '').includes(orderId));
-        if (!hasChildWithId) {
-          seenIds.add(orderId);
-          matchedNodes.push({ id: orderId, node: el });
-        }
+    // 2. data-order-id / data-receipt-id veya link parametresi taşıyan görünür düğümleri de ekle
+    const attrElements = Array.from(document.querySelectorAll('[data-order-id], [data-receipt-id], a[href*="order_id="], a[href*="receipt_id="]'));
+    for (const el of attrElements) {
+      if (!isNodeVisible(el)) continue;
+      const dId = el.getAttribute('data-order-id') || el.getAttribute('data-receipt-id') || '';
+      const href = el.getAttribute('href') || el.href || '';
+      const m = dId.match(/^(\d{9,12})$/) || href.match(/[?&](?:order|receipt)_id=(\d{9,12})\b/);
+      if (m) {
+        matchedHits.push({ id: m[1], node: el });
       }
     }
 
-    // 2. Bulunan her yaprak sipariş düğümü için izole kart kapsayıcısını bul
+    // 3. Tekil ID garantisi ve Yaprak Düğüm (Leaf Node) seçimi
+    const uniqueHits = [];
+    for (const hit of matchedHits) {
+      const id = hit.id;
+      if (seenIds.has(id)) continue;
+      // Kendi çocuklarında da aynı ID geçiyorsa, leaf düğümü beklemek için üst düğümü atla
+      const hasChildWithId = Array.from(hit.node.children).some(ch => (ch.textContent || '').includes(id));
+      if (!hasChildWithId) {
+        seenIds.add(id);
+        uniqueHits.push(hit);
+      }
+    }
+
+    // 4. Kart Kapsayıcısı İzolasyonu (Zorunlu Değişmez: Bir kartta TAM 1 adet tekil sipariş ID'si olmalı)
     const knownCardSelectors = [
       '[data-region="order-card"]',
       '[class*="order-card"]',
@@ -475,39 +522,44 @@
       '[data-testid*="order-card"]'
     ];
 
-    for (const item of matchedNodes) {
+    for (const item of uniqueHits) {
       const node = item.node;
       const id = item.id;
 
-      // Öncelik 1: closest bilinen kart seçicileri
+      // Öncelik 1: closest bilinen kart seçicileri ve tam 1 ID değişmezi doğrulaması
       let cardEl = node.closest(knownCardSelectors.join(', '));
+      if (cardEl && !containsExactlyOne(cardEl, id)) {
+        // Eğer generic .wt-card veya .panel-body birden çok siparişi içine almışsa geçersiz say
+        cardEl = null;
+      }
 
-      // Eğer kart bulunamadıysa veya body/main/root seviyesine ulaştıysa, güvenli tırman
+      // Öncelik 2: Güvenli ata tırmanışı
       if (!cardEl || cardEl === document.body || cardEl.tagName === 'MAIN' || cardEl.id === 'root' || cardEl.id === 'content') {
         let curr = node.parentElement;
         let best = node.parentElement || node;
 
         while (curr && curr !== document.body && curr.tagName !== 'MAIN' && curr.id !== 'root' && curr.id !== 'content') {
           // Sayfa seviyesi navigasyon/başlık/sekme gördüğü anda tırmanmayı kesinlikle durdur!
-          if (curr.querySelector('nav, header, [role="tablist"], .wt-tabs, .action-needed')) {
+          // Not: Kart içindeki <header class="order-header"> tırmanmayı kesmesin diye genel header yerine spesifik nav arıyoruz
+          if (curr.querySelector('nav, [role="tablist"], [role="navigation"], .wt-tabs, .action-needed')) {
             break;
           }
 
-          // Kapsayıcıda başka bir sipariş ID'si tespit edilirse dur
-          const currText = curr.textContent || '';
-          const allIds = currText.match(/#(\d{10})\b/g) || [];
-          const distinct = new Set(allIds);
-          if (distinct.size > 1) {
-            break;
+          const ids = uniqueOrderIds(curr);
+          if (ids.size > 1) {
+            break; // Başka bir siparişle birleştiği an dur!
           }
-
-          best = curr;
+          if (ids.size === 1 && ids.has(id)) {
+            best = curr;
+          }
           curr = curr.parentElement;
         }
         cardEl = best;
       }
 
-      list.push({ id, element: cardEl });
+      if (cardEl && cardEl !== document.body) {
+        list.push({ id, element: cardEl });
+      }
     }
 
     return list;
@@ -517,35 +569,23 @@
   function resolveCardShipTo(cardEl) {
     if (!cardEl || typeof cardEl.querySelectorAll !== 'function') return null;
 
-    // 1. Ship to başlığını veya butonunu ara (Ok karakterlerini tolere eder, Ship today ile ASLA eşleşmez)
-    const shipToHeader = Array.from(cardEl.querySelectorAll('button, p, div, span, h3, h4, h5, h6, strong, b, [role="button"]')).find(el => {
-      const t = (el.textContent || '').trim();
-      return /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b/i.test(t) && !/today/i.test(t);
-    });
+    // 1. SADECE buton veya tıklanabilir toggle adaylarını filtrele (S1-c)
+    // Negatif lookahead ile Ship today / day bildirimlerini kesinlikle dışla
+    const buttonCandidates = Array.from(cardEl.querySelectorAll('button, [role="button"], [aria-expanded], a.wt-btn, a[class*="toggle"]'));
+    const toggleBtn = buttonCandidates
+      .filter(el => /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi|Teslimat\s+adresi)\b(?!\s*(?:day|today))/i.test((el.textContent || '').trim()))
+      .sort((a, b) => (a.textContent || '').trim().length - (b.textContent || '').trim().length)[0] || null;
 
-    let toggleBtn = null;
     let addrBody = null;
-
-    if (shipToHeader) {
-      // Eğer bulunan eleman doğrudan buton ise kendisi toggle butonudur
-      if (shipToHeader.tagName === 'BUTTON' || shipToHeader.getAttribute('role') === 'button' || shipToHeader.classList.contains('wt-btn')) {
-        toggleBtn = shipToHeader;
-      } else {
-        const parent = shipToHeader.parentElement;
-        const grandParent = parent ? parent.parentElement : null;
-
-        toggleBtn = (parent && parent.querySelector('button, [role="button"]'))
-                 || (grandParent && grandParent.querySelector('button, [role="button"]'))
-                 || cardEl.querySelector('button[aria-controls*="wt-content-toggle"], button.wt-content-toggle, button[class*="wt-content-toggle"], button[aria-expanded]');
-      }
-    } else {
-      toggleBtn = cardEl.querySelector('button[aria-controls*="wt-content-toggle"], button.wt-content-toggle, button[class*="wt-content-toggle"], button[aria-expanded]');
-    }
 
     if (toggleBtn) {
       const controlsId = toggleBtn.getAttribute('aria-controls');
       if (controlsId) {
-        addrBody = document.getElementById(controlsId);
+        // Kart kapsamında ara; document'ta bulunursa kart içinde olduğunu doğrula (S1-d)
+        addrBody = cardEl.querySelector('#' + CSS.escape(controlsId)) || document.getElementById(controlsId);
+        if (addrBody && !cardEl.contains(addrBody)) {
+          addrBody = null;
+        }
       }
     }
 
@@ -553,9 +593,8 @@
       addrBody = cardEl.querySelector('.wt-content-toggle__body, [id*="wt-content-toggle"], .ship-to-summary');
     }
 
-    const isExpanded = addrBody 
-      ? (addrBody.getAttribute('aria-hidden') === 'false' || addrBody.style.visibility === 'visible' || addrBody.classList.contains('wt-content-toggle__body--open') || addrBody.style.display !== 'none')
-      : (toggleBtn ? toggleBtn.getAttribute('aria-expanded') === 'true' : false);
+    // 2. Semantik Açık/Kapalı Kontrolü (S1-a)
+    const isExpanded = isDrawerOpen(toggleBtn, addrBody);
 
     return { toggleBtn, addrBody, isExpanded };
   }
@@ -599,7 +638,7 @@
           else if (block.includes('EUR') || block.includes('€')) currency = 'EUR';
           else if (block.includes('GBP') || block.includes('£')) currency = 'GBP';
 
-          const priceMatch = block.match(/#\d{10}[^\n\r]*(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i)
+          const priceMatch = block.match(/#\d{9,12}[^\n\r]*(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i)
                           || block.match(/(?:US\$|\$|₺|EUR|€)\s*([\d,.]+)/i);
           const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, '')) : null;
 
@@ -608,8 +647,8 @@
           const isInvalidBuyer = !buyerName || /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*)$/i.test(buyerName.trim()) || /^\d+$/.test(buyerName.trim()) || buyerName.trim().length < 2;
 
           if (isInvalidBuyer) {
-            // 1. Karttaki müşteri adını (#\d{10} öncesindeki başlık) yakala (Örn: Marie Cindy, jessica benson)
-            const nameMatch = block.match(/([A-Za-z\u00C0-\u017F\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{10}/);
+            // 1. Karttaki müşteri adını (#\d{9,12} öncesindeki başlık) yakala (Örn: Marie Cindy, jessica benson)
+            const nameMatch = block.match(/([A-Za-z\u00C0-\u017F\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{9,12}/);
             if (nameMatch) {
               const candidate = nameMatch[1].replace(/[▾▼]/g, '').trim();
               if (candidate && !/^(?:Select all|Ordered|Order|Ship by|day|days|ago|today|yesterday|overdue|action\s*needed)$/i.test(candidate) && candidate.length >= 2) {
@@ -867,15 +906,16 @@
         }
       }
 
-      // Dinamik bekleme: Toggle kutuları açılana kadar en fazla 1500ms bekle
+      // Dinamik bekleme: Toggle kutuları açılana kadar bekle (aria-expanded veya body görünürlüğü)
       const startTime = Date.now();
       while (Date.now() - startTime < 1500) {
-        const anyPending = Array.from(buttonsToClick).some(btn => {
+        const allOpened = Array.from(buttonsToClick).every(btn => {
+          if (btn.getAttribute('aria-expanded') === 'true') return true;
           const cid = btn.getAttribute('aria-controls');
           const body = cid ? document.getElementById(cid) : null;
-          return body && body.getAttribute('aria-hidden') === 'true';
+          return body && (body.getAttribute('aria-hidden') === 'false' || Boolean(body.offsetHeight));
         });
-        if (!anyPending) break;
+        if (allOpened) break;
         await new Promise(r => setTimeout(r, 100));
       }
 
