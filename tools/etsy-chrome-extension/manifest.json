@@ -5,6 +5,7 @@
   "description": "Etsy Mağazası için Fon Rezervi Senkronizasyonu, Sipariş ve Müşteri Kargo Bilgisi Aktarıcısı (VDS Köprüsü)",
   "permissions": [
     "activeTab",
+    "tabs",
     "storage",
     "scripting",
     "clipboardWrite"
