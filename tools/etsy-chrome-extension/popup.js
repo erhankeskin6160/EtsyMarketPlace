@@ -483,20 +483,26 @@ document.addEventListener('DOMContentLoaded', async () => {
       return;
     }
 
+    const EXPECTED_SCRIPT_VERSION = '1.4.0';
     let retryCount = 0;
     const maxRetries = 3;
+    let upgradedStaleScript = false;
 
     function queryContentScript() {
       chrome.tabs.sendMessage(activeTab.id, { action: 'GET_PAGE_DATA' }, async (response) => {
-        if (chrome.runtime.lastError || !response || !response.success) {
-          if (retryCount < maxRetries) {
-            retryCount++;
+        const versionMismatch = Boolean(response && response.success && response.scriptVersion !== EXPECTED_SCRIPT_VERSION && !upgradedStaleScript);
+        if (chrome.runtime.lastError || !response || !response.success || versionMismatch) {
+          if (versionMismatch) {
+            upgradedStaleScript = true;
+          }
+          if (versionMismatch || retryCount < maxRetries) {
+            if (!versionMismatch) retryCount++;
             try {
               await chrome.scripting.executeScript({
                 target: { tabId: activeTab.id },
                 files: ['content.js']
               });
-              setTimeout(queryContentScript, 400);
+              setTimeout(queryContentScript, 250);
             } catch (scriptErr) {
               finDetectBanner.innerText = '⚠️ Sayfa algılanamadı. Lütfen Etsy sekmesini 1 kez yenileyin (F5).';
               ordDetectBanner.innerText = '⚠️ Sayfa algılanamadı. Lütfen Etsy sekmesini 1 kez yenileyin (F5).';
