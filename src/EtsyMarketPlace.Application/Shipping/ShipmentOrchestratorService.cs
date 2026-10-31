@@ -326,7 +326,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
 
             ShipEntegraSettingsStore.Save(settings);
 
-            bool isConnected = settings.HasValidTokenFormat;
+            bool isConnected = settings.HasValidTokenFormat || (!string.IsNullOrWhiteSpace(settings.ApiKey) && !string.IsNullOrWhiteSpace(settings.ApiSecret));
             string? snippet = settings.HasValidTokenFormat
                 ? (settings.CleanToken.Length > 8 ? settings.CleanToken[..4] + "..." + settings.CleanToken[^4..] : "***")
                 : (!string.IsNullOrWhiteSpace(settings.ApiKey) ? settings.ApiKey[..4] + "..." : null);
