@@ -49,11 +49,24 @@ document.addEventListener('DOMContentLoaded', async () => {
   let config = await new Promise((resolve) => {
     chrome.storage.local.get(['apiUrl', 'apiKey', 'shopId', 'autoSync', 'storedOrders'], (res) => {
       const rawStored = Array.isArray(res.storedOrders) ? res.storedOrders : [];
+      function isInvalidBuyerName(name) {
+        if (!name) return true;
+        const t = String(name).replace(/[▾▼]/g, '').trim();
+        if (t.length < 2) return true;
+        if (/^\d+$/.test(t)) return true;
+        return /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*|action\s*needed.*|unread\s*messages?.*|messages?.*)$/i.test(t);
+      }
+
       // SADECE 9-12 HANELİ KANONİK ETSY SİPARİŞ NUMARALARINI TUT
       const cleanMap = new Map();
       rawStored.forEach(o => {
         const id = String(o.receiptId || '').trim();
         if (/^\d{9,12}$/.test(id)) {
+          // Eğer hafızadaki kayıt kirli isim ("Help requests", "day" vb.) taşıyorsa temizle
+          if (isInvalidBuyerName(o.buyerName)) {
+            o.buyerName = 'Etsy Müşterisi';
+            o.isFullAddress = false;
+          }
           if (!cleanMap.has(id)) {
             cleanMap.set(id, o);
           } else {
@@ -172,6 +185,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     // mevcut tam adres bilgilerini koru (ezilme önleme!)
     const keepExistingAddress = existing.isFullAddress && !incoming.isFullAddress;
 
+    // Alıcı Adı: Eğer existing ismi geçersiz ise (örn: "Help requests"), keepExistingAddress olsa dahi incoming ile ez!
+    const existingBuyerInvalid = isInvalidBuyerName(existing.buyerName);
+    const incomingBuyerInvalid = isInvalidBuyerName(incoming.buyerName);
+
+    let resolvedBuyer = incoming.buyerName;
+    if (keepExistingAddress && !existingBuyerInvalid) {
+      resolvedBuyer = existing.buyerName;
+    } else if (existingBuyerInvalid && !incomingBuyerInvalid) {
+      resolvedBuyer = incoming.buyerName;
+    } else if (!existingBuyerInvalid) {
+      resolvedBuyer = existing.buyerName;
+    }
+
     return {
       ...incoming,
       ...existing,
@@ -183,7 +209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       status: incoming.status || existing.status,
       iossNumber: incoming.iossNumber || existing.iossNumber,
       // Adres alanları
-      buyerName: (keepExistingAddress ? existing.buyerName : incoming.buyerName) || existing.buyerName || incoming.buyerName,
+      buyerName: resolvedBuyer || 'Etsy Müşterisi',
       shippingAddress: keepExistingAddress ? existing.shippingAddress : (incoming.shippingAddress || existing.shippingAddress),
       streetAddress: keepExistingAddress ? existing.streetAddress : (incoming.streetAddress || existing.streetAddress),
       secondAddress: keepExistingAddress ? existing.secondAddress : (incoming.secondAddress || existing.secondAddress),

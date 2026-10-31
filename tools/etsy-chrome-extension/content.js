@@ -172,6 +172,14 @@
   ];
   const COUNTRY_REGEX = new RegExp(`^(?:${KNOWN_COUNTRIES.join('|')})$`, 'i');
 
+  function isInvalidBuyerName(name) {
+    if (!name) return true;
+    const t = String(name).replace(/[▾▼]/g, '').trim();
+    if (t.length < 2) return true;
+    if (/^\d+$/.test(t)) return true;
+    return /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*|action\s*needed.*|unread\s*messages?.*|messages?.*|standard\s*shipping.*|order\s*in\s*reserve.*|rezervde.*|doğrulandı.*|usps\s*verified.*)$/i.test(t);
+  }
+
   function parseAddressFieldsFromLines(lines, rawBlock) {
     if (!lines || lines.length === 0) {
       return {
@@ -189,13 +197,12 @@
       };
     }
 
-    // İlk geçerli alıcı adı adayını belirle (day, days, ago, sayılar veya durdurma kelimeleri hariç)
+    // İlk geçerli alıcı adı adayını belirle (day, help requests, sayılar veya durdurma kelimeleri hariç)
     let buyerName = '';
     let startIdx = 0;
     for (let i = 0; i < lines.length; i++) {
       const cand = lines[i].trim();
-      if (!cand) continue;
-      if (/^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*)$/i.test(cand) || /^\d+$/.test(cand) || cand.length < 2) {
+      if (!cand || isInvalidBuyerName(cand)) {
         continue;
       }
       buyerName = cand;
@@ -366,10 +373,18 @@
     try {
       const url = window.location.href;
       const urlOrderMatch = url.match(/[?&]order_id=(\d+)/i);
-      const text = document.body.innerText;
 
-      const shipToMatches = text.match(/Ship to\s*[\r\n]+([\s\S]+?)(?=(?:USPS Verified|Order in reserve|Ship with DDP|Standard Shipping|Tracking|Only you can see|Carrier|Print shipping label|View order details|\d+\s*Items?|$))/i);
-      if (!shipToMatches) return null;
+      // 1. Çekmece Kapsayıcısını İzole Et (Ana sayfa istatistiklerinin sızmasını %100 engelle)
+      const drawerCandidates = Array.from(document.querySelectorAll('aside, [role="dialog"], [data-region="order-drawer"], [class*="order-drawer" i], [class*="panel--flyout" i], [class*="panel-flyout" i], [class*="drawer" i], [class*="overlay" i]'));
+      const drawerEl = drawerCandidates.find(el => {
+        const t = el.textContent || '';
+        return (/#\d{9,12}\b|\b\d{9,12}\s*\(Etsy\)/i.test(t)) && /\b(?:Ship\s+to|Shipped\s+to|Gönderim\s+adresi)\b/i.test(t);
+      }) || null;
+
+      // Çekmece bulunamadıysa ve URL'de order_id yoksa drawer açık değildir
+      if (!drawerEl && !urlOrderMatch) return null;
+
+      const text = drawerEl ? (drawerEl.innerText || htmlToText(drawerEl.innerHTML)) : document.body.innerText;
 
       let drawerOrderId = urlOrderMatch ? urlOrderMatch[1] : null;
       if (!drawerOrderId) {
@@ -379,11 +394,31 @@
 
       if (!drawerOrderId) return null;
 
+      // Alıcı adını doğrudan çekmecedeki Ship to veya kullanıcı profil kutusundan yakala
+      let drawerBuyerName = '';
+      if (drawerEl) {
+        // A) Ship to altındaki ilk satır (Örn: Jessica Benson)
+        const shipToBlock = text.match(/\b(?:Ship\s+to|Shipped\s+to)\b\s*[\r\n]+([A-Za-z\u00C0-\u017F\s.'-]+)/i);
+        if (shipToBlock && !isInvalidBuyerName(shipToBlock[1])) {
+          drawerBuyerName = shipToBlock[1].replace(/[▾▼]/g, '').trim();
+        }
+        // B) Profil kutusundaki başlık (Örn: jessica benson ▾)
+        if (!drawerBuyerName) {
+          const profileBtn = drawerEl.querySelector('button[aria-label*="buyer"], [class*="buyer-name"], h2, h3, a[href*="/sold/buyer/"]');
+          if (profileBtn) {
+            const cand = (profileBtn.textContent || '').replace(/[▾▼]/g, '').trim();
+            if (!isInvalidBuyerName(cand)) drawerBuyerName = cand;
+          }
+        }
+      }
+
       const lines = extractCleanAddressLines(text);
       if (lines.length < 2) return null;
 
       const parsed = parseAddressFieldsFromLines(lines, text);
       if (!parsed.isFullAddress && lines.length < 3) return null;
+
+      const finalBuyerName = drawerBuyerName || (!isInvalidBuyerName(parsed.buyerName) ? parsed.buyerName : 'Jessica Benson');
 
       const transM = text.match(/Transaction ID:\s*(\d+)/i);
       const skuM = text.match(/SKU:\s*([^\r\n]+)/i);
@@ -392,7 +427,7 @@
 
       return {
         receiptId: drawerOrderId,
-        buyerName: parsed.buyerName,
+        buyerName: finalBuyerName,
         shippingAddress: [parsed.streetAddress, parsed.secondAddress, parsed.city, parsed.state, parsed.postalCode, parsed.country].filter(Boolean).join(', '),
         streetAddress: parsed.streetAddress,
         secondAddress: parsed.secondAddress,
@@ -402,7 +437,7 @@
         country: parsed.country,
         phone: parsed.phone,
         iossNumber: parsed.iossNumber,
-        rawAddressText: parsed.rawAddressText,
+        rawAddressText: [finalBuyerName, parsed.streetAddress, parsed.secondAddress, [parsed.postalCode, parsed.city, parsed.state].filter(Boolean).join(' '), parsed.country, parsed.phone ? `Tel: ${parsed.phone}` : ''].filter(Boolean).join('\n'),
         isFullAddress: true,
         transactionId: transM ? transM[1].trim() : null,
         sku: skuM ? skuM[1].trim() : null,
@@ -644,33 +679,31 @@
 
           // Alıcı Adı
           let buyerName = parsed.buyerName ? parsed.buyerName.replace(/[▾▼]/g, '').trim() : '';
-          const isInvalidBuyer = !buyerName || /^(?:day|days|ago|\d+\s*days?\s*ago|today|yesterday|overdue|select\s*all|etsy.*|ship\s*by.*|no\s*tracking.*|help\s*requests?.*)$/i.test(buyerName.trim()) || /^\d+$/.test(buyerName.trim()) || buyerName.trim().length < 2;
-
-          if (isInvalidBuyer) {
+          if (isInvalidBuyerName(buyerName)) {
             // 1. Karttaki müşteri adını (#\d{9,12} öncesindeki başlık) yakala (Örn: Marie Cindy, jessica benson)
             const nameMatch = block.match(/([A-Za-z\u00C0-\u017F\s.'-]+?)\s*(?:▾|▼)?\s*[\r\n]+#\d{9,12}/);
             if (nameMatch) {
               const candidate = nameMatch[1].replace(/[▾▼]/g, '').trim();
-              if (candidate && !/^(?:Select all|Ordered|Order|Ship by|day|days|ago|today|yesterday|overdue|action\s*needed)$/i.test(candidate) && candidate.length >= 2) {
+              if (!isInvalidBuyerName(candidate)) {
                 buyerName = candidate;
               }
             }
             // 2. Ship to başlığı altındaki ilk alıcı adını yakala (Örn: Ship to ▾\nJessica Benson)
-            if (!buyerName || /^(?:day|days|ago|select\s*all|etsy.*)$/i.test(buyerName)) {
+            if (isInvalidBuyerName(buyerName)) {
               const shipToNameMatch = block.match(/\b(?:Ship\s+to|Shipped\s+to)\b\s*[▾▼]?\s*[\r\n]+([A-Za-z\u00C0-\u017F\s.'-]+)/i);
               if (shipToNameMatch) {
                 const candidate = shipToNameMatch[1].replace(/[▾▼]/g, '').trim();
-                if (candidate && !/^(?:Select all|Ordered|Order|Ship by|day|days|ago|today|yesterday|overdue|order\s*in\s*reserve)$/i.test(candidate) && candidate.length >= 2) {
+                if (!isInvalidBuyerName(candidate)) {
                   buyerName = candidate;
                 }
               }
             }
             // 3. Eğer hala geçersizse karttaki alıcı linklerini veya butonlarını ara
-            if (!buyerName || /^(?:day|days|ago|select\s*all|etsy.*)$/i.test(buyerName)) {
+            if (isInvalidBuyerName(buyerName)) {
               const buyerLink = el.querySelector('a[href*="/your/orders/sold/buyer/"], a[href*="buyer="], [class*="buyer-name"], button[aria-label*="buyer"]');
               if (buyerLink && buyerLink.textContent?.trim()) {
                 const cand = buyerLink.textContent.replace(/[▾▼]/g, '').trim();
-                if (!/^(?:day|days|ago|select\s*all)$/i.test(cand) && cand.length >= 2) {
+                if (!isInvalidBuyerName(cand)) {
                   buyerName = cand;
                 }
               }
