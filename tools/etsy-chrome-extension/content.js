@@ -4,6 +4,14 @@
 (function () {
   'use strict';
 
+  function isContextValid() {
+    try {
+      return Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id);
+    } catch {
+      return false;
+    }
+  }
+
   function getPageType() {
     const url = window.location.href;
     if (url.includes('/your/account/payments') || url.includes('/finances/payment_account')) {
@@ -631,26 +639,44 @@
     return Array.from(ordersMap.values());
   }
 
-  // 5. ÇEKMECE AÇILDIĞINDA OTOMATİK TAM ADRES GÜNCELLEMESİ (MutationObserver)
+  // 5. ÇEKMECE AÇILDIĞINDA OTOMATİK TAM ADRES GÜNCELLEMESİ (MutationObserver & Context Koruması)
   let lastObservedDrawerId = null;
   const observer = new MutationObserver(() => {
-    const drawer = parseOpenDrawerOrder();
-    if (drawer && drawer.isFullAddress && drawer.receiptId !== lastObservedDrawerId) {
-      lastObservedDrawerId = drawer.receiptId;
-      chrome.storage.local.get(['storedOrders'], (res) => {
-        const stored = Array.isArray(res.storedOrders) ? res.storedOrders : [];
-        const idx = stored.findIndex(o => o.receiptId === drawer.receiptId);
-        if (idx !== -1) {
-          stored[idx] = { ...stored[idx], ...drawer };
-        } else {
-          stored.push(drawer);
-        }
-        chrome.storage.local.set({ storedOrders: stored });
-      });
+    if (!isContextValid()) {
+      try { observer.disconnect(); } catch {}
+      return;
+    }
+    try {
+      const drawer = parseOpenDrawerOrder();
+      if (drawer && drawer.isFullAddress && drawer.receiptId !== lastObservedDrawerId) {
+        lastObservedDrawerId = drawer.receiptId;
+        if (!isContextValid()) return;
+        chrome.storage.local.get(['storedOrders'], (res) => {
+          if (!isContextValid() || (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.lastError)) return;
+          const stored = Array.isArray(res?.storedOrders) ? res.storedOrders : [];
+          const idx = stored.findIndex(o => o.receiptId === drawer.receiptId);
+          if (idx !== -1) {
+            stored[idx] = { ...stored[idx], ...drawer };
+          } else {
+            stored.push(drawer);
+          }
+          if (isContextValid()) {
+            chrome.storage.local.set({ storedOrders: stored }, () => {
+              if (chrome.runtime?.lastError) { /* sessiz geç */ }
+            });
+          }
+        });
+      }
+    } catch (e) {
+      if (!isContextValid()) {
+        try { observer.disconnect(); } catch {}
+      }
     }
   });
 
-  observer.observe(document.body, { childList: true, subtree: true });
+  try {
+    observer.observe(document.body, { childList: true, subtree: true });
+  } catch {}
 
   // 6. ÇEKMECELERİ AÇMADAN ARKA PLANDA DERİN TAM ADRES ÇÖZÜCÜ
   async function fetchSingleOrderFullAddress(receiptId) {
@@ -785,8 +811,10 @@
   }
 
   // 7. MESAJ DİNLEYİCİ
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    const pageType = getPageType();
+  if (isContextValid() && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+      if (!isContextValid()) return false;
+      const pageType = getPageType();
 
     if (request.action === 'GET_PAGE_DATA') {
       let financeData = null;
@@ -837,5 +865,6 @@
     }
 
     return true;
-  });
+    });
+  }
 })();
