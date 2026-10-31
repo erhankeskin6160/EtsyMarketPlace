@@ -1,10 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "Etsy MarketPlace Satıcı Asistanı (Copilot)",
-  "version": "1.4.1",
-  "description": "Etsy Mağazası için Fon Rezervi Senkronizasyonu, Sipariş ve Müşteri Kargo Bilgisi Aktarıcısı (VDS Köprüsü)",
+  "name": "Etsy MarketPlace Satıcı Asistanı (Copilot v2)",
+  "version": "2.0.0",
+  "description": "Etsy Mağazası için React Bellek + Yapısal DOM Tabanlı Sipariş, Müşteri Adresi ve Fon Rezervi VDS Köprüsü (Sıfır Bot Riski)",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
   "permissions": [
-    "activeTab",
     "tabs",
     "storage",
     "scripting",
@@ -16,11 +20,17 @@
     "http://5.180.81.148:5263/*"
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_title": "Etsy Satıcı Asistanı (Copilot)"
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Etsy Copilot v2.0.0 — VDS Satıcı Köprüsü",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -28,7 +38,8 @@
         "*://*.etsy.com/*"
       ],
       "js": [
-        "content.js"
+        "src/shared/address-parser.js",
+        "src/content/content-agent.js"
       ],
       "run_at": "document_idle"
     }

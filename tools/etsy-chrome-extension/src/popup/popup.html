@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <title>Etsy Copilot v2.0.0</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="copilot-shell">
+    <header class="copilot-header">
+      <div class="brand-group">
+        <div class="brand-badge">E</div>
+        <div>
+          <div class="brand-title-row">
+            <h1 class="brand-title">Etsy Copilot</h1>
+            <span class="version-pill">v2.0</span>
+          </div>
+          <span class="brand-subtitle">React Bellek + Yapısal VDS Köprüsü</span>
+        </div>
+      </div>
+      <div class="api-pill checking" id="apiStatusPill">
+        <span class="status-dot"></span>
+        <span id="apiStatusText">VDS Kontrol...</span>
+      </div>
+    </header>
+
+    <nav class="tab-bar" role="tablist">
+      <button type="button" class="tab-btn active" data-tab="orders" role="tab">📦 Sipariş &amp; Müşteri</button>
+      <button type="button" class="tab-btn" data-tab="finance" role="tab">💰 Finans &amp; Rezerv</button>
+      <button type="button" class="tab-btn" data-tab="settings" role="tab">⚙️ Ayarlar</button>
+    </nav>
+
+    <!-- SEKME 1: SİPARİŞ & MÜŞTERİ -->
+    <main class="tab-pane active" id="pane-orders">
+      <div class="detect-banner" id="ordDetectBanner">
+        🔍 Etsy Siparişler sekmesi taranıyor...
+      </div>
+
+      <div class="metrics-bar">
+        <div class="scope-switch">
+          <button type="button" class="scope-pill active" data-scope="live" id="btnScopeLive">
+            Canlı Sayfa (<strong id="liveCount">0</strong>)
+          </button>
+          <button type="button" class="scope-pill" data-scope="archive" id="btnScopeArchive">
+            Arşiv (<strong id="archiveCount">0</strong>)
+          </button>
+        </div>
+        <div class="full-addr-stat">
+          🏠 Tam Adres: <strong id="fullAddrStat">0/0</strong>
+        </div>
+      </div>
+
+      <div class="order-list" id="orderListContainer">
+        <div class="empty-state">Etsy Siparişler sayfası bekleniyor...</div>
+      </div>
+
+      <button type="button" class="btn btn-resolve" id="btnResolveAddresses">
+        🎯 Satır İçi Açık Adresleri Çöz &amp; Yenile
+      </button>
+
+      <button type="button" class="btn btn-sync" id="btnSyncOrders">
+        📥 Müşteri &amp; Siparişleri VDS'e Aktar
+      </button>
+
+      <div class="utility-grid">
+        <button type="button" class="btn btn-sub" id="btnExportCsv" title="Excel uyumlu UTF-8 CSV indir">📄 CSV</button>
+        <button type="button" class="btn btn-sub" id="btnCopyJson" title="Siparişleri JSON olarak kopyala">📋 JSON</button>
+        <button type="button" class="btn btn-sub diag" id="btnCopyDiag" title="React Fiber ve DOM tanılama raporunu kopyala">🔬 Tanılama</button>
+        <button type="button" class="btn btn-sub danger" id="btnClearStore" title="Arşivi sıfırla ve yeniden tara">🗑️ Sıfırla</button>
+      </div>
+
+      <div class="feedback-box hidden" id="ordResultBox"></div>
+    </main>
+
+    <!-- SEKME 2: FİNANS & REZERV -->
+    <main class="tab-pane" id="pane-finance">
+      <div class="detect-banner" id="finDetectBanner">
+        ℹ️ Etsy Ödeme Hesabı (Payment Account) sekmesini açtığınızda veriler otomatik okunur.
+      </div>
+
+      <div class="finance-card">
+        <div class="fin-row">
+          <span class="fin-label">Kullanılabilir Bakiye:</span>
+          <strong class="fin-val emerald" id="finCurrent">—</strong>
+        </div>
+        <div class="fin-row">
+          <span class="fin-label">Rezervedeki Fon (<span id="finPct">%0</span>):</span>
+          <strong class="fin-val amber" id="finReserve">—</strong>
+        </div>
+        <div class="fin-row">
+          <span class="fin-label">Toplam Etsy Fonu:</span>
+          <strong class="fin-val cyan" id="finTotal">—</strong>
+        </div>
+        <div class="fin-row divider">
+          <span class="fin-label">Sonraki İnceleme Tarihi:</span>
+          <span class="fin-val" id="finDate">—</span>
+        </div>
+      </div>
+
+      <button type="button" class="btn btn-resolve" id="btnSyncFinance">
+        ⚡ Finans &amp; Rezervi VDS'e Aktar
+      </button>
+
+      <div class="feedback-box hidden" id="finResultBox"></div>
+    </main>
+
+    <!-- SEKME 3: AYARLAR -->
+    <main class="tab-pane" id="pane-settings">
+      <div class="settings-stack">
+        <div class="field-group">
+          <label>Hızlı Sunucu Seçimi:</label>
+          <div class="chip-row">
+            <button type="button" class="chip-btn" id="btnPresetLocal">🖥️ VDS İçi (localhost)</button>
+            <button type="button" class="chip-btn" id="btnPresetRemote">🌐 Sabit IP (5.180.81.148)</button>
+          </div>
+        </div>
+
+        <div class="field-group">
+          <label for="cfgApiUrl">VDS API Adresi:</label>
+          <input type="text" id="cfgApiUrl" class="text-input" placeholder="http://localhost:5263">
+        </div>
+
+        <div class="field-group">
+          <label for="cfgApiKey">API Güvenlik Anahtarı (X-Api-Key):</label>
+          <input type="text" id="cfgApiKey" class="text-input" placeholder="etsy-vds-sync-key-2026">
+        </div>
+
+        <div class="field-group">
+          <label for="cfgShopId">Mağaza ID (Shop ID):</label>
+          <input type="text" id="cfgShopId" class="text-input" placeholder="53236321">
+        </div>
+
+        <label class="check-row" for="cfgAutoSync">
+          <input type="checkbox" id="cfgAutoSync">
+          <span>Ödeme hesabı sekmesi açıldığında otomatik senkronize et</span>
+        </label>
+
+        <button type="button" class="btn btn-sync" id="btnSaveSettings">
+          💾 Ayarları Kaydet &amp; Test Et
+        </button>
+
+        <div class="feedback-box hidden" id="setResultBox"></div>
+      </div>
+    </main>
+
+    <footer class="copilot-footer">
+      <span>🛡️ Sıfır Bot Riski • Salt-Okunur React Fiber + Yapısal MV3 v2.0.0</span>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
