@@ -1,4 +1,4 @@
-namespace EtsyMarketPlace.Api.Controllers;
+﻿namespace EtsyMarketPlace.Api.Controllers;
 
 using System;
 using System.Linq;
@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using MediatR;
 using EtsyMarketPlace.Api.Models;
+using EtsyMarketPlace.Api.Services;
 using EtsyMarketPlace.Application.ListingOptimization;
 using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.CreateListing;

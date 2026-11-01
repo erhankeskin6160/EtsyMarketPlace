@@ -83,29 +83,41 @@ public class EtsyFinancialsController : BaseApiController
         [FromQuery] string period = "last_month",
         [FromQuery] DateTimeOffset? startDate = null,
         [FromQuery] DateTimeOffset? endDate = null,
+        [FromQuery] bool refresh = false,
         CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"fin-ledger:{resolvedShopId}:{period}:{startDate:yyyyMMdd}:{endDate:yyyyMMdd}";
-        if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
-            return Ok(cachedPayload);
 
-        var query = new GetFinancialPerformanceRequest
+        var response = await DashboardResponseCache.GetOrAddAsync(
+            cacheKey,
+            TimeSpan.FromMinutes(4),
+            async () =>
+            {
+                var query = new GetFinancialPerformanceRequest
+                {
+                    ShopId = resolvedShopId,
+                    Period = period,
+                    StartDate = startDate,
+                    EndDate = endDate
+                };
+                var res = await _mediator.Send(query, cancellationToken);
+                return (res.Success && res.Data is not null ? res : null)!;
+            },
+            forceRefresh: refresh);
+
+        if (response != null && response.Success)
+            return Ok(response.Data);
+
+        var fallbackQuery = new GetFinancialPerformanceRequest
         {
             ShopId = resolvedShopId,
             Period = period,
             StartDate = startDate,
             EndDate = endDate
         };
-
-        var response = await _mediator.Send(query, cancellationToken);
-        if (response.Success && response.Data is not null)
-        {
-            DashboardResponseCache.Set(cacheKey, response.Data, TimeSpan.FromMinutes(4));
-            return Ok(response.Data);
-        }
-
-        return StatusCode(response.StatusCode, response);
+        var fallbackResponse = await _mediator.Send(fallbackQuery, cancellationToken);
+        return StatusCode(fallbackResponse.StatusCode, fallbackResponse);
     }
 
     [HttpGet("etsy/orders/monthly-summaries")]
@@ -128,47 +140,87 @@ public class EtsyFinancialsController : BaseApiController
 
     [HttpGet("etsy/financial/analysis")]
     [EndpointSummary("Akıllı Finansal Analiz ve Öneri Motoru")]
-    public async Task<IActionResult> GetFinancialAnalysis([FromQuery] string shopId = "53236321", [FromQuery] DateTimeOffset? startDate = null, [FromQuery] DateTimeOffset? endDate = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetFinancialAnalysis(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] DateTimeOffset? startDate = null,
+        [FromQuery] DateTimeOffset? endDate = null,
+        [FromQuery] bool refresh = false,
+        CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var end = endDate ?? DateTimeOffset.UtcNow;
         var start = startDate ?? end.AddDays(-30);
         if (start > end) return BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
-        return Ok(await _analysis.AnalyzeAsync(resolvedShopId, start, end, cancellationToken));
+
+        var cacheKey = $"fin-analysis:{resolvedShopId}:{start:yyyyMMdd}:{end:yyyyMMdd}";
+        var result = await DashboardResponseCache.GetOrAddAsync(
+            cacheKey,
+            TimeSpan.FromMinutes(3),
+            () => _analysis.AnalyzeAsync(resolvedShopId, start, end, cancellationToken),
+            forceRefresh: refresh);
+
+        return Ok(result);
     }
 
     [HttpGet("etsy/orders/unfulfilled-cost-alerts")]
     [EndpointSummary("Maliyeti Eksik Sipariş Alarmları")]
-    public async Task<IActionResult> GetUnfulfilledCostAlerts([FromQuery] string shopId = "53236321", CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetUnfulfilledCostAlerts(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] bool refresh = false,
+        CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        return Ok(await _reporting.GetUnfulfilledCostAlertsAsync(resolvedShopId, cancellationToken));
+        var cacheKey = $"uncosted-alerts:{resolvedShopId}";
+        var result = await DashboardResponseCache.GetOrAddAsync(
+            cacheKey,
+            TimeSpan.FromMinutes(2),
+            () => _reporting.GetUnfulfilledCostAlertsAsync(resolvedShopId, cancellationToken),
+            forceRefresh: refresh);
+
+        return Ok(result);
     }
 
     [HttpGet("etsy/shop/daily-brief")]
     [EndpointSummary("Günlük Mağaza Bülteni ve Sağlık Skoru")]
-    public async Task<IActionResult> GetDailyShopBrief([FromQuery] string shopId = "53236321", [FromQuery] DateTimeOffset? date = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetDailyShopBrief(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] DateTimeOffset? date = null,
+        [FromQuery] bool refresh = false,
+        CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var brief = await _dashboard.GetDailyShopBriefAsync(resolvedShopId, date, cancellationToken);
-        return Ok(brief);
+        var cacheKey = $"daily-brief:{resolvedShopId}:{date:yyyyMMdd}";
+        var result = await DashboardResponseCache.GetOrAddAsync(
+            cacheKey,
+            TimeSpan.FromMinutes(2),
+            () => _dashboard.GetDailyShopBriefAsync(resolvedShopId, date, cancellationToken),
+            forceRefresh: refresh);
+
+        return Ok(result);
     }
 
     [HttpGet("etsy/shop/recent-orders")]
     [EndpointSummary("Son Siparişler — Canlı Satış Akışı")]
-    public async Task<IActionResult> GetRecentOrders([FromQuery] string shopId = "53236321", [FromQuery] int days = 31, [FromQuery] int limit = 15, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetRecentOrders(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] int days = 31,
+        [FromQuery] int limit = 15,
+        [FromQuery] bool refresh = false,
+        CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var clampedDays = Math.Clamp(days, 1, 90);
         var clampedLimit = Math.Clamp(limit, 1, 50);
         var cacheKey = $"recent-orders:{resolvedShopId}:{clampedDays}:{clampedLimit}";
-        if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
-            return Ok(cachedPayload);
 
         try
         {
-            var result = await _dashboard.GetRecentOrdersAsync(resolvedShopId, clampedDays, clampedLimit, cancellationToken);
-            DashboardResponseCache.Set(cacheKey, result, TimeSpan.FromSeconds(90));
+            var result = await DashboardResponseCache.GetOrAddAsync(
+                cacheKey,
+                TimeSpan.FromSeconds(90),
+                () => _dashboard.GetRecentOrdersAsync(resolvedShopId, clampedDays, clampedLimit, cancellationToken),
+                forceRefresh: refresh);
+
             return Ok(result);
         }
         catch (Exception ex)
@@ -184,17 +236,20 @@ public class EtsyFinancialsController : BaseApiController
         [FromQuery] string period = "this_month",
         [FromQuery] DateTimeOffset? startDate = null,
         [FromQuery] DateTimeOffset? endDate = null,
+        [FromQuery] bool refresh = false,
         CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"fin-orders:{resolvedShopId}:{period}:{startDate:yyyyMMdd}:{endDate:yyyyMMdd}";
-        if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
-            return Ok(cachedPayload);
 
         try
         {
-            var result = await _dashboard.GetOrderFinancialsAsync(resolvedShopId, period, startDate, endDate, cancellationToken);
-            DashboardResponseCache.Set(cacheKey, result, TimeSpan.FromMinutes(2));
+            var result = await DashboardResponseCache.GetOrAddAsync(
+                cacheKey,
+                TimeSpan.FromMinutes(2),
+                () => _dashboard.GetOrderFinancialsAsync(resolvedShopId, period, startDate, endDate, cancellationToken),
+                forceRefresh: refresh);
+
             return Ok(result);
         }
         catch (Exception ex)
@@ -231,17 +286,23 @@ public class EtsyFinancialsController : BaseApiController
 
     [HttpGet("etsy/financial/daily-series")]
     [EndpointSummary("Günlük Gelir ve Net Kâr Serisi")]
-    public async Task<IActionResult> GetDailySeries([FromQuery] string shopId = "53236321", [FromQuery] string? month = null, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetDailySeries(
+        [FromQuery] string shopId = "53236321",
+        [FromQuery] string? month = null,
+        [FromQuery] bool refresh = false,
+        CancellationToken cancellationToken = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"daily-series:{resolvedShopId}:{month ?? "current"}";
-        if (DashboardResponseCache.TryGet(cacheKey, out var cachedPayload) && cachedPayload is not null)
-            return Ok(cachedPayload);
 
         try
         {
-            var result = await _dashboard.GetDailySeriesAsync(resolvedShopId, month, cancellationToken);
-            DashboardResponseCache.Set(cacheKey, result, TimeSpan.FromSeconds(90));
+            var result = await DashboardResponseCache.GetOrAddAsync(
+                cacheKey,
+                TimeSpan.FromSeconds(90),
+                () => _dashboard.GetDailySeriesAsync(resolvedShopId, month, cancellationToken),
+                forceRefresh: refresh);
+
             return Ok(result);
         }
         catch (Exception ex)
