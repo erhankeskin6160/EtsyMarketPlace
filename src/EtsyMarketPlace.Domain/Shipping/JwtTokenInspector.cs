@@ -23,12 +23,34 @@ public static class JwtTokenInspector
         var expiry = GetExpirationUtc(token);
         if (expiry == null)
         {
-            return true;
+            // "Bilinmiyor" != "süresi dolmuş". Paseto v4 token'larının payload'ı JSON
+            // olmadığı için exp okunamıyor; bu yüzden geçerli token sürekli yenilenmeye
+            // çalışılıyor ve "oturum tokeni bulunamadı" hatası üretiliyordu.
+            // Yapısal olarak token'a benzeyen değerlerde kararı sunucuya (401) bırakıyoruz;
+            // bozuk/eksik değerler süresi dolmuş sayılmaya devam eder.
+            return !LooksLikeStructuredToken(token);
         }
 
         long currentSeconds = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         long expSeconds = new DateTimeOffset(expiry.Value).ToUnixTimeSeconds();
         return currentSeconds >= (expSeconds - leewaySeconds);
+    }
+
+    /// <summary>
+    /// Token'ın en az üç nokta ile ayrılmış parça içerip içermediğini kontrol eder.
+    /// Paseto (v4.public.payload.sig) ve JWT (header.payload.sig) bu koşulu sağlar.
+    /// </summary>
+    private static bool LooksLikeStructuredToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token)) return false;
+
+        string clean = token.Trim();
+        if (clean.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            clean = clean[7..].Trim();
+        }
+
+        return clean.Length > 20 && clean.Split('.').Length >= 3;
     }
 
     /// <summary>

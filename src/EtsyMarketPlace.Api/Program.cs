@@ -161,7 +161,16 @@ builder.Services.AddSingleton<EtsyMarketPlace.Application.Shipping.ShipmentCreat
 {
     var manager = new EtsyMarketPlace.Application.Shipping.ShipmentCreationManager();
     var shipEntegraApi = sp.GetService<EtsyMarketPlace.Application.Shipping.IShipEntegraApiClient>();
-    manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.ShipEntegraShipmentCreationProvider(shipEntegraApi));
+    EtsyMarketPlace.Application.Shipping.IShippingSessionManager? shipEntegraSession = null;
+    try { shipEntegraSession = sp.GetService<EtsyMarketPlace.Application.Shipping.IShippingSessionManager>(); } catch { }
+    var shipEntegraProtector = EtsyMarketPlace.Application.Shipping.ShippingSecretProtector.Current;
+    Func<string, string>? shipEntegraDecryptor = shipEntegraProtector is null
+        ? null
+        : new Func<string, string>(cipher => shipEntegraProtector.Unprotect(cipher));
+    manager.RegisterProvider(new EtsyMarketPlace.Application.Shipping.ShipEntegraShipmentCreationProvider(
+        shipEntegraApi,
+        shipEntegraSession,
+        shipEntegraDecryptor));
     var arasApi = sp.GetService<EtsyMarketPlace.Application.Shipping.IArasGlobalApiClient>();
     if (arasApi != null)
     {

@@ -576,11 +576,16 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
                 ? _passwordDecryptor(settings.EncryptedPassword)
                 : string.Empty;
 
+            // Sunucu tarafında (ör. VDS API) tarayıcı profili yoksa bu çağrı uzun süre bekleyebilir;
+            // HTTP isteğini kilitlememesi için üst sınır koyuyoruz.
+            using var sessionTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            sessionTimeout.CancelAfter(TimeSpan.FromSeconds(20));
+
             string? fresh = await _sessionManager.RefreshShipEntegraTokenAsync(
                 settings.SavedEmail,
                 pass,
                 showBrowser: false,
-                ct: cancellationToken);
+                ct: sessionTimeout.Token);
 
             if (!string.IsNullOrWhiteSpace(fresh))
             {
