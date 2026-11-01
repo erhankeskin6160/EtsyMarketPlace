@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Etsy MarketPlace Satıcı Asistanı (Copilot v2)",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "description": "Etsy Mağazası için React Bellek + Yapısal DOM Tabanlı Sipariş, Müşteri Adresi ve Fon Rezervi VDS Köprüsü (Sıfır Bot Riski)",
   "icons": {
     "16": "icons/icon-16.png",

@@ -1,4 +1,4 @@
-// Etsy Copilot v2.4.0 — Katman 1: Salt-Okunur MAIN World React Fiber, Preact/Backbone & Etsy.Context Okuyucu
+// Etsy Copilot v2.5.0 — Katman 1: Salt-Okunur MAIN World React Fiber, Preact/Backbone & Etsy.Context Okuyucu
 // GÜVENLİK GARANTİSİ (Anti-Ban / DataDome Uyumlu):
 // - window.fetch, XMLHttpRequest veya herhangi bir tarayıcı prototipine KESİNLİKLE DOKUNMAZ.
 // - Sayfada kalıcı global değişken veya event listener bırakmaz.

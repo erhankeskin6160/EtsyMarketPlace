@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
 
-  const AGENT_VERSION = '2.4.0';
+  const AGENT_VERSION = '2.5.0';
 
   if (typeof root.__etsyCopilotV2Cleanup === 'function') {
     try { root.__etsyCopilotV2Cleanup(); } catch {}
@@ -1194,11 +1194,12 @@
   }
 
   /**
-   * Çekmeceleri tek tek elle açma zahmetini ortadan kaldıran güvenli ve insani DOM gezgini:
+   * Çekmeceleri tek tek elle açma zahmetini ortadan kaldıran güvenli ve insani DOM gezgini (v2.5.0):
    * 1. Önce satır içi akordeonları açar (expandAllInlineAccordions).
-   * 2. Hâlâ tam adresi olmayan kartlar için, kartın sipariş detayını açan bağlantısına (order link)
-   *    180ms aralıkla sırayla tıklar, çekmece açıldığında adresi yakalar ve arşive iletir.
-   * 3. İşlem bittiğinde çekmeceyi 'X' butonu veya Escape tuşu ile kapatarak sayfayı ilk haline getirir.
+   * 2. Hâlâ tam adresi olmayan sipariş ID'lerini belirler (stale DOM nesneleri yerine salt kimlik listesi).
+   * 3. Her eksik sipariş için canlı DOM'dan taze referansla sipariş açıcıyı bulur.
+   *    Önceki çekmeceyi güvenle kapatıp yenisini açar, adresi yakalayıp kaydeder.
+   * 4. İşlem bittiğinde çekmeceyi %100 kapatır ve tam listeyi döndürür.
    */
   async function walkAndCaptureOrderDrawers(doc) {
     const targetDoc = doc || (typeof document !== 'undefined' ? document : null);
@@ -1214,14 +1215,15 @@
       resolvedOrders.set(currentResult.drawerOrder.receiptId, currentResult.drawerOrder);
     }
 
-    // 2. Hâlâ tam adresi olmayan kartları belirle
-    const isolated = isolateOrderCards(targetDoc);
-    const missing = isolated.filter(({ id }) => {
-      const cur = resolvedOrders.get(id);
-      return !cur || !cur.isFullAddress;
-    });
+    // 2. Eksik sipariş ID'lerini topla (stale DOM düğümleri yerine salt kimlik listesi)
+    const targetOrderIds = [];
+    for (const ord of currentResult.orders) {
+      if (!ord.isFullAddress) {
+        targetOrderIds.push(ord.receiptId);
+      }
+    }
 
-    if (missing.length === 0) {
+    if (targetOrderIds.length === 0) {
       return currentResult;
     }
 
@@ -1243,39 +1245,89 @@
 
     function closeAnyOpenDrawer() {
       try {
-        const closeBtn = targetDoc.querySelector(
-          '[data-wt-overlay-close], button[aria-label*="close" i], button[aria-label*="kapat" i], .wt-overlay__close, [class*="overlay__close" i]'
+        // A. Etsy çekmece overlay kapatma butonları (Örn: gri daire içindeki 'X' butonu veya [aria-label="Close"])
+        const closeBtns = targetDoc.querySelectorAll(
+          '[data-wt-overlay-close], button.wt-overlay__close, button[class*="overlay__close" i], [class*="overlay-close" i], button[aria-label="Close" i], button[aria-label="Kapat" i], button[aria-label*="close" i], [data-testid*="close" i]'
         );
-        if (closeBtn) {
-          safeTriggerClick(closeBtn);
-        } else if (typeof KeyboardEvent !== 'undefined') {
-          targetDoc.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+        for (const b of closeBtns) {
+          if (!isElementHiddenCss(b, targetDoc)) {
+            safeTriggerClick(b);
+          }
+        }
+
+        // B. Etsy karartma arka planı (Backdrop click) - tıklandığında çekmeceyi %100 kapatır
+        const backdrops = targetDoc.querySelectorAll('.wt-overlay__backdrop, [class*="overlay__backdrop" i]');
+        for (const bd of backdrops) {
+          if (bd.isConnected && !isElementHiddenCss(bd, targetDoc)) {
+            safeTriggerClick(bd);
+          }
+        }
+
+        // C. Klavye Escape tuşu (hem targetDoc hem window üzerinde tetikle)
+        if (typeof KeyboardEvent !== 'undefined') {
+          const escEvt = new KeyboardEvent('keydown', {
+            key: 'Escape',
+            code: 'Escape',
+            keyCode: 27,
+            which: 27,
+            bubbles: true,
+            cancelable: true
+          });
+          targetDoc.dispatchEvent(escEvt);
+          if (typeof window !== 'undefined' && window.dispatchEvent) {
+            window.dispatchEvent(escEvt);
+          }
         }
       } catch {}
     }
 
     let drawersOpenedCount = 0;
 
-    for (let i = 0; i < missing.length; i++) {
-      const { id, idAnchor, cardEl } = missing[i];
+    for (let i = 0; i < targetOrderIds.length; i++) {
+      const id = targetOrderIds[i];
 
-      // Kart içinde çekmeceyi açan elementi bul (Öncelik: order_id bağlantısı veya kart satırı)
-      let clickable = idAnchor;
-      if (cardEl && cardEl.querySelector) {
-        clickable = cardEl.querySelector(`a[href*="order_id=${id}"], a[href*="/sold/all?order_id="], [data-order-id="${id}"]`)
-          || (idAnchor.closest ? idAnchor.closest('a, button, tr, [class*="row" i]') : null)
-          || idAnchor;
+      // Eğer bu sipariş zaten başka bir adımda veya önceki çekmecede tam çözüldüyse atla
+      const existing = resolvedOrders.get(id);
+      if (existing && existing.isFullAddress) {
+        continue;
+      }
+
+      // Canlı DOM'da bu siparişe ait tıklanabilir elementi TAZE olarak ara (Stale DOM Prevention!)
+      let clickable = targetDoc.querySelector(`a[href*="order_id=${id}"], [data-order-id="${id}"] a, tr[data-order-id="${id}"]`);
+
+      if (!clickable) {
+        const freshCards = isolateOrderCards(targetDoc);
+        const cardMatch = freshCards.find((c) => c.id === id);
+        if (cardMatch) {
+          clickable = (cardMatch.cardEl.querySelector && cardMatch.cardEl.querySelector(`a[href*="order_id="], a[href*="/sold/all"], [class*="order-link" i], [class*="receipt" i]`))
+            || cardMatch.idAnchor;
+        }
+      }
+
+      if (!clickable) {
+        const { listAnchors } = findMinimalOrderAnchors(targetDoc);
+        const anchorMatch = listAnchors.find((a) => a.id === id);
+        if (anchorMatch) {
+          clickable = (anchorMatch.el.closest ? anchorMatch.el.closest('a, button, tr, [class*="row" i]') : null) || anchorMatch.el;
+        }
       }
 
       if (clickable) {
+        // Eğer önceki bir siparişten çekmece açık kaldıysa önce hızlıca kapat (100ms)
+        const currentOpen = extractOpenDrawerOrder(targetDoc);
+        if (currentOpen && String(currentOpen.receiptId) !== String(id)) {
+          closeAnyOpenDrawer();
+          await new Promise((r) => setTimeout(r, 100));
+        }
+
         safeTriggerClick(clickable);
         drawersOpenedCount++;
 
-        // Çekmecenin render olmasını bekle (maks 450ms)
+        // Çekmecenin render olmasını bekle (maks 600ms, 50ms aralıklarla)
         const start = Date.now();
         let captured = null;
-        while (Date.now() - start < 450) {
-          await new Promise((r) => setTimeout(r, 60));
+        while (Date.now() - start < 600) {
+          await new Promise((r) => setTimeout(r, 50));
           const drOrder = extractOpenDrawerOrder(targetDoc);
           if (drOrder && String(drOrder.receiptId) === String(id) && drOrder.isFullAddress) {
             captured = drOrder;
@@ -1294,17 +1346,17 @@
         }
       }
 
-      if (i < missing.length - 1) {
+      if (i < targetOrderIds.length - 1) {
         await new Promise((r) => setTimeout(r, 120));
       }
     }
 
-    // İşlem bittiğinde çekmeceyi kapat
+    // İşlem bittiğinde çekmeceyi kapat ve sayfayı temiz bırak
     await new Promise((r) => setTimeout(r, 100));
     closeAnyOpenDrawer();
     await new Promise((r) => setTimeout(r, 150));
 
-    // Son durumu derle
+    // Son durumu derle (Çözülen tam adresleri ana listeye enjekte et)
     const finalScan = extractOrdersFromDom(targetDoc);
     const finalOrders = finalScan.orders.map((ord) => {
       const rich = resolvedOrders.get(ord.receiptId);

@@ -1,6 +1,6 @@
-// Etsy Copilot v2.4.0 — Ortak Sözleşmeler, Depolama Anahtarları ve VDS DTO Eşleyicileri
+// Etsy Copilot v2.5.0 — Ortak Sözleşmeler, Depolama Anahtarları ve VDS DTO Eşleyicileri
 
-export const EXTENSION_VERSION = '2.4.0';
+export const EXTENSION_VERSION = '2.5.0';
 export const STORAGE_SCHEMA_VERSION = 2;
 
 export const STORAGE_KEYS = Object.freeze({
