@@ -252,4 +252,54 @@ public sealed class ShiptomoreOfficialApiTests
         Assert.NotEqual("widect_widect_standard", request.ServiceSlug);
         Assert.Equal("retail", request.ShipmentType);
     }
+
+    [Fact]
+    public void BuildRequest_PopulatesReceiverStateCode_WhenStateIsPresent_EvenIfHasStateIsFalse()
+    {
+        var context = new ShipmentCreationContext
+        {
+            Order = new EtsyOrderFulfillmentItem
+            {
+                ReceiptId = 4210985421,
+                BuyerName = "Jessica Benson",
+                StreetAddress = "156 Deerfield Ave NE",
+                City = "Port Charlotte",
+                State = "FL",
+                HasState = false,
+                PostalCode = "33952-8113",
+                CountryCode = "US"
+            },
+            SelectedSubCarrier = "WIDECT",
+            SelectedServiceCode = "widect:widect_standard"
+        };
+
+        var request = ShiptomoreOfficialShipmentCreationProvider.BuildRequest(context);
+
+        Assert.Equal("FL", request.ReceiverStateCode);
+        Assert.NotNull(request.ReceiverStateCode);
+    }
+
+    [Fact]
+    public void BuildRequest_ExtractsStateCode_FromCityOrAddress_WhenStateIsEmpty()
+    {
+        var context = new ShipmentCreationContext
+        {
+            Order = new EtsyOrderFulfillmentItem
+            {
+                ReceiptId = 4210985421,
+                BuyerName = "Jessica Benson",
+                StreetAddress = "156 Deerfield Ave NE",
+                City = "Port Charlotte, FL",
+                State = "",
+                PostalCode = "33952",
+                CountryCode = "US"
+            },
+            SelectedSubCarrier = "WIDECT",
+            SelectedServiceCode = "widect:widect_standard"
+        };
+
+        var request = ShiptomoreOfficialShipmentCreationProvider.BuildRequest(context);
+
+        Assert.Equal("FL", request.ReceiverStateCode);
+    }
 }

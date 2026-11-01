@@ -501,6 +501,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const destCountry = (this.selectedOrder.countryCode || 'US').toUpperCase();
+    if (carrierKey === 'shiptomore' && (destCountry === 'US' || destCountry === 'CA' || destCountry === 'IE') && !this.selectedOrder.state?.trim()) {
+      alert('⚠️ Ship to More ile ABD (US), Kanada (CA) ve İrlanda (IE) gönderimlerinde uluslararası gümrük beyanı için alıcı eyalet kodu (State) zorunludur.\n\nLütfen "Adresi Düzenle" butonuna tıklayarak eyalet kodunu (ör. FL, NY, CA) girin.');
+      this.openAddressModal();
+      return;
+    }
+
     const rId = Number(this.selectedOrder.orderId);
     if (!rId || isNaN(rId)) {
       alert('Geçersiz Sipariş ID (Receipt ID)');
@@ -530,6 +537,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         second_line: this.selectedOrder.secondAddress || '',
         city: this.selectedOrder.city || '',
         state: this.selectedOrder.state || '',
+        hasState: !!(this.selectedOrder.state && this.selectedOrder.state.trim()),
         postalCode: this.selectedOrder.postalCode || '',
         zip: this.selectedOrder.postalCode || '',
         countryCode: this.selectedOrder.countryCode || 'US',

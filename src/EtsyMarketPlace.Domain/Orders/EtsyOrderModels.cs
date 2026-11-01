@@ -73,8 +73,22 @@ public sealed class EtsyOrderFulfillmentItem
     [JsonPropertyName("city")]
     public string City { get; set; } = string.Empty;
 
+    private string _state = string.Empty;
+    private bool _hasState;
+
     [JsonPropertyName("state")]
-    public string State { get; set; } = string.Empty;
+    public string State
+    {
+        get => _state;
+        set
+        {
+            _state = value ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(_state))
+            {
+                _hasState = true;
+            }
+        }
+    }
 
     [JsonPropertyName("postalCode")]
     public string PostalCode { get; set; } = string.Empty;
@@ -97,7 +111,12 @@ public sealed class EtsyOrderFulfillmentItem
     }
 
     public string CountryName { get; set; } = string.Empty;
-    public bool HasState { get; set; } = false;
+    [JsonPropertyName("hasState")]
+    public bool HasState
+    {
+        get => _hasState || !string.IsNullOrWhiteSpace(_state);
+        set => _hasState = value;
+    }
 
     [JsonPropertyName("phone")]
     public string Phone { get; set; } = string.Empty;

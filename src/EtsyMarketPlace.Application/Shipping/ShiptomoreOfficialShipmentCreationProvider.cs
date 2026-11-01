@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Application.Diagnostics;
 using EtsyMarketPlace.Domain.Shipping;
+using EtsyMarketPlace.Domain.Orders;
 
 /// <summary>
 /// Ship to More resmî API'si üzerinden GERÇEK gönderi oluşturan sağlayıcı.
@@ -87,6 +88,12 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         }
 
         var request = BuildRequest(context);
+
+        if ((request.ReceiverCountryCode == "US" || request.ReceiverCountryCode == "CA" || request.ReceiverCountryCode == "IE")
+            && string.IsNullOrWhiteSpace(request.ReceiverStateCode))
+        {
+            return Fail($"Ship to More: {request.ReceiverCountryCode} ülkesi için alıcı eyalet (State) kodu zorunludur. Lütfen 'Adresi Düzenle' düğmesine tıklayarak eyaleti (ör. FL, NY, CA) girin.");
+        }
 
         if (!string.IsNullOrWhiteSpace(context.HsCode))
         {
@@ -258,7 +265,7 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
             ReceiverStreet2 = string.IsNullOrWhiteSpace(order.SecondAddress) ? null : order.SecondAddress,
             ReceiverCity = order.City ?? string.Empty,
             ReceiverZip = order.PostalCode ?? string.Empty,
-            ReceiverStateCode = order.HasState && !string.IsNullOrWhiteSpace(order.State) ? order.State : null,
+            ReceiverStateCode = ResolveReceiverStateCode(order, countryCode),
 
             // Etsy IOSS numarası: alıcı ID'si değil, SATICI'nın IOSS kaydıdır.
             CollectIdNumber = string.IsNullOrWhiteSpace(order.IossNumber) ? null : order.IossNumber,
@@ -344,4 +351,57 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         IsSuccess = false,
         ErrorMessage = message
     };
+    /// <summary>
+    /// Alıcı eyalet kodunu çözümler. US, CA, IE için zorunludur.
+    /// State alanı doluysa doğrudan alır; boşsa şehir veya tam adres metninden regex ile kurtarmayı dener.
+    /// </summary>
+    public static string? ResolveReceiverStateCode(EtsyOrderFulfillmentItem order, string countryCode)
+    {
+        if (order == null) return null;
+
+        if (!string.IsNullOrWhiteSpace(order.State))
+        {
+            return order.State.Trim();
+        }
+
+        if (order.HasState && !string.IsNullOrWhiteSpace(order.State))
+        {
+            return order.State.Trim();
+        }
+
+        // Sadece US, CA, IE için adres veya şehir içinden fallback aranır
+        string upperCountry = (countryCode ?? string.Empty).Trim().ToUpperInvariant();
+        if (upperCountry != "US" && upperCountry != "CA" && upperCountry != "IE")
+        {
+            return null;
+        }
+
+        return TryExtractStateFromAddress(order);
+    }
+
+    private static string? TryExtractStateFromAddress(EtsyOrderFulfillmentItem order)
+    {
+        // 1. Şehir alanı "City, STATE" veya "City STATE" biçiminde mi?
+        if (!string.IsNullOrWhiteSpace(order.City))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(order.City, @"\b([A-Z]{2})\b");
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+        }
+
+        // 2. Ham adres veya sokak adresi içinde 2 büyük harf + posta kodu var mı? (Örn: "FL 33952" veya "FL, 33952-8113")
+        string combined = $"{order.StreetAddress} {order.SecondAddress} {order.RawAddressText}".Trim();
+        if (!string.IsNullOrWhiteSpace(combined))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(combined, @"\b([A-Z]{2})\b\s*,?\s*\d{5}");
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+        }
+
+        return null;
+    }
 }
