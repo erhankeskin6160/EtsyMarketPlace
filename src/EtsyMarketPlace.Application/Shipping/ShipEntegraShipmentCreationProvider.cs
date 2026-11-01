@@ -176,7 +176,7 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
                 Name = string.IsNullOrWhiteSpace(order.BuyerName) ? "-" : order.BuyerName,
                 Address1 = !string.IsNullOrWhiteSpace(order.StreetAddress) ? order.StreetAddress : "-",
                 City = string.IsNullOrWhiteSpace(order.City) ? "-" : order.City,
-                State = order.HasState ? (order.State ?? string.Empty) : null,
+                State = !string.IsNullOrWhiteSpace(order.State) ? order.State.Trim() : (order.HasState ? (order.State ?? string.Empty) : null),
                 ZipCode = string.IsNullOrWhiteSpace(order.PostalCode) ? "-" : order.PostalCode,
                 Country = !string.IsNullOrWhiteSpace(order.CountryCode) ? order.CountryCode : "US",
                 Email = string.IsNullOrWhiteSpace(order.BuyerEmail) ? null : order.BuyerEmail

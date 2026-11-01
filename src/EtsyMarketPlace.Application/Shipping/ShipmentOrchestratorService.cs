@@ -64,7 +64,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         var order = command.RecipientAddress;
         if (_fulfillmentService != null && !string.IsNullOrWhiteSpace(command.ShopId))
         {
-            if (order == null || string.IsNullOrWhiteSpace(order.BuyerName) || string.IsNullOrWhiteSpace(order.StreetAddress))
+            if (order == null || string.IsNullOrWhiteSpace(order.BuyerName) || string.IsNullOrWhiteSpace(order.StreetAddress) || string.IsNullOrWhiteSpace(order.State))
             {
                 try
                 {
