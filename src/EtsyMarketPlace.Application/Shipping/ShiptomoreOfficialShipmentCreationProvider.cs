@@ -15,7 +15,7 @@ using EtsyMarketPlace.Domain.Shipping;
 /// <c>IsCreationSupported =&gt; false</c> döndüğü için arayüzde "Gönderi kapalı" görünüyordu).
 ///
 /// Eşleştirme kararları:
-/// - <c>shipment_type</c> her zaman "sale" (API varsayılanı "sample" — numune beyanı olurdu).
+/// - <c>shipment_type</c>: Gümrük faturası henüz eklenmemişse veya Widect kullanılıyorsa "retail" (faturasız perakende); aksi halde "sale".
 /// - Etsy IOSS numarası <c>collect_id_number</c> alanına yazılır.
 /// - Zorunlu alanlar (telefon, e-posta, sokak, şehir, posta kodu) önce doğrulanır; eksikse
 ///   kullanıcıya hangi alanın eksik olduğu söylenir, boşa API çağrısı yapılmaz.
@@ -167,20 +167,71 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
         string receiverName = string.IsNullOrWhiteSpace(last) ? first : $"{first} {last}";
 
         string provider = (context.SelectedSubCarrier ?? string.Empty).Trim().ToLowerInvariant();
+        string service = string.Empty;
+
+        // 1. Önce SelectedServiceCode ("provider:service" veya "service") ayrıştırılır
+        if (!string.IsNullOrWhiteSpace(context.SelectedServiceCode))
+        {
+            string code = context.SelectedServiceCode.Trim();
+            if (code.Contains(':'))
+            {
+                var parts = code.Split(':', 2);
+                string codeProvider = parts[0].Trim().ToLowerInvariant();
+                string codeService = parts[1].Trim().ToLowerInvariant();
+
+                if (!string.IsNullOrWhiteSpace(codeProvider) && (string.IsNullOrWhiteSpace(provider) || provider == "shiptomore"))
+                {
+                    provider = codeProvider;
+                }
+                service = codeService;
+            }
+            else
+            {
+                service = code.ToLowerInvariant();
+            }
+        }
+
+        // 2. Eğer provider hala boşsa veya "shiptomore" ise varsayılan atanır
         if (string.IsNullOrWhiteSpace(provider) || provider == "shiptomore")
         {
             provider = "fedex";
         }
 
-        string rawService = (context.ServiceType ?? string.Empty).Trim().ToLowerInvariant();
-        string service = rawService.Replace(' ', '_');
-        if (service.Contains("air_priority") || service.Contains("ddp"))
+        // 3. Eğer service hala boşsa, ServiceType fallback'i üzerinden çözümlenir
+        if (string.IsNullOrWhiteSpace(service))
         {
-            service = "air_priority";
+            string rawService = (context.ServiceType ?? string.Empty).Trim().ToLowerInvariant();
+            int dashIdx = rawService.IndexOfAny(new[] { '—', '-' });
+            if (dashIdx > 0)
+            {
+                rawService = rawService.Substring(0, dashIdx).Trim();
+            }
+
+            service = rawService.Replace(' ', '_');
+            if (service.Contains("air_priority") || service.Contains("ddp"))
+            {
+                service = "air_priority";
+            }
+            else if (service.Contains("fedex") || service.Contains("priority_express"))
+            {
+                service = "fedex_priority";
+            }
         }
-        else if (service.Contains("fedex") || service.Contains("priority_express"))
+
+        // 4. Çift taşıyıcı ön eki koruması (örn: "widect_widect_standard" -> "widect_standard")
+        if (!string.IsNullOrWhiteSpace(provider))
         {
-            service = "fedex_priority";
+            string doublePrefix = provider + "_" + provider + "_";
+            if (service.StartsWith(doublePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                service = service.Substring(provider.Length + 1);
+            }
+        }
+
+        // "—", "-" veya "shiptomore" artıklarını temizle
+        if (service.Contains("—") || service.Contains("-shiptomore") || service.Contains("shiptomore"))
+        {
+            service = service.Split(new[] { "—", "shiptomore" }, StringSplitOptions.RemoveEmptyEntries)[0].Trim().Trim('_');
         }
 
         string receiverEmail = !string.IsNullOrWhiteSpace(order.BuyerEmail)
@@ -213,7 +264,9 @@ public sealed class ShiptomoreOfficialShipmentCreationProvider : IShipmentCreati
             CollectIdNumber = string.IsNullOrWhiteSpace(order.IossNumber) ? null : order.IossNumber,
             CollectIdType = "ioss",
 
-            ShipmentType = "sale",
+            // Şartname kuralı: 'retail' fatura gerektirmez ve kabul etmez; 'sale' commercial/ETGB faturası zorunlu tutar.
+            // Widect'te fatura belgesi henüz iliştirilmemişse 422 hatası vermemesi için 'retail' atanır.
+            ShipmentType = (provider == "widect") ? "retail" : "sale",
             PackageType = "custom",
             CustomerReference = order.OrderNumber,
 

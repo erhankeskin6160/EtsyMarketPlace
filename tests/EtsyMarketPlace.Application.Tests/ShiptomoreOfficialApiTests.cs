@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Xunit;
 using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Domain.Shipping;
+using EtsyMarketPlace.Domain.Orders;
 using EtsyMarketPlace.Infrastructure.Shipping;
 
 /// <summary>
@@ -215,5 +216,40 @@ public sealed class ShiptomoreOfficialApiTests
         Assert.Equal("39264000", code.Code);
         Assert.Equal("Statuettes and other ornamental articles, of plastics", code.Description);
         Assert.Equal(5.3, code.UsTariffRate!.Value, 3);
+    }
+
+    [Fact]
+    public void BuildRequest_ResolvesServiceSlug_Correctly_From_SelectedServiceCode()
+    {
+        var context = new ShipmentCreationContext
+        {
+            Order = new EtsyOrderFulfillmentItem
+            {
+                ReceiptId = 4210985421,
+                BuyerName = "Jessica Benson",
+                StreetAddress = "156 Deerfield Ave NE",
+                City = "Port Charlotte",
+                State = "FL",
+                PostalCode = "33952-8113",
+                CountryCode = "US",
+                Phone = "+12392492326",
+                BuyerEmail = "jessica@example.com"
+            },
+            SelectedSubCarrier = "WIDECT",
+            SelectedServiceCode = "widect:widect_standard",
+            ServiceType = "WIDECT widect_standard — Shiptomore",
+            WeightKg = 0.4,
+            WidthCm = 15,
+            LengthCm = 20,
+            HeightCm = 10,
+            HsCode = "3926400000"
+        };
+
+        var request = ShiptomoreOfficialShipmentCreationProvider.BuildRequest(context);
+
+        Assert.Equal("widect", request.ProviderSlug);
+        Assert.Equal("widect_standard", request.ServiceSlug);
+        Assert.NotEqual("widect_widect_standard", request.ServiceSlug);
+        Assert.Equal("retail", request.ShipmentType);
     }
 }
