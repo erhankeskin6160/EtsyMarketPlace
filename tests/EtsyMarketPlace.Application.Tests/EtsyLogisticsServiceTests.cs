@@ -71,6 +71,9 @@ public sealed class EtsyLogisticsServiceTests
         public Task<System.Collections.Generic.IReadOnlyList<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt>> GetFulfillmentReceiptsAsync(string shopId, int lookbackDays = 45, bool? wasShipped = null, CancellationToken cancellationToken = default) =>
             Task.FromResult(FulfillmentReceipts);
 
+        public Task<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt?> GetFulfillmentReceiptByIdAsync(string shopId, long receiptId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt?>(null);
+
         public Task<bool> SubmitTrackingAsync(string shopId, long receiptId, string trackingCode, string carrierName, bool sendBcc = false, CancellationToken cancellationToken = default) =>
             Task.FromResult(SubmitTrackingResult);
 

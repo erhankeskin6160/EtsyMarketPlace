@@ -1,5 +1,6 @@
 namespace EtsyMarketPlace.Application.Shipping;
 
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -17,6 +18,14 @@ public interface IEtsyLogisticsApiClient
         string shopId,
         int lookbackDays = 45,
         bool? wasShipped = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Tekil bir Etsy siparişinin (receipt) canlı API detayını ve alıcı adresini çeker.
+    /// </summary>
+    Task<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt?> GetFulfillmentReceiptByIdAsync(
+        string shopId,
+        long receiptId,
         CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -451,7 +451,7 @@ export class OrdersService {
     this.ordersLoadError = null;
     const shopId = shopIdOverride || this.etsyApi.activeShopId();
 
-    this.etsyApi.getFulfillmentQueue(shopId, 60)
+    this.etsyApi.getFulfillmentQueue(shopId, 180)
       .subscribe({
         next: (resp) => {
           this.ordersLoading = false;
@@ -566,6 +566,11 @@ export class OrdersService {
           this.ordersSubject.next(liveOrders);
           const selected = this.selectedOrderSubject.value;
           this.selectedOrderSubject.next((selected && liveOrders.find(order => order.orderId === selected.orderId)) || liveOrders[0] || null);
+          for (const order of liveOrders) {
+            if (!order.buyerName || order.buyerName === 'Etsy Alıcısı' || order.buyerName.startsWith('Etsy Siparişi #') || order.isAddressMissing) {
+              this.hydrateBuyerInfo(order.orderId, shopId);
+            }
+          }
         },
         error: () => {
           this.fallbackToCostAlerts(shopId);
@@ -617,6 +622,9 @@ export class OrdersService {
           this.ordersSubject.next(liveOrders);
           const selected = this.selectedOrderSubject.value;
           this.selectedOrderSubject.next((selected && liveOrders.find(order => order.orderId === selected.orderId)) || liveOrders[0] || null);
+          for (const order of liveOrders) {
+            this.hydrateBuyerInfo(order.orderId, shopId);
+          }
         },
         error: () => {
           this.ordersLoading = false;
@@ -625,6 +633,92 @@ export class OrdersService {
           this.selectedOrderSubject.next(null);
         }
       });
+  }
+
+  public hydrateBuyerInfo(orderId: string, shopId?: string): void {
+    const sId = shopId || this.etsyApi.activeShopId();
+    const rId = Number(orderId);
+    if (!rId) return;
+
+    this.etsyApi.getReceiptDetail(rId, sId).subscribe({
+      next: (res: any) => {
+        const data = res?.data || res;
+        if (!data || !data.buyerName) return;
+        const cleanName = String(data.buyerName).trim();
+        if (!cleanName || cleanName.startsWith('Etsy Siparişi #')) return;
+
+        const currentList = this.ordersSubject.value;
+        const updatedList = currentList.map(order => {
+          if (order.orderId === orderId) {
+            const hasAddress = Boolean(
+              (data.streetAddress && data.streetAddress.trim().length > 0) ||
+              (order.streetAddress && order.streetAddress.trim().length > 0)
+            );
+            const addressParts = [
+              data.streetAddress || order.streetAddress,
+              data.secondAddress || order.secondAddress,
+              data.city || order.city,
+              data.state || order.state,
+              data.postalCode || order.postalCode,
+              data.countryName || order.country
+            ].filter(Boolean);
+
+            return {
+              ...order,
+              buyerName: cleanName,
+              buyerEmail: data.buyerEmail || order.buyerEmail,
+              phone: data.phone || order.phone,
+              streetAddress: data.streetAddress || order.streetAddress,
+              secondAddress: data.secondAddress || order.secondAddress,
+              city: data.city || order.city,
+              state: data.state || order.state,
+              postalCode: data.postalCode || order.postalCode,
+              country: data.countryName || order.country,
+              countryCode: data.countryCode || order.countryCode,
+              addressSnippet: addressParts.join(', '),
+              isAddressMissing: !hasAddress,
+              addressWarning: !hasAddress ? 'Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin.' : undefined
+            };
+          }
+          return order;
+        });
+
+        this.ordersSubject.next(updatedList);
+        const selected = this.selectedOrderSubject.value;
+        if (selected && selected.orderId === orderId) {
+          const updatedSelected = updatedList.find(o => o.orderId === orderId);
+          if (updatedSelected) this.selectedOrderSubject.next(updatedSelected);
+        }
+      },
+      error: () => {
+        // İkincil fallback: veritabanı adres servisini dene
+        this.etsyApi.getOrderAddress(rId).subscribe({
+          next: (addrRes: any) => {
+            const addr = addrRes?.data || addrRes;
+            if (!addr || !addr.buyerName) return;
+            const cleanName = String(addr.buyerName).trim();
+            if (!cleanName || cleanName.startsWith('Etsy Siparişi #')) return;
+
+            const currentList = this.ordersSubject.value;
+            const updatedList = currentList.map(order => {
+              if (order.orderId === orderId) {
+                return {
+                  ...order,
+                  buyerName: cleanName,
+                  streetAddress: addr.streetAddress || order.streetAddress,
+                  city: addr.city || order.city,
+                  state: addr.state || order.state,
+                  postalCode: addr.postalCode || order.postalCode,
+                  country: addr.countryName || order.country
+                };
+              }
+              return order;
+            });
+            this.ordersSubject.next(updatedList);
+          }
+        });
+      }
+    });
   }
 
   public executeCreateShipment(payload: {

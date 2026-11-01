@@ -244,6 +244,12 @@ public sealed class OrdersAndShippingEnhancementsTests
             CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<EtsyFulfillmentReceipt>>([receipt]);
 
+        public Task<EtsyFulfillmentReceipt?> GetFulfillmentReceiptByIdAsync(
+            string shopId,
+            long receiptId,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<EtsyFulfillmentReceipt?>(receipt);
+
         public Task<bool> SubmitTrackingAsync(
             string shopId,
             long receiptId,

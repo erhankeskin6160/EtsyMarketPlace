@@ -124,7 +124,7 @@ public sealed class EtsyOrderService
 
     public static void ApplyRecord(EtsyOrderFulfillmentItem target, OrderAddressRecord record)
     {
-        if (!string.IsNullOrWhiteSpace(record.BuyerName)) target.BuyerName = record.BuyerName;
+        if (!string.IsNullOrWhiteSpace(record.BuyerName) && !record.BuyerName.Trim().StartsWith("Etsy Siparişi #", StringComparison.OrdinalIgnoreCase)) target.BuyerName = record.BuyerName;
         if (!string.IsNullOrWhiteSpace(record.BuyerEmail)) target.BuyerEmail = record.BuyerEmail;
         if (!string.IsNullOrWhiteSpace(record.Phone)) target.Phone = record.Phone;
         if (!string.IsNullOrWhiteSpace(record.StreetAddress)) target.StreetAddress = record.StreetAddress;

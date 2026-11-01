@@ -130,7 +130,8 @@ public sealed class EtsyLogisticsApiClient : IEtsyLogisticsApiClient
         CancellationToken ct = default)
     {
         var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);
-        long minCreated = DateTimeOffset.UtcNow.AddDays(-Math.Max(1, lookbackDays)).ToUnixTimeSeconds();
+        int effectiveDays = (wasShipped.HasValue && !wasShipped.Value) ? Math.Max(lookbackDays, 180) : Math.Max(1, lookbackDays);
+        long minCreated = DateTimeOffset.UtcNow.AddDays(-effectiveDays).ToUnixTimeSeconds();
         const int pageSize = 100;
         var receipts = new List<EtsyFulfillmentReceipt>();
         var offset = 0;
@@ -180,6 +181,30 @@ public sealed class EtsyLogisticsApiClient : IEtsyLogisticsApiClient
         }
 
         return receipts;
+    }
+
+    public async Task<EtsyFulfillmentReceipt?> GetFulfillmentReceiptByIdAsync(
+        string shopId,
+        long receiptId,
+        CancellationToken ct = default)
+    {
+        if (receiptId <= 0 || string.IsNullOrWhiteSpace(shopId)) return null;
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);
+        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/receipts/{receiptId}";
+
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
+        req.Headers.Add("x-api-key", apiKeyHeader);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var res = await _httpClient.SendAsync(req, ct);
+        if (!res.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var body = await res.Content.ReadAsStringAsync(ct);
+        using var doc = JsonDocument.Parse(body);
+        return ParseFulfillmentReceipt(doc.RootElement);
     }
 
     public async Task<bool> SubmitTrackingAsync(

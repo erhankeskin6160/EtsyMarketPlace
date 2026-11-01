@@ -105,6 +105,61 @@ public sealed class EtsyOrderFulfillmentService : IEtsyOrderFulfillmentService
         return queue;
     }
 
+    public async Task<EtsyOrderFulfillmentItem?> GetReceiptDetailAsync(
+        string shopId,
+        long receiptId,
+        CancellationToken cancellationToken = default)
+    {
+        if (receiptId <= 0 || string.IsNullOrWhiteSpace(shopId)) return null;
+
+        var receipt = await _logisticsApiClient.GetFulfillmentReceiptByIdAsync(shopId, receiptId, cancellationToken);
+        if (receipt == null) return null;
+
+        var item = EtsyFulfillmentQueuePolicy.ToQueueItem(receipt);
+
+        if (receipt.TrackingCodes != null && receipt.TrackingCodes.Count > 0)
+        {
+            var candidate = receipt.TrackingCodes[0]?.Trim();
+            if (!string.IsNullOrWhiteSpace(candidate) && !candidate.Equals("No tracking", StringComparison.OrdinalIgnoreCase))
+            {
+                item.TrackingCode = candidate;
+            }
+        }
+
+        bool hasValidTracking = !string.IsNullOrWhiteSpace(item.TrackingCode) &&
+                                !string.Equals(item.TrackingCode.Trim(), "No tracking", StringComparison.OrdinalIgnoreCase);
+        item.Status = hasValidTracking ? "shipped" : "unfulfilled";
+
+        if (_addressRepository != null)
+        {
+            try
+            {
+                var existing = await _addressRepository.GetByReceiptIdAsync(receiptId, cancellationToken);
+                if (existing != null)
+                {
+                    EtsyOrderService.ApplyRecord(item, existing);
+                }
+                else if (!string.IsNullOrWhiteSpace(item.BuyerName) &&
+                         !item.BuyerName.StartsWith("Etsy Siparişi #", StringComparison.OrdinalIgnoreCase))
+                {
+                    await SaveOrderAddressAsync(receiptId, item, cancellationToken);
+                }
+            }
+            catch
+            {
+                // Yerel depo hatası akışı bozmasın
+            }
+        }
+
+        bool isMissing = string.IsNullOrWhiteSpace(item.StreetAddress) || string.IsNullOrWhiteSpace(item.City);
+        item.IsAddressMissing = isMissing;
+        item.AddressWarning = isMissing
+            ? "Alıcı sokak veya şehir bilgisi eksik. Lütfen düzenleyin."
+            : string.Empty;
+
+        return item;
+    }
+
     public async Task SaveOrderAddressAsync(
         long receiptId,
         EtsyOrderFulfillmentItem updatedAddress,
@@ -119,9 +174,27 @@ public sealed class EtsyOrderFulfillmentService : IEtsyOrderFulfillmentService
             ? updatedAddress.GtipCode.Trim()
             : (updatedAddress.Items?.FirstOrDefault(i => !string.IsNullOrWhiteSpace(i.HsCode))?.HsCode ?? string.Empty);
 
+        string buyerName = updatedAddress.BuyerName ?? string.Empty;
+        if (buyerName.StartsWith("Etsy Siparişi #", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var existing = await _addressRepository.GetByReceiptIdAsync(receiptId, cancellationToken);
+                if (existing != null && !string.IsNullOrWhiteSpace(existing.BuyerName) &&
+                    !existing.BuyerName.StartsWith("Etsy Siparişi #", StringComparison.OrdinalIgnoreCase))
+                {
+                    buyerName = existing.BuyerName;
+                }
+            }
+            catch
+            {
+                // sessiz devam
+            }
+        }
+
         var record = new OrderAddressRecord(
             receiptId,
-            updatedAddress.BuyerName ?? string.Empty,
+            buyerName,
             updatedAddress.BuyerEmail ?? string.Empty,
             updatedAddress.Phone ?? string.Empty,
             updatedAddress.StreetAddress ?? string.Empty,

@@ -21,6 +21,14 @@ public interface IEtsyOrderFulfillmentService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Tekil bir siparişin canlı Etsy API detayını ve alıcı adını çeker, yerel veritabanını günceller.
+    /// </summary>
+    Task<EtsyOrderFulfillmentItem?> GetReceiptDetailAsync(
+        string shopId,
+        long receiptId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Kullanıcının arayüzden düzenlediği alıcı adresini kalıcı SQLite deposuna kaydeder.
     /// </summary>
     Task SaveOrderAddressAsync(
