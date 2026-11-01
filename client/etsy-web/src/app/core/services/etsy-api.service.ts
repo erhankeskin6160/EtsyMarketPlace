@@ -463,6 +463,12 @@ export class EtsyApiService {
     return this.http.get<{ count: number; results: any[] }>(url);
   }
 
+  /** Tekil siparişin canlı Etsy API fiş ve alıcı adı detayını getirir. */
+  getReceiptDetail(receiptId: number, shopId?: string): Observable<any> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<any>(`${this.API_BASE}/api/etsy/orders/${receiptId}/receipt-detail?shopId=${id}`);
+  }
+
   /** Alıcı adresini kalıcı SQLite deposuna kaydeder. */
   /** Siparişin veritabanında (SQLite/PostgreSQL) kayıtlı tam adresini getirir. */
   getOrderAddress(receiptId: number): Observable<any> {

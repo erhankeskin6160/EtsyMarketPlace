@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 namespace EtsyMarketPlace.Api.Controllers;
 
 using System;
@@ -18,6 +18,7 @@ using EtsyMarketPlace.Application.Features.Orders.Commands.SaveOrderAddress;
 using EtsyMarketPlace.Application.Features.Orders.Commands.SyncExtensionOrders;
 using EtsyMarketPlace.Application.Features.Orders.Commands.UploadOrdersCsv;
 using EtsyMarketPlace.Application.Features.Orders.Queries.GetFulfillmentQueue;
+using EtsyMarketPlace.Application.Features.Orders.Queries.GetReceiptDetail;
 
 [ApiController]
 [Route("api/etsy/orders")]
@@ -48,6 +49,24 @@ public class EtsyOrdersController : BaseApiController
             ShopId = resolvedShopId,
             LookbackDays = lookbackDays,
             WasShipped = wasShipped
+        };
+
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet("{receiptId}/receipt-detail")]
+    [EndpointSummary("Tekil Siparişin Canlı Etsy API Fiş ve Alıcı Adı Detayını Getir")]
+    public async Task<IActionResult> GetReceiptDetail(
+        [FromRoute] long receiptId,
+        [FromQuery] string shopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var request = new GetReceiptDetailRequest
+        {
+            ShopId = resolvedShopId,
+            ReceiptId = receiptId
         };
 
         var response = await _mediator.Send(request, cancellationToken);

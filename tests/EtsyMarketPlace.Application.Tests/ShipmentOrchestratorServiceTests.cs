@@ -44,6 +44,7 @@ public sealed class ShipmentOrchestratorServiceTests
         public Task<IReadOnlyList<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt>> GetFulfillmentReceiptsAsync(string shopId, int lookbackDays = 45, bool? wasShipped = null, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt>>(new List<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt>());
 
+        public Task<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt?> GetFulfillmentReceiptByIdAsync(string shopId, long receiptId, CancellationToken cancellationToken = default) => Task.FromResult<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt?>(null);
         public Task<string> GetRawShippingProfilesJsonAsync(string shopId, CancellationToken cancellationToken = default) => Task.FromResult("{}");
         public Task<string?> GetRawReadinessDefinitionsJsonAsync(string shopId, CancellationToken cancellationToken = default) => Task.FromResult<string?>("{}");
         public Task<string?> GetRawActiveListingsJsonAsync(string shopId, CancellationToken cancellationToken = default) => Task.FromResult<string?>("{}");

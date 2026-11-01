@@ -76,6 +76,71 @@ public sealed class OrdersHandlerTests
         Assert.NotNull(response.Data);
     }
 
+    [Fact]
+    public async Task GetReceiptDetailHandler_ReturnsReceiptDetail_WhenReceiptExists()
+    {
+        var fakeFulfillment = new FakeFulfillmentService
+        {
+            Items =
+            [
+                new EtsyOrderFulfillmentItem
+                {
+                    ReceiptId = 4210985421,
+                    BuyerName = "Jessica Benson",
+                    StreetAddress = "156 Deerfield Ave NE",
+                    City = "Port Charlotte",
+                    State = "FL",
+                    PostalCode = "33952-8113",
+                    CountryCode = "US"
+                }
+            ]
+        };
+
+        var handler = new EtsyMarketPlace.Application.Features.Orders.Queries.GetReceiptDetail.GetReceiptDetailHandler(fakeFulfillment);
+        var request = new EtsyMarketPlace.Application.Features.Orders.Queries.GetReceiptDetail.GetReceiptDetailRequest
+        {
+            ShopId = "53236321",
+            ReceiptId = 4210985421
+        };
+
+        var response = await handler.Handle(request, CancellationToken.None);
+
+        Assert.True(response.Success);
+        Assert.Equal((int)HttpStatusCode.OK, response.StatusCode);
+        var item = Assert.IsType<EtsyOrderFulfillmentItem>(response.Data);
+        Assert.Equal("Jessica Benson", item.BuyerName);
+    }
+
+    [Fact]
+    public void ApplyRecord_NeverOverwrites_RealBuyerName_WithFallbackPlaceholder()
+    {
+        var target = new EtsyOrderFulfillmentItem
+        {
+            ReceiptId = 4210985421,
+            BuyerName = "Jessica Benson"
+        };
+
+        var recordWithFallback = new OrderAddressRecord(
+            4210985421,
+            "Etsy Siparişi #4210985421",
+            "",
+            "",
+            "156 Deerfield Ave NE",
+            "",
+            "Port Charlotte",
+            "FL",
+            "33952-8113",
+            "US",
+            "United States",
+            "WebManual",
+            DateTime.UtcNow);
+
+        EtsyOrderService.ApplyRecord(target, recordWithFallback);
+
+        Assert.Equal("Jessica Benson", target.BuyerName);
+        Assert.Equal("156 Deerfield Ave NE", target.StreetAddress);
+    }
+
     private sealed class FakeFulfillmentService : IEtsyOrderFulfillmentService
     {
         public List<EtsyOrderFulfillmentItem> Items { get; set; } = [];
@@ -83,6 +148,11 @@ public sealed class OrdersHandlerTests
         public Task<IReadOnlyList<EtsyOrderFulfillmentItem>> GetFulfillmentQueueAsync(string shopId, int lookbackDays = 45, bool? wasShipped = null, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<IReadOnlyList<EtsyOrderFulfillmentItem>>(Items);
+        }
+
+        public Task<EtsyOrderFulfillmentItem?> GetReceiptDetailAsync(string shopId, long receiptId, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult(Items.FirstOrDefault(i => i.ReceiptId == receiptId));
         }
 
         public Task SaveOrderAddressAsync(long receiptId, EtsyOrderFulfillmentItem updatedAddress, CancellationToken cancellationToken = default)
