@@ -83,7 +83,7 @@ public class SettingsController : BaseApiController
     public async Task<IActionResult> GetCarrierSessions([FromQuery] string shopId = "53236321", CancellationToken ct = default)
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
-        var response = await _mediator.Send(new GetCarrierSessionsRequest(resolvedShopId), ct);
+        var response = await _mediator.Send(new GetPersistedCarrierSessionsRequest(resolvedShopId), ct);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
 

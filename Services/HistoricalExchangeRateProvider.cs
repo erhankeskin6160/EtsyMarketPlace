@@ -1,92 +1,33 @@
 namespace SimilarProductsWinForms.Services;
 
-using System.Collections.Concurrent;
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using RealProvider = EtsyMarketPlace.Application.EtsyIntegration.HistoricalExchangeRateProvider;
 
+/// <summary>
+/// WinForms geriye dönük uyumluluk adaptörü (Facade).
+/// Tüm kur çözümlemelerini Clean Architecture Application katmanındaki tekil sağlayıcıya (Single Source of Truth) delege eder.
+/// WinForms masaüstü ekranlarının canlı API kur tamamlama ve TCMB parite motorundan yararlanmasını sağlar.
+/// </summary>
 internal static class HistoricalExchangeRateProvider
 {
-    private static readonly ConcurrentDictionary<DateTime, decimal> RateCache = new();
-
-    // 2026 yılı dönemsel ve günlük resmi Dolar/TL kurları (TCMB / Piyasa Kapanış Kalibrasyonu)
-    private static readonly Dictionary<DateTime, decimal> KnownRates = new()
-    {
-        { new DateTime(2026, 1, 1),  46.80m },
-        { new DateTime(2026, 3, 1),  47.20m },
-        { new DateTime(2026, 5, 1),  47.65m },
-        { new DateTime(2026, 7, 1),  48.00m },
-        { new DateTime(2026, 8, 1),  48.20m },
-        { new DateTime(2026, 8, 15), 48.25m },
-        { new DateTime(2026, 8, 30), 48.26m },
-
-        // Eylül 2026 Günlük Kurları
-        { new DateTime(2026, 9, 1),  48.28m },
-        { new DateTime(2026, 9, 5),  48.35m },
-        { new DateTime(2026, 9, 10), 48.50m },
-        { new DateTime(2026, 9, 15), 48.64m },
-        { new DateTime(2026, 9, 18), 48.73m },
-        { new DateTime(2026, 9, 20), 48.72m },
-        { new DateTime(2026, 9, 22), 48.78m },
-        { new DateTime(2026, 9, 25), 48.82m },
-        { new DateTime(2026, 9, 26), 48.85m },
-        { new DateTime(2026, 9, 28), 48.88m },
-        { new DateTime(2026, 9, 30), 48.95m },
-
-        // Ekim 2026 Günlük Kurları (TCMB / Piyasa Kapanışları)
-        { new DateTime(2026, 10, 1),  49.05m },
-        { new DateTime(2026, 10, 2),  49.15m },
-        { new DateTime(2026, 10, 3),  49.15m },
-        { new DateTime(2026, 10, 4),  49.15m },
-        { new DateTime(2026, 10, 5),  49.14m },
-        { new DateTime(2026, 10, 6),  49.16m },
-        { new DateTime(2026, 10, 7),  49.19m },
-        { new DateTime(2026, 10, 8),  49.22m },
-        { new DateTime(2026, 10, 9),  49.28m },
-        { new DateTime(2026, 10, 10), 49.28m },
-        { new DateTime(2026, 10, 11), 49.28m },
-        { new DateTime(2026, 10, 12), 49.34m },
-        { new DateTime(2026, 10, 13), 49.36m },
-        { new DateTime(2026, 10, 14), 49.39m },
-        { new DateTime(2026, 10, 15), 49.42m },
-        { new DateTime(2026, 10, 16), 49.53m },
-        { new DateTime(2026, 10, 17), 49.53m },
-        { new DateTime(2026, 10, 18), 49.53m }
-    };
-
     /// <summary>
-    /// Belirtilen sipariş/işlem gününe ait Dolar/TL kurunu döndürür.
+    /// Belirtilen sipariş/işlem gününe ait Dolar/TL kilitli kurunu döndürür.
     /// </summary>
     public static decimal GetRateForDate(DateTime date, decimal fallbackRate = 48.25m)
-    {
-        var targetDate = date.Date;
+        => RealProvider.GetRateForDate(date, fallbackRate);
 
-        if (RateCache.TryGetValue(targetDate, out var cachedRate))
-        {
-            return cachedRate;
-        }
-
-        if (KnownRates.TryGetValue(targetDate, out var exactRate))
-        {
-            RateCache[targetDate] = exactRate;
-            return exactRate;
-        }
-
-        // En yakın geçmiş bilinen kuru bul
-        var pastRate = KnownRates
-            .Where(kvp => kvp.Key <= targetDate)
-            .OrderByDescending(kvp => kvp.Key)
-            .Select(kvp => (decimal?)kvp.Value)
-            .FirstOrDefault();
-
-        var resolved = pastRate ?? fallbackRate;
-        RateCache[targetDate] = resolved;
-        return resolved;
-    }
-
+    /// <summary>
+    /// Belirli bir gün için özel kur ataması yapar.
+    /// </summary>
     public static void SetCustomRate(DateTime date, decimal rate)
-    {
-        if (rate > 0)
-        {
-            RateCache[date.Date] = rate;
-            KnownRates[date.Date] = rate;
-        }
-    }
+        => RealProvider.SetCustomRate(date, rate);
+
+    /// <summary>
+    /// Sipariş listesindeki tüm farklı tarihleri tek bir hamlede toplu olarak API'den çeker ve önbelleğe kilitler.
+    /// </summary>
+    public static Task HydrateRatesForDatesAsync(IEnumerable<DateTime> dates, CancellationToken ct = default)
+        => RealProvider.HydrateRatesForDatesAsync(dates, ct);
 }

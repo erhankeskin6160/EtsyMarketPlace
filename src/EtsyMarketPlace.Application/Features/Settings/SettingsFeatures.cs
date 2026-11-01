@@ -103,13 +103,13 @@ public sealed class SaveTelegramSettingsHandler(IShopSettingsRepository reposito
     }
 }
 
-// 4. Carrier Sessions
-public sealed record GetCarrierSessionsRequest(string ShopId) : IRequest<ServiceResponse>;
+// 4. Persisted Carrier Sessions (Veritabanında saklanan oturum kayıtları)
+public sealed record GetPersistedCarrierSessionsRequest(string ShopId) : IRequest<ServiceResponse>;
 
-public sealed class GetCarrierSessionsHandler(IShopSettingsRepository repository)
-    : IRequestHandler<GetCarrierSessionsRequest, ServiceResponse>
+public sealed class GetPersistedCarrierSessionsHandler(IShopSettingsRepository repository)
+    : IRequestHandler<GetPersistedCarrierSessionsRequest, ServiceResponse>
 {
-    public async Task<ServiceResponse> Handle(GetCarrierSessionsRequest request, CancellationToken cancellationToken)
+    public async Task<ServiceResponse> Handle(GetPersistedCarrierSessionsRequest request, CancellationToken cancellationToken)
     {
         var sessions = await repository.GetCarrierSessionsAsync(request.ShopId, cancellationToken);
         return ServiceResponse.CreateSuccess("Kargo taşıyıcı oturumları getirildi.", sessions);
