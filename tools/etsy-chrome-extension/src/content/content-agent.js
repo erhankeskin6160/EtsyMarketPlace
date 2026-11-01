@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
 
-  const AGENT_VERSION = '2.5.0';
+  const AGENT_VERSION = '2.6.0';
 
   if (typeof root.__etsyCopilotV2Cleanup === 'function') {
     try { root.__etsyCopilotV2Cleanup(); } catch {}
@@ -1375,25 +1375,36 @@
     return finalScan;
   }
 
-  // Tarayıcı Content Script mesaj dinleyicisi ve otomatik Drawer gözlemcisi
+  // Tarayıcı Content Script mesaj dinleyicisi ve kullanıcı kontrollü pasif Drawer gözlemcisi
   if (isExtensionContextValid() && typeof document !== 'undefined' && document.body) {
     let lastDrawerId = '';
+    let mutationDebounceTimer = null;
+
     const observer = new MutationObserver(() => {
       if (!isExtensionContextValid()) {
         try { observer.disconnect(); } catch {}
         return;
       }
       if (detectPageType() !== 'orders') return;
-      try {
-        const drOrder = extractOpenDrawerOrder(document);
-        if (drOrder && drOrder.isFullAddress && drOrder.receiptId !== lastDrawerId) {
-          lastDrawerId = drOrder.receiptId;
-          chrome.runtime.sendMessage({
-            action: 'CA_DRAWER_CAPTURED',
-            order: drOrder
-          }).catch(() => {});
-        }
-      } catch {}
+
+      // Hızlı ön kontrol: Ekranda çekmece/dialog/aside kapsayıcısı yoksa ASLA tarama yapma! (%0 CPU & sıfır gereksiz işlem)
+      if (!document.querySelector('aside, [role="dialog"], [aria-modal="true"], .wt-overlay, [class*="drawer" i]')) {
+        return;
+      }
+
+      if (mutationDebounceTimer) clearTimeout(mutationDebounceTimer);
+      mutationDebounceTimer = setTimeout(() => {
+        try {
+          const drOrder = extractOpenDrawerOrder(document);
+          if (drOrder && drOrder.isFullAddress && drOrder.receiptId !== lastDrawerId) {
+            lastDrawerId = drOrder.receiptId;
+            chrome.runtime.sendMessage({
+              action: 'CA_DRAWER_CAPTURED',
+              order: drOrder
+            }).catch(() => {});
+          }
+        } catch {}
+      }, 400);
     });
 
     try {

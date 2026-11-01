@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const totalFull = appState.livePageOrders.filter((o) => o.isFullAddress).length;
     const namedCount = appState.livePageOrders.filter((o) => o.buyerName && o.buyerName !== 'Etsy Müşterisi').length;
     ordDetectBanner.className = 'detect-banner ok';
-    ordDetectBanner.textContent = `✅ ${appState.livePageOrders.length} sipariş okundu (${totalFull} Tam Adres • ${namedCount} Müşteri${reactFull > 0 ? ` • ${reactFull} React Bellek` : ''}).`;
+    ordDetectBanner.textContent = `🛡️ Pasif İzleme (Sıfır Bot Riski • ${totalFull}/${appState.livePageOrders.length} Tam Adres • ${namedCount} Müşteri)`;
   } else if (appState.pageType === 'finance') {
     activateTab('finance');
     finDetectBanner.className = 'detect-banner ok';
