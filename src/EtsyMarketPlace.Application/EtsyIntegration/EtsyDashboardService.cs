@@ -1,4 +1,4 @@
-namespace EtsyMarketPlace.Application.EtsyIntegration;
+﻿namespace EtsyMarketPlace.Application.EtsyIntegration;
 
 using System;
 using System.Collections.Generic;
@@ -69,17 +69,36 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             return (startDate.Value, endDate.Value);
         }
 
-        return period?.ToLowerInvariant() switch
+        var trNow = now.ToOffset(TimeSpan.FromHours(3));
+
+        return period?.Trim().ToLowerInvariant() switch
         {
-            "today" => (now.Date, now),
-            "last_month" => (
-                new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).AddMonths(-1).ToUniversalTime(), 
-                new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime()),
-            null or "" or "this_month" => (
-                // Türkiye saat dilimi (UTC+3) ile ay başlangıcı: 1. gün 00:00 TR = Önceki ay son günü 21:00 UTC
-                new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(), 
+            "today" or "bugun" => (
+                new DateTimeOffset(trNow.Year, trNow.Month, trNow.Day, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(),
                 now),
-            _ => throw new ArgumentException("period today, this_month veya last_month olmalıdır.")
+            "last_month" or "gecen_ay" => (
+                new DateTimeOffset(trNow.Year, trNow.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).AddMonths(-1).ToUniversalTime(), 
+                new DateTimeOffset(trNow.Year, trNow.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime()),
+            "last_90_days" or "90d" or "son_90_gun" => (
+                now.AddDays(-90),
+                now),
+            "this_year" or "bu_yil" => (
+                new DateTimeOffset(trNow.Year, 1, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(),
+                now),
+            "last_year" or "gecen_yil" => (
+                new DateTimeOffset(trNow.Year - 1, 1, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(),
+                new DateTimeOffset(trNow.Year, 1, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime()),
+            "all_time" or "all" or "tum_zamanlar" => (
+                new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(),
+                now),
+            null or "" or "this_month" or "bu_ay" => (
+                // Türkiye saat dilimi (UTC+3) ile ay başlangıcı: 1. gün 00:00 TR = Önceki ay son günü 21:00 UTC
+                new DateTimeOffset(trNow.Year, trNow.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(), 
+                now),
+            _ => (
+                // Beklenmeyen periyot parametrelerinde dashboard'u kilitlemek yerine güvenli fallback
+                new DateTimeOffset(trNow.Year, trNow.Month, 1, 0, 0, 0, TimeSpan.FromHours(3)).ToUniversalTime(),
+                now)
         };
     }
 
