@@ -1,4 +1,4 @@
-namespace EtsyMarketPlace.Application.Tests;
+﻿namespace EtsyMarketPlace.Application.Tests;
 
 using System;
 using System.Collections.Generic;
@@ -244,5 +244,56 @@ public sealed class EtsyDashboardServiceTests
     {
         var category = EtsyLedgerFinancialEngine.ClassifyEntry("disburse2", "shop_payment", "disburse2");
         Assert.Equal("deposit", category);
+    }
+
+    [Fact]
+    public async Task GetFinancialPerformanceAsync_SupportsAllTimePeriod()
+    {
+        var reporting = new FakeReportingService();
+        var ledger = new FakeLedgerReportService { LedgerOk = true };
+        var etsyClient = new FakeEtsyDataClient();
+        var repo = new FakeIntegrationRepository();
+        var bank = new BankDepositService();
+
+        var service = new EtsyDashboardService(reporting, ledger, etsyClient, repo, bank);
+        var result = await service.GetFinancialPerformanceAsync("53236321", "all_time", null, null);
+
+        Assert.True(result.LedgerOk);
+        Assert.Equal(2000m, result.GrossSales);
+        Assert.Equal(1000m, result.NetProfit);
+    }
+
+    [Fact]
+    public async Task GetFinancialPerformanceAsync_SupportsThisYearPeriod()
+    {
+        var reporting = new FakeReportingService();
+        var ledger = new FakeLedgerReportService { LedgerOk = true };
+        var etsyClient = new FakeEtsyDataClient();
+        var repo = new FakeIntegrationRepository();
+        var bank = new BankDepositService();
+
+        var service = new EtsyDashboardService(reporting, ledger, etsyClient, repo, bank);
+        var result = await service.GetFinancialPerformanceAsync("53236321", "this_year", null, null);
+
+        Assert.True(result.LedgerOk);
+        Assert.Equal(2000m, result.GrossSales);
+    }
+
+    [Fact]
+    public async Task GetFinancialPerformanceAsync_SupportsUnknownPeriod_FallsBackToThisMonthSafely()
+    {
+        var reporting = new FakeReportingService();
+        var ledger = new FakeLedgerReportService { LedgerOk = true };
+        var etsyClient = new FakeEtsyDataClient();
+        var repo = new FakeIntegrationRepository();
+        var bank = new BankDepositService();
+
+        var service = new EtsyDashboardService(reporting, ledger, etsyClient, repo, bank);
+        // Önceden "period today, this_month veya last_month olmalıdır." hatası fırlatıyordu.
+        // Artık güvenli bir şekilde this_month'a fallback yapmalıdır.
+        var result = await service.GetFinancialPerformanceAsync("53236321", "unknown_period_xyz", null, null);
+
+        Assert.True(result.LedgerOk);
+        Assert.Equal(2000m, result.GrossSales);
     }
 }

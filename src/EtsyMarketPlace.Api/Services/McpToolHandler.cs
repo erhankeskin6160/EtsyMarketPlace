@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Application.EtsyIntegration;
 
@@ -230,11 +230,13 @@ public sealed class McpToolHandler
         }
 
         var period = parameters.TryGetProperty("period", out var value) ? value.GetString() : "this_month";
-        return period switch
+        return period?.Trim().ToLowerInvariant() switch
         {
-            "today" => (now.Date, now),
-            "last_month" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddTicks(-1)),
-            "this_month" or null or "" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now),
+            "today" or "bugun" => (now.Date, now),
+            "last_month" or "gecen_ay" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddMonths(-1), new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero).AddTicks(-1)),
+            "this_year" or "bu_yil" => (new DateTimeOffset(now.Year, 1, 1, 0, 0, 0, TimeSpan.Zero), now),
+            "all_time" or "all" or "tum_zamanlar" => (new DateTimeOffset(2024, 1, 1, 0, 0, 0, TimeSpan.Zero), now),
+            "this_month" or null or "" or "bu_ay" => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now),
             _ => (new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero), now)
         };
     }
