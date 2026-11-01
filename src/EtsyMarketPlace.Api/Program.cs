@@ -233,10 +233,40 @@ builder.Services.AddSwaggerGen(c =>
     {
         Title = "EtsyMarketPlace Gemini Spark & MCP Web API",
         Version = "v1",
-        Description = "Google Gemini Spark (gemini.google.com/spark/apps) ve harici sistemler için Model Context Protocol (MCP) ve Finansal Raporlama API'si."
+        Description = "Google Gemini Spark (gemini.google.com/spark/apps) ve harici sistemler iÃ§in Model Context Protocol (MCP) ve Finansal Raporlama API'si."
+    });
+
+    c.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.OpenApiSecurityScheme
+    {
+        Description = "VDS API anahtarÄ±. Ä°stek baÅŸlÄ±ÄŸÄ±nda 'X-API-KEY: {anahtar}' ÅŸeklinde gÃ¶nderilmelidir.",
+        Name = "X-API-KEY",
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.SecuritySchemeType.ApiKey,
+        Scheme = "ApiKeyScheme"
+    });
+
+    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
+    {
+        Description = "JWT Bearer yetkilendirme baÅŸlÄ±ÄŸÄ±. 'Bearer {token}' formatÄ±nda girilmelidir.",
+        Name = "Authorization",
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT"
+    });
+
+    c.AddSecurityRequirement(doc => new Microsoft.OpenApi.OpenApiSecurityRequirement
+    {
+        {
+            new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", doc),
+            new List<string>()
+        },
+        {
+            new Microsoft.OpenApi.OpenApiSecuritySchemeReference("Bearer", doc),
+            new List<string>()
+        }
     });
 });
-
 var app = builder.Build();
 
 // 4.1. PostgreSQL Otomatik Tablo Başlatıcı
@@ -271,6 +301,7 @@ if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
 
 app.UseCors();
 app.UseMiddleware<ClientVersionGateMiddleware>();
+app.UseMiddleware<SwaggerBasicAuthMiddleware>();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
