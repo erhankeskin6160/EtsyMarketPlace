@@ -331,10 +331,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderOrders();
   renderFinance();
 
-  // 3. Mavi Buton: Satır İçi Açık Adresleri Çöz & React Belleği Yeniden Oku
+  // 3. Mavi Buton: Tüm Siparişlerin Tam Adreslerini Otomatik Çöz (Çekmece Gezgini)
   btnResolveAddresses.addEventListener('click', async () => {
     btnResolveAddresses.disabled = true;
-    btnResolveAddresses.textContent = '⏳ Satır içi adres panelleri açılıyor ve React belleği okunuyor...';
+    btnResolveAddresses.textContent = '⏳ Siparişler taranıyor ve çekmeceler otomatik açılıyor...';
     ordResultBox.className = 'feedback-box hidden';
 
     const targetTabId = await getCurrentWindowActiveTabId();
@@ -343,7 +343,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       tabId: targetTabId
     });
     btnResolveAddresses.disabled = false;
-    btnResolveAddresses.textContent = '🎯 Satır İçi Açık Adresleri Çöz & Yenile';
+    btnResolveAddresses.textContent = '🎯 Tüm Siparişlerin Tam Adreslerini Otomatik Çöz';
 
     if (res?.ok && res.state) {
       appState = res.state;
@@ -353,13 +353,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       renderOrders();
 
       const full = appState.livePageOrders.filter((o) => o.isFullAddress).length;
-      const clicked = res?.diagnostics?.structuralDom?.clickedInlineToggles || 0;
       showFeedback(
         ordResultBox,
         full > 0,
         full > 0
-          ? `🎯 Sayfadaki ${full}/${appState.livePageOrders.length} siparişin tam sokak adresi çözüldü!${clicked > 0 ? ` (${clicked} panel açıldı)` : ''}`
-          : 'ℹ️ Bu sayfadaki siparişlerde açılabilir satır içi sokak paneli bulunamadı; herhangi bir siparişe tıklayarak çekmeceden tam adres yakalayabilirsiniz.'
+          ? `🎯 Sayfadaki ${full}/${appState.livePageOrders.length} siparişin tam sokak adresi otomatik olarak çekmecelerden çözüldü!`
+          : 'ℹ️ Sayfadaki siparişlerin adresleri okunamadı; sayfayı yenileyip (F5) tekrar deneyebilirsiniz.'
       );
     } else {
       showFeedback(ordResultBox, false, `⚠️ ${res?.message || res?.error || 'Adres çözümleme başarısız.'}`);

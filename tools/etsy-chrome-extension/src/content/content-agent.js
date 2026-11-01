@@ -1,4 +1,4 @@
-// Etsy Copilot v2.3.0 — Katman 2: Dil ve Google-Çeviri Bağımsız Yapısal DOM & Inline Accordion Ajanı
+// Etsy Copilot v2.4.0 — Katman 2: Dil ve Google-Çeviri Bağımsız Yapısal DOM & Inline Accordion Ajanı
 // - "Ship to" / İngilizce metin aramasına BAĞIMLI DEĞİLDİR; varsa başlığı ve gizli .wt-content-toggle__body HTML'ini de çözer.
 // - Google Çeviri (<font dir="auto">) ve parçalı "#<a>4210985421</a>" metin düğümlerini birleştirerek okur.
 // - Çekmece açıkken arka plandaki <main aria-hidden="true"> kartlarını kaybetmez; hem listeyi hem çekmeceyi eşzamanlı okur.
@@ -6,7 +6,7 @@
 (function (root) {
   'use strict';
 
-  const AGENT_VERSION = '2.3.0';
+  const AGENT_VERSION = '2.4.0';
 
   if (typeof root.__etsyCopilotV2Cleanup === 'function') {
     try { root.__etsyCopilotV2Cleanup(); } catch {}
@@ -1193,6 +1193,136 @@
     return extracted;
   }
 
+  /**
+   * Çekmeceleri tek tek elle açma zahmetini ortadan kaldıran güvenli ve insani DOM gezgini:
+   * 1. Önce satır içi akordeonları açar (expandAllInlineAccordions).
+   * 2. Hâlâ tam adresi olmayan kartlar için, kartın sipariş detayını açan bağlantısına (order link)
+   *    180ms aralıkla sırayla tıklar, çekmece açıldığında adresi yakalar ve arşive iletir.
+   * 3. İşlem bittiğinde çekmeceyi 'X' butonu veya Escape tuşu ile kapatarak sayfayı ilk haline getirir.
+   */
+  async function walkAndCaptureOrderDrawers(doc) {
+    const targetDoc = doc || (typeof document !== 'undefined' ? document : null);
+    if (!targetDoc || !targetDoc.body) return extractOrdersFromDom(targetDoc);
+
+    // 1. Önce satır içi açılabilenleri aç
+    let currentResult = await expandAllInlineAccordions(targetDoc);
+    const resolvedOrders = new Map();
+    for (const ord of currentResult.orders) {
+      resolvedOrders.set(ord.receiptId, ord);
+    }
+    if (currentResult.drawerOrder && currentResult.drawerOrder.isFullAddress) {
+      resolvedOrders.set(currentResult.drawerOrder.receiptId, currentResult.drawerOrder);
+    }
+
+    // 2. Hâlâ tam adresi olmayan kartları belirle
+    const isolated = isolateOrderCards(targetDoc);
+    const missing = isolated.filter(({ id }) => {
+      const cur = resolvedOrders.get(id);
+      return !cur || !cur.isFullAddress;
+    });
+
+    if (missing.length === 0) {
+      return currentResult;
+    }
+
+    function safeTriggerClick(el) {
+      if (!el) return;
+      try {
+        if (typeof MouseEvent !== 'undefined') {
+          el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+          el.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+        }
+        el.click();
+        if (typeof MouseEvent !== 'undefined') {
+          el.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        }
+      } catch {
+        try { el.click(); } catch {}
+      }
+    }
+
+    function closeAnyOpenDrawer() {
+      try {
+        const closeBtn = targetDoc.querySelector(
+          '[data-wt-overlay-close], button[aria-label*="close" i], button[aria-label*="kapat" i], .wt-overlay__close, [class*="overlay__close" i]'
+        );
+        if (closeBtn) {
+          safeTriggerClick(closeBtn);
+        } else if (typeof KeyboardEvent !== 'undefined') {
+          targetDoc.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+        }
+      } catch {}
+    }
+
+    let drawersOpenedCount = 0;
+
+    for (let i = 0; i < missing.length; i++) {
+      const { id, idAnchor, cardEl } = missing[i];
+
+      // Kart içinde çekmeceyi açan elementi bul (Öncelik: order_id bağlantısı veya kart satırı)
+      let clickable = idAnchor;
+      if (cardEl && cardEl.querySelector) {
+        clickable = cardEl.querySelector(`a[href*="order_id=${id}"], a[href*="/sold/all?order_id="], [data-order-id="${id}"]`)
+          || (idAnchor.closest ? idAnchor.closest('a, button, tr, [class*="row" i]') : null)
+          || idAnchor;
+      }
+
+      if (clickable) {
+        safeTriggerClick(clickable);
+        drawersOpenedCount++;
+
+        // Çekmecenin render olmasını bekle (maks 450ms)
+        const start = Date.now();
+        let captured = null;
+        while (Date.now() - start < 450) {
+          await new Promise((r) => setTimeout(r, 60));
+          const drOrder = extractOpenDrawerOrder(targetDoc);
+          if (drOrder && String(drOrder.receiptId) === String(id) && drOrder.isFullAddress) {
+            captured = drOrder;
+            break;
+          }
+        }
+
+        if (captured) {
+          resolvedOrders.set(id, captured);
+          if (isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.runtime) {
+            chrome.runtime.sendMessage({
+              action: 'CA_DRAWER_CAPTURED',
+              order: captured
+            }).catch(() => {});
+          }
+        }
+      }
+
+      if (i < missing.length - 1) {
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    }
+
+    // İşlem bittiğinde çekmeceyi kapat
+    await new Promise((r) => setTimeout(r, 100));
+    closeAnyOpenDrawer();
+    await new Promise((r) => setTimeout(r, 150));
+
+    // Son durumu derle
+    const finalScan = extractOrdersFromDom(targetDoc);
+    const finalOrders = finalScan.orders.map((ord) => {
+      const rich = resolvedOrders.get(ord.receiptId);
+      if (rich && rich.isFullAddress) {
+        return rich;
+      }
+      return ord;
+    });
+
+    finalScan.orders = finalOrders;
+    if (finalScan.diagnostics) {
+      finalScan.diagnostics.drawersOpenedCount = drawersOpenedCount;
+      finalScan.diagnostics.autoWalkCompleted = true;
+    }
+
+    return finalScan;
+  }
+
   // Tarayıcı Content Script mesaj dinleyicisi ve otomatik Drawer gözlemcisi
   if (isExtensionContextValid() && typeof document !== 'undefined' && document.body) {
     let lastDrawerId = '';
@@ -1247,13 +1377,13 @@
 
       if (message.action === 'CA_EXPAND_INLINE_ADDRESSES') {
         (async () => {
-          const expanded = await expandAllInlineAccordions(document);
+          const resolved = await walkAndCaptureOrderDrawers(document);
           sendResponse({
             ok: true,
             version: AGENT_VERSION,
-            orders: expanded.orders,
-            drawerOrder: expanded.drawerOrder,
-            diagnostics: expanded.diagnostics
+            orders: resolved.orders,
+            drawerOrder: resolved.drawerOrder,
+            diagnostics: resolved.diagnostics
           });
         })();
         return true;
@@ -1279,7 +1409,8 @@
     extractOrdersFromDom,
     extractOpenDrawerOrder,
     extractFinanceSnapshot,
-    expandAllInlineAccordions
+    expandAllInlineAccordions,
+    walkAndCaptureOrderDrawers
   });
 
   root.EtsyCopilotContentAgent = exported;

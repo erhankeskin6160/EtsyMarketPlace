@@ -1,4 +1,4 @@
-// Etsy Copilot v2.3.0 — Katman 3: Durumsuz (Stateless) MV3 Service Worker Orkestratörü
+// Etsy Copilot v2.4.0 — Katman 3: Durumsuz (Stateless) MV3 Service Worker Orkestratörü
 // KURAL: Hiçbir global değişkende durum tutulmaz; tüm durum chrome.storage.local üzerinden okunur/yazılır.
 
 import {
