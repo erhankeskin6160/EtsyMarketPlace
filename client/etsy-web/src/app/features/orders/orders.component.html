@@ -258,8 +258,10 @@
               <span class="tracking-code-info">Takip No: <strong>{{ selectedOrder.trackingNumber }}</strong> ({{ selectedOrder.carrier || 'Kargo' }})</span>
               <a *ngIf="selectedOrder.labelUrl" [href]="selectedOrder.labelUrl" target="_blank" class="btn-download-label-link">📄 Etiketi İndir / Aç</a>
             </div>
+          </div>
 
-            <!-- Recipient Delivery Address Card & Edit Button -->
+          <div class="detail-scroll">
+            <!-- Recipient Delivery Address Card & Edit Button (Inside Scroll) -->
             <div class="delivery-address-card">
               <div class="address-card-header">
                 <div class="address-header-left">
@@ -316,9 +318,6 @@
                 </span>
               </div>
             </div>
-          </div>
-
-          <div class="detail-scroll">
             <!-- 1. PAKET ÖLÇÜLERİ (DESKTOP GRID PARITY + HAZIR KUTU ŞABLONLARI) -->
             <div class="glass-card package-specs-card">
               <div class="card-head-line" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
