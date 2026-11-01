@@ -32,9 +32,8 @@ public class AuthEnforcementTests : IClassFixture<ApiTestFactory>
     [Fact]
     public async Task ProtectedEndpoint_WithApiKey_ReturnsOk()
     {
-        using var factory = TestAuthHelper.CreateFactoryWithApiKey("test-api-key-0123456789abcd");
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("X-Api-Key", "test-api-key-0123456789abcd");
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Api-Key", ApiTestFactory.TestApiKey);
 
         var response = await client.GetAsync("/api/etsy/financial/performance?shopId=53236321&period=last_month");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -43,8 +42,7 @@ public class AuthEnforcementTests : IClassFixture<ApiTestFactory>
     [Fact]
     public async Task ProtectedEndpoint_WithWrongApiKey_ReturnsUnauthorized()
     {
-        using var factory = TestAuthHelper.CreateFactoryWithApiKey("test-api-key-0123456789abcd");
-        var client = factory.CreateClient();
+        var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", "wrong-key");
 
         var response = await client.GetAsync("/api/etsy/financial/performance?shopId=53236321&period=last_month");

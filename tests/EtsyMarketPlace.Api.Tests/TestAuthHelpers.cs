@@ -7,14 +7,16 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
-/// <summary>API testleri için deterministik JWT anahtarı sağlayan fabrika.</summary>
+/// <summary>API testleri için deterministik JWT anahtarı ve API anahtarı sağlayan fabrika.</summary>
 public sealed class ApiTestFactory : WebApplicationFactory<Program>
 {
     public const string TestJwtSecret = "Integration_Test_Secret_Key_0123456789abcdef";
+    public const string TestApiKey = "test-api-key-0123456789abcd";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("Jwt:Secret", TestJwtSecret);
+        builder.UseSetting("Security:ApiKey", TestApiKey);
     }
 }
 

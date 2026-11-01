@@ -1,4 +1,4 @@
-﻿namespace EtsyMarketPlace.Api.Tests;
+namespace EtsyMarketPlace.Api.Tests;
 
 using System;
 using System.Collections.Generic;
@@ -49,7 +49,7 @@ public class DashboardResponseCacheTests
         var executionCounter = 0;
 
         // 10 adet eşzamanlı istek aynı anda çağrıldığında
-        var tasks = new List<Task<string>>();
+        var tasks = new List<Task<string?>>();
         for (int i = 0; i < 10; i++)
         {
             tasks.Add(DashboardResponseCache.GetOrAddAsync(
