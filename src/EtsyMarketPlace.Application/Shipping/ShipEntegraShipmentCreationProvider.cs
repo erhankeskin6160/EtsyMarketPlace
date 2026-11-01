@@ -143,6 +143,18 @@ public sealed class ShipEntegraShipmentCreationProvider : IShipmentCreationProvi
 
         if (string.Equals(order.CountryCode, "US", StringComparison.OrdinalIgnoreCase))
         {
+            // Panel kodu 4-2-2-2-2 gruplayıp kendi HTS listesiyle karşılaştırır. Listede
+            // birebir bulunmayan "00" istatistik gruplu kodları en yakın geçerli üst koda indir
+            // (örn. 3926400000 -> 3926.40.00), aksi halde geçerli bir gönderi boşuna reddedilir.
+            foreach (var product in products)
+            {
+                string? normalized = ShipEntegraHsCodeCatalog.NormalizeForUs(product.HsCode);
+                if (!string.IsNullOrWhiteSpace(normalized))
+                {
+                    product.HsCode = normalized;
+                }
+            }
+
             var invalidCodes = products
                 .Select(p => p.HsCode)
                 .Where(code => !ShipEntegraHsCodeCatalog.IsUsCode(code))

@@ -63,6 +63,43 @@ public static class ShipEntegraHsCodeCatalog
     }
 
     /// <summary>Geçersiz kod için aynı fasıldan benzer geçerli kodlar önerir.</summary>
+    /// <summary>
+    /// ABD listesinde birebir bulunmayan kodlarda sondaki "00" istatistik gruplarını atarak
+    /// en yakın geçerli üst kodu döndürür. Kod zaten geçerliyse veya indirgenecek geçerli bir
+    /// ata yoksa null döner (çağıran taraf için "değişiklik gerekmiyor" anlamında).
+    /// Örn: 3926400000 -> 3926.40.00.00 -> 3926.40.00
+    /// </summary>
+    public static string? NormalizeForUs(string? hsCode)
+    {
+        string formatted = Format(hsCode);
+        if (string.IsNullOrEmpty(formatted))
+        {
+            return null;
+        }
+
+        if (UsCodes.Value.Contains(formatted))
+        {
+            return null;
+        }
+
+        var parts = formatted.Split('.');
+        for (int len = parts.Length - 1; len >= 2; len--)
+        {
+            // Yalnızca sıfır istatistik grupları atılır; anlamlı bir alt grup asla düşürülmez.
+            if (parts[len] != "00")
+            {
+                break;
+            }
+
+            string candidate = string.Join('.', parts.Take(len));
+            if (UsCodes.Value.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
     public static string SuggestFor(string? hsCode, int max = 6)
     {
         string formatted = Format(hsCode);
