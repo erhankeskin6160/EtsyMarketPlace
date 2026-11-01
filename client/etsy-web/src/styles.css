@@ -182,3 +182,9 @@ body {
   color: #34d399;
   border: 1px solid rgba(16, 185, 129, 0.3);
 }
+
+/* Ensure Floating Copilot stays above cockpit footer and doesn't overlap action buttons */
+body:has(.cockpit-footer) .floating-btn-wrap {
+  bottom: 60px !important;
+  right: 20px !important;
+}
