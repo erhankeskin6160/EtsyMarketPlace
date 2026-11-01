@@ -7,6 +7,7 @@ using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Application.Features.Settings;
 
 [ApiController]
+[Route("api/v{version:apiVersion}")]
 [Route("api")]
 public class SettingsController : BaseApiController
 {

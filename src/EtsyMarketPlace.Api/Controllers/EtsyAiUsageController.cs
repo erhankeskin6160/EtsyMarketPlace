@@ -11,6 +11,7 @@ using EtsyMarketPlace.Application.Features.AiUsage.Queries.GetAiUsageHistory;
 using EtsyMarketPlace.Application.Features.AiUsage.Queries.GetAiUsageStats;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy/ai-usage")]
 [Route("api/etsy/ai-usage")]
 public class EtsyAiUsageController : ControllerBase
 {

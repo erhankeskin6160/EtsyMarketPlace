@@ -25,9 +25,18 @@ function getCandidateBaseUrls(settings) {
 }
 
 function buildAuthHeaders(settings) {
+  let clientVersion = '2.6.0';
+  try {
+    if (typeof chrome !== 'undefined' && chrome?.runtime?.getManifest) {
+      clientVersion = chrome.runtime.getManifest()?.version || '2.6.0';
+    }
+  } catch {}
+
   return {
     'Content-Type': 'application/json',
-    'X-Api-Key': String(settings?.apiKey || DEFAULT_SETTINGS.apiKey).trim()
+    'X-Api-Key': String(settings?.apiKey || DEFAULT_SETTINGS.apiKey).trim(),
+    'X-Client-Type': 'chrome-extension',
+    'X-Client-Version': clientVersion
   };
 }
 

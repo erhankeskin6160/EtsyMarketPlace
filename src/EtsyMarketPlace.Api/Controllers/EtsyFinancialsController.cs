@@ -1,4 +1,4 @@
-﻿using EtsyMarketPlace.Application.Features.Financials;
+using EtsyMarketPlace.Application.Features.Financials;
 using EtsyMarketPlace.Application.Features.Orders.Commands.SyncExtensionOrders;
 using System;
 using System.Collections.Generic;
@@ -20,6 +20,7 @@ using EtsyMarketPlace.Application.Features.Queries.Financials.GetMonthlyOrderSum
 namespace EtsyMarketPlace.Api.Controllers;
 
 [ApiController]
+[Route("api/v{version:apiVersion}")]
 [Route("api")]
 public class EtsyFinancialsController : BaseApiController
 {

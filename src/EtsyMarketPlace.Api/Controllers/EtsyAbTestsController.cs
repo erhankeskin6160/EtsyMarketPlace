@@ -13,6 +13,7 @@ using EtsyMarketPlace.Application.Features.AbTests.Commands.UpdateAbTestStatus;
 using EtsyMarketPlace.Application.Features.AbTests.Queries.GetAbTests;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy/ab-tests")]
 [Route("api/etsy/ab-tests")]
 public class EtsyAbTestsController : ControllerBase
 {

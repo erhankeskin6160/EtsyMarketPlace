@@ -18,6 +18,7 @@ using EtsyMarketPlace.Application.Features.Logistics.Queries.SearchHsCodes;
 using EtsyMarketPlace.Application.Features.Logistics.Queries.SearchSellerTaxonomyNodes;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy")]
 [Route("api/etsy")]
 public class EtsyLogisticsController : BaseApiController
 {

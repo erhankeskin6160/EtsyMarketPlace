@@ -14,6 +14,7 @@ using EtsyMarketPlace.Application.Features.Auth.Commands.Register;
 using EtsyMarketPlace.Application.Features.Auth.Queries.GetCurrentUser;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/auth")]
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {

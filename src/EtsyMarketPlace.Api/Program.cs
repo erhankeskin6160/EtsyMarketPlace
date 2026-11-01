@@ -1,4 +1,6 @@
-﻿using System.Security.Cryptography;
+using Asp.Versioning;
+using EtsyMarketPlace.Api.Middleware;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using EtsyMarketPlace.Api.Services;
@@ -44,6 +46,23 @@ builder.Services.AddControllers(options =>
     options.Filters.Add<ValidationFilter>();
 });
 builder.Services.AddApplicationValidation();
+
+// 1.01. API Sürümleme (Dual-Routing v1 & Sürümsüz Geriye Uyumluluk)
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = ApiVersionReader.Combine(
+        new UrlSegmentApiVersionReader(),
+        new HeaderApiVersionReader("X-Api-Version"),
+        new QueryStringApiVersionReader("api-version")
+    );
+}).AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'VVV";
+    options.SubstituteApiVersionInUrl = true;
+});
 
 // 1.1. Kimlik doğrulama (P0): JWT Bearer + X-Api-Key (makine-makine) ve varsayılan zorunlu politika.
 builder.Services.AddAuthentication("Multi")
@@ -251,6 +270,7 @@ if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
 }
 
 app.UseCors();
+app.UseMiddleware<ClientVersionGateMiddleware>();
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {

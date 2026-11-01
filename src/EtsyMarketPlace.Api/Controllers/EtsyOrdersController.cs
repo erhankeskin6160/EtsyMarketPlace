@@ -21,6 +21,7 @@ using EtsyMarketPlace.Application.Features.Orders.Queries.GetFulfillmentQueue;
 using EtsyMarketPlace.Application.Features.Orders.Queries.GetReceiptDetail;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy/orders")]
 [Route("api/etsy/orders")]
 public class EtsyOrdersController : BaseApiController
 {

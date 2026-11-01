@@ -13,6 +13,7 @@ using EtsyMarketPlace.Application.Features.Tracking.Queries.GetTrackingItems;
 using EtsyMarketPlace.Application.Features.Tracking.Queries.GetTrackingSnapshots;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy/tracking")]
 [Route("api/etsy/tracking")]
 public class EtsyTrackingController : ControllerBase
 {

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using EtsyMarketPlace.Application.Mcp;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy/mcp")]
 [Route("api/etsy/mcp")]
 public sealed class EtsyMcpController : BaseApiController
 {

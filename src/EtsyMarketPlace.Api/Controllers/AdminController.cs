@@ -16,6 +16,7 @@ using EtsyMarketPlace.Application.Features.Admin.Queries.GetSystemStats;
 
 [Authorize(Roles = EtsyMarketPlace.Application.Auth.UserRoles.Admin)]
 [ApiController]
+[Route("api/v{version:apiVersion}/admin")]
 [Route("api/admin")]
 public class AdminController : ControllerBase
 {

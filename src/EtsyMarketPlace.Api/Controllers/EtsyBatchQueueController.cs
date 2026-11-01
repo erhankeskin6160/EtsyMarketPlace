@@ -13,6 +13,7 @@ using EtsyMarketPlace.Application.Features.BatchQueue.Commands.ProcessBatchItem;
 using EtsyMarketPlace.Application.Features.BatchQueue.Queries.GetBatchQueue;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy/batch-queue")]
 [Route("api/etsy/batch-queue")]
 public class EtsyBatchQueueController : ControllerBase
 {

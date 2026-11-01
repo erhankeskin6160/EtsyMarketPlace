@@ -1,4 +1,4 @@
-﻿namespace EtsyMarketPlace.Api.Controllers;
+namespace EtsyMarketPlace.Api.Controllers;
 
 using System;
 using System.Linq;
@@ -18,6 +18,7 @@ using EtsyMarketPlace.Application.Features.Listings.Queries.GetListingAudits;
 using EtsyMarketPlace.Application.Features.Listings.Queries.GetShopListings;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy")]
 [Route("api/etsy")]
 public class EtsyListingsController : BaseApiController
 {

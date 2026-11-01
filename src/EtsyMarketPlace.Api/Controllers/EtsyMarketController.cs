@@ -6,6 +6,7 @@ using EtsyMarketPlace.Application.MarketResearch;
 using EtsyMarketPlace.Application.Features.MarketResearch;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy/market")]
 [Route("api/etsy/market")]
 public class EtsyMarketController : BaseApiController
 {

@@ -6,6 +6,7 @@ using EtsyMarketPlace.Api.Models;
 using EtsyMarketPlace.Application.Features.OAuth;
 
 [ApiController]
+[Route("api/v{version:apiVersion}/etsy")]
 [Route("api/etsy")]
 public class EtsyOAuthController : BaseApiController
 {
