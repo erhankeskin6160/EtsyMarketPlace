@@ -97,6 +97,19 @@ builder.Services.AddSingleton<ListingOptimizationService>();
 builder.Services.Configure<EtsyIntegrationOptions>(builder.Configuration.GetSection("EtsyIntegration"));
 builder.Services.Configure<EtsyApiOptions>(builder.Configuration.GetSection("Etsy"));
 
+// 2.0. Başlangıç Yapılandırma Doğrulamaları (GitHub Issue #44: ValidateOnStart)
+builder.Services.AddOptions<SecurityOptions>()
+    .Bind(builder.Configuration.GetSection("Security"))
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+builder.Services.AddOptions<JwtOptions>()
+    .Bind(builder.Configuration.GetSection("Jwt"))
+    .Validate(j => string.IsNullOrWhiteSpace(j.Secret) || j.Secret.Trim().Length >= 32, "Jwt:Secret tanımlandığında en az 32 karakter uzunluğunda olmalıdır.")
+    .ValidateOnStart();
+
+builder.Services.AddScoped<IConfigurationStatusService, ConfigurationStatusService>();
+
 // 2.1. PostgreSQL Entity Framework Core DbContext Kaydı
 var pgConnectionString = builder.Configuration.GetConnectionString("PostgreSql")
     ?? "Host=localhost;Port=5432;Database=etsy_marketplace_db;Username=postgres;Password=admin123";
