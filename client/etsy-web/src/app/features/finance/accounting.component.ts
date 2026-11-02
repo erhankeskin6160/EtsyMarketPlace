@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -10,6 +10,7 @@ import {
   OrderFinancialRow,
   ForecastKpiSummary
 } from '../../core/models/accounting.models';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-accounting',
@@ -19,6 +20,7 @@ import {
   styleUrls: ['./accounting.component.css']
 })
 export class AccountingComponent implements OnInit, OnDestroy {
+  private destroyRef = inject(DestroyRef);
   Math = Math;
   isTry = true;
   activeTab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' = 'orders';
@@ -908,7 +910,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const end = this.parseTurkishDate(this.endDate, true);
 
     // 1. Canlı sipariş listesi çekimi
-    this.etsyApi.getOrderFinancialsByDateRange(start, end).subscribe({
+    this.etsyApi.getOrderFinancialsByDateRange(start, end).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         if (isManualRefresh) this.isRefreshing = false;
         if (res && res.orders && Array.isArray(res.orders) && res.orders.length > 0) {
@@ -958,7 +960,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
 
     // 2. Canlı VDS/Etsy defter KPI kartları çekimi (GEMINI.md Kural 3: Sıfır Mock, Sunucu Finans Motoru)
-    this.etsyApi.getFinancialPerformanceByDateRange(start, end).subscribe({
+    this.etsyApi.getFinancialPerformanceByDateRange(start, end).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (perf: any) => {
         if (perf) {
           const rate = Number(perf.exchangeRateUsed ?? this.liveRate ?? 49.12);
@@ -1023,7 +1025,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
 
     // 3. Canlı banka transferleri çekimi (Payouts)
-    this.etsyApi.getBankPayoutsByDateRange(start, end).subscribe({
+    this.etsyApi.getBankPayoutsByDateRange(start, end).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (payouts: EtsyBankPayoutDto[]) => {
         // Ücret / Fee içeren satırlar elenir ve aynı dakika & benzer tutardaki mükerrer transferler deduplicate edilir
         const feeFiltered = (payouts || []).filter(p => 
@@ -1468,7 +1470,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         productCost: this.costModalProduction,
         shippingCost: this.costModalShipping,
         packagingCost: this.costModalPackaging
-      }).subscribe({
+      }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.showToast(`✅ #${order.receiptId} maliyeti ${totalCost.toFixed(2)} kaydedildi ve VDS ile senkronize edildi!`);
         },
@@ -1490,7 +1492,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   loadPaymentReserveSnapshot(): void {
-    this.etsyApi.getPaymentReserveSnapshot().subscribe({
+    this.etsyApi.getPaymentReserveSnapshot().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         if (res && res.success && res.data) {
           this.reserveSnapshot = res.data;
@@ -1519,7 +1521,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.isSavingReserve = true;
     this.reserveSnapshot.totalFundsTry = Number((Number(this.reserveSnapshot.currentBalanceTry) + Number(this.reserveSnapshot.pendingBalanceTry)).toFixed(2));
     this.reserveSnapshot.lastUpdatedUtc = new Date().toISOString();
-    this.etsyApi.savePaymentReserveSnapshot(this.reserveSnapshot).subscribe({
+    this.etsyApi.savePaymentReserveSnapshot(this.reserveSnapshot).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isSavingReserve = false;
         if (res && res.data) {

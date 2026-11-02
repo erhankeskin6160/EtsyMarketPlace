@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -6,6 +6,7 @@ import { EtsyApiService, MarketTagFrequencyDto, MarketSearchResponseDto, Tracked
 import { forkJoin, of, catchError, map } from 'rxjs';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface MarketItem {
   isTargetListing?: boolean;
@@ -68,6 +69,7 @@ export interface CompareResult {
   styleUrl: './market-research.component.css'
 })
 export class MarketResearchComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   router = inject(Router);
@@ -256,7 +258,7 @@ export class MarketResearchComponent implements OnInit {
       ? '🎯 Etsy ürün linki tespit edildi. Ürün detayları çekiliyor ve niş pazar rekabeti analiz ediliyor...'
       : `"${this.searchKeyword}" için Etsy canlı pazar verileri taranıyor...`;
 
-    this.etsyApi.searchMarket(this.searchKeyword, this.limit, this.sortBy).subscribe({
+    this.etsyApi.searchMarket(this.searchKeyword, this.limit, this.sortBy).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isLoading = false;
         if (res && res.listings && res.listings.length > 0) {
@@ -709,7 +711,7 @@ export class MarketResearchComponent implements OnInit {
       currentRank: item.listingRank || 1,
       snapshotDate: new Date().toISOString()
     };
-    this.etsyApi.saveTrackingCapture(payload).subscribe({
+    this.etsyApi.saveTrackingCapture(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.showToastMsg(`📌 #${item.id} (${item.title.slice(0, 25)}...) VDS SQLite takip tablosuna eklendi!`);
       },
@@ -914,7 +916,7 @@ export class MarketResearchComponent implements OnInit {
       apiKey: this.aiService.settings().geminiApiKey || undefined,
       model: this.aiService.activeModelName(),
       provider: this.aiService.activeProvider()
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isGeneratingReport = false;
         this.aiReport = res.reportHtml;
@@ -936,7 +938,7 @@ export class MarketResearchComponent implements OnInit {
     }
 
     this.isTrackingKeyword = true;
-    this.etsyApi.trackMarketKeyword(kw).subscribe({
+    this.etsyApi.trackMarketKeyword(kw).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isTrackingKeyword = false;
         this.showToastMsg(`📌 "${kw}" takibe alındı — pazar snapshot'ı kaydedildi.`);
@@ -958,7 +960,7 @@ export class MarketResearchComponent implements OnInit {
 
   loadTrackedKeywords(): void {
     this.isLoadingTracked = true;
-    this.etsyApi.getTrackedMarketKeywords().subscribe({
+    this.etsyApi.getTrackedMarketKeywords().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (list) => {
         this.isLoadingTracked = false;
         this.trackedKeywords = list || [];
@@ -971,7 +973,7 @@ export class MarketResearchComponent implements OnInit {
   }
 
   refreshTrackedKeyword(keyword: string): void {
-    this.etsyApi.trackMarketKeyword(keyword).subscribe({
+    this.etsyApi.trackMarketKeyword(keyword).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.showToastMsg(`🔄 "${keyword}" için yeni snapshot kaydedildi.`);
         this.loadTrackedKeywords();
@@ -985,7 +987,7 @@ export class MarketResearchComponent implements OnInit {
       return;
     }
 
-    this.etsyApi.deleteTrackedMarketKeyword(keyword).subscribe({
+    this.etsyApi.deleteTrackedMarketKeyword(keyword).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.trackedKeywords = this.trackedKeywords.filter(t => t.item.displayName !== keyword);
         this.showToastMsg(`🗑 "${keyword}" takipten çıkarıldı.`);
@@ -1057,7 +1059,7 @@ export class MarketResearchComponent implements OnInit {
           }))
         )
       )
-    ).subscribe(results => {
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(results => {
       this.isComparing = false;
       this.compareResults = results;
       const failCount = results.filter(r => !r.ok).length;

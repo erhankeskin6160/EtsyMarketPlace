@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface BatchItem {
   id: number;
@@ -359,6 +360,7 @@ interface BatchItem {
   `]
 })
 export class BatchQueueComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   statusFilter: 'ALL' | 'Pending' | 'Completed' = 'ALL';
@@ -373,7 +375,7 @@ export class BatchQueueComponent implements OnInit {
   }
 
   loadQueue(): void {
-    this.etsyApi.getBatchQueue().subscribe({
+    this.etsyApi.getBatchQueue().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         if (data && data.length > 0) {
           this.items = data.map((d: any) => ({
@@ -448,7 +450,7 @@ export class BatchQueueComponent implements OnInit {
       optimizedTags: item.optimizedTags,
       overallScore: 93,
       status: 2
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.toastMessage = `✓ #${item.listingId} ilanı (${item.targetKeyword}) yapay zeka ile optimize edildi!`;
         setTimeout(() => this.toastMessage = '', 3000);
@@ -487,7 +489,7 @@ export class BatchQueueComponent implements OnInit {
             optimizedTags: p.optimizedTags,
             overallScore: 94,
             status: 2
-          }).subscribe({ error: () => {} });
+          }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => {} });
         });
         this.toastMessage = `✓ ${pendings.length} adet ilan başarıyla optimize edildi ve VDS SQLite kuyruğu güncellendi!`;
         setTimeout(() => this.toastMessage = '', 4000);
@@ -503,7 +505,7 @@ export class BatchQueueComponent implements OnInit {
       optimizedTags: item.optimizedTags,
       overallScore: item.overallScore,
       status: 5
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.toastMessage = `✓ #${item.listingId} ilanı Etsy API'ye taslak olarak yüklendi!`;
         setTimeout(() => this.toastMessage = '', 3000);
@@ -513,7 +515,7 @@ export class BatchQueueComponent implements OnInit {
 
   clearCompleted(): void {
     this.items = this.items.filter(i => i.status === 'Pending');
-    this.etsyApi.clearCompletedBatch().subscribe({
+    this.etsyApi.clearCompletedBatch().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.toastMessage = `✓ Tamamlanan ilanlar kuyruktan temizlendi.`;
         setTimeout(() => this.toastMessage = '', 3000);

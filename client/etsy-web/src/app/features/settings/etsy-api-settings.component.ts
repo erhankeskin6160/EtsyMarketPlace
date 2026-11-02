@@ -1,9 +1,10 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-etsy-api-settings',
@@ -656,6 +657,7 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
   `]
 })
 export class EtsyApiSettingsComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   currentShopId = '53236321';
   manualRate = 49.12;
 
@@ -700,7 +702,7 @@ export class EtsyApiSettingsComponent implements OnInit {
     this.loadSavedCredentials();
 
     // Check if redirected from Etsy with ?code=...
-    this.route.queryParams.subscribe(params => {
+    this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       const code = params['code'];
       const state = params['state'];
       if (code) {
@@ -713,7 +715,7 @@ export class EtsyApiSettingsComponent implements OnInit {
   }
 
   loadSavedCredentials(): void {
-    this.etsyApi.getEtsyCredentials(this.currentShopId).subscribe({
+    this.etsyApi.getEtsyCredentials(this.currentShopId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         if (res) {
           if (res.keystringMasked && !res.keystringMasked.includes('****')) {
@@ -745,7 +747,7 @@ export class EtsyApiSettingsComponent implements OnInit {
       keystring: this.keystring.trim(),
       sharedSecret: this.sharedSecret.trim(),
       redirectUri: this.redirectUri.trim()
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.isSavingCredentials = false;
         this.showToast('✅ Etsy Developer API anahtarları VDS kasasına güvenle kaydedildi!', 'success');
@@ -764,7 +766,7 @@ export class EtsyApiSettingsComponent implements OnInit {
     }
 
     this.isConnecting = true;
-    this.etsyApi.getEtsyConnectUrl(this.currentShopId, this.redirectUri).subscribe({
+    this.etsyApi.getEtsyConnectUrl(this.currentShopId, this.redirectUri).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isConnecting = false;
         this.showToast('Etsy resmi yetkilendirme sayfasına yönlendiriliyorsunuz...', 'success');
@@ -807,7 +809,7 @@ export class EtsyApiSettingsComponent implements OnInit {
       code,
       state: state || undefined,
       redirectUri: this.redirectUri
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isExchangingCode = false;
         this.showManualCodeModal = false;
@@ -849,7 +851,7 @@ export class EtsyApiSettingsComponent implements OnInit {
 
   testEtsyToken(): void {
     this.isTestingToken = true;
-    this.etsyApi.checkTokenStatus(this.currentShopId).subscribe({
+    this.etsyApi.checkTokenStatus(this.currentShopId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isTestingToken = false;
         this.etsyApi.verifyApiConnection();
@@ -870,7 +872,7 @@ export class EtsyApiSettingsComponent implements OnInit {
 
   tryRefreshToken(): void {
     this.isRefreshingToken = true;
-    this.etsyApi.refreshToken(this.currentShopId).subscribe({
+    this.etsyApi.refreshToken(this.currentShopId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isRefreshingToken = false;
         this.etsyApi.verifyApiConnection();

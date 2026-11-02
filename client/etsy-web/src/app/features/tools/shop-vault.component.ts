@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-shop-vault',
@@ -347,6 +348,7 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
   `]
 })
 export class ShopVaultComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   includeImages = true;
   includeInactive = true;
   autoRewriteSeo = true;
@@ -369,7 +371,7 @@ export class ShopVaultComponent implements OnInit {
   }
 
   loadActiveListingStats(): void {
-    this.etsyApi.getShopActiveListings(undefined, 100).subscribe({
+    this.etsyApi.getShopActiveListings(undefined, 100).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (items) => {
         if (items && items.length > 0) {
           this.totalListingsCount = items.length;
@@ -388,7 +390,7 @@ export class ShopVaultComponent implements OnInit {
 
   createBackup(): void {
     this.isBackingUp = true;
-    this.etsyApi.getShopActiveListings(undefined, 100).subscribe({
+    this.etsyApi.getShopActiveListings(undefined, 100).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (items) => {
         this.isBackingUp = false;
         const exportItems = (items && items.length > 0) ? items.map(i => ({

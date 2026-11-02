@@ -1,8 +1,9 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface CarrierRate {
   id: string;
@@ -394,6 +395,7 @@ export interface CarrierRate {
   `]
 })
 export class ShippingHubComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   destinationCountry = 'US';
   weightGrams = 250;
   dimWidth = 15;
@@ -475,7 +477,7 @@ export class ShippingHubComponent implements OnInit {
       lengthCm: this.dimLength,
       heightCm: this.dimHeight,
       usdTryRate: rate
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (resp) => {
         this.isLoading = false;
         const quotes: any[] = resp?.quotes || [];

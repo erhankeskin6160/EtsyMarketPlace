@@ -1,8 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface ListingProductCost {
   listingId: string;
@@ -560,6 +561,7 @@ const STORAGE_KEY = 'etsy_product_costs_v1';
   `]
 })
 export class ProductCostManagerComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   private apiService = inject(EtsyApiService);
   private router = inject(Router);
 
@@ -589,7 +591,7 @@ export class ProductCostManagerComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.apiService.getShopActiveListings(undefined, 100).subscribe({
+    this.apiService.getShopActiveListings(undefined, 100).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (listings) => {
         this.isLoading = false;
         if (listings && listings.length > 0) {

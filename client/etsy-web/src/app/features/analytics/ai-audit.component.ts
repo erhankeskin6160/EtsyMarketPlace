@@ -1,8 +1,9 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService, ShopListingItemDto, SavedListingAuditDto, OptimizeListingResponseDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
 
@@ -14,6 +15,7 @@ type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
   styleUrls: ['./ai-audit.component.css']
 })
 export class AiAuditComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
   aiSettings = inject(AiSettingsService);
   readonly Math = Math;
@@ -135,7 +137,7 @@ export class AiAuditComponent implements OnInit {
     this.isLoading = true;
     this.showToast('Canlı Etsy aktif ilanları yükleniyor...', 'info');
 
-    this.etsyApi.getShopActiveListings(undefined, this.fetchLimit).subscribe({
+    this.etsyApi.getShopActiveListings(undefined, this.fetchLimit).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         this.isLoading = false;
         this.listings = data || [];
@@ -330,7 +332,7 @@ export class AiAuditComponent implements OnInit {
       provider: settings.provider
     };
 
-    this.etsyApi.optimizeListingWithAi(this.selectedListing.listingId, payload).subscribe({
+    this.etsyApi.optimizeListingWithAi(this.selectedListing.listingId, payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: OptimizeListingResponseDto) => {
         this.isAuditingSelected = false;
         if (res.success) {
@@ -433,7 +435,7 @@ export class AiAuditComponent implements OnInit {
         provider: settings.provider
       };
 
-      this.etsyApi.optimizeListingWithAi(item.listingId, payload).subscribe({
+      this.etsyApi.optimizeListingWithAi(item.listingId, payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (res) => {
           if (res.success) {
             item.aiScore = res.seoScoreAfter;
@@ -514,7 +516,7 @@ export class AiAuditComponent implements OnInit {
       materials: this.selectedListing.materials
     };
 
-    this.etsyApi.updateEtsyListing(this.selectedListing.listingId, payload).subscribe({
+    this.etsyApi.updateEtsyListing(this.selectedListing.listingId, payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isUpdatingEtsy = false;
         this.showToast(`🎉 İlan #${this.selectedListing?.listingId} başarıyla Etsy'de güncellendi!`, 'success');

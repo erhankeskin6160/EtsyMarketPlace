@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, HostListener, inject, ViewChild, ElementRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, inject, ViewChild, ElementRef, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
@@ -9,6 +9,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { Observable, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface GalleryImage {
   id: string;
@@ -76,6 +77,7 @@ export interface VariationRow {
   styleUrls: ['./fast-creator.component.css']
 })
 export class FastCreatorComponent implements OnInit, OnDestroy {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   listingAiService = inject(EtsyListingAiService);
@@ -215,7 +217,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     }
 
     // QueryParams aktarımı (Dış Pazarlar, Viral 3D vb.)
-    this.route.queryParams.subscribe(params => {
+    this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params['title']) {
         this.selectedTemplateId = '';
         this.title = params['title'];
@@ -565,7 +567,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   loadCategories(): void {
     this.isLoadingCategories = true;
-    this.etsyApi.getSellerTaxonomy().subscribe({
+    this.etsyApi.getSellerTaxonomy().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isLoadingCategories = false;
         this.categoriesList = res?.results || [];
@@ -656,7 +658,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   loadShippingProfiles(): void {
     this.isLoadingShippingProfiles = true;
-    this.etsyApi.getShippingProfiles().subscribe({
+    this.etsyApi.getShippingProfiles().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isLoadingShippingProfiles = false;
         const results = res?.results || (Array.isArray(res) ? res : []);
@@ -680,7 +682,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   loadReadinessStates(): void {
     this.isLoadingReadinessStates = true;
-    this.etsyApi.getReadinessStates().subscribe({
+    this.etsyApi.getReadinessStates().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isLoadingReadinessStates = false;
         const results = res?.results || (Array.isArray(res) ? res : []);
@@ -844,7 +846,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       return;
     }
     this.isGeneratingTitle = true;
-    this.listingAiService.suggestTitle(input, this.selectedCategory).subscribe({
+    this.listingAiService.suggestTitle(input, this.selectedCategory).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.isGeneratingTitle = false;
         this.title = res.value;
@@ -971,7 +973,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         candidates = buildTaxonomyShortlist(taxonomy, title, desc, this.TR_TO_EN_TAXONOMY_MAP, 80);
         return this.listingAiService.suggestCategoryMultimodal(title, desc, images, candidates);
       })
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.isGeneratingCategory = false;
         const grounded = this.groundTaxonomyRecommendation(res, candidates);
@@ -1045,7 +1047,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       return;
     }
     this.isGeneratingTags = true;
-    this.listingAiService.suggestTags(input, this.selectedCategory).subscribe({
+    this.listingAiService.suggestTags(input, this.selectedCategory).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.isGeneratingTags = false;
         this.tags = res.value;
@@ -1093,7 +1095,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
     };
 
     this.isGeneratingDesc = true;
-    this.listingAiService.suggestDescription(context).subscribe({
+    this.listingAiService.suggestDescription(context).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.isGeneratingDesc = false;
         this.description = res.value;
@@ -1142,7 +1144,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       preliminaryNotes: sellerNotes,
       variationsSummary,
       category: this.selectedCategory
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.isGeneratingAll = false;
         this.title = res.title;
@@ -1453,7 +1455,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       model: this.aiService.activeModelName()
     };
 
-    this.etsyApi.improveListingLqs(cmd).subscribe({
+    this.etsyApi.improveListingLqs(cmd).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isGeneratingVariations = false;
         if (res.suggestedVariations && res.suggestedVariations.length > 0) {
@@ -1534,7 +1536,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   activateListingNow(listingId: number | undefined): void {
     if (!listingId) return;
     this.isActivatingListing = true;
-    this.etsyApi.updateListingState(listingId, 'active').subscribe({
+    this.etsyApi.updateListingState(listingId, 'active').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isActivatingListing = false;
         if (this.createdListingResult) {
@@ -1635,7 +1637,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       variationGroups: variationGroupsPayload
     };
 
-    this.etsyApi.createListing(payload).subscribe({
+    this.etsyApi.createListing(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isSavingDraft = false;
         if (res && res.success) {

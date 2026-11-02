@@ -1,8 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterModule, Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface PerformanceSnapshot {
   period: string;
@@ -393,6 +394,7 @@ interface ProductTraffic {
   `]
 })
 export class ShopPerformanceComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
   router = inject(Router);
 
@@ -414,7 +416,7 @@ export class ShopPerformanceComponent implements OnInit {
 
   refreshPerformance(): void {
     // 1. Fetch real financial performance from VDS SQLite
-    this.etsyApi.getFinancialPerformance('this_month').subscribe({
+    this.etsyApi.getFinancialPerformance('this_month').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (perf: any) => {
         if (perf) {
           const gross = Number(perf.grossSalesUsd ?? perf.grossSales ?? 0);
@@ -430,7 +432,7 @@ export class ShopPerformanceComponent implements OnInit {
     });
 
     // 2. Fetch real monthly history from VDS SQLite
-    this.etsyApi.getShopPerformanceHistory().subscribe({
+    this.etsyApi.getShopPerformanceHistory().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         if (data && data.length > 0) {
           this.monthlyHistory = data.map((d: any) => ({
@@ -448,7 +450,7 @@ export class ShopPerformanceComponent implements OnInit {
     });
 
     // 3. Fetch active listings for traffic & conversion table
-    this.etsyApi.getShopActiveListings(undefined, 100).subscribe({
+    this.etsyApi.getShopActiveListings(undefined, 100).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (listings) => {
         if (listings && listings.length > 0) {
           this.topProducts = listings.map(l => {

@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface ScheduledJob {
   id: string;
@@ -290,6 +291,7 @@ interface ScheduledJob {
   `]
 })
 export class TaskSchedulerAutomationComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   toastMessage = '';
@@ -359,7 +361,7 @@ export class TaskSchedulerAutomationComponent implements OnInit {
 
     if (job.id === 'job-1') {
       this.toastMessage = `⚡ "${job.name}" görevi VDS sunucusunda başlatıldı. Siparişler taranıyor...`;
-      this.etsyApi.syncFromEtsy().subscribe({
+      this.etsyApi.syncFromEtsy().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (res) => {
           this.toastMessage = `✓ "${job.name}" başarıyla tamamlandı: ${res.orderCount} sipariş, ${res.transactionCount} hareket senkronize edildi.`;
           setTimeout(() => this.toastMessage = '', 4500);

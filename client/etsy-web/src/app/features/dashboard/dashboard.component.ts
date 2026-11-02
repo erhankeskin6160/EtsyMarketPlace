@@ -1,4 +1,5 @@
-import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject, DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
@@ -843,6 +844,7 @@ Chart.register(...registerables);
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   apiService = inject(EtsyApiService);
+  private destroyRef = inject(DestroyRef);
 
   @ViewChild('trendChart') chartCanvas?: ElementRef<HTMLCanvasElement>;
   chartInstance?: Chart;
@@ -884,7 +886,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   loadRecentOrders(): void {
-    this.apiService.getRecentOrders(15).subscribe({
+    this.apiService.getRecentOrders(15).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.liveOrders = res?.orders ?? [];
         this.recentOrdersError = false;
@@ -897,7 +899,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   loadDailySeries(): void {
-    this.apiService.getDailySeries().subscribe({
+    this.apiService.getDailySeries().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.trendLabels = res?.labels ?? [];
         this.trendGross = res?.grossSales ?? [];
@@ -923,7 +925,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   loadLiveKpis(): void {
-    this.apiService.getFinancialPerformance('this_month').subscribe({
+    this.apiService.getFinancialPerformance('this_month').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (perf) => {
         this.financialPerformance = perf;
         this.grossSalesUsd = perf.grossSales;
@@ -949,7 +951,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.apiService.getDailyBrief().subscribe({
+    this.apiService.getDailyBrief().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (brief) => {
         this.dailyBrief = brief;
       },
@@ -958,7 +960,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.apiService.getShopActiveListings(undefined, 100).subscribe({
+    this.apiService.getShopActiveListings(undefined, 100).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (items) => {
         const count = items?.length ?? 0;
         this.activeListingsText = count >= 100 ? '100+ Aktif İlan' : `${count} Aktif İlan`;

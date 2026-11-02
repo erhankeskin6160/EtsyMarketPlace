@@ -1,8 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { AuditLog } from '../../core/models/auth.models';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface LogEntry {
   timestamp: string;
@@ -325,6 +326,7 @@ export interface LogEntry {
   `]
 })
 export class SystemLogsComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   showInfo = true;
@@ -355,7 +357,7 @@ export class SystemLogsComponent implements OnInit {
   }
 
   loadStats(): void {
-    this.etsyApi.getSystemStats().subscribe({
+    this.etsyApi.getSystemStats().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (s) => {
         if (s) {
           this.auditLogCount = s.auditLogCount || this.auditLogCount;
@@ -368,7 +370,7 @@ export class SystemLogsComponent implements OnInit {
 
   loadLogs(): void {
     this.isLoading = true;
-    this.etsyApi.getAuditLogs(150).subscribe({
+    this.etsyApi.getAuditLogs(150).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (auditLogs) => {
         this.isLoading = false;
         if (auditLogs && auditLogs.length > 0) {

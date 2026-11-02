@@ -1,7 +1,8 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService, ShopListingItemDto } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-profit-calculator',
@@ -575,6 +576,7 @@ import { EtsyApiService, ShopListingItemDto } from '../../core/services/etsy-api
   `]
 })
 export class ProfitCalculatorComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   productName = '3D Kristal Ejderha (Bambu PLA)';
   salePriceUsd = 49.50;
   buyerShippingUsd = 0;
@@ -614,7 +616,7 @@ export class ProfitCalculatorComponent implements OnInit {
   }
 
   loadListings(): void {
-    this.etsyApi.getShopActiveListings(undefined, 50).subscribe({
+    this.etsyApi.getShopActiveListings(undefined, 50).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (listings) => {
         this.activeListings = listings || [];
       },

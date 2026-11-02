@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface ModuleDetail {
   id: string;
@@ -200,6 +201,7 @@ interface ModuleDetail {
   `]
 })
 export class ModuleViewerComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   route = inject(ActivatedRoute);
   apiService = inject(EtsyApiService);
 
@@ -465,7 +467,7 @@ export class ModuleViewerComponent implements OnInit {
   };
 
   ngOnInit(): void {
-    this.route.url.subscribe(() => {
+    this.route.url.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
       const path = this.route.snapshot.routeConfig?.path || '';
       const mappedKey = this.resolveKey(path);
       this.module = this.catalog[mappedKey] || this.catalog['orders'];

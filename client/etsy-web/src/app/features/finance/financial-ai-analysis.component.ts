@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface FinancialInsight {
   type: 'warning' | 'opportunity' | 'success';
@@ -323,6 +324,7 @@ interface FinancialInsight {
   `]
 })
 export class FinancialAiAnalysisComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   // Initialized to 0 - Zero fake data policy!
@@ -340,7 +342,7 @@ export class FinancialAiAnalysisComponent implements OnInit {
   }
 
   loadFinancials(): void {
-    this.etsyApi.getFinancialPerformance('this_month').subscribe({
+    this.etsyApi.getFinancialPerformance('this_month').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (perf: any) => {
         if (perf) {
           const gross = Number(perf.grossSalesUsd ?? perf['grossSalesUsd'] ?? perf.grossSales ?? 0);
@@ -394,7 +396,7 @@ export class FinancialAiAnalysisComponent implements OnInit {
 
   runFinancialAudit(): void {
     this.toastMessage = '⚡ VDS Akıllı Finansal Analiz motoru çalıştırılıyor...';
-    this.etsyApi.getFinancialAnalysis().subscribe({
+    this.etsyApi.getFinancialAnalysis().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: any) => {
         if (res && res.recommendations && res.recommendations.length > 0) {
           this.insights = res.recommendations.map((rec: any, idx: number) => ({

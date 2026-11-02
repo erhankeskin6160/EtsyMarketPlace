@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -12,6 +12,7 @@ import {
   CarrierAccountSession,
   GtipCodeItem
 } from '../../core/models/orders.models';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-orders',
@@ -21,6 +22,7 @@ import {
   styleUrl: './orders.component.css'
 })
 export class OrdersComponent implements OnInit, OnDestroy {
+  private destroyRef = inject(DestroyRef);
   // STATE
   allOrders: OrderFulfillmentItem[] = [];
   selectedOrder: OrderFulfillmentItem | null = null;
@@ -132,7 +134,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // 1. Subscribe to orders stream
-    const ordersSub = this.ordersService.orders$.subscribe(orders => {
+    const ordersSub = this.ordersService.orders$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(orders => {
       this.allOrders = orders;
       if (!this.selectedOrder && orders.length > 0) {
         this.onSelectOrder(orders[0]);
@@ -141,7 +143,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.subs.push(ordersSub);
 
     // 2. Subscribe to selected order
-    const selectedSub = this.ordersService.selectedOrder$.subscribe(order => {
+    const selectedSub = this.ordersService.selectedOrder$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(order => {
       if (order) {
         const orderChanged = !this.selectedOrder || this.selectedOrder.orderId !== order.orderId;
         this.selectedOrder = order;
@@ -162,13 +164,13 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.subs.push(selectedSub);
 
     // 3. Subscribe to carrier sessions
-    const sessionsSub = this.ordersService.sessions$.subscribe(sessions => {
+    const sessionsSub = this.ordersService.sessions$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(sessions => {
       this.carrierSessions = sessions;
     });
     this.subs.push(sessionsSub);
 
     // 4. Listen to queryParams from Shipping Hub
-    const routeSub = this.route.queryParams.subscribe(params => {
+    const routeSub = this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       if (params['carrierName'] && params['carrierCost']) {
         const cName = params['carrierName'];
         const cCost = parseFloat(params['carrierCost']);
@@ -402,7 +404,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.selectedOrder.postalCode,
       this.selectedOrder.city,
       this.selectedOrder.state
-    ).subscribe(res => {
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(res => {
       if (res && res.quotes && res.quotes.length > 0) {
         this.carrierQuotes = res.quotes;
       }
@@ -423,7 +425,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.gtipResults = instant;
     this.showGtipSuggestions = true;
 
-    this.ordersService.searchGtipRemote(this.gtipSearchTerm).subscribe(results => {
+    this.ordersService.searchGtipRemote(this.gtipSearchTerm).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(results => {
       this.gtipResults = results;
       this.showGtipSuggestions = results.length > 0;
     });
@@ -473,7 +475,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.selectedOrder.orderId, 
       Number(this.editableProductCost) || 0, 
       Number(this.editableShippingCost) || 0
-    ).subscribe(saved => {
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe(saved => {
       this.saveSuccessMessage = saved
         ? '✓ Maliyet, paket ölçüleri ve GTİP kalıcı olarak SQLite veritabanına kaydedildi.'
         : '⚠️ Maliyetler bu oturumda güncellendi (sunucu kaydı sırasında bağlantı uyarısı).';
@@ -546,7 +548,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         buyerEmail: this.selectedOrder.buyerEmail || '',
         email: this.selectedOrder.buyerEmail || ''
       }
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: any) => {
         this.isGeneratingShipment = false;
         if (res && res.success) {
@@ -559,7 +561,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
             this.selectedOrder.selectedCarrier = carrierKey;
             this.selectedOrder.labelUrl = res.labelUrl;
             this.selectedOrder.labelBase64 = res.labelBase64;
-            this.ordersService.persistOrderFulfillmentMeta(this.selectedOrder).subscribe({ next: () => {}, error: () => {} });
+            this.ordersService.persistOrderFulfillmentMeta(this.selectedOrder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ next: () => {}, error: () => {} });
           }
           const etsyNote = this.notifyEtsyOnShipment
             ? (res.etsyTrackingSubmitted ? 'Etsy mağazanıza takip numarası iletildi ve sipariş kargolandı yapıldı.' : (res.etsyTrackingMessage || 'Etsy bildirimi iletilemedi.'))
@@ -640,7 +642,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
 
     const rId = Number(order.orderId);
     if (rId && !isNaN(rId)) {
-      this.ordersService.getOrderAddress(rId).subscribe({
+      this.ordersService.getOrderAddress(rId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (res: any) => {
           if (res && res.success && res.data) {
             const db = res.data;
@@ -765,7 +767,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     // DB'de kayıtlı adres varsa otomatik çek ve yapay zeka kutusuna doldur
     const rId = Number(order.orderId);
     if (rId && !isNaN(rId)) {
-      this.ordersService.getOrderAddress(rId).subscribe({
+      this.ordersService.getOrderAddress(rId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: (res: any) => {
           if (res && res.success && res.data) {
             const db = res.data;
@@ -823,7 +825,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.aiParseErrorMessage = null;
     this.aiParseSuccessMessage = null;
 
-    this.ordersService.aiParseAddress(this.rawAddressInput).subscribe({
+    this.ordersService.aiParseAddress(this.rawAddressInput).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: any) => {
         this.isAiParsing = false;
         if (!res) {
@@ -871,7 +873,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
     this.csvUploadSuccessMessage = null;
     this.csvUploadErrorMessage = null;
 
-    this.ordersService.uploadOrdersCsv(file).subscribe({
+    this.ordersService.uploadOrdersCsv(file).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: any) => {
         this.isUploadingCsv = false;
         this.csvUploadSuccessMessage = `✅ ${res?.count || 0} sipariş adresi CSV'den başarıyla yüklendi ve eşitlendi!`;
@@ -896,7 +898,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       alert('Geçersiz Sipariş ID');
       return;
     }
-    this.ordersService.updateOrderAddress(rId, this.editAddressModel).subscribe({
+    this.ordersService.updateOrderAddress(rId, this.editAddressModel).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         if (this.selectedOrder) {
           Object.assign(this.selectedOrder, this.editAddressModel);
@@ -965,7 +967,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       this.arasEmail.trim() || undefined,
       this.arasPassword.trim() || undefined,
       openBrowser
-    ).subscribe({
+    ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res: any) => {
         this.isCapturingBrowserToken = false;
         if (res && res.bearerToken) {
@@ -1047,7 +1049,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
         apiKey: this.seApiKey.trim(),
         apiSecret: this.seApiSecret.trim(),
         bearerToken: this.modalTokenInput.trim()
-      }).subscribe({
+      }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.isConnectingCarrier = false;
           alert('✅ ShipEntegra API Bağlantısı Başarılı!\nPublic API kimlik doğrulaması tamamlandı. Canlı navlun ve gönderi oluşturma aktif.');
@@ -1119,7 +1121,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       carrierKey: 'shiptomore',
       apiKey: this.stmClientId.trim(),
       apiSecret: this.stmClientSecret.trim()
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.stmStatusText = res?.message || '✅ Ship to More resmî API bağlantısı başarılı! Canlı navlun tarifeleri aktif.';
         this.stmStatusKind = 'ok';
@@ -1153,7 +1155,7 @@ export class OrdersComponent implements OnInit, OnDestroy {
       carrierKey: 'shiptomore',
       apiKey: this.stmClientId.trim(),
       apiSecret: this.stmClientSecret.trim()
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isTestingShiptomore = false;
         this.ordersService.connectCarrier('shiptomore', this.stmClientId.trim(), this.stmClientSecret.trim(), this.stmClientId.trim(), this.stmClientSecret.trim());

@@ -1,9 +1,10 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService, MarketListingItemDto, CreateListingPayload } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 export interface DiscoveryItem {
   id: number;
@@ -41,6 +42,7 @@ export interface DiscoveryItem {
   styleUrls: ['./product-discovery.component.css']
 })
 export class ProductDiscoveryComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
   aiService = inject(AiSettingsService);
   router = inject(Router);
@@ -114,7 +116,7 @@ export class ProductDiscoveryComponent implements OnInit {
   }
 
   loadShippingProfiles(): void {
-    this.etsyApi.getShippingProfiles().subscribe({
+    this.etsyApi.getShippingProfiles().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         if (res && res.results && Array.isArray(res.results)) {
           this.shippingProfiles = res.results;
@@ -138,7 +140,7 @@ export class ProductDiscoveryComponent implements OnInit {
     this.isLoading = true;
     this.statusText = `"${kw}" için Etsy pazarında canlı ürünler taranıyor...`;
 
-    this.etsyApi.searchMarket(kw, this.limitInput, 'market_score').subscribe({
+    this.etsyApi.searchMarket(kw, this.limitInput, 'market_score').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isLoading = false;
         if (res && res.listings && res.listings.length > 0) {
@@ -172,7 +174,7 @@ export class ProductDiscoveryComponent implements OnInit {
     this.isImporting = true;
     this.statusText = '🔗 Etsy linki çözümleniyor, ürün detayları ve niş pazar verileri taranıyor...';
 
-    this.etsyApi.searchMarket(link, this.limitInput, 'market_score').subscribe({
+    this.etsyApi.searchMarket(link, this.limitInput, 'market_score').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isImporting = false;
         if (res && res.listings && res.listings.length > 0) {
@@ -238,7 +240,7 @@ export class ProductDiscoveryComponent implements OnInit {
       model: this.aiService.activeModelName()
     };
 
-    this.etsyApi.improveListingLqs(cmd).subscribe({
+    this.etsyApi.improveListingLqs(cmd).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isGeneratingFullAi = false;
         if (res) {
@@ -326,7 +328,7 @@ Have custom color, sizing, or personalization requests? Feel free to reach out v
       model: this.aiService.activeModelName()
     };
 
-    this.etsyApi.improveListingLqs(cmd).subscribe({
+    this.etsyApi.improveListingLqs(cmd).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isGeneratingDesc = false;
         if (res && res.optimizedDescription) {
@@ -422,7 +424,7 @@ Have custom color, sizing, or personalization requests? Feel free to reach out v
       images: imagePayloads
     };
 
-    this.etsyApi.createListing(payload).subscribe({
+    this.etsyApi.createListing(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isSavingDraft = false;
         if (res && res.listingId) {

@@ -1,8 +1,9 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { User, AuditLog, SystemStats, UpdateUserRequest } from '../../core/models/auth.models';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-admin',
@@ -338,6 +339,7 @@ import { User, AuditLog, SystemStats, UpdateUserRequest } from '../../core/model
   `]
 })
 export class AdminComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   apiService = inject(EtsyApiService);
 
   users: User[] = [];
@@ -368,7 +370,7 @@ export class AdminComponent implements OnInit {
   }
 
   loadData(): void {
-    this.apiService.getAdminUsers().subscribe({
+    this.apiService.getAdminUsers().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => this.users = res,
       error: () => {
         // Fallback default admin user
@@ -386,12 +388,12 @@ export class AdminComponent implements OnInit {
       }
     });
 
-    this.apiService.getAuditLogs().subscribe({
+    this.apiService.getAuditLogs().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => this.logs = res,
       error: () => {}
     });
 
-    this.apiService.getSystemStats().subscribe({
+    this.apiService.getSystemStats().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => this.stats = res,
       error: () => {}
     });
@@ -406,7 +408,7 @@ export class AdminComponent implements OnInit {
       isActive: user.isActive
     };
 
-    this.apiService.updateAdminUser(user.id, req).subscribe({
+    this.apiService.updateAdminUser(user.id, req).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.showToast(`✓ "${user.username}" kullanıcısının rolü "${user.role}" ve ayarları başarıyla kaydedildi.`, 'success');
         this.loadData();
@@ -419,7 +421,7 @@ export class AdminComponent implements OnInit {
   }
 
   toggleStatus(user: User): void {
-    this.apiService.toggleUserStatus(user.id).subscribe({
+    this.apiService.toggleUserStatus(user.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         user.isActive = res.isActive;
         this.showToast(`✓ "${user.username}" hesabı ${res.isActive ? 'aktif edildi' : 'askıya alındı'}.`, 'success');

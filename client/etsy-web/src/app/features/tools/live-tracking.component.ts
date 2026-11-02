@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface TrackedEntity {
   id: number;
@@ -416,6 +417,7 @@ interface TrackedEntity {
   `]
 })
 export class LiveTrackingRadarComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   searchQuery = '';
@@ -436,7 +438,7 @@ export class LiveTrackingRadarComponent implements OnInit {
   }
 
   loadTracked(): void {
-    this.etsyApi.getTrackingItems().subscribe({
+    this.etsyApi.getTrackingItems().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         if (data && data.length > 0) {
           this.items = data.map((d: any) => ({
@@ -496,7 +498,7 @@ export class LiveTrackingRadarComponent implements OnInit {
       }
     };
 
-    this.etsyApi.saveTrackingCapture(payload).subscribe({
+    this.etsyApi.saveTrackingCapture(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.toastMessage = `✓ "${this.newItem.displayName}" VDS SQLite veri tabanına kaydedildi ve radara alındı!`;
         this.showAddModal = false;
@@ -542,7 +544,7 @@ export class LiveTrackingRadarComponent implements OnInit {
       }
     };
 
-    this.etsyApi.saveTrackingCapture(payload).subscribe({
+    this.etsyApi.saveTrackingCapture(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.toastMessage = `⚡ "${item.displayName}" için anlık tarama VDS SQLite'a kaydedildi! (Fiyat: \$${item.latestPrice})`;
         setTimeout(() => this.toastMessage = '', 4000);
@@ -556,7 +558,7 @@ export class LiveTrackingRadarComponent implements OnInit {
 
   deleteTracked(id: number): void {
     this.items = this.items.filter(i => i.id !== id);
-    this.etsyApi.deleteTrackingItem(id).subscribe({
+    this.etsyApi.deleteTrackingItem(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.toastMessage = '✓ Takip öğesi silindi.';
         setTimeout(() => this.toastMessage = '', 3000);

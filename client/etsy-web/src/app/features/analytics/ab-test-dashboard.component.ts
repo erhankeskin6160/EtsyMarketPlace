@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 interface AbTestCard {
   id: number;
@@ -537,6 +538,7 @@ interface AbTestCard {
   `]
 })
 export class AbTestDashboardComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   filterStatus: 'ALL' | 'Active' | 'Completed' = 'ALL';
@@ -559,7 +561,7 @@ export class AbTestDashboardComponent implements OnInit {
   }
 
   loadFromVds(): void {
-    this.etsyApi.getAbTests().subscribe({
+    this.etsyApi.getAbTests().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         if (data && data.length > 0) {
           this.experiments = data.map((d: any) => ({
@@ -626,7 +628,7 @@ export class AbTestDashboardComponent implements OnInit {
       variantB_Description: 'Optimize edilmiş AI açıklaması'
     };
 
-    this.etsyApi.createAbTest(payload).subscribe({
+    this.etsyApi.createAbTest(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (created) => {
         this.toastMessage = `✓ "${this.newExp.experimentName}" A/B testi başarıyla başlatıldı ve VDS SQLite'a kaydedildi!`;
         this.showCreateModal = false;
@@ -660,14 +662,14 @@ export class AbTestDashboardComponent implements OnInit {
 
   declareWinner(exp: AbTestCard): void {
     exp.status = 'Completed';
-    this.etsyApi.updateAbTestStatus(exp.id, 1).subscribe({
+    this.etsyApi.updateAbTestStatus(exp.id, 1).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         // Apply winner title and tags to active Etsy listing
         if (exp.listingId) {
           this.etsyApi.updateEtsyListing(exp.listingId, {
             title: exp.variantB_Title,
             tags: exp.variantB_Tags
-          }).subscribe({
+          }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
             next: () => {
               this.toastMessage = `✓ B Varyantı kazanan ilan edildi! Başlık ve 13 etiket mağazaya canlı olarak uygulandı.`;
               setTimeout(() => this.toastMessage = '', 4500);
@@ -691,7 +693,7 @@ export class AbTestDashboardComponent implements OnInit {
 
   deleteExperiment(id: number): void {
     this.experiments = this.experiments.filter(e => e.id !== id);
-    this.etsyApi.deleteAbTest(id).subscribe({
+    this.etsyApi.deleteAbTest(id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
         this.toastMessage = '✓ A/B test deneyi VDS veri tabanından silindi.';
         setTimeout(() => this.toastMessage = '', 3000);

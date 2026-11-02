@@ -1,4 +1,4 @@
-import { Component, OnInit, ElementRef, ViewChild, HostListener, inject } from '@angular/core';
+import { Component, OnInit, ElementRef, ViewChild, HostListener, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { StoreAiAssistantService, AssistantChatMessage, ChatAttachment } from '../../core/services/store-ai-assistant.service';
@@ -7,6 +7,7 @@ import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { Router } from '@angular/router';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-floating-copilot',
@@ -1011,6 +1012,7 @@ import { AiLogoComponent } from '../../core/components/ai-logo.component';
   `]
 })
 export class FloatingCopilotComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   @ViewChild('scrollArea') scrollArea!: ElementRef;
   @ViewChild('fileInput') fileInputRef!: ElementRef<HTMLInputElement>;
 
@@ -1487,7 +1489,7 @@ Size nasıl yardımcı olabilirim?<br>
     this.refreshSavedSessionsList();
     setTimeout(() => this.scrollToBottom(), 50);
 
-    this.assistantAi.generateResponse(displayText, attachmentsToSend, sessionHistorySnapshot).subscribe({
+    this.assistantAi.generateResponse(displayText, attachmentsToSend, sessionHistorySnapshot).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.generatingSessionIds.delete(targetSessionId);
         const assistantMsg: AssistantChatMessage = {

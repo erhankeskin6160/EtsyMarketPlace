@@ -1,8 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-register',
@@ -145,6 +146,7 @@ import { AuthService } from '../../core/services/auth.service';
   `]
 })
 export class RegisterComponent {
+  private destroyRef = inject(DestroyRef);
   authService = inject(AuthService);
   router = inject(Router);
 
@@ -165,7 +167,7 @@ export class RegisterComponent {
       email: this.email,
       shopId: this.shopId,
       password: this.password
-    }).subscribe({
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: res => {
         this.loading = false;
         if (res.success) {

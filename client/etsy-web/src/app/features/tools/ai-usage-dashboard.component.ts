@@ -1,10 +1,11 @@
-import { Component, OnInit, AfterViewInit, OnDestroy, ViewChild, ElementRef, inject } from '@angular/core';
+import { Component, OnInit, AfterViewInit, OnDestroy, ViewChild, ElementRef, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { EtsyApiService, AiProviderBalanceDto } from '../../core/services/etsy-api.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { Chart, registerables } from 'chart.js';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 Chart.register(...registerables);
 
@@ -997,6 +998,7 @@ interface UsageRecord {
   `]
 })
 export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestroy {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   @ViewChild('tokenDonutCanvas') tokenDonutCanvas!: ElementRef<HTMLCanvasElement>;
@@ -1123,7 +1125,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
 
   loadData(): void {
     this.isLoadingBalances = true;
-    this.etsyApi.getAiProviderBalances(undefined, this.exchangeRate, this.selectedPeriod).subscribe({
+    this.etsyApi.getAiProviderBalances(undefined, this.exchangeRate, this.selectedPeriod).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (balances) => {
         this.isLoadingBalances = false;
         if (balances && balances.length > 0) {
@@ -1139,7 +1141,7 @@ export class AiUsageDashboardComponent implements OnInit, AfterViewInit, OnDestr
     });
 
     const provFilter = (this.selectedBrand === 'ALL' || this.selectedBrand === 'ACTIVE_ONLY') ? undefined : this.selectedBrand;
-    this.etsyApi.getAiUsageHistory(provFilter, 300, this.selectedPeriod).subscribe({
+    this.etsyApi.getAiUsageHistory(provFilter, 300, this.selectedPeriod).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (hist) => {
         if (hist && hist.length > 0) {
           this.history = hist.map((h: any) => ({

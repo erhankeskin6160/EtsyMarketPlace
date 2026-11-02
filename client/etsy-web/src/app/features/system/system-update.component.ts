@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-system-update',
@@ -287,6 +288,7 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
   `]
 })
 export class SystemUpdateComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   vdsVersion = 'v2.4.0-Production';
@@ -299,7 +301,7 @@ export class SystemUpdateComponent implements OnInit {
   }
 
   checkHealth(): void {
-    this.etsyApi.getSystemVersion().subscribe({
+    this.etsyApi.getSystemVersion().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (info) => {
         if (info) {
           this.vdsVersion = `v${info.version || '2.4.0'} (${info.database || 'SQLite-WAL'})`;

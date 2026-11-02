@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, DestroyRef, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -11,6 +11,7 @@ import {
   AiLqsImprovementResultDto
 } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 const COMPETITOR_STORAGE_KEY = 'etsy_competitor_shops_v2';
 
@@ -2257,6 +2258,7 @@ export interface LqsAuditCheck {
   `]
 })
 export class CompetitorSpyComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   activeMainTab: 'competitor' | 'seasonal' = 'competitor';
   activeIntelTab: 'tags' | 'gap' | 'lqs' = 'tags';
   activeProductDetailTab: 'description' | 'tags' | 'ai-doctor' = 'description';
@@ -2301,7 +2303,7 @@ export class CompetitorSpyComponent implements OnInit {
     this.loadWatchedShops();
     this.loadSeasonalTrends();
 
-    this.route.queryParams.subscribe(params => {
+    this.route.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       const targetShop = (params['shop'] || '').trim();
       if (targetShop) {
         this.shopQueryInput = targetShop;
@@ -2327,7 +2329,7 @@ export class CompetitorSpyComponent implements OnInit {
     this.isAnalyzing = true;
     this.errorMessage = '';
 
-    this.etsyApi.analyzeCompetitorShop(query, this.sampleLimit).subscribe({
+    this.etsyApi.analyzeCompetitorShop(query, this.sampleLimit).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isAnalyzing = false;
         this.analysisResult = res;
@@ -2538,7 +2540,7 @@ export class CompetitorSpyComponent implements OnInit {
       opportunityScore: shop.competitorStrengthScore,
       resultCount: shop.activeListingsCount,
       sampleSize: res.listings?.length || 0
-    }).subscribe({ error: () => {} });
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({ error: () => {} });
 
     if (notify) {
       this.showToast(`📌 "${shop.shopName}" takip listesine kaydedildi ve canlı snapshot güncellendi!`);
@@ -2624,7 +2626,7 @@ export class CompetitorSpyComponent implements OnInit {
       taxonomyId: item.taxonomyId
     };
 
-    this.etsyApi.getCompetitorListingInventory(item.listingId).subscribe({
+    this.etsyApi.getCompetitorListingInventory(item.listingId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (inv) => {
         if (inv && inv.hasVariations) {
           cloned.hasVariations = true;
@@ -2722,7 +2724,7 @@ export class CompetitorSpyComponent implements OnInit {
       model: this.aiSettings.activeModelName()
     };
 
-    this.etsyApi.improveListingLqs(cmd).subscribe({
+    this.etsyApi.improveListingLqs(cmd).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.isImprovingLqs = false;
         this.lqsImprovementResult = res;
@@ -2850,7 +2852,7 @@ export class CompetitorSpyComponent implements OnInit {
   }
 
   private loadSeasonalTrends(): void {
-    this.etsyApi.getSeasonalTrends().subscribe({
+    this.etsyApi.getSeasonalTrends().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (list) => {
         this.seasonalTrends = list || [];
       },

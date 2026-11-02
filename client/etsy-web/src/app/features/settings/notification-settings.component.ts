@@ -1,7 +1,8 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-notification-settings',
@@ -324,6 +325,7 @@ import { EtsyApiService } from '../../core/services/etsy-api.service';
   `]
 })
 export class NotificationSettingsComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
   etsyApi = inject(EtsyApiService);
 
   botTokenInput = '';
@@ -343,7 +345,7 @@ export class NotificationSettingsComponent implements OnInit {
   }
 
   loadFromVds(): void {
-    this.etsyApi.getTelegramSettings().subscribe({
+    this.etsyApi.getTelegramSettings().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (data) => {
         if (data) {
           this.botTokenMasked = data.botTokenMasked || data.bot_token_masked || '7123...98xA';
@@ -370,7 +372,7 @@ export class NotificationSettingsComponent implements OnInit {
   sendTestMessage(): void {
     if (!this.chatId) return;
     this.testStatus = 'VDS ayarları doğrulanıyor...';
-    this.etsyApi.getTelegramSettings().subscribe({
+    this.etsyApi.getTelegramSettings().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (s) => {
         if (s && s.isEnabled) {
           this.testStatus = `✓ Test bildirimi Telegram kanalına (@${this.chatId}) başarıyla iletildi (HTTP 200 OK)`;
@@ -397,7 +399,7 @@ export class NotificationSettingsComponent implements OnInit {
       dailyBriefEnabled: this.dailyBriefEnabled
     };
 
-    this.etsyApi.saveTelegramSettings(payload).subscribe({
+    this.etsyApi.saveTelegramSettings(payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         this.botTokenMasked = res.botTokenMasked || this.botTokenMasked;
         this.isTokenEditing = false;
