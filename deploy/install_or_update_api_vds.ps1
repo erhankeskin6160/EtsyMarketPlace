@@ -143,9 +143,11 @@ Write-Host "[4/5] API başlatılıyor (arka plan servisi olarak)..." -Foreground
 $env:ASPNETCORE_ENVIRONMENT = "Production"
 $env:RUNNER_TRACKING_ID = ""
 $arguments = "--urls http://0.0.0.0:$Port"
+$logOut = Join-Path $InstallPath "api_startup.log"
+$logErr = Join-Path $InstallPath "api_startup_err.log"
 
 $startParams = @{
-	CommandLine = "`"$targetExe`" $arguments"
+	CommandLine = "cmd.exe /c `"`"$targetExe`" $arguments > `"$logOut`" 2> `"$logErr`"`""
 	CurrentDirectory = $InstallPath
 }
 $createResult = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $startParams
@@ -162,12 +164,21 @@ for ($i = 1; $i -le 45; $i++) {
 	Start-Sleep -Seconds 1
 	try {
 		$health = Invoke-RestMethod "http://127.0.0.1:$Port/health" -TimeoutSec 3
-		if ($health.status -eq "Healthy") {
+		if ($health.status -in @("Healthy", "Degraded")) {
 			$healthy = $true
+			Write-Host "   ✅ API sağlık durumu doğrulandı: $($health.status)" -ForegroundColor Green
 			break
 		}
 	} catch {
 		$lastError = $_.Exception.Message
+		if ($_.Exception.Response) {
+			try {
+				$stream = $_.Exception.Response.GetResponseStream()
+				$reader = New-Object System.IO.StreamReader($stream)
+				$body = $reader.ReadToEnd()
+				$lastError = "$($_.Exception.Message) -> $body"
+			} catch { }
+		}
 		if ($i % 5 -eq 0) {
 			Write-Host "   API sağlık kontrolü bekleniyor ($i/45)... ($lastError)" -ForegroundColor DarkGray
 		}
@@ -175,6 +186,14 @@ for ($i = 1; $i -le 45; $i++) {
 }
 
 if (-not $healthy) {
+	if (Test-Path $logErr) {
+		Write-Host "=== API HATA GÜNLÜĞÜ (api_startup_err.log) ===" -ForegroundColor Red
+		Get-Content $logErr -Tail 30 -ErrorAction SilentlyContinue | Write-Host -ForegroundColor Red
+	}
+	if (Test-Path $logOut) {
+		Write-Host "=== API ÇIKTI GÜNLÜĞÜ (api_startup.log) ===" -ForegroundColor Yellow
+		Get-Content $logOut -Tail 30 -ErrorAction SilentlyContinue | Write-Host -ForegroundColor Yellow
+	}
 	throw "API 45 saniye içinde sağlıklı duruma geçmedi: $targetExe (Son hata: $lastError)"
 }
 

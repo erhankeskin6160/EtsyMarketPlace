@@ -16,12 +16,13 @@ public class RealHealthAndVersionApiTests : IClassFixture<ApiTestFactory>
     }
 
     [Fact]
-    public async Task HealthEndpoint_WhenDatabaseIsUnreachable_Returns503ServiceUnavailable()
+    public async Task HealthEndpoint_WhenPostgreSqlRequiredAndUnreachable_Returns503ServiceUnavailable()
     {
-        // Issue #43 gereksinimi: Veritabanına erişilemediğinde /health 503 ve "Unhealthy" dönmelidir
+        // Issue #43 gereksinimi: PostgreSQL zorunlu kılındığında ve erişilemediğinde /health 503 ve "Unhealthy" dönmelidir
         var client = _factory.WithWebHostBuilder(builder =>
         {
             builder.UseSetting("HealthChecks:BypassDatabaseProbe", "false");
+            builder.UseSetting("HealthChecks:RequirePostgreSql", "true");
             // Geçersiz/ulaşılamayan bir IP ve port vererek canlı probe başarısızlığını simüle ediyoruz (hızlı timeout ile)
             builder.UseSetting("ConnectionStrings:PostgreSql", "Host=127.0.0.1;Port=54329;Database=unreachable_db;Username=test;Password=test;Timeout=1;CommandTimeout=1");
         }).CreateClient();
@@ -36,6 +37,30 @@ public class RealHealthAndVersionApiTests : IClassFixture<ApiTestFactory>
         Assert.Equal("Unhealthy", root.GetProperty("status").GetString());
         Assert.True(root.TryGetProperty("missingRequired", out var missingRequired));
         Assert.Contains("Database:PostgreSQL", missingRequired.ToString());
+    }
+
+    [Fact]
+    public async Task HealthEndpoint_WhenPostgresUnreachableInDualMode_Returns200WithDegradedStatus()
+    {
+        // VDS mimarisi gereksinimi: PostgreSQL henüz kurulu/çalışmıyor olsa bile SQLite yerel veritabanı aktifse
+        // API çökmemeli; 200 OK ve 'Degraded' statüsü dönerek VDS deploy'un başarıyla tamamlanmasını sağlamalıdır.
+        var client = _factory.WithWebHostBuilder(builder =>
+        {
+            builder.UseSetting("HealthChecks:BypassDatabaseProbe", "false");
+            builder.UseSetting("HealthChecks:RequirePostgreSql", "false");
+            builder.UseSetting("ConnectionStrings:PostgreSql", "Host=127.0.0.1;Port=54329;Database=unreachable_db;Username=test;Password=test;Timeout=1;CommandTimeout=1");
+        }).CreateClient();
+
+        var response = await client.GetAsync("/health");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync();
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        Assert.Equal("Degraded", root.GetProperty("status").GetString());
+        Assert.True(root.TryGetProperty("missingOptional", out var missingOptional));
+        Assert.Contains("Database:PostgreSQL", missingOptional.ToString());
     }
 
     [Fact]

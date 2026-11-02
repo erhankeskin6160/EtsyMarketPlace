@@ -288,7 +288,8 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<EtsyMarketPlaceDbContext>();
-        await db.Database.MigrateAsync();
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        await db.Database.MigrateAsync(cts.Token);
 
         var migrator = scope.ServiceProvider.GetRequiredService<EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator>();
         var migrationRes = await migrator.MigrateAndSeedAsync();

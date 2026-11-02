@@ -46,27 +46,77 @@ public sealed class ConfigurationStatusService : IConfigurationStatusService
         var missingRequired = result.MissingRequired;
         var missingOptional = result.MissingOptional;
 
-        // 1. Veritabanı (PostgreSQL Canlı Bağlantı Denetimi - GitHub Issue #43)
-        var pgConn = _configuration.GetConnectionString("PostgreSql");
-        if (string.IsNullOrWhiteSpace(pgConn))
+        // 1. Veritabanı Mimarisi Denetimi (SQLite Canlı Depo & PostgreSQL Probe)
+        // 1.1. SQLite Yerel Veritabanı Denetimi (VDS Canlı Çalışma Çekirdeği)
+        bool sqliteOk = false;
+        var sqlitePath = _configuration.GetValue<string>("EtsyIntegration:DatabasePath");
+        if (string.IsNullOrWhiteSpace(sqlitePath))
         {
-            components["database"] = new ConfigComponentStatus
+            sqlitePath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "EtsyMarketPlace",
+                "etsy-finance.db");
+        }
+        else
+        {
+            sqlitePath = Environment.ExpandEnvironmentVariables(sqlitePath);
+        }
+
+        try
+        {
+            var sqliteDir = Path.GetDirectoryName(sqlitePath);
+            if (!string.IsNullOrWhiteSpace(sqliteDir))
+            {
+                Directory.CreateDirectory(sqliteDir);
+            }
+            sqliteOk = true;
+        }
+        catch (Exception ex)
+        {
+            sqliteOk = false;
+            components["database_sqlite"] = new ConfigComponentStatus
             {
                 IsConfigured = false,
                 Status = "Unhealthy",
-                Summary = "ConnectionStrings:PostgreSql tanımlı değil.",
-                Action = "appsettings.json veya VDS ortam değişkenlerinde PostgreSQL bağlantı dizesini tanımlayın."
+                Summary = $"SQLite dizin erişim hatası: {ex.Message}",
+                Action = "VDS disk yazma izinlerini kontrol edin."
             };
-            missingRequired.Add("ConnectionStrings:PostgreSql");
         }
-        else if (_configuration.GetValue<bool>("HealthChecks:BypassDatabaseProbe", false))
+
+        // 1.2. PostgreSQL Canlı Bağlantı Denetimi
+        bool postgresOk = false;
+        var pgConn = _configuration.GetConnectionString("PostgreSql");
+        bool bypassPgProbe = _configuration.GetValue<bool>("HealthChecks:BypassDatabaseProbe", false);
+        bool requirePostgres = _configuration.GetValue<bool>("HealthChecks:RequirePostgreSql", false);
+
+        if (bypassPgProbe)
         {
+            postgresOk = true;
             components["database"] = new ConfigComponentStatus
             {
                 IsConfigured = true,
                 Status = "Healthy",
                 Summary = "PostgreSQL bağlantı denetimi yapılandırma gereği baypas edildi (Test/Mock modu)."
             };
+        }
+        else if (string.IsNullOrWhiteSpace(pgConn))
+        {
+            postgresOk = false;
+            components["database"] = new ConfigComponentStatus
+            {
+                IsConfigured = false,
+                Status = "Degraded",
+                Summary = "PostgreSQL bağlantı dizesi tanımlı değil (SQLite yerel veritabanı aktif).",
+                Action = "PostgreSQL'e geçiş için ConnectionStrings:PostgreSql tanımlayabilirsiniz."
+            };
+            if (requirePostgres)
+            {
+                missingRequired.Add("Database:PostgreSQL");
+            }
+            else
+            {
+                missingOptional.Add("Database:PostgreSQL");
+            }
         }
         else
         {
@@ -79,8 +129,8 @@ public sealed class ConfigurationStatusService : IConfigurationStatusService
                 var db = scope.ServiceProvider.GetService<EtsyMarketPlaceDbContext>();
                 if (db != null)
                 {
-                    var canConnect = await db.Database.CanConnectAsync(cts.Token);
-                    if (canConnect)
+                    postgresOk = await db.Database.CanConnectAsync(cts.Token);
+                    if (postgresOk)
                     {
                         components["database"] = new ConfigComponentStatus
                         {
@@ -94,34 +144,50 @@ public sealed class ConfigurationStatusService : IConfigurationStatusService
                         components["database"] = new ConfigComponentStatus
                         {
                             IsConfigured = true,
-                            Status = "Unhealthy",
-                            Summary = "PostgreSQL veritabanına bağlanılamadı (CanConnect = false).",
-                            Action = "PostgreSQL servisinin çalıştığından ve bağlantı dizesinin doğruluğundan emin olun."
+                            Status = (requirePostgres || !sqliteOk) ? "Unhealthy" : "Degraded",
+                            Summary = sqliteOk 
+                                ? "PostgreSQL servisine bağlanılamadı; yerel SQLite veritabanı ile kesintisiz çalışılıyor."
+                                : "PostgreSQL veritabanına bağlanılamadı (CanConnect = false).",
+                            Action = "PostgreSQL servisinin çalıştığından emin olun."
                         };
-                        missingRequired.Add("Database:PostgreSQL");
+                        if (requirePostgres || !sqliteOk)
+                        {
+                            missingRequired.Add("Database:PostgreSQL");
+                        }
+                        else
+                        {
+                            missingOptional.Add("Database:PostgreSQL");
+                        }
                     }
-                }
-                else
-                {
-                    components["database"] = new ConfigComponentStatus
-                    {
-                        IsConfigured = true,
-                        Status = "Healthy",
-                        Summary = "PostgreSQL bağlantı dizesi mevcut."
-                    };
                 }
             }
             catch (Exception ex)
             {
+                postgresOk = false;
                 components["database"] = new ConfigComponentStatus
                 {
                     IsConfigured = true,
-                    Status = "Unhealthy",
-                    Summary = $"PostgreSQL canlı bağlantı hatası: {ex.Message}",
+                    Status = (requirePostgres || !sqliteOk) ? "Unhealthy" : "Degraded",
+                    Summary = sqliteOk 
+                        ? $"PostgreSQL bağlantı uyarısı ({ex.Message}); yerel SQLite veritabanı aktif."
+                        : $"PostgreSQL canlı bağlantı hatası: {ex.Message}",
                     Action = "PostgreSQL servisini kontrol edin."
                 };
-                missingRequired.Add("Database:PostgreSQL");
+                if (requirePostgres || !sqliteOk)
+                {
+                    missingRequired.Add("Database:PostgreSQL");
+                }
+                else
+                {
+                    missingOptional.Add("Database:PostgreSQL");
+                }
             }
+        }
+
+        // Eğer SQLite de bozuksa ve PostgreSQL de yoksa veritabanı çökmüş sayılır
+        if (!sqliteOk && !postgresOk)
+        {
+            missingRequired.Add("Database:Operational");
         }
 
         // 2. Güvenlik (ApiKey & JWT)
