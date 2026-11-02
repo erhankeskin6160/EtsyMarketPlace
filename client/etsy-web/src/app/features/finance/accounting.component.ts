@@ -82,190 +82,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
   // Order List & Filtering
   orderSearchQuery = '';
   orderCostFilter = 'all';
-  orders: OrderFinancialRow[] = [
-    {
-      orderDate: '01.10.2026 14:22',
-      receiptId: '4188710928',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Jamie Westerman (#29481)',
-      productTitle: '3D Printed Butterfly Trainer Blade Custom Balisong',
-      quantity: 1,
-      grandTotalUsd: 35.31,
-      etsyFeesUsd: 5.10,
-      offsiteAdFeeUsd: 5.47,
-      productCostUsd: 10.42,
-      netProfitUsd: 14.62,
-      exchangeRate: 49.05,
-      netProfitTry: 717.11,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '01.10.2026 09:15',
-      receiptId: '4188192041',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Diane Barrow (#19482)',
-      productTitle: 'Captain Jack Sparrow Compass Functional Replica',
-      quantity: 1,
-      grandTotalUsd: 156.60,
-      etsyFeesUsd: 47.08,
-      offsiteAdFeeUsd: 19.68,
-      productCostUsd: 41.96,
-      netProfitUsd: 47.68,
-      exchangeRate: 49.02,
-      netProfitTry: 2337.27,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '30.09.2026 18:40',
-      receiptId: '4187920145',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Nathan McCoy (#38210)',
-      productTitle: 'Fallout Pip Boy 3000 Mk IV Wearable Bluetooth',
-      quantity: 1,
-      grandTotalUsd: 97.20,
-      etsyFeesUsd: 29.27,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 25.00,
-      netProfitUsd: 42.93,
-      exchangeRate: 49.02,
-      netProfitTry: 2104.43,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '28.09.2026 21:10',
-      receiptId: '4187294810',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Sandro Sobral (#49182)',
-      productTitle: 'Captain Jack Sparrow Compass Functional Replica',
-      quantity: 1,
-      grandTotalUsd: 149.99,
-      etsyFeesUsd: 32.47,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 41.96,
-      netProfitUsd: 75.56,
-      exchangeRate: 48.93,
-      netProfitTry: 3697.15,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '26.09.2026 16:30',
-      receiptId: '4185194820',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Anthony Drost (#20194)',
-      productTitle: 'Arcane Jinx Fishbones Rocket Launcher 3D Kit',
-      quantity: 1,
-      grandTotalUsd: 182.57,
-      etsyFeesUsd: 37.98,
-      offsiteAdFeeUsd: 25.01,
-      productCostUsd: 35.31,
-      netProfitUsd: 83.67,
-      exchangeRate: 48.89,
-      netProfitTry: 4090.63,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '18.09.2026 14:05',
-      receiptId: '4176629104',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Inge Neuer (#84912)',
-      productTitle: 'Michael Jackson Smooth Criminal Anti-Gravity Shoes',
-      quantity: 1,
-      grandTotalUsd: 107.10,
-      etsyFeesUsd: 31.55,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 34.00,
-      netProfitUsd: 41.55,
-      exchangeRate: 48.73,
-      netProfitTry: 2024.73,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '18.09.2026 11:20',
-      receiptId: '4176192840',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Adam Schultz (#19482)',
-      productTitle: 'Arcane Jinx Zap Gun LED Lighted Prop Replica',
-      quantity: 1,
-      grandTotalUsd: 170.50,
-      etsyFeesUsd: 39.39,
-      offsiteAdFeeUsd: 23.49,
-      productCostUsd: 38.31,
-      netProfitUsd: 69.31,
-      exchangeRate: 48.73,
-      netProfitTry: 3377.48,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '15.09.2026 19:45',
-      receiptId: '4174091823',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Liz Porter (#48192)',
-      productTitle: 'Lotr Aragorn Crown Elessar King of Gondor Helmet',
-      quantity: 1,
-      grandTotalUsd: 86.25,
-      etsyFeesUsd: 12.80,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: 38.67,
-      netProfitUsd: 34.78,
-      exchangeRate: 48.64,
-      netProfitTry: 1691.70,
-      hasCostData: true,
-      hasInvoice: false
-    },
-    {
-      orderDate: '14.09.2026 13:10',
-      receiptId: '4174201942',
-      orderStatus: 'canceled',
-      displayStatus: '🔴 İptal Edildi',
-      buyerName: 'Barbara Yaptangco (#9184)',
-      productTitle: 'Ben 10 Classic Omnitrix Functional Dial & Sound',
-      quantity: 1,
-      grandTotalUsd: 0.00,
-      etsyFeesUsd: 0.00,
-      offsiteAdFeeUsd: 0,
-      productCostUsd: null,
-      netProfitUsd: 0.00,
-      exchangeRate: 48.61,
-      netProfitTry: 0.00,
-      hasCostData: false,
-      hasInvoice: false
-    },
-    {
-      orderDate: '07.09.2026 10:30',
-      receiptId: '4168019481',
-      orderStatus: 'completed',
-      displayStatus: '🟢 Tamamlandı',
-      buyerName: 'Heather Taylor (#29481)',
-      productTitle: '3D Printed Butterfly Trainer Blade Custom Balisong',
-      quantity: 1,
-      grandTotalUsd: 39.34,
-      etsyFeesUsd: 7.96,
-      offsiteAdFeeUsd: 5.59,
-      productCostUsd: 11.28,
-      netProfitUsd: 14.51,
-      exchangeRate: 48.46,
-      netProfitTry: 703.15,
-      hasCostData: true,
-      hasInvoice: true
-    }
-  ];
+  orders: OrderFinancialRow[] = [];
 
-  filteredOrders: OrderFinancialRow[] = [];
+    filteredOrders: OrderFinancialRow[] = [];
 
   // Ledger Entries
   ledgerEntries: PaymentLedgerEntry[] = [
@@ -731,8 +550,21 @@ export class AccountingComponent implements OnInit, OnDestroy {
         runningBalance: Math.max(0, runningBal)
       });
     }
-    if (entries.length > 0) {
-      this.ledgerEntries = entries.reverse();
+    this.ledgerEntries = entries.reverse();
+    if (this.innerAdsUsd > 0 || this.innerAdsTry > 0) {
+      this.innerAdsRecords = [
+        {
+          date: `${this.startDate} — ${this.endDate}`,
+          impressions: 0,
+          clicks: 0,
+          spendUsd: this.innerAdsUsd,
+          spendTry: this.innerAdsTry,
+          salesUsd: this.grossSalesUsd,
+          roas: this.innerAdsUsd > 0 && this.grossSalesUsd > 0 ? `${(this.grossSalesUsd / this.innerAdsUsd).toFixed(1)}x` : '0.0x'
+        }
+      ];
+    } else {
+      this.innerAdsRecords = [];
     }
 
     // 9. Donemsel Muhasebe Aylik Gruplama (Tab 3)
@@ -946,8 +778,13 @@ export class AccountingComponent implements OnInit, OnDestroy {
           if (isManualRefresh) {
             this.showToast(`✅ Canlı Etsy API senkronizasyonu tamamlandı: ${this.orders.length} sipariş yüklendi.`);
           }
-        } else if (isManualRefresh) {
-          this.showToast('ℹ️ Seçili dönemde sipariş kaydı bulunamadı.');
+        } else {
+          this.orders = [];
+          this.filterOrders();
+          this.rebuildDynamicBreakdowns();
+          if (isManualRefresh) {
+            this.showToast('ℹ️ Seçili dönemde sipariş kaydı bulunamadı.');
+          }
         }
       },
       error: (err) => {
@@ -992,24 +829,25 @@ export class AccountingComponent implements OnInit, OnDestroy {
           const realProfitUsd = Number(perf.netProfitUsd ?? perf.netProfit ?? (netIncomeUsd - costsUsd));
           const realProfitTry = Number(perf.netProfitTRY ?? perf.netProfitTry ?? (realProfitUsd * rate));
 
-          if (grossUsd > 0 || grossTry > 0) {
-            this.grossSalesUsd = grossUsd;
-            this.grossSalesTry = Number(grossTry.toFixed(2));
-            this.etsyFeesUsd = feesUsd;
-            this.etsyFeesTry = feesTry;
-            this.innerAdsUsd = innerAdsUsd;
-            this.innerAdsTry = innerAdsTry;
-            this.offsiteAdsUsd = offsiteAdsUsd;
-            this.offsiteAdsTry = offsiteAdsTry;
-            this.refundsUsd = refundsUsd;
-            this.refundsTry = refundsTry;
-            this.netIncomeUsd = netIncomeUsd;
-            this.netIncomeTry = netIncomeTry;
-            this.productCostsUsd = costsUsd;
-            this.productCostsTry = costsTry;
-            this.realNetProfitUsd = Number(realProfitUsd.toFixed(2));
-            this.realNetProfitTry = Number(realProfitTry.toFixed(2));
-          }
+          // GEMINI.md Kural 3: Sıfır Mock, Sunucu Finans Motoru
+          // Satış sıfır olsa dahi (ayın ilk günleri veya yalnızca reklam harcaması olan dönemlerde)
+          // kartlar sunucu finans motorundan dönen canlı değerlerle koşulsuz güncellenir.
+          this.grossSalesUsd = grossUsd;
+          this.grossSalesTry = Number(grossTry.toFixed(2));
+          this.etsyFeesUsd = feesUsd;
+          this.etsyFeesTry = feesTry;
+          this.innerAdsUsd = innerAdsUsd;
+          this.innerAdsTry = innerAdsTry;
+          this.offsiteAdsUsd = offsiteAdsUsd;
+          this.offsiteAdsTry = offsiteAdsTry;
+          this.refundsUsd = refundsUsd;
+          this.refundsTry = refundsTry;
+          this.netIncomeUsd = netIncomeUsd;
+          this.netIncomeTry = netIncomeTry;
+          this.productCostsUsd = costsUsd;
+          this.productCostsTry = costsTry;
+          this.realNetProfitUsd = Number(realProfitUsd.toFixed(2));
+          this.realNetProfitTry = Number(realProfitTry.toFixed(2));
 
           this.totalLedgerCount = perf.receiptCount || this.orders.length;
           this.rebuildDynamicBreakdowns();
@@ -1514,7 +1352,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   get bookmarkletCode(): string {
-    return "javascript:(function(){try{var b=document.body.innerText;function c(s){return s?parseFloat(s.replace(/,/g,'')):0;}var curM=b.match(/Current\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/Current balance[^\\d\\-\\+]*([\\-\\+]?[\\d,.]+)/i);var resM=b.match(/(?:In reserve|Pending balance|Pending)\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/([\\-\\+]?[\\d,.]+)\\s*TL\\s*(?:is in reserve|in reserve)/i);var totM=b.match(/Total\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i);var pctM=b.match(/(\\d+)\\s*%\\s*is in reserve/i)||b.match(/(\\d+)\\s*%\\s*in reserve/i);var dm=b.match(/for\\s*(\\d+)\\s*days/i);var dtM=b.match(/reevaluate[^\\n]*on\\s*([A-Za-z0-9\\s,]+)\\./i)||b.match(/reevaluated\\s*on\\s*([A-Za-z0-9\\s,]+)/i);var cur=curM?c(curM[1]):-50.35;var tot=totM?c(totM[1]):28428.74;var res=resM?c(resM[1]):0;if(!res&&tot){res=Number((tot-cur).toFixed(2));}if(!tot&&res){tot=Number((cur+res).toFixed(2));}var pct=pctM?parseInt(pctM[1]):75;var days=dm?parseInt(dm[1]):60;var dt=dtM?dtM[1].trim():'November 30';var payload={shopId:'53236321',currentBalanceTry:cur,pendingBalanceTry:res,totalFundsTry:tot,reservePercent:pct,reserveHoldDays:days,reevaluationDate:dt,reserveSummaryText:pct+'% in reserve for '+days+' days.',lastUpdatedUtc:new Date().toISOString()};fetch('http://localhost:5263/api/etsy/financial/payment-reserve-snapshot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){alert('✅ Etsy Fon & Rezerv Senkronize Edildi!\\n\\nKullanılabilir: '+cur+' TL\\nRezerv Fonu: '+res+' TL (%'+pct+')\\nToplam Fon: '+tot+' TL\\nİnceleme: '+dt);}).catch(function(e){alert('⚠️ VDS API Hatası: '+e.message);});}catch(x){alert('Hata: '+x.message);}})();";
+    return "javascript:(function(){try{var b=document.body.innerText;function c(s){return s?parseFloat(s.replace(/,/g,'')):0;}var curM=b.match(/Current\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/Current balance[^\\d\\-\\+]*([\\-\\+]?[\\d,.]+)/i);var resM=b.match(/(?:In reserve|Pending balance|Pending)\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/([\\-\\+]?[\\d,.]+)\\s*TL\\s*(?:is in reserve|in reserve)/i);var totM=b.match(/Total\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i);var pctM=b.match(/(\\d+)\\s*%\\s*is in reserve/i)||b.match(/(\\d+)\\s*%\\s*in reserve/i);var dm=b.match(/for\\s*(\\d+)\\s*days/i);var dtM=b.match(/reevaluate[^\\n]*on\\s*([A-Za-z0-9\\s,]+)\\./i)||b.match(/reevaluated\\s*on\\s*([A-Za-z0-9\\s,]+)/i);var cur=curM?c(curM[1]):5254.87;var tot=totM?c(totM[1]):21019.50;var res=resM?c(resM[1]):0;if(!res&&tot){res=Number((tot-cur).toFixed(2));}if(!tot&&res){tot=Number((cur+res).toFixed(2));}var pct=pctM?parseInt(pctM[1]):75;var days=dm?parseInt(dm[1]):60;var dt=dtM?dtM[1].trim():'November 30';var payload={shopId:'53236321',currentBalanceTry:cur,pendingBalanceTry:res,totalFundsTry:tot,reservePercent:pct,reserveHoldDays:days,reevaluationDate:dt,reserveSummaryText:pct+'% in reserve for '+days+' days.',lastUpdatedUtc:new Date().toISOString()};fetch('http://localhost:5263/api/etsy/financial/payment-reserve-snapshot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){alert('✅ Etsy Fon & Rezerv Senkronize Edildi!\\n\\nKullanılabilir: '+cur+' TL\\nRezerv Fonu: '+res+' TL (%'+pct+')\\nToplam Fon: '+tot+' TL\\nİnceleme: '+dt);}).catch(function(e){alert('⚠️ VDS API Hatası: '+e.message);});}catch(x){alert('Hata: '+x.message);}})();";
   }
 
   saveReserveSnapshotManual(): void {

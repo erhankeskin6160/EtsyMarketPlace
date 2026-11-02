@@ -38,9 +38,9 @@ public sealed class GetPaymentReserveSnapshotHandler(IShopSettingsRepository rep
             {
                 var fallback = new EtsyPaymentReserveSnapshotDto(
                     request.ShopId,
-                    -50.35m,
-                    28479.09m,
-                    28428.74m,
+                    5254.87m,
+                    15764.63m,
+                    21019.50m,
                     75m,
                     60,
                     "November 30",

@@ -50,8 +50,9 @@ public class PaymentReserveSnapshotTests
         Assert.NotNull(result.Data);
         var snapshot = (EtsyPaymentReserveSnapshotDto)result.Data;
         Assert.Equal("53236321", snapshot.ShopId);
-        Assert.Equal(-50.35m, snapshot.CurrentBalanceTry);
-        Assert.Equal(28479.09m, snapshot.PendingBalanceTry);
+        Assert.Equal(5254.87m, snapshot.CurrentBalanceTry);
+        Assert.Equal(15764.63m, snapshot.PendingBalanceTry);
+        Assert.Equal(21019.50m, snapshot.TotalBalanceTry);
         Assert.Equal(75m, snapshot.ReservePercent);
         Assert.Equal(60, snapshot.ReserveHoldDays);
         Assert.Equal("November 30", snapshot.ReevaluationDate);
