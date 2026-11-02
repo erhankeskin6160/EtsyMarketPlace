@@ -5,11 +5,11 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
-public class SystemApiTests : IClassFixture<WebApplicationFactory<Program>>
+public class SystemApiTests : IClassFixture<ApiTestFactory>
 {
     private readonly HttpClient _client;
 
-    public SystemApiTests(WebApplicationFactory<Program> factory)
+    public SystemApiTests(ApiTestFactory factory)
     {
         _client = factory.CreateClient();
     }

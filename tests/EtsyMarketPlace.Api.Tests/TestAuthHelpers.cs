@@ -17,6 +17,7 @@ public sealed class ApiTestFactory : WebApplicationFactory<Program>
     {
         builder.UseSetting("Jwt:Secret", TestJwtSecret);
         builder.UseSetting("Security:ApiKey", TestApiKey);
+        builder.UseSetting("HealthChecks:BypassDatabaseProbe", "true");
     }
 }
 

@@ -2,13 +2,16 @@ namespace EtsyMarketPlace.Api.Services;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Api.Security;
 using EtsyMarketPlace.Application.Auth;
+using EtsyMarketPlace.Infrastructure.Database.Postgres;
 using EtsyMarketPlace.Infrastructure.EtsyIntegration;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 
 public sealed class ConfigurationStatusService : IConfigurationStatusService
@@ -18,29 +21,32 @@ public sealed class ConfigurationStatusService : IConfigurationStatusService
     private readonly IOptions<JwtOptions> _jwtOptions;
     private readonly IOptions<EtsyApiOptions> _etsyOptions;
     private readonly JwtTokenService? _jwtService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     public ConfigurationStatusService(
         IConfiguration configuration,
         IOptions<SecurityOptions> securityOptions,
         IOptions<JwtOptions> jwtOptions,
         IOptions<EtsyApiOptions> etsyOptions,
+        IServiceScopeFactory scopeFactory,
         JwtTokenService? jwtService = null)
     {
         _configuration = configuration;
         _securityOptions = securityOptions;
         _jwtOptions = jwtOptions;
         _etsyOptions = etsyOptions;
+        _scopeFactory = scopeFactory;
         _jwtService = jwtService;
     }
 
-    public Task<ConfigStatusResult> GetStatusAsync(CancellationToken cancellationToken = default)
+    public async Task<ConfigStatusResult> GetStatusAsync(CancellationToken cancellationToken = default)
     {
         var result = new ConfigStatusResult();
         var components = result.Components;
         var missingRequired = result.MissingRequired;
         var missingOptional = result.MissingOptional;
 
-        // 1. Veritabanı (PostgreSQL)
+        // 1. Veritabanı (PostgreSQL Canlı Bağlantı Denetimi - GitHub Issue #43)
         var pgConn = _configuration.GetConnectionString("PostgreSql");
         if (string.IsNullOrWhiteSpace(pgConn))
         {
@@ -53,14 +59,69 @@ public sealed class ConfigurationStatusService : IConfigurationStatusService
             };
             missingRequired.Add("ConnectionStrings:PostgreSql");
         }
-        else
+        else if (_configuration.GetValue<bool>("HealthChecks:BypassDatabaseProbe", false))
         {
             components["database"] = new ConfigComponentStatus
             {
                 IsConfigured = true,
                 Status = "Healthy",
-                Summary = "PostgreSQL bağlantı dizesi tanımlı."
+                Summary = "PostgreSQL bağlantı denetimi yapılandırma gereği baypas edildi (Test/Mock modu)."
             };
+        }
+        else
+        {
+            try
+            {
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(2));
+
+                using var scope = _scopeFactory.CreateScope();
+                var db = scope.ServiceProvider.GetService<EtsyMarketPlaceDbContext>();
+                if (db != null)
+                {
+                    var canConnect = await db.Database.CanConnectAsync(cts.Token);
+                    if (canConnect)
+                    {
+                        components["database"] = new ConfigComponentStatus
+                        {
+                            IsConfigured = true,
+                            Status = "Healthy",
+                            Summary = "PostgreSQL veritabanı aktif ve canlı yanıt veriyor."
+                        };
+                    }
+                    else
+                    {
+                        components["database"] = new ConfigComponentStatus
+                        {
+                            IsConfigured = true,
+                            Status = "Unhealthy",
+                            Summary = "PostgreSQL veritabanına bağlanılamadı (CanConnect = false).",
+                            Action = "PostgreSQL servisinin çalıştığından ve bağlantı dizesinin doğruluğundan emin olun."
+                        };
+                        missingRequired.Add("Database:PostgreSQL");
+                    }
+                }
+                else
+                {
+                    components["database"] = new ConfigComponentStatus
+                    {
+                        IsConfigured = true,
+                        Status = "Healthy",
+                        Summary = "PostgreSQL bağlantı dizesi mevcut."
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                components["database"] = new ConfigComponentStatus
+                {
+                    IsConfigured = true,
+                    Status = "Unhealthy",
+                    Summary = $"PostgreSQL canlı bağlantı hatası: {ex.Message}",
+                    Action = "PostgreSQL servisini kontrol edin."
+                };
+                missingRequired.Add("Database:PostgreSQL");
+            }
         }
 
         // 2. Güvenlik (ApiKey & JWT)
@@ -138,7 +199,32 @@ public sealed class ConfigurationStatusService : IConfigurationStatusService
             };
         }
 
-        // 5. Genel Durum Belirleme (Healthy, Degraded, Unhealthy)
+        // 5. Disk ve Veri Klasörü Yazma İzni Denetimi
+        try
+        {
+            var dataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "EtsyMarketPlace");
+            Directory.CreateDirectory(dataDir);
+            components["storage"] = new ConfigComponentStatus
+            {
+                IsConfigured = true,
+                Status = "Healthy",
+                Summary = $"Kalıcı veri depolama alanı erişilebilir."
+            };
+        }
+        catch (Exception ex)
+        {
+            components["storage"] = new ConfigComponentStatus
+            {
+                IsConfigured = false,
+                Status = "Degraded",
+                Summary = $"Depolama dizini erişim uyarısı: {ex.Message}"
+            };
+            missingOptional.Add("Storage:Permissions");
+        }
+
+        // 6. Genel Durum Belirleme (Healthy, Degraded, Unhealthy)
         if (missingRequired.Count > 0)
         {
             result.Status = "Unhealthy";
@@ -152,6 +238,6 @@ public sealed class ConfigurationStatusService : IConfigurationStatusService
             result.Status = "Healthy";
         }
 
-        return Task.FromResult(result);
+        return result;
     }
 }

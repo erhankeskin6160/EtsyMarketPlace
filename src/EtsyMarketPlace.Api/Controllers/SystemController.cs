@@ -1,4 +1,6 @@
 using System;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using EtsyMarketPlace.Api.Services;
@@ -14,10 +16,36 @@ namespace EtsyMarketPlace.Api.Controllers;
 public class SystemController : ControllerBase
 {
     private readonly IConfigurationStatusService _configStatusService;
+    private static readonly (string InformationalVersion, string CommitSha) VersionInfo = ResolveVersionInfo();
 
     public SystemController(IConfigurationStatusService configStatusService)
     {
         _configStatusService = configStatusService;
+    }
+
+    private static (string InformationalVersion, string CommitSha) ResolveVersionInfo()
+    {
+        var infoVer = typeof(SystemController).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "2.4.0";
+
+        var commitSha = Environment.GetEnvironmentVariable("GIT_COMMIT_SHA")
+            ?? Environment.GetEnvironmentVariable("GITHUB_SHA");
+
+        if (string.IsNullOrWhiteSpace(commitSha) && infoVer.Contains('+'))
+        {
+            var parts = infoVer.Split('+');
+            if (parts.Length > 1 && !string.IsNullOrWhiteSpace(parts[1]))
+            {
+                commitSha = parts[1].Trim();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(commitSha))
+        {
+            commitSha = "dev-build";
+        }
+
+        return (infoVer, commitSha);
     }
 
     [HttpGet("")]
@@ -81,11 +109,20 @@ public class SystemController : ControllerBase
         return Ok(new
         {
             version = "2.4.0",
+            informationalVersion = VersionInfo.InformationalVersion,
+            commitSha = VersionInfo.CommitSha,
             service = "EtsyMarketPlace VDS Command Engine",
             status = "Online",
             database = "PostgreSQL",
             uptimeSeconds = Environment.TickCount64 / 1000,
-            serverTime = DateTimeOffset.UtcNow.ToString("O")
+            serverTime = DateTimeOffset.UtcNow.ToString("O"),
+            runtime = new
+            {
+                framework = RuntimeInformation.FrameworkDescription,
+                clrVersion = Environment.Version.ToString(),
+                os = RuntimeInformation.OSDescription,
+                architecture = RuntimeInformation.OSArchitecture.ToString()
+            }
         });
     }
 }
