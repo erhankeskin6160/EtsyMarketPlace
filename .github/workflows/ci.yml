@@ -19,6 +19,16 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore SimilarProductsWinForms.sln
 
+    - name: Audit NuGet Packages for Known Vulnerabilities
+      shell: pwsh
+      run: |
+        $vulnOutput = dotnet list SimilarProductsWinForms.sln package --vulnerable --include-transitive
+        $vulnOutput
+        if ($vulnOutput -match "(Critical|High|Moderate|Low)") {
+          Write-Error "Guvenlik acigi bulunan NuGet paketleri tespit edildi!"
+          exit 1
+        }
+
     - name: Build Solution
       run: dotnet build SimilarProductsWinForms.sln -c Release --no-restore
 
