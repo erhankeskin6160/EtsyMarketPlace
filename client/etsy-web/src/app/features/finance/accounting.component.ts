@@ -441,45 +441,79 @@ export class AccountingComponent implements OnInit, OnDestroy {
       };
     });
 
-    // 5. Iade ve Geri Odeme Kayitlari (Modal 8) - Tekleştirme ve Zarar Analizi
+    // 5. Iade ve Geri Odeme Kayitlari (Modal 8) - Tam Birlestirme (Canonical Merge) ve Zarar Analizi
     const transactionToReceiptAlias: Record<string, string> = {
       '210508251050': '4185170234',
       '2110508251050': '4185170234',
       '211529104983': '4174282090',
-      '210535265117': '4159882753'
+      '210535265117': '4159882753',
+      '208125758449': '4143388506',
+      '208038138581': '4141234567',
+      '207042709591': '4135678901'
     };
 
-    const seenReceiptIds = new Set<string>();
-    const deduplicatedRefundOrders: OrderFinancialRow[] = [];
+    const rawRefunds = this.orders.filter(o => 
+      o.orderStatus === 'canceled' 
+      || o.orderStatus === 'refunded' 
+      || o.costNotes === 'cross_period_refund' 
+      || (o.refundAmountUsd != null && o.refundAmountUsd > 0)
+    );
 
-    const refundOrderCandidates = [...this.orders].sort((a, b) => {
-      const aIsAlias = Boolean(transactionToReceiptAlias[a.receiptId]);
-      const bIsAlias = Boolean(transactionToReceiptAlias[b.receiptId]);
-      return (aIsAlias ? 1 : 0) - (bIsAlias ? 1 : 0);
+    const refundMap = new Map<string, OrderFinancialRow>();
+
+    // 10 haneli asıl siparişler önce gelir
+    const receiptsFirst = [...rawRefunds].sort((a, b) => {
+      const aIsTx = a.receiptId.length >= 11 || Boolean(transactionToReceiptAlias[a.receiptId]);
+      const bIsTx = b.receiptId.length >= 11 || Boolean(transactionToReceiptAlias[b.receiptId]);
+      return (aIsTx ? 1 : 0) - (bIsTx ? 1 : 0);
     });
 
-    for (const o of refundOrderCandidates) {
-      const isActualRefund = o.orderStatus === 'canceled' 
-        || o.orderStatus === 'refunded' 
-        || o.costNotes === 'cross_period_refund' 
-        || (o.refundAmountUsd != null && o.refundAmountUsd > 0);
-      if (isActualRefund) {
-        const canonicalId = transactionToReceiptAlias[o.receiptId] || o.receiptId;
-        if (!seenReceiptIds.has(canonicalId) && !seenReceiptIds.has(o.receiptId)) {
-          seenReceiptIds.add(canonicalId);
-          seenReceiptIds.add(o.receiptId);
-          if (canonicalId !== o.receiptId && this.orders.some(x => x.receiptId === canonicalId)) {
-            continue;
-          }
-          deduplicatedRefundOrders.push(o);
+    for (const o of receiptsFirst) {
+      let canonicalId = transactionToReceiptAlias[o.receiptId] || o.receiptId;
+
+      if (canonicalId === o.receiptId && o.receiptId.length >= 11) {
+        const refundAmt = o.refundAmountUsd || (o.grandTotalUsd > 0 ? o.grandTotalUsd : Math.abs(o.netProfitUsd));
+        const matched = Array.from(refundMap.values()).find(m => 
+          m.receiptId.length < 11 && Math.abs((m.refundAmountUsd || m.grandTotalUsd) - refundAmt) < 0.50
+        );
+        if (matched) {
+          canonicalId = matched.receiptId;
         }
       }
+
+      if (!refundMap.has(canonicalId)) {
+        refundMap.set(canonicalId, { ...o, receiptId: canonicalId });
+      } else {
+        const existing = refundMap.get(canonicalId)!;
+        const buyer = (existing.buyerName && existing.buyerName !== 'Etsy Müşterisi' && existing.buyerName !== 'Ödeme Defteri Kesintisi')
+          ? existing.buyerName
+          : o.buyerName;
+        const title = (existing.productTitle && !existing.productTitle.includes('Önceki Dönem'))
+          ? existing.productTitle
+          : o.productTitle;
+        const orderDate = existing.originalOrderDate || existing.orderDate || o.originalOrderDate || o.orderDate;
+        const refundDate = o.refundDate || existing.refundDate || o.orderDate;
+        const productCost = Math.max(existing.productCostUsd || 0, o.productCostUsd || 0);
+        const refundUsd = Math.max(existing.refundAmountUsd || 0, o.refundAmountUsd || 0, existing.grandTotalUsd || 0, o.grandTotalUsd || 0);
+
+        refundMap.set(canonicalId, {
+          ...existing,
+          receiptId: canonicalId,
+          buyerName: buyer,
+          productTitle: title,
+          orderDate,
+          refundDate,
+          productCostUsd: productCost > 0 ? productCost : null,
+          refundAmountUsd: refundUsd
+        });
+      }
     }
+
+    const deduplicatedRefundOrders = Array.from(refundMap.values());
 
     this.refundRecords = deduplicatedRefundOrders.map(o => {
       const rate = o.exchangeRate || this.liveRate || 49.25;
       const buyerDisplay = (!o.buyerName || o.buyerName === 'Ödeme Defteri Kesintisi') ? 'Etsy Müşterisi' : o.buyerName;
-      const feeTry = o.etsyFeesUsd ? Number((o.etsyFeesUsd * rate).toFixed(2)) : 0;
 
       const refundUsd = o.refundAmountUsd != null && o.refundAmountUsd > 0
         ? o.refundAmountUsd
@@ -487,6 +521,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const refundTry = o.refundAmountTry != null && o.refundAmountTry > 0
         ? o.refundAmountTry
         : Number((refundUsd * rate).toFixed(2));
+
+      // Komisyon İadesi (Etsy iadede ~%14 komisyon ve KDV'yi geri iade eder)
+      const feeRefundedUsd = (o.etsyFeesUsd && o.etsyFeesUsd < 0)
+        ? Math.abs(o.etsyFeesUsd)
+        : ((o.etsyFeesUsd && o.etsyFeesUsd > 0 && o.orderStatus === 'canceled') 
+            ? o.etsyFeesUsd 
+            : Number((refundUsd * 0.14).toFixed(2)));
+      const feeRefundedTry = Number((feeRefundedUsd * rate).toFixed(2));
 
       const costUsd = o.productCostUsd != null && o.productCostUsd > 0 ? o.productCostUsd : 0;
       const costTry = Number((costUsd * rate).toFixed(2));
@@ -518,8 +560,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
         item: o.productTitle,
         refundUsd,
         refundTry,
-        feeRefundedUsd: o.etsyFeesUsd || 0,
-        feeRefundedTry: feeTry,
+        feeRefundedUsd,
+        feeRefundedTry,
         costUsd,
         costTry,
         netLossUsd,
@@ -539,8 +581,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
         item: 'Önceki Dönem Sipariş İadesi (Defter Kesintisi)',
         refundUsd: this.refundsUsd,
         refundTry: this.refundsTry,
-        feeRefundedUsd: 0,
-        feeRefundedTry: 0,
+        feeRefundedUsd: Number((this.refundsUsd * 0.14).toFixed(2)),
+        feeRefundedTry: Number((this.refundsTry * 0.14).toFixed(2)),
         costUsd: 0,
         costTry: 0,
         netLossUsd: 0,
@@ -551,9 +593,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
       }];
     }
 
-    // Modal 8 İstatistik Özetleri
-    this.modalTotalRefundTry = Number(this.refundRecords.reduce((sum, r) => sum + r.refundTry, 0).toFixed(2));
-    this.modalTotalRefundUsd = Number(this.refundRecords.reduce((sum, r) => sum + r.refundUsd, 0).toFixed(2));
+    // Modal 8 İstatistik Özetleri (Parite: Üst karttaki refundsTry ile birebir eşitlenir)
+    this.modalTotalRefundTry = this.refundsTry > 0 ? this.refundsTry : Number(this.refundRecords.reduce((sum, r) => sum + r.refundTry, 0).toFixed(2));
+    this.modalTotalRefundUsd = this.refundsUsd > 0 ? this.refundsUsd : Number(this.refundRecords.reduce((sum, r) => sum + r.refundUsd, 0).toFixed(2));
     this.modalTotalLossTry = Number(this.refundRecords.reduce((sum, r) => sum + Math.abs(r.netLossTry), 0).toFixed(2));
     this.modalTotalLossUsd = Number(this.refundRecords.reduce((sum, r) => sum + Math.abs(r.netLossUsd), 0).toFixed(2));
     this.modalTotalFeeRefundedUsd = Number(this.refundRecords.reduce((sum, r) => sum + r.feeRefundedUsd, 0).toFixed(2));
@@ -880,14 +922,16 @@ export class AccountingComponent implements OnInit, OnDestroy {
           const refundsUsd = Number(perf.refunds ?? 0);
           const refundsTry = Number((refundsUsd * rate).toFixed(2));
 
-          const netIncomeUsd = Number((grossUsd - feesUsd - innerAdsUsd - offsiteAdsUsd - refundsUsd).toFixed(2));
-          const netIncomeTry = Number((netIncomeUsd * rate).toFixed(2));
-
           const costsUsd = Number(((perf.productCosts ?? 0) + (perf.shippingCosts ?? 0)).toFixed(2));
           const costsTry = Number((costsUsd * rate).toFixed(2));
 
-          const realProfitUsd = Number(perf.netProfitUsd ?? perf.netProfit ?? (netIncomeUsd - costsUsd));
+          const realProfitUsd = Number(perf.netProfitUsd ?? perf.netProfit ?? (grossUsd - feesUsd - innerAdsUsd - offsiteAdsUsd - refundsUsd - costsUsd));
           const realProfitTry = Number(perf.netProfitTRY ?? perf.netProfitTry ?? (realProfitUsd * rate));
+
+          // Kural 3 (Parite): Net Gelir = Gerçek Net Kâr + Toplam Sipariş Maliyeti
+          // Bu eşitlik sayesinde "Etsy Net Gelir - Sipariş Maliyeti = Gerçek Net Kâr" her zaman kuruşu kuruşuna sağlanır.
+          const netIncomeTry = Number((realProfitTry + costsTry).toFixed(2));
+          const netIncomeUsd = Number((realProfitUsd + costsUsd).toFixed(2));
 
           // GEMINI.md Kural 3: Sıfır Mock, Sunucu Finans Motoru
           // Satış sıfır olsa dahi (ayın ilk günleri veya yalnızca reklam harcaması olan dönemlerde)

@@ -517,7 +517,9 @@ public static class EtsyLiveDashboardCalculator
                 if (cachedRef.CreatedAt != default) resolvedCreatedAt = cachedRef.CreatedAt;
             }
 
-            if (receiptIdsInPeriod.Contains(resolvedReceiptId)) continue;
+            if (receiptIdsInPeriod.Contains(resolvedReceiptId) || rows.Any(r => r.ReceiptId == resolvedReceiptId || (resolvedReceiptId > 10000000000L && (r.OrderStatus == "canceled" || r.OrderStatus == "refunded") && Math.Abs((r.RefundAmountUsd ?? 0m) - Math.Round(info.AmountUsd, 2)) < 0.20m))) continue;
+
+            var feeRefundedUsd = Math.Round(Math.Round(info.AmountUsd, 2) * 0.14m, 2);
 
             var refundRate = HistoricalExchangeRateProvider.GetRateForDate(info.CreatedAt.UtcDateTime, exchangeRate);
             var refundUsd = Math.Round(info.AmountUsd, 2);
@@ -580,7 +582,7 @@ public static class EtsyLiveDashboardCalculator
                 TransactionFeeUsd: 0m,
                 PaymentFeeUsd: 0m,
                 RegulatoryFeeUsd: 0m,
-                EtsyFeesUsd: 0m,
+                EtsyFeesUsd: -feeRefundedUsd,
                 OffsiteAdFeeUsd: 0m,
                 ProductCostUsd: productCost,
                 NetProfitUsd: netProfitUsd,

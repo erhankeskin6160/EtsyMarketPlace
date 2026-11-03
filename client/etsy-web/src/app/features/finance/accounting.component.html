@@ -398,8 +398,8 @@
                   <td class="customer-cell" [title]="o.buyerName">{{ o.buyerName }}</td>
                   <td class="product-cell" [title]="o.productTitle">{{ o.productTitle }}</td>
                   <td class="qty-cell">{{ o.quantity }}</td>
-                  <td class="amount-cell">{{ o.orderStatus === 'canceled' ? '$0.00' : ('$' + o.grandTotalUsd.toFixed(2)) }}</td>
-                  <td class="fee-cell">{{ o.orderStatus === 'canceled' ? '$0.00' : ('$' + o.etsyFeesUsd.toFixed(2)) }}</td>
+                  <td class="amount-cell">{{ (o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? '$0.00' : ('$' + o.grandTotalUsd.toFixed(2)) }}</td>
+                  <td class="fee-cell">{{ (o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? (o.etsyFeesUsd < 0 ? '+$' + Math.abs(o.etsyFeesUsd).toFixed(2) : '$0.00') : ('$' + o.etsyFeesUsd.toFixed(2)) }}</td>
                   <td class="fee-cell">{{ o.offsiteAdFeeUsd > 0 ? ('$' + o.offsiteAdFeeUsd.toFixed(2)) : '—' }}</td>
                   <td class="cost-cell">
                     {{ o.productCostUsd !== null ? ('$' + o.productCostUsd.toFixed(2)) : '—' }}

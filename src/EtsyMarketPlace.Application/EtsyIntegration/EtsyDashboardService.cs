@@ -297,6 +297,17 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         // Siparişlerin kendi oluşturulma tarihlerine ait kilitli kurları dinamik hidrate et
         if (receipts.Count > 0)
         {
+            foreach (var r in receipts)
+            {
+                foreach (var item in r.Items)
+                {
+                    if (item.TransactionId > 0 && r.ReceiptId > 0)
+                    {
+                        EtsyTransactionOrderCache.Register(item.TransactionId, r.ReceiptId, r.BuyerName ?? string.Empty, r.CreatedAt, item.Title ?? string.Empty);
+                    }
+                }
+            }
+
             var distinctDates = receipts.Select(r => r.CreatedAt.UtcDateTime.Date).Distinct().ToList();
             await HistoricalExchangeRateProvider.HydrateRatesForDatesAsync(distinctDates, cancellationToken);
         }
