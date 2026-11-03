@@ -892,6 +892,31 @@ export class AccountingComponent implements OnInit, OnDestroy {
             refundAmountUsd: dto.refundAmountUsd,
             refundAmountTry: dto.refundAmountTry
           }));
+          // Tekilleştirme: receiptId veya bilinen transaction alias üzerinden canonical mapping
+          const orderMap = new Map<string, OrderFinancialRow>();
+          for (const ord of rawMappedOrders) {
+            const canonicalId = this.transactionToReceiptAlias[ord.receiptId] || ord.receiptId;
+            const existing = orderMap.get(canonicalId);
+            if (!existing) {
+              orderMap.set(canonicalId, { ...ord, receiptId: canonicalId });
+            } else {
+              // Mevcut olanla birleştir: Müşteri adı ve ürün detayını koru
+              const hasBetterName = ord.buyerName && ord.buyerName !== 'Misafir Müşteri' && ord.buyerName !== 'Etsy Müşterisi';
+              const hasBetterProduct = ord.productTitle && !ord.productTitle.includes('Önceki Dönem');
+              orderMap.set(canonicalId, {
+                ...existing,
+                receiptId: canonicalId,
+                buyerName: hasBetterName ? ord.buyerName : existing.buyerName,
+                productTitle: hasBetterProduct ? ord.productTitle : existing.productTitle,
+                productCostUsd: existing.productCostUsd ?? ord.productCostUsd,
+                hasCostData: existing.hasCostData || ord.hasCostData,
+                unitProductCostUsd: existing.unitProductCostUsd ?? ord.unitProductCostUsd,
+                actualShippingCostUsd: existing.actualShippingCostUsd ?? ord.actualShippingCostUsd,
+                packagingCostUsd: existing.packagingCostUsd ?? ord.packagingCostUsd
+              });
+            }
+          }
+          this.orders = Array.from(orderMap.values());
           this.filterOrders();
           this.rebuildDynamicBreakdowns();
           if (isManualRefresh) {
