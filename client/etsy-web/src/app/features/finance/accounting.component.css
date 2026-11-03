@@ -839,6 +839,11 @@
       background: rgba(16, 185, 129, 0.1);
       font-weight: 700;
     }
+    .badge-status-payout.badge-refund {
+      background: rgba(239, 68, 68, 0.15) !important;
+      color: #f87171 !important;
+      border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    }
     .badge-status-payout {
       font-size: 0.72rem;
       font-weight: 700;

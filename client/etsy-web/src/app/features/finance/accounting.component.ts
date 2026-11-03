@@ -407,13 +407,15 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.salesRecords = this.orders.map(o => {
       const rate = o.exchangeRate || this.liveRate || 49.25;
       const isCanceled = o.orderStatus === 'canceled' || o.orderStatus === 'refunded';
+      const actualAmountUsd = (isCanceled && o.refundAmountUsd && o.refundAmountUsd > 0) ? o.refundAmountUsd : o.grandTotalUsd;
+      const actualAmountTry = (isCanceled && o.refundAmountTry && o.refundAmountTry > 0) ? o.refundAmountTry : Number((actualAmountUsd * rate).toFixed(2));
       return {
         date: o.orderDate,
         receiptId: o.receiptId,
         buyer: o.buyerName,
         item: o.productTitle,
-        amount: isCanceled ? 0 : o.grandTotalUsd,
-        tryAmount: isCanceled ? 0 : Number((o.grandTotalUsd * rate).toFixed(2)),
+        amount: actualAmountUsd,
+        tryAmount: actualAmountTry,
         paymentType: isCanceled ? 'canceled' : 'payment_gross'
       };
     });
