@@ -78,6 +78,8 @@ export interface OrderFinancialRow {
   fxConversionFeeTry?: number;
   refundDate?: string;
   originalOrderDate?: string;
+  refundAmountUsd?: number;
+  refundAmountTry?: number;
 }
 
 export interface ForecastKpiSummary {

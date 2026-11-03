@@ -354,4 +354,66 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(176.28m, row.GrandTotalUsd);
         Assert.Equal(-176.28m, row.NetProfitUsd);
     }
+
+    [Fact]
+    public void BuildDetailedOrderRows_LinksTransactionIdToReceiptId_AndPreventsDuplicates()
+    {
+        var origDate = new DateTimeOffset(2026, 9, 26, 14, 0, 0, TimeSpan.Zero);
+        var refundDate = new DateTimeOffset(2026, 11, 3, 10, 0, 0, TimeSpan.Zero);
+
+        var receipts = new[]
+        {
+            new EtsyDashboardReceipt(
+                ReceiptId: 4185170234L,
+                CreatedAt: origDate,
+                IsPaid: false,
+                IsCanceled: true,
+                IsFromOffsiteAds: false,
+                CurrencyCode: "USD",
+                GrandTotal: 174.62m,
+                Subtotal: 174.62m,
+                ShippingCost: 0m,
+                DiscountAmt: 0m,
+                TaxCost: 0m,
+                RefundedAmount: 174.62m,
+                Items: new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 9999L, 1, 2110508251050L) },
+                BuyerName: "Anthony Brown")
+        };
+
+        var ledgerFees = new List<EtsyDashboardLedgerFee>
+        {
+            new(
+                Type: "refund",
+                ReferenceId: 2110508251050L,
+                Description: "REFUND_GROSS",
+                Amount: -174.62m,
+                CreatedAt: refundDate)
+        };
+
+        var orderCosts = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4185170234L] = new(ProductCost: 35.00m, ShippingCost: 21.31m, PackagingCost: 0m)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            receipts,
+            ledgerFees,
+            orderCosts,
+            50.00m);
+
+        // Mükerrer satır oluşmamalı: Sadece tek satır olmalı!
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.Equal(4185170234L, row.ReceiptId);
+        Assert.Equal("Anthony Brown", row.BuyerName);
+        Assert.Equal("Arcane Jinx Statue", row.ProductTitle);
+        Assert.Equal("03.11.2026", row.RefundDate);
+        Assert.Equal("26.09.2026", row.OrderDate);
+        Assert.Equal(174.62m, row.RefundAmountUsd);
+        Assert.Equal(Math.Round(row.RefundAmountUsd.Value * row.ExchangeRate, 2), row.RefundAmountTry);
+        Assert.Equal(56.31m, row.ProductCostUsd);
+        // İptal edilen ve maliyeti girilen siparişte satıcının net zararı maliyet kadardır
+        Assert.Equal(-56.31m, row.NetProfitUsd);
+        Assert.Equal(Math.Round(row.NetProfitUsd * row.ExchangeRate, 2), row.NetProfitTry);
+    }
 }

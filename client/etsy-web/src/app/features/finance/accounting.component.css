@@ -1088,3 +1088,34 @@
   background: rgba(239, 68, 68, 0.15);
   color: #f87171;
 }
+.drilldown-summary-box.highlight-danger-box {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+.drilldown-summary-box .text-red-bold {
+  color: #ef4444;
+  font-weight: 800;
+}
+.badge-cancel-status {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badge-cancel-status.cost_loss {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+.badge-cancel-status.unproduced {
+  background: rgba(16, 185, 129, 0.15);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.badge-cancel-status.partial {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}

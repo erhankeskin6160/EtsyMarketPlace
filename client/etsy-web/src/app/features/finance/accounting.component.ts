@@ -12,6 +12,25 @@ import {
 } from '../../core/models/accounting.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
+export interface RefundDetailRecord {
+  refundDate: string;
+  orderDate: string;
+  receiptId: string;
+  buyer: string;
+  item: string;
+  refundUsd: number;
+  refundTry: number;
+  feeRefundedUsd: number;
+  feeRefundedTry: number;
+  costUsd: number;
+  costTry: number;
+  netLossUsd: number;
+  netLossTry: number;
+  reason: string;
+  cancelType: 'cost_loss' | 'unproduced' | 'partial';
+  cancelTypeLabel: string;
+}
+
 export interface OrderCostShippingRow {
   date: string;
   receiptId: string;
@@ -80,13 +99,13 @@ export class AccountingComponent implements OnInit, OnDestroy {
   isSavingReserve = false;
   reserveSnapshot: EtsyPaymentReserveSnapshotDto = {
     shopId: '53236321',
-    currentBalanceTry: -50.35,
-    pendingBalanceTry: 28479.09,
-    totalFundsTry: 28428.74,
+    currentBalanceTry: -1201.05,
+    pendingBalanceTry: 7037.15,
+    totalFundsTry: 5836.10,
     reservePercent: 75,
     reserveHoldDays: 60,
     reevaluationDate: 'November 30',
-    reserveSummaryText: '75% in reserve for up to 60 days. Next review: November 30',
+    reserveSummaryText: '75% in reserve for 60 days. Next review: November 30',
     lastUpdatedUtc: new Date().toISOString()
   };
 
@@ -181,7 +200,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
   feesRecords: any[] = [];
   innerAdsRecords: any[] = [];
   offsiteAdsRecords: any[] = [];
-  refundRecords: any[] = [];
+  refundRecords: RefundDetailRecord[] = [];
+  modalTotalRefundTry = 0;
+  modalTotalRefundUsd = 0;
+  modalTotalLossTry = 0;
+  modalTotalLossUsd = 0;
+  modalTotalFeeRefundedUsd = 0;
+  modalUnproducedCancelCount = 0;
+  modalCostLossCancelCount = 0;
   netIncomeRecords: any[] = [];
   bankPayoutRecords: any[] = [];
   orderCostShippingRecords: OrderCostShippingRow[] = [];
@@ -415,26 +441,72 @@ export class AccountingComponent implements OnInit, OnDestroy {
       };
     });
 
-    // 5. Iade ve Geri Odeme Kayitlari (Modal 8)
-    this.refundRecords = this.orders
-      .filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded')
-      .map(o => {
-        const rate = o.exchangeRate || this.liveRate || 49.25;
-        const buyerDisplay = (!o.buyerName || o.buyerName === 'Ödeme Defteri Kesintisi') ? 'Etsy Müşterisi' : o.buyerName;
-        const feeTry = o.etsyFeesUsd ? Number((o.etsyFeesUsd * rate).toFixed(2)) : 0;
-        return {
-          refundDate: o.refundDate || o.orderDate,
-          orderDate: o.originalOrderDate || o.orderDate,
-          receiptId: o.receiptId,
-          buyer: buyerDisplay,
-          item: o.productTitle,
-          refundUsd: o.grandTotalUsd,
-          refundTry: Number((o.grandTotalUsd * rate).toFixed(2)),
-          feeRefundedUsd: o.etsyFeesUsd || 0,
-          feeRefundedTry: feeTry,
-          reason: o.costNotes === 'cross_period_refund' ? 'Önceki Dönem İadesi' : (o.orderStatus === 'canceled' ? 'Sipariş İptali / Tam İade' : 'Kısmi İade')
-        };
-      });
+    // 5. Iade ve Geri Odeme Kayitlari (Modal 8) - Tekleştirme ve Zarar Analizi
+    const seenReceiptIds = new Set<string>();
+    const deduplicatedRefundOrders: OrderFinancialRow[] = [];
+
+    for (const o of this.orders) {
+      if (o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund' || (o.refundDate && o.refundDate.length > 0)) {
+        if (!seenReceiptIds.has(o.receiptId)) {
+          seenReceiptIds.add(o.receiptId);
+          deduplicatedRefundOrders.push(o);
+        }
+      }
+    }
+
+    this.refundRecords = deduplicatedRefundOrders.map(o => {
+      const rate = o.exchangeRate || this.liveRate || 49.25;
+      const buyerDisplay = (!o.buyerName || o.buyerName === 'Ödeme Defteri Kesintisi') ? 'Etsy Müşterisi' : o.buyerName;
+      const feeTry = o.etsyFeesUsd ? Number((o.etsyFeesUsd * rate).toFixed(2)) : 0;
+
+      const refundUsd = o.refundAmountUsd != null && o.refundAmountUsd > 0
+        ? o.refundAmountUsd
+        : (o.grandTotalUsd > 0 ? o.grandTotalUsd : Math.abs(o.netProfitUsd < 0 && o.orderStatus !== 'canceled' ? o.netProfitUsd : 0));
+      const refundTry = o.refundAmountTry != null && o.refundAmountTry > 0
+        ? o.refundAmountTry
+        : Number((refundUsd * rate).toFixed(2));
+
+      const costUsd = o.productCostUsd != null && o.productCostUsd > 0 ? o.productCostUsd : 0;
+      const costTry = Number((costUsd * rate).toFixed(2));
+
+      // Maliyet girildiyse satıcının cebinden çıkan para geri gelmez => Net Zarar = -cost
+      // Maliyet girilmediyse / 0 ise => Henüz üretilmeden iptal edilmiştir => Zarar = 0
+      const netLossUsd = costUsd > 0 ? -costUsd : 0;
+      const netLossTry = costTry > 0 ? -costTry : 0;
+
+      let cancelType: 'cost_loss' | 'unproduced' | 'partial' = 'unproduced';
+      let cancelTypeLabel = 'Üretilmeden İptal (Zararsız)';
+
+      if (o.orderStatus === 'refunded' && o.costNotes !== 'cross_period_refund') {
+        cancelType = 'partial';
+        cancelTypeLabel = 'Kısmi İade';
+      } else if (costUsd > 0) {
+        cancelType = 'cost_loss';
+        cancelTypeLabel = 'Kargo/Üretim Zararı';
+      } else {
+        cancelType = 'unproduced';
+        cancelTypeLabel = 'Üretilmeden İptal (Zararsız)';
+      }
+
+      return {
+        refundDate: o.refundDate || o.orderDate,
+        orderDate: o.originalOrderDate || o.orderDate,
+        receiptId: o.receiptId,
+        buyer: buyerDisplay,
+        item: o.productTitle,
+        refundUsd,
+        refundTry,
+        feeRefundedUsd: o.etsyFeesUsd || 0,
+        feeRefundedTry: feeTry,
+        costUsd,
+        costTry,
+        netLossUsd,
+        netLossTry,
+        reason: o.costNotes === 'cross_period_refund' ? 'Önceki Dönem İadesi' : (o.orderStatus === 'canceled' ? 'Sipariş İptali / Tam İade' : 'Kısmi İade'),
+        cancelType,
+        cancelTypeLabel
+      };
+    });
 
     if (this.refundRecords.length === 0 && this.refundsUsd > 0) {
       this.refundRecords = [{
@@ -447,9 +519,25 @@ export class AccountingComponent implements OnInit, OnDestroy {
         refundTry: this.refundsTry,
         feeRefundedUsd: 0,
         feeRefundedTry: 0,
-        reason: 'Önceki Dönem Sipariş İadesi'
+        costUsd: 0,
+        costTry: 0,
+        netLossUsd: 0,
+        netLossTry: 0,
+        reason: 'Önceki Dönem Sipariş İadesi',
+        cancelType: 'unproduced',
+        cancelTypeLabel: 'Üretilmeden İptal (Zararsız)'
       }];
     }
+
+    // Modal 8 İstatistik Özetleri
+    this.modalTotalRefundTry = Number(this.refundRecords.reduce((sum, r) => sum + r.refundTry, 0).toFixed(2));
+    this.modalTotalRefundUsd = Number(this.refundRecords.reduce((sum, r) => sum + r.refundUsd, 0).toFixed(2));
+    this.modalTotalLossTry = Number(this.refundRecords.reduce((sum, r) => sum + Math.abs(r.netLossTry), 0).toFixed(2));
+    this.modalTotalLossUsd = Number(this.refundRecords.reduce((sum, r) => sum + Math.abs(r.netLossUsd), 0).toFixed(2));
+    this.modalTotalFeeRefundedUsd = Number(this.refundRecords.reduce((sum, r) => sum + r.feeRefundedUsd, 0).toFixed(2));
+    this.modalUnproducedCancelCount = this.refundRecords.filter(r => r.cancelType === 'unproduced').length;
+    this.modalCostLossCancelCount = this.refundRecords.filter(r => r.cancelType === 'cost_loss').length;
+
     // 6. Gercek Net Kar & Bilanco Analizi Tablosu (Modal 3)
     this.balanceBreakdownRecords = [
       { type: 'Gelir', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: this.netIncomeTry, status: '🟢 Net', isPositive: true, explanation: 'Komisyon, reklam ve iadeler sonrası platformdan kalan net hakediş' },
@@ -718,7 +806,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
             etsyNetPayoutTry: dto.etsyNetPayoutTry !== undefined ? dto.etsyNetPayoutTry : (dto.grandTotalUsd && dto.exchangeRate ? Number(((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)) * (dto.exchangeRate * 0.975)).toFixed(2)) : undefined),
             fxConversionFeeTry: dto.fxConversionFeeTry !== undefined ? dto.fxConversionFeeTry : undefined,
             refundDate: dto.refundDate || dto.orderDate,
-            originalOrderDate: dto.originalOrderDate || dto.orderDate
+            originalOrderDate: dto.originalOrderDate || dto.orderDate,
+            refundAmountUsd: dto.refundAmountUsd,
+            refundAmountTry: dto.refundAmountTry
           }));
           this.filterOrders();
           this.rebuildDynamicBreakdowns();
@@ -1324,7 +1414,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   get bookmarkletCode(): string {
-    return "javascript:(function(){try{var b=document.body.innerText;function c(s){return s?parseFloat(s.replace(/,/g,'')):0;}var curM=b.match(/Current\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/Current balance[^\\d\\-\\+]*([\\-\\+]?[\\d,.]+)/i);var resM=b.match(/(?:In reserve|Pending balance|Pending)\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/([\\-\\+]?[\\d,.]+)\\s*TL\\s*(?:is in reserve|in reserve)/i);var totM=b.match(/Total\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i);var pctM=b.match(/(\\d+)\\s*%\\s*is in reserve/i)||b.match(/(\\d+)\\s*%\\s*in reserve/i);var dm=b.match(/for\\s*(\\d+)\\s*days/i);var dtM=b.match(/reevaluate[^\\n]*on\\s*([A-Za-z0-9\\s,]+)\\./i)||b.match(/reevaluated\\s*on\\s*([A-Za-z0-9\\s,]+)/i);var cur=curM?c(curM[1]):5254.87;var tot=totM?c(totM[1]):21019.50;var res=resM?c(resM[1]):0;if(!res&&tot){res=Number((tot-cur).toFixed(2));}if(!tot&&res){tot=Number((cur+res).toFixed(2));}var pct=pctM?parseInt(pctM[1]):75;var days=dm?parseInt(dm[1]):60;var dt=dtM?dtM[1].trim():'November 30';var payload={shopId:'53236321',currentBalanceTry:cur,pendingBalanceTry:res,totalFundsTry:tot,reservePercent:pct,reserveHoldDays:days,reevaluationDate:dt,reserveSummaryText:pct+'% in reserve for '+days+' days.',lastUpdatedUtc:new Date().toISOString()};fetch('http://localhost:5263/api/etsy/financial/payment-reserve-snapshot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){alert('✅ Etsy Fon & Rezerv Senkronize Edildi!\\n\\nKullanılabilir: '+cur+' TL\\nRezerv Fonu: '+res+' TL (%'+pct+')\\nToplam Fon: '+tot+' TL\\nİnceleme: '+dt);}).catch(function(e){alert('⚠️ VDS API Hatası: '+e.message);});}catch(x){alert('Hata: '+x.message);}})();";
+    return "javascript:(function(){try{var b=document.body.innerText;function c(s){return s?parseFloat(s.replace(/,/g,'')):0;}var curM=b.match(/Current\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/Current balance[^\\d\\-\\+]*([\\-\\+]?[\\d,.]+)/i);var resM=b.match(/(?:In reserve|Pending balance|Pending)\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i)||b.match(/([\\-\\+]?[\\d,.]+)\\s*TL\\s*(?:is in reserve|in reserve)/i);var totM=b.match(/Total\\s*[\\r\\n]+\\s*([\\-\\+]?[\\d,.]+)\\s*TL/i);var pctM=b.match(/(\\d+)\\s*%\\s*is in reserve/i)||b.match(/(\\d+)\\s*%\\s*in reserve/i);var dm=b.match(/for\\s*(\\d+)\\s*days/i);var dtM=b.match(/reevaluate[^\\n]*on\\s*([A-Za-z0-9\\s,]+)\\./i)||b.match(/reevaluated\\s*on\\s*([A-Za-z0-9\\s,]+)/i);var cur=curM?c(curM[1]):-1201.05;var tot=totM?c(totM[1]):5836.10;var res=resM?c(resM[1]):7037.15;if(!res&&tot){res=Number((tot-cur).toFixed(2));}if(!tot&&res){tot=Number((cur+res).toFixed(2));}var pct=pctM?parseInt(pctM[1]):75;var days=dm?parseInt(dm[1]):60;var dt=dtM?dtM[1].trim():'November 30';var payload={shopId:'53236321',currentBalanceTry:cur,pendingBalanceTry:res,totalFundsTry:tot,reservePercent:pct,reserveHoldDays:days,reevaluationDate:dt,reserveSummaryText:pct+'% in reserve for '+days+' days.',lastUpdatedUtc:new Date().toISOString()};fetch('http://localhost:5263/api/etsy/financial/payment-reserve-snapshot',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(function(r){return r.json();}).then(function(d){alert('✅ Etsy Fon & Rezerv Senkronize Edildi!\\n\\nKullanılabilir: '+cur+' TL\\nRezerv Fonu: '+res+' TL (%'+pct+')\\nToplam Fon: '+tot+' TL\\nİnceleme: '+dt);}).catch(function(e){alert('⚠️ VDS API Hatası: '+e.message);});}catch(x){alert('Hata: '+x.message);}})();";
   }
 
   saveReserveSnapshotManual(): void {

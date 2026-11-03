@@ -9,6 +9,15 @@ namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
 public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions> options, IShopSettingsRepository settingsRepository) : IEtsyDataClient
 {
+    public static bool TryGetOrderReferenceByTransaction(long transactionId, out TransactionOrderReference? reference)
+    {
+        return EtsyTransactionOrderCache.TryGetOrderReference(transactionId, out reference);
+    }
+
+    public static void RegisterTransactionOrder(long transactionId, long receiptId, string buyerName, DateTimeOffset createdAt, string title)
+    {
+        EtsyTransactionOrderCache.Register(transactionId, receiptId, buyerName, createdAt, title);
+    }
     private readonly EtsyApiOptions _options = options.Value;
 
     public Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
@@ -320,10 +329,18 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         {
             foreach (var transaction in transactions.EnumerateArray())
             {
+                var txId = LongValue(transaction, "transaction_id"); if (txId <= 0) txId = LongValue(transaction, "id");
+                var txTitle = StringValue(transaction, "title") ?? string.Empty;
                 items.Add(new EtsyDashboardReceiptItem(
-                    StringValue(transaction, "title") ?? string.Empty,
+                    txTitle,
                     LongValue(transaction, "listing_id"),
-                    (int)LongValue(transaction, "quantity")));
+                    (int)LongValue(transaction, "quantity"),
+                    txId));
+                if (txId > 0 && receiptId > 0)
+                {
+                    var txCreated = DateValue(item, "created_timestamp", "create_timestamp");
+                    RegisterTransactionOrder(txId, receiptId, StringValue(item, "name", "buyer_name") ?? string.Empty, txCreated, txTitle);
+                }
             }
         }
 
@@ -586,3 +603,4 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         return new HttpRequestException($"Etsy API {(int)response.StatusCode} ({response.StatusCode}): {detail}", null, response.StatusCode);
     }
 }
+
