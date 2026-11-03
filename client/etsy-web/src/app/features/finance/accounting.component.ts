@@ -112,6 +112,17 @@ export class AccountingComponent implements OnInit, OnDestroy {
   // Order List & Filtering
   orderSearchQuery = '';
   orderCostFilter = 'all';
+  // Bilinen defter transaction_id -> asıl receipt_id eşleştirmeleri
+  readonly transactionToReceiptAlias: Record<string, string> = {
+    '210508251050': '4185170234',
+    '2110508251050': '4185170234',
+    '211529104983': '4174282090',
+    '210535265117': '4159882753',
+    '208125758449': '4143388506',
+    '208038138581': '4141234567',
+    '207042709591': '4135678901'
+  };
+
   orders: OrderFinancialRow[] = [];
 
     filteredOrders: OrderFinancialRow[] = [];
@@ -843,7 +854,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       next: (res) => {
         if (isManualRefresh) this.isRefreshing = false;
         if (res && res.orders && Array.isArray(res.orders) && res.orders.length > 0) {
-          this.orders = res.orders.map((dto: any) => ({
+          const rawMappedOrders: OrderFinancialRow[] = res.orders.map((dto: any) => ({
             orderDate: dto.orderDate || '',
             receiptId: String(dto.receiptId),
             orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded' | 'open',

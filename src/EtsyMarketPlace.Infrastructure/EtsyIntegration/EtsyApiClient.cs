@@ -34,7 +34,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
 
     /// <summary>Web kontrol paneli: verilen aralikta magaza fislerini (siparisleri) Etsy API'den canli ceker.</summary>
     public Task<IReadOnlyList<EtsyDashboardReceipt>> GetShopReceiptsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
-        GetPagedAsync("application/shops/{0}/receipts", shopId, startDate, endDate, ParseDashboardReceipt, cancellationToken);
+        GetPagedAsync("application/shops/{0}/receipts?includes=Transactions", shopId, startDate, endDate, ParseDashboardReceipt, cancellationToken);
 
     /// <summary>Web kontrol paneli: odeme hesabi defter kayitlari (dis reklam kesintilerinin siparis eslesmesi icin).</summary>
     public Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
@@ -221,7 +221,8 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
 
         for (var offset = 0; ; offset += limit)
         {
-            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}?limit={limit}&offset={offset}&min_created={minUnix}&max_created={maxUnix}";
+            var separator = route.Contains('?') ? "&" : "?";
+            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}{separator}limit={limit}&offset={offset}&min_created={minUnix}&max_created={maxUnix}";
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Add("X-Etsy-Shop-Id", shopId);
             request.Headers.Add("x-api-key", apiKeyHeader);
@@ -254,7 +255,8 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         for (var offset = 0; ; offset += limit)
         {
             var route = string.Format(CultureInfo.InvariantCulture, routeTemplate, Uri.EscapeDataString(shopId));
-            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}?limit={limit}&offset={offset}&min_created={startDate.ToUnixTimeSeconds()}&max_created={endDate.ToUnixTimeSeconds()}";
+            var separator = route.Contains('?') ? "&" : "?";
+            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}{separator}limit={limit}&offset={offset}&min_created={startDate.ToUnixTimeSeconds()}&max_created={endDate.ToUnixTimeSeconds()}";
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Add("X-Etsy-Shop-Id", shopId);
             request.Headers.Add("x-api-key", await ResolveApiKeyHeaderAsync(shopId, cancellationToken));
