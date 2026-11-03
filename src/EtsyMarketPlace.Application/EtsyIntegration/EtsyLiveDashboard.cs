@@ -506,7 +506,7 @@ public static class EtsyLiveDashboardCalculator
             var resolvedTitle = string.Empty;
             DateTimeOffset? resolvedCreatedAt = null;
 
-            if (EtsyTransactionOrderCache.TryGetOrderReference(info.ReferenceId, out var cachedRef) && cachedRef != null)
+            if ((EtsyTransactionOrderCache.TryGetOrderReference(info.ReferenceId, out var cachedRef) || EtsyTransactionOrderCache.TryGetOrderReference(kvp.Key, out cachedRef)) && cachedRef != null)
             {
                 if (resolvedReceiptId == info.ReferenceId && cachedRef.ReceiptId > 0)
                 {

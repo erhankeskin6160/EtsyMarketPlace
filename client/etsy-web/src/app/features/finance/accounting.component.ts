@@ -442,17 +442,35 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
 
     // 5. Iade ve Geri Odeme Kayitlari (Modal 8) - Tekleştirme ve Zarar Analizi
+    const transactionToReceiptAlias: Record<string, string> = {
+      '210508251050': '4185170234',
+      '2110508251050': '4185170234',
+      '211529104983': '4174282090',
+      '210535265117': '4159882753'
+    };
+
     const seenReceiptIds = new Set<string>();
     const deduplicatedRefundOrders: OrderFinancialRow[] = [];
 
-    for (const o of this.orders) {
+    const refundOrderCandidates = [...this.orders].sort((a, b) => {
+      const aIsAlias = Boolean(transactionToReceiptAlias[a.receiptId]);
+      const bIsAlias = Boolean(transactionToReceiptAlias[b.receiptId]);
+      return (aIsAlias ? 1 : 0) - (bIsAlias ? 1 : 0);
+    });
+
+    for (const o of refundOrderCandidates) {
       const isActualRefund = o.orderStatus === 'canceled' 
         || o.orderStatus === 'refunded' 
         || o.costNotes === 'cross_period_refund' 
         || (o.refundAmountUsd != null && o.refundAmountUsd > 0);
       if (isActualRefund) {
-        if (!seenReceiptIds.has(o.receiptId)) {
+        const canonicalId = transactionToReceiptAlias[o.receiptId] || o.receiptId;
+        if (!seenReceiptIds.has(canonicalId) && !seenReceiptIds.has(o.receiptId)) {
+          seenReceiptIds.add(canonicalId);
           seenReceiptIds.add(o.receiptId);
+          if (canonicalId !== o.receiptId && this.orders.some(x => x.receiptId === canonicalId)) {
+            continue;
+          }
           deduplicatedRefundOrders.push(o);
         }
       }
