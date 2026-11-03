@@ -1226,16 +1226,21 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const rateToUse = this.selectedOrder.effectiveExchangeRate || this.selectedOrder.exchangeRate;
       this.selectedOrder.netProfitTry = Number((this.selectedOrder.netProfitUsd * rateToUse).toFixed(2));
 
-      // Recalculate KPIs from all completed orders
+      // Recalculate KPIs from all completed orders (GEMINI.md Kural 3: Sunucu Finans Motoru Paritesi)
+      // Gerçek Net Kâr = Etsy Net Hakediş - Toplam Sipariş Maliyeti
+      // Mükerrer kesintiyi engelle: o.netProfitTry içinde reklam ve iadeler zaten düşüldüğünden,
+      // doğrudan net hakediş (netIncomeTry) üzerinden toplam sipariş maliyeti düşülür.
       const active = this.orders.filter(o => o.orderStatus !== 'canceled');
-      const totalCostsTRY = active.reduce((sum, o) => sum + ((o.productCostUsd || 0) * o.exchangeRate), 0);
-      const totalNetTRY = active.reduce((sum, o) => sum + o.netProfitTry, 0) - this.innerAdsTry - this.offsiteAdsTry - this.refundsTry;
+      const totalCostsTRY = active.reduce((sum, o) => sum + ((o.productCostUsd || 0) * (o.exchangeRate || this.liveRate)), 0);
+      const totalCostsUSD = Number((totalCostsTRY / this.liveRate).toFixed(2));
+      const totalNetTRY = Number((this.netIncomeTry - totalCostsTRY).toFixed(2));
+      const totalNetUSD = Number((this.netIncomeUsd - totalCostsUSD).toFixed(2));
 
       this.productCostsTry = Number(totalCostsTRY.toFixed(2));
-      this.productCostsUsd = Number((totalCostsTRY / this.liveRate).toFixed(2));
-      this.realNetProfitTry = Number(totalNetTRY.toFixed(2));
-      this.realNetProfitUsd = Number((totalNetTRY / this.liveRate).toFixed(2));
-
+      this.productCostsUsd = totalCostsUSD;
+      this.realNetProfitTry = totalNetTRY;
+      this.realNetProfitUsd = totalNetUSD;
+      this.rebuildDynamicBreakdowns();
       const order = this.selectedOrder;
       this.etsyApi.saveOrderCost(order.receiptId, {
         productCost: this.costModalProduction,
@@ -1244,6 +1249,26 @@ export class AccountingComponent implements OnInit, OnDestroy {
       }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
         next: () => {
           this.showToast(`✅ #${order.receiptId} maliyeti ${totalCost.toFixed(2)} kaydedildi ve VDS ile senkronize edildi!`);
+          // VDS Canlı Defter Motorundan güncel performans verilerini yeniden çek
+          const start = this.parseTurkishDate(this.startDate, false);
+          const end = this.parseTurkishDate(this.endDate, true);
+          this.etsyApi.getFinancialPerformanceByDateRange(start, end).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+            next: (perf: any) => {
+              if (perf) {
+                const rate = Number(perf.exchangeRateUsed ?? this.liveRate ?? 49.12);
+                const costsUsd = Number(((perf.productCosts ?? 0) + (perf.shippingCosts ?? 0)).toFixed(2));
+                const costsTry = Number((costsUsd * rate).toFixed(2));
+                const realProfitUsd = Number(perf.netProfitUsd ?? perf.netProfit ?? (this.netIncomeUsd - costsUsd));
+                const realProfitTry = Number(perf.netProfitTRY ?? perf.netProfitTry ?? (realProfitUsd * rate));
+
+                this.productCostsUsd = costsUsd;
+                this.productCostsTry = costsTry;
+                this.realNetProfitUsd = Number(realProfitUsd.toFixed(2));
+                this.realNetProfitTry = Number(realProfitTry.toFixed(2));
+                this.rebuildDynamicBreakdowns();
+              }
+            }
+          });
         },
         error: () => {
           this.showToast(`✅ #${order.receiptId} maliyeti ${totalCost.toFixed(2)} yerel güncellendi.`);
