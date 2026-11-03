@@ -12,6 +12,17 @@ import {
 } from '../../core/models/accounting.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
+export interface OrderCostShippingRow {
+  date: string;
+  receiptId: string;
+  qty: string;
+  productionCostTry: number;
+  shippingCostTry: number;
+  totalCostTry: number;
+  invoice: string;
+  title: string;
+}
+
 @Component({
   selector: 'app-accounting',
   standalone: true,
@@ -165,100 +176,16 @@ export class AccountingComponent implements OnInit, OnDestroy {
   sortColumn: string = 'netProfitUsd';
   sortDirection: 'asc' | 'desc' = 'asc';
 
-  // Modal: Satış ve Gelir Analizi (Brüt Satış)
-  salesRecords = [
-    { date: '01.10.26 14:22', receiptId: '4188710928', buyer: 'Jamie Westerman', item: '3D Printed Butterfly Trainer Blade', amount: 35.31, tryAmount: 1731.96, paymentType: 'payment_gross' },
-    { date: '01.10.26 09:15', receiptId: '4188192041', buyer: 'Diane Barrow', item: 'Captain Jack Sparrow Compass Functional', amount: 156.60, tryAmount: 7676.53, paymentType: 'payment_gross' },
-    { date: '30.09.26 18:40', receiptId: '4187920145', buyer: 'Nathan McCoy', item: 'Fallout Pip Boy 3000 Mk IV Wearable', amount: 148.50, tryAmount: 7280.96, paymentType: 'payment_gross' },
-    { date: '28.09.26 21:05', receiptId: '4187299104', buyer: 'Sarah Jenkins', item: 'Captain Jack Sparrow Resin Statue', amount: 156.60, tryAmount: 7662.30, paymentType: 'payment_gross' },
-    { date: '25.09.26 16:30', receiptId: '4185189201', buyer: 'Lucas Meyer', item: 'Arcane Jinx Statue LoL Figure', amount: 147.20, tryAmount: 7178.94, paymentType: 'payment_gross' },
-    { date: '18.09.26 20:12', receiptId: '4178129840', buyer: 'Elena Rostova', item: 'Arcane Jinx Statue LoL Figure', amount: 169.50, tryAmount: 8259.74, paymentType: 'payment_gross' },
-    { date: '18.09.26 11:45', receiptId: '4176640192', buyer: 'David Kim', item: 'Michael Jackson Statue King of Pop', amount: 147.20, tryAmount: 7172.06, paymentType: 'payment_gross' },
-    { date: '15.09.26 13:20', receiptId: '4174028911', buyer: 'Marcus Vance', item: 'Lotr Aragorn Crown of Gondor', amount: 154.50, tryAmount: 7494.79, paymentType: 'payment_gross' },
-    { date: '14.09.26 08:50', receiptId: '4174291882', buyer: 'Tom Bradley', item: 'Ben 10 Classic Omnitrix Watch V2', amount: 0.00, tryAmount: 0.00, paymentType: 'canceled' },
-    { date: '07.09.26 17:15', receiptId: '4168074902', buyer: 'Chloe Bennett', item: '3D Printed Butterfly Trainer Blade', amount: 37.90, tryAmount: 1836.26, paymentType: 'payment_gross' }
-  ];
-
-  // Modal: Etsy Komisyon & Kesinti Analizi
-  feesRecords = [
-    { type: 'İşlem Komisyonu (%6.5)', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 72.26, feeTry: 3549.41, note: 'Etsy Transaction Fee (%6.5)' },
-    { type: 'Ödeme İşleme (Processing)', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 49.02, feeTry: 2407.86, note: 'Etsy Payments Processing Fee (%3 + $0.25)' },
-    { type: 'Listeleme Ücreti (Listing)', count: '28 Yenileme', baseUsd: 0, feeUsd: 5.60, feeTry: 275.07, note: 'Auto-renew listing fee ($0.20/adet)' },
-    { type: 'Düzenleyici İşletme Ücreti', count: '10 İşlem', baseUsd: 1111.73, feeUsd: 13.90, feeTry: 682.77, note: 'Regulatory Operating Fee (TR %1.25)' },
-    { type: 'Etsy Kesinti KDV (VAT)', count: 'Tüm Kesintiler', baseUsd: 0, feeUsd: 28.16, feeTry: 1383.22, note: '%20 Türkiye KDV Tevkifatı' },
-    { type: 'Offsite Ads Dış Reklam Kesintisi', count: '3 Satış', baseUsd: 533.40, feeUsd: 80.01, feeTry: 3930.29, note: '%15 Offsite Ads komisyonu' },
-    { type: 'Etsy Ads Tıklama Harcaması', count: '68 Tıklama', baseUsd: 0, feeUsd: 8.23, feeTry: 404.30, note: 'Arama içi sponsorlu reklam harcaması' }
-  ];
-
-  // Modal: Etsy Ads İç Reklam Analizi
-  innerAdsRecords = [
-    { date: '02.10.2026', impressions: 420, clicks: 14, spendUsd: 1.82, spendTry: 89.40, salesUsd: 35.31, roas: '19.4x' },
-    { date: '01.10.2026', impressions: 385, clicks: 12, spendUsd: 1.56, spendTry: 76.47, salesUsd: 0.00, roas: '0.0x' },
-    { date: '30.09.2026', impressions: 512, clicks: 18, spendUsd: 2.34, spendTry: 114.71, salesUsd: 148.50, roas: '63.5x' },
-    { date: '29.09.2026', impressions: 310, clicks: 9, spendUsd: 1.17, spendTry: 57.35, salesUsd: 0.00, roas: '0.0x' },
-    { date: '28.09.2026', impressions: 405, clicks: 15, spendUsd: 1.34, spendTry: 65.69, salesUsd: 0.00, roas: '0.0x' }
-  ];
-
-  // Modal: Offsite Ads Dış Reklam Analizi
-  offsiteAdsRecords = [
-    { receiptId: '4188710928', buyer: 'Jamie Westerman', saleAmountUsd: 35.31, rate: '%15', feeUsd: 5.30, feeTry: 259.97, channel: 'Google Shopping' },
-    { receiptId: '4188192041', buyer: 'Diane Barrow', saleAmountUsd: 156.60, rate: '%15', feeUsd: 23.49, feeTry: 1151.48, channel: 'Facebook / Instagram' },
-    { receiptId: '4187299104', buyer: 'Sarah Jenkins', saleAmountUsd: 156.60, rate: '%15', feeUsd: 23.49, feeTry: 1150.31, channel: 'Pinterest Ads' },
-    { receiptId: '4178129840', buyer: 'Elena Rostova', saleAmountUsd: 169.50, rate: '%15', feeUsd: 25.43, feeTry: 1238.44, channel: 'Google Search Partner' }
-  ];
-
-  // Modal: İade ve Geri Ödeme Analizi
-  refundRecords = [
-    { date: '14.09.2026 08:50', receiptId: '4174291882', buyer: 'Tom Bradley', item: 'Ben 10 Classic Omnitrix Watch V2', refundUsd: 38.44, refundTry: 1888.14, reason: 'Alıcı Adres Değişikliği / İptal Talebi', feeRefundedUsd: 4.80 }
-  ];
-
-  // Modal: Etsy Net Gelir Analizi
-  netIncomeRecords = [
-    { category: 'Brüt Satış Geliri', amountUsd: 1111.73, amountTry: 54608.24, isPositive: true, note: 'Müşterilerden tahsil edilen toplam sipariş tutarı' },
-    { category: 'Etsy Standart Komisyon & İşlem Ücreti', amountUsd: -148.98, amountTry: -7318.84, isPositive: false, note: 'Transaction, listing, processing & regulatory fee' },
-    { category: 'Offsite Ads Dış Reklam Kesintisi', amountUsd: -80.01, amountTry: -3930.29, isPositive: false, note: 'Dış arama motoru ve sosyal medya reklam payı' },
-    { category: 'Etsy Ads Arama İçi Reklam', amountUsd: -8.23, amountTry: -404.30, isPositive: false, note: 'Etsy içi tıklama başı reklam harcaması' },
-    { category: 'Etsy Kesinti KDV (VAT)', amountUsd: -28.16, amountTry: -1383.22, isPositive: false, note: 'Kesintilere uygulanan resmî KDV tevkifatı' },
-    { category: 'İadeler ve İptaller (Refunds)', amountUsd: -38.44, amountTry: -1888.14, isPositive: false, note: 'İade edilen sipariş tutarı' },
-    { category: 'NET HAKEDİŞ (ETSY NET GELİR)', amountUsd: 724.80, amountTry: 35601.79, isPositive: true, note: 'Banka hesabına aktarılmaya hazır nihai platform bakiyesi' }
-  ];
-
-  // Modal 1 Data: Bank Payouts (Matching Görsel 2)
-  bankPayoutRecords = [
-    { date: '01.10.26 11:01', refNo: '#208503135526', type: 'Banka Transferi', amount: 4359.09, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 49.05₺)' },
-    { date: '28.09.26 11:04', refNo: '#208313484387', type: 'Banka Transferi', amount: 4403.77, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.93₺)' },
-    { date: '21.09.26 11:10', refNo: '#210139855281', type: 'Banka Transferi', amount: 3898.61, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.79₺)' },
-    { date: '18.09.26 11:01', refNo: '#207743529694', type: 'Banka Transferi', amount: 607.16, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.73₺)' },
-    { date: '17.09.26 11:00', refNo: '#209914284431', type: 'Banka Transferi', amount: 908.67, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.68₺)' },
-    { date: '16.09.26 11:01', refNo: '#207632008578', type: 'Banka Transferi', amount: 3142.58, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.66₺)' },
-    { date: '14.09.26 11:04', refNo: '#207510955300', type: 'Banka Transferi', amount: 961.62, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.61₺)' },
-    { date: '10.09.26 11:00', refNo: '#209507913407', type: 'Banka Transferi', amount: 4705.13, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.51₺)' },
-    { date: '09.09.26 11:01', refNo: '#209450052917', type: 'Banka Transferi', amount: 1693.64, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.47₺)' },
-    { date: '04.09.26 11:00', refNo: '#206922866600', type: 'Banka Transferi', amount: 2914.63, status: 'Yatırıldı', note: 'disburse2 (Kur: 1$ = 48.40₺)' }
-  ];
-
-  // Modal 2 Data: Shipping & Cost Breakdown (Matching Görsel 3)
-  orderCostShippingRecords = [
-    { date: '01.10.26', receiptId: '4188719047', qty: '1 Ad', shippingCostTry: 475.29, invoice: '—', title: '3D Printed Butterfly Trainer | Colorful Safe K...' },
-    { date: '30.09.26', receiptId: '4188172739', qty: '1 Ad', shippingCostTry: 1037.75, invoice: '—', title: 'Captain Jack Sparrow Resin Statue | Pirates...' },
-    { date: '30.09.26', receiptId: '4187902419', qty: '1 Ad', shippingCostTry: 980.40, invoice: '—', title: 'Fallout Pip-Boy 3000 | Fallout Pip-Boy 3000...' },
-    { date: '28.09.26', receiptId: '4187282652', qty: '1 Ad', shippingCostTry: 1035.85, invoice: '—', title: 'Captain Jack Sparrow Resin Statue | Pirates...' },
-    { date: '25.09.26', receiptId: '4185170234', qty: '1 Ad', shippingCostTry: 977.80, invoice: '—', title: 'Arcane Jinx Statue, League of Legends Figur...' },
-    { date: '18.09.26', receiptId: '4176634453', qty: '1 Ad', shippingCostTry: 974.60, invoice: '—', title: 'Michael Jackson Statue, King of Pop Figure...' },
-    { date: '18.09.26', receiptId: '4178116180', qty: '1 Ad', shippingCostTry: 1120.79, invoice: '—', title: 'Arcane Jinx Statue, League of Legends Figur...' },
-    { date: '15.09.26', receiptId: '4174015409', qty: '1 Ad', shippingCostTry: 1021.44, invoice: '—', title: 'Lotr Aragorn Crown-Aragorn -Crown of Gon...' },
-    { date: '14.09.26', receiptId: '4174282090', qty: '1 Ad', shippingCostTry: 0.00, invoice: '—', title: 'Ben 10 Classic Omnitrix Watch V2  Ben 10...' },
-    { date: '07.09.26', receiptId: '4168067600', qty: '1 Ad', shippingCostTry: 503.01, invoice: 'Fatura', title: '3D Printed Butterfly Trainer | Colorful Safe K...' }
-  ];
-
-  // Modal 3 Data: Balance & Real Profit (Matching Görsel 4)
-  balanceBreakdownRecords = [
-    { type: 'Gelir', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: 35601.79, status: '🟢 Net', isPositive: true, explanation: 'Komisyon ve iadeler sonrası platformdan kalan net hakediş' },
-    { type: 'Kargo', name: 'Kargo Gönderimleri', detail: '9 Gönderi', amount: -8126.93, status: '', isPositive: false, explanation: 'Siparişlerin müşterilere kargolanma ve lojistik maliyeti' },
-    { type: 'Üretim', name: '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -5397.16, status: '', isPositive: false, explanation: 'Üretimde harcanan hammadde ve 3D yazıcı amortismanı' },
-    { type: 'Paket', name: 'Paketleme & Fatura', detail: '1 Fatura', amount: 0.00, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' },
-    { type: 'KÂR', name: 'GERÇEK NET KÂR', detail: 'Saf Kâr', amount: 22077.69, status: '🟢 Kâr', isPositive: true, explanation: 'Tüm platform ve operasyonel giderler çıktıktan sonra bankadaki net kâr' }
-  ];
+  // Dynamic Modal Collections (GEMINI.md Kural 3: Sıfır Mock - Canlı Defter ve Siparişlerle Beslenir)
+  salesRecords: any[] = [];
+  feesRecords: any[] = [];
+  innerAdsRecords: any[] = [];
+  offsiteAdsRecords: any[] = [];
+  refundRecords: any[] = [];
+  netIncomeRecords: any[] = [];
+  bankPayoutRecords: any[] = [];
+  orderCostShippingRecords: OrderCostShippingRow[] = [];
+  balanceBreakdownRecords: any[] = [];
 
   constructor(
     private etsyApi: EtsyApiService,
@@ -420,11 +347,17 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const rate = o.exchangeRate || this.liveRate || 49.25;
       const totalUsd = o.productCostUsd || 0;
       const shipUsd = o.actualShippingCostUsd != null ? o.actualShippingCostUsd : (totalUsd * 0.635);
+      const prodUsd = o.unitProductCostUsd != null ? o.unitProductCostUsd : (totalUsd * 0.28);
+      const totalCostTry = Number((totalUsd * rate).toFixed(2));
+      const shippingCostTry = Number((shipUsd * rate).toFixed(2));
+      const productionCostTry = Number((prodUsd * rate).toFixed(2));
       return {
         date: (o.orderDate || '').split(' ')[0],
         receiptId: o.receiptId,
         qty: `${o.quantity} Ad`,
-        shippingCostTry: Number((shipUsd * rate).toFixed(2)),
+        productionCostTry,
+        shippingCostTry,
+        totalCostTry,
         invoice: o.hasInvoice ? 'Fatura' : '—',
         title: o.productTitle
       };

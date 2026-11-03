@@ -744,7 +744,7 @@
 
     /* DRILLDOWN MODAL STYLES (MATCHING GÖRSEL 2, 3, 4) */
     .drilldown-card {
-      max-width: 960px;
+      max-width: 1080px;
       width: 94%;
       background: #0d1527;
       border: 1px solid #334155;
@@ -802,6 +802,7 @@
     .drilldown-table-wrapper {
       max-height: 380px;
       overflow-y: auto;
+      overflow-x: auto;
       border: 1px solid #26334d;
       border-radius: 8px;
       margin-bottom: 12px;
@@ -1069,3 +1070,5 @@
   color: white;
   box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
 }
+
+    .font-semibold { font-weight: 600; }

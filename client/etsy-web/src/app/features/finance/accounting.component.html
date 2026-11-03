@@ -931,7 +931,9 @@
                     <th>Tarih</th>
                     <th>Sipariş No</th>
                     <th>Adet</th>
+                    <th>Üretim Maliyeti</th>
                     <th>Kargo Maliyeti</th>
+                    <th>Toplam Maliyet</th>
                     <th>Fatura</th>
                     <th>Ürün / İlan Başlığı</th>
                   </tr>
@@ -941,7 +943,9 @@
                     <td class="date-cell">{{ s.date }}</td>
                     <td class="ref-cell">#{{ s.receiptId }}</td>
                     <td>{{ s.qty }}</td>
+                    <td class="amount-cell text-primary">{{ s.productionCostTry > 0 ? ('₺' + formatNumber(s.productionCostTry)) : '₺0,00' }}</td>
                     <td class="amount-cell text-warning">{{ s.shippingCostTry > 0 ? ('₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
+                    <td class="amount-cell text-danger font-semibold">{{ s.totalCostTry > 0 ? ('₺' + formatNumber(s.totalCostTry)) : '₺0,00' }}</td>
                     <td>
                       <span *ngIf="s.invoice !== '—'" class="badge-invoice">📄 {{ s.invoice }}</span>
                       <span *ngIf="s.invoice === '—'" class="text-muted">—</span>
