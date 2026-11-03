@@ -217,6 +217,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
   modalTotalLossTry = 0;
   modalTotalLossUsd = 0;
   modalTotalFeeRefundedUsd = 0;
+  modalTotalFeeRefundedTry = 0;
+  modalNetBalanceImpactUsd = 0;
+  modalNetBalanceImpactTry = 0;
   modalUnproducedCancelCount = 0;
   modalCostLossCancelCount = 0;
   netIncomeRecords: any[] = [];
@@ -610,6 +613,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.modalTotalLossTry = Number(this.refundRecords.reduce((sum, r) => sum + Math.abs(r.netLossTry), 0).toFixed(2));
     this.modalTotalLossUsd = Number(this.refundRecords.reduce((sum, r) => sum + Math.abs(r.netLossUsd), 0).toFixed(2));
     this.modalTotalFeeRefundedUsd = Number(this.refundRecords.reduce((sum, r) => sum + r.feeRefundedUsd, 0).toFixed(2));
+    this.modalTotalFeeRefundedTry = Number((this.modalTotalFeeRefundedUsd * this.liveRate).toFixed(2));
+    this.modalNetBalanceImpactUsd = Number((this.modalTotalRefundUsd - this.modalTotalFeeRefundedUsd).toFixed(2));
+    this.modalNetBalanceImpactTry = Number((this.modalTotalRefundTry - this.modalTotalFeeRefundedTry).toFixed(2));
     this.modalUnproducedCancelCount = this.refundRecords.filter(r => r.cancelType === 'unproduced').length;
     this.modalCostLossCancelCount = this.refundRecords.filter(r => r.cancelType === 'cost_loss').length;
 

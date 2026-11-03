@@ -1622,6 +1622,19 @@ internal sealed class FinancialReportForm : Form
                     title = order.ProductTitle;
                 }
             }
+            else if (r.ReferenceId > 0)
+            {
+                var order = _report.OrderSummaries.FirstOrDefault(o => o.ReceiptId == r.ReferenceId);
+                if (order != null)
+                {
+                    orderNo = $"#{order.ReceiptId}";
+                    title = order.ProductTitle;
+                }
+                else
+                {
+                    orderNo = $"#{r.ReferenceId}";
+                }
+            }
             else
             {
                 // 2. Proximity match with orders by date and amount
@@ -1635,7 +1648,8 @@ internal sealed class FinancialReportForm : Form
                 }
             }
 
-            rows.Add(new ToolTipTableRow(dateStr, orderNo, "1 Ad", $"-{cur}{displayAmt:N2}", false, "", title));
+            string refundStatus = "İade Edildi";
+            rows.Add(new ToolTipTableRow(dateStr, orderNo, "1 Ad", $"-{cur}{displayAmt:N2}", false, refundStatus, title));
         }
 
         _refundsTooltipPayload = new ToolTipDataPayload(

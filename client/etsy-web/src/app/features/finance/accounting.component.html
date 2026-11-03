@@ -1313,10 +1313,15 @@
                 <span class="box-val text-danger">{{ refundRecords.length }} Sipariş</span>
                 <span class="box-sub">{{ modalUnproducedCancelCount }} Zararsız | {{ modalCostLossCancelCount }} Maliyetli</span>
               </div>
-              <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Geri Alınan Komisyon</span>
-                <span class="box-val text-emerald">+${{ formatNumber(modalTotalFeeRefundedUsd) }} USD</span>
-                <span class="box-sub">İade Sonucu İade Alınan Komisyon</span>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Geri Alınan Komisyon</span>
+                <span class="box-val text-emerald">+${{ formatNumber(modalTotalFeeRefundedUsd) }} USD</span>
+                <span class="box-sub">+₺{{ formatNumber(modalTotalFeeRefundedTry) }} (Hesaba Yatan)</span>
+              </div>
+              <div class="drilldown-summary-box highlight-amber-box">
+                <span class="box-lbl">Net Bakiye Çıkışı (Kasa Kaybı)</span>
+                <span class="box-val text-amber-bold">-₺{{ formatNumber(modalNetBalanceImpactTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(modalNetBalanceImpactUsd) }} USD (Komisyon Düşülmüş)</span>
               </div>
               <div class="drilldown-summary-box highlight-danger-box">
                 <span class="box-lbl">Toplam İptal Zararı</span>

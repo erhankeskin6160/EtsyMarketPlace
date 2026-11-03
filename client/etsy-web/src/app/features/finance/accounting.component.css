@@ -177,7 +177,7 @@
       margin-bottom: 20px;
     }
     @media (max-width: 1400px) {
-      .kpi-grid-9 { grid-template-columns: repeat(3, 1fr); }
+      .kpi-grid-9 { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
     }
     .kpi-card {
       background: #151c2c;
@@ -770,7 +770,7 @@
     }
     .drilldown-summary-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
       gap: 12px;
       margin-bottom: 16px;
     }
@@ -1120,4 +1120,14 @@
   background: rgba(59, 130, 246, 0.15);
   color: #93c5fd;
   border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+/* Net Balance Impact Highlight */
+.drilldown-summary-box.highlight-amber-box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+.drilldown-summary-box .text-amber-bold {
+  color: #f59e0b;
+  font-weight: 800;
 }
