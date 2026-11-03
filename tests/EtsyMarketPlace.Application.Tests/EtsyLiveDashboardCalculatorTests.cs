@@ -1,4 +1,4 @@
-﻿namespace EtsyMarketPlace.Application.Tests;
+namespace EtsyMarketPlace.Application.Tests;
 
 using System;
 using System.Collections.Generic;
@@ -309,5 +309,49 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.NotNull(row.FxConversionFeeTry);
         Assert.True(row.FxConversionFeeTry > 0);
     }
-}
 
+    [Fact]
+    public void BuildDetailedOrderRows_ResolvesRealOrderNumberAndBuyerName_ForCrossPeriodRefund()
+    {
+        var refundTimestamp = new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+        var origOrderDate = new DateTimeOffset(2026, 9, 25, 10, 0, 0, TimeSpan.Zero);
+
+        var ledgerFees = new List<EtsyDashboardLedgerFee>
+        {
+            new(
+                Type: "refund",
+                ReferenceId: 2110508251050L,
+                Description: "Refund for Order #4185170234",
+                Amount: -176.28m,
+                CreatedAt: refundTimestamp)
+        };
+
+        var buyerMap = new Dictionary<long, string>
+        {
+            [4185170234L] = "Anthony Brown"
+        };
+        var dateMap = new Dictionary<long, DateTimeOffset>
+        {
+            [4185170234L] = origOrderDate
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            Array.Empty<EtsyDashboardReceipt>(),
+            ledgerFees,
+            NoCosts(),
+            49.25m,
+            buyerMap,
+            dateMap);
+
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.Equal(4185170234L, row.ReceiptId);
+        Assert.Equal("Anthony Brown", row.BuyerName);
+        Assert.Equal("25.09.2026", row.OrderDate);
+        Assert.Equal("03.11.2026", row.RefundDate);
+        Assert.Equal("25.09.2026", row.OriginalOrderDate);
+        Assert.Equal("refunded", row.OrderStatus);
+        Assert.Equal(176.28m, row.GrandTotalUsd);
+        Assert.Equal(-176.28m, row.NetProfitUsd);
+    }
+}

@@ -1,4 +1,4 @@
-﻿<div class="accounting-view">
+<div class="accounting-view">
       <!-- 1. TOP HEADER & DESKTOP CONTROLS -->
       <div class="accounting-header">
         <div class="header-left">
@@ -1320,27 +1320,31 @@
             </div>
 
             <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
+              <table class="drilldown-table refund-table">
                 <thead>
                   <tr>
-                    <th>Tarih</th>
+                    <th>İade Tarihi</th>
+                    <th>Sipariş Tarihi</th>
                     <th>Sipariş No</th>
-                    <th>Alıcı</th>
-                    <th>Ürün</th>
+                    <th>Alıcı / Müşteri</th>
+                    <th>Ürün / Başlık</th>
                     <th>İade Tutarı ($)</th>
                     <th>İade Tutarı (₺)</th>
-                    <th>İade Nedeni</th>
+                    <th>Geri Alınan Komisyon</th>
+                    <th>İade Türü</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let r of refundRecords">
-                    <td class="date-cell">{{ r.date }}</td>
-                    <td class="ref-cell">#{{ r.receiptId }}</td>
-                    <td>{{ r.buyer }}</td>
-                    <td class="title-cell">{{ r.item }}</td>
-                    <td class="amount-cell text-danger">{{ '-$' + r.refundUsd.toFixed(2) }}</td>
-                    <td class="amount-cell text-danger">-₺{{ formatNumber(r.refundTry) }}</td>
-                    <td class="note-cell">{{ r.reason }}</td>
+                    <td class="date-cell">{{ r.refundDate }}</td>
+                    <td class="date-cell">{{ r.orderDate }}</td>
+                    <td class="ref-cell font-mono">#{{ r.receiptId }}</td>
+                    <td class="buyer-cell font-semibold">{{ r.buyer }}</td>
+                    <td class="title-cell refund-title" [title]="r.item">{{ r.item }}</td>
+                    <td class="amount-cell text-danger font-bold">{{ '-$' + r.refundUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-danger font-bold">-₺{{ formatNumber(r.refundTry) }}</td>
+                    <td class="amount-cell text-emerald">{{ r.feeRefundedUsd > 0 ? '+$' + r.feeRefundedUsd.toFixed(2) + ' (+₺' + formatNumber(r.feeRefundedTry) + ')' : '—' }}</td>
+                    <td class="note-cell"><span class="badge-refund-type">{{ r.reason }}</span></td>
                   </tr>
                 </tbody>
               </table>

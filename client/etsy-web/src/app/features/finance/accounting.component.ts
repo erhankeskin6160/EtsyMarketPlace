@@ -416,27 +416,39 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
 
     // 5. Iade ve Geri Odeme Kayitlari (Modal 8)
-    if (this.refundRecords.length === 0 && this.refundsUsd > 0) {
-      this.refundRecords = [{ date: this.endDate, receiptId: 'DEFTER', buyer: 'Etsy Ödeme Defteri', item: 'Önceki Dönem Sipariş İadesi (Bu Ayın Bakiyesinden Düşüldü)', refundUsd: this.refundsUsd, refundTry: this.refundsTry, reason: 'Önceki Dönem Sipariş İadesi (Ödeme Defteri Kesintisi)', feeRefundedUsd: 0 }];
-    }
     this.refundRecords = this.orders
       .filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded')
       .map(o => {
         const rate = o.exchangeRate || this.liveRate || 49.25;
+        const buyerDisplay = (!o.buyerName || o.buyerName === 'Ödeme Defteri Kesintisi') ? 'Etsy Müşterisi' : o.buyerName;
+        const feeTry = o.etsyFeesUsd ? Number((o.etsyFeesUsd * rate).toFixed(2)) : 0;
         return {
-          date: o.orderDate,
+          refundDate: o.refundDate || o.orderDate,
+          orderDate: o.originalOrderDate || o.orderDate,
           receiptId: o.receiptId,
-          buyer: o.buyerName,
+          buyer: buyerDisplay,
           item: o.productTitle,
           refundUsd: o.grandTotalUsd,
           refundTry: Number((o.grandTotalUsd * rate).toFixed(2)),
-          reason: o.costNotes === 'cross_period_refund' ? 'Önceki Dönem Sipariş İadesi (Ödeme Defteri Kesintisi)' : 'Sipariş İptali / Tam İade',
-          feeRefundedUsd: o.etsyFeesUsd
+          feeRefundedUsd: o.etsyFeesUsd || 0,
+          feeRefundedTry: feeTry,
+          reason: o.costNotes === 'cross_period_refund' ? 'Önceki Dönem İadesi' : (o.orderStatus === 'canceled' ? 'Sipariş İptali / Tam İade' : 'Kısmi İade')
         };
       });
 
     if (this.refundRecords.length === 0 && this.refundsUsd > 0) {
-      this.refundRecords = [{ date: this.endDate, receiptId: 'DEFTER', buyer: 'Etsy Ödeme Defteri', item: 'Önceki Dönem Sipariş İadesi (Bu Ayın Bakiyesinden Düşüldü)', refundUsd: this.refundsUsd, refundTry: this.refundsTry, reason: 'Önceki Dönem Sipariş İadesi (Ödeme Defteri Kesintisi)', feeRefundedUsd: 0 }];
+      this.refundRecords = [{
+        refundDate: this.endDate,
+        orderDate: this.startDate,
+        receiptId: 'DEFTER',
+        buyer: 'Etsy Müşterisi',
+        item: 'Önceki Dönem Sipariş İadesi (Defter Kesintisi)',
+        refundUsd: this.refundsUsd,
+        refundTry: this.refundsTry,
+        feeRefundedUsd: 0,
+        feeRefundedTry: 0,
+        reason: 'Önceki Dönem Sipariş İadesi'
+      }];
     }
     // 6. Gercek Net Kar & Bilanco Analizi Tablosu (Modal 3)
     this.balanceBreakdownRecords = [
@@ -704,7 +716,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
             effectiveExchangeRate: dto.effectiveExchangeRate || (dto.exchangeRate ? Number((dto.exchangeRate * 0.975).toFixed(2)) : undefined),
             etsyNetPayoutUsd: dto.etsyNetPayoutUsd !== undefined ? dto.etsyNetPayoutUsd : (dto.grandTotalUsd ? Number((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)).toFixed(2)) : undefined),
             etsyNetPayoutTry: dto.etsyNetPayoutTry !== undefined ? dto.etsyNetPayoutTry : (dto.grandTotalUsd && dto.exchangeRate ? Number(((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)) * (dto.exchangeRate * 0.975)).toFixed(2)) : undefined),
-            fxConversionFeeTry: dto.fxConversionFeeTry !== undefined ? dto.fxConversionFeeTry : undefined
+            fxConversionFeeTry: dto.fxConversionFeeTry !== undefined ? dto.fxConversionFeeTry : undefined,
+            refundDate: dto.refundDate || dto.orderDate,
+            originalOrderDate: dto.originalOrderDate || dto.orderDate
           }));
           this.filterOrders();
           this.rebuildDynamicBreakdowns();

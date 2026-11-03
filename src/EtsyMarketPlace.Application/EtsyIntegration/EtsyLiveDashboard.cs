@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 namespace EtsyMarketPlace.Application.EtsyIntegration;
@@ -184,7 +184,9 @@ public static class EtsyLiveDashboardCalculator
         IReadOnlyList<EtsyDashboardReceipt> receipts,
         IReadOnlyList<EtsyDashboardLedgerFee> ledgerFees,
         IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
-        decimal exchangeRate = 49.16m)
+        decimal exchangeRate = 49.16m,
+        IReadOnlyDictionary<long, string>? buyerNameMap = null,
+        IReadOnlyDictionary<long, DateTimeOffset>? originalOrderDateMap = null)
     {
         var offsiteAdsMap = BuildOffsiteAdsMap(ledgerFees);
         var refundEntries = BuildRefundEntries(ledgerFees);
@@ -342,10 +344,12 @@ public static class EtsyLiveDashboardCalculator
                 effectiveExchangeRate,
                 etsyNetPayoutUsd,
                 etsyNetPayoutTry,
-                fxConversionFeeTry));
+                fxConversionFeeTry,
+                refundEntries.TryGetValue(receipt.ReceiptId, out var itemRefundInfo) ? itemRefundInfo.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture) : null,
+                orderDate));
         }
 
-        AppendCrossPeriodRefundRows(rows, refundEntries, receiptIdsInPeriod, orderCosts, exchangeRate);
+        AppendCrossPeriodRefundRows(rows, refundEntries, receiptIdsInPeriod, orderCosts, exchangeRate, buyerNameMap, originalOrderDateMap);
         return rows.OrderByDescending(r => r.CreatedAt).ToList();
     }
 
@@ -362,14 +366,19 @@ public static class EtsyLiveDashboardCalculator
         {
             if (!string.Equals(entry.Type, "offsite_ads", StringComparison.OrdinalIgnoreCase)) continue;
 
-            var receiptId = entry.ReferenceId;
-            if (receiptId <= 0 && !string.IsNullOrWhiteSpace(entry.Description))
+            var receiptId = 0L;
+            if (!string.IsNullOrWhiteSpace(entry.Description))
             {
-                var match = Regex.Match(entry.Description, @"#?(\d{9,11})");
+                var match = Regex.Match(entry.Description, @"(?:Order|Receipt|Sipariş)?\s*#?(\d{9,11})", RegexOptions.IgnoreCase);
                 if (match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
                 {
                     receiptId = parsed;
                 }
+            }
+
+            if (receiptId <= 0)
+            {
+                receiptId = entry.ReferenceId;
             }
 
             if (receiptId > 0)
@@ -395,14 +404,19 @@ public static class EtsyLiveDashboardCalculator
             var amt = Math.Abs(entry.Amount);
             if (amt <= 0) continue;
 
-            var receiptId = entry.ReferenceId;
-            if (receiptId <= 0 && !string.IsNullOrWhiteSpace(entry.Description))
+            var receiptId = 0L;
+            if (!string.IsNullOrWhiteSpace(entry.Description))
             {
-                var match = Regex.Match(entry.Description, @"#?(\d{9,11})");
+                var match = Regex.Match(entry.Description, @"(?:Order|Receipt|Sipariş)?\s*#?(\d{9,11})", RegexOptions.IgnoreCase);
                 if (match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
                 {
                     receiptId = parsed;
                 }
+            }
+
+            if (receiptId <= 0)
+            {
+                receiptId = entry.ReferenceId;
             }
 
             if (receiptId <= 0)
@@ -440,7 +454,9 @@ public static class EtsyLiveDashboardCalculator
         Dictionary<long, LedgerRefundInfo> refundEntries,
         HashSet<long> receiptIdsInPeriod,
         IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
-        decimal exchangeRate)
+        decimal exchangeRate,
+        IReadOnlyDictionary<long, string>? buyerNameMap = null,
+        IReadOnlyDictionary<long, DateTimeOffset>? originalOrderDateMap = null)
     {
         foreach (var kvp in refundEntries)
         {
@@ -454,10 +470,27 @@ public static class EtsyLiveDashboardCalculator
 
             decimal? productCost = null;
             var hasCost = false;
-            if (orderCosts != null && orderCosts.TryGetValue(info.ReferenceId, out var orderCost))
+            EtsyDashboardOrderCost? orderCost = null;
+            if (orderCosts != null && orderCosts.TryGetValue(info.ReferenceId, out orderCost))
             {
                 productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
                 hasCost = true;
+            }
+
+            var buyerName = "Etsy Müşterisi";
+            if (buyerNameMap != null && buyerNameMap.TryGetValue(info.ReferenceId, out var bName) && !string.IsNullOrWhiteSpace(bName))
+            {
+                buyerName = bName;
+            }
+            else if (orderCost != null && !string.IsNullOrWhiteSpace(orderCost.Notes) && orderCost.Notes.StartsWith("Müşteri: ", StringComparison.OrdinalIgnoreCase))
+            {
+                buyerName = orderCost.Notes.Substring("Müşteri: ".Length).Trim();
+            }
+
+            var origOrderDateStr = refundDate;
+            if (originalOrderDateMap != null && originalOrderDateMap.TryGetValue(info.ReferenceId, out var origDate))
+            {
+                origOrderDateStr = origDate.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
             }
 
             var descTitle = !string.IsNullOrWhiteSpace(info.Description)
@@ -467,10 +500,10 @@ public static class EtsyLiveDashboardCalculator
             rows.Add(new EtsyOrderFinancialDetail(
                 ReceiptId: info.ReferenceId,
                 CreatedAt: info.CreatedAt,
-                OrderDate: refundDate,
+                OrderDate: origOrderDateStr,
                 OrderStatus: "refunded",
                 DisplayStatus: "↩️ İade (Önceki Dönem)",
-                BuyerName: "Ödeme Defteri Kesintisi",
+                BuyerName: buyerName,
                 ProductTitle: descTitle,
                 ListingId: 0L,
                 Quantity: 1,
@@ -498,7 +531,9 @@ public static class EtsyLiveDashboardCalculator
                 EffectiveExchangeRate: Math.Round(refundRate * 0.975m, 2),
                 EtsyNetPayoutUsd: -refundUsd,
                 EtsyNetPayoutTry: Math.Round(-refundUsd * (refundRate * 0.975m), 2),
-                FxConversionFeeTry: Math.Round((-refundUsd * refundRate) - Math.Round(-refundUsd * (refundRate * 0.975m), 2), 2)));
+                FxConversionFeeTry: Math.Round((-refundUsd * refundRate) - Math.Round(-refundUsd * (refundRate * 0.975m), 2), 2),
+                RefundDate: refundDate,
+                OriginalOrderDate: origOrderDateStr));
         }
     }
 }
@@ -573,6 +608,8 @@ public sealed record EtsyOrderFinancialDetail(
     decimal? EffectiveExchangeRate = null,
     decimal? EtsyNetPayoutUsd = null,
     decimal? EtsyNetPayoutTry = null,
-    decimal? FxConversionFeeTry = null);
+    decimal? FxConversionFeeTry = null,
+    string? RefundDate = null,
+    string? OriginalOrderDate = null);
 
 public sealed record EtsyDailySeries(string[] Labels, decimal[] GrossSales, decimal[] NetProfit);

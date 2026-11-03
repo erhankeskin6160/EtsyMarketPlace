@@ -1,4 +1,4 @@
-﻿namespace EtsyMarketPlace.Application.EtsyIntegration;
+namespace EtsyMarketPlace.Application.EtsyIntegration;
 
 using System;
 using System.Collections.Generic;
@@ -16,19 +16,22 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
     private readonly IEtsyDataClient _etsyClient;
     private readonly IEtsyIntegrationRepository _repository;
     private readonly IBankDepositService _bankService;
+    private readonly EtsyMarketPlace.Domain.Orders.IOrderAddressRepository? _addressRepository;
 
     public EtsyDashboardService(
         IEtsyReportingService reporting,
         IEtsyLedgerReportService ledgerReport,
         IEtsyDataClient etsyClient,
         IEtsyIntegrationRepository repository,
-        IBankDepositService bankService)
+        IBankDepositService bankService,
+        EtsyMarketPlace.Domain.Orders.IOrderAddressRepository? addressRepository = null)
     {
         _reporting = reporting ?? throw new ArgumentNullException(nameof(reporting));
         _ledgerReport = ledgerReport ?? throw new ArgumentNullException(nameof(ledgerReport));
         _etsyClient = etsyClient ?? throw new ArgumentNullException(nameof(etsyClient));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _bankService = bankService ?? throw new ArgumentNullException(nameof(bankService));
+        _addressRepository = addressRepository;
     }
 
     private static async Task<(IReadOnlyList<EtsyDashboardLedgerFee> Entries, string? Error)> SafeGetLedgerAsync(
@@ -307,7 +310,20 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         }
         catch { }
 
-        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledgerEntries, costs, rate);
+        IReadOnlyDictionary<long, string>? buyerNameMap = null;
+        IReadOnlyDictionary<long, DateTimeOffset>? orderDateMap = null;
+        if (_addressRepository != null)
+        {
+            try
+            {
+                var addrDict = await _addressRepository.GetAllAsync(cancellationToken);
+                buyerNameMap = addrDict.ToDictionary(k => k.Key, v => v.Value.BuyerName);
+                orderDateMap = addrDict.ToDictionary(k => k.Key, v => new DateTimeOffset(v.Value.UpdatedAtUtc, TimeSpan.Zero));
+            }
+            catch { }
+        }
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledgerEntries, costs, rate, buyerNameMap, orderDateMap);
 
         var activeOrderRows = rows.Where(r => !string.Equals(r.CostNotes, "cross_period_refund", StringComparison.OrdinalIgnoreCase)).ToList();
         return new OrderFinancialsDashboardResult(

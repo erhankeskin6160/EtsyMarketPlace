@@ -1,4 +1,4 @@
-﻿export interface PaymentLedgerEntry {
+export interface PaymentLedgerEntry {
   id: string;
   entryDate: string;
   transactionType: 'sale' | 'fee' | 'refund' | 'ad' | 'listing' | 'payout';
@@ -76,6 +76,8 @@ export interface OrderFinancialRow {
   etsyNetPayoutUsd?: number;
   etsyNetPayoutTry?: number;
   fxConversionFeeTry?: number;
+  refundDate?: string;
+  originalOrderDate?: string;
 }
 
 export interface ForecastKpiSummary {
