@@ -77,11 +77,12 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
             foreach (var receipt in receipts)
             {
                 if (!receipt.IsPaid && !receipt.IsCanceled) continue;
-                if (receipt.IsCanceled) continue;
                 if (!costs.TryGetValue(receipt.ReceiptId, out var cost)) continue;
 
-                var day = receipt.CreatedAt.UtcDateTime.Date;
                 var amount = Math.Round(cost.ProductCost + cost.ShippingCost, 2);
+                if (receipt.IsCanceled && amount <= 0) continue;
+
+                var day = receipt.CreatedAt.UtcDateTime.Date;
                 costsByDay[day] = costsByDay.TryGetValue(day, out var existing) ? existing + amount : amount;
             }
         }

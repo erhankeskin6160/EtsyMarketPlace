@@ -112,12 +112,12 @@ public static class EtsyLiveDashboardCalculator
                 }
 
                 etsyFees = transactionFee + paymentFee + regulatoryFee + tax;
+            }
 
-                if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
-                {
-                    productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost, 2);
-                    hasCost = true;
-                }
+            if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
+            {
+                productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost, 2);
+                hasCost = true;
             }
 
             var netProfitUsd = isCanceled ? (hasCost && productCost > 0 ? -productCost : 0m) : Math.Round(grandTotal - etsyFees - offsiteAdFee - productCost, 2);

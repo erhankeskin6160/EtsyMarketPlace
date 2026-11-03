@@ -329,14 +329,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   get totalShippingCostTry(): number {
-    return Number(this.orders.filter(o => o.orderStatus !== 'canceled').reduce((sum, o) => {
+    return Number(this.orders.filter(o => o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0).reduce((sum, o) => {
       const shipUsd = o.actualShippingCostUsd != null ? o.actualShippingCostUsd : ((o.productCostUsd || 0) * 0.635);
       return sum + (shipUsd * (o.exchangeRate || this.liveRate));
     }, 0).toFixed(2));
   }
 
   get totalProductionCostTry(): number {
-    return Number(this.orders.filter(o => o.orderStatus !== 'canceled').reduce((sum, o) => {
+    return Number(this.orders.filter(o => o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0).reduce((sum, o) => {
       const prodUsd = o.unitProductCostUsd != null ? o.unitProductCostUsd : ((o.productCostUsd || 0) * 0.28);
       return sum + (prodUsd * (o.exchangeRate || this.liveRate));
     }, 0).toFixed(2));
@@ -1445,7 +1445,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       // Gerçek Net Kâr = Etsy Net Hakediş - Toplam Sipariş Maliyeti
       // Mükerrer kesintiyi engelle: o.netProfitTry içinde reklam ve iadeler zaten düşüldüğünden,
       // doğrudan net hakediş (netIncomeTry) üzerinden toplam sipariş maliyeti düşülür.
-      const active = this.orders.filter(o => o.orderStatus !== 'canceled');
+      const active = this.orders.filter(o => o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0);
       const totalCostsTRY = active.reduce((sum, o) => sum + ((o.productCostUsd || 0) * (o.exchangeRate || this.liveRate)), 0);
       const totalCostsUSD = Number((totalCostsTRY / this.liveRate).toFixed(2));
       const totalNetTRY = Number((this.netIncomeTry - totalCostsTRY).toFixed(2));
