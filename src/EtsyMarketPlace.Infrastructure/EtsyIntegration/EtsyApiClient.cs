@@ -368,6 +368,10 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             || BoolValue(item, "was_refunded")
             || (grandTotal > 0 && refundedAmount >= grandTotal);
 
+        var isShipped = BoolValue(item, "is_shipped")
+            || status.Contains("complete", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("ship", StringComparison.OrdinalIgnoreCase);
+
         var buyerName = StringValue(item, "name", "buyer_name");
         var buyerEmail = StringValue(item, "buyer_email");
         var uid = LongValue(item, "buyer_user_id");
@@ -390,7 +394,8 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             buyerName,
             buyerUserId,
             buyerEmail,
-            status);
+            status,
+            isShipped);
     }
 
     private static EtsyDashboardLedgerFee? ParseDashboardLedgerFee(JsonElement item, string shopId)

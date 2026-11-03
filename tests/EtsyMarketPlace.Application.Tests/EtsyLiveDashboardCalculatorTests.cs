@@ -200,6 +200,45 @@ public sealed class EtsyLiveDashboardCalculatorTests
     }
 
     [Fact]
+    public void BuildDetailedOrderRows_SetsOpenStatus_WhenOrderIsPendingShipment()
+    {
+        var receipt = new EtsyDashboardReceipt(
+            44210965421L,
+            new DateTimeOffset(2026, 10, 26, 10, 0, 0, TimeSpan.Zero),
+            true,
+            false,
+            false,
+            "USD",
+            123.40m,
+            123.40m,
+            0m,
+            0m,
+            0m,
+            0m,
+            new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 13, 1) },
+            "Jessica Benson",
+            Status: "Open",
+            IsShipped: false);
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            new[] { receipt },
+            Array.Empty<EtsyDashboardLedgerFee>(),
+            new Dictionary<long, EtsyDashboardOrderCost>(),
+            49.53m);
+
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.Equal(44210965421L, row.ReceiptId);
+        Assert.Equal("Jessica Benson", row.BuyerName);
+        Assert.Equal("open", row.OrderStatus);
+        Assert.Equal("Kargolanacak (Yeni)", row.DisplayStatus);
+        Assert.Equal(123.40m, row.GrandTotalUsd);
+        Assert.Null(row.RefundDate);
+        Assert.Equal(0m, row.RefundAmountUsd);
+        Assert.True(row.NetProfitUsd > 0);
+    }
+
+    [Fact]
     public void BuildDetailedOrderRows_SetsCanceledStatus_WhenOrderIsCanceled()
     {
         var receipt = new EtsyDashboardReceipt(

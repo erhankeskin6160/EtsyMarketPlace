@@ -446,7 +446,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const deduplicatedRefundOrders: OrderFinancialRow[] = [];
 
     for (const o of this.orders) {
-      if (o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund' || (o.refundDate && o.refundDate.length > 0)) {
+      const isActualRefund = o.orderStatus === 'canceled' 
+        || o.orderStatus === 'refunded' 
+        || o.costNotes === 'cross_period_refund' 
+        || (o.refundAmountUsd != null && o.refundAmountUsd > 0);
+      if (isActualRefund) {
         if (!seenReceiptIds.has(o.receiptId)) {
           seenReceiptIds.add(o.receiptId);
           deduplicatedRefundOrders.push(o);
@@ -461,7 +465,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
       const refundUsd = o.refundAmountUsd != null && o.refundAmountUsd > 0
         ? o.refundAmountUsd
-        : (o.grandTotalUsd > 0 ? o.grandTotalUsd : Math.abs(o.netProfitUsd < 0 && o.orderStatus !== 'canceled' ? o.netProfitUsd : 0));
+        : (o.orderStatus === 'canceled' && o.grandTotalUsd > 0 ? o.grandTotalUsd : Math.abs(o.netProfitUsd < 0 ? o.netProfitUsd : 0));
       const refundTry = o.refundAmountTry != null && o.refundAmountTry > 0
         ? o.refundAmountTry
         : Number((refundUsd * rate).toFixed(2));
@@ -782,8 +786,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
           this.orders = res.orders.map((dto: any) => ({
             orderDate: dto.orderDate || '',
             receiptId: String(dto.receiptId),
-            orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded',
-            displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled' ? '🔴 İptal Edildi' : '🟢 Tamamlandı'),
+            orderStatus: (dto.orderStatus || 'completed') as 'completed' | 'canceled' | 'refunded' | 'open',
+            displayStatus: dto.displayStatus || (dto.orderStatus === 'canceled' ? '🔴 İptal Edildi' : (dto.orderStatus === 'open' ? '🔵 Kargolanacak (Yeni)' : '🟢 Tamamlandı')),
+
             buyerName: dto.buyerName || 'Misafir Müşteri',
             productTitle: dto.productTitle || dto.title || '',
             quantity: dto.quantity || 1,
@@ -805,7 +810,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
             etsyNetPayoutUsd: dto.etsyNetPayoutUsd !== undefined ? dto.etsyNetPayoutUsd : (dto.grandTotalUsd ? Number((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)).toFixed(2)) : undefined),
             etsyNetPayoutTry: dto.etsyNetPayoutTry !== undefined ? dto.etsyNetPayoutTry : (dto.grandTotalUsd && dto.exchangeRate ? Number(((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)) * (dto.exchangeRate * 0.975)).toFixed(2)) : undefined),
             fxConversionFeeTry: dto.fxConversionFeeTry !== undefined ? dto.fxConversionFeeTry : undefined,
-            refundDate: dto.refundDate || dto.orderDate,
+            refundDate: dto.refundDate || undefined,
             originalOrderDate: dto.originalOrderDate || dto.orderDate,
             refundAmountUsd: dto.refundAmountUsd,
             refundAmountTry: dto.refundAmountTry
@@ -1070,6 +1075,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
     if (this.orderCostFilter === 'completed') {
       result = result.filter(o => o.orderStatus === 'completed');
+    } else if (this.orderCostFilter === 'open') {
+      result = result.filter(o => o.orderStatus === 'open');
     } else if (this.orderCostFilter === 'canceled') {
       result = result.filter(o => o.orderStatus === 'canceled' || o.orderStatus === 'refunded');
     } else if (this.orderCostFilter === 'hasCost') {

@@ -284,7 +284,8 @@
             <div class="filter-dropdown-wrap">
               <select [(ngModel)]="orderCostFilter" (change)="filterOrders()" class="order-filter-select">
                 <option value="all">📦 Tüm Siparişler</option>
-                <option value="completed">🟢 Başarılı Siparişler</option>
+                <option value="open">🔵 Kargolanacak (Yeni)</option>
+                <option value="completed">🟢 Tamamlanan / Gönderilen</option>
                 <option value="canceled">🔴 İptal / İade Edilenler</option>
                 <option value="hasCost">✅ Maliyeti Girilmiş</option>
                 <option value="missingCost">⚠️ Maliyeti Eksik</option>

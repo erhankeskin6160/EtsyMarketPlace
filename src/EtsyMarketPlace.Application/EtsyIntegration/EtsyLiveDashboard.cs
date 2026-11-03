@@ -270,8 +270,9 @@ public static class EtsyLiveDashboardCalculator
             var isPartialRefund = !isFullRefundOrCanceled && refundedAmt > 0 && refundedAmt < originalGrandTotal;
             var isCanceled = isFullRefundOrCanceled;
 
-            var orderStatus = isFullRefundOrCanceled ? "canceled" : (isPartialRefund ? "refunded" : "completed");
-            var displayStatus = isFullRefundOrCanceled ? "İptal Edildi" : (isPartialRefund ? "Kısmi İade" : "Tamamlandı");
+            var isOpenOrder = !isFullRefundOrCanceled && !isPartialRefund && string.Equals(receipt.Status, "Open", StringComparison.OrdinalIgnoreCase);
+            var orderStatus = isFullRefundOrCanceled ? "canceled" : (isPartialRefund ? "refunded" : (isOpenOrder ? "open" : "completed"));
+            var displayStatus = isFullRefundOrCanceled ? "İptal Edildi" : (isPartialRefund ? "Kısmi İade" : (isOpenOrder ? "Kargolanacak (Yeni)" : "Tamamlandı"));
 
             var transactionFee = 0m;
             var paymentFee = 0m;
@@ -623,7 +624,8 @@ public sealed record EtsyDashboardReceipt(
     string? BuyerName = null,
     long? BuyerUserId = null,
     string? BuyerEmail = null,
-    string? Status = null);
+    string? Status = null,
+    bool IsShipped = false);
 
 public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount, DateTimeOffset? CreatedAt = null);
 

@@ -53,7 +53,7 @@ export interface ExpenseBreakdownItem {
 export interface OrderFinancialRow {
   orderDate: string;
   receiptId: string;
-  orderStatus: 'completed' | 'canceled' | 'refunded';
+  orderStatus: 'completed' | 'canceled' | 'refunded' | 'open';
   displayStatus: string;
   buyerName: string;
   productTitle: string;
