@@ -314,6 +314,8 @@ if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
 }
 
 app.UseCors();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.UseMiddleware<ClientVersionGateMiddleware>();
 app.UseMiddleware<SwaggerBasicAuthMiddleware>();
 app.UseSwagger();
@@ -329,6 +331,9 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapPost("/api/system/migrate-postgres", async (EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator migrator) => Results.Ok(await migrator.MigrateAndSeedAsync()))
     .AllowAnonymous();
+
+// 7. Angular Web Kokpiti SPA Fallback
+app.MapFallbackToFile("index.html").AllowAnonymous();
 
 app.Run();
 

@@ -14,6 +14,7 @@ on:
       - '*.sln'
       - '**/*.csproj'
       - '.github/workflows/deploy-api-vds.yml'
+      - 'client/etsy-web/**'
   workflow_dispatch:
 
 permissions:
@@ -36,6 +37,22 @@ jobs:
 
       - name: Test
         run: dotnet test .\SimilarProductsWinForms.sln -c Release --no-restore
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build Web Client (Angular 18)
+        run: |
+          cd client/etsy-web
+          npm ci
+          npm run build
+
+      - name: Copy Web Client to API wwwroot
+        run: |
+          New-Item -ItemType Directory -Force -Path src/EtsyMarketPlace.Api/wwwroot
+          Copy-Item -Path client/etsy-web/dist/etsy-web/browser/* -Destination src/EtsyMarketPlace.Api/wwwroot/ -Recurse -Force
 
       - name: Publish API
         run: dotnet publish .\src\EtsyMarketPlace.Api\EtsyMarketPlace.Api.csproj -c Release -r win-x64 --self-contained true -o .\publish-api-vds
