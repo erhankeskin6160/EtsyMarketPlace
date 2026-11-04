@@ -1,3 +1,4 @@
+using System.IO;
 using System;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -49,9 +50,19 @@ public class SystemController : ControllerBase
     }
 
     [HttpGet("")]
-    [EndpointSummary("API Kök Bilgilendirme")]
+    [EndpointSummary("API Kök Bilgilendirme / Web Kokpiti")]
     public IActionResult GetRootInfo()
     {
+        var acceptHeader = Request.Headers.Accept.ToString();
+        if (acceptHeader.Contains("text/html", StringComparison.OrdinalIgnoreCase))
+        {
+            var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot", "index.html");
+            if (System.IO.File.Exists(webRoot))
+            {
+                return PhysicalFile(webRoot, "text/html");
+            }
+        }
+
         return Ok(new
         {
             status = "Healthy",
