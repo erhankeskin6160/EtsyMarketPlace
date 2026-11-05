@@ -42,3 +42,11 @@ export interface NavItem {
   badge?: string;
   route: string;
 }
+
+export interface EtsyConnectedShopDto {
+  shopId: string;
+  shopName?: string | null;
+  isActive: boolean;
+  tokenExpiresAt?: string | null;
+  isExpired: boolean;
+}

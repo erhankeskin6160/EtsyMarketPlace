@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { DailyBrief, FinancialSummary, BankDeposit } from '../models/etsy.models';
+import { DailyBrief, FinancialSummary, BankDeposit, EtsyConnectedShopDto } from '../models/etsy.models';
 import { User, UpdateUserRequest, AuditLog, SystemStats } from '../models/auth.models';
 import { environment } from '../../../environments/environment';
 
@@ -260,14 +260,24 @@ export class EtsyApiService {
   readonly isTryCurrency = signal<boolean>(true);
   readonly isSidebarCollapsed = signal<boolean>(false);
 
+  // Connected Shops Signal
+  readonly connectedShops = signal<EtsyConnectedShopDto[]>([]);
+
   // Live Token & API Connection Signals
   readonly tokenStatus = signal<'connected' | 'expired' | 'missing' | 'error' | 'checking'>('checking');
   readonly tokenExpiresAt = signal<string | null>(null);
   readonly tokenDetails = signal<string>('Kontrol ediliyor...');
 
   constructor() {
+    try {
+      const savedShop = localStorage.getItem('etsy_active_shop_id');
+      if (savedShop && savedShop.trim()) {
+        this.activeShopId.set(savedShop.trim());
+      }
+    } catch {}
     this.fetchLiveExchangeRate();
     this.verifyApiConnection();
+    this.loadConnectedShops();
   }
 
   /** Checks live Etsy OAuth v3 token validity on VDS and updates reactive signals */
@@ -311,6 +321,42 @@ export class EtsyApiService {
         }
       }
     });
+  }
+
+  loadConnectedShops(): void {
+    this.http.get<any>(`${this.API_BASE}/api/etsy/token/connected-shops`).subscribe({
+      next: (res) => {
+        const list: EtsyConnectedShopDto[] = Array.isArray(res) ? res : (res?.data || []);
+        if (list.length > 0) {
+          this.connectedShops.set(list);
+        } else {
+          this.connectedShops.set([{
+            shopId: this.activeShopId(),
+            shopName: this.activeShopId(),
+            isActive: true,
+            isExpired: false
+          }]);
+        }
+      },
+      error: () => {
+        this.connectedShops.set([{
+          shopId: this.activeShopId(),
+          shopName: this.activeShopId(),
+          isActive: true,
+          isExpired: false
+        }]);
+      }
+    });
+  }
+
+  switchShop(shopId: string): void {
+    if (!shopId || shopId === this.activeShopId()) return;
+    this.activeShopId.set(shopId);
+    try {
+      localStorage.setItem('etsy_active_shop_id', shopId);
+    } catch {}
+    this.verifyApiConnection();
+    this.loadConnectedShops();
   }
 
   checkTokenStatus(shopId?: string): Observable<EtsyTokenStatusDto> {

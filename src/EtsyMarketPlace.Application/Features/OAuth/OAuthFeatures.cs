@@ -195,3 +195,21 @@ public sealed class ExchangeEtsyOAuthCodeHandler(
         }
     }
 }
+
+// 5. Connected Shops
+public sealed record GetConnectedShopsQuery() : IRequest<ServiceResponse>;
+
+public sealed class GetConnectedShopsHandler(IEtsyTokenStore tokenStore)
+    : IRequestHandler<GetConnectedShopsQuery, ServiceResponse>
+{
+    public async Task<ServiceResponse> Handle(GetConnectedShopsQuery request, CancellationToken cancellationToken)
+    {
+        var shops = await tokenStore.GetConnectedShopsAsync(cancellationToken);
+        if (shops.Count == 0)
+        {
+            var defaultShop = new EtsyConnectedShopDto("53236321", "53236321", true, null, false);
+            return ServiceResponse.CreateSuccess("Bağlı mağazalar getirildi.", new[] { defaultShop });
+        }
+        return ServiceResponse.CreateSuccess("Bağlı mağazalar getirildi.", shops);
+    }
+}

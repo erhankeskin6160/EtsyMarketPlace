@@ -154,6 +154,57 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
         }
     }
 
+    public async Task<IReadOnlyList<EtsyConnectedShopDto>> GetConnectedShopsAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var shops = await _context.ShopConnections
+                .AsNoTracking(
+                ).Include(s => s.OAuthToken)
+                .ToListAsync(cancellationToken);
+
+            if (shops.Count == 0)
+            {
+                var tokens = await _context.OAuthTokens.AsNoTracking().ToListAsync(cancellationToken);
+                if (tokens.Count > 0)
+                {
+                    return tokens.Select(t => new EtsyConnectedShopDto(
+                        t.ShopId,
+                        t.ShopId,
+                        true,
+                        new DateTimeOffset(t.AccessTokenExpiresAt, TimeSpan.Zero),
+                        t.AccessTokenExpiresAt <= DateTime.UtcNow
+                    )).ToList();
+                }
+
+                if (_fallbackStore != null)
+                {
+                    return await _fallbackStore.GetConnectedShopsAsync(cancellationToken);
+                }
+
+                return Array.Empty<EtsyConnectedShopDto>();
+            }
+
+            return shops.Select(s => new EtsyConnectedShopDto(
+                s.ShopId,
+                string.IsNullOrWhiteSpace(s.ShopName) ? s.ShopId : s.ShopName,
+                s.IsActive,
+                s.OAuthToken != null ? new DateTimeOffset(s.OAuthToken.AccessTokenExpiresAt, TimeSpan.Zero) : null,
+                s.OAuthToken == null || s.OAuthToken.AccessTokenExpiresAt <= DateTime.UtcNow
+            )).ToList();
+        }
+        catch (Exception ex) when (IsDatabaseUnavailableException(ex))
+        {
+            _logger.LogWarning(ex, "PostgreSQL çevrimdışı, bağlı mağazalar SQLite yedeğinden alınıyor");
+            return _fallbackStore != null ? await _fallbackStore.GetConnectedShopsAsync(cancellationToken) : Array.Empty<EtsyConnectedShopDto>();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "PostgreSQL'den bağlı mağazalar alınırken hata oluştu: {Message}", ex.Message);
+            return _fallbackStore != null ? await _fallbackStore.GetConnectedShopsAsync(cancellationToken) : Array.Empty<EtsyConnectedShopDto>();
+        }
+    }
+
     private string UnprotectOrRaw(string cipherOrRaw)
     {
         if (string.IsNullOrWhiteSpace(cipherOrRaw)) return string.Empty;

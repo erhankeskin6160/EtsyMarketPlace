@@ -104,10 +104,46 @@
           {{ apiService.isTryCurrency() ? '₺ TRY Aktif' : '$ USD Aktif' }}
         </button>
 
-        <!-- Store Switcher -->
-        <div class="store-badge">
-          <span class="store-icon">🏬</span>
-          <span>{{ apiService.activeShopId() }}</span>
+        <!-- Store Switcher Dropdown -->
+        <div class="store-dropdown-container">
+          <button class="store-badge-btn" (click)="toggleShopDropdown($event)" [class.active]="isShopDropdownOpen" title="Mağaza Değiştir veya Yönet">
+            <span class="store-icon">🏬</span>
+            <span class="store-id">{{ apiService.activeShopId() }}</span>
+            <span class="dropdown-chevron" [class.rotated]="isShopDropdownOpen">▾</span>
+          </button>
+
+          <!-- Dropdown Menu -->
+          <div class="store-dropdown-menu" *ngIf="isShopDropdownOpen" (click)="$event.stopPropagation()">
+            <div class="dropdown-header">
+              <span class="hdr-title">Bağlı Etsy Mağazaları</span>
+              <span class="hdr-count">{{ apiService.connectedShops().length }} Mağaza</span>
+            </div>
+
+            <div class="shop-list">
+              <div 
+                *ngFor="let shop of apiService.connectedShops()" 
+                class="shop-item" 
+                [class.selected]="shop.shopId === apiService.activeShopId()"
+                (click)="selectShop(shop.shopId, $event)">
+                <div class="shop-status-dot" [class.online]="!shop.isExpired" [class.expired]="shop.isExpired" [title]="shop.isExpired ? 'Token süresi dolmuş' : 'Token aktif ve bağlı'"></div>
+                <div class="shop-info">
+                  <div class="shop-name-row">
+                    <span class="shop-name">{{ shop.shopName || shop.shopId }}</span>
+                    <span *ngIf="shop.shopId === apiService.activeShopId()" class="active-tag">SEÇİLİ</span>
+                  </div>
+                  <span class="shop-id-sub">ID: {{ shop.shopId }}</span>
+                </div>
+                <span *ngIf="shop.shopId === apiService.activeShopId()" class="check-icon">✓</span>
+              </div>
+            </div>
+
+            <div class="dropdown-footer">
+              <button class="btn-add-shop" (click)="goToConnectNewShop($event)">
+                <span class="plus-icon">＋</span>
+                <span>Yeni Mağaza Bağla</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- Refresh Button -->

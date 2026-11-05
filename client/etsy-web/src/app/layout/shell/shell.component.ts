@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -26,6 +26,34 @@ export class ShellComponent {
 
   isRateModalOpen = false;
   tempRate = 48.25;
+  isShopDropdownOpen = false;
+
+  @HostListener('document:click')
+  onDocumentClick(): void {
+    if (this.isShopDropdownOpen) {
+      this.isShopDropdownOpen = false;
+    }
+  }
+
+  toggleShopDropdown(event: Event): void {
+    event.stopPropagation();
+    this.isShopDropdownOpen = !this.isShopDropdownOpen;
+    if (this.isShopDropdownOpen) {
+      this.apiService.loadConnectedShops();
+    }
+  }
+
+  selectShop(shopId: string, event: Event): void {
+    event.stopPropagation();
+    this.apiService.switchShop(shopId);
+    this.isShopDropdownOpen = false;
+  }
+
+  goToConnectNewShop(event: Event): void {
+    event.stopPropagation();
+    this.isShopDropdownOpen = false;
+    this.router.navigate(['/settings/etsy-api']);
+  }
 
   readonly categories = [
     {

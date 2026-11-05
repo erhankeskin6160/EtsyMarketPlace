@@ -15,10 +15,18 @@ public interface IEtsyOAuthService
     Task<EtsyOAuthToken> RefreshTokenAsync(string shopId, string refreshToken, CancellationToken cancellationToken = default);
 }
 
+public record EtsyConnectedShopDto(
+    string ShopId,
+    string? ShopName,
+    bool IsActive,
+    DateTimeOffset? TokenExpiresAt,
+    bool IsExpired);
+
 public interface IEtsyTokenStore
 {
     Task<EtsyOAuthToken?> GetAsync(string shopId, CancellationToken cancellationToken = default);
     Task SaveAsync(string shopId, EtsyOAuthToken token, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<EtsyConnectedShopDto>> GetConnectedShopsAsync(CancellationToken cancellationToken = default);
 }
 
 public interface IEtsyDataClient

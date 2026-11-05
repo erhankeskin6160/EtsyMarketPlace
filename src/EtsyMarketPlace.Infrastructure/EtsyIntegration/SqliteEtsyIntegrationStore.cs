@@ -92,6 +92,32 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<EtsyConnectedShopDto>> GetConnectedShopsAsync(CancellationToken cancellationToken = default)
+    {
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT shop_id, access_token_expires_at FROM oauth_tokens;";
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var list = new List<EtsyConnectedShopDto>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var shopId = reader.GetString(0);
+            DateTimeOffset? expiresAt = null;
+            if (!reader.IsDBNull(1))
+            {
+                var expiresStr = reader.GetString(1);
+                if (DateTimeOffset.TryParse(expiresStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedExpires))
+                {
+                    expiresAt = parsedExpires;
+                }
+            }
+            var isExpired = expiresAt == null || expiresAt <= DateTimeOffset.UtcNow;
+            list.Add(new EtsyConnectedShopDto(shopId, shopId, true, expiresAt, isExpired));
+        }
+        return list;
+    }
+
     public async Task<DateTimeOffset?> GetLastCursorAsync(string shopId, string dataType, CancellationToken cancellationToken = default)
     {
         await EnsureInitializedAsync(cancellationToken);

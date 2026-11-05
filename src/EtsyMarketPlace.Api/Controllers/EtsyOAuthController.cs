@@ -77,4 +77,13 @@ public class EtsyOAuthController : BaseApiController
         var response = await _mediator.Send(cmd, cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
+
+    [HttpGet("token/connected-shops")]
+    [HttpGet("shops/connected")]
+    [EndpointSummary("Bağlı Etsy Mağazalarını Listele")]
+    public async Task<IActionResult> GetConnectedShops(CancellationToken cancellationToken = default)
+    {
+        var response = await _mediator.Send(new GetConnectedShopsQuery(), cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
 }
