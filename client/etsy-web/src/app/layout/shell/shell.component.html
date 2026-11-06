@@ -3,21 +3,21 @@
   <aside class="sidebar" [class.collapsed]="apiService.isSidebarCollapsed()">
     <div class="sidebar-header">
       <div class="brand">
-        <span class="brand-icon">🚀</span>
+        <span class="brand-icon"><i class="fa-solid fa-store text-orange-500"></i></span>
         <div class="brand-text" *ngIf="!apiService.isSidebarCollapsed()">
           <span class="brand-title">EtsyMarketPlace</span>
           <span class="brand-sub">Enterprise Web Studio</span>
         </div>
       </div>
       <button class="btn-toggle" (click)="apiService.toggleSidebar()" title="Menüyü Daralt/Genişlet">
-        {{ apiService.isSidebarCollapsed() ? '▶' : '◀' }}
+        <i [class]="apiService.isSidebarCollapsed() ? 'fa-solid fa-chevron-right text-xs' : 'fa-solid fa-chevron-left text-xs'"></i>
       </button>
     </div>
 
     <!-- Admin Link (Only for Admin role) -->
     <div class="admin-quick-strip" *ngIf="authService.isAdmin() && !apiService.isSidebarCollapsed()">
       <a routerLink="/admin" routerLinkActive="active-nav" class="admin-link">
-        <span class="nav-icon">👑</span>
+        <span class="nav-icon"><i class="fa-solid fa-crown text-amber-400"></i></span>
         <span class="nav-text">Yönetim & Admin Paneli</span>
         <span class="badge badge-admin">YÖNETİCİ</span>
       </a>
@@ -36,7 +36,7 @@
              routerLinkActive="active-nav"
              class="nav-item"
              [title]="item.title">
-            <span class="nav-icon">{{ item.icon }}</span>
+            <span class="nav-icon"><i [class]="'fa-solid ' + item.icon"></i></span>
             <span class="nav-text" *ngIf="!apiService.isSidebarCollapsed()">{{ item.title }}</span>
             <span class="badge" [class.badge-new]="item.badge === 'YENİ'" [class.badge-pro]="item.badge === 'PRO'" *ngIf="item.badge && !apiService.isSidebarCollapsed()">
               {{ item.badge }}
@@ -55,7 +55,9 @@
           <div class="user-role">{{ authService.currentUser()?.role || 'StoreOwner' }}</div>
         </div>
       </div>
-      <button class="btn-logout" (click)="authService.logout()" title="Çıkış Yap">🚪</button>
+      <button class="btn-logout" (click)="authService.logout()" title="Çıkış Yap">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      </button>
     </div>
   </aside>
 
@@ -64,7 +66,7 @@
     <!-- TOP HEADER BAR -->
     <header class="top-header">
       <div class="header-left">
-        <h1 class="page-title">🚀 Etsy Mağaza Komuta Merkezi</h1>
+        <h1 class="page-title"><i class="fa-solid fa-layer-group text-orange-500 mr-2"></i>Etsy Mağaza Komuta Merkezi</h1>
         <span class="page-subtitle">Canlı Mağaza İstatistikleri, Finansal Özet ve Akıllı Büyüme Paneli</span>
       </div>
 
@@ -73,7 +75,7 @@
         <button class="ai-model-hub-badge" [ngClass]="aiService.activeBadgeClass()" (click)="aiService.openAiSettingsModal()" title="AI Model Ayarları & Sağlayıcı Merkezi (Tıklayın)">
           <app-ai-logo [provider]="aiService.activeProvider()" [size]="16"></app-ai-logo>
           <span>{{ aiService.activeBadgeTextClean() }}</span>
-          <span class="hub-gear-icon">⚙️</span>
+          <i class="fa-solid fa-gear hub-gear-icon"></i>
         </button>
 
         <!-- Dynamic Live Etsy API Status Badge -->
@@ -84,19 +86,19 @@
           <span class="status-dot"></span>
           <span class="status-text">
             <ng-container [ngSwitch]="apiService.tokenStatus()">
-              <span *ngSwitchCase="'connected'">🟢 Canlı Etsy API</span>
-              <span *ngSwitchCase="'expired'">⚠️ Token Süresi Doldu</span>
-              <span *ngSwitchCase="'missing'">🔴 Etsy API Bağlı Değil</span>
-              <span *ngSwitchCase="'error'">⚠️ VDS Bağlantı Hatası</span>
-              <span *ngSwitchDefault>⏳ API Kontrol Ediliyor...</span>
+              <span *ngSwitchCase="'connected'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Canlı Etsy API</span>
+              <span *ngSwitchCase="'expired'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-amber-500"></span> Token Süresi Doldu</span>
+              <span *ngSwitchCase="'missing'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Etsy API Bağlı Değil</span>
+              <span *ngSwitchCase="'error'" class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-rose-500"></span> VDS Bağlantı Hatası</span>
+              <span *ngSwitchDefault class="flex items-center gap-1.5"><i class="fa-solid fa-spinner fa-spin text-xs"></i> API Kontrol Ediliyor...</span>
             </ng-container>
           </span>
         </button>
 
         <!-- Live Exchange Rate -->
         <button class="exchange-rate-pill" (click)="openRateModal()" title="Kuru değiştirmek için tıklayın">
-          <span>💱 1 USD = {{ apiService.exchangeRate() | number:'1.2-2' }} ₺</span>
-          <span class="edit-hint">✎</span>
+          <span><i class="fa-solid fa-coins mr-1 text-amber-400"></i> 1 USD = {{ apiService.exchangeRate() | number:'1.2-2' }} ₺</span>
+          <i class="fa-solid fa-pen text-xs edit-hint ml-1"></i>
         </button>
 
         <!-- Currency Toggle -->
@@ -107,9 +109,9 @@
         <!-- Store Switcher Dropdown -->
         <div class="store-dropdown-container">
           <button class="store-badge-btn" (click)="toggleShopDropdown($event)" [class.active]="isShopDropdownOpen" title="Mağaza Değiştir veya Yönet">
-            <span class="store-icon">🏬</span>
+            <span class="store-icon"><i class="fa-solid fa-store text-orange-400"></i></span>
             <span class="store-id">{{ apiService.activeShopId() }}</span>
-            <span class="dropdown-chevron" [class.rotated]="isShopDropdownOpen">▾</span>
+            <i class="fa-solid fa-chevron-down text-xs dropdown-chevron" [class.rotated]="isShopDropdownOpen"></i>
           </button>
 
           <!-- Dropdown Menu -->
@@ -133,13 +135,13 @@
                   </div>
                   <span class="shop-id-sub">ID: {{ shop.shopId }}</span>
                 </div>
-                <span *ngIf="shop.shopId === apiService.activeShopId()" class="check-icon">✓</span>
+                <i *ngIf="shop.shopId === apiService.activeShopId()" class="fa-solid fa-check check-icon text-emerald-400"></i>
               </div>
             </div>
 
             <div class="dropdown-footer">
               <button class="btn-add-shop" (click)="goToConnectNewShop($event)">
-                <span class="plus-icon">＋</span>
+                <i class="fa-solid fa-plus plus-icon mr-1"></i>
                 <span>Yeni Mağaza Bağla</span>
               </button>
             </div>
@@ -148,7 +150,7 @@
 
         <!-- Refresh Button -->
         <button class="btn-refresh" (click)="router.navigate([router.url])" title="Sayfayı Yenile">
-          🔄 Yenile
+          <i class="fa-solid fa-arrows-rotate mr-1"></i> Yenile
         </button>
       </div>
     </header>
@@ -156,7 +158,7 @@
     <!-- Global Token / API Disconnected Warning Alert Bar -->
     <div *ngIf="apiService.tokenStatus() === 'expired' || apiService.tokenStatus() === 'missing'" class="global-api-warning-bar">
       <div class="warning-content">
-        <span class="warning-icon">⚠️</span>
+        <i class="fa-solid fa-triangle-exclamation warning-icon text-amber-400"></i>
         <span class="warning-msg">
           <strong>Dikkat:</strong> 
           {{ apiService.tokenStatus() === 'expired' 
@@ -165,7 +167,7 @@
         </span>
       </div>
       <button class="btn-warning-action" (click)="router.navigate(['/settings/etsy-api'])">
-        🔗 Etsy API Yetkilendirme Sayfasına Git
+        <i class="fa-solid fa-link mr-1"></i> Etsy API Yetkilendirme Sayfasına Git
       </button>
     </div>
 
@@ -180,8 +182,8 @@
 <div class="modal-backdrop" *ngIf="isRateModalOpen" (click)="closeRateModal()">
   <div class="modal-dialog" (click)="$event.stopPropagation()">
     <div class="modal-header">
-      <h3>💱 Canlı USD / TRY Döviz Kuru Ayarla</h3>
-      <button class="modal-close" (click)="closeRateModal()">✕</button>
+      <h3><i class="fa-solid fa-coins mr-2 text-amber-400"></i>Canlı USD / TRY Döviz Kuru Ayarla</h3>
+      <button class="modal-close" (click)="closeRateModal()">&times;</button>
     </div>
     <div class="modal-body">
       <p class="modal-desc">
@@ -195,7 +197,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" (click)="closeRateModal()">İptal</button>
-      <button class="btn btn-orange" (click)="saveRate()">💾 Kuru Kaydet</button>
+      <button class="btn btn-orange" (click)="saveRate()"><i class="fa-solid fa-floppy-disk mr-1"></i> Kuru Kaydet</button>
     </div>
   </div>
 </div>

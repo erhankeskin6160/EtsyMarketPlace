@@ -59,55 +59,55 @@ export class ShellComponent {
     {
       title: 'Genel',
       items: [
-        { id: 'dashboard', title: 'Kontrol Paneli', icon: '📊', route: '/dashboard' },
-        { id: 'orders_shipping', title: 'Sipariş & Kargo', icon: '🚚', route: '/orders', badge: 'YENİ' },
-        { id: 'fast_creator', title: 'Hızlı Ürün Ekle (AI)', icon: '⚡', route: '/listings/fast-creator', badge: 'YENİ' },
-        { id: 'product_discovery', title: 'Ürün Bul & Taslak', icon: '🎯', route: '/listings/discovery', badge: 'YENİ' },
-        { id: 'ai_image', title: 'AI Görsel Stüdyosu', icon: '🎨', route: '/ai-studio', badge: 'PRO' },
-        { id: 'shop', title: 'Mağazam Performansı', icon: '🏬', route: '/analytics/shop' }
+        { id: 'dashboard', title: 'Kontrol Paneli', icon: 'fa-chart-pie', route: '/dashboard' },
+        { id: 'orders_shipping', title: 'Sipariş & Kargo', icon: 'fa-truck-fast', route: '/orders', badge: 'YENİ' },
+        { id: 'fast_creator', title: 'Hızlı Ürün Ekle (AI)', icon: 'fa-bolt', route: '/listings/fast-creator', badge: 'YENİ' },
+        { id: 'product_discovery', title: 'Ürün Bul & Taslak', icon: 'fa-crosshairs', route: '/listings/discovery', badge: 'YENİ' },
+        { id: 'ai_image', title: 'AI Görsel Stüdyosu', icon: 'fa-wand-magic-sparkles', route: '/ai-studio', badge: 'PRO' },
+        { id: 'shop', title: 'Mağazam Performansı', icon: 'fa-store', route: '/analytics/shop' }
       ]
     },
     {
       title: 'Araştırma & Analiz',
       items: [
-        { id: 'research', title: 'Pazar Araştırması', icon: '🔍', route: '/research/market' },
-        { id: 'viral_3d', title: 'Viral 3D Model Avcısı', icon: '🔥', route: '/research/viral-3d', badge: 'YENİ' },
-        { id: 'competitor_spy', title: 'Rakip & Trend Casusu', icon: '🕵️', route: '/research/competitor', badge: 'YENİ' },
-        { id: 'external', title: 'Dış Pazar Yeri Bulucu', icon: '🌐', route: '/research/external' },
-        { id: 'ai_audit', title: 'Mağaza AI Analizi', icon: '🤖', route: '/analytics/ai-audit', badge: 'YENİ' },
-        { id: 'ab_test', title: 'A/B Test Paneli', icon: '📈', route: '/analytics/ab-test' }
+        { id: 'research', title: 'Pazar Araştırması', icon: 'fa-magnifying-glass-chart', route: '/research/market' },
+        { id: 'viral_3d', title: 'Viral 3D Model Avcısı', icon: 'fa-cube', route: '/research/viral-3d', badge: 'YENİ' },
+        { id: 'competitor_spy', title: 'Rakip & Trend Casusu', icon: 'fa-user-secret', route: '/research/competitor', badge: 'YENİ' },
+        { id: 'external', title: 'Dış Pazar Yeri Bulucu', icon: 'fa-globe', route: '/research/external' },
+        { id: 'ai_audit', title: 'Mağaza AI Analizi', icon: 'fa-brain', route: '/analytics/ai-audit', badge: 'YENİ' },
+        { id: 'ab_test', title: 'A/B Test Paneli', icon: 'fa-chart-line', route: '/analytics/ab-test' }
       ]
     },
     {
       title: 'Otomasyon & Finansal Araçlar',
       items: [
-        { id: 'financial', title: 'Finansal Raporlama', icon: '💳', route: '/finance/accounting', badge: 'YENİ' },
-        { id: 'financial_ai', title: 'Finansal AI Analiz', icon: '🧠', route: '/finance/ai-analysis', badge: 'YENİ' },
-        { id: 'profit', title: 'Kâr Simülatörü', icon: '💰', route: '/finance/profit' },
-        { id: 'automation', title: 'Otomasyon Raporu', icon: '⚡', route: '/tools/automation' },
-        { id: 'batch', title: 'Toplu İşlem Kuyruğu', icon: '📦', route: '/tools/batch' },
-        { id: 'shop_vault', title: 'Mağaza Yedek & Transfer', icon: '🛡️', route: '/tools/vault', badge: 'YENİ' },
-        { id: 'tracking', title: 'Takip Geçmişi', icon: '🎯', route: '/tools/tracking' },
-        { id: 'ai_usage', title: 'AI Token & Bakiye Takip', icon: '📊', route: '/tools/ai-usage', badge: 'YENİ' }
+        { id: 'financial', title: 'Finansal Raporlama', icon: 'fa-file-invoice-dollar', route: '/finance/accounting', badge: 'YENİ' },
+        { id: 'financial_ai', title: 'Finansal AI Analiz', icon: 'fa-microchip', route: '/finance/ai-analysis', badge: 'YENİ' },
+        { id: 'profit', title: 'Kâr Simülatörü', icon: 'fa-sack-dollar', route: '/finance/profit' },
+        { id: 'automation', title: 'Otomasyon Raporu', icon: 'fa-gears', route: '/tools/automation' },
+        { id: 'batch', title: 'Toplu İşlem Kuyruğu', icon: 'fa-boxes-stacked', route: '/tools/batch' },
+        { id: 'shop_vault', title: 'Mağaza Yedek & Transfer', icon: 'fa-shield-halved', route: '/tools/vault', badge: 'YENİ' },
+        { id: 'tracking', title: 'Takip Geçmişi', icon: 'fa-location-crosshairs', route: '/tools/tracking' },
+        { id: 'ai_usage', title: 'AI Token & Bakiye Takip', icon: 'fa-chart-simple', route: '/tools/ai-usage', badge: 'YENİ' }
       ]
     },
     {
       title: 'Kargo Entegrasyonları Hub',
       items: [
-        { id: 'aras', title: 'Aras Global Kargo', icon: '🚚', route: '/shipping/aras' },
-        { id: 'shipentegra', title: 'ShipEntegra Kargo', icon: '📦', route: '/shipping/shipentegra' },
-        { id: 'navlungo', title: 'Navlungo Kargo', icon: '🚢', route: '/shipping/navlungo' },
-        { id: 'shiptomore', title: 'Shiptomore Kargo', icon: '✈️', route: '/shipping/shiptomore' }
+        { id: 'aras', title: 'Aras Global Kargo', icon: 'fa-truck', route: '/shipping/aras' },
+        { id: 'shipentegra', title: 'ShipEntegra Kargo', icon: 'fa-box', route: '/shipping/shipentegra' },
+        { id: 'navlungo', title: 'Navlungo Kargo', icon: 'fa-ship', route: '/shipping/navlungo' },
+        { id: 'shiptomore', title: 'Shiptomore Kargo', icon: 'fa-plane-departure', route: '/shipping/shiptomore' }
       ]
     },
     {
       title: 'Sistem & Ayarlar',
       items: [
-        { id: 'ai_models', title: 'AI Model & Optimizasyon', icon: '⚡', route: '/settings/ai-models', badge: 'YENİ' },
-        { id: 'notifications', title: 'Telegram Bildirim Botu', icon: '✈️', route: '/settings/notifications', badge: 'YENİ' },
-        { id: 'api', title: 'Etsy API Ayarları', icon: '⚙️', route: '/settings/etsy-api' },
-        { id: 'update', title: 'Sürüm Güncelle (Client)', icon: '🚀', route: '/settings/update', badge: 'YENİ' },
-        { id: 'logs', title: 'Uygulama Günlüğü', icon: '📄', route: '/system/logs' }
+        { id: 'ai_models', title: 'AI Model & Optimizasyon', icon: 'fa-sliders', route: '/settings/ai-models', badge: 'YENİ' },
+        { id: 'notifications', title: 'Telegram Bildirim Botu', icon: 'fa-paper-plane', route: '/settings/notifications', badge: 'YENİ' },
+        { id: 'api', title: 'Etsy API Ayarları', icon: 'fa-key', route: '/settings/etsy-api' },
+        { id: 'update', title: 'Sürüm Güncelle (Client)', icon: 'fa-arrows-rotate', route: '/settings/update', badge: 'YENİ' },
+        { id: 'logs', title: 'Uygulama Günlüğü', icon: 'fa-terminal', route: '/system/logs' }
       ]
     }
   ];
