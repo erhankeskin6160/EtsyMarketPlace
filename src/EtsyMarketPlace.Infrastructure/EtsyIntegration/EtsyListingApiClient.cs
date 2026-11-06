@@ -391,27 +391,47 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
         var clampedLimit = Math.Clamp(limit, 1, 100);
         var url = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/active?limit={clampedLimit}&sort_on=updated&sort_order=desc&includes=Images";
 
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        request.Headers.Add("x-api-key", apiKeyHeader);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        for (int attempt = 1; attempt <= 3; attempt++)
         {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Add("x-api-key", apiKeyHeader);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var response = await _httpClient.SendAsync(req, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsStringAsync(cancellationToken);
+            }
+
+            if ((int)response.StatusCode == 429 && attempt < 3)
+            {
+                var delay = response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMilliseconds(attempt * 700);
+                await Task.Delay(delay, cancellationToken);
+                continue;
+            }
+
             var fallbackUrl = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/active?limit={clampedLimit}&sort_on=updated&sort_order=desc";
             using var fbReq = new HttpRequestMessage(HttpMethod.Get, fallbackUrl);
             fbReq.Headers.Add("x-api-key", apiKeyHeader);
             fbReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
             using var fbResp = await _httpClient.SendAsync(fbReq, cancellationToken);
-            if (!fbResp.IsSuccessStatusCode)
+            if (fbResp.IsSuccessStatusCode)
             {
-                var err = await response.Content.ReadAsStringAsync(cancellationToken);
-                throw new HttpRequestException($"Etsy API hatası (HTTP {(int)response.StatusCode}): {err}");
+                return await fbResp.Content.ReadAsStringAsync(cancellationToken);
             }
-            return await fbResp.Content.ReadAsStringAsync(cancellationToken);
+
+            if ((int)fbResp.StatusCode == 429 && attempt < 3)
+            {
+                var delay = fbResp.Headers.RetryAfter?.Delta ?? TimeSpan.FromMilliseconds(attempt * 700);
+                await Task.Delay(delay, cancellationToken);
+                continue;
+            }
+
+            var err = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new HttpRequestException($"Etsy API hatası (HTTP {(int)response.StatusCode}): {err}");
         }
 
-        return await response.Content.ReadAsStringAsync(cancellationToken);
+        throw new HttpRequestException("Etsy API rate limit aşıldı (429).");
     }
 
     public async Task<string?> GetListingImagesRawJsonAsync(long listingId, string shopId, CancellationToken cancellationToken = default)

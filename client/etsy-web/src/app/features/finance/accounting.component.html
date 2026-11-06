@@ -34,7 +34,7 @@
       <div class="desktop-action-bar">
         <!-- Date Preset Dropdown -->
         <div class="bar-control-group">
-          <select [(ngModel)]="selectedDatePreset" (change)="onPresetChange()" class="bar-select">
+          <select [(ngModel)]="selectedDatePreset" (change)="onPresetChange()" class="bar-select" aria-label="Tarih Aralığı Filtresi">
             <option value="last30">Son 30 Gün</option>
             <option value="last7">Son 7 Gün</option>
             <option value="thisMonth">Bu Ay</option>
@@ -46,9 +46,9 @@
 
         <!-- Date Range Pickers -->
         <div class="bar-control-group dates">
-          <input type="text" [(ngModel)]="startDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" />
+          <input type="text" [(ngModel)]="startDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Başlangıç Tarihi" placeholder="GG.AA.YYYY" />
           <span class="date-sep">—</span>
-          <input type="text" [(ngModel)]="endDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" />
+          <input type="text" [(ngModel)]="endDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Bitiş Tarihi" placeholder="GG.AA.YYYY" />
         </div>
 
         <!-- Action Buttons -->
@@ -282,7 +282,7 @@
             </div>
 
             <div class="filter-dropdown-wrap">
-              <select [(ngModel)]="orderCostFilter" (change)="filterOrders()" class="order-filter-select">
+              <select [(ngModel)]="orderCostFilter" (change)="filterOrders()" class="order-filter-select" aria-label="Sipariş Durumu Filtresi">
                 <option value="all">📦 Tüm Siparişler</option>
                 <option value="open">🔵 Kargolanacak (Yeni)</option>
                 <option value="completed">🟢 Tamamlanan / Gönderilen</option>
