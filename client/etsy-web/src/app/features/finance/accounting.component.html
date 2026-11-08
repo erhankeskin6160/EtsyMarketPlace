@@ -104,8 +104,8 @@
           <!-- Kullanılabilir Bakiye -->
           <div class="reserve-metric-box">
             <span class="metric-lbl">Kullanılabilir (Deposit):</span>
-            <span class="metric-val" [ngClass]="reserveSnapshot.currentBalanceTry >= 0 ? 'text-success' : 'text-danger'">
-              ₺{{ formatNumber(reserveSnapshot.currentBalanceTry) }}
+            <span class="metric-val" [ngClass]="reserveSnapshot.currentBalanceTry >= 0 ? 'text-emerald' : 'text-danger'">
+              {{ formatSignedTry(reserveSnapshot.currentBalanceTry) }}
             </span>
           </div>
 
@@ -120,8 +120,8 @@
           <!-- Toplam Etsy Fonu -->
           <div class="reserve-metric-box">
             <span class="metric-lbl">Toplam Etsy Hesabı:</span>
-            <span class="metric-val text-cyan">
-              ₺{{ formatNumber(reserveSnapshot.totalFundsTry) }}
+            <span class="metric-val" [ngClass]="reserveSnapshot.totalFundsTry >= 0 ? 'text-emerald' : 'text-danger'">
+              {{ formatSignedTry(reserveSnapshot.totalFundsTry) }}
             </span>
           </div>
 
@@ -142,8 +142,8 @@
             <span class="kpi-title">💰 BRÜT SATIŞ</span>
             <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
-          <div class="kpi-value text-success">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</div>
-          <div class="kpi-indicator green"></div>
+          <div class="kpi-value text-emerald">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</div>
+          <div class="kpi-indicator emerald"></div>
         </div>
 
         <!-- 2. Etsy Kesintisi -->
@@ -152,8 +152,8 @@
             <span class="kpi-title">📋 ETSY KESİNTİSİ</span>
             <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
-          <div class="kpi-value text-warning">-{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</div>
-          <div class="kpi-indicator orange"></div>
+          <div class="kpi-value text-danger">-{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</div>
+          <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 3. İç Reklam -->
@@ -172,8 +172,8 @@
             <span class="kpi-title">🌐 DIŞ REKLAM</span>
             <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
-          <div class="kpi-value text-orange">-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</div>
-          <div class="kpi-indicator dark-orange"></div>
+          <div class="kpi-value text-danger">-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</div>
+          <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 5. İadeler -->
@@ -202,8 +202,8 @@
             <span class="kpi-title">📦 SİPARİŞ MALİYETİ</span>
             <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
-          <div class="kpi-value text-warning">-{{ formatKpi(productCostsTry, productCostsUsd) }}</div>
-          <div class="kpi-indicator orange"></div>
+          <div class="kpi-value text-danger">-{{ formatKpi(productCostsTry, productCostsUsd) }}</div>
+          <div class="kpi-indicator red"></div>
         </div>
 
         <!-- 8. Gerçek Net Kâr -->
@@ -222,8 +222,8 @@
             <span class="kpi-title">🏦 BANKA YATIRIMI</span>
             <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
-          <div class="kpi-value text-cyan">-{{ formatKpi(bankPayoutsTry, bankPayoutsUsd) }}</div>
-          <div class="kpi-indicator cyan"></div>
+          <div class="kpi-value text-emerald">{{ formatKpi(bankPayoutsTry, bankPayoutsUsd) }}</div>
+          <div class="kpi-indicator emerald"></div>
         </div>
       </div>
 
@@ -398,13 +398,13 @@
                   <td class="customer-cell" [title]="o.buyerName">{{ o.buyerName }}</td>
                   <td class="product-cell" [title]="o.productTitle">{{ o.productTitle }}</td>
                   <td class="qty-cell">{{ o.quantity }}</td>
-                  <td class="amount-cell" [ngClass]="(o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? 'text-danger' : ''">{{ '$' + ((o.refundAmountUsd && o.refundAmountUsd > 0) ? o.refundAmountUsd : o.grandTotalUsd).toFixed(2) }}</td>
-                  <td class="fee-cell">{{ (o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? (o.etsyFeesUsd < 0 ? '+$' + Math.abs(o.etsyFeesUsd).toFixed(2) : '$0.00') : ('$' + o.etsyFeesUsd.toFixed(2)) }}</td>
-                  <td class="fee-cell">{{ o.offsiteAdFeeUsd > 0 ? ('$' + o.offsiteAdFeeUsd.toFixed(2)) : '—' }}</td>
-                  <td class="cost-cell">
-                    {{ o.productCostUsd !== null ? ('$' + o.productCostUsd.toFixed(2)) : '—' }}
+                  <td class="amount-cell" [ngClass]="(o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? 'text-danger' : 'text-emerald'">{{ '$' + ((o.refundAmountUsd && o.refundAmountUsd > 0) ? o.refundAmountUsd : o.grandTotalUsd).toFixed(2) }}</td>
+                  <td class="fee-cell" [ngClass]="(o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') && o.etsyFeesUsd < 0 ? 'text-emerald' : 'text-danger'">{{ (o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? (o.etsyFeesUsd < 0 ? '+$' + Math.abs(o.etsyFeesUsd).toFixed(2) : '$0.00') : ('-$' + Math.abs(o.etsyFeesUsd).toFixed(2)) }}</td>
+                  <td class="fee-cell" [class.text-danger]="o.offsiteAdFeeUsd > 0">{{ o.offsiteAdFeeUsd > 0 ? ('-$' + o.offsiteAdFeeUsd.toFixed(2)) : '—' }}</td>
+                  <td class="cost-cell" [class.text-danger]="(o.productCostUsd || 0) > 0">
+                    {{ o.productCostUsd !== null && o.productCostUsd > 0 ? ('-$' + o.productCostUsd.toFixed(2)) : (o.productCostUsd === 0 ? '$0.00' : '—') }}
                   </td>
-                  <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-success' : 'text-danger'">
+                  <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                     {{ o.netProfitUsd < 0 ? ('-$' + Math.abs(o.netProfitUsd).toFixed(2)) : (o.orderStatus === 'canceled' && !o.hasCostData ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2))) }}
                   </td>
                   <td class="rate-cell" [title]="'TCMB Kilitli Kuru: ₺' + o.exchangeRate.toFixed(2) + (o.effectiveExchangeRate ? ('\nEtsy Fiili Kuru (%2.5 FX Kesintili): ₺' + o.effectiveExchangeRate.toFixed(2)) : '') + (o.etsyNetPayoutTry ? ('\nEtsy Net Hak Ediş: ₺' + formatNumber(o.etsyNetPayoutTry)) : '')">₺{{ o.exchangeRate.toFixed(2) }}</td>
@@ -576,11 +576,11 @@
                 <tr *ngFor="let p of periodSummaries">
                   <td><strong>{{ p.periodLabel }}</strong></td>
                   <td>{{ p.orderCount }} Adet</td>
-                  <td class="text-success">₺{{ formatNumber(p.grossTry) }}</td>
-                  <td class="text-warning">{{ p.feesTry > 0 ? '-₺' + formatNumber(p.feesTry) : '₺0,00' }}</td>
+                  <td class="text-emerald">₺{{ formatNumber(p.grossTry) }}</td>
+                  <td class="text-danger">{{ p.feesTry > 0 ? '-₺' + formatNumber(p.feesTry) : '₺0,00' }}</td>
                   <td class="text-danger">{{ p.adsTry > 0 ? '-₺' + formatNumber(p.adsTry) : '₺0,00' }}</td>
-                  <td class="text-warning">{{ p.costsTry > 0 ? '-₺' + formatNumber(p.costsTry) : '₺0,00' }}</td>
-                  <td class="text-primary">₺{{ formatNumber(p.payoutsTry) }}</td>
+                  <td class="text-danger">{{ p.costsTry > 0 ? '-₺' + formatNumber(p.costsTry) : '₺0,00' }}</td>
+                  <td class="text-emerald">₺{{ formatNumber(p.payoutsTry) }}</td>
                   <td [ngClass]="p.realProfitTry >= 0 ? 'text-emerald' : 'text-danger'"><strong>{{ formatSignedTry(p.realProfitTry) }}</strong></td>
                   <td><span class="margin-pill" [ngClass]="p.realProfitTry >= 0 ? 'margin-pill-success' : 'margin-pill-danger'">%{{ p.grossTry > 0 ? (p.realProfitTry / p.grossTry * 100).toFixed(1) : '0.0' }}</span></td>
                 </tr>
@@ -659,7 +659,7 @@
                   </td>
                   <td class="title-cell">{{ e.title }}</td>
                   <td class="mono">{{ e.orderNumber || '—' }}</td>
-                  <td class="amount">{{ e.grossAmount > 0 ? ('$' + e.grossAmount.toFixed(2)) : '—' }}</td>
+                  <td class="amount text-emerald">{{ e.grossAmount > 0 ? ('$' + e.grossAmount.toFixed(2)) : '—' }}</td>
                   <td class="fee text-danger">{{ e.feeAmount !== 0 ? ('$' + e.feeAmount.toFixed(2)) : '—' }}</td>
                   <td class="net" [ngClass]="e.netAmount >= 0 ? 'text-success' : 'text-danger'">
                     {{ e.netAmount >= 0 ? ('$' + e.netAmount.toFixed(2)) : ('-$' + Math.abs(e.netAmount).toFixed(2)) }}
@@ -844,9 +844,9 @@
           </div>
           <div class="modal-body">
             <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
+              <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Toplam Banka Yatırımı</span>
-                <span class="box-val text-cyan">₺{{ formatNumber(bankPayoutsTry) }}</span>
+                <span class="box-val text-emerald">+₺{{ formatNumber(bankPayoutsTry) }}</span>
                 <span class="box-sub">{{ bankPayoutRecords.length }} Transfer</span>
               </div>
               <div class="drilldown-summary-box">
@@ -856,7 +856,7 @@
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Ortalama Transfer</span>
-                <span class="box-val text-primary">₺{{ formatNumber(averagePayoutTry) }}</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(averagePayoutTry) }}</span>
                 <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Net Gelirin %{{ payoutRatio }}'i</span>
               </div>
             </div>
@@ -910,17 +910,17 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Kargo Maliyeti</span>
-                <span class="box-val text-warning">₺{{ formatNumber(totalShippingCostTry) }}</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(totalShippingCostTry) }}</span>
                 <span class="box-sub">Maliyetin %{{ shippingCostSharePct }}'i</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Üretim / Hammadde</span>
-                <span class="box-val text-primary">₺{{ formatNumber(totalProductionCostTry) }}</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(totalProductionCostTry) }}</span>
                 <span class="box-sub">Filament & 3D Yazıcı Payı</span>
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Paketleme & Fatura</span>
-                <span class="box-val text-emerald">₺{{ formatNumber(totalPackagingCostTry) }}</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(totalPackagingCostTry) }}</span>
                 <span class="box-sub">{{ invoiceOrderCount }} Fatura Kayıtlı</span>
               </div>
             </div>
@@ -944,9 +944,9 @@
                     <td class="date-cell">{{ s.date }}</td>
                     <td class="ref-cell">#{{ s.receiptId }}</td>
                     <td>{{ s.qty }}</td>
-                    <td class="amount-cell text-primary">{{ s.productionCostTry > 0 ? ('₺' + formatNumber(s.productionCostTry)) : '₺0,00' }}</td>
-                    <td class="amount-cell text-warning">{{ s.shippingCostTry > 0 ? ('₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
-                    <td class="amount-cell text-danger font-semibold">{{ s.totalCostTry > 0 ? ('₺' + formatNumber(s.totalCostTry)) : '₺0,00' }}</td>
+                    <td class="amount-cell text-danger">{{ s.productionCostTry > 0 ? ('-₺' + formatNumber(s.productionCostTry)) : '₺0,00' }}</td>
+                    <td class="amount-cell text-danger">{{ s.shippingCostTry > 0 ? ('-₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
+                    <td class="amount-cell text-danger font-semibold">{{ s.totalCostTry > 0 ? ('-₺' + formatNumber(s.totalCostTry)) : '₺0,00' }}</td>
                     <td>
                       <span *ngIf="s.invoice !== '—'" class="badge-invoice">📄 {{ s.invoice }}</span>
                       <span *ngIf="s.invoice === '—'" class="text-muted">—</span>
@@ -1109,7 +1109,7 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Kesinti Tutarı</span>
-                <span class="box-val text-warning">-₺{{ formatNumber(etsyFeesTry) }}</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(etsyFeesTry) }}</span>
                 <span class="box-sub">-${{ formatNumber(etsyFeesUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
@@ -1119,7 +1119,7 @@
               </div>
               <div class="drilldown-summary-box">
                 <span class="box-lbl">KDV Tevkifatı (TR %20)</span>
-                <span class="box-val text-danger">₺{{ formatNumber(estimatedVatTry) }}</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(estimatedVatTry) }}</span>
                 <span class="box-sub">Kesintiler Üzerinden KDV</span>
               </div>
             </div>
@@ -1141,8 +1141,8 @@
                     <td><strong>{{ f.type }}</strong></td>
                     <td>{{ f.count }}</td>
                     <td>{{ f.baseUsd > 0 ? ('$' + f.baseUsd.toFixed(2)) : '—' }}</td>
-                    <td class="amount-cell text-warning">{{ '-$' + f.feeUsd.toFixed(2) }}</td>
-                    <td class="amount-cell text-warning">-₺{{ formatNumber(f.feeTry) }}</td>
+                    <td class="amount-cell text-danger">{{ '-$' + f.feeUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-danger">-₺{{ formatNumber(f.feeTry) }}</td>
                     <td class="note-cell">{{ f.note }}</td>
                   </tr>
                 </tbody>
@@ -1239,7 +1239,7 @@
             <div class="drilldown-summary-grid">
               <div class="drilldown-summary-box">
                 <span class="box-lbl">Toplam Dış Reklam Kesintisi</span>
-                <span class="box-val text-orange">-₺{{ formatNumber(offsiteAdsTry) }}</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(offsiteAdsTry) }}</span>
                 <span class="box-sub">-${{ formatNumber(offsiteAdsUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
@@ -1273,8 +1273,8 @@
                     <td>{{ off.buyer }}</td>
                     <td class="amount-cell text-emerald">{{ '$' + off.saleAmountUsd.toFixed(2) }}</td>
                     <td><span class="badge-status-payout">{{ off.rate }}</span></td>
-                    <td class="amount-cell text-orange">{{ '-$' + off.feeUsd.toFixed(2) }}</td>
-                    <td class="amount-cell text-orange">-₺{{ formatNumber(off.feeTry) }}</td>
+                    <td class="amount-cell text-danger">{{ '-$' + off.feeUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-danger">-₺{{ formatNumber(off.feeTry) }}</td>
                     <td class="note-cell">{{ off.channel }}</td>
                   </tr>
                 </tbody>
@@ -1357,7 +1357,7 @@
                     <td class="amount-cell text-danger font-bold">{{ '-$' + r.refundUsd.toFixed(2) }}</td>
                     <td class="amount-cell text-danger font-bold">-₺{{ formatNumber(r.refundTry) }}</td>
                     <td class="amount-cell text-emerald">{{ r.feeRefundedUsd > 0 ? '+$' + r.feeRefundedUsd.toFixed(2) + ' (+₺' + formatNumber(r.feeRefundedTry) + ')' : '—' }}</td>
-                    <td class="amount-cell font-mono">{{ r.costUsd > 0 ? '₺' + formatNumber(r.costTry) + ' ($' + r.costUsd.toFixed(2) + ')' : '₺0,00' }}</td>
+                    <td class="amount-cell font-mono" [class.text-danger]="r.costUsd > 0">{{ r.costUsd > 0 ? '-₺' + formatNumber(r.costTry) + ' (-$' + r.costUsd.toFixed(2) + ')' : '₺0,00' }}</td>
                     <td class="amount-cell font-bold" [ngClass]="{'text-danger': r.netLossUsd < 0, 'text-emerald': r.netLossUsd === 0}">
                       {{ r.netLossUsd < 0 ? '-₺' + formatNumber(r.netLossTry * -1) + ' (-$' + (r.netLossUsd * -1).toFixed(2) + ')' : '₺0,00 (Zararsız)' }}
                     </td>

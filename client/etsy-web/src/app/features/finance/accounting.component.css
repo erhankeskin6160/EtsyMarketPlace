@@ -231,13 +231,13 @@
     .kpi-indicator.crimson { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
     .kpi-indicator.cyan { background: #06b6d4; }
 
-    .text-success { color: #34d399; }
-    .text-warning { color: #fbbf24; }
-    .text-danger { color: #f87171; }
-    .text-orange { color: #fb923c; }
-    .text-primary { color: #818cf8; }
-    .text-emerald { color: #4ade80; }
-    .text-cyan { color: #38bdf8; }
+    .text-success { color: #10b981 !important; }
+    .text-warning { color: #fbbf24 !important; }
+    .text-danger { color: #ef4444 !important; }
+    .text-orange { color: #fb923c !important; }
+    .text-primary { color: #818cf8 !important; }
+    .text-emerald { color: #10b981 !important; }
+    .text-cyan { color: #38bdf8 !important; }
 
     /* TAB NAVIGATION */
     .tab-nav-bar {
@@ -849,6 +849,18 @@
       background: rgba(239, 68, 68, 0.12) !important;
       font-weight: 700;
       border-left: 3px solid #ef4444;
+    }
+    .drilldown-table td.text-danger,
+    .glass-table td.text-danger,
+    .amount-cell.text-danger {
+      color: #ef4444 !important;
+      font-weight: 700 !important;
+    }
+    .drilldown-table td.text-emerald,
+    .glass-table td.text-emerald,
+    .amount-cell.text-emerald {
+      color: #10b981 !important;
+      font-weight: 700 !important;
     }
     .badge-status-payout.badge-refund,
     .badge-status-payout.badge-danger {
