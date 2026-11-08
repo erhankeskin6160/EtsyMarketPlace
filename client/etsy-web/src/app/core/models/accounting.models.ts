@@ -96,6 +96,26 @@ export interface ForecastKpiSummary {
   shippingBoxesCount: number;
 }
 
+export interface AiTrafficFunnelSnapshotDto {
+  activeListingCount: number;
+  totalViews: number;
+  estimatedUniqueVisits: number;
+  totalFavorites: number;
+  estimatedAddToCarts: number;
+  realizedOrders: number;
+  viewToVisitRatePct: number;
+  favoriteToViewRatePct: number;
+  addToCartRatePct: number;
+  cartToOrderConversionPct: number;
+  overallConversionRatePct: number;
+  projectedNext30dViews: number;
+  projectedNext30dVisits: number;
+  projectedNext30dFavorites: number;
+  projectedNext30dCarts: number;
+  funnelBottleneckStage: string;
+  funnelAiDiagnosis: string;
+}
+
 export interface AiFinancialForecastRequestDto {
   shopId?: string;
   startDate: string;
@@ -117,6 +137,11 @@ export interface AiFinancialForecastRequestDto {
   topProductRevenueUsd?: number;
   topProductProfitUsd?: number;
   missingCostOrderIds?: string[];
+  historicalViews?: number;
+  historicalVisits?: number;
+  historicalFavorites?: number;
+  historicalAddToCarts?: number;
+  activeListingCount?: number;
 }
 
 export interface AiForecastHorizonItemDto {
@@ -134,6 +159,10 @@ export interface AiForecastHorizonItemDto {
   growthRatePct: number;
   estimatedBankPayoutTry: number;
   estimatedReserveReleaseTry: number;
+  projectedViews?: number;
+  projectedVisits?: number;
+  projectedFavorites?: number;
+  projectedAddToCarts?: number;
 }
 
 export interface AiForecastScenarioItemDto {
@@ -158,6 +187,11 @@ export interface AiProductForecastItemDto {
   projectedNext30dOrders: number;
   projectedNext30dRevenueUsd: number;
   projectedNext30dProfitUsd: number;
+  views?: number;
+  visits?: number;
+  favorites?: number;
+  estimatedCarts?: number;
+  conversionRatePct?: number;
   aiStrategyTag: string;
   aiRecommendation: string;
 }
@@ -196,4 +230,5 @@ export interface AiFinancialForecastResponseDto {
   horizonProjections?: AiForecastHorizonItemDto[];
   scenarios?: AiForecastScenarioItemDto[];
   productForecasts?: AiProductForecastItemDto[];
+  trafficFunnel?: AiTrafficFunnelSnapshotDto;
 }

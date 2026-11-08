@@ -604,17 +604,106 @@
             </div>
           </div>
 
+          <!-- 2.5. GEÇMİŞ ZİYARET, GÖRÜNTÜLENME, FAVORİ & SEPETE EKLEME DÖNÜŞÜM HUNİSİ (TRAFFIC & ENGAGEMENT FUNNEL) -->
+          <div class="traffic-funnel-panel" *ngIf="aiForecast?.trafficFunnel as tf">
+            <div class="funnel-header">
+              <div>
+                <h4>🎯 Geçmiş Ziyaret, Görüntülenme, Favori & Sepete Ekleme Dönüşüm Hunisi (CRO Analizi)</h4>
+                <span class="funnel-sub">
+                  Mağazadaki <strong>{{ tf.activeListingCount }} aktif ilanın</strong> geçmiş görüntülenme, tekil ziyaret, favori ve sepete ekleme verilerinin gelecek 30 günlük satış projeksiyonuna etkisi
+                </span>
+              </div>
+              <div class="funnel-header-badges">
+                <span class="funnel-cr-badge">
+                  ⚡ Genel Mağaza Dönüşüm Oranı (CR): <strong>%{{ tf.overallConversionRatePct.toFixed(2) }}</strong>
+                </span>
+                <span class="funnel-bottleneck-badge">
+                  🔍 Ana Huni Darboğazı: <strong>{{ tf.funnelBottleneckStage }}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div class="funnel-steps-grid">
+              <!-- Aşama 1: Görüntülenme (Views) -->
+              <div class="funnel-step-card views">
+                <div class="f-step-top">
+                  <span class="f-step-icon">👁️ GÖRÜNTÜLENME (VIEWS)</span>
+                  <span class="f-step-rate">Üst Huni (%100)</span>
+                </div>
+                <div class="f-step-val">{{ tf.totalViews | number }}</div>
+                <div class="f-step-proj">
+                  Gelecek 30G Tahmini: <strong class="text-cyan">{{ tf.projectedNext30dViews | number }} Görüntülenme</strong>
+                </div>
+              </div>
+
+              <!-- Aşama 2: Tekil Ziyaret (Visits) -->
+              <div class="funnel-step-card visits">
+                <div class="f-step-top">
+                  <span class="f-step-icon">🚶 TEKİL ZİYARET (VISITS)</span>
+                  <span class="f-step-rate">%{{ tf.viewToVisitRatePct.toFixed(1) }} Geçiş</span>
+                </div>
+                <div class="f-step-val">{{ tf.estimatedUniqueVisits | number }}</div>
+                <div class="f-step-proj">
+                  Gelecek 30G Tahmini: <strong class="text-cyan">{{ tf.projectedNext30dVisits | number }} Ziyaret</strong>
+                </div>
+              </div>
+
+              <!-- Aşama 3: Favoriye Ekleme (Favorites) -->
+              <div class="funnel-step-card favorites">
+                <div class="f-step-top">
+                  <span class="f-step-icon">❤️ FAVORİLER (FAVORITES)</span>
+                  <span class="f-step-rate">%{{ tf.favoriteToViewRatePct.toFixed(2) }} Fav/Gör.</span>
+                </div>
+                <div class="f-step-val text-warning">{{ tf.totalFavorites | number }}</div>
+                <div class="f-step-proj">
+                  Gelecek 30G Tahmini: <strong class="text-warning">+{{ tf.projectedNext30dFavorites | number }} Favori</strong>
+                </div>
+              </div>
+
+              <!-- Aşama 4: Sepete Ekleme (Add-to-Cart) -->
+              <div class="funnel-step-card carts">
+                <div class="f-step-top">
+                  <span class="f-step-icon">🛒 SEPETE EKLEME (CARTS)</span>
+                  <span class="f-step-rate">%{{ tf.addToCartRatePct.toFixed(2) }} Sepet/Ziyaret</span>
+                </div>
+                <div class="f-step-val text-cyan">{{ tf.estimatedAddToCarts | number }}</div>
+                <div class="f-step-proj">
+                  Gelecek 30G Tahmini: <strong class="text-cyan">{{ tf.projectedNext30dCarts | number }} Sepet</strong>
+                </div>
+              </div>
+
+              <!-- Aşama 5: Tamamlanan Sipariş (Orders) -->
+              <div class="funnel-step-card orders">
+                <div class="f-step-top">
+                  <span class="f-step-icon">🛍️ SATIŞA DÖNÜŞEN SİPARİŞ</span>
+                  <span class="f-step-rate text-emerald">%{{ tf.cartToOrderConversionPct.toFixed(1) }} Sepet➔Satış</span>
+                </div>
+                <div class="f-step-val text-emerald">{{ tf.realizedOrders }} Sipariş</div>
+                <div class="f-step-proj">
+                  Gelecek 30G Tahmini: <strong class="text-emerald">{{ aiForecast?.estimatedOrders || 0 }} Sipariş</strong>
+                </div>
+              </div>
+            </div>
+
+            <div class="funnel-diagnosis-box" *ngIf="tf.funnelAiDiagnosis">
+              <span class="diag-badge">🧠 AI Dönüşüm Hunisi (CRO) Teşhisi:</span>
+              <span class="diag-text">{{ tf.funnelAiDiagnosis }}</span>
+            </div>
+          </div>
+
           <!-- 3. MULTI-HORIZON PROJECTION TABLE (30 / 60 / 90 / 180 DAYS) -->
           <div class="projection-matrix-card" *ngIf="aiForecast?.horizonProjections?.length">
             <div class="matrix-card-header">
-              <h4>📈 Çok Ufuklu İleri Finansal Projeksiyon Tablosu (30 — 60 — 90 — 180 Gün)</h4>
-              <span class="matrix-sub">Canlı satış hızı (Run-Rate), 60 gün rezerv çözülmesi ve bileşik büyüme modeli</span>
+              <h4>📈 Çok Ufuklu İleri Finansal & Trafik Projeksiyon Tablosu (30 — 60 — 90 — 180 Gün)</h4>
+              <span class="matrix-sub">Canlı satış hızı (Run-Rate), görüntülenme/favori/sepet hunisi, 60 gün rezerv çözülmesi ve bileşik büyüme modeli</span>
             </div>
             <div class="glass-table-wrapper">
               <table class="glass-table">
                 <thead>
                   <tr>
                     <th>Projeksiyon Ufku</th>
+                    <th>Tahmini Görüntülenme / Ziyaret</th>
+                    <th>Tahmini Favori / Sepet</th>
                     <th>Tahmini Sipariş</th>
                     <th>Beklenen Brüt Ciro ($)</th>
                     <th>Beklenen Brüt Ciro (₺)</th>
@@ -631,6 +720,14 @@
                       [class.active-horizon-row]="h.horizonCode === selectedHorizonCode"
                       (click)="selectedHorizonCode = $any(h.horizonCode)">
                     <td><strong>{{ h.horizonTitle }}</strong></td>
+                    <td>
+                      <span class="text-cyan">{{ (h.projectedViews || 0) | number }} Gör.</span>
+                      <small class="text-muted"> / {{ (h.projectedVisits || 0) | number }} Ziy.</small>
+                    </td>
+                    <td>
+                      <span class="text-warning">❤️ {{ (h.projectedFavorites || 0) | number }}</span>
+                      <small class="text-cyan"> | 🛒 {{ (h.projectedAddToCarts || 0) | number }}</small>
+                    </td>
                     <td>{{ h.estimatedOrders }} Adet <span class="text-emerald">(+%{{ h.growthRatePct.toFixed(1) }})</span></td>
                     <td class="text-emerald">${{ formatNumber(h.expectedGrossUsd) }}</td>
                     <td class="text-emerald">₺{{ formatNumber(h.expectedGrossTry) }}</td>
@@ -680,8 +777,8 @@
           <div class="what-if-simulator-panel" *ngIf="aiForecast as fc">
             <div class="sim-header">
               <div>
-                <h4>🎛️ İnteraktif "What-If" Kâr, Fiyat, Reklam ve Kur Simülatörü</h4>
-                <p>Fiyat, sipariş hacmi, reklam bütçesi, kargo/üretim tasarrufu ve USD/TRY kurunu değiştirerek gelecek 30 günlük net kârınıza etkisini canlı test edin.</p>
+                <h4>🎛️ İnteraktif "What-If" Kâr, Fiyat, Dönüşüm Hunisi, Reklam ve Kur Simülatörü</h4>
+                <p>Fiyat, sipariş hacmi, favori/sepet dönüşüm oranı, reklam bütçesi, maliyet tasarrufu ve USD/TRY kurunu değiştirerek gelecek 30 günlük net kârınıza etkisini canlı test edin.</p>
               </div>
               <button class="btn-reset-sim" (click)="resetSimulationSliders()">🔄 Varsayılana Sıfırla</button>
             </div>
@@ -698,10 +795,18 @@
 
                 <div class="sim-control">
                   <div class="sim-lbl-row">
-                    <span>📦 Aylık Sipariş Hacmi Değişimi</span>
+                    <span>📦 Aylık Trafik / Ziyaret Hacmi Değişimi</span>
                     <strong [ngClass]="simVolumeChangePct >= 0 ? 'text-emerald' : 'text-danger'">{{ simVolumeChangePct >= 0 ? '+' : '' }}%{{ simVolumeChangePct }}</strong>
                   </div>
                   <input type="range" min="-30" max="100" step="5" [(ngModel)]="simVolumeChangePct" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🛒 Favori & Sepet ➔ Sipariş Dönüşüm Artışı (CRO)</span>
+                    <strong [ngClass]="simConversionBoostPct >= 0 ? 'text-emerald' : 'text-danger'">{{ simConversionBoostPct >= 0 ? '+' : '' }}%{{ simConversionBoostPct }}</strong>
+                  </div>
+                  <input type="range" min="-20" max="50" step="2" [(ngModel)]="simConversionBoostPct" class="sim-range" />
                 </div>
 
                 <div class="sim-control">
@@ -760,14 +865,17 @@
           <!-- 6. SKU / PRODUCT-LEVEL FORECAST TABLE -->
           <div class="projection-matrix-card" *ngIf="aiForecast?.productForecasts?.length">
             <div class="matrix-card-header">
-              <h4>🏆 Ürün / SKU Bazlı Kârlılık ve Gelecek 30 Gün Satış Projeksiyonu</h4>
-              <span class="matrix-sub">Gerçek sipariş verilerinden ürün bazlı marj, büyüme potansiyeli ve AI strateji önerisi</span>
+              <h4>🏆 Ürün / SKU Bazlı Görüntülenme, Favori, Sepet ve 30 Gün Satış Projeksiyonu</h4>
+              <span class="matrix-sub">Gerçek sipariş ve ilan etkileşim (görüntülenme, ziyaret, favori, sepete ekleme) verilerinden ürün bazlı büyüme ve AI strateji önerisi</span>
             </div>
             <div class="glass-table-wrapper">
               <table class="glass-table">
                 <thead>
                   <tr>
                     <th>Ürün Adı (Gerçek Mağaza İlanı)</th>
+                    <th>Görüntülenme / Ziyaret</th>
+                    <th>Favori & Sepet</th>
+                    <th>Dönüşüm (CR)</th>
                     <th>Mevcut Sipariş</th>
                     <th>Mevcut Ciro ($)</th>
                     <th>Mevcut Net Kâr ($)</th>
@@ -776,12 +884,25 @@
                     <th>Gelecek 30G Beklenen Ciro ($)</th>
                     <th>Gelecek 30G Beklenen Net Kâr ($)</th>
                     <th>AI Strateji Sınıfı</th>
-                    <th>AI Ürün Aksiyon Önerisi</th>
+                    <th>AI Ürün & Dönüşüm Aksiyon Önerisi</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let pf of aiForecast?.productForecasts">
                     <td class="product-cell" [title]="pf.productTitle"><strong>{{ pf.productTitle }}</strong></td>
+                    <td>
+                      <span class="text-cyan">{{ (pf.views || 0) | number }} Gör.</span>
+                      <small class="text-muted"> / {{ (pf.visits || 0) | number }} Ziy.</small>
+                    </td>
+                    <td>
+                      <span class="text-warning">❤️ {{ (pf.favorites || 0) | number }}</span>
+                      <small class="text-cyan"> | 🛒 {{ (pf.estimatedCarts || 0) | number }}</small>
+                    </td>
+                    <td>
+                      <span class="margin-pill" [ngClass]="(pf.conversionRatePct || 0) >= 2.0 ? 'margin-pill-success' : 'margin-pill-danger'">
+                        %{{ (pf.conversionRatePct || 0).toFixed(2) }}
+                      </span>
+                    </td>
                     <td>{{ pf.currentOrders }} Adet</td>
                     <td class="text-emerald">${{ formatNumber(pf.currentRevenueUsd) }}</td>
                     <td [ngClass]="pf.currentProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedUsd(pf.currentProfitUsd) }}</td>

@@ -129,7 +129,12 @@ public sealed class EtsyFinancialAnalysisServiceTests
             MissingCostOrderIds: ["4199001122"],
             TopProductTitle: "Geometric Desk Organizer",
             TopProductRevenueUsd: 210m,
-            TopProductProfitUsd: 120m);
+            TopProductProfitUsd: 120m,
+            HistoricalViews: 1240,
+            HistoricalVisits: 780,
+            HistoricalFavorites: 96,
+            HistoricalAddToCarts: 34,
+            ActiveListingCount: 18);
 
         var result = await service.GenerateAiForecastAsync(cmd);
 
@@ -140,10 +145,19 @@ public sealed class EtsyFinancialAnalysisServiceTests
         Assert.NotEmpty(result.ActionPlan);
         Assert.NotNull(result.HorizonProjections);
         Assert.Equal(4, result.HorizonProjections!.Count);
+        Assert.True(result.HorizonProjections[0].ProjectedViews > 0);
+        Assert.True(result.HorizonProjections[0].ProjectedAddToCarts > 0);
         Assert.NotNull(result.Scenarios);
         Assert.Equal(3, result.Scenarios!.Count);
         Assert.NotNull(result.ProductForecasts);
         Assert.NotEmpty(result.ProductForecasts!);
+        Assert.NotNull(result.TrafficFunnel);
+        Assert.Equal(1240, result.TrafficFunnel!.TotalViews);
+        Assert.Equal(780, result.TrafficFunnel.EstimatedUniqueVisits);
+        Assert.Equal(96, result.TrafficFunnel.TotalFavorites);
+        Assert.Equal(34, result.TrafficFunnel.EstimatedAddToCarts);
+        Assert.True(result.TrafficFunnel.OverallConversionRatePct > 0m);
+        Assert.False(string.IsNullOrWhiteSpace(result.TrafficFunnel.FunnelAiDiagnosis));
     }
 
     private sealed class StubLlmClient : IGeminiListingApiClient

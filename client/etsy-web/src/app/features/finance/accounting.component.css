@@ -1715,3 +1715,159 @@
   color: #f87171 !important;
   border: 1px solid rgba(239, 68, 68, 0.35) !important;
 }
+
+/* =========================================================================
+   TRAFFIC, VIEWS, FAVORITES & ADD-TO-CART CONVERSION FUNNEL PANEL
+   ========================================================================= */
+.traffic-funnel-panel {
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.78));
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  border-radius: 14px;
+  padding: 18px 20px;
+  margin-bottom: 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+}
+
+.funnel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.funnel-header h4 {
+  margin: 0 0 4px 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.funnel-sub {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.funnel-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.funnel-cr-badge {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.38);
+  color: #6ee7b7;
+}
+
+.funnel-bottleneck-badge {
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(245, 158, 11, 0.38);
+  color: #fde68a;
+}
+
+.funnel-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.funnel-step-card {
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.funnel-step-card.views {
+  border-top: 3px solid #6366f1;
+}
+
+.funnel-step-card.visits {
+  border-top: 3px solid #38bdf8;
+}
+
+.funnel-step-card.favorites {
+  border-top: 3px solid #f59e0b;
+}
+
+.funnel-step-card.carts {
+  border-top: 3px solid #06b6d4;
+}
+
+.funnel-step-card.orders {
+  border-top: 3px solid #10b981;
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.f-step-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.f-step-icon {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #cbd5e1;
+  letter-spacing: 0.02em;
+}
+
+.f-step-rate {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #94a3b8;
+}
+
+.f-step-val {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.f-step-proj {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.funnel-diagnosis-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(56, 189, 248, 0.08);
+  border-left: 3px solid #38bdf8;
+  font-size: 0.82rem;
+  line-height: 1.5;
+  color: #e2e8f0;
+}
+
+.diag-badge {
+  font-weight: 800;
+  color: #38bdf8;
+  white-space: nowrap;
+}
+
+@media (max-width: 1200px) {
+  .funnel-steps-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

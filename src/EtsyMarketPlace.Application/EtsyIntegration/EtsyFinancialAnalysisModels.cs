@@ -34,6 +34,25 @@ public sealed record FinancialAnalysisRecommendation(
     string Title,
     string Description);
 
+public sealed record AiTrafficFunnelSnapshotDto(
+    int ActiveListingCount,
+    int TotalViews,
+    int EstimatedUniqueVisits,
+    int TotalFavorites,
+    int EstimatedAddToCarts,
+    int RealizedOrders,
+    decimal ViewToVisitRatePct,
+    decimal FavoriteToViewRatePct,
+    decimal AddToCartRatePct,
+    decimal CartToOrderConversionPct,
+    decimal OverallConversionRatePct,
+    int ProjectedNext30dViews,
+    int ProjectedNext30dVisits,
+    int ProjectedNext30dFavorites,
+    int ProjectedNext30dCarts,
+    string FunnelBottleneckStage,
+    string FunnelAiDiagnosis);
+
 public sealed record AiForecastHorizonItemDto(
     string HorizonCode,
     string HorizonTitle,
@@ -48,7 +67,11 @@ public sealed record AiForecastHorizonItemDto(
     int EstimatedOrders,
     decimal GrowthRatePct,
     decimal EstimatedBankPayoutTry,
-    decimal EstimatedReserveReleaseTry);
+    decimal EstimatedReserveReleaseTry,
+    int ProjectedViews = 0,
+    int ProjectedVisits = 0,
+    int ProjectedFavorites = 0,
+    int ProjectedAddToCarts = 0);
 
 public sealed record AiForecastScenarioItemDto(
     string ScenarioCode,
@@ -72,7 +95,12 @@ public sealed record AiProductForecastItemDto(
     decimal ProjectedNext30dRevenueUsd,
     decimal ProjectedNext30dProfitUsd,
     string AiStrategyTag,
-    string AiRecommendation);
+    string AiRecommendation,
+    int Views = 0,
+    int Visits = 0,
+    int Favorites = 0,
+    int EstimatedCarts = 0,
+    decimal ConversionRatePct = 0m);
 
 public sealed record AiFinancialForecastCommand(
     string ShopId,
@@ -94,7 +122,12 @@ public sealed record AiFinancialForecastCommand(
     string? TopProductTitle = null,
     decimal? TopProductRevenueUsd = null,
     decimal? TopProductProfitUsd = null,
-    IReadOnlyList<string>? MissingCostOrderIds = null);
+    IReadOnlyList<string>? MissingCostOrderIds = null,
+    int? HistoricalViews = null,
+    int? HistoricalVisits = null,
+    int? HistoricalFavorites = null,
+    int? HistoricalAddToCarts = null,
+    int? ActiveListingCount = null);
 
 public sealed record AiFinancialForecastResultDto(
     string ShopId,
@@ -129,4 +162,5 @@ public sealed record AiFinancialForecastResultDto(
     IReadOnlyList<string> ActionPlan,
     IReadOnlyList<AiForecastHorizonItemDto>? HorizonProjections = null,
     IReadOnlyList<AiForecastScenarioItemDto>? Scenarios = null,
-    IReadOnlyList<AiProductForecastItemDto>? ProductForecasts = null);
+    IReadOnlyList<AiProductForecastItemDto>? ProductForecasts = null,
+    AiTrafficFunnelSnapshotDto? TrafficFunnel = null);
