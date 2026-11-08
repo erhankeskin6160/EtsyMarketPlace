@@ -1183,10 +1183,18 @@
                   🏦 Etsy Fiili Kuru: ₺{{ selectedOrder.effectiveExchangeRate.toFixed(2) }}
                 </span>
               </div>
-              <div class="etsy-payout-box" *ngIf="selectedOrder.etsyNetPayoutTry" style="margin-top: 10px; padding: 8px 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; font-size: 12px;">
+              <div class="etsy-payout-box" *ngIf="selectedOrder.etsyNetPayoutTry" style="margin-top: 10px; padding: 10px 14px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 8px; font-size: 12px;">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span><strong>Etsy Ödeme Hesabı Net Hak Edişi (Maliyetsiz):</strong></span>
-                  <span style="color: #34d399; font-weight: 700; font-size: 13px;">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry) }} <small style="color: #94a3b8;">(&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0)).toFixed(2) }})</small></span>
+                  <span><strong>💎 Etsy Ödeme Hesabı Net Hak Edişi (Maliyetsiz):</strong></span>
+                  <span style="color: #34d399; font-weight: 800; font-size: 14px;">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry) }} <small style="color: #94a3b8;">(&#36;{{ (selectedOrder.etsyNetPayoutUsd || (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0))).toFixed(2) }})</small></span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; color: #94a3b8; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 6px;">
+                  <span>🔒 Fon Rezervi Dağılımı (%{{ reserveSnapshot.reservePercent }} Blokaj):</span>
+                  <span>
+                    <strong class="text-warning">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry * (reserveSnapshot.reservePercent / 100)) }} Rezerve</strong> ({{ reserveSnapshot.reserveHoldDays }} gün)
+                    &nbsp;|&nbsp;
+                    <strong class="text-cyan">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry * ((100 - reserveSnapshot.reservePercent) / 100)) }} Kullanılabilir</strong>
+                  </span>
                 </div>
               </div>
               <div class="ctx-row" style="margin-top: 8px; font-size: 11px; color: #a1a1aa; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 4px;" *ngIf="selectedOrder.costNotes">
