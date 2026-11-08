@@ -18,7 +18,8 @@ public sealed record EtsyLedgerLiveResult(
     DateTimeOffset GeneratedAt,
     FinancialPerformance Performance,
     IReadOnlyList<EtsyLedgerDailySummary> Daily,
-    int ReceiptCount);
+    int ReceiptCount,
+    IReadOnlyList<EtsyLedgerMonthlySummary>? Monthly = null);
 
 public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyIntegrationRepository repository) : IEtsyLedgerReportService
 {
@@ -55,7 +56,7 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
         var report = EtsyLedgerFinancialEngine.BuildReport(entries, costsByDay);
         var performance = MapToPerformance(startDate, endDate, report);
 
-        return new EtsyLedgerLiveResult(true, null, "etsy-ledger-live", DateTimeOffset.UtcNow, performance, report.Daily, receiptCount);
+        return new EtsyLedgerLiveResult(true, null, "etsy-ledger-live", DateTimeOffset.UtcNow, performance, report.Daily, receiptCount, report.Monthly);
     }
 
     /// <summary>

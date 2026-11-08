@@ -31,6 +31,30 @@ export interface RefundDetailRecord {
   cancelTypeLabel: string;
 }
 
+export interface MonthlyFinancialSummaryDto {
+  year: number;
+  month: number;
+  periodLabel: string;
+  orderCount: number;
+  grossSalesUsd: number;
+  grossSalesTry: number;
+  etsyFeesUsd: number;
+  etsyFeesTry: number;
+  adFeesUsd: number;
+  adFeesTry: number;
+  innerAdFeesTry: number;
+  offsiteAdFeesTry: number;
+  refundsUsd: number;
+  refundsTry: number;
+  productCostsUsd: number;
+  productCostsTry: number;
+  bankPayoutsUsd: number;
+  bankPayoutsTry: number;
+  realNetProfitUsd: number;
+  realNetProfitTry: number;
+  profitMarginPct: number;
+}
+
 export interface OrderCostShippingRow {
   date: string;
   receiptId: string;
@@ -278,6 +302,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
   get payoutRatio(): string {
     return this.netIncomeTry > 0 ? (this.bankPayoutsTry / this.netIncomeTry * 100).toFixed(1) : '0.0';
   }
+
+  serverMonthlySummaries: MonthlyFinancialSummaryDto[] = [];
 
   periodSummaries: Array<{
     periodLabel: string;
@@ -684,6 +710,20 @@ export class AccountingComponent implements OnInit, OnDestroy {
     }
 
     // 9. Donemsel Muhasebe Aylik Gruplama (Tab 3)
+    if (this.serverMonthlySummaries && this.serverMonthlySummaries.length > 0) {
+      this.periodSummaries = this.serverMonthlySummaries.map(m => ({
+        periodLabel: m.periodLabel,
+        orderCount: m.orderCount,
+        grossTry: Number(m.grossSalesTry.toFixed(2)),
+        feesTry: Number(m.etsyFeesTry.toFixed(2)),
+        adsTry: Number(m.adFeesTry.toFixed(2)),
+        costsTry: Number(m.productCostsTry.toFixed(2)),
+        payoutsTry: Number(m.bankPayoutsTry.toFixed(2)),
+        realProfitTry: Number(m.realNetProfitTry.toFixed(2))
+      }));
+      return;
+    }
+
     const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
     const map = new Map<string, { sortKey: number; label: string; count: number; gross: number; fees: number; ads: number; costs: number; payouts: number; profit: number }>();
 
@@ -711,8 +751,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
             });
           }
           const bucket = map.get(key)!;
-          bucket.count += 1;
-          if (o.orderStatus !== 'canceled') {
+          if (o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded') {
+            bucket.count += 1;
             const gTry = o.grandTotalUsd * rate;
             const fTry = o.etsyFeesUsd * rate;
             const aTry = (o.offsiteAdFeeUsd || 0) * rate;
@@ -854,6 +894,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     if (isManualRefresh) {
       this.isRefreshing = true;
     }
+    this.serverMonthlySummaries = [];
     const start = this.parseTurkishDate(this.startDate, false);
     const end = this.parseTurkishDate(this.endDate, true);
 
@@ -998,6 +1039,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
           this.realNetProfitTry = Number(realProfitTry.toFixed(2));
 
           this.totalLedgerCount = perf.receiptCount || this.orders.length;
+          if (perf.monthlySummaries && Array.isArray(perf.monthlySummaries) && perf.monthlySummaries.length > 0) {
+            this.serverMonthlySummaries = perf.monthlySummaries;
+          }
           this.rebuildDynamicBreakdowns();
           if (perf.bankPayoutsTRY !== undefined && perf.bankPayoutsTRY !== null) {
             this.bankPayoutsUsd = Number(perf.bankPayoutsUSD ?? (perf.bankPayoutsTRY / rate));

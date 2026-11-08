@@ -220,11 +220,95 @@ public static class EtsyLedgerFinancialEngine
         var totalProductCostsTry = daily.Sum(d => d.ProductCostsTry);
         var overallRate = totalGross > 0 ? Math.Round(totalGrossTry / totalGross, 4) : fallbackExchangeRate;
 
+        var monthly = BuildMonthlySummaries(daily, entries);
+
         return new EtsyLedgerFinancialReport(
             totalGross, totalFees, totalInnerAds, totalOffsiteAds, totalRefunds, totalDeposits,
             totalShipping, totalProductCosts, totalNet, totalNet - totalProductCosts,
             totalGrossTry, totalFeesTry, totalInnerTry, totalOffsiteTry, totalRefundsTry,
-            totalProductCostsTry, totalNetProfitTry, overallRate, daily);
+            totalProductCostsTry, totalNetProfitTry, overallRate, daily, monthly);
+    }
+
+    /// <summary>
+    /// Gunluk defter ozetlerinden ve defter kayitlarindan aylik donemsel ozetleri uretir.
+    /// Her ayin toplami gunluklerin toplamina ve dolayisiyla ust KPI kartlarina kurusu kurusuna esittir.
+    /// </summary>
+    public static IReadOnlyList<EtsyLedgerMonthlySummary> BuildMonthlySummaries(
+        IReadOnlyList<EtsyLedgerDailySummary> daily,
+        IReadOnlyList<EtsyLedgerEntryDetail> entries)
+    {
+        var turkishMonthNames = new[]
+        {
+            "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+            "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+        };
+
+        var monthly = new List<EtsyLedgerMonthlySummary>();
+
+        var monthGroups = daily
+            .GroupBy(d => (d.Date.Year, d.Date.Month))
+            .OrderByDescending(g => g.Key.Year * 100 + g.Key.Month);
+
+        foreach (var g in monthGroups)
+        {
+            var y = g.Key.Year;
+            var m = g.Key.Month;
+            var periodLabel = m >= 1 && m <= 12 ? $"{turkishMonthNames[m]} {y}" : $"{y}-{m:D2}";
+
+            var orderCount = entries
+                .Where(e => e.CreatedAt.UtcDateTime.Year == y && e.CreatedAt.UtcDateTime.Month == m && e.Type == "sale" && e.ReferenceId > 0)
+                .Select(e => e.ReferenceId)
+                .Distinct()
+                .Count();
+
+            if (orderCount == 0)
+            {
+                orderCount = entries.Count(e => e.CreatedAt.UtcDateTime.Year == y && e.CreatedAt.UtcDateTime.Month == m && e.Type == "sale");
+            }
+
+            var grossUsd = g.Sum(d => d.GrossSales);
+            var grossTry = g.Sum(d => d.GrossSalesTry);
+            var feesUsd = Math.Abs(g.Sum(d => d.EtsyFees));
+            var feesTry = Math.Abs(g.Sum(d => d.EtsyFeesTry));
+            var innerAdsTry = Math.Abs(g.Sum(d => d.InnerAdFeesTry));
+            var offsiteAdsTry = Math.Abs(g.Sum(d => d.OffsiteAdFeesTry));
+            var adFeesUsd = Math.Abs(g.Sum(d => d.InnerAdFees + d.OffsiteAdFees));
+            var adFeesTry = innerAdsTry + offsiteAdsTry;
+            var refundsUsd = Math.Abs(g.Sum(d => d.Refunds));
+            var refundsTry = Math.Abs(g.Sum(d => d.RefundsTry));
+            var productCostsUsd = g.Sum(d => d.ProductCosts);
+            var productCostsTry = g.Sum(d => d.ProductCostsTry);
+            var realProfitUsd = g.Sum(d => d.RealNetProfitUsd);
+            var realProfitTry = g.Sum(d => d.RealNetProfitTry);
+
+            var margin = grossTry > 0 ? Math.Round((realProfitTry / grossTry) * 100m, 1) : 0m;
+
+            monthly.Add(new EtsyLedgerMonthlySummary(
+                Year: y,
+                Month: m,
+                PeriodLabel: periodLabel,
+                OrderCount: orderCount,
+                GrossSalesUsd: Math.Round(grossUsd, 2),
+                GrossSalesTry: Math.Round(grossTry, 2),
+                EtsyFeesUsd: Math.Round(feesUsd, 2),
+                EtsyFeesTry: Math.Round(feesTry, 2),
+                AdFeesUsd: Math.Round(adFeesUsd, 2),
+                AdFeesTry: Math.Round(adFeesTry, 2),
+                InnerAdFeesTry: Math.Round(innerAdsTry, 2),
+                OffsiteAdFeesTry: Math.Round(offsiteAdsTry, 2),
+                RefundsUsd: Math.Round(refundsUsd, 2),
+                RefundsTry: Math.Round(refundsTry, 2),
+                ProductCostsUsd: Math.Round(productCostsUsd, 2),
+                ProductCostsTry: Math.Round(productCostsTry, 2),
+                BankPayoutsUsd: 0m,
+                BankPayoutsTry: 0m,
+                RealNetProfitUsd: Math.Round(realProfitUsd, 2),
+                RealNetProfitTry: Math.Round(realProfitTry, 2),
+                ProfitMarginPct: margin
+            ));
+        }
+
+        return monthly;
     }
 }
 
@@ -285,4 +369,29 @@ public sealed record EtsyLedgerFinancialReport(
     decimal ProductCostsTry,
     decimal NetProfitTry,
     decimal AverageExchangeRate,
-    IReadOnlyList<EtsyLedgerDailySummary> Daily);
+    IReadOnlyList<EtsyLedgerDailySummary> Daily,
+    IReadOnlyList<EtsyLedgerMonthlySummary>? Monthly = null);
+
+/// <summary>Aylik finansal ozet (masaustu donemsel muhasebe portu, USD/TRY).</summary>
+public sealed record EtsyLedgerMonthlySummary(
+    int Year,
+    int Month,
+    string PeriodLabel,
+    int OrderCount,
+    decimal GrossSalesUsd,
+    decimal GrossSalesTry,
+    decimal EtsyFeesUsd,
+    decimal EtsyFeesTry,
+    decimal AdFeesUsd,
+    decimal AdFeesTry,
+    decimal InnerAdFeesTry,
+    decimal OffsiteAdFeesTry,
+    decimal RefundsUsd,
+    decimal RefundsTry,
+    decimal ProductCostsUsd,
+    decimal ProductCostsTry,
+    decimal BankPayoutsUsd,
+    decimal BankPayoutsTry,
+    decimal RealNetProfitUsd,
+    decimal RealNetProfitTry,
+    decimal ProfitMarginPct);

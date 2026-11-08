@@ -161,6 +161,75 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             var totalPayoutsUsd = payouts.Sum(x => Math.Abs(x.Amount));
             var totalPayoutsTry = payouts.Sum(x => Math.Abs(x.Amount) * (x.ExchangeRateToTry ?? HistoricalExchangeRateProvider.GetRateForDate(x.OccurredAt.DateTime)));
 
+            var payoutsByMonth = payouts
+                .GroupBy(x => (x.OccurredAt.UtcDateTime.Year, x.OccurredAt.UtcDateTime.Month))
+                .ToDictionary(
+                    g => g.Key,
+                    g => (
+                        Usd: g.Sum(x => Math.Abs(x.Amount)),
+                        Try: g.Sum(x => Math.Abs(x.Amount) * (x.ExchangeRateToTry ?? HistoricalExchangeRateProvider.GetRateForDate(x.OccurredAt.DateTime)))
+                    ));
+
+            var turkishMonthNames = new[]
+            {
+                "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+                "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+            };
+
+            var baseMonthly = live.Monthly ?? Array.Empty<EtsyLedgerMonthlySummary>();
+            var monthlyMap = baseMonthly.ToDictionary(m => (m.Year, m.Month));
+
+            var allKeys = monthlyMap.Keys
+                .Union(payoutsByMonth.Keys)
+                .OrderByDescending(k => k.Year * 100 + k.Month)
+                .ToList();
+
+            var combinedMonthly = new List<EtsyLedgerMonthlySummary>();
+            foreach (var key in allKeys)
+            {
+                var hasPayout = payoutsByMonth.TryGetValue(key, out var po);
+                var payoutUsd = hasPayout ? Math.Round(po.Usd, 2) : 0m;
+                var payoutTry = hasPayout ? Math.Round(po.Try, 2) : 0m;
+
+                if (monthlyMap.TryGetValue(key, out var m))
+                {
+                    combinedMonthly.Add(m with
+                    {
+                        BankPayoutsUsd = payoutUsd,
+                        BankPayoutsTry = payoutTry
+                    });
+                }
+                else
+                {
+                    var y = key.Year;
+                    var mo = key.Month;
+                    var label = mo >= 1 && mo <= 12 ? $"{turkishMonthNames[mo]} {y}" : $"{y}-{mo:D2}";
+                    combinedMonthly.Add(new EtsyLedgerMonthlySummary(
+                        Year: y,
+                        Month: mo,
+                        PeriodLabel: label,
+                        OrderCount: 0,
+                        GrossSalesUsd: 0m,
+                        GrossSalesTry: 0m,
+                        EtsyFeesUsd: 0m,
+                        EtsyFeesTry: 0m,
+                        AdFeesUsd: 0m,
+                        AdFeesTry: 0m,
+                        InnerAdFeesTry: 0m,
+                        OffsiteAdFeesTry: 0m,
+                        RefundsUsd: 0m,
+                        RefundsTry: 0m,
+                        ProductCostsUsd: 0m,
+                        ProductCostsTry: 0m,
+                        BankPayoutsUsd: payoutUsd,
+                        BankPayoutsTry: payoutTry,
+                        RealNetProfitUsd: 0m,
+                        RealNetProfitTry: 0m,
+                        ProfitMarginPct: 0m
+                    ));
+                }
+            }
+
             return new LiveFinancialPerformanceResult(
                 GrossSales: p.GrossSales,
                 PlatformFees: p.PlatformFees,
@@ -183,7 +252,8 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
                 Source: live.Source,
                 GeneratedAt: live.GeneratedAt,
                 BankPayoutsUSD: totalPayoutsUsd,
-                BankPayoutsTRY: Math.Round(totalPayoutsTry, 2));
+                BankPayoutsTRY: Math.Round(totalPayoutsTry, 2),
+                MonthlySummaries: combinedMonthly);
         }
 
         var legacy = await _reporting.GetFinancialPerformanceAsync(shopId, start, end, cancellationToken);

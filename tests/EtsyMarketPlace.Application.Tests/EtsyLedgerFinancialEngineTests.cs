@@ -154,4 +154,61 @@ public sealed class EtsyLedgerFinancialEngineTests
         Assert.Equal(-38.59m, report.Refunds);
         Assert.Equal(161.41m, report.EtsyNetRevenue);
     }
+
+    [Fact]
+    public void BuildMonthlySummaries_ProducesExactParityWithTotals()
+    {
+        var oct = new DateTimeOffset(2026, 10, 15, 10, 0, 0, TimeSpan.Zero);
+        var nov = new DateTimeOffset(2026, 11, 2, 14, 0, 0, TimeSpan.Zero);
+
+        var entries = new List<EtsyLedgerEntryDetail>
+        {
+            Entry("sale", 150m, "sale 1", oct, referenceId: 1001),
+            Entry("sale", 80m, "sale 2", oct, referenceId: 1002),
+            Entry("transaction_fee", -15m, "fee oct", oct),
+            Entry("ad_fee", -20m, "ads oct", oct),
+
+            Entry("sale", 200m, "sale 3", nov, referenceId: 1003),
+            Entry("transaction_fee", -18m, "fee nov", nov),
+            Entry("offsite_ads", -25m, "ads nov", nov),
+            Entry("refund", -50m, "refund nov", nov)
+        };
+
+        var costs = new Dictionary<DateTime, decimal>
+        {
+            [oct.UtcDateTime.Date] = 30m,
+            [nov.UtcDateTime.Date] = 40m
+        };
+
+        var report = EtsyLedgerFinancialEngine.BuildReport(entries, costs);
+
+        Assert.NotNull(report.Monthly);
+        Assert.Equal(2, report.Monthly.Count);
+
+        // Siralama azalan: Kasim 2026 once, Ekim 2026 sonra
+        var novSummary = report.Monthly[0];
+        var octSummary = report.Monthly[1];
+
+        Assert.Equal("Kasım 2026", novSummary.PeriodLabel);
+        Assert.Equal(1, novSummary.OrderCount);
+        Assert.Equal(200m, novSummary.GrossSalesUsd);
+        Assert.Equal(18m, novSummary.EtsyFeesUsd);
+        Assert.Equal(25m, novSummary.AdFeesUsd);
+        Assert.Equal(50m, novSummary.RefundsUsd);
+        Assert.Equal(40m, novSummary.ProductCostsUsd);
+
+        Assert.Equal("Ekim 2026", octSummary.PeriodLabel);
+        Assert.Equal(2, octSummary.OrderCount);
+        Assert.Equal(230m, octSummary.GrossSalesUsd);
+        Assert.Equal(15m, octSummary.EtsyFeesUsd);
+        Assert.Equal(20m, octSummary.AdFeesUsd);
+        Assert.Equal(30m, octSummary.ProductCostsUsd);
+
+        // 100% Parite: Aylik toplamlar rapor genel toplamina esit olmalidir
+        var sumMonthlyGrossTry = report.Monthly.Sum(m => m.GrossSalesTry);
+        var sumMonthlyNetProfitTry = report.Monthly.Sum(m => m.RealNetProfitTry);
+
+        Assert.Equal(report.GrossSalesTry, sumMonthlyGrossTry);
+        Assert.Equal(report.NetProfitTry, sumMonthlyNetProfitTry);
+    }
 }
