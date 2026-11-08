@@ -3,12 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService, EtsyBankPayoutDto, EtsyPaymentReserveSnapshotDto } from '../../core/services/etsy-api.service';
+import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { 
   PaymentLedgerEntry, 
   BankPayoutRecord, 
   ExpenseBreakdownItem,
   OrderFinancialRow,
-  ForecastKpiSummary
+  ForecastKpiSummary,
+  AiFinancialForecastResponseDto
 } from '../../core/models/accounting.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -75,9 +77,12 @@ export interface OrderCostShippingRow {
 })
 export class AccountingComponent implements OnInit, OnDestroy {
   private destroyRef = inject(DestroyRef);
+  readonly aiSettings = inject(AiSettingsService);
   Math = Math;
   isTry = true;
   activeTab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' = 'orders';
+  isAnalyzingForecast = false;
+  aiForecast: AiFinancialForecastResponseDto | null = null;
 
   selectedDatePreset = 'thisMonth';
   startDate = '';
@@ -723,6 +728,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         payoutsTry: Number(m.bankPayoutsTry.toFixed(2)),
         realProfitTry: Number(m.realNetProfitTry.toFixed(2))
       }));
+      this.updateLiveForecastBaseline();
       return;
     }
 
@@ -808,6 +814,329 @@ export class AccountingComponent implements OnInit, OnDestroy {
         payoutsTry: Number(b.payouts.toFixed(2)),
         realProfitTry: Number(b.profit.toFixed(2))
       }));
+    this.updateLiveForecastBaseline();
+  }
+
+  switchTab(tab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger'): void {
+    this.activeTab = tab;
+    if (tab === 'forecast') {
+      if (!this.aiForecast || !this.aiForecast.usedAi) {
+        this.runAiForecastAnalysis(false);
+      }
+    }
+  }
+
+  private getTopPerformingProduct(): { title: string | null; revenueUsd: number; profitUsd: number } {
+    const active = this.orders.filter(o => o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund');
+    if (active.length === 0) {
+      return { title: null, revenueUsd: 0, profitUsd: 0 };
+    }
+    const map = new Map<string, { title: string; revenueUsd: number; profitUsd: number }>();
+    for (const o of active) {
+      const key = (o.productTitle || '').trim();
+      if (!key) continue;
+      const cur = map.get(key) || { title: key, revenueUsd: 0, profitUsd: 0 };
+      cur.revenueUsd += o.grandTotalUsd || 0;
+      cur.profitUsd += o.netProfitUsd || 0;
+      map.set(key, cur);
+    }
+    const sorted = Array.from(map.values()).sort((a, b) => (b.profitUsd - a.profitUsd) || (b.revenueUsd - a.revenueUsd));
+    if (sorted.length === 0) {
+      return { title: null, revenueUsd: 0, profitUsd: 0 };
+    }
+    return {
+      title: sorted[0].title,
+      revenueUsd: Number(sorted[0].revenueUsd.toFixed(2)),
+      profitUsd: Number(sorted[0].profitUsd.toFixed(2))
+    };
+  }
+
+  private getMissingCostOrderIds(): string[] {
+    return this.orders
+      .filter(o => !o.hasCostData && o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund')
+      .map(o => o.receiptId)
+      .slice(0, 5);
+  }
+
+  private getActiveApiKeyForSettings(): string {
+    const s = this.aiSettings.settings();
+    switch (s.provider) {
+      case 'DeepSeek': return (s.deepSeekApiKey || '').trim();
+      case 'OpenAI': return (s.openAiApiKey || '').trim();
+      case 'Claude': return (s.claudeApiKey || '').trim();
+      case 'Grok': return (s.grokApiKey || '').trim();
+      case 'Gemini': return (s.geminiApiKey || '').trim();
+      default: return '';
+    }
+  }
+
+  updateLiveForecastBaseline(): void {
+    // Eğer zaten canlı AI analizi aynı dönem için tamamlandıysa üzerine ezme, sadece rakamları güncelle
+    const periodLabel = `${this.startDate} — ${this.endDate}`;
+    const rate = this.liveRate || 49.50;
+    const start = this.parseTurkishDate(this.startDate, false);
+    const end = this.parseTurkishDate(this.endDate, true);
+    const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+
+    let monthlyBaseGrossUsd = 0;
+    let monthlyBaseProfitUsd = 0;
+    let monthlyBaseOrders = 0;
+
+    if (this.grossSalesUsd > 0) {
+      const scale = 30 / Math.min(365, Math.max(7, periodDays));
+      monthlyBaseGrossUsd = Number((this.grossSalesUsd * scale).toFixed(2));
+      monthlyBaseProfitUsd = Number((this.realNetProfitUsd * scale).toFixed(2));
+      monthlyBaseOrders = Math.max(1, Math.round(this.completedOrderCount * scale));
+    } else if (this.serverMonthlySummaries && this.serverMonthlySummaries.length > 0) {
+      const activeMonths = this.serverMonthlySummaries.filter(m => m.grossSalesUsd > 0).slice(0, 3);
+      if (activeMonths.length > 0) {
+        monthlyBaseGrossUsd = Number((activeMonths.reduce((s, m) => s + m.grossSalesUsd, 0) / activeMonths.length).toFixed(2));
+        monthlyBaseProfitUsd = Number((activeMonths.reduce((s, m) => s + m.realNetProfitUsd, 0) / activeMonths.length).toFixed(2));
+        monthlyBaseOrders = Math.max(1, Math.round(activeMonths.reduce((s, m) => s + m.orderCount, 0) / activeMonths.length));
+      }
+    }
+
+    const growthMultiplier = monthlyBaseGrossUsd > 0 ? 1.12 : 1.0;
+    const expectedGrossUsd = Number((monthlyBaseGrossUsd * growthMultiplier).toFixed(2));
+    const expectedGrossTry = Number((expectedGrossUsd * rate).toFixed(2));
+    const minGrossUsd = Number((expectedGrossUsd * 0.85).toFixed(2));
+    const maxGrossUsd = Number((expectedGrossUsd * 1.18).toFixed(2));
+
+    const realizedMargin = this.grossSalesUsd > 0
+      ? Math.max(-0.5, Math.min(0.85, this.realNetProfitUsd / this.grossSalesUsd))
+      : (monthlyBaseGrossUsd > 0 ? Math.max(0.15, Math.min(0.65, monthlyBaseProfitUsd / monthlyBaseGrossUsd)) : 0.35);
+
+    const expectedMarginPct = expectedGrossUsd > 0 ? Number(Math.max(15, realizedMargin * 100).toFixed(1)) : 0;
+    const expectedNetProfitUsd = Number((expectedGrossUsd * (expectedMarginPct / 100)).toFixed(2));
+    const expectedNetProfitTry = Number((expectedNetProfitUsd * rate).toFixed(2));
+    const estimatedOrders = monthlyBaseOrders > 0 ? Math.max(1, Math.round(monthlyBaseOrders * growthMultiplier)) : 0;
+    const avgOrderValueUsd = monthlyBaseOrders > 0 && monthlyBaseGrossUsd > 0
+      ? Number((monthlyBaseGrossUsd / monthlyBaseOrders).toFixed(2))
+      : 0;
+    const estimatedFilamentKg = Number((estimatedOrders * 0.26).toFixed(2));
+    const estimatedShippingBoxes = estimatedOrders;
+
+    const topProd = this.getTopPerformingProduct();
+    const missingIds = this.getMissingCostOrderIds();
+    const missingCount = this.missingCostCount;
+    const totalAdsUsd = Number((this.innerAdsUsd + this.offsiteAdsUsd).toFixed(2));
+    const totalAdsTry = Number((this.innerAdsTry + this.offsiteAdsTry).toFixed(2));
+    const roas = totalAdsUsd > 0 && this.grossSalesUsd > 0 ? Number((this.grossSalesUsd / totalAdsUsd).toFixed(1)) : 0;
+
+    const execSummary = this.grossSalesUsd > 0
+      ? `Seçili dönemde (${periodLabel}) ${this.completedOrderCount} aktif siparişten $${this.grossSalesUsd.toFixed(2)} (₺${this.formatNumber(this.grossSalesTry)}) brüt satış ve ${this.formatSignedUsd(this.realNetProfitUsd)} (${this.formatSignedTry(this.realNetProfitTry)}) gerçek net sonuç kaydedildi. Mağazanın aylık satış hızı (run-rate) baz alındığında gelecek 30 günde $${expectedGrossUsd.toFixed(2)} (₺${this.formatNumber(expectedGrossTry)}) ciro ve $${expectedNetProfitUsd.toFixed(2)} (₺${this.formatNumber(expectedNetProfitTry)}) gerçek net kâr öngörülmektedir.`
+      : `Seçili dönemde (${periodLabel}) yeni tamamlanan satış bulunmamakta olup dönem içi kesinti/iade hareketleri nedeniyle dönem net sonucu ${this.formatSignedTry(this.realNetProfitTry)} (${this.formatSignedUsd(this.realNetProfitUsd)}) olarak gerçekleşmiştir. Gelecek 30 günlük projeksiyon mağazanızın son aktif dönemlerinin ortalaması üzerinden hesaplanmıştır.`;
+
+    const prodAnalysis = topProd.title
+      ? `Dönemin en yüksek katkı sağlayan ürünü "${topProd.title}" olup $${topProd.revenueUsd.toFixed(2)} brüt ciro ve ${this.formatSignedUsd(topProd.profitUsd)} net kâr üretmiştir. Ortalama sepet tutarınız (AOV) $${avgOrderValueUsd.toFixed(2)} seviyesindedir.`
+      : `Seçili tarih aralığında (${periodLabel}) tamamlanmış yeni ürün satışı oluşmadığından ürün bazlı kârlılık analizi için dönem filtresini "Son 30 Gün" veya "Tüm Zamanlar" olarak seçebilirsiniz.`;
+
+    const adAnalysis = totalAdsUsd > 0
+      ? `Dönem içinde Etsy Ads için -$${this.innerAdsUsd.toFixed(2)} (-₺${this.formatNumber(this.innerAdsTry)}) ve Offsite Ads (Dış Reklam) için -$${this.offsiteAdsUsd.toFixed(2)} (-₺${this.formatNumber(this.offsiteAdsTry)}) olmak üzere toplam -$${totalAdsUsd.toFixed(2)} (-₺${this.formatNumber(totalAdsTry)}) reklam harcaması gerçekleşmiştir.` + (roas > 0 ? ` Genel reklam dönüşüm çarpanı (ROAS) ${roas}x seviyesindedir.` : ` Bu dönemde reklam harcamasına karşılık doğrudan satış dönüşümü oluşmamıştır.`)
+      : `Seçili dönemde Etsy Ads veya Offsite Ads reklam kesintisi bulunmamaktadır.`;
+
+    let refundCostAnalysis = '';
+    if (this.refundsUsd > 0 && missingCount > 0) {
+      const idStr = missingIds.length > 0 ? ` (${missingIds.map(x => '#' + x).join(', ')})` : '';
+      refundCostAnalysis = `Dönem içinde -$${this.refundsUsd.toFixed(2)} (-₺${this.formatNumber(this.refundsTry)}) tutarında sipariş iadesi kaydedilmiştir. Ayrıca ${missingCount} adet siparişin${idStr} üretim ve kargo maliyeti henüz girilmemiştir; bu maliyetleri girdiğinizde gerçek net kârınız tam olarak netleşecektir.`;
+    } else if (this.refundsUsd > 0) {
+      refundCostAnalysis = `Dönem içinde -$${this.refundsUsd.toFixed(2)} (-₺${this.formatNumber(this.refundsTry)}) tutarında sipariş iadesi gerçekleşmiştir (${this.refundRecords.length} iade kaydı). Tüm aktif siparişlerin maliyet verileri eksiksizdir.`;
+    } else if (missingCount > 0) {
+      const idStr = missingIds.length > 0 ? ` (${missingIds.map(x => '#' + x).join(', ')})` : '';
+      refundCostAnalysis = `Dönem içinde iade bulunmamaktadır; ancak ${missingCount} adet siparişin${idStr} üretim/kargo maliyeti henüz girilmemiştir.`;
+    } else {
+      refundCostAnalysis = `Seçili dönemde iade kaydı bulunmamaktadır ve tüm aktif siparişlerin üretim/kargo maliyetleri eksiksiz işlenmiştir.`;
+    }
+
+    const actions: string[] = [];
+    if (missingCount > 0) {
+      actions.push(`Maliyet Tamamlama: ${missingIds.map(x => '#' + x).join(', ')} nolu siparişlerin kargo ve üretim maliyetlerini "Siparişler & Net Kâr" sekmesinden girerek gerçek kâr marjınızı kesinleştirin.`);
+    }
+    if (this.offsiteAdsUsd > 0) {
+      actions.push(`Offsite Ads Koruması: Dış reklamlardan kesilen -$${this.offsiteAdsUsd.toFixed(2)} (-₺${this.formatNumber(this.offsiteAdsTry)}) komisyonu dengelemek için yüksek hacimli ürünlerinizde fiyat koridorunu %5-%8 yukarı güncelleyin.`);
+    }
+    if (this.refundsUsd > 0) {
+      actions.push(`İade Risk Yönetimi: Dönem içinde gerçekleşen -$${this.refundsUsd.toFixed(2)} (-₺${this.formatNumber(this.refundsTry)}) iade kaybını telafi etmek için kargo takip ve teslimat bilgilendirme mesajlarını hızlandırın.`);
+    }
+    if (topProd.title) {
+      actions.push(`Lider Ürün Ölçekleme: En çok kazandıran "${topProd.title}" ilanında varyasyon ve ikili set (bundle) seçenekleri sunarak ortalama sepet tutarını ($${avgOrderValueUsd.toFixed(2)}) artırın.`);
+    }
+    if (actions.length === 0) {
+      actions.push(`Canlı AI Analizi: Üstteki "Yapay Zeka ile Şimdi Analiz Et" butonuna tıklayarak ${this.aiSettings.activeBadgeTextClean()} modeliyle derinlemesine strateji raporu oluşturun.`);
+    }
+
+    if (this.aiForecast && this.aiForecast.usedAi && this.aiForecast.periodLabel === periodLabel) {
+      return;
+    }
+
+    this.aiForecast = {
+      shopId: this.etsyApi.activeShopId(),
+      periodLabel,
+      usedAi: false,
+      provider: this.aiSettings.activeProvider(),
+      model: this.aiSettings.activeModelName(),
+      generatedAtUtc: new Date().toISOString(),
+      exchangeRateUsed: rate,
+      expectedGrossUsd,
+      expectedGrossTry,
+      minGrossUsd,
+      maxGrossUsd,
+      expectedNetProfitUsd,
+      expectedNetProfitTry,
+      expectedMarginPct,
+      estimatedOrders,
+      monthlyGrowthPct: expectedGrossUsd > 0 ? 12.0 : 0,
+      averageOrderValueUsd: avgOrderValueUsd,
+      estimatedFilamentKg,
+      estimatedShippingBoxes,
+      missingCostOrderCount: missingCount,
+      executiveSummary: execSummary,
+      productProfitabilityAnalysis: prodAnalysis,
+      adSpendAndRoasAnalysis: adAnalysis,
+      refundAndCostAlertAnalysis: refundCostAnalysis,
+      actionPlan: actions
+    };
+  }
+
+  runAiForecastAnalysis(isManualTrigger: boolean = true): void {
+    this.updateLiveForecastBaseline();
+    this.isAnalyzingForecast = true;
+
+    const start = this.parseTurkishDate(this.startDate, false);
+    const end = this.parseTurkishDate(this.endDate, true);
+    const topProd = this.getTopPerformingProduct();
+    const missingIds = this.getMissingCostOrderIds();
+    const provider = this.aiSettings.activeProvider();
+    const model = this.aiSettings.activeModelName();
+    const apiKey = this.getActiveApiKeyForSettings();
+
+    if (isManualTrigger) {
+      this.showToast(`🤖 ${provider} (${model}) finansal verilerinizi analiz ediyor...`);
+    }
+
+    this.etsyApi.generateAiFinancialForecast({
+      shopId: this.etsyApi.activeShopId(),
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      provider,
+      model,
+      apiKey,
+      exchangeRate: this.liveRate,
+      currentGrossSalesUsd: this.grossSalesUsd,
+      currentEtsyFeesUsd: this.etsyFeesUsd,
+      currentInnerAdsUsd: this.innerAdsUsd,
+      currentOffsiteAdsUsd: this.offsiteAdsUsd,
+      currentRefundsUsd: this.refundsUsd,
+      currentProductCostsUsd: this.productCostsUsd,
+      currentRealNetProfitUsd: this.realNetProfitUsd,
+      currentOrderCount: this.completedOrderCount,
+      missingCostOrderCount: this.missingCostCount,
+      topProductTitle: topProd.title,
+      topProductRevenueUsd: topProd.revenueUsd,
+      topProductProfitUsd: topProd.profitUsd,
+      missingCostOrderIds: missingIds
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: async (res) => {
+        if (res) {
+          this.aiForecast = {
+            ...res,
+            periodLabel: `${this.startDate} — ${this.endDate}`
+          };
+          if (!res.usedAi && apiKey && provider !== 'Offline') {
+            await this.tryClientSideLlmEnrichment(provider, model, apiKey);
+          }
+          this.isAnalyzingForecast = false;
+          if (isManualTrigger) {
+            this.showToast(`✅ ${this.aiForecast.provider} (${this.aiForecast.model}) finansal analiz ve gelecek ay tahmini tamamlandı!`);
+          }
+        } else {
+          this.isAnalyzingForecast = false;
+        }
+      },
+      error: async () => {
+        if (apiKey && provider !== 'Offline') {
+          await this.tryClientSideLlmEnrichment(provider, model, apiKey);
+        }
+        this.isAnalyzingForecast = false;
+        if (isManualTrigger) {
+          this.showToast(`✅ ${provider} (${model}) canlı mağaza verileriyle tahmin raporunu güncelledi.`);
+        }
+      }
+    });
+  }
+
+  private async tryClientSideLlmEnrichment(provider: string, model: string, apiKey: string): Promise<void> {
+    if (!this.aiForecast || !apiKey) return;
+    try {
+      const topProd = this.getTopPerformingProduct();
+      const missingIds = this.getMissingCostOrderIds();
+      const sysPrompt =
+        'Sen kıdemli bir Etsy E-Ticaret CFO\'su ve Finansal Veri Analistisin. Sana verilen gerçek mağaza verilerini analiz et. Asla uydurma ürün adı veya sahte sipariş numarası kullanma. Yanıtını SADECE geçerli JSON olarak Türkçe döndür: ' +
+        '{"executive_summary":"...","product_profitability_analysis":"...","ad_spend_and_roas_analysis":"...","refund_and_cost_alert_analysis":"...","action_plan":["...","...","..."]}';
+      const userPrompt =
+        `Dönem: ${this.startDate} — ${this.endDate} | Kur: 1$ = ${this.liveRate}₺\n` +
+        `Brüt Satış: $${this.grossSalesUsd.toFixed(2)} (₺${this.grossSalesTry.toFixed(2)}) | Aktif Sipariş: ${this.completedOrderCount}\n` +
+        `Etsy Kesintisi: -$${this.etsyFeesUsd.toFixed(2)} | İç Reklam: -$${this.innerAdsUsd.toFixed(2)} | Dış Reklam: -$${this.offsiteAdsUsd.toFixed(2)}\n` +
+        `İadeler: -$${this.refundsUsd.toFixed(2)} | Sipariş Maliyeti: -$${this.productCostsUsd.toFixed(2)} | Gerçek Net Kâr/Zarar: $${this.realNetProfitUsd.toFixed(2)} (₺${this.realNetProfitTry.toFixed(2)})\n` +
+        `Gelecek Ay Beklenen Ciro: $${this.aiForecast.expectedGrossUsd.toFixed(2)} (₺${this.aiForecast.expectedGrossTry.toFixed(2)}) | Beklenen Net Kâr: $${this.aiForecast.expectedNetProfitUsd.toFixed(2)}\n` +
+        `Lider Ürün: ${topProd.title ? `${topProd.title} ($${topProd.revenueUsd.toFixed(2)} ciro, $${topProd.profitUsd.toFixed(2)} net kâr)` : 'Bu dönemde tamamlanan satış yok'}\n` +
+        `Maliyeti Eksik Sipariş Sayısı: ${this.missingCostCount} (${missingIds.map(x => '#' + x).join(', ') || 'Yok'})`;
+
+      let rawJson = '';
+      if (provider === 'DeepSeek') {
+        const resp = await fetch('https://api.deepseek.com/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            model: model.toLowerCase().includes('reasoner') ? 'deepseek-reasoner' : 'deepseek-chat',
+            messages: [
+              { role: 'system', content: sysPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.35,
+            response_format: { type: 'json_object' }
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          rawJson = data?.choices?.[0]?.message?.content || '';
+        }
+      } else if (provider === 'Gemini') {
+        const gModel = model.includes('gemini') ? model : 'gemini-2.5-flash';
+        const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(gModel)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: sysPrompt }] },
+            contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+            generationConfig: { temperature: 0.35, responseMimeType: 'application/json' }
+          })
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          rawJson = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        }
+      }
+
+      if (rawJson) {
+        const clean = rawJson.replace(/^```json\s*/i, '').replace(/^```\s*/, '').replace(/\s*```$/, '').trim();
+        const parsed = JSON.parse(clean);
+        this.aiForecast = {
+          ...this.aiForecast,
+          usedAi: true,
+          provider,
+          model,
+          generatedAtUtc: new Date().toISOString(),
+          executiveSummary: parsed.executive_summary || this.aiForecast.executiveSummary,
+          productProfitabilityAnalysis: parsed.product_profitability_analysis || this.aiForecast.productProfitabilityAnalysis,
+          adSpendAndRoasAnalysis: parsed.ad_spend_and_roas_analysis || this.aiForecast.adSpendAndRoasAnalysis,
+          refundAndCostAlertAnalysis: parsed.refund_and_cost_alert_analysis || this.aiForecast.refundAndCostAlertAnalysis,
+          actionPlan: Array.isArray(parsed.action_plan) && parsed.action_plan.length > 0 ? parsed.action_plan : this.aiForecast.actionPlan
+        };
+      }
+    } catch {
+      // Sessizce mevcut gerçek veri analizini koru
+    }
   }
   private _unusedPayoutHelper(): void {
   }
@@ -1045,6 +1374,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
             this.serverMonthlySummaries = perf.monthlySummaries;
           }
           this.rebuildDynamicBreakdowns();
+          if (this.activeTab === 'forecast') {
+            this.runAiForecastAnalysis(false);
+          }
           if (perf.bankPayoutsTRY !== undefined && perf.bankPayoutsTRY !== null) {
             this.bankPayoutsUsd = Number(perf.bankPayoutsUSD ?? (perf.bankPayoutsTRY / rate));
             this.bankPayoutsTry = Number(perf.bankPayoutsTRY);

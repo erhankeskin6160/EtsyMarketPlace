@@ -95,3 +95,54 @@ export interface ForecastKpiSummary {
   filamentKg: number;
   shippingBoxesCount: number;
 }
+
+export interface AiFinancialForecastRequestDto {
+  shopId?: string;
+  startDate: string;
+  endDate: string;
+  provider?: string;
+  model?: string;
+  apiKey?: string;
+  exchangeRate?: number;
+  currentGrossSalesUsd?: number;
+  currentEtsyFeesUsd?: number;
+  currentInnerAdsUsd?: number;
+  currentOffsiteAdsUsd?: number;
+  currentRefundsUsd?: number;
+  currentProductCostsUsd?: number;
+  currentRealNetProfitUsd?: number;
+  currentOrderCount?: number;
+  missingCostOrderCount?: number;
+  topProductTitle?: string | null;
+  topProductRevenueUsd?: number;
+  topProductProfitUsd?: number;
+  missingCostOrderIds?: string[];
+}
+
+export interface AiFinancialForecastResponseDto {
+  shopId: string;
+  periodLabel: string;
+  usedAi: boolean;
+  provider: string;
+  model: string;
+  generatedAtUtc: string;
+  exchangeRateUsed: number;
+  expectedGrossUsd: number;
+  expectedGrossTry: number;
+  minGrossUsd: number;
+  maxGrossUsd: number;
+  expectedNetProfitUsd: number;
+  expectedNetProfitTry: number;
+  expectedMarginPct: number;
+  estimatedOrders: number;
+  monthlyGrowthPct: number;
+  averageOrderValueUsd: number;
+  estimatedFilamentKg: number;
+  estimatedShippingBoxes: number;
+  missingCostOrderCount: number;
+  executiveSummary: string;
+  productProfitabilityAnalysis: string;
+  adSpendAndRoasAnalysis: string;
+  refundAndCostAlertAnalysis: string;
+  actionPlan: string[];
+}

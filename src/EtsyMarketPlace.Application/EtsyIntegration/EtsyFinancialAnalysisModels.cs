@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace EtsyMarketPlace.Application.EtsyIntegration;
 
 public sealed record FinancialAnalysisSnapshot(
@@ -30,3 +33,52 @@ public sealed record FinancialAnalysisRecommendation(
     string Priority,
     string Title,
     string Description);
+
+public sealed record AiFinancialForecastCommand(
+    string ShopId,
+    DateTimeOffset StartDate,
+    DateTimeOffset EndDate,
+    string? Provider = null,
+    string? Model = null,
+    string? ApiKey = null,
+    decimal? ExchangeRate = null,
+    decimal? CurrentGrossSalesUsd = null,
+    decimal? CurrentEtsyFeesUsd = null,
+    decimal? CurrentInnerAdsUsd = null,
+    decimal? CurrentOffsiteAdsUsd = null,
+    decimal? CurrentRefundsUsd = null,
+    decimal? CurrentProductCostsUsd = null,
+    decimal? CurrentRealNetProfitUsd = null,
+    int? CurrentOrderCount = null,
+    int? MissingCostOrderCount = null,
+    string? TopProductTitle = null,
+    decimal? TopProductRevenueUsd = null,
+    decimal? TopProductProfitUsd = null,
+    IReadOnlyList<string>? MissingCostOrderIds = null);
+
+public sealed record AiFinancialForecastResultDto(
+    string ShopId,
+    string PeriodLabel,
+    bool UsedAi,
+    string Provider,
+    string Model,
+    DateTimeOffset GeneratedAtUtc,
+    decimal ExchangeRateUsed,
+    decimal ExpectedGrossUsd,
+    decimal ExpectedGrossTry,
+    decimal MinGrossUsd,
+    decimal MaxGrossUsd,
+    decimal ExpectedNetProfitUsd,
+    decimal ExpectedNetProfitTry,
+    decimal ExpectedMarginPct,
+    int EstimatedOrders,
+    decimal MonthlyGrowthPct,
+    decimal AverageOrderValueUsd,
+    decimal EstimatedFilamentKg,
+    int EstimatedShippingBoxes,
+    int MissingCostOrderCount,
+    string ExecutiveSummary,
+    string ProductProfitabilityAnalysis,
+    string AdSpendAndRoasAnalysis,
+    string RefundAndCostAlertAnalysis,
+    IReadOnlyList<string> ActionPlan);

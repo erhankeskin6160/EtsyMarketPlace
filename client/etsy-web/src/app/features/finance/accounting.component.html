@@ -232,35 +232,35 @@
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'charts'" 
-          (click)="activeTab = 'charts'">
+          (click)="switchTab('charts')">
           📊 Grafik Analizleri
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'forecast'" 
-          (click)="activeTab = 'forecast'">
+          (click)="switchTab('forecast')">
           🤖 AI Kâr & Ciro Tahmini
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'period'" 
-          (click)="activeTab = 'period'">
+          (click)="switchTab('period')">
           📅 Dönemsel Muhasebe
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'orders'" 
-          (click)="activeTab = 'orders'">
+          (click)="switchTab('orders')">
           📦 Siparişler & Net Kâr
         </button>
 
         <button 
           class="nav-tab" 
           [class.active]="activeTab === 'ledger'" 
-          (click)="activeTab = 'ledger'">
+          (click)="switchTab('ledger')">
           📋 Ödeme Defteri Kayıtları
         </button>
       </div>
@@ -514,43 +514,117 @@
           </div>
         </div>
 
-        <!-- TAB 2: AI KÂR & CİRO TAHMİNİ -->
+        <!-- TAB 2: AI KÂR & CİRO TAHMİNİ (CANLI AI CFO & PROJEKSİYON MOTORU) -->
         <div *ngIf="activeTab === 'forecast'" class="tab-pane">
-          <div class="forecast-grid-4">
-            <div class="forecast-card primary">
-              <div class="fc-title">🔮 GELECEK AY BEKLENEN CİRO</div>
-              <div class="fc-value">$1,350 / ₺66,312</div>
-              <div class="fc-sub">Min: $1,150 — Max: $1,580</div>
+          <!-- AI FORECAST ACTION & STATUS TOOLBAR -->
+          <div class="forecast-toolbar">
+            <div class="forecast-toolbar-left">
+              <span class="ai-engine-badge" [class.ai-live]="aiForecast?.usedAi">
+                <span class="ai-pulse-dot"></span>
+                🧠 Aktif AI Motoru: <strong>{{ aiForecast?.provider || aiSettings.activeProvider() }} ({{ aiForecast?.model || aiSettings.activeModelName() }})</strong>
+              </span>
+              <span class="forecast-period-pill">
+                📅 Baz Dönem: <strong>{{ aiForecast?.periodLabel || (startDate + ' — ' + endDate) }}</strong>
+              </span>
+              <span class="forecast-rate-pill">
+                💱 Kur: <strong>1$ = ₺{{ (aiForecast?.exchangeRateUsed || liveRate).toFixed(2) }}</strong>
+              </span>
             </div>
 
-            <div class="forecast-card success">
-              <div class="fc-title">💵 BEKLENEN GERÇEK NET KÂR</div>
-              <div class="fc-value">$545 / ₺26,770</div>
-              <div class="fc-sub">Beklenen Kâr Marjı: %40.4</div>
-            </div>
-
-            <div class="forecast-card sky">
-              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME</div>
-              <div class="fc-value">14 Sipariş</div>
-              <div class="fc-sub">Aylık Büyüme: +%22.5</div>
-            </div>
-
-            <div class="forecast-card warning">
-              <div class="fc-title">🖨️ STOK & HAMMADDE İHTİYACI</div>
-              <div class="fc-value">3.8 kg Filament</div>
-              <div class="fc-sub">12 Adet Kargo Kutusu</div>
+            <div class="forecast-toolbar-right">
+              <button 
+                class="btn-ai-analyze" 
+                [disabled]="isAnalyzingForecast"
+                (click)="runAiForecastAnalysis(true)">
+                <span *ngIf="!isAnalyzingForecast">🤖 Yapay Zeka ile Şimdi Analiz Et</span>
+                <span *ngIf="isAnalyzingForecast">⏳ {{ aiSettings.activeProvider() }} Analiz Ediyor...</span>
+              </button>
             </div>
           </div>
 
-          <div class="ai-cfo-panel">
-            <div class="ai-cfo-header">
-              <span class="sparkle">✨</span>
-              <h4>Gemini Spark AI CFO - Mağaza Büyüme ve Kârlılık Raporu</h4>
+          <!-- 4 DYNAMIC FORECAST KPI CARDS -->
+          <div class="forecast-grid-4" *ngIf="aiForecast as fc">
+            <div class="forecast-card primary">
+              <div class="fc-title">🔮 GELECEK 30 GÜN BEKLENEN CİRO</div>
+              <div class="fc-value" [ngClass]="fc.expectedGrossUsd > 0 ? 'text-emerald' : ''">
+                ${{ formatNumber(fc.expectedGrossUsd) }} / ₺{{ formatNumber(fc.expectedGrossTry) }}
+              </div>
+              <div class="fc-sub">
+                Güven Aralığı: ${{ formatNumber(fc.minGrossUsd) }} — ${{ formatNumber(fc.maxGrossUsd) }}
+              </div>
             </div>
-            <div class="ai-cfo-body">
-              <p>• <strong>Dönüşüm Oranı Analizi:</strong> 3D Printed Butterfly Balisong modeli %420 net marj ve %41.4 kâr katkısıyla mağazanızın amiral gemisidir. Reklam bütçenizi bu ürüne %15 artırmanız önerilir.</p>
-              <p>• <strong>Offsite Ads Uyarısı:</strong> Dış reklamlardan gelen 3 sipariş için $80.01 (%15 kesinti) ödenmiştir. Yüksek marjlı ürünler dışında Offsite reklamları sınırlandırmak net kârınızı ₺3.900 artıracaktır.</p>
-              <p>• <strong>Maliyet Girişi:</strong> #4174201942 nolu Ben 10 siparişinin filament maliyetini girdiğinizde gerçek net kârınız netleşecektir.</p>
+
+            <div class="forecast-card" [ngClass]="fc.expectedNetProfitUsd >= 0 ? 'success' : 'danger'">
+              <div class="fc-title">💵 BEKLENEN GERÇEK NET {{ fc.expectedNetProfitUsd >= 0 ? 'KÂR' : 'SONUÇ' }}</div>
+              <div class="fc-value" [ngClass]="fc.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
+                {{ formatSignedUsd(fc.expectedNetProfitUsd) }} / {{ formatSignedTry(fc.expectedNetProfitTry) }}
+              </div>
+              <div class="fc-sub">
+                Beklenen Net Kâr Marjı: <strong [ngClass]="fc.expectedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ fc.expectedMarginPct.toFixed(1) }}</strong>
+              </div>
+            </div>
+
+            <div class="forecast-card sky">
+              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME HIZI</div>
+              <div class="fc-value">{{ fc.estimatedOrders }} Sipariş</div>
+              <div class="fc-sub">
+                Aylık Büyüme: <strong [ngClass]="fc.monthlyGrowthPct >= 0 ? 'text-emerald' : 'text-danger'">{{ fc.monthlyGrowthPct >= 0 ? '+' : '' }}%{{ fc.monthlyGrowthPct.toFixed(1) }}</strong> | Ort. Sepet: ${{ fc.averageOrderValueUsd.toFixed(2) }}
+              </div>
+            </div>
+
+            <div class="forecast-card warning">
+              <div class="fc-title">🖨️ STOK, HAMMADDE & MALİYET DURUMU</div>
+              <div class="fc-value">{{ fc.estimatedFilamentKg.toFixed(2) }} kg Filament</div>
+              <div class="fc-sub">
+                {{ fc.estimatedShippingBoxes }} Kargo Kutusu
+                <span *ngIf="fc.missingCostOrderCount > 0" class="text-danger"> | ⚠️ {{ fc.missingCostOrderCount }} Eksik Maliyet</span>
+                <span *ngIf="fc.missingCostOrderCount === 0" class="text-emerald"> | ✅ Maliyetler Tam</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- DYNAMIC AI CFO REPORT & ACTION PLAN -->
+          <div class="ai-cfo-panel" *ngIf="aiForecast as fc">
+            <div class="ai-cfo-header">
+              <div class="ai-cfo-title-row">
+                <span class="sparkle">✨</span>
+                <h4>{{ fc.provider }} ({{ fc.model }}) AI CFO — Canlı Mağaza Büyüme ve Kârlılık Raporu</h4>
+              </div>
+              <span class="ai-source-tag" [class.live]="fc.usedAi">
+                {{ fc.usedAi ? '🟢 Canlı LLM CFO Analizi' : '🔵 Canlı VDS Finans Motoru Analizi' }}
+              </span>
+            </div>
+
+            <div class="ai-cfo-grid">
+              <div class="ai-cfo-section">
+                <div class="ai-sec-title">📊 Yönetici Özeti ve Nakit Akışı Projeksiyonu</div>
+                <p>{{ fc.executiveSummary }}</p>
+              </div>
+
+              <div class="ai-cfo-section">
+                <div class="ai-sec-title">🏆 Ürün Kârlılığı ve Dönüşüm Analizi</div>
+                <p>{{ fc.productProfitabilityAnalysis }}</p>
+              </div>
+
+              <div class="ai-cfo-section">
+                <div class="ai-sec-title">📣 Reklam Harcamaları (Etsy Ads & Offsite Ads) ve ROAS</div>
+                <p>{{ fc.adSpendAndRoasAnalysis }}</p>
+              </div>
+
+              <div class="ai-cfo-section">
+                <div class="ai-sec-title">🛡️ İade Riski ve Operasyonel Maliyet Denetimi</div>
+                <p>{{ fc.refundAndCostAlertAnalysis }}</p>
+              </div>
+            </div>
+
+            <div class="ai-action-box" *ngIf="fc.actionPlan && fc.actionPlan.length > 0">
+              <div class="ai-action-header">🚀 Gelecek 30 Gün İçin AI CFO Eylem Planı</div>
+              <ul class="ai-action-list">
+                <li *ngFor="let item of fc.actionPlan; let i = index">
+                  <span class="action-idx">{{ i + 1 }}</span>
+                  <span class="action-text">{{ item }}</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>

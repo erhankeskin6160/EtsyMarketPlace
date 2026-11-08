@@ -163,6 +163,21 @@ public class EtsyFinancialsController : BaseApiController
         return Ok(result);
     }
 
+    [HttpPost("etsy/financial/ai-forecast")]
+    [EndpointSummary("Canlı AI CFO & Gelecek Ay Kâr/Ciro Tahmin Motoru")]
+    public async Task<IActionResult> GenerateAiFinancialForecast(
+        [FromBody] AiFinancialForecastCommand request,
+        CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+            return BadRequest(new { error = "Geçersiz tahmin isteği." });
+
+        var resolvedShopId = ResolveShopId(request.ShopId, _config);
+        var normalizedCommand = request with { ShopId = resolvedShopId };
+        var result = await _analysis.GenerateAiForecastAsync(normalizedCommand, cancellationToken);
+        return Ok(result);
+    }
+
     [HttpGet("etsy/orders/unfulfilled-cost-alerts")]
     [EndpointSummary("Maliyeti Eksik Sipariş Alarmları")]
     public async Task<IActionResult> GetUnfulfilledCostAlerts(
@@ -492,6 +507,4 @@ public class EtsyFinancialsController : BaseApiController
         var response = await _mediator.Send(new SavePaymentReserveSnapshotCommand(normalized), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
-
-
 }

@@ -1,3 +1,7 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+
 namespace EtsyMarketPlace.Application.EtsyIntegration;
 
 public interface IEtsyFinancialAnalysisService
@@ -6,5 +10,9 @@ public interface IEtsyFinancialAnalysisService
         string shopId,
         DateTimeOffset startDate,
         DateTimeOffset endDate,
+        CancellationToken cancellationToken = default);
+
+    Task<AiFinancialForecastResultDto> GenerateAiForecastAsync(
+        AiFinancialForecastCommand command,
         CancellationToken cancellationToken = default);
 }

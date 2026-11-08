@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { DailyBrief, FinancialSummary, BankDeposit, EtsyConnectedShopDto } from '../models/etsy.models';
+import { AiFinancialForecastRequestDto, AiFinancialForecastResponseDto } from '../models/accounting.models';
 import { User, UpdateUserRequest, AuditLog, SystemStats } from '../models/auth.models';
 import { environment } from '../../../environments/environment';
 
@@ -628,6 +629,14 @@ export class EtsyApiService {
     if (startDate) url += `&startDate=${encodeURIComponent(startDate.toISOString())}`;
     if (endDate) url += `&endDate=${encodeURIComponent(endDate.toISOString())}`;
     return this.http.get<any>(url);
+  }
+
+  generateAiFinancialForecast(payload: AiFinancialForecastRequestDto): Observable<AiFinancialForecastResponseDto> {
+    const shopId = payload.shopId || this.activeShopId();
+    return this.http.post<AiFinancialForecastResponseDto>(`${this.API_BASE}/api/etsy/financial/ai-forecast`, {
+      ...payload,
+      shopId
+    });
   }
 
   getBankPayouts(startDate?: Date, endDate?: Date): Observable<EtsyBankPayoutDto[]> {
