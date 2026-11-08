@@ -648,12 +648,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.modalCostLossCancelCount = this.refundRecords.filter(r => r.cancelType === 'cost_loss').length;
 
     // 6. Gercek Net Kar & Bilanco Analizi Tablosu (Modal 3)
+    const isNetIncomePos = this.netIncomeTry >= 0;
+    const isRealProfitPos = this.realNetProfitTry >= 0;
     this.balanceBreakdownRecords = [
-      { type: 'Gelir', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: this.netIncomeTry, status: '🟢 Net', isPositive: true, explanation: 'Komisyon, reklam ve iadeler sonrası platformdan kalan net hakediş' },
+      { type: isNetIncomePos ? 'Gelir' : 'Borç', name: 'Etsy Net Gelir', detail: 'Net Hakediş', amount: this.netIncomeTry, status: isNetIncomePos ? '🟢 Net' : '🔴 Borç', isPositive: isNetIncomePos, explanation: 'Komisyon, reklam ve iadeler sonrası platformdan kalan net hakediş' },
       { type: 'Kargo', name: 'Kargo Gönderimleri', detail: `${this.completedOrderCount} Gönderi`, amount: -this.totalShippingCostTry, status: '', isPositive: false, explanation: 'Siparişlerin müşterilere kargolanma ve lojistik maliyeti (ShipEntegra / QuickShipper)' },
       { type: 'Üretim', name: '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -this.totalProductionCostTry, status: '', isPositive: false, explanation: 'Üretimde harcanan hammadde ve 3D yazıcı amortismanı' },
       { type: 'Paket', name: 'Paketleme & Fatura', detail: `${this.invoiceOrderCount} Fatura`, amount: -this.totalPackagingCostTry, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' },
-      { type: 'KÂR', name: 'GERÇEK NET KÂR', detail: 'Saf Kâr', amount: this.realNetProfitTry, status: '🟢 Kâr', isPositive: true, explanation: 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' }
+      { type: isRealProfitPos ? 'KÂR' : 'ZARAR', name: 'GERÇEK NET KÂR', detail: isRealProfitPos ? 'Saf Kâr' : 'Net Zarar', amount: this.realNetProfitTry, status: isRealProfitPos ? '🟢 Kâr' : '🔴 Zarar', isPositive: isRealProfitPos, explanation: isRealProfitPos ? 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' : 'Giderler ve kesintiler gelirleri aştığı için oluşan net zarar' }
     ];
 
     // 7. Etsy Net Gelir Mutabakat Tablosu (Modal 9)
@@ -666,7 +668,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       { category: 'Etsy Ads Arama İçi Reklam', amountUsd: -this.innerAdsUsd, amountTry: -this.innerAdsTry, isPositive: false, note: 'Etsy içi tıklama başı reklam harcaması' },
       { category: 'Etsy Kesinti KDV (VAT)', amountUsd: -vatUsd, amountTry: -vatTry, isPositive: false, note: 'Kesintilere uygulanan resmî KDV tevkifatı' },
       { category: 'İadeler ve İptaller (Refunds)', amountUsd: -this.refundsUsd, amountTry: -this.refundsTry, isPositive: false, note: 'İade edilen sipariş tutarı' },
-      { category: 'NET HAKEDİŞ (ETSY NET GELİR)', amountUsd: this.netIncomeUsd, amountTry: this.netIncomeTry, isPositive: true, note: 'Banka hesabına aktarılmaya hazır nihai platform bakiyesi' }
+      { category: 'NET HAKEDİŞ (ETSY NET GELİR)', amountUsd: this.netIncomeUsd, amountTry: this.netIncomeTry, isPositive: isNetIncomePos, note: isNetIncomePos ? 'Banka hesabına aktarılmaya hazır nihai platform bakiyesi' : 'Platform giderleri ve iadeler satışı aştığı için oluşan net borç/eksi bakiye' }
     ];
 
     // 8. Odeme Defteri Kayitlari (Ledger Entries Tab 5)
@@ -1131,10 +1133,27 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   formatKpi(valTry: number, valUsd: number): string {
-    if (this.isTry) {
-      return '₺' + this.formatNumber(valTry);
+    const val = this.isTry ? valTry : valUsd;
+    const symbol = this.isTry ? '₺' : '$';
+    return this.formatSignedCurrency(val, symbol);
+  }
+
+  formatSignedCurrency(val: number, symbol: string): string {
+    if (!val || Math.abs(val) < 0.005) {
+      return symbol + '0,00';
     }
-    return '$' + this.formatNumber(valUsd);
+    if (val < 0) {
+      return '-' + symbol + this.formatNumber(Math.abs(val));
+    }
+    return symbol + this.formatNumber(val);
+  }
+
+  formatSignedTry(val: number): string {
+    return this.formatSignedCurrency(val, '₺');
+  }
+
+  formatSignedUsd(val: number): string {
+    return this.formatSignedCurrency(val, '$');
   }
 
   formatNumber(val: number): string {

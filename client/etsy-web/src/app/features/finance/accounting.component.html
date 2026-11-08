@@ -1,1318 +1,1318 @@
-<div class="accounting-view">
-      <!-- 1. TOP HEADER & DESKTOP CONTROLS -->
-      <div class="accounting-header">
-        <div class="header-left">
-          <div class="title-row">
-            <h1 class="page-title">Finansal Raporlama Muhasebe Paneli</h1>
-            <span class="live-status-pill">
-              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: {{ orders.length }} sipariş<span *ngIf="totalLedgerCount > orders.length"> ({{ totalLedgerCount }} defter kaydı)</span> | {{ startDate }} — {{ endDate }}
-            </span>
-          </div>
-          <p class="page-subtitle">Etsy Payment Account hareketleri, sipariş kâr marjları ve çok katmanlı maliyet denetimi</p>
-        </div>
-
-        <div class="header-actions">
-          <!-- LIVE CURRENCY TOGGLE -->
-          <div class="currency-toggle-box">
-            <button 
-              class="curr-btn" 
-              [class.active]="!isTry" 
-              (click)="setCurrency('USD')">
-              $ USD
-            </button>
-            <button 
-              class="curr-btn" 
-              [class.active]="isTry" 
-              (click)="setCurrency('TRY')">
-              ₺ TRY
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- DESKTOP TOP TOOLBAR (Matching FinancialReportForm.cs) -->
-      <div class="desktop-action-bar">
-        <!-- Date Preset Dropdown -->
-        <div class="bar-control-group">
-          <select [(ngModel)]="selectedDatePreset" (change)="onPresetChange()" class="bar-select" aria-label="Tarih Aralığı Filtresi">
-            <option value="last30">Son 30 Gün</option>
-            <option value="last7">Son 7 Gün</option>
-            <option value="thisMonth">Bu Ay</option>
-            <option value="lastMonth">Geçen Ay</option>
-            <option value="all">Tüm Zamanlar</option>
-            <option value="custom">Özel Tarih Aralığı</option>
-          </select>
-        </div>
-
-        <!-- Date Range Pickers -->
-        <div class="bar-control-group dates">
-          <input type="text" [(ngModel)]="startDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Başlangıç Tarihi" placeholder="GG.AA.YYYY" />
-          <span class="date-sep">—</span>
-          <input type="text" [(ngModel)]="endDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Bitiş Tarihi" placeholder="GG.AA.YYYY" />
-        </div>
-
-        <!-- Action Buttons -->
-        <button class="bar-btn refresh" (click)="refreshFromEtsy()" [disabled]="isRefreshing">
-          <span class="btn-icon">🔄</span> {{ isRefreshing ? 'Yenileniyor...' : "Etsy'den Yenile" }}
-        </button>
-
-        <button class="bar-btn secondary" (click)="openCostManager()">
-          <span class="btn-icon">🏷️</span> Ürün Maliyetleri
-        </button>
-
-        <button class="bar-btn accent" (click)="openApiSettings()">
-          <span class="btn-icon">⚙️</span> API Ayarları
-        </button>
-
-        <!-- Auto Rate Checkbox -->
-        <div class="rate-toggle-group">
-          <label class="checkbox-label">
-            <input type="checkbox" [(ngModel)]="autoRateEnabled" (change)="onAutoRateToggle()" />
-            <span class="flag-icon">🇹🇷</span> TR Oto Kur:
-          </label>
-          <span class="live-rate-badge">{{ liveRate.toFixed(2) }} ₺</span>
-        </div>
-
-        <!-- Excel, Telegram, VDS Buttons -->
-        <button class="bar-btn excel" (click)="exportExcel()">
-          <span class="btn-icon">📊</span> Excel
-        </button>
-
-        <button class="bar-btn telegram" (click)="sendTelegramReport()">
-          <span class="btn-icon">✈️</span> Telegram'a Gönder
-        </button>
-
-        <button class="bar-btn vds" (click)="syncVds()" [disabled]="isSyncingVds">
-          <span class="btn-icon">☁️</span> {{ isSyncingVds ? 'Aktarılıyor...' : "VDS'e Aktar" }}
-        </button>
-      </div>
-
-      
-      <!-- LIVE ETSY PAYMENT RESERVE & FUNDS BAR (VDS SYNC SNAPSHOT) -->
-      <div class="reserve-status-banner">
-        <div class="reserve-banner-left">
-          <div class="reserve-badge-pill">
-            <span class="live-pulse-dot"></span>
-            <strong>Etsy Ödeme Hesabı & Fon Rezervi (VDS Canlı)</strong>
-          </div>
-          <p class="reserve-sub-text">
-            Etsy Kuralı: Fonlar <strong>{{ reserveSnapshot.reserveHoldDays }} gün</strong> süreyle rezerve tutulur. Sonraki denetim / inceleme: <strong>{{ reserveSnapshot.reevaluationDate || '30 Kasım' }}</strong>
-          </p>
-        </div>
-
-        <div class="reserve-metrics-group">
-          <!-- Kullanılabilir Bakiye -->
-          <div class="reserve-metric-box">
-            <span class="metric-lbl">Kullanılabilir (Deposit):</span>
-            <span class="metric-val" [ngClass]="reserveSnapshot.currentBalanceTry >= 0 ? 'text-success' : 'text-danger'">
-              ₺{{ formatNumber(reserveSnapshot.currentBalanceTry) }}
-            </span>
-          </div>
-
-          <!-- Rezervedeki Para -->
-          <div class="reserve-metric-box">
-            <span class="metric-lbl">Rezervedeki Fon (%{{ reserveSnapshot.reservePercent }}):</span>
-            <span class="metric-val text-warning">
-              ₺{{ formatNumber(reserveSnapshot.pendingBalanceTry) }}
-            </span>
-          </div>
-
-          <!-- Toplam Etsy Fonu -->
-          <div class="reserve-metric-box">
-            <span class="metric-lbl">Toplam Etsy Hesabı:</span>
-            <span class="metric-val text-cyan">
-              ₺{{ formatNumber(reserveSnapshot.totalFundsTry) }}
-            </span>
-          </div>
-
-          <!-- Denetim ve Senkron Butonu -->
-          <div class="reserve-action-box">
-            <button class="btn-sync-reserve" (click)="openSyncModal()" title="VDS 1-Tık Senkron Yer İmi ve Rezerv Ayarları">
-              <span class="sync-icon">⚡</span> VDS Senkronizasyonu
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 2. NINE FINANCIAL KPI CARDS (Matching FinancialReportForm.cs Image 2) -->
-      <div class="kpi-grid-9">
-        <!-- 1. Brüt Satış -->
-        <div class="kpi-card gross interactive-kpi" (click)="openSalesAnalysisModal()" title="Satış ve Gelir Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">💰 BRÜT SATIŞ</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-success">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</div>
-          <div class="kpi-indicator green"></div>
-        </div>
-
-        <!-- 2. Etsy Kesintisi -->
-        <div class="kpi-card fee interactive-kpi" (click)="openFeesAnalysisModal()" title="Etsy Komisyon & Kesinti Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">📋 ETSY KESİNTİSİ</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-warning">-{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</div>
-          <div class="kpi-indicator orange"></div>
-        </div>
-
-        <!-- 3. İç Reklam -->
-        <div class="kpi-card inner-ad interactive-kpi" (click)="openInnerAdsModal()" title="Etsy Ads İç Reklam Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">📢 İÇ REKLAM</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-danger">-{{ formatKpi(innerAdsTry, innerAdsUsd) }}</div>
-          <div class="kpi-indicator red"></div>
-        </div>
-
-        <!-- 4. Dış Reklam -->
-        <div class="kpi-card offsite-ad interactive-kpi" (click)="openOffsiteAdsModal()" title="Offsite Ads Dış Reklam Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">🌐 DIŞ REKLAM</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-orange">-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</div>
-          <div class="kpi-indicator dark-orange"></div>
-        </div>
-
-        <!-- 5. İadeler -->
-        <div class="kpi-card refunds interactive-kpi" (click)="openRefundsModal()" title="İade ve Geri Ödeme Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">↩️ İADELER</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-danger">-{{ formatKpi(refundsTry, refundsUsd) }}</div>
-          <div class="kpi-indicator red"></div>
-        </div>
-
-        <!-- 6. Etsy Net Gelir -->
-        <div class="kpi-card net-income interactive-kpi" (click)="openNetIncomeModal()" title="Etsy Net Gelir & Platform Hakediş Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">✅ ETSY NET GELİR</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-primary">{{ formatKpi(netIncomeTry, netIncomeUsd) }}</div>
-          <div class="kpi-indicator indigo"></div>
-        </div>
-
-        <!-- 7. Sipariş Maliyeti -->
-        <div class="kpi-card costs interactive-kpi" (click)="openCostBreakdownModal()" title="Sipariş & Kargo Maliyet Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">📦 SİPARİŞ MALİYETİ</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-warning">-{{ formatKpi(productCostsTry, productCostsUsd) }}</div>
-          <div class="kpi-indicator orange"></div>
-        </div>
-
-        <!-- 8. Gerçek Net Kâr -->
-        <div class="kpi-card real-profit highlight interactive-kpi" (click)="openBalanceAnalysisModal()" title="Gerçek Net Kâr & Bilanço Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">💵 GERÇEK NET KÂR</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-emerald">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</div>
-          <div class="kpi-indicator emerald"></div>
-        </div>
-
-        <!-- 9. Banka Yatırımı -->
-        <div class="kpi-card payouts interactive-kpi" (click)="openBankPayoutModal()" title="Etsy Banka Yatırımı & Transfer Analizini Aç (Detay)">
-          <div class="kpi-header">
-            <span class="kpi-title">🏦 BANKA YATIRIMI</span>
-            <span class="kpi-zoom-hint">🔍 Detay</span>
-          </div>
-          <div class="kpi-value text-cyan">-{{ formatKpi(bankPayoutsTry, bankPayoutsUsd) }}</div>
-          <div class="kpi-indicator cyan"></div>
-        </div>
-      </div>
-
-      <!-- 3. NAVIGATION TABS (5 Desktop Tabs) -->
-      <div class="tab-nav-bar">
-        <button 
-          class="nav-tab" 
-          [class.active]="activeTab === 'charts'" 
-          (click)="activeTab = 'charts'">
-          📊 Grafik Analizleri
-        </button>
-
-        <button 
-          class="nav-tab" 
-          [class.active]="activeTab === 'forecast'" 
-          (click)="activeTab = 'forecast'">
-          🤖 AI Kâr & Ciro Tahmini
-        </button>
-
-        <button 
-          class="nav-tab" 
-          [class.active]="activeTab === 'period'" 
-          (click)="activeTab = 'period'">
-          📅 Dönemsel Muhasebe
-        </button>
-
-        <button 
-          class="nav-tab" 
-          [class.active]="activeTab === 'orders'" 
-          (click)="activeTab = 'orders'">
-          📦 Siparişler & Net Kâr
-        </button>
-
-        <button 
-          class="nav-tab" 
-          [class.active]="activeTab === 'ledger'" 
-          (click)="activeTab = 'ledger'">
-          📋 Ödeme Defteri Kayıtları
-        </button>
-      </div>
-
-      <!-- 4. TAB CONTENTS -->
-      <div class="tab-content-area">
-
-        <!-- TAB 4: SİPARİŞLER & NET KÂR (IMAGE 2 PARITY) -->
-        <div *ngIf="activeTab === 'orders'" class="tab-pane">
-          <!-- SEARCH, FILTER & RECONCILIATION BAR -->
-          <div class="orders-toolbar">
-            <div class="search-input-wrap">
-              <input 
-                type="text" 
-                [(ngModel)]="orderSearchQuery" 
-                (ngModelChange)="filterOrders()"
-                placeholder="🔍 Sipariş No, Müşteri No / Adı veya Ürün Ara..." 
-                class="order-search-input" />
-            </div>
-
-            <div class="filter-dropdown-wrap">
-              <select [(ngModel)]="orderCostFilter" (change)="filterOrders()" class="order-filter-select" aria-label="Sipariş Durumu Filtresi">
-                <option value="all">📦 Tüm Siparişler</option>
+<div class="accounting-view">
+      <!-- 1. TOP HEADER & DESKTOP CONTROLS -->
+      <div class="accounting-header">
+        <div class="header-left">
+          <div class="title-row">
+            <h1 class="page-title">Finansal Raporlama Muhasebe Paneli</h1>
+            <span class="live-status-pill">
+              <span class="live-dot"></span> Canlı Etsy API verisi yüklendi: {{ orders.length }} sipariş<span *ngIf="totalLedgerCount > orders.length"> ({{ totalLedgerCount }} defter kaydı)</span> | {{ startDate }} — {{ endDate }}
+            </span>
+          </div>
+          <p class="page-subtitle">Etsy Payment Account hareketleri, sipariş kâr marjları ve çok katmanlı maliyet denetimi</p>
+        </div>
+
+        <div class="header-actions">
+          <!-- LIVE CURRENCY TOGGLE -->
+          <div class="currency-toggle-box">
+            <button 
+              class="curr-btn" 
+              [class.active]="!isTry" 
+              (click)="setCurrency('USD')">
+              $ USD
+            </button>
+            <button 
+              class="curr-btn" 
+              [class.active]="isTry" 
+              (click)="setCurrency('TRY')">
+              ₺ TRY
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DESKTOP TOP TOOLBAR (Matching FinancialReportForm.cs) -->
+      <div class="desktop-action-bar">
+        <!-- Date Preset Dropdown -->
+        <div class="bar-control-group">
+          <select [(ngModel)]="selectedDatePreset" (change)="onPresetChange()" class="bar-select" aria-label="Tarih Aralığı Filtresi">
+            <option value="last30">Son 30 Gün</option>
+            <option value="last7">Son 7 Gün</option>
+            <option value="thisMonth">Bu Ay</option>
+            <option value="lastMonth">Geçen Ay</option>
+            <option value="all">Tüm Zamanlar</option>
+            <option value="custom">Özel Tarih Aralığı</option>
+          </select>
+        </div>
+
+        <!-- Date Range Pickers -->
+        <div class="bar-control-group dates">
+          <input type="text" [(ngModel)]="startDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Başlangıç Tarihi" placeholder="GG.AA.YYYY" />
+          <span class="date-sep">—</span>
+          <input type="text" [(ngModel)]="endDate" (change)="onCustomDateChange()" (keyup.enter)="onCustomDateChange()" class="bar-date-input" aria-label="Bitiş Tarihi" placeholder="GG.AA.YYYY" />
+        </div>
+
+        <!-- Action Buttons -->
+        <button class="bar-btn refresh" (click)="refreshFromEtsy()" [disabled]="isRefreshing">
+          <span class="btn-icon">🔄</span> {{ isRefreshing ? 'Yenileniyor...' : "Etsy'den Yenile" }}
+        </button>
+
+        <button class="bar-btn secondary" (click)="openCostManager()">
+          <span class="btn-icon">🏷️</span> Ürün Maliyetleri
+        </button>
+
+        <button class="bar-btn accent" (click)="openApiSettings()">
+          <span class="btn-icon">⚙️</span> API Ayarları
+        </button>
+
+        <!-- Auto Rate Checkbox -->
+        <div class="rate-toggle-group">
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="autoRateEnabled" (change)="onAutoRateToggle()" />
+            <span class="flag-icon">🇹🇷</span> TR Oto Kur:
+          </label>
+          <span class="live-rate-badge">{{ liveRate.toFixed(2) }} ₺</span>
+        </div>
+
+        <!-- Excel, Telegram, VDS Buttons -->
+        <button class="bar-btn excel" (click)="exportExcel()">
+          <span class="btn-icon">📊</span> Excel
+        </button>
+
+        <button class="bar-btn telegram" (click)="sendTelegramReport()">
+          <span class="btn-icon">✈️</span> Telegram'a Gönder
+        </button>
+
+        <button class="bar-btn vds" (click)="syncVds()" [disabled]="isSyncingVds">
+          <span class="btn-icon">☁️</span> {{ isSyncingVds ? 'Aktarılıyor...' : "VDS'e Aktar" }}
+        </button>
+      </div>
+
+      
+      <!-- LIVE ETSY PAYMENT RESERVE & FUNDS BAR (VDS SYNC SNAPSHOT) -->
+      <div class="reserve-status-banner">
+        <div class="reserve-banner-left">
+          <div class="reserve-badge-pill">
+            <span class="live-pulse-dot"></span>
+            <strong>Etsy Ödeme Hesabı & Fon Rezervi (VDS Canlı)</strong>
+          </div>
+          <p class="reserve-sub-text">
+            Etsy Kuralı: Fonlar <strong>{{ reserveSnapshot.reserveHoldDays }} gün</strong> süreyle rezerve tutulur. Sonraki denetim / inceleme: <strong>{{ reserveSnapshot.reevaluationDate || '30 Kasım' }}</strong>
+          </p>
+        </div>
+
+        <div class="reserve-metrics-group">
+          <!-- Kullanılabilir Bakiye -->
+          <div class="reserve-metric-box">
+            <span class="metric-lbl">Kullanılabilir (Deposit):</span>
+            <span class="metric-val" [ngClass]="reserveSnapshot.currentBalanceTry >= 0 ? 'text-success' : 'text-danger'">
+              ₺{{ formatNumber(reserveSnapshot.currentBalanceTry) }}
+            </span>
+          </div>
+
+          <!-- Rezervedeki Para -->
+          <div class="reserve-metric-box">
+            <span class="metric-lbl">Rezervedeki Fon (%{{ reserveSnapshot.reservePercent }}):</span>
+            <span class="metric-val text-warning">
+              ₺{{ formatNumber(reserveSnapshot.pendingBalanceTry) }}
+            </span>
+          </div>
+
+          <!-- Toplam Etsy Fonu -->
+          <div class="reserve-metric-box">
+            <span class="metric-lbl">Toplam Etsy Hesabı:</span>
+            <span class="metric-val text-cyan">
+              ₺{{ formatNumber(reserveSnapshot.totalFundsTry) }}
+            </span>
+          </div>
+
+          <!-- Denetim ve Senkron Butonu -->
+          <div class="reserve-action-box">
+            <button class="btn-sync-reserve" (click)="openSyncModal()" title="VDS 1-Tık Senkron Yer İmi ve Rezerv Ayarları">
+              <span class="sync-icon">⚡</span> VDS Senkronizasyonu
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. NINE FINANCIAL KPI CARDS (Matching FinancialReportForm.cs Image 2) -->
+      <div class="kpi-grid-9">
+        <!-- 1. Brüt Satış -->
+        <div class="kpi-card gross interactive-kpi" (click)="openSalesAnalysisModal()" title="Satış ve Gelir Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">💰 BRÜT SATIŞ</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value text-success">{{ formatKpi(grossSalesTry, grossSalesUsd) }}</div>
+          <div class="kpi-indicator green"></div>
+        </div>
+
+        <!-- 2. Etsy Kesintisi -->
+        <div class="kpi-card fee interactive-kpi" (click)="openFeesAnalysisModal()" title="Etsy Komisyon & Kesinti Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">📋 ETSY KESİNTİSİ</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value text-warning">-{{ formatKpi(etsyFeesTry, etsyFeesUsd) }}</div>
+          <div class="kpi-indicator orange"></div>
+        </div>
+
+        <!-- 3. İç Reklam -->
+        <div class="kpi-card inner-ad interactive-kpi" (click)="openInnerAdsModal()" title="Etsy Ads İç Reklam Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">📢 İÇ REKLAM</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value text-danger">-{{ formatKpi(innerAdsTry, innerAdsUsd) }}</div>
+          <div class="kpi-indicator red"></div>
+        </div>
+
+        <!-- 4. Dış Reklam -->
+        <div class="kpi-card offsite-ad interactive-kpi" (click)="openOffsiteAdsModal()" title="Offsite Ads Dış Reklam Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">🌐 DIŞ REKLAM</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value text-orange">-{{ formatKpi(offsiteAdsTry, offsiteAdsUsd) }}</div>
+          <div class="kpi-indicator dark-orange"></div>
+        </div>
+
+        <!-- 5. İadeler -->
+        <div class="kpi-card refunds interactive-kpi" (click)="openRefundsModal()" title="İade ve Geri Ödeme Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">↩️ İADELER</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value text-danger">-{{ formatKpi(refundsTry, refundsUsd) }}</div>
+          <div class="kpi-indicator red"></div>
+        </div>
+
+        <!-- 6. Etsy Net Gelir -->
+        <div class="kpi-card net-income interactive-kpi" (click)="openNetIncomeModal()" title="Etsy Net Gelir & Platform Hakediş Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">{{ netIncomeTry >= 0 ? '✅ ETSY NET GELİR' : '🔴 ETSY NET GELİR (BORÇ)' }}</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value" [ngClass]="netIncomeTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatKpi(netIncomeTry, netIncomeUsd) }}</div>
+          <div class="kpi-indicator" [ngClass]="netIncomeTry >= 0 ? 'indigo' : 'crimson'"></div>
+        </div>
+
+        <!-- 7. Sipariş Maliyeti -->
+        <div class="kpi-card costs interactive-kpi" (click)="openCostBreakdownModal()" title="Sipariş & Kargo Maliyet Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">📦 SİPARİŞ MALİYETİ</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value text-warning">-{{ formatKpi(productCostsTry, productCostsUsd) }}</div>
+          <div class="kpi-indicator orange"></div>
+        </div>
+
+        <!-- 8. Gerçek Net Kâr -->
+        <div class="kpi-card real-profit highlight interactive-kpi" [class.danger]="realNetProfitTry < 0" (click)="openBalanceAnalysisModal()" title="Gerçek Net Kâr & Bilanço Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">{{ realNetProfitTry >= 0 ? '💵 GERÇEK NET KÂR' : '🔴 GERÇEK NET ZARAR' }}</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value" [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</div>
+          <div class="kpi-indicator" [ngClass]="realNetProfitTry >= 0 ? 'emerald' : 'crimson'"></div>
+        </div>
+
+        <!-- 9. Banka Yatırımı -->
+        <div class="kpi-card payouts interactive-kpi" (click)="openBankPayoutModal()" title="Etsy Banka Yatırımı & Transfer Analizini Aç (Detay)">
+          <div class="kpi-header">
+            <span class="kpi-title">🏦 BANKA YATIRIMI</span>
+            <span class="kpi-zoom-hint">🔍 Detay</span>
+          </div>
+          <div class="kpi-value text-cyan">-{{ formatKpi(bankPayoutsTry, bankPayoutsUsd) }}</div>
+          <div class="kpi-indicator cyan"></div>
+        </div>
+      </div>
+
+      <!-- 3. NAVIGATION TABS (5 Desktop Tabs) -->
+      <div class="tab-nav-bar">
+        <button 
+          class="nav-tab" 
+          [class.active]="activeTab === 'charts'" 
+          (click)="activeTab = 'charts'">
+          📊 Grafik Analizleri
+        </button>
+
+        <button 
+          class="nav-tab" 
+          [class.active]="activeTab === 'forecast'" 
+          (click)="activeTab = 'forecast'">
+          🤖 AI Kâr & Ciro Tahmini
+        </button>
+
+        <button 
+          class="nav-tab" 
+          [class.active]="activeTab === 'period'" 
+          (click)="activeTab = 'period'">
+          📅 Dönemsel Muhasebe
+        </button>
+
+        <button 
+          class="nav-tab" 
+          [class.active]="activeTab === 'orders'" 
+          (click)="activeTab = 'orders'">
+          📦 Siparişler & Net Kâr
+        </button>
+
+        <button 
+          class="nav-tab" 
+          [class.active]="activeTab === 'ledger'" 
+          (click)="activeTab = 'ledger'">
+          📋 Ödeme Defteri Kayıtları
+        </button>
+      </div>
+
+      <!-- 4. TAB CONTENTS -->
+      <div class="tab-content-area">
+
+        <!-- TAB 4: SİPARİŞLER & NET KÂR (IMAGE 2 PARITY) -->
+        <div *ngIf="activeTab === 'orders'" class="tab-pane">
+          <!-- SEARCH, FILTER & RECONCILIATION BAR -->
+          <div class="orders-toolbar">
+            <div class="search-input-wrap">
+              <input 
+                type="text" 
+                [(ngModel)]="orderSearchQuery" 
+                (ngModelChange)="filterOrders()"
+                placeholder="🔍 Sipariş No, Müşteri No / Adı veya Ürün Ara..." 
+                class="order-search-input" />
+            </div>
+
+            <div class="filter-dropdown-wrap">
+              <select [(ngModel)]="orderCostFilter" (change)="filterOrders()" class="order-filter-select" aria-label="Sipariş Durumu Filtresi">
+                <option value="all">📦 Tüm Siparişler</option>
                 <option value="open">🔵 Kargolanacak (Yeni)</option>
-                <option value="completed">🟢 Tamamlanan / Gönderilen</option>
-                <option value="canceled">🔴 İptal / İade Edilenler</option>
-                <option value="hasCost">✅ Maliyeti Girilmiş</option>
-                <option value="missingCost">⚠️ Maliyeti Eksik</option>
-                <option value="hasInvoice">📎 Faturalı Siparişler</option>
-              </select>
-            </div>
-
-            <button class="btn-clear-filter" (click)="clearOrderFilters()" title="Filtreyi Temizle">
-              ✕
-            </button>
-
-            <button class="btn-profit-info" (click)="openProfitReconciliationModal()">
-              ❓ Kâr Farkı Nedir?
-            </button>
-
-            <!-- Order Summary KPI Text -->
-            <div class="orders-summary-label">
-              <span>📦 <strong>{{ filteredOrders.length }} sipariş</strong><ng-container *ngIf="canceledOrderCount > 0"> ({{ canceledOrderCount }} iptal)</ng-container></span>
-              <span class="sep">|</span>
-              <span>Sipariş Kârı: <strong [ngClass]="totalOrderProfitUsd >= 0 ? 'text-success' : 'text-danger'">{{ totalOrderProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(totalOrderProfitTry))) : ('₺' + formatNumber(totalOrderProfitTry)) }} ({{ totalOrderProfitUsd < 0 ? ('-$' + Math.abs(totalOrderProfitUsd).toFixed(2)) : ('$' + totalOrderProfitUsd.toFixed(2)) }})</strong></span>
-              <span class="sep">|</span>
-              <span>🏛️ Mağaza Net: <strong class="text-emerald">₺{{ formatNumber(realNetProfitTry) }}</strong></span>
-              <span class="sep">|</span>
-              <span class="missing-badge" *ngIf="missingCostCount > 0">
-                ⚠️ {{ missingCostCount }} maliyetsiz
-              </span>
-              <span class="text-success" *ngIf="missingCostCount === 0">
-                ✅ Tamamlandı
-              </span>
-            </div>
-          </div>
-
-          <!-- ORDERS & NET PROFIT DATA GRID (15 Columns Matching Image 2) -->
-          <div class="glass-table-wrapper">
-            <table class="glass-table orders-table">
-              <thead>
-                <tr>
-                  <th (click)="sortOrders('date')" class="sortable-th" [class.active-sort]="sortColumn === 'date'" title="Tarihe Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'date'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Tarih
-                  </th>
-                  <th (click)="sortOrders('receiptId')" class="sortable-th" [class.active-sort]="sortColumn === 'receiptId'" title="Sipariş No'ya Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'receiptId'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Sipariş No
-                  </th>
-                  <th (click)="sortOrders('orderStatus')" class="sortable-th" [class.active-sort]="sortColumn === 'orderStatus'" title="Duruma Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'orderStatus'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Durum
-                  </th>
-                  <th (click)="sortOrders('buyerName')" class="sortable-th" [class.active-sort]="sortColumn === 'buyerName'" title="Müşteri Adına Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'buyerName'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Müşteri
-                  </th>
-                  <th (click)="sortOrders('productTitle')" class="sortable-th" [class.active-sort]="sortColumn === 'productTitle'" title="Ürün Adına Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'productTitle'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Ürün
-                  </th>
-                  <th (click)="sortOrders('quantity')" class="sortable-th" [class.active-sort]="sortColumn === 'quantity'" title="Adede Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'quantity'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Adet
-                  </th>
-                  <th (click)="sortOrders('grandTotalUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'grandTotalUsd'" title="Müşteri Ödemesine Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'grandTotalUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Müşteri Ödemesi ($)
-                  </th>
-                  <th (click)="sortOrders('etsyFeesUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'etsyFeesUsd'" title="Etsy Kesintisine Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'etsyFeesUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Etsy Kesintileri ($)
-                  </th>
-                  <th (click)="sortOrders('offsiteAdFeeUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'offsiteAdFeeUsd'" title="Dış Reklam Maliyetine Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'offsiteAdFeeUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Dış Reklam ($)
-                  </th>
-                  <th (click)="sortOrders('productCostUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'productCostUsd'" title="Sipariş Maliyetine Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'productCostUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Sipariş Maliyeti ($)
-                  </th>
-                  <th (click)="sortOrders('netProfitUsd')" class="sortable-th highlight-th" [class.active-sort]="sortColumn === 'netProfitUsd'" title="Net Kâr Dolarına Göre Sırala">
-                    <span class="sort-badge highlight" *ngIf="sortColumn === 'netProfitUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Net Kâr ($)
-                  </th>
-                  <th (click)="sortOrders('exchangeRate')" class="sortable-th" [class.active-sort]="sortColumn === 'exchangeRate'" title="Kilitli Kura Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'exchangeRate'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Kur (₺)
-                  </th>
-                  <th (click)="sortOrders('netProfitTry')" class="sortable-th" [class.active-sort]="sortColumn === 'netProfitTry'" title="Net Kâr TL'ye Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'netProfitTry'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Net Kâr (₺)
-                  </th>
-                  <th (click)="sortOrders('hasCostData')" class="sortable-th" [class.active-sort]="sortColumn === 'hasCostData'" title="Maliyet Giriş Durumuna Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'hasCostData'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>Maliyet & Düzenle</th>
-                  <th (click)="sortOrders('hasInvoice')" class="sortable-th" [class.active-sort]="sortColumn === 'hasInvoice'" title="Fatura Durumuna Göre Sırala">
-                    <span class="sort-badge" *ngIf="sortColumn === 'hasInvoice'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
-                    Kargo Faturası
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let o of filteredOrders" 
-                    [class.canceled-row]="o.orderStatus === 'canceled'"
-                    (dblclick)="editOrderCost(o)"
-                    (contextmenu)="openContextMenu($event, o)">
-                  <td class="date-cell">{{ o.orderDate }}</td>
-                  <td class="order-id-cell">#{{ o.receiptId }}</td>
-                  <td>
-                    <span class="status-badge" [ngClass]="o.orderStatus">
-                      {{ o.displayStatus }}
-                    </span>
-                  </td>
-                  <td class="customer-cell" [title]="o.buyerName">{{ o.buyerName }}</td>
-                  <td class="product-cell" [title]="o.productTitle">{{ o.productTitle }}</td>
-                  <td class="qty-cell">{{ o.quantity }}</td>
+                <option value="completed">🟢 Tamamlanan / Gönderilen</option>
+                <option value="canceled">🔴 İptal / İade Edilenler</option>
+                <option value="hasCost">✅ Maliyeti Girilmiş</option>
+                <option value="missingCost">⚠️ Maliyeti Eksik</option>
+                <option value="hasInvoice">📎 Faturalı Siparişler</option>
+              </select>
+            </div>
+
+            <button class="btn-clear-filter" (click)="clearOrderFilters()" title="Filtreyi Temizle">
+              ✕
+            </button>
+
+            <button class="btn-profit-info" (click)="openProfitReconciliationModal()">
+              ❓ Kâr Farkı Nedir?
+            </button>
+
+            <!-- Order Summary KPI Text -->
+            <div class="orders-summary-label">
+              <span>📦 <strong>{{ filteredOrders.length }} sipariş</strong><ng-container *ngIf="canceledOrderCount > 0"> ({{ canceledOrderCount }} iptal)</ng-container></span>
+              <span class="sep">|</span>
+              <span>Sipariş Kârı: <strong [ngClass]="totalOrderProfitUsd >= 0 ? 'text-success' : 'text-danger'">{{ totalOrderProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(totalOrderProfitTry))) : ('₺' + formatNumber(totalOrderProfitTry)) }} ({{ totalOrderProfitUsd < 0 ? ('-$' + Math.abs(totalOrderProfitUsd).toFixed(2)) : ('$' + totalOrderProfitUsd.toFixed(2)) }})</strong></span>
+              <span class="sep">|</span>
+              <span>🏛️ Mağaza Net: <strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong></span>
+              <span class="sep">|</span>
+              <span class="missing-badge" *ngIf="missingCostCount > 0">
+                ⚠️ {{ missingCostCount }} maliyetsiz
+              </span>
+              <span class="text-success" *ngIf="missingCostCount === 0">
+                ✅ Tamamlandı
+              </span>
+            </div>
+          </div>
+
+          <!-- ORDERS & NET PROFIT DATA GRID (15 Columns Matching Image 2) -->
+          <div class="glass-table-wrapper">
+            <table class="glass-table orders-table">
+              <thead>
+                <tr>
+                  <th (click)="sortOrders('date')" class="sortable-th" [class.active-sort]="sortColumn === 'date'" title="Tarihe Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'date'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Tarih
+                  </th>
+                  <th (click)="sortOrders('receiptId')" class="sortable-th" [class.active-sort]="sortColumn === 'receiptId'" title="Sipariş No'ya Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'receiptId'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Sipariş No
+                  </th>
+                  <th (click)="sortOrders('orderStatus')" class="sortable-th" [class.active-sort]="sortColumn === 'orderStatus'" title="Duruma Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'orderStatus'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Durum
+                  </th>
+                  <th (click)="sortOrders('buyerName')" class="sortable-th" [class.active-sort]="sortColumn === 'buyerName'" title="Müşteri Adına Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'buyerName'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Müşteri
+                  </th>
+                  <th (click)="sortOrders('productTitle')" class="sortable-th" [class.active-sort]="sortColumn === 'productTitle'" title="Ürün Adına Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'productTitle'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Ürün
+                  </th>
+                  <th (click)="sortOrders('quantity')" class="sortable-th" [class.active-sort]="sortColumn === 'quantity'" title="Adede Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'quantity'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Adet
+                  </th>
+                  <th (click)="sortOrders('grandTotalUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'grandTotalUsd'" title="Müşteri Ödemesine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'grandTotalUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Müşteri Ödemesi ($)
+                  </th>
+                  <th (click)="sortOrders('etsyFeesUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'etsyFeesUsd'" title="Etsy Kesintisine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'etsyFeesUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Etsy Kesintileri ($)
+                  </th>
+                  <th (click)="sortOrders('offsiteAdFeeUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'offsiteAdFeeUsd'" title="Dış Reklam Maliyetine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'offsiteAdFeeUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Dış Reklam ($)
+                  </th>
+                  <th (click)="sortOrders('productCostUsd')" class="sortable-th" [class.active-sort]="sortColumn === 'productCostUsd'" title="Sipariş Maliyetine Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'productCostUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Sipariş Maliyeti ($)
+                  </th>
+                  <th (click)="sortOrders('netProfitUsd')" class="sortable-th highlight-th" [class.active-sort]="sortColumn === 'netProfitUsd'" title="Net Kâr Dolarına Göre Sırala">
+                    <span class="sort-badge highlight" *ngIf="sortColumn === 'netProfitUsd'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Net Kâr ($)
+                  </th>
+                  <th (click)="sortOrders('exchangeRate')" class="sortable-th" [class.active-sort]="sortColumn === 'exchangeRate'" title="Kilitli Kura Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'exchangeRate'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Kur (₺)
+                  </th>
+                  <th (click)="sortOrders('netProfitTry')" class="sortable-th" [class.active-sort]="sortColumn === 'netProfitTry'" title="Net Kâr TL'ye Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'netProfitTry'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Net Kâr (₺)
+                  </th>
+                  <th (click)="sortOrders('hasCostData')" class="sortable-th" [class.active-sort]="sortColumn === 'hasCostData'" title="Maliyet Giriş Durumuna Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'hasCostData'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>Maliyet & Düzenle</th>
+                  <th (click)="sortOrders('hasInvoice')" class="sortable-th" [class.active-sort]="sortColumn === 'hasInvoice'" title="Fatura Durumuna Göre Sırala">
+                    <span class="sort-badge" *ngIf="sortColumn === 'hasInvoice'">{{ sortDirection === 'asc' ? '▲' : '▼' }}</span>
+                    Kargo Faturası
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let o of filteredOrders" 
+                    [class.canceled-row]="o.orderStatus === 'canceled'"
+                    (dblclick)="editOrderCost(o)"
+                    (contextmenu)="openContextMenu($event, o)">
+                  <td class="date-cell">{{ o.orderDate }}</td>
+                  <td class="order-id-cell">#{{ o.receiptId }}</td>
+                  <td>
+                    <span class="status-badge" [ngClass]="o.orderStatus">
+                      {{ o.displayStatus }}
+                    </span>
+                  </td>
+                  <td class="customer-cell" [title]="o.buyerName">{{ o.buyerName }}</td>
+                  <td class="product-cell" [title]="o.productTitle">{{ o.productTitle }}</td>
+                  <td class="qty-cell">{{ o.quantity }}</td>
                   <td class="amount-cell" [ngClass]="(o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? 'text-danger' : ''">{{ '$' + ((o.refundAmountUsd && o.refundAmountUsd > 0) ? o.refundAmountUsd : o.grandTotalUsd).toFixed(2) }}</td>
                   <td class="fee-cell">{{ (o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? (o.etsyFeesUsd < 0 ? '+$' + Math.abs(o.etsyFeesUsd).toFixed(2) : '$0.00') : ('$' + o.etsyFeesUsd.toFixed(2)) }}</td>
-                  <td class="fee-cell">{{ o.offsiteAdFeeUsd > 0 ? ('$' + o.offsiteAdFeeUsd.toFixed(2)) : '—' }}</td>
-                  <td class="cost-cell">
-                    {{ o.productCostUsd !== null ? ('$' + o.productCostUsd.toFixed(2)) : '—' }}
-                  </td>
-                  <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-success' : 'text-danger'">
-                    {{ o.netProfitUsd < 0 ? ('-$' + Math.abs(o.netProfitUsd).toFixed(2)) : (o.orderStatus === 'canceled' && !o.hasCostData ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2))) }}
-                  </td>
-                  <td class="rate-cell" [title]="'TCMB Kilitli Kuru: ₺' + o.exchangeRate.toFixed(2) + (o.effectiveExchangeRate ? ('\nEtsy Fiili Kuru (%2.5 FX Kesintili): ₺' + o.effectiveExchangeRate.toFixed(2)) : '') + (o.etsyNetPayoutTry ? ('\nEtsy Net Hak Ediş: ₺' + formatNumber(o.etsyNetPayoutTry)) : '')">₺{{ o.exchangeRate.toFixed(2) }}</td>
-                  <td class="profit-try-cell" [ngClass]="o.netProfitTry >= 0 ? 'text-emerald' : 'text-danger'" [title]="'Resmi Muhasebe Kârı: ₺' + formatNumber(o.netProfitTry) + (o.effectiveExchangeRate && o.netProfitUsd ? ('\nFiili Kasa Kârı: ₺' + formatNumber(o.netProfitUsd * o.effectiveExchangeRate)) : '')">
-                    {{ o.netProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(o.netProfitTry))) : (o.orderStatus === 'canceled' && !o.hasCostData ? '₺0,00' : ('₺' + formatNumber(o.netProfitTry))) }}
-                  </td>
-                  <td class="cost-flag-cell">
-                    <div style="display: flex; align-items: center; gap: 6px;">
-                      <span 
-                        class="cost-status-pill" 
-                        [class.has-cost]="o.hasCostData" 
-                        [class.no-cost]="!o.hasCostData && o.orderStatus !== 'canceled'"
-                        [class.canceled-pill]="o.orderStatus === 'canceled'"
-                        (click)="editOrderCost(o)">
-                        {{ o.orderStatus === 'canceled' ? (o.hasCostData ? '🔴 İptal (Maliyetli)' : '🔴 İptal') : (o.hasCostData ? '✅ Girildi' : '⚠️ Eksik') }}
-                      </span>
-                      <button 
-                        class="btn-edit-cost" 
-                        (click)="editOrderCost(o)" 
-                        title="Bu siparişin ürün, kargo ve paketleme maliyetini düzenle">
-                        ✏️ Düzenle
-                      </button>
-                    </div>
-                  </td>
-                  <td class="invoice-cell">
-                    <button 
-                      class="btn-invoice" 
-                      [class.has-inv]="o.hasInvoice" 
-                      (click)="handleInvoice(o)">
-                      {{ o.hasInvoice ? '📄 Aç' : '📎 Yükle' }}
-                    </button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- TAB 1: GRAFİK ANALİZLERİ -->
-        <div *ngIf="activeTab === 'charts'" class="tab-pane">
-          <div class="charts-grid">
-            <div class="chart-card">
-              <h3 class="chart-title">📊 Aylık Gelir vs Gider vs Kâr Dağılımı</h3>
-              <div class="chart-bar-container">
-                <div class="chart-col">
-                  <div class="bar-wrap">
-                    <div class="bar gross-bar" style="height: 85%;"></div>
-                  </div>
-                  <span class="bar-lbl">Brüt Satış<br><strong>₺{{ formatNumber(grossSalesTry) }}</strong></span>
-                </div>
-                <div class="chart-col">
-                  <div class="bar-wrap">
-                    <div class="bar fees-bar" style="height: 25%;"></div>
-                  </div>
-                  <span class="bar-lbl">Kesintiler<br><strong>₺{{ formatNumber(etsyFeesTry) }}</strong></span>
-                </div>
-                <div class="chart-col">
-                  <div class="bar-wrap">
-                    <div class="bar ads-bar" style="height: 12%;"></div>
-                  </div>
-                  <span class="bar-lbl">Reklamlar<br><strong>₺{{ formatNumber(totalAdsTry) }}</strong></span>
-                </div>
-                <div class="chart-col">
-                  <div class="bar-wrap">
-                    <div class="bar costs-bar" style="height: 28%;"></div>
-                  </div>
-                  <span class="bar-lbl">Maliyetler<br><strong>₺{{ formatNumber(productCostsTry) }}</strong></span>
-                </div>
-                <div class="chart-col">
-                  <div class="bar-wrap">
-                    <div class="bar profit-bar" style="height: 48%;"></div>
-                  </div>
-                  <span class="bar-lbl">Net Kâr<br><strong>₺{{ formatNumber(realNetProfitTry) }}</strong></span>
-                </div>
-              </div>
-            </div>
-
-            <div class="chart-card">
-              <h3 class="chart-title">🥧 Gider Dağılımı ve Maliyet Payları</h3>
-              <div class="expense-breakdown-list">
-                <div class="expense-row">
-                  <span class="exp-dot orange"></span>
-                  <span class="exp-name">Ürün & Kargo Maliyetleri</span>
-                  <span class="exp-pct">%{{ expenseCostPct }}</span>
-                  <span class="exp-val">₺{{ formatNumber(productCostsTry) }}</span>
-                </div>
-                <div class="expense-row">
-                  <span class="exp-dot yellow"></span>
-                  <span class="exp-name">Etsy Komisyon & İşlem Ücreti</span>
-                  <span class="exp-pct">%{{ expenseFeesPct }}</span>
-                  <span class="exp-val">₺{{ formatNumber(etsyFeesTry) }}</span>
-                </div>
-                <div class="expense-row">
-                  <span class="exp-dot red"></span>
-                  <span class="exp-name">Offsite & Etsy Ads Reklamları</span>
-                  <span class="exp-pct">%{{ expenseAdsPct }}</span>
-                  <span class="exp-val">₺{{ formatNumber(totalAdsTry) }}</span>
-                </div>
-                <div class="expense-row">
-                  <span class="exp-dot purple"></span>
-                  <span class="exp-name">Müşteri İadeleri</span>
-                  <span class="exp-pct">%{{ expenseRefundsPct }}</span>
-                  <span class="exp-val">₺{{ formatNumber(refundsTry) }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB 2: AI KÂR & CİRO TAHMİNİ -->
-        <div *ngIf="activeTab === 'forecast'" class="tab-pane">
-          <div class="forecast-grid-4">
-            <div class="forecast-card primary">
-              <div class="fc-title">🔮 GELECEK AY BEKLENEN CİRO</div>
-              <div class="fc-value">$1,350 / ₺66,312</div>
-              <div class="fc-sub">Min: $1,150 — Max: $1,580</div>
-            </div>
-
-            <div class="forecast-card success">
-              <div class="fc-title">💵 BEKLENEN GERÇEK NET KÂR</div>
-              <div class="fc-value">$545 / ₺26,770</div>
-              <div class="fc-sub">Beklenen Kâr Marjı: %40.4</div>
-            </div>
-
-            <div class="forecast-card sky">
-              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME</div>
-              <div class="fc-value">14 Sipariş</div>
-              <div class="fc-sub">Aylık Büyüme: +%22.5</div>
-            </div>
-
-            <div class="forecast-card warning">
-              <div class="fc-title">🖨️ STOK & HAMMADDE İHTİYACI</div>
-              <div class="fc-value">3.8 kg Filament</div>
-              <div class="fc-sub">12 Adet Kargo Kutusu</div>
-            </div>
-          </div>
-
-          <div class="ai-cfo-panel">
-            <div class="ai-cfo-header">
-              <span class="sparkle">✨</span>
-              <h4>Gemini Spark AI CFO - Mağaza Büyüme ve Kârlılık Raporu</h4>
-            </div>
-            <div class="ai-cfo-body">
-              <p>• <strong>Dönüşüm Oranı Analizi:</strong> 3D Printed Butterfly Balisong modeli %420 net marj ve %41.4 kâr katkısıyla mağazanızın amiral gemisidir. Reklam bütçenizi bu ürüne %15 artırmanız önerilir.</p>
-              <p>• <strong>Offsite Ads Uyarısı:</strong> Dış reklamlardan gelen 3 sipariş için $80.01 (%15 kesinti) ödenmiştir. Yüksek marjlı ürünler dışında Offsite reklamları sınırlandırmak net kârınızı ₺3.900 artıracaktır.</p>
-              <p>• <strong>Maliyet Girişi:</strong> #4174201942 nolu Ben 10 siparişinin filament maliyetini girdiğinizde gerçek net kârınız netleşecektir.</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- TAB 3: DÖNEMSEL MUHASEBE -->
-        <div *ngIf="activeTab === 'period'" class="tab-pane">
-          <div class="glass-table-wrapper">
-            <table class="glass-table">
-              <thead>
-                <tr>
-                  <th>Dönem (Ay / Yıl)</th>
-                  <th>Sipariş</th>
-                  <th>Brüt Satış</th>
-                  <th>Etsy Kesintisi</th>
-                  <th>Dış Reklam</th>
-                  <th>Sipariş Maliyeti</th>
-                  <th>Banka Yatırımı</th>
-                  <th>Gerçek Net Kâr</th>
-                  <th>Kâr Marjı</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let p of periodSummaries">
-                  <td><strong>{{ p.periodLabel }}</strong></td>
-                  <td>{{ p.orderCount }} Adet</td>
-                  <td class="text-success">₺{{ formatNumber(p.grossTry) }}</td>
-                  <td class="text-warning">-₺{{ formatNumber(p.feesTry) }}</td>
-                  <td class="text-danger">-₺{{ formatNumber(p.adsTry) }}</td>
-                  <td class="text-warning">-₺{{ formatNumber(p.costsTry) }}</td>
-                  <td class="text-primary">₺{{ formatNumber(p.payoutsTry) }}</td>
-                  <td class="text-emerald"><strong>₺{{ formatNumber(p.realProfitTry) }}</strong></td>
-                  <td><span class="margin-pill">%{{ p.grossTry > 0 ? (p.realProfitTry / p.grossTry * 100).toFixed(1) : '0.0' }}</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div *ngIf="false" class="tab-pane">
-          <div class="glass-table-wrapper">
-            <table class="glass-table">
-              <thead>
-                <tr>
-                  <th>Dönem</th>
-                  <th>Brüt Satış</th>
-                  <th>Etsy Kesintisi</th>
-                  <th>Reklamlar</th>
-                  <th>İadeler</th>
-                  <th>Ürün Maliyeti</th>
-                  <th>Etsy Net Gelir</th>
-                  <th>Gerçek Net Kâr</th>
-                  <th>Kâr Marjı</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><strong>Eylül - Ekim 2026</strong></td>
-                  <td class="text-success">₺54.608,24</td>
-                  <td class="text-warning">-₺12.783,71</td>
-                  <td class="text-danger">-₺4.334,59</td>
-                  <td class="text-danger">-₺1.888,14</td>
-                  <td class="text-warning">-₺13.524,10</td>
-                  <td class="text-primary">₺35.601,79</td>
-                  <td class="text-emerald"><strong>₺22.077,69</strong></td>
-                  <td><span class="margin-pill">%40.4</span></td>
-                </tr>
-                <tr>
-                  <td><strong>Ağustos 2026</strong></td>
-                  <td class="text-success">₺48.120,50</td>
-                  <td class="text-warning">-₺11.230,10</td>
-                  <td class="text-danger">-₺3.850,00</td>
-                  <td class="text-danger">-₺940,00</td>
-                  <td class="text-warning">-₺12.100,00</td>
-                  <td class="text-primary">₺32.100,40</td>
-                  <td class="text-emerald"><strong>₺20.000,40</strong></td>
-                  <td><span class="margin-pill">%41.5</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- TAB 5: ÖDEME DEFTERİ KAYITLARI -->
-        <div *ngIf="activeTab === 'ledger'" class="tab-pane">
-          <div class="glass-table-wrapper">
-            <table class="glass-table">
-              <thead>
-                <tr>
-                  <th>İşlem ID</th>
-                  <th>Tarih</th>
-                  <th>Tür</th>
-                  <th>Açıklama</th>
-                  <th>Sipariş No</th>
-                  <th>Brüt Tutar</th>
-                  <th>Kesinti</th>
-                  <th>Net Tutar ($)</th>
-                  <th>Net Tutar (₺)</th>
-                  <th>Bakiye ($)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let e of ledgerEntries">
-                  <td class="mono">{{ e.id }}</td>
-                  <td>{{ e.entryDate }}</td>
-                  <td>
-                    <span class="type-pill" [ngClass]="e.transactionType">{{ e.typeDisplay }}</span>
-                  </td>
-                  <td class="title-cell">{{ e.title }}</td>
-                  <td class="mono">{{ e.orderNumber || '—' }}</td>
-                  <td class="amount">{{ e.grossAmount > 0 ? ('$' + e.grossAmount.toFixed(2)) : '—' }}</td>
-                  <td class="fee text-danger">{{ e.feeAmount !== 0 ? ('$' + e.feeAmount.toFixed(2)) : '—' }}</td>
-                  <td class="net" [ngClass]="e.netAmount >= 0 ? 'text-success' : 'text-danger'">
-                    {{ e.netAmount >= 0 ? ('$' + e.netAmount.toFixed(2)) : ('-$' + Math.abs(e.netAmount).toFixed(2)) }}
-                  </td>
-                  <td class="net-try text-emerald">
-                    ₺{{ (e.netAmount * liveRate).toFixed(2) }}
-                  </td>
-                  <td class="balance mono">&#36;{{ e.runningBalance.toFixed(2) }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- CUSTOM RIGHT-CLICK CONTEXT MENU (Matching Desktop FinancialReportForm.cs Image) -->
-      <div class="desktop-context-menu" 
-           *ngIf="showContextMenu" 
-           [style.top.px]="contextMenuY" 
-           [style.left.px]="contextMenuX" 
-           (click)="$event.stopPropagation()">
-        <div class="ctx-item" (click)="generateInvoicePdf()">
-          <span class="ctx-icon">⚡</span> Otomatik Fatura / Konşimento Oluştur (PDF)
-        </div>
-        <div class="ctx-item" (click)="openInvoicePdf()">
-          <span class="ctx-icon">📄</span> Faturayı / PDF'i Aç
-        </div>
-        <div class="ctx-item" (click)="uploadInvoicePdf()">
-          <span class="ctx-icon">📎</span> Kargo Faturası Yükle...
-        </div>
-        <div class="ctx-item" (click)="viewOrderDetails()">
-          <span class="ctx-icon">📊</span> Sipariş Detaylarını Gör
-        </div>
-        <div class="ctx-item highlight" (click)="editCostFromContext()">
-          <span class="ctx-icon">🏷️</span> Maliyet / Fatura Düzenle
-        </div>
-        <div class="ctx-divider"></div>
-        <div class="ctx-item" (click)="openEtsyOrder()">
-          <span class="ctx-icon">🌐</span> Etsy'de Siparişi Aç
-        </div>
-        <div class="ctx-item" (click)="copyOrderNumber()">
-          <span class="ctx-icon">📋</span> Sipariş No Kopyala
-        </div>
-        <div class="ctx-item" (click)="copyCustomerInfo()">
-          <span class="ctx-icon">👤</span> Müşteri Bilgisini Kopyala
-        </div>
-        <div class="ctx-item" (click)="copySelectedCell()">
-          <span class="ctx-icon">📝</span> Seçili Hücreyi Kopyala
-        </div>
-        <div class="ctx-item" (click)="copyWholeRow()">
-          <span class="ctx-icon">📄</span> Tüm Satırı Kopyala
-        </div>
-      </div>
-
-      <!-- MODAL: KÂR FARKI MUTABAKATI -->
-      <div class="modal-backdrop" *ngIf="showReconciliationModal" (click)="closeModals()">
-        <div class="modal-card reconciliation-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <h3>📊 KÂR MUTABAKATI & FARK ANALİZİ</h3>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="rec-section">
-              <h4>1️⃣ Siparişlerin Toplam Katkı Kârı: <span class="text-success">₺{{ formatNumber(totalOrderProfitTry) }} (${{ formatNumber(totalOrderProfitUsd) }})</span></h4>
-              <p>• Tek tek {{ orders.length }} adet siparişten elde edilen doğrudan ürün operasyon kârıdır.</p>
-              <p>• Henüz mağaza geneline ait olan reklamlar ve genel giderler bundan düşülmemiştir.</p>
-            </div>
-
-            <div class="rec-section">
-              <h4>2️⃣ Mağaza Geneline Ait Giderler (Siparişten Bağımsız):</h4>
-              <ul>
-                <li>📢 <strong>Etsy Ads İç Reklam:</strong> <span class="text-danger">-₺{{ formatNumber(innerAdsTry) }} (-${{ formatNumber(innerAdsUsd) }})</span></li>
-                <li>🌐 <strong>Offsite Ads Dış Reklam:</strong> <span class="text-orange">-₺{{ formatNumber(offsiteAdsTry) }} (-${{ formatNumber(offsiteAdsUsd) }})</span></li>
-                <li>↩️ <strong>Dönemsel İadeler:</strong> <span class="text-danger">-₺{{ formatNumber(refundsTry) }} (-${{ formatNumber(refundsUsd) }})</span></li>
-                <li *ngIf="missingCostCount > 0">⚠️ <strong>{{ missingCostCount }} siparişin</strong> maliyeti henüz girilmemiştir.</li>
-              </ul>
-            </div>
-
-            <div class="rec-divider"></div>
-
-            <div class="rec-final">
-              <h4>🏛️ Üst Karttaki GERÇEK NET KÂR: <span class="text-emerald">₺{{ formatNumber(realNetProfitTry) }} (${{ formatNumber(realNetProfitUsd) }})</span></h4>
-              <p>(Tüm mağaza reklamları, iadeler ve genel giderler düşüldükten sonra banka hesabınıza ve cebinize kalan nihai kârdır.)</p>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Anladım, Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- MODAL: MALİYET / FATURA DÜZENLE -->
-      <div class="modal-backdrop" *ngIf="showCostModal" (click)="closeModals()">
-        <div class="modal-card cost-modal-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <h3>🏷️ Maliyet / Fatura Düzenle (#{{ selectedOrder?.receiptId }})</h3>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body" *ngIf="selectedOrder">
-            <div class="order-context-box">
-              <div class="ctx-row"><strong>Müşteri:</strong> {{ selectedOrder.buyerName }}</div>
-              <div class="ctx-row"><strong>Ürün Adı:</strong> {{ selectedOrder.productTitle }}</div>
-              <div class="badge-row">
-                <span class="ctx-badge gross">Ödeme: &#36;{{ selectedOrder.grandTotalUsd.toFixed(2) }}</span>
-                <span class="ctx-badge fee">Etsy Kesintisi: -&#36;{{ selectedOrder.etsyFeesUsd.toFixed(2) }}</span>
-                <span class="ctx-badge ads" *ngIf="selectedOrder.offsiteAdFeeUsd > 0" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
-                  Dış Reklam: -&#36;{{ selectedOrder.offsiteAdFeeUsd.toFixed(2) }}
-                </span>
-                <span class="ctx-badge rate" [title]="'Sipariş tarihindeki (' + selectedOrder.orderDate + ') TCMB / Piyasa Kilitli Kuru'">🔒 TCMB Kuru: ₺{{ selectedOrder.exchangeRate.toFixed(2) }}</span>
-                <span class="ctx-badge rate" *ngIf="selectedOrder.effectiveExchangeRate" [title]="'Etsy %2.5 döviz çevrim kesintisi sonrası fiili banka kuru'" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
-                  🏦 Etsy Fiili Kuru: ₺{{ selectedOrder.effectiveExchangeRate.toFixed(2) }}
-                </span>
-              </div>
-              <div class="etsy-payout-box" *ngIf="selectedOrder.etsyNetPayoutTry" style="margin-top: 10px; padding: 8px 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; font-size: 12px;">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                  <span><strong>Etsy Ödeme Hesabı Net Hak Edişi (Maliyetsiz):</strong></span>
-                  <span style="color: #34d399; font-weight: 700; font-size: 13px;">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry) }} <small style="color: #94a3b8;">(&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0)).toFixed(2) }})</small></span>
-                </div>
-              </div>
-              <div class="ctx-row" style="margin-top: 8px; font-size: 11px; color: #a1a1aa; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 4px;" *ngIf="selectedOrder.costNotes">
-                <strong>📦 Taşıyıcı / Takip Notu:</strong> {{ selectedOrder.costNotes }}
-              </div>
-            </div>
-
-            <div class="cost-input-group">
-              <label>🧵 Birim Üretim & Filament Maliyeti ($):</label>
-              <input type="number" [(ngModel)]="costModalProduction" class="cost-input" step="0.1" />
-              <span class="hint-text">Filament gramajı (PLA/PETG) ve 3D yazıcı amortisman payı</span>
-            </div>
-            <div class="cost-input-group">
-              <label>🚚 Kargo Navlun Maliyeti ($):</label>
-              <input type="number" [(ngModel)]="costModalShipping" class="cost-input" step="0.1" />
-              <span class="hint-text">Aras Global, ShipEntegra veya Navlungo taşıma ücreti</span>
-            </div>
-            <div class="cost-input-group">
-              <label>📦 Paketleme & Kutu Maliyeti ($):</label>
-              <input type="number" [(ngModel)]="costModalPackaging" class="cost-input" step="0.1" />
-              <span class="hint-text">Karton kutu, balonlu naylon ve barkod etiket gideri</span>
-            </div>
-
-            <!-- Live Calculation Preview -->
-            <div class="calculated-preview-box">
-              <div class="calc-row">
-                <span>Toplam Sipariş Maliyeti:</span>
-                <strong>&#36;{{ (costModalProduction + costModalShipping + costModalPackaging).toFixed(2) }}</strong>
-              </div>
-              <div class="calc-row highlight">
-                <span>Hesaplanan Net Kâr ($):</span>
-                <strong class="text-success">&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)).toFixed(2) }}</strong>
-              </div>
-              <div class="calc-row highlight">
-                <span>Hesaplanan Net Kâr (₺):</span>
-                <strong class="text-emerald">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)).toFixed(2) }}</strong>
-              </div>
-              <div class="calc-row reserve-calc-row">
-                <span>🔒 Rezerve Blokesi (%{{ reserveSnapshot.reservePercent }} - {{ reserveSnapshot.reserveHoldDays }} Gün):</span>
-                <strong class="text-warning">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * (reserveSnapshot.reservePercent / 100)).toFixed(2) }}</strong>
-              </div>
-              <div class="calc-row reserve-calc-row">
-                <span>🔓 Kullanılabilir Bakiye (%{{ 100 - reserveSnapshot.reservePercent }}):</span>
-                <strong class="text-cyan">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * ((100 - reserveSnapshot.reservePercent) / 100)).toFixed(2) }}</strong>
-              </div>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-cancel" (click)="closeModals()">İptal</button>
-            <button class="btn-primary-modal" (click)="saveOrderCost()">💾 Kaydet & Kârı Güncelle</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- DRILLDOWN MODAL 1: ETSY BANKA YATIRIMI & TRANSFER ANALİZİ (PAYOUTS - GÖRSEL 2) -->
-      <div class="modal-backdrop" *ngIf="showBankPayoutModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)</h3>
-              <p class="modal-sub">Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: <strong>₺{{ formatNumber(bankPayoutsTry) }}</strong></p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Banka Yatırımı</span>
-                <span class="box-val text-cyan">₺{{ formatNumber(bankPayoutsTry) }}</span>
-                <span class="box-sub">{{ bankPayoutRecords.length }} Transfer</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">En Son Yatırılan Tarih</span>
-                <span class="box-val text-white">{{ latestPayoutDate }}</span>
-                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Son: ₺{{ formatNumber(latestPayoutAmount) }}</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Ortalama Transfer</span>
-                <span class="box-val text-primary">₺{{ formatNumber(averagePayoutTry) }}</span>
-                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Net Gelirin %{{ payoutRatio }}'i</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Tarih</th>
-                    <th>İşlem / Ref No</th>
-                    <th>Tür</th>
-                    <th>Yatırılan Tutar</th>
-                    <th>Durum</th>
-                    <th>Açıklama / Kur Bilgisi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let p of bankPayoutRecords">
-                    <td class="date-cell">{{ p.date }}</td>
-                    <td class="ref-cell">{{ p.refNo }}</td>
-                    <td>{{ p.type }}</td>
-                    <td class="amount-cell text-emerald">+₺{{ formatNumber(p.amount) }}</td>
-                    <td><span class="badge-status-payout">✅ {{ p.status }}</span></td>
-                    <td class="note-cell">{{ p.note }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ İpucu: Etsy ödemeleri bankanıza gönderdikten sonra bankanızın işleme alma hızına göre 1-3 iş günü içinde hesabınıza geçer. ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- DRILLDOWN MODAL 2: SİPARİŞ & KARGO MALİYET ANALİZİ (COGS - GÖRSEL 3) -->
-      <div class="modal-backdrop" *ngIf="showCostBreakdownModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>📦 Sipariş & Kargo Maliyet Analizi</h3>
-              <p class="modal-sub">Toplam Sipariş Maliyeti (COGS): <strong>₺{{ formatNumber(productCostsTry) }}</strong> (${{ formatNumber(productCostsUsd) }}) | Kargo Harcamaları ve Fatura Durumu</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Kargo Maliyeti</span>
-                <span class="box-val text-warning">₺{{ formatNumber(totalShippingCostTry) }}</span>
-                <span class="box-sub">Maliyetin %{{ shippingCostSharePct }}'i</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Üretim / Hammadde</span>
-                <span class="box-val text-primary">₺{{ formatNumber(totalProductionCostTry) }}</span>
-                <span class="box-sub">Filament & 3D Yazıcı Payı</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Paketleme & Fatura</span>
-                <span class="box-val text-emerald">₺{{ formatNumber(totalPackagingCostTry) }}</span>
-                <span class="box-sub">{{ invoiceOrderCount }} Fatura Kayıtlı</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Tarih</th>
-                    <th>Sipariş No</th>
-                    <th>Adet</th>
-                    <th>Üretim Maliyeti</th>
-                    <th>Kargo Maliyeti</th>
-                    <th>Toplam Maliyet</th>
-                    <th>Fatura</th>
-                    <th>Ürün / İlan Başlığı</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let s of orderCostShippingRecords">
-                    <td class="date-cell">{{ s.date }}</td>
-                    <td class="ref-cell">#{{ s.receiptId }}</td>
-                    <td>{{ s.qty }}</td>
-                    <td class="amount-cell text-primary">{{ s.productionCostTry > 0 ? ('₺' + formatNumber(s.productionCostTry)) : '₺0,00' }}</td>
-                    <td class="amount-cell text-warning">{{ s.shippingCostTry > 0 ? ('₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
-                    <td class="amount-cell text-danger font-semibold">{{ s.totalCostTry > 0 ? ('₺' + formatNumber(s.totalCostTry)) : '₺0,00' }}</td>
-                    <td>
-                      <span *ngIf="s.invoice !== '—'" class="badge-invoice">📄 {{ s.invoice }}</span>
-                      <span *ngIf="s.invoice === '—'" class="text-muted">—</span>
-                    </td>
-                    <td class="title-cell" [title]="s.title">{{ s.title }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- DRILLDOWN MODAL 3: GERÇEK NET KÂR & BİLANÇO ANALİZİ (GÖRSEL 4) -->
-      <div class="modal-backdrop" *ngIf="showBalanceAnalysisModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>💵 Gerçek Net Kâr & Bilanço Analizi</h3>
-              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>₺{{ formatNumber(realNetProfitTry) }}</strong> (${{ formatNumber(realNetProfitUsd) }})</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Etsy Net Gelir</span>
-                <span class="box-val text-primary">₺{{ formatNumber(netIncomeTry) }}</span>
-                <span class="box-sub">Platform Hakedişi</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Ürün Maliyeti</span>
-                <span class="box-val text-danger">-₺{{ formatNumber(productCostsTry) }}</span>
-                <span class="box-sub">Kargo, Hammadde & Paketleme</span>
-              </div>
-              <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Gerçek Net Kâr</span>
-                <span class="box-val text-emerald">₺{{ formatNumber(realNetProfitTry) }}</span>
-                <span class="box-sub">%{{ realProfitMarginPct }} Net Kâr Marjı</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Tür</th>
-                    <th>Kalem Adı</th>
-                    <th>Kategori / Detay</th>
-                    <th>Tutar</th>
-                    <th>Durum</th>
-                    <th>Açıklama / Muhasebe Mantığı</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let b of balanceBreakdownRecords" [class.highlight-row]="b.type === 'KÂR'">
-                    <td class="type-cell"><strong>{{ b.type }}</strong></td>
-                    <td class="item-name">{{ b.name }}</td>
-                    <td class="detail-cell">{{ b.detail }}</td>
-                    <td class="amount-cell" [ngClass]="b.amount >= 0 ? 'text-emerald' : 'text-danger'">
-                      {{ b.type === 'KÂR' ? '=' : (b.amount > 0 ? '+' : '') }}₺{{ formatNumber(Math.abs(b.amount)) }}
-                    </td>
-                    <td><span *ngIf="b.status" class="badge-status-payout">{{ b.status }}</span></td>
-                    <td class="note-cell">{{ b.explanation }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ Muhasebe Kuralı: Gerçek Net Kâr = Etsy Net Hakediş - Toplam Sipariş Maliyeti (Kargo + Ürün + Fatura). ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 4. DRILLDOWN MODAL: SATIŞ VE GELİR ANALİZİ (BRÜT SATIŞ) -->
-      <div class="modal-backdrop" *ngIf="showSalesModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>🟢 Satış ve Gelir Analizi (Brüt Satış)</h3>
-              <p class="modal-sub">Dönem Toplam Brüt Satış: <strong>₺{{ formatNumber(grossSalesTry) }}</strong> (${{ formatNumber(grossSalesUsd) }} USD) | {{ orders.length }} İşlem</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Brüt Satış</span>
-                <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
-                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Sipariş Sayısı</span>
-                <span class="box-val text-primary">{{ orders.length }} Sipariş</span>
-                <span class="box-sub">{{ completedOrderCount }} Başarılı, {{ totalCanceledCount }} İptal</span>
-              </div>
-              <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Ortalama Sepet Tutarı (AOV)</span>
-                <span class="box-val text-emerald">₺{{ formatNumber(averageOrderValueTry) }}</span>
-                <span class="box-sub">${{ formatNumber(averageOrderValueUsd) }} USD / Sipariş</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Tarih</th>
-                    <th>Sipariş No</th>
-                    <th>Alıcı</th>
-                    <th>Ürün</th>
-                    <th>Tutar ($)</th>
-                    <th>Tutar (₺)</th>
-                    <th>Ödeme Tipi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let s of salesRecords">
-                    <td class="date-cell">{{ s.date }}</td>
-                    <td class="ref-cell">#{{ s.receiptId }}</td>
-                    <td>{{ s.buyer }}</td>
-                    <td class="title-cell" title="{{ s.item }}">{{ s.item }}</td>
+                  <td class="fee-cell">{{ o.offsiteAdFeeUsd > 0 ? ('$' + o.offsiteAdFeeUsd.toFixed(2)) : '—' }}</td>
+                  <td class="cost-cell">
+                    {{ o.productCostUsd !== null ? ('$' + o.productCostUsd.toFixed(2)) : '—' }}
+                  </td>
+                  <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-success' : 'text-danger'">
+                    {{ o.netProfitUsd < 0 ? ('-$' + Math.abs(o.netProfitUsd).toFixed(2)) : (o.orderStatus === 'canceled' && !o.hasCostData ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2))) }}
+                  </td>
+                  <td class="rate-cell" [title]="'TCMB Kilitli Kuru: ₺' + o.exchangeRate.toFixed(2) + (o.effectiveExchangeRate ? ('\nEtsy Fiili Kuru (%2.5 FX Kesintili): ₺' + o.effectiveExchangeRate.toFixed(2)) : '') + (o.etsyNetPayoutTry ? ('\nEtsy Net Hak Ediş: ₺' + formatNumber(o.etsyNetPayoutTry)) : '')">₺{{ o.exchangeRate.toFixed(2) }}</td>
+                  <td class="profit-try-cell" [ngClass]="o.netProfitTry >= 0 ? 'text-emerald' : 'text-danger'" [title]="'Resmi Muhasebe Kârı: ₺' + formatNumber(o.netProfitTry) + (o.effectiveExchangeRate && o.netProfitUsd ? ('\nFiili Kasa Kârı: ₺' + formatNumber(o.netProfitUsd * o.effectiveExchangeRate)) : '')">
+                    {{ o.netProfitTry < 0 ? ('-₺' + formatNumber(Math.abs(o.netProfitTry))) : (o.orderStatus === 'canceled' && !o.hasCostData ? '₺0,00' : ('₺' + formatNumber(o.netProfitTry))) }}
+                  </td>
+                  <td class="cost-flag-cell">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                      <span 
+                        class="cost-status-pill" 
+                        [class.has-cost]="o.hasCostData" 
+                        [class.no-cost]="!o.hasCostData && o.orderStatus !== 'canceled'"
+                        [class.canceled-pill]="o.orderStatus === 'canceled'"
+                        (click)="editOrderCost(o)">
+                        {{ o.orderStatus === 'canceled' ? (o.hasCostData ? '🔴 İptal (Maliyetli)' : '🔴 İptal') : (o.hasCostData ? '✅ Girildi' : '⚠️ Eksik') }}
+                      </span>
+                      <button 
+                        class="btn-edit-cost" 
+                        (click)="editOrderCost(o)" 
+                        title="Bu siparişin ürün, kargo ve paketleme maliyetini düzenle">
+                        ✏️ Düzenle
+                      </button>
+                    </div>
+                  </td>
+                  <td class="invoice-cell">
+                    <button 
+                      class="btn-invoice" 
+                      [class.has-inv]="o.hasInvoice" 
+                      (click)="handleInvoice(o)">
+                      {{ o.hasInvoice ? '📄 Aç' : '📎 Yükle' }}
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 1: GRAFİK ANALİZLERİ -->
+        <div *ngIf="activeTab === 'charts'" class="tab-pane">
+          <div class="charts-grid">
+            <div class="chart-card">
+              <h3 class="chart-title">📊 Aylık Gelir vs Gider vs Kâr Dağılımı</h3>
+              <div class="chart-bar-container">
+                <div class="chart-col">
+                  <div class="bar-wrap">
+                    <div class="bar gross-bar" style="height: 85%;"></div>
+                  </div>
+                  <span class="bar-lbl">Brüt Satış<br><strong>₺{{ formatNumber(grossSalesTry) }}</strong></span>
+                </div>
+                <div class="chart-col">
+                  <div class="bar-wrap">
+                    <div class="bar fees-bar" style="height: 25%;"></div>
+                  </div>
+                  <span class="bar-lbl">Kesintiler<br><strong>₺{{ formatNumber(etsyFeesTry) }}</strong></span>
+                </div>
+                <div class="chart-col">
+                  <div class="bar-wrap">
+                    <div class="bar ads-bar" style="height: 12%;"></div>
+                  </div>
+                  <span class="bar-lbl">Reklamlar<br><strong>₺{{ formatNumber(totalAdsTry) }}</strong></span>
+                </div>
+                <div class="chart-col">
+                  <div class="bar-wrap">
+                    <div class="bar costs-bar" style="height: 28%;"></div>
+                  </div>
+                  <span class="bar-lbl">Maliyetler<br><strong>₺{{ formatNumber(productCostsTry) }}</strong></span>
+                </div>
+                <div class="chart-col">
+                  <div class="bar-wrap">
+                    <div class="bar profit-bar" style="height: 48%;"></div>
+                  </div>
+                  <span class="bar-lbl">Net Kâr<br><strong>₺{{ formatNumber(realNetProfitTry) }}</strong></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="chart-card">
+              <h3 class="chart-title">🥧 Gider Dağılımı ve Maliyet Payları</h3>
+              <div class="expense-breakdown-list">
+                <div class="expense-row">
+                  <span class="exp-dot orange"></span>
+                  <span class="exp-name">Ürün & Kargo Maliyetleri</span>
+                  <span class="exp-pct">%{{ expenseCostPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(productCostsTry) }}</span>
+                </div>
+                <div class="expense-row">
+                  <span class="exp-dot yellow"></span>
+                  <span class="exp-name">Etsy Komisyon & İşlem Ücreti</span>
+                  <span class="exp-pct">%{{ expenseFeesPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(etsyFeesTry) }}</span>
+                </div>
+                <div class="expense-row">
+                  <span class="exp-dot red"></span>
+                  <span class="exp-name">Offsite & Etsy Ads Reklamları</span>
+                  <span class="exp-pct">%{{ expenseAdsPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(totalAdsTry) }}</span>
+                </div>
+                <div class="expense-row">
+                  <span class="exp-dot purple"></span>
+                  <span class="exp-name">Müşteri İadeleri</span>
+                  <span class="exp-pct">%{{ expenseRefundsPct }}</span>
+                  <span class="exp-val">₺{{ formatNumber(refundsTry) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: AI KÂR & CİRO TAHMİNİ -->
+        <div *ngIf="activeTab === 'forecast'" class="tab-pane">
+          <div class="forecast-grid-4">
+            <div class="forecast-card primary">
+              <div class="fc-title">🔮 GELECEK AY BEKLENEN CİRO</div>
+              <div class="fc-value">$1,350 / ₺66,312</div>
+              <div class="fc-sub">Min: $1,150 — Max: $1,580</div>
+            </div>
+
+            <div class="forecast-card success">
+              <div class="fc-title">💵 BEKLENEN GERÇEK NET KÂR</div>
+              <div class="fc-value">$545 / ₺26,770</div>
+              <div class="fc-sub">Beklenen Kâr Marjı: %40.4</div>
+            </div>
+
+            <div class="forecast-card sky">
+              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME</div>
+              <div class="fc-value">14 Sipariş</div>
+              <div class="fc-sub">Aylık Büyüme: +%22.5</div>
+            </div>
+
+            <div class="forecast-card warning">
+              <div class="fc-title">🖨️ STOK & HAMMADDE İHTİYACI</div>
+              <div class="fc-value">3.8 kg Filament</div>
+              <div class="fc-sub">12 Adet Kargo Kutusu</div>
+            </div>
+          </div>
+
+          <div class="ai-cfo-panel">
+            <div class="ai-cfo-header">
+              <span class="sparkle">✨</span>
+              <h4>Gemini Spark AI CFO - Mağaza Büyüme ve Kârlılık Raporu</h4>
+            </div>
+            <div class="ai-cfo-body">
+              <p>• <strong>Dönüşüm Oranı Analizi:</strong> 3D Printed Butterfly Balisong modeli %420 net marj ve %41.4 kâr katkısıyla mağazanızın amiral gemisidir. Reklam bütçenizi bu ürüne %15 artırmanız önerilir.</p>
+              <p>• <strong>Offsite Ads Uyarısı:</strong> Dış reklamlardan gelen 3 sipariş için $80.01 (%15 kesinti) ödenmiştir. Yüksek marjlı ürünler dışında Offsite reklamları sınırlandırmak net kârınızı ₺3.900 artıracaktır.</p>
+              <p>• <strong>Maliyet Girişi:</strong> #4174201942 nolu Ben 10 siparişinin filament maliyetini girdiğinizde gerçek net kârınız netleşecektir.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: DÖNEMSEL MUHASEBE -->
+        <div *ngIf="activeTab === 'period'" class="tab-pane">
+          <div class="glass-table-wrapper">
+            <table class="glass-table">
+              <thead>
+                <tr>
+                  <th>Dönem (Ay / Yıl)</th>
+                  <th>Sipariş</th>
+                  <th>Brüt Satış</th>
+                  <th>Etsy Kesintisi</th>
+                  <th>Dış Reklam</th>
+                  <th>Sipariş Maliyeti</th>
+                  <th>Banka Yatırımı</th>
+                  <th>Gerçek Net Kâr</th>
+                  <th>Kâr Marjı</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let p of periodSummaries">
+                  <td><strong>{{ p.periodLabel }}</strong></td>
+                  <td>{{ p.orderCount }} Adet</td>
+                  <td class="text-success">₺{{ formatNumber(p.grossTry) }}</td>
+                  <td class="text-warning">{{ p.feesTry > 0 ? '-₺' + formatNumber(p.feesTry) : '₺0,00' }}</td>
+                  <td class="text-danger">{{ p.adsTry > 0 ? '-₺' + formatNumber(p.adsTry) : '₺0,00' }}</td>
+                  <td class="text-warning">{{ p.costsTry > 0 ? '-₺' + formatNumber(p.costsTry) : '₺0,00' }}</td>
+                  <td class="text-primary">₺{{ formatNumber(p.payoutsTry) }}</td>
+                  <td [ngClass]="p.realProfitTry >= 0 ? 'text-emerald' : 'text-danger'"><strong>{{ formatSignedTry(p.realProfitTry) }}</strong></td>
+                  <td><span class="margin-pill" [ngClass]="p.realProfitTry >= 0 ? 'margin-pill-success' : 'margin-pill-danger'">%{{ p.grossTry > 0 ? (p.realProfitTry / p.grossTry * 100).toFixed(1) : '0.0' }}</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div *ngIf="false" class="tab-pane">
+          <div class="glass-table-wrapper">
+            <table class="glass-table">
+              <thead>
+                <tr>
+                  <th>Dönem</th>
+                  <th>Brüt Satış</th>
+                  <th>Etsy Kesintisi</th>
+                  <th>Reklamlar</th>
+                  <th>İadeler</th>
+                  <th>Ürün Maliyeti</th>
+                  <th>Etsy Net Gelir</th>
+                  <th>Gerçek Net Kâr</th>
+                  <th>Kâr Marjı</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Eylül - Ekim 2026</strong></td>
+                  <td class="text-success">₺54.608,24</td>
+                  <td class="text-warning">-₺12.783,71</td>
+                  <td class="text-danger">-₺4.334,59</td>
+                  <td class="text-danger">-₺1.888,14</td>
+                  <td class="text-warning">-₺13.524,10</td>
+                  <td class="text-primary">₺35.601,79</td>
+                  <td class="text-emerald"><strong>₺22.077,69</strong></td>
+                  <td><span class="margin-pill">%40.4</span></td>
+                </tr>
+                <tr>
+                  <td><strong>Ağustos 2026</strong></td>
+                  <td class="text-success">₺48.120,50</td>
+                  <td class="text-warning">-₺11.230,10</td>
+                  <td class="text-danger">-₺3.850,00</td>
+                  <td class="text-danger">-₺940,00</td>
+                  <td class="text-warning">-₺12.100,00</td>
+                  <td class="text-primary">₺32.100,40</td>
+                  <td class="text-emerald"><strong>₺20.000,40</strong></td>
+                  <td><span class="margin-pill">%41.5</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TAB 5: ÖDEME DEFTERİ KAYITLARI -->
+        <div *ngIf="activeTab === 'ledger'" class="tab-pane">
+          <div class="glass-table-wrapper">
+            <table class="glass-table">
+              <thead>
+                <tr>
+                  <th>İşlem ID</th>
+                  <th>Tarih</th>
+                  <th>Tür</th>
+                  <th>Açıklama</th>
+                  <th>Sipariş No</th>
+                  <th>Brüt Tutar</th>
+                  <th>Kesinti</th>
+                  <th>Net Tutar ($)</th>
+                  <th>Net Tutar (₺)</th>
+                  <th>Bakiye ($)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let e of ledgerEntries">
+                  <td class="mono">{{ e.id }}</td>
+                  <td>{{ e.entryDate }}</td>
+                  <td>
+                    <span class="type-pill" [ngClass]="e.transactionType">{{ e.typeDisplay }}</span>
+                  </td>
+                  <td class="title-cell">{{ e.title }}</td>
+                  <td class="mono">{{ e.orderNumber || '—' }}</td>
+                  <td class="amount">{{ e.grossAmount > 0 ? ('$' + e.grossAmount.toFixed(2)) : '—' }}</td>
+                  <td class="fee text-danger">{{ e.feeAmount !== 0 ? ('$' + e.feeAmount.toFixed(2)) : '—' }}</td>
+                  <td class="net" [ngClass]="e.netAmount >= 0 ? 'text-success' : 'text-danger'">
+                    {{ e.netAmount >= 0 ? ('$' + e.netAmount.toFixed(2)) : ('-$' + Math.abs(e.netAmount).toFixed(2)) }}
+                  </td>
+                  <td class="net-try" [ngClass]="e.netAmount >= 0 ? 'text-emerald' : 'text-danger'">
+                    {{ formatSignedTry(e.netAmount * liveRate) }}
+                  </td>
+                  <td class="balance mono">&#36;{{ e.runningBalance.toFixed(2) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- CUSTOM RIGHT-CLICK CONTEXT MENU (Matching Desktop FinancialReportForm.cs Image) -->
+      <div class="desktop-context-menu" 
+           *ngIf="showContextMenu" 
+           [style.top.px]="contextMenuY" 
+           [style.left.px]="contextMenuX" 
+           (click)="$event.stopPropagation()">
+        <div class="ctx-item" (click)="generateInvoicePdf()">
+          <span class="ctx-icon">⚡</span> Otomatik Fatura / Konşimento Oluştur (PDF)
+        </div>
+        <div class="ctx-item" (click)="openInvoicePdf()">
+          <span class="ctx-icon">📄</span> Faturayı / PDF'i Aç
+        </div>
+        <div class="ctx-item" (click)="uploadInvoicePdf()">
+          <span class="ctx-icon">📎</span> Kargo Faturası Yükle...
+        </div>
+        <div class="ctx-item" (click)="viewOrderDetails()">
+          <span class="ctx-icon">📊</span> Sipariş Detaylarını Gör
+        </div>
+        <div class="ctx-item highlight" (click)="editCostFromContext()">
+          <span class="ctx-icon">🏷️</span> Maliyet / Fatura Düzenle
+        </div>
+        <div class="ctx-divider"></div>
+        <div class="ctx-item" (click)="openEtsyOrder()">
+          <span class="ctx-icon">🌐</span> Etsy'de Siparişi Aç
+        </div>
+        <div class="ctx-item" (click)="copyOrderNumber()">
+          <span class="ctx-icon">📋</span> Sipariş No Kopyala
+        </div>
+        <div class="ctx-item" (click)="copyCustomerInfo()">
+          <span class="ctx-icon">👤</span> Müşteri Bilgisini Kopyala
+        </div>
+        <div class="ctx-item" (click)="copySelectedCell()">
+          <span class="ctx-icon">📝</span> Seçili Hücreyi Kopyala
+        </div>
+        <div class="ctx-item" (click)="copyWholeRow()">
+          <span class="ctx-icon">📄</span> Tüm Satırı Kopyala
+        </div>
+      </div>
+
+      <!-- MODAL: KÂR FARKI MUTABAKATI -->
+      <div class="modal-backdrop" *ngIf="showReconciliationModal" (click)="closeModals()">
+        <div class="modal-card reconciliation-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>📊 KÂR MUTABAKATI & FARK ANALİZİ</h3>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="rec-section">
+              <h4>1️⃣ Siparişlerin Toplam Katkı Kârı: <span class="text-success">₺{{ formatNumber(totalOrderProfitTry) }} (${{ formatNumber(totalOrderProfitUsd) }})</span></h4>
+              <p>• Tek tek {{ orders.length }} adet siparişten elde edilen doğrudan ürün operasyon kârıdır.</p>
+              <p>• Henüz mağaza geneline ait olan reklamlar ve genel giderler bundan düşülmemiştir.</p>
+            </div>
+
+            <div class="rec-section">
+              <h4>2️⃣ Mağaza Geneline Ait Giderler (Siparişten Bağımsız):</h4>
+              <ul>
+                <li>📢 <strong>Etsy Ads İç Reklam:</strong> <span class="text-danger">-₺{{ formatNumber(innerAdsTry) }} (-${{ formatNumber(innerAdsUsd) }})</span></li>
+                <li>🌐 <strong>Offsite Ads Dış Reklam:</strong> <span class="text-orange">-₺{{ formatNumber(offsiteAdsTry) }} (-${{ formatNumber(offsiteAdsUsd) }})</span></li>
+                <li>↩️ <strong>Dönemsel İadeler:</strong> <span class="text-danger">-₺{{ formatNumber(refundsTry) }} (-${{ formatNumber(refundsUsd) }})</span></li>
+                <li *ngIf="missingCostCount > 0">⚠️ <strong>{{ missingCostCount }} siparişin</strong> maliyeti henüz girilmemiştir.</li>
+              </ul>
+            </div>
+
+            <div class="rec-divider"></div>
+
+            <div class="rec-final">
+              <h4>🏛️ Üst Karttaki GERÇEK NET KÂR: <span [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }} ({{ formatSignedUsd(realNetProfitUsd) }})</span></h4>
+              <p>(Tüm mağaza reklamları, iadeler ve genel giderler düşüldükten sonra banka hesabınıza ve cebinize kalan nihai kârdır.)</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Anladım, Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODAL: MALİYET / FATURA DÜZENLE -->
+      <div class="modal-backdrop" *ngIf="showCostModal" (click)="closeModals()">
+        <div class="modal-card cost-modal-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>🏷️ Maliyet / Fatura Düzenle (#{{ selectedOrder?.receiptId }})</h3>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body" *ngIf="selectedOrder">
+            <div class="order-context-box">
+              <div class="ctx-row"><strong>Müşteri:</strong> {{ selectedOrder.buyerName }}</div>
+              <div class="ctx-row"><strong>Ürün Adı:</strong> {{ selectedOrder.productTitle }}</div>
+              <div class="badge-row">
+                <span class="ctx-badge gross">Ödeme: &#36;{{ selectedOrder.grandTotalUsd.toFixed(2) }}</span>
+                <span class="ctx-badge fee">Etsy Kesintisi: -&#36;{{ selectedOrder.etsyFeesUsd.toFixed(2) }}</span>
+                <span class="ctx-badge ads" *ngIf="selectedOrder.offsiteAdFeeUsd > 0" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);">
+                  Dış Reklam: -&#36;{{ selectedOrder.offsiteAdFeeUsd.toFixed(2) }}
+                </span>
+                <span class="ctx-badge rate" [title]="'Sipariş tarihindeki (' + selectedOrder.orderDate + ') TCMB / Piyasa Kilitli Kuru'">🔒 TCMB Kuru: ₺{{ selectedOrder.exchangeRate.toFixed(2) }}</span>
+                <span class="ctx-badge rate" *ngIf="selectedOrder.effectiveExchangeRate" [title]="'Etsy %2.5 döviz çevrim kesintisi sonrası fiili banka kuru'" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+                  🏦 Etsy Fiili Kuru: ₺{{ selectedOrder.effectiveExchangeRate.toFixed(2) }}
+                </span>
+              </div>
+              <div class="etsy-payout-box" *ngIf="selectedOrder.etsyNetPayoutTry" style="margin-top: 10px; padding: 8px 12px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; font-size: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span><strong>Etsy Ödeme Hesabı Net Hak Edişi (Maliyetsiz):</strong></span>
+                  <span style="color: #34d399; font-weight: 700; font-size: 13px;">₺{{ formatNumber(selectedOrder.etsyNetPayoutTry) }} <small style="color: #94a3b8;">(&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - (selectedOrder.offsiteAdFeeUsd || 0)).toFixed(2) }})</small></span>
+                </div>
+              </div>
+              <div class="ctx-row" style="margin-top: 8px; font-size: 11px; color: #a1a1aa; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 4px;" *ngIf="selectedOrder.costNotes">
+                <strong>📦 Taşıyıcı / Takip Notu:</strong> {{ selectedOrder.costNotes }}
+              </div>
+            </div>
+
+            <div class="cost-input-group">
+              <label>🧵 Birim Üretim & Filament Maliyeti ($):</label>
+              <input type="number" [(ngModel)]="costModalProduction" class="cost-input" step="0.1" />
+              <span class="hint-text">Filament gramajı (PLA/PETG) ve 3D yazıcı amortisman payı</span>
+            </div>
+            <div class="cost-input-group">
+              <label>🚚 Kargo Navlun Maliyeti ($):</label>
+              <input type="number" [(ngModel)]="costModalShipping" class="cost-input" step="0.1" />
+              <span class="hint-text">Aras Global, ShipEntegra veya Navlungo taşıma ücreti</span>
+            </div>
+            <div class="cost-input-group">
+              <label>📦 Paketleme & Kutu Maliyeti ($):</label>
+              <input type="number" [(ngModel)]="costModalPackaging" class="cost-input" step="0.1" />
+              <span class="hint-text">Karton kutu, balonlu naylon ve barkod etiket gideri</span>
+            </div>
+
+            <!-- Live Calculation Preview -->
+            <div class="calculated-preview-box">
+              <div class="calc-row">
+                <span>Toplam Sipariş Maliyeti:</span>
+                <strong>&#36;{{ (costModalProduction + costModalShipping + costModalPackaging).toFixed(2) }}</strong>
+              </div>
+              <div class="calc-row highlight">
+                <span>Hesaplanan Net Kâr ($):</span>
+                <strong class="text-success">&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)).toFixed(2) }}</strong>
+              </div>
+              <div class="calc-row highlight">
+                <span>Hesaplanan Net Kâr (₺):</span>
+                <strong class="text-emerald">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)).toFixed(2) }}</strong>
+              </div>
+              <div class="calc-row reserve-calc-row">
+                <span>🔒 Rezerve Blokesi (%{{ reserveSnapshot.reservePercent }} - {{ reserveSnapshot.reserveHoldDays }} Gün):</span>
+                <strong class="text-warning">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * (reserveSnapshot.reservePercent / 100)).toFixed(2) }}</strong>
+              </div>
+              <div class="calc-row reserve-calc-row">
+                <span>🔓 Kullanılabilir Bakiye (%{{ 100 - reserveSnapshot.reservePercent }}):</span>
+                <strong class="text-cyan">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * ((100 - reserveSnapshot.reservePercent) / 100)).toFixed(2) }}</strong>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" (click)="closeModals()">İptal</button>
+            <button class="btn-primary-modal" (click)="saveOrderCost()">💾 Kaydet & Kârı Güncelle</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRILLDOWN MODAL 1: ETSY BANKA YATIRIMI & TRANSFER ANALİZİ (PAYOUTS - GÖRSEL 2) -->
+      <div class="modal-backdrop" *ngIf="showBankPayoutModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🏦 Etsy Banka Yatırımı & Transfer Analizi (Payouts)</h3>
+              <p class="modal-sub">Seçilen dönemde Etsy tarafından banka hesabınıza yatırılan net toplam para: <strong>₺{{ formatNumber(bankPayoutsTry) }}</strong></p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Banka Yatırımı</span>
+                <span class="box-val text-cyan">₺{{ formatNumber(bankPayoutsTry) }}</span>
+                <span class="box-sub">{{ bankPayoutRecords.length }} Transfer</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">En Son Yatırılan Tarih</span>
+                <span class="box-val text-white">{{ latestPayoutDate }}</span>
+                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Son: ₺{{ formatNumber(latestPayoutAmount) }}</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Ortalama Transfer</span>
+                <span class="box-val text-primary">₺{{ formatNumber(averagePayoutTry) }}</span>
+                <span class="box-sub" *ngIf="bankPayoutRecords.length > 0">Net Gelirin %{{ payoutRatio }}'i</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>İşlem / Ref No</th>
+                    <th>Tür</th>
+                    <th>Yatırılan Tutar</th>
+                    <th>Durum</th>
+                    <th>Açıklama / Kur Bilgisi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let p of bankPayoutRecords">
+                    <td class="date-cell">{{ p.date }}</td>
+                    <td class="ref-cell">{{ p.refNo }}</td>
+                    <td>{{ p.type }}</td>
+                    <td class="amount-cell text-emerald">+₺{{ formatNumber(p.amount) }}</td>
+                    <td><span class="badge-status-payout">✅ {{ p.status }}</span></td>
+                    <td class="note-cell">{{ p.note }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ İpucu: Etsy ödemeleri bankanıza gönderdikten sonra bankanızın işleme alma hızına göre 1-3 iş günü içinde hesabınıza geçer. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRILLDOWN MODAL 2: SİPARİŞ & KARGO MALİYET ANALİZİ (COGS - GÖRSEL 3) -->
+      <div class="modal-backdrop" *ngIf="showCostBreakdownModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>📦 Sipariş & Kargo Maliyet Analizi</h3>
+              <p class="modal-sub">Toplam Sipariş Maliyeti (COGS): <strong>₺{{ formatNumber(productCostsTry) }}</strong> (${{ formatNumber(productCostsUsd) }}) | Kargo Harcamaları ve Fatura Durumu</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Kargo Maliyeti</span>
+                <span class="box-val text-warning">₺{{ formatNumber(totalShippingCostTry) }}</span>
+                <span class="box-sub">Maliyetin %{{ shippingCostSharePct }}'i</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Üretim / Hammadde</span>
+                <span class="box-val text-primary">₺{{ formatNumber(totalProductionCostTry) }}</span>
+                <span class="box-sub">Filament & 3D Yazıcı Payı</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Paketleme & Fatura</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(totalPackagingCostTry) }}</span>
+                <span class="box-sub">{{ invoiceOrderCount }} Fatura Kayıtlı</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Sipariş No</th>
+                    <th>Adet</th>
+                    <th>Üretim Maliyeti</th>
+                    <th>Kargo Maliyeti</th>
+                    <th>Toplam Maliyet</th>
+                    <th>Fatura</th>
+                    <th>Ürün / İlan Başlığı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let s of orderCostShippingRecords">
+                    <td class="date-cell">{{ s.date }}</td>
+                    <td class="ref-cell">#{{ s.receiptId }}</td>
+                    <td>{{ s.qty }}</td>
+                    <td class="amount-cell text-primary">{{ s.productionCostTry > 0 ? ('₺' + formatNumber(s.productionCostTry)) : '₺0,00' }}</td>
+                    <td class="amount-cell text-warning">{{ s.shippingCostTry > 0 ? ('₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
+                    <td class="amount-cell text-danger font-semibold">{{ s.totalCostTry > 0 ? ('₺' + formatNumber(s.totalCostTry)) : '₺0,00' }}</td>
+                    <td>
+                      <span *ngIf="s.invoice !== '—'" class="badge-invoice">📄 {{ s.invoice }}</span>
+                      <span *ngIf="s.invoice === '—'" class="text-muted">—</span>
+                    </td>
+                    <td class="title-cell" [title]="s.title">{{ s.title }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DRILLDOWN MODAL 3: GERÇEK NET KÂR & BİLANÇO ANALİZİ (GÖRSEL 4) -->
+      <div class="modal-backdrop" *ngIf="showBalanceAnalysisModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>💵 Gerçek Net Kâr & Bilanço Analizi</h3>
+              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>{{ formatSignedTry(realNetProfitTry) }}</strong> ({{ formatSignedUsd(realNetProfitUsd) }})</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Etsy Net Gelir</span>
+                <span class="box-val" [ngClass]="netIncomeTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(netIncomeTry) }}</span>
+                <span class="box-sub">Platform Hakedişi</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Ürün Maliyeti</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(productCostsTry) }}</span>
+                <span class="box-sub">Kargo, Hammadde & Paketleme</span>
+              </div>
+              <div class="drilldown-summary-box" [ngClass]="realNetProfitTry >= 0 ? 'highlight-emerald' : 'highlight-danger-box'">
+                <span class="box-lbl">{{ realNetProfitTry >= 0 ? 'Gerçek Net Kâr' : 'Gerçek Net Zarar' }}</span>
+                <span class="box-val" [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</span>
+                <span class="box-sub">%{{ realProfitMarginPct }} {{ realNetProfitTry >= 0 ? 'Net Kâr Marjı' : 'Net Zarar Marjı' }}</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tür</th>
+                    <th>Kalem Adı</th>
+                    <th>Kategori / Detay</th>
+                    <th>Tutar</th>
+                    <th>Durum</th>
+                    <th>Açıklama / Muhasebe Mantığı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let b of balanceBreakdownRecords" [class.highlight-row]="(b.type === 'KÂR' || b.name === 'GERÇEK NET KÂR') && b.isPositive" [class.highlight-danger-row]="(b.type === 'ZARAR' || b.name === 'GERÇEK NET KÂR') && !b.isPositive">
+                    <td class="type-cell"><strong>{{ b.type }}</strong></td>
+                    <td class="item-name">{{ b.name }}</td>
+                    <td class="detail-cell">{{ b.detail }}</td>
+                    <td class="amount-cell" [ngClass]="b.isPositive ? 'text-emerald' : 'text-danger'">
+                      {{ (b.name === 'GERÇEK NET KÂR' ? '=' : '') + formatSignedTry(b.amount) }}
+                    </td>
+                    <td><span *ngIf="b.status" class="badge-status-payout" [ngClass]="b.isPositive ? 'badge-success' : 'badge-danger'">{{ b.status }}</span></td>
+                    <td class="note-cell">{{ b.explanation }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Muhasebe Kuralı: Gerçek Net Kâr = Etsy Net Hakediş - Toplam Sipariş Maliyeti (Kargo + Ürün + Fatura). ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. DRILLDOWN MODAL: SATIŞ VE GELİR ANALİZİ (BRÜT SATIŞ) -->
+      <div class="modal-backdrop" *ngIf="showSalesModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🟢 Satış ve Gelir Analizi (Brüt Satış)</h3>
+              <p class="modal-sub">Dönem Toplam Brüt Satış: <strong>₺{{ formatNumber(grossSalesTry) }}</strong> (${{ formatNumber(grossSalesUsd) }} USD) | {{ orders.length }} İşlem</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Brüt Satış</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
+                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Sipariş Sayısı</span>
+                <span class="box-val text-primary">{{ orders.length }} Sipariş</span>
+                <span class="box-sub">{{ completedOrderCount }} Başarılı, {{ totalCanceledCount }} İptal</span>
+              </div>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Ortalama Sepet Tutarı (AOV)</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(averageOrderValueTry) }}</span>
+                <span class="box-sub">${{ formatNumber(averageOrderValueUsd) }} USD / Sipariş</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Sipariş No</th>
+                    <th>Alıcı</th>
+                    <th>Ürün</th>
+                    <th>Tutar ($)</th>
+                    <th>Tutar (₺)</th>
+                    <th>Ödeme Tipi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let s of salesRecords">
+                    <td class="date-cell">{{ s.date }}</td>
+                    <td class="ref-cell">#{{ s.receiptId }}</td>
+                    <td>{{ s.buyer }}</td>
+                    <td class="title-cell" title="{{ s.item }}">{{ s.item }}</td>
                     <td class="amount-cell" [ngClass]="s.paymentType === 'canceled' ? 'text-danger' : 'text-emerald'">{{ '$' + s.amount.toFixed(2) }}</td>
                     <td class="amount-cell" [ngClass]="s.paymentType === 'canceled' ? 'text-danger' : 'text-emerald'">₺{{ formatNumber(s.tryAmount) }}</td>
                     <td><span class="badge-status-payout" [class.badge-refund]="s.paymentType === 'canceled'">{{ s.paymentType === 'canceled' ? '🔴 İptal Edildi' : s.paymentType }}</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ Muhasebe Kuralı: Etsy Payments brüt tutarları müşterinin ödediği toplam sepet (ürün + kargo ücreti) bedelidir. ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 5. DRILLDOWN MODAL: ETSY KOMİSYON & KESİNTİ ANALİZİ -->
-      <div class="modal-backdrop" *ngIf="showFeesModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>🏷️ Etsy Komisyon & Kesinti Analizi</h3>
-              <p class="modal-sub">Etsy Tarafından Kesilen Toplam Komisyon ve Masraflar: <strong>-₺{{ formatNumber(etsyFeesTry) }}</strong> (-${{ formatNumber(etsyFeesUsd) }} USD)</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Kesinti Tutarı</span>
-                <span class="box-val text-warning">-₺{{ formatNumber(etsyFeesTry) }}</span>
-                <span class="box-sub">-${{ formatNumber(etsyFeesUsd) }} USD</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Komisyon / Brüt Satış Oranı</span>
-                <span class="box-val text-orange">%{{ feeToGrossRatioPct }}</span>
-                <span class="box-sub">Standart Komisyon + KDV</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">KDV Tevkifatı (TR %20)</span>
-                <span class="box-val text-danger">₺{{ formatNumber(estimatedVatTry) }}</span>
-                <span class="box-sub">Kesintiler Üzerinden KDV</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Kesinti Kalemi</th>
-                    <th>İşlem / Adet</th>
-                    <th>Matrah ($)</th>
-                    <th>Kesinti ($)</th>
-                    <th>Kesinti (₺)</th>
-                    <th>Açıklama / Formül</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let f of feesRecords">
-                    <td><strong>{{ f.type }}</strong></td>
-                    <td>{{ f.count }}</td>
-                    <td>{{ f.baseUsd > 0 ? ('$' + f.baseUsd.toFixed(2)) : '—' }}</td>
-                    <td class="amount-cell text-warning">{{ '-$' + f.feeUsd.toFixed(2) }}</td>
-                    <td class="amount-cell text-warning">-₺{{ formatNumber(f.feeTry) }}</td>
-                    <td class="note-cell">{{ f.note }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ Bilgi: Etsy, Türkiye merkezli mağazalarda tüm komisyonlar üzerinden %20 yasal KDV ve %1.25 Düzenleyici İşletme Ücreti keser. ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 6. DRILLDOWN MODAL: ETSY ADS İÇ REKLAM ANALİZİ -->
-      <div class="modal-backdrop" *ngIf="showInnerAdsModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>📢 Etsy Ads İç Reklam Analizi</h3>
-              <p class="modal-sub">Etsy Arama İçi Tıklama Başı Sponsorlu Reklam Harcamaları: <strong>-₺{{ formatNumber(innerAdsTry) }}</strong> (-${{ formatNumber(innerAdsUsd) }} USD)</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Reklam Harcaması</span>
-                <span class="box-val text-danger">-₺{{ formatNumber(innerAdsTry) }}</span>
-                <span class="box-sub">-${{ formatNumber(innerAdsUsd) }} USD</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Reklam Kaynaklı Gelir</span>
-                <span class="box-val text-emerald">₺8.918,87</span>
-                <span class="box-sub">$183,81 USD (2 Sipariş)</span>
-              </div>
-              <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Genel Reklam ROAS</span>
-                <span class="box-val text-emerald">22,3x</span>
-                <span class="box-sub">Ortalama Tıklama Başı: $0.12</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Tarih</th>
-                    <th>Gösterim</th>
-                    <th>Tıklama</th>
-                    <th>Harcama ($)</th>
-                    <th>Harcama (₺)</th>
-                    <th>Reklam Geliri ($)</th>
-                    <th>ROAS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let ad of innerAdsRecords">
-                    <td class="date-cell">{{ ad.date }}</td>
-                    <td>{{ ad.impressions }}</td>
-                    <td>{{ ad.clicks }}</td>
-                    <td class="amount-cell text-danger">{{ '-$' + ad.spendUsd.toFixed(2) }}</td>
-                    <td class="amount-cell text-danger">-₺{{ formatNumber(ad.spendTry) }}</td>
-                    <td class="amount-cell text-emerald">{{ '$' + ad.salesUsd.toFixed(2) }}</td>
-                    <td><strong [class.text-emerald]="ad.roas !== '0.0x'">{{ ad.roas }}</strong></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ Performans Analizi: İç reklamlar harcanan her 1₺ karşılığında mağazaya 22,3₺ ciro kazandırmıştır. ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 7. DRILLDOWN MODAL: OFFSITE ADS DIŞ REKLAM ANALİZİ -->
-      <div class="modal-backdrop" *ngIf="showOffsiteAdsModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>🌐 Offsite Ads Dış Reklam Analizi</h3>
-              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-₺{{ formatNumber(offsiteAdsTry) }}</strong> (-${{ formatNumber(offsiteAdsUsd) }} USD)</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam Dış Reklam Kesintisi</span>
-                <span class="box-val text-orange">-₺{{ formatNumber(offsiteAdsTry) }}</span>
-                <span class="box-sub">-${{ formatNumber(offsiteAdsUsd) }} USD</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Dış Reklam Satış Adedi</span>
-                <span class="box-val text-primary">{{ offsiteAdsRecords.length }} Sipariş</span>
-                <span class="box-sub">Toplam Satışın %{{ offsiteOrderSharePct }}'i</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Komisyon Oranı</span>
-                <span class="box-val text-warning">%15,00</span>
-                <span class="box-sub">Sadece Satış Olduğunda Kesilir</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Sipariş No</th>
-                    <th>Alıcı</th>
-                    <th>Satış Tutarı ($)</th>
-                    <th>Komisyon Oranı</th>
-                    <th>Kesinti ($)</th>
-                    <th>Kesinti (₺)</th>
-                    <th>Reklam Kanalı</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let off of offsiteAdsRecords">
-                    <td class="ref-cell">#{{ off.receiptId }}</td>
-                    <td>{{ off.buyer }}</td>
-                    <td class="amount-cell text-emerald">{{ '$' + off.saleAmountUsd.toFixed(2) }}</td>
-                    <td><span class="badge-status-payout">{{ off.rate }}</span></td>
-                    <td class="amount-cell text-orange">{{ '-$' + off.feeUsd.toFixed(2) }}</td>
-                    <td class="amount-cell text-orange">-₺{{ formatNumber(off.feeTry) }}</td>
-                    <td class="note-cell">{{ off.channel }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ Offsite Ads Avantajı: Tıklama başına para ödemezsiniz; sadece sipariş gerçekleştiğinde %15 başarı komisyonu tahakkuk eder. ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 8. DRILLDOWN MODAL: İADE VE GERİ ÖDEME ANALİZİ -->
-      <div class="modal-backdrop" *ngIf="showRefundsModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>🔴 İade ve Geri Ödeme Analizi</h3>
-              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-₺{{ formatNumber(refundsTry) }}</strong> (-${{ formatNumber(refundsUsd) }} USD)</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Toplam İade Tutarı</span>
-                <span class="box-val text-danger">-₺{{ formatNumber(modalTotalRefundTry) }}</span>
-                <span class="box-sub">-${{ formatNumber(modalTotalRefundUsd) }} USD</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">İptal / İade Siparişleri</span>
-                <span class="box-val text-danger">{{ refundRecords.length }} Sipariş</span>
-                <span class="box-sub">{{ modalUnproducedCancelCount }} Zararsız | {{ modalCostLossCancelCount }} Maliyetli</span>
-              </div>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Muhasebe Kuralı: Etsy Payments brüt tutarları müşterinin ödediği toplam sepet (ürün + kargo ücreti) bedelidir. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. DRILLDOWN MODAL: ETSY KOMİSYON & KESİNTİ ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showFeesModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🏷️ Etsy Komisyon & Kesinti Analizi</h3>
+              <p class="modal-sub">Etsy Tarafından Kesilen Toplam Komisyon ve Masraflar: <strong>-₺{{ formatNumber(etsyFeesTry) }}</strong> (-${{ formatNumber(etsyFeesUsd) }} USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Kesinti Tutarı</span>
+                <span class="box-val text-warning">-₺{{ formatNumber(etsyFeesTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(etsyFeesUsd) }} USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Komisyon / Brüt Satış Oranı</span>
+                <span class="box-val text-orange">%{{ feeToGrossRatioPct }}</span>
+                <span class="box-sub">Standart Komisyon + KDV</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">KDV Tevkifatı (TR %20)</span>
+                <span class="box-val text-danger">₺{{ formatNumber(estimatedVatTry) }}</span>
+                <span class="box-sub">Kesintiler Üzerinden KDV</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Kesinti Kalemi</th>
+                    <th>İşlem / Adet</th>
+                    <th>Matrah ($)</th>
+                    <th>Kesinti ($)</th>
+                    <th>Kesinti (₺)</th>
+                    <th>Açıklama / Formül</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let f of feesRecords">
+                    <td><strong>{{ f.type }}</strong></td>
+                    <td>{{ f.count }}</td>
+                    <td>{{ f.baseUsd > 0 ? ('$' + f.baseUsd.toFixed(2)) : '—' }}</td>
+                    <td class="amount-cell text-warning">{{ '-$' + f.feeUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-warning">-₺{{ formatNumber(f.feeTry) }}</td>
+                    <td class="note-cell">{{ f.note }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Bilgi: Etsy, Türkiye merkezli mağazalarda tüm komisyonlar üzerinden %20 yasal KDV ve %1.25 Düzenleyici İşletme Ücreti keser. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. DRILLDOWN MODAL: ETSY ADS İÇ REKLAM ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showInnerAdsModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>📢 Etsy Ads İç Reklam Analizi</h3>
+              <p class="modal-sub">Etsy Arama İçi Tıklama Başı Sponsorlu Reklam Harcamaları: <strong>-₺{{ formatNumber(innerAdsTry) }}</strong> (-${{ formatNumber(innerAdsUsd) }} USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Reklam Harcaması</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(innerAdsTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(innerAdsUsd) }} USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Reklam Kaynaklı Gelir</span>
+                <span class="box-val text-emerald">₺8.918,87</span>
+                <span class="box-sub">$183,81 USD (2 Sipariş)</span>
+              </div>
+              <div class="drilldown-summary-box highlight-emerald">
+                <span class="box-lbl">Genel Reklam ROAS</span>
+                <span class="box-val text-emerald">22,3x</span>
+                <span class="box-sub">Ortalama Tıklama Başı: $0.12</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Tarih</th>
+                    <th>Gösterim</th>
+                    <th>Tıklama</th>
+                    <th>Harcama ($)</th>
+                    <th>Harcama (₺)</th>
+                    <th>Reklam Geliri ($)</th>
+                    <th>ROAS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let ad of innerAdsRecords">
+                    <td class="date-cell">{{ ad.date }}</td>
+                    <td>{{ ad.impressions }}</td>
+                    <td>{{ ad.clicks }}</td>
+                    <td class="amount-cell text-danger">{{ '-$' + ad.spendUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-danger">-₺{{ formatNumber(ad.spendTry) }}</td>
+                    <td class="amount-cell text-emerald">{{ '$' + ad.salesUsd.toFixed(2) }}</td>
+                    <td><strong [class.text-emerald]="ad.roas !== '0.0x'">{{ ad.roas }}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Performans Analizi: İç reklamlar harcanan her 1₺ karşılığında mağazaya 22,3₺ ciro kazandırmıştır. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. DRILLDOWN MODAL: OFFSITE ADS DIŞ REKLAM ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showOffsiteAdsModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🌐 Offsite Ads Dış Reklam Analizi</h3>
+              <p class="modal-sub">Google, Facebook, Instagram ve Pinterest Reklam Komisyonu: <strong>-₺{{ formatNumber(offsiteAdsTry) }}</strong> (-${{ formatNumber(offsiteAdsUsd) }} USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam Dış Reklam Kesintisi</span>
+                <span class="box-val text-orange">-₺{{ formatNumber(offsiteAdsTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(offsiteAdsUsd) }} USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Dış Reklam Satış Adedi</span>
+                <span class="box-val text-primary">{{ offsiteAdsRecords.length }} Sipariş</span>
+                <span class="box-sub">Toplam Satışın %{{ offsiteOrderSharePct }}'i</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Komisyon Oranı</span>
+                <span class="box-val text-warning">%15,00</span>
+                <span class="box-sub">Sadece Satış Olduğunda Kesilir</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Sipariş No</th>
+                    <th>Alıcı</th>
+                    <th>Satış Tutarı ($)</th>
+                    <th>Komisyon Oranı</th>
+                    <th>Kesinti ($)</th>
+                    <th>Kesinti (₺)</th>
+                    <th>Reklam Kanalı</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let off of offsiteAdsRecords">
+                    <td class="ref-cell">#{{ off.receiptId }}</td>
+                    <td>{{ off.buyer }}</td>
+                    <td class="amount-cell text-emerald">{{ '$' + off.saleAmountUsd.toFixed(2) }}</td>
+                    <td><span class="badge-status-payout">{{ off.rate }}</span></td>
+                    <td class="amount-cell text-orange">{{ '-$' + off.feeUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-orange">-₺{{ formatNumber(off.feeTry) }}</td>
+                    <td class="note-cell">{{ off.channel }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Offsite Ads Avantajı: Tıklama başına para ödemezsiniz; sadece sipariş gerçekleştiğinde %15 başarı komisyonu tahakkuk eder. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 8. DRILLDOWN MODAL: İADE VE GERİ ÖDEME ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showRefundsModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>🔴 İade ve Geri Ödeme Analizi</h3>
+              <p class="modal-sub">Dönem İçi Gerçekleşen Sipariş İadeleri & İptalleri: <strong>-₺{{ formatNumber(refundsTry) }}</strong> (-${{ formatNumber(refundsUsd) }} USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Toplam İade Tutarı</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(modalTotalRefundTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(modalTotalRefundUsd) }} USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">İptal / İade Siparişleri</span>
+                <span class="box-val text-danger">{{ refundRecords.length }} Sipariş</span>
+                <span class="box-sub">{{ modalUnproducedCancelCount }} Zararsız | {{ modalCostLossCancelCount }} Maliyetli</span>
+              </div>
               <div class="drilldown-summary-box highlight-emerald">
                 <span class="box-lbl">Geri Alınan Komisyon</span>
                 <span class="box-val text-emerald">+${{ formatNumber(modalTotalFeeRefundedUsd) }} USD</span>
@@ -1322,192 +1322,192 @@
                 <span class="box-lbl">Net Bakiye Çıkışı (Kasa Kaybı)</span>
                 <span class="box-val text-amber-bold">-₺{{ formatNumber(modalNetBalanceImpactTry) }}</span>
                 <span class="box-sub">-${{ formatNumber(modalNetBalanceImpactUsd) }} USD (Komisyon Düşülmüş)</span>
-              </div>
-              <div class="drilldown-summary-box highlight-danger-box">
-                <span class="box-lbl">Toplam İptal Zararı</span>
-                <span class="box-val text-red-bold">-₺{{ formatNumber(modalTotalLossTry) }}</span>
-                <span class="box-sub">-${{ formatNumber(modalTotalLossUsd) }} USD (Kargo/Hammadde)</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table refund-table">
-                <thead>
-                  <tr>
-                    <th>İade Tarihi</th>
-                    <th>Sipariş Tarihi</th>
-                    <th>Sipariş No</th>
-                    <th>Alıcı / Müşteri</th>
-                    <th>Ürün / Başlık</th>
-                    <th>İade Tutarı ($)</th>
-                    <th>İade Tutarı (₺)</th>
-                    <th>Geri Alınan Komisyon</th>
-                    <th>Sipariş Maliyeti</th>
-                    <th>Net Zarar</th>
-                    <th>İptal Durumu</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let r of refundRecords">
-                    <td class="date-cell">{{ r.refundDate }}</td>
-                    <td class="date-cell">{{ r.orderDate }}</td>
-                    <td class="ref-cell font-mono">#{{ r.receiptId }}</td>
-                    <td class="buyer-cell font-semibold">{{ r.buyer }}</td>
-                    <td class="title-cell refund-title" [title]="r.item">{{ r.item }}</td>
-                    <td class="amount-cell text-danger font-bold">{{ '-$' + r.refundUsd.toFixed(2) }}</td>
-                    <td class="amount-cell text-danger font-bold">-₺{{ formatNumber(r.refundTry) }}</td>
-                    <td class="amount-cell text-emerald">{{ r.feeRefundedUsd > 0 ? '+$' + r.feeRefundedUsd.toFixed(2) + ' (+₺' + formatNumber(r.feeRefundedTry) + ')' : '—' }}</td>
-                    <td class="amount-cell font-mono">{{ r.costUsd > 0 ? '₺' + formatNumber(r.costTry) + ' ($' + r.costUsd.toFixed(2) + ')' : '₺0,00' }}</td>
-                    <td class="amount-cell font-bold" [ngClass]="{'text-danger': r.netLossUsd < 0, 'text-emerald': r.netLossUsd === 0}">
-                      {{ r.netLossUsd < 0 ? '-₺' + formatNumber(r.netLossTry * -1) + ' (-$' + (r.netLossUsd * -1).toFixed(2) + ')' : '₺0,00 (Zararsız)' }}
-                    </td>
-                    <td class="note-cell">
-                      <span [class]="'badge-cancel-status ' + r.cancelType">{{ r.cancelTypeLabel }}</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ Finansal Not: İade yapıldığında Etsy işlem komisyonunu ve KDV'sini mağaza bakiyesine otomatik geri yatırır. ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 9. DRILLDOWN MODAL: ETSY NET GELİR & PLATFORM HAKEDİŞ ANALİZİ -->
-      <div class="modal-backdrop" *ngIf="showNetIncomeModal" (click)="closeModals()">
-        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>💎 Etsy Net Gelir & Platform Hakediş Analizi</h3>
-              <p class="modal-sub">Tüm Platform Kesintileri ve İadeler Sonrası Saf Etsy Hakedişi: <strong>₺{{ formatNumber(netIncomeTry) }}</strong> (${{ formatNumber(netIncomeUsd) }} USD)</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-          <div class="modal-body">
-            <div class="drilldown-summary-grid">
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Brüt Satış Geliri</span>
-                <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
-                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
-              </div>
-              <div class="drilldown-summary-box">
-                <span class="box-lbl">Platform Giderleri Toplamı</span>
-                <span class="box-val text-danger">-₺{{ formatNumber(etsyFeesTry + innerAdsTry + offsiteAdsTry + refundsTry) }}</span>
-                <span class="box-sub">Komisyon, Reklam & İadeler</span>
-              </div>
-              <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Etsy Net Hakediş</span>
-                <span class="box-val text-primary">₺{{ formatNumber(netIncomeTry) }}</span>
-                <span class="box-sub">${{ formatNumber(netIncomeUsd) }} USD</span>
-              </div>
-            </div>
-
-            <div class="drilldown-table-wrapper">
-              <table class="drilldown-table">
-                <thead>
-                  <tr>
-                    <th>Hesap Kalemi</th>
-                    <th>Tutar ($)</th>
-                    <th>Tutar (₺)</th>
-                    <th>Muhasebe Açıklaması</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let n of netIncomeRecords" [class.highlight-row]="n.category.includes('NET HAKEDİŞ')">
-                    <td><strong>{{ n.category }}</strong></td>
-                    <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
-                      {{ (n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountUsd > 0 ? '+' : '')) + '$' + formatNumber(Math.abs(n.amountUsd)) }}
-                    </td>
-                    <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
-                      {{ n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountTry > 0 ? '+' : '') }}₺{{ formatNumber(Math.abs(n.amountTry)) }}
-                    </td>
-                    <td class="note-cell">{{ n.note }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div class="drilldown-footnote">
-              💡 [ Hakediş Tanımı: Etsy Net Gelir, mağazanın kargo ve ürün maliyeti hariç, doğrudan banka hesabına gönderilecek saf Etsy bakiyesidir. ]
-            </div>
-          </div>
-          <div class="modal-footer">
-            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- TOAST NOTIFICATION -->
-      <div class="toast-notification" *ngIf="toastMessage">
-        {{ toastMessage }}
-      </div>
-    
-      <!-- MODAL: VDS 1-TIK SENKRON VE FON REZERVİ AYARLARI -->
-      <div class="modal-backdrop" *ngIf="showSyncModal" (click)="closeModals()">
-        <div class="modal-card sync-modal-card" (click)="$event.stopPropagation()">
-          <div class="modal-header">
-            <div class="drilldown-title-box">
-              <h3>⚡ Etsy Fon Rezervi & VDS Canlı Köprüsü (Sıfır Ban Riski)</h3>
-              <p class="modal-sub">Etsy mağazanız VDS'te açıkken, tek bir tıkla bakiye ve rezerv verisini anında buraya aktarın.</p>
-            </div>
-            <button class="btn-modal-close" (click)="closeModals()">✕</button>
-          </div>
-
-          <div class="modal-body">
-            <!-- VDS 1-Click Bookmarklet Step -->
-            <div class="sync-step-box">
-              <h4 class="step-title">1. VDS Chrome İçin 1-Tık Senkron Yer İmi (Bookmarklet)</h4>
-              <p class="step-desc">
-                Bu yöntem <strong>%100 güvenlidir</strong> ve sıfır ban riski taşır; çünkü Etsy sunucularına harici hiçbir istek yapmaz, sadece VDS Chrome'da açık olan sekmenizdeki rakamları okuyup yerel VDS API'nize kaydeder.
-              </p>
-              <div class="bookmarklet-action-row">
-                <button class="btn-copy-bookmarklet" (click)="copyBookmarkletCode()">
-                  📋 1-Tık Senkron Kodunu Kopyala
-                </button>
-                <span class="bookmarklet-hint">VDS Chrome'da Yer İmleri çubuğuna sağ tıklayın -> 'Sayfa Ekle' deyin ve URL alanına bu kodu yapıştırın. Etsy Finance sekmesindeyken tıklamanız yeterlidir.</span>
-              </div>
-            </div>
-
-            <!-- Manual Value Override -->
-            <div class="sync-step-box">
-              <h4 class="step-title">2. Değerleri Doğrudan Güncelleme (Manuel Düzenleme)</h4>
-              <div class="form-grid-2">
-                <div class="form-group">
-                  <label>Kullanılabilir Bakiye (₺):</label>
-                  <input type="number" [(ngModel)]="reserveSnapshot.currentBalanceTry" step="0.01" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label>Rezervedeki Para (₺):</label>
-                  <input type="number" [(ngModel)]="reserveSnapshot.pendingBalanceTry" step="0.01" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label>Rezerv Oranı (%):</label>
-                  <input type="number" [(ngModel)]="reserveSnapshot.reservePercent" min="0" max="100" class="form-input" />
-                </div>
-                <div class="form-group">
-                  <label>Rezerv Tutma Süresi (Gün):</label>
-                  <input type="number" [(ngModel)]="reserveSnapshot.reserveHoldDays" class="form-input" />
-                </div>
-                <div class="form-group full-width">
-                  <label>Sonraki Etsy Denetim / İnceleme Tarihi:</label>
-                  <input type="text" [(ngModel)]="reserveSnapshot.reevaluationDate" placeholder="Örn: November 30" class="form-input" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="modal-footer">
-            <button class="btn-cancel" (click)="closeModals()">Kapat</button>
-            <button class="btn-primary-modal" (click)="saveReserveSnapshotManual()" [disabled]="isSavingReserve">
-              💾 {{ isSavingReserve ? 'Kaydediliyor...' : 'Değerleri Kaydet' }}
-            </button>
-          </div>
-        </div>
-      </div>
+              </div>
+              <div class="drilldown-summary-box highlight-danger-box">
+                <span class="box-lbl">Toplam İptal Zararı</span>
+                <span class="box-val text-red-bold">-₺{{ formatNumber(modalTotalLossTry) }}</span>
+                <span class="box-sub">-${{ formatNumber(modalTotalLossUsd) }} USD (Kargo/Hammadde)</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table refund-table">
+                <thead>
+                  <tr>
+                    <th>İade Tarihi</th>
+                    <th>Sipariş Tarihi</th>
+                    <th>Sipariş No</th>
+                    <th>Alıcı / Müşteri</th>
+                    <th>Ürün / Başlık</th>
+                    <th>İade Tutarı ($)</th>
+                    <th>İade Tutarı (₺)</th>
+                    <th>Geri Alınan Komisyon</th>
+                    <th>Sipariş Maliyeti</th>
+                    <th>Net Zarar</th>
+                    <th>İptal Durumu</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let r of refundRecords">
+                    <td class="date-cell">{{ r.refundDate }}</td>
+                    <td class="date-cell">{{ r.orderDate }}</td>
+                    <td class="ref-cell font-mono">#{{ r.receiptId }}</td>
+                    <td class="buyer-cell font-semibold">{{ r.buyer }}</td>
+                    <td class="title-cell refund-title" [title]="r.item">{{ r.item }}</td>
+                    <td class="amount-cell text-danger font-bold">{{ '-$' + r.refundUsd.toFixed(2) }}</td>
+                    <td class="amount-cell text-danger font-bold">-₺{{ formatNumber(r.refundTry) }}</td>
+                    <td class="amount-cell text-emerald">{{ r.feeRefundedUsd > 0 ? '+$' + r.feeRefundedUsd.toFixed(2) + ' (+₺' + formatNumber(r.feeRefundedTry) + ')' : '—' }}</td>
+                    <td class="amount-cell font-mono">{{ r.costUsd > 0 ? '₺' + formatNumber(r.costTry) + ' ($' + r.costUsd.toFixed(2) + ')' : '₺0,00' }}</td>
+                    <td class="amount-cell font-bold" [ngClass]="{'text-danger': r.netLossUsd < 0, 'text-emerald': r.netLossUsd === 0}">
+                      {{ r.netLossUsd < 0 ? '-₺' + formatNumber(r.netLossTry * -1) + ' (-$' + (r.netLossUsd * -1).toFixed(2) + ')' : '₺0,00 (Zararsız)' }}
+                    </td>
+                    <td class="note-cell">
+                      <span [class]="'badge-cancel-status ' + r.cancelType">{{ r.cancelTypeLabel }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Finansal Not: İade yapıldığında Etsy işlem komisyonunu ve KDV'sini mağaza bakiyesine otomatik geri yatırır. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9. DRILLDOWN MODAL: ETSY NET GELİR & PLATFORM HAKEDİŞ ANALİZİ -->
+      <div class="modal-backdrop" *ngIf="showNetIncomeModal" (click)="closeModals()">
+        <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>💎 Etsy Net Gelir & Platform Hakediş Analizi</h3>
+              <p class="modal-sub">Tüm Platform Kesintileri ve İadeler Sonrası Saf Etsy Hakedişi: <strong>{{ formatSignedTry(netIncomeTry) }}</strong> ({{ formatSignedUsd(netIncomeUsd) }} USD)</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="drilldown-summary-grid">
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Brüt Satış Geliri</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
+                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD</span>
+              </div>
+              <div class="drilldown-summary-box">
+                <span class="box-lbl">Platform Giderleri Toplamı</span>
+                <span class="box-val text-danger">-₺{{ formatNumber(etsyFeesTry + innerAdsTry + offsiteAdsTry + refundsTry) }}</span>
+                <span class="box-sub">Komisyon, Reklam & İadeler</span>
+              </div>
+              <div class="drilldown-summary-box" [ngClass]="netIncomeTry >= 0 ? 'highlight-emerald' : 'highlight-danger-box'">
+                <span class="box-lbl">{{ netIncomeTry >= 0 ? 'Etsy Net Hakediş' : 'Etsy Net Borç / Eksi Bakiye' }}</span>
+                <span class="box-val" [ngClass]="netIncomeTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(netIncomeTry) }}</span>
+                <span class="box-sub">{{ formatSignedUsd(netIncomeUsd) }} USD</span>
+              </div>
+            </div>
+
+            <div class="drilldown-table-wrapper">
+              <table class="drilldown-table">
+                <thead>
+                  <tr>
+                    <th>Hesap Kalemi</th>
+                    <th>Tutar ($)</th>
+                    <th>Tutar (₺)</th>
+                    <th>Muhasebe Açıklaması</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let n of netIncomeRecords" [class.highlight-row]="n.category.includes('NET HAKEDİŞ') && n.isPositive" [class.highlight-danger-row]="n.category.includes('NET HAKEDİŞ') && !n.isPositive">
+                    <td><strong>{{ n.category }}</strong></td>
+                    <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
+                      {{ (n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountUsd > 0 ? '+' : '')) + formatSignedUsd(n.amountUsd) }}
+                    </td>
+                    <td class="amount-cell" [ngClass]="n.isPositive ? 'text-emerald' : 'text-danger'">
+                      {{ (n.category.includes('NET HAKEDİŞ') ? '=' : (n.amountTry > 0 ? '+' : '')) + formatSignedTry(n.amountTry) }}
+                    </td>
+                    <td class="note-cell">{{ n.note }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="drilldown-footnote">
+              💡 [ Hakediş Tanımı: Etsy Net Gelir, mağazanın kargo ve ürün maliyeti hariç, doğrudan banka hesabına gönderilecek saf Etsy bakiyesidir. ]
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-primary-modal" (click)="closeModals()">Kapat</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOAST NOTIFICATION -->
+      <div class="toast-notification" *ngIf="toastMessage">
+        {{ toastMessage }}
+      </div>
+    
+      <!-- MODAL: VDS 1-TIK SENKRON VE FON REZERVİ AYARLARI -->
+      <div class="modal-backdrop" *ngIf="showSyncModal" (click)="closeModals()">
+        <div class="modal-card sync-modal-card" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <div class="drilldown-title-box">
+              <h3>⚡ Etsy Fon Rezervi & VDS Canlı Köprüsü (Sıfır Ban Riski)</h3>
+              <p class="modal-sub">Etsy mağazanız VDS'te açıkken, tek bir tıkla bakiye ve rezerv verisini anında buraya aktarın.</p>
+            </div>
+            <button class="btn-modal-close" (click)="closeModals()">✕</button>
+          </div>
+
+          <div class="modal-body">
+            <!-- VDS 1-Click Bookmarklet Step -->
+            <div class="sync-step-box">
+              <h4 class="step-title">1. VDS Chrome İçin 1-Tık Senkron Yer İmi (Bookmarklet)</h4>
+              <p class="step-desc">
+                Bu yöntem <strong>%100 güvenlidir</strong> ve sıfır ban riski taşır; çünkü Etsy sunucularına harici hiçbir istek yapmaz, sadece VDS Chrome'da açık olan sekmenizdeki rakamları okuyup yerel VDS API'nize kaydeder.
+              </p>
+              <div class="bookmarklet-action-row">
+                <button class="btn-copy-bookmarklet" (click)="copyBookmarkletCode()">
+                  📋 1-Tık Senkron Kodunu Kopyala
+                </button>
+                <span class="bookmarklet-hint">VDS Chrome'da Yer İmleri çubuğuna sağ tıklayın -> 'Sayfa Ekle' deyin ve URL alanına bu kodu yapıştırın. Etsy Finance sekmesindeyken tıklamanız yeterlidir.</span>
+              </div>
+            </div>
+
+            <!-- Manual Value Override -->
+            <div class="sync-step-box">
+              <h4 class="step-title">2. Değerleri Doğrudan Güncelleme (Manuel Düzenleme)</h4>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label>Kullanılabilir Bakiye (₺):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.currentBalanceTry" step="0.01" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Rezervedeki Para (₺):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.pendingBalanceTry" step="0.01" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Rezerv Oranı (%):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.reservePercent" min="0" max="100" class="form-input" />
+                </div>
+                <div class="form-group">
+                  <label>Rezerv Tutma Süresi (Gün):</label>
+                  <input type="number" [(ngModel)]="reserveSnapshot.reserveHoldDays" class="form-input" />
+                </div>
+                <div class="form-group full-width">
+                  <label>Sonraki Etsy Denetim / İnceleme Tarihi:</label>
+                  <input type="text" [(ngModel)]="reserveSnapshot.reevaluationDate" placeholder="Örn: November 30" class="form-input" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn-cancel" (click)="closeModals()">Kapat</button>
+            <button class="btn-primary-modal" (click)="saveReserveSnapshotManual()" [disabled]="isSavingReserve">
+              💾 {{ isSavingReserve ? 'Kaydediliyor...' : 'Değerleri Kaydet' }}
+            </button>
+          </div>
+        </div>
+      </div>
 </div>

@@ -201,6 +201,10 @@
       border: 1px solid rgba(52, 211, 153, 0.4);
       background: linear-gradient(180deg, #15232c, #0e1c24);
     }
+    .kpi-card.highlight.danger {
+      border: 1px solid rgba(239, 68, 68, 0.4) !important;
+      background: linear-gradient(180deg, #281418, #180d10) !important;
+    }
     .kpi-title {
       font-size: 0.68rem;
       font-weight: 700;
@@ -224,6 +228,7 @@
     .kpi-indicator.dark-orange { background: #ea580c; }
     .kpi-indicator.indigo { background: #6366f1; }
     .kpi-indicator.emerald { background: #34d399; box-shadow: 0 0 6px #34d399; }
+    .kpi-indicator.crimson { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
     .kpi-indicator.cyan { background: #06b6d4; }
 
     .text-success { color: #34d399; }
@@ -838,11 +843,23 @@
     .drilldown-table tr.highlight-row {
       background: rgba(16, 185, 129, 0.1);
       font-weight: 700;
+      border-left: 3px solid #10b981;
     }
-    .badge-status-payout.badge-refund {
+    .drilldown-table tr.highlight-danger-row {
+      background: rgba(239, 68, 68, 0.12) !important;
+      font-weight: 700;
+      border-left: 3px solid #ef4444;
+    }
+    .badge-status-payout.badge-refund,
+    .badge-status-payout.badge-danger {
       background: rgba(239, 68, 68, 0.15) !important;
       color: #f87171 !important;
       border: 1px solid rgba(239, 68, 68, 0.3) !important;
+    }
+    .badge-status-payout.badge-success {
+      background: rgba(16, 185, 129, 0.15) !important;
+      color: #34d399 !important;
+      border: 1px solid rgba(16, 185, 129, 0.3) !important;
     }
     .badge-status-payout {
       font-size: 0.72rem;
@@ -1135,4 +1152,24 @@
 .drilldown-summary-box .text-amber-bold {
   color: #f59e0b;
   font-weight: 800;
+}
+
+/* Margin Pills for Periodic Accounting */
+.margin-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+}
+.margin-pill-success {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34d399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+}
+.margin-pill-danger {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border: 1px solid rgba(239, 68, 68, 0.35) !important;
 }
