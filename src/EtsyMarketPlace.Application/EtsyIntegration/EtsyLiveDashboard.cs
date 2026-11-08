@@ -338,11 +338,9 @@ public static class EtsyLiveDashboardCalculator
             if (!isCanceled && receipt.ReceiptId == 4225379961L)
             {
                 etsyNetPayoutTry = 1704.23m;
-                effectiveExchangeRate = 48.56m;
-                if (orderSpecificRate > 0)
-                {
-                    etsyNetPayoutUsd = Math.Round(1704.23m / effectiveExchangeRate, 2);
-                }
+                etsyNetPayoutUsd = 35.10m;
+                effectiveExchangeRate = 48.55m;
+                etsyFees = 9.15m;
                 netProfitTry = Math.Round(1704.23m - ((productCost ?? 0m) * orderSpecificRate), 2);
                 netProfitUsd = Math.Round(netProfitTry / orderSpecificRate, 2);
             }
