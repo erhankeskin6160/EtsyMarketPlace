@@ -514,20 +514,23 @@
           </div>
         </div>
 
-        <!-- TAB 2: AI KÂR & CİRO TAHMİNİ (CANLI AI CFO & PROJEKSİYON MOTORU) -->
+        <!-- TAB 2: AI KÂR & CİRO TAHMİNİ (DERİN İLERİ PROJEKSİYON & CANLI AI CFO SİMÜLATÖRÜ) -->
         <div *ngIf="activeTab === 'forecast'" class="tab-pane">
-          <!-- AI FORECAST ACTION & STATUS TOOLBAR -->
-          <div class="forecast-toolbar">
+          <!-- 1. AI FORECAST ACTION & HEALTH SCORE TOOLBAR -->
+          <div class="forecast-toolbar" *ngIf="aiForecast as fc">
             <div class="forecast-toolbar-left">
-              <span class="ai-engine-badge" [class.ai-live]="aiForecast?.usedAi">
+              <span class="ai-engine-badge" [class.ai-live]="fc.usedAi">
                 <span class="ai-pulse-dot"></span>
-                🧠 Aktif AI Motoru: <strong>{{ aiForecast?.provider || aiSettings.activeProvider() }} ({{ aiForecast?.model || aiSettings.activeModelName() }})</strong>
+                🧠 Aktif AI Motoru: <strong>{{ fc.provider || aiSettings.activeProvider() }} ({{ fc.model || aiSettings.activeModelName() }})</strong>
               </span>
               <span class="forecast-period-pill">
-                📅 Baz Dönem: <strong>{{ aiForecast?.periodLabel || (startDate + ' — ' + endDate) }}</strong>
+                📅 Baz Dönem: <strong>{{ fc.periodLabel || (startDate + ' — ' + endDate) }}</strong>
               </span>
-              <span class="forecast-rate-pill">
-                💱 Kur: <strong>1$ = ₺{{ (aiForecast?.exchangeRateUsed || liveRate).toFixed(2) }}</strong>
+              <span class="forecast-health-pill" [ngClass]="(fc.healthScore || 70) >= 75 ? 'health-good' : ((fc.healthScore || 70) >= 55 ? 'health-warn' : 'health-bad')">
+                🩺 Finansal Sağlık: <strong>{{ fc.healthScore || 75 }}/100 — {{ fc.healthGrade || 'A (Sağlıklı)' }}</strong>
+              </span>
+              <span class="forecast-breakeven-pill">
+                ⚖️ Başabaş (Break-Even): <strong>{{ fc.breakEvenOrdersPerMonth || 1 }} Sipariş / ${{ formatNumber(fc.breakEvenRevenueUsd || 0) }} (₺{{ formatNumber(fc.breakEvenRevenueTry || 0) }})</strong>
               </span>
             </div>
 
@@ -542,53 +545,264 @@
             </div>
           </div>
 
-          <!-- 4 DYNAMIC FORECAST KPI CARDS -->
-          <div class="forecast-grid-4" *ngIf="aiForecast as fc">
+          <!-- 2. MULTI-HORIZON SELECTOR & 4 DYNAMIC KPI CARDS (30 / 60 / 90 / 180 GÜN) -->
+          <div class="horizon-selector-bar" *ngIf="aiForecast as fc">
+            <div class="horizon-bar-left">
+              <span class="horizon-bar-title">🔭 İleri Projeksiyon Ufku Seçimi:</span>
+              <div class="horizon-btn-group">
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '30d'" (click)="selectedHorizonCode = '30d'">Gelecek 30 Gün (1 Ay)</button>
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '60d'" (click)="selectedHorizonCode = '60d'">Gelecek 60 Gün (2 Ay)</button>
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '90d'" (click)="selectedHorizonCode = '90d'">Gelecek 90 Gün (Çeyrek)</button>
+                <button class="horizon-btn" [class.active]="selectedHorizonCode === '180d'" (click)="selectedHorizonCode = '180d'">Gelecek 180 Gün (6 Ay)</button>
+              </div>
+            </div>
+            <div class="horizon-bar-right" *ngIf="activeHorizonItem as hz">
+              <span>🏦 Beklenen Banka Yatırımı: <strong class="text-emerald">₺{{ formatNumber(hz.estimatedBankPayoutTry) }}</strong></span>
+              <span *ngIf="hz.estimatedReserveReleaseTry > 0" class="sep">|</span>
+              <span *ngIf="hz.estimatedReserveReleaseTry > 0">🔓 Çözülecek Rezerv Fonu: <strong class="text-cyan">+₺{{ formatNumber(hz.estimatedReserveReleaseTry) }}</strong></span>
+            </div>
+          </div>
+
+          <!-- 4 DYNAMIC FORECAST KPI CARDS (SELECTED HORIZON) -->
+          <div class="forecast-grid-4" *ngIf="activeHorizonItem as hz">
             <div class="forecast-card primary">
-              <div class="fc-title">🔮 GELECEK 30 GÜN BEKLENEN CİRO</div>
-              <div class="fc-value" [ngClass]="fc.expectedGrossUsd > 0 ? 'text-emerald' : ''">
-                ${{ formatNumber(fc.expectedGrossUsd) }} / ₺{{ formatNumber(fc.expectedGrossTry) }}
+              <div class="fc-title">🔮 {{ hz.horizonTitle | uppercase }} BEKLENEN CİRO</div>
+              <div class="fc-value" [ngClass]="hz.expectedGrossUsd > 0 ? 'text-emerald' : ''">
+                ${{ formatNumber(hz.expectedGrossUsd) }} / ₺{{ formatNumber(hz.expectedGrossTry) }}
               </div>
               <div class="fc-sub">
-                Güven Aralığı: ${{ formatNumber(fc.minGrossUsd) }} — ${{ formatNumber(fc.maxGrossUsd) }}
+                Tahmini Kesinti & Reklam: <span class="text-danger">-${{ formatNumber(hz.expectedFeesAndAdsUsd) }}</span>
               </div>
             </div>
 
-            <div class="forecast-card" [ngClass]="fc.expectedNetProfitUsd >= 0 ? 'success' : 'danger'">
-              <div class="fc-title">💵 BEKLENEN GERÇEK NET {{ fc.expectedNetProfitUsd >= 0 ? 'KÂR' : 'SONUÇ' }}</div>
-              <div class="fc-value" [ngClass]="fc.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
-                {{ formatSignedUsd(fc.expectedNetProfitUsd) }} / {{ formatSignedTry(fc.expectedNetProfitTry) }}
+            <div class="forecast-card" [ngClass]="hz.expectedNetProfitUsd >= 0 ? 'success' : 'danger'">
+              <div class="fc-title">💵 {{ hz.horizonTitle | uppercase }} GERÇEK NET {{ hz.expectedNetProfitUsd >= 0 ? 'KÂR' : 'SONUÇ' }}</div>
+              <div class="fc-value" [ngClass]="hz.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
+                {{ formatSignedUsd(hz.expectedNetProfitUsd) }} / {{ formatSignedTry(hz.expectedNetProfitTry) }}
               </div>
               <div class="fc-sub">
-                Beklenen Net Kâr Marjı: <strong [ngClass]="fc.expectedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ fc.expectedMarginPct.toFixed(1) }}</strong>
+                Beklenen Net Kâr Marjı: <strong [ngClass]="hz.expectedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ hz.expectedMarginPct.toFixed(1) }}</strong> | Maliyet: <span class="text-danger">-${{ formatNumber(hz.expectedCostsUsd) }}</span>
               </div>
             </div>
 
             <div class="forecast-card sky">
-              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME HIZI</div>
-              <div class="fc-value">{{ fc.estimatedOrders }} Sipariş</div>
+              <div class="fc-title">📦 TAHMİNİ SİPARİŞ & BÜYÜME İVMESİ</div>
+              <div class="fc-value">{{ hz.estimatedOrders }} Sipariş</div>
               <div class="fc-sub">
-                Aylık Büyüme: <strong [ngClass]="fc.monthlyGrowthPct >= 0 ? 'text-emerald' : 'text-danger'">{{ fc.monthlyGrowthPct >= 0 ? '+' : '' }}%{{ fc.monthlyGrowthPct.toFixed(1) }}</strong> | Ort. Sepet: ${{ fc.averageOrderValueUsd.toFixed(2) }}
+                Kümülatif Büyüme: <strong class="text-emerald">+%{{ hz.growthRatePct.toFixed(1) }}</strong> | Ort. Sepet (AOV): ${{ (aiForecast?.averageOrderValueUsd || 0).toFixed(2) }}
               </div>
             </div>
 
-            <div class="forecast-card warning">
-              <div class="fc-title">🖨️ STOK, HAMMADDE & MALİYET DURUMU</div>
-              <div class="fc-value">{{ fc.estimatedFilamentKg.toFixed(2) }} kg Filament</div>
+            <div class="forecast-card warning" *ngIf="aiForecast as fc">
+              <div class="fc-title">🖨️ STOK, HAMMADDE & NAKİT AKIŞI</div>
+              <div class="fc-value">{{ (hz.estimatedOrders * 0.26).toFixed(2) }} kg Filament</div>
               <div class="fc-sub">
-                {{ fc.estimatedShippingBoxes }} Kargo Kutusu
+                {{ hz.estimatedOrders }} Kargo Kutusu
                 <span *ngIf="fc.missingCostOrderCount > 0" class="text-danger"> | ⚠️ {{ fc.missingCostOrderCount }} Eksik Maliyet</span>
                 <span *ngIf="fc.missingCostOrderCount === 0" class="text-emerald"> | ✅ Maliyetler Tam</span>
               </div>
             </div>
           </div>
 
-          <!-- DYNAMIC AI CFO REPORT & ACTION PLAN -->
+          <!-- 3. MULTI-HORIZON PROJECTION TABLE (30 / 60 / 90 / 180 DAYS) -->
+          <div class="projection-matrix-card" *ngIf="aiForecast?.horizonProjections?.length">
+            <div class="matrix-card-header">
+              <h4>📈 Çok Ufuklu İleri Finansal Projeksiyon Tablosu (30 — 60 — 90 — 180 Gün)</h4>
+              <span class="matrix-sub">Canlı satış hızı (Run-Rate), 60 gün rezerv çözülmesi ve bileşik büyüme modeli</span>
+            </div>
+            <div class="glass-table-wrapper">
+              <table class="glass-table">
+                <thead>
+                  <tr>
+                    <th>Projeksiyon Ufku</th>
+                    <th>Tahmini Sipariş</th>
+                    <th>Beklenen Brüt Ciro ($)</th>
+                    <th>Beklenen Brüt Ciro (₺)</th>
+                    <th>Etsy Kesinti & Reklam ($)</th>
+                    <th>Üretim & Kargo Maliyeti ($)</th>
+                    <th>Beklenen Gerçek Net Kâr ($)</th>
+                    <th>Beklenen Gerçek Net Kâr (₺)</th>
+                    <th>Kâr Marjı</th>
+                    <th>Banka Yatırımı & Rezerv Çözülmesi (₺)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let h of aiForecast?.horizonProjections" 
+                      [class.active-horizon-row]="h.horizonCode === selectedHorizonCode"
+                      (click)="selectedHorizonCode = $any(h.horizonCode)">
+                    <td><strong>{{ h.horizonTitle }}</strong></td>
+                    <td>{{ h.estimatedOrders }} Adet <span class="text-emerald">(+%{{ h.growthRatePct.toFixed(1) }})</span></td>
+                    <td class="text-emerald">${{ formatNumber(h.expectedGrossUsd) }}</td>
+                    <td class="text-emerald">₺{{ formatNumber(h.expectedGrossTry) }}</td>
+                    <td class="text-danger">-${{ formatNumber(h.expectedFeesAndAdsUsd) }}</td>
+                    <td class="text-danger">-${{ formatNumber(h.expectedCostsUsd) }}</td>
+                    <td [ngClass]="h.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'"><strong>{{ formatSignedUsd(h.expectedNetProfitUsd) }}</strong></td>
+                    <td [ngClass]="h.expectedNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'"><strong>{{ formatSignedTry(h.expectedNetProfitTry) }}</strong></td>
+                    <td><span class="margin-pill" [ngClass]="h.expectedMarginPct >= 0 ? 'margin-pill-success' : 'margin-pill-danger'">%{{ h.expectedMarginPct.toFixed(1) }}</span></td>
+                    <td class="text-emerald">
+                      ₺{{ formatNumber(h.estimatedBankPayoutTry) }}
+                      <span *ngIf="h.estimatedReserveReleaseTry > 0" class="reserve-release-tag">+₺{{ formatNumber(h.estimatedReserveReleaseTry) }} Rezerv</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 4. 3-SCENARIO MATRIX (KONSERVATİF / BAZ / AGRESİF BÜYÜME) -->
+          <div class="scenario-grid-3" *ngIf="aiForecast?.scenarios?.length">
+            <div class="scenario-card" *ngFor="let sc of aiForecast?.scenarios" [ngClass]="sc.scenarioCode">
+              <div class="sc-header">
+                <span class="sc-title">{{ sc.scenarioTitle }}</span>
+                <span class="sc-badge">{{ sc.badgeText }}</span>
+              </div>
+              <div class="sc-metrics">
+                <div class="sc-metric-item">
+                  <span class="sc-lbl">Beklenen Ciro (30G)</span>
+                  <span class="sc-val text-emerald">${{ formatNumber(sc.expectedGrossUsd) }} <small>(₺{{ formatNumber(sc.expectedGrossTry) }})</small></span>
+                </div>
+                <div class="sc-metric-item">
+                  <span class="sc-lbl">Beklenen Gerçek Net Kâr</span>
+                  <span class="sc-val" [ngClass]="sc.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
+                    {{ formatSignedUsd(sc.expectedNetProfitUsd) }} <small>({{ formatSignedTry(sc.expectedNetProfitTry) }})</small>
+                  </span>
+                </div>
+                <div class="sc-metric-item">
+                  <span class="sc-lbl">Sipariş & Net Marj</span>
+                  <span class="sc-val">{{ sc.estimatedOrders }} Sipariş | <strong>%{{ sc.expectedMarginPct.toFixed(1) }} Marj</strong></span>
+                </div>
+              </div>
+              <p class="sc-desc">{{ sc.keyDriverSummary }}</p>
+            </div>
+          </div>
+
+          <!-- 5. INTERACTIVE "WHAT-IF" PROFIT & GROWTH SIMULATOR -->
+          <div class="what-if-simulator-panel" *ngIf="aiForecast as fc">
+            <div class="sim-header">
+              <div>
+                <h4>🎛️ İnteraktif "What-If" Kâr, Fiyat, Reklam ve Kur Simülatörü</h4>
+                <p>Fiyat, sipariş hacmi, reklam bütçesi, kargo/üretim tasarrufu ve USD/TRY kurunu değiştirerek gelecek 30 günlük net kârınıza etkisini canlı test edin.</p>
+              </div>
+              <button class="btn-reset-sim" (click)="resetSimulationSliders()">🔄 Varsayılana Sıfırla</button>
+            </div>
+
+            <div class="sim-body-grid">
+              <div class="sim-sliders-col">
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🏷️ Ürün Satış Fiyatı Değişimi</span>
+                    <strong [ngClass]="simPriceChangePct >= 0 ? 'text-emerald' : 'text-danger'">{{ simPriceChangePct >= 0 ? '+' : '' }}%{{ simPriceChangePct }}</strong>
+                  </div>
+                  <input type="range" min="-20" max="40" step="1" [(ngModel)]="simPriceChangePct" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>📦 Aylık Sipariş Hacmi Değişimi</span>
+                    <strong [ngClass]="simVolumeChangePct >= 0 ? 'text-emerald' : 'text-danger'">{{ simVolumeChangePct >= 0 ? '+' : '' }}%{{ simVolumeChangePct }}</strong>
+                  </div>
+                  <input type="range" min="-30" max="100" step="5" [(ngModel)]="simVolumeChangePct" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>📣 Reklam Bütçesi (Etsy Ads) Değişimi</span>
+                    <strong [ngClass]="simAdBudgetChangePct <= 0 ? 'text-emerald' : 'text-warning'">{{ simAdBudgetChangePct >= 0 ? '+' : '' }}%{{ simAdBudgetChangePct }}</strong>
+                  </div>
+                  <input type="range" min="-50" max="100" step="5" [(ngModel)]="simAdBudgetChangePct" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🚚 Kargo & Filament Maliyet Tasarrufu</span>
+                    <strong class="text-emerald">+%{{ simCostSavingPct }} Tasarruf</strong>
+                  </div>
+                  <input type="range" min="0" max="35" step="1" [(ngModel)]="simCostSavingPct" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>💱 Hedef USD / TRY Döviz Kuru</span>
+                    <strong class="text-cyan">1$ = ₺{{ simTargetRateTry.toFixed(2) }}</strong>
+                  </div>
+                  <input type="range" min="45" max="65" step="0.25" [(ngModel)]="simTargetRateTry" class="sim-range" />
+                </div>
+              </div>
+
+              <div class="sim-results-col">
+                <div class="sim-result-box">
+                  <span class="sim-res-lbl">SİMÜLE EDİLEN AYLIK CİRO</span>
+                  <div class="sim-res-val text-emerald">${{ formatNumber(simulatedGrossUsd) }} / ₺{{ formatNumber(simulatedGrossTry) }}</div>
+                  <span class="sim-res-sub">Tahmini {{ simulatedOrdersCount }} Sipariş (Baz: {{ fc.estimatedOrders }} Sipariş)</span>
+                </div>
+
+                <div class="sim-result-box highlight">
+                  <span class="sim-res-lbl">SİMÜLE EDİLEN GERÇEK NET KÂR</span>
+                  <div class="sim-res-val" [ngClass]="simulatedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
+                    {{ formatSignedUsd(simulatedNetProfitUsd) }} / {{ formatSignedTry(simulatedNetProfitTry) }}
+                  </div>
+                  <span class="sim-res-sub">
+                    Simüle Net Marj: <strong [ngClass]="simulatedMarginPct >= 0 ? 'text-emerald' : 'text-danger'">%{{ simulatedMarginPct.toFixed(1) }}</strong>
+                  </span>
+                </div>
+
+                <div class="sim-result-box delta">
+                  <span class="sim-res-lbl">BAZ SENARYOYA GÖRE NET KÂR FARKI (ETKİ)</span>
+                  <div class="sim-res-val" [ngClass]="simulatedProfitDeltaTry >= 0 ? 'text-emerald' : 'text-danger'">
+                    {{ simulatedProfitDeltaUsd >= 0 ? '+' : '' }}{{ formatSignedUsd(simulatedProfitDeltaUsd) }} ({{ simulatedProfitDeltaTry >= 0 ? '+' : '' }}{{ formatSignedTry(simulatedProfitDeltaTry) }})
+                  </div>
+                  <span class="sim-res-sub">Parametre değişimlerinin kasaya doğrudan aylık net etkisi</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 6. SKU / PRODUCT-LEVEL FORECAST TABLE -->
+          <div class="projection-matrix-card" *ngIf="aiForecast?.productForecasts?.length">
+            <div class="matrix-card-header">
+              <h4>🏆 Ürün / SKU Bazlı Kârlılık ve Gelecek 30 Gün Satış Projeksiyonu</h4>
+              <span class="matrix-sub">Gerçek sipariş verilerinden ürün bazlı marj, büyüme potansiyeli ve AI strateji önerisi</span>
+            </div>
+            <div class="glass-table-wrapper">
+              <table class="glass-table">
+                <thead>
+                  <tr>
+                    <th>Ürün Adı (Gerçek Mağaza İlanı)</th>
+                    <th>Mevcut Sipariş</th>
+                    <th>Mevcut Ciro ($)</th>
+                    <th>Mevcut Net Kâr ($)</th>
+                    <th>Net Marj</th>
+                    <th>Gelecek 30G Tahmini Sipariş</th>
+                    <th>Gelecek 30G Beklenen Ciro ($)</th>
+                    <th>Gelecek 30G Beklenen Net Kâr ($)</th>
+                    <th>AI Strateji Sınıfı</th>
+                    <th>AI Ürün Aksiyon Önerisi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let pf of aiForecast?.productForecasts">
+                    <td class="product-cell" [title]="pf.productTitle"><strong>{{ pf.productTitle }}</strong></td>
+                    <td>{{ pf.currentOrders }} Adet</td>
+                    <td class="text-emerald">${{ formatNumber(pf.currentRevenueUsd) }}</td>
+                    <td [ngClass]="pf.currentProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedUsd(pf.currentProfitUsd) }}</td>
+                    <td><span class="margin-pill" [ngClass]="pf.currentMarginPct >= 20 ? 'margin-pill-success' : 'margin-pill-danger'">%{{ pf.currentMarginPct.toFixed(1) }}</span></td>
+                    <td><strong>{{ pf.projectedNext30dOrders }} Adet</strong></td>
+                    <td class="text-emerald">${{ formatNumber(pf.projectedNext30dRevenueUsd) }}</td>
+                    <td [ngClass]="pf.projectedNext30dProfitUsd >= 0 ? 'text-emerald' : 'text-danger'"><strong>{{ formatSignedUsd(pf.projectedNext30dProfitUsd) }}</strong></td>
+                    <td><span class="ai-strategy-pill">{{ pf.aiStrategyTag }}</span></td>
+                    <td class="ai-rec-cell">{{ pf.aiRecommendation }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 7. DYNAMIC AI CFO REPORT & ACTION PLAN -->
           <div class="ai-cfo-panel" *ngIf="aiForecast as fc">
             <div class="ai-cfo-header">
               <div class="ai-cfo-title-row">
                 <span class="sparkle">✨</span>
-                <h4>{{ fc.provider }} ({{ fc.model }}) AI CFO — Canlı Mağaza Büyüme ve Kârlılık Raporu</h4>
+                <h4>{{ fc.provider }} ({{ fc.model }}) AI CFO — Derinlemesine Mağaza Büyüme ve Kârlılık Raporu</h4>
               </div>
               <span class="ai-source-tag" [class.live]="fc.usedAi">
                 {{ fc.usedAi ? '🟢 Canlı LLM CFO Analizi' : '🔵 Canlı VDS Finans Motoru Analizi' }}
@@ -618,7 +832,7 @@
             </div>
 
             <div class="ai-action-box" *ngIf="fc.actionPlan && fc.actionPlan.length > 0">
-              <div class="ai-action-header">🚀 Gelecek 30 Gün İçin AI CFO Eylem Planı</div>
+              <div class="ai-action-header">🚀 Gelecek 30-90 Gün İçin AI CFO Stratejik Eylem Planı</div>
               <ul class="ai-action-list">
                 <li *ngFor="let item of fc.actionPlan; let i = index">
                   <span class="action-idx">{{ i + 1 }}</span>

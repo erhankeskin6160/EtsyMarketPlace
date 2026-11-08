@@ -34,6 +34,46 @@ public sealed record FinancialAnalysisRecommendation(
     string Title,
     string Description);
 
+public sealed record AiForecastHorizonItemDto(
+    string HorizonCode,
+    string HorizonTitle,
+    int Days,
+    decimal ExpectedGrossUsd,
+    decimal ExpectedGrossTry,
+    decimal ExpectedFeesAndAdsUsd,
+    decimal ExpectedCostsUsd,
+    decimal ExpectedNetProfitUsd,
+    decimal ExpectedNetProfitTry,
+    decimal ExpectedMarginPct,
+    int EstimatedOrders,
+    decimal GrowthRatePct,
+    decimal EstimatedBankPayoutTry,
+    decimal EstimatedReserveReleaseTry);
+
+public sealed record AiForecastScenarioItemDto(
+    string ScenarioCode,
+    string ScenarioTitle,
+    string BadgeText,
+    decimal ExpectedGrossUsd,
+    decimal ExpectedGrossTry,
+    decimal ExpectedNetProfitUsd,
+    decimal ExpectedNetProfitTry,
+    decimal ExpectedMarginPct,
+    int EstimatedOrders,
+    string KeyDriverSummary);
+
+public sealed record AiProductForecastItemDto(
+    string ProductTitle,
+    int CurrentOrders,
+    decimal CurrentRevenueUsd,
+    decimal CurrentProfitUsd,
+    decimal CurrentMarginPct,
+    int ProjectedNext30dOrders,
+    decimal ProjectedNext30dRevenueUsd,
+    decimal ProjectedNext30dProfitUsd,
+    string AiStrategyTag,
+    string AiRecommendation);
+
 public sealed record AiFinancialForecastCommand(
     string ShopId,
     DateTimeOffset StartDate,
@@ -77,8 +117,16 @@ public sealed record AiFinancialForecastResultDto(
     decimal EstimatedFilamentKg,
     int EstimatedShippingBoxes,
     int MissingCostOrderCount,
+    int HealthScore,
+    string HealthGrade,
+    int BreakEvenOrdersPerMonth,
+    decimal BreakEvenRevenueUsd,
+    decimal BreakEvenRevenueTry,
     string ExecutiveSummary,
     string ProductProfitabilityAnalysis,
     string AdSpendAndRoasAnalysis,
     string RefundAndCostAlertAnalysis,
-    IReadOnlyList<string> ActionPlan);
+    IReadOnlyList<string> ActionPlan,
+    IReadOnlyList<AiForecastHorizonItemDto>? HorizonProjections = null,
+    IReadOnlyList<AiForecastScenarioItemDto>? Scenarios = null,
+    IReadOnlyList<AiProductForecastItemDto>? ProductForecasts = null);

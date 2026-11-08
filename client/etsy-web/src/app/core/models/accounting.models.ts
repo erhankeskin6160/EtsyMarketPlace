@@ -119,6 +119,49 @@ export interface AiFinancialForecastRequestDto {
   missingCostOrderIds?: string[];
 }
 
+export interface AiForecastHorizonItemDto {
+  horizonCode: string;
+  horizonTitle: string;
+  days: number;
+  expectedGrossUsd: number;
+  expectedGrossTry: number;
+  expectedFeesAndAdsUsd: number;
+  expectedCostsUsd: number;
+  expectedNetProfitUsd: number;
+  expectedNetProfitTry: number;
+  expectedMarginPct: number;
+  estimatedOrders: number;
+  growthRatePct: number;
+  estimatedBankPayoutTry: number;
+  estimatedReserveReleaseTry: number;
+}
+
+export interface AiForecastScenarioItemDto {
+  scenarioCode: string;
+  scenarioTitle: string;
+  badgeText: string;
+  expectedGrossUsd: number;
+  expectedGrossTry: number;
+  expectedNetProfitUsd: number;
+  expectedNetProfitTry: number;
+  expectedMarginPct: number;
+  estimatedOrders: number;
+  keyDriverSummary: string;
+}
+
+export interface AiProductForecastItemDto {
+  productTitle: string;
+  currentOrders: number;
+  currentRevenueUsd: number;
+  currentProfitUsd: number;
+  currentMarginPct: number;
+  projectedNext30dOrders: number;
+  projectedNext30dRevenueUsd: number;
+  projectedNext30dProfitUsd: number;
+  aiStrategyTag: string;
+  aiRecommendation: string;
+}
+
 export interface AiFinancialForecastResponseDto {
   shopId: string;
   periodLabel: string;
@@ -140,9 +183,17 @@ export interface AiFinancialForecastResponseDto {
   estimatedFilamentKg: number;
   estimatedShippingBoxes: number;
   missingCostOrderCount: number;
+  healthScore?: number;
+  healthGrade?: string;
+  breakEvenOrdersPerMonth?: number;
+  breakEvenRevenueUsd?: number;
+  breakEvenRevenueTry?: number;
   executiveSummary: string;
   productProfitabilityAnalysis: string;
   adSpendAndRoasAnalysis: string;
   refundAndCostAlertAnalysis: string;
   actionPlan: string[];
+  horizonProjections?: AiForecastHorizonItemDto[];
+  scenarios?: AiForecastScenarioItemDto[];
+  productForecasts?: AiProductForecastItemDto[];
 }

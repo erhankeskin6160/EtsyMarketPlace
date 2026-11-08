@@ -10,7 +10,10 @@ import {
   ExpenseBreakdownItem,
   OrderFinancialRow,
   ForecastKpiSummary,
-  AiFinancialForecastResponseDto
+  AiFinancialForecastResponseDto,
+  AiForecastHorizonItemDto,
+  AiForecastScenarioItemDto,
+  AiProductForecastItemDto
 } from '../../core/models/accounting.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -83,6 +86,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
   activeTab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' = 'orders';
   isAnalyzingForecast = false;
   aiForecast: AiFinancialForecastResponseDto | null = null;
+  selectedHorizonCode: '30d' | '60d' | '90d' | '180d' = '30d';
+
+  // Interactive What-If Simulator Sliders
+  simPriceChangePct = 0;       // -20% to +40%
+  simVolumeChangePct = 0;      // -30% to +100%
+  simAdBudgetChangePct = 0;    // -50% to +100%
+  simCostSavingPct = 0;        // 0% to +35%
+  simTargetRateTry = 0;        // 0 means use liveRate
 
   selectedDatePreset = 'thisMonth';
   startDate = '';
@@ -820,10 +831,237 @@ export class AccountingComponent implements OnInit, OnDestroy {
   switchTab(tab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger'): void {
     this.activeTab = tab;
     if (tab === 'forecast') {
+      if (this.simTargetRateTry <= 0) {
+        this.simTargetRateTry = Number((this.liveRate || 49.50).toFixed(2));
+      }
       if (!this.aiForecast || !this.aiForecast.usedAi) {
         this.runAiForecastAnalysis(false);
       }
     }
+  }
+
+  resetSimulationSliders(): void {
+    this.simPriceChangePct = 0;
+    this.simVolumeChangePct = 0;
+    this.simAdBudgetChangePct = 0;
+    this.simCostSavingPct = 0;
+    this.simTargetRateTry = Number((this.liveRate || 49.50).toFixed(2));
+    this.showToast('🔄 Simülasyon parametreleri mağaza baz değerlerine sıfırlandı.');
+  }
+
+  get activeHorizonItem(): AiForecastHorizonItemDto | null {
+    const list = this.aiForecast?.horizonProjections;
+    if (!list || list.length === 0) return null;
+    return list.find(h => h.horizonCode === this.selectedHorizonCode) || list[0];
+  }
+
+  get simulatedGrossUsd(): number {
+    const base = this.aiForecast?.expectedGrossUsd || 0;
+    const priceFactor = 1 + (this.simPriceChangePct / 100);
+    const volFactor = 1 + (this.simVolumeChangePct / 100);
+    const adBoostFactor = 1 + (Math.max(0, this.simAdBudgetChangePct) * 0.0022);
+    return Number((base * priceFactor * volFactor * adBoostFactor).toFixed(2));
+  }
+
+  get simulatedGrossTry(): number {
+    const rate = this.simTargetRateTry > 10 ? this.simTargetRateTry : (this.liveRate || 49.50);
+    return Number((this.simulatedGrossUsd * rate).toFixed(2));
+  }
+
+  get simulatedOrdersCount(): number {
+    const baseOrders = this.aiForecast?.estimatedOrders || 0;
+    const volFactor = 1 + (this.simVolumeChangePct / 100);
+    const adBoostFactor = 1 + (Math.max(0, this.simAdBudgetChangePct) * 0.0022);
+    return Math.max(0, Math.round(baseOrders * volFactor * adBoostFactor));
+  }
+
+  get simulatedNetProfitUsd(): number {
+    const fc = this.aiForecast;
+    if (!fc) return 0;
+    const simGross = this.simulatedGrossUsd;
+    if (simGross <= 0) return 0;
+
+    // Standart Etsy kesintisi (~%14) + reklam etkisi + maliyet tasarrufu etkisi
+    const baseFeeRatio = this.grossSalesUsd > 0 ? Math.min(0.25, Math.max(0.12, this.etsyFeesUsd / this.grossSalesUsd)) : 0.145;
+    const baseAdUsd = (this.innerAdsUsd + this.offsiteAdsUsd) > 0
+      ? (this.innerAdsUsd + this.offsiteAdsUsd)
+      : (fc.expectedGrossUsd * 0.06);
+    const simAdUsd = baseAdUsd * (1 + (this.simAdBudgetChangePct / 100));
+
+    const baseCostRatio = this.grossSalesUsd > 0 && this.productCostsUsd > 0
+      ? Math.min(0.60, Math.max(0.18, this.productCostsUsd / this.grossSalesUsd))
+      : Math.max(0.22, 1 - (fc.expectedMarginPct / 100) - baseFeeRatio - 0.05);
+    const volFactor = 1 + (this.simVolumeChangePct / 100);
+    const costSavingFactor = 1 - (this.simCostSavingPct / 100);
+    const simCostsUsd = (fc.expectedGrossUsd * baseCostRatio) * volFactor * costSavingFactor;
+
+    const simFeesUsd = simGross * baseFeeRatio;
+    const netUsd = simGross - simFeesUsd - simAdUsd - simCostsUsd;
+    return Number(netUsd.toFixed(2));
+  }
+
+  get simulatedNetProfitTry(): number {
+    const rate = this.simTargetRateTry > 10 ? this.simTargetRateTry : (this.liveRate || 49.50);
+    return Number((this.simulatedNetProfitUsd * rate).toFixed(2));
+  }
+
+  get simulatedMarginPct(): number {
+    const g = this.simulatedGrossUsd;
+    if (g <= 0) return 0;
+    return Number(((this.simulatedNetProfitUsd / g) * 100).toFixed(1));
+  }
+
+  get simulatedProfitDeltaTry(): number {
+    const baseTry = this.aiForecast?.expectedNetProfitTry || 0;
+    return Number((this.simulatedNetProfitTry - baseTry).toFixed(2));
+  }
+
+  get simulatedProfitDeltaUsd(): number {
+    const baseUsd = this.aiForecast?.expectedNetProfitUsd || 0;
+    return Number((this.simulatedNetProfitUsd - baseUsd).toFixed(2));
+  }
+
+  private buildLocalProductForecasts(periodDays: number): AiProductForecastItemDto[] {
+    const active = this.orders.filter(o => o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund');
+    const map = new Map<string, { title: string; count: number; revenueUsd: number; profitUsd: number }>();
+
+    for (const o of active) {
+      const key = (o.productTitle || '').trim();
+      if (!key) continue;
+      const cur = map.get(key) || { title: key, count: 0, revenueUsd: 0, profitUsd: 0 };
+      cur.count += (o.quantity || 1);
+      cur.revenueUsd += (o.grandTotalUsd || 0);
+      cur.profitUsd += (o.netProfitUsd || 0);
+      map.set(key, cur);
+    }
+
+    const scale30 = (30 / Math.min(365, Math.max(7, periodDays))) * 1.12;
+    return Array.from(map.values())
+      .sort((a, b) => (b.profitUsd - a.profitUsd) || (b.revenueUsd - a.revenueUsd))
+      .slice(0, 5)
+      .map(item => {
+        const rev = Number(item.revenueUsd.toFixed(2));
+        const prof = Number(item.profitUsd.toFixed(2));
+        const mrg = rev > 0 ? Number(((prof / rev) * 100).toFixed(1)) : 0;
+        const projOrders = Math.max(1, Math.round(item.count * scale30));
+        const projRev = Number((rev * scale30).toFixed(2));
+        const projProf = Number((prof * scale30).toFixed(2));
+        const tag = mrg >= 35 ? '🚀 Yıldız Ürün (Ölçekle)' : (mrg >= 15 ? '⚖️ Dengeli Katkı' : '⚠️ Marj Optimize Et');
+        const rec = mrg >= 35
+          ? 'Etsy Ads bütçesini %15 artırın ve 2\'li set (bundle) varyasyonu ekleyin.'
+          : (mrg >= 15
+              ? 'Fiyatı %5 yukarı çekerek kargo/reklam maliyet yükünü dengeleyin.'
+              : 'Kargo ve üretim maliyetini inceleyin; Offsite Ads etkisini fiyatlayın.');
+        return {
+          productTitle: item.title,
+          currentOrders: item.count,
+          currentRevenueUsd: rev,
+          currentProfitUsd: prof,
+          currentMarginPct: mrg,
+          projectedNext30dOrders: projOrders,
+          projectedNext30dRevenueUsd: projRev,
+          projectedNext30dProfitUsd: projProf,
+          aiStrategyTag: tag,
+          aiRecommendation: rec
+        };
+      });
+  }
+
+  private buildLocalHorizons(expectedGrossUsd: number, expectedMarginPct: number, estimatedOrders: number, rate: number): AiForecastHorizonItemDto[] {
+    const specs: Array<{ code: string; title: string; days: number; mult: number; growth: number }> = [
+      { code: '30d', title: 'Gelecek 30 Gün (1 Ay)', days: 30, mult: 1.0, growth: 12.0 },
+      { code: '60d', title: 'Gelecek 60 Gün (2 Ay)', days: 60, mult: 2.08, growth: 16.5 },
+      { code: '90d', title: 'Gelecek 90 Gün (Çeyrek / 3 Ay)', days: 90, mult: 3.24, growth: 21.8 },
+      { code: '180d', title: 'Gelecek 180 Gün (Yarıyıl / 6 Ay)', days: 180, mult: 6.85, growth: 34.0 }
+    ];
+    const marginRatio = Math.max(0.15, Math.min(0.75, expectedMarginPct / 100));
+    const feeRatio = this.grossSalesUsd > 0 ? Math.min(0.40, Math.max(0.14, (this.etsyFeesUsd + this.innerAdsUsd + this.offsiteAdsUsd) / this.grossSalesUsd)) : 0.22;
+    const costRatio = this.grossSalesUsd > 0 && this.productCostsUsd > 0 ? Math.min(0.55, Math.max(0.15, this.productCostsUsd / this.grossSalesUsd)) : 0.32;
+
+    return specs.map(s => {
+      const grossUsd = Number((expectedGrossUsd * s.mult).toFixed(2));
+      const grossTry = Number((grossUsd * rate).toFixed(2));
+      const feesAdsUsd = Number((grossUsd * feeRatio).toFixed(2));
+      const costsUsd = Number((grossUsd * costRatio).toFixed(2));
+      const netProfitUsd = Number((grossUsd * marginRatio).toFixed(2));
+      const netProfitTry = Number((netProfitUsd * rate).toFixed(2));
+      const orders = estimatedOrders > 0 ? Math.max(1, Math.round(estimatedOrders * s.mult)) : 0;
+      const netEtsyPayoutTry = Number(((grossUsd - feesAdsUsd) * rate).toFixed(2));
+      const reserveHoldRatio = s.days <= 30 ? 0.25 : (s.days <= 60 ? 0.10 : 0.0);
+      const estReserveReleaseTry = s.days >= 60 ? Number((netEtsyPayoutTry * 0.22).toFixed(2)) : 0;
+      const estBankPayoutTry = Number((netEtsyPayoutTry * (1 - reserveHoldRatio)).toFixed(2));
+
+      return {
+        horizonCode: s.code,
+        horizonTitle: s.title,
+        days: s.days,
+        expectedGrossUsd: grossUsd,
+        expectedGrossTry: grossTry,
+        expectedFeesAndAdsUsd: feesAdsUsd,
+        expectedCostsUsd: costsUsd,
+        expectedNetProfitUsd: netProfitUsd,
+        expectedNetProfitTry: netProfitTry,
+        expectedMarginPct: Number((marginRatio * 100).toFixed(1)),
+        estimatedOrders: orders,
+        growthRatePct: grossUsd > 0 ? s.growth : 0,
+        estimatedBankPayoutTry: estBankPayoutTry,
+        estimatedReserveReleaseTry: estReserveReleaseTry
+      };
+    });
+  }
+
+  private buildLocalScenarios(expectedGrossUsd: number, expectedMarginPct: number, estimatedOrders: number, rate: number): AiForecastScenarioItemDto[] {
+    const marginRatio = Math.max(0.15, Math.min(0.75, expectedMarginPct / 100));
+    const pessGrossUsd = Number((expectedGrossUsd * 0.82).toFixed(2));
+    const pessMargin = Math.max(10, Number(((marginRatio - 0.06) * 100).toFixed(1)));
+    const pessProfitUsd = Number((pessGrossUsd * (pessMargin / 100)).toFixed(2));
+
+    const baseGrossUsd = expectedGrossUsd;
+    const baseMargin = Number((marginRatio * 100).toFixed(1));
+    const baseProfitUsd = Number((baseGrossUsd * marginRatio).toFixed(2));
+
+    const optGrossUsd = Number((expectedGrossUsd * 1.28).toFixed(2));
+    const optMargin = Math.min(70, Number(((marginRatio + 0.05) * 100).toFixed(1)));
+    const optProfitUsd = Number((optGrossUsd * (optMargin / 100)).toFixed(2));
+
+    return [
+      {
+        scenarioCode: 'pessimistic',
+        scenarioTitle: '🛡️ Konservatif (Stres Testi)',
+        badgeText: '-%18 Hacim / Yüksek Kesinti',
+        expectedGrossUsd: pessGrossUsd,
+        expectedGrossTry: Number((pessGrossUsd * rate).toFixed(2)),
+        expectedNetProfitUsd: pessProfitUsd,
+        expectedNetProfitTry: Number((pessProfitUsd * rate).toFixed(2)),
+        expectedMarginPct: pessMargin,
+        estimatedOrders: estimatedOrders > 0 ? Math.max(1, Math.round(estimatedOrders * 0.82)) : 0,
+        keyDriverSummary: 'Offsite Ads payının arttığı ve organik trafiğin %18 yavaşladığı güvenli alt sınır senaryosu.'
+      },
+      {
+        scenarioCode: 'baseline',
+        scenarioTitle: '🎯 Baz Beklenti (Gerçekçi Projeksiyon)',
+        badgeText: '+%12 Büyüme / Mevcut Trend',
+        expectedGrossUsd: baseGrossUsd,
+        expectedGrossTry: Number((baseGrossUsd * rate).toFixed(2)),
+        expectedNetProfitUsd: baseProfitUsd,
+        expectedNetProfitTry: Number((baseProfitUsd * rate).toFixed(2)),
+        expectedMarginPct: baseMargin,
+        estimatedOrders,
+        keyDriverSummary: 'Mağazanızın mevcut sipariş hızı (run-rate), kesinti oranı ve kur çarpanıyla beklenen ana rota.'
+      },
+      {
+        scenarioCode: 'optimistic',
+        scenarioTitle: '🚀 Agresif Büyüme (SEO + Bundle)',
+        badgeText: '+%28 Hacim / +%5 Marj',
+        expectedGrossUsd: optGrossUsd,
+        expectedGrossTry: Number((optGrossUsd * rate).toFixed(2)),
+        expectedNetProfitUsd: optProfitUsd,
+        expectedNetProfitTry: Number((optProfitUsd * rate).toFixed(2)),
+        expectedMarginPct: optMargin,
+        estimatedOrders: estimatedOrders > 0 ? Math.max(1, Math.round(estimatedOrders * 1.25)) : 0,
+        keyDriverSummary: 'Lider ürünlerde 2\'li set (bundle) satışı ve 13 etiket optimizasyonuyla AOV ve dönüşümün arttığı üst hedef.'
+      }
+    ];
   }
 
   private getTopPerformingProduct(): { title: string | null; revenueUsd: number; profitUsd: number } {
@@ -969,6 +1207,27 @@ export class AccountingComponent implements OnInit, OnDestroy {
       return;
     }
 
+    let score = 70;
+    if (this.realNetProfitUsd > 0) score += 12;
+    else if (this.realNetProfitUsd < 0) score -= 18;
+    if (expectedMarginPct >= 35) score += 10;
+    else if (expectedMarginPct < 20) score -= 10;
+    if (missingCount > 0) score -= Math.min(12, missingCount * 3);
+    score = Math.max(25, Math.min(98, score));
+    const healthGrade = score >= 85 ? 'A+ (Çok Güçlü)' : (score >= 75 ? 'A (Sağlıklı Büyüme)' : (score >= 60 ? 'B (Dengeli / İyileştirilebilir)' : 'C (Marj ve İade Baskısı)'));
+
+    const fixedAndAdOverheadUsd = Math.max(25, this.innerAdsUsd + this.offsiteAdsUsd + (this.refundsUsd * 0.35));
+    const effAov = avgOrderValueUsd > 0 ? avgOrderValueUsd : 45;
+    const contribRatio = Math.max(0.20, Math.min(0.65, expectedMarginPct / 100));
+    const contribPerOrderUsd = Math.max(5, effAov * contribRatio);
+    const breakEvenOrders = Math.max(1, Math.ceil(fixedAndAdOverheadUsd / contribPerOrderUsd));
+    const breakEvenRevUsd = Number((breakEvenOrders * effAov).toFixed(2));
+    const breakEvenRevTry = Number((breakEvenRevUsd * rate).toFixed(2));
+
+    if (this.simTargetRateTry <= 0) {
+      this.simTargetRateTry = Number(rate.toFixed(2));
+    }
+
     this.aiForecast = {
       shopId: this.etsyApi.activeShopId(),
       periodLabel,
@@ -990,11 +1249,19 @@ export class AccountingComponent implements OnInit, OnDestroy {
       estimatedFilamentKg,
       estimatedShippingBoxes,
       missingCostOrderCount: missingCount,
+      healthScore: score,
+      healthGrade,
+      breakEvenOrdersPerMonth: breakEvenOrders,
+      breakEvenRevenueUsd: breakEvenRevUsd,
+      breakEvenRevenueTry: breakEvenRevTry,
       executiveSummary: execSummary,
       productProfitabilityAnalysis: prodAnalysis,
       adSpendAndRoasAnalysis: adAnalysis,
       refundAndCostAlertAnalysis: refundCostAnalysis,
-      actionPlan: actions
+      actionPlan: actions,
+      horizonProjections: this.buildLocalHorizons(expectedGrossUsd, expectedMarginPct, estimatedOrders, rate),
+      scenarios: this.buildLocalScenarios(expectedGrossUsd, expectedMarginPct, estimatedOrders, rate),
+      productForecasts: this.buildLocalProductForecasts(periodDays)
     };
   }
 
@@ -1038,9 +1305,17 @@ export class AccountingComponent implements OnInit, OnDestroy {
     }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: async (res) => {
         if (res) {
+          const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+          const localHorizons = this.buildLocalHorizons(res.expectedGrossUsd, res.expectedMarginPct, res.estimatedOrders, res.exchangeRateUsed || this.liveRate);
+          const localScenarios = this.buildLocalScenarios(res.expectedGrossUsd, res.expectedMarginPct, res.estimatedOrders, res.exchangeRateUsed || this.liveRate);
+          const localProds = this.buildLocalProductForecasts(periodDays);
+
           this.aiForecast = {
             ...res,
-            periodLabel: `${this.startDate} — ${this.endDate}`
+            periodLabel: `${this.startDate} — ${this.endDate}`,
+            horizonProjections: (res.horizonProjections && res.horizonProjections.length > 0) ? res.horizonProjections : localHorizons,
+            scenarios: (res.scenarios && res.scenarios.length > 0) ? res.scenarios : localScenarios,
+            productForecasts: (res.productForecasts && res.productForecasts.length > 0) ? res.productForecasts : localProds
           };
           if (!res.usedAi && apiKey && provider !== 'Offline') {
             await this.tryClientSideLlmEnrichment(provider, model, apiKey);

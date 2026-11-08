@@ -153,14 +153,15 @@ public sealed class EtsyFinancialAnalysisService(
             }
         }
 
-        // 3. Sipariş detayları, en çok kazandıran ürün ve eksik maliyetli siparişleri çözümle
+        // 3. Sipariş detayları, en çok kazandıran ürünler ve eksik maliyetli siparişleri çözümle
         var topProductTitle = command.TopProductTitle;
         var topProductRevenueUsd = command.TopProductRevenueUsd ?? 0m;
         var topProductProfitUsd = command.TopProductProfitUsd ?? 0m;
         var missingCostIds = command.MissingCostOrderIds?.Where(x => !string.IsNullOrWhiteSpace(x)).ToList() ?? [];
         var missingCostCount = command.MissingCostOrderCount ?? missingCostIds.Count;
+        var productForecasts = new List<AiProductForecastItemDto>();
 
-        if (dashboardService != null && (string.IsNullOrWhiteSpace(topProductTitle) || missingCostIds.Count == 0))
+        if (dashboardService != null)
         {
             try
             {
@@ -177,26 +178,53 @@ public sealed class EtsyFinancialAnalysisService(
                         orderCount = activeOrders.Count;
                     }
 
-                    if (string.IsNullOrWhiteSpace(topProductTitle) && activeOrders.Count > 0)
+                    if (activeOrders.Count > 0)
                     {
-                        var topGroup = activeOrders
+                        var groupedProducts = activeOrders
                             .Where(o => !string.IsNullOrWhiteSpace(o.ProductTitle))
                             .GroupBy(o => o.ProductTitle.Trim(), StringComparer.OrdinalIgnoreCase)
-                            .Select(g => new
+                            .Select(g =>
                             {
-                                Title = g.Key,
-                                Revenue = g.Sum(x => x.GrandTotalUsd),
-                                Profit = g.Sum(x => x.NetProfitUsd)
-                            })
-                            .OrderByDescending(x => x.Profit)
-                            .ThenByDescending(x => x.Revenue)
-                            .FirstOrDefault();
+                                var rev = Math.Round(g.Sum(x => x.GrandTotalUsd), 2);
+                                var prof = Math.Round(g.Sum(x => x.NetProfitUsd), 2);
+                                var cnt = g.Count();
+                                var mrg = rev > 0m ? Math.Round(prof / rev * 100m, 1) : 0m;
+                                var scale30 = (decimal)(30.0 / Math.Clamp(periodDays, 7.0, 365.0)) * 1.12m;
+                                var projOrders = Math.Max(1, (int)Math.Round(cnt * scale30));
+                                var projRev = Math.Round(rev * scale30, 2);
+                                var projProf = Math.Round(prof * scale30, 2);
 
-                        if (topGroup != null)
+                                var tag = mrg >= 35m ? "🚀 Yıldız Ürün (Ölçekle)" : (mrg >= 15m ? "⚖️ Dengeli Katkı" : "⚠️ Marj Optimize Et");
+                                var rec = mrg >= 35m
+                                    ? "Etsy Ads bütçesini %15 artırın ve 2'li bundle varyasyonu ekleyin."
+                                    : (mrg >= 15m
+                                        ? "Fiyatı %5 yukarı çekerek kargo/reklam maliyet yükünü dengeleyin."
+                                        : "Kargo ve üretim maliyetini inceleyin; Offsite Ads etkisini fiyatlayın.");
+
+                                return new AiProductForecastItemDto(
+                                    ProductTitle: g.Key,
+                                    CurrentOrders: cnt,
+                                    CurrentRevenueUsd: rev,
+                                    CurrentProfitUsd: prof,
+                                    CurrentMarginPct: mrg,
+                                    ProjectedNext30dOrders: projOrders,
+                                    ProjectedNext30dRevenueUsd: projRev,
+                                    ProjectedNext30dProfitUsd: projProf,
+                                    AiStrategyTag: tag,
+                                    AiRecommendation: rec);
+                            })
+                            .OrderByDescending(x => x.CurrentProfitUsd)
+                            .ThenByDescending(x => x.CurrentRevenueUsd)
+                            .Take(5)
+                            .ToList();
+
+                        productForecasts.AddRange(groupedProducts);
+
+                        if (string.IsNullOrWhiteSpace(topProductTitle) && groupedProducts.Count > 0)
                         {
-                            topProductTitle = topGroup.Title;
-                            topProductRevenueUsd = Math.Round(topGroup.Revenue, 2);
-                            topProductProfitUsd = Math.Round(topGroup.Profit, 2);
+                            topProductTitle = groupedProducts[0].ProductTitle;
+                            topProductRevenueUsd = groupedProducts[0].CurrentRevenueUsd;
+                            topProductProfitUsd = groupedProducts[0].CurrentProfitUsd;
                         }
                     }
 
@@ -216,6 +244,22 @@ public sealed class EtsyFinancialAnalysisService(
             {
                 // Sipariş detayı alınamazsa mevcut özetlerle devam et
             }
+        }
+
+        if (productForecasts.Count == 0 && !string.IsNullOrWhiteSpace(topProductTitle))
+        {
+            var mrg = topProductRevenueUsd > 0m ? Math.Round(topProductProfitUsd / topProductRevenueUsd * 100m, 1) : 35m;
+            productForecasts.Add(new AiProductForecastItemDto(
+                ProductTitle: topProductTitle!,
+                CurrentOrders: Math.Max(1, orderCount),
+                CurrentRevenueUsd: topProductRevenueUsd,
+                CurrentProfitUsd: topProductProfitUsd,
+                CurrentMarginPct: mrg,
+                ProjectedNext30dOrders: Math.Max(1, (int)Math.Round(Math.Max(1, orderCount) * 1.12m)),
+                ProjectedNext30dRevenueUsd: Math.Round(topProductRevenueUsd * 1.12m, 2),
+                ProjectedNext30dProfitUsd: Math.Round(topProductProfitUsd * 1.12m, 2),
+                AiStrategyTag: mrg >= 30m ? "🚀 Yıldız Ürün (Ölçekle)" : "⚖️ Dengeli Katkı",
+                AiRecommendation: "Varyasyon ve bundle seçenekleriyle ortalama sepet tutarını büyütün."));
         }
 
         if (missingCostCount == 0 && missingCostIds.Count == 0)
@@ -263,6 +307,38 @@ public sealed class EtsyFinancialAnalysisService(
         var monthlyGrowthPct = effectiveMonthlyGrossUsd > 0m ? 12.0m : 0.0m;
         var estimatedFilamentKg = Math.Round(estimatedOrders * 0.26m, 2);
         var estimatedShippingBoxes = estimatedOrders;
+
+        // 4.1. Finansal Sağlık Skoru (Health Score 0-100) ve Başabaş (Break-Even) Analizi
+        var (healthScore, healthGrade, breakEvenOrders, breakEvenRevUsd, breakEvenRevTry) = CalculateHealthAndBreakEven(
+            grossUsd,
+            feesUsd,
+            innerAdsUsd,
+            offsiteAdsUsd,
+            refundsUsd,
+            costsUsd,
+            realNetProfitUsd,
+            expectedMarginPct,
+            avgOrderValueUsd,
+            missingCostCount,
+            exchangeRate);
+
+        // 4.2. Çok Ufuklu İleri Projeksiyon (30 Gün, 60 Gün, 90 Gün, 180 Gün) ve 3 Senaryo Matrisi
+        var feeRatio = grossUsd > 0m ? Math.Clamp((feesUsd + innerAdsUsd + offsiteAdsUsd) / grossUsd, 0.14m, 0.40m) : 0.22m;
+        var costRatio = grossUsd > 0m && costsUsd > 0m ? Math.Clamp(costsUsd / grossUsd, 0.15m, 0.55m) : 0.32m;
+
+        var horizons = BuildMultiHorizonProjections(
+            expectedGrossUsd,
+            expectedMarginPct,
+            estimatedOrders,
+            feeRatio,
+            costRatio,
+            exchangeRate);
+
+        var scenarios = BuildScenarioMatrix(
+            expectedGrossUsd,
+            expectedMarginPct,
+            estimatedOrders,
+            exchangeRate);
 
         // 5. Aktif AI Sağlayıcı, Model ve API Anahtarını Çözümle
         var (resolvedProvider, resolvedModel, apiKey) = await ResolveAiCredentialsAsync(
@@ -363,6 +439,9 @@ public sealed class EtsyFinancialAnalysisService(
                         estimatedShippingBoxes = estimatedOrders;
                     }
 
+                    horizons = BuildMultiHorizonProjections(expectedGrossUsd, expectedMarginPct, estimatedOrders, feeRatio, costRatio, exchangeRate);
+                    scenarios = BuildScenarioMatrix(expectedGrossUsd, expectedMarginPct, estimatedOrders, exchangeRate);
+
                     if (!string.IsNullOrWhiteSpace(aiExec) || !string.IsNullOrWhiteSpace(aiProd))
                     {
                         return new AiFinancialForecastResultDto(
@@ -386,11 +465,19 @@ public sealed class EtsyFinancialAnalysisService(
                             EstimatedFilamentKg: estimatedFilamentKg,
                             EstimatedShippingBoxes: estimatedShippingBoxes,
                             MissingCostOrderCount: missingCostCount,
+                            HealthScore: healthScore,
+                            HealthGrade: healthGrade,
+                            BreakEvenOrdersPerMonth: breakEvenOrders,
+                            BreakEvenRevenueUsd: breakEvenRevUsd,
+                            BreakEvenRevenueTry: breakEvenRevTry,
                             ExecutiveSummary: aiExec,
                             ProductProfitabilityAnalysis: aiProd,
                             AdSpendAndRoasAnalysis: aiAds,
                             RefundAndCostAlertAnalysis: aiRefund,
-                            ActionPlan: aiActions.Count > 0 ? aiActions : BuildDataDrivenActionPlan(grossUsd, innerAdsUsd, offsiteAdsUsd, refundsUsd, missingCostCount, missingCostIds, topProductTitle));
+                            ActionPlan: aiActions.Count > 0 ? aiActions : BuildDataDrivenActionPlan(grossUsd, innerAdsUsd, offsiteAdsUsd, refundsUsd, missingCostCount, missingCostIds, topProductTitle),
+                            HorizonProjections: horizons,
+                            Scenarios: scenarios,
+                            ProductForecasts: productForecasts);
                     }
                 }
             }
@@ -431,7 +518,201 @@ public sealed class EtsyFinancialAnalysisService(
             missingCostIds,
             topProductTitle,
             topProductRevenueUsd,
-            topProductProfitUsd);
+            topProductProfitUsd,
+            healthScore,
+            healthGrade,
+            breakEvenOrders,
+            breakEvenRevUsd,
+            breakEvenRevTry,
+            horizons,
+            scenarios,
+            productForecasts);
+    }
+
+    private static (int Score, string Grade, int BreakEvenOrders, decimal BreakEvenUsd, decimal BreakEvenTry) CalculateHealthAndBreakEven(
+        decimal grossUsd,
+        decimal feesUsd,
+        decimal innerAdsUsd,
+        decimal offsiteAdsUsd,
+        decimal refundsUsd,
+        decimal costsUsd,
+        decimal realNetProfitUsd,
+        decimal expectedMarginPct,
+        decimal avgOrderValueUsd,
+        int missingCostCount,
+        decimal exchangeRate)
+    {
+        var score = 70;
+
+        if (realNetProfitUsd > 0m)
+        {
+            score += 12;
+        }
+        else if (realNetProfitUsd < 0m)
+        {
+            score -= 18;
+        }
+
+        if (expectedMarginPct >= 35m)
+        {
+            score += 10;
+        }
+        else if (expectedMarginPct < 20m)
+        {
+            score -= 10;
+        }
+
+        if (grossUsd > 0m)
+        {
+            var refundRatio = refundsUsd / grossUsd;
+            if (refundRatio > 0.15m) score -= 12;
+            else if (refundRatio == 0m) score += 5;
+
+            var adRatio = (innerAdsUsd + offsiteAdsUsd) / grossUsd;
+            if (adRatio > 0.20m) score -= 8;
+        }
+
+        if (missingCostCount > 0)
+        {
+            score -= Math.Min(12, missingCostCount * 3);
+        }
+
+        score = Math.Clamp(score, 25, 98);
+        var grade = score switch
+        {
+            >= 85 => "A+ (Çok Güçlü)",
+            >= 75 => "A (Sağlıklı Büyüme)",
+            >= 60 => "B (Dengeli / İyileştirilebilir)",
+            >= 45 => "C (Marj ve İade Baskısı)",
+            _ => "D (Kritik Gider/İade Uyarısı)"
+        };
+
+        var fixedAndAdOverheadUsd = Math.Max(25m, innerAdsUsd + offsiteAdsUsd + (refundsUsd * 0.35m));
+        var effAov = avgOrderValueUsd > 0m ? avgOrderValueUsd : 45m;
+        var contributionMarginRatio = Math.Clamp(expectedMarginPct / 100m, 0.20m, 0.65m);
+        var contributionPerOrderUsd = Math.Max(5m, effAov * contributionMarginRatio);
+        var breakEvenOrders = Math.Max(1, (int)Math.Ceiling(fixedAndAdOverheadUsd / contributionPerOrderUsd));
+        var breakEvenUsd = Math.Round(breakEvenOrders * effAov, 2);
+        var breakEvenTry = Math.Round(breakEvenUsd * exchangeRate, 2);
+
+        return (score, grade, breakEvenOrders, breakEvenUsd, breakEvenTry);
+    }
+
+    private static List<AiForecastHorizonItemDto> BuildMultiHorizonProjections(
+        decimal base30dGrossUsd,
+        decimal expectedMarginPct,
+        int base30dOrders,
+        decimal feeRatio,
+        decimal costRatio,
+        decimal exchangeRate)
+    {
+        var list = new List<AiForecastHorizonItemDto>();
+        var specs = new (string Code, string Title, int Days, decimal Multiplier, decimal GrowthPct)[]
+        {
+            ("30d", "Gelecek 30 Gün (1 Ay)", 30, 1.00m, 12.0m),
+            ("60d", "Gelecek 60 Gün (2 Ay)", 60, 2.08m, 16.5m),
+            ("90d", "Gelecek 90 Gün (Çeyrek / 3 Ay)", 90, 3.24m, 21.8m),
+            ("180d", "Gelecek 180 Gün (Yarıyıl / 6 Ay)", 180, 6.85m, 34.0m)
+        };
+
+        var marginRatio = Math.Clamp(expectedMarginPct / 100m, 0.15m, 0.75m);
+
+        foreach (var s in specs)
+        {
+            var grossUsd = Math.Round(base30dGrossUsd * s.Multiplier, 2);
+            var grossTry = Math.Round(grossUsd * exchangeRate, 2);
+            var feesAdsUsd = Math.Round(grossUsd * feeRatio, 2);
+            var costsUsd = Math.Round(grossUsd * costRatio, 2);
+            var netProfitUsd = Math.Round(grossUsd * marginRatio, 2);
+            var netProfitTry = Math.Round(netProfitUsd * exchangeRate, 2);
+            var orders = base30dOrders > 0 ? Math.Max(1, (int)Math.Round(base30dOrders * s.Multiplier)) : 0;
+
+            var netEtsyPayoutTry = Math.Round((grossUsd - feesAdsUsd) * exchangeRate, 2);
+            var reserveHoldRatio = s.Days <= 30 ? 0.25m : (s.Days <= 60 ? 0.10m : 0.0m);
+            var estReserveReleaseTry = s.Days >= 60 ? Math.Round(netEtsyPayoutTry * 0.22m, 2) : 0m;
+            var estBankPayoutTry = Math.Round(netEtsyPayoutTry * (1m - reserveHoldRatio), 2);
+
+            list.Add(new AiForecastHorizonItemDto(
+                HorizonCode: s.Code,
+                HorizonTitle: s.Title,
+                Days: s.Days,
+                ExpectedGrossUsd: grossUsd,
+                ExpectedGrossTry: grossTry,
+                ExpectedFeesAndAdsUsd: feesAdsUsd,
+                ExpectedCostsUsd: costsUsd,
+                ExpectedNetProfitUsd: netProfitUsd,
+                ExpectedNetProfitTry: netProfitTry,
+                ExpectedMarginPct: Math.Round(marginRatio * 100m, 1),
+                EstimatedOrders: orders,
+                GrowthRatePct: grossUsd > 0m ? s.GrowthPct : 0m,
+                EstimatedBankPayoutTry: estBankPayoutTry,
+                EstimatedReserveReleaseTry: estReserveReleaseTry));
+        }
+
+        return list;
+    }
+
+    private static List<AiForecastScenarioItemDto> BuildScenarioMatrix(
+        decimal expectedGrossUsd,
+        decimal expectedMarginPct,
+        int estimatedOrders,
+        decimal exchangeRate)
+    {
+        var marginRatio = Math.Clamp(expectedMarginPct / 100m, 0.15m, 0.75m);
+
+        var pessGrossUsd = Math.Round(expectedGrossUsd * 0.82m, 2);
+        var pessMargin = Math.Max(10m, Math.Round((marginRatio - 0.06m) * 100m, 1));
+        var pessProfitUsd = Math.Round(pessGrossUsd * (pessMargin / 100m), 2);
+        var pessOrders = estimatedOrders > 0 ? Math.Max(1, (int)Math.Round(estimatedOrders * 0.82m)) : 0;
+
+        var baseGrossUsd = expectedGrossUsd;
+        var baseMargin = Math.Round(marginRatio * 100m, 1);
+        var baseProfitUsd = Math.Round(baseGrossUsd * marginRatio, 2);
+        var baseOrders = estimatedOrders;
+
+        var optGrossUsd = Math.Round(expectedGrossUsd * 1.28m, 2);
+        var optMargin = Math.Min(70m, Math.Round((marginRatio + 0.05m) * 100m, 1));
+        var optProfitUsd = Math.Round(optGrossUsd * (optMargin / 100m), 2);
+        var optOrders = estimatedOrders > 0 ? Math.Max(1, (int)Math.Round(estimatedOrders * 1.25m)) : 0;
+
+        return
+        [
+            new AiForecastScenarioItemDto(
+                ScenarioCode: "pessimistic",
+                ScenarioTitle: "🛡️ Konservatif (Stres Testi)",
+                BadgeText: "-%18 Hacim / Yüksek Kesinti",
+                ExpectedGrossUsd: pessGrossUsd,
+                ExpectedGrossTry: Math.Round(pessGrossUsd * exchangeRate, 2),
+                ExpectedNetProfitUsd: pessProfitUsd,
+                ExpectedNetProfitTry: Math.Round(pessProfitUsd * exchangeRate, 2),
+                ExpectedMarginPct: pessMargin,
+                EstimatedOrders: pessOrders,
+                KeyDriverSummary: "Offsite Ads payının arttığı ve organik trafiğin %18 yavaşladığı güvenli alt sınır senaryosu."),
+
+            new AiForecastScenarioItemDto(
+                ScenarioCode: "baseline",
+                ScenarioTitle: "🎯 Baz Beklenti (Gerçekçi Projeksiyon)",
+                BadgeText: "+%12 Büyüme / Mevcut Trend",
+                ExpectedGrossUsd: baseGrossUsd,
+                ExpectedGrossTry: Math.Round(baseGrossUsd * exchangeRate, 2),
+                ExpectedNetProfitUsd: baseProfitUsd,
+                ExpectedNetProfitTry: Math.Round(baseProfitUsd * exchangeRate, 2),
+                ExpectedMarginPct: baseMargin,
+                EstimatedOrders: baseOrders,
+                KeyDriverSummary: "Mağazanızın mevcut sipariş hızı (run-rate), kesinti oranı ve kur çarpanıyla beklenen ana rota."),
+
+            new AiForecastScenarioItemDto(
+                ScenarioCode: "optimistic",
+                ScenarioTitle: "🚀 Agresif Büyüme (SEO + Bundle)",
+                BadgeText: "+%28 Hacim / +%5 Marj",
+                ExpectedGrossUsd: optGrossUsd,
+                ExpectedGrossTry: Math.Round(optGrossUsd * exchangeRate, 2),
+                ExpectedNetProfitUsd: optProfitUsd,
+                ExpectedNetProfitTry: Math.Round(optProfitUsd * exchangeRate, 2),
+                ExpectedMarginPct: optMargin,
+                EstimatedOrders: optOrders,
+                KeyDriverSummary: "Lider ürünlerde 2'li set (bundle) satışı ve 13 etiket optimizasyonuyla AOV ve dönüşümün arttığı üst hedef.")
+        ];
     }
 
     private async Task<(string Provider, string Model, string ApiKey)> ResolveAiCredentialsAsync(
@@ -559,7 +840,15 @@ public sealed class EtsyFinancialAnalysisService(
         IReadOnlyList<string> missingCostIds,
         string? topProductTitle,
         decimal topProductRevenueUsd,
-        decimal topProductProfitUsd)
+        decimal topProductProfitUsd,
+        int healthScore,
+        string healthGrade,
+        int breakEvenOrders,
+        decimal breakEvenRevUsd,
+        decimal breakEvenRevTry,
+        IReadOnlyList<AiForecastHorizonItemDto> horizons,
+        IReadOnlyList<AiForecastScenarioItemDto> scenarios,
+        IReadOnlyList<AiProductForecastItemDto> productForecasts)
     {
         var grossTry = Math.Round(grossUsd * exchangeRate, 2);
         var realProfitTry = Math.Round(realNetProfitUsd * exchangeRate, 2);
@@ -625,11 +914,19 @@ public sealed class EtsyFinancialAnalysisService(
             EstimatedFilamentKg: estimatedFilamentKg,
             EstimatedShippingBoxes: estimatedShippingBoxes,
             MissingCostOrderCount: missingCostCount,
+            HealthScore: healthScore,
+            HealthGrade: healthGrade,
+            BreakEvenOrdersPerMonth: breakEvenOrders,
+            BreakEvenRevenueUsd: breakEvenRevUsd,
+            BreakEvenRevenueTry: breakEvenRevTry,
             ExecutiveSummary: execSummary,
             ProductProfitabilityAnalysis: productAnalysis,
             AdSpendAndRoasAnalysis: adsAnalysis,
             RefundAndCostAlertAnalysis: refundAndCostAnalysis,
-            ActionPlan: actions);
+            ActionPlan: actions,
+            HorizonProjections: horizons,
+            Scenarios: scenarios,
+            ProductForecasts: productForecasts);
     }
 
     private static List<string> BuildDataDrivenActionPlan(

@@ -100,6 +100,11 @@ public sealed class EtsyFinancialAnalysisServiceTests
         Assert.Equal(11, result.EstimatedOrders);
         Assert.Contains("Canlı DeepSeek CFO", result.ExecutiveSummary);
         Assert.Equal(2, result.ActionPlan.Count);
+        Assert.NotNull(result.HorizonProjections);
+        Assert.Equal(4, result.HorizonProjections!.Count);
+        Assert.NotNull(result.Scenarios);
+        Assert.Equal(3, result.Scenarios!.Count);
+        Assert.True(result.HealthScore >= 25 && result.HealthScore <= 98);
     }
 
     [Fact]
@@ -133,6 +138,12 @@ public sealed class EtsyFinancialAnalysisServiceTests
         Assert.Contains("Geometric Desk Organizer", result.ProductProfitabilityAnalysis);
         Assert.Contains("#4199001122", result.RefundAndCostAlertAnalysis);
         Assert.NotEmpty(result.ActionPlan);
+        Assert.NotNull(result.HorizonProjections);
+        Assert.Equal(4, result.HorizonProjections!.Count);
+        Assert.NotNull(result.Scenarios);
+        Assert.Equal(3, result.Scenarios!.Count);
+        Assert.NotNull(result.ProductForecasts);
+        Assert.NotEmpty(result.ProductForecasts!);
     }
 
     private sealed class StubLlmClient : IGeminiListingApiClient
