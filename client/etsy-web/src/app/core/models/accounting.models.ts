@@ -192,8 +192,89 @@ export interface AiProductForecastItemDto {
   favorites?: number;
   estimatedCarts?: number;
   conversionRatePct?: number;
+  intentScore?: number;
+  funnelLeakStage?: string;
+  maxSafeCouponPct?: number;
+  maxSafeCouponWithOffsiteAdsPct?: number;
+  recommendedFavCouponPct?: number;
+  recommendedCartCouponPct?: number;
+  offerLadderSummary?: string;
+  upsellBundleSuggestion?: string;
   aiStrategyTag: string;
   aiRecommendation: string;
+}
+
+export interface AiCouponGuardrailDto {
+  itemPriceUsd: number;
+  shippingChargedUsd: number;
+  unitTotalCostUsd: number;
+  targetMinProfitUsd: number;
+  activeCouponPct: number;
+  maxSafeCouponStandardPct: number;
+  maxSafeCouponWithOffsiteAdsPct: number;
+  breakEvenCouponWithOffsiteAdsPct: number;
+  customerPaidAfterCouponUsd: number;
+  etsyFeesUsd: number;
+  offsiteAdFeeIfTriggeredUsd: number;
+  netPayoutBeforeCostUsd: number;
+  netProfitStandardUsd: number;
+  netProfitStandardTry: number;
+  netProfitWithOffsiteAdsUsd: number;
+  netProfitWithOffsiteAdsTry: number;
+  recommendedFavCouponPct: number;
+  recommendedCartCouponPct: number;
+  recommendedVipCouponPct: number;
+  riskCode: string;
+  riskBadge: string;
+  guardrailDiagnosis: string;
+}
+
+export interface AiPriceElasticityScenarioDto {
+  scenarioCode: string;
+  scenarioTitle: string;
+  badgeText: string;
+  itemListPriceUsd: number;
+  shippingChargedUsd: number;
+  couponDiscountPct: number;
+  customerPaysTotalUsd: number;
+  etsyFeesUsd: number;
+  unitCostUsd: number;
+  unitNetProfitUsd: number;
+  unitNetProfitTry: number;
+  estimatedConversionRatePct: number;
+  breakEvenConversionRatePct: number;
+  estimatedMonthlyOrders: number;
+  expectedMonthlyNetProfitUsd: number;
+  expectedMonthlyNetProfitTry: number;
+  isRecommended: boolean;
+  strategyNote: string;
+}
+
+export interface AiOfferLadderTierDto {
+  tierOrder: number;
+  tierName: string;
+  targetSegment: string;
+  triggerTiming: string;
+  couponCode: string;
+  discountSpec: string;
+  expectedConversionLiftPct: number;
+  unitNetProfitAfterOfferUsd: number;
+  psychologicalPrinciple: string;
+}
+
+export interface AiEventUrgencyHookDto {
+  eventCode: string;
+  eventTitle: string;
+  targetAudience: string;
+  urgencyHookText: string;
+  recommendedAction: string;
+}
+
+export interface AiCroElasticitySummaryDto {
+  couponGuardrail: AiCouponGuardrailDto;
+  elasticityScenarios: AiPriceElasticityScenarioDto[];
+  offerLadderTiers: AiOfferLadderTierDto[];
+  eventUrgencyHooks: AiEventUrgencyHookDto[];
 }
 
 export interface AiFinancialForecastResponseDto {
@@ -231,4 +312,5 @@ export interface AiFinancialForecastResponseDto {
   scenarios?: AiForecastScenarioItemDto[];
   productForecasts?: AiProductForecastItemDto[];
   trafficFunnel?: AiTrafficFunnelSnapshotDto;
+  croElasticity?: AiCroElasticitySummaryDto;
 }

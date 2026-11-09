@@ -22,6 +22,9 @@ interface ProductTraffic {
   orders: number;
   revenue: number;
   conversionRate: number;
+  intentScore: number;
+  funnelStage: string;
+  recommendedCoupon: string;
 }
 
 @Component({
@@ -36,7 +39,7 @@ interface ProductTraffic {
           <div class="icon-box">🏬</div>
           <div>
             <h1 class="page-title">Mağazam Performansı & Ziyaretçi Analitiği</h1>
-            <p class="page-subtitle">Ziyaretçi trafiği, görüntülenme, favori sayıları ve ürün bazlı dönüşüm oranı (CR %) istatistikleri</p>
+            <p class="page-subtitle">Ziyaretçi trafiği, görüntülenme, favori sayıları, CRO Niyet Skoru (0-100) ve ürün bazlı dönüşüm hunisi istatistikleri</p>
           </div>
         </div>
         <div class="header-actions">
@@ -118,7 +121,7 @@ interface ProductTraffic {
       <!-- TOP LISTING TRAFFIC & PERFORMANCE TABLE -->
       <div class="traffic-section glass-card">
         <div class="section-header">
-          <h2 class="section-title">En Çok Satan & Trafik Çeken İlanlar</h2>
+          <h2 class="section-title">En Çok Satan & Trafik Çeken İlanlar (CRO & Niyet Skoru Matrisi)</h2>
           <span class="badge-active">{{ topProducts.length > 0 ? (topProducts.length + ' İlan') : 'Canlı Veri Yok' }}</span>
         </div>
 
@@ -130,9 +133,11 @@ interface ProductTraffic {
                 <th>Listing ID</th>
                 <th>Görüntülenme</th>
                 <th>Favori</th>
+                <th>CRO Niyet Skoru</th>
                 <th>Sipariş</th>
                 <th>Toplam Ciro</th>
                 <th>Dönüşüm Oranı (CR)</th>
+                <th>Huni Teşhisi & Güvenli Kupon</th>
               </tr>
             </thead>
             <tbody>
@@ -141,6 +146,11 @@ interface ProductTraffic {
                 <td><code>#{{ p.listingId }}</code></td>
                 <td>{{ p.views | number }}</td>
                 <td class="text-purple">{{ p.favorites | number }}</td>
+                <td>
+                  <span class="cr-pill" [ngClass]="p.intentScore >= 65 ? 'high' : 'normal'">
+                    🔥 {{ p.intentScore }}/100
+                  </span>
+                </td>
                 <td><b>{{ p.orders }}</b></td>
                 <td class="text-green"><b>\${{ p.revenue | number:'1.2-2' }}</b></td>
                 <td>
@@ -150,9 +160,13 @@ interface ProductTraffic {
                     </span>
                   </div>
                 </td>
+                <td>
+                  <div><b>{{ p.funnelStage }}</b></div>
+                  <small class="text-blue">{{ p.recommendedCoupon }}</small>
+                </td>
               </tr>
               <tr *ngIf="topProducts.length === 0">
-                <td colspan="7" class="empty-table-cell">
+                <td colspan="9" class="empty-table-cell">
                   <div class="empty-state-box">
                     <span class="empty-icon">🏬</span>
                     <span class="empty-title">Canlı Mağaza Ürün Verisi Bulunamadı</span>
@@ -459,6 +473,12 @@ export class ShopPerformanceComponent implements OnInit {
             const orders = Math.floor(favs * 0.12);
             const rev = Number(((l.price || 0) * orders).toFixed(2));
             const cr = views > 0 ? Number(((orders / views) * 100).toFixed(1)) : 0;
+            const visits = Math.max(1, Math.round(views * 0.62));
+            const intentScore = Math.min(98, Math.max(15, Math.round(((favs / visits) * 300) + (cr * 8))));
+            const funnelStage = favs >= 10 && orders === 0
+              ? '🛒 Sepet / Kargo Şoku'
+              : (views < 80 ? '🔍 Üst Huni (SEO Darboğazı)' : '✅ Dengeli Huni Akışı');
+            const recommendedCoupon = 'Fav: %8 (2sa) → Sepet: %15 (24sa)';
             return {
               listingId: String(l.listingId),
               title: l.title,
@@ -466,7 +486,10 @@ export class ShopPerformanceComponent implements OnInit {
               favorites: favs,
               orders: orders,
               revenue: rev,
-              conversionRate: cr
+              conversionRate: cr,
+              intentScore,
+              funnelStage,
+              recommendedCoupon
             };
           });
         }

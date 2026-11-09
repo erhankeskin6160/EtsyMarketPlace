@@ -1871,3 +1871,373 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* ============================================================================
+   2.6 & 2.7 CRO & COUPON ELASTICITY LAB, C_MAX GUARDRAIL & OFFER LADDER
+   ============================================================================ */
+.cro-elasticity-lab-panel,
+.cro-offer-ladder-panel {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(30, 41, 59, 0.85));
+  border: 1px solid rgba(56, 189, 248, 0.22);
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 22px;
+  box-shadow: 0 12px 32px rgba(2, 6, 23, 0.45);
+}
+
+.cro-lab-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.cro-lab-header h4 {
+  margin: 0 0 4px 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.cro-lab-sub {
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+.cro-lab-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.cro-risk-pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  border: 1px solid transparent;
+}
+
+.cro-risk-pill.safe {
+  background: rgba(16, 185, 129, 0.14);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.cro-risk-pill.danger {
+  background: rgba(239, 68, 68, 0.16);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.cro-guardrail-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.cg-kpi-card {
+  background: rgba(15, 23, 42, 0.72);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cg-kpi-card.trap-alert {
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+.cg-kpi-card.highlight {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: rgba(6, 78, 59, 0.18);
+}
+
+.cg-lbl {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0.04em;
+}
+
+.cg-val {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.cg-sub {
+  font-size: 0.73rem;
+  color: #94a3b8;
+}
+
+.cro-lab-body-grid {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 18px;
+}
+
+.cro-sliders-box,
+.cro-scenarios-box {
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.cro-sliders-box h5,
+.cro-scenarios-box h5 {
+  margin: 0 0 12px 0;
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #e2e8f0;
+}
+
+.cro-guardrail-diag {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.1);
+  border-left: 3px solid #10b981;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #e2e8f0;
+}
+
+.cro-guardrail-diag.danger {
+  background: rgba(239, 68, 68, 0.12);
+  border-left-color: #ef4444;
+}
+
+.cro-scenario-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.cro-sc-card {
+  background: rgba(30, 41, 59, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cro-sc-card.recommended {
+  border-color: rgba(16, 185, 129, 0.55);
+  background: linear-gradient(145deg, rgba(6, 78, 59, 0.25), rgba(15, 23, 42, 0.8));
+}
+
+.cro-sc-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.cro-sc-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.cro-sc-badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.14);
+  color: #38bdf8;
+}
+
+.cro-sc-price-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+  padding-bottom: 6px;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.18);
+}
+
+.cro-sc-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  font-size: 0.75rem;
+}
+
+.cro-sc-metrics > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cro-sc-metrics small {
+  font-size: 0.67rem;
+  color: #94a3b8;
+}
+
+.cro-sc-note {
+  margin: 0;
+  font-size: 0.73rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.cro-ladder-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 18px;
+}
+
+.ladder-tiers-list,
+.urgency-hooks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ladder-tier-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.68);
+  border: 1px solid rgba(56, 189, 248, 0.18);
+}
+
+.lt-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.lt-code {
+  font-size: 0.8rem;
+  font-weight: 800;
+  color: #38bdf8;
+}
+
+.lt-timing,
+.lt-channel {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #cbd5e1;
+}
+
+.lt-offer {
+  font-size: 0.78rem;
+  color: #f8fafc;
+  margin-bottom: 4px;
+}
+
+.lt-copy {
+  margin: 0;
+  font-size: 0.73rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.btn-apply-ladder {
+  background: linear-gradient(135deg, #0ea5e9, #6366f1);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.btn-apply-ladder:hover {
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
+
+.ladder-applied-toast {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.urgency-hook-card {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.68);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.uh-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: #f8fafc;
+}
+
+.uh-window {
+  font-size: 0.7rem;
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.uh-cutoff {
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.uh-banner {
+  margin: 0;
+  font-size: 0.74rem;
+  color: #cbd5e1;
+  font-style: italic;
+}
+
+.uh-upsell {
+  font-size: 0.74rem;
+  color: #34d399;
+}
+
+@media (max-width: 1200px) {
+  .cro-guardrail-strip,
+  .cro-scenario-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .cro-lab-body-grid,
+  .cro-ladder-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .cro-guardrail-strip,
+  .cro-scenario-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}

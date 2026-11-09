@@ -27,7 +27,7 @@ interface ScheduledJob {
           <div class="icon-box">⚙️</div>
           <div>
             <h1 class="page-title">Otomasyon & Arka Plan Görev Zamanlayıcı (Cron)</h1>
-            <p class="page-subtitle">VDS üzerinde 7/24 çalışan arka plan senkronizasyonu, otomatik sipariş çekme ve kargo takip botları</p>
+            <p class="page-subtitle">VDS üzerinde 7/24 çalışan arka plan senkronizasyonu, CRO teklif merdiveni, C_max marj kalkanı ve kargo takip botları</p>
           </div>
         </div>
         <div class="header-actions">
@@ -55,9 +55,9 @@ interface ScheduledJob {
           <span class="kpi-sub">VDS SQLite Senkronize</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">OTO KARGO SORGULAMA</span>
-          <span class="kpi-val text-orange">Her 15 Dk</span>
-          <span class="kpi-sub">4 Taşıyıcı Entegre</span>
+          <span class="kpi-label">CRO & C_MAX KALKANI</span>
+          <span class="kpi-val text-orange">Aktif Koruma</span>
+          <span class="kpi-sub">Kupon + Offsite Ads Denetimi</span>
         </div>
       </div>
 
@@ -227,7 +227,7 @@ interface ScheduledJob {
     .job-status-dot.green { background: #10b981; box-shadow: 0 0 10px #10b981; }
     .job-status-dot.gray { background: #64748b; }
     .job-info { display: flex; flex-direction: column; gap: 4px; flex: 1; }
-    .job-title-row { display: flex; align-items: center; gap: 10px; }
+    .job-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
     .job-name { font-size: 0.95rem; font-weight: 700; color: #f1f5f9; }
     .cron-badge code {
       background: rgba(0, 0, 0, 0.4);
@@ -336,6 +336,26 @@ export class TaskSchedulerAutomationComponent implements OnInit {
       status: 'Idle',
       isEnabled: false,
       desc: '7 günü tamamlayan A/B testlerini istatistiksel üstünlük kriterine göre otomatik sonlandırıp kazananı mağazaya uygular.'
+    },
+    {
+      id: 'job-5',
+      name: '🪜 CRO Terk Edilmiş Sepet & Favori 3 Kademeli Teklif Merdiveni',
+      schedule: '0 */2 * * * (Her 2 Saatte)',
+      lastRun: '32 dakika önce',
+      nextRun: '1 saat 28 dk sonra',
+      status: 'Running',
+      isEnabled: true,
+      desc: 'Favorileyenlere 2 saatte %8 nazik dürtme, sepete ekleyip çıkana 24 saatte %15 kurtarma kuponu ve 72. saatte Ücretsiz Kargo VIP teklifi tetikler.'
+    },
+    {
+      id: 'job-6',
+      name: '🛡️ Kupon + Offsite Ads (%15) C_max Marj Koruma Kalkanı',
+      schedule: '*/30 * * * * (Her 30 Dakikada)',
+      lastRun: '8 dakika önce',
+      nextRun: '22 dakika sonra',
+      status: 'Running',
+      isEnabled: true,
+      desc: 'Aktif mağaza kuponlarının (örn. %30 DSFJY25) %15 Offsite Ads komisyonuyla çakışarak birim net kârı hedef eşik altına düşürmesini denetler ve uyarır.'
     }
   ];
 
@@ -345,6 +365,12 @@ export class TaskSchedulerAutomationComponent implements OnInit {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          const existingIds = new Set(parsed.map((j: ScheduledJob) => j.id));
+          for (const defJob of this.jobs) {
+            if (!existingIds.has(defJob.id)) {
+              parsed.push(defJob);
+            }
+          }
           this.jobs = parsed;
         }
       } catch {}

@@ -691,6 +691,197 @@
             </div>
           </div>
 
+          <!-- 2.6. AI KUPON ÇAKIŞMASI KALKANI (C_MAX GUARDRAIL) & FİYAT / ÜCRETSİZ KARGO ELASTİKİYET LABORATUVARI -->
+          <div class="cro-elasticity-lab-panel" *ngIf="liveCouponGuardrail as cg">
+            <div class="cro-lab-header">
+              <div>
+                <h4>🛡️ AI Kupon Çakışması Kalkanı (C_max Guardrail) & Fiyat / Ücretsiz Kargo Elastikiyet Laboratuvarı</h4>
+                <span class="cro-lab-sub">
+                  Seçili Ürün: <strong class="text-cyan">{{ croSelectedProductTitle }}</strong> — Kupon + %15 Offsite Ads çakışmasını canlı test edin ve Ücretsiz Kargo psikolojisiyle başabaş dönüşüm oranını (Break-Even CVR) karşılaştırın.
+                </span>
+              </div>
+              <div class="cro-lab-header-actions">
+                <span class="cro-risk-pill" [class.danger]="cg.riskCode !== 'SAFE_GUARDRAIL'" [class.safe]="cg.riskCode === 'SAFE_GUARDRAIL'">
+                  {{ cg.riskBadge }}
+                </span>
+                <button class="btn-reset-sim" (click)="resetCroLabSliders()">🔄 #4225379961 Referansına Sıfırla</button>
+              </div>
+            </div>
+
+            <!-- C_max Guardrail KPI Strip -->
+            <div class="cro-guardrail-strip">
+              <div class="cg-kpi-card">
+                <span class="cg-lbl">MÜŞTERİ ÖDEMESİ (VERGİ HARİÇ)</span>
+                <div class="cg-val text-cyan">${{ cg.customerPaidAfterCouponUsd.toFixed(2) }}</div>
+                <span class="cg-sub">İndirim: -${{ (cg.itemPriceUsd * cg.activeCouponPct / 100).toFixed(2) }} (%{{ cg.activeCouponPct }}) + ${{ cg.shippingChargedUsd.toFixed(2) }} Kargo</span>
+              </div>
+
+              <div class="cg-kpi-card">
+                <span class="cg-lbl">STANDART SİPARİŞ NET KÂR</span>
+                <div class="cg-val" [ngClass]="cg.netProfitStandardUsd >= cg.targetMinProfitUsd ? 'text-emerald' : 'text-warning'">
+                  {{ formatSignedUsd(cg.netProfitStandardUsd) }}
+                </div>
+                <span class="cg-sub">Etsy Kesintisi: -${{ cg.etsyFeesUsd.toFixed(2) }} | Hak Ediş: ${{ cg.netPayoutBeforeCostUsd.toFixed(2) }}</span>
+              </div>
+
+              <div class="cg-kpi-card" [class.trap-alert]="cg.riskCode !== 'SAFE_GUARDRAIL'">
+                <span class="cg-lbl">OFFSITE ADS (%15) ÇAKIŞMALI NET KÂR</span>
+                <div class="cg-val" [ngClass]="cg.netProfitWithOffsiteAdsUsd >= 0 ? 'text-warning' : 'text-danger'">
+                  {{ formatSignedUsd(cg.netProfitWithOffsiteAdsUsd) }}
+                </div>
+                <span class="cg-sub">Offsite Kesintisi: -${{ cg.offsiteAdFeeIfTriggeredUsd.toFixed(2) }} | Başabaş Kupon: %{{ cg.breakEvenCouponWithOffsiteAdsPct.toFixed(1) }}</span>
+              </div>
+
+              <div class="cg-kpi-card highlight">
+                <span class="cg-lbl">MAKSİMUM GÜVENLİ KUPON TAVANI (C_MAX)</span>
+                <div class="cg-val text-emerald">
+                  Standart: %{{ cg.maxSafeCouponStandardPct.toFixed(1) }} <small class="text-warning">| Offsite: %{{ cg.maxSafeCouponWithOffsiteAdsPct.toFixed(1) }}</small>
+                </div>
+                <span class="cg-sub">Min. ${{ cg.targetMinProfitUsd.toFixed(2) }} net kâr koruma eşiği</span>
+              </div>
+            </div>
+
+            <!-- Interactive Sliders + 4-Scenario Matrix -->
+            <div class="cro-lab-body-grid">
+              <div class="cro-sliders-box">
+                <h5>🎛️ Birim Ekonomi & Kupon Parametreleri</h5>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🏷️ Ürün Liste Fiyatı (P_list)</span>
+                    <strong class="text-cyan">${{ croItemPriceUsd.toFixed(2) }}</strong>
+                  </div>
+                  <input type="range" min="15" max="150" step="1" [(ngModel)]="croItemPriceUsd" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🚚 Müşteriden Alınan Kargo Ücreti (S_charge)</span>
+                    <strong class="text-cyan">${{ croShippingChargedUsd.toFixed(2) }}</strong>
+                  </div>
+                  <input type="range" min="0" max="25" step="1" [(ngModel)]="croShippingChargedUsd" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🎟️ Aktif Mağaza Kupon İndirimi (%)</span>
+                    <strong [ngClass]="croActiveCouponPct > cg.maxSafeCouponWithOffsiteAdsPct ? 'text-danger' : 'text-emerald'">%{{ croActiveCouponPct }} İndirim</strong>
+                  </div>
+                  <input type="range" min="0" max="50" step="5" [(ngModel)]="croActiveCouponPct" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🖨️ 3D Baskı + Navlun + Kutu Maliyeti (COGS)</span>
+                    <strong class="text-warning">${{ croUnitTotalCostUsd.toFixed(2) }}</strong>
+                  </div>
+                  <input type="range" min="4" max="60" step="0.5" [(ngModel)]="croUnitTotalCostUsd" class="sim-range" />
+                </div>
+
+                <div class="sim-control">
+                  <div class="sim-lbl-row">
+                    <span>🎯 Hedeflenen Minimum Birim Net Kâr</span>
+                    <strong class="text-emerald">${{ croTargetMinProfitUsd.toFixed(2) }}</strong>
+                  </div>
+                  <input type="range" min="2" max="35" step="1" [(ngModel)]="croTargetMinProfitUsd" class="sim-range" />
+                </div>
+
+                <div class="cro-guardrail-diag" [class.danger]="cg.riskCode !== 'SAFE_GUARDRAIL'">
+                  <strong>🛡️ C_max Guardrail Teşhisi:</strong> {{ cg.guardrailDiagnosis }}
+                </div>
+              </div>
+
+              <!-- 4-Scenario Free Shipping vs Coupon Elasticity Matrix -->
+              <div class="cro-scenarios-box">
+                <h5>⚖️ Fiyat Çapası, Kupon ve "Ücretsiz Kargo Psikolojisi" Elastikiyet Matrisi (4 Senaryo)</h5>
+                <div class="cro-scenario-cards-grid">
+                  <div class="cro-sc-card" *ngFor="let esc of livePriceElasticityScenarios" [class.recommended]="esc.isRecommended">
+                    <div class="cro-sc-top">
+                      <span class="cro-sc-title">{{ esc.scenarioTitle }}</span>
+                      <span class="cro-sc-badge">{{ esc.badgeText }}</span>
+                    </div>
+                    <div class="cro-sc-price-row">
+                      <span>Liste: <strong>${{ esc.itemListPriceUsd.toFixed(2) }}</strong> + Kargo: <strong>${{ esc.shippingChargedUsd.toFixed(2) }}</strong> (Kupon: %{{ esc.couponDiscountPct }})</span>
+                      <span class="text-cyan">Müşteri Öder: <strong>${{ esc.customerPaysTotalUsd.toFixed(2) }}</strong></span>
+                    </div>
+                    <div class="cro-sc-metrics">
+                      <div>
+                        <small>Birim Net Kâr ($ / ₺)</small>
+                        <strong [ngClass]="esc.unitNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
+                          {{ formatSignedUsd(esc.unitNetProfitUsd) }}
+                        </strong>
+                        <small class="text-muted">
+                          ({{ formatSignedTry(esc.unitNetProfitTry) }})
+                        </small>
+                      </div>
+                      <div>
+                        <small>Tahmini CR / Başabaş CR</small>
+                        <strong class="text-cyan">%{{ esc.estimatedConversionRatePct.toFixed(2) }}</strong>
+                        <small class="text-muted"> (Eşik: %{{ esc.breakEvenConversionRatePct.toFixed(2) }})</small>
+                      </div>
+                      <div>
+                        <small>30G Beklenen Net Kâr</small>
+                        <strong class="text-emerald">${{ formatNumber(esc.expectedMonthlyNetProfitUsd) }} ({{ esc.estimatedMonthlyOrders }} Sip.)</strong>
+                      </div>
+                    </div>
+                    <p class="cro-sc-note">{{ esc.strategyNote }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2.7. 3 KADEMELİ TEKLİF MERDİVENİ (OFFER LADDER) & ETKİNLİK ACİLİYET KANCALARI -->
+          <div class="cro-offer-ladder-panel" *ngIf="liveOfferLadderTiers.length">
+            <div class="cro-ladder-grid">
+              <div class="ladder-col">
+                <div class="matrix-card-header">
+                  <h4>🪜 Terk Edilmiş Sepet & Favori 3 Kademeli Teklif Merdiveni (Offer Ladder)</h4>
+                  <span class="matrix-sub">Herkese %30 kupon dağıtmak yerine marjı koruyan kademeli davranışsal tetikleme mimarisi</span>
+                </div>
+                <div class="ladder-tiers-list">
+                  <div class="ladder-tier-item" *ngFor="let tier of liveOfferLadderTiers">
+                    <div class="lt-left">
+                      <div class="lt-badge-row">
+                        <span class="lt-code">{{ tier.tierName }}</span>
+                        <span class="lt-timing">⏱️ {{ tier.triggerTiming }}</span>
+                        <span class="lt-channel">📡 {{ tier.targetSegment }}</span>
+                      </div>
+                      <div class="lt-offer">
+                        🎁 <strong>{{ tier.discountSpec }}</strong> — Kod: <code>{{ tier.couponCode }}</code>
+                        <span class="text-emerald"> | Birim Net Kâr: ${{ tier.unitNetProfitAfterOfferUsd.toFixed(2) }} (+%{{ tier.expectedConversionLiftPct }} CR)</span>
+                      </div>
+                      <p class="lt-copy">"{{ tier.psychologicalPrinciple }}"</p>
+                    </div>
+                    <div class="lt-right">
+                      <button class="btn-apply-ladder" (click)="applyOfferLadderToScheduler(tier)">
+                        ⚡ Otomasyona Bağla
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="urgency-col" *ngIf="liveEventUrgencyHooks.length">
+                <div class="matrix-card-header">
+                  <h4>⏳ Cosplay & Özel Gün "Son Baskı / Kargo Kesim" Aciliyet Kancaları</h4>
+                  <span class="matrix-sub">3D baskı üretim süresi + uluslararası kargo (7-12 gün) teslimat garantisi tetikleyicileri</span>
+                </div>
+                <div class="urgency-hooks-list">
+                  <div class="urgency-hook-card" *ngFor="let hook of liveEventUrgencyHooks">
+                    <div class="uh-top">
+                      <strong>🎭 {{ hook.eventTitle }}</strong>
+                      <span class="uh-window">📅 {{ hook.eventCode }}</span>
+                    </div>
+                    <div class="uh-cutoff text-warning">🎯 Hedef Kitle: {{ hook.targetAudience }}</div>
+                    <p class="uh-banner">"{{ hook.urgencyHookText }}"</p>
+                    <div class="uh-upsell">💡 <strong>AOV / Aksiyon Önerisi:</strong> {{ hook.recommendedAction }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- 3. MULTI-HORIZON PROJECTION TABLE (30 / 60 / 90 / 180 DAYS) -->
           <div class="projection-matrix-card" *ngIf="aiForecast?.horizonProjections?.length">
             <div class="matrix-card-header">
@@ -875,16 +1066,16 @@
                     <th>Ürün Adı (Gerçek Mağaza İlanı)</th>
                     <th>Görüntülenme / Ziyaret</th>
                     <th>Favori & Sepet</th>
+                    <th>Niyet Skoru (0-100)</th>
                     <th>Dönüşüm (CR)</th>
-                    <th>Mevcut Sipariş</th>
-                    <th>Mevcut Ciro ($)</th>
+                    <th>Güvenli Kupon (C_max)</th>
+                    <th>Mevcut Sipariş / Ciro</th>
                     <th>Mevcut Net Kâr ($)</th>
-                    <th>Net Marj</th>
-                    <th>Gelecek 30G Tahmini Sipariş</th>
-                    <th>Gelecek 30G Beklenen Ciro ($)</th>
-                    <th>Gelecek 30G Beklenen Net Kâr ($)</th>
+                    <th>Gelecek 30G Tahmini</th>
+                    <th>Huni Darboğazı & Teklif Merdiveni</th>
                     <th>AI Strateji Sınıfı</th>
                     <th>AI Ürün & Dönüşüm Aksiyon Önerisi</th>
+                    <th>CRO Lab</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -899,19 +1090,41 @@
                       <small class="text-cyan"> | 🛒 {{ (pf.estimatedCarts || 0) | number }}</small>
                     </td>
                     <td>
+                      <span class="margin-pill" [ngClass]="(pf.intentScore || 50) >= 65 ? 'margin-pill-success' : 'margin-pill-danger'">
+                        🔥 {{ pf.intentScore || 55 }}/100
+                      </span>
+                    </td>
+                    <td>
                       <span class="margin-pill" [ngClass]="(pf.conversionRatePct || 0) >= 2.0 ? 'margin-pill-success' : 'margin-pill-danger'">
                         %{{ (pf.conversionRatePct || 0).toFixed(2) }}
                       </span>
                     </td>
-                    <td>{{ pf.currentOrders }} Adet</td>
-                    <td class="text-emerald">${{ formatNumber(pf.currentRevenueUsd) }}</td>
-                    <td [ngClass]="pf.currentProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedUsd(pf.currentProfitUsd) }}</td>
-                    <td><span class="margin-pill" [ngClass]="pf.currentMarginPct >= 20 ? 'margin-pill-success' : 'margin-pill-danger'">%{{ pf.currentMarginPct.toFixed(1) }}</span></td>
-                    <td><strong>{{ pf.projectedNext30dOrders }} Adet</strong></td>
-                    <td class="text-emerald">${{ formatNumber(pf.projectedNext30dRevenueUsd) }}</td>
-                    <td [ngClass]="pf.projectedNext30dProfitUsd >= 0 ? 'text-emerald' : 'text-danger'"><strong>{{ formatSignedUsd(pf.projectedNext30dProfitUsd) }}</strong></td>
+                    <td>
+                      <span class="text-emerald"><strong>%{{ (pf.maxSafeCouponPct ?? 25).toFixed(0) }}</strong></span>
+                      <small class="text-warning"> (Offsite: %{{ (pf.maxSafeCouponWithOffsiteAdsPct ?? 14).toFixed(0) }})</small>
+                    </td>
+                    <td>
+                      {{ pf.currentOrders }} Adet | <span class="text-emerald">${{ formatNumber(pf.currentRevenueUsd) }}</span>
+                    </td>
+                    <td [ngClass]="pf.currentProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
+                      {{ formatSignedUsd(pf.currentProfitUsd) }} <small>(%{{ pf.currentMarginPct.toFixed(1) }})</small>
+                    </td>
+                    <td>
+                      <strong>{{ pf.projectedNext30dOrders }} Adet</strong> |
+                      <span class="text-emerald">${{ formatNumber(pf.projectedNext30dRevenueUsd) }}</span>
+                      <small [ngClass]="pf.projectedNext30dProfitUsd >= 0 ? 'text-emerald' : 'text-danger'"> ({{ formatSignedUsd(pf.projectedNext30dProfitUsd) }})</small>
+                    </td>
+                    <td class="ai-rec-cell">
+                      <div><strong>{{ pf.funnelLeakStage || '✅ Dengeli Huni Akışı' }}</strong></div>
+                      <small class="text-cyan">{{ pf.offerLadderSummary || 'Fav: %8 → Sepet: %15 → VIP: Ücretsiz Kargo' }}</small>
+                    </td>
                     <td><span class="ai-strategy-pill">{{ pf.aiStrategyTag }}</span></td>
                     <td class="ai-rec-cell">{{ pf.aiRecommendation }}</td>
+                    <td>
+                      <button class="btn-apply-ladder" (click)="selectProductForCroLab(pf)" title="Bu ürünü CRO & Kupon Simülatörüne yükle">
+                        🎛️ Simüle Et
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>

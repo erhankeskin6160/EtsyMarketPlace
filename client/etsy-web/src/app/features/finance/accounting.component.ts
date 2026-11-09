@@ -14,7 +14,12 @@ import {
   AiForecastHorizonItemDto,
   AiForecastScenarioItemDto,
   AiProductForecastItemDto,
-  AiTrafficFunnelSnapshotDto
+  AiTrafficFunnelSnapshotDto,
+  AiCouponGuardrailDto,
+  AiPriceElasticityScenarioDto,
+  AiOfferLadderTierDto,
+  AiEventUrgencyHookDto,
+  AiCroElasticitySummaryDto
 } from '../../core/models/accounting.models';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -96,6 +101,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
   simCostSavingPct = 0;        // 0% to +35%
   simConversionBoostPct = 0;   // -20% to +50% (Favori -> Sepet -> Sipariş Dönüşüm İyileştirmesi)
   simTargetRateTry = 0;        // 0 means use liveRate
+
+  // Interactive CRO, Coupon Stacking Guardrail (C_max) & Free Shipping Elasticity Lab State
+  croSelectedProductTitle = 'Hexcore Rubik\'s Cube / Arcane Cosplay';
+  croItemPriceUsd = 45.00;
+  croShippingChargedUsd = 10.00;
+  croActiveCouponPct = 30;     // Örn: DSFJY25 (%30 Kupon)
+  croUnitTotalCostUsd = 12.50; // 3D Filament + Kargo Navlun + Kutu
+  croTargetMinProfitUsd = 5.00;
 
   // Mağaza Aktif İlan Trafik, Görüntülenme ve Favori Verileri (Etsy v3 Canlı + Yerel Analitik)
   shopListings: ShopListingItemDto[] = [];
@@ -947,6 +960,343 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return Number((this.simulatedNetProfitUsd - baseUsd).toFixed(2));
   }
 
+  // --- CRO, COUPON STACKING GUARDRAIL (C_MAX) & FREE SHIPPING ELASTICITY LAB ---
+  resetCroLabSliders(): void {
+    this.croSelectedProductTitle = 'Hexcore Rubik\'s Cube / Arcane Cosplay';
+    this.croItemPriceUsd = 45.00;
+    this.croShippingChargedUsd = 10.00;
+    this.croActiveCouponPct = 30;
+    this.croUnitTotalCostUsd = 12.50;
+    this.croTargetMinProfitUsd = 5.00;
+    this.showToast('🔄 Kupon Kalkanı & Elastikiyet Laboratuvarı baz değerlere ($45 + $10 Kargo, %30 DSFJY25) sıfırlandı.');
+  }
+
+  selectProductForCroLab(pf: AiProductForecastItemDto): void {
+    this.croSelectedProductTitle = pf.productTitle;
+    const estPrice = pf.currentOrders > 0 && pf.currentRevenueUsd > 0
+      ? Number(Math.max(15, (pf.currentRevenueUsd / pf.currentOrders) - 10).toFixed(2))
+      : 45.00;
+    const estProfit = pf.currentOrders > 0 && pf.currentProfitUsd > 0
+      ? Number((pf.currentProfitUsd / pf.currentOrders).toFixed(2))
+      : 16.00;
+    this.croItemPriceUsd = estPrice;
+    this.croShippingChargedUsd = 10.00;
+    this.croActiveCouponPct = pf.recommendedCartCouponPct || 15;
+    this.croUnitTotalCostUsd = Number(Math.max(6.0, ((estPrice + 10) * 0.78) - estProfit).toFixed(2));
+    this.croTargetMinProfitUsd = 5.00;
+    this.showToast(`🎯 "${pf.productTitle.slice(0, 36)}..." ürünü Kupon Kalkanı & Elastikiyet Simülatörüne yüklendi!`);
+  }
+
+  applyOfferLadderToScheduler(tier: AiOfferLadderTierDto): void {
+    try {
+      const saved = localStorage.getItem('etsy_automation_jobs_v1');
+      const jobs: any[] = saved ? JSON.parse(saved) : [];
+      const jobId = `cro-tier-${tier.tierOrder}`;
+      const existingIdx = jobs.findIndex(j => j.id === jobId);
+      const newJob = {
+        id: jobId,
+        name: `CRO Otomasyonu — ${tier.tierName} (${tier.couponCode})`,
+        schedule: tier.tierOrder === 1 ? '0 */4 * * * (Her 4 Saatte)' : (tier.tierOrder === 2 ? '0 */6 * * * (Her 6 Saatte)' : '0 9 * * * (Her Gün 09:00)'),
+        lastRun: 'Az önce',
+        nextRun: '4 saat sonra',
+        status: 'Running',
+        isEnabled: true,
+        desc: `${tier.targetSegment} için ${tier.discountSpec} kuralını C_max marj kalkanıyla otomatik çalıştırır.`
+      };
+      if (existingIdx >= 0) {
+        jobs[existingIdx] = newJob;
+      } else {
+        jobs.unshift(newJob);
+      }
+      localStorage.setItem('etsy_automation_jobs_v1', JSON.stringify(jobs));
+    } catch {}
+    this.showToast(`⚡ "${tier.couponCode}" (${tier.tierName}) kuralı VDS Otomasyon Zamanlayıcıya aktif olarak kaydedildi!`);
+  }
+
+  get liveCouponGuardrail(): AiCouponGuardrailDto {
+    const safePrice = Math.max(1, Number(this.croItemPriceUsd) || 45);
+    const safeShip = Math.max(0, Number(this.croShippingChargedUsd) || 0);
+    const safeCost = Math.max(0, Number(this.croUnitTotalCostUsd) || 0);
+    const safeTarget = Math.max(0, Number(this.croTargetMinProfitUsd) || 0);
+    const activeCoupon = Math.min(80, Math.max(0, Number(this.croActiveCouponPct) || 0));
+    const rate = this.simTargetRateTry > 10 ? this.simTargetRateTry : (this.liveRate || 49.50);
+
+    const etsyFeeRatio = 0.2205;   // %6.5 işlem + %6.5 ödeme + %1.67 yasal + KDV (~%22.05)
+    const offsiteRatio = 0.15;     // %15 Offsite Ads
+    const fixedFeeUsd = 0.28;      // ~14 TL sabit işlem ücreti
+
+    const keepStandard = 1 - etsyFeeRatio;
+    const keepOffsite = 1 - etsyFeeRatio - offsiteRatio;
+
+    const reqGrossStd = (safeTarget + fixedFeeUsd + safeCost) / keepStandard;
+    const maxSafeStdPct = Number(Math.min(65, Math.max(0, ((safePrice + safeShip - reqGrossStd) / safePrice) * 100)).toFixed(1));
+
+    const reqGrossOff = (safeTarget + fixedFeeUsd + safeCost) / keepOffsite;
+    const maxSafeOffPct = Number(Math.min(55, Math.max(0, ((safePrice + safeShip - reqGrossOff) / safePrice) * 100)).toFixed(1));
+
+    const breakEvenGrossOff = (fixedFeeUsd + safeCost) / keepOffsite;
+    const breakEvenOffPct = Number(Math.min(75, Math.max(0, ((safePrice + safeShip - breakEvenGrossOff) / safePrice) * 100)).toFixed(1));
+
+    const discountedSub = Number((safePrice * (1 - activeCoupon / 100)).toFixed(2));
+    const customerPaid = Number((discountedSub + safeShip).toFixed(2));
+    const etsyFees = Number((customerPaid * etsyFeeRatio).toFixed(2));
+    const netPayoutStd = Number((customerPaid - etsyFees).toFixed(2));
+    const netProfitStdUsd = Number((netPayoutStd - safeCost).toFixed(2));
+
+    const offsiteFeeUsd = Number((customerPaid * offsiteRatio).toFixed(2));
+    const netProfitOffUsd = Number((netProfitStdUsd - offsiteFeeUsd).toFixed(2));
+
+    let riskCode = 'SAFE_GUARDRAIL';
+    let riskBadge = '🟢 GÜVENLİ MARJ KORİDORU';
+    let diagnosis = `%${activeCoupon} kupon oranınız hem standart satışta ($${netProfitStdUsd.toFixed(2)} net kâr) hem de Offsite Ads (%15) çakışmasında ($${netProfitOffUsd.toFixed(2)} net kâr) hedef marjınızı koruyor.`;
+
+    if (netProfitOffUsd < 0) {
+      riskCode = 'CRITICAL_LOSS_TRAP';
+      riskBadge = '🛑 ZARAR TUZAĞI (Kupon + Offsite Ads Çakışması)';
+      diagnosis = `%${activeCoupon} kupon uygulandığında müşteri ödemesi $${customerPaid.toFixed(2)} seviyesine düşüyor (Etsy kesintisi: -$${etsyFees.toFixed(2)}, Maliyet öncesi kalan: $${netPayoutStd.toFixed(2)}). Standart satışta $${netProfitStdUsd.toFixed(2)} kalırken, sipariş Offsite Ads (%15 = -$${offsiteFeeUsd.toFixed(2)}) üzerinden gelirse net sonuç -$${Math.abs(netProfitOffUsd).toFixed(2)} (-₺${this.formatNumber(Math.abs(netProfitOffUsd * rate))}) ZARARA dönüyor! Güvenli kupon sınırınız Offsite Ads korumalı %${maxSafeOffPct.toFixed(1)} (standart %${maxSafeStdPct.toFixed(1)}) olmalıdır.`;
+    } else if (netProfitOffUsd < safeTarget) {
+      riskCode = 'WARNING_MARGIN_EROSION';
+      riskBadge = '⚠️ MARJ ERİMESİ UYARISI (Hedef Kâr Altı)';
+      diagnosis = `%${activeCoupon} kupon ile standart satışta $${netProfitStdUsd.toFixed(2)} (₺${this.formatNumber(netProfitStdUsd * rate)}) net kâr kalıyor; ancak Offsite Ads (%15 = -$${offsiteFeeUsd.toFixed(2)}) çakışmasında net kâr $${netProfitOffUsd.toFixed(2)} seviyesine inerek hedef kârınızın ($${safeTarget.toFixed(2)}) altına düşüyor. İdeal sepet kupon koridoru: %${Math.min(15, Math.round(maxSafeStdPct))} – %${maxSafeStdPct.toFixed(1)}.`;
+    }
+
+    const recFav = Math.min(15, Math.max(5, Math.round(Math.min(10, maxSafeStdPct * 0.55))));
+    const recCart = Math.min(20, Math.max(5, Math.round(Math.min(15, maxSafeStdPct * 0.75))));
+    const recVip = Math.min(25, Math.max(10, Math.round(Math.min(20, maxSafeStdPct))));
+
+    return {
+      itemPriceUsd: safePrice,
+      shippingChargedUsd: safeShip,
+      unitTotalCostUsd: safeCost,
+      targetMinProfitUsd: safeTarget,
+      activeCouponPct: activeCoupon,
+      maxSafeCouponStandardPct: maxSafeStdPct,
+      maxSafeCouponWithOffsiteAdsPct: maxSafeOffPct,
+      breakEvenCouponWithOffsiteAdsPct: breakEvenOffPct,
+      customerPaidAfterCouponUsd: customerPaid,
+      etsyFeesUsd: etsyFees,
+      offsiteAdFeeIfTriggeredUsd: offsiteFeeUsd,
+      netPayoutBeforeCostUsd: netPayoutStd,
+      netProfitStandardUsd: netProfitStdUsd,
+      netProfitStandardTry: Number((netProfitStdUsd * rate).toFixed(2)),
+      netProfitWithOffsiteAdsUsd: netProfitOffUsd,
+      netProfitWithOffsiteAdsTry: Number((netProfitOffUsd * rate).toFixed(2)),
+      recommendedFavCouponPct: recFav,
+      recommendedCartCouponPct: recCart,
+      recommendedVipCouponPct: recVip,
+      riskCode,
+      riskBadge,
+      guardrailDiagnosis: diagnosis
+    };
+  }
+
+  get livePriceElasticityScenarios(): AiPriceElasticityScenarioDto[] {
+    const p = Math.max(5, Number(this.croItemPriceUsd) || 45);
+    const s = Math.max(0, Number(this.croShippingChargedUsd) || 0);
+    const cost = Math.max(0, Number(this.croUnitTotalCostUsd) || 0);
+    const activeCoupon = Math.min(80, Math.max(5, Number(this.croActiveCouponPct) || 30));
+    const rate = this.simTargetRateTry > 10 ? this.simTargetRateTry : (this.liveRate || 49.50);
+    const feeRatio = 0.2205;
+
+    const visits = Math.max(140, this.aiForecast?.trafficFunnel?.projectedNext30dVisits || 280);
+    const baseCr = Math.min(10, Math.max(0.6, this.aiForecast?.trafficFunnel?.overallConversionRatePct || 2.10));
+
+    // 1. Baz Senaryo (Ücretli Kargo, %0 Kupon)
+    const s1Total = Number((p + s).toFixed(2));
+    const s1Fees = Number((s1Total * feeRatio).toFixed(2));
+    const s1UnitProfit = Number((s1Total - s1Fees - cost).toFixed(2));
+    const s1Orders = Math.max(1, Math.round(visits * (baseCr / 100)));
+    const s1MonthlyUsd = Number((s1Orders * s1UnitProfit).toFixed(2));
+
+    // 2. Akıllı Çapa Fiyat (+%8 Liste) + %15 Sepet/Fav Kuponu
+    const s2List = Number((p * 1.08).toFixed(2));
+    const s2Disc = Number((s2List * 0.85).toFixed(2));
+    const s2Total = Number((s2Disc + s).toFixed(2));
+    const s2Fees = Number((s2Total * feeRatio).toFixed(2));
+    const s2UnitProfit = Number((s2Total - s2Fees - cost).toFixed(2));
+    const s2Cr = Number((baseCr * 1.24).toFixed(2));
+    const s2Orders = Math.max(1, Math.round(visits * (s2Cr / 100)));
+    const s2MonthlyUsd = Number((s2Orders * s2UnitProfit).toFixed(2));
+    const s2BreakEvenCr = s2UnitProfit > 0 ? Number((baseCr * (s1UnitProfit / s2UnitProfit)).toFixed(2)) : 99.9;
+
+    // 3. Ücretsiz Kargo Psikolojisi ($P+$S Ürün + $0 Kargo)
+    const s3List = Number((p + s).toFixed(2));
+    const s3Total = s3List;
+    const s3Fees = Number((s3Total * feeRatio).toFixed(2));
+    const s3UnitProfit = Number((s3Total - s3Fees - cost).toFixed(2));
+    const s3Cr = Number((baseCr * 1.28).toFixed(2));
+    const s3Orders = Math.max(1, Math.round(visits * (s3Cr / 100)));
+    const s3MonthlyUsd = Number((s3Orders * s3UnitProfit).toFixed(2));
+    const s3BreakEvenCr = s3UnitProfit > 0 ? Number((baseCr * (s1UnitProfit / s3UnitProfit)).toFixed(2)) : baseCr;
+
+    // 4. Seçili Aktif Kupon Senaryosu (Örn: %30 DSFJY25)
+    const s4Disc = Number((p * (1 - activeCoupon / 100)).toFixed(2));
+    const s4Total = Number((s4Disc + s).toFixed(2));
+    const s4Fees = Number((s4Total * feeRatio).toFixed(2));
+    const s4UnitProfit = Number((s4Total - s4Fees - cost).toFixed(2));
+    const s4Cr = Number((baseCr * (1 + Math.min(0.55, activeCoupon * 0.0125))).toFixed(2));
+    const s4Orders = Math.max(1, Math.round(visits * (s4Cr / 100)));
+    const s4MonthlyUsd = Number((s4Orders * s4UnitProfit).toFixed(2));
+    const s4BreakEvenCr = s4UnitProfit > 0 ? Number((baseCr * (s1UnitProfit / s4UnitProfit)).toFixed(2)) : 99.9;
+
+    return [
+      {
+        scenarioCode: 'PAID_SHIPPING_BASE',
+        scenarioTitle: `📦 Mevcut Liste ($${p.toFixed(0)} + $${s.toFixed(0)} Kargo, %0 Kupon)`,
+        badgeText: 'Baz Senaryo',
+        itemListPriceUsd: p,
+        shippingChargedUsd: s,
+        couponDiscountPct: 0,
+        customerPaysTotalUsd: s1Total,
+        etsyFeesUsd: s1Fees,
+        unitCostUsd: cost,
+        unitNetProfitUsd: s1UnitProfit,
+        unitNetProfitTry: Number((s1UnitProfit * rate).toFixed(2)),
+        estimatedConversionRatePct: baseCr,
+        breakEvenConversionRatePct: baseCr,
+        estimatedMonthlyOrders: s1Orders,
+        expectedMonthlyNetProfitUsd: s1MonthlyUsd,
+        expectedMonthlyNetProfitTry: Number((s1MonthlyUsd * rate).toFixed(2)),
+        isRecommended: false,
+        strategyNote: `Müşteri ödeme adımında +$${s.toFixed(2)} kargo görünce sepeti terk edebiliyor (Shipping Shock).`
+      },
+      {
+        scenarioCode: 'SMART_ANCHOR_COUPON_15',
+        scenarioTitle: `🎯 Akıllı Çapa Fiyat ($${s2List.toFixed(2)}) + %15 Kupon (CART15)`,
+        badgeText: 'Marj Korumalı İndirim',
+        itemListPriceUsd: s2List,
+        shippingChargedUsd: s,
+        couponDiscountPct: 15,
+        customerPaysTotalUsd: s2Total,
+        etsyFeesUsd: s2Fees,
+        unitCostUsd: cost,
+        unitNetProfitUsd: s2UnitProfit,
+        unitNetProfitTry: Number((s2UnitProfit * rate).toFixed(2)),
+        estimatedConversionRatePct: s2Cr,
+        breakEvenConversionRatePct: s2BreakEvenCr,
+        estimatedMonthlyOrders: s2Orders,
+        expectedMonthlyNetProfitUsd: s2MonthlyUsd,
+        expectedMonthlyNetProfitTry: Number((s2MonthlyUsd * rate).toFixed(2)),
+        isRecommended: s2MonthlyUsd > s3MonthlyUsd && s2MonthlyUsd > s4MonthlyUsd,
+        strategyNote: `Liste fiyatını %8 artırıp sepet/favori kitlesine %15 kupon verdiğinizde birim kâr ($${s2UnitProfit.toFixed(2)}) erimez, dönüşüm %24 artar.`
+      },
+      {
+        scenarioCode: 'FREE_SHIPPING_PSYCHOLOGY',
+        scenarioTitle: `🚀 Ücretsiz Kargo Psikolojisi ($${s3List.toFixed(0)} Ürün + $0 Kargo)`,
+        badgeText: '🌟 AI Önerisi (ABD $35+ Boost)',
+        itemListPriceUsd: s3List,
+        shippingChargedUsd: 0,
+        couponDiscountPct: 0,
+        customerPaysTotalUsd: s3Total,
+        etsyFeesUsd: s3Fees,
+        unitCostUsd: cost,
+        unitNetProfitUsd: s3UnitProfit,
+        unitNetProfitTry: Number((s3UnitProfit * rate).toFixed(2)),
+        estimatedConversionRatePct: s3Cr,
+        breakEvenConversionRatePct: s3BreakEvenCr,
+        estimatedMonthlyOrders: s3Orders,
+        expectedMonthlyNetProfitUsd: s3MonthlyUsd,
+        expectedMonthlyNetProfitTry: Number((s3MonthlyUsd * rate).toFixed(2)),
+        isRecommended: s3MonthlyUsd >= s2MonthlyUsd && s3MonthlyUsd >= s4MonthlyUsd,
+        strategyNote: `Kargoyu ürün fiyatına ($${s3List.toFixed(2)}) dahil ettiğinizde toplam müşteri ödemesi ve Etsy kesintisi kuruşu kuruşuna aynıdır; ancak 'Free Shipping' rozetiyle dönüşüm +%28 artar.`
+      },
+      {
+        scenarioCode: 'ACTIVE_COUPON_TEST',
+        scenarioTitle: `🏷️ Seçili %${activeCoupon} Mağaza Kuponu (Örn: DSFJY25)`,
+        badgeText: s4UnitProfit < this.croTargetMinProfitUsd ? '⚠️ Düşük Birim Kâr' : 'Aktif Test',
+        itemListPriceUsd: p,
+        shippingChargedUsd: s,
+        couponDiscountPct: activeCoupon,
+        customerPaysTotalUsd: s4Total,
+        etsyFeesUsd: s4Fees,
+        unitCostUsd: cost,
+        unitNetProfitUsd: s4UnitProfit,
+        unitNetProfitTry: Number((s4UnitProfit * rate).toFixed(2)),
+        estimatedConversionRatePct: s4Cr,
+        breakEvenConversionRatePct: s4BreakEvenCr,
+        estimatedMonthlyOrders: s4Orders,
+        expectedMonthlyNetProfitUsd: s4MonthlyUsd,
+        expectedMonthlyNetProfitTry: Number((s4MonthlyUsd * rate).toFixed(2)),
+        isRecommended: s4MonthlyUsd > s3MonthlyUsd && s4UnitProfit >= this.croTargetMinProfitUsd,
+        strategyNote: `Müşteri $${s4Total.toFixed(2)} öder, Etsy -$${s4Fees.toFixed(2)} keser, maliyet öncesi $${(s4Total - s4Fees).toFixed(2)} (Birim Net Kâr: $${s4UnitProfit.toFixed(2)}) kalır. Başabaş için dönüşüm en az %${s4BreakEvenCr.toFixed(2)} olmalıdır.`
+      }
+    ];
+  }
+
+  get liveOfferLadderTiers(): AiOfferLadderTierDto[] {
+    if (this.aiForecast?.croElasticity?.offerLadderTiers?.length) {
+      return this.aiForecast.croElasticity.offerLadderTiers;
+    }
+    const g = this.liveCouponGuardrail;
+    const tf = this.aiForecast?.trafficFunnel;
+    const favCount = Math.max(12, tf?.totalFavorites || 24);
+    const cartCount = Math.max(6, tf?.estimatedAddToCarts || 12);
+    const feeRatio = 0.2205;
+
+    const calcUnitNet = (discPct: number, multPrice = 1, multCost = 1) => {
+      const rev = (g.itemPriceUsd * multPrice) * (1 - discPct / 100) + g.shippingChargedUsd;
+      return Number((rev * (1 - feeRatio) - (g.unitTotalCostUsd * multCost)).toFixed(2));
+    };
+
+    return [
+      {
+        tierOrder: 1,
+        tierName: '1. Kademe: Soğuk Favori Kancası (Favorited Item Offer)',
+        targetSegment: `Ürünü favoriye ekleyen ${favCount} potansiyel alıcı (Niyet Skoru: 35–59)`,
+        triggerTiming: 'Favoriye ekledikten 12 saat sonra otomatik',
+        couponCode: `FAV${g.recommendedFavCouponPct}`,
+        discountSpec: `%${g.recommendedFavCouponPct} İndirim + 3D Ölçek/Kalite Güvencesi`,
+        expectedConversionLiftPct: 14.5,
+        unitNetProfitAfterOfferUsd: calcUnitNet(g.recommendedFavCouponPct),
+        psychologicalPrinciple: 'Mikro-Teşvik: Marjı eritmeden favoriden sepete geçişi tetikler.'
+      },
+      {
+        tierOrder: 2,
+        tierName: '2. Kademe: Sıcak Sepet & Kargo Şoku Kurtarıcı (Abandoned Cart)',
+        targetSegment: `Sepetinde ürün bekleten ${cartCount} yüksek niyetli alıcı (Niyet Skoru: 60–84)`,
+        triggerTiming: 'Sepete ekledikten 24 saat sonra ödeme yapılmazsa',
+        couponCode: `CART${g.recommendedCartCouponPct}`,
+        discountSpec: `%${g.recommendedCartCouponPct} Sepet İndirimi veya Ücretsiz Kargo ($10 Kargo Bariyerini Kaldırır)`,
+        expectedConversionLiftPct: 26.8,
+        unitNetProfitAfterOfferUsd: calcUnitNet(g.recommendedCartCouponPct),
+        psychologicalPrinciple: 'Kayıptan Kaçınma & Kargo Şoku Çözümü: Ödeme adımındaki +$10 kargo acısını nötrler.'
+      },
+      {
+        tierOrder: 3,
+        tierName: '3. Kademe: VIP & Aynı Kargoda 2\'li Bundle Teklifi (Upsell)',
+        targetSegment: 'Tekrar müşteriler ve 2+ ürün bakan Cosplay koleksiyonerleri (Niyet Skoru: 85+)',
+        triggerTiming: 'Sipariş sonrası anında veya $75+ sepet büyüklüğünde',
+        couponCode: `VIP${g.recommendedVipCouponPct}`,
+        discountSpec: `%${g.recommendedVipCouponPct} VIP Kuponu (C_max Korumalı) + 2. Aksesuarda Aynı Kargo`,
+        expectedConversionLiftPct: 34.0,
+        unitNetProfitAfterOfferUsd: calcUnitNet(g.recommendedVipCouponPct, 1.65, 1.35),
+        psychologicalPrinciple: 'Birim Kargo Arbitrajı (Upsell Bundling): 500gr altı pakette 2. ürünü ekstra kargo ödemeden gönderip AOV\'yi katlar.'
+      }
+    ];
+  }
+
+  get liveEventUrgencyHooks(): AiEventUrgencyHookDto[] {
+    if (this.aiForecast?.croElasticity?.eventUrgencyHooks?.length) {
+      return this.aiForecast.croElasticity.eventUrgencyHooks;
+    }
+    return [
+      {
+        eventCode: 'Q4_HOLIDAY_RUSH',
+        eventTitle: '🎄 Q4 / Noel & Yılbaşı Hediye Son Kargo Garantisi',
+        targetAudience: 'Arcane / Gaming / Cosplay Hediye Arayanlar',
+        urgencyHookText: 'Atölye Kapasite Uyarısı: Yılbaşı teslimat garantisi için bu hafta yalnızca 15 adet 3D baskı slotu açıktır. Bugün verilen siparişler 3 iş günü erken kargolanır!',
+        recommendedAction: 'İlan başlığı ve mağaza duyurusuna "Fast 3-Day 3D Print Dispatch" rozeti ekleyin.'
+      },
+      {
+        eventCode: 'COSPLAY_CONVENTION_SLOT',
+        eventTitle: '🎭 Cosplay & Comic-Con Etkinlik Yetiştirme + Hediye Stand Çapası',
+        targetAudience: 'Hexcore Rubik\'s Cube, Butterfly Balisong & Ben 10 Omnitrix Koleksiyonerleri',
+        urgencyHookText: 'Etkinlik tarihine yetişmesi için ekspres üretim sırası aktif! Şimdi sepetinizi tamamlarsanız ücretsiz sergileme standı (Display Stand) paketinize hediye eklenir.',
+        recommendedAction: 'Ücretsiz 15gr 3D sergileme standını ($0.35 filament maliyeti) %30 indirim yerine yüksek değerli hediye çapa olarak sunun.'
+      }
+    ];
+  }
+
   private resolveListingEngagementForTitle(productTitle: string, currentOrders: number): {
     views: number;
     visits: number;
@@ -1090,6 +1440,32 @@ export class AccountingComponent implements OnInit, OnDestroy {
               : (mrg >= 15
                   ? `Fiyatı %5 yukarı çekin ve ${eng.favorites} favori / ${eng.carts} sepet kitlesine terk edilmiş sepet kuponu gönderin.`
                   : 'Kargo ve üretim maliyetini inceleyin; Offsite Ads etkisini fiyatlayın.'));
+        const visitsSafe = Math.max(1, eng.visits);
+        const favRate = eng.favorites / visitsSafe;
+        const cartRate = eng.carts / visitsSafe;
+        const convRate = item.count / visitsSafe;
+        const rawIntent = (favRate * 100 * 3.0) + (cartRate * 100 * 5.0) + (convRate * 100 * 6.0);
+        const intentScore = Math.min(98, Math.max(15, Math.round(rawIntent)));
+
+        const unitPrice = Math.max(12, estUnitPrice);
+        const shipCharge = 10.0;
+        const estCost = Number(Math.max(8, unitPrice * 0.30).toFixed(2));
+        const targetMinProfit = Number(Math.max(4, unitPrice * 0.14).toFixed(2));
+        const maxDiscStd = (unitPrice * 0.7795) + (shipCharge * 0.7795) - estCost - targetMinProfit;
+        const maxDiscOffsite = (unitPrice * 0.6295) + (shipCharge * 0.6295) - estCost - targetMinProfit;
+        const cMaxStd = Math.max(0, Math.min(50, Number(((maxDiscStd / unitPrice) * 100).toFixed(1))));
+        const cMaxOffsite = Math.max(0, Math.min(40, Number(((maxDiscOffsite / unitPrice) * 100).toFixed(1))));
+        const recFav = Math.min(10, Math.max(5, Math.round(cMaxOffsite * 0.45)));
+        const recCart = Math.min(15, Math.max(recFav + 3, Math.round(cMaxOffsite * 0.70)));
+
+        const funnelLeakStage = eng.favorites >= 10 && item.count === 0
+          ? '🛒 Sepet / Kargo Şoku (Yüksek Favori, Düşük Satış)'
+          : (eng.carts >= 3 && item.count <= 1
+              ? '💳 Ödeme Terki (Kupon Tetikleyici Bekliyor)'
+              : (eng.views < 80
+                  ? '🔍 Üst Huni (SEO & Etiket Görünürlüğü Darboğazı)'
+                  : '✅ Dengeli Huni Akışı'));
+
         return {
           productTitle: item.title,
           currentOrders: item.count,
@@ -1104,6 +1480,14 @@ export class AccountingComponent implements OnInit, OnDestroy {
           favorites: eng.favorites,
           estimatedCarts: eng.carts,
           conversionRatePct: eng.conversionPct,
+          intentScore,
+          funnelLeakStage,
+          maxSafeCouponPct: cMaxStd,
+          maxSafeCouponWithOffsiteAdsPct: cMaxOffsite,
+          recommendedFavCouponPct: recFav,
+          recommendedCartCouponPct: recCart,
+          offerLadderSummary: `Fav: %${recFav} (2sa) → Sepet: %${recCart} (24sa) → VIP: Ücretsiz Kargo (72sa)`,
+          upsellBundleSuggestion: `2'li Cosplay/Hediye Seti veya StandVaryasyonu ($${Math.round(unitPrice * 1.45)})`,
           aiStrategyTag: tag,
           aiRecommendation: rec
         };

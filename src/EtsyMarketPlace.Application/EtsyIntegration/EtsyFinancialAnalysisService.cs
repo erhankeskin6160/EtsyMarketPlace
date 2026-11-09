@@ -272,13 +272,17 @@ public sealed class EtsyFinancialAnalysisService(
                                 var prodVisits = Math.Max(cnt, (int)Math.Round(prodViews * 0.64m));
                                 var prodCarts = Math.Max(cnt, (int)Math.Round((prodFavs * 0.38m) + (cnt * 2.15m)));
                                 var prodCr = prodVisits > 0 ? Math.Round((decimal)cnt / prodVisits * 100m, 2) : 2.1m;
+                                var unitPrice = cnt > 0 ? Math.Round(rev / cnt, 2) : 45.0m;
+                                var unitProfit = cnt > 0 ? Math.Round(prof / cnt, 2) : 14.0m;
+                                var cro = EtsyCroElasticityEngine.AnalyzeProductCroMetrics(
+                                    g.Key, prodViews, prodVisits, prodFavs, prodCarts, cnt, unitPrice, unitProfit);
 
                                 var tag = mrg >= 35m ? "🚀 Yıldız Ürün (Ölçekle)" : (mrg >= 15m ? "⚖️ Dengeli Katkı" : "⚠️ Marj Optimize Et");
                                 var rec = mrg >= 35m
-                                    ? $"Dönüşüm %{prodCr:0.00} ({prodFavs} Favori / {prodCarts} Sepet). Etsy Ads bütçesini %15 artırın ve 2'li bundle ekleyin."
+                                    ? $"Dönüşüm %{prodCr:0.00} ({prodFavs} Favori / {prodCarts} Sepet, Niyet Skoru: {cro.IntentScore}/100). Etsy Ads bütçesini %15 artırın ve 2'li bundle ekleyin (Maks. Güvenli Kupon: %{cro.MaxSafeCouponPct:0.0})."
                                     : (mrg >= 15m
-                                        ? $"Sepette {prodCarts} potansiyel alıcı var; fiyatı %5 optimize edip sepet terk (abandoned cart) kuponu tanımlayın."
-                                        : "Kargo ve üretim maliyetini inceleyin; Offsite Ads etkisini fiyatlayın.");
+                                        ? $"Sepette {prodCarts} potansiyel alıcı var ({cro.FunnelLeakStage}); %{cro.RecommendedCartCouponPct} sepet kuponu veya ücretsiz kargo tanımlayın."
+                                        : $"Kargo ve üretim maliyetini inceleyin; Offsite Ads çakışmasında güvenli kupon sınırı %{cro.MaxSafeCouponWithOffsiteAdsPct:0.0}.");
 
                                 return new AiProductForecastItemDto(
                                     ProductTitle: g.Key,
@@ -295,7 +299,15 @@ public sealed class EtsyFinancialAnalysisService(
                                     Visits: prodVisits,
                                     Favorites: prodFavs,
                                     EstimatedCarts: prodCarts,
-                                    ConversionRatePct: prodCr);
+                                    ConversionRatePct: prodCr,
+                                    IntentScore: cro.IntentScore,
+                                    FunnelLeakStage: cro.FunnelLeakStage,
+                                    MaxSafeCouponPct: cro.MaxSafeCouponPct,
+                                    MaxSafeCouponWithOffsiteAdsPct: cro.MaxSafeCouponWithOffsiteAdsPct,
+                                    RecommendedFavCouponPct: cro.RecommendedFavCouponPct,
+                                    RecommendedCartCouponPct: cro.RecommendedCartCouponPct,
+                                    OfferLadderSummary: cro.OfferLadderSummary,
+                                    UpsellBundleSuggestion: cro.UpsellBundleSuggestion);
                             })
                             .OrderByDescending(x => x.CurrentProfitUsd)
                             .ThenByDescending(x => x.CurrentRevenueUsd)
@@ -338,6 +350,10 @@ public sealed class EtsyFinancialAnalysisService(
             var prodVisits = Math.Max(cnt, (int)Math.Round(prodViews * 0.64m));
             var prodCarts = Math.Max(cnt, (int)Math.Round((prodFavs * 0.38m) + (cnt * 2.15m)));
             var prodCr = prodVisits > 0 ? Math.Round((decimal)cnt / prodVisits * 100m, 2) : 2.1m;
+            var unitPrice = cnt > 0 && topProductRevenueUsd > 0m ? Math.Round(topProductRevenueUsd / cnt, 2) : 45.0m;
+            var unitProf = cnt > 0 && topProductProfitUsd > 0m ? Math.Round(topProductProfitUsd / cnt, 2) : 14.0m;
+            var cro = EtsyCroElasticityEngine.AnalyzeProductCroMetrics(
+                topProductTitle!, prodViews, prodVisits, prodFavs, prodCarts, cnt, unitPrice, unitProf);
 
             productForecasts.Add(new AiProductForecastItemDto(
                 ProductTitle: topProductTitle!,
@@ -349,12 +365,20 @@ public sealed class EtsyFinancialAnalysisService(
                 ProjectedNext30dRevenueUsd: Math.Round(topProductRevenueUsd * 1.12m, 2),
                 ProjectedNext30dProfitUsd: Math.Round(topProductProfitUsd * 1.12m, 2),
                 AiStrategyTag: mrg >= 30m ? "🚀 Yıldız Ürün (Ölçekle)" : "⚖️ Dengeli Katkı",
-                AiRecommendation: $"Dönüşüm %{prodCr:0.00} ({prodFavs} Favori / {prodCarts} Sepet). Varyasyon ve bundle seçenekleriyle AOV büyütün.",
+                AiRecommendation: $"Dönüşüm %{prodCr:0.00} ({prodFavs} Favori / {prodCarts} Sepet, Niyet Skoru: {cro.IntentScore}/100). Varyasyon ve bundle seçenekleriyle AOV büyütün.",
                 Views: prodViews,
                 Visits: prodVisits,
                 Favorites: prodFavs,
                 EstimatedCarts: prodCarts,
-                ConversionRatePct: prodCr));
+                ConversionRatePct: prodCr,
+                IntentScore: cro.IntentScore,
+                FunnelLeakStage: cro.FunnelLeakStage,
+                MaxSafeCouponPct: cro.MaxSafeCouponPct,
+                MaxSafeCouponWithOffsiteAdsPct: cro.MaxSafeCouponWithOffsiteAdsPct,
+                RecommendedFavCouponPct: cro.RecommendedFavCouponPct,
+                RecommendedCartCouponPct: cro.RecommendedCartCouponPct,
+                OfferLadderSummary: cro.OfferLadderSummary,
+                UpsellBundleSuggestion: cro.UpsellBundleSuggestion));
         }
 
         // Eğer dönemde hiç sipariş yoksa ama mağazada yüksek görüntülenme/favori alan ilanlar varsa onları da ürün tablosuna ekle
@@ -368,6 +392,8 @@ public sealed class EtsyFinancialAnalysisService(
                 var crt = Math.Max(1, (int)Math.Round(fv * 0.42m));
                 var projOrd = Math.Max(1, (int)Math.Round(crt * 0.28m));
                 var estPrice = 42.0m;
+                var cro = EtsyCroElasticityEngine.AnalyzeProductCroMetrics(
+                    kv.Key, vw, vs, fv, crt, 0, estPrice, Math.Round(estPrice * 0.35m, 2));
                 productForecasts.Add(new AiProductForecastItemDto(
                     ProductTitle: kv.Key,
                     CurrentOrders: 0,
@@ -378,12 +404,20 @@ public sealed class EtsyFinancialAnalysisService(
                     ProjectedNext30dRevenueUsd: Math.Round(projOrd * estPrice, 2),
                     ProjectedNext30dProfitUsd: Math.Round(projOrd * estPrice * 0.35m, 2),
                     AiStrategyTag: "🔥 Yüksek Favori / Sepet Potansiyeli",
-                    AiRecommendation: $"{vw} görüntülenme ve {fv} favori birikimi var; %10 favori/sepet kuponu ile satışa dönüştürün.",
+                    AiRecommendation: $"{vw} görüntülenme ve {fv} favori birikimi var (Niyet Skoru: {cro.IntentScore}/100); %{cro.RecommendedFavCouponPct} favori / %{cro.RecommendedCartCouponPct} sepet kuponu ile satışa dönüştürün.",
                     Views: vw,
                     Visits: vs,
                     Favorites: fv,
                     EstimatedCarts: crt,
-                    ConversionRatePct: 0m));
+                    ConversionRatePct: 0m,
+                    IntentScore: cro.IntentScore,
+                    FunnelLeakStage: cro.FunnelLeakStage,
+                    MaxSafeCouponPct: cro.MaxSafeCouponPct,
+                    MaxSafeCouponWithOffsiteAdsPct: cro.MaxSafeCouponWithOffsiteAdsPct,
+                    RecommendedFavCouponPct: cro.RecommendedFavCouponPct,
+                    RecommendedCartCouponPct: cro.RecommendedCartCouponPct,
+                    OfferLadderSummary: cro.OfferLadderSummary,
+                    UpsellBundleSuggestion: cro.UpsellBundleSuggestion));
             }
         }
 
@@ -475,6 +509,18 @@ public sealed class EtsyFinancialAnalysisService(
             expectedMarginPct,
             estimatedOrders,
             exchangeRate);
+
+        var croItemPrice = avgOrderValueUsd > 12m ? Math.Round(avgOrderValueUsd - 10m, 2) : 45.00m;
+        var croUnitCost = orderCount > 0 && costsUsd > 0m ? Math.Round(costsUsd / orderCount, 2) : 12.50m;
+        var croElasticity = EtsyCroElasticityEngine.BuildStoreCroElasticitySummary(
+            avgItemPriceUsd: croItemPrice,
+            avgShippingUsd: 10.00m,
+            avgUnitCostUsd: croUnitCost,
+            projectedMonthlyVisits: trafficFunnel.ProjectedNext30dVisits,
+            overallCrPct: trafficFunnel.OverallConversionRatePct,
+            totalFavorites: trafficFunnel.TotalFavorites,
+            totalCarts: trafficFunnel.EstimatedAddToCarts,
+            exchangeRate: exchangeRate);
 
         // 5. Aktif AI Sağlayıcı, Model ve API Anahtarını Çözümle
         var (resolvedProvider, resolvedModel, apiKey) = await ResolveAiCredentialsAsync(
@@ -615,7 +661,8 @@ public sealed class EtsyFinancialAnalysisService(
                             HorizonProjections: horizons,
                             Scenarios: scenarios,
                             ProductForecasts: productForecasts,
-                            TrafficFunnel: trafficFunnel);
+                            TrafficFunnel: trafficFunnel,
+                            CroElasticity: croElasticity);
                     }
                 }
             }
@@ -665,7 +712,8 @@ public sealed class EtsyFinancialAnalysisService(
             horizons,
             scenarios,
             productForecasts,
-            trafficFunnel);
+            trafficFunnel,
+            croElasticity);
     }
 
     private static (int Views, int Favorites) ResolveProductEngagement(
@@ -1090,7 +1138,8 @@ public sealed class EtsyFinancialAnalysisService(
         IReadOnlyList<AiForecastHorizonItemDto> horizons,
         IReadOnlyList<AiForecastScenarioItemDto> scenarios,
         IReadOnlyList<AiProductForecastItemDto> productForecasts,
-        AiTrafficFunnelSnapshotDto trafficFunnel)
+        AiTrafficFunnelSnapshotDto trafficFunnel,
+        AiCroElasticitySummaryDto? croElasticity = null)
     {
         var grossTry = Math.Round(grossUsd * exchangeRate, 2);
         var realProfitTry = Math.Round(realNetProfitUsd * exchangeRate, 2);
@@ -1167,7 +1216,8 @@ public sealed class EtsyFinancialAnalysisService(
             HorizonProjections: horizons,
             Scenarios: scenarios,
             ProductForecasts: productForecasts,
-            TrafficFunnel: trafficFunnel);
+            TrafficFunnel: trafficFunnel,
+            CroElasticity: croElasticity);
     }
 
     private static List<string> BuildDataDrivenActionPlan(

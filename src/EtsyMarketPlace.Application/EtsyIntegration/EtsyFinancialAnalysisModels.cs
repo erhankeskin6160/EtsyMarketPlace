@@ -100,7 +100,83 @@ public sealed record AiProductForecastItemDto(
     int Visits = 0,
     int Favorites = 0,
     int EstimatedCarts = 0,
-    decimal ConversionRatePct = 0m);
+    decimal ConversionRatePct = 0m,
+    int IntentScore = 0,
+    string FunnelLeakStage = "",
+    decimal MaxSafeCouponPct = 20.0m,
+    decimal MaxSafeCouponWithOffsiteAdsPct = 12.0m,
+    int RecommendedFavCouponPct = 10,
+    int RecommendedCartCouponPct = 15,
+    string OfferLadderSummary = "",
+    string UpsellBundleSuggestion = "");
+
+public sealed record AiCouponGuardrailDto(
+    decimal ItemPriceUsd,
+    decimal ShippingChargedUsd,
+    decimal UnitTotalCostUsd,
+    decimal TargetMinProfitUsd,
+    decimal ActiveCouponPct,
+    decimal MaxSafeCouponStandardPct,
+    decimal MaxSafeCouponWithOffsiteAdsPct,
+    decimal BreakEvenCouponWithOffsiteAdsPct,
+    decimal CustomerPaidAfterCouponUsd,
+    decimal EtsyFeesUsd,
+    decimal OffsiteAdFeeIfTriggeredUsd,
+    decimal NetPayoutBeforeCostUsd,
+    decimal NetProfitStandardUsd,
+    decimal NetProfitStandardTry,
+    decimal NetProfitWithOffsiteAdsUsd,
+    decimal NetProfitWithOffsiteAdsTry,
+    int RecommendedFavCouponPct,
+    int RecommendedCartCouponPct,
+    int RecommendedVipCouponPct,
+    string RiskCode,
+    string RiskBadge,
+    string GuardrailDiagnosis);
+
+public sealed record AiPriceElasticityScenarioDto(
+    string ScenarioCode,
+    string ScenarioTitle,
+    string BadgeText,
+    decimal ItemListPriceUsd,
+    decimal ShippingChargedUsd,
+    decimal CouponDiscountPct,
+    decimal CustomerPaysTotalUsd,
+    decimal EtsyFeesUsd,
+    decimal UnitCostUsd,
+    decimal UnitNetProfitUsd,
+    decimal UnitNetProfitTry,
+    decimal EstimatedConversionRatePct,
+    decimal BreakEvenConversionRatePct,
+    int EstimatedMonthlyOrders,
+    decimal ExpectedMonthlyNetProfitUsd,
+    decimal ExpectedMonthlyNetProfitTry,
+    bool IsRecommended,
+    string StrategyNote);
+
+public sealed record AiOfferLadderTierDto(
+    int TierOrder,
+    string TierName,
+    string TargetSegment,
+    string TriggerTiming,
+    string CouponCode,
+    string DiscountSpec,
+    decimal ExpectedConversionLiftPct,
+    decimal UnitNetProfitAfterOfferUsd,
+    string PsychologicalPrinciple);
+
+public sealed record AiEventUrgencyHookDto(
+    string EventCode,
+    string EventTitle,
+    string TargetAudience,
+    string UrgencyHookText,
+    string RecommendedAction);
+
+public sealed record AiCroElasticitySummaryDto(
+    AiCouponGuardrailDto CouponGuardrail,
+    IReadOnlyList<AiPriceElasticityScenarioDto> ElasticityScenarios,
+    IReadOnlyList<AiOfferLadderTierDto> OfferLadderTiers,
+    IReadOnlyList<AiEventUrgencyHookDto> EventUrgencyHooks);
 
 public sealed record AiFinancialForecastCommand(
     string ShopId,
@@ -163,4 +239,5 @@ public sealed record AiFinancialForecastResultDto(
     IReadOnlyList<AiForecastHorizonItemDto>? HorizonProjections = null,
     IReadOnlyList<AiForecastScenarioItemDto>? Scenarios = null,
     IReadOnlyList<AiProductForecastItemDto>? ProductForecasts = null,
-    AiTrafficFunnelSnapshotDto? TrafficFunnel = null);
+    AiTrafficFunnelSnapshotDto? TrafficFunnel = null,
+    AiCroElasticitySummaryDto? CroElasticity = null);
