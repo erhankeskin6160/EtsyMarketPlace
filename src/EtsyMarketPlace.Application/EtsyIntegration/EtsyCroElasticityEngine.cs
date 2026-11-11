@@ -13,7 +13,6 @@ public static class EtsyCroElasticityEngine
 {
     private const decimal DefaultEtsyFeeRatio = 0.2205m; // %6.5 işlem + %6.5 ödeme + %1.67 yasal + KDV (~%22.05)
     private const decimal DefaultOffsiteAdsRatio = 0.15m; // %15 Offsite Ads komisyonu
-    private const decimal DefaultFixedFeeUsd = 0.28m;     // 14 TL (~$0.28) sabit işlem ücreti
 
     /// <summary>
     /// Bir ürün için Kupon + Offsite Ads + Etsy Kesintisi + 3D Baskı/Kargo Maliyeti üst üste bindiğinde
@@ -39,17 +38,17 @@ public static class EtsyCroElasticityEngine
         var keepRatioStandard = Math.Max(0.10m, 1.0m - etsyFeeRatio);
         var keepRatioWithOffsite = Math.Max(0.10m, 1.0m - etsyFeeRatio - offsiteAdsRatio);
 
-        // C_max = max(0, [P + S - (Target + FixedFee + Cost) / (1 - F)] / P)
-        var requiredGrossStandard = (safeTarget + DefaultFixedFeeUsd + safeCost) / keepRatioStandard;
+        // C_max = max(0, [P + S - (Target + Cost) / (1 - F)] / P) — canlı net kesinti oranı (~%22.05 sabit pay dahil) ile birebir tutarlı
+        var requiredGrossStandard = (safeTarget + safeCost) / keepRatioStandard;
         var maxSafeStandardRatio = (safePrice + safeShip - requiredGrossStandard) / safePrice;
         var maxSafeStandardPct = Math.Round(Math.Clamp(maxSafeStandardRatio * 100m, 0m, 65m), 1);
 
-        var requiredGrossOffsite = (safeTarget + DefaultFixedFeeUsd + safeCost) / keepRatioWithOffsite;
+        var requiredGrossOffsite = (safeTarget + safeCost) / keepRatioWithOffsite;
         var maxSafeOffsiteRatio = (safePrice + safeShip - requiredGrossOffsite) / safePrice;
         var maxSafeOffsitePct = Math.Round(Math.Clamp(maxSafeOffsiteRatio * 100m, 0m, 55m), 1);
 
         // Zarar başabaş (Target = 0) kupon sınırı (Offsite Ads dahil)
-        var breakEvenGrossOffsite = (DefaultFixedFeeUsd + safeCost) / keepRatioWithOffsite;
+        var breakEvenGrossOffsite = safeCost / keepRatioWithOffsite;
         var breakEvenCouponOffsitePct = Math.Round(Math.Clamp(((safePrice + safeShip - breakEvenGrossOffsite) / safePrice) * 100m, 0m, 75m), 1);
 
         // Aktif kupon (örn. %30 DSFJY25) ile gerçekleşen rakamlar
@@ -141,7 +140,14 @@ public static class EtsyCroElasticityEngine
         var s1Orders = Math.Max(1, (int)Math.Round(visits * (cr / 100m)));
         var s1MonthlyProfitUsd = Math.Round(s1Orders * s1UnitProfit, 2);
 
-        // Senaryo 2: Akıllı Sepet/Favori Kupon Kurgusu (+%10 Liste Fiyatı Çapası + %15 Kupon)
+        static decimal ComputeBreakEvenCr(decimal baseCrVal, decimal baseProfitVal, decimal scenarioProfitVal, decimal fallbackOnUnprofitable)
+        {
+            if (scenarioProfitVal <= 0m) return fallbackOnUnprofitable;
+            if (baseProfitVal <= 0m) return 0m;
+            return Math.Round(baseCrVal * (baseProfitVal / scenarioProfitVal), 2);
+        }
+
+        // Senaryo 2: Akıllı Sepet/Favori Kupon Kurgusu (+%8 Liste Fiyatı Çapası + %15 Kupon)
         var s2ListPrice = Math.Round(p * 1.08m, 2);
         var s2CouponPct = 15m;
         var s2DiscountedItem = Math.Round(s2ListPrice * (1m - s2CouponPct / 100m), 2);
@@ -151,7 +157,7 @@ public static class EtsyCroElasticityEngine
         var s2Cr = Math.Round(cr * 1.24m, 2); // %15 sepet kuponu psikolojik tetiklemesi (+%24 CVR)
         var s2Orders = Math.Max(1, (int)Math.Round(visits * (s2Cr / 100m)));
         var s2MonthlyProfitUsd = Math.Round(s2Orders * s2UnitProfit, 2);
-        var s2BreakEvenCr = s2UnitProfit > 0m ? Math.Round(cr * (s1UnitProfit / s2UnitProfit), 2) : 99.9m;
+        var s2BreakEvenCr = ComputeBreakEvenCr(cr, s1UnitProfit, s2UnitProfit, 99.9m);
 
         // Senaryo 3: Ücretsiz Kargo Psikolojisi ($55 Ürün + $0 Kargo — Etsy US $35+ Free Shipping Boost)
         var s3ListPrice = Math.Round(p + s, 2);
@@ -161,7 +167,7 @@ public static class EtsyCroElasticityEngine
         var s3Cr = Math.Round(cr * 1.28m, 2); // Kargo şokunun kalkması + Etsy Free Shipping rozeti (+%28 CVR)
         var s3Orders = Math.Max(1, (int)Math.Round(visits * (s3Cr / 100m)));
         var s3MonthlyProfitUsd = Math.Round(s3Orders * s3UnitProfit, 2);
-        var s3BreakEvenCr = s3UnitProfit > 0m ? Math.Round(cr * (s1UnitProfit / s3UnitProfit), 2) : cr;
+        var s3BreakEvenCr = ComputeBreakEvenCr(cr, s1UnitProfit, s3UnitProfit, cr);
 
         // Senaryo 4: Agresif %30 Mağaza Kuponu (Örn: DSFJY25 — $45 ürün -> $31.50 + $10 kargo = $41.50)
         var s4CouponPct = 30m;
@@ -172,7 +178,7 @@ public static class EtsyCroElasticityEngine
         var s4Cr = Math.Round(cr * 1.38m, 2);
         var s4Orders = Math.Max(1, (int)Math.Round(visits * (s4Cr / 100m)));
         var s4MonthlyProfitUsd = Math.Round(s4Orders * s4UnitProfit, 2);
-        var s4BreakEvenCr = s4UnitProfit > 0m ? Math.Round(cr * (s1UnitProfit / s4UnitProfit), 2) : 99.9m;
+        var s4BreakEvenCr = ComputeBreakEvenCr(cr, s1UnitProfit, s4UnitProfit, 99.9m);
 
         return
         [

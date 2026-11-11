@@ -73,7 +73,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
             <span class="kpi-val fee-val">&#36;{{ totalEtsyFeesUsd.toFixed(2) }}</span>
             <span class="kpi-try">₺{{ (totalEtsyFeesUsd * usdTryRate).toFixed(2) }}</span>
           </div>
-          <span class="kpi-sub">%6.5 Komisyon + %3 İşlem + Listeleme</span>
+          <span class="kpi-sub">TR Komisyon (%14.1) + KDV (%20) + İlan</span>
         </div>
       </div>
 
@@ -202,12 +202,20 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
               <span>-&#36;{{ (totalRevenueUsd * 0.065).toFixed(2) }}</span>
             </div>
             <div class="fee-row">
-              <span>Ödeme İşleme Ücreti (%3 + &#36;0.25)</span>
-              <span>-&#36;{{ (totalRevenueUsd * 0.03 + 0.25).toFixed(2) }}</span>
+              <span>TR Ödeme İşleme Ücreti (%6.5 + 3₺)</span>
+              <span>-&#36;{{ paymentProcessingFeeUsd.toFixed(2) }}</span>
+            </div>
+            <div class="fee-row">
+              <span>Düzenleyici İşletme Ücreti (TR %1.1)</span>
+              <span>-&#36;{{ (totalRevenueUsd * 0.011).toFixed(2) }}</span>
             </div>
             <div class="fee-row">
               <span>İlan Listeleme Ücreti (Listing Fee)</span>
               <span>-&#36;0.20</span>
+            </div>
+            <div class="fee-row">
+              <span>Etsy Kesinti KDV Tevkifatı (TR %20)</span>
+              <span>-&#36;{{ vatOnFeesUsd.toFixed(2) }}</span>
             </div>
             <div class="fee-row" *ngIf="useCurrencyConversion">
               <span>Döviz Çevrim Farkı (%2.5)</span>
@@ -632,11 +640,11 @@ export class ProfitCalculatorComponent implements OnInit {
 
       try {
         const savedCosts: any[] = JSON.parse(localStorage.getItem('etsy_product_costs_v1') || '[]');
-        const existing = savedCosts.find((c: any) => c.listingId === found.listingId || c.listingId === found.listingId.toString());
+        const existing = savedCosts.find((c: any) => String(c.listingId) === String(found.listingId));
         if (existing) {
-          this.materialCostUsd = existing.productCostUsd || existing.costUsd || this.materialCostUsd;
-          this.shippingCostUsd = existing.shippingCostUsd || this.shippingCostUsd;
-          this.packagingCostUsd = existing.packagingCostUsd || this.packagingCostUsd;
+          this.materialCostUsd = Number(existing.materialCostUsd ?? existing.productCostUsd ?? existing.costUsd ?? this.materialCostUsd);
+          this.shippingCostUsd = Number(existing.shippingCostUsd ?? this.shippingCostUsd);
+          this.packagingCostUsd = Number(existing.packagingCostUsd ?? this.packagingCostUsd);
         }
       } catch {}
 
@@ -645,19 +653,23 @@ export class ProfitCalculatorComponent implements OnInit {
   }
 
   saveToCostManager(): void {
-    const listingId = this.selectedListingId || Date.now();
+    const listingId = String(this.selectedListingId || Date.now());
     try {
       const savedCosts: any[] = JSON.parse(localStorage.getItem('etsy_product_costs_v1') || '[]');
-      const idx = savedCosts.findIndex((c: any) => c.listingId === listingId || c.listingId === listingId.toString());
+      const idx = savedCosts.findIndex((c: any) => String(c.listingId) === listingId);
       const itemToSave = {
-        listingId: listingId,
+        listingId,
+        title: this.productName,
         productName: this.productName,
+        sku: `SKU-${listingId.slice(-4)}`,
         salePriceUsd: this.salePriceUsd,
+        materialCostUsd: this.materialCostUsd,
         productCostUsd: this.materialCostUsd,
         shippingCostUsd: this.shippingCostUsd,
         packagingCostUsd: this.packagingCostUsd,
         netProfitUsd: this.netProfitUsd,
         marginPercent: this.marginPercent,
+        lastUpdated: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
@@ -677,7 +689,17 @@ export class ProfitCalculatorComponent implements OnInit {
   }
 
   get usdTryRate(): number {
-    return this.etsyApi.exchangeRate();
+    return this.etsyApi.exchangeRate() || 49.50;
+  }
+
+  get paymentProcessingFeeUsd(): number {
+    return (this.totalRevenueUsd * 0.065) + (3.0 / this.usdTryRate);
+  }
+
+  get vatOnFeesUsd(): number {
+    const txnFee = this.totalRevenueUsd * 0.065;
+    const regFee = this.totalRevenueUsd * 0.011;
+    return (txnFee + this.paymentProcessingFeeUsd + regFee + 0.20) * 0.20;
   }
 
   setCarrierCost(costUsd: number, name: string): void {
@@ -687,19 +709,17 @@ export class ProfitCalculatorComponent implements OnInit {
 
   recalc(): void {
     this.totalRevenueUsd = this.salePriceUsd + this.buyerShippingUsd + this.giftWrapUsd;
-    
-    // Etsy transaction fee 6.5% on total revenue
+
+    // Türkiye Etsy kesintileri: İşlem %6.5 + Ödeme (%6.5 + 3₺) + Düzenleyici %1.1 + Listeleme $0.20 + %20 KDV
     const txnFee = this.totalRevenueUsd * 0.065;
-    // Payment processing fee 3% + $0.25
-    const procFee = (this.totalRevenueUsd * 0.03) + 0.25;
-    // Listing fee $0.20
+    const procFee = this.paymentProcessingFeeUsd;
+    const regFee = this.totalRevenueUsd * 0.011;
     const listingFee = 0.20;
-    // Currency conversion 2.5%
+    const vatFee = (txnFee + procFee + regFee + listingFee) * 0.20;
     const convFee = this.useCurrencyConversion ? (this.totalRevenueUsd * 0.025) : 0;
-    // Offsite ads
     const offsiteFee = this.totalRevenueUsd * (this.offsiteAdsPercent / 100);
 
-    this.totalEtsyFeesUsd = txnFee + procFee + listingFee + convFee + offsiteFee;
+    this.totalEtsyFeesUsd = txnFee + procFee + regFee + listingFee + vatFee + convFee + offsiteFee;
 
     const directCosts = this.materialCostUsd + this.shippingCostUsd + this.packagingCostUsd + this.adCostUsd;
     this.totalExpensesUsd = this.totalEtsyFeesUsd + directCosts;
@@ -707,7 +727,7 @@ export class ProfitCalculatorComponent implements OnInit {
     this.netProfitUsd = Number((this.totalRevenueUsd - this.totalExpensesUsd).toFixed(2));
     this.netProfitTry = Number((this.netProfitUsd * this.usdTryRate).toFixed(2));
 
-    this.marginPercent = this.totalRevenueUsd > 0 
+    this.marginPercent = this.totalRevenueUsd > 0
       ? Number(((this.netProfitUsd / this.totalRevenueUsd) * 100).toFixed(1))
       : 0;
 
@@ -715,13 +735,22 @@ export class ProfitCalculatorComponent implements OnInit {
       ? Number(((this.netProfitUsd / this.totalExpensesUsd) * 100).toFixed(1))
       : 0;
 
-    // Ratios for split bar
-    if (this.totalRevenueUsd > 0) {
-      this.profitRatio = Math.max(0, (this.netProfitUsd / this.totalRevenueUsd) * 100);
-      this.feeRatio = (this.totalEtsyFeesUsd / this.totalRevenueUsd) * 100;
-      this.materialRatio = (this.materialCostUsd / this.totalRevenueUsd) * 100;
-      this.shippingRatio = (this.shippingCostUsd / this.totalRevenueUsd) * 100;
-      this.adRatio = (this.adCostUsd / this.totalRevenueUsd) * 100;
+    // Zararda (%0 kâr) split-bar çubuğunun %100'ü taşmasını engellemek için gider toplamıyla normalize et
+    const barDenom = this.netProfitUsd >= 0
+      ? this.totalRevenueUsd
+      : this.totalExpensesUsd;
+    if (barDenom > 0) {
+      this.profitRatio = this.netProfitUsd > 0 ? (this.netProfitUsd / barDenom) * 100 : 0;
+      this.feeRatio = (this.totalEtsyFeesUsd / barDenom) * 100;
+      this.materialRatio = (this.materialCostUsd / barDenom) * 100;
+      this.shippingRatio = (this.shippingCostUsd / barDenom) * 100;
+      this.adRatio = (this.adCostUsd / barDenom) * 100;
+    } else {
+      this.profitRatio = 0;
+      this.feeRatio = 0;
+      this.materialRatio = 0;
+      this.shippingRatio = 0;
+      this.adRatio = 0;
     }
   }
 }

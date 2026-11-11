@@ -585,8 +585,20 @@ export class ProductCostManagerComponent implements OnInit {
     const savedRaw = localStorage.getItem(STORAGE_KEY);
     if (savedRaw) {
       try {
-        const parsed: ListingProductCost[] = JSON.parse(savedRaw);
-        parsed.forEach(p => savedMap.set(String(p.listingId), p));
+        const parsed: any[] = JSON.parse(savedRaw);
+        parsed.forEach(p => {
+          const normalized: ListingProductCost = {
+            listingId: String(p.listingId),
+            title: p.title || p.productName || `İlan #${p.listingId}`,
+            sku: p.sku || `SKU-${String(p.listingId).slice(-4)}`,
+            salePriceUsd: Number(p.salePriceUsd ?? 0),
+            materialCostUsd: Number(p.materialCostUsd ?? p.productCostUsd ?? p.costUsd ?? 0),
+            packagingCostUsd: Number(p.packagingCostUsd ?? 0),
+            shippingCostUsd: Number(p.shippingCostUsd ?? 0),
+            lastUpdated: p.lastUpdated || p.updatedAt || new Date().toISOString()
+          };
+          savedMap.set(normalized.listingId, normalized);
+        });
       } catch {}
     }
 
@@ -617,13 +629,13 @@ export class ProductCostManagerComponent implements OnInit {
           }
           return;
         }
-        this.fallbackToSavedOrSeed(savedMap);
+        this.loadSavedOnly(savedMap);
       },
       error: () => {
         this.isLoading = false;
-        this.fallbackToSavedOrSeed(savedMap);
+        this.loadSavedOnly(savedMap);
         if (showSyncToast) {
-          this.toastMessage = `⚠️ Canlı mağaza ilanlarına erişilemedi, kayıtlı veriler yüklendi.`;
+          this.toastMessage = `⚠️ Canlı mağaza ilanlarına erişilemedi, yalnızca kayıtlı veriler gösteriliyor.`;
           setTimeout(() => this.toastMessage = '', 4000);
         }
       }
@@ -634,65 +646,9 @@ export class ProductCostManagerComponent implements OnInit {
     this.loadCosts(true);
   }
 
-  private fallbackToSavedOrSeed(savedMap: Map<string, ListingProductCost>): void {
-    if (savedMap.size > 0) {
-      this.items = Array.from(savedMap.values());
-      return;
-    }
-
-    // Default seed listings
-    this.items = [
-      {
-        listingId: '1849204811',
-        title: 'Articulated Crystal Wing Dragon 3D Print Toy',
-        sku: 'DRG-CRY-01',
-        salePriceUsd: 38.50,
-        materialCostUsd: 4.80,
-        packagingCostUsd: 1.20,
-        shippingCostUsd: 9.80,
-        lastUpdated: new Date().toISOString()
-      },
-      {
-        listingId: '1849204812',
-        title: 'Personalized Leather Shoulder Bag Handmade Vintage Satchel',
-        sku: 'BAG-LTH-02',
-        salePriceUsd: 84.00,
-        materialCostUsd: 22.00,
-        packagingCostUsd: 2.50,
-        shippingCostUsd: 12.50,
-        lastUpdated: new Date().toISOString()
-      },
-      {
-        listingId: '1849204813',
-        title: 'Self-Watering Geometric Succulent Planter Nordic Pot',
-        sku: 'PLT-GEO-03',
-        salePriceUsd: 26.00,
-        materialCostUsd: 3.10,
-        packagingCostUsd: 1.00,
-        shippingCostUsd: 9.80,
-        lastUpdated: new Date().toISOString()
-      },
-      {
-        listingId: '1849204814',
-        title: 'Custom Name Dainty Silver Necklace 925 Sterling',
-        sku: 'JWL-SLV-04',
-        salePriceUsd: 42.00,
-        materialCostUsd: 0,
-        packagingCostUsd: 0,
-        shippingCostUsd: 0,
-        lastUpdated: new Date().toISOString()
-      },
-      {
-        listingId: '1849204815',
-        title: 'Steampunk Mechanical Skeleton Gear Desk Clock',
-        sku: 'CLK-STP-05',
-        salePriceUsd: 92.00,
-        materialCostUsd: 15.00,
-        packagingCostUsd: 3.00,
-        shippingCostUsd: 14.50,
-        lastUpdated: new Date().toISOString()
-      }
-    ];
+  private loadSavedOnly(savedMap: Map<string, ListingProductCost>): void {
+    // Sıfır Mock ilkesi: API başarısızsa yalnızca kullanıcının kendi kaydettiği kayıtlar gösterilir, sahte seed ürün üretilmez.
+    this.items = Array.from(savedMap.values());
   }
 
   isItemCostMissing(item: ListingProductCost): boolean {
@@ -722,7 +678,8 @@ export class ProductCostManagerComponent implements OnInit {
   }
 
   calcNetProfit(item: ListingProductCost): number {
-    const etsyFees = (item.salePriceUsd * 0.095) + 0.45; // ~9.5% fees + fixed
+    // TR Etsy kesintileri: işlem %6.5 + ödeme %6.5 + düzenleyici %1.1 + %20 KDV + sabit işlem/ilan payı (~%22.05)
+    const etsyFees = (item.salePriceUsd * 0.2205);
     const totalCosts = (item.materialCostUsd || 0) + (item.packagingCostUsd || 0) + (item.shippingCostUsd || 0) + etsyFees;
     return Number((item.salePriceUsd - totalCosts).toFixed(2));
   }
@@ -739,7 +696,12 @@ export class ProductCostManagerComponent implements OnInit {
 
   saveAll(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.items));
+      const payload = this.items.map(i => ({
+        ...i,
+        productName: i.title,
+        productCostUsd: i.materialCostUsd
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
       this.toastMessage = '✅ Tüm ürün maliyetleri başarıyla kaydedildi!';
       setTimeout(() => this.toastMessage = '', 3500);
     } catch (e) {

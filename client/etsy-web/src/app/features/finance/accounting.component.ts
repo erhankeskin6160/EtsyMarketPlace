@@ -1028,18 +1028,17 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
     const etsyFeeRatio = 0.2205;   // %6.5 işlem + %6.5 ödeme + %1.67 yasal + KDV (~%22.05)
     const offsiteRatio = 0.15;     // %15 Offsite Ads
-    const fixedFeeUsd = 0.28;      // ~14 TL sabit işlem ücreti
 
     const keepStandard = 1 - etsyFeeRatio;
     const keepOffsite = 1 - etsyFeeRatio - offsiteRatio;
 
-    const reqGrossStd = (safeTarget + fixedFeeUsd + safeCost) / keepStandard;
+    const reqGrossStd = (safeTarget + safeCost) / keepStandard;
     const maxSafeStdPct = Number(Math.min(65, Math.max(0, ((safePrice + safeShip - reqGrossStd) / safePrice) * 100)).toFixed(1));
 
-    const reqGrossOff = (safeTarget + fixedFeeUsd + safeCost) / keepOffsite;
+    const reqGrossOff = (safeTarget + safeCost) / keepOffsite;
     const maxSafeOffPct = Number(Math.min(55, Math.max(0, ((safePrice + safeShip - reqGrossOff) / safePrice) * 100)).toFixed(1));
 
-    const breakEvenGrossOff = (fixedFeeUsd + safeCost) / keepOffsite;
+    const breakEvenGrossOff = safeCost / keepOffsite;
     const breakEvenOffPct = Number(Math.min(75, Math.max(0, ((safePrice + safeShip - breakEvenGrossOff) / safePrice) * 100)).toFixed(1));
 
     const discountedSub = Number((safePrice * (1 - activeCoupon / 100)).toFixed(2));
@@ -1113,6 +1112,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const s1Orders = Math.max(1, Math.round(visits * (baseCr / 100)));
     const s1MonthlyUsd = Number((s1Orders * s1UnitProfit).toFixed(2));
 
+    const computeBreakEvenCr = (baseProfitVal: number, scenarioProfitVal: number, fallbackUnprofitable: number): number => {
+      if (scenarioProfitVal <= 0) return fallbackUnprofitable;
+      if (baseProfitVal <= 0) return 0;
+      return Number((baseCr * (baseProfitVal / scenarioProfitVal)).toFixed(2));
+    };
+
     // 2. Akıllı Çapa Fiyat (+%8 Liste) + %15 Sepet/Fav Kuponu
     const s2List = Number((p * 1.08).toFixed(2));
     const s2Disc = Number((s2List * 0.85).toFixed(2));
@@ -1122,7 +1127,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const s2Cr = Number((baseCr * 1.24).toFixed(2));
     const s2Orders = Math.max(1, Math.round(visits * (s2Cr / 100)));
     const s2MonthlyUsd = Number((s2Orders * s2UnitProfit).toFixed(2));
-    const s2BreakEvenCr = s2UnitProfit > 0 ? Number((baseCr * (s1UnitProfit / s2UnitProfit)).toFixed(2)) : 99.9;
+    const s2BreakEvenCr = computeBreakEvenCr(s1UnitProfit, s2UnitProfit, 99.9);
 
     // 3. Ücretsiz Kargo Psikolojisi ($P+$S Ürün + $0 Kargo)
     const s3List = Number((p + s).toFixed(2));
@@ -1132,7 +1137,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const s3Cr = Number((baseCr * 1.28).toFixed(2));
     const s3Orders = Math.max(1, Math.round(visits * (s3Cr / 100)));
     const s3MonthlyUsd = Number((s3Orders * s3UnitProfit).toFixed(2));
-    const s3BreakEvenCr = s3UnitProfit > 0 ? Number((baseCr * (s1UnitProfit / s3UnitProfit)).toFixed(2)) : baseCr;
+    const s3BreakEvenCr = computeBreakEvenCr(s1UnitProfit, s3UnitProfit, baseCr);
 
     // 4. Seçili Aktif Kupon Senaryosu (Örn: %30 DSFJY25)
     const s4Disc = Number((p * (1 - activeCoupon / 100)).toFixed(2));
@@ -1142,7 +1147,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const s4Cr = Number((baseCr * (1 + Math.min(0.55, activeCoupon * 0.0125))).toFixed(2));
     const s4Orders = Math.max(1, Math.round(visits * (s4Cr / 100)));
     const s4MonthlyUsd = Number((s4Orders * s4UnitProfit).toFixed(2));
-    const s4BreakEvenCr = s4UnitProfit > 0 ? Number((baseCr * (s1UnitProfit / s4UnitProfit)).toFixed(2)) : 99.9;
+    const s4BreakEvenCr = computeBreakEvenCr(s1UnitProfit, s4UnitProfit, 99.9);
 
     return [
       {
@@ -1506,7 +1511,6 @@ export class AccountingComponent implements OnInit, OnDestroy {
       { code: '90d', title: 'Gelecek 90 Gün (Çeyrek / 3 Ay)', days: 90, mult: 3.24, growth: 21.8 },
       { code: '180d', title: 'Gelecek 180 Gün (Yarıyıl / 6 Ay)', days: 180, mult: 6.85, growth: 34.0 }
     ];
-    const marginRatio = Math.max(0.15, Math.min(0.75, expectedMarginPct / 100));
     const feeRatio = this.grossSalesUsd > 0 ? Math.min(0.40, Math.max(0.14, (this.etsyFeesUsd + this.innerAdsUsd + this.offsiteAdsUsd) / this.grossSalesUsd)) : 0.22;
     const costRatio = this.grossSalesUsd > 0 && this.productCostsUsd > 0 ? Math.min(0.55, Math.max(0.15, this.productCostsUsd / this.grossSalesUsd)) : 0.32;
 
@@ -1520,8 +1524,9 @@ export class AccountingComponent implements OnInit, OnDestroy {
       const grossTry = Number((grossUsd * rate).toFixed(2));
       const feesAdsUsd = Number((grossUsd * feeRatio).toFixed(2));
       const costsUsd = Number((grossUsd * costRatio).toFixed(2));
-      const netProfitUsd = Number((grossUsd * marginRatio).toFixed(2));
+      const netProfitUsd = Number((grossUsd - feesAdsUsd - costsUsd).toFixed(2));
       const netProfitTry = Number((netProfitUsd * rate).toFixed(2));
+      const rowMarginPct = grossUsd > 0 ? Number(((netProfitUsd / grossUsd) * 100).toFixed(1)) : 0;
       const orders = estimatedOrders > 0 ? Math.max(1, Math.round(estimatedOrders * s.mult)) : 0;
       const netEtsyPayoutTry = Number(((grossUsd - feesAdsUsd) * rate).toFixed(2));
       const reserveHoldRatio = s.days <= 30 ? 0.25 : (s.days <= 60 ? 0.10 : 0.0);
@@ -1538,7 +1543,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         expectedCostsUsd: costsUsd,
         expectedNetProfitUsd: netProfitUsd,
         expectedNetProfitTry: netProfitTry,
-        expectedMarginPct: Number((marginRatio * 100).toFixed(1)),
+        expectedMarginPct: rowMarginPct,
         estimatedOrders: orders,
         growthRatePct: grossUsd > 0 ? s.growth : 0,
         estimatedBankPayoutTry: estBankPayoutTry,
@@ -1551,18 +1556,18 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
   }
 
-  private buildLocalScenarios(expectedGrossUsd: number, expectedMarginPct: number, estimatedOrders: number, rate: number): AiForecastScenarioItemDto[] {
-    const marginRatio = Math.max(0.15, Math.min(0.75, expectedMarginPct / 100));
+  private buildLocalScenarios(expectedGrossUsd: number, expectedNetProfitUsd: number, expectedMarginPct: number, estimatedOrders: number, rate: number): AiForecastScenarioItemDto[] {
+    const marginRatio = Math.max(-0.50, Math.min(0.85, expectedMarginPct / 100));
     const pessGrossUsd = Number((expectedGrossUsd * 0.82).toFixed(2));
-    const pessMargin = Math.max(10, Number(((marginRatio - 0.06) * 100).toFixed(1)));
+    const pessMargin = expectedGrossUsd > 0 ? Number(((marginRatio - 0.06) * 100).toFixed(1)) : 0;
     const pessProfitUsd = Number((pessGrossUsd * (pessMargin / 100)).toFixed(2));
 
     const baseGrossUsd = expectedGrossUsd;
-    const baseMargin = Number((marginRatio * 100).toFixed(1));
-    const baseProfitUsd = Number((baseGrossUsd * marginRatio).toFixed(2));
+    const baseMargin = expectedGrossUsd > 0 ? Number(expectedMarginPct.toFixed(1)) : 0;
+    const baseProfitUsd = expectedGrossUsd > 0 ? Number(expectedNetProfitUsd.toFixed(2)) : 0;
 
     const optGrossUsd = Number((expectedGrossUsd * 1.28).toFixed(2));
-    const optMargin = Math.min(70, Number(((marginRatio + 0.05) * 100).toFixed(1)));
+    const optMargin = expectedGrossUsd > 0 ? Math.min(75, Number(((marginRatio + 0.05) * 100).toFixed(1))) : 0;
     const optProfitUsd = Number((optGrossUsd * (optMargin / 100)).toFixed(2));
 
     return [
@@ -1655,7 +1660,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const rate = this.liveRate || 49.50;
     const start = this.parseTurkishDate(this.startDate, false);
     const end = this.parseTurkishDate(this.endDate, true);
-    const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    // start (TR 00:00 = UTC-3) ile end (UTC 23:59) arasındaki ~3 saatlik kaymayı telafi ederek doğru takvim gün sayısı al
+    const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime() - (3 * 3600000)) / (1000 * 60 * 60 * 24)));
 
     let monthlyBaseGrossUsd = 0;
     let monthlyBaseProfitUsd = 0;
@@ -1681,12 +1687,21 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const minGrossUsd = Number((expectedGrossUsd * 0.85).toFixed(2));
     const maxGrossUsd = Number((expectedGrossUsd * 1.18).toFixed(2));
 
-    const realizedMargin = this.grossSalesUsd > 0
-      ? Math.max(-0.5, Math.min(0.85, this.realNetProfitUsd / this.grossSalesUsd))
-      : (monthlyBaseGrossUsd > 0 ? Math.max(0.15, Math.min(0.65, monthlyBaseProfitUsd / monthlyBaseGrossUsd)) : 0.35);
+    const feeRatio = this.grossSalesUsd > 0
+      ? Math.min(0.40, Math.max(0.14, (this.etsyFeesUsd + this.innerAdsUsd + this.offsiteAdsUsd) / this.grossSalesUsd))
+      : 0.22;
+    const costRatio = this.grossSalesUsd > 0 && this.productCostsUsd > 0
+      ? Math.min(0.55, Math.max(0.15, this.productCostsUsd / this.grossSalesUsd))
+      : 0.32;
 
-    const expectedMarginPct = expectedGrossUsd > 0 ? Number(Math.max(15, realizedMargin * 100).toFixed(1)) : 0;
-    const expectedNetProfitUsd = Number((expectedGrossUsd * (expectedMarginPct / 100)).toFixed(2));
+    const baseFeesAdsUsd = Number((expectedGrossUsd * feeRatio).toFixed(2));
+    const baseCostsUsd = Number((expectedGrossUsd * costRatio).toFixed(2));
+    const expectedNetProfitUsd = expectedGrossUsd > 0
+      ? Number((expectedGrossUsd - baseFeesAdsUsd - baseCostsUsd).toFixed(2))
+      : 0;
+    const expectedMarginPct = expectedGrossUsd > 0
+      ? Number(((expectedNetProfitUsd / expectedGrossUsd) * 100).toFixed(1))
+      : 0;
     const expectedNetProfitTry = Number((expectedNetProfitUsd * rate).toFixed(2));
     const estimatedOrders = monthlyBaseOrders > 0 ? Math.max(1, Math.round(monthlyBaseOrders * growthMultiplier)) : 0;
     const avgOrderValueUsd = monthlyBaseOrders > 0 && monthlyBaseGrossUsd > 0
@@ -1802,7 +1817,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       refundAndCostAlertAnalysis: refundCostAnalysis,
       actionPlan: actions,
       horizonProjections: this.buildLocalHorizons(expectedGrossUsd, expectedMarginPct, estimatedOrders, rate, localFunnel),
-      scenarios: this.buildLocalScenarios(expectedGrossUsd, expectedMarginPct, estimatedOrders, rate),
+      scenarios: this.buildLocalScenarios(expectedGrossUsd, expectedNetProfitUsd, expectedMarginPct, estimatedOrders, rate),
       productForecasts: this.buildLocalProductForecasts(periodDays),
       trafficFunnel: localFunnel
     };
@@ -1814,7 +1829,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
     const start = this.parseTurkishDate(this.startDate, false);
     const end = this.parseTurkishDate(this.endDate, true);
-    const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    // start (TR 00:00 = UTC-3) ile end (UTC 23:59) arasındaki ~3 saatlik kaymayı telafi ederek doğru takvim gün sayısı al
+    const periodDays = Math.max(1, Math.round((end.getTime() - start.getTime() - (3 * 3600000)) / (1000 * 60 * 60 * 24)));
     const localFunnel = this.buildLocalTrafficFunnel(periodDays, this.aiForecast?.estimatedOrders || 10);
     const topProd = this.getTopPerformingProduct();
     const missingIds = this.getMissingCostOrderIds();
@@ -1857,7 +1873,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
         if (res) {
           const mergedFunnel = res.trafficFunnel && res.trafficFunnel.totalViews > 0 ? res.trafficFunnel : localFunnel;
           const localHorizons = this.buildLocalHorizons(res.expectedGrossUsd, res.expectedMarginPct, res.estimatedOrders, res.exchangeRateUsed || this.liveRate, mergedFunnel);
-          const localScenarios = this.buildLocalScenarios(res.expectedGrossUsd, res.expectedMarginPct, res.estimatedOrders, res.exchangeRateUsed || this.liveRate);
+          const localScenarios = this.buildLocalScenarios(res.expectedGrossUsd, res.expectedNetProfitUsd, res.expectedMarginPct, res.estimatedOrders, res.exchangeRateUsed || this.liveRate);
           const localProds = this.buildLocalProductForecasts(periodDays);
 
           this.aiForecast = {

@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { EtsyApiService } from '../../core/services/etsy-api.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -10,6 +11,17 @@ interface FinancialInsight {
   description: string;
   impactUsd: number;
   actionText: string;
+}
+
+interface PayoutForecastRow {
+  periodLabel: string;
+  estimatedOrders: number;
+  grossUsd: number;
+  feesAndAdsUsd: number;
+  costsUsd: number;
+  netPayoutTry: number;
+  netProfitUsd: number;
+  marginPct: number;
 }
 
 @Component({
@@ -39,7 +51,7 @@ interface FinancialInsight {
         <div class="kpi-card">
           <span class="kpi-label">30 GÜNLÜK TAHMİNİ CİRO</span>
           <span class="kpi-val text-green">\${{ projectedRevenue | number:'1.2-2' }}</span>
-          <span class="kpi-sub">Geçen Aya Göre: +%14.2</span>
+          <span class="kpi-sub">{{ growthSubtitle }}</span>
         </div>
         <div class="kpi-card">
           <span class="kpi-label">BEKLENEN NET KÂR</span>
@@ -52,9 +64,9 @@ interface FinancialInsight {
           <span class="kpi-sub">İşlem, İlan & Ödeme Ücreti</span>
         </div>
         <div class="kpi-card">
-          <span class="kpi-label">REKLAM GETİRİSİ (ROAS)</span>
+          <span class="kpi-label">REKLAM GETİRİSİ (MER / ROAS)</span>
           <span class="kpi-val text-purple">{{ roasScore }}x</span>
-          <span class="kpi-sub">Her $1 Reklama \${{ roasScore }} Satış</span>
+          <span class="kpi-sub">{{ roasScore > 0 ? ('Her $1 Reklama $' + roasScore + ' Mağaza Cirosu') : 'Dönem içi reklam harcaması yok' }}</span>
         </div>
       </div>
 
@@ -108,56 +120,34 @@ interface FinancialInsight {
 
       <!-- CASH FLOW PROJECTION TABLE -->
       <div class="projection-card glass-card">
-        <h2 class="section-title">Gelecek 60 Günlük Tahmini Banka Ödeme Takvimi (Payouts)</h2>
+        <h2 class="section-title">Çok Ufuklu Tahmini Ciro & Banka Ödeme Takvimi (Canlı Defter Projeksiyonu)</h2>
         <div class="table-responsive">
           <table class="data-table">
             <thead>
               <tr>
                 <th>Dönem</th>
                 <th>Tahmini Sipariş</th>
-                <th>Brüt Hasılat</th>
-                <th>Etsy Kesintisi</th>
-                <th>Kargo Masrafı</th>
-                <th>Net Hesaba Giriş</th>
-                <th>Güven Skoru</th>
+                <th>Beklenen Brüt Ciro</th>
+                <th>Etsy Kesinti & Reklam</th>
+                <th>Üretim & Kargo</th>
+                <th>Tahmini Net Kâr</th>
+                <th>Tahmini Banka Ödemesi</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td><b>Önümüzdeki 15 Gün</b></td>
-                <td>28 Adet</td>
-                <td>$980.00</td>
-                <td class="text-orange">-$147.00</td>
-                <td class="text-orange">-$224.00</td>
-                <td class="text-green"><b>$609.00</b></td>
-                <td><span class="conf-pill high">%94 Güven</span></td>
+              <tr *ngFor="let row of payoutForecastRows">
+                <td><b>{{ row.periodLabel }}</b></td>
+                <td>{{ row.estimatedOrders }} Adet</td>
+                <td>\${{ row.grossUsd | number:'1.2-2' }}</td>
+                <td class="text-orange">-\${{ row.feesAndAdsUsd | number:'1.2-2' }}</td>
+                <td class="text-orange">-\${{ row.costsUsd | number:'1.2-2' }}</td>
+                <td [class.text-green]="row.netProfitUsd >= 0" [class.text-red]="row.netProfitUsd < 0"><b>\${{ row.netProfitUsd | number:'1.2-2' }}</b></td>
+                <td><span class="conf-pill high">₺{{ row.netPayoutTry | number:'1.2-2' }} (%{{ row.marginPct }})</span></td>
               </tr>
-              <tr>
-                <td><b>16 - 30. Günler</b></td>
-                <td>34 Adet</td>
-                <td>$1,190.00</td>
-                <td class="text-orange">-$178.50</td>
-                <td class="text-orange">-$272.00</td>
-                <td class="text-green"><b>$739.50</b></td>
-                <td><span class="conf-pill high">%88 Güven</span></td>
-              </tr>
-              <tr>
-                <td><b>31 - 45. Günler</b></td>
-                <td>38 Adet</td>
-                <td>$1,330.00</td>
-                <td class="text-orange">-$199.50</td>
-                <td class="text-orange">-$304.00</td>
-                <td class="text-green"><b>$826.50</b></td>
-                <td><span class="conf-pill mid">%82 Güven</span></td>
-              </tr>
-              <tr>
-                <td><b>46 - 60. Günler</b></td>
-                <td>42 Adet</td>
-                <td>$1,470.00</td>
-                <td class="text-orange">-$220.50</td>
-                <td class="text-orange">-$336.00</td>
-                <td class="text-green"><b>$913.50</b></td>
-                <td><span class="conf-pill mid">%78 Güven</span></td>
+              <tr *ngIf="payoutForecastRows.length === 0">
+                <td colspan="7" style="text-align: center; color: #94a3b8; padding: 20px;">
+                  Canlı defter projeksiyonu henüz yüklenmedi veya seçili dönem için yeterli sipariş verisi bulunmuyor.
+                </td>
               </tr>
             </tbody>
           </table>
@@ -325,6 +315,7 @@ interface FinancialInsight {
 })
 export class FinancialAiAnalysisComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private router = inject(Router);
   etsyApi = inject(EtsyApiService);
 
   // Initialized to 0 - Zero fake data policy!
@@ -333,9 +324,11 @@ export class FinancialAiAnalysisComponent implements OnInit {
   netMarginPercent = 0;
   feePercentage = 0;
   roasScore = 0;
+  growthSubtitle = 'Canlı defter verisi bekleniyor';
 
   toastMessage = '';
   insights: FinancialInsight[] = [];
+  payoutForecastRows: PayoutForecastRow[] = [];
 
   ngOnInit(): void {
     this.loadFinancials();
@@ -345,20 +338,21 @@ export class FinancialAiAnalysisComponent implements OnInit {
     this.etsyApi.getFinancialPerformance('this_month').pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (perf: any) => {
         if (perf) {
-          const gross = Number(perf.grossSalesUsd ?? perf['grossSalesUsd'] ?? perf.grossSales ?? 0);
-          const net = Number(perf.netProfitUsd ?? perf['netProfitUsd'] ?? perf.netProfit ?? 0);
-          const margin = Number(perf.netMarginPercent ?? perf['netMarginPercent'] ?? perf.netProfitMargin ?? 0);
+          const gross = Number(perf.grossSalesUsd ?? perf.grossSales ?? 0);
+          const net = Number(perf.netProfitUsd ?? perf.netProfit ?? 0);
+          const margin = Number(perf.profitMarginPercent ?? perf.netMarginPercent ?? perf.netProfitMargin ?? 0);
           const fees = Number(perf.platformFees ?? 0);
           const ads = Number(perf.internalAdsCost ?? 0) + Number(perf.externalAdsCost ?? 0);
+          const rate = Number(perf.exchangeRateUsed ?? this.etsyApi.exchangeRate() ?? 49.5);
 
           if (gross > 0) {
-            this.projectedRevenue = gross * 1.15;
-            this.projectedNetProfit = net * 1.15;
+            this.projectedRevenue = Number((gross * 1.12).toFixed(2));
+            this.projectedNetProfit = Number((net * 1.12).toFixed(2));
             this.netMarginPercent = Number(margin.toFixed(1));
             this.feePercentage = Number(((fees / gross) * 100).toFixed(1));
             this.roasScore = ads > 0 ? Number((gross / ads).toFixed(1)) : 0;
+            this.growthSubtitle = `Baz Brüt Ciro: $${gross.toFixed(2)} (+%12 projeksiyon)`;
 
-            // Generate real data-driven insights based on shop's actual numbers
             const realInsights: FinancialInsight[] = [];
             if (this.feePercentage > 15) {
               realInsights.push({
@@ -369,26 +363,75 @@ export class FinancialAiAnalysisComponent implements OnInit {
                 actionText: 'Fiyatlandırma Stratejisini İncele'
               });
             }
-            if (this.netMarginPercent > 50) {
+            if (this.netMarginPercent > 35) {
               realInsights.push({
                 type: 'success',
                 title: 'Sağlıklı Kâr Marjı',
-                description: `Net kâr marjınız %${this.netMarginPercent} seviyesinde oldukça güçlü. Bu marj reklam hacmini artırarak ölçeklenmek için alan sağlıyor.`,
-                impactUsd: Math.round(net * 0.1),
+                description: `Net kâr marjınız %${this.netMarginPercent} seviyesinde. Bu marj reklam hacmini artırarak ölçeklenmek için alan sağlıyor.`,
+                impactUsd: Math.max(0, Math.round(net * 0.1)),
                 actionText: 'Büyüme Fırsatlarını Gör'
+              });
+            } else if (net < 0) {
+              realInsights.push({
+                type: 'warning',
+                title: 'Dönem Net Zarar Uyarısı',
+                description: `Bu dönem net sonucu -$${Math.abs(net).toFixed(2)} seviyesindedir. İade, reklam ve sipariş maliyetlerini muhasebe panelinden inceleyin.`,
+                impactUsd: Math.round(net),
+                actionText: 'Muhasebe Paneline Git'
               });
             }
             if (this.roasScore > 0) {
               realInsights.push({
                 type: 'opportunity',
-                title: `Reklam Verimliliği (${this.roasScore}x ROAS)`,
-                description: `Harcanan her 1$ reklam maliyeti yaklaşık ${this.roasScore}$ ciro oluşturuyor.`,
+                title: `Reklam Verimliliği (${this.roasScore}x MER)`,
+                description: `Harcanan her 1$ reklam maliyeti karşılığında mağazada ${this.roasScore}$ toplam ciro oluştu.`,
                 impactUsd: Math.round(gross * 0.12),
                 actionText: 'Reklam Bütçesini Optimize Et'
               });
             }
             this.insights = realInsights;
+          } else {
+            this.projectedRevenue = 0;
+            this.projectedNetProfit = Number(net.toFixed(2));
+            this.netMarginPercent = 0;
+            this.feePercentage = 0;
+            this.roasScore = 0;
+            this.growthSubtitle = 'Bu ay henüz tamamlanmış satış yok';
           }
+
+          const end = new Date();
+          const start = new Date();
+          start.setDate(end.getDate() - 30);
+          this.etsyApi.generateAiFinancialForecast({
+            shopId: this.etsyApi.activeShopId(),
+            startDate: start.toISOString(),
+            endDate: end.toISOString(),
+            provider: 'Offline',
+            exchangeRate: rate,
+            currentGrossSalesUsd: gross,
+            currentEtsyFeesUsd: fees,
+            currentInnerAdsUsd: Number(perf.internalAdsCost ?? 0),
+            currentOffsiteAdsUsd: Number(perf.externalAdsCost ?? 0),
+            currentRefundsUsd: Number(perf.refunds ?? 0),
+            currentProductCostsUsd: Number((perf.productCosts ?? 0) + (perf.shippingCosts ?? 0)),
+            currentRealNetProfitUsd: net,
+            currentOrderCount: Number(perf.receiptCount ?? 0)
+          }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+            next: (forecast) => {
+              if (forecast?.horizonProjections?.length) {
+                this.payoutForecastRows = forecast.horizonProjections.map(h => ({
+                  periodLabel: h.horizonTitle,
+                  estimatedOrders: h.estimatedOrders,
+                  grossUsd: h.expectedGrossUsd,
+                  feesAndAdsUsd: h.expectedFeesAndAdsUsd,
+                  costsUsd: h.expectedCostsUsd,
+                  netPayoutTry: h.estimatedBankPayoutTry,
+                  netProfitUsd: h.expectedNetProfitUsd,
+                  marginPct: h.expectedMarginPct
+                }));
+              }
+            }
+          });
         }
       }
     });
@@ -403,25 +446,24 @@ export class FinancialAiAnalysisComponent implements OnInit {
             type: idx === 0 ? 'warning' : (idx === 1 ? 'opportunity' : 'success'),
             title: rec.title || rec.category || 'Finansal Tavsiye',
             description: rec.description || rec.message || 'Kâr marjını korumak için önerilen aksiyon.',
-            impactUsd: rec.potentialGainUsd || Math.round(this.projectedNetProfit * 0.1) || 15,
-            actionText: rec.actionTitle || 'Öneriyi Uygula'
+            impactUsd: Number(rec.potentialGainUsd ?? 0),
+            actionText: rec.actionTitle || 'Detayları Gör'
           }));
-          this.toastMessage = '⚡ Canlı VDS Finansal AI analizi başarıyla tamamlandı ve öneriler güncellendi!';
+          this.toastMessage = '⚡ Canlı VDS Finansal AI analizi tamamlandı ve öneriler güncellendi!';
           setTimeout(() => this.toastMessage = '', 4000);
         } else {
-          this.toastMessage = '⚡ Finansal yapay zeka denetimi tamamlandı: Mevcut finansal durum sağlıklı!';
+          this.toastMessage = '⚡ Finansal denetim tamamlandı.';
           setTimeout(() => this.toastMessage = '', 4000);
         }
       },
       error: () => {
-        this.toastMessage = '⚡ Finansal yapay zeka denetimi tamamlandı (Kural motoru devrede).';
+        this.toastMessage = '⚠️ VDS finansal analiz servisine şu anda ulaşılamıyor.';
         setTimeout(() => this.toastMessage = '', 4000);
       }
     });
   }
 
-  applyRecommendation(item: FinancialInsight): void {
-    this.toastMessage = `✓ "${item.title}" önerisi başarıyla uygulandı!`;
-    setTimeout(() => this.toastMessage = '', 4000);
+  applyRecommendation(_item: FinancialInsight): void {
+    this.router.navigate(['/finance/accounting']);
   }
 }

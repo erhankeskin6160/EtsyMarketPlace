@@ -67,4 +67,38 @@ public sealed class EtsyCroElasticityEngineTests
         Assert.False(string.IsNullOrWhiteSpace(result.UpsellBundleSuggestion));
         Assert.True(result.MaxSafeCouponPct > 0m);
     }
+
+    [Fact]
+    public void CalculateCouponGuardrail_BoundaryAndNegativeProfitBreakEvenCvr_AreConsistent()
+    {
+        // C_max sınırında canlı hesaplanan Offsite kârı hedef marj ile tutarlı olmalıdır ($0.28 çift düşüm/eksik yok)
+        var first = EtsyCroElasticityEngine.CalculateCouponGuardrail(
+            itemPriceUsd: 45.00m,
+            shippingChargedUsd: 10.00m,
+            unitTotalCostUsd: 18.00m,
+            targetMinProfitUsd: 5.00m,
+            activeCouponPct: 10.0m,
+            exchangeRate: 50.00m);
+
+        var atBoundary = EtsyCroElasticityEngine.CalculateCouponGuardrail(
+            itemPriceUsd: 45.00m,
+            shippingChargedUsd: 10.00m,
+            unitTotalCostUsd: 18.00m,
+            targetMinProfitUsd: 5.00m,
+            activeCouponPct: first.MaxSafeCouponWithOffsiteAdsPct,
+            exchangeRate: 50.00m);
+
+        // %0.1 yuvarlama toleransı ($0.05) içinde hedef $5.00'ı tutmalı
+        Assert.True(atBoundary.NetProfitWithOffsiteAdsUsd >= 4.90m);
+
+        // Baz birim kâr negatif olduğunda bile hiçbir senaryoda negatif BreakEvenConversionRatePct oluşmamalı
+        var scenarios = EtsyCroElasticityEngine.BuildPriceShippingElasticityMatrix(
+            baseItemPriceUsd: 20.00m,
+            baseShippingChargedUsd: 5.00m,
+            unitTotalCostUsd: 24.00m,
+            projectedMonthlyVisits: 200,
+            baseConversionRatePct: 2.0m);
+
+        Assert.All(scenarios, s => Assert.True(s.BreakEvenConversionRatePct >= 0m));
+    }
 }
