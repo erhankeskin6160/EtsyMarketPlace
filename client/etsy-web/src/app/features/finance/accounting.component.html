@@ -1393,23 +1393,23 @@
             <div class="calculated-preview-box">
               <div class="calc-row">
                 <span>Toplam Sipariş Maliyeti:</span>
-                <strong>&#36;{{ (costModalProduction + costModalShipping + costModalPackaging).toFixed(2) }}</strong>
+                <strong>&#36;{{ getCostModalPreviewTotalCostUsd().toFixed(2) }}</strong>
               </div>
               <div class="calc-row highlight">
                 <span>Hesaplanan Net Kâr ($):</span>
-                <strong class="text-success">&#36;{{ (selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)).toFixed(2) }}</strong>
+                <strong class="text-success">&#36;{{ getCostModalPreviewNetUsd().toFixed(2) }}</strong>
               </div>
               <div class="calc-row highlight">
                 <span>Hesaplanan Net Kâr (₺):</span>
-                <strong class="text-emerald">₺{{ ((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)).toFixed(2) }}</strong>
+                <strong class="text-emerald">₺{{ formatNumber(getCostModalPreviewNetTry()) }}</strong>
               </div>
               <div class="calc-row reserve-calc-row">
                 <span>🔒 Rezerve Blokesi (%{{ reserveSnapshot.reservePercent }} - {{ reserveSnapshot.reserveHoldDays }} Gün):</span>
-                <strong class="text-warning">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * (reserveSnapshot.reservePercent / 100)).toFixed(2) }}</strong>
+                <strong class="text-warning">₺{{ formatNumber(getCostModalPreviewNetTry() * (reserveSnapshot.reservePercent / 100)) }}</strong>
               </div>
               <div class="calc-row reserve-calc-row">
                 <span>🔓 Kullanılabilir Bakiye (%{{ 100 - reserveSnapshot.reservePercent }}):</span>
-                <strong class="text-cyan">₺{{ (((selectedOrder.grandTotalUsd - selectedOrder.etsyFeesUsd - selectedOrder.offsiteAdFeeUsd - (costModalProduction + costModalShipping + costModalPackaging)) * (selectedOrder.effectiveExchangeRate || selectedOrder.exchangeRate)) * ((100 - reserveSnapshot.reservePercent) / 100)).toFixed(2) }}</strong>
+                <strong class="text-cyan">₺{{ formatNumber(getCostModalPreviewNetTry() * ((100 - reserveSnapshot.reservePercent) / 100)) }}</strong>
               </div>
             </div>
           </div>
@@ -1740,7 +1740,7 @@
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Bilgi: Etsy, Türkiye merkezli mağazalarda tüm komisyonlar üzerinden %20 yasal KDV ve %1.25 Düzenleyici İşletme Ücreti keser. ]
+              💡 [ Bilgi: Etsy, Türkiye merkezli mağazalarda tüm komisyonlar üzerinden %20 yasal KDV ve %1.1-%1.25 Düzenleyici İşletme Ücreti keser. İç ve Dış Reklam giderleri kendi özel kartlarında ayrı izlenir. ]
             </div>
           </div>
           <div class="modal-footer">
@@ -1767,14 +1767,14 @@
                 <span class="box-sub">-${{ formatNumber(innerAdsUsd) }} USD</span>
               </div>
               <div class="drilldown-summary-box">
-                <span class="box-lbl">Reklam Kaynaklı Gelir</span>
-                <span class="box-val text-emerald">₺8.918,87</span>
-                <span class="box-sub">$183,81 USD (2 Sipariş)</span>
+                <span class="box-lbl">Dönem Mağaza Brüt Satışı</span>
+                <span class="box-val text-emerald">₺{{ formatNumber(grossSalesTry) }}</span>
+                <span class="box-sub">${{ formatNumber(grossSalesUsd) }} USD ({{ completedOrderCount }} Sipariş)</span>
               </div>
               <div class="drilldown-summary-box highlight-emerald">
-                <span class="box-lbl">Genel Reklam ROAS</span>
-                <span class="box-val text-emerald">22,3x</span>
-                <span class="box-sub">Ortalama Tıklama Başı: $0.12</span>
+                <span class="box-lbl">Mağaza Geneli Verim (MER)</span>
+                <span class="box-val text-emerald">{{ innerAdsStoreMer }}</span>
+                <span class="box-sub">Ciro İçi Pay: %{{ innerAdsShareOfGrossPct }}</span>
               </div>
             </div>
 
@@ -1782,31 +1782,29 @@
               <table class="drilldown-table">
                 <thead>
                   <tr>
-                    <th>Tarih</th>
-                    <th>Gösterim</th>
-                    <th>Tıklama</th>
+                    <th>Dönem</th>
                     <th>Harcama ($)</th>
                     <th>Harcama (₺)</th>
-                    <th>Reklam Geliri ($)</th>
-                    <th>ROAS</th>
+                    <th>Mağaza Brüt Ciro ($)</th>
+                    <th>Ciro İçi Pay (%)</th>
+                    <th>Genel MER</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr *ngFor="let ad of innerAdsRecords">
                     <td class="date-cell">{{ ad.date }}</td>
-                    <td>{{ ad.impressions }}</td>
-                    <td>{{ ad.clicks }}</td>
                     <td class="amount-cell text-danger">{{ '-$' + ad.spendUsd.toFixed(2) }}</td>
                     <td class="amount-cell text-danger">-₺{{ formatNumber(ad.spendTry) }}</td>
-                    <td class="amount-cell text-emerald">{{ '$' + ad.salesUsd.toFixed(2) }}</td>
-                    <td><strong [class.text-emerald]="ad.roas !== '0.0x'">{{ ad.roas }}</strong></td>
+                    <td class="amount-cell text-emerald">{{ '$' + ad.storeGrossUsd.toFixed(2) }}</td>
+                    <td>{{ ad.acosPct }}</td>
+                    <td><strong [class.text-emerald]="ad.mer !== '0.0x'">{{ ad.mer }}</strong></td>
                   </tr>
                 </tbody>
               </table>
             </div>
 
             <div class="drilldown-footnote">
-              💡 [ Performans Analizi: İç reklamlar harcanan her 1₺ karşılığında mağazaya 22,3₺ ciro kazandırmıştır. ]
+              💡 [ Defter Verisi Notu: Etsy Ödeme Defteri yalnızca net Etsy Ads tıklama harcamasını (-₺{{ formatNumber(innerAdsTry) }}) raporlar; gösterim/tıklama bazlı atıf bulunmadığından yukarıda dönem mağaza brüt cirosuna göre genel verim (MER: {{ innerAdsStoreMer }}) gösterilmektedir. ]
             </div>
           </div>
           <div class="modal-footer">

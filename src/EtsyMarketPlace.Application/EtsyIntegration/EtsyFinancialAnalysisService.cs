@@ -449,22 +449,24 @@ public sealed class EtsyFinancialAnalysisService(
         // Favori ve Sepete Ekleme yoğunluğu yüksekse büyüme çarpanını organik olarak güçlendir
         var engagementMomentumBonus = trafficFunnel.FavoriteToViewRatePct >= 6.0m ? 0.04m : (trafficFunnel.FavoriteToViewRatePct >= 3.5m ? 0.02m : 0.0m);
         var effectiveMonthlyGrossUsd = baselineMonthlyGrossUsd > 0m ? baselineMonthlyGrossUsd : grossUsd;
-        var realizedMarginRatio = grossUsd > 0m
-            ? Math.Clamp(realNetProfitUsd / grossUsd, -0.50m, 0.85m)
-            : (baselineMonthlyGrossUsd > 0m
-                ? Math.Clamp(baselineMonthlyProfitUsd / baselineMonthlyGrossUsd, 0.15m, 0.65m)
-                : 0.35m);
+
+        var feeRatio = grossUsd > 0m ? Math.Clamp((feesUsd + innerAdsUsd + offsiteAdsUsd) / grossUsd, 0.14m, 0.40m) : 0.22m;
+        var costRatio = grossUsd > 0m && costsUsd > 0m ? Math.Clamp(costsUsd / grossUsd, 0.15m, 0.55m) : 0.32m;
 
         var growthMultiplier = effectiveMonthlyGrossUsd > 0m ? (1.12m + engagementMomentumBonus) : 1.0m;
         var expectedGrossUsd = Math.Round(effectiveMonthlyGrossUsd * growthMultiplier, 2);
         var minGrossUsd = Math.Round(expectedGrossUsd * 0.85m, 2);
         var maxGrossUsd = Math.Round(expectedGrossUsd * 1.18m, 2);
 
-        var expectedMarginPct = effectiveMonthlyGrossUsd > 0m
-            ? Math.Round(Math.Max(15.0m, realizedMarginRatio * 100m), 1)
+        var baseFeesAdsUsd = Math.Round(expectedGrossUsd * feeRatio, 2);
+        var baseCostsUsd = Math.Round(expectedGrossUsd * costRatio, 2);
+        var expectedNetProfitUsd = effectiveMonthlyGrossUsd > 0m
+            ? Math.Round(expectedGrossUsd - baseFeesAdsUsd - baseCostsUsd, 2)
+            : 0.0m;
+        var expectedMarginPct = expectedGrossUsd > 0m
+            ? Math.Round(expectedNetProfitUsd / expectedGrossUsd * 100m, 1)
             : 0.0m;
 
-        var expectedNetProfitUsd = Math.Round(expectedGrossUsd * (expectedMarginPct / 100m), 2);
         var expectedGrossTry = Math.Round(expectedGrossUsd * exchangeRate, 2);
         var expectedNetProfitTry = Math.Round(expectedNetProfitUsd * exchangeRate, 2);
 
@@ -492,9 +494,6 @@ public sealed class EtsyFinancialAnalysisService(
             exchangeRate);
 
         // 4.2. Çok Ufuklu İleri Projeksiyon (30 Gün, 60 Gün, 90 Gün, 180 Gün) ve 3 Senaryo Matrisi
-        var feeRatio = grossUsd > 0m ? Math.Clamp((feesUsd + innerAdsUsd + offsiteAdsUsd) / grossUsd, 0.14m, 0.40m) : 0.22m;
-        var costRatio = grossUsd > 0m && costsUsd > 0m ? Math.Clamp(costsUsd / grossUsd, 0.15m, 0.55m) : 0.32m;
-
         var horizons = BuildMultiHorizonProjections(
             expectedGrossUsd,
             expectedMarginPct,
@@ -506,6 +505,7 @@ public sealed class EtsyFinancialAnalysisService(
 
         var scenarios = BuildScenarioMatrix(
             expectedGrossUsd,
+            expectedNetProfitUsd,
             expectedMarginPct,
             estimatedOrders,
             exchangeRate);
@@ -623,7 +623,7 @@ public sealed class EtsyFinancialAnalysisService(
                     }
 
                     horizons = BuildMultiHorizonProjections(expectedGrossUsd, expectedMarginPct, estimatedOrders, feeRatio, costRatio, exchangeRate, trafficFunnel);
-                    scenarios = BuildScenarioMatrix(expectedGrossUsd, expectedMarginPct, estimatedOrders, exchangeRate);
+                    scenarios = BuildScenarioMatrix(expectedGrossUsd, expectedNetProfitUsd, expectedMarginPct, estimatedOrders, exchangeRate);
 
                     if (!string.IsNullOrWhiteSpace(aiExec) || !string.IsNullOrWhiteSpace(aiProd))
                     {
@@ -903,8 +903,9 @@ public sealed class EtsyFinancialAnalysisService(
             var grossTry = Math.Round(grossUsd * exchangeRate, 2);
             var feesAdsUsd = Math.Round(grossUsd * feeRatio, 2);
             var costsUsd = Math.Round(grossUsd * costRatio, 2);
-            var netProfitUsd = Math.Round(grossUsd * marginRatio, 2);
+            var netProfitUsd = Math.Round(grossUsd - feesAdsUsd - costsUsd, 2);
             var netProfitTry = Math.Round(netProfitUsd * exchangeRate, 2);
+            var rowMarginPct = grossUsd > 0m ? Math.Round(netProfitUsd / grossUsd * 100m, 1) : 0m;
             var orders = base30dOrders > 0 ? Math.Max(1, (int)Math.Round(base30dOrders * s.Multiplier)) : 0;
 
             var netEtsyPayoutTry = Math.Round((grossUsd - feesAdsUsd) * exchangeRate, 2);
@@ -927,7 +928,7 @@ public sealed class EtsyFinancialAnalysisService(
                 ExpectedCostsUsd: costsUsd,
                 ExpectedNetProfitUsd: netProfitUsd,
                 ExpectedNetProfitTry: netProfitTry,
-                ExpectedMarginPct: Math.Round(marginRatio * 100m, 1),
+                ExpectedMarginPct: rowMarginPct,
                 EstimatedOrders: orders,
                 GrowthRatePct: grossUsd > 0m ? s.GrowthPct : 0m,
                 EstimatedBankPayoutTry: estBankPayoutTry,
@@ -943,24 +944,25 @@ public sealed class EtsyFinancialAnalysisService(
 
     private static List<AiForecastScenarioItemDto> BuildScenarioMatrix(
         decimal expectedGrossUsd,
+        decimal expectedNetProfitUsd,
         decimal expectedMarginPct,
         int estimatedOrders,
         decimal exchangeRate)
     {
-        var marginRatio = Math.Clamp(expectedMarginPct / 100m, 0.15m, 0.75m);
+        var marginRatio = Math.Clamp(expectedMarginPct / 100m, -0.50m, 0.85m);
 
         var pessGrossUsd = Math.Round(expectedGrossUsd * 0.82m, 2);
-        var pessMargin = Math.Max(10m, Math.Round((marginRatio - 0.06m) * 100m, 1));
+        var pessMargin = expectedGrossUsd > 0m ? Math.Round((marginRatio - 0.06m) * 100m, 1) : 0m;
         var pessProfitUsd = Math.Round(pessGrossUsd * (pessMargin / 100m), 2);
         var pessOrders = estimatedOrders > 0 ? Math.Max(1, (int)Math.Round(estimatedOrders * 0.82m)) : 0;
 
         var baseGrossUsd = expectedGrossUsd;
-        var baseMargin = Math.Round(marginRatio * 100m, 1);
-        var baseProfitUsd = Math.Round(baseGrossUsd * marginRatio, 2);
+        var baseMargin = expectedGrossUsd > 0m ? Math.Round(expectedMarginPct, 1) : 0m;
+        var baseProfitUsd = expectedGrossUsd > 0m ? Math.Round(expectedNetProfitUsd, 2) : 0m;
         var baseOrders = estimatedOrders;
 
         var optGrossUsd = Math.Round(expectedGrossUsd * 1.28m, 2);
-        var optMargin = Math.Min(70m, Math.Round((marginRatio + 0.05m) * 100m, 1));
+        var optMargin = expectedGrossUsd > 0m ? Math.Min(75m, Math.Round((marginRatio + 0.05m) * 100m, 1)) : 0m;
         var optProfitUsd = Math.Round(optGrossUsd * (optMargin / 100m), 2);
         var optOrders = estimatedOrders > 0 ? Math.Max(1, (int)Math.Round(estimatedOrders * 1.25m)) : 0;
 

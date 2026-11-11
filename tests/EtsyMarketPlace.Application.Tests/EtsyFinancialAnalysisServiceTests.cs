@@ -160,6 +160,44 @@ public sealed class EtsyFinancialAnalysisServiceTests
         Assert.False(string.IsNullOrWhiteSpace(result.TrafficFunnel.FunnelAiDiagnosis));
     }
 
+    [Fact]
+    public async Task GenerateAiForecastAsync_MaintainsHorizonAndBaselineArithmeticParityEvenWhenCurrentPeriodIsNegative()
+    {
+        // Cari dönem bir kerelik geçmiş iadeler yüzünden zarardayken (-79 USD) bile ileriye dönük
+        // birim ekonomisi ve çok ufuklu tablo satırları Brüt - Kesinti - Maliyet = Net Kâr özdeşliğini korumalıdır.
+        var reporting = new StubReportingService
+        {
+            Performance = new FinancialPerformance(
+                DateTimeOffset.UtcNow.AddDays(-30), DateTimeOffset.UtcNow, "USD",
+                139.01m, 6.06m, 2.11m, 11.29m, 32.00m, 20.95m, 174.62m, -108.02m, -77.7m)
+        };
+
+        var service = new EtsyFinancialAnalysisService(reporting, new StubLedgerReportService());
+        var cmd = new AiFinancialForecastCommand(
+            ShopId: "53236321",
+            StartDate: DateTimeOffset.UtcNow.AddDays(-30),
+            EndDate: DateTimeOffset.UtcNow,
+            Provider: "Offline",
+            ExchangeRate: 50.24m,
+            CurrentOrderCount: 2);
+
+        var result = await service.GenerateAiForecastAsync(cmd);
+
+        Assert.NotNull(result.HorizonProjections);
+        foreach (var horizon in result.HorizonProjections!)
+        {
+            var expectedFromColumns = Math.Round(horizon.ExpectedGrossUsd - horizon.ExpectedFeesAndAdsUsd - horizon.ExpectedCostsUsd, 2);
+            Assert.Equal(expectedFromColumns, horizon.ExpectedNetProfitUsd);
+        }
+
+        Assert.Equal(result.HorizonProjections[0].ExpectedNetProfitUsd, result.ExpectedNetProfitUsd);
+        Assert.Equal(result.HorizonProjections[0].ExpectedMarginPct, result.ExpectedMarginPct);
+
+        var baseline = Assert.Single(result.Scenarios!, s => s.ScenarioCode == "baseline");
+        Assert.Equal(result.ExpectedNetProfitUsd, baseline.ExpectedNetProfitUsd);
+        Assert.Equal(result.ExpectedMarginPct, baseline.ExpectedMarginPct);
+    }
+
     private sealed class StubLlmClient : IGeminiListingApiClient
     {
         public string JsonResponse { get; init; } = "{}";
