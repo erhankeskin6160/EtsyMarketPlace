@@ -80,7 +80,7 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
                 if (!receipt.IsPaid && !receipt.IsCanceled) continue;
                 if (!costs.TryGetValue(receipt.ReceiptId, out var cost)) continue;
 
-                var amount = Math.Round(cost.ProductCost + cost.ShippingCost, 2);
+                var amount = Math.Round(cost.ProductCost + cost.ShippingCost + cost.PackagingCost, 2);
                 if (receipt.IsCanceled && amount <= 0) continue;
 
                 var day = receipt.CreatedAt.UtcDateTime.Date;
@@ -114,7 +114,8 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
             report.GrossSalesTry,
             report.NetProfitTry,
             null, null, null,
-            report.AverageExchangeRate);
+            report.AverageExchangeRate,
+            report.ProductCostsTry);
     }
 
     private static FinancialPerformance EmptyPerformance(DateTimeOffset startDate, DateTimeOffset endDate) =>

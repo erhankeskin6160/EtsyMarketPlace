@@ -12,6 +12,7 @@ public class OrderCost
     public decimal OrderTotal { get; set; }
     public decimal? ProductCost { get; set; }
     public decimal? ShippingCost { get; set; }
+    public decimal? PackagingCost { get; set; }
     public string? AlertReason { get; set; }
 
     public ShopConnection? Shop { get; set; }

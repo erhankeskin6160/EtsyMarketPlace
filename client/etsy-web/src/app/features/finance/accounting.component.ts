@@ -72,6 +72,7 @@ export interface OrderCostShippingRow {
   qty: string;
   productionCostTry: number;
   shippingCostTry: number;
+  packagingCostTry: number;
   totalCostTry: number;
   invoice: string;
   title: string;
@@ -406,27 +407,43 @@ export class AccountingComponent implements OnInit, OnDestroy {
     return this.grossSalesTry > 0 ? (this.realNetProfitTry / this.grossSalesTry * 100).toFixed(1) : '0.0';
   }
 
+  private get costEligibleOrders(): OrderFinancialRow[] {
+    return this.orders.filter(o =>
+      o.orderStatus !== 'refunded' &&
+      o.costNotes !== 'cross_period_refund' &&
+      (o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0)
+    );
+  }
+
   get totalShippingCostTry(): number {
-    return Number(this.orders.filter(o => o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0).reduce((sum, o) => {
-      const shipUsd = o.actualShippingCostUsd != null ? o.actualShippingCostUsd : ((o.productCostUsd || 0) * 0.635);
+    return Number(this.costEligibleOrders.reduce((sum, o) => {
+      const shipUsd = o.actualShippingCostUsd ?? 0;
       return sum + (shipUsd * (o.exchangeRate || this.liveRate));
     }, 0).toFixed(2));
   }
 
   get totalProductionCostTry(): number {
-    return Number(this.orders.filter(o => o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0).reduce((sum, o) => {
-      const prodUsd = o.unitProductCostUsd != null ? o.unitProductCostUsd : ((o.productCostUsd || 0) * 0.28);
+    return Number(this.costEligibleOrders.reduce((sum, o) => {
+      const hasSplit = o.unitProductCostUsd != null || o.actualShippingCostUsd != null || o.packagingCostUsd != null;
+      const prodUsd = hasSplit ? (o.unitProductCostUsd ?? 0) : (o.productCostUsd ?? 0);
       return sum + (prodUsd * (o.exchangeRate || this.liveRate));
     }, 0).toFixed(2));
   }
 
   get totalPackagingCostTry(): number {
-    const rem = this.productCostsTry - this.totalShippingCostTry - this.totalProductionCostTry;
-    return Number(Math.max(0, rem).toFixed(2));
+    return Number(this.costEligibleOrders.reduce((sum, o) => {
+      const pkgUsd = o.packagingCostUsd ?? 0;
+      return sum + (pkgUsd * (o.exchangeRate || this.liveRate));
+    }, 0).toFixed(2));
+  }
+
+  get totalCostBreakdownTry(): number {
+    return Number((this.totalShippingCostTry + this.totalProductionCostTry + this.totalPackagingCostTry).toFixed(2));
   }
 
   get shippingCostSharePct(): string {
-    return this.productCostsTry > 0 ? (this.totalShippingCostTry / this.productCostsTry * 100).toFixed(1) : '0.0';
+    const base = this.productCostsTry > 0 ? this.productCostsTry : this.totalCostBreakdownTry;
+    return base > 0 ? (this.totalShippingCostTry / base * 100).toFixed(1) : '0.0';
   }
 
   get invoiceOrderCount(): number {
@@ -458,23 +475,25 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   rebuildDynamicBreakdowns(): void {
-    const activeOrders = this.orders.filter(o => o.orderStatus !== 'canceled' && o.orderStatus !== 'refunded' && o.costNotes !== 'cross_period_refund');
-
-    // 1. Siparis & Kargo Maliyet Kayitlari (Modal 2)
-    this.orderCostShippingRecords = activeOrders.map(o => {
+    // 1. Siparis & Kargo Maliyet Kayitlari (Modal 2 — Ust KPI ve özet kutularıyla %100 parite)
+    this.orderCostShippingRecords = this.costEligibleOrders.map(o => {
       const rate = o.exchangeRate || this.liveRate || 49.25;
-      const totalUsd = o.productCostUsd || 0;
-      const shipUsd = o.actualShippingCostUsd != null ? o.actualShippingCostUsd : (totalUsd * 0.635);
-      const prodUsd = o.unitProductCostUsd != null ? o.unitProductCostUsd : (totalUsd * 0.28);
+      const hasSplit = o.unitProductCostUsd != null || o.actualShippingCostUsd != null || o.packagingCostUsd != null;
+      const shipUsd = o.actualShippingCostUsd ?? 0;
+      const prodUsd = hasSplit ? (o.unitProductCostUsd ?? 0) : (o.productCostUsd ?? 0);
+      const pkgUsd = o.packagingCostUsd ?? 0;
+      const totalUsd = hasSplit ? (prodUsd + shipUsd + pkgUsd) : (o.productCostUsd ?? 0);
       const totalCostTry = Number((totalUsd * rate).toFixed(2));
       const shippingCostTry = Number((shipUsd * rate).toFixed(2));
       const productionCostTry = Number((prodUsd * rate).toFixed(2));
+      const packagingCostTry = Number((pkgUsd * rate).toFixed(2));
       return {
         date: (o.orderDate || '').split(' ')[0],
         receiptId: o.receiptId,
         qty: `${o.quantity} Ad`,
         productionCostTry,
         shippingCostTry,
+        packagingCostTry,
         totalCostTry,
         invoice: o.hasInvoice ? 'Fatura' : '—',
         title: o.productTitle
@@ -2162,7 +2181,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
           const refundsTry = Number((refundsUsd * rate).toFixed(2));
 
           const costsUsd = Number(((perf.productCosts ?? 0) + (perf.shippingCosts ?? 0)).toFixed(2));
-          const costsTry = Number((costsUsd * rate).toFixed(2));
+          const costsTry = Number((perf.productCostsTRY ?? (costsUsd * rate)).toFixed(2));
 
           const realProfitUsd = Number(perf.netProfitUsd ?? perf.netProfit ?? (grossUsd - feesUsd - innerAdsUsd - offsiteAdsUsd - refundsUsd - costsUsd));
           const realProfitTry = Number(perf.netProfitTRY ?? perf.netProfitTry ?? (realProfitUsd * rate));
@@ -2665,7 +2684,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       // Gerçek Net Kâr = Etsy Net Hakediş - Toplam Sipariş Maliyeti
       // Mükerrer kesintiyi engelle: o.netProfitTry içinde reklam ve iadeler zaten düşüldüğünden,
       // doğrudan net hakediş (netIncomeTry) üzerinden toplam sipariş maliyeti düşülür.
-      const active = this.orders.filter(o => o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0);
+      const active = this.costEligibleOrders;
       const totalCostsTRY = active.reduce((sum, o) => sum + ((o.productCostUsd || 0) * (o.exchangeRate || this.liveRate)), 0);
       const totalCostsUSD = Number((totalCostsTRY / this.liveRate).toFixed(2));
       const totalNetTRY = Number((this.netIncomeTry - totalCostsTRY).toFixed(2));
@@ -2692,7 +2711,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
               if (perf) {
                 const rate = Number(perf.exchangeRateUsed ?? this.liveRate ?? 49.12);
                 const costsUsd = Number(((perf.productCosts ?? 0) + (perf.shippingCosts ?? 0)).toFixed(2));
-                const costsTry = Number((costsUsd * rate).toFixed(2));
+                const costsTry = Number((perf.productCostsTRY ?? (costsUsd * rate)).toFixed(2));
                 const realProfitUsd = Number(perf.netProfitUsd ?? perf.netProfit ?? (this.netIncomeUsd - costsUsd));
                 const realProfitTry = Number(perf.netProfitTRY ?? perf.netProfitTry ?? (realProfitUsd * rate));
 

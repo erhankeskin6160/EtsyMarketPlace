@@ -116,7 +116,7 @@ public static class EtsyLiveDashboardCalculator
 
             if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
             {
-                productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost, 2);
+                productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
                 hasCost = true;
             }
 
@@ -260,7 +260,7 @@ public static class EtsyLiveDashboardCalculator
                 productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
                 unitProductCost = orderCost.ProductCost;
                 actualShippingCost = orderCost.ShippingCost;
-                packagingCost = orderCost.PackagingCost > 0 ? orderCost.PackagingCost : 1.00m;
+                packagingCost = orderCost.PackagingCost;
                 costNotes = orderCost.Notes;
                 hasCost = true;
             }
@@ -539,11 +539,17 @@ public static class EtsyLiveDashboardCalculator
             var refundDate = info.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
 
             decimal? productCost = null;
+            decimal? unitProductCost = null;
+            decimal? actualShippingCost = null;
+            decimal? packagingCost = null;
             var hasCost = false;
             EtsyDashboardOrderCost? orderCost = null;
             if (orderCosts != null && orderCosts.TryGetValue(resolvedReceiptId, out orderCost))
             {
                 productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
+                unitProductCost = orderCost.ProductCost;
+                actualShippingCost = orderCost.ShippingCost;
+                packagingCost = orderCost.PackagingCost;
                 hasCost = true;
             }
 
@@ -603,9 +609,9 @@ public static class EtsyLiveDashboardCalculator
                 HasCostData: hasCost,
                 HasInvoice: false,
                 InvoicePath: null,
-                UnitProductCostUsd: null,
-                ActualShippingCostUsd: null,
-                PackagingCostUsd: null,
+                UnitProductCostUsd: unitProductCost,
+                ActualShippingCostUsd: actualShippingCost,
+                PackagingCostUsd: packagingCost,
                 CostNotes: "cross_period_refund",
                 EffectiveExchangeRate: Math.Round(refundRate * 0.975m, 2),
                 EtsyNetPayoutUsd: -refundUsd,

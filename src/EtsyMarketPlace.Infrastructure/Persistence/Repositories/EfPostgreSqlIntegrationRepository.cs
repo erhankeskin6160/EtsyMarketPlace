@@ -455,7 +455,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
         {
             var entities = await _context.OrderCosts
                 .AsNoTracking()
-                .Where(o => o.ShopId == shopId && (o.ProductCost != null || o.ShippingCost != null))
+                .Where(o => o.ShopId == shopId && (o.ProductCost != null || o.ShippingCost != null || o.PackagingCost != null))
                 .ToListAsync(cancellationToken);
 
             var dict = new Dictionary<long, EtsyDashboardOrderCost>();
@@ -466,7 +466,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
                     dict[receiptId] = new EtsyDashboardOrderCost(
                         e.ProductCost ?? 0m,
                         e.ShippingCost ?? 0m,
-                        1.00m,
+                        e.PackagingCost ?? 0m,
                         e.AlertReason
                     );
                 }
@@ -498,6 +498,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
                 OrderTotal = 0,
                 ProductCost = productCost,
                 ShippingCost = shippingCost,
+                PackagingCost = packagingCost,
                 AlertReason = notes
             });
         }
@@ -505,6 +506,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
         {
             if (productCost.HasValue) existing.ProductCost = productCost;
             if (shippingCost.HasValue) existing.ShippingCost = shippingCost;
+            if (packagingCost.HasValue) existing.PackagingCost = packagingCost;
             if (notes is not null) existing.AlertReason = notes;
         }
 

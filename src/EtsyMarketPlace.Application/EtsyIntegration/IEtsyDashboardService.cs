@@ -65,7 +65,8 @@ public record LiveFinancialPerformanceResult(
     DateTimeOffset GeneratedAt,
     decimal? BankPayoutsUSD = null,
     decimal? BankPayoutsTRY = null,
-    IReadOnlyList<EtsyLedgerMonthlySummary>? MonthlySummaries = null);
+    IReadOnlyList<EtsyLedgerMonthlySummary>? MonthlySummaries = null,
+    decimal? ProductCostsTRY = null);
 
 public record FinancialSummaryDashboardResult(
     string Period,

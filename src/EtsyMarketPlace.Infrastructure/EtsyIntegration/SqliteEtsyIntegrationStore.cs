@@ -46,11 +46,45 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         {
             if (_initialized) return;
             await _migrationRunner.MigrateAsync(_connectionString, EtsyFinanceMigrations.All, cancellationToken);
+            await EnsureOrderCostPackagingColumnAsync(cancellationToken);
             _initialized = true;
         }
         finally
         {
             _schemaLock.Release();
+        }
+    }
+
+    private async Task EnsureOrderCostPackagingColumnAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var connection = await OpenAsync(cancellationToken);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA table_info(order_costs);";
+            var hasPackaging = false;
+            await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+            {
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    if (string.Equals(reader.GetString(1), "packaging_cost", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasPackaging = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!hasPackaging)
+            {
+                await using var alterCmd = connection.CreateCommand();
+                alterCmd.CommandText = "ALTER TABLE order_costs ADD COLUMN packaging_cost REAL NULL;";
+                await alterCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+        }
+        catch (SqliteException)
+        {
+            // Sütun zaten mevcut veya tablo henüz başlatılmadı
         }
     }
 
@@ -344,7 +378,7 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await EnsureInitializedAsync(cancellationToken);
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT order_id, product_cost, shipping_cost, alert_reason FROM order_costs WHERE shop_id=$shopId AND (product_cost IS NOT NULL OR shipping_cost IS NOT NULL);";
+        command.CommandText = "SELECT order_id, product_cost, shipping_cost, packaging_cost, alert_reason FROM order_costs WHERE shop_id=$shopId AND (product_cost IS NOT NULL OR shipping_cost IS NOT NULL OR packaging_cost IS NOT NULL);";
         command.Parameters.AddWithValue("$shopId", shopId);
         var result = new Dictionary<long, EtsyDashboardOrderCost>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -355,8 +389,9 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
 
             var productCost = reader.IsDBNull(1) ? 0m : Convert.ToDecimal(reader.GetValue(1), CultureInfo.InvariantCulture);
             var shippingCost = reader.IsDBNull(2) ? 0m : Convert.ToDecimal(reader.GetValue(2), CultureInfo.InvariantCulture);
-            var notes = reader.IsDBNull(3) ? null : reader.GetString(3);
-            result[orderId] = new EtsyDashboardOrderCost(productCost, shippingCost, 1.00m, notes);
+            var packagingCost = reader.IsDBNull(3) ? 0m : Convert.ToDecimal(reader.GetValue(3), CultureInfo.InvariantCulture);
+            var notes = reader.IsDBNull(4) ? null : reader.GetString(4);
+            result[orderId] = new EtsyDashboardOrderCost(productCost, shippingCost, packagingCost, notes);
         }
 
         return result;
@@ -368,11 +403,12 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         await using var connection = await OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO order_costs(shop_id, order_id, created_at, currency, order_total, product_cost, shipping_cost, alert_reason)
-            VALUES($shopId, $orderId, $now, 'USD', 0, $productCost, $shippingCost, $reason)
+            INSERT INTO order_costs(shop_id, order_id, created_at, currency, order_total, product_cost, shipping_cost, packaging_cost, alert_reason)
+            VALUES($shopId, $orderId, $now, 'USD', 0, $productCost, $shippingCost, $packagingCost, $reason)
             ON CONFLICT(shop_id, order_id) DO UPDATE SET
-                product_cost = excluded.product_cost,
-                shipping_cost = excluded.shipping_cost,
+                product_cost = COALESCE(excluded.product_cost, order_costs.product_cost),
+                shipping_cost = COALESCE(excluded.shipping_cost, order_costs.shipping_cost),
+                packaging_cost = COALESCE(excluded.packaging_cost, order_costs.packaging_cost),
                 alert_reason = COALESCE(excluded.alert_reason, order_costs.alert_reason);
             """;
         command.Parameters.AddWithValue("$shopId", shopId);
@@ -380,6 +416,7 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
         command.Parameters.AddWithValue("$productCost", (object?)productCost ?? DBNull.Value);
         command.Parameters.AddWithValue("$shippingCost", (object?)shippingCost ?? DBNull.Value);
+        command.Parameters.AddWithValue("$packagingCost", (object?)packagingCost ?? DBNull.Value);
         command.Parameters.AddWithValue("$reason", (object?)notes ?? DBNull.Value);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

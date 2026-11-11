@@ -403,6 +403,7 @@
                   <td class="fee-cell" [class.text-danger]="o.offsiteAdFeeUsd > 0">{{ o.offsiteAdFeeUsd > 0 ? ('-$' + o.offsiteAdFeeUsd.toFixed(2)) : '—' }}</td>
                   <td class="cost-cell" [class.text-danger]="(o.productCostUsd || 0) > 0">
                     {{ o.productCostUsd !== null && o.productCostUsd > 0 ? ('-$' + o.productCostUsd.toFixed(2)) : (o.productCostUsd === 0 ? '$0.00' : '—') }}
+                    <small *ngIf="o.costNotes === 'cross_period_refund' && (o.productCostUsd || 0) > 0" class="text-muted" style="display:block;font-size:0.68rem;">(Önceki dönem)</small>
                   </td>
                   <td class="profit-usd-cell" [ngClass]="o.netProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                     {{ o.netProfitUsd < 0 ? ('-$' + Math.abs(o.netProfitUsd).toFixed(2)) : (o.orderStatus === 'canceled' && !o.hasCostData ? '$0.00' : ('$' + o.netProfitUsd.toFixed(2))) }}
@@ -1564,6 +1565,7 @@
                     <th>Adet</th>
                     <th>Üretim Maliyeti</th>
                     <th>Kargo Maliyeti</th>
+                    <th>Paketleme</th>
                     <th>Toplam Maliyet</th>
                     <th>Fatura</th>
                     <th>Ürün / İlan Başlığı</th>
@@ -1576,6 +1578,7 @@
                     <td>{{ s.qty }}</td>
                     <td class="amount-cell text-danger">{{ s.productionCostTry > 0 ? ('-₺' + formatNumber(s.productionCostTry)) : '₺0,00' }}</td>
                     <td class="amount-cell text-danger">{{ s.shippingCostTry > 0 ? ('-₺' + formatNumber(s.shippingCostTry)) : '₺0,00' }}</td>
+                    <td class="amount-cell text-danger">{{ s.packagingCostTry > 0 ? ('-₺' + formatNumber(s.packagingCostTry)) : '₺0,00' }}</td>
                     <td class="amount-cell text-danger font-semibold">{{ s.totalCostTry > 0 ? ('-₺' + formatNumber(s.totalCostTry)) : '₺0,00' }}</td>
                     <td>
                       <span *ngIf="s.invoice !== '—'" class="badge-invoice">📄 {{ s.invoice }}</span>

@@ -43,6 +43,8 @@ public class EtsyMarketPlaceDbContextTests
         Assert.NotNull(orderCostEntity);
         Assert.Equal("order_costs", orderCostEntity.GetTableName());
         Assert.Equal(2, orderCostEntity.FindPrimaryKey()!.Properties.Count);
+        Assert.NotNull(orderCostEntity.FindProperty(nameof(OrderCost.PackagingCost)));
+        Assert.Equal("packaging_cost", orderCostEntity.FindProperty(nameof(OrderCost.PackagingCost))!.GetColumnName());
 
         var trafficEntity = model.FindEntityType(typeof(ListingTrafficDaily));
         Assert.NotNull(trafficEntity);

@@ -451,8 +451,49 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(174.62m, row.RefundAmountUsd);
         Assert.Equal(Math.Round(row.RefundAmountUsd.Value * row.ExchangeRate, 2), row.RefundAmountTry);
         Assert.Equal(56.31m, row.ProductCostUsd);
+        Assert.Equal(35.00m, row.UnitProductCostUsd);
+        Assert.Equal(21.31m, row.ActualShippingCostUsd);
+        Assert.Equal(0m, row.PackagingCostUsd);
         // İptal edilen ve maliyeti girilen siparişte satıcının net zararı maliyet kadardır
         Assert.Equal(-56.31m, row.NetProfitUsd);
         Assert.Equal(Math.Round(row.NetProfitUsd * row.ExchangeRate, 2), row.NetProfitTry);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_DoesNotInjectPhantomPackaging_AndMatchesTotalBreakdown()
+    {
+        var receipt = new EtsyDashboardReceipt(
+            4225379961L,
+            new DateTimeOffset(2026, 11, 8, 12, 0, 0, TimeSpan.Zero),
+            true,
+            false,
+            false,
+            "USD",
+            44.25m,
+            31.50m,
+            10.00m,
+            13.50m,
+            2.75m,
+            0m,
+            new[] { new EtsyDashboardReceiptItem("Hexcore Rubik Cube", 11111, 1) },
+            "Seth Camacho");
+
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4225379961L] = new EtsyDashboardOrderCost(ProductCost: 4.50m, ShippingCost: 8.50m, PackagingCost: 1.00m)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            new[] { receipt },
+            Array.Empty<EtsyDashboardLedgerFee>(),
+            costs,
+            50.17m);
+
+        Assert.Single(rows);
+        var row = rows[0];
+        Assert.Equal(14.00m, row.ProductCostUsd);
+        Assert.Equal(4.50m, row.UnitProductCostUsd);
+        Assert.Equal(8.50m, row.ActualShippingCostUsd);
+        Assert.Equal(1.00m, row.PackagingCostUsd);
     }
 }

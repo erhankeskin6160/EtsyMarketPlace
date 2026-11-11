@@ -201,6 +201,7 @@ public class EtsyMarketPlaceDbContext : DbContext
             entity.Property(e => e.OrderTotal).HasColumnName("order_total").HasPrecision(18, 4).HasDefaultValue(0m);
             entity.Property(e => e.ProductCost).HasColumnName("product_cost").HasPrecision(18, 4);
             entity.Property(e => e.ShippingCost).HasColumnName("shipping_cost").HasPrecision(18, 4);
+            entity.Property(e => e.PackagingCost).HasColumnName("packaging_cost").HasPrecision(18, 4);
             entity.Property(e => e.AlertReason).HasColumnName("alert_reason").HasMaxLength(500);
 
             entity.HasIndex(e => new { e.ShopId, e.CreatedAt });

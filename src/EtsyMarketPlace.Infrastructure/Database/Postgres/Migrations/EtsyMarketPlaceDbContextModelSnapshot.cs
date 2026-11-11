@@ -1204,6 +1204,11 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("order_total");
 
+                    b.Property<decimal?>("PackagingCost")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("packaging_cost");
+
                     b.Property<decimal?>("ProductCost")
                         .HasPrecision(18, 4)
                         .HasColumnType("numeric(18,4)")
