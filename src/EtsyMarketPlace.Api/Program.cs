@@ -290,6 +290,10 @@ using (var scope = app.Services.CreateScope())
         var db = scope.ServiceProvider.GetRequiredService<EtsyMarketPlaceDbContext>();
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await db.Database.MigrateAsync(cts.Token);
+        await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(
+            db.Database,
+            "ALTER TABLE order_costs ADD COLUMN IF NOT EXISTS packaging_cost numeric(18,4) NULL;",
+            cts.Token);
 
         var migrator = scope.ServiceProvider.GetRequiredService<EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator>();
         var migrationRes = await migrator.MigrateAndSeedAsync();

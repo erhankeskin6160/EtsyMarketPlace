@@ -108,9 +108,11 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         // Tarihsel kurlari parse oncesinde tek seferde hidrate et
         try
         {
-            await HistoricalExchangeRateProvider.HydrateRatesForDatesAsync(
-                new[] { startDate.UtcDateTime.Date, endDate.UtcDateTime.Date },
-                cancellationToken);
+            var minD = startDate.UtcDateTime.Date;
+            var maxD = endDate.UtcDateTime.Date;
+            var totalDays = Math.Clamp((maxD - minD).Days + 1, 1, 730);
+            var allDates = Enumerable.Range(0, totalDays).Select(offset => minD.AddDays(offset));
+            await HistoricalExchangeRateProvider.HydrateRatesForDatesAsync(allDates, cancellationToken);
         }
         catch
         {

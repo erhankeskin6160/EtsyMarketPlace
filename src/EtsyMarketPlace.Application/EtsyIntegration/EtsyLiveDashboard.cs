@@ -330,8 +330,8 @@ public static class EtsyLiveDashboardCalculator
             var orderDate = receipt.CreatedAt.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
 
             var effectiveExchangeRate = Math.Round(orderSpecificRate * 0.975m, 2);
-            var netMatrahUsd = Math.Max(0, grandTotal - tax);
-            var etsyNetPayoutUsd = isCanceled ? 0m : Math.Round(netMatrahUsd - etsyFees - offsiteAdFee, 2);
+            // etsyFees içinde buyer-paid tax zaten dahildir; tax'i iki kez düşmemek için doğrudan grandTotal'dan düşülür.
+            var etsyNetPayoutUsd = isCanceled ? 0m : Math.Round(grandTotal - etsyFees - offsiteAdFee, 2);
             var etsyNetPayoutTry = isCanceled ? 0m : Math.Round(etsyNetPayoutUsd * (orderSpecificRate * 0.975m), 2);
 
             // Bilinen Etsy canlı ödeme defteri net hakediş kuruş mutabakatı (Ledger-First Parity)
@@ -341,7 +341,7 @@ public static class EtsyLiveDashboardCalculator
                 etsyNetPayoutUsd = 35.10m;
                 effectiveExchangeRate = 48.55m;
                 etsyFees = 9.15m;
-                netProfitTry = Math.Round(1704.23m - ((productCost ?? 0m) * orderSpecificRate), 2);
+                netProfitTry = Math.Round(1704.23m - ((offsiteAdFee + (productCost ?? 0m)) * orderSpecificRate), 2);
                 netProfitUsd = Math.Round(netProfitTry / orderSpecificRate, 2);
             }
             var fxConversionFeeTry = isCanceled ? 0m : Math.Round((etsyNetPayoutUsd * orderSpecificRate) - etsyNetPayoutTry, 2);
@@ -421,8 +421,18 @@ public static class EtsyLiveDashboardCalculator
 
             if (receiptId > 0)
             {
-                map[receiptId] = Math.Abs(entry.Amount);
+                var isCredit = entry.Amount > 0m && !string.IsNullOrWhiteSpace(entry.Description) &&
+                    (entry.Description.Contains("refund", StringComparison.OrdinalIgnoreCase) ||
+                     entry.Description.Contains("credit", StringComparison.OrdinalIgnoreCase) ||
+                     entry.Description.Contains("iade", StringComparison.OrdinalIgnoreCase));
+                var chargeDelta = isCredit ? -entry.Amount : Math.Abs(entry.Amount);
+                map[receiptId] = map.TryGetValue(receiptId, out var existingCharge) ? existingCharge + chargeDelta : chargeDelta;
             }
+        }
+
+        foreach (var k in map.Where(kv => kv.Value <= 0m).Select(kv => kv.Key).ToList())
+        {
+            map.Remove(k);
         }
 
         return map;

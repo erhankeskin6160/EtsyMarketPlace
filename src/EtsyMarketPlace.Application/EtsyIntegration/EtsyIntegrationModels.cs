@@ -65,7 +65,11 @@ public sealed record FinancialPerformance(
     decimal? OrderGrossSalesTRY = null,
     decimal? OrderNetProfitTRY = null,
     decimal? ExchangeRateUsed = null,
-    decimal? ProductCostsTRY = null);
+    decimal? ProductCostsTRY = null,
+    decimal? PlatformFeesTRY = null,
+    decimal? InternalAdsCostTRY = null,
+    decimal? ExternalAdsCostTRY = null,
+    decimal? RefundsTRY = null);
 
 public sealed record DailyShopBrief(
     DateTimeOffset Date,

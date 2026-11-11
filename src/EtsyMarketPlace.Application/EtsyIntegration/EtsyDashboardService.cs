@@ -254,7 +254,11 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
                 BankPayoutsUSD: totalPayoutsUsd,
                 BankPayoutsTRY: Math.Round(totalPayoutsTry, 2),
                 MonthlySummaries: combinedMonthly,
-                ProductCostsTRY: p.ProductCostsTRY);
+                ProductCostsTRY: p.ProductCostsTRY,
+                PlatformFeesTRY: p.PlatformFeesTRY,
+                InternalAdsCostTRY: p.InternalAdsCostTRY,
+                ExternalAdsCostTRY: p.ExternalAdsCostTRY,
+                RefundsTRY: p.RefundsTRY);
         }
 
         var legacy = await _reporting.GetFinancialPerformanceAsync(shopId, start, end, cancellationToken);

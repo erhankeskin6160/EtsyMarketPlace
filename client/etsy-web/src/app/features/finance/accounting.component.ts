@@ -124,30 +124,30 @@ export class AccountingComponent implements OnInit, OnDestroy {
   isSyncingVds = false;
   toastMessage = '';
 
-  // 9 KPI Values (Matching Desktop Image 2)
-  grossSalesTry = 54608.24;
-  grossSalesUsd = 1111.73;
+  // 9 KPI Values (GEMINI.md Kural 3: Sıfır Mock — Sunucu Finans Motorundan Yüklenene Kadar 0)
+  grossSalesTry = 0;
+  grossSalesUsd = 0;
 
-  etsyFeesTry = 12783.71;
-  etsyFeesUsd = 260.25;
+  etsyFeesTry = 0;
+  etsyFeesUsd = 0;
 
-  innerAdsTry = 404.30;
-  innerAdsUsd = 8.23;
+  innerAdsTry = 0;
+  innerAdsUsd = 0;
 
-  offsiteAdsTry = 3930.29;
-  offsiteAdsUsd = 80.01;
+  offsiteAdsTry = 0;
+  offsiteAdsUsd = 0;
 
-  refundsTry = 1888.14;
-  refundsUsd = 38.44;
+  refundsTry = 0;
+  refundsUsd = 0;
 
-  netIncomeTry = 35601.79;
-  netIncomeUsd = 724.80;
+  netIncomeTry = 0;
+  netIncomeUsd = 0;
 
-  productCostsTry = 13524.10;
-  productCostsUsd = 275.33;
+  productCostsTry = 0;
+  productCostsUsd = 0;
 
-  realNetProfitTry = 22077.69;
-  realNetProfitUsd = 449.46;
+  realNetProfitTry = 0;
+  realNetProfitUsd = 0;
 
   bankPayoutsTry = 0;
   bankPayoutsUsd = 0;
@@ -186,63 +186,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
     filteredOrders: OrderFinancialRow[] = [];
 
-  // Ledger Entries
-  ledgerEntries: PaymentLedgerEntry[] = [
-    {
-      id: 'TXN-908124',
-      entryDate: '2026-10-02 14:22',
-      transactionType: 'sale',
-      typeDisplay: 'Sipariş Ödemesi',
-      title: 'Ödeme Alma: #348912401 (Emily Watson)',
-      orderNumber: '#348912401',
-      grossAmount: 64.50,
-      feeAmount: -4.19,
-      netAmount: 60.31,
-      currency: 'USD',
-      netAmountTry: 2962.43,
-      runningBalance: 12450.80
-    },
-    {
-      id: 'TXN-908123',
-      entryDate: '2026-10-02 12:00',
-      transactionType: 'ad',
-      typeDisplay: 'Etsy Ads Tıklama',
-      title: 'Günlük Reklam Harcaması (Tıklama Başı Maliyet)',
-      grossAmount: 0,
-      feeAmount: -12.50,
-      netAmount: -12.50,
-      currency: 'USD',
-      netAmountTry: -614.00,
-      runningBalance: 12390.49
-    },
-    {
-      id: 'TXN-908122',
-      entryDate: '2026-10-02 09:15',
-      transactionType: 'sale',
-      typeDisplay: 'Sipariş Ödemesi',
-      title: 'Ödeme Alma: #348876102 (Oliver Smith)',
-      orderNumber: '#348876102',
-      grossAmount: 118.00,
-      feeAmount: -7.67,
-      netAmount: 110.33,
-      currency: 'USD',
-      netAmountTry: 5419.41,
-      runningBalance: 12402.99
-    },
-    {
-      id: 'TXN-908121',
-      entryDate: '2026-10-01 23:59',
-      transactionType: 'payout',
-      typeDisplay: 'Banka Transferi',
-      title: 'Banka Hesabına Aktarım (QNB Finansbank TR)',
-      grossAmount: 0,
-      feeAmount: 0,
-      netAmount: -561.78,
-      currency: 'USD',
-      netAmountTry: -27594.89,
-      runningBalance: 12292.66
-    }
-  ];
+  // Ledger Entries (Canlı verilerden oluşturulur — Sıfır Mock)
+  ledgerEntries: PaymentLedgerEntry[] = [];
 
   // Modals
   showSalesModal = false;
@@ -748,21 +693,26 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const chronoOrders = [...this.orders].reverse();
     for (const o of chronoOrders) {
       const rate = o.exchangeRate || this.liveRate || 49.25;
-      const netOrderUsd = Number((o.grandTotalUsd - o.etsyFeesUsd - (o.offsiteAdFeeUsd || 0)).toFixed(2));
+      const isRefundOrCancel = o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund';
+      const refundVal = o.refundAmountUsd && o.refundAmountUsd > 0 ? o.refundAmountUsd : o.grandTotalUsd;
+      const feeCreditOnRefund = o.etsyFeesUsd < 0 ? Math.abs(o.etsyFeesUsd) : 0;
+      const netOrderUsd = isRefundOrCancel
+        ? Number((-refundVal + feeCreditOnRefund).toFixed(2))
+        : Number((o.grandTotalUsd - o.etsyFeesUsd - (o.offsiteAdFeeUsd || 0)).toFixed(2));
       runningBal = Number((runningBal + netOrderUsd).toFixed(2));
       entries.push({
         id: `TX-${o.receiptId}`,
         entryDate: o.orderDate,
-        transactionType: o.orderStatus === 'canceled' ? 'refund' : 'PAYMENT',
-        typeDisplay: o.orderStatus === 'canceled' ? 'İade / İptal' : 'Sipariş Tahsilatı',
-        title: `Payment for Order #${o.receiptId} (${o.buyerName})`,
+        transactionType: isRefundOrCancel ? 'refund' : 'PAYMENT',
+        typeDisplay: isRefundOrCancel ? 'İade / İptal' : 'Sipariş Tahsilatı',
+        title: isRefundOrCancel ? `Refund for Order #${o.receiptId} (${o.buyerName})` : `Payment for Order #${o.receiptId} (${o.buyerName})`,
         orderNumber: `#${o.receiptId}`,
-        grossAmount: o.grandTotalUsd,
-        feeAmount: -Number((o.etsyFeesUsd + (o.offsiteAdFeeUsd || 0)).toFixed(2)),
-        netAmount: o.orderStatus === 'canceled' ? -o.grandTotalUsd : netOrderUsd,
+        grossAmount: isRefundOrCancel ? 0 : o.grandTotalUsd,
+        feeAmount: isRefundOrCancel ? feeCreditOnRefund : -Number((o.etsyFeesUsd + (o.offsiteAdFeeUsd || 0)).toFixed(2)),
+        netAmount: netOrderUsd,
         currency: 'USD',
-        netAmountTry: Number(((o.orderStatus === 'canceled' ? -o.grandTotalUsd : netOrderUsd) * rate).toFixed(2)),
-        runningBalance: Math.max(0, runningBal)
+        netAmountTry: Number((netOrderUsd * rate).toFixed(2)),
+        runningBalance: Number(runningBal.toFixed(2))
       });
     }
     this.ledgerEntries = entries.reverse();
@@ -2072,7 +2022,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     const end = this.parseTurkishDate(this.endDate, true);
 
     // 1. Canlı sipariş listesi çekimi
-    this.etsyApi.getOrderFinancialsByDateRange(start, end).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.etsyApi.getOrderFinancialsByDateRange(start, end, isManualRefresh).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (res) => {
         if (isManualRefresh) this.isRefreshing = false;
         if (res && res.orders && Array.isArray(res.orders) && res.orders.length > 0) {
@@ -2086,7 +2036,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
             productTitle: dto.productTitle || dto.title || '',
             quantity: dto.quantity || 1,
             grandTotalUsd: dto.grandTotalUsd || 0,
-            etsyFeesUsd: (dto.receiptId === '4225379961') ? 9.15 : (dto.etsyFeesUsd || 0),
+            etsyFeesUsd: dto.etsyFeesUsd || 0,
             offsiteAdFeeUsd: dto.offsiteAdFeeUsd || 0,
             productCostUsd: dto.productCostUsd !== undefined ? dto.productCostUsd : null,
             netProfitUsd: dto.netProfitUsd || 0,
@@ -2100,8 +2050,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
             packagingCostUsd: dto.packagingCostUsd !== undefined ? dto.packagingCostUsd : undefined,
             costNotes: dto.costNotes || undefined,
             effectiveExchangeRate: dto.effectiveExchangeRate || (dto.exchangeRate ? Number((dto.exchangeRate * 0.975).toFixed(2)) : undefined),
-            etsyNetPayoutUsd: (dto.receiptId === '4225379961') ? 35.10 : (dto.etsyNetPayoutUsd !== undefined ? dto.etsyNetPayoutUsd : (dto.grandTotalUsd ? Number((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)).toFixed(2)) : undefined)),
-            etsyNetPayoutTry: (dto.receiptId === '4225379961') ? 1704.23 : (dto.etsyNetPayoutTry !== undefined ? dto.etsyNetPayoutTry : (dto.grandTotalUsd && dto.exchangeRate ? Number(((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)) * (dto.exchangeRate * 0.975)).toFixed(2)) : undefined)),
+            etsyNetPayoutUsd: dto.etsyNetPayoutUsd !== undefined ? dto.etsyNetPayoutUsd : (dto.grandTotalUsd ? Number((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)).toFixed(2)) : undefined),
+            etsyNetPayoutTry: dto.etsyNetPayoutTry !== undefined ? dto.etsyNetPayoutTry : (dto.grandTotalUsd && dto.exchangeRate ? Number(((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)) * (dto.exchangeRate * 0.975)).toFixed(2)) : undefined),
             fxConversionFeeTry: dto.fxConversionFeeTry !== undefined ? dto.fxConversionFeeTry : undefined,
             refundDate: dto.refundDate || undefined,
             originalOrderDate: dto.originalOrderDate || dto.orderDate,
@@ -2157,7 +2107,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
     });
 
     // 2. Canlı VDS/Etsy defter KPI kartları çekimi (GEMINI.md Kural 3: Sıfır Mock, Sunucu Finans Motoru)
-    this.etsyApi.getFinancialPerformanceByDateRange(start, end).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    this.etsyApi.getFinancialPerformanceByDateRange(start, end, isManualRefresh).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (perf: any) => {
         if (perf) {
           const rate = Number(perf.exchangeRateUsed ?? this.liveRate ?? 49.12);
@@ -2169,16 +2119,16 @@ export class AccountingComponent implements OnInit, OnDestroy {
           const grossTry = Number(perf.grossSalesTRY ?? perf.grossSalesTry ?? (grossUsd * rate));
 
           const feesUsd = Number(perf.platformFees ?? 0);
-          const feesTry = Number((feesUsd * rate).toFixed(2));
+          const feesTry = Number((perf.platformFeesTRY ?? (feesUsd * rate)).toFixed(2));
 
           const innerAdsUsd = Number(perf.internalAdsCost ?? 0);
-          const innerAdsTry = Number((innerAdsUsd * rate).toFixed(2));
+          const innerAdsTry = Number((perf.internalAdsCostTRY ?? (innerAdsUsd * rate)).toFixed(2));
 
           const offsiteAdsUsd = Number(perf.externalAdsCost ?? 0);
-          const offsiteAdsTry = Number((offsiteAdsUsd * rate).toFixed(2));
+          const offsiteAdsTry = Number((perf.externalAdsCostTRY ?? (offsiteAdsUsd * rate)).toFixed(2));
 
           const refundsUsd = Number(perf.refunds ?? 0);
-          const refundsTry = Number((refundsUsd * rate).toFixed(2));
+          const refundsTry = Number((perf.refundsTRY ?? (refundsUsd * rate)).toFixed(2));
 
           const costsUsd = Number(((perf.productCosts ?? 0) + (perf.shippingCosts ?? 0)).toFixed(2));
           const costsTry = Number((perf.productCostsTRY ?? (costsUsd * rate)).toFixed(2));
@@ -2706,7 +2656,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
           // VDS Canlı Defter Motorundan güncel performans verilerini yeniden çek
           const start = this.parseTurkishDate(this.startDate, false);
           const end = this.parseTurkishDate(this.endDate, true);
-          this.etsyApi.getFinancialPerformanceByDateRange(start, end).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+          this.etsyApi.getFinancialPerformanceByDateRange(start, end, true).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
             next: (perf: any) => {
               if (perf) {
                 const rate = Number(perf.exchangeRateUsed ?? this.liveRate ?? 49.12);

@@ -115,7 +115,11 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
             report.NetProfitTry,
             null, null, null,
             report.AverageExchangeRate,
-            report.ProductCostsTry);
+            report.ProductCostsTry,
+            Math.Abs(report.EtsyFeesTry),
+            Math.Abs(report.InnerAdFeesTry),
+            Math.Abs(report.OffsiteAdFeesTry),
+            Math.Abs(report.RefundsTry));
     }
 
     private static FinancialPerformance EmptyPerformance(DateTimeOffset startDate, DateTimeOffset endDate) =>

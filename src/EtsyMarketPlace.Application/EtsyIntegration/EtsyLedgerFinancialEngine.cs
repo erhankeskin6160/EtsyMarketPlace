@@ -182,20 +182,22 @@ public static class EtsyLedgerFinancialEngine
             var innerAds = dayEntries.Where(e => e.Type == "ad_fee").Sum(e => e.Amount);
             var offsiteAds = dayEntries.Where(e => e.Type == "offsite_ads").Sum(e => e.Amount);
             var deposits = dayEntries.Where(e => e.Type == "deposit").Sum(e => e.Amount);
+            var shipping = dayEntries.Where(e => e.Type == "shipping").Sum(e => e.Amount);
             var fees = dayEntries.Where(IsFeeType).Sum(e => e.Amount);
 
             var grossTry = dayEntries.Where(e => e.Type == "sale").Sum(e => e.AmountTry);
             var refundsTry = dayEntries.Where(e => e.Type == "refund").Sum(e => e.AmountTry);
             var innerAdsTry = dayEntries.Where(e => e.Type == "ad_fee").Sum(e => e.AmountTry);
             var offsiteAdsTry = dayEntries.Where(e => e.Type == "offsite_ads").Sum(e => e.AmountTry);
+            var shippingTry = dayEntries.Where(e => e.Type == "shipping").Sum(e => e.AmountTry);
             var feesTry = dayEntries.Where(IsFeeType).Sum(e => e.AmountTry);
 
             var productCosts = productCostsByDay.TryGetValue(day, out var pc) ? pc : 0m;
             var dayRate = HistoricalExchangeRateProvider.GetRateForDate(day, fallbackExchangeRate);
             var productCostsTry = Math.Round(productCosts * dayRate, 2);
 
-            var netRevenue = gross + refunds + fees + innerAds + offsiteAds;
-            var netRevenueTry = grossTry + refundsTry + feesTry + innerAdsTry + offsiteAdsTry;
+            var netRevenue = gross + refunds + fees + innerAds + offsiteAds + shipping;
+            var netRevenueTry = grossTry + refundsTry + feesTry + innerAdsTry + offsiteAdsTry + shippingTry;
             var realProfit = netRevenue - productCosts;
             var realProfitTry = netRevenueTry - productCostsTry;
 

@@ -496,4 +496,49 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(8.50m, row.ActualShippingCostUsd);
         Assert.Equal(1.00m, row.PackagingCostUsd);
     }
+
+    [Fact]
+    public void BuildDetailedOrderRows_SubtractsOffsiteAdsOn4225379961_AndDoesNotDoubleSubtractTax()
+    {
+        var receipt1 = new EtsyDashboardReceipt(
+            4225379961L,
+            new DateTimeOffset(2026, 11, 8, 12, 0, 0, TimeSpan.Zero),
+            true, false, false, "USD", 44.25m, 31.50m, 10.00m, 13.50m, 2.75m, 0m,
+            new[] { new EtsyDashboardReceiptItem("Hexcore Rubik Cube", 11111, 1) },
+            "Seth Camacho");
+
+        var receipt2 = new EtsyDashboardReceipt(
+            4226762400L,
+            new DateTimeOffset(2026, 11, 8, 14, 0, 0, TimeSpan.Zero),
+            true, false, false, "USD", 94.76m, 80.00m, 7.00m, 0m, 7.76m, 0m,
+            new[] { new EtsyDashboardReceiptItem("The Mask Figure", 22222, 1) },
+            "Bryan Sanon");
+
+        var ledgerFees = new[]
+        {
+            new EtsyDashboardLedgerFee("offsite_ads", 4225379961L, "Offsite ads #4225379961", -5.00m),
+            new EtsyDashboardLedgerFee("offsite_ads", 4225379961L, "Offsite ads VAT #4225379961", -1.30m)
+        };
+
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4225379961L] = new EtsyDashboardOrderCost(ProductCost: 5.00m, ShippingCost: 8.00m, PackagingCost: 0m)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            new[] { receipt1, receipt2 },
+            ledgerFees,
+            costs,
+            50.00m);
+
+        var seth = rows.Single(r => r.ReceiptId == 4225379961L);
+        Assert.Equal(6.30m, seth.OffsiteAdFeeUsd);
+        // 1704.23 TL hak ediş - (6.30 + 13.00) * kuru -> Dış reklam mutlaka düşülmüş olmalı
+        var expectedTry = Math.Round(1704.23m - ((6.30m + 13.00m) * seth.ExchangeRate), 2);
+        Assert.Equal(expectedTry, seth.NetProfitTry);
+
+        var bryan = rows.Single(r => r.ReceiptId == 4226762400L);
+        // Tax etsyFees içinde zaten olduğundan EtsyNetPayoutUsd iki kez tax düşmemeli
+        Assert.Equal(Math.Round(bryan.GrandTotalUsd - bryan.EtsyFeesUsd - bryan.OffsiteAdFeeUsd, 2), bryan.EtsyNetPayoutUsd);
+    }
 }
