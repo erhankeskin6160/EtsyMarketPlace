@@ -703,4 +703,51 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(38.31m, row.ProductCostUsd);
         Assert.Equal(-201.98m, row.NetProfitUsd);
     }
+
+    [Fact]
+    public void BuildDetailedOrderRows_MatchesTryDenominatedCrossPeriodReceipt_ByConvertedUsdAmount()
+    {
+        var orderAt = new DateTimeOffset(2026, 9, 16, 10, 0, 0, TimeSpan.Zero);
+        var refundAt = new DateTimeOffset(2026, 11, 12, 10, 0, 0, TimeSpan.Zero);
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", 213006308300L, "REFUND_GROSS", -161.39m, refundAt)
+        };
+        var fallbackReceipts = new[]
+        {
+            new EtsyDashboardReceipt(
+                4178116200L,
+                orderAt,
+                false,
+                true,
+                false,
+                "TRY",
+                8308.46m,
+                8308.46m,
+                0m,
+                0m,
+                0m,
+                8106.75m,
+                new List<EtsyDashboardReceiptItem> { new("Arcane Jinx Statue", 111, 1) })
+        };
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4178116200L] = new(15.31m, 23m, 0m, null)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            Array.Empty<EtsyDashboardReceipt>(),
+            ledger,
+            costs,
+            50m,
+            buyerNameMap: new Dictionary<long, string> { [4178116200L] = "Adam Schulz" },
+            originalOrderDateMap: new Dictionary<long, DateTimeOffset> { [4178116200L] = orderAt },
+            fallbackReceipts: fallbackReceipts);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(4178116200L, row.ReceiptId);
+        Assert.Equal("Adam Schulz", row.BuyerName);
+        Assert.Equal(38.31m, row.ProductCostUsd);
+        Assert.Equal(-199.70m, row.NetProfitUsd);
+    }
 }

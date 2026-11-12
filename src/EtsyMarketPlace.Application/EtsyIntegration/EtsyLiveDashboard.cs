@@ -570,7 +570,7 @@ public static class EtsyLiveDashboardCalculator
         return map;
     }
 
-    /// <summary>Iade tutarina uyan tek bir iptal/iade edilmis USD siparisi varsa onu dondurur; belirsizse null.</summary>
+    /// <summary>Iade tutarina uyan tek bir iptal/iade edilmis siparis varsa (USD veya TRY/EUR/GBP cevrimiyle) onu dondurur; belirsizse null.</summary>
     internal static long? TryMatchReceiptByAmount(
         decimal refundUsd,
         DateTimeOffset refundAt,
@@ -580,13 +580,34 @@ public static class EtsyLiveDashboardCalculator
         if (receipts is null || refundUsd <= 0) return null;
 
         var candidates = receipts
-            .Where(r => (r.IsCanceled || r.RefundedAmount > 0)
-                && !claimedReceipts.Contains(r.ReceiptId)
-                && r.CurrencyCode.Equals("USD", StringComparison.OrdinalIgnoreCase)
-                && r.CreatedAt <= refundAt
-                && r.GrandTotal > 0
-                && refundUsd <= r.GrandTotal + 0.01m
-                && refundUsd >= r.GrandTotal * 0.85m)
+            .Where(r =>
+            {
+                if (!(r.IsCanceled || r.RefundedAmount > 0)) return false;
+                if (claimedReceipts.Contains(r.ReceiptId)) return false;
+                if (r.CreatedAt > refundAt || r.GrandTotal <= 0) return false;
+
+                var grandTotalUsd = r.GrandTotal;
+                if (r.CurrencyCode.Equals("TRY", StringComparison.OrdinalIgnoreCase) || r.CurrencyCode.Equals("TL", StringComparison.OrdinalIgnoreCase))
+                {
+                    var receiptRate = HistoricalExchangeRateProvider.GetRateForDate(r.CreatedAt.UtcDateTime, 49.16m);
+                    if (receiptRate <= 0) return false;
+                    grandTotalUsd = r.GrandTotal / receiptRate;
+                }
+                else if (r.CurrencyCode.Equals("EUR", StringComparison.OrdinalIgnoreCase))
+                {
+                    grandTotalUsd = r.GrandTotal * 1.1m;
+                }
+                else if (r.CurrencyCode.Equals("GBP", StringComparison.OrdinalIgnoreCase))
+                {
+                    grandTotalUsd = r.GrandTotal * 1.3m;
+                }
+                else if (!r.CurrencyCode.Equals("USD", StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                return refundUsd <= grandTotalUsd + 0.05m && refundUsd >= grandTotalUsd * 0.85m;
+            })
             .Take(2)
             .ToList();
 

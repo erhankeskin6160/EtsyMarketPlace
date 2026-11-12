@@ -163,8 +163,16 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
         {
             try
             {
-                var fallbackReceipts = await dataClient.GetReceiptsModifiedBetweenAsync(shopId, startDate, endDate, cancellationToken);
-                if (fallbackReceipts.Count == 0)
+                IReadOnlyList<EtsyDashboardReceipt>? fallbackReceipts = null;
+                try
+                {
+                    fallbackReceipts = await dataClient.GetReceiptsModifiedBetweenAsync(shopId, startDate, endDate, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    fallbackReceipts = null;
+                }
+                if (fallbackReceipts is null || fallbackReceipts.Count == 0)
                 {
                     fallbackReceipts = await dataClient.GetShopReceiptsAsync(shopId, startDate.AddDays(-120), startDate, cancellationToken);
                 }

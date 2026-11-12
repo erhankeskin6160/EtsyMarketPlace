@@ -490,8 +490,15 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         {
             try
             {
-                fallbackReceipts = await _etsyClient.GetReceiptsModifiedBetweenAsync(shopId, start, end, cancellationToken);
-                if (fallbackReceipts.Count == 0)
+                try
+                {
+                    fallbackReceipts = await _etsyClient.GetReceiptsModifiedBetweenAsync(shopId, start, end, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    fallbackReceipts = null;
+                }
+                if (fallbackReceipts is null || fallbackReceipts.Count == 0)
                 {
                     fallbackReceipts = await _etsyClient.GetShopReceiptsAsync(shopId, start.AddDays(-120), start, cancellationToken);
                 }
