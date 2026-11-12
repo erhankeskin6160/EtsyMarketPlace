@@ -91,7 +91,7 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
 
             if (costs.Count > 0)
             {
-                await AddCrossPeriodRefundCostsAsync(shopId, startDate, entries, costs, periodReceiptIds, costsByDay, cancellationToken);
+                await AddCrossPeriodRefundCostsAsync(shopId, startDate, endDate, entries, costs, periodReceiptIds, costsByDay, cancellationToken);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -107,6 +107,7 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
     private async Task AddCrossPeriodRefundCostsAsync(
         string shopId,
         DateTimeOffset startDate,
+        DateTimeOffset endDate,
         IReadOnlyList<EtsyLedgerEntryDetail> entries,
         IReadOnlyDictionary<long, EtsyDashboardOrderCost> costs,
         HashSet<long> periodReceiptIds,
@@ -162,7 +163,11 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
         {
             try
             {
-                var fallbackReceipts = await dataClient.GetShopReceiptsAsync(shopId, startDate.AddDays(-120), startDate, cancellationToken);
+                var fallbackReceipts = await dataClient.GetReceiptsModifiedBetweenAsync(shopId, startDate, endDate, cancellationToken);
+                if (fallbackReceipts.Count == 0)
+                {
+                    fallbackReceipts = await dataClient.GetShopReceiptsAsync(shopId, startDate.AddDays(-120), startDate, cancellationToken);
+                }
                 var claimed = new HashSet<long>(resolvedByEntry.Values);
                 for (var i = 0; i < refundEntries.Count; i++)
                 {

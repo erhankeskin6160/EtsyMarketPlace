@@ -338,6 +338,63 @@ public sealed class EtsyDashboardServiceTests
         Assert.Equal(-201.98m, result.Performance.NetProfit);
     }
 
+    [Fact]
+    public async Task GetOrderFinancialsAsync_UsesModifiedReceipts_ToAvoidJulyCollisionAndResolveAdamSchulzCost()
+    {
+        var reporting = new FakeReportingService();
+        var ledger = new FakeLedgerReportService { LedgerOk = true };
+        var repo = new FakeIntegrationRepository();
+        repo.Costs[4178116161L] = new EtsyDashboardOrderCost(15.31m, 23.00m, 0m, null);
+        var client = new ModifiedReceiptsOnlyCrossPeriodClient();
+        var service = new EtsyDashboardService(reporting, ledger, client, repo, new BankDepositService());
+
+        var result = await service.GetOrderFinancialsAsync(
+            "shop-1",
+            "custom",
+            new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 11, 12, 23, 59, 59, TimeSpan.Zero));
+
+        var row = Assert.Single(result.Orders);
+        Assert.Equal(4178116161L, row.ReceiptId);
+        Assert.Equal("Adam Schulz", row.BuyerName);
+        Assert.Equal(38.31m, row.ProductCostUsd);
+        Assert.Equal(-201.98m, row.NetProfitUsd);
+    }
+
+    private sealed class ModifiedReceiptsOnlyCrossPeriodClient : IEtsyDataClient
+    {
+        public Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyBankPayout>>(Array.Empty<EtsyBankPayout>());
+        public Task<IReadOnlyList<EtsyFinancialTransaction>> GetFinancialTransactionsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyFinancialTransaction>>(Array.Empty<EtsyFinancialTransaction>());
+        public Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyOrderCostAlert>>(Array.Empty<EtsyOrderCostAlert>());
+        public Task<IReadOnlyList<EtsyDashboardReceipt>> GetShopReceiptsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
+        {
+            if (startDate < new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero))
+            {
+                return Task.FromResult<IReadOnlyList<EtsyDashboardReceipt>>(new[]
+                {
+                    new EtsyDashboardReceipt(4122912855L, new DateTimeOffset(2026, 7, 22, 10, 0, 0, TimeSpan.Zero), false, true, false, "USD", 179.69m, 179.69m, 0m, 0m, 0m, 179.69m, new[] { new EtsyDashboardReceiptItem("Old July Order", 111L, 1, 299999999996L) }, "Tetiana Dzherek"),
+                    new EtsyDashboardReceipt(4178116161L, new DateTimeOffset(2026, 9, 16, 10, 0, 0, TimeSpan.Zero), false, true, false, "USD", 170.50m, 170.50m, 0m, 0m, 0m, 163.67m, new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 123L, 1, 299999999995L) }, "Adam Schulz")
+                });
+            }
+            return Task.FromResult<IReadOnlyList<EtsyDashboardReceipt>>(Array.Empty<EtsyDashboardReceipt>());
+        }
+        public Task<IReadOnlyList<EtsyDashboardReceipt>> GetReceiptsModifiedBetweenAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyDashboardReceipt>>(new[]
+            {
+                new EtsyDashboardReceipt(4178116161L, new DateTimeOffset(2026, 9, 16, 10, 0, 0, TimeSpan.Zero), false, true, false, "USD", 170.50m, 170.50m, 0m, 0m, 0m, 163.67m, new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 123L, 1, 299999999995L) }, "Adam Schulz")
+            });
+        public Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyDashboardLedgerFee>>(new[]
+            {
+                new EtsyDashboardLedgerFee("refund", 299999999997L, "REFUND_GROSS", -163.67m, new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero), 9988776657L)
+            });
+        public Task<IReadOnlyList<EtsyLedgerEntryDetail>> GetLedgerEntriesDetailedAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyLedgerEntryDetail>>(Array.Empty<EtsyLedgerEntryDetail>());
+    }
+
     private sealed class CrossPeriodLedgerReportClient : IEtsyDataClient
     {
         public Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>

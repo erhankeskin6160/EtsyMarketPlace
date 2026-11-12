@@ -51,6 +51,10 @@ public interface IEtsyDataClient
     /// <summary>Capraz donem iadeleri icin tekil siparis detayini (alici adi, urun adi, siparis tarihi) ceker.</summary>
     Task<EtsyDashboardReceipt?> GetReceiptByIdAsync(string shopId, long receiptId, CancellationToken cancellationToken = default) =>
         Task.FromResult<EtsyDashboardReceipt?>(null);
+
+    /// <summary>Verilen tarih araliginda durumu/iadesi guncellenen (min_last_modified/max_last_modified) magaza fislerini ceker.</summary>
+    Task<IReadOnlyList<EtsyDashboardReceipt>> GetReceiptsModifiedBetweenAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<EtsyDashboardReceipt>>(Array.Empty<EtsyDashboardReceipt>());
 }
 
 public interface IEtsyFinancialReportService

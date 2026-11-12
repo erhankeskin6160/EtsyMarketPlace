@@ -36,6 +36,10 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     public Task<IReadOnlyList<EtsyDashboardReceipt>> GetShopReceiptsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
         GetPagedAsync("application/shops/{0}/receipts?includes=Transactions", shopId, startDate, endDate, ParseDashboardReceipt, cancellationToken);
 
+    /// <summary>Verilen aralikta durumu/iadesi guncellenen (min_last_modified/max_last_modified) magaza fislerini ceker.</summary>
+    public Task<IReadOnlyList<EtsyDashboardReceipt>> GetReceiptsModifiedBetweenAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
+        GetSingleRangePagedAsync("application/shops/{0}/receipts?includes=Transactions", shopId, startDate, endDate, ParseDashboardReceipt, cancellationToken, "min_last_modified", "max_last_modified");
+
     /// <summary>Web kontrol paneli: odeme hesabi defter kayitlari (dis reklam kesintilerinin siparis eslesmesi icin).</summary>
     public Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default) =>
         GetPagedAsync("application/shops/{0}/payment-account/ledger-entries", shopId, startDate, endDate, ParseDashboardLedgerFee, cancellationToken);
@@ -379,7 +383,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         return elements;
     }
 
-    private async Task<IReadOnlyList<T>> GetSingleRangePagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken)
+    private async Task<IReadOnlyList<T>> GetSingleRangePagedAsync<T>(string routeTemplate, string shopId, DateTimeOffset startDate, DateTimeOffset endDate, Func<JsonElement, string, T?> parser, CancellationToken cancellationToken, string minParamName = "min_created", string maxParamName = "max_created")
         where T : class
     {
         var results = new List<T>();
@@ -388,7 +392,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         {
             var route = string.Format(CultureInfo.InvariantCulture, routeTemplate, Uri.EscapeDataString(shopId));
             var separator = route.Contains('?') ? "&" : "?";
-            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}{separator}limit={limit}&offset={offset}&min_created={startDate.ToUnixTimeSeconds()}&max_created={endDate.ToUnixTimeSeconds()}";
+            var uri = $"{_options.ApiBaseUrl.TrimEnd('/')}/{route}{separator}limit={limit}&offset={offset}&{minParamName}={startDate.ToUnixTimeSeconds()}&{maxParamName}={endDate.ToUnixTimeSeconds()}";
             using var request = new HttpRequestMessage(HttpMethod.Get, uri);
             request.Headers.Add("X-Etsy-Shop-Id", shopId);
             request.Headers.Add("x-api-key", await ResolveApiKeyHeaderAsync(shopId, cancellationToken));
