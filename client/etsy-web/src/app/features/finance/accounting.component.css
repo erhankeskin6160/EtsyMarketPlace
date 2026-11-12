@@ -205,6 +205,9 @@
       border: 1px solid rgba(239, 68, 68, 0.4) !important;
       background: linear-gradient(180deg, #281418, #180d10) !important;
     }
+    .kpi-card.highlight.danger .kpi-title {
+      color: #f87171 !important;
+    }
     .kpi-header {
       display: flex;
       justify-content: space-between;

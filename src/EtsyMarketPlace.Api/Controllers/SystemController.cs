@@ -59,6 +59,9 @@ public class SystemController : ControllerBase
             var webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot", "index.html");
             if (System.IO.File.Exists(webRoot))
             {
+                Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+                Response.Headers.Pragma = "no-cache";
+                Response.Headers.Expires = "0";
                 return PhysicalFile(webRoot, "text/html");
             }
         }

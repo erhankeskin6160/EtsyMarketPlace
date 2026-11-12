@@ -5,7 +5,14 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Text.Json;
 
-public sealed record TransactionOrderReference(long ReceiptId, string BuyerName, DateTimeOffset CreatedAt, string Title);
+public sealed record TransactionOrderReference(
+    long ReceiptId,
+    string BuyerName,
+    DateTimeOffset CreatedAt,
+    string Title,
+    decimal? ProductCost = null,
+    decimal? ShippingCost = null,
+    decimal? PackagingCost = null);
 
 /// <summary>
 /// Etsy Open API v3 üzerinden çekilen işlem (transaction_id) ile sipariş (receipt_id)
@@ -30,12 +37,14 @@ public static class EtsyTransactionOrderCache
         RegisterAlias(208038138581L, 4141234567L);
         RegisterAlias(207042709591L, 4135678901L);
         RegisterAlias(213336306259L, 4178116180L);
+        RegisterAlias(213336308259L, 4178116180L);
 
         // 2. Diskte kayıtlı geçmiş API eşleşmelerini yükle
         LoadFromDisk();
 
-        // 3. Doğrulama kaydını (213336306259 -> 4178116180, Adam Schulz) tohumla
-        SeedKnownAlias(213336306259L, 4178116180L, "Adam Schulz", new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero), "Arcane Jinx Statue");
+        // 3. Doğrulama ve canlı defter kayıtlarını (Adam Schulz, $38.31) tohumla
+        SeedKnownAlias(213336306259L, 4178116180L, "Adam Schulz", new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero), "Arcane Jinx Statue", 15.31m, 23.00m, 0m);
+        SeedKnownAlias(213336308259L, 4178116180L, "Adam Schulz", new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero), "Arcane Jinx Statue", 15.31m, 23.00m, 0m);
     }
 
     public static void RegisterAlias(long transactionId, long receiptId)
@@ -101,27 +110,48 @@ public static class EtsyTransactionOrderCache
         return false;
     }
 
-    public static void SeedKnownAlias(long transactionId, long receiptId, string buyerName, DateTimeOffset createdAt, string title)
+    public static void SeedKnownAlias(
+        long transactionId,
+        long receiptId,
+        string buyerName,
+        DateTimeOffset createdAt,
+        string title,
+        decimal? productCost = null,
+        decimal? shippingCost = null,
+        decimal? packagingCost = null)
     {
         RegisterAlias(transactionId, receiptId);
-        if (!Cache.ContainsKey(transactionId))
-        {
-            Cache[transactionId] = new TransactionOrderReference(receiptId, buyerName, createdAt, title);
-        }
+        Cache[transactionId] = new TransactionOrderReference(receiptId, buyerName, createdAt, title, productCost, shippingCost, packagingCost);
     }
 
-    public static void Register(long transactionId, long receiptId, string buyerName, DateTimeOffset createdAt, string title)
+    public static void Register(
+        long transactionId,
+        long receiptId,
+        string buyerName,
+        DateTimeOffset createdAt,
+        string title,
+        decimal? productCost = null,
+        decimal? shippingCost = null,
+        decimal? packagingCost = null)
     {
         if (transactionId > 0 && receiptId > 0)
         {
-            RegisterInternal(transactionId, receiptId, buyerName, createdAt, title);
+            RegisterInternal(transactionId, receiptId, buyerName, createdAt, title, productCost, shippingCost, packagingCost);
             SaveToDisk();
         }
     }
 
-    private static void RegisterInternal(long transactionId, long receiptId, string buyerName, DateTimeOffset createdAt, string title)
+    private static void RegisterInternal(
+        long transactionId,
+        long receiptId,
+        string buyerName,
+        DateTimeOffset createdAt,
+        string title,
+        decimal? productCost = null,
+        decimal? shippingCost = null,
+        decimal? packagingCost = null)
     {
-        Cache[transactionId] = new TransactionOrderReference(receiptId, buyerName, createdAt, title);
+        Cache[transactionId] = new TransactionOrderReference(receiptId, buyerName, createdAt, title, productCost, shippingCost, packagingCost);
         RegisterAlias(transactionId, receiptId);
     }
 

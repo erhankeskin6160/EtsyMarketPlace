@@ -39,6 +39,23 @@ jobs:
         run: |
           dotnet publish SimilarProductsWinForms.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true /p:EnableCompressionInSingleFile=true -o publish_vds_standalone
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build Web Client (Angular 18)
+        run: |
+          cd client/etsy-web
+          npm ci
+          npm run build
+
+      - name: Copy Web Client to API wwwroot
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src/EtsyMarketPlace.Api/wwwroot
+          Copy-Item -Path client/etsy-web/dist/etsy-web/browser/* -Destination src/EtsyMarketPlace.Api/wwwroot/ -Recurse -Force
+
       - name: Build Standalone Win-x64 API
         shell: pwsh
         run: |

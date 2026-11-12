@@ -900,4 +900,47 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.True(row2.NetProfitUsd < 0);
         Assert.Equal(-199.70m, row2.NetProfitUsd); // -161.39 refund gross - 38.31 cost = -199.70
     }
+
+    [Theory]
+    [InlineData(213336306259L)]
+    [InlineData(213336308259L)]
+    public void BuildDetailedOrderRows_ResolvesAdamSchulzAndCostFallback_ForBothTransactionIds(long transactionId)
+    {
+        const long expectedReceiptId = 4178116180L;
+        const string expectedBuyer = "Adam Schulz";
+        const decimal expectedCost = 38.31m;
+
+        // 1. Verify canonical ID resolution
+        var canonicalId = EtsyTransactionOrderCache.GetCanonicalReceiptId(transactionId);
+        Assert.Equal(expectedReceiptId, canonicalId);
+
+        // 2. Verify cache reference resolution (buyer name, title, and product/shipping cost)
+        var hasRef = EtsyTransactionOrderCache.TryGetOrderReference(transactionId, out var orderRef);
+        Assert.True(hasRef);
+        Assert.NotNull(orderRef);
+        Assert.Equal(expectedReceiptId, orderRef!.ReceiptId);
+        Assert.Equal(expectedBuyer, orderRef.BuyerName);
+        Assert.Equal(15.31m, orderRef.ProductCost);
+        Assert.Equal(23.00m, orderRef.ShippingCost);
+
+        // 3. Verify cross-period refund row construction with empty DB costs dictionary to exercise cost fallback ($38.31)
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", transactionId, "REFUND_GROSS", -161.30m, DateTimeOffset.UtcNow)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            Array.Empty<EtsyDashboardReceipt>(),
+            ledger,
+            new Dictionary<long, EtsyDashboardOrderCost>(), // Empty DB cost table
+            50.26m);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(expectedReceiptId, row.ReceiptId);
+        Assert.Equal(expectedBuyer, row.BuyerName);
+        Assert.Equal(expectedCost, row.ProductCostUsd);
+        Assert.True(row.HasCostData);
+        Assert.True(row.NetProfitUsd < 0);
+        Assert.Equal(-199.61m, row.NetProfitUsd); // -161.30 refund gross - 38.31 cost = -199.61
+    }
 }

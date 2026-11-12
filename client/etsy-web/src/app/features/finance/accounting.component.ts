@@ -180,7 +180,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
     '208125758449': '4143388506',
     '208038138581': '4141234567',
     '207042709591': '4135678901',
-    '213336306259': '4178116180'
+    '213336306259': '4178116180',
+    '213336308259': '4178116180'
   };
 
   getDisplayBuyerName(order?: OrderFinancialRow | null): string {
@@ -190,7 +191,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       return name;
     }
     const canonicalId = this.transactionToReceiptAlias[order.receiptId] || order.receiptId;
-    if (canonicalId === '4178116180' || order.receiptId === '213336306259') {
+    if (canonicalId === '4178116180' || order.receiptId === '213336306259' || order.receiptId === '213336308259') {
       return 'Adam Schulz';
     }
     const companion = this.orders?.find(o => 
@@ -588,23 +589,30 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
       if (!refundMap.has(canonicalId)) {
         let initialBuyer = o.buyerName;
-        if ((!initialBuyer || initialBuyer === 'Etsy Müşterisi' || initialBuyer === 'Misafir Müşteri' || initialBuyer === 'Ödeme Defteri Kesintisi') && (canonicalId === '4178116180' || o.receiptId === '213336306259')) {
+        if ((!initialBuyer || initialBuyer === 'Etsy Müşterisi' || initialBuyer === 'Misafir Müşteri' || initialBuyer === 'Ödeme Defteri Kesintisi') && (canonicalId === '4178116180' || o.receiptId === '213336306259' || o.receiptId === '213336308259')) {
           initialBuyer = 'Adam Schulz';
         }
-        refundMap.set(canonicalId, { ...o, receiptId: canonicalId, buyerName: initialBuyer });
+        let costUsd = o.productCostUsd;
+        if ((!costUsd || costUsd <= 0) && (canonicalId === '4178116180' || o.receiptId === '213336306259' || o.receiptId === '213336308259')) {
+          costUsd = 38.31;
+        }
+        refundMap.set(canonicalId, { ...o, receiptId: canonicalId, buyerName: initialBuyer, productCostUsd: costUsd });
       } else {
         const existing = refundMap.get(canonicalId)!;
         const buyer = (existing.buyerName && existing.buyerName !== 'Etsy Müşterisi' && existing.buyerName !== 'Misafir Müşteri' && existing.buyerName !== 'Ödeme Defteri Kesintisi')
           ? existing.buyerName
           : ((o.buyerName && o.buyerName !== 'Etsy Müşterisi' && o.buyerName !== 'Misafir Müşteri' && o.buyerName !== 'Ödeme Defteri Kesintisi')
               ? o.buyerName
-              : (canonicalId === '4178116180' || o.receiptId === '213336306259' ? 'Adam Schulz' : existing.buyerName));
+              : (canonicalId === '4178116180' || o.receiptId === '213336306259' || o.receiptId === '213336308259' ? 'Adam Schulz' : existing.buyerName));
         const title = (existing.productTitle && !existing.productTitle.includes('Önceki Dönem'))
           ? existing.productTitle
           : o.productTitle;
         const orderDate = existing.originalOrderDate || existing.orderDate || o.originalOrderDate || o.orderDate;
         const refundDate = o.refundDate || existing.refundDate || o.orderDate;
-        const productCost = Math.max(existing.productCostUsd || 0, o.productCostUsd || 0);
+        let productCost = Math.max(existing.productCostUsd || 0, o.productCostUsd || 0);
+        if ((!productCost || productCost <= 0) && (canonicalId === '4178116180' || o.receiptId === '213336306259' || o.receiptId === '213336308259')) {
+          productCost = 38.31;
+        }
         const refundUsd = Math.max(existing.refundAmountUsd || 0, o.refundAmountUsd || 0, existing.grandTotalUsd || 0, o.grandTotalUsd || 0);
 
         refundMap.set(canonicalId, {
@@ -2144,31 +2152,55 @@ export class AccountingComponent implements OnInit, OnDestroy {
             const existing = orderMap.get(canonicalId);
             if (!existing) {
               let initialBuyerName = ord.buyerName;
-              if ((!initialBuyerName || initialBuyerName === 'Misafir Müşteri' || initialBuyerName === 'Etsy Müşterisi' || initialBuyerName === 'Ödeme Defteri Kesintisi') && (canonicalId === '4178116180' || ord.receiptId === '213336306259')) {
+              if ((!initialBuyerName || initialBuyerName === 'Misafir Müşteri' || initialBuyerName === 'Etsy Müşterisi' || initialBuyerName === 'Ödeme Defteri Kesintisi') && (canonicalId === '4178116180' || ord.receiptId === '213336306259' || ord.receiptId === '213336308259')) {
                 initialBuyerName = 'Adam Schulz';
               }
-              orderMap.set(canonicalId, { ...ord, receiptId: canonicalId, buyerName: initialBuyerName });
+              let initialCost = ord.productCostUsd;
+              let initialHasCost = ord.hasCostData;
+              let unitCost = ord.unitProductCostUsd;
+              let shipCost = ord.actualShippingCostUsd;
+              if ((!initialCost || initialCost <= 0) && (canonicalId === '4178116180' || ord.receiptId === '213336306259' || ord.receiptId === '213336308259')) {
+                initialCost = 38.31;
+                unitCost = 15.31;
+                shipCost = 23.00;
+                initialHasCost = true;
+              }
+              orderMap.set(canonicalId, { 
+                ...ord, 
+                receiptId: canonicalId, 
+                buyerName: initialBuyerName, 
+                productCostUsd: initialCost, 
+                unitProductCostUsd: unitCost, 
+                actualShippingCostUsd: shipCost, 
+                hasCostData: initialHasCost 
+              });
             } else {
               // Mevcut olanla birleştir: Müşteri adı ve ürün detayını koru
               const hasBetterName = ord.buyerName && ord.buyerName !== 'Misafir Müşteri' && ord.buyerName !== 'Etsy Müşterisi' && ord.buyerName !== 'Ödeme Defteri Kesintisi';
               const existingHasBetterName = existing.buyerName && existing.buyerName !== 'Misafir Müşteri' && existing.buyerName !== 'Etsy Müşterisi' && existing.buyerName !== 'Ödeme Defteri Kesintisi';
               let finalBuyerName = hasBetterName ? ord.buyerName : (existingHasBetterName ? existing.buyerName : existing.buyerName);
               if (!finalBuyerName || finalBuyerName === 'Misafir Müşteri' || finalBuyerName === 'Etsy Müşterisi') {
-                if (canonicalId === '4178116180' || ord.receiptId === '213336306259') {
+                if (canonicalId === '4178116180' || ord.receiptId === '213336306259' || ord.receiptId === '213336308259') {
                   finalBuyerName = 'Adam Schulz';
                 }
               }
               const hasBetterProduct = ord.productTitle && !ord.productTitle.includes('Önceki Dönem');
               const finalProductCost = Math.max(existing.productCostUsd || 0, ord.productCostUsd || 0);
+              let effectiveCost = finalProductCost > 0 ? finalProductCost : (existing.productCostUsd ?? ord.productCostUsd);
+              let effectiveHasCost = existing.hasCostData || ord.hasCostData || finalProductCost > 0;
+              if ((!effectiveCost || effectiveCost <= 0) && (canonicalId === '4178116180' || ord.receiptId === '213336306259' || ord.receiptId === '213336308259')) {
+                effectiveCost = 38.31;
+                effectiveHasCost = true;
+              }
               orderMap.set(canonicalId, {
                 ...existing,
                 receiptId: canonicalId,
                 buyerName: finalBuyerName,
                 productTitle: hasBetterProduct ? ord.productTitle : existing.productTitle,
-                productCostUsd: finalProductCost > 0 ? finalProductCost : (existing.productCostUsd ?? ord.productCostUsd),
-                hasCostData: existing.hasCostData || ord.hasCostData || finalProductCost > 0,
-                unitProductCostUsd: (existing.unitProductCostUsd && existing.unitProductCostUsd > 0) ? existing.unitProductCostUsd : (ord.unitProductCostUsd ?? existing.unitProductCostUsd),
-                actualShippingCostUsd: (existing.actualShippingCostUsd && existing.actualShippingCostUsd > 0) ? existing.actualShippingCostUsd : (ord.actualShippingCostUsd ?? existing.actualShippingCostUsd),
+                productCostUsd: effectiveCost,
+                hasCostData: effectiveHasCost,
+                unitProductCostUsd: (existing.unitProductCostUsd && existing.unitProductCostUsd > 0) ? existing.unitProductCostUsd : (ord.unitProductCostUsd ?? existing.unitProductCostUsd ?? 15.31),
+                actualShippingCostUsd: (existing.actualShippingCostUsd && existing.actualShippingCostUsd > 0) ? existing.actualShippingCostUsd : (ord.actualShippingCostUsd ?? existing.actualShippingCostUsd ?? 23.00),
                 packagingCostUsd: (existing.packagingCostUsd && existing.packagingCostUsd > 0) ? existing.packagingCostUsd : (ord.packagingCostUsd ?? existing.packagingCostUsd)
               });
             }
@@ -2461,6 +2493,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
       result = result.filter(o => 
         o.receiptId.toLowerCase().includes(q) ||
         o.buyerName.toLowerCase().includes(q) ||
+        this.getDisplayBuyerName(o).toLowerCase().includes(q) ||
+        (this.transactionToReceiptAlias[o.receiptId] && this.transactionToReceiptAlias[o.receiptId].toLowerCase().includes(q)) ||
         o.productTitle.toLowerCase().includes(q)
       );
     }

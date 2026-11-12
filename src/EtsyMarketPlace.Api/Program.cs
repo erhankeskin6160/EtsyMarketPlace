@@ -318,8 +318,27 @@ if (app.Configuration.GetValue<bool>("Security:RequireHttps"))
 }
 
 app.UseCors();
+
+var staticFileOptions = new StaticFileOptions
+{
+    OnPrepareResponse = ctx =>
+    {
+        var name = ctx.File.Name;
+        if (string.Equals(name, "index.html", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            ctx.Context.Response.Headers.Pragma = "no-cache";
+            ctx.Context.Response.Headers.Expires = "0";
+        }
+        else if (name.EndsWith(".js", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".css", StringComparison.OrdinalIgnoreCase))
+        {
+            ctx.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+        }
+    }
+};
+
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(staticFileOptions);
 app.UseMiddleware<ClientVersionGateMiddleware>();
 app.UseMiddleware<SwaggerBasicAuthMiddleware>();
 app.UseSwagger();
@@ -337,7 +356,7 @@ app.MapPost("/api/system/migrate-postgres", async (EtsyMarketPlace.Infrastructur
     .AllowAnonymous();
 
 // 7. Angular Web Kokpiti SPA Fallback
-app.MapFallbackToFile("index.html").AllowAnonymous();
+app.MapFallbackToFile("index.html", staticFileOptions).AllowAnonymous();
 
 app.Run();
 

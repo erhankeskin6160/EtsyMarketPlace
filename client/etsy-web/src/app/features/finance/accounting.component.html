@@ -209,7 +209,7 @@
         <!-- 8. Gerçek Net Kâr -->
         <div class="kpi-card real-profit highlight interactive-kpi" [class.danger]="realNetProfitTry < 0" (click)="openBalanceAnalysisModal()" title="Gerçek Net Kâr & Bilanço Analizini Aç (Detay)">
           <div class="kpi-header">
-            <span class="kpi-title">{{ realNetProfitTry >= 0 ? '💵 GERÇEK NET KÂR' : '🔴 GERÇEK NET ZARAR' }}</span>
+            <span class="kpi-title" [class.text-danger]="realNetProfitTry < 0">{{ realNetProfitTry >= 0 ? '💵 GERÇEK NET KÂR' : '🔴 GERÇEK NET ZARAR' }}</span>
             <span class="kpi-zoom-hint">🔍 Detay</span>
           </div>
           <div class="kpi-value" [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatKpi(realNetProfitTry, realNetProfitUsd) }}</div>
@@ -395,7 +395,7 @@
                       {{ o.displayStatus }}
                     </span>
                   </td>
-                  <td class="customer-cell" [title]="o.buyerName">{{ o.buyerName }}</td>
+                  <td class="customer-cell" [title]="getDisplayBuyerName(o)">{{ getDisplayBuyerName(o) }}</td>
                   <td class="product-cell" [title]="o.productTitle">{{ o.productTitle }}</td>
                   <td class="qty-cell">{{ o.quantity }}</td>
                   <td class="amount-cell" [ngClass]="(o.orderStatus === 'canceled' || o.orderStatus === 'refunded' || o.costNotes === 'cross_period_refund') ? 'text-danger' : 'text-emerald'">{{ '$' + ((o.refundAmountUsd && o.refundAmountUsd > 0) ? o.refundAmountUsd : o.grandTotalUsd).toFixed(2) }}</td>
@@ -577,7 +577,7 @@
             </div>
 
             <div class="forecast-card" [ngClass]="hz.expectedNetProfitUsd >= 0 ? 'success' : 'danger'">
-              <div class="fc-title">💵 {{ hz.horizonTitle | uppercase }} GERÇEK NET {{ hz.expectedNetProfitUsd >= 0 ? 'KÂR' : 'SONUÇ' }}</div>
+              <div class="fc-title">{{ hz.expectedNetProfitUsd >= 0 ? '💵 ' + (hz.horizonTitle | uppercase) + ' GERÇEK NET KÂR' : '🔴 ' + (hz.horizonTitle | uppercase) + ' GERÇEK NET ZARAR' }}</div>
               <div class="fc-value" [ngClass]="hz.expectedNetProfitUsd >= 0 ? 'text-emerald' : 'text-danger'">
                 {{ formatSignedUsd(hz.expectedNetProfitUsd) }} / {{ formatSignedTry(hz.expectedNetProfitTry) }}
               </div>
