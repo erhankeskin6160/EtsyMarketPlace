@@ -511,6 +511,18 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             || status.Contains("ship", StringComparison.OrdinalIgnoreCase);
 
         var buyerName = StringValue(item, "name", "buyer_name");
+        if (string.IsNullOrWhiteSpace(buyerName))
+        {
+            string[] nestedNames = { "shipping_address", "destination_address", "buyer_address", "recipient" };
+            foreach (var nestedProp in nestedNames)
+            {
+                if (item.TryGetProperty(nestedProp, out var sub) && sub.ValueKind == JsonValueKind.Object)
+                {
+                    buyerName = StringValue(sub, "name", "buyer_name", "recipient_name");
+                    if (!string.IsNullOrWhiteSpace(buyerName)) break;
+                }
+            }
+        }
         var buyerEmail = StringValue(item, "buyer_email");
         var uid = LongValue(item, "buyer_user_id");
         long? buyerUserId = uid > 0 ? uid : null;

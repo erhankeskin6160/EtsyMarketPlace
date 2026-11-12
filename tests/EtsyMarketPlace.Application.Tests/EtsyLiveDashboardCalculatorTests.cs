@@ -750,4 +750,80 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(38.31m, row.ProductCostUsd);
         Assert.Equal(-199.70m, row.NetProfitUsd);
     }
+
+    [Fact]
+    public void BuildDetailedOrderRows_ResolvesRealBuyerName_WhenTransactionIdMatchesCache_4178116180()
+    {
+        const long transactionId = 213336306259L;
+        const long receiptId = 4178116180L;
+        const string buyerName = "Adam Schulz";
+
+        EtsyTransactionOrderCache.Register(transactionId, receiptId, buyerName, DateTimeOffset.UtcNow, "Arcane Jinx Statue");
+
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", transactionId, "REFUND_GROSS", -161.39m, DateTimeOffset.UtcNow)
+        };
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [receiptId] = new(15.31m, 23.00m, 0m, null)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            Array.Empty<EtsyDashboardReceipt>(),
+            ledger,
+            costs,
+            49.50m);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(receiptId, row.ReceiptId);
+        Assert.Equal(buyerName, row.BuyerName);
+        Assert.NotEqual("Etsy Müşterisi", row.BuyerName);
+        Assert.True(row.HasCostData);
+        Assert.Equal(38.31m, row.ProductCostUsd);
+        Assert.True(row.NetProfitUsd < 0, "Net profit must be negative (loss) when refund cost exists.");
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_ResolvesBuyerNameFromBuyerNameMap_WhenReceiptBuyerNameIsMissingOrGeneric()
+    {
+        const long receiptId = 4178116180L;
+        var orderAt = new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero);
+
+        var receipts = new List<EtsyDashboardReceipt>
+        {
+            new(receiptId, orderAt, true, false, false, "USD", 150.00m, 150.00m, 0m, 0m, 0m, 0m,
+                new List<EtsyDashboardReceiptItem> { new("Arcane Jinx Statue", 123L, 1) },
+                BuyerName: "Etsy Müşterisi")
+        };
+
+        var buyerMap = new Dictionary<long, string>
+        {
+            [receiptId] = "Adam Schulz"
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            receipts,
+            Array.Empty<EtsyDashboardLedgerFee>(),
+            new Dictionary<long, EtsyDashboardOrderCost>(),
+            50.0m,
+            buyerNameMap: buyerMap);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(receiptId, row.ReceiptId);
+        Assert.Equal("Adam Schulz", row.BuyerName);
+        Assert.NotEqual("Etsy Müşterisi", row.BuyerName);
+    }
+
+    [Theory]
+    [InlineData(100.0, 15.0, 0.0, 50.0, 35.0, false)]
+    [InlineData(100.0, 15.0, 15.0, 80.0, -10.0, true)]
+    [InlineData(0.0, 0.0, 0.0, 38.31, -38.31, true)]
+    public void ComputeOrderNetProfit_CorrectlyIdentifiesLossPosition(
+        decimal grandTotal, decimal fees, decimal ads, decimal cost, decimal expectedNet, bool expectedIsLoss)
+    {
+        var netProfit = Math.Round(grandTotal - fees - ads - cost, 2);
+        Assert.Equal(expectedNet, netProfit);
+        Assert.Equal(expectedIsLoss, netProfit < 0);
+    }
 }

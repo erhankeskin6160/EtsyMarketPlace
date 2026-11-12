@@ -504,8 +504,8 @@
                   <span class="summary-val text-fee">-{{ (selectedOrder.totalAmount * 0.095) | number:'1.2-2' }} USD</span>
                 </div>
                 <div class="summary-col highlight">
-                  <span class="summary-label">Net Kâr</span>
-                  <span class="summary-val text-profit">{{ liveNetProfit | number:'1.2-2' }} USD</span>
+                  <span class="summary-label">{{ liveNetProfit >= 0 ? 'Net Kâr' : 'Net Zarar' }}</span>
+                  <span class="summary-val" [ngClass]="liveNetProfit >= 0 ? 'text-profit' : 'text-danger'">{{ liveNetProfit | number:'1.2-2' }} USD</span>
                   <span class="try-sub">({{ formatTry(liveNetProfit) }})</span>
                 </div>
                 <div class="summary-col">

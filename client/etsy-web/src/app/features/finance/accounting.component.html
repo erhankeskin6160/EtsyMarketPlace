@@ -1341,7 +1341,7 @@
           </div>
           <div class="modal-body" *ngIf="selectedOrder">
             <div class="order-context-box">
-              <div class="ctx-row"><strong>Müşteri:</strong> {{ selectedOrder.buyerName }}</div>
+              <div class="ctx-row"><strong>Müşteri:</strong> {{ getDisplayBuyerName(selectedOrder) }}</div>
               <div class="ctx-row"><strong>Ürün Adı:</strong> {{ selectedOrder.productTitle }}</div>
               <div class="badge-row">
                 <span class="ctx-badge gross">Ödeme: &#36;{{ selectedOrder.grandTotalUsd.toFixed(2) }}</span>
@@ -1396,12 +1396,16 @@
                 <strong>&#36;{{ getCostModalPreviewTotalCostUsd().toFixed(2) }}</strong>
               </div>
               <div class="calc-row highlight">
-                <span>Hesaplanan Net Kâr ($):</span>
-                <strong class="text-success">&#36;{{ getCostModalPreviewNetUsd().toFixed(2) }}</strong>
+                <span>{{ getCostModalPreviewNetUsd() >= 0 ? 'Hesaplanan Net Kâr ($):' : 'Hesaplanan Net Zarar ($):' }}</span>
+                <strong [ngClass]="getCostModalPreviewNetUsd() >= 0 ? 'text-success' : 'text-danger'">
+                  {{ getCostModalPreviewNetUsd() < 0 ? '-' : '' }}&#36;{{ (getCostModalPreviewNetUsd() < 0 ? -getCostModalPreviewNetUsd() : getCostModalPreviewNetUsd()).toFixed(2) }}
+                </strong>
               </div>
               <div class="calc-row highlight">
-                <span>Hesaplanan Net Kâr (₺):</span>
-                <strong class="text-emerald">₺{{ formatNumber(getCostModalPreviewNetTry()) }}</strong>
+                <span>{{ getCostModalPreviewNetTry() >= 0 ? 'Hesaplanan Net Kâr (₺):' : 'Hesaplanan Net Zarar (₺):' }}</span>
+                <strong [ngClass]="getCostModalPreviewNetTry() >= 0 ? 'text-emerald' : 'text-danger'">
+                  {{ getCostModalPreviewNetTry() < 0 ? '-₺' : '₺' }}{{ formatNumber(getCostModalPreviewNetTry() < 0 ? -getCostModalPreviewNetTry() : getCostModalPreviewNetTry()) }}
+                </strong>
               </div>
               <div class="calc-row reserve-calc-row">
                 <span>🔒 Rezerve Blokesi (%{{ reserveSnapshot.reservePercent }} - {{ reserveSnapshot.reserveHoldDays }} Gün):</span>

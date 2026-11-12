@@ -4,6 +4,7 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Windows.Forms;
+using EtsyMarketPlace.Application.EtsyIntegration;
 using SimilarProductsWinForms.Controls;
 using SimilarProductsWinForms.Models;
 using SimilarProductsWinForms.Services;
@@ -46,10 +47,23 @@ internal sealed class CostDetailsPopupForm : Form
 
         InvoiceFilePath = currentEntry?.InvoiceFilePath ?? order.InvoiceFilePath;
 
+        string resolvedCustomer = !string.IsNullOrWhiteSpace(order.BuyerName) && order.BuyerName != "Etsy Müşterisi" && order.BuyerName != "Misafir Müşteri"
+            ? order.DisplayCustomer
+            : (!string.IsNullOrWhiteSpace(currentEntry?.BuyerName) && currentEntry.BuyerName != "Etsy Müşterisi" && currentEntry.BuyerName != "Misafir Müşteri"
+                ? (order.BuyerUserId > 0 ? $"{currentEntry.BuyerName} (#{order.BuyerUserId})" : currentEntry.BuyerName)
+                : order.DisplayCustomer);
+
+        if ((string.IsNullOrWhiteSpace(resolvedCustomer) || resolvedCustomer == "—" || resolvedCustomer.Contains("Etsy Müşterisi") || resolvedCustomer.Contains("Misafir Müşteri"))
+            && EtsyTransactionOrderCache.TryGetOrderByReceiptId(order.ReceiptId, out var cachedRef)
+            && cachedRef != null && !string.IsNullOrWhiteSpace(cachedRef.BuyerName))
+        {
+            resolvedCustomer = order.BuyerUserId > 0 ? $"{cachedRef.BuyerName} (#{order.BuyerUserId})" : cachedRef.BuyerName;
+        }
+
         BuildLayout(
             storageKey: StorageKey,
             title: order.ProductTitle,
-            customerText: order.DisplayCustomer,
+            customerText: resolvedCustomer,
             orderNo: $"#{order.ReceiptId}",
             prodCost: currentEntry?.UnitCost ?? order.UnitProductionCost,
             shipCost: currentEntry?.UnitShippingCost ?? order.UnitShippingCost,

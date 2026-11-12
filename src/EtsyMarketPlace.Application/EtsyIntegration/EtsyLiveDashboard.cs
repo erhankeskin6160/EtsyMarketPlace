@@ -115,7 +115,9 @@ public static class EtsyLiveDashboardCalculator
                 etsyFees = transactionFee + paymentFee + regulatoryFee + tax;
             }
 
-            if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
+            if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost)
+                || (EtsyTransactionOrderCache.GetCanonicalReceiptId(receipt.ReceiptId) != receipt.ReceiptId
+                    && orderCosts.TryGetValue(EtsyTransactionOrderCache.GetCanonicalReceiptId(receipt.ReceiptId), out orderCost)))
             {
                 productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
                 hasCost = true;
@@ -243,7 +245,13 @@ public static class EtsyLiveDashboardCalculator
             var title = string.IsNullOrWhiteSpace(firstItem?.Title) ? $"Sipariş #{receipt.ReceiptId}" : firstItem!.Title;
             var listingId = firstItem?.ListingId ?? 0L;
             var quantity = receipt.Items.Count > 0 ? receipt.Items.Sum(i => i.Quantity) : 1;
-            var buyerName = string.IsNullOrWhiteSpace(receipt.BuyerName) ? "Misafir Müşteri" : receipt.BuyerName;
+            var buyerName = (!string.IsNullOrWhiteSpace(receipt.BuyerName) && receipt.BuyerName != "Misafir Müşteri" && receipt.BuyerName != "Etsy Müşterisi")
+                ? receipt.BuyerName
+                : (buyerNameMap != null && buyerNameMap.TryGetValue(receipt.ReceiptId, out var mappedName) && !string.IsNullOrWhiteSpace(mappedName) && mappedName != "Etsy Müşterisi"
+                    ? mappedName
+                    : (EtsyTransactionOrderCache.TryGetOrderByReceiptId(receipt.ReceiptId, out var cachedRef) && !string.IsNullOrWhiteSpace(cachedRef?.BuyerName)
+                        ? cachedRef.BuyerName
+                        : (string.IsNullOrWhiteSpace(receipt.BuyerName) ? "Misafir Müşteri" : receipt.BuyerName)));
 
             var orderSpecificRate = HistoricalExchangeRateProvider.GetRateForDate(receipt.CreatedAt.UtcDateTime, exchangeRate);
 
@@ -275,7 +283,9 @@ public static class EtsyLiveDashboardCalculator
             string? costNotes = null;
             var hasCost = false;
 
-            if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost))
+            if (orderCosts.TryGetValue(receipt.ReceiptId, out var orderCost)
+                || (EtsyTransactionOrderCache.GetCanonicalReceiptId(receipt.ReceiptId) != receipt.ReceiptId
+                    && orderCosts.TryGetValue(EtsyTransactionOrderCache.GetCanonicalReceiptId(receipt.ReceiptId), out orderCost)))
             {
                 productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
                 unitProductCost = orderCost.ProductCost;
@@ -504,7 +514,7 @@ public static class EtsyLiveDashboardCalculator
             var receiptId = 0L;
             if (!string.IsNullOrWhiteSpace(entry.Description))
             {
-                var match = Regex.Match(entry.Description, @"(?<!\d)(\d{9,11})(?!\d)", RegexOptions.IgnoreCase);
+                var match = Regex.Match(entry.Description, @"(?<!\d)(\d{9,13})(?!\d)", RegexOptions.IgnoreCase);
                 if (match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed))
                 {
                     receiptId = parsed;
@@ -524,6 +534,15 @@ public static class EtsyLiveDashboardCalculator
             if (receiptId <= 0 && EtsyTransactionOrderCache.TryGetOrderReference(entry.ReferenceId, out var cachedRef) && cachedRef != null)
             {
                 receiptId = cachedRef.ReceiptId;
+            }
+
+            if (receiptId <= 0 && entry.ReferenceId > 0)
+            {
+                var canonical = EtsyTransactionOrderCache.GetCanonicalReceiptId(entry.ReferenceId);
+                if (canonical != entry.ReferenceId && canonical > 0)
+                {
+                    receiptId = canonical;
+                }
             }
 
             if (receiptId > 0) claimedReceipts.Add(receiptId);
@@ -641,13 +660,30 @@ public static class EtsyLiveDashboardCalculator
 
             var info = kvp.Value;
             var resolvedReceiptId = kvp.Key;
+            var canonicalReceiptId = EtsyTransactionOrderCache.GetCanonicalReceiptId(resolvedReceiptId);
+            if (canonicalReceiptId != resolvedReceiptId && canonicalReceiptId > 0)
+            {
+                resolvedReceiptId = canonicalReceiptId;
+            }
+            else if (info.ReferenceId > 0)
+            {
+                var canonicalRefId = EtsyTransactionOrderCache.GetCanonicalReceiptId(info.ReferenceId);
+                if (canonicalRefId != info.ReferenceId && canonicalRefId > 0)
+                {
+                    resolvedReceiptId = canonicalRefId;
+                }
+            }
+
             var resolvedBuyerName = "Etsy Müşterisi";
             var resolvedTitle = string.Empty;
             DateTimeOffset? resolvedCreatedAt = null;
 
-            if ((EtsyTransactionOrderCache.TryGetOrderReference(info.ReferenceId, out var cachedRef) || EtsyTransactionOrderCache.TryGetOrderReference(kvp.Key, out cachedRef)) && cachedRef != null)
+            if ((EtsyTransactionOrderCache.TryGetOrderReference(info.ReferenceId, out var cachedRef) 
+                || EtsyTransactionOrderCache.TryGetOrderReference(kvp.Key, out cachedRef)
+                || EtsyTransactionOrderCache.TryGetOrderByReceiptId(resolvedReceiptId, out cachedRef)) 
+                && cachedRef != null)
             {
-                if (resolvedReceiptId == info.ReferenceId && cachedRef.ReceiptId > 0)
+                if ((resolvedReceiptId == info.ReferenceId || resolvedReceiptId == kvp.Key) && cachedRef.ReceiptId > 0)
                 {
                     resolvedReceiptId = cachedRef.ReceiptId;
                 }
@@ -671,7 +707,15 @@ public static class EtsyLiveDashboardCalculator
             decimal? packagingCost = null;
             var hasCost = false;
             EtsyDashboardOrderCost? orderCost = null;
-            if (orderCosts != null && orderCosts.TryGetValue(resolvedReceiptId, out orderCost))
+            if (orderCosts != null)
+            {
+                if (!orderCosts.TryGetValue(resolvedReceiptId, out orderCost))
+                {
+                    if (info.ReferenceId > 0 && orderCosts.TryGetValue(info.ReferenceId, out orderCost)) { }
+                    else if (kvp.Key > 0 && orderCosts.TryGetValue(kvp.Key, out orderCost)) { }
+                }
+            }
+            if (orderCost != null)
             {
                 productCost = Math.Round(orderCost.ProductCost + orderCost.ShippingCost + orderCost.PackagingCost, 2);
                 unitProductCost = orderCost.ProductCost;
@@ -680,13 +724,28 @@ public static class EtsyLiveDashboardCalculator
                 hasCost = true;
             }
 
-            if (buyerNameMap != null && buyerNameMap.TryGetValue(resolvedReceiptId, out var bName) && !string.IsNullOrWhiteSpace(bName))
+            if (buyerNameMap != null)
             {
-                resolvedBuyerName = bName;
+                if (buyerNameMap.TryGetValue(resolvedReceiptId, out var bName) && !string.IsNullOrWhiteSpace(bName) && bName != "Etsy Müşterisi")
+                {
+                    resolvedBuyerName = bName;
+                }
+                else if (info.ReferenceId > 0 && buyerNameMap.TryGetValue(info.ReferenceId, out bName) && !string.IsNullOrWhiteSpace(bName) && bName != "Etsy Müşterisi")
+                {
+                    resolvedBuyerName = bName;
+                }
+                else if (kvp.Key > 0 && buyerNameMap.TryGetValue(kvp.Key, out bName) && !string.IsNullOrWhiteSpace(bName) && bName != "Etsy Müşterisi")
+                {
+                    resolvedBuyerName = bName;
+                }
             }
-            else if (orderCost != null && !string.IsNullOrWhiteSpace(orderCost.Notes) && orderCost.Notes.StartsWith("Müşteri: ", StringComparison.OrdinalIgnoreCase))
+            if ((resolvedBuyerName == "Etsy Müşterisi" || string.IsNullOrWhiteSpace(resolvedBuyerName)) && orderCost != null && !string.IsNullOrWhiteSpace(orderCost.Notes) && orderCost.Notes.StartsWith("Müşteri: ", StringComparison.OrdinalIgnoreCase))
             {
                 resolvedBuyerName = orderCost.Notes.Substring("Müşteri: ".Length).Trim();
+            }
+            if ((resolvedBuyerName == "Etsy Müşterisi" || string.IsNullOrWhiteSpace(resolvedBuyerName)) && cachedRef != null && !string.IsNullOrWhiteSpace(cachedRef.BuyerName))
+            {
+                resolvedBuyerName = cachedRef.BuyerName;
             }
 
             string? origOrderDateStr = null;

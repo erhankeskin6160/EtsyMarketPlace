@@ -41,14 +41,14 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
       <!-- KPI METRIC CARDS -->
       <div class="kpi-grid">
-        <div class="kpi-card profit-card">
-          <span class="kpi-label">GERÇEK NET KÂR</span>
+        <div class="kpi-card profit-card" [class.loss-card]="netProfitUsd < 0">
+          <span class="kpi-label">{{ netProfitUsd >= 0 ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR' }}</span>
           <div class="kpi-value-row">
-            <span class="kpi-val">&#36;{{ netProfitUsd.toFixed(2) }}</span>
+            <span class="kpi-val" [class.text-danger]="netProfitUsd < 0">&#36;{{ netProfitUsd.toFixed(2) }}</span>
             <span class="kpi-try">₺{{ netProfitTry.toFixed(2) }}</span>
           </div>
-          <span class="kpi-sub" [class.success]="marginPercent >= 30">
-            Kâr Marjı: <strong>%{{ marginPercent.toFixed(1) }}</strong>
+          <span class="kpi-sub" [class.success]="marginPercent >= 30" [class.danger]="marginPercent < 0">
+            {{ netProfitUsd >= 0 ? 'Kâr Marjı:' : 'Zarar Marjı:' }} <strong>%{{ marginPercent.toFixed(1) }}</strong>
           </span>
         </div>
 
@@ -336,6 +336,16 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
     .profit-card {
       border-color: rgba(16, 185, 129, 0.4);
       background: rgba(16, 185, 129, 0.08);
+    }
+    .profit-card.loss-card {
+      border-color: rgba(239, 68, 68, 0.4) !important;
+      background: rgba(239, 68, 68, 0.08) !important;
+    }
+    .kpi-val.text-danger {
+      color: #ef4444 !important;
+    }
+    .kpi-sub.danger strong {
+      color: #ef4444 !important;
     }
     .kpi-label {
       font-size: 0.75rem;

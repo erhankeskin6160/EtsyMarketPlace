@@ -885,6 +885,14 @@
       border-radius: 8px;
       padding: 8px 12px;
     }
+    .profit-summary-banner.negative {
+      border-color: rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.08);
+    }
+    .profit-summary-banner.negative .text-profit,
+    .summary-val.text-danger {
+      color: #ef4444 !important;
+    }
     .summary-col {
       display: flex;
       flex-direction: column;
