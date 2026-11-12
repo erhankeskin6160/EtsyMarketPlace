@@ -611,12 +611,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
         ? o.refundAmountTry
         : Number((refundUsd * rate).toFixed(2));
 
-      // Komisyon İadesi: Yalnızca defterde/siparişte doğrulanmış gerçek komisyon iadesi kullanılır (tahmini oran üretilmez)
-      const feeRefundedUsd = (o.etsyFeesUsd && o.etsyFeesUsd < 0)
-        ? Math.abs(o.etsyFeesUsd)
-        : ((o.etsyFeesUsd && o.etsyFeesUsd > 0 && o.orderStatus === 'canceled')
-            ? o.etsyFeesUsd
-            : 0);
+      // Komisyon İadesi: yalnızca Etsy defterindeki gerçek ücret iadesi (tahmin yok; bulunamazsa 0)
+      const feeRefundedUsd = (o.etsyFeesUsd && o.etsyFeesUsd < 0) ? Math.abs(o.etsyFeesUsd) : 0;
       const feeRefundedTry = Number((feeRefundedUsd * rate).toFixed(2));
 
       const costUsd = o.productCostUsd != null && o.productCostUsd > 0 ? o.productCostUsd : 0;
@@ -643,7 +639,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
 
       return {
         refundDate: o.refundDate || o.orderDate,
-        orderDate: o.originalOrderDate || o.orderDate,
+        orderDate: o.originalOrderDate || (o.costNotes === 'cross_period_refund' ? '—' : o.orderDate),
         receiptId: o.receiptId,
         buyer: buyerDisplay,
         item: o.productTitle,
@@ -2109,7 +2105,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
             etsyNetPayoutTry: dto.etsyNetPayoutTry !== undefined ? dto.etsyNetPayoutTry : (dto.grandTotalUsd && (dto.exchangeRate || dto.exchangeRateUsed || this.liveRate) ? Number(((dto.grandTotalUsd - (dto.etsyFeesUsd || 0) - (dto.offsiteAdFeeUsd || 0)) * (dto.exchangeRate || dto.exchangeRateUsed || this.liveRate)).toFixed(2)) : undefined),
             fxConversionFeeTry: dto.fxConversionFeeTry !== undefined ? dto.fxConversionFeeTry : undefined,
             refundDate: dto.refundDate || undefined,
-            originalOrderDate: dto.originalOrderDate || dto.orderDate,
+            originalOrderDate: dto.originalOrderDate || (dto.costNotes === 'cross_period_refund' ? undefined : dto.orderDate),
             refundAmountUsd: dto.refundAmountUsd,
             refundAmountTry: dto.refundAmountTry
           }));

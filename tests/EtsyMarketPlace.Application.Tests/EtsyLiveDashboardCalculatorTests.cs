@@ -177,7 +177,7 @@ public sealed class EtsyLiveDashboardCalculatorTests
 
         var ledgerFees = new[]
         {
-            new EtsyDashboardLedgerFee("offsite_ads", 4188719047, "Offsite ad fee for order #4188719047", 20.08m)
+            new EtsyDashboardLedgerFee("offsite_ads", 4188719047, "Offsite ad fee for order #4188719047", -20.08m)
         };
 
         var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(new[] { receipt }, ledgerFees, costs, 49.19m);
@@ -540,5 +540,110 @@ public sealed class EtsyLiveDashboardCalculatorTests
         var bryan = rows.Single(r => r.ReceiptId == 4226762400L);
         // Tax etsyFees içinde zaten olduğundan EtsyNetPayoutUsd iki kez tax düşmemeli
         Assert.Equal(Math.Round(bryan.GrandTotalUsd - bryan.EtsyFeesUsd - bryan.OffsiteAdFeeUsd, 2), bryan.EtsyNetPayoutUsd);
+    }
+
+    private static EtsyDashboardLedgerFee Credit(string type, long refId, decimal amount, DateTimeOffset at)
+        => new(type, refId, "Credit", amount, at);
+
+    [Fact]
+    public void BuildDetailedOrderRows_MatchesUnresolvedRefundToTheSingleCanceledReceipt_WithLedgerDateAndAmount()
+    {
+        var orderDate = new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero);
+        var refundAt = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var receipts = new[] { Receipt(4178116160L, 170.50m, 170.50m, canceled: true, createdAt: orderDate) };
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", 213006308259L, "REFUND_GROSS", -161.39m, refundAt)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledger, NoCosts(), 50.23m);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(4178116160L, row.ReceiptId);
+        Assert.Equal("12.11.2026", row.RefundDate);
+        Assert.Equal("18.09.2026", row.OrderDate);
+        Assert.Equal(161.39m, row.RefundAmountUsd);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_DoesNotGuess_WhenTwoCanceledReceiptsMatchTheRefundAmount()
+    {
+        var refundAt = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var receipts = new[]
+        {
+            Receipt(4178116160L, 170.50m, 170.50m, canceled: true, createdAt: new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero)),
+            Receipt(4178116161L, 165.00m, 165.00m, canceled: true, createdAt: new DateTimeOffset(2026, 9, 19, 10, 0, 0, TimeSpan.Zero))
+        };
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", 213006308259L, "REFUND_GROSS", -161.39m, refundAt)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledger, NoCosts(), 50.23m);
+
+        var unresolved = Assert.Single(rows, r => r.CostNotes == "cross_period_refund");
+        Assert.Equal(213006308259L, unresolved.ReceiptId);
+        Assert.Null(unresolved.OriginalOrderDate);
+        Assert.Equal("12.11.2026", unresolved.RefundDate);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_UsesRealLedgerFeeCredits_NotAFixedPercentage()
+    {
+        var refundAt = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", 213006308259L, "REFUND_GROSS", -161.39m, refundAt),
+            Credit("transaction_fee", 213006308259L, 8.52m, refundAt),
+            Credit("payment_processing", 213006308259L, 10.77m, refundAt),
+            Credit("offsite_ads", 213006308259L, 22.57m, refundAt)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(Array.Empty<EtsyDashboardReceipt>(), ledger, NoCosts(), 50.23m);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(-41.86m, row.EtsyFeesUsd);
+        Assert.Equal(Math.Round(-161.39m + 41.86m, 2), row.NetProfitUsd);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_WithoutFeeCreditEntries_ReportsZeroInsteadOfEstimating()
+    {
+        var refundAt = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var ledger = new List<EtsyDashboardLedgerFee> { new("refund", 213006308259L, "REFUND_GROSS", -100m, refundAt) };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(Array.Empty<EtsyDashboardReceipt>(), ledger, NoCosts(), 50m);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(0m, row.EtsyFeesUsd);
+        Assert.Equal(-100m, row.NetProfitUsd);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_DoesNotTruncate12DigitTransactionIdsIntoFakeReceiptNumbers()
+    {
+        var refundAt = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
+        var ledger = new List<EtsyDashboardLedgerFee> { new("refund", 0L, "Refund 213006308259", -50m, refundAt) };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(Array.Empty<EtsyDashboardReceipt>(), ledger, NoCosts(), 50m);
+
+        var row = Assert.Single(rows);
+        Assert.NotEqual(21300630825L, row.ReceiptId);
+    }
+
+    [Fact]
+    public void BuildOrderRows_IgnoresPositiveOffsiteAdCredits_AsOrderAdFees()
+    {
+        var at = new DateTimeOffset(2026, 10, 2, 9, 0, 0, TimeSpan.Zero);
+        var receipts = new[] { Receipt(4200000001L, 100m, 100m, createdAt: at) };
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("offsite_ads", 4200000001L, "Order #4200000001", 15m, at)
+        };
+
+        var withCredit = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, ledger, NoCosts(), 50m);
+        var without = EtsyLiveDashboardCalculator.BuildOrderRows(receipts, Array.Empty<EtsyDashboardLedgerFee>(), NoCosts(), 50m);
+
+        Assert.Equal(without[0].NetProfitUsd, withCredit[0].NetProfitUsd);
     }
 }

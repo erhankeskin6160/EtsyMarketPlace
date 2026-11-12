@@ -20,15 +20,8 @@ public static class EtsyTransactionOrderCache
 
     static EtsyTransactionOrderCache()
     {
-        // Bilinen mağaza iade transaction -> sipariş eşleşmeleri (Etsy defter referansları)
-        RegisterInternal(210508251050L, 4185170234L, "Anthony Brown", new DateTimeOffset(2026, 9, 26, 12, 0, 0, TimeSpan.Zero), "Arcane Jinx Statue, League of Legends Figure");
-        RegisterInternal(2110508251050L, 4185170234L, "Anthony Brown", new DateTimeOffset(2026, 9, 26, 12, 0, 0, TimeSpan.Zero), "Arcane Jinx Statue, League of Legends Figure");
-        RegisterInternal(211529104983L, 4174282090L, "Barbara Yapana", new DateTimeOffset(2026, 9, 14, 12, 0, 0, TimeSpan.Zero), "Ben 10 Classic Omnitrix Watch V2");
-        RegisterInternal(210535265117L, 4159882753L, "Vladimir Vasilyev", new DateTimeOffset(2026, 8, 31, 12, 0, 0, TimeSpan.Zero), "Ben 10 Classic Omnitrix");
-        RegisterInternal(208125758449L, 4143388506L, "darisa Lorenzo", new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.Zero), "Kratos Controller Holder");
-        RegisterInternal(208038138581L, 4141234567L, "Etsy Müşterisi", new DateTimeOffset(2026, 8, 17, 12, 0, 0, TimeSpan.Zero), "Önceki Dönem Sipariş İadesi");
-        RegisterInternal(207042709591L, 4135678901L, "Etsy Müşterisi", new DateTimeOffset(2026, 7, 31, 12, 0, 0, TimeSpan.Zero), "Önceki Dönem Sipariş İadesi");
-
+        // Sıfır Mock İlkesi: sabit kodlu eşleşme yok. Kayıtlar yalnızca Etsy API'den (Register)
+        // ve diske yazılmış önceki API eşleşmelerinden (LoadFromDisk) gelir.
         LoadFromDisk();
     }
 
