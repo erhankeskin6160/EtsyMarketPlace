@@ -826,4 +826,78 @@ public sealed class EtsyLiveDashboardCalculatorTests
         Assert.Equal(expectedNet, netProfit);
         Assert.Equal(expectedIsLoss, netProfit < 0);
     }
+
+    [Fact]
+    public void EmpiricalVerification_Order4178116180_AndRefundTransaction213336306259_AdamSchulz_AndLossCalculation()
+    {
+        const long transactionId = 213336306259L;
+        const long expectedReceiptId = 4178116180L;
+        const string expectedBuyer = "Adam Schulz";
+        const decimal expectedCost = 38.31m;
+
+        // 1. Verify Cache canonical resolution out of the box
+        var canonicalId = EtsyTransactionOrderCache.GetCanonicalReceiptId(transactionId);
+        Assert.Equal(expectedReceiptId, canonicalId);
+
+        var hasRef = EtsyTransactionOrderCache.TryGetOrderReference(transactionId, out var orderRef);
+        Assert.True(hasRef);
+        Assert.NotNull(orderRef);
+        Assert.Equal(expectedReceiptId, orderRef!.ReceiptId);
+        Assert.Equal(expectedBuyer, orderRef.BuyerName);
+
+        // 2. Verify Canceled Order with Costs ($15.31 + $23.00 = $38.31) results in Net Profit = -$38.31
+        var canceledReceipt = new EtsyDashboardReceipt(
+            ReceiptId: expectedReceiptId,
+            CreatedAt: new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero),
+            IsPaid: false,
+            IsCanceled: true,
+            IsFromOffsiteAds: false,
+            CurrencyCode: "USD",
+            GrandTotal: 170.50m,
+            Subtotal: 170.50m,
+            ShippingCost: 0m,
+            DiscountAmt: 0m,
+            TaxCost: 0m,
+            RefundedAmount: 170.50m,
+            Items: new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 9999L, 1, transactionId) },
+            BuyerName: "Etsy Müşterisi");
+
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [expectedReceiptId] = new(ProductCost: 15.31m, ShippingCost: 23.00m, PackagingCost: 0m)
+        };
+
+        var rowsFromReceipt = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            new[] { canceledReceipt },
+            Array.Empty<EtsyDashboardLedgerFee>(),
+            costs,
+            50.00m);
+
+        var row1 = Assert.Single(rowsFromReceipt);
+        Assert.Equal(expectedReceiptId, row1.ReceiptId);
+        Assert.Equal(expectedBuyer, row1.BuyerName);
+        Assert.Equal(expectedCost, row1.ProductCostUsd);
+        Assert.Equal(-expectedCost, row1.NetProfitUsd); // Exactly -$38.31
+        Assert.True(row1.NetProfitUsd < 0);
+
+        // 3. Verify Cross-Period Refund Ledger Entry with transactionId 213336306259
+        // Resolves to Receipt #4178116180, picks up costs $38.31, and yields net loss
+        var ledgerRefund = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", transactionId, "REFUND_GROSS", -161.39m, DateTimeOffset.UtcNow)
+        };
+
+        var rowsFromLedger = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            Array.Empty<EtsyDashboardReceipt>(),
+            ledgerRefund,
+            costs,
+            50.00m);
+
+        var row2 = Assert.Single(rowsFromLedger);
+        Assert.Equal(expectedReceiptId, row2.ReceiptId);
+        Assert.Equal(expectedBuyer, row2.BuyerName);
+        Assert.Equal(expectedCost, row2.ProductCostUsd);
+        Assert.True(row2.NetProfitUsd < 0);
+        Assert.Equal(-199.70m, row2.NetProfitUsd); // -161.39 refund gross - 38.31 cost = -199.70
+    }
 }
