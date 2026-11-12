@@ -396,20 +396,114 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         }
         catch { }
 
-        IReadOnlyDictionary<long, string>? buyerNameMap = null;
-        IReadOnlyDictionary<long, DateTimeOffset>? orderDateMap = null;
+        var buyerNameMap = new Dictionary<long, string>();
+        var orderDateMap = new Dictionary<long, DateTimeOffset>();
+        var titleMap = new Dictionary<long, string>();
         if (_addressRepository != null)
         {
             try
             {
                 var addrDict = await _addressRepository.GetAllAsync(cancellationToken);
-                buyerNameMap = addrDict.ToDictionary(k => k.Key, v => v.Value.BuyerName);
-                orderDateMap = addrDict.ToDictionary(k => k.Key, v => new DateTimeOffset(v.Value.UpdatedAtUtc, TimeSpan.Zero));
+                foreach (var kv in addrDict)
+                {
+                    if (!string.IsNullOrWhiteSpace(kv.Value.BuyerName))
+                    {
+                        buyerNameMap[kv.Key] = kv.Value.BuyerName;
+                    }
+                    orderDateMap[kv.Key] = new DateTimeOffset(kv.Value.UpdatedAtUtc, TimeSpan.Zero);
+                }
             }
             catch { }
         }
 
-        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledgerEntries, costs, rate, buyerNameMap, orderDateMap);
+        IReadOnlyDictionary<long, long>? ledgerEntryToReceiptMap = null;
+        var refundEntryIds = ledgerEntries
+            .Where(e => e.EntryId > 0 && string.Equals(e.Type, "refund", StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.EntryId)
+            .Distinct()
+            .ToList();
+
+        if (refundEntryIds.Count > 0)
+        {
+            try
+            {
+                ledgerEntryToReceiptMap = await _etsyClient.GetReceiptIdsByLedgerEntriesAsync(shopId, refundEntryIds, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Defter -> siparis esleme ucu gecici olarak erisilemezse mevcut donem akisi korunur
+            }
+        }
+
+        var periodReceiptIds = new HashSet<long>(receipts.Select(r => r.ReceiptId));
+        var crossPeriodReceiptIds = new HashSet<long>();
+        if (ledgerEntryToReceiptMap != null)
+        {
+            foreach (var rid in ledgerEntryToReceiptMap.Values)
+            {
+                if (rid > 0 && !periodReceiptIds.Contains(rid))
+                {
+                    crossPeriodReceiptIds.Add(rid);
+                }
+            }
+        }
+        foreach (var entry in ledgerEntries.Where(e => string.Equals(e.Type, "refund", StringComparison.OrdinalIgnoreCase)))
+        {
+            if (entry.ReferenceId > 0 && EtsyTransactionOrderCache.TryGetOrderReference(entry.ReferenceId, out var cached) && cached != null && cached.ReceiptId > 0 && !periodReceiptIds.Contains(cached.ReceiptId))
+            {
+                crossPeriodReceiptIds.Add(cached.ReceiptId);
+            }
+        }
+
+        if (crossPeriodReceiptIds.Count > 0)
+        {
+            var fetched = await Task.WhenAll(crossPeriodReceiptIds.Take(25).Select(async rid =>
+            {
+                try
+                {
+                    return await _etsyClient.GetReceiptByIdAsync(shopId, rid, cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    return null;
+                }
+            }));
+
+            foreach (var extReceipt in fetched)
+            {
+                if (extReceipt is null || extReceipt.ReceiptId <= 0) continue;
+                if (!string.IsNullOrWhiteSpace(extReceipt.BuyerName))
+                {
+                    buyerNameMap[extReceipt.ReceiptId] = extReceipt.BuyerName;
+                }
+                if (extReceipt.CreatedAt != default)
+                {
+                    orderDateMap[extReceipt.ReceiptId] = extReceipt.CreatedAt;
+                }
+                var firstTitle = extReceipt.Items.FirstOrDefault()?.Title;
+                if (!string.IsNullOrWhiteSpace(firstTitle))
+                {
+                    titleMap[extReceipt.ReceiptId] = firstTitle;
+                }
+                foreach (var item in extReceipt.Items)
+                {
+                    if (item.TransactionId > 0)
+                    {
+                        EtsyTransactionOrderCache.Register(item.TransactionId, extReceipt.ReceiptId, extReceipt.BuyerName ?? string.Empty, extReceipt.CreatedAt, item.Title ?? string.Empty);
+                    }
+                }
+            }
+        }
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            receipts,
+            ledgerEntries,
+            costs,
+            rate,
+            buyerNameMap,
+            orderDateMap,
+            ledgerEntryToReceiptMap,
+            titleMap);
 
         var activeOrderRows = rows.Where(r => !string.Equals(r.CostNotes, "cross_period_refund", StringComparison.OrdinalIgnoreCase)).ToList();
         return new OrderFinancialsDashboardResult(

@@ -48,6 +48,110 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         GetPagedAsync("application/shops/{0}/payment-account/ledger-entries", shopId, startDate, endDate, ParseLedgerEntryDetail, cancellationToken);
 
     /// <summary>
+    /// Etsy'nin resmi payment-account/ledger-entries/payments ucundan defter kaydi -> receipt_id eslesmesini ceker.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, long>> GetReceiptIdsByLedgerEntriesAsync(
+        string shopId,
+        IReadOnlyCollection<long> ledgerEntryIds,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<long, long>();
+        if (ledgerEntryIds is null || ledgerEntryIds.Count == 0) return result;
+
+        var ids = ledgerEntryIds.Where(id => id > 0).Distinct().ToList();
+        if (ids.Count == 0) return result;
+
+        var baseUrl = _options.ApiBaseUrl.TrimEnd('/');
+        var apiKey = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
+
+        foreach (var chunk in ids.Chunk(50))
+        {
+            try
+            {
+                var joined = string.Join(",", chunk);
+                var uri = $"{baseUrl}/application/shops/{Uri.EscapeDataString(shopId)}/payment-account/ledger-entries/payments?ledger_entry_ids={Uri.EscapeDataString(joined)}";
+                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                request.Headers.Add("X-Etsy-Shop-Id", shopId);
+                request.Headers.Add("x-api-key", apiKey);
+                using var response = await httpClient.SendAsync(request, cancellationToken);
+                if (!response.IsSuccessStatusCode) continue;
+
+                using var doc = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken);
+                if (doc is null || !doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+                    continue;
+
+                foreach (var entry in results.EnumerateArray())
+                {
+                    var entryId = LongValue(entry, "ledger_entry_id", "entry_id", "id");
+                    if (entryId <= 0) continue;
+
+                    var receiptId = LongValue(entry, "receipt_id");
+                    if (receiptId <= 0 && entry.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var payment in payments.EnumerateArray())
+                        {
+                            receiptId = LongValue(payment, "receipt_id");
+                            if (receiptId > 0) break;
+                        }
+                    }
+
+                    if (receiptId > 0)
+                    {
+                        result[entryId] = receiptId;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Tekil chunk hatasi tum finansal paneli dusurmez
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Capraz donem iadeleri icin tekil siparis detayini Etsy receipts/{receipt_id} ucundan ceker.
+    /// </summary>
+    public async Task<EtsyDashboardReceipt?> GetReceiptByIdAsync(
+        string shopId,
+        long receiptId,
+        CancellationToken cancellationToken = default)
+    {
+        if (receiptId <= 0) return null;
+
+        try
+        {
+            var baseUrl = _options.ApiBaseUrl.TrimEnd('/');
+            var uri = $"{baseUrl}/application/shops/{Uri.EscapeDataString(shopId)}/receipts/{receiptId}?includes=Transactions";
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+            request.Headers.Add("X-Etsy-Shop-Id", shopId);
+            request.Headers.Add("x-api-key", await ResolveApiKeyHeaderAsync(shopId, cancellationToken));
+            using var response = await httpClient.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode) return null;
+
+            using var doc = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken);
+            if (doc is null) return null;
+
+            var root = doc.RootElement;
+            if (root.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in results.EnumerateArray())
+                {
+                    return ParseDashboardReceipt(item, shopId);
+                }
+                return null;
+            }
+
+            return ParseDashboardReceipt(root, shopId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Etsy istekleri icin x-api-key degerini cozer: once magaza ayarlari (DPAPI sifreli kayit),
     /// yoksa yapilandirma (appsettings) kullanilir. Token uclariyla ayni kalip (EtsyOAuthService.ResolveCredentialsAsync).
     /// </summary>
@@ -427,12 +531,15 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             ? "offsite_ads"
             : rawType;
 
+        var entryId = LongValue(item, "entry_id", "ledger_entry_id", "id");
+
         return new EtsyDashboardLedgerFee(
             kind,
             referenceId,
             description,
             LedgerAmountToUsd(item),
-            createdAt);
+            createdAt,
+            entryId);
     }
 
     private static EtsyLedgerEntryDetail? ParseLedgerEntryDetail(JsonElement item, string shopId)
@@ -580,11 +687,15 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
 
     private static bool BoolValue(JsonElement element, string name) => element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
 
-    private static long LongValue(JsonElement element, string name)
+    private static long LongValue(JsonElement element, params string[] names)
     {
-        if (!element.TryGetProperty(name, out var value)) return 0;
-        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)) return number;
-        return long.TryParse(value.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)) return number;
+            if (long.TryParse(value.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+        }
+        return 0;
     }
 
     private static decimal MoneyValue(JsonElement element, params string[] names)

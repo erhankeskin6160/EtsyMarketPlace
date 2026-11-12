@@ -296,4 +296,86 @@ public sealed class EtsyDashboardServiceTests
         Assert.True(result.LedgerOk);
         Assert.Equal(2000m, result.GrossSales);
     }
+
+    [Fact]
+    public async Task GetOrderFinancialsAsync_ResolvesCrossPeriodRefund_ViaLedgerEntryPaymentsAndReceiptLookup()
+    {
+        var reporting = new FakeReportingService();
+        var ledger = new FakeLedgerReportService { LedgerOk = true };
+        var etsyClient = new CrossPeriodRefundEtsyDataClient();
+        var repo = new FakeIntegrationRepository();
+        var bank = new BankDepositService();
+
+        var service = new EtsyDashboardService(reporting, ledger, etsyClient, repo, bank);
+        var result = await service.GetOrderFinancialsAsync("53236321", "this_month", null, null);
+
+        var row = Assert.Single(result.Orders);
+        Assert.Equal(4178116160L, row.ReceiptId);
+        Assert.Equal("Adam Schulz", row.BuyerName);
+        Assert.Equal("Arcane Jinx Statue", row.ProductTitle);
+        Assert.Equal("18.09.2026", row.OrderDate);
+        Assert.Equal("18.09.2026", row.OriginalOrderDate);
+        Assert.Equal("12.11.2026", row.RefundDate);
+        Assert.Equal(161.39m, row.RefundAmountUsd);
+    }
+
+    private sealed class CrossPeriodRefundEtsyDataClient : IEtsyDataClient
+    {
+        public Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyBankPayout>>(Array.Empty<EtsyBankPayout>());
+
+        public Task<IReadOnlyList<EtsyFinancialTransaction>> GetFinancialTransactionsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyFinancialTransaction>>(Array.Empty<EtsyFinancialTransaction>());
+
+        public Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyOrderCostAlert>>(Array.Empty<EtsyOrderCostAlert>());
+
+        public Task<IReadOnlyList<EtsyDashboardReceipt>> GetShopReceiptsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyDashboardReceipt>>(Array.Empty<EtsyDashboardReceipt>());
+
+        public Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyDashboardLedgerFee>>(new[]
+            {
+                new EtsyDashboardLedgerFee(
+                    Type: "refund",
+                    ReferenceId: 213006308259L,
+                    Description: "REFUND_GROSS",
+                    Amount: -161.39m,
+                    CreatedAt: new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero),
+                    EntryId: 9988776655L)
+            });
+
+        public Task<IReadOnlyList<EtsyLedgerEntryDetail>> GetLedgerEntriesDetailedAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyLedgerEntryDetail>>(Array.Empty<EtsyLedgerEntryDetail>());
+
+        public Task<IReadOnlyDictionary<long, long>> GetReceiptIdsByLedgerEntriesAsync(string shopId, IReadOnlyCollection<long> ledgerEntryIds, CancellationToken ct)
+        {
+            IReadOnlyDictionary<long, long> map = new Dictionary<long, long>
+            {
+                [9988776655L] = 4178116160L
+            };
+            return Task.FromResult(map);
+        }
+
+        public Task<EtsyDashboardReceipt?> GetReceiptByIdAsync(string shopId, long receiptId, CancellationToken ct)
+        {
+            if (receiptId != 4178116160L) return Task.FromResult<EtsyDashboardReceipt?>(null);
+
+            return Task.FromResult<EtsyDashboardReceipt?>(new EtsyDashboardReceipt(
+                ReceiptId: 4178116160L,
+                CreatedAt: new DateTimeOffset(2026, 9, 18, 10, 0, 0, TimeSpan.Zero),
+                IsPaid: false,
+                IsCanceled: true,
+                IsFromOffsiteAds: false,
+                CurrencyCode: "USD",
+                GrandTotal: 170.50m,
+                Subtotal: 170.50m,
+                ShippingCost: 0m,
+                DiscountAmt: 0m,
+                TaxCost: 0m,
+                RefundedAmount: 161.39m,
+                Items: new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 12345L, 1, 213006308259L) },
+                BuyerName: "Adam Schulz"));
+        }
+    }
 }

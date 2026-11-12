@@ -43,6 +43,14 @@ public interface IEtsyDataClient
 
     /// <summary>Sunucu finans motoru: tam alanli odeme hesabi defter kayitlari (siniflandirma + USD donusumu ile).</summary>
     Task<IReadOnlyList<EtsyLedgerEntryDetail>> GetLedgerEntriesDetailedAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default);
+
+    /// <summary>Defter kayit ID'lerinden (ledger_entry_id) bagli gercek Etsy siparis ID'lerini (receipt_id) cozer.</summary>
+    Task<IReadOnlyDictionary<long, long>> GetReceiptIdsByLedgerEntriesAsync(string shopId, IReadOnlyCollection<long> ledgerEntryIds, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyDictionary<long, long>>(new Dictionary<long, long>());
+
+    /// <summary>Capraz donem iadeleri icin tekil siparis detayini (alici adi, urun adi, siparis tarihi) ceker.</summary>
+    Task<EtsyDashboardReceipt?> GetReceiptByIdAsync(string shopId, long receiptId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<EtsyDashboardReceipt?>(null);
 }
 
 public interface IEtsyFinancialReportService

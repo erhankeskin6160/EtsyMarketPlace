@@ -17,7 +17,8 @@ public static class EtsyLiveDashboardCalculator
         IReadOnlyList<EtsyDashboardReceipt> receipts,
         IReadOnlyList<EtsyDashboardLedgerFee> ledgerFees,
         IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
-        decimal exchangeRate = 49.16m)
+        decimal exchangeRate = 49.16m,
+        IReadOnlyDictionary<long, long>? ledgerEntryToReceiptMap = null)
     {
         var transactionToReceiptMap = new Dictionary<long, EtsyDashboardReceipt>();
         foreach (var r in receipts)
@@ -31,7 +32,7 @@ public static class EtsyLiveDashboardCalculator
             }
         }
         var offsiteAdsMap = BuildOffsiteAdsMap(ledgerFees);
-        var refundEntries = BuildRefundEntries(ledgerFees, transactionToReceiptMap, receipts);
+        var refundEntries = BuildRefundEntries(ledgerFees, transactionToReceiptMap, receipts, ledgerEntryToReceiptMap);
         var receiptIdsInPeriod = new HashSet<long>(receipts.Select(r => r.ReceiptId));
         var rows = new List<EtsyDashboardOrderRow>();
 
@@ -197,7 +198,9 @@ public static class EtsyLiveDashboardCalculator
         IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
         decimal exchangeRate = 49.16m,
         IReadOnlyDictionary<long, string>? buyerNameMap = null,
-        IReadOnlyDictionary<long, DateTimeOffset>? originalOrderDateMap = null)
+        IReadOnlyDictionary<long, DateTimeOffset>? originalOrderDateMap = null,
+        IReadOnlyDictionary<long, long>? ledgerEntryToReceiptMap = null,
+        IReadOnlyDictionary<long, string>? titleMap = null)
     {
         var transactionToReceiptMap = new Dictionary<long, EtsyDashboardReceipt>();
         foreach (var r in receipts)
@@ -211,7 +214,7 @@ public static class EtsyLiveDashboardCalculator
             }
         }
         var offsiteAdsMap = BuildOffsiteAdsMap(ledgerFees);
-        var refundEntries = BuildRefundEntries(ledgerFees, transactionToReceiptMap, receipts);
+        var refundEntries = BuildRefundEntries(ledgerFees, transactionToReceiptMap, receipts, ledgerEntryToReceiptMap);
         var receiptIdsInPeriod = new HashSet<long>(receipts.Select(r => r.ReceiptId));
         var rows = new List<EtsyOrderFinancialDetail>();
 
@@ -387,7 +390,7 @@ public static class EtsyLiveDashboardCalculator
                 Math.Round((refundEntries.TryGetValue(receipt.ReceiptId, out var rInfo2) ? rInfo2.AmountUsd : (refundedAmt > 0 ? refundedAmt : (isCanceled && originalGrandTotal > 0 ? originalGrandTotal : 0m))) * orderSpecificRate, 2)));
         }
 
-        AppendCrossPeriodRefundRows(rows, refundEntries, receiptIdsInPeriod, orderCosts, exchangeRate, buyerNameMap, originalOrderDateMap);
+        AppendCrossPeriodRefundRows(rows, refundEntries, receiptIdsInPeriod, orderCosts, exchangeRate, buyerNameMap, originalOrderDateMap, titleMap);
         return rows.OrderByDescending(r => r.CreatedAt).ToList();
     }
 
@@ -456,7 +459,8 @@ public static class EtsyLiveDashboardCalculator
     private static Dictionary<long, LedgerRefundInfo> BuildRefundEntries(
         IReadOnlyList<EtsyDashboardLedgerFee> entries,
         IReadOnlyDictionary<long, EtsyDashboardReceipt>? transactionMap = null,
-        IReadOnlyList<EtsyDashboardReceipt>? receipts = null)
+        IReadOnlyList<EtsyDashboardReceipt>? receipts = null,
+        IReadOnlyDictionary<long, long>? ledgerEntryToReceiptMap = null)
     {
         var map = new Dictionary<long, LedgerRefundInfo>();
         if (entries is null) return map;
@@ -484,6 +488,11 @@ public static class EtsyLiveDashboardCalculator
                 {
                     receiptId = parsed;
                 }
+            }
+
+            if (receiptId <= 0 && entry.EntryId > 0 && ledgerEntryToReceiptMap != null && ledgerEntryToReceiptMap.TryGetValue(entry.EntryId, out var apiMappedReceiptId) && apiMappedReceiptId > 0)
+            {
+                receiptId = apiMappedReceiptId;
             }
 
             if (receiptId <= 0 && transactionMap != null && transactionMap.TryGetValue(entry.ReferenceId, out var mappedReceipt))
@@ -581,7 +590,8 @@ public static class EtsyLiveDashboardCalculator
         IReadOnlyDictionary<long, EtsyDashboardOrderCost> orderCosts,
         decimal exchangeRate,
         IReadOnlyDictionary<long, string>? buyerNameMap = null,
-        IReadOnlyDictionary<long, DateTimeOffset>? originalOrderDateMap = null)
+        IReadOnlyDictionary<long, DateTimeOffset>? originalOrderDateMap = null,
+        IReadOnlyDictionary<long, string>? titleMap = null)
     {
         foreach (var kvp in refundEntries)
         {
@@ -645,6 +655,11 @@ public static class EtsyLiveDashboardCalculator
             else if (resolvedCreatedAt.HasValue)
             {
                 origOrderDateStr = resolvedCreatedAt.Value.ToOffset(TurkeyOffset).ToString("dd.MM.yyyy", CultureInfo.InvariantCulture);
+            }
+
+            if (string.IsNullOrWhiteSpace(resolvedTitle) && titleMap != null && titleMap.TryGetValue(resolvedReceiptId, out var mappedTitle) && !string.IsNullOrWhiteSpace(mappedTitle))
+            {
+                resolvedTitle = mappedTitle;
             }
 
             var descTitle = !string.IsNullOrWhiteSpace(resolvedTitle)
@@ -722,7 +737,7 @@ public sealed record EtsyDashboardReceipt(
     string? Status = null,
     bool IsShipped = false);
 
-public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount, DateTimeOffset? CreatedAt = null);
+public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount, DateTimeOffset? CreatedAt = null, long EntryId = 0L);
 
 public sealed record EtsyDashboardOrderCost(decimal ProductCost, decimal ShippingCost, decimal PackagingCost = 0m, string? Notes = null);
 
