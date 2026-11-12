@@ -1004,6 +1004,7 @@
     .ads-bar { background: #ef4444; }
     .costs-bar { background: #fb923c; }
     .profit-bar { background: #34d399; box-shadow: 0 0 10px rgba(52, 211, 153, 0.5); }
+    .danger-bar { background: #ef4444; box-shadow: 0 0 10px rgba(239, 68, 68, 0.5); }
     .bar-lbl { font-size: 0.72rem; text-align: center; color: #94a3b8; }
 
     .expense-breakdown-list { display: flex; flex-direction: column; gap: 12px; }

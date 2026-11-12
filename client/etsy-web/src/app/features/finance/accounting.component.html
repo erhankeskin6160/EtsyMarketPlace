@@ -476,9 +476,9 @@
                 </div>
                 <div class="chart-col">
                   <div class="bar-wrap">
-                    <div class="bar profit-bar" style="height: 48%;"></div>
+                    <div class="bar" [ngClass]="realNetProfitTry >= 0 ? 'profit-bar' : 'danger-bar'" style="height: 48%;"></div>
                   </div>
-                  <span class="bar-lbl">Net Kâr<br><strong>₺{{ formatNumber(realNetProfitTry) }}</strong></span>
+                  <span class="bar-lbl">{{ realNetProfitTry >= 0 ? 'Net Kâr' : 'Net Zarar' }}<br><strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong></span>
                 </div>
               </div>
             </div>
@@ -1322,7 +1322,7 @@
             <div class="rec-divider"></div>
 
             <div class="rec-final">
-              <h4>🏛️ Üst Karttaki GERÇEK NET KÂR: <span [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }} ({{ formatSignedUsd(realNetProfitUsd) }})</span></h4>
+              <h4>🏛️ Üst Karttaki {{ realNetProfitTry >= 0 ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR' }}: <span [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }} ({{ formatSignedUsd(realNetProfitUsd) }})</span></h4>
               <p>(Tüm mağaza reklamları, iadeler ve genel giderler düşüldükten sonra banka hesabınıza ve cebinize kalan nihai kârdır.)</p>
             </div>
           </div>
@@ -1558,8 +1558,8 @@
         <div class="modal-card drilldown-card" (click)="$event.stopPropagation()">
           <div class="modal-header">
             <div class="drilldown-title-box">
-              <h3>💵 Gerçek Net Kâr & Bilanço Analizi</h3>
-              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış nihai net kâr: <strong>{{ formatSignedTry(realNetProfitTry) }}</strong> ({{ formatSignedUsd(realNetProfitUsd) }})</p>
+              <h3>{{ realNetProfitTry >= 0 ? '💵 Gerçek Net Kâr & Bilanço Analizi' : '🔴 Gerçek Net Zarar & Bilanço Analizi' }}</h3>
+              <p class="modal-sub">Etsy Net Hakedişinden ürün ve kargo maliyetleri çıkarılmış {{ realNetProfitTry >= 0 ? 'nihai net kâr' : 'nihai net zarar' }}: <strong [ngClass]="realNetProfitTry >= 0 ? 'text-emerald' : 'text-danger'">{{ formatSignedTry(realNetProfitTry) }}</strong> ({{ formatSignedUsd(realNetProfitUsd) }})</p>
             </div>
             <button class="btn-modal-close" (click)="closeModals()">✕</button>
           </div>
@@ -1595,12 +1595,12 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let b of balanceBreakdownRecords" [class.highlight-row]="(b.type === 'KÂR' || b.name === 'GERÇEK NET KÂR') && b.isPositive" [class.highlight-danger-row]="(b.type === 'ZARAR' || b.name === 'GERÇEK NET KÂR') && !b.isPositive">
+                  <tr *ngFor="let b of balanceBreakdownRecords" [class.highlight-row]="(b.type === 'KÂR' || b.name.includes('GERÇEK NET')) && b.isPositive" [class.highlight-danger-row]="(b.type === 'ZARAR' || b.name.includes('GERÇEK NET')) && !b.isPositive">
                     <td class="type-cell"><strong>{{ b.type }}</strong></td>
                     <td class="item-name">{{ b.name }}</td>
                     <td class="detail-cell">{{ b.detail }}</td>
                     <td class="amount-cell" [ngClass]="b.isPositive ? 'text-emerald' : 'text-danger'">
-                      {{ (b.name === 'GERÇEK NET KÂR' ? '=' : '') + formatSignedTry(b.amount) }}
+                      {{ (b.name.includes('GERÇEK NET') ? '=' : '') + formatSignedTry(b.amount) }}
                     </td>
                     <td><span *ngIf="b.status" class="badge-status-payout" [ngClass]="b.isPositive ? 'badge-success' : 'badge-danger'">{{ b.status }}</span></td>
                     <td class="note-cell">{{ b.explanation }}</td>

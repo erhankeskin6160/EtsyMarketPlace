@@ -703,7 +703,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
       { type: 'Kargo', name: 'Kargo Gönderimleri', detail: `${this.completedOrderCount} Gönderi`, amount: -this.totalShippingCostTry, status: '', isPositive: false, explanation: 'Siparişlerin müşterilere kargolanma ve lojistik maliyeti (ShipEntegra / QuickShipper)' },
       { type: 'Üretim', name: '3D Baskı / Hammadde', detail: 'Filament & Reçine', amount: -this.totalProductionCostTry, status: '', isPositive: false, explanation: 'Üretimde harcanan hammadde ve 3D yazıcı amortismanı' },
       { type: 'Paket', name: 'Paketleme & Fatura', detail: `${this.invoiceOrderCount} Fatura`, amount: -this.totalPackagingCostTry, status: '', isPositive: false, explanation: 'Kutu, balonlu naylon, barkod etiketi ve resmî faturalar' },
-      { type: isRealProfitPos ? 'KÂR' : 'ZARAR', name: 'GERÇEK NET KÂR', detail: isRealProfitPos ? 'Saf Kâr' : 'Net Zarar', amount: this.realNetProfitTry, status: isRealProfitPos ? '🟢 Kâr' : '🔴 Zarar', isPositive: isRealProfitPos, explanation: isRealProfitPos ? 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' : 'Giderler ve kesintiler gelirleri aştığı için oluşan net zarar' }
+      { type: isRealProfitPos ? 'KÂR' : 'ZARAR', name: isRealProfitPos ? 'GERÇEK NET KÂR' : 'GERÇEK NET ZARAR', detail: isRealProfitPos ? 'Saf Kâr' : 'Net Zarar', amount: this.realNetProfitTry, status: isRealProfitPos ? '🟢 Kâr' : '🔴 Zarar', isPositive: isRealProfitPos, explanation: isRealProfitPos ? 'Tüm platform ve operasyonel giderler çıktıktan sonra kalan net kâr' : 'Giderler ve kesintiler gelirleri aştığı için oluşan net zarar' }
     ];
 
     // 7. Etsy Net Gelir Mutabakat Tablosu (Modal 9)

@@ -32,11 +32,11 @@ Chart.register(...registerables);
 
         <div class="glass-card kpi-card">
           <div class="kpi-header">
-            <span class="kpi-label">💰 GERÇEK NET KÂR</span>
-            <span class="kpi-tag text-cyan">{{ financialPerformance ? (financialPerformance.netProfitMargin / 100 | percent:'1.0-1') : 'Veri yok' }}</span>
+            <span class="kpi-label">{{ netProfitUsd >= 0 ? '💰 GERÇEK NET KÂR' : '🔴 GERÇEK NET ZARAR' }}</span>
+            <span class="kpi-tag" [ngClass]="netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">{{ financialPerformance ? (financialPerformance.netProfitMargin / 100 | percent:'1.0-1') : 'Veri yok' }}</span>
           </div>
-          <div class="kpi-value text-cyan">
-            <ng-container *ngIf="financialPerformance; else noFinanceValue">&#36;{{ netProfitUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
+          <div class="kpi-value" [ngClass]="netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">
+            <ng-container *ngIf="financialPerformance; else noFinanceValue">{{ netProfitUsd < 0 ? '-' : '' }}&#36;{{ (netProfitUsd < 0 ? -netProfitUsd : netProfitUsd) | number:'1.2-2' }} <span class="kpi-sub-try">({{ netProfitUsd < 0 ? '-₺' : '₺' }}{{ (netProfitUsd < 0 ? -netProfitUsd : netProfitUsd) * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
           </div>
           <div class="kpi-sub">Maliyet, Komisyonlar Düşülmüş</div>
         </div>
@@ -237,7 +237,7 @@ Chart.register(...registerables);
                   <td class="font-semibold">{{ o.title }}</td>
                   <td>{{ o.quantity }}</td>
                   <td class="text-emerald font-bold">&#36;{{ o.totalUsd | number:'1.2-2' }}</td>
-                  <td class="text-cyan font-bold">{{ o.netProfitUsd >= 0 ? '+' : '' }}&#36;{{ o.netProfitUsd | number:'1.2-2' }} <span class="text-xs text-muted">(₺{{ o.netProfitUsd * apiService.exchangeRate() | number:'1.0-0' }})</span> <span *ngIf="!o.hasCost" class="text-xs" title="Sipariş maliyeti girilmemiş — net kâr maliyet hariç hesaplandı">⚠</span></td>
+                  <td class="font-bold" [ngClass]="o.netProfitUsd >= 0 ? 'text-cyan' : 'text-danger'">{{ o.netProfitUsd >= 0 ? '+' : '-' }}&#36;{{ (o.netProfitUsd < 0 ? -o.netProfitUsd : o.netProfitUsd) | number:'1.2-2' }} <span class="text-xs text-muted">({{ o.netProfitUsd < 0 ? '-₺' : '₺' }}{{ (o.netProfitUsd < 0 ? -o.netProfitUsd : o.netProfitUsd) * apiService.exchangeRate() | number:'1.0-0' }})</span> <span *ngIf="!o.hasCost" class="text-xs" title="Sipariş maliyeti girilmemiş — net kâr maliyet hariç hesaplandı">⚠</span></td>
                 </tr>
               </tbody>
             </table>
