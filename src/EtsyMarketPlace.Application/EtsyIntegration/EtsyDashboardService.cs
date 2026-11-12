@@ -447,19 +447,78 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
                 }
             }
         }
+        var hasUnresolvedRefund = false;
         foreach (var entry in ledgerEntries.Where(e => string.Equals(e.Type, "refund", StringComparison.OrdinalIgnoreCase)))
         {
-            if (entry.ReferenceId > 0 && EtsyTransactionOrderCache.TryGetOrderReference(entry.ReferenceId, out var cached) && cached != null && cached.ReceiptId > 0 && !periodReceiptIds.Contains(cached.ReceiptId))
+            var resolved = false;
+            if (entry.EntryId > 0 && ledgerEntryToReceiptMap != null && ledgerEntryToReceiptMap.TryGetValue(entry.EntryId, out var mappedRid) && mappedRid > 0)
             {
-                crossPeriodReceiptIds.Add(cached.ReceiptId);
+                resolved = true;
+            }
+            if (entry.ReferenceId > 0 && EtsyTransactionOrderCache.TryGetOrderReference(entry.ReferenceId, out var cached) && cached != null && cached.ReceiptId > 0)
+            {
+                resolved = true;
+                if (!periodReceiptIds.Contains(cached.ReceiptId))
+                {
+                    crossPeriodReceiptIds.Add(cached.ReceiptId);
+                }
             }
             if (!string.IsNullOrWhiteSpace(entry.Description))
             {
                 var match = System.Text.RegularExpressions.Regex.Match(entry.Description, @"(?<!\d)(\d{9,11})(?!\d)");
-                if (match.Success && long.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.None, CultureInfo.InvariantCulture, out var descRid) && descRid > 0 && !periodReceiptIds.Contains(descRid))
+                if (match.Success && long.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.None, CultureInfo.InvariantCulture, out var descRid) && descRid > 0)
                 {
-                    crossPeriodReceiptIds.Add(descRid);
+                    resolved = true;
+                    if (!periodReceiptIds.Contains(descRid))
+                    {
+                        crossPeriodReceiptIds.Add(descRid);
+                    }
                 }
+            }
+            if (!resolved && entry.ReferenceId > 0 && periodReceiptIds.Contains(entry.ReferenceId))
+            {
+                resolved = true;
+            }
+            if (!resolved && Math.Abs(entry.Amount) > 0)
+            {
+                hasUnresolvedRefund = true;
+            }
+        }
+
+        IReadOnlyList<EtsyDashboardReceipt>? fallbackReceipts = null;
+        if (hasUnresolvedRefund)
+        {
+            try
+            {
+                fallbackReceipts = await _etsyClient.GetShopReceiptsAsync(shopId, start.AddDays(-120), start, cancellationToken);
+                foreach (var extReceipt in fallbackReceipts)
+                {
+                    if (extReceipt.ReceiptId <= 0) continue;
+                    if (!string.IsNullOrWhiteSpace(extReceipt.BuyerName) && !buyerNameMap.ContainsKey(extReceipt.ReceiptId))
+                    {
+                        buyerNameMap[extReceipt.ReceiptId] = extReceipt.BuyerName;
+                    }
+                    if (extReceipt.CreatedAt != default && !orderDateMap.ContainsKey(extReceipt.ReceiptId))
+                    {
+                        orderDateMap[extReceipt.ReceiptId] = extReceipt.CreatedAt;
+                    }
+                    var firstTitle = extReceipt.Items.FirstOrDefault()?.Title;
+                    if (!string.IsNullOrWhiteSpace(firstTitle) && !titleMap.ContainsKey(extReceipt.ReceiptId))
+                    {
+                        titleMap[extReceipt.ReceiptId] = firstTitle;
+                    }
+                    foreach (var item in extReceipt.Items)
+                    {
+                        if (item.TransactionId > 0)
+                        {
+                            EtsyTransactionOrderCache.Register(item.TransactionId, extReceipt.ReceiptId, extReceipt.BuyerName ?? string.Empty, extReceipt.CreatedAt, item.Title ?? string.Empty);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Yedek gecmis fis taramasi basarisiz olursa mevcut akis korunur
             }
         }
 
@@ -511,7 +570,8 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             buyerNameMap,
             orderDateMap,
             ledgerEntryToReceiptMap,
-            titleMap);
+            titleMap,
+            fallbackReceipts);
 
         var activeOrderRows = rows.Where(r => !string.Equals(r.CostNotes, "cross_period_refund", StringComparison.OrdinalIgnoreCase)).ToList();
         return new OrderFinancialsDashboardResult(

@@ -157,8 +157,9 @@ public sealed class EtsyDashboardServiceTests
         public Task SaveListingTrafficDailyAsync(IReadOnlyCollection<EtsyListingTrafficRecord> records, CancellationToken ct = default) => Task.CompletedTask;
         public Task<IReadOnlyList<EtsyListingTrafficRecord>> GetListingTrafficAnalyticsAsync(string shopId, string? snapshotDate = null, int limit = 50, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<EtsyListingTrafficRecord>>(Array.Empty<EtsyListingTrafficRecord>());
         public Task SaveChartSnapshotAsync(EtsyChartSnapshot snapshot, CancellationToken ct = default) => Task.CompletedTask;
+        public Dictionary<long, EtsyDashboardOrderCost> Costs { get; } = new();
         public Task<EtsyChartSnapshot?> GetChartSnapshotAsync(string shopId, string chartType, CancellationToken ct = default) => Task.FromResult<EtsyChartSnapshot?>(null);
-        public Task<IReadOnlyDictionary<long, EtsyDashboardOrderCost>> GetOrderCostsAsync(string shopId, CancellationToken ct = default) => Task.FromResult<IReadOnlyDictionary<long, EtsyDashboardOrderCost>>(new Dictionary<long, EtsyDashboardOrderCost>());
+        public Task<IReadOnlyDictionary<long, EtsyDashboardOrderCost>> GetOrderCostsAsync(string shopId, CancellationToken ct = default) => Task.FromResult<IReadOnlyDictionary<long, EtsyDashboardOrderCost>>(Costs);
         public Task UpsertOrderCostAsync(string shopId, string orderId, decimal? productCost, decimal? shippingCost, decimal? packagingCost, string? notes, CancellationToken ct = default) => Task.CompletedTask;
     }
 
@@ -317,6 +318,57 @@ public sealed class EtsyDashboardServiceTests
         Assert.Equal("18.09.2026", row.OriginalOrderDate);
         Assert.Equal("12.11.2026", row.RefundDate);
         Assert.Equal(161.39m, row.RefundAmountUsd);
+    }
+
+    [Fact]
+    public async Task GetLiveReportAsync_IncludesSavedCostOfCrossPeriodRefund_InProductCostsAndNetProfit()
+    {
+        var repo = new FakeIntegrationRepository();
+        repo.Costs[4178116160L] = new EtsyDashboardOrderCost(15.31m, 23.00m, 0m, null);
+        var client = new CrossPeriodLedgerReportClient();
+        var service = new EtsyLedgerReportService(client, repo);
+
+        var result = await service.GetLiveReportAsync(
+            "shop-1",
+            new DateTimeOffset(2026, 11, 1, 0, 0, 0, TimeSpan.Zero),
+            new DateTimeOffset(2026, 11, 30, 23, 59, 59, TimeSpan.Zero));
+
+        Assert.True(result.LedgerOk);
+        Assert.Equal(38.31m, result.Performance.ProductCosts);
+        Assert.Equal(-201.98m, result.Performance.NetProfit);
+    }
+
+    private sealed class CrossPeriodLedgerReportClient : IEtsyDataClient
+    {
+        public Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyBankPayout>>(Array.Empty<EtsyBankPayout>());
+        public Task<IReadOnlyList<EtsyFinancialTransaction>> GetFinancialTransactionsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyFinancialTransaction>>(Array.Empty<EtsyFinancialTransaction>());
+        public Task<IReadOnlyList<EtsyOrderCostAlert>> GetUnfulfilledCostAlertsAsync(string shopId, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyOrderCostAlert>>(Array.Empty<EtsyOrderCostAlert>());
+        public Task<IReadOnlyList<EtsyDashboardReceipt>> GetShopReceiptsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyDashboardReceipt>>(Array.Empty<EtsyDashboardReceipt>());
+        public Task<IReadOnlyList<EtsyDashboardLedgerFee>> GetPaymentAccountLedgerEntriesAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyDashboardLedgerFee>>(Array.Empty<EtsyDashboardLedgerFee>());
+        public Task<IReadOnlyList<EtsyLedgerEntryDetail>> GetLedgerEntriesDetailedAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<EtsyLedgerEntryDetail>>(new[]
+            {
+                new EtsyLedgerEntryDetail(
+                    Type: "refund",
+                    RawType: "REFUND_GROSS",
+                    RawReferenceType: "payment",
+                    Description: "REFUND_GROSS",
+                    Amount: -163.67m,
+                    NetAmount: -163.67m,
+                    AmountTry: -8019.83m,
+                    Currency: "USD",
+                    CreatedAt: new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero),
+                    ExchangeRate: 49m,
+                    ReferenceId: 299999999998L,
+                    EntryId: 9988776656L)
+            });
+        public Task<IReadOnlyDictionary<long, long>> GetReceiptIdsByLedgerEntriesAsync(string shopId, IReadOnlyCollection<long> ledgerEntryIds, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyDictionary<long, long>>(new Dictionary<long, long> { [9988776656L] = 4178116160L });
     }
 
     private sealed class CrossPeriodRefundEtsyDataClient : IEtsyDataClient

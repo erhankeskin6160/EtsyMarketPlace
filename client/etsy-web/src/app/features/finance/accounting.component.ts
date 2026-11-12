@@ -361,7 +361,12 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   computeOrderNetUsdForCost(order: OrderFinancialRow, totalCostUsd: number): number {
-    if (order.orderStatus === 'canceled' || order.costNotes === 'cross_period_refund') {
+    if (order.costNotes === 'cross_period_refund') {
+      const refundUsd = order.refundAmountUsd && order.refundAmountUsd > 0 ? order.refundAmountUsd : (order.grandTotalUsd || 0);
+      const feeCreditUsd = order.etsyFeesUsd < 0 ? Math.abs(order.etsyFeesUsd) : 0;
+      return Number((-refundUsd + feeCreditUsd - totalCostUsd).toFixed(2));
+    }
+    if (order.orderStatus === 'canceled') {
       return Number((-totalCostUsd).toFixed(2));
     }
     const basePayoutUsd = order.etsyNetPayoutUsd !== undefined && order.etsyNetPayoutUsd !== null
@@ -388,7 +393,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   private get costEligibleOrders(): OrderFinancialRow[] {
     return this.orders.filter(o =>
       o.orderStatus !== 'refunded' &&
-      o.costNotes !== 'cross_period_refund' &&
+      (o.costNotes !== 'cross_period_refund' || (o.productCostUsd || 0) > 0) &&
       (o.orderStatus !== 'canceled' || (o.productCostUsd || 0) > 0)
     );
   }

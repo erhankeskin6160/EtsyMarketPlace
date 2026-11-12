@@ -646,4 +646,61 @@ public sealed class EtsyLiveDashboardCalculatorTests
 
         Assert.Equal(without[0].NetProfitUsd, withCredit[0].NetProfitUsd);
     }
+
+    [Fact]
+    public void BuildDetailedOrderRows_SubtractsSavedOrderCost_FromCrossPeriodRefundNetProfit()
+    {
+        var refundAt = new DateTimeOffset(2026, 11, 3, 10, 0, 0, TimeSpan.Zero);
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", 4185170299L, "Refund for Order #4185170299", -174.62m, refundAt),
+            Credit("transaction_fee", 4185170299L, 11.63m, refundAt)
+        };
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4185170299L] = new(30m, 25.31m, 0m, "Müşteri: Anthony Brown")
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            Array.Empty<EtsyDashboardReceipt>(), ledger, costs, 50m);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(4185170299L, row.ReceiptId);
+        Assert.Equal(55.31m, row.ProductCostUsd);
+        Assert.Equal(-218.30m, row.NetProfitUsd);
+    }
+
+    [Fact]
+    public void BuildDetailedOrderRows_ResolvesCrossPeriodRefund_ViaFallbackReceipts_WhenLedgerPaymentsEmpty()
+    {
+        var orderAt = new DateTimeOffset(2026, 9, 16, 10, 0, 0, TimeSpan.Zero);
+        var refundAt = new DateTimeOffset(2026, 11, 12, 10, 0, 0, TimeSpan.Zero);
+        var ledger = new List<EtsyDashboardLedgerFee>
+        {
+            new("refund", 213006308299L, "REFUND_GROSS", -163.67m, refundAt)
+        };
+        var fallbackReceipts = new[]
+        {
+            Receipt(4178116199L, 170.50m, 170.50m, canceled: true, createdAt: orderAt)
+        };
+        var costs = new Dictionary<long, EtsyDashboardOrderCost>
+        {
+            [4178116199L] = new(15.31m, 23m, 0m, null)
+        };
+
+        var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(
+            Array.Empty<EtsyDashboardReceipt>(),
+            ledger,
+            costs,
+            50m,
+            buyerNameMap: new Dictionary<long, string> { [4178116199L] = "Adam Schulz" },
+            originalOrderDateMap: new Dictionary<long, DateTimeOffset> { [4178116199L] = orderAt },
+            fallbackReceipts: fallbackReceipts);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(4178116199L, row.ReceiptId);
+        Assert.Equal("Adam Schulz", row.BuyerName);
+        Assert.Equal(38.31m, row.ProductCostUsd);
+        Assert.Equal(-201.98m, row.NetProfitUsd);
+    }
 }

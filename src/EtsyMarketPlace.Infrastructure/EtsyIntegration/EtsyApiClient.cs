@@ -65,42 +65,61 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         var baseUrl = _options.ApiBaseUrl.TrimEnd('/');
         var apiKey = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
 
+        using var throttle = new SemaphoreSlim(4, 4);
         var pairs = await Task.WhenAll(ids.Select(async entryId =>
         {
+            await throttle.WaitAsync(cancellationToken);
             try
             {
                 var uri = $"{baseUrl}/application/shops/{Uri.EscapeDataString(shopId)}/payment-account/ledger-entries/payments?ledger_entry_ids={entryId}";
-                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-                request.Headers.Add("X-Etsy-Shop-Id", shopId);
-                request.Headers.Add("x-api-key", apiKey);
-                using var response = await httpClient.SendAsync(request, cancellationToken);
-                if (!response.IsSuccessStatusCode) return (entryId, 0L);
-
-                using var doc = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken);
-                if (doc is null || !doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
-                    return (entryId, 0L);
-
-                foreach (var entry in results.EnumerateArray())
+                for (var attempt = 0; attempt < 2; attempt++)
                 {
-                    var receiptId = LongValue(entry, "receipt_id");
-                    if (receiptId <= 0 && entry.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Array)
+                    using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                    request.Headers.Add("X-Etsy-Shop-Id", shopId);
+                    request.Headers.Add("x-api-key", apiKey);
+                    using var response = await httpClient.SendAsync(request, cancellationToken);
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt == 0)
                     {
-                        foreach (var payment in payments.EnumerateArray())
+                        var delayMs = response.Headers.RetryAfter?.Delta is { TotalMilliseconds: > 0 } delta
+                            ? Math.Clamp((int)delta.TotalMilliseconds, 300, 3000)
+                            : 800;
+                        await Task.Delay(delayMs, cancellationToken);
+                        continue;
+                    }
+                    if (!response.IsSuccessStatusCode) return (entryId, 0L);
+
+                    using var doc = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken);
+                    if (doc is null || !doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+                        return (entryId, 0L);
+
+                    foreach (var entry in results.EnumerateArray())
+                    {
+                        var receiptId = LongValue(entry, "receipt_id");
+                        if (receiptId <= 0 && entry.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Array)
                         {
-                            receiptId = LongValue(payment, "receipt_id");
-                            if (receiptId > 0) break;
+                            foreach (var payment in payments.EnumerateArray())
+                            {
+                                receiptId = LongValue(payment, "receipt_id");
+                                if (receiptId > 0) break;
+                            }
+                        }
+
+                        if (receiptId > 0)
+                        {
+                            return (entryId, receiptId);
                         }
                     }
 
-                    if (receiptId > 0)
-                    {
-                        return (entryId, receiptId);
-                    }
+                    return (entryId, 0L);
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Tekil kayit hatasi tum finansal paneli dusurmez
+            }
+            finally
+            {
+                throttle.Release();
             }
 
             return (entryId, 0L);

@@ -200,9 +200,23 @@ public static class EtsyLiveDashboardCalculator
         IReadOnlyDictionary<long, string>? buyerNameMap = null,
         IReadOnlyDictionary<long, DateTimeOffset>? originalOrderDateMap = null,
         IReadOnlyDictionary<long, long>? ledgerEntryToReceiptMap = null,
-        IReadOnlyDictionary<long, string>? titleMap = null)
+        IReadOnlyDictionary<long, string>? titleMap = null,
+        IReadOnlyList<EtsyDashboardReceipt>? fallbackReceipts = null)
     {
         var transactionToReceiptMap = new Dictionary<long, EtsyDashboardReceipt>();
+        if (fallbackReceipts is { Count: > 0 })
+        {
+            foreach (var r in fallbackReceipts)
+            {
+                foreach (var item in r.Items)
+                {
+                    if (item.TransactionId > 0)
+                    {
+                        transactionToReceiptMap[item.TransactionId] = r;
+                    }
+                }
+            }
+        }
         foreach (var r in receipts)
         {
             foreach (var item in r.Items)
@@ -213,8 +227,11 @@ public static class EtsyLiveDashboardCalculator
                 }
             }
         }
+        var allCandidateReceipts = fallbackReceipts is { Count: > 0 }
+            ? receipts.Concat(fallbackReceipts).ToList()
+            : receipts;
         var offsiteAdsMap = BuildOffsiteAdsMap(ledgerFees);
-        var refundEntries = BuildRefundEntries(ledgerFees, transactionToReceiptMap, receipts, ledgerEntryToReceiptMap);
+        var refundEntries = BuildRefundEntries(ledgerFees, transactionToReceiptMap, allCandidateReceipts, ledgerEntryToReceiptMap);
         var receiptIdsInPeriod = new HashSet<long>(receipts.Select(r => r.ReceiptId));
         var rows = new List<EtsyOrderFinancialDetail>();
 
@@ -672,7 +689,7 @@ public static class EtsyLiveDashboardCalculator
                     ? $"Önceki Dönem Sipariş İadesi ({info.Description})"
                     : $"Önceki Dönem Sipariş İadesi (#{resolvedReceiptId})");
 
-            var netProfitUsd = Math.Round(-refundUsd + feeRefundedUsd, 2);
+            var netProfitUsd = Math.Round(-refundUsd + feeRefundedUsd - (productCost ?? 0m), 2);
             var netProfitTry = Math.Round(netProfitUsd * refundRate, 2);
             var displayStatus = "↩️ İade (Önceki Dönem)";
 

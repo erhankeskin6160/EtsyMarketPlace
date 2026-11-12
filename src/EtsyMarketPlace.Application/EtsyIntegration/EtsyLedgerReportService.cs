@@ -52,7 +52,7 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
             }
         }
 
-        var (costsByDay, receiptCount) = await BuildProductCostsByDayAsync(shopId, startDate, endDate, cancellationToken);
+        var (costsByDay, receiptCount) = await BuildProductCostsByDayAsync(shopId, startDate, endDate, entries, cancellationToken);
         var report = EtsyLedgerFinancialEngine.BuildReport(entries, costsByDay);
         var performance = MapToPerformance(startDate, endDate, report);
 
@@ -61,10 +61,11 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
 
     /// <summary>
     /// Siparis/urun maliyetlerini gun bazinda toplar; masaustu orderSummaries.ProductCost semantigi:
-    /// yalniz odanmis (veya iptal) siparisler sayilir, iptallerin maliyeti sifirlanir.
+    /// yalniz odanmis (veya iptal) siparisler sayilir, iptallerde maliyet girilmisse zarara dahil edilir.
+    /// Ayrica donem icinde iade edilen capraz donem siparislerin maliyetleri de iade gunune eklenir.
     /// </summary>
     private async Task<(IReadOnlyDictionary<DateTime, decimal> Costs, int ReceiptCount)> BuildProductCostsByDayAsync(
-        string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken)
+        string shopId, DateTimeOffset startDate, DateTimeOffset endDate, IReadOnlyList<EtsyLedgerEntryDetail> entries, CancellationToken cancellationToken)
     {
         var costsByDay = new Dictionary<DateTime, decimal>();
         var receiptCount = 0;
@@ -74,6 +75,7 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
             var receipts = await dataClient.GetShopReceiptsAsync(shopId, startDate, endDate, cancellationToken);
             receiptCount = receipts.Count(r => r.IsPaid || r.IsCanceled);
             var costs = await repository.GetOrderCostsAsync(shopId, cancellationToken);
+            var periodReceiptIds = new HashSet<long>(receipts.Select(r => r.ReceiptId));
 
             foreach (var receipt in receipts)
             {
@@ -86,6 +88,11 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
                 var day = receipt.CreatedAt.UtcDateTime.Date;
                 costsByDay[day] = costsByDay.TryGetValue(day, out var existing) ? existing + amount : amount;
             }
+
+            if (costs.Count > 0)
+            {
+                await AddCrossPeriodRefundCostsAsync(shopId, startDate, entries, costs, periodReceiptIds, costsByDay, cancellationToken);
+            }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -95,6 +102,96 @@ public sealed class EtsyLedgerReportService(IEtsyDataClient dataClient, IEtsyInt
         }
 
         return (costsByDay, receiptCount);
+    }
+
+    private async Task AddCrossPeriodRefundCostsAsync(
+        string shopId,
+        DateTimeOffset startDate,
+        IReadOnlyList<EtsyLedgerEntryDetail> entries,
+        IReadOnlyDictionary<long, EtsyDashboardOrderCost> costs,
+        HashSet<long> periodReceiptIds,
+        Dictionary<DateTime, decimal> costsByDay,
+        CancellationToken cancellationToken)
+    {
+        var refundEntries = entries.Where(e => e.Type == "refund" && Math.Abs(e.Amount) > 0).ToList();
+        if (refundEntries.Count == 0) return;
+
+        var entryIdsToLookup = new List<long>();
+        var resolvedByEntry = new Dictionary<int, long>();
+        for (var i = 0; i < refundEntries.Count; i++)
+        {
+            var e = refundEntries[i];
+            var rid = 0L;
+            if (e.ReferenceId > 0 && (periodReceiptIds.Contains(e.ReferenceId) || costs.ContainsKey(e.ReferenceId)))
+            {
+                rid = e.ReferenceId;
+            }
+            else if (e.ReferenceId > 0 && EtsyTransactionOrderCache.TryGetOrderReference(e.ReferenceId, out var cached) && cached != null && cached.ReceiptId > 0)
+            {
+                rid = cached.ReceiptId;
+            }
+            if (rid > 0)
+            {
+                resolvedByEntry[i] = rid;
+            }
+            else if (e.EntryId > 0)
+            {
+                entryIdsToLookup.Add(e.EntryId);
+            }
+        }
+
+        if (entryIdsToLookup.Count > 0)
+        {
+            try
+            {
+                var apiMap = await dataClient.GetReceiptIdsByLedgerEntriesAsync(shopId, entryIdsToLookup, cancellationToken);
+                for (var i = 0; i < refundEntries.Count; i++)
+                {
+                    if (resolvedByEntry.ContainsKey(i)) continue;
+                    var e = refundEntries[i];
+                    if (e.EntryId > 0 && apiMap.TryGetValue(e.EntryId, out var rid) && rid > 0)
+                    {
+                        resolvedByEntry[i] = rid;
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { _ = ex; }
+        }
+
+        if (resolvedByEntry.Count < refundEntries.Count)
+        {
+            try
+            {
+                var fallbackReceipts = await dataClient.GetShopReceiptsAsync(shopId, startDate.AddDays(-120), startDate, cancellationToken);
+                var claimed = new HashSet<long>(resolvedByEntry.Values);
+                for (var i = 0; i < refundEntries.Count; i++)
+                {
+                    if (resolvedByEntry.ContainsKey(i)) continue;
+                    var e = refundEntries[i];
+                    var matched = EtsyLiveDashboardCalculator.TryMatchReceiptByAmount(Math.Abs(e.Amount), e.CreatedAt, fallbackReceipts, claimed);
+                    if (matched.HasValue)
+                    {
+                        resolvedByEntry[i] = matched.Value;
+                        claimed.Add(matched.Value);
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException) { _ = ex; }
+        }
+
+        var countedCrossPeriodIds = new HashSet<long>();
+        for (var i = 0; i < refundEntries.Count; i++)
+        {
+            if (!resolvedByEntry.TryGetValue(i, out var rid)) continue;
+            if (periodReceiptIds.Contains(rid) || !countedCrossPeriodIds.Add(rid)) continue;
+            if (!costs.TryGetValue(rid, out var cost)) continue;
+
+            var amount = Math.Round(cost.ProductCost + cost.ShippingCost + cost.PackagingCost, 2);
+            if (amount <= 0) continue;
+
+            var day = refundEntries[i].CreatedAt.UtcDateTime.Date;
+            costsByDay[day] = costsByDay.TryGetValue(day, out var existing) ? existing + amount : amount;
+        }
     }
 
     private static FinancialPerformance MapToPerformance(DateTimeOffset startDate, DateTimeOffset endDate, EtsyLedgerFinancialReport report)
