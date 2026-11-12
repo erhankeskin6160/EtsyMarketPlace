@@ -338,7 +338,7 @@ public sealed class EtsyDashboardServiceTests
             {
                 new EtsyDashboardLedgerFee(
                     Type: "refund",
-                    ReferenceId: 213006308259L,
+                    ReferenceId: 299999999999L,
                     Description: "REFUND_GROSS",
                     Amount: -161.39m,
                     CreatedAt: new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero),
@@ -374,7 +374,7 @@ public sealed class EtsyDashboardServiceTests
                 DiscountAmt: 0m,
                 TaxCost: 0m,
                 RefundedAmount: 161.39m,
-                Items: new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 12345L, 1, 213006308259L) },
+                Items: new[] { new EtsyDashboardReceiptItem("Arcane Jinx Statue", 12345L, 1, 299999999999L) },
                 BuyerName: "Adam Schulz"));
         }
     }

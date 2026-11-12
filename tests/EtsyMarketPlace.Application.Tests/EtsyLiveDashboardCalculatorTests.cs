@@ -553,7 +553,7 @@ public sealed class EtsyLiveDashboardCalculatorTests
         var receipts = new[] { Receipt(4178116160L, 170.50m, 170.50m, canceled: true, createdAt: orderDate) };
         var ledger = new List<EtsyDashboardLedgerFee>
         {
-            new("refund", 213006308259L, "REFUND_GROSS", -161.39m, refundAt)
+            new("refund", 288888888888L, "REFUND_GROSS", -161.39m, refundAt)
         };
 
         var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledger, NoCosts(), 50.23m);
@@ -576,13 +576,13 @@ public sealed class EtsyLiveDashboardCalculatorTests
         };
         var ledger = new List<EtsyDashboardLedgerFee>
         {
-            new("refund", 213006308259L, "REFUND_GROSS", -161.39m, refundAt)
+            new("refund", 288888888888L, "REFUND_GROSS", -161.39m, refundAt)
         };
 
         var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(receipts, ledger, NoCosts(), 50.23m);
 
         var unresolved = Assert.Single(rows, r => r.CostNotes == "cross_period_refund");
-        Assert.Equal(213006308259L, unresolved.ReceiptId);
+        Assert.Equal(288888888888L, unresolved.ReceiptId);
         Assert.Null(unresolved.OriginalOrderDate);
         Assert.Equal("12.11.2026", unresolved.RefundDate);
     }
@@ -593,10 +593,10 @@ public sealed class EtsyLiveDashboardCalculatorTests
         var refundAt = new DateTimeOffset(2026, 11, 12, 9, 0, 0, TimeSpan.Zero);
         var ledger = new List<EtsyDashboardLedgerFee>
         {
-            new("refund", 213006308259L, "REFUND_GROSS", -161.39m, refundAt),
-            Credit("transaction_fee", 213006308259L, 8.52m, refundAt),
-            Credit("payment_processing", 213006308259L, 10.77m, refundAt),
-            Credit("offsite_ads", 213006308259L, 22.57m, refundAt)
+            new("refund", 288888888889L, "REFUND_GROSS", -161.39m, refundAt),
+            Credit("transaction_fee", 288888888889L, 8.52m, refundAt),
+            Credit("payment_processing", 288888888889L, 10.77m, refundAt),
+            Credit("offsite_ads", 288888888889L, 22.57m, refundAt)
         };
 
         var rows = EtsyLiveDashboardCalculator.BuildDetailedOrderRows(Array.Empty<EtsyDashboardReceipt>(), ledger, NoCosts(), 50.23m);

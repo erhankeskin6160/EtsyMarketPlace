@@ -49,6 +49,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
 
     /// <summary>
     /// Etsy'nin resmi payment-account/ledger-entries/payments ucundan defter kaydi -> receipt_id eslesmesini ceker.
+    /// Etsy Payment yaniti ledger_entry_id alanini geri donmedigi icin her entryId ayri sorgulanir.
     /// </summary>
     public async Task<IReadOnlyDictionary<long, long>> GetReceiptIdsByLedgerEntriesAsync(
         string shopId,
@@ -58,33 +59,29 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         var result = new Dictionary<long, long>();
         if (ledgerEntryIds is null || ledgerEntryIds.Count == 0) return result;
 
-        var ids = ledgerEntryIds.Where(id => id > 0).Distinct().ToList();
+        var ids = ledgerEntryIds.Where(id => id > 0).Distinct().Take(25).ToList();
         if (ids.Count == 0) return result;
 
         var baseUrl = _options.ApiBaseUrl.TrimEnd('/');
         var apiKey = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
 
-        foreach (var chunk in ids.Chunk(50))
+        var pairs = await Task.WhenAll(ids.Select(async entryId =>
         {
             try
             {
-                var joined = string.Join(",", chunk);
-                var uri = $"{baseUrl}/application/shops/{Uri.EscapeDataString(shopId)}/payment-account/ledger-entries/payments?ledger_entry_ids={Uri.EscapeDataString(joined)}";
+                var uri = $"{baseUrl}/application/shops/{Uri.EscapeDataString(shopId)}/payment-account/ledger-entries/payments?ledger_entry_ids={entryId}";
                 using var request = new HttpRequestMessage(HttpMethod.Get, uri);
                 request.Headers.Add("X-Etsy-Shop-Id", shopId);
                 request.Headers.Add("x-api-key", apiKey);
                 using var response = await httpClient.SendAsync(request, cancellationToken);
-                if (!response.IsSuccessStatusCode) continue;
+                if (!response.IsSuccessStatusCode) return (entryId, 0L);
 
                 using var doc = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken: cancellationToken);
                 if (doc is null || !doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
-                    continue;
+                    return (entryId, 0L);
 
                 foreach (var entry in results.EnumerateArray())
                 {
-                    var entryId = LongValue(entry, "ledger_entry_id", "entry_id", "id");
-                    if (entryId <= 0) continue;
-
                     var receiptId = LongValue(entry, "receipt_id");
                     if (receiptId <= 0 && entry.TryGetProperty("payments", out var payments) && payments.ValueKind == JsonValueKind.Array)
                     {
@@ -97,13 +94,23 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
 
                     if (receiptId > 0)
                     {
-                        result[entryId] = receiptId;
+                        return (entryId, receiptId);
                     }
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // Tekil chunk hatasi tum finansal paneli dusurmez
+                // Tekil kayit hatasi tum finansal paneli dusurmez
+            }
+
+            return (entryId, 0L);
+        }));
+
+        foreach (var (entryId, receiptId) in pairs)
+        {
+            if (receiptId > 0)
+            {
+                result[entryId] = receiptId;
             }
         }
 

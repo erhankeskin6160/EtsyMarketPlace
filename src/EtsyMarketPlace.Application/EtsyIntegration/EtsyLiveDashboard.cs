@@ -290,6 +290,10 @@ public static class EtsyLiveDashboardCalculator
                 shippingCost = 0m;
                 discountAmt = 0m;
                 tax = 0m;
+                if (refundEntries.TryGetValue(receipt.ReceiptId, out var canceledRefundInfo) && canceledRefundInfo.FeeCreditUsd > 0)
+                {
+                    etsyFees = -Math.Round(canceledRefundInfo.FeeCreditUsd, 2);
+                }
             }
             else
             {

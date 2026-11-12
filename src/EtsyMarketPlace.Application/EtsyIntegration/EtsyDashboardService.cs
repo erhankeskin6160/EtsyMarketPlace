@@ -453,6 +453,14 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
             {
                 crossPeriodReceiptIds.Add(cached.ReceiptId);
             }
+            if (!string.IsNullOrWhiteSpace(entry.Description))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(entry.Description, @"(?<!\d)(\d{9,11})(?!\d)");
+                if (match.Success && long.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.None, CultureInfo.InvariantCulture, out var descRid) && descRid > 0 && !periodReceiptIds.Contains(descRid))
+                {
+                    crossPeriodReceiptIds.Add(descRid);
+                }
+            }
         }
 
         if (crossPeriodReceiptIds.Count > 0)
