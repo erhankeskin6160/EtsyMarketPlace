@@ -43,7 +43,10 @@ export class AiAuditComponent implements OnInit {
 
   // AI Editor / After Fields
   afterTitle = '';
+  titleSuggestions: string[] = [];
   afterTags: string[] = [];
+  afterMaterials: string[] = [];
+  newMaterialInput = '';
   afterDescription = '';
   aiCritique = '';
   riskWarnings: string[] = [];
@@ -52,6 +55,7 @@ export class AiAuditComponent implements OnInit {
   aiModelUsed = '';
   aiProviderUsed = '';
   newTagInput = '';
+  private batchCancelRequested = false;
 
   // AI Settings Dialog
   showSettingsModal = false;
@@ -174,7 +178,9 @@ export class AiAuditComponent implements OnInit {
     } else {
       // Initialize with current listing content as baseline
       this.afterTitle = listing.title;
+      this.titleSuggestions = [];
       this.afterTags = [...(listing.tags || [])];
+      this.afterMaterials = [...(listing.materials || [])];
       this.afterDescription = listing.description;
       this.aiCritique = listing.riskWarnings && listing.riskWarnings.length > 0
         ? 'Mevcut listing algoritmik olarak taranmış ve potansiyel marka/telif riskleri tespit edilmiştir. "AI ile Puanla" butonuna basarak yapay zeka ile tam SEO optimizasyonu ve temiz başlık/etiket seti üretebilirsiniz.'
@@ -202,13 +208,18 @@ export class AiAuditComponent implements OnInit {
 
     const titleSuggestions: string[] = parsedResult?.TitleSuggestions || parsedResult?.titleSuggestions || [];
     const tagSuggestions: string[] = parsedResult?.TagSuggestions || parsedResult?.tagSuggestions || [];
+    const materialSuggestions: string[] = parsedResult?.MaterialSuggestions || parsedResult?.materialSuggestions || [];
     const descDraft: string = parsedResult?.DescriptionDraft || parsedResult?.descriptionDraft || '';
     const risks: string[] = parsedResult?.RiskWarnings || parsedResult?.riskWarnings || [];
     const actions: string[] = parsedResult?.ActionChecklist || parsedResult?.actionChecklist || [];
     const critique: string = parsedResult?.SeoCritique || parsedResult?.seoCritique || '';
     const scoreAfter: number = audit.seoScoreAfter || audit.optimizedSeoScore || parsedResult?.OptimizedSeoScore || 0;
 
+    this.titleSuggestions = titleSuggestions;
     this.afterTitle = audit.optimizedTitle || titleSuggestions[0] || audit.title || '';
+    this.afterMaterials = materialSuggestions.length > 0
+      ? [...materialSuggestions]
+      : [...(this.selectedListing?.materials || [])];
 
     if (audit.optimizedTagsJson) {
       try {
@@ -337,7 +348,13 @@ export class AiAuditComponent implements OnInit {
         this.isAuditingSelected = false;
         if (res.success) {
           this.afterTitle = res.optimizedTitle;
+          this.titleSuggestions = res.titleSuggestions && res.titleSuggestions.length > 0
+            ? res.titleSuggestions
+            : (res.optimizedTitle ? [res.optimizedTitle] : []);
           this.afterTags = res.optimizedTags || [];
+          this.afterMaterials = res.materialSuggestions && res.materialSuggestions.length > 0
+            ? [...res.materialSuggestions]
+            : [...(this.selectedListing?.materials || [])];
           this.afterDescription = res.optimizedDescription;
           this.aiCritique = res.critique || 'Optimizasyon başarıyla tamamlandı.';
           this.riskWarnings = res.riskWarnings || [];
@@ -396,13 +413,6 @@ export class AiAuditComponent implements OnInit {
       return;
     }
 
-    if (!confirm(`${targets.length} adet ilan sırayla ${this.aiSettings.activeBadgeTextClean()} ile denetlenecek ve optimize edilecek. Devam edilsin mi?`)) {
-      return;
-    }
-
-    this.isBatchAuditing = true;
-    this.batchProgress = { current: 0, total: targets.length };
-
     const settings = this.aiSettings.settings();
     const isStrict = settings.strictNeverOffline;
     const apiKey = this.getActiveApiKey();
@@ -412,7 +422,20 @@ export class AiAuditComponent implements OnInit {
       return;
     }
 
+    if (!confirm(`${targets.length} adet ilan sırayla ${this.aiSettings.activeBadgeTextClean()} ile denetlenecek ve optimize edilecek. Devam edilsin mi?`)) {
+      return;
+    }
+
+    this.batchCancelRequested = false;
+    this.isBatchAuditing = true;
+    this.batchProgress = { current: 0, total: targets.length };
+
     const processNext = (index: number) => {
+      if (this.batchCancelRequested) {
+        this.isBatchAuditing = false;
+        this.showToast(`Toplu denetim durduruldu (${this.batchProgress.current}/${targets.length}).`, 'info');
+        return;
+      }
       if (index >= targets.length) {
         this.isBatchAuditing = false;
         this.showToast(`${targets.length} ilan başarıyla toplu AI denetiminden geçirildi!`, 'success');
@@ -475,6 +498,10 @@ export class AiAuditComponent implements OnInit {
     processNext(0);
   }
 
+  cancelBatchAudit(): void {
+    this.batchCancelRequested = true;
+  }
+
   // ── Etsy Direct Update ───────────────────────────────────────────────────
   updateListingOnEtsy(): void {
     if (!this.selectedListing) return;
@@ -490,6 +517,11 @@ export class AiAuditComponent implements OnInit {
       return;
     }
 
+    if ((this.afterTitle.match(/&/g) || []).length > 1) {
+      this.showToast("Etsy API başlıkta birden fazla '&' karakterini reddeder! Lütfen 'and' veya virgül kullanın.", 'error');
+      return;
+    }
+
     if (this.afterTags.length > 13) {
       this.showToast(`Etsy en fazla 13 etikete izin verir! (Mevcut: ${this.afterTags.length})`, 'error');
       return;
@@ -501,7 +533,11 @@ export class AiAuditComponent implements OnInit {
       return;
     }
 
-    const confirmMsg = `DİKKAT: Listing #${this.selectedListing.listingId} doğrudan canlı Etsy mağazanıza gönderilecektir.\n\nYeni Başlık: ${this.afterTitle.substring(0, 50)}...\nEtiket Sayısı: ${this.afterTags.length}\n\nOnaylıyor musunuz?`;
+    const tagWarning = this.afterTags.length < 13
+      ? `\n⚠️ UYARI: Etiket sayısı 13'ün altında (${this.afterTags.length}/13). Etsy SEO için 13 etiket önerilir.\n`
+      : '';
+
+    const confirmMsg = `DİKKAT: Listing #${this.selectedListing.listingId} doğrudan canlı Etsy mağazanıza gönderilecektir.\n${tagWarning}\nYeni Başlık: ${this.afterTitle.substring(0, 60)}...\nEtiket Sayısı: ${this.afterTags.length}/13\nMalzeme Sayısı: ${this.afterMaterials.length}\n\nOnaylıyor musunuz?`;
     if (!confirm(confirmMsg)) {
       return;
     }
@@ -513,7 +549,7 @@ export class AiAuditComponent implements OnInit {
       title: this.afterTitle.trim(),
       description: this.afterDescription.trim(),
       tags: this.afterTags,
-      materials: this.selectedListing.materials
+      materials: this.afterMaterials
     };
 
     this.etsyApi.updateEtsyListing(this.selectedListing.listingId, payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -524,6 +560,7 @@ export class AiAuditComponent implements OnInit {
         if (this.selectedListing) {
           this.selectedListing.title = this.afterTitle;
           this.selectedListing.tags = [...this.afterTags];
+          this.selectedListing.materials = [...this.afterMaterials];
           this.selectedListing.description = this.afterDescription;
           this.selectedListing.seoScore = this.aiScoreAfter || 95;
           if (this.selectedListing.savedAudit) {
@@ -542,31 +579,65 @@ export class AiAuditComponent implements OnInit {
   }
 
   // ── Helper Actions ────────────────────────────────────────────────────────
+  selectTitleSuggestion(title: string): void {
+    this.afterTitle = title;
+    this.showToast('Alternatif başlık seçildi.', 'info');
+  }
+
+  addMaterial(): void {
+    const mat = this.newMaterialInput.trim();
+    if (!mat) return;
+    if (this.afterMaterials.length >= 13) {
+      this.showToast('En fazla 13 malzeme ekleyebilirsiniz!', 'error');
+      return;
+    }
+    if (mat.length > 45) {
+      this.showToast(`Malzeme 45 karakteri aşamaz! (${mat.length} karakter)`, 'error');
+      return;
+    }
+    if (!this.afterMaterials.some(m => m.toLowerCase() === mat.toLowerCase())) {
+      this.afterMaterials.push(mat);
+    }
+    this.newMaterialInput = '';
+  }
+
+  removeMaterial(index: number): void {
+    this.afterMaterials.splice(index, 1);
+  }
+
+  resetToOriginal(): void {
+    if (!this.selectedListing) return;
+    this.afterTitle = this.selectedListing.title;
+    this.afterTags = [...(this.selectedListing.tags || [])];
+    this.afterMaterials = [...(this.selectedListing.materials || [])];
+    this.afterDescription = this.selectedListing.description;
+    this.showToast('Editör alanları mevcut Etsy ilanına sıfırlandı.', 'info');
+  }
+
   formatDescriptionTemplate(): void {
     if (!this.selectedListing) return;
 
     const baseDesc = (this.afterDescription || this.selectedListing.description || '').trim();
 
-    const formatted = `✦ ÖNE ÇIKAN ÖZELLİKLER ✦
+    const formatted = `✦ HIGHLIGHTS ✦
 ${baseDesc}
 
-✦ BOYUT VE MATERYAL BİLGİLERİ ✦
-- Birinci sınıf dayanıklı ve çevre dostu materyallerden üretilmiştir.
-- Detaylı ölçüler ve renk seçenekleri için varyasyonları kontrol edebilirsiniz.
+✦ DIMENSIONS & MATERIALS ✦
+- Crafted with durable, high-quality materials for long-lasting display and daily use.
+- Please check the listing photos and variations for exact sizing and color options.
 
-✦ KİŞİSELLEŞTİRME & SİPARİŞ NOTLARI ✦
-- Kişiye özel tasarım veya isim/tarih ekletmek isterseniz sipariş notunda belirtebilirsiniz.
-- Özel talepleriniz için sipariş öncesi mesaj atabilirsiniz.
+✦ PERSONALIZATION & CUSTOM ORDERS ✦
+- Looking for a custom size, color, or gift note? Leave a note at checkout or message us before ordering.
 
-✦ KARGO & TESLİMAT BİLGİLERİ ✦
-- Siparişleriniz 1-3 iş günü içerisinde özenle paketlenip kargoya teslim edilir.
-- Tüm kargolarımız takip numaralı ve sigortalı olarak gönderilmektedir.
+✦ SHIPPING & PACKAGING ✦
+- Carefully packed with protective materials and dispatched within 1-3 business days.
+- All orders ship with international tracking for safe delivery.
 
-✦ BAKIM & KULLANIM TALİMATLARI ✦
-- Uzun ömürlü kullanım için nemli ve yumuşak bir bezle temizlenmesi tavsiye edilir.`;
+✦ CARE INSTRUCTIONS ✦
+- Wipe gently with a soft, dry or slightly damp cloth. Avoid harsh chemicals.`;
 
     this.afterDescription = formatted;
-    this.showToast('Standart profesyonel Etsy paragraf şablonu uygulandı.', 'success');
+    this.showToast('İngilizce profesyonel Etsy paragraf şablonu uygulandı.', 'success');
   }
 
   copySuggestionToClipboard(): void {

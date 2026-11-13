@@ -533,38 +533,9 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
           (lowerPrompt.includes('kargo') && lowerPrompt.includes('maliyet') && (lowerPrompt.includes('müşteri') || lowerPrompt.includes('musteri') || lowerPrompt.includes('ürün') || lowerPrompt.includes('urun')))
         );
 
-        // 2. Draft Listing Action Intent Detection
-        const isActionRequest = !isShipmentReport && !isMcpInquiry && (
-          lowerPrompt.includes('hızlı ürün') || lowerPrompt.includes('hizli urun') ||
-          lowerPrompt.includes('hızlı ekle') || lowerPrompt.includes('hizli ekle') ||
-          lowerPrompt.includes('taslak aç') || lowerPrompt.includes('taslak ac') ||
-          lowerPrompt.includes('taslak oluştur') || lowerPrompt.includes('taslak olustur') ||
-          lowerPrompt.includes('etsy\'ye gönder') || lowerPrompt.includes('etsy\'ye aktar') ||
-          lowerPrompt.includes('bunu listele') || lowerPrompt.includes('modülünü kullan') ||
-          lowerPrompt.includes('modulunu kullan') || lowerPrompt.includes('bunu hazırla') ||
-          lowerPrompt.includes('bunu hazirla') || lowerPrompt.includes('mcp bağlasak') ||
-          lowerPrompt.includes('mcp ile') || (lowerPrompt.includes('mcp bağla') && !lowerPrompt.includes('bağlamadık'))
-        );
-
-        const keyword = toolContext?.keyword || this.extractSearchKeyword(userPrompt, attachments);
-        const avgPrice = toolContext?.marketResult?.kpis?.averagePrice || 14.90;
-
         let autoAction$: Observable<ToolExecutionResult | null>;
         if (isShipmentReport) {
           autoAction$ = this.toolRegistry.executeTool('match_and_save_shipping_report', { rawReportText: augmentedPrompt });
-        } else if (isActionRequest) {
-          autoAction$ = this.toolRegistry.executeTool('create_etsy_draft_listing', {
-            title: `3D Printed ${this.capitalizeWords(keyword)} | Custom DIY Model Kit Gift`,
-            priceUsd: Number(avgPrice.toFixed(2)),
-            tags: this.generateTagsForKeyword(keyword),
-            description: `Custom 3D printed ${keyword}. Handcrafted with precision engineering and high-grade PLA filament.\n\n` +
-              `• Lightweight and durable punch-out design.\n` +
-              `• Perfect gift for aviation enthusiasts, collectors, and hobbyists.\n` +
-              `• Carefully packaged with protective backing.\n` +
-              `• Dispatched via trackable international shipping.`,
-            materials: ['PLA Filament', 'Eco friendly Plastic', 'Handcrafted'],
-            quantity: 15
-          }, attachments);
         } else {
           autoAction$ = of<ToolExecutionResult | null>(null);
         }
@@ -574,6 +545,15 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
             // Check API Key
             const apiKey = this.getApiKeyForProvider(provider, settings);
             if (!apiKey || apiKey.trim().length === 0 || provider === 'Offline') {
+              if (settings.strictNeverOffline && provider !== 'Offline') {
+                const errHtml = `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.45);border-radius:8px;padding:12px 14px;color:#fecaca;"><strong>⚠️ Canlı AI Zorunlu Modu Aktif:</strong> <b>${provider}</b> için API anahtarı tanımlı değil. Lütfen sağ üstteki ⚙️ <b>Yapay Zeka &amp; Model Ayarları</b> penceresinden geçerli bir API anahtarı girin.</div>`;
+                const updatedHistory = [...history, { role: 'assistant' as const, content: `${provider} API anahtarı eksik.` }];
+                if (!sessionHistory) {
+                  this.conversationHistory = updatedHistory;
+                }
+                return of({ replyHtml: errHtml, updatedHistory });
+              }
+
               let intelligentReply = this.generateDynamicDataReply(userPrompt, snap, provider, activeModel, attachments, toolContext, actionResult);
               if (actionResult?.actionCardHtml) {
                 intelligentReply = actionResult.actionCardHtml + '<br>' + intelligentReply;
@@ -761,6 +741,125 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     }
   }
 
+  /**
+   * Executes Turn #2 synthesis for tool-calling across all 5 LLM providers (Gemini, Claude, DeepSeek, OpenAI, Grok).
+   */
+  private synthesizeToolTurn2$(
+    normProvider: string,
+    modelName: string,
+    apiKey: string,
+    systemPrompt: string,
+    followUpPrompt: string,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[]
+  ): Observable<string> {
+    if (normProvider === 'Gemini') {
+      const mName = modelName || 'gemini-2.5-flash';
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(mName)}:generateContent?key=${encodeURIComponent(apiKey.trim())}`;
+      const contents = [
+        ...history.slice(0, -1).map(m => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }]
+        })),
+        { role: 'user', parts: [{ text: followUpPrompt }] }
+      ];
+      return this.http.post<any>(url, {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents,
+        generationConfig: { temperature: 0.5, maxOutputTokens: 2500 }
+      }).pipe(
+        map(res => res?.candidates?.[0]?.content?.parts?.find((p: any) => typeof p?.text === 'string')?.text?.trim() || '')
+      );
+    }
+
+    if (normProvider === 'Claude') {
+      const url = 'https://api.anthropic.com/v1/messages';
+      const headers = new HttpHeaders({
+        'x-api-key': apiKey.trim(),
+        'anthropic-version': '2023-06-01',
+        'dangerously-allow-browser': 'true',
+        'Content-Type': 'application/json'
+      });
+      const messages = [
+        ...history.slice(0, -1).filter(m => m.role !== 'system').map(m => ({
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content
+        })),
+        { role: 'user', content: followUpPrompt }
+      ];
+      return this.http.post<any>(url, {
+        model: modelName || 'claude-3-7-sonnet-20250219',
+        system: systemPrompt,
+        messages,
+        max_tokens: 2500,
+        temperature: 0.5
+      }, { headers }).pipe(
+        map(res => res?.content?.find((c: any) => c?.type === 'text')?.text?.trim() || '')
+      );
+    }
+
+    const url = normProvider === 'OpenAI'
+      ? 'https://api.openai.com/v1/chat/completions'
+      : normProvider === 'Grok'
+        ? 'https://api.x.ai/v1/chat/completions'
+        : 'https://api.deepseek.com/chat/completions';
+
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${apiKey.trim()}`,
+      'Content-Type': 'application/json'
+    });
+
+    const body: any = {
+      model: normProvider === 'DeepSeek' ? this.normalizeDeepSeekModel(modelName) : modelName,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...history.slice(0, -1).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+        { role: 'user', content: followUpPrompt }
+      ],
+      max_tokens: 2500
+    };
+    if (body.model !== 'deepseek-reasoner') {
+      body.temperature = 0.5;
+    }
+
+    return this.http.post<any>(url, body, { headers }).pipe(
+      map(res2 => res2?.choices?.[0]?.message?.content?.trim() || '')
+    );
+  }
+
+  /**
+   * Surfaces provider HTTP errors transparently and respects strictNeverOffline.
+   */
+  private handleProviderError(
+    err: any,
+    providerLabel: string,
+    modelName: string,
+    augmentedPrompt: string,
+    snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
+    attachments?: ChatAttachment[],
+    toolContext?: LiveToolContext | null
+  ): Observable<AiResponseResult> {
+    const status = err?.status ? `HTTP ${err.status}` : 'Ağ/CORS Hatası';
+    const detail = err?.error?.error?.message || err?.error?.message || err?.message || 'Bilinmeyen hata';
+    console.warn(`[StoreAiAssistant] ${providerLabel} API hatası (${status}):`, detail);
+
+    const isStrict = this.aiSettings.settings().strictNeverOffline;
+    const errorBanner = `<div style="background:rgba(239,68,68,0.12);border:1px solid rgba(248,113,113,0.45);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:0.82rem;color:#fecaca;"><strong>⚠️ ${providerLabel} (${modelName}) Yanıt Vermedi (${status}):</strong> ${detail}</div>`;
+
+    if (isStrict) {
+      return of({
+        replyHtml: errorBanner + `<p style="color:#cbd5e1;font-size:0.85rem;">Canlı AI Zorunlu modu aktif olduğu için çevrimdışı yedek yanıt üretilmedi. Lütfen API anahtarınızı veya model seçiminizi kontrol edin.</p>`,
+        updatedHistory: [...history, { role: 'assistant' as const, content: `${providerLabel} API Hatası (${status}): ${detail}` }]
+      });
+    }
+
+    const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, providerLabel, modelName, attachments, toolContext);
+    return of({
+      replyHtml: errorBanner + fallback,
+      updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
+    });
+  }
+
   private synthesizeCombinedTools$(
     combinedNames: string,
     combinedData: any[],
@@ -789,33 +888,11 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     }
 
     const followUpPrompt = `${augmentedPrompt}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n⚡ [CANLI MAĞAZA & ETSY VERİ ÇIKTILARI — ${combinedNames}]:\nAşağıdaki JSON verileri az önce kendi zekanla çağırdığın araçlardan canlı olarak dönmüştür. Lütfen bu gerçek verileri analiz ederek kullanıcının sorusunu eksiksiz, somut rakamlarla ve tablolarla yanıtla (kullanıcıya teknik araç/MCP terimleri kullanmadan doğal bir danışman gibi anlat):\n\`\`\`json\n${toolJson.slice(0, 7500)}\n\`\`\`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-
     const systemPrompt = this.buildSystemPrompt(snap, providerLabel, modelName, toolContext);
-    const url = normProvider === 'OpenAI'
-      ? 'https://api.openai.com/v1/chat/completions'
-      : normProvider === 'Grok'
-        ? 'https://api.x.ai/v1/chat/completions'
-        : 'https://api.deepseek.com/chat/completions';
 
-    const headers = new HttpHeaders({
-      'Authorization': `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json'
-    });
-
-    const body = {
-      model: normProvider === 'DeepSeek' ? this.normalizeDeepSeekModel(modelName) : modelName,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...history.slice(0, -1).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
-        { role: 'user', content: followUpPrompt }
-      ],
-      temperature: 0.5,
-      max_tokens: 2500
-    };
-
-    return this.http.post<any>(url, body, { headers }).pipe(
-      map(res2 => {
-        const synthesized = res2?.choices?.[0]?.message?.content?.trim() || initialText || `⚡ **${combinedNames}** başarıyla çalıştırıldı.`;
+    return this.synthesizeToolTurn2$(normProvider, modelName, apiKey, systemPrompt, followUpPrompt, history).pipe(
+      map(text2 => {
+        const synthesized = text2 || initialText || `⚡ **${combinedNames}** başarıyla çalıştırıldı.`;
         return {
           replyHtml: mcpBadge + (actionCardHtml ? actionCardHtml + '<br>' : '') + this.formatMarkdown(synthesized),
           updatedHistory: [...history, { role: 'assistant' as const, content: synthesized }]
@@ -872,33 +949,11 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         }
 
         const followUpPrompt = `${augmentedPrompt}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n🔌 [CANLI VDS & ETSY MCP ARACI ÇIKTISI — ${fnName}]:\nAşağıdaki JSON verisi az önce çağırdığın "${fnName}" aracından canlı olarak dönmüştür. Lütfen bu gerçek verileri analiz ederek kullanıcının sorusunu eksiksiz, somut rakamlarla ve tablolarla yanıtla (asla "şimdi çekiyorum" deme, veri aşağıdadır):\n\`\`\`json\n${toolJson.slice(0, 6000)}\n\`\`\`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
-
         const systemPrompt = this.buildSystemPrompt(snap, providerLabel, modelName, toolContext);
-        const url = normProvider === 'OpenAI'
-          ? 'https://api.openai.com/v1/chat/completions'
-          : normProvider === 'Grok'
-            ? 'https://api.x.ai/v1/chat/completions'
-            : 'https://api.deepseek.com/chat/completions';
 
-        const headers = new HttpHeaders({
-          'Authorization': `Bearer ${apiKey.trim()}`,
-          'Content-Type': 'application/json'
-        });
-
-        const body = {
-          model: normProvider === 'DeepSeek' ? this.normalizeDeepSeekModel(modelName) : modelName,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...history.slice(0, -1).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
-            { role: 'user', content: followUpPrompt }
-          ],
-          temperature: 0.5,
-          max_tokens: 2500
-        };
-
-        return this.http.post<any>(url, body, { headers }).pipe(
-          map(res2 => {
-            const synthesized = res2?.choices?.[0]?.message?.content?.trim() || toolRes.message || `⚡ **${fnName}** başarıyla çalıştırıldı.`;
+        return this.synthesizeToolTurn2$(normProvider, modelName, apiKey, systemPrompt, followUpPrompt, history).pipe(
+          map(text2 => {
+            const synthesized = text2 || toolRes.message || `⚡ **${fnName}** başarıyla çalıştırıldı.`;
             const html = mcpBadge + (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(synthesized);
             return {
               replyHtml: html,
@@ -912,6 +967,59 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
               updatedHistory: [...history, { role: 'assistant' as const, content: fallbackText }]
             });
           })
+        );
+      })
+    );
+  }
+
+  private dispatchParsedToolCalls$(
+    parsedCalls: { fnName: string; parsedArgs: any }[],
+    text: string | undefined,
+    providerLabel: string,
+    modelName: string,
+    augmentedPrompt: string,
+    snap: StoreContextSnapshot,
+    history: { role: 'user' | 'assistant' | 'system'; content: string; attachments?: ChatAttachment[] }[],
+    attachments?: ChatAttachment[],
+    toolContext?: LiveToolContext | null
+  ): Observable<AiResponseResult> {
+    if (parsedCalls.length === 1) {
+      return this.executeAndSynthesizeTool$(
+        parsedCalls[0].fnName,
+        parsedCalls[0].parsedArgs,
+        text,
+        providerLabel,
+        modelName,
+        augmentedPrompt,
+        snap,
+        history,
+        attachments,
+        toolContext
+      );
+    }
+
+    return forkJoin<any[]>(
+      parsedCalls.map(c => this.toolRegistry.executeTool(c.fnName, c.parsedArgs, attachments))
+    ).pipe(
+      switchMap((results: any[]) => {
+        const combinedNames = parsedCalls.map(c => c.fnName).join(', ');
+        const combinedData = results.map((r, i) => ({
+          tool: parsedCalls[i].fnName,
+          arguments: parsedCalls[i].parsedArgs,
+          result: r.data ?? r.message
+        }));
+        return this.synthesizeCombinedTools$(
+          combinedNames,
+          combinedData,
+          results.find(r => Boolean(r.actionCardHtml))?.actionCardHtml,
+          text,
+          providerLabel,
+          modelName,
+          augmentedPrompt,
+          snap,
+          history,
+          attachments,
+          toolContext
         );
       })
     );
@@ -945,71 +1053,8 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         })
         .filter((c: any) => Boolean(c.fnName));
 
-      if (parsedCalls.length === 1) {
-        return this.executeAndSynthesizeTool$(
-          parsedCalls[0].fnName,
-          parsedCalls[0].parsedArgs,
-          text,
-          providerLabel,
-          modelName,
-          augmentedPrompt,
-          snap,
-          history,
-          attachments,
-          toolContext
-        );
-      } else if (parsedCalls.length > 1) {
-        return forkJoin<any[]>(
-          parsedCalls.map((c: any) => this.toolRegistry.executeTool(c.fnName, c.parsedArgs, attachments))
-        ).pipe(
-          switchMap((results: any[]) => {
-            const combinedNames = parsedCalls.map((c: any) => c.fnName).join(', ');
-            const combinedData = results.map((r, i) => ({
-              tool: parsedCalls[i].fnName,
-              arguments: parsedCalls[i].parsedArgs,
-              result: r.data ?? r.message
-            }));
-            return this.synthesizeCombinedTools$(
-              combinedNames,
-              combinedData,
-              results.find(r => Boolean(r.actionCardHtml))?.actionCardHtml,
-              text,
-              providerLabel,
-              modelName,
-              augmentedPrompt,
-              snap,
-              history,
-              attachments,
-              toolContext
-            );
-          })
-        );
-      }
-    }
-    if (false && toolCalls && toolCalls.length > 0) {
-      const fn = toolCalls[0]?.function;
-      const fnName = fn?.name || '';
-      let parsedArgs: any = {};
-      try {
-        parsedArgs = typeof fn?.arguments === 'string' ? JSON.parse(fn.arguments) : (fn?.arguments || {});
-      } catch {
-        parsedArgs = {};
-      }
-      if (fnName) {
-        return this.executeAndSynthesizeTool$(fnName, parsedArgs, text, providerLabel, modelName, augmentedPrompt, snap, history, attachments, toolContext);
-      }
-      if (false && fnName) {
-        return this.toolRegistry.executeTool(fnName, parsedArgs, attachments).pipe(
-          map(toolRes => {
-            const baseText = text || toolRes.message || `⚡ **${fnName}** başarıyla çalıştırıldı.`;
-            const completedText = this.ensureCompleteReply(baseText, toolContext, augmentedPrompt, snap, providerLabel, modelName, attachments);
-            const html = (toolRes.actionCardHtml ? toolRes.actionCardHtml + '<br>' : '') + this.formatMarkdown(completedText);
-            return {
-              replyHtml: html,
-              updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
-            };
-          })
-        );
+      if (parsedCalls.length > 0) {
+        return this.dispatchParsedToolCalls$(parsedCalls, text, providerLabel, modelName, augmentedPrompt, snap, history, attachments, toolContext);
       }
     }
 
@@ -1068,14 +1113,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         }
         return this.handleLlmChoice$(res?.choices?.[0], 'DeepSeek', normalizedModel, augmentedPrompt, snap, history, attachments, toolContext);
       }),
-      catchError(err => {
-        console.warn('[StoreAiAssistant] DeepSeek API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'DeepSeek', normalizedModel, attachments, toolContext);
-        return of({
-          replyHtml: fallback,
-          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
-        });
-      })
+      catchError(err => this.handleProviderError(err, 'DeepSeek', normalizedModel, augmentedPrompt, snap, history, attachments, toolContext))
     );
   }
 
@@ -1137,14 +1175,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         }
         return this.handleLlmChoice$(res?.choices?.[0], 'OpenAI', model, augmentedPrompt, snap, history, attachments, toolContext);
       }),
-      catchError(err => {
-        console.warn('[StoreAiAssistant] OpenAI API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'OpenAI', model, attachments, toolContext);
-        return of({
-          replyHtml: fallback,
-          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
-        });
-      })
+      catchError(err => this.handleProviderError(err, 'OpenAI', model, augmentedPrompt, snap, history, attachments, toolContext))
     );
   }
 
@@ -1212,7 +1243,8 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
       system: systemPrompt,
       messages,
       max_tokens: 2800,
-      temperature: 0.6
+      temperature: 0.6,
+      tools: this.toolRegistry.getAnthropicTools()
     };
 
     const headers = new HttpHeaders({
@@ -1223,28 +1255,29 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     });
 
     return this.http.post<any>(url, body, { headers }).pipe(
-      map(res => {
+      switchMap(res => {
         if (res?.usage) {
           this.trackAiUsage('Claude', model, 'Claude Mağaza Asistanı', res.usage.input_tokens, res.usage.output_tokens, (res.usage.input_tokens + res.usage.output_tokens));
         }
-        const text = res?.content?.[0]?.text?.trim();
+        const blocks: any[] = Array.isArray(res?.content) ? res.content : [];
+        const text = blocks.filter(b => b?.type === 'text' && b?.text).map(b => b.text).join('\n').trim();
+        const toolUses = blocks.filter(b => b?.type === 'tool_use' && b?.name);
+
+        if (toolUses.length > 0) {
+          const parsedCalls = toolUses.map(tu => ({ fnName: tu.name, parsedArgs: tu.input || {} }));
+          return this.dispatchParsedToolCalls$(parsedCalls, text, 'Claude', model, augmentedPrompt, snap, history, attachments, toolContext);
+        }
+
         if (text) {
           const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'Claude', model, attachments);
-          return {
+          return of({
             replyHtml: this.formatMarkdown(completedText),
             updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
-          };
+          });
         }
         throw new Error('Boş Claude yanıtı');
       }),
-      catchError(err => {
-        console.warn('[StoreAiAssistant] Claude API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Claude', model, attachments, toolContext);
-        return of({
-          replyHtml: fallback,
-          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
-        });
-      })
+      catchError(err => this.handleProviderError(err, 'Claude', model, augmentedPrompt, snap, history, attachments, toolContext))
     );
   }
 
@@ -1289,14 +1322,7 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         }
         return this.handleLlmChoice$(res?.choices?.[0], 'Grok', model, augmentedPrompt, snap, history, attachments, toolContext);
       }),
-      catchError(err => {
-        console.warn('[StoreAiAssistant] Grok API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Grok', model, attachments, toolContext);
-        return of({
-          replyHtml: fallback,
-          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
-        });
-      })
+      catchError(err => this.handleProviderError(err, 'Grok', model, augmentedPrompt, snap, history, attachments, toolContext))
     );
   }
 
@@ -1349,6 +1375,9 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
         parts: [{ text: systemPrompt }]
       },
       contents: geminiHistory,
+      tools: [{
+        functionDeclarations: this.toolRegistry.getGeminiFunctionDeclarations()
+      }],
       generationConfig: {
         temperature: 0.7,
         topP: 0.95,
@@ -1357,28 +1386,32 @@ net, samimi, sıcak ve kendinden emin bir dille açıkla ve doğrula. Asla "bağ
     };
 
     return this.http.post<any>(url, body).pipe(
-      map(res => {
+      switchMap(res => {
         if (res?.usageMetadata) {
           this.trackAiUsage('Google Gemini', modelName, 'Gemini Mağaza Asistanı', res.usageMetadata.promptTokenCount, res.usageMetadata.candidatesTokenCount, res.usageMetadata.totalTokenCount);
         }
-        const text = res?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+        const parts: any[] = res?.candidates?.[0]?.content?.parts || [];
+        const functionCalls = parts.filter(p => Boolean(p?.functionCall?.name)).map(p => p.functionCall);
+        const text = parts.filter(p => typeof p?.text === 'string').map(p => p.text).join('\n').trim();
+
+        if (functionCalls.length > 0) {
+          const parsedCalls = functionCalls.map((fc: any) => ({
+            fnName: fc.name,
+            parsedArgs: fc.args || {}
+          }));
+          return this.dispatchParsedToolCalls$(parsedCalls, text, 'Gemini', modelName, augmentedPrompt, snap, history, attachments, toolContext);
+        }
+
         if (text) {
           const completedText = this.ensureCompleteReply(text, toolContext, augmentedPrompt, snap, 'Google Gemini', modelName, attachments);
-          return {
+          return of({
             replyHtml: this.formatMarkdown(completedText),
             updatedHistory: [...history, { role: 'assistant' as const, content: completedText }]
-          };
+          });
         }
         throw new Error('Boş Gemini yanıtı');
       }),
-      catchError(err => {
-        console.warn('[StoreAiAssistant] Gemini API hatası, canlı mağaza zekası devrede:', err);
-        const fallback = this.generateDynamicDataReply(augmentedPrompt, snap, 'Google Gemini', modelName, attachments, toolContext);
-        return of({
-          replyHtml: fallback,
-          updatedHistory: [...history, { role: 'assistant' as const, content: fallback }]
-        });
-      })
+      catchError(err => this.handleProviderError(err, 'Google Gemini', modelName, augmentedPrompt, snap, history, attachments, toolContext))
     );
   }
 
@@ -1445,9 +1478,9 @@ KARGO SEÇİM KURALI:
     return `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 GERÇEK KARGO VE SİPARİŞ MALİYETLERİ İŞLEME KURALI:
 1. Kullanıcı bir kargo raporu (JSON veya sevkiyat listesi) paylaştığında;
-   Sistem bu raporu otomatik olarak inceleyip müşteri adları (örn: Luis Miguel Barrajon Gigante, Inge Neuer) ve ürün adlarıyla canlı Etsy sipariş geçmişini eşleştirir ve hesaplanan gerçek kargo maliyetlerini VDS API veritabanına doğrudan kaydeder.
+   Sistem bu raporu otomatik olarak inceleyip müşteri adları ve ürün adlarıyla canlı Etsy sipariş geçmişini eşleştirir ve hesaplanan gerçek kargo maliyetlerini VDS API veritabanına doğrudan kaydeder.
 2. ASLA "marketplaceOrderId: null olduğu için otomatik yazamıyorum" veya "sen bana sipariş ID ver ben yazayım" deme! Sistem müşteri adından ve ürün adından otomatik akıllı eşleştirme yapabilmektedir.
-3. Yanıtında eşleşen ve veritabanına başarıyla kaydedilen siparişleri (Sipariş No, Alıcı Adı, Kargo Tutarı $ / ₺), varsa test/örnek kayıtları net ve şeffaf bir dille kullanıcıya raporla.
+3. Yanıtında eşleşen ve veritabanına başarıyla kaydedilen siparişleri (Sipariş No, Alıcı Adı, Kargo Tutarı $ / ₺), varsa eşleşmeyen kayıtları net ve şeffaf bir dille kullanıcıya raporla.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SENİN KİMLİĞİN VE ROLÜN:
@@ -1468,12 +1501,12 @@ GÜNCEL CANLI MAĞAZA VE FİNANSAL VERİLERİ (VDS API SUNUCU FİNANS MOTORU):
 - Bu Ayki Toplam Sipariş Adedi: ${snap.receiptCount} Sipariş
 - Platform Kesintileri & Komisyonlar: -$${snap.platformFeesUsd.toFixed(2)}
 - Reklam Harcamaları: Toplam -$${snap.totalAdsUsd.toFixed(2)} (İç Reklam/Etsy Ads: -$${snap.internalAdsUsd.toFixed(2)}, Dış Reklam/Offsite: -$${snap.externalAdsUsd.toFixed(2)})
-- İadeler (Ödeme Defteri Nakit Hareketi): -$${snap.refundsUsd.toFixed(2)} (ÇOK ÖNEMLİ KURAL: Bu ay oluşturulan ${snap.receiptCount} siparişin HİÇBİRİ iade veya iptal edilmemiştir; tamamı 'completed' durumdadır! Ödeme defterindeki -$${snap.refundsUsd.toFixed(2)} iade kesintisi, ÖNCEKİ AYDA (Eylül) verilmiş bir siparişin 14 Ekim tarihinde müşteriye yapılan geri ödemesidir. Etsy nakit muhasebesi gereği iade hangi ay yapıldıysa o ayın ödeme defteri bakiyesinden düşer. Kullanıcıya iade kalemini anlatırken mutlaka 'Bu ayki 6 siparişimizde sıfır iade var; tablodaki -$${snap.refundsUsd.toFixed(2)} iade önceki ayın siparişinin 14 Ekimde kasadan düşen nakit iadesidir' diye açıkla!)
+- İadeler (Ödeme Defteri Nakit Hareketi): -$${snap.refundsUsd.toFixed(2)} (Etsy ödeme defteri nakit muhasebesi gereği iade hangi ay gerçekleştiyse o ayın ödeme defteri bakiyesinden düşer; sipariş listesiyle karşılaştırarak iade detayını net açıkla.)
 - Bu Ayki Ürün + Kargo Maliyetleri (COGS - Net Kârdan ZATEN DÜŞÜLMÜŞTÜR): Toplam -$${snap.totalCostsUsd.toFixed(2)} (Kargo: -$${snap.shippingCostsUsd.toFixed(2)}, Ürün/Üretim: -$${snap.productCostsUsd.toFixed(2)})
 - GERÇEK NET KÂR (Komisyon, Reklam, İade ve $${snap.totalCostsUsd.toFixed(2)} Maliyet Düşüldükten Sonra Kalan Kesin Net Kâr): $${snap.netProfitUsd.toFixed(2)} (₺${snap.netProfitTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })})
 - Gerçek Net Kâr Marjı: %${snap.netProfitMargin.toFixed(1)} (Maliyetler düşülmüş gerçek marjdır!)
 - Bankaya Aktarılan Transfer (Payout): ₺${snap.payoutsTry.toLocaleString('tr-TR', { maximumFractionDigits: 0 })} ($${snap.payoutsUsd.toFixed(2)})
-- Aktif İlan Sayısı: ${snap.activeListingsCount} Aktif İlan (KESİN BİLGİ: Mağazada ${snap.activeListingsCount} aktif ilan vardır, asla 15 ilan deme!)
+- Aktif İlan Sayısı: ${snap.activeListingsCount} Aktif İlan (Sadece canlı verideki gerçek sayıyı kullan, tahmin yürütme.)
 - Portföydeki Örnek İlanlar (Fiyat, Görüntülenme ve Favori İstatistikleriyle):
 ${snap.topListingTitles.map((t, i) => `  ${i + 1}. ${t}`).join('\n')}
 
@@ -1497,6 +1530,7 @@ ${toolSection}
 - get_store_orders: Dönem ve durum filtresine (all, completed, canceled, missing_cost) göre siparişleri ve maliyet/kâr kırılımını çeker.
 - get_bank_payouts: Bankaya yatan (Disbursement / Bank Payout) gerçek ödemeleri çeker.
 - get_shop_active_listings: Mağazanın aktif Etsy ilanlarını, LQS skorunu ve 13 etiket durumunu çeker.
+- audit_etsy_listing: Belirtilen Listing ID için Mağaza AI Analizi motorunu çalıştırarak SEO puanı, 3 başlık önerisi, 13 etiket, açıklama ve telif risk raporu üretir.
 - update_etsy_listing: Mevcut bir Etsy ilanının başlık, fiyat, 13 etiket ve açıklamasını canlı Etsy v3 API ile günceller.
 - save_order_cost: Siparişin kargo/üretim maliyetini VDS veritabanına kaydeder.
 - query_etsy_official_dev_mcp: Resmi Etsy Developer MCP sunucusundan (learn_etsy_api, search_etsy_api, list_endpoints, get_endpoint, get_schema) OpenAPI v3 şemalarını sorgular.

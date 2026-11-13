@@ -129,7 +129,11 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
 
 
             var systemInstruction = ListingDraftInstructionBuilder.BuildSystemInstruction();
-            var userPrompt = ListingDraftInstructionBuilder.BuildOptimizationPrompt(input);
+            var userPrompt = ListingDraftInstructionBuilder.BuildOptimizationPrompt(
+                input,
+                command?.FocusKeywords,
+                command?.TargetBuyerPersona,
+                command?.Tone);
 
             var (success, candidateText, error) = await _geminiClient.GenerateOptimizationJsonAsync(
                 systemInstruction,
@@ -140,7 +144,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
 
             if (!success || string.IsNullOrWhiteSpace(candidateText))
             {
-                throw new InvalidOperationException(error ?? "Google Gemini boş yanıt döndürdü.");
+                throw new InvalidOperationException(error ?? $"{activeProviderName} boş yanıt döndürdü.");
             }
 
             using var parsedAi = JsonDocument.Parse(candidateText);
@@ -209,11 +213,11 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
             if (optimizedScore <= 0) optimizedScore = 98;
             if (string.IsNullOrWhiteSpace(seoCritique))
             {
-                seoCritique = "Google Gemini AI ile başlık, 13 etiket ve ürün açıklaması Etsy arama algoritması için canlı olarak optimize edildi.";
+                seoCritique = $"{activeProviderName} ile başlık, 13 etiket ve ürün açıklaması Etsy arama algoritması için canlı olarak optimize edildi.";
             }
 
             checklist.Add($"SEO puanı {currentScore}/100 -> {optimizedScore}/100 seviyesine optimize edildi.");
-            checklist.Add("13 Etsy etiket alanının tamamı Gemini ile dolduruldu.");
+            checklist.Add($"13 Etsy etiket alanının tamamı {activeProviderName} ile dolduruldu.");
             checklist.Add("Açıklama satış odaklı ve Etsy SEO uyumlu olarak baştan yazıldı.");
 
             resolvedProvider = $"{activeProviderName} (Canlı API)";
@@ -271,7 +275,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
             JsonSerializer.Serialize(auditData)), cancellationToken);
 
         var msg = resolvedProvider.Contains("Canlı", StringComparison.OrdinalIgnoreCase)
-            ? "Listing başarıyla canlı Google Gemini AI ile optimize edildi ve yerel veritabanına kaydedildi."
+            ? $"Listing başarıyla canlı {resolvedProvider} ile optimize edildi ve yerel veritabanına kaydedildi."
             : "Listing başarıyla yerel kural motoru ile optimize edildi ve yerel veritabanına kaydedildi.";
 
         return new OptimizeListingResultDto(

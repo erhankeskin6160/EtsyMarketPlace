@@ -286,8 +286,26 @@ export class CopilotToolRegistryService {
       {
         type: 'function',
         function: {
+          name: 'audit_etsy_listing',
+          description: 'Mağaza AI Analizi motorunu çalıştırarak belirtilen Etsy ilanını SEO puanı, 13 etiket, başlık ve telif riskleri açısından denetler ve optimize edilmiş öneri üretir.',
+          parameters: {
+            type: 'object',
+            properties: {
+              listingId: { type: 'string', description: 'Denetlenecek Etsy ilan numarası (Listing ID)' },
+              title: { type: 'string', description: 'İlanın mevcut başlığı (opsiyonel, verilmezse canlı ilandan çekilir)' },
+              tags: { type: 'array', items: { type: 'string' }, description: 'Mevcut etiketler (opsiyonel)' },
+              description: { type: 'string', description: 'Mevcut açıklama (opsiyonel)' },
+              focusKeywords: { type: 'string', description: 'Odak anahtar kelimeler (opsiyonel)' }
+            },
+            required: ['listingId']
+          }
+        }
+      },
+      {
+        type: 'function',
+        function: {
           name: 'navigate_to_module',
-          description: 'Kullanıcının ekranını ilgili mağaza modülüne yönlendirir (örn: "/listings/fast-creator", "/research/market", "/finance/accounting").',
+          description: 'Kullanıcının ekranını ilgili mağaza modülüne yönlendirir (örn: "/listings/fast-creator", "/research/market", "/finance/accounting", "/analytics/ai-audit").',
           parameters: {
             type: 'object',
             properties: {
@@ -299,6 +317,28 @@ export class CopilotToolRegistryService {
         }
       }
     ];
+  }
+
+  /**
+   * Google Gemini API functionDeclarations format derived from the single tool registry.
+   */
+  public getGeminiFunctionDeclarations(): any[] {
+    return this.getToolDefinitions().map(t => ({
+      name: t.function.name,
+      description: t.function.description,
+      parameters: t.function.parameters
+    }));
+  }
+
+  /**
+   * Anthropic Claude API tools format derived from the single tool registry.
+   */
+  public getAnthropicTools(): any[] {
+    return this.getToolDefinitions().map(t => ({
+      name: t.function.name,
+      description: t.function.description,
+      input_schema: t.function.parameters
+    }));
   }
 
   /**
@@ -335,6 +375,9 @@ export class CopilotToolRegistryService {
       case 'update_etsy_listing':
       case 'query_etsy_official_dev_mcp':
         return this.handleVdsMcpCall(toolName, args);
+
+      case 'audit_etsy_listing':
+        return this.handleAuditEtsyListing(args);
 
       case 'navigate_to_module':
         return this.handleNavigate(args);
@@ -579,6 +622,69 @@ export class CopilotToolRegistryService {
         data: null,
         message: `Kargo hesaplama başarısız: ${err?.message || 'Bilinmeyen hata'}`
       }))
+    );
+  }
+
+  private handleAuditEtsyListing(args: any): Observable<ToolExecutionResult> {
+    const listingId = String(args?.listingId || '').trim();
+    if (!listingId) {
+      return of({
+        toolName: 'audit_etsy_listing',
+        success: false,
+        data: null,
+        message: 'Denetlenecek Listing ID belirtilmedi.'
+      });
+    }
+
+    const s = this.aiSettings.settings();
+    const provider = s.provider || 'Gemini';
+    const apiKey = provider === 'DeepSeek' ? s.deepSeekApiKey
+      : provider === 'OpenAI' ? s.openAiApiKey
+      : provider === 'Claude' ? s.claudeApiKey
+      : provider === 'Grok' ? s.grokApiKey
+      : s.geminiApiKey;
+
+    const runAudit = (title: string, tags: string[], description: string) =>
+      this.etsyApi.optimizeListingWithAi(listingId, {
+        shopId: this.etsyApi.activeShopId(),
+        title,
+        tags,
+        description,
+        focusKeywords: args?.focusKeywords || '',
+        model: this.aiSettings.activeModelName(),
+        apiKey: (apiKey || '').trim(),
+        provider
+      }).pipe(
+        map(res => ({
+          toolName: 'audit_etsy_listing',
+          success: Boolean(res?.success),
+          data: res,
+          message: res?.success
+            ? `#${listingId} ilanı AI ile denetlendi (Skor: ${res.seoScoreBefore} -> ${res.seoScoreAfter}/100).`
+            : `Denetim tamamlanamadı: ${res?.message || 'Bilinmeyen hata'}`
+        })),
+        catchError(err => of({
+          toolName: 'audit_etsy_listing',
+          success: false,
+          data: null,
+          message: `Mağaza AI Analizi hatası: ${err?.error?.error || err?.message || 'Bağlantı hatası'}`
+        }))
+      );
+
+    if (args?.title && Array.isArray(args?.tags)) {
+      return runAudit(args.title, args.tags, args.description || '');
+    }
+
+    return this.etsyApi.getShopActiveListings(this.etsyApi.activeShopId(), 100).pipe(
+      switchMap(listings => {
+        const found = (listings || []).find(l => String(l.listingId) === listingId);
+        return runAudit(
+          args?.title || found?.title || listingId,
+          Array.isArray(args?.tags) ? args.tags : (found?.tags || []),
+          args?.description || found?.description || ''
+        );
+      }),
+      catchError(() => runAudit(args?.title || listingId, args?.tags || [], args?.description || ''))
     );
   }
 

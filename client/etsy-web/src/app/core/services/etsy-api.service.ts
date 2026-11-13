@@ -234,7 +234,9 @@ export interface OptimizeListingResponseDto {
   success: boolean;
   listingId: string;
   optimizedTitle: string;
+  titleSuggestions?: string[];
   optimizedTags: string[];
+  materialSuggestions?: string[];
   optimizedDescription: string;
   aiModel: string;
   provider?: string;

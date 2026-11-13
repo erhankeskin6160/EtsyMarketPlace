@@ -153,7 +153,12 @@
   <div *ngIf="isBatchAuditing" class="batch-progress-card">
     <div class="progress-info">
       <span>Toplu AI Denetimi Yürütülüyor: {{ batchProgress.current }} / {{ batchProgress.total }}</span>
-      <span>{{ Math.round((batchProgress.current / batchProgress.total) * 100) }}%</span>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <span>{{ Math.round((batchProgress.current / batchProgress.total) * 100) }}%</span>
+        <button type="button" class="btn-settings" (click)="cancelBatchAudit()" style="padding: 4px 10px; font-size: 12px; background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.45); color: #fca5a5;">
+          ⏹ Durdur
+        </button>
+      </div>
     </div>
     <div class="progress-bar-bg">
       <div class="progress-bar-fill" [style.width.%]="(batchProgress.current / batchProgress.total) * 100"></div>
@@ -400,7 +405,7 @@
               [disabled]="isAuditingSelected"
             >
               <span *ngIf="isAuditingSelected" class="btn-spinner"></span>
-              <span>{{ isAuditingSelected ? 'Gemini Üretiyor...' : '✨ AI ile Yeniden Üret' }}</span>
+              <span>{{ isAuditingSelected ? (aiSettings.activeProvider() + ' Üretiyor...') : '✨ AI ile Yeniden Üret' }}</span>
             </button>
 
             <!-- 3. Şablonla Paragrafla -->
@@ -411,6 +416,11 @@
             <!-- 4. Öneriyi Kopyala -->
             <button class="btn-hub-secondary" (click)="copySuggestionToClipboard()">
               <span>📋 Öneriyi Kopyala</span>
+            </button>
+
+            <!-- 5. Orijinale Dön -->
+            <button class="btn-hub-secondary" (click)="resetToOriginal()">
+              <span>↩️ Orijinale Dön</span>
             </button>
           </div>
 
@@ -555,6 +565,19 @@
               class="editable-input title-input"
               placeholder="AI optimize başlık..."
             />
+            <div *ngIf="titleSuggestions.length > 1" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+              <button
+                *ngFor="let sug of titleSuggestions; let i = index"
+                type="button"
+                (click)="selectTitleSuggestion(sug)"
+                [style.borderColor]="afterTitle === sug ? '#22d3ee' : 'rgba(148,163,184,0.25)'"
+                [style.background]="afterTitle === sug ? 'rgba(34,211,238,0.14)' : 'rgba(15,23,42,0.55)'"
+                style="font-size: 11px; padding: 5px 9px; border-radius: 6px; border: 1px solid; color: #cbd5e1; cursor: pointer; text-align: left;"
+                [title]="sug"
+              >
+                Başlık #{{ i + 1 }} ({{ sug.length }} krk)
+              </button>
+            </div>
           </div>
 
           <!-- AI Optimize 13 Etiket -->
@@ -573,8 +596,13 @@
 
             <!-- Tags Chips -->
             <div class="tags-container">
-              <span *ngFor="let tag of afterTags; let i = index" class="tag-chip tag-chip-after">
-                <span>{{ tag }}</span>
+              <span
+                *ngFor="let tag of afterTags; let i = index"
+                class="tag-chip tag-chip-after"
+                [style.borderColor]="tag.length > 20 ? '#ef4444' : ''"
+                [title]="tag + ' (' + tag.length + '/20 krk)'"
+              >
+                <span>{{ tag }} <small style="opacity: 0.65; font-size: 10px;">({{ tag.length }})</small></span>
                 <button class="tag-remove-btn" (click)="removeTag(i)" title="Etiketi Sil">×</button>
               </span>
             </div>
@@ -589,6 +617,31 @@
                 class="add-tag-input"
               />
               <button class="btn-add-tag" (click)="addTag()" [disabled]="!newTagInput.trim()">+ Ekle</button>
+            </div>
+          </div>
+
+          <!-- Malzemeler (Materials) -->
+          <div class="form-group">
+            <div class="label-row">
+              <label class="field-label">Malzemeler (Materials)</label>
+              <span class="char-count">{{ afterMaterials.length }} / 13</span>
+            </div>
+            <div class="tags-container">
+              <span *ngFor="let mat of afterMaterials; let i = index" class="tag-chip tag-chip-after">
+                <span>{{ mat }}</span>
+                <button class="tag-remove-btn" (click)="removeMaterial(i)" title="Malzemeyi Sil">×</button>
+              </span>
+              <span *ngIf="afterMaterials.length === 0" class="no-tags-msg" style="font-size: 12px; opacity: 0.7;">Henüz malzeme eklenmedi.</span>
+            </div>
+            <div *ngIf="afterMaterials.length < 13" class="add-tag-box">
+              <input
+                type="text"
+                [(ngModel)]="newMaterialInput"
+                (keyup.enter)="addMaterial()"
+                placeholder="Yeni malzeme ekle (ör. PLA Filament)..."
+                class="add-tag-input"
+              />
+              <button class="btn-add-tag" (click)="addMaterial()" [disabled]="!newMaterialInput.trim()">+ Ekle</button>
             </div>
           </div>
 

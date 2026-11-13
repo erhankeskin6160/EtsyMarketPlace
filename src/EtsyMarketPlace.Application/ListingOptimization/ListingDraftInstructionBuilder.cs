@@ -29,9 +29,13 @@ public static class ListingDraftInstructionBuilder
 
     /// <summary>
     /// Builds the full user prompt for optimizing an existing listing.
-    /// Combines Etsy knowledge base rules, JSON schema instructions, and the listing context.
+    /// Combines Etsy knowledge base rules, JSON schema instructions, seller preferences, and the listing context.
     /// </summary>
-    public static string BuildOptimizationPrompt(ListingOptimizationInput input)
+    public static string BuildOptimizationPrompt(
+        ListingOptimizationInput input,
+        string? focusKeywords = null,
+        string? targetBuyerPersona = null,
+        string? tone = null)
     {
         var builder = new StringBuilder();
         builder.AppendLine(BuildResponseSchemaInstruction());
@@ -39,6 +43,24 @@ public static class ListingDraftInstructionBuilder
         builder.AppendLine(EtsyListingKnowledgeBase.BuildAiInstructionBlock());
         builder.AppendLine();
         builder.AppendLine(BuildFieldRules());
+
+        if (!string.IsNullOrWhiteSpace(focusKeywords) ||
+            !string.IsNullOrWhiteSpace(targetBuyerPersona) ||
+            !string.IsNullOrWhiteSpace(tone) ||
+            !string.IsNullOrWhiteSpace(input.DescriptionStyle))
+        {
+            builder.AppendLine();
+            builder.AppendLine("Seller optimization preferences (MUST incorporate naturally in English output):");
+            if (!string.IsNullOrWhiteSpace(focusKeywords))
+                builder.AppendLine($"- Focus keywords to prioritize in title & tags: {focusKeywords.Trim()}");
+            if (!string.IsNullOrWhiteSpace(targetBuyerPersona))
+                builder.AppendLine($"- Target buyer persona: {targetBuyerPersona.Trim()}");
+            if (!string.IsNullOrWhiteSpace(tone))
+                builder.AppendLine($"- Desired brand tone & voice: {tone.Trim()}");
+            if (!string.IsNullOrWhiteSpace(input.DescriptionStyle))
+                builder.AppendLine($"- Description style: {input.DescriptionStyle.Trim()}");
+        }
+
         builder.AppendLine();
         builder.AppendLine(BuildListingContext(input.TargetKeyword, input.Title, input.Tags, input.Description));
         return builder.ToString();

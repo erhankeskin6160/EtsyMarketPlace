@@ -15,6 +15,7 @@ public class AiListingOptimizationUseCaseTests
         public bool Success { get; set; } = true;
         public string? ContentToReturn { get; set; }
         public string? ErrorToReturn { get; set; }
+        public string? LastUserPrompt { get; private set; }
 
         public Task<(bool Success, string? Content, string? ErrorMessage)> GenerateOptimizationJsonAsync(
             string systemInstruction,
@@ -23,6 +24,7 @@ public class AiListingOptimizationUseCaseTests
             string apiKey,
             CancellationToken cancellationToken = default)
         {
+            LastUserPrompt = userPrompt;
             return Task.FromResult((Success, ContentToReturn, ErrorToReturn));
         }
     }
@@ -178,5 +180,49 @@ public class AiListingOptimizationUseCaseTests
         Assert.Equal("DeepSeek (Canlı API)", result.Provider);
         Assert.Equal("DeepSeek-V4-Flash", result.AiModel);
         Assert.Single(fakeRepo.SavedAudits);
+    }
+
+    [Fact]
+    public async Task OptimizeListingAsync_IncludesSellerPreferencesInPromptAndUsesProviderName()
+    {
+        var aiJsonResponse = """
+        {
+            "title_suggestions": ["Handcrafted Wooden Desk Lamp Warm LED Gift for Him", "Alt Title 2", "Alt Title 3"],
+            "tag_suggestions": ["wooden desk lamp", "warm led lamp", "gift for him", "office desk decor", "minimalist lamp", "handmade wood light", "ambient night light", "bedside table lamp", "eco friendly lamp", "architect desk gift", "modern wood decor", "study room light", "artisan table lamp"],
+            "material_suggestions": ["Walnut Wood", "LED"],
+            "description_draft": "Warm minimalist wooden desk lamp.",
+            "current_seo_score": 68,
+            "optimized_seo_score": 96,
+            "risk_warnings": []
+        }
+        """;
+
+        var fakeAi = new FakeGeminiListingApiClient { Success = true, ContentToReturn = aiJsonResponse };
+        var fakeRepo = new FakeShopSettingsRepository();
+        var useCase = new AiListingOptimizationUseCase(fakeAi, new ListingOptimizationService(), fakeRepo);
+
+        var cmd = new OptimizeListingCommandDto(
+            ShopId: "53236321",
+            Title: "Wooden Lamp",
+            Description: "Nice lamp",
+            Tags: new[] { "lamp" },
+            TargetKeyword: "wooden desk lamp",
+            DescriptionStyle: "Minimalist",
+            FocusKeywords: "architect desk gift, walnut lamp",
+            TargetBuyerPersona: "Minimalist home office workers",
+            Tone: "Lüks & Premium",
+            Model: "gpt-4o",
+            ApiKey: "sk-openai-test",
+            Provider: "OpenAI");
+
+        var result = await useCase.OptimizeListingAsync("999001", "53236321", cmd);
+
+        Assert.True(result.Success);
+        Assert.Contains("architect desk gift, walnut lamp", fakeAi.LastUserPrompt);
+        Assert.Contains("Minimalist home office workers", fakeAi.LastUserPrompt);
+        Assert.Contains("Lüks & Premium", fakeAi.LastUserPrompt);
+        Assert.Contains("OpenAI", result.Message);
+        Assert.Contains("OpenAI", result.Critique);
+        Assert.Equal(3, result.TitleSuggestions.Count);
     }
 }
