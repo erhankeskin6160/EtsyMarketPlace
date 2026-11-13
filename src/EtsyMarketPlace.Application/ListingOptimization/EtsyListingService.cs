@@ -303,6 +303,17 @@ public sealed class EtsyListingService : IEtsyListingService
             formDict["tags"] = string.Join(",", validTags);
         }
 
+        var validMaterials = (request.Materials ?? Array.Empty<string>())
+            .Select(m => m.Trim())
+            .Where(m => m.Length > 0 && m.Length <= 45)
+            .Take(13)
+            .ToList();
+
+        if (validMaterials.Count > 0)
+        {
+            formDict["materials"] = string.Join(",", validMaterials);
+        }
+
         var (success, body, error) = await _listingClient.UpdateListingRawAsync(shopId, listingId, formDict, cancellationToken);
         if (!success)
         {

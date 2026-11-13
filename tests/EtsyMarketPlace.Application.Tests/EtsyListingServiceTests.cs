@@ -49,8 +49,13 @@ public class EtsyListingServiceTests
         public Task<string?> GetListingImagesRawJsonAsync(long listingId, string shopId, CancellationToken ct) =>
             Task.FromResult<string?>(null);
 
-        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IReadOnlyDictionary<string, string> formFields, CancellationToken ct) =>
-            Task.FromResult((UpdateSuccess, "{}", UpdateSuccess ? null : "Etsy error"));
+        public IReadOnlyDictionary<string, string>? LastFormFields { get; private set; }
+
+        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IReadOnlyDictionary<string, string> formFields, CancellationToken ct)
+        {
+            LastFormFields = formFields;
+            return Task.FromResult((UpdateSuccess, "{}", UpdateSuccess ? null : "Etsy error"));
+        }
     }
 
     private sealed class FakeShopSettingsRepository : IShopSettingsRepository
@@ -152,13 +157,15 @@ public class EtsyListingServiceTests
         var fakeClient = new FakeEtsyListingApiClient { UpdateSuccess = true };
         var fakeRepo = new FakeShopSettingsRepository();
         var service = new EtsyListingService(fakeClient, fakeRepo);
-        var req = new UpdateListingRequestDto("53236321", "Handmade Chess Set", "Nice description", new[] { "tag1", "tag2" });
+        var req = new UpdateListingRequestDto("53236321", "Handmade Chess Set", "Nice description", new[] { "tag1", "tag2" }, new[] { "PLA Plastic", "Resin" });
 
         var res = await service.UpdateListingAsync("53236321", "123", req);
 
         Assert.True(res.Success);
         Assert.Equal("123", res.ListingId);
         Assert.Single(fakeRepo.SavedAudits);
+        Assert.NotNull(fakeClient.LastFormFields);
+        Assert.Equal("PLA Plastic,Resin", fakeClient.LastFormFields!["materials"]);
     }
 
     [Fact]

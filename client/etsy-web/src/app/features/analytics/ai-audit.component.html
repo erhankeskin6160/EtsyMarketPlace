@@ -538,6 +538,9 @@
               <span *ngIf="isUpdatingEtsy" class="btn-spinner"></span>
               <span>{{ isUpdatingEtsy ? "Etsy'ye Yükleniyor..." : "🚀 Etsy'de Güncelle" }}</span>
             </button>
+            <div *ngIf="inlineUpdateError" class="inline-update-error">
+              ⚠️ {{ inlineUpdateError }}
+            </div>
 
             <!-- 2. AI ile Yeniden Optimize Et -->
             <button
@@ -894,6 +897,33 @@
     <div class="lightbox-card" (click)="$event.stopPropagation()">
       <button type="button" class="lightbox-close" (click)="closeLightbox()">✕</button>
       <img [src]="lightboxImageUrl" alt="Tam Boyut Görsel Önizleme" class="lightbox-img" referrerpolicy="no-referrer" />
+    </div>
+  </div>
+
+  <!-- CONFIRM ETSY PUSH MODAL -->
+  <div *ngIf="showConfirmPushModal && selectedListing" class="modal-backdrop" (click)="showConfirmPushModal = false">
+    <div class="modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">🚀 Canlı Etsy Güncellemesini Onayla</h3>
+        <button type="button" class="modal-close-btn" (click)="showConfirmPushModal = false">✕</button>
+      </div>
+      <div class="modal-body confirm-push-summary">
+        <p><strong>İlan #{{ selectedListing.listingId }}</strong> doğrudan canlı Etsy mağazanızda güncellenecektir.</p>
+        <div *ngIf="afterTags.length < 13" class="confirm-push-warn">
+          ⚠️ Etiket sayısı 13'ün altında ({{ afterTags.length }}/13). Etsy SEO için 13 etiket önerilir.
+        </div>
+        <div class="confirm-push-row">
+          <div><strong>Yeni Başlık:</strong> {{ afterTitle }}</div>
+          <div style="margin-top: 6px;">
+            <strong>Etiketler:</strong> {{ afterTags.length }}/13 &nbsp;|&nbsp;
+            <strong>Malzemeler:</strong> {{ afterMaterials.length }}/13
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" (click)="showConfirmPushModal = false">Vazgeç</button>
+        <button type="button" class="btn-modal-confirm-etsy" (click)="confirmUpdateListingOnEtsy()">Evet, Etsy'ye Gönder</button>
+      </div>
     </div>
   </div>
 </div>

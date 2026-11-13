@@ -15,6 +15,11 @@
 
 /* ── Toast Banner ────────────────────────────────────────────────────────── */
 .toast-banner {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 1500;
+  max-width: 520px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -24,7 +29,7 @@
   font-weight: 500;
   backdrop-filter: blur(12px);
   animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.65);
 }
 
 .toast-info {
@@ -1870,5 +1875,62 @@
   background: rgba(15, 23, 42, 0.9);
   color: #fff;
   font-size: 16px;
+  cursor: pointer;
+}
+
+.inline-update-error {
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.confirm-push-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.confirm-push-row {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.confirm-push-warn {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  color: #fde68a;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+}
+
+.btn-modal-cancel {
+  background: rgba(51, 65, 85, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  color: #e2e8f0;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 10px;
+}
+
+.btn-modal-confirm-etsy {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  color: #fff;
+  padding: 9px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
   cursor: pointer;
 }

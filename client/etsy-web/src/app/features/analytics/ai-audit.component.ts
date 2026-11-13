@@ -57,6 +57,8 @@ export class AiAuditComponent implements OnInit {
   isBatchAuditing = false;
   batchProgress = { current: 0, total: 0 };
   isUpdatingEtsy = false;
+  inlineUpdateError: string | null = null;
+  showConfirmPushModal = false;
   toastMessage: string | null = null;
   toastType: 'success' | 'error' | 'info' = 'info';
 
@@ -195,6 +197,8 @@ export class AiAuditComponent implements OnInit {
   selectListing(listing: ShopListingItemDto): void {
     this.selectedListing = listing;
     this.newTagInput = '';
+    this.inlineUpdateError = null;
+    this.showConfirmPushModal = false;
     this.loadListingImages(listing);
 
     if (listing.savedAudit || (listing.hasSavedAudit && listing.resultJson)) {
@@ -533,44 +537,53 @@ export class AiAuditComponent implements OnInit {
 
   // ── Etsy Direct Update ───────────────────────────────────────────────────
   updateListingOnEtsy(): void {
-    if (!this.selectedListing) return;
+    if (!this.selectedListing || this.isUpdatingEtsy) return;
+    this.inlineUpdateError = null;
 
     // Validation matching Etsy API constraints
     if (!this.afterTitle || this.afterTitle.trim().length === 0) {
-      this.showToast('Başlık boş olamaz!', 'error');
+      const msg = 'Başlık boş olamaz!';
+      this.inlineUpdateError = msg;
+      this.showToast(msg, 'error');
       return;
     }
 
     if (this.afterTitle.length > 140) {
-      this.showToast(`Başlık 140 karakterden uzun olamaz! (Mevcut: ${this.afterTitle.length})`, 'error');
+      const msg = `Başlık 140 karakterden uzun olamaz! (Mevcut: ${this.afterTitle.length})`;
+      this.inlineUpdateError = msg;
+      this.showToast(msg, 'error');
       return;
     }
 
     if ((this.afterTitle.match(/&/g) || []).length > 1) {
-      this.showToast("Etsy API başlıkta birden fazla '&' karakterini reddeder! Lütfen 'and' veya virgül kullanın.", 'error');
+      const msg = "Etsy API başlıkta birden fazla '&' karakterini reddeder! Lütfen 'and' veya virgül kullanın.";
+      this.inlineUpdateError = msg;
+      this.showToast(msg, 'error');
       return;
     }
 
     if (this.afterTags.length > 13) {
-      this.showToast(`Etsy en fazla 13 etikete izin verir! (Mevcut: ${this.afterTags.length})`, 'error');
+      const msg = `Etsy en fazla 13 etikete izin verir! (Mevcut: ${this.afterTags.length})`;
+      this.inlineUpdateError = msg;
+      this.showToast(msg, 'error');
       return;
     }
 
     const invalidTag = this.afterTags.find(t => t.length > 20);
     if (invalidTag) {
-      this.showToast(`Etiketler en fazla 20 karakter olabilir: "${invalidTag}" (${invalidTag.length} karakter)`, 'error');
+      const msg = `Etiketler en fazla 20 karakter olabilir: "${invalidTag}" (${invalidTag.length} karakter). Lütfen bu etiketi kısaltın veya silin.`;
+      this.inlineUpdateError = msg;
+      this.showToast(msg, 'error');
       return;
     }
 
-    const tagWarning = this.afterTags.length < 13
-      ? `\n⚠️ UYARI: Etiket sayısı 13'ün altında (${this.afterTags.length}/13). Etsy SEO için 13 etiket önerilir.\n`
-      : '';
+    this.showConfirmPushModal = true;
+  }
 
-    const confirmMsg = `DİKKAT: Listing #${this.selectedListing.listingId} doğrudan canlı Etsy mağazanıza gönderilecektir.\n${tagWarning}\nYeni Başlık: ${this.afterTitle.substring(0, 60)}...\nEtiket Sayısı: ${this.afterTags.length}/13\nMalzeme Sayısı: ${this.afterMaterials.length}\n\nOnaylıyor musunuz?`;
-    if (!confirm(confirmMsg)) {
-      return;
-    }
-
+  confirmUpdateListingOnEtsy(): void {
+    if (!this.selectedListing || this.isUpdatingEtsy) return;
+    this.showConfirmPushModal = false;
+    this.inlineUpdateError = null;
     this.isUpdatingEtsy = true;
     this.showToast('Değişiklikler canlı Etsy mağazasına yükleniyor...', 'info');
 
@@ -582,7 +595,7 @@ export class AiAuditComponent implements OnInit {
     };
 
     this.etsyApi.updateEtsyListing(this.selectedListing.listingId, payload).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (res) => {
+      next: () => {
         this.isUpdatingEtsy = false;
         this.showToast(`🎉 İlan #${this.selectedListing?.listingId} başarıyla Etsy'de güncellendi!`, 'success');
 
@@ -601,8 +614,9 @@ export class AiAuditComponent implements OnInit {
       error: (err) => {
         this.isUpdatingEtsy = false;
         console.error('Update Etsy listing error:', err);
-        const msg = err?.error?.error || err?.message || 'Etsy API güncelleme isteğini reddetti';
-        this.showToast(`Etsy Güncelleme Hatası: ${msg}`, 'error');
+        const msg = err?.error?.message || err?.error?.error || err?.message || 'Etsy API güncelleme isteğini reddetti';
+        this.inlineUpdateError = `Etsy Güncelleme Hatası: ${msg}`;
+        this.showToast(this.inlineUpdateError, 'error');
       }
     });
   }
