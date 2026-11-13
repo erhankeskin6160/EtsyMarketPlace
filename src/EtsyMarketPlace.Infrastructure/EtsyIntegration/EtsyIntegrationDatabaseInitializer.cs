@@ -26,6 +26,12 @@ public sealed class EtsyIntegrationDatabaseInitializer(
                     await store.InitializeAsync(cancellationToken);
                 }
 
+                var accountingStore = scope.ServiceProvider.GetService<EtsyMarketPlace.Infrastructure.Persistence.Repositories.SqliteAccountingStore>();
+                if (accountingStore != null)
+                {
+                    await accountingStore.InitializeAsync(cancellationToken);
+                }
+
                 var abTestRepo = scope.ServiceProvider.GetService<IAbTestRepository>();
                 if (abTestRepo != null) await abTestRepo.InitializeAsync(cancellationToken);
 

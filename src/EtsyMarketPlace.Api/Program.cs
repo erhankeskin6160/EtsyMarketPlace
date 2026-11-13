@@ -112,8 +112,14 @@ builder.Services.AddOptions<JwtOptions>()
 builder.Services.AddScoped<IConfigurationStatusService, ConfigurationStatusService>();
 
 // 2.1. PostgreSQL Entity Framework Core DbContext Kaydı
-var pgConnectionString = builder.Configuration.GetConnectionString("PostgreSql")
+var rawPgConnectionString = builder.Configuration.GetConnectionString("PostgreSql")
     ?? "Host=localhost;Port=5432;Database=etsy_marketplace_db;Username=postgres;Password=admin123";
+var pgCsBuilder = new Npgsql.NpgsqlConnectionStringBuilder(rawPgConnectionString);
+if (!rawPgConnectionString.Contains("Timeout=", StringComparison.OrdinalIgnoreCase) && pgCsBuilder.Timeout > 5)
+{
+    pgCsBuilder.Timeout = 5;
+}
+var pgConnectionString = pgCsBuilder.ConnectionString;
 
 builder.Services.AddDbContext<EtsyMarketPlaceDbContext>(options =>
 {
@@ -142,6 +148,7 @@ var dbPath = Path.Combine(dataDir, "etsy-finance.db");
 
 builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
 builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
+builder.Services.AddSingleton<SqliteAccountingStore>();
 builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
 builder.Services.AddScoped<IShopSettingsRepository, EfPostgreSqlShopSettingsRepository>();
@@ -288,17 +295,28 @@ var app = builder.Build();
 // 4.1. PostgreSQL Otomatik Tablo Başlatıcı
 using (var scope = app.Services.CreateScope())
 {
+    var db = scope.ServiceProvider.GetRequiredService<EtsyMarketPlaceDbContext>();
+    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
     try
     {
-        var db = scope.ServiceProvider.GetRequiredService<EtsyMarketPlaceDbContext>();
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         await db.Database.MigrateAsync(cts.Token);
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "PostgreSQL EF Core MigrateAsync uyarısı (mevcut şema olabilir): {Message}", ex.Message);
+    }
+
+    try
+    {
         await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.ExecuteSqlRawAsync(
             db.Database,
             "ALTER TABLE order_costs ADD COLUMN IF NOT EXISTS packaging_cost numeric(18,4) NULL;",
             cts.Token);
 
-        var migrator = scope.ServiceProvider.GetRequiredService<EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator>();
+        await AccountingPostgresSchemaBootstrapper.EnsureTablesExistAsync(db, app.Logger, cts.Token);
+
+        var migrator = scope.ServiceProvider.GetRequiredService<PostgreSqlDataMigrator>();
         var migrationRes = await migrator.MigrateAndSeedAsync();
         app.Logger.LogInformation("PostgreSQL Veri Tohumlama ve Göç: {Message}", migrationRes.Message);
     }

@@ -901,6 +901,11 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.updateLiveForecastBaseline();
   }
 
+  private cachedIncomeStartKey = '';
+  private cachedIncomeStartDate: Date | null = null;
+  private cachedIncomeEndKey = '';
+  private cachedIncomeEndDate: Date | null = null;
+
   get activeShopId(): string {
     return this.etsyApi.activeShopId();
   }
@@ -915,11 +920,21 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   get incomeStatementStartDate(): Date {
-    return this.parseTurkishDate(this.startDate, false);
+    const key = `${this.selectedDatePreset}|${this.startDate}`;
+    if (this.cachedIncomeStartKey !== key || !this.cachedIncomeStartDate) {
+      this.cachedIncomeStartKey = key;
+      this.cachedIncomeStartDate = this.parseTurkishDate(this.startDate, false);
+    }
+    return this.cachedIncomeStartDate;
   }
 
   get incomeStatementEndDate(): Date {
-    return this.parseTurkishDate(this.endDate, true);
+    const key = `${this.selectedDatePreset}|${this.endDate}`;
+    if (this.cachedIncomeEndKey !== key || !this.cachedIncomeEndDate) {
+      this.cachedIncomeEndKey = key;
+      this.cachedIncomeEndDate = this.parseTurkishDate(this.endDate, true);
+    }
+    return this.cachedIncomeEndDate;
   }
 
   switchTab(tab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' | 'income-statement'): void {

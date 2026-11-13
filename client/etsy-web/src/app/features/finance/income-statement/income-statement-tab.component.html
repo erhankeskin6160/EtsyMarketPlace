@@ -1,4 +1,14 @@
 <div class="is-shell">
+  <div class="visually-hidden" aria-live="polite">{{ liveAnnouncement() }}</div>
+
+  <ng-template #mutationFeedbackTpl>
+    @if (errorMessage()) {
+      <div class="inline-feedback error" role="alert">⚠️ {{ errorMessage() }}</div>
+    } @else if (toast()) {
+      <div class="inline-feedback success" role="status">{{ toast() }}</div>
+    }
+  </ng-template>
+
   <!-- Üst Başlık & Çıktı Aksiyonları -->
   <div class="is-top-banner">
     <div class="is-title-wrap">
@@ -350,7 +360,18 @@
           <div class="form-field">
             <label for="expDate">Fiş / Fatura Tarihi</label>
             <p class="field-hint">Tekrarlayan giderlerde başlangıç ayı esas alınır.</p>
-            <input id="expDate" name="entryDate" type="date" class="field-input" [(ngModel)]="expenseForm.entryDate" required />
+            <input
+              id="expDate"
+              name="entryDate"
+              type="date"
+              class="field-input"
+              [(ngModel)]="expenseForm.entryDate"
+              [attr.aria-invalid]="isExpenseDateInvalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="isExpenseDateInvalid() ? 'expDate-err' : null"
+              required />
+            @if (isExpenseDateInvalid()) {
+              <div id="expDate-err" class="field-error">Geçerli bir tarih seçiniz.</div>
+            }
           </div>
 
           <div class="form-field">
@@ -378,11 +399,13 @@
               type="text"
               class="field-input"
               [(ngModel)]="expenseForm.description"
+              [attr.aria-invalid]="isExpenseDescriptionInvalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="isExpenseDescriptionInvalid() ? 'expDesc-err' : null"
               required
               minlength="2"
               placeholder="Gider kalemi açıklaması" />
-            @if (expenseSubmitted() && (!expenseForm.description || expenseForm.description.trim().length < 2)) {
-              <div class="field-error">En az 2 karakterlik açıklama girmelisiniz.</div>
+            @if (isExpenseDescriptionInvalid()) {
+              <div id="expDesc-err" class="field-error">En az 2 karakterlik açıklama girmelisiniz.</div>
             }
           </div>
 
@@ -397,9 +420,11 @@
               min="0.01"
               class="field-input"
               [(ngModel)]="expenseForm.amount"
+              [attr.aria-invalid]="isExpenseAmountInvalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="isExpenseAmountInvalid() ? 'expAmount-err' : null"
               required />
-            @if (expenseSubmitted() && !(expenseForm.amount > 0)) {
-              <div class="field-error">Tutar 0'dan büyük olmalıdır.</div>
+            @if (isExpenseAmountInvalid()) {
+              <div id="expAmount-err" class="field-error">Tutar 0'dan büyük olmalıdır.</div>
             }
           </div>
 
@@ -442,9 +467,12 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()">
-          {{ saving() ? '⏳ Kaydediliyor...' : '💾 Fişi Kaydet & Tabloyu Güncelle' }}
-        </button>
+        <div class="form-actions-row">
+          <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
+            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Fişi Kaydet & Tabloyu Güncelle' }}
+          </button>
+          <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
+        </div>
       </form>
     </div>
 
@@ -483,7 +511,7 @@
                 </td>
                 <td class="num">{{ formatTry(item.amountTry) }}</td>
                 <td class="num">
-                  <button type="button" class="btn-is btn-is-danger" (click)="removeExpense(item.id)">🗑️ Sil</button>
+                  <button type="button" class="btn-is btn-is-danger" [disabled]="saving()" (click)="removeExpense(item.id)">🗑️ Sil</button>
                 </td>
               </tr>
             } @empty {
@@ -510,9 +538,17 @@
           <div class="form-field">
             <label for="assetName">Varlık Adı</label>
             <p class="field-hint">Örn: Bambu Lab X1C #1 veya İş İstasyonu PC.</p>
-            <input id="assetName" name="assetName" type="text" class="field-input" [(ngModel)]="assetForm.assetName" required />
-            @if (assetSubmitted() && !assetForm.assetName.trim()) {
-              <div class="field-error">Varlık adı zorunludur.</div>
+            <input
+              id="assetName"
+              name="assetName"
+              type="text"
+              class="field-input"
+              [(ngModel)]="assetForm.assetName"
+              [attr.aria-invalid]="isAssetNameInvalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="isAssetNameInvalid() ? 'assetName-err' : null"
+              required />
+            @if (isAssetNameInvalid()) {
+              <div id="assetName-err" class="field-error">Varlık adı zorunludur.</div>
             }
           </div>
 
@@ -539,22 +575,68 @@
           <div class="form-field">
             <label for="assetDate">Aktife Giriş (Alış) Tarihi</label>
             <p class="field-hint">Kıst / gün oranlı dönem amortismanı bu tarihten başlar.</p>
-            <input id="assetDate" name="acquisitionDate" type="date" class="field-input" [(ngModel)]="assetForm.acquisitionDate" required />
+            <input
+              id="assetDate"
+              name="acquisitionDate"
+              type="date"
+              class="field-input"
+              [(ngModel)]="assetForm.acquisitionDate"
+              [attr.aria-invalid]="isAssetDateInvalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="isAssetDateInvalid() ? 'assetDate-err' : null"
+              required />
+            @if (isAssetDateInvalid()) {
+              <div id="assetDate-err" class="field-error">Aktife giriş (alış) tarihi zorunludur.</div>
+            }
           </div>
 
           <div class="form-field">
             <label for="assetCost">Maliyet Bedeli (₺ TRY)</label>
             <p class="field-hint">KDV hariç (veya KDV indirilmiyorsa toplam) alış bedeli.</p>
-            <input id="assetCost" name="acquisitionCostTry" type="number" step="0.01" min="1" class="field-input" [(ngModel)]="assetForm.acquisitionCostTry" required />
+            <input
+              id="assetCost"
+              name="acquisitionCostTry"
+              type="number"
+              step="0.01"
+              min="1"
+              class="field-input"
+              [(ngModel)]="assetForm.acquisitionCostTry"
+              [attr.aria-invalid]="isAssetCostInvalid() ? 'true' : 'false'"
+              [attr.aria-describedby]="isAssetCostInvalid() ? 'assetCost-err' : null"
+              required />
+            @if (isAssetCostInvalid()) {
+              <div id="assetCost-err" class="field-error">Maliyet bedeli 0'dan büyük olmalıdır.</div>
+            }
           </div>
 
           <div class="form-field">
             <label for="assetLife">Ekonomik Ömür (Yıl) & Hurda Değer (₺)</label>
             <p class="field-hint">3D yazıcı/PC genelde 4–5 yıl ekonomik ömre sahiptir.</p>
             <div style="display:flex; gap:6px;">
-              <input id="assetLife" name="usefulLifeYears" type="number" min="1" max="50" class="field-input" [(ngModel)]="assetForm.usefulLifeYears" style="flex:1;" />
-              <input name="salvageValueTry" type="number" min="0" step="0.01" class="field-input" [(ngModel)]="assetForm.salvageValueTry" placeholder="Hurda ₺" style="flex:1;" />
+              <input
+                id="assetLife"
+                name="usefulLifeYears"
+                type="number"
+                min="1"
+                max="50"
+                class="field-input"
+                [(ngModel)]="assetForm.usefulLifeYears"
+                [attr.aria-invalid]="isAssetLifeOrSalvageInvalid() ? 'true' : 'false'"
+                [attr.aria-describedby]="isAssetLifeOrSalvageInvalid() ? 'assetLife-err' : null"
+                style="flex:1;" />
+              <input
+                name="salvageValueTry"
+                type="number"
+                min="0"
+                step="0.01"
+                class="field-input"
+                [(ngModel)]="assetForm.salvageValueTry"
+                [attr.aria-invalid]="isAssetLifeOrSalvageInvalid() ? 'true' : 'false'"
+                placeholder="Hurda ₺"
+                style="flex:1;" />
             </div>
+            @if (isAssetLifeOrSalvageInvalid()) {
+              <div id="assetLife-err" class="field-error">Ömür 1–50 yıl, hurda değer maliyetin altında olmalıdır.</div>
+            }
           </div>
 
           <div class="form-field">
@@ -567,9 +649,12 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()">
-          {{ saving() ? '⏳ Kaydediliyor...' : '💾 Sabit Kıymeti Kaydet' }}
-        </button>
+        <div class="form-actions-row">
+          <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
+            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Sabit Kıymeti Kaydet' }}
+          </button>
+          <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
+        </div>
       </form>
     </div>
 
@@ -602,7 +687,7 @@
                 <td class="num muted-val">{{ formatTry(dep.accumulatedDepreciationEndTry) }}</td>
                 <td class="num pos-val">{{ formatTry(dep.netBookValueEndTry) }}</td>
                 <td class="num">
-                  <button type="button" class="btn-is btn-is-danger" (click)="removeAsset(dep.assetId)">🗑️ Sil</button>
+                  <button type="button" class="btn-is btn-is-danger" [disabled]="saving()" (click)="removeAsset(dep.assetId)">🗑️ Sil</button>
                 </td>
               </tr>
             } @empty {
@@ -771,9 +856,12 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()">
-          {{ saving() ? '⏳ Kaydediliyor...' : '💾 Muhasebe Politikasını Kaydet' }}
-        </button>
+        <div class="form-actions-row">
+          <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
+            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Muhasebe Politikasını Kaydet' }}
+          </button>
+          <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
+        </div>
       </form>
     </div>
 
@@ -823,9 +911,12 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()">
-          💾 Aralıklı Envanter Sayımını Kaydet
-        </button>
+        <div class="form-actions-row">
+          <button type="submit" class="btn-is btn-is-primary" [disabled]="saving()" [attr.aria-busy]="saving()">
+            {{ saving() ? '⏳ Kaydediliyor...' : '💾 Aralıklı Envanter Sayımını Kaydet' }}
+          </button>
+          <ng-container *ngTemplateOutlet="mutationFeedbackTpl"></ng-container>
+        </div>
       </form>
     </div>
   }

@@ -752,6 +752,8 @@ public sealed class UpsertOperatingExpenseHandler(IAccountingRepository repo) : 
             return ServiceResponse.CreateError("Gider açıklaması zorunludur.", HttpStatusCode.BadRequest);
         if (request.Amount <= 0m)
             return ServiceResponse.CreateError("Tutar 0'dan büyük olmalıdır.", HttpStatusCode.BadRequest);
+        if (request.EntryDate.Year < 1990)
+            return ServiceResponse.CreateError("Geçerli bir belge/gider tarihi giriniz.", HttpStatusCode.BadRequest);
 
         var currency = string.IsNullOrWhiteSpace(request.Currency) ? "TRY" : request.Currency.Trim().ToUpperInvariant();
         var rate = currency == "TRY"
@@ -847,6 +849,8 @@ public sealed class UpsertFixedAssetHandler(IAccountingRepository repo) : IReque
             return ServiceResponse.CreateError("ShopId zorunludur.", HttpStatusCode.BadRequest);
         if (string.IsNullOrWhiteSpace(request.AssetName))
             return ServiceResponse.CreateError("Varlık adı zorunludur.", HttpStatusCode.BadRequest);
+        if (request.AcquisitionDate.Year < 1990)
+            return ServiceResponse.CreateError("Geçerli bir aktife giriş (alış) tarihi giriniz.", HttpStatusCode.BadRequest);
         if (request.AcquisitionCostTry <= 0m)
             return ServiceResponse.CreateError("Alış bedeli 0'dan büyük olmalıdır.", HttpStatusCode.BadRequest);
         if (request.UsefulLifeYears is <= 0 or > 50)

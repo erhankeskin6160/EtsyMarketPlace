@@ -497,3 +497,79 @@ CREATE TABLE IF NOT EXISTS discovered_models (
 );
 CREATE INDEX IF NOT EXISTS ix_discovered_models_platform ON discovered_models(platform);
 CREATE INDEX IF NOT EXISTS ix_discovered_models_score ON discovered_models(opportunity_score DESC);
+
+-- -------------------------------------------------------------------------
+-- BÖLÜM 8: GENEL MUHASEBE & RESMİ MSUGT GELİR TABLOSU (TDHP 600–692)
+-- -------------------------------------------------------------------------
+
+-- 32. Shop Accounting Profiles (TDHP Politika, Vergi Rejimi & Genç Girişimci Profili)
+CREATE TABLE IF NOT EXISTS accounting_shop_profiles (
+    shop_id VARCHAR(64) PRIMARY KEY,
+    commission_target INTEGER NOT NULL DEFAULT 0,
+    shipping_target INTEGER NOT NULL DEFAULT 0,
+    canceled_cost_target INTEGER NOT NULL DEFAULT 0,
+    inventory_method INTEGER NOT NULL DEFAULT 0,
+    tax_regime INTEGER NOT NULL DEFAULT 0,
+    young_entrepreneur_mode_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    young_entrepreneur_annual_limit_try NUMERIC(18, 4) NOT NULL DEFAULT 400000,
+    young_entrepreneur_prior_used_try NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    e_export_exemption_rate_pct NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    custom_or_corporate_tax_rate_pct NUMERIC(18, 4) NOT NULL DEFAULT 25,
+    custom_gvk_brackets_json VARCHAR(4000) NULL,
+    include_fx_spread_and_exchange_difference BOOLEAN NOT NULL DEFAULT TRUE,
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 33. Accounting Operating Expenses (İşletme Gideri / KKEG / Bağ-Kur Fişleri)
+CREATE TABLE IF NOT EXISTS accounting_operating_expenses (
+    id BIGSERIAL PRIMARY KEY,
+    shop_id VARCHAR(64) NOT NULL,
+    entry_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    document_no VARCHAR(128) NOT NULL DEFAULT '',
+    category INTEGER NOT NULL,
+    description VARCHAR(512) NOT NULL,
+    amount NUMERIC(18, 4) NOT NULL,
+    currency VARCHAR(8) NOT NULL DEFAULT 'TRY',
+    exchange_rate_to_try NUMERIC(18, 4) NOT NULL DEFAULT 1,
+    amount_try NUMERIC(18, 4) NOT NULL,
+    is_tax_deductible BOOLEAN NOT NULL DEFAULT TRUE,
+    frequency INTEGER NOT NULL DEFAULT 0,
+    recurring_end_date TIMESTAMP WITHOUT TIME ZONE NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "IX_accounting_operating_expenses_shop_id_entry_date"
+    ON accounting_operating_expenses (shop_id, entry_date);
+
+-- 34. Accounting Fixed Assets (253/255 3D Yazıcı & Demirbaş Amortisman Kartları)
+CREATE TABLE IF NOT EXISTS accounting_fixed_assets (
+    id BIGSERIAL PRIMARY KEY,
+    shop_id VARCHAR(64) NOT NULL,
+    asset_name VARCHAR(256) NOT NULL,
+    asset_account_code VARCHAR(16) NOT NULL DEFAULT '253',
+    expense_target_category INTEGER NOT NULL DEFAULT 632,
+    acquisition_date TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    acquisition_cost_try NUMERIC(18, 4) NOT NULL,
+    salvage_value_try NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    useful_life_years INTEGER NOT NULL DEFAULT 5,
+    method INTEGER NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS "IX_accounting_fixed_assets_shop_id"
+    ON accounting_fixed_assets (shop_id);
+
+-- 35. Accounting Inventory Adjustments (Aralıklı Envanter Dönem Sayımları)
+CREATE TABLE IF NOT EXISTS accounting_inventory_adjustments (
+    shop_id VARCHAR(64) NOT NULL,
+    year INTEGER NOT NULL,
+    month INTEGER NOT NULL,
+    opening_inventory_try NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    gross_purchases_try NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    purchase_returns_and_discounts_try NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    closing_inventory_try NUMERIC(18, 4) NOT NULL DEFAULT 0,
+    notes VARCHAR(1000) NULL,
+    updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (shop_id, year, month)
+);

@@ -2,6 +2,7 @@ import { CommonModule } from '@angular/common';
 import { Component, DestroyRef, Input, OnChanges, OnInit, SimpleChanges, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
+import { EMPTY, Observable, Subject, catchError, finalize, switchMap, tap, timeout } from 'rxjs';
 import {
   CanceledOrderCostTarget,
   CommissionAccountTarget,
@@ -44,6 +45,7 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
   readonly saving = signal(false);
   readonly errorMessage = signal<string | null>(null);
   readonly toast = signal<string | null>(null);
+  readonly liveAnnouncement = signal<string>('');
   readonly response = signal<IncomeStatementResponseDto | null>(null);
   readonly activeSubTab = signal<'statement' | 'expenses' | 'assets' | 'vouchers' | 'policy'>('statement');
   readonly expandedCode = signal<string | null>(null);
@@ -93,37 +95,61 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
   invForm: InventoryPeriodAdjustmentDto = this.defaultInventoryForm();
 
   private initialized = false;
+  private lastLoadedQueryKey = '';
+  private readonly refreshRequests$ = new Subject<void>();
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor() {
+    this.refreshRequests$
+      .pipe(
+        switchMap(() => {
+          this.loading.set(true);
+          return this.etsyApi
+            .getIncomeStatement(this.period, this.startDate, this.endDate, this.previewYoungOverride(), this.shopId)
+            .pipe(
+              timeout(25000),
+              finalize(() => this.loading.set(false)),
+              tap(res => {
+                this.errorMessage.set(null);
+                this.response.set(res);
+                this.syncFormsFromResponse(res);
+              }),
+              catchError(err => {
+                const msg = this.extractHttpErrorMessage(err, 'Resmi Gelir Tablosu yüklenemedi.');
+                this.setError(msg);
+                return EMPTY;
+              })
+            );
+        }),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe();
+
+    this.destroyRef.onDestroy(() => {
+      if (this.toastTimer) clearTimeout(this.toastTimer);
+    });
+  }
 
   ngOnInit(): void {
     this.initialized = true;
+    this.lastLoadedQueryKey = this.buildQueryKey();
     this.refreshStatement();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (!this.initialized) return;
     if (changes['shopId'] || changes['period'] || changes['startDate'] || changes['endDate'] || changes['reloadToken']) {
-      this.refreshStatement();
+      const nextKey = this.buildQueryKey();
+      if (nextKey !== this.lastLoadedQueryKey) {
+        this.lastLoadedQueryKey = nextKey;
+        this.refreshStatement();
+      }
     }
   }
 
   refreshStatement(): void {
-    this.loading.set(true);
-    this.errorMessage.set(null);
-
-    this.etsyApi
-      .getIncomeStatement(this.period, this.startDate, this.endDate, this.previewYoungOverride(), this.shopId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: res => {
-          this.loading.set(false);
-          this.response.set(res);
-          this.syncFormsFromResponse(res);
-        },
-        error: err => {
-          this.loading.set(false);
-          this.errorMessage.set(err?.error?.message || err?.message || 'Resmi Gelir Tablosu yüklenemedi.');
-        }
-      });
+    this.lastLoadedQueryKey = this.buildQueryKey();
+    this.refreshRequests$.next();
   }
 
   toggleYoungPreview(enable: boolean): void {
@@ -133,22 +159,12 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
 
   persistYoungMode(enable: boolean): void {
     const updated: ShopAccountingProfileDto = { ...this.profileForm, youngEntrepreneurModeEnabled: enable };
-    this.saving.set(true);
-    this.etsyApi
-      .saveAccountingProfile(updated, this.shopId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.previewYoungOverride.set(null);
-          this.showToast(`✅ Genç Girişimci modu kalıcı olarak ${enable ? 'AKTİF' : 'KAPALI'} kaydedildi.`);
-          this.refreshStatement();
-        },
-        error: err => {
-          this.saving.set(false);
-          this.errorMessage.set(err?.error?.message || 'Profil kaydedilemedi.');
-        }
-      });
+    this.executeSave(
+      this.etsyApi.saveAccountingProfile(updated, this.shopId),
+      `✅ Genç Girişimci modu kalıcı olarak ${enable ? 'AKTİF' : 'KAPALI'} kaydedildi.`,
+      'Profil kaydedilemedi.',
+      () => this.previewYoungOverride.set(null)
+    );
   }
 
   toggleExpand(code: string): void {
@@ -159,15 +175,57 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     return sec.lines.length === 1 && sec.lines[0].isSubtotal;
   }
 
+  isExpenseDescriptionInvalid(): boolean {
+    return this.expenseSubmitted() && (!this.expenseForm.description || this.expenseForm.description.trim().length < 2);
+  }
+
+  isExpenseDateInvalid(): boolean {
+    return this.expenseSubmitted() && !this.expenseForm.entryDate?.trim();
+  }
+
+  isExpenseAmountInvalid(): boolean {
+    return this.expenseSubmitted() && !(Number(this.expenseForm.amount) > 0);
+  }
+
+  isAssetNameInvalid(): boolean {
+    return this.assetSubmitted() && !this.assetForm.assetName.trim();
+  }
+
+  isAssetDateInvalid(): boolean {
+    return this.assetSubmitted() && !this.assetForm.acquisitionDate?.trim();
+  }
+
+  isAssetCostInvalid(): boolean {
+    return this.assetSubmitted() && !(Number(this.assetForm.acquisitionCostTry) > 0);
+  }
+
+  isAssetLifeOrSalvageInvalid(): boolean {
+    if (!this.assetSubmitted()) return false;
+    const life = Number(this.assetForm.usefulLifeYears);
+    const salvage = Number(this.assetForm.salvageValueTry) || 0;
+    const cost = Number(this.assetForm.acquisitionCostTry) || 0;
+    return life < 1 || life > 50 || salvage < 0 || (cost > 0 && salvage >= cost);
+  }
+
   submitExpense(): void {
     this.expenseSubmitted.set(true);
-    if (!this.expenseForm.description || this.expenseForm.description.trim().length < 2 || !(this.expenseForm.amount > 0)) {
+    this.errorMessage.set(null);
+
+    if (this.isExpenseDateInvalid()) {
+      this.failClientValidation('expDate', 'Geçerli bir belge / gider tarihi seçiniz.');
+      return;
+    }
+    if (this.isExpenseDescriptionInvalid()) {
+      this.failClientValidation('expDesc', 'En az 2 karakterlik açıklama girmelisiniz.');
+      return;
+    }
+    if (this.isExpenseAmountInvalid()) {
+      this.failClientValidation('expAmount', 'Tutar 0\'dan büyük olmalıdır.');
       return;
     }
 
-    this.saving.set(true);
-    this.etsyApi
-      .createOperatingExpense(
+    this.executeSave(
+      this.etsyApi.createOperatingExpense(
         {
           shopId: this.shopId,
           entryDate: this.expenseForm.entryDate,
@@ -184,133 +242,101 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
             : null
         },
         this.shopId
-      )
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.expenseSubmitted.set(false);
-          this.expenseForm = this.freshExpenseForm();
-          this.showToast('✅ Gider/KKEG fişi kaydedildi ve Gelir Tablosu güncellendi.');
-          this.refreshStatement();
-        },
-        error: err => {
-          this.saving.set(false);
-          this.errorMessage.set(err?.error?.message || 'Gider fişi kaydedilemedi.');
-        }
-      });
+      ),
+      '✅ Gider/KKEG fişi kaydedildi ve Gelir Tablosu güncellendi.',
+      'Gider fişi kaydedilemedi.',
+      () => {
+        this.expenseSubmitted.set(false);
+        this.expenseForm = this.freshExpenseForm();
+      }
+    );
   }
 
   removeExpense(id: number): void {
-    this.saving.set(true);
-    this.etsyApi
-      .deleteOperatingExpense(id, this.shopId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.showToast('🗑️ Gider fişi silindi.');
-          this.refreshStatement();
-        },
-        error: err => {
-          this.saving.set(false);
-          this.errorMessage.set(err?.error?.message || 'Gider fişi silinemedi.');
-        }
-      });
+    this.executeSave(
+      this.etsyApi.deleteOperatingExpense(id, this.shopId),
+      '🗑️ Gider fişi silindi.',
+      'Gider fişi silinemedi.'
+    );
   }
 
   submitAsset(): void {
     this.assetSubmitted.set(true);
-    if (!this.assetForm.assetName.trim() || !(this.assetForm.acquisitionCostTry > 0)) {
+    this.errorMessage.set(null);
+
+    if (this.isAssetNameInvalid()) {
+      this.failClientValidation('assetName', 'Varlık adı zorunludur.');
+      return;
+    }
+    if (this.isAssetDateInvalid()) {
+      this.failClientValidation('assetDate', 'Aktife giriş (alış) tarihi zorunludur.');
+      return;
+    }
+    if (this.isAssetCostInvalid()) {
+      this.failClientValidation('assetCost', 'Maliyet bedeli 0\'dan büyük olmalıdır.');
       return;
     }
 
-    this.saving.set(true);
-    this.etsyApi
-      .createFixedAsset(
+    const life = Number(this.assetForm.usefulLifeYears);
+    const salvage = Number(this.assetForm.salvageValueTry) || 0;
+    const cost = Number(this.assetForm.acquisitionCostTry);
+    if (!Number.isFinite(life) || life < 1 || life > 50) {
+      this.failClientValidation('assetLife', 'Ekonomik ömür 1 ile 50 yıl arasında olmalıdır.');
+      return;
+    }
+    if (salvage < 0 || salvage >= cost) {
+      this.failClientValidation('assetLife', 'Hurda değer 0 ile maliyet bedelinin altında olmalıdır.');
+      return;
+    }
+
+    this.executeSave(
+      this.etsyApi.createFixedAsset(
         {
           shopId: this.shopId,
           assetName: this.assetForm.assetName.trim(),
-          assetAccountCode: this.assetForm.assetAccountCode,
+          assetAccountCode: this.assetForm.assetAccountCode || '253',
           expenseTargetCategory: Number(this.assetForm.expenseTargetCategory),
           acquisitionDate: this.assetForm.acquisitionDate,
-          acquisitionCostTry: Number(this.assetForm.acquisitionCostTry),
-          salvageValueTry: Number(this.assetForm.salvageValueTry) || 0,
-          usefulLifeYears: Number(this.assetForm.usefulLifeYears) || 5,
+          acquisitionCostTry: cost,
+          salvageValueTry: salvage,
+          usefulLifeYears: life,
           method: Number(this.assetForm.method) as DepreciationMethod,
           isActive: true
         },
         this.shopId
-      )
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.assetSubmitted.set(false);
-          this.assetForm = this.freshAssetForm();
-          this.showToast('✅ Duran varlık ve amortisman kartı eklendi.');
-          this.refreshStatement();
-        },
-        error: err => {
-          this.saving.set(false);
-          this.errorMessage.set(err?.error?.message || 'Sabit kıymet kaydedilemedi.');
-        }
-      });
+      ),
+      '✅ Duran varlık ve amortisman kartı eklendi.',
+      'Sabit kıymet kaydedilemedi.',
+      () => {
+        this.assetSubmitted.set(false);
+        this.assetForm = this.freshAssetForm();
+      }
+    );
   }
 
   removeAsset(id: number): void {
-    this.saving.set(true);
-    this.etsyApi
-      .deleteFixedAsset(id, this.shopId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.showToast('🗑️ Duran varlık kartı silindi.');
-          this.refreshStatement();
-        },
-        error: err => {
-          this.saving.set(false);
-          this.errorMessage.set(err?.error?.message || 'Sabit kıymet silinemedi.');
-        }
-      });
+    this.executeSave(
+      this.etsyApi.deleteFixedAsset(id, this.shopId),
+      '🗑️ Duran varlık kartı silindi.',
+      'Sabit kıymet silinemedi.'
+    );
   }
 
   saveProfile(): void {
-    this.saving.set(true);
-    this.etsyApi
-      .saveAccountingProfile(this.profileForm, this.shopId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.previewYoungOverride.set(null);
-          this.showToast('✅ TDHP muhasebe politikası ve vergi ayarları kaydedildi.');
-          this.refreshStatement();
-        },
-        error: err => {
-          this.saving.set(false);
-          this.errorMessage.set(err?.error?.message || 'Muhasebe politikası kaydedilemedi.');
-        }
-      });
+    this.executeSave(
+      this.etsyApi.saveAccountingProfile(this.profileForm, this.shopId),
+      '✅ TDHP muhasebe politikası ve vergi ayarları kaydedildi.',
+      'Muhasebe politikası kaydedilemedi.',
+      () => this.previewYoungOverride.set(null)
+    );
   }
 
   saveInventory(): void {
-    this.saving.set(true);
-    this.etsyApi
-      .saveInventoryAdjustment({ ...this.invForm, shopId: this.shopId }, this.shopId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.saving.set(false);
-          this.showToast('✅ Aralıklı envanter dönem sayımı kaydedildi.');
-          this.refreshStatement();
-        },
-        error: err => {
-          this.saving.set(false);
-          this.errorMessage.set(err?.error?.message || 'Stok sayımı kaydedilemedi.');
-        }
-      });
+    this.executeSave(
+      this.etsyApi.saveInventoryAdjustment({ ...this.invForm, shopId: this.shopId }, this.shopId),
+      '✅ Aralıklı envanter dönem sayımı kaydedildi.',
+      'Stok sayımı kaydedilemedi.'
+    );
   }
 
   previewPeriodicCogs(): number {
@@ -381,6 +407,87 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
     const n = Number(val || 0);
     const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     return n < 0 ? `-$${abs}` : `$${abs}`;
+  }
+
+  private executeSave<T>(
+    request$: Observable<T>,
+    successMsg: string,
+    fallbackError: string,
+    onSuccess?: (result: T) => void
+  ): void {
+    if (this.saving()) return;
+    this.errorMessage.set(null);
+    this.toast.set(null);
+    this.saving.set(true);
+
+    request$
+      .pipe(
+        timeout(20000),
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef)
+      )
+      .subscribe({
+        next: res => {
+          onSuccess?.(res);
+          this.showToast(successMsg);
+          this.refreshStatement();
+        },
+        error: err => {
+          this.setError(this.extractHttpErrorMessage(err, fallbackError));
+        }
+      });
+  }
+
+  private buildQueryKey(): string {
+    const startMs = this.startDate ? this.startDate.getTime() : 0;
+    const endMs = this.endDate ? this.endDate.getTime() : 0;
+    return `${this.shopId}|${this.period}|${startMs}|${endMs}|${this.reloadToken}`;
+  }
+
+  private failClientValidation(elementId: string, message: string): void {
+    this.setError(message);
+    document.getElementById(elementId)?.focus();
+  }
+
+  private setError(message: string): void {
+    this.toast.set(null);
+    this.errorMessage.set(message);
+    this.liveAnnouncement.set(message);
+  }
+
+  private extractHttpErrorMessage(err: unknown, fallback: string): string {
+    const anyErr = err as Record<string, any> | null | undefined;
+    if (!anyErr) return fallback;
+    if (anyErr['name'] === 'TimeoutError') {
+      return 'Sunucu yanıtı zaman aşımına uğradı (20 sn). Ağ veya VDS durumunu kontrol edip tekrar deneyin.';
+    }
+    if (anyErr['status'] === 0) {
+      return 'Sunucuya bağlanılamadı. VDS API erişimini veya internet bağlantınızı kontrol edin.';
+    }
+    if (anyErr['status'] === 401) {
+      return 'Oturum süresi dolmuş veya yetki eksik (401). Sayfayı yenileyip yeniden oturum açın.';
+    }
+    const body = anyErr['error'];
+    if (typeof body === 'string' && body.trim()) return body.trim();
+    if (body && typeof body === 'object') {
+      if (typeof body['message'] === 'string' && body['message'].trim()) return body['message'].trim();
+      if (typeof body['error'] === 'string' && body['error'].trim()) return body['error'].trim();
+      if (Array.isArray(body['errors']) && body['errors'].length > 0) {
+        return body['errors'].join(' ');
+      }
+      if (body['errors'] && typeof body['errors'] === 'object') {
+        const flattened = Object.values(body['errors'])
+          .flatMap(v => Array.isArray(v) ? v : [v])
+          .map(v => String(v ?? '').trim())
+          .filter(Boolean);
+        if (flattened.length > 0) return flattened.join(' ');
+      }
+      if (typeof body['title'] === 'string' && body['title'].trim()) return body['title'].trim();
+    }
+    if (typeof anyErr['message'] === 'string' && anyErr['message'].trim() && anyErr['status'] == null) {
+      return anyErr['message'].trim();
+    }
+    return fallback;
   }
 
   private syncFormsFromResponse(res: IncomeStatementResponseDto): void {
@@ -460,10 +567,12 @@ export class IncomeStatementTabComponent implements OnInit, OnChanges {
   }
 
   private showToast(msg: string): void {
+    this.errorMessage.set(null);
     this.toast.set(msg);
-    setTimeout(() => {
+    this.liveAnnouncement.set(msg);
+    if (this.toastTimer) clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
       if (this.toast() === msg) this.toast.set(null);
-    }, 4000);
+    }, 5000);
   }
 }
-
