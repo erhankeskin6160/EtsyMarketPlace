@@ -203,6 +203,48 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
         return (true, imageId);
     }
 
+    public async Task<bool> DeleteListingImageAsync(
+        string shopId,
+        long listingId,
+        long listingImageId,
+        CancellationToken cancellationToken = default)
+    {
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
+        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/{listingId}/images/{listingImageId}";
+
+        using var req = new HttpRequestMessage(HttpMethod.Delete, url);
+        req.Headers.Add("x-api-key", apiKeyHeader);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var res = await _httpClient.SendAsync(req, cancellationToken);
+        return res.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> UpdateListingImageRankAsync(
+        string shopId,
+        long listingId,
+        long listingImageId,
+        int rank,
+        CancellationToken cancellationToken = default)
+    {
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
+        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/{listingId}/images";
+
+        using var imgContent = new MultipartFormDataContent();
+        imgContent.Add(new StringContent(listingImageId.ToString(CultureInfo.InvariantCulture)), "listing_image_id");
+        imgContent.Add(new StringContent(rank.ToString(CultureInfo.InvariantCulture)), "rank");
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = imgContent
+        };
+        req.Headers.Add("x-api-key", apiKeyHeader);
+        req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+        using var res = await _httpClient.SendAsync(req, cancellationToken);
+        return res.IsSuccessStatusCode;
+    }
+
     public async Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(
         string shopId,
         long listingId,

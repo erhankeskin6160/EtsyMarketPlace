@@ -18,6 +18,19 @@ public interface IEtsyListingApiClient
         int rank,
         CancellationToken cancellationToken = default);
 
+    Task<bool> DeleteListingImageAsync(
+        string shopId,
+        long listingId,
+        long listingImageId,
+        CancellationToken cancellationToken = default);
+
+    Task<bool> UpdateListingImageRankAsync(
+        string shopId,
+        long listingId,
+        long listingImageId,
+        int rank,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(
         string shopId,
         long listingId,

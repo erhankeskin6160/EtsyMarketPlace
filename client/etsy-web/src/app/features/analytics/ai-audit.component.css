@@ -1543,3 +1543,332 @@
 .btn-modal-save:hover {
   background: linear-gradient(135deg, #0369a1, #075985);
 }
+
+/* ── Listing Image Management Console ───────────────────────────────────── */
+.img-preview-box {
+  position: relative;
+}
+
+.img-preview-box.drag-over {
+  border: 2px dashed #06b6d4;
+  box-shadow: 0 0 18px rgba(6, 182, 212, 0.35);
+}
+
+.img-preview-box .preview-img {
+  cursor: zoom-in;
+}
+
+.cover-rank-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  background: rgba(15, 23, 42, 0.85);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  backdrop-filter: blur(6px);
+}
+
+.cover-rank-badge.is-cover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.92), rgba(6, 182, 212, 0.92));
+  color: #042f2e;
+  border-color: rgba(110, 231, 183, 0.6);
+}
+
+.img-overlay-actions {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 6px;
+}
+
+.img-icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 23, 42, 0.82);
+  color: #f8fafc;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.18s ease;
+  backdrop-filter: blur(6px);
+}
+
+.img-icon-btn:hover {
+  border-color: #38bdf8;
+  transform: translateY(-1px);
+}
+
+.img-icon-btn.danger:hover {
+  border-color: #ef4444;
+  background: rgba(127, 29, 29, 0.88);
+}
+
+.gallery-strip-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 12px;
+}
+
+.gallery-strip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.gallery-count-label {
+  font-weight: 600;
+  color: #cbd5e1;
+}
+
+.gallery-loading-hint {
+  color: #38bdf8;
+  font-size: 11px;
+}
+
+.gallery-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 7px;
+}
+
+.gallery-thumb-card {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1.5px solid rgba(148, 163, 184, 0.22);
+  background: #0f172a;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.gallery-thumb-card.active {
+  border-color: #06b6d4;
+  box-shadow: 0 0 10px rgba(6, 182, 212, 0.45);
+}
+
+.gallery-thumb-card.is-new {
+  border-color: #10b981;
+}
+
+.gallery-thumb-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.thumb-rank-pill {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  background: rgba(15, 23, 42, 0.86);
+  color: #e2e8f0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.thumb-new-dot {
+  position: absolute;
+  bottom: 20px;
+  left: 3px;
+  background: #10b981;
+  color: #022c22;
+  font-size: 8px;
+  font-weight: 800;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.thumb-hover-controls {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  justify-content: space-between;
+  background: rgba(2, 6, 23, 0.86);
+  padding: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.gallery-thumb-card:hover .thumb-hover-controls,
+.gallery-thumb-card.active .thumb-hover-controls {
+  opacity: 1;
+}
+
+.thumb-ctrl-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 1px 0;
+  line-height: 1;
+}
+
+.thumb-ctrl-btn:hover:not(:disabled) {
+  color: #38bdf8;
+}
+
+.thumb-ctrl-btn.danger:hover:not(:disabled) {
+  color: #f87171;
+}
+
+.thumb-ctrl-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.gallery-add-tile {
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  border: 1.5px dashed rgba(56, 189, 248, 0.5);
+  background: rgba(15, 23, 42, 0.55);
+  color: #38bdf8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  text-align: center;
+}
+
+.gallery-add-tile:hover {
+  border-color: #22d3ee;
+  background: rgba(6, 182, 212, 0.12);
+}
+
+.gallery-add-tile .add-plus {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.gallery-add-tile .add-text {
+  font-size: 9px;
+  font-weight: 600;
+}
+
+.antiban-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
+.image-sync-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn-sync-images {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(34, 211, 238, 0.45);
+  background: linear-gradient(135deg, #0891b2, #4f46e5);
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+}
+
+.btn-sync-images:hover:not(:disabled) {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 14px rgba(6, 182, 212, 0.35);
+}
+
+.btn-sync-images:disabled {
+  opacity: 0.65;
+  cursor: default;
+  background: rgba(30, 41, 59, 0.8);
+  border-color: rgba(148, 163, 184, 0.25);
+  color: #94a3b8;
+}
+
+.btn-ai-studio-inline {
+  width: 100%;
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(168, 85, 247, 0.38);
+  background: rgba(88, 28, 135, 0.25);
+  color: #e9d5ff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-ai-studio-inline:hover {
+  background: rgba(126, 34, 206, 0.38);
+  border-color: rgba(192, 132, 252, 0.65);
+}
+
+.lightbox-backdrop {
+  z-index: 1200;
+}
+
+.lightbox-card {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: #0f172a;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
+}
+
+.lightbox-img {
+  max-width: 85vw;
+  max-height: 82vh;
+  object-fit: contain;
+  border-radius: 8px;
+  display: block;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(15, 23, 42, 0.9);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}

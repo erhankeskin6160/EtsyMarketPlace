@@ -14,6 +14,7 @@ using EtsyMarketPlace.Application.Features.Listings.Commands.AiOptimizeListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.CreateListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListing;
 using EtsyMarketPlace.Application.Features.Listings.Commands.UpdateListingState;
+using EtsyMarketPlace.Application.Features.Listings.Images;
 using EtsyMarketPlace.Application.Features.Listings.Queries.GetListingAudits;
 using EtsyMarketPlace.Application.Features.Listings.Queries.GetShopListings;
 
@@ -178,4 +179,54 @@ public class EtsyListingsController : BaseApiController
         var response = await _mediator.Send(request, cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
+
+    [HttpGet("listings/{listingId:long}/images")]
+    [EndpointSummary("Etsy İlanına Ait Tüm Görselleri Sıralı Olarak Getir")]
+    public async Task<IActionResult> GetListingImages(
+        long listingId,
+        [FromQuery] string? shopId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var query = new GetListingImagesQuery { ShopId = resolvedShopId, ListingId = listingId };
+        var response = await _mediator.Send(query, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPut("listings/{listingId:long}/images/sync")]
+    [EndpointSummary("Etsy İlan Görsellerini Senkronize Et (Yükleme, Sıralama, Silme + Anti-Ban EXIF/pHash)")]
+    public async Task<IActionResult> SyncListingImages(
+        long listingId,
+        [FromBody] SyncListingImagesApiRequest request,
+        [FromQuery] string? shopId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
+            ? request.ShopId.Trim()
+            : ResolveShopId(shopId, _config);
+
+        var command = new SyncListingImagesCommand
+        {
+            ShopId = resolvedShopId,
+            ListingId = listingId,
+            Items = (request?.Items ?? Array.Empty<SyncListingImageItemApiRequest>())
+                .Select(i => new SyncListingImageItem(i.ListingImageId, i.DataUrl, i.FileName, i.Rank))
+                .ToList()
+        };
+
+        var response = await _mediator.Send(command, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
 }
+
+public sealed record SyncListingImageItemApiRequest(
+    long? ListingImageId,
+    string? DataUrl,
+    string? FileName,
+    int Rank
+);
+
+public sealed record SyncListingImagesApiRequest(
+    string? ShopId,
+    System.Collections.Generic.IReadOnlyList<SyncListingImageItemApiRequest>? Items
+);

@@ -171,6 +171,7 @@ builder.Services.AddScoped<IEtsySynchronizationService, EtsySynchronizationServi
 builder.Services.AddScoped<IEtsyLedgerReportService, EtsyLedgerReportService>();
 builder.Services.AddScoped<IEtsyDashboardService, EtsyDashboardService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IEtsyListingApiClient, EtsyMarketPlace.Infrastructure.EtsyIntegration.EtsyListingApiClient>();
+builder.Services.AddSingleton<EtsyMarketPlace.Domain.ShopVault.Interfaces.IExifStripper, EtsyMarketPlace.Infrastructure.ShopVault.ImageSanitization.ExifStripperImageProcessor>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.ListingOptimization.IGeminiListingApiClient, EtsyMarketPlace.Infrastructure.ListingOptimization.GeminiListingApiClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IFastListingPublishService, EtsyMarketPlace.Application.ListingOptimization.FastListingPublishService>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.ListingOptimization.IEtsyListingService, EtsyMarketPlace.Application.ListingOptimization.EtsyListingService>();

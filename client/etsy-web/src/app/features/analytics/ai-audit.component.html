@@ -351,18 +351,159 @@
             <span class="badge-listing-id">#{{ selectedListing.listingId }}</span>
           </div>
 
-          <!-- Zoom Image -->
-          <div class="img-preview-box">
+          <!-- Zoom & Active Cover Preview -->
+          <div
+            class="img-preview-box"
+            [class.drag-over]="isImageDragOver"
+            (dragover)="onImageDragOver($event)"
+            (dragleave)="onImageDragLeave($event)"
+            (drop)="onImageDrop($event)"
+          >
             <img
-              *ngIf="selectedListing.primaryImageUrl || selectedListing.thumbnail"
-              [src]="selectedListing.primaryImageUrl || selectedListing.thumbnail"
+              *ngIf="activePreviewUrl"
+              [src]="activePreviewUrl"
               [alt]="selectedListing.title"
               class="preview-img"
               referrerpolicy="no-referrer"
               (error)="onImgError($event)"
+              (click)="openLightbox(activeFullPreviewUrl, $event)"
             />
-            <div *ngIf="!selectedListing.primaryImageUrl && !selectedListing.thumbnail" class="no-img-box">
+            <div *ngIf="!activePreviewUrl" class="no-img-box">
               <span>🖼️ Görsel Yok</span>
+            </div>
+
+            <span *ngIf="listingImages.length > 0" class="cover-rank-badge" [class.is-cover]="activeImageIndex === 0">
+              {{ activeImageIndex === 0 ? 'KAPAK #1' : '#' + (activeImageIndex + 1) }}
+            </span>
+
+            <div *ngIf="activePreviewUrl" class="img-overlay-actions">
+              <button
+                type="button"
+                class="img-icon-btn"
+                title="Tam Boyutta Büyüt"
+                (click)="openLightbox(activeFullPreviewUrl, $event)"
+              >🔍</button>
+              <button
+                type="button"
+                class="img-icon-btn"
+                title="AI Görsel Stüdyosu'nda Düzenle"
+                (click)="openImageInAiStudio()"
+              >✨</button>
+              <button
+                *ngIf="activeImageIndex > 0"
+                type="button"
+                class="img-icon-btn"
+                title="Kapak Görseli Yap (#1)"
+                (click)="setAsCover(activeImageIndex, $event)"
+              >⭐</button>
+              <button
+                *ngIf="listingImages.length > 1"
+                type="button"
+                class="img-icon-btn danger"
+                title="Bu Görseli Kaldır"
+                (click)="removeImage(activeImageIndex, $event)"
+              >🗑️</button>
+            </div>
+          </div>
+
+          <!-- Multi-Image Gallery Strip (Max 10) -->
+          <div class="gallery-strip-wrap">
+            <div class="gallery-strip-header">
+              <span class="gallery-count-label">
+                Ürün Galerisi ({{ listingImages.length }} / {{ maxListingImages }})
+              </span>
+              <span *ngIf="isLoadingImages" class="gallery-loading-hint">Yükleniyor...</span>
+            </div>
+
+            <div class="gallery-strip">
+              <div
+                *ngFor="let img of listingImages; let idx = index"
+                class="gallery-thumb-card"
+                [class.active]="idx === activeImageIndex"
+                [class.is-new]="img.isNew"
+                (click)="selectImageIndex(idx)"
+              >
+                <img [src]="img.url" [alt]="'Görsel #' + (idx + 1)" referrerpolicy="no-referrer" />
+                <span class="thumb-rank-pill">#{{ idx + 1 }}</span>
+                <span *ngIf="img.isNew" class="thumb-new-dot" title="Yeni eklendi">YENİ</span>
+
+                <div class="thumb-hover-controls">
+                  <button
+                    type="button"
+                    class="thumb-ctrl-btn"
+                    title="Sola Taşı"
+                    [disabled]="idx === 0"
+                    (click)="moveImage(idx, -1, $event)"
+                  >‹</button>
+                  <button
+                    type="button"
+                    class="thumb-ctrl-btn"
+                    title="Sağa Taşı"
+                    [disabled]="idx === listingImages.length - 1"
+                    (click)="moveImage(idx, 1, $event)"
+                  >›</button>
+                  <button
+                    type="button"
+                    class="thumb-ctrl-btn danger"
+                    title="Görseli Sil"
+                    [disabled]="listingImages.length <= 1"
+                    (click)="removeImage(idx, $event)"
+                  >×</button>
+                </div>
+              </div>
+
+              <!-- + Görsel Ekle Slot -->
+              <label
+                *ngIf="listingImages.length < maxListingImages"
+                class="gallery-add-tile"
+                title="Yeni görsel yükle veya sürükle-bırak (Maks. 10)"
+                (dragover)="onImageDragOver($event)"
+                (dragleave)="onImageDragLeave($event)"
+                (drop)="onImageDrop($event)"
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  hidden
+                  (change)="onImageFilesSelected($event)"
+                />
+                <span class="add-plus">+</span>
+                <span class="add-text">Görsel Ekle</span>
+              </label>
+            </div>
+
+            <!-- Anti-Ban Badge & Image Sync Actions -->
+            <div class="antiban-pill">
+              <span>🛡️ EXIF & pHash Otomatik Temizlenir</span>
+            </div>
+
+            <div class="image-sync-actions">
+              <button
+                type="button"
+                class="btn-sync-images"
+                [disabled]="isSyncingImages || pendingImageChangesCount === 0"
+                (click)="syncImagesToEtsy()"
+              >
+                <span *ngIf="isSyncingImages" class="btn-spinner"></span>
+                <span>
+                  {{
+                    isSyncingImages
+                      ? "Görseller Etsy'ye Yükleniyor..."
+                      : pendingImageChangesCount > 0
+                        ? "✨ Görselleri Etsy'de Güncelle (" + pendingImageChangesCount + " Değişiklik)"
+                        : "✓ Görseller Etsy ile Güncel"
+                  }}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                class="btn-ai-studio-inline"
+                (click)="openImageInAiStudio()"
+              >
+                <span>🎨 AI Stüdyo'da Düzenle</span>
+              </button>
             </div>
           </div>
 
@@ -745,6 +886,14 @@
       <div class="modal-footer">
         <button class="btn-modal-save" (click)="showSettingsModal = false">Ayarları Kaydet</button>
       </div>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX MODAL -->
+  <div *ngIf="lightboxImageUrl" class="modal-backdrop lightbox-backdrop" (click)="closeLightbox()">
+    <div class="lightbox-card" (click)="$event.stopPropagation()">
+      <button type="button" class="lightbox-close" (click)="closeLightbox()">✕</button>
+      <img [src]="lightboxImageUrl" alt="Tam Boyut Görsel Önizleme" class="lightbox-img" referrerpolicy="no-referrer" />
     </div>
   </div>
 </div>

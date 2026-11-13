@@ -22,6 +22,12 @@ public class EtsyListingServiceTests
         public Task<(bool Success, long ImageId)> UploadListingImageAsync(string shopId, long listingId, byte[] imageBytes, string fileName, int rank, CancellationToken ct) =>
             Task.FromResult((true, 12345L));
 
+        public Task<bool> DeleteListingImageAsync(string shopId, long listingId, long listingImageId, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
+        public Task<bool> UpdateListingImageRankAsync(string shopId, long listingId, long listingImageId, int rank, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
         public Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(string shopId, long listingId, EtsyInventoryPayload payload, CancellationToken ct) =>
             Task.FromResult((true, (string?)null, (string?)null));
 

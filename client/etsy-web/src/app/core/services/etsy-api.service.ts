@@ -230,6 +230,29 @@ export interface ShopListingItemDto {
   savedAudit?: SavedListingAuditDto | any | null;
 }
 
+export interface ListingImageDetailDto {
+  listingImageId: number;
+  rank: number;
+  url570xN: string;
+  urlFullxfull: string;
+  url75x75: string;
+}
+
+export interface SyncListingImageItemDto {
+  listingImageId?: number | null;
+  dataUrl?: string | null;
+  fileName?: string | null;
+  rank: number;
+}
+
+export interface SyncListingImagesResultDto {
+  listingId: number;
+  images: ListingImageDetailDto[];
+  uploadedCount: number;
+  deletedCount: number;
+  reorderedCount: number;
+}
+
 export interface OptimizeListingResponseDto {
   success: boolean;
   listingId: string;
@@ -880,6 +903,23 @@ export class EtsyApiService {
   getListingAudits(shopId?: string): Observable<SavedListingAuditDto[]> {
     const id = shopId || this.activeShopId();
     return this.http.get<SavedListingAuditDto[]>(`${this.API_BASE}/api/etsy/listings/audits?shopId=${encodeURIComponent(id)}`);
+  }
+
+  getListingImages(listingId: string | number, shopId?: string): Observable<ListingImageDetailDto[]> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<ListingImageDetailDto[]>(`${this.API_BASE}/api/etsy/listings/${listingId}/images?shopId=${encodeURIComponent(id)}`);
+  }
+
+  syncListingImages(
+    listingId: string | number,
+    items: SyncListingImageItemDto[],
+    shopId?: string
+  ): Observable<SyncListingImagesResultDto> {
+    const id = shopId || this.activeShopId();
+    return this.http.put<SyncListingImagesResultDto>(
+      `${this.API_BASE}/api/etsy/listings/${listingId}/images/sync?shopId=${encodeURIComponent(id)}`,
+      { shopId: id, items }
+    );
   }
 
   // ── Etsy Canlı Pazar Araştırması & Rakip İstihbaratı ─────────────────────

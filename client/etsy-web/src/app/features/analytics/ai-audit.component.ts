@@ -1,11 +1,28 @@
 import { Component, OnInit, inject, signal, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { EtsyApiService, ShopListingItemDto, SavedListingAuditDto, OptimizeListingResponseDto } from '../../core/services/etsy-api.service';
+import { Router } from '@angular/router';
+import {
+  EtsyApiService,
+  ShopListingItemDto,
+  SavedListingAuditDto,
+  OptimizeListingResponseDto,
+  ListingImageDetailDto,
+  SyncListingImageItemDto
+} from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
+
+export interface EditableListingImage {
+  listingImageId: number | null;
+  url: string;
+  fullUrl: string;
+  dataUrl?: string | null;
+  fileName?: string | null;
+  isNew?: boolean;
+}
 
 @Component({
   selector: 'app-ai-audit',
@@ -16,9 +33,20 @@ type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
 })
 export class AiAuditComponent implements OnInit {
   private destroyRef = inject(DestroyRef);
+  private router = inject(Router);
   etsyApi = inject(EtsyApiService);
   aiSettings = inject(AiSettingsService);
   readonly Math = Math;
+
+  // Listing Image Management State
+  listingImages: EditableListingImage[] = [];
+  private originalImagesSignature = '';
+  activeImageIndex = 0;
+  isLoadingImages = false;
+  isSyncingImages = false;
+  isImageDragOver = false;
+  lightboxImageUrl: string | null = null;
+  readonly maxListingImages = 10;
 
   // Data & State
   listings: ShopListingItemDto[] = [];
@@ -167,6 +195,7 @@ export class AiAuditComponent implements OnInit {
   selectListing(listing: ShopListingItemDto): void {
     this.selectedListing = listing;
     this.newTagInput = '';
+    this.loadListingImages(listing);
 
     if (listing.savedAudit || (listing.hasSavedAudit && listing.resultJson)) {
       this.populateFromAudit(listing.savedAudit || {
@@ -697,6 +726,267 @@ ${baseDesc}
 
   lastPage(): void {
     this.currentPage = this.totalPages;
+  }
+
+  // ── Listing Image Management ──────────────────────────────────────────────
+  get activePreviewUrl(): string {
+    const active = this.listingImages[this.activeImageIndex] || this.listingImages[0];
+    return active?.url || this.selectedListing?.primaryImageUrl || this.selectedListing?.thumbnail || '';
+  }
+
+  get activeFullPreviewUrl(): string {
+    const active = this.listingImages[this.activeImageIndex] || this.listingImages[0];
+    return active?.fullUrl || active?.url || this.activePreviewUrl;
+  }
+
+  get pendingImageChangesCount(): number {
+    if (!this.originalImagesSignature) return 0;
+    const current = this.buildImagesSignature(this.listingImages);
+    if (current === this.originalImagesSignature) return 0;
+
+    const origIds: (number | null)[] = JSON.parse(this.originalImagesSignature);
+    let changes = 0;
+    const newCount = this.listingImages.filter(i => i.isNew).length;
+    changes += newCount;
+
+    const currentIds = new Set(this.listingImages.filter(i => i.listingImageId).map(i => i.listingImageId));
+    for (const id of origIds) {
+      if (id && !currentIds.has(id)) changes++;
+    }
+
+    // Check rank changes for remaining existing images
+    this.listingImages.forEach((img, idx) => {
+      if (!img.isNew && img.listingImageId && origIds[idx] !== img.listingImageId) {
+        changes++;
+      }
+    });
+
+    return Math.max(changes, 1);
+  }
+
+  private buildImagesSignature(imgs: EditableListingImage[]): string {
+    return JSON.stringify(imgs.map(i => (i.isNew ? `new:${i.fileName || i.url.slice(0, 32)}` : i.listingImageId)));
+  }
+
+  loadListingImages(listing: ShopListingItemDto): void {
+    this.isLoadingImages = true;
+    this.activeImageIndex = 0;
+    const fallbackUrls = (listing.images && listing.images.length > 0)
+      ? listing.images
+      : (listing.primaryImageUrl ? [listing.primaryImageUrl] : []);
+
+    this.listingImages = fallbackUrls.map(u => ({
+      listingImageId: null,
+      url: u,
+      fullUrl: u,
+      isNew: false
+    }));
+    this.originalImagesSignature = '';
+
+    this.etsyApi.getListingImages(listing.listingId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (imgs: ListingImageDetailDto[]) => {
+        if (this.selectedListing?.listingId !== listing.listingId) return;
+        this.isLoadingImages = false;
+        if (imgs && imgs.length > 0) {
+          this.listingImages = imgs.map(i => ({
+            listingImageId: i.listingImageId,
+            url: i.url570xN || i.urlFullxfull || i.url75x75,
+            fullUrl: i.urlFullxfull || i.url570xN,
+            isNew: false
+          }));
+          this.originalImagesSignature = this.buildImagesSignature(this.listingImages);
+        } else {
+          this.originalImagesSignature = this.buildImagesSignature(this.listingImages);
+        }
+      },
+      error: () => {
+        this.isLoadingImages = false;
+        this.originalImagesSignature = this.buildImagesSignature(this.listingImages);
+      }
+    });
+  }
+
+  selectImageIndex(index: number): void {
+    if (index >= 0 && index < this.listingImages.length) {
+      this.activeImageIndex = index;
+    }
+  }
+
+  moveImage(index: number, delta: number, event?: Event): void {
+    event?.stopPropagation();
+    const target = index + delta;
+    if (target < 0 || target >= this.listingImages.length) return;
+    const copy = [...this.listingImages];
+    const [moved] = copy.splice(index, 1);
+    copy.splice(target, 0, moved);
+    this.listingImages = copy;
+    if (this.activeImageIndex === index) {
+      this.activeImageIndex = target;
+    } else if (this.activeImageIndex === target) {
+      this.activeImageIndex = index;
+    }
+  }
+
+  setAsCover(index: number, event?: Event): void {
+    event?.stopPropagation();
+    if (index <= 0 || index >= this.listingImages.length) return;
+    const copy = [...this.listingImages];
+    const [moved] = copy.splice(index, 1);
+    copy.unshift(moved);
+    this.listingImages = copy;
+    this.activeImageIndex = 0;
+  }
+
+  removeImage(index: number, event?: Event): void {
+    event?.stopPropagation();
+    if (this.listingImages.length <= 1) {
+      this.showToast('Etsy ilanında en az 1 görsel bulunmalıdır.', 'error');
+      return;
+    }
+    this.listingImages = this.listingImages.filter((_, i) => i !== index);
+    if (this.activeImageIndex >= this.listingImages.length) {
+      this.activeImageIndex = Math.max(0, this.listingImages.length - 1);
+    }
+  }
+
+  onImageFilesSelected(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    if (input.files && input.files.length > 0) {
+      this.processImageFiles(Array.from(input.files));
+      input.value = '';
+    }
+  }
+
+  onImageDragOver(event: DragEvent): void {
+    event.preventDefault();
+    this.isImageDragOver = true;
+  }
+
+  onImageDragLeave(event: DragEvent): void {
+    event.preventDefault();
+    this.isImageDragOver = false;
+  }
+
+  onImageDrop(event: DragEvent): void {
+    event.preventDefault();
+    this.isImageDragOver = false;
+    if (event.dataTransfer?.files && event.dataTransfer.files.length > 0) {
+      this.processImageFiles(Array.from(event.dataTransfer.files));
+    }
+  }
+
+  private processImageFiles(files: File[]): void {
+    const remaining = this.maxListingImages - this.listingImages.length;
+    if (remaining <= 0) {
+      this.showToast(`En fazla ${this.maxListingImages} görsel ekleyebilirsiniz.`, 'error');
+      return;
+    }
+
+    const validFiles = files
+      .filter(f => f.type.startsWith('image/'))
+      .slice(0, remaining);
+
+    if (validFiles.length === 0) {
+      this.showToast('Lütfen geçerli bir görsel dosyası (JPG, PNG, WEBP) seçin.', 'error');
+      return;
+    }
+
+    for (const file of validFiles) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        if (!dataUrl) return;
+        this.listingImages = [
+          ...this.listingImages,
+          {
+            listingImageId: null,
+            url: dataUrl,
+            fullUrl: dataUrl,
+            dataUrl,
+            fileName: file.name,
+            isNew: true
+          }
+        ];
+        this.activeImageIndex = this.listingImages.length - 1;
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  syncImagesToEtsy(): void {
+    if (!this.selectedListing || this.isSyncingImages) return;
+    if (this.listingImages.length === 0) {
+      this.showToast('Etsy ilanında en az 1 görsel bulunmalıdır.', 'error');
+      return;
+    }
+
+    const items: SyncListingImageItemDto[] = this.listingImages.map((img, idx) => ({
+      listingImageId: img.isNew ? null : img.listingImageId,
+      dataUrl: img.isNew ? img.dataUrl : null,
+      fileName: img.isNew ? img.fileName : null,
+      rank: idx + 1
+    }));
+
+    this.isSyncingImages = true;
+    const targetListing = this.selectedListing;
+    this.showToast(`#${targetListing.listingId} görselleri Anti-Ban EXIF/pHash temizliği ile Etsy'ye yükleniyor...`, 'info');
+
+    this.etsyApi.syncListingImages(targetListing.listingId, items).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => {
+        this.isSyncingImages = false;
+        if (res?.images && res.images.length > 0) {
+          this.listingImages = res.images.map(i => ({
+            listingImageId: i.listingImageId,
+            url: i.url570xN || i.urlFullxfull || i.url75x75,
+            fullUrl: i.urlFullxfull || i.url570xN,
+            isNew: false
+          }));
+          this.originalImagesSignature = this.buildImagesSignature(this.listingImages);
+          this.activeImageIndex = 0;
+
+          const newCover = this.listingImages[0]?.url;
+          if (newCover) {
+            targetListing.primaryImageUrl = newCover;
+            targetListing.thumbnail = newCover;
+            targetListing.images = this.listingImages.map(i => i.url);
+          }
+        }
+        this.showToast(
+          `✅ Görseller Etsy'de güncellendi! (${res.uploadedCount} yüklendi, ${res.reorderedCount} sıralandı, ${res.deletedCount} silindi)`,
+          'success'
+        );
+      },
+      error: (err) => {
+        this.isSyncingImages = false;
+        const msg = err?.error?.message || err?.error?.error || err?.message || 'Görseller güncellenemedi.';
+        this.showToast(`❌ Görsel güncelleme hatası: ${msg}`, 'error');
+      }
+    });
+  }
+
+  openImageInAiStudio(): void {
+    if (!this.selectedListing) return;
+    const url = this.activeFullPreviewUrl;
+    if (!url || url.startsWith('data:')) {
+      this.showToast('AI Stüdyoya aktarmak için önce görseli Etsy\'ye yükleyin veya mevcut bir Etsy görseli seçin.', 'info');
+      return;
+    }
+    this.router.navigate(['/ai-studio'], {
+      queryParams: {
+        imageUrl: url,
+        title: this.selectedListing.title,
+        listingId: this.selectedListing.listingId
+      }
+    });
+  }
+
+  openLightbox(url: string, event?: Event): void {
+    event?.stopPropagation();
+    if (url) this.lightboxImageUrl = url;
+  }
+
+  closeLightbox(): void {
+    this.lightboxImageUrl = null;
   }
 
   // ── Image Error Fallback ──────────────────────────────────────────────────
