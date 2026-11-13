@@ -60,7 +60,7 @@ public sealed class FastListingPublishServiceTests
         public Task<string?> GetListingImagesRawJsonAsync(long listingId, string shopId, CancellationToken ct) =>
             Task.FromResult<string?>(null);
 
-        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IReadOnlyDictionary<string, string> formFields, CancellationToken ct) =>
+        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IEnumerable<KeyValuePair<string, string>> formFields, CancellationToken ct) =>
             Task.FromResult((true, "{}", (string?)null));
     }
 

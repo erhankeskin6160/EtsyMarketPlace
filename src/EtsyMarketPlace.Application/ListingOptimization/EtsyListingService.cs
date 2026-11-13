@@ -286,10 +286,10 @@ public sealed class EtsyListingService : IEtsyListingService
         if (request.Title.Count(c => c == '&') > 1)
             throw new ArgumentException("Etsy kuralı: Başlıkta '&' karakteri en fazla 1 kez kullanılabilir.");
 
-        var formDict = new Dictionary<string, string>
+        var formFields = new List<KeyValuePair<string, string>>
         {
-            ["title"] = request.Title.Trim(),
-            ["description"] = (request.Description ?? string.Empty).Trim()
+            new("title", request.Title.Trim()),
+            new("description", (request.Description ?? string.Empty).Trim())
         };
 
         var validTags = (request.Tags ?? Array.Empty<string>())
@@ -298,9 +298,9 @@ public sealed class EtsyListingService : IEtsyListingService
             .Take(13)
             .ToList();
 
-        if (validTags.Count > 0)
+        foreach (var tag in validTags)
         {
-            formDict["tags"] = string.Join(",", validTags);
+            formFields.Add(new("tags[]", tag));
         }
 
         var validMaterials = (request.Materials ?? Array.Empty<string>())
@@ -309,12 +309,12 @@ public sealed class EtsyListingService : IEtsyListingService
             .Take(13)
             .ToList();
 
-        if (validMaterials.Count > 0)
+        foreach (var mat in validMaterials)
         {
-            formDict["materials"] = string.Join(",", validMaterials);
+            formFields.Add(new("materials[]", mat));
         }
 
-        var (success, body, error) = await _listingClient.UpdateListingRawAsync(shopId, listingId, formDict, cancellationToken);
+        var (success, body, error) = await _listingClient.UpdateListingRawAsync(shopId, listingId, formFields, cancellationToken);
         if (!success)
         {
             throw new InvalidOperationException(error ?? "Etsy güncelleme başarısız.");

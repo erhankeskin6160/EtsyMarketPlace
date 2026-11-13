@@ -49,11 +49,11 @@ public class EtsyListingServiceTests
         public Task<string?> GetListingImagesRawJsonAsync(long listingId, string shopId, CancellationToken ct) =>
             Task.FromResult<string?>(null);
 
-        public IReadOnlyDictionary<string, string>? LastFormFields { get; private set; }
+        public IReadOnlyList<KeyValuePair<string, string>>? LastFormFields { get; private set; }
 
-        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IReadOnlyDictionary<string, string> formFields, CancellationToken ct)
+        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IEnumerable<KeyValuePair<string, string>> formFields, CancellationToken ct)
         {
-            LastFormFields = formFields;
+            LastFormFields = formFields.ToList();
             return Task.FromResult((UpdateSuccess, "{}", UpdateSuccess ? null : "Etsy error"));
         }
     }
@@ -165,7 +165,10 @@ public class EtsyListingServiceTests
         Assert.Equal("123", res.ListingId);
         Assert.Single(fakeRepo.SavedAudits);
         Assert.NotNull(fakeClient.LastFormFields);
-        Assert.Equal("PLA Plastic,Resin", fakeClient.LastFormFields!["materials"]);
+        var sentTags = fakeClient.LastFormFields!.Where(kv => kv.Key == "tags[]").Select(kv => kv.Value).ToList();
+        var sentMaterials = fakeClient.LastFormFields!.Where(kv => kv.Key == "materials[]").Select(kv => kv.Value).ToList();
+        Assert.Equal(new[] { "tag1", "tag2" }, sentTags);
+        Assert.Equal(new[] { "PLA Plastic", "Resin" }, sentMaterials);
     }
 
     [Fact]

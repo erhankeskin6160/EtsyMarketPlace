@@ -174,7 +174,7 @@ public sealed class ListingImagesUseCaseTests
             => throw new NotImplementedException();
         public Task<string> GetShopListingsRawJsonAsync(string shopId, int limit, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
-        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IReadOnlyDictionary<string, string> formFields, CancellationToken cancellationToken = default)
+        public Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(string shopId, string listingId, IEnumerable<KeyValuePair<string, string>> formFields, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
     }
 }

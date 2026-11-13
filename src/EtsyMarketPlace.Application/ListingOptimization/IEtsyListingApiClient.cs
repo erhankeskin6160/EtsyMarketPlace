@@ -70,6 +70,6 @@ public interface IEtsyListingApiClient
     Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(
         string shopId,
         string listingId,
-        IReadOnlyDictionary<string, string> formFields,
+        IEnumerable<KeyValuePair<string, string>> formFields,
         CancellationToken cancellationToken = default);
 }

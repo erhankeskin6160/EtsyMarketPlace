@@ -500,7 +500,7 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
     public async Task<(bool Success, string Body, string? ErrorMessage)> UpdateListingRawAsync(
         string shopId,
         string listingId,
-        IReadOnlyDictionary<string, string> formFields,
+        IEnumerable<KeyValuePair<string, string>> formFields,
         CancellationToken cancellationToken = default)
     {
         var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
