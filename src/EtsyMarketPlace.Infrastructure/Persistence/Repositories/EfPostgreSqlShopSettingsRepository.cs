@@ -20,7 +20,7 @@ using EtsyMarketPlace.Infrastructure.Database.Postgres;
 /// </summary>
 public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 {
-    private readonly EtsyMarketPlaceDbContext _context;
+    private readonly DbContextLeaseProvider _dbLease;
     private readonly IDataProtector _protector;
     private readonly ILogger<EfPostgreSqlShopSettingsRepository> _logger;
     private readonly SqliteEtsyIntegrationStore? _fallbackStore;
@@ -29,9 +29,13 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
         EtsyMarketPlaceDbContext context,
         IDataProtectionProvider protectionProvider,
         ILogger<EfPostgreSqlShopSettingsRepository> logger,
-        SqliteEtsyIntegrationStore? fallbackStore = null)
+        SqliteEtsyIntegrationStore? fallbackStore = null,
+        IDbContextFactory<EtsyMarketPlaceDbContext>? contextFactory = null)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        if (context is null && contextFactory is null)
+            throw new ArgumentNullException(nameof(context));
+
+        _dbLease = new DbContextLeaseProvider(context, contextFactory);
         _protector = protectionProvider.CreateProtector("EtsyMarketPlace.ShopSettings.v1");
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fallbackStore = fallbackStore;
@@ -57,7 +61,8 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            var entity = await _context.ShopTelegramSettings
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entity = await lease.Context.ShopTelegramSettings
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.ShopId == shopId.Trim(), cancellationToken);
 
@@ -90,9 +95,11 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
-            var existing = await _context.ShopTelegramSettings
+            var existing = await context.ShopTelegramSettings
                 .FirstOrDefaultAsync(s => s.ShopId == sid, cancellationToken);
 
             string encryptedToken = !string.IsNullOrWhiteSpace(request.BotToken)
@@ -112,7 +119,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                     DailyBriefEnabled = request.DailyBriefEnabled,
                     UpdatedAt = DateTime.UtcNow
                 };
-                _context.ShopTelegramSettings.Add(existing);
+                context.ShopTelegramSettings.Add(existing);
             }
             else
             {
@@ -126,7 +133,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 existing.UpdatedAt = DateTime.UtcNow;
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
 
             string maskedToken = MaskSecret(UnprotectOrRaw(existing.EncryptedBotToken));
             return new TelegramShopSettings(
@@ -154,7 +161,8 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            var entities = await _context.ShopCarrierSessions
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entities = await lease.Context.ShopCarrierSessions
                 .AsNoTracking()
                 .Where(c => c.ShopId == shopId.Trim())
                 .ToListAsync(cancellationToken);
@@ -185,9 +193,11 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
-            var existing = await _context.ShopCarrierSessions
+            var existing = await context.ShopCarrierSessions
                 .FirstOrDefaultAsync(c => c.ShopId == sid && c.CarrierId == request.CarrierId, cancellationToken);
 
             string encryptedCreds = !string.IsNullOrWhiteSpace(request.Credentials)
@@ -206,7 +216,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                     IsConnected = request.IsConnected,
                     UpdatedAt = DateTime.UtcNow
                 };
-                _context.ShopCarrierSessions.Add(existing);
+                context.ShopCarrierSessions.Add(existing);
             }
             else
             {
@@ -218,7 +228,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 existing.UpdatedAt = DateTime.UtcNow;
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
 
             return new CarrierSessionRecord(
                 existing.ShopId,
@@ -244,7 +254,8 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            var entity = await _context.EtsyAppCredentials
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entity = await lease.Context.EtsyAppCredentials
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.ShopId == shopId.Trim(), cancellationToken);
 
@@ -271,7 +282,8 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            var entity = await _context.EtsyAppCredentials
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entity = await lease.Context.EtsyAppCredentials
                 .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.ShopId == shopId.Trim(), cancellationToken);
 
@@ -296,9 +308,11 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
-            var existing = await _context.EtsyAppCredentials
+            var existing = await context.EtsyAppCredentials
                 .FirstOrDefaultAsync(e => e.ShopId == sid, cancellationToken);
 
             string encKey = !string.IsNullOrWhiteSpace(request.Keystring)
@@ -319,7 +333,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                     RedirectUri = request.RedirectUri ?? string.Empty,
                     UpdatedAt = DateTime.UtcNow
                 };
-                _context.EtsyAppCredentials.Add(existing);
+                context.EtsyAppCredentials.Add(existing);
             }
             else
             {
@@ -329,7 +343,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 existing.UpdatedAt = DateTime.UtcNow;
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
 
             return new EtsyAppCredentialsRecord(
                 existing.ShopId,
@@ -353,7 +367,8 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            var entities = await _context.ListingAiAudits
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entities = await lease.Context.ListingAiAudits
                 .AsNoTracking()
                 .Where(a => a.ShopId == shopId.Trim())
                 .OrderByDescending(a => a.AuditedAt)
@@ -388,9 +403,11 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
         try
         {
             var sid = request.ShopId.Trim();
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
-            _context.ListingAiAudits.Add(new ListingAiAudit
+            context.ListingAiAudits.Add(new ListingAiAudit
             {
                 ShopId = sid,
                 ListingId = request.ListingId,
@@ -404,7 +421,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 AuditedAt = DateTime.UtcNow
             });
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
         {
@@ -420,7 +437,8 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            var entity = await _context.ShopAiSettings
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entity = await lease.Context.ShopAiSettings
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.ShopId == shopId.Trim(), cancellationToken);
 
@@ -442,9 +460,11 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
 
         try
         {
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
-            var existing = await _context.ShopAiSettings
+            var existing = await context.ShopAiSettings
                 .FirstOrDefaultAsync(s => s.ShopId == sid, cancellationToken);
 
             if (existing is null)
@@ -455,7 +475,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                     SettingsJson = settingsJson ?? "{}",
                     UpdatedAt = DateTime.UtcNow
                 };
-                _context.ShopAiSettings.Add(existing);
+                context.ShopAiSettings.Add(existing);
             }
             else
             {
@@ -463,7 +483,7 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
                 existing.UpdatedAt = DateTime.UtcNow;
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
         {
@@ -475,18 +495,18 @@ public sealed class EfPostgreSqlShopSettingsRepository : IShopSettingsRepository
         }
     }
 
-    private async Task EnsureShopExistsAsync(string shopId, CancellationToken ct)
+    private static async Task EnsureShopExistsAsync(EtsyMarketPlaceDbContext context, string shopId, CancellationToken ct)
     {
-        var exists = await _context.ShopConnections.AnyAsync(s => s.ShopId == shopId, ct);
+        var exists = await context.ShopConnections.AnyAsync(s => s.ShopId == shopId, ct);
         if (!exists)
         {
-            _context.ShopConnections.Add(new ShopConnection
+            context.ShopConnections.Add(new ShopConnection
             {
                 ShopId = shopId,
                 ShopName = shopId,
                 IsActive = true
             });
-            await _context.SaveChangesAsync(ct);
+            await context.SaveChangesAsync(ct);
         }
     }
 

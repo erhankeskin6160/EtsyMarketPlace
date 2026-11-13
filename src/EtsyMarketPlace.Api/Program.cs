@@ -121,10 +121,12 @@ if (!rawPgConnectionString.Contains("Timeout=", StringComparison.OrdinalIgnoreCa
 }
 var pgConnectionString = pgCsBuilder.ConnectionString;
 
-builder.Services.AddDbContext<EtsyMarketPlaceDbContext>(options =>
+builder.Services.AddDbContextFactory<EtsyMarketPlaceDbContext>(options =>
 {
     options.UseNpgsql(pgConnectionString);
 });
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IDbContextFactory<EtsyMarketPlaceDbContext>>().CreateDbContext());
 builder.Services.AddScoped<EtsyMarketPlace.Infrastructure.Database.Postgres.PostgreSqlDataMigrator>();
 
 var dataProtectionPath = Path.Combine(

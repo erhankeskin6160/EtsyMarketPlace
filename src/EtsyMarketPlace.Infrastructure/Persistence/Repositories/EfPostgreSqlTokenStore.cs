@@ -18,7 +18,7 @@ using EtsyMarketPlace.Infrastructure.Database.Postgres;
 /// </summary>
 public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
 {
-    private readonly EtsyMarketPlaceDbContext _context;
+    private readonly DbContextLeaseProvider _dbLease;
     private readonly IDataProtector _protector;
     private readonly ILogger<EfPostgreSqlTokenStore> _logger;
     private readonly SqliteEtsyIntegrationStore? _fallbackStore;
@@ -27,9 +27,13 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
         EtsyMarketPlaceDbContext context,
         IDataProtectionProvider protectionProvider,
         ILogger<EfPostgreSqlTokenStore> logger,
-        SqliteEtsyIntegrationStore? fallbackStore = null)
+        SqliteEtsyIntegrationStore? fallbackStore = null,
+        IDbContextFactory<EtsyMarketPlaceDbContext>? contextFactory = null)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        if (context is null && contextFactory is null)
+            throw new ArgumentNullException(nameof(context));
+
+        _dbLease = new DbContextLeaseProvider(context, contextFactory);
         _protector = protectionProvider.CreateProtector("EtsyMarketPlace.EtsyOAuthToken.v2");
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _fallbackStore = fallbackStore;
@@ -55,7 +59,8 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
 
         try
         {
-            var entity = await _context.OAuthTokens
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entity = await lease.Context.OAuthTokens
                 .AsNoTracking()
                 .FirstOrDefaultAsync(t => t.ShopId == shopId.Trim(), cancellationToken);
 
@@ -92,9 +97,11 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
         try
         {
             var normalizedShopId = shopId.Trim();
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
 
             // Önce mağaza bağlantısının varlığından emin ol
-            var shop = await _context.ShopConnections
+            var shop = await context.ShopConnections
                 .FirstOrDefaultAsync(s => s.ShopId == normalizedShopId, cancellationToken);
 
             if (shop is null)
@@ -105,10 +112,10 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
                     ShopName = normalizedShopId,
                     IsActive = true
                 };
-                _context.ShopConnections.Add(shop);
+                context.ShopConnections.Add(shop);
             }
 
-            var existing = await _context.OAuthTokens
+            var existing = await context.OAuthTokens
                 .FirstOrDefaultAsync(t => t.ShopId == normalizedShopId, cancellationToken);
 
             var protectedAccess = _protector.Protect(token.AccessToken);
@@ -116,7 +123,7 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
 
             if (existing is null)
             {
-                _context.OAuthTokens.Add(new OAuthToken
+                context.OAuthTokens.Add(new OAuthToken
                 {
                     ShopId = normalizedShopId,
                     AccessToken = protectedAccess,
@@ -133,7 +140,7 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
                 existing.TokenType = string.IsNullOrWhiteSpace(token.TokenType) ? "Bearer" : token.TokenType;
             }
 
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
             _logger.LogInformation("Etsy OAuth token PostgreSQL'e başarıyla kaydedildi (ShopId: {ShopId})", normalizedShopId);
         }
         catch (Exception ex) when (IsDatabaseUnavailableException(ex))
@@ -158,14 +165,17 @@ public sealed class EfPostgreSqlTokenStore : IEtsyTokenStore
     {
         try
         {
-            var shops = await _context.ShopConnections
-                .AsNoTracking(
-                ).Include(s => s.OAuthToken)
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
+
+            var shops = await context.ShopConnections
+                .AsNoTracking()
+                .Include(s => s.OAuthToken)
                 .ToListAsync(cancellationToken);
 
             if (shops.Count == 0)
             {
-                var tokens = await _context.OAuthTokens.AsNoTracking().ToListAsync(cancellationToken);
+                var tokens = await context.OAuthTokens.AsNoTracking().ToListAsync(cancellationToken);
                 if (tokens.Count > 0)
                 {
                     return tokens.Select(t => new EtsyConnectedShopDto(

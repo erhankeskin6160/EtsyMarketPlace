@@ -18,24 +18,28 @@ namespace EtsyMarketPlace.Infrastructure.Persistence.Repositories;
 /// </summary>
 public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEtsyReportingService
 {
-    private readonly EtsyMarketPlaceDbContext _context;
+    private readonly DbContextLeaseProvider _dbLease;
     private readonly ILogger<EfPostgreSqlIntegrationRepository> _logger;
 
     public EfPostgreSqlIntegrationRepository(
         EtsyMarketPlaceDbContext context,
-        ILogger<EfPostgreSqlIntegrationRepository> logger)
+        ILogger<EfPostgreSqlIntegrationRepository> logger,
+        IDbContextFactory<EtsyMarketPlaceDbContext>? contextFactory = null)
     {
-        _context = context ?? throw new ArgumentNullException(nameof(context));
+        if (context is null && contextFactory is null)
+            throw new ArgumentNullException(nameof(context));
+
+        _dbLease = new DbContextLeaseProvider(context, contextFactory);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    private async Task EnsureShopExistsAsync(string shopId, CancellationToken cancellationToken = default)
+    private static async Task EnsureShopExistsAsync(EtsyMarketPlaceDbContext context, string shopId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(shopId)) return;
-        var exists = await _context.ShopConnections.AnyAsync(s => s.ShopId == shopId, cancellationToken);
+        var exists = await context.ShopConnections.AnyAsync(s => s.ShopId == shopId, cancellationToken);
         if (!exists)
         {
-            _context.ShopConnections.Add(new ShopConnection
+            context.ShopConnections.Add(new ShopConnection
             {
                 ShopId = shopId,
                 ShopName = shopId,
@@ -43,13 +47,14 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
                 IsActive = true,
                 LastSynchronizedAt = DateTime.UtcNow
             });
-            await _context.SaveChangesAsync(cancellationToken);
+            await context.SaveChangesAsync(cancellationToken);
         }
     }
 
     public async Task<DateTimeOffset?> GetLastCursorAsync(string shopId, string dataType, CancellationToken cancellationToken = default)
     {
-        var syncState = await _context.SyncStates
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var syncState = await lease.Context.SyncStates
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.ShopId == shopId && s.DataType == dataType, cancellationToken);
 
@@ -62,18 +67,21 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
     {
         if (payouts == null || payouts.Count == 0) return;
 
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
+
         var shopIds = payouts.Select(p => p.ShopId).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct();
         foreach (var sid in shopIds)
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
         foreach (var p in payouts)
         {
-            var existing = await _context.BankPayouts
+            var existing = await context.BankPayouts
                 .FirstOrDefaultAsync(x => x.ShopId == p.ShopId && x.ReferenceId == p.ReferenceId, cancellationToken);
 
             if (existing is null)
             {
-                _context.BankPayouts.Add(new BankPayout
+                context.BankPayouts.Add(new BankPayout
                 {
                     ShopId = p.ShopId,
                     ReferenceId = p.ReferenceId,
@@ -96,7 +104,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             }
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<EtsyBankPayout>> GetBankPayoutsAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
@@ -106,7 +114,8 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             var startUtc = startDate.UtcDateTime;
             var endUtc = endDate.UtcDateTime;
 
-            var entities = await _context.BankPayouts
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entities = await lease.Context.BankPayouts
                 .AsNoTracking()
                 .Where(p => p.ShopId == shopId && p.OccurredAt >= startUtc && p.OccurredAt <= endUtc)
                 .OrderByDescending(p => p.OccurredAt)
@@ -133,18 +142,21 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
     {
         if (transactions == null || transactions.Count == 0) return;
 
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
+
         var shopIds = transactions.Select(t => t.ShopId).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct();
         foreach (var sid in shopIds)
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
         foreach (var t in transactions)
         {
-            var existing = await _context.FinancialTransactions
+            var existing = await context.FinancialTransactions
                 .FirstOrDefaultAsync(x => x.ShopId == t.ShopId && x.ReferenceId == t.ReferenceId, cancellationToken);
 
             if (existing is null)
             {
-                _context.FinancialTransactions.Add(new FinancialTransaction
+                context.FinancialTransactions.Add(new FinancialTransaction
                 {
                     ShopId = t.ShopId,
                     ReferenceId = t.ReferenceId,
@@ -173,25 +185,28 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             }
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task SaveOrderAlertsAsync(IReadOnlyCollection<EtsyOrderCostAlert> alerts, CancellationToken cancellationToken = default)
     {
         if (alerts == null || alerts.Count == 0) return;
 
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
+
         var shopIds = alerts.Select(a => a.ShopId).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct();
         foreach (var sid in shopIds)
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
         foreach (var a in alerts)
         {
-            var existing = await _context.OrderCosts
+            var existing = await context.OrderCosts
                 .FirstOrDefaultAsync(x => x.ShopId == a.ShopId && x.OrderId == a.OrderId, cancellationToken);
 
             if (existing is null)
             {
-                _context.OrderCosts.Add(new OrderCost
+                context.OrderCosts.Add(new OrderCost
                 {
                     ShopId = a.ShopId,
                     OrderId = a.OrderId,
@@ -214,20 +229,23 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             }
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task SaveSyncStateAsync(string shopId, string dataType, DateTimeOffset cursor, string? error = null, CancellationToken cancellationToken = default)
     {
-        await EnsureShopExistsAsync(shopId, cancellationToken);
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
 
-        var existing = await _context.SyncStates
+        await EnsureShopExistsAsync(context, shopId, cancellationToken);
+
+        var existing = await context.SyncStates
             .FirstOrDefaultAsync(s => s.ShopId == shopId && s.DataType == dataType, cancellationToken);
 
         var now = DateTime.UtcNow;
         if (existing is null)
         {
-            _context.SyncStates.Add(new SyncState
+            context.SyncStates.Add(new SyncState
             {
                 ShopId = shopId,
                 DataType = dataType,
@@ -243,25 +261,28 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             existing.LastError = error;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task SaveMonthlyOrderSummariesAsync(IReadOnlyCollection<EtsyMonthlyOrderSummary> summaries, CancellationToken cancellationToken = default)
     {
         if (summaries == null || summaries.Count == 0) return;
 
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
+
         var shopIds = summaries.Select(s => s.ShopId).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct();
         foreach (var sid in shopIds)
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
         foreach (var s in summaries)
         {
-            var existing = await _context.MonthlyOrderSummaries
+            var existing = await context.MonthlyOrderSummaries
                 .FirstOrDefaultAsync(m => m.ShopId == s.ShopId && m.YearMonth == s.YearMonth, cancellationToken);
 
             if (existing is null)
             {
-                _context.MonthlyOrderSummaries.Add(new MonthlyOrderSummary
+                context.MonthlyOrderSummaries.Add(new MonthlyOrderSummary
                 {
                     ShopId = s.ShopId,
                     YearMonth = s.YearMonth,
@@ -286,12 +307,13 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             }
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<EtsyMonthlyOrderSummary>> GetMonthlyOrderSummariesAsync(string shopId, int months = 12, CancellationToken cancellationToken = default)
     {
-        var entities = await _context.MonthlyOrderSummaries
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var entities = await lease.Context.MonthlyOrderSummaries
             .AsNoTracking()
             .Where(m => m.ShopId == shopId)
             .OrderByDescending(m => m.YearMonth)
@@ -315,18 +337,21 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
     {
         if (records == null || records.Count == 0) return;
 
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
+
         var shopIds = records.Select(r => r.ShopId).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct();
         foreach (var sid in shopIds)
-            await EnsureShopExistsAsync(sid, cancellationToken);
+            await EnsureShopExistsAsync(context, sid, cancellationToken);
 
         foreach (var r in records)
         {
-            var existing = await _context.ListingTrafficDailies
+            var existing = await context.ListingTrafficDailies
                 .FirstOrDefaultAsync(x => x.ShopId == r.ShopId && x.ListingId == r.ListingId && x.SnapshotDate == r.SnapshotDate, cancellationToken);
 
             if (existing is null)
             {
-                _context.ListingTrafficDailies.Add(new ListingTrafficDaily
+                context.ListingTrafficDailies.Add(new ListingTrafficDaily
                 {
                     ShopId = r.ShopId,
                     ListingId = r.ListingId,
@@ -358,14 +383,17 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             }
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<EtsyListingTrafficRecord>> GetListingTrafficAnalyticsAsync(string shopId, string? snapshotDate = null, int limit = 50, CancellationToken cancellationToken = default)
     {
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
+
         if (string.IsNullOrWhiteSpace(snapshotDate))
         {
-            var maxDate = await _context.ListingTrafficDailies
+            var maxDate = await context.ListingTrafficDailies
                 .Where(x => x.ShopId == shopId)
                 .Select(x => x.SnapshotDate)
                 .OrderByDescending(d => d)
@@ -373,7 +401,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             snapshotDate = maxDate ?? DateTime.UtcNow.ToString("yyyy-MM-dd");
         }
 
-        var entities = await _context.ListingTrafficDailies
+        var entities = await context.ListingTrafficDailies
             .AsNoTracking()
             .Where(x => x.ShopId == shopId && x.SnapshotDate == snapshotDate)
             .OrderByDescending(x => x.ViewsToday)
@@ -400,14 +428,17 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
 
     public async Task SaveChartSnapshotAsync(EtsyChartSnapshot snapshot, CancellationToken cancellationToken = default)
     {
-        await EnsureShopExistsAsync(snapshot.ShopId, cancellationToken);
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
 
-        var existing = await _context.ChartSnapshots
+        await EnsureShopExistsAsync(context, snapshot.ShopId, cancellationToken);
+
+        var existing = await context.ChartSnapshots
             .FirstOrDefaultAsync(c => c.ShopId == snapshot.ShopId && c.ChartType == snapshot.ChartType, cancellationToken);
 
         if (existing is null)
         {
-            _context.ChartSnapshots.Add(new ChartSnapshot
+            context.ChartSnapshots.Add(new ChartSnapshot
             {
                 ShopId = snapshot.ShopId,
                 ChartType = snapshot.ChartType,
@@ -425,12 +456,13 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             existing.UpdatedAt = snapshot.UpdatedAt.UtcDateTime;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<EtsyChartSnapshot?> GetChartSnapshotAsync(string shopId, string chartType, CancellationToken cancellationToken = default)
     {
-        var entity = await _context.ChartSnapshots
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var entity = await lease.Context.ChartSnapshots
             .AsNoTracking()
             .FirstOrDefaultAsync(c => c.ShopId == shopId && c.ChartType == chartType, cancellationToken);
 
@@ -453,7 +485,8 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
     {
         try
         {
-            var entities = await _context.OrderCosts
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var entities = await lease.Context.OrderCosts
                 .AsNoTracking()
                 .Where(o => o.ShopId == shopId && (o.ProductCost != null || o.ShippingCost != null || o.PackagingCost != null))
                 .ToListAsync(cancellationToken);
@@ -482,14 +515,17 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
 
     public async Task UpsertOrderCostAsync(string shopId, string orderId, decimal? productCost, decimal? shippingCost, decimal? packagingCost, string? notes, CancellationToken cancellationToken = default)
     {
-        await EnsureShopExistsAsync(shopId, cancellationToken);
+        await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+        var context = lease.Context;
 
-        var existing = await _context.OrderCosts
+        await EnsureShopExistsAsync(context, shopId, cancellationToken);
+
+        var existing = await context.OrderCosts
             .FirstOrDefaultAsync(o => o.ShopId == shopId && o.OrderId == orderId, cancellationToken);
 
         if (existing is null)
         {
-            _context.OrderCosts.Add(new OrderCost
+            context.OrderCosts.Add(new OrderCost
             {
                 ShopId = shopId,
                 OrderId = orderId,
@@ -510,7 +546,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             if (notes is not null) existing.AlertReason = notes;
         }
 
-        await _context.SaveChangesAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<FinancialPerformance> GetFinancialPerformanceAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
@@ -520,7 +556,10 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             var startUtc = startDate.UtcDateTime;
             var endUtc = endDate.UtcDateTime;
 
-            var txs = await _context.FinancialTransactions
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var context = lease.Context;
+
+            var txs = await context.FinancialTransactions
                 .AsNoTracking()
                 .Where(t => t.ShopId == shopId && t.OccurredAt >= startUtc && t.OccurredAt <= endUtc)
                 .ToListAsync(cancellationToken);
@@ -538,7 +577,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             var margin = gross == 0 ? 0 : net / gross * 100;
 
             // 1. En güncel döviz kurunu çek (bank_payouts tablosundaki kur veya varsayılan 48.25)
-            var latestPayout = await _context.BankPayouts
+            var latestPayout = await context.BankPayouts
                 .AsNoTracking()
                 .Where(p => p.ShopId == shopId && p.ExchangeRateToTry > 30)
                 .OrderByDescending(p => p.OccurredAt)
@@ -550,7 +589,7 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
             var startMonth = startDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
             var endMonth = endDate.ToString("yyyy-MM", CultureInfo.InvariantCulture);
 
-            var monthlyTurnoverList = await _context.MonthlyOrderSummaries
+            var monthlyTurnoverList = await context.MonthlyOrderSummaries
                 .AsNoTracking()
                 .Where(m => m.ShopId == shopId && string.Compare(m.YearMonth, startMonth) >= 0 && string.Compare(m.YearMonth, endMonth) <= 0)
                 .Select(m => m.GrossRevenue)
@@ -605,7 +644,8 @@ public class EfPostgreSqlIntegrationRepository : IEtsyIntegrationRepository, IEt
     {
         try
         {
-            var costs = await _context.OrderCosts
+            await using var lease = await _dbLease.AcquireAsync(cancellationToken);
+            var costs = await lease.Context.OrderCosts
                 .AsNoTracking()
                 .Where(c => c.ShopId == shopId && (!c.ProductCost.HasValue || !c.ShippingCost.HasValue))
                 .OrderBy(c => c.CreatedAt)
