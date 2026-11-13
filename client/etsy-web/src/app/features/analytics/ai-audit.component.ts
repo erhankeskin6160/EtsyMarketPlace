@@ -17,6 +17,7 @@ import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 type FilterType = 'all' | 'lowSeo' | 'missingTags' | 'hasAudit' | 'zeroFav';
+type SortColumn = 'seoScore' | 'aiScore' | 'tags' | 'price' | 'favorites' | 'stock';
 
 export interface EditableListingImage {
   listingImageId: number | null;
@@ -73,10 +74,12 @@ export class AiAuditComponent implements OnInit {
   toastMessage: string | null = null;
   toastType: 'success' | 'error' | 'info' = 'info';
 
-  // Filters & Search
+  // Filters, Search & Sort
   activeFilter: FilterType = 'all';
   searchQuery = '';
   fetchLimit = 25;
+  sortColumn: SortColumn | null = null;
+  sortDirection: 'asc' | 'desc' = 'asc';
 
   // Pagination
   currentPage = 1;
@@ -322,6 +325,28 @@ export class AiAuditComponent implements OnInit {
     this.applyFilter();
   }
 
+  toggleSort(column: SortColumn): void {
+    if (this.sortColumn === column) {
+      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      this.sortColumn = column;
+      this.sortDirection = 'asc';
+    }
+    this.currentPage = 1;
+    this.applyFilter();
+  }
+
+  private getSortValue(item: ShopListingItemDto, col: SortColumn): number {
+    switch (col) {
+      case 'seoScore': return item.seoScore ?? 0;
+      case 'aiScore': return item.aiScore ?? -1;
+      case 'tags': return item.tags?.length ?? 0;
+      case 'price': return item.priceAmount ?? item.price ?? 0;
+      case 'favorites': return (item.numFavorers != null ? item.numFavorers : item.favorites) ?? 0;
+      case 'stock': return item.quantity ?? 0;
+    }
+  }
+
   applyFilter(): void {
     let result = [...this.listings];
 
@@ -344,6 +369,13 @@ export class AiAuditComponent implements OnInit {
         l.listingId.toString().includes(q) ||
         (l.tags && l.tags.some(t => t.toLowerCase().includes(q)))
       );
+    }
+
+    // Sort
+    if (this.sortColumn) {
+      const col = this.sortColumn;
+      const dir = this.sortDirection === 'asc' ? 1 : -1;
+      result.sort((a, b) => (this.getSortValue(a, col) - this.getSortValue(b, col)) * dir);
     }
 
     this.filteredListings = result;
