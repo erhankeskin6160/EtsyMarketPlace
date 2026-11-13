@@ -208,6 +208,13 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
                 seoCritique = critEl.GetString()?.Trim() ?? string.Empty;
             }
 
+            tagSuggestions = EtsyTagNormalizer.NormalizeTo13Tags(tagSuggestions);
+            if (tagSuggestions.Count < EtsyTagNormalizer.TargetTagCount)
+            {
+                var offlineFallback = _ruleOptimizer.Optimize(input);
+                tagSuggestions = EtsyTagNormalizer.NormalizeTo13Tags(tagSuggestions, offlineFallback.TagSuggestions);
+            }
+
             bestTitle = titleSuggestions.FirstOrDefault() ?? title;
             if (currentScore <= 0) currentScore = 80;
             if (optimizedScore <= 0) optimizedScore = 98;
@@ -235,7 +242,7 @@ public sealed class AiListingOptimizationUseCase : IAiListingOptimizerUseCase
             optimizedScore = offlineResult.OptimizedSeoScore;
             titleSuggestions = offlineResult.TitleSuggestions.ToList();
             bestTitle = titleSuggestions.FirstOrDefault() ?? title;
-            tagSuggestions = offlineResult.TagSuggestions.ToList();
+            tagSuggestions = EtsyTagNormalizer.NormalizeTo13Tags(offlineResult.TagSuggestions);
             materialSuggestions = offlineResult.MaterialSuggestions.ToList();
             descriptionDraft = offlineResult.DescriptionDraft;
             riskWarnings = offlineResult.RiskWarnings.ToList();

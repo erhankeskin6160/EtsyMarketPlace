@@ -168,7 +168,8 @@ public static class ListingDraftInstructionBuilder
             4. Room & Placement: Where is it displayed or used? (e.g. "music room decor", "shelf display piece")
             5. Theme, Era & Style: What theme/era/style does it evoke? (e.g. "pop music legend", "80s music icon")
             6. Niche Alias & Long-Tail: Alternative buyer search phrases? (e.g. "king of pop gift", "celebrity fan statue")
-          * Each tag must be 20 characters or less in length. Every tag must be in English.
+          * Each tag MUST be 20 characters or less in length (count characters strictly; aim for 12-19 chars, NEVER > 20). Every tag must be in English.
+          * Generate 16 candidate tags in tag_suggestions (top 13 primary + 3 backup <=20-char tags) so all 13 final tags remain 100% compliant without losing quality.
         - material_suggestions: only list materials explicitly mentioned or clearly visible in the source listing text (in English, e.g. "Wood", "PLA Plastic", "Resin", "Cotton"). Up to 13 items, each 45 characters or less. Never invent materials.
         - description_draft: Craft a natural, authentic, and compelling English Etsy description tailored specifically to this product's character, style, and niche.
           * COMPLETE CREATIVE FREEDOM & UNIQUE VOICE (NO REPETITIVE FORMULAS):
