@@ -387,6 +387,15 @@ public sealed class MarketResearchServiceTests
     {
         public string? ResponseJson { get; set; }
 
+        public Task<(bool Success, string? Content, string? ErrorMessage)> GenerateVisionJsonAsync(
+            string systemInstruction,
+            string userPrompt,
+            IReadOnlyList<EtsyMarketPlace.Application.ListingOptimization.VisionImageInput> images,
+            string model,
+            string apiKey,
+            CancellationToken cancellationToken = default)
+            => GenerateOptimizationJsonAsync(systemInstruction, userPrompt, model, apiKey, cancellationToken);
+
         public Task<(bool Success, string? Content, string? ErrorMessage)> GenerateOptimizationJsonAsync(
             string systemInstruction,
             string userPrompt,

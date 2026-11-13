@@ -236,6 +236,44 @@ export interface ListingImageDetailDto {
   url570xN: string;
   urlFullxfull: string;
   url75x75: string;
+  altText?: string;
+}
+
+export interface CoverCtrAuditDto {
+  overallScore: number;
+  contrastScore: number;
+  mobileCropScore: number;
+  backgroundScore: number;
+  tip: string;
+  isVisionAnalyzed: boolean;
+  note: string;
+}
+
+export interface ImageAltTextSuggestionDto {
+  listingImageId: number;
+  rank: number;
+  suggestedAltText: string;
+  angleLabel: string;
+}
+
+export interface AnalyzeListingImagesResultDto {
+  listingId: number;
+  coverCtr: CoverCtrAuditDto;
+  altTextSuggestions: ImageAltTextSuggestionDto[];
+  provider: string;
+  model: string;
+}
+
+export interface UpdateListingImageAltTextItemDto {
+  listingImageId: number;
+  rank: number;
+  altText: string;
+}
+
+export interface UpdateListingImagesAltTextResultDto {
+  listingId: number;
+  updatedCount: number;
+  images: ListingImageDetailDto[];
 }
 
 export interface SyncListingImageItemDto {
@@ -919,6 +957,30 @@ export class EtsyApiService {
     const id = shopId || this.activeShopId();
     return this.http.put<SyncListingImagesResultDto>(
       `${this.API_BASE}/api/etsy/listings/${listingId}/images/sync?shopId=${encodeURIComponent(id)}`,
+      { shopId: id, items }
+    );
+  }
+
+  analyzeListingImages(
+    listingId: string | number,
+    payload: { shopId?: string; title?: string; provider?: string; model?: string; apiKey?: string }
+  ): Observable<AnalyzeListingImagesResultDto> {
+    const shopId = payload.shopId || this.activeShopId();
+    const body = { ...payload, shopId };
+    return this.http.post<AnalyzeListingImagesResultDto>(
+      `${this.API_BASE}/api/etsy/listings/${listingId}/images/ai-audit?shopId=${encodeURIComponent(shopId)}`,
+      body
+    );
+  }
+
+  updateListingImagesAltText(
+    listingId: string | number,
+    items: UpdateListingImageAltTextItemDto[],
+    shopId?: string
+  ): Observable<UpdateListingImagesAltTextResultDto> {
+    const id = shopId || this.activeShopId();
+    return this.http.put<UpdateListingImagesAltTextResultDto>(
+      `${this.API_BASE}/api/etsy/listings/${listingId}/images/alt-text?shopId=${encodeURIComponent(id)}`,
       { shopId: id, items }
     );
   }

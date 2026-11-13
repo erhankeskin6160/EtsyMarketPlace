@@ -208,6 +208,15 @@ public sealed class EtsyFinancialAnalysisServiceTests
             string apiKey,
             CancellationToken cancellationToken = default)
             => Task.FromResult<(bool, string?, string?)>((true, JsonResponse, null));
+
+        public Task<(bool Success, string? Content, string? ErrorMessage)> GenerateVisionJsonAsync(
+            string systemInstruction,
+            string userPrompt,
+            IReadOnlyList<VisionImageInput> images,
+            string model,
+            string apiKey,
+            CancellationToken cancellationToken = default)
+            => Task.FromResult<(bool, string?, string?)>((true, JsonResponse, null));
     }
 
     private sealed class StubReportingService : IEtsyReportingService

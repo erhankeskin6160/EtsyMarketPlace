@@ -8,7 +8,8 @@ public sealed record ListingImageDetailDto(
     int Rank,
     string Url570xN,
     string UrlFullxfull,
-    string Url75x75
+    string Url75x75,
+    string AltText = ""
 );
 
 public sealed record SyncListingImageItem(
@@ -50,6 +51,9 @@ internal static class EtsyListingImageJsonParser
             string u570 = item.TryGetProperty("url_570xN", out var p570) ? p570.GetString() ?? "" : "";
             string uFull = item.TryGetProperty("url_fullxfull", out var pFull) ? pFull.GetString() ?? "" : "";
             string u75 = item.TryGetProperty("url_75x75", out var p75) ? p75.GetString() ?? "" : "";
+            string altText = item.TryGetProperty("alt_text", out var pAlt) && pAlt.ValueKind == JsonValueKind.String
+                ? pAlt.GetString()?.Trim() ?? ""
+                : "";
 
             if (string.IsNullOrWhiteSpace(u570)) u570 = !string.IsNullOrWhiteSpace(uFull) ? uFull : u75;
             if (string.IsNullOrWhiteSpace(uFull)) uFull = u570;
@@ -57,7 +61,7 @@ internal static class EtsyListingImageJsonParser
 
             if (imageId > 0 || !string.IsNullOrWhiteSpace(u570))
             {
-                list.Add(new ListingImageDetailDto(imageId, rank, u570, uFull, u75));
+                list.Add(new ListingImageDetailDto(imageId, rank, u570, uFull, u75, altText));
             }
         }
 

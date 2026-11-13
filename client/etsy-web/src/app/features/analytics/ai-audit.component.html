@@ -412,6 +412,9 @@
               <span class="gallery-count-label">
                 Ürün Galerisi ({{ listingImages.length }} / {{ maxListingImages }})
               </span>
+              <span class="alt-summary-pill" [class.all-done]="listingImages.length > 0 && altTextFilledCount === listingImages.length">
+                ALT: {{ altTextFilledCount }}/{{ listingImages.length }}
+              </span>
               <span *ngIf="isLoadingImages" class="gallery-loading-hint">Yükleniyor...</span>
             </div>
 
@@ -423,9 +426,15 @@
                 [class.is-new]="img.isNew"
                 (click)="selectImageIndex(idx)"
               >
-                <img [src]="img.url" [alt]="'Görsel #' + (idx + 1)" referrerpolicy="no-referrer" />
+                <img [src]="img.url" [alt]="img.altText || ('Görsel #' + (idx + 1))" referrerpolicy="no-referrer" />
                 <span class="thumb-rank-pill">#{{ idx + 1 }}</span>
                 <span *ngIf="img.isNew" class="thumb-new-dot" title="Yeni eklendi">YENİ</span>
+                <span
+                  *ngIf="!img.isNew"
+                  class="thumb-alt-pill"
+                  [class.has-alt]="(img.altText || '').trim().length > 0"
+                  [title]="(img.altText || '').trim() ? img.altText : 'Alt-Text eksik'"
+                >{{ (img.altText || '').trim().length > 0 ? 'ALT ✓' : 'ALT !' }}</span>
 
                 <div class="thumb-hover-controls">
                   <button
@@ -504,6 +513,66 @@
               >
                 <span>🎨 AI Stüdyo'da Düzenle</span>
               </button>
+
+              <button
+                type="button"
+                class="btn-ai-image-audit"
+                [disabled]="isAnalyzingImages || listingImages.length === 0"
+                (click)="analyzeImagesWithAi()"
+              >
+                <span *ngIf="isAnalyzingImages" class="btn-spinner"></span>
+                <span>{{ isAnalyzingImages ? 'Görseller Analiz Ediliyor...' : '✨ AI Alt-Text & Kapak CTR Analizi' }}</span>
+              </button>
+
+              <button
+                type="button"
+                class="btn-alt-text-modal"
+                [disabled]="listingImages.length === 0"
+                (click)="openAltTextModal()"
+              >
+                <span>🏷️ Alt-Text Düzenle / Etsy'ye Kaydet ({{ altTextFilledCount }}/{{ listingImages.length }})</span>
+              </button>
+            </div>
+
+            <!-- Tahmini Görsel Kapak CTR Skoru Kartı -->
+            <div *ngIf="coverCtrAudit" class="cover-ctr-card">
+              <div class="cover-ctr-header">
+                <div class="cover-ctr-title-wrap">
+                  <span class="cover-ctr-title">🎯 Tahmini Görsel CTR Skoru</span>
+                  <span class="cover-ctr-mode">{{ coverCtrAudit.isVisionAnalyzed ? 'Vision AI' : 'Yerel Analiz' }}</span>
+                </div>
+                <span
+                  class="cover-ctr-badge"
+                  [class.good]="coverCtrAudit.overallScore >= 80"
+                  [class.mid]="coverCtrAudit.overallScore >= 60 && coverCtrAudit.overallScore < 80"
+                  [class.low]="coverCtrAudit.overallScore < 60"
+                >{{ coverCtrAudit.overallScore }}/100</span>
+              </div>
+
+              <div class="cover-ctr-bars">
+                <div class="ctr-bar-row">
+                  <span class="ctr-bar-label">Kontrast &amp; Netlik</span>
+                  <div class="ctr-bar-track"><div class="ctr-bar-fill" [style.width.%]="coverCtrAudit.contrastScore"></div></div>
+                  <span class="ctr-bar-val">{{ coverCtrAudit.contrastScore }}</span>
+                </div>
+                <div class="ctr-bar-row">
+                  <span class="ctr-bar-label">Mobil Kırpma (1:1)</span>
+                  <div class="ctr-bar-track"><div class="ctr-bar-fill" [style.width.%]="coverCtrAudit.mobileCropScore"></div></div>
+                  <span class="ctr-bar-val">{{ coverCtrAudit.mobileCropScore }}</span>
+                </div>
+                <div class="ctr-bar-row">
+                  <span class="ctr-bar-label">Arka Plan Ayrımı</span>
+                  <div class="ctr-bar-track"><div class="ctr-bar-fill" [style.width.%]="coverCtrAudit.backgroundScore"></div></div>
+                  <span class="ctr-bar-val">{{ coverCtrAudit.backgroundScore }}</span>
+                </div>
+              </div>
+
+              <div class="cover-ctr-tip" *ngIf="coverCtrAudit.tip">
+                💡 {{ coverCtrAudit.tip }}
+              </div>
+              <div class="cover-ctr-note" *ngIf="coverCtrAudit.note">
+                ℹ️ {{ coverCtrAudit.note }}
+              </div>
             </div>
           </div>
 
@@ -923,6 +992,66 @@
       <div class="modal-footer">
         <button type="button" class="btn-modal-cancel" (click)="showConfirmPushModal = false">Vazgeç</button>
         <button type="button" class="btn-modal-confirm-etsy" (click)="confirmUpdateListingOnEtsy()">Evet, Etsy'ye Gönder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ALT-TEXT SEO EDIT & ETSY PUSH MODAL -->
+  <div *ngIf="showAltTextModal && selectedListing" class="modal-backdrop" (click)="closeAltTextModal()">
+    <div class="modal-card alt-text-modal-card" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3 class="modal-title">🏷️ Görsel Alt-Text SEO Düzenleyici (Maks. 250 Karakter)</h3>
+        <button type="button" class="modal-close-btn" (click)="closeAltTextModal()">✕</button>
+      </div>
+      <div class="modal-body alt-text-modal-body">
+        <div class="alt-modal-toolbar">
+          <span class="alt-modal-hint">Google Görseller &amp; Etsy erişilebilirlik SEO'su için doğal İngilizce açıklama girin.</span>
+          <button
+            type="button"
+            class="btn-alt-ai-gen"
+            [disabled]="isAnalyzingImages"
+            (click)="analyzeImagesWithAi()"
+          >
+            {{ isAnalyzingImages ? 'Üretiliyor...' : '✨ AI ile Tümünü Doldur' }}
+          </button>
+        </div>
+
+        <div class="alt-text-list">
+          <div *ngFor="let img of listingImages; let idx = index" class="alt-text-row">
+            <div class="alt-row-thumb-wrap">
+              <img [src]="img.url" [alt]="'Görsel #' + (idx + 1)" class="alt-row-thumb" referrerpolicy="no-referrer" />
+              <span class="alt-row-rank">#{{ idx + 1 }}</span>
+            </div>
+            <div class="alt-row-editor">
+              <div class="alt-row-meta">
+                <span class="alt-row-angle" *ngIf="img.angleLabel">{{ img.angleLabel }}</span>
+                <span class="alt-row-new-warn" *ngIf="!img.listingImageId">Önce görseli Etsy'ye yükleyin</span>
+                <span class="alt-char-count" [class.over]="(img.altText || '').trim().length > 250">
+                  {{ (img.altText || '').trim().length }} / 250
+                </span>
+              </div>
+              <textarea
+                class="alt-text-input"
+                rows="2"
+                maxlength="260"
+                [(ngModel)]="img.altText"
+                [disabled]="!img.listingImageId"
+                placeholder="Örn: Handmade 3D printed green and silver cosplay wrist watch prop on wooden desk..."
+              ></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-modal-cancel" (click)="closeAltTextModal()">Kapat</button>
+        <button
+          type="button"
+          class="btn-modal-confirm-etsy"
+          [disabled]="isSavingAltText"
+          (click)="saveAltTextsToEtsy()"
+        >
+          {{ isSavingAltText ? 'Etsy\'ye Kaydediliyor...' : '🚀 Alt-Text\'leri Etsy\'ye Kaydet' }}
+        </button>
       </div>
     </div>
   </div>

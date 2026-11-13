@@ -221,7 +221,77 @@ public class EtsyListingsController : BaseApiController
         var response = await _mediator.Send(command, cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }
+
+    [HttpPost("listings/{listingId:long}/images/ai-audit")]
+    [EndpointSummary("Görsel Alt-Text (SEO) Önerileri ve Kapak CTR Görsel Kalite Skoru Üret")]
+    public async Task<IActionResult> AnalyzeListingImages(
+        long listingId,
+        [FromBody] AnalyzeListingImagesApiRequest? request,
+        [FromQuery] string? shopId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
+            ? request.ShopId.Trim()
+            : ResolveShopId(shopId, _config);
+
+        var command = new AnalyzeListingImagesCommand
+        {
+            ShopId = resolvedShopId,
+            ListingId = listingId,
+            Title = request?.Title ?? string.Empty,
+            Provider = request?.Provider,
+            Model = request?.Model,
+            ApiKey = request?.ApiKey
+        };
+
+        var response = await _mediator.Send(command, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPut("listings/{listingId:long}/images/alt-text")]
+    [EndpointSummary("Etsy İlan Görsellerinin Alt-Text (SEO) Alanlarını Güncelle")]
+    public async Task<IActionResult> UpdateListingImagesAltText(
+        long listingId,
+        [FromBody] UpdateListingImagesAltTextApiRequest request,
+        [FromQuery] string? shopId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
+            ? request.ShopId.Trim()
+            : ResolveShopId(shopId, _config);
+
+        var command = new UpdateListingImagesAltTextCommand
+        {
+            ShopId = resolvedShopId,
+            ListingId = listingId,
+            Items = (request?.Items ?? Array.Empty<UpdateImageAltTextApiItem>())
+                .Select(i => new UpdateImageAltTextItem(i.ListingImageId, i.Rank, i.AltText ?? string.Empty))
+                .ToList()
+        };
+
+        var response = await _mediator.Send(command, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
 }
+
+public sealed record AnalyzeListingImagesApiRequest(
+    string? ShopId,
+    string? Title,
+    string? Provider,
+    string? Model,
+    string? ApiKey
+);
+
+public sealed record UpdateImageAltTextApiItem(
+    long ListingImageId,
+    int Rank,
+    string? AltText
+);
+
+public sealed record UpdateListingImagesAltTextApiRequest(
+    string? ShopId,
+    System.Collections.Generic.IReadOnlyList<UpdateImageAltTextApiItem>? Items
+);
 
 public sealed record SyncListingImageItemApiRequest(
     long? ListingImageId,

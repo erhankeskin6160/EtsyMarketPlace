@@ -160,6 +160,10 @@ public sealed class ListingImagesUseCaseTests
             return Task.FromResult(true);
         }
 
+        public Task<bool> UpdateListingImageMetadataAsync(
+            string shopId, long listingId, long listingImageId, int rank, string? altText, CancellationToken cancellationToken = default)
+            => Task.FromResult(true);
+
         public Task<(long ListingId, string Url)> CreateDraftListingAsync(string shopId, CreateDraftListingRawRequest rawRequest, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
         public Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(string shopId, long listingId, EtsyInventoryPayload payload, CancellationToken cancellationToken = default)

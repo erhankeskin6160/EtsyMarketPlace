@@ -31,6 +31,14 @@ public interface IEtsyListingApiClient
         int rank,
         CancellationToken cancellationToken = default);
 
+    Task<bool> UpdateListingImageMetadataAsync(
+        string shopId,
+        long listingId,
+        long listingImageId,
+        int rank,
+        string? altText,
+        CancellationToken cancellationToken = default);
+
     Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(
         string shopId,
         long listingId,

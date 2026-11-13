@@ -8,7 +8,10 @@ import {
   SavedListingAuditDto,
   OptimizeListingResponseDto,
   ListingImageDetailDto,
-  SyncListingImageItemDto
+  SyncListingImageItemDto,
+  CoverCtrAuditDto,
+  AnalyzeListingImagesResultDto,
+  UpdateListingImageAltTextItemDto
 } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -22,6 +25,8 @@ export interface EditableListingImage {
   dataUrl?: string | null;
   fileName?: string | null;
   isNew?: boolean;
+  altText: string;
+  angleLabel?: string;
 }
 
 @Component({
@@ -47,6 +52,12 @@ export class AiAuditComponent implements OnInit {
   isImageDragOver = false;
   lightboxImageUrl: string | null = null;
   readonly maxListingImages = 10;
+
+  // Image Alt-Text SEO & Visual Cover CTR Audit State
+  coverCtrAudit: CoverCtrAuditDto | null = null;
+  isAnalyzingImages = false;
+  isSavingAltText = false;
+  showAltTextModal = false;
 
   // Data & State
   listings: ShopListingItemDto[] = [];
@@ -785,6 +796,7 @@ ${baseDesc}
   loadListingImages(listing: ShopListingItemDto): void {
     this.isLoadingImages = true;
     this.activeImageIndex = 0;
+    this.coverCtrAudit = null;
     const fallbackUrls = (listing.images && listing.images.length > 0)
       ? listing.images
       : (listing.primaryImageUrl ? [listing.primaryImageUrl] : []);
@@ -793,7 +805,8 @@ ${baseDesc}
       listingImageId: null,
       url: u,
       fullUrl: u,
-      isNew: false
+      isNew: false,
+      altText: ''
     }));
     this.originalImagesSignature = '';
 
@@ -806,7 +819,8 @@ ${baseDesc}
             listingImageId: i.listingImageId,
             url: i.url570xN || i.urlFullxfull || i.url75x75,
             fullUrl: i.urlFullxfull || i.url570xN,
-            isNew: false
+            isNew: false,
+            altText: i.altText || ''
           }));
           this.originalImagesSignature = this.buildImagesSignature(this.listingImages);
         } else {
@@ -920,7 +934,8 @@ ${baseDesc}
             fullUrl: dataUrl,
             dataUrl,
             fileName: file.name,
-            isNew: true
+            isNew: true,
+            altText: ''
           }
         ];
         this.activeImageIndex = this.listingImages.length - 1;
@@ -955,7 +970,8 @@ ${baseDesc}
             listingImageId: i.listingImageId,
             url: i.url570xN || i.urlFullxfull || i.url75x75,
             fullUrl: i.urlFullxfull || i.url570xN,
-            isNew: false
+            isNew: false,
+            altText: i.altText || ''
           }));
           this.originalImagesSignature = this.buildImagesSignature(this.listingImages);
           this.activeImageIndex = 0;
@@ -1003,6 +1019,119 @@ ${baseDesc}
 
   closeLightbox(): void {
     this.lightboxImageUrl = null;
+  }
+
+  // ── Görsel Alt-Text SEO & Tahmini Kapak CTR Analizi ───────────────────────
+  get altTextFilledCount(): number {
+    return this.listingImages.filter(i => (i.altText || '').trim().length > 0).length;
+  }
+
+  analyzeImagesWithAi(): void {
+    if (!this.selectedListing || this.listingImages.length === 0 || this.isAnalyzingImages) return;
+
+    const targetListing = this.selectedListing;
+    const settings = this.aiSettings.settings();
+    const apiKey = this.getActiveApiKey();
+
+    this.isAnalyzingImages = true;
+    this.showToast('✨ Görseller için AI Alt-Text ve Kapak CTR analizi başlatıldı...', 'info');
+
+    this.etsyApi.analyzeListingImages(targetListing.listingId, {
+      shopId: this.etsyApi.activeShopId(),
+      title: targetListing.title,
+      provider: settings.provider,
+      model: this.aiSettings.activeModelName(),
+      apiKey
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res: AnalyzeListingImagesResultDto) => {
+        if (this.selectedListing?.listingId !== targetListing.listingId) return;
+        this.isAnalyzingImages = false;
+        this.coverCtrAudit = res.coverCtr;
+
+        if (res.altTextSuggestions && res.altTextSuggestions.length > 0) {
+          for (const suggestion of res.altTextSuggestions) {
+            const match = this.listingImages.find(
+              (img, idx) =>
+                (suggestion.listingImageId > 0 && img.listingImageId === suggestion.listingImageId) ||
+                idx + 1 === suggestion.rank
+            );
+            if (match) {
+              match.altText = suggestion.suggestedAltText;
+              match.angleLabel = suggestion.angleLabel;
+            }
+          }
+        }
+
+        this.showToast(
+          res.coverCtr?.isVisionAnalyzed
+            ? `✅ Görsel AI Analizi tamamlandı! Tahmini Kapak CTR: ${res.coverCtr.overallScore}/100`
+            : `✅ Alt-Text taslakları oluşturuldu! (Tahmini Kapak CTR: ${res.coverCtr?.overallScore ?? 0}/100)`,
+          'success'
+        );
+      },
+      error: (err) => {
+        this.isAnalyzingImages = false;
+        const msg = err?.error?.message || err?.error?.error || err?.message || 'Görsel analizi başarısız.';
+        this.showToast(`❌ Görsel analiz hatası: ${msg}`, 'error');
+      }
+    });
+  }
+
+  openAltTextModal(): void {
+    if (this.listingImages.length === 0) return;
+    this.showAltTextModal = true;
+  }
+
+  closeAltTextModal(): void {
+    this.showAltTextModal = false;
+  }
+
+  saveAltTextsToEtsy(): void {
+    if (!this.selectedListing || this.isSavingAltText) return;
+    const targetListing = this.selectedListing;
+
+    const items: UpdateListingImageAltTextItemDto[] = [];
+    for (let i = 0; i < this.listingImages.length; i++) {
+      const img = this.listingImages[i];
+      if (!img.listingImageId) continue;
+      const trimmed = (img.altText || '').trim();
+      if (trimmed.length > 250) {
+        this.showToast(`❌ Görsel #${i + 1} Alt-Text 250 karakteri aşamaz (${trimmed.length}/250).`, 'error');
+        return;
+      }
+      items.push({
+        listingImageId: img.listingImageId,
+        rank: i + 1,
+        altText: trimmed
+      });
+    }
+
+    if (items.length === 0) {
+      this.showToast('Etsy\'ye kaydedilecek mevcut bir görsel bulunamadı. Yeni görselleri önce Etsy\'de güncelleyin.', 'info');
+      return;
+    }
+
+    this.isSavingAltText = true;
+    this.etsyApi.updateListingImagesAltText(targetListing.listingId, items).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => {
+        this.isSavingAltText = false;
+        if (this.selectedListing?.listingId === targetListing.listingId && res.images) {
+          for (const updated of res.images) {
+            const match = this.listingImages.find(img => img.listingImageId === updated.listingImageId);
+            if (match) {
+              match.altText = updated.altText || '';
+            }
+          }
+        }
+        this.showAltTextModal = false;
+        this.showToast(`✅ ${res.updatedCount} görselin Alt-Text SEO açıklaması Etsy'ye kaydedildi!`, 'success');
+      },
+      error: (err) => {
+        this.isSavingAltText = false;
+        const msg = err?.error?.message || err?.error?.error || err?.message || 'Alt-Text kaydedilemedi.';
+        this.showToast(`❌ Alt-Text kayıt hatası: ${msg}`, 'error');
+      }
+    });
   }
 
   // ── Image Error Fallback ──────────────────────────────────────────────────

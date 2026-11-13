@@ -28,6 +28,9 @@ public class EtsyListingServiceTests
         public Task<bool> UpdateListingImageRankAsync(string shopId, long listingId, long listingImageId, int rank, CancellationToken ct = default) =>
             Task.FromResult(true);
 
+        public Task<bool> UpdateListingImageMetadataAsync(string shopId, long listingId, long listingImageId, int rank, string? altText, CancellationToken ct = default) =>
+            Task.FromResult(true);
+
         public Task<(bool Success, string? ErrorMessage, string? ResponseJson)> UpdateListingInventoryAsync(string shopId, long listingId, EtsyInventoryPayload payload, CancellationToken ct) =>
             Task.FromResult((true, (string?)null, (string?)null));
 

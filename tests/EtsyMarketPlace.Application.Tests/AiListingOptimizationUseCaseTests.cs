@@ -27,6 +27,15 @@ public class AiListingOptimizationUseCaseTests
             LastUserPrompt = userPrompt;
             return Task.FromResult((Success, ContentToReturn, ErrorToReturn));
         }
+
+        public Task<(bool Success, string? Content, string? ErrorMessage)> GenerateVisionJsonAsync(
+            string systemInstruction,
+            string userPrompt,
+            IReadOnlyList<VisionImageInput> images,
+            string model,
+            string apiKey,
+            CancellationToken cancellationToken = default)
+            => GenerateOptimizationJsonAsync(systemInstruction, userPrompt, model, apiKey, cancellationToken);
     }
 
     private sealed class FakeShopSettingsRepository : IShopSettingsRepository

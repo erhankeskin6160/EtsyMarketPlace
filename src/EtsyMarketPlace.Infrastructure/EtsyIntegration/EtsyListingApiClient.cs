@@ -220,11 +220,20 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
         return res.IsSuccessStatusCode;
     }
 
-    public async Task<bool> UpdateListingImageRankAsync(
+    public Task<bool> UpdateListingImageRankAsync(
         string shopId,
         long listingId,
         long listingImageId,
         int rank,
+        CancellationToken cancellationToken = default)
+        => UpdateListingImageMetadataAsync(shopId, listingId, listingImageId, rank, null, cancellationToken);
+
+    public async Task<bool> UpdateListingImageMetadataAsync(
+        string shopId,
+        long listingId,
+        long listingImageId,
+        int rank,
+        string? altText,
         CancellationToken cancellationToken = default)
     {
         var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, cancellationToken);
@@ -233,6 +242,10 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
         using var imgContent = new MultipartFormDataContent();
         imgContent.Add(new StringContent(listingImageId.ToString(CultureInfo.InvariantCulture)), "listing_image_id");
         imgContent.Add(new StringContent(rank.ToString(CultureInfo.InvariantCulture)), "rank");
+        if (altText != null)
+        {
+            imgContent.Add(new StringContent(altText), "alt_text");
+        }
 
         using var req = new HttpRequestMessage(HttpMethod.Post, url)
         {
