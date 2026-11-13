@@ -891,9 +891,11 @@ ${baseDesc}
       return;
     }
 
+    const targetListingId = this.selectedListing?.listingId;
     for (const file of validFiles) {
       const reader = new FileReader();
       reader.onload = () => {
+        if (this.selectedListing?.listingId !== targetListingId) return;
         const dataUrl = reader.result as string;
         if (!dataUrl) return;
         this.listingImages = [

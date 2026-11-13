@@ -194,6 +194,7 @@ public class EtsyListingsController : BaseApiController
     }
 
     [HttpPut("listings/{listingId:long}/images/sync")]
+    [RequestSizeLimit(104_857_600)]
     [EndpointSummary("Etsy İlan Görsellerini Senkronize Et (Yükleme, Sıralama, Silme + Anti-Ban EXIF/pHash)")]
     public async Task<IActionResult> SyncListingImages(
         long listingId,

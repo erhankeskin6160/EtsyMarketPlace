@@ -100,11 +100,23 @@ public sealed class SyncListingImagesCommandHandler(
             }
         }
 
-        // 3. Sırası (rank) değişen mevcut görselleri güncelle
+        // 3. Yükleme/silme sonrası Etsy'nin kaydırmış olabileceği sıraları doğru yakalamak için güncel listeyi kontrol et
+        var postMutationById = currentById;
+        if (uploadedCount > 0 || deletedCount > 0)
+        {
+            var midRaw = await apiClient.GetListingImagesRawJsonAsync(request.ListingId, request.ShopId, cancellationToken);
+            var midImages = EtsyListingImageJsonParser.ParseImages(midRaw);
+            if (midImages.Count > 0)
+            {
+                postMutationById = midImages.ToDictionary(i => i.ListingImageId);
+            }
+        }
+
+        // 4. Sırası (rank) değişen mevcut görselleri güncelle
         foreach (var item in orderedItems.Where(i => i.ListingImageId.HasValue && i.ListingImageId.Value > 0))
         {
             var id = item.ListingImageId!.Value;
-            if (currentById.TryGetValue(id, out var existing) && existing.Rank != item.Rank)
+            if (postMutationById.TryGetValue(id, out var existing) && existing.Rank != item.Rank)
             {
                 var updated = await apiClient.UpdateListingImageRankAsync(
                     request.ShopId,
@@ -118,7 +130,7 @@ public sealed class SyncListingImagesCommandHandler(
             }
         }
 
-        // 4. Güncel görsel listesini Etsy'den tekrar çek
+        // 5. Güncel görsel listesini Etsy'den tekrar çek
         var refreshedRaw = await apiClient.GetListingImagesRawJsonAsync(request.ListingId, request.ShopId, cancellationToken);
         var refreshedImages = EtsyListingImageJsonParser.ParseImages(refreshedRaw);
 
