@@ -52,7 +52,7 @@ public class EtsyListingsController : BaseApiController
         [FromBody] OptimizeListingApiRequest request,
         CancellationToken cancellationToken)
     {
-        var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request.ShopId)
             ? request.ShopId.Trim()
             : ResolveShopId(shopId, _config);
 
@@ -97,9 +97,12 @@ public class EtsyListingsController : BaseApiController
     public async Task<IActionResult> UpdateListing(
         string listingId,
         [FromBody] UpdateListingApiRequest request,
-        CancellationToken cancellationToken)
+        [FromQuery] string? shopId = null,
+        CancellationToken cancellationToken = default)
     {
-        var resolvedShopId = ResolveShopId(request.ShopId, _config);
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request.ShopId)
+            ? request.ShopId.Trim()
+            : ResolveShopId(shopId, _config);
         var reqDto = new UpdateListingRequestDto(
             resolvedShopId,
             request.Title,
@@ -202,7 +205,7 @@ public class EtsyListingsController : BaseApiController
         [FromQuery] string? shopId = null,
         CancellationToken cancellationToken = default)
     {
-        var resolvedShopId = !string.IsNullOrWhiteSpace(request?.ShopId)
+        var resolvedShopId = !string.IsNullOrWhiteSpace(request.ShopId)
             ? request.ShopId.Trim()
             : ResolveShopId(shopId, _config);
 

@@ -28,7 +28,7 @@ public sealed record OptimizeListingApiRequest(
     string? Provider = null);
 
 public sealed record UpdateListingApiRequest(
-    string ShopId,
+    string? ShopId,
     string Title,
     string Description,
     IReadOnlyList<string> Tags,

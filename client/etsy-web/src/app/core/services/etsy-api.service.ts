@@ -897,7 +897,8 @@ export class EtsyApiService {
     state?: string;
   }): Observable<any> {
     const shopId = payload.shopId || this.activeShopId();
-    return this.http.put<any>(`${this.API_BASE}/api/etsy/listings/${listingId}?shopId=${encodeURIComponent(shopId)}`, payload);
+    const body = { ...payload, shopId };
+    return this.http.put<any>(`${this.API_BASE}/api/etsy/listings/${listingId}?shopId=${encodeURIComponent(shopId)}`, body);
   }
 
   getListingAudits(shopId?: string): Observable<SavedListingAuditDto[]> {
