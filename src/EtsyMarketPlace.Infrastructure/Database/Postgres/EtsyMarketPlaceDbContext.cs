@@ -1,3 +1,5 @@
+using EtsyMarketPlace.Domain.Accounting;
+using EtsyMarketPlace.Domain.Accounting.Entities;
 using EtsyMarketPlace.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,6 +37,10 @@ public class EtsyMarketPlaceDbContext : DbContext
     public DbSet<AiUsageRecordEntity> AiUsageHistory => Set<AiUsageRecordEntity>();
     public DbSet<TrackingItemEntity> TrackingItems => Set<TrackingItemEntity>();
     public DbSet<TrackingSnapshotEntity> TrackingSnapshots => Set<TrackingSnapshotEntity>();
+    public DbSet<OperatingExpenseEntry> AccountingOperatingExpenses => Set<OperatingExpenseEntry>();
+    public DbSet<FixedAssetItem> AccountingFixedAssets => Set<FixedAssetItem>();
+    public DbSet<InventoryPeriodAdjustment> AccountingInventoryAdjustments => Set<InventoryPeriodAdjustment>();
+    public DbSet<ShopAccountingProfile> AccountingShopProfiles => Set<ShopAccountingProfile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -511,6 +517,89 @@ public class EtsyMarketPlaceDbContext : DbContext
             entity.Property(e => e.OpportunityScore).HasColumnName("opportunity_score");
 
             entity.HasIndex(e => e.TrackingItemId);
+        });
+
+        // 23. AccountingOperatingExpenses (TDHP 611–689 / KKEG 950 / Bağ-Kur 890)
+        modelBuilder.Entity<OperatingExpenseEntry>(entity =>
+        {
+            entity.ToTable("accounting_operating_expenses");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(e => e.ShopId).HasColumnName("shop_id").IsRequired().HasMaxLength(64);
+            entity.Property(e => e.EntryDate).HasColumnName("entry_date");
+            entity.Property(e => e.DocumentNo).HasColumnName("document_no").HasMaxLength(128);
+            entity.Property(e => e.Category).HasColumnName("category").HasConversion<int>();
+            entity.Property(e => e.Description).HasColumnName("description").IsRequired().HasMaxLength(512);
+            entity.Property(e => e.Amount).HasColumnName("amount").HasPrecision(18, 4);
+            entity.Property(e => e.Currency).HasColumnName("currency").IsRequired().HasMaxLength(8);
+            entity.Property(e => e.ExchangeRateToTry).HasColumnName("exchange_rate_to_try").HasPrecision(18, 4);
+            entity.Property(e => e.AmountTry).HasColumnName("amount_try").HasPrecision(18, 4);
+            entity.Property(e => e.IsTaxDeductible).HasColumnName("is_tax_deductible");
+            entity.Property(e => e.Frequency).HasColumnName("frequency").HasConversion<int>();
+            entity.Property(e => e.RecurringEndDate).HasColumnName("recurring_end_date");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => new { e.ShopId, e.EntryDate });
+        });
+
+        // 24. AccountingFixedAssets (TDHP 253 / 255 / 257 Amortisman Kartları)
+        modelBuilder.Entity<FixedAssetItem>(entity =>
+        {
+            entity.ToTable("accounting_fixed_assets");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).HasColumnName("id").ValueGeneratedOnAdd();
+            entity.Property(e => e.ShopId).HasColumnName("shop_id").IsRequired().HasMaxLength(64);
+            entity.Property(e => e.AssetName).HasColumnName("asset_name").IsRequired().HasMaxLength(256);
+            entity.Property(e => e.AssetAccountCode).HasColumnName("asset_account_code").IsRequired().HasMaxLength(16);
+            entity.Property(e => e.ExpenseTargetCategory).HasColumnName("expense_target_category").HasConversion<int>();
+            entity.Property(e => e.AcquisitionDate).HasColumnName("acquisition_date");
+            entity.Property(e => e.AcquisitionCostTry).HasColumnName("acquisition_cost_try").HasPrecision(18, 4);
+            entity.Property(e => e.SalvageValueTry).HasColumnName("salvage_value_try").HasPrecision(18, 4);
+            entity.Property(e => e.UsefulLifeYears).HasColumnName("useful_life_years");
+            entity.Property(e => e.Method).HasColumnName("method").HasConversion<int>();
+            entity.Property(e => e.IsActive).HasColumnName("is_active");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+            entity.HasIndex(e => e.ShopId);
+        });
+
+        // 25. AccountingInventoryAdjustments (Aralıklı Envanter Dönem Sayımları)
+        modelBuilder.Entity<InventoryPeriodAdjustment>(entity =>
+        {
+            entity.ToTable("accounting_inventory_adjustments");
+            entity.HasKey(e => new { e.ShopId, e.Year, e.Month });
+            entity.Property(e => e.ShopId).HasColumnName("shop_id").IsRequired().HasMaxLength(64);
+            entity.Property(e => e.Year).HasColumnName("year");
+            entity.Property(e => e.Month).HasColumnName("month");
+            entity.Property(e => e.OpeningInventoryTry).HasColumnName("opening_inventory_try").HasPrecision(18, 4);
+            entity.Property(e => e.GrossPurchasesTry).HasColumnName("gross_purchases_try").HasPrecision(18, 4);
+            entity.Property(e => e.PurchaseReturnsAndDiscountsTry).HasColumnName("purchase_returns_and_discounts_try").HasPrecision(18, 4);
+            entity.Property(e => e.ClosingInventoryTry).HasColumnName("closing_inventory_try").HasPrecision(18, 4);
+            entity.Property(e => e.Notes).HasColumnName("notes").HasMaxLength(1000);
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+        });
+
+        // 26. AccountingShopProfiles (Mağaza TDHP Politikası & Genç Girişimci Profili)
+        modelBuilder.Entity<ShopAccountingProfile>(entity =>
+        {
+            entity.ToTable("accounting_shop_profiles");
+            entity.HasKey(e => e.ShopId);
+            entity.Property(e => e.ShopId).HasColumnName("shop_id").IsRequired().HasMaxLength(64);
+            entity.Property(e => e.CommissionTarget).HasColumnName("commission_target").HasConversion<int>();
+            entity.Property(e => e.ShippingTarget).HasColumnName("shipping_target").HasConversion<int>();
+            entity.Property(e => e.CanceledCostTarget).HasColumnName("canceled_cost_target").HasConversion<int>();
+            entity.Property(e => e.InventoryMethod).HasColumnName("inventory_method").HasConversion<int>();
+            entity.Property(e => e.TaxRegime).HasColumnName("tax_regime").HasConversion<int>();
+            entity.Property(e => e.YoungEntrepreneurModeEnabled).HasColumnName("young_entrepreneur_mode_enabled");
+            entity.Property(e => e.YoungEntrepreneurAnnualLimitTry).HasColumnName("young_entrepreneur_annual_limit_try").HasPrecision(18, 4);
+            entity.Property(e => e.YoungEntrepreneurPriorUsedTry).HasColumnName("young_entrepreneur_prior_used_try").HasPrecision(18, 4);
+            entity.Property(e => e.EExportExemptionRatePct).HasColumnName("e_export_exemption_rate_pct").HasPrecision(18, 4);
+            entity.Property(e => e.CustomOrCorporateTaxRatePct).HasColumnName("custom_or_corporate_tax_rate_pct").HasPrecision(18, 4);
+            entity.Property(e => e.CustomGvkBracketsJson).HasColumnName("custom_gvk_brackets_json").HasMaxLength(4000);
+            entity.Property(e => e.IncludeFxSpreadAndExchangeDifference).HasColumnName("include_fx_spread_and_exchange_difference");
+            entity.Property(e => e.UpdatedAt).HasColumnName("updated_at");
         });
     }
 }

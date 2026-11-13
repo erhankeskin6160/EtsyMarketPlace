@@ -270,7 +270,8 @@
     .nav-tab:hover {
       color: #f1f5f9;
     }
-    .nav-tab.active {
+    .nav-tab.active,
+    .nav-tab[aria-selected="true"] {
       color: #38bdf8;
       border-bottom-color: #38bdf8;
       background: rgba(56, 189, 248, 0.05);

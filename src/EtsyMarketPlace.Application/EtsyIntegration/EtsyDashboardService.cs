@@ -62,7 +62,7 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
         return (Array.Empty<EtsyDashboardLedgerFee>(), "bilinmeyen hata");
     }
 
-    private static (DateTimeOffset Start, DateTimeOffset End) ResolvePeriod(string? period, DateTimeOffset? startDate, DateTimeOffset? endDate)
+    public static (DateTimeOffset Start, DateTimeOffset End) ResolvePeriod(string? period, DateTimeOffset? startDate, DateTimeOffset? endDate)
     {
         var now = DateTimeOffset.UtcNow;
         if (startDate.HasValue && endDate.HasValue)

@@ -527,6 +527,21 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         var uid = LongValue(item, "buyer_user_id");
         long? buyerUserId = uid > 0 ? uid : null;
 
+        var countryCode = StringValue(item, "country_iso", "country_code");
+        if (string.IsNullOrWhiteSpace(countryCode))
+        {
+            string[] nestedAddr = { "shipping_address", "destination_address", "buyer_address", "recipient" };
+            foreach (var nestedProp in nestedAddr)
+            {
+                if (item.TryGetProperty(nestedProp, out var sub) && sub.ValueKind == JsonValueKind.Object)
+                {
+                    countryCode = StringValue(sub, "country_iso", "country_code");
+                    if (!string.IsNullOrWhiteSpace(countryCode)) break;
+                }
+            }
+        }
+        countryCode = string.IsNullOrWhiteSpace(countryCode) ? null : countryCode.Trim().ToUpperInvariant();
+
         return new EtsyDashboardReceipt(
             receiptId,
             DateValue(item, "created_timestamp", "create_timestamp"),
@@ -545,7 +560,8 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             buyerUserId,
             buyerEmail,
             status,
-            isShipped);
+            isShipped,
+            countryCode);
     }
 
     private static EtsyDashboardLedgerFee? ParseDashboardLedgerFee(JsonElement item, string shopId)

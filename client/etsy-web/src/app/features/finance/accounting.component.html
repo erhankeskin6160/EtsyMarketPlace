@@ -263,6 +263,14 @@
           (click)="switchTab('ledger')">
           📋 Ödeme Defteri Kayıtları
         </button>
+        <button
+          class="nav-tab"
+          role="tab"
+          [attr.aria-selected]="activeTab === 'income-statement'"
+          [class.active]="activeTab === 'income-statement'"
+          (click)="switchTab('income-statement')">
+          📜 Resmi Gelir Tablosu
+        </button>
       </div>
 
       <!-- 4. TAB CONTENTS -->
@@ -1252,6 +1260,18 @@
               </tbody>
             </table>
           </div>
+        </div>
+
+        <!-- TAB 6: RESMİ GELİR TABLOSU (MSUGT 600–692) -->
+        <div *ngIf="activeTab === 'income-statement'" class="tab-pane">
+          <app-income-statement-tab
+            [shopId]="activeShopId"
+            [period]="incomeStatementApiPeriod"
+            [startDate]="incomeStatementStartDate"
+            [endDate]="incomeStatementEndDate"
+            [isTry]="isTry"
+            [reloadToken]="incomeStatementReloadToken">
+          </app-income-statement-tab>
         </div>
 
       </div>

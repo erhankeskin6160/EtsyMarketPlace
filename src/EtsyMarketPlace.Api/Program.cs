@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.AspNetCore.DataProtection;
 using EtsyMarketPlace.Api.Services;
 using EtsyMarketPlace.Application.AbTesting;
+using EtsyMarketPlace.Application.Accounting;
 using EtsyMarketPlace.Application.AiUsage;
 using EtsyMarketPlace.Application.Auth;
 using EtsyMarketPlace.Application.Banking;
@@ -144,6 +145,7 @@ builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
 builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
 builder.Services.AddScoped<IShopSettingsRepository, EfPostgreSqlShopSettingsRepository>();
+builder.Services.AddScoped<IAccountingRepository, EfPostgreSqlAccountingRepository>();
 
 // PostgreSQL 16 EF Core Persistence & Unit of Work (FAZ 1: Finansal Veri Görünürlüğü)
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();

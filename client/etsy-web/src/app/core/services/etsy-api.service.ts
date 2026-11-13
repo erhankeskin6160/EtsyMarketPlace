@@ -3,6 +3,13 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { DailyBrief, FinancialSummary, BankDeposit, EtsyConnectedShopDto } from '../models/etsy.models';
 import { AiFinancialForecastRequestDto, AiFinancialForecastResponseDto } from '../models/accounting.models';
+import {
+  FixedAssetItemDto,
+  IncomeStatementResponseDto,
+  InventoryPeriodAdjustmentDto,
+  OperatingExpenseEntryDto,
+  ShopAccountingProfileDto
+} from '../models/income-statement.models';
 import { User, UpdateUserRequest, AuditLog, SystemStats } from '../models/auth.models';
 import { environment } from '../../../environments/environment';
 
@@ -1051,6 +1058,84 @@ export class EtsyApiService {
 
   private _noopMcpMarker(): Observable<any> {
     return this.http.get<any>(`${this.API_BASE}/api/system/version`);
+  }
+
+  // ── Resmi Gelir Tablosu (TDHP 600–692) & Genel Muhasebe Endpoints ──────────
+  getIncomeStatement(
+    period: string = 'this_month',
+    startDate?: Date | null,
+    endDate?: Date | null,
+    youngEntrepreneurMode?: boolean | null,
+    shopId?: string
+  ): Observable<IncomeStatementResponseDto> {
+    const sId = shopId || this.activeShopId();
+    const params = new URLSearchParams();
+    params.set('shopId', sId);
+    params.set('period', period);
+    if (startDate) params.set('startDate', startDate.toISOString());
+    if (endDate) params.set('endDate', endDate.toISOString());
+    if (youngEntrepreneurMode !== undefined && youngEntrepreneurMode !== null) {
+      params.set('youngEntrepreneurMode', String(youngEntrepreneurMode));
+    }
+    return this.http.get<IncomeStatementResponseDto>(`${this.API_BASE}/api/etsy/accounting/income-statement?${params.toString()}`);
+  }
+
+  saveAccountingProfile(profile: ShopAccountingProfileDto, shopId?: string): Observable<ShopAccountingProfileDto> {
+    const sId = shopId || profile.shopId || this.activeShopId();
+    return this.http.put<ShopAccountingProfileDto>(
+      `${this.API_BASE}/api/etsy/accounting/profile?shopId=${encodeURIComponent(sId)}`,
+      { ...profile, shopId: sId }
+    );
+  }
+
+  createOperatingExpense(entry: Partial<OperatingExpenseEntryDto>, shopId?: string): Observable<OperatingExpenseEntryDto> {
+    const sId = shopId || entry.shopId || this.activeShopId();
+    return this.http.post<OperatingExpenseEntryDto>(
+      `${this.API_BASE}/api/etsy/accounting/expenses?shopId=${encodeURIComponent(sId)}`,
+      { ...entry, shopId: sId }
+    );
+  }
+
+  updateOperatingExpense(id: number, entry: Partial<OperatingExpenseEntryDto>, shopId?: string): Observable<OperatingExpenseEntryDto> {
+    const sId = shopId || entry.shopId || this.activeShopId();
+    return this.http.put<OperatingExpenseEntryDto>(
+      `${this.API_BASE}/api/etsy/accounting/expenses/${id}?shopId=${encodeURIComponent(sId)}`,
+      { ...entry, shopId: sId }
+    );
+  }
+
+  deleteOperatingExpense(id: number, shopId?: string): Observable<boolean> {
+    const sId = shopId || this.activeShopId();
+    return this.http.delete<boolean>(`${this.API_BASE}/api/etsy/accounting/expenses/${id}?shopId=${encodeURIComponent(sId)}`);
+  }
+
+  createFixedAsset(asset: Partial<FixedAssetItemDto>, shopId?: string): Observable<FixedAssetItemDto> {
+    const sId = shopId || asset.shopId || this.activeShopId();
+    return this.http.post<FixedAssetItemDto>(
+      `${this.API_BASE}/api/etsy/accounting/fixed-assets?shopId=${encodeURIComponent(sId)}`,
+      { ...asset, shopId: sId }
+    );
+  }
+
+  updateFixedAsset(id: number, asset: Partial<FixedAssetItemDto>, shopId?: string): Observable<FixedAssetItemDto> {
+    const sId = shopId || asset.shopId || this.activeShopId();
+    return this.http.put<FixedAssetItemDto>(
+      `${this.API_BASE}/api/etsy/accounting/fixed-assets/${id}?shopId=${encodeURIComponent(sId)}`,
+      { ...asset, shopId: sId }
+    );
+  }
+
+  deleteFixedAsset(id: number, shopId?: string): Observable<boolean> {
+    const sId = shopId || this.activeShopId();
+    return this.http.delete<boolean>(`${this.API_BASE}/api/etsy/accounting/fixed-assets/${id}?shopId=${encodeURIComponent(sId)}`);
+  }
+
+  saveInventoryAdjustment(adjustment: InventoryPeriodAdjustmentDto, shopId?: string): Observable<InventoryPeriodAdjustmentDto> {
+    const sId = shopId || adjustment.shopId || this.activeShopId();
+    return this.http.put<InventoryPeriodAdjustmentDto>(
+      `${this.API_BASE}/api/etsy/accounting/inventory-adjustment?shopId=${encodeURIComponent(sId)}`,
+      { ...adjustment, shopId: sId }
+    );
   }
 }
 

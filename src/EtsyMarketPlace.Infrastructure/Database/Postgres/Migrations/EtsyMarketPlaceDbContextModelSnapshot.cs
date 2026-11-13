@@ -22,6 +22,279 @@ namespace EtsyMarketPlace.Infrastructure.Database.Postgres.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Accounting.Entities.FixedAssetItem", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("AcquisitionCostTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("acquisition_cost_try");
+
+                    b.Property<DateTime>("AcquisitionDate")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("acquisition_date");
+
+                    b.Property<string>("AssetAccountCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("asset_account_code");
+
+                    b.Property<string>("AssetName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("asset_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("ExpenseTargetCategory")
+                        .HasColumnType("integer")
+                        .HasColumnName("expense_target_category");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<int>("Method")
+                        .HasColumnType("integer")
+                        .HasColumnName("method");
+
+                    b.Property<decimal>("SalvageValueTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("salvage_value_try");
+
+                    b.Property<string>("ShopId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("shop_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("UsefulLifeYears")
+                        .HasColumnType("integer")
+                        .HasColumnName("useful_life_years");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShopId");
+
+                    b.ToTable("accounting_fixed_assets", (string)null);
+                });
+
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Accounting.Entities.InventoryPeriodAdjustment", b =>
+                {
+                    b.Property<string>("ShopId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("shop_id");
+
+                    b.Property<int>("Year")
+                        .HasColumnType("integer")
+                        .HasColumnName("year");
+
+                    b.Property<int>("Month")
+                        .HasColumnType("integer")
+                        .HasColumnName("month");
+
+                    b.Property<decimal>("ClosingInventoryTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("closing_inventory_try");
+
+                    b.Property<decimal>("GrossPurchasesTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("gross_purchases_try");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("notes");
+
+                    b.Property<decimal>("OpeningInventoryTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("opening_inventory_try");
+
+                    b.Property<decimal>("PurchaseReturnsAndDiscountsTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("purchase_returns_and_discounts_try");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("ShopId", "Year", "Month");
+
+                    b.ToTable("accounting_inventory_adjustments", (string)null);
+                });
+
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Accounting.Entities.OperatingExpenseEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("amount");
+
+                    b.Property<decimal>("AmountTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("amount_try");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer")
+                        .HasColumnName("category");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("DocumentNo")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("document_no");
+
+                    b.Property<DateTime>("EntryDate")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("entry_date");
+
+                    b.Property<decimal>("ExchangeRateToTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("exchange_rate_to_try");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("integer")
+                        .HasColumnName("frequency");
+
+                    b.Property<bool>("IsTaxDeductible")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_tax_deductible");
+
+                    b.Property<DateTime?>("RecurringEndDate")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("recurring_end_date");
+
+                    b.Property<string>("ShopId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("shop_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ShopId", "EntryDate");
+
+                    b.ToTable("accounting_operating_expenses", (string)null);
+                });
+
+            modelBuilder.Entity("EtsyMarketPlace.Domain.Accounting.Entities.ShopAccountingProfile", b =>
+                {
+                    b.Property<string>("ShopId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("shop_id");
+
+                    b.Property<int>("CanceledCostTarget")
+                        .HasColumnType("integer")
+                        .HasColumnName("canceled_cost_target");
+
+                    b.Property<int>("CommissionTarget")
+                        .HasColumnType("integer")
+                        .HasColumnName("commission_target");
+
+                    b.Property<string>("CustomGvkBracketsJson")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("custom_gvk_brackets_json");
+
+                    b.Property<decimal>("CustomOrCorporateTaxRatePct")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("custom_or_corporate_tax_rate_pct");
+
+                    b.Property<decimal>("EExportExemptionRatePct")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("e_export_exemption_rate_pct");
+
+                    b.Property<bool>("IncludeFxSpreadAndExchangeDifference")
+                        .HasColumnType("boolean")
+                        .HasColumnName("include_fx_spread_and_exchange_difference");
+
+                    b.Property<int>("InventoryMethod")
+                        .HasColumnType("integer")
+                        .HasColumnName("inventory_method");
+
+                    b.Property<int>("ShippingTarget")
+                        .HasColumnType("integer")
+                        .HasColumnName("shipping_target");
+
+                    b.Property<int>("TaxRegime")
+                        .HasColumnType("integer")
+                        .HasColumnName("tax_regime");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<decimal>("YoungEntrepreneurAnnualLimitTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("young_entrepreneur_annual_limit_try");
+
+                    b.Property<bool>("YoungEntrepreneurModeEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("young_entrepreneur_mode_enabled");
+
+                    b.Property<decimal>("YoungEntrepreneurPriorUsedTry")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("young_entrepreneur_prior_used_try");
+
+                    b.HasKey("ShopId");
+
+                    b.ToTable("accounting_shop_profiles", (string)null);
+                });
+
             modelBuilder.Entity("EtsyMarketPlace.Domain.Entities.AiUsageRecordEntity", b =>
                 {
                     b.Property<long>("Id")

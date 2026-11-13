@@ -312,7 +312,131 @@ public static class EtsyLedgerFinancialEngine
 
         return monthly;
     }
+
+    /// <summary>
+    /// Tekdüzen Hesap Planı (MSUGT 600–692) resmi gelir tablosu için defter kayıtlarının
+    /// alt kırılımlarını üretir. Mevcut <see cref="BuildReport"/> formülünü değiştirmez;
+    /// toplam komisyon, reklam, KDV/düzenleyici ücret ve iade tutarları birebir örtüşür.
+    /// </summary>
+    public static EtsyLedgerSubBreakdown BuildSubBreakdown(IReadOnlyList<EtsyLedgerEntryDetail> entries)
+    {
+        decimal grossUsd = 0m, grossRawTry = 0m;
+        decimal txFeeUsd = 0m, txFeeTry = 0m;
+        decimal listFeeUsd = 0m, listFeeTry = 0m;
+        decimal procFeeUsd = 0m, procFeeTry = 0m;
+        decimal regTaxFeeUsd = 0m, regTaxFeeTry = 0m;
+        decimal otherFeeUsd = 0m, otherFeeTry = 0m;
+        decimal innerAdUsd = 0m, innerAdTry = 0m;
+        decimal offsiteAdUsd = 0m, offsiteAdTry = 0m;
+        decimal refundUsd = 0m, refundTry = 0m;
+        decimal shippingUsd = 0m, shippingTry = 0m;
+        decimal depositUsd = 0m, depositTry = 0m;
+
+        foreach (var e in entries)
+        {
+            switch (e.Type)
+            {
+                case "sale":
+                    grossUsd += e.Amount;
+                    grossRawTry += e.AmountTry;
+                    break;
+                case "refund":
+                    refundUsd += -e.Amount;
+                    refundTry += -e.AmountTry;
+                    break;
+                case "ad_fee":
+                    innerAdUsd += -e.Amount;
+                    innerAdTry += -e.AmountTry;
+                    break;
+                case "offsite_ads":
+                    offsiteAdUsd += -e.Amount;
+                    offsiteAdTry += -e.AmountTry;
+                    break;
+                case "shipping":
+                    shippingUsd += -e.Amount;
+                    shippingTry += -e.AmountTry;
+                    break;
+                case "deposit":
+                    depositUsd += e.Amount;
+                    depositTry += e.AmountTry;
+                    break;
+                case "transaction_fee":
+                    txFeeUsd += -e.Amount;
+                    txFeeTry += -e.AmountTry;
+                    break;
+                case "listing_fee":
+                    listFeeUsd += -e.Amount;
+                    listFeeTry += -e.AmountTry;
+                    break;
+                case "payment_processing":
+                    procFeeUsd += -e.Amount;
+                    procFeeTry += -e.AmountTry;
+                    break;
+                case "regulatory_operating_fee":
+                case "etsy_tax_fee":
+                    regTaxFeeUsd += -e.Amount;
+                    regTaxFeeTry += -e.AmountTry;
+                    break;
+                default:
+                    if (e.Amount < 0 || e.NetAmount < 0)
+                    {
+                        otherFeeUsd += -e.Amount;
+                        otherFeeTry += -e.AmountTry;
+                    }
+                    break;
+            }
+        }
+
+        return new EtsyLedgerSubBreakdown(
+            GrossSalesUsd: grossUsd,
+            GrossSalesRawTry: grossRawTry,
+            TransactionFeeUsd: txFeeUsd,
+            TransactionFeeTry: txFeeTry,
+            ListingFeeUsd: listFeeUsd,
+            ListingFeeTry: listFeeTry,
+            PaymentProcessingUsd: procFeeUsd,
+            PaymentProcessingTry: procFeeTry,
+            RegulatoryAndTaxFeeUsd: regTaxFeeUsd,
+            RegulatoryAndTaxFeeTry: regTaxFeeTry,
+            OtherUnknownFeeUsd: otherFeeUsd,
+            OtherUnknownFeeTry: otherFeeTry,
+            InnerAdFeeUsd: innerAdUsd,
+            InnerAdFeeTry: innerAdTry,
+            OffsiteAdFeeUsd: offsiteAdUsd,
+            OffsiteAdFeeTry: offsiteAdTry,
+            RefundUsd: refundUsd,
+            RefundTry: refundTry,
+            ShippingLedgerNetUsd: shippingUsd,
+            ShippingLedgerNetTry: shippingTry,
+            DepositUsd: depositUsd,
+            DepositTry: depositTry);
+    }
 }
+
+/// <summary>Resmi MSUGT Gelir Tablosu için defter alt kırılımları (giderler net pozitif tutar).</summary>
+public sealed record EtsyLedgerSubBreakdown(
+    decimal GrossSalesUsd,
+    decimal GrossSalesRawTry,
+    decimal TransactionFeeUsd,
+    decimal TransactionFeeTry,
+    decimal ListingFeeUsd,
+    decimal ListingFeeTry,
+    decimal PaymentProcessingUsd,
+    decimal PaymentProcessingTry,
+    decimal RegulatoryAndTaxFeeUsd,
+    decimal RegulatoryAndTaxFeeTry,
+    decimal OtherUnknownFeeUsd,
+    decimal OtherUnknownFeeTry,
+    decimal InnerAdFeeUsd,
+    decimal InnerAdFeeTry,
+    decimal OffsiteAdFeeUsd,
+    decimal OffsiteAdFeeTry,
+    decimal RefundUsd,
+    decimal RefundTry,
+    decimal ShippingLedgerNetUsd,
+    decimal ShippingLedgerNetTry,
+    decimal DepositUsd,
+    decimal DepositTry);
 
 /// <summary>Sunucu finans motoru icin tam alanli defter kaydi (tutarlar USD'ye cevrilmis).</summary>
 public sealed record EtsyLedgerEntryDetail(

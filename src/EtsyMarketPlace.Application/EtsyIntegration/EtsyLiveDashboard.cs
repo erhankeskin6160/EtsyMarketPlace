@@ -843,7 +843,8 @@ public sealed record EtsyDashboardReceipt(
     long? BuyerUserId = null,
     string? BuyerEmail = null,
     string? Status = null,
-    bool IsShipped = false);
+    bool IsShipped = false,
+    string? CountryCode = null);
 
 public sealed record EtsyDashboardLedgerFee(string Type, long ReferenceId, string? Description, decimal Amount, DateTimeOffset? CreatedAt = null, long EntryId = 0L);
 

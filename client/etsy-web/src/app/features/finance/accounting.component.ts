@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { EtsyApiService, EtsyBankPayoutDto, EtsyPaymentReserveSnapshotDto, ShopListingItemDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService } from '../../core/services/ai-settings.service';
+import { IncomeStatementTabComponent } from './income-statement/income-statement-tab.component';
 import { 
   PaymentLedgerEntry, 
   BankPayoutRecord, 
@@ -81,7 +82,7 @@ export interface OrderCostShippingRow {
 @Component({
   selector: 'app-accounting',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, IncomeStatementTabComponent],
   templateUrl: './accounting.component.html',
   styleUrls: ['./accounting.component.css']
 })
@@ -90,7 +91,8 @@ export class AccountingComponent implements OnInit, OnDestroy {
   readonly aiSettings = inject(AiSettingsService);
   Math = Math;
   isTry = true;
-  activeTab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' = 'orders';
+  activeTab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' | 'income-statement' = 'orders';
+  incomeStatementReloadToken = 0;
   isAnalyzingForecast = false;
   aiForecast: AiFinancialForecastResponseDto | null = null;
   selectedHorizonCode: '30d' | '60d' | '90d' | '180d' = '30d';
@@ -899,7 +901,28 @@ export class AccountingComponent implements OnInit, OnDestroy {
     this.updateLiveForecastBaseline();
   }
 
-  switchTab(tab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger'): void {
+  get activeShopId(): string {
+    return this.etsyApi.activeShopId();
+  }
+
+  get incomeStatementApiPeriod(): string {
+    switch (this.selectedDatePreset) {
+      case 'thisMonth': return 'this_month';
+      case 'lastMonth': return 'last_month';
+      case 'all': return 'all_time';
+      default: return 'custom';
+    }
+  }
+
+  get incomeStatementStartDate(): Date {
+    return this.parseTurkishDate(this.startDate, false);
+  }
+
+  get incomeStatementEndDate(): Date {
+    return this.parseTurkishDate(this.endDate, true);
+  }
+
+  switchTab(tab: 'charts' | 'forecast' | 'period' | 'orders' | 'ledger' | 'income-statement'): void {
     this.activeTab = tab;
     if (tab === 'forecast') {
       if (this.simTargetRateTry <= 0) {
@@ -2098,6 +2121,7 @@ export class AccountingComponent implements OnInit, OnDestroy {
   }
 
   loadLiveOrders(isManualRefresh: boolean = false, fromVdsSync: boolean = false): void {
+    this.incomeStatementReloadToken++;
     if (isManualRefresh) {
       this.isRefreshing = true;
     }
