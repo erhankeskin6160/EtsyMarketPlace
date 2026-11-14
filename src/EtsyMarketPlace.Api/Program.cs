@@ -150,6 +150,7 @@ var dbPath = Path.Combine(dataDir, "etsy-finance.db");
 
 builder.Services.AddSingleton<ISqliteMigrationRunner, SqliteMigrationRunner>();
 builder.Services.AddSingleton<SqliteEtsyIntegrationStore>();
+builder.Services.AddSingleton<IEtsyRawDataCacheStore>(sp => sp.GetRequiredService<SqliteEtsyIntegrationStore>());
 builder.Services.AddSingleton<SqliteAccountingStore>();
 builder.Services.AddScoped<IEtsyTokenStore, EfPostgreSqlTokenStore>();
 builder.Services.AddScoped<IUserRepository, EfPostgreSqlUserRepository>();
@@ -236,6 +237,7 @@ builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketRes
 builder.Services.AddScoped<EtsyMarketPlace.Application.MarketResearch.IMarketKeywordTrackingService, EtsyMarketPlace.Application.MarketResearch.MarketKeywordTrackingService>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.AiUsage.IAiBalanceService, EtsyMarketPlace.Application.AiUsage.AiBalanceService>();
 builder.Services.AddHostedService<EtsyIntegrationDatabaseInitializer>();
+builder.Services.AddHostedService<EtsyDeltaSyncBackgroundService>();
 builder.Services.AddScoped<McpToolHandler>();
 builder.Services.AddHttpClient<EtsyMarketPlace.Application.Mcp.IEtsyOfficialMcpClient, EtsyMarketPlace.Infrastructure.Mcp.EtsyOfficialMcpClient>();
 builder.Services.AddScoped<EtsyMarketPlace.Application.Mcp.IMcpServerService, EtsyMarketPlace.Application.Mcp.McpServerService>();

@@ -11,6 +11,7 @@ public static class EtsyFinanceMigrations
         new Migration002_CreateIdentityAndAuditTables(),
         new Migration003_CreatePerformanceIndexes(),
         new Migration004_SeedDefaultAdminUser(),
-        new Migration005_CreateAccountingIncomeStatementTables()
+        new Migration005_CreateAccountingIncomeStatementTables(),
+        new Migration006_CreateEtsyRawCacheTables()
     };
 }

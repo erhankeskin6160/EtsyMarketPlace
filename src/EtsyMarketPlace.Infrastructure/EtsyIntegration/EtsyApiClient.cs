@@ -1,13 +1,19 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using EtsyMarketPlace.Application.EtsyIntegration;
 using Microsoft.Extensions.Options;
 
 namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
-public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions> options, IShopSettingsRepository settingsRepository) : IEtsyDataClient
+public sealed class EtsyApiClient(
+    HttpClient httpClient,
+    IOptions<EtsyApiOptions> options,
+    IShopSettingsRepository settingsRepository,
+    IEtsyRawDataCacheStore? rawCacheStore = null) : IEtsyDataClient
 {
     public static bool TryGetOrderReferenceByTransaction(long transactionId, out TransactionOrderReference? reference)
     {
@@ -66,11 +72,26 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         var ids = ledgerEntryIds.Where(id => id > 0).Distinct().Take(25).ToList();
         if (ids.Count == 0) return result;
 
+        if (rawCacheStore is not null)
+        {
+            var cachedMappings = await rawCacheStore.GetLedgerReceiptMappingsAsync(shopId, ids, cancellationToken);
+            foreach (var kv in cachedMappings)
+            {
+                if (kv.Key > 0 && kv.Value > 0)
+                {
+                    result[kv.Key] = kv.Value;
+                }
+            }
+        }
+
+        var missingIds = ids.Where(id => !result.ContainsKey(id)).ToList();
+        if (missingIds.Count == 0) return result;
+
         var baseUrl = _options.ApiBaseUrl.TrimEnd('/');
         var apiKey = await ResolveApiKeyHeaderAsync(shopId, cancellationToken);
 
         using var throttle = new SemaphoreSlim(2, 2);
-        var pairs = await Task.WhenAll(ids.Select(async entryId =>
+        var pairs = await Task.WhenAll(missingIds.Select(async entryId =>
         {
             await throttle.WaitAsync(cancellationToken);
             try
@@ -129,12 +150,19 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             return (entryId, 0L);
         }));
 
+        var newlyResolved = new Dictionary<long, long>();
         foreach (var (entryId, receiptId) in pairs)
         {
             if (receiptId > 0)
             {
                 result[entryId] = receiptId;
+                newlyResolved[entryId] = receiptId;
             }
+        }
+
+        if (rawCacheStore is not null && newlyResolved.Count > 0)
+        {
+            await rawCacheStore.UpsertLedgerReceiptMappingsAsync(shopId, newlyResolved, cancellationToken);
         }
 
         return result;
@@ -150,6 +178,17 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
     {
         if (receiptId <= 0) return null;
 
+        if (rawCacheStore is not null)
+        {
+            var cachedJson = await rawCacheStore.GetRawReceiptJsonByIdAsync(shopId, receiptId, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(cachedJson))
+            {
+                using var cachedDoc = JsonDocument.Parse(cachedJson);
+                var parsedCached = ParseDashboardReceipt(cachedDoc.RootElement, shopId);
+                if (parsedCached is not null) return parsedCached;
+            }
+        }
+
         try
         {
             var baseUrl = _options.ApiBaseUrl.TrimEnd('/');
@@ -164,16 +203,32 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             if (doc is null) return null;
 
             var root = doc.RootElement;
+            JsonElement? receiptElement = null;
             if (root.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in results.EnumerateArray())
                 {
-                    return ParseDashboardReceipt(item, shopId);
+                    receiptElement = item;
+                    break;
                 }
-                return null;
+            }
+            else
+            {
+                receiptElement = root;
             }
 
-            return ParseDashboardReceipt(root, shopId);
+            if (receiptElement is null) return null;
+
+            if (rawCacheStore is not null)
+            {
+                var cachedItem = ToCachedReceiptItem(receiptElement.Value, DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+                if (cachedItem is not null)
+                {
+                    await rawCacheStore.UpsertRawReceiptsAsync(shopId, new[] { cachedItem }, cancellationToken);
+                }
+            }
+
+            return ParseDashboardReceipt(receiptElement.Value, shopId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -323,16 +378,60 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         var minUnix = windowStart.ToUnixTimeSeconds();
         var rawMaxUnix = windowEnd.ToUnixTimeSeconds();
         var maxUnix = windowEnd >= now.AddMinutes(-5) ? ((rawMaxUnix + 59) / 60) * 60 : rawMaxUnix;
-        var cacheKey = $"{_options.ApiBaseUrl}:{shopId}:{minUnix}:{maxUnix}";
+        var isHistorical = windowEnd < now.AddDays(-2);
+        var forceRefresh = EtsySyncContext.ForceDeltaRefresh;
 
-        if (_ledgerWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
+        if (rawCacheStore is not null)
         {
-            return await cached.Task;
+            var datasetKey = isHistorical ? $"ledger_hist:{minUnix}:{maxUnix}" : $"ledger_active:{minUnix}";
+            var cacheKey = $"{_options.ApiBaseUrl}:{shopId}:{minUnix}:{maxUnix}";
+            if (!forceRefresh && _ledgerWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
+            {
+                return await cached.Task;
+            }
+
+            var ttl = isHistorical ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(60);
+            var dbTask = ExecuteDbFirstSyncAsync(
+                shopId,
+                datasetKey,
+                "ledger_active:latest",
+                minUnix,
+                maxUnix,
+                isHistorical,
+                async (fetchMin, fetchMax, _) =>
+                {
+                    var fetched = await FetchRawWindowElementsAsync(routeTemplate, shopId, apiKeyHeader, fetchMin, fetchMax, cancellationToken);
+                    var rawItems = ToCachedLedgerItems(fetched, fetchMin);
+                    await rawCacheStore.UpsertRawLedgerItemsAsync(shopId, rawItems, cancellationToken);
+                },
+                async (readMin, readMax) =>
+                {
+                    var jsons = await rawCacheStore.GetRawLedgerJsonByRangeAsync(shopId, readMin, readMax, cancellationToken);
+                    return DeserializeJsonElements(jsons);
+                },
+                cancellationToken);
+
+            _ledgerWindowCache[cacheKey] = (now.Add(ttl), dbTask);
+            try
+            {
+                return await dbTask;
+            }
+            catch
+            {
+                _ledgerWindowCache.TryRemove(cacheKey, out _);
+                throw;
+            }
         }
 
-        var ttl = windowEnd < now.AddDays(-2) ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(60);
+        var memCacheKey = $"{_options.ApiBaseUrl}:{shopId}:{minUnix}:{maxUnix}";
+        if (!forceRefresh && _ledgerWindowCache.TryGetValue(memCacheKey, out var memCached) && memCached.ExpiresAt > now && !memCached.Task.IsFaulted && !memCached.Task.IsCanceled)
+        {
+            return await memCached.Task;
+        }
+
+        var memTtl = isHistorical ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(60);
         var task = FetchRawWindowElementsAsync(routeTemplate, shopId, apiKeyHeader, minUnix, maxUnix, cancellationToken);
-        _ledgerWindowCache[cacheKey] = (now.Add(ttl), task);
+        _ledgerWindowCache[memCacheKey] = (now.Add(memTtl), task);
 
         try
         {
@@ -340,7 +439,7 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         }
         catch
         {
-            _ledgerWindowCache.TryRemove(cacheKey, out _);
+            _ledgerWindowCache.TryRemove(memCacheKey, out _);
             throw;
         }
     }
@@ -411,9 +510,68 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
         var minUnix = startDate.ToUnixTimeSeconds();
         var rawMaxUnix = endDate.ToUnixTimeSeconds();
         var maxUnix = endDate >= now.AddMinutes(-5) ? ((rawMaxUnix + 59) / 60) * 60 : rawMaxUnix;
+        var isHistorical = endDate < now.AddDays(-2);
+        var forceRefresh = EtsySyncContext.ForceDeltaRefresh;
         var cacheKey = $"{_options.ApiBaseUrl}:{routeTemplate}:{shopId}:{minParamName}:{maxParamName}:{minUnix}:{maxUnix}";
 
-        if (_singleRangeWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
+        if (rawCacheStore is not null &&
+            routeTemplate.Contains("receipts", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(minParamName, "min_created", StringComparison.OrdinalIgnoreCase))
+        {
+            var datasetKey = isHistorical ? $"receipts_hist:{minUnix}:{maxUnix}" : $"receipts_active:{minUnix}";
+            if (!forceRefresh && _singleRangeWindowCache.TryGetValue(cacheKey, out var cachedDb) && cachedDb.ExpiresAt > now && !cachedDb.Task.IsFaulted && !cachedDb.Task.IsCanceled)
+            {
+                return await cachedDb.Task;
+            }
+
+            var ttl = isHistorical ? TimeSpan.FromMinutes(30) : TimeSpan.FromSeconds(60);
+            var dbTask = ExecuteDbFirstSyncAsync(
+                shopId,
+                datasetKey,
+                "receipts_active:latest",
+                minUnix,
+                maxUnix,
+                isHistorical,
+                async (fetchMin, fetchMax, isDelta) =>
+                {
+                    var createdItems = await FetchSingleRangeElementsAsync(routeTemplate, shopId, fetchMin, fetchMax, "min_created", "max_created", cancellationToken);
+                    var itemsToUpsert = ToCachedReceiptItems(createdItems, fetchMin).ToList();
+
+                    if (isDelta)
+                    {
+                        try
+                        {
+                            var modifiedItems = await FetchSingleRangeElementsAsync(routeTemplate, shopId, fetchMin, fetchMax, "min_last_modified", "max_last_modified", cancellationToken);
+                            itemsToUpsert.AddRange(ToCachedReceiptItems(modifiedItems, fetchMin));
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            // Ek min_last_modified sorgusu basarisiz olsa bile min_created sonuclari DB'ye yazilir.
+                        }
+                    }
+
+                    await rawCacheStore.UpsertRawReceiptsAsync(shopId, itemsToUpsert, cancellationToken);
+                },
+                async (readMin, readMax) =>
+                {
+                    var jsons = await rawCacheStore.GetRawReceiptsJsonByRangeAsync(shopId, readMin, readMax, cancellationToken);
+                    return DeserializeJsonElements(jsons);
+                },
+                cancellationToken);
+
+            _singleRangeWindowCache[cacheKey] = (now.Add(ttl), dbTask);
+            try
+            {
+                return await dbTask;
+            }
+            catch
+            {
+                _singleRangeWindowCache.TryRemove(cacheKey, out _);
+                throw;
+            }
+        }
+
+        if (!forceRefresh && _singleRangeWindowCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > now && !cached.Task.IsFaulted && !cached.Task.IsCanceled)
         {
             return await cached.Task;
         }
@@ -430,6 +588,143 @@ public sealed class EtsyApiClient(HttpClient httpClient, IOptions<EtsyApiOptions
             _singleRangeWindowCache.TryRemove(cacheKey, out _);
             throw;
         }
+    }
+
+    private async Task<IReadOnlyList<JsonElement>> ExecuteDbFirstSyncAsync(
+        string shopId,
+        string datasetKey,
+        string rollingKey,
+        long minUnix,
+        long maxUnix,
+        bool isHistorical,
+        Func<long, long, bool, Task> fetchAndUpsertAsync,
+        Func<long, long, Task<IReadOnlyList<JsonElement>>> readFromDbAsync,
+        CancellationToken cancellationToken)
+    {
+        var watermark = await rawCacheStore!.GetWatermarkAsync(shopId, datasetKey, cancellationToken);
+        if (!isHistorical && watermark is null)
+        {
+            var rolling = await rawCacheStore.GetWatermarkAsync(shopId, rollingKey, cancellationToken);
+            if (rolling is not null && rolling.MinSyncedUnix <= minUnix && minUnix <= rolling.MaxSyncedUnix)
+            {
+                watermark = rolling;
+            }
+        }
+
+        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var cooldownSeconds = EtsySyncContext.ForceDeltaRefresh
+            ? Math.Max(0, _options.ForceRefreshCooldownSeconds)
+            : Math.Max(60, _options.DeltaSyncIntervalMinutes * 60);
+
+        if (watermark is not null)
+        {
+            if (isHistorical || (nowUnix - watermark.LastDeltaSyncUnix) < cooldownSeconds)
+            {
+                return await readFromDbAsync(minUnix, maxUnix);
+            }
+        }
+
+        var hasPriorSync = watermark is not null;
+        var fetchStartUnix = hasPriorSync
+            ? Math.Max(minUnix, Math.Min(maxUnix, watermark!.MaxSyncedUnix - 300))
+            : minUnix;
+
+        try
+        {
+            await fetchAndUpsertAsync(fetchStartUnix, maxUnix, hasPriorSync);
+            var postSyncNowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            var syncedToUnix = Math.Max(minUnix, Math.Min(maxUnix, postSyncNowUnix));
+
+            await rawCacheStore.SaveWatermarkAsync(
+                new EtsySyncWatermark(shopId, datasetKey, minUnix, syncedToUnix, postSyncNowUnix),
+                cancellationToken);
+
+            if (!isHistorical)
+            {
+                var currentRolling = await rawCacheStore.GetWatermarkAsync(shopId, rollingKey, cancellationToken);
+                if (currentRolling is null || (minUnix <= currentRolling.MaxSyncedUnix && syncedToUnix >= currentRolling.MinSyncedUnix))
+                {
+                    await rawCacheStore.SaveWatermarkAsync(
+                        new EtsySyncWatermark(shopId, rollingKey, minUnix, syncedToUnix, postSyncNowUnix),
+                        cancellationToken);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && hasPriorSync)
+        {
+            // DB'de mevcut esitlenmis veri bulundugundan 429/ag hatalarinda son tam veri kesintisiz donulur
+        }
+
+        return await readFromDbAsync(minUnix, maxUnix);
+    }
+
+    private static IReadOnlyList<EtsyCachedRawItem> ToCachedLedgerItems(IReadOnlyList<JsonElement> elements, long fallbackUnix)
+    {
+        var items = new List<EtsyCachedRawItem>(elements.Count);
+        foreach (var el in elements)
+        {
+            var rawJson = el.GetRawText();
+            var itemId = StringValue(el, "entry_id", "ledger_entry_id", "id");
+            if (string.IsNullOrWhiteSpace(itemId))
+            {
+                itemId = $"hash_{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(rawJson)))[..16]}";
+            }
+
+            var createdUnix = ExtractUnixTimestamp(el, fallbackUnix, "create_date", "created_timestamp", "created", "date");
+            items.Add(new EtsyCachedRawItem(itemId, createdUnix, createdUnix, rawJson));
+        }
+        return items;
+    }
+
+    private static IReadOnlyList<EtsyCachedRawItem> ToCachedReceiptItems(IReadOnlyList<JsonElement> elements, long fallbackUnix)
+    {
+        var items = new List<EtsyCachedRawItem>(elements.Count);
+        foreach (var el in elements)
+        {
+            var item = ToCachedReceiptItem(el, fallbackUnix);
+            if (item is not null)
+            {
+                items.Add(item);
+            }
+        }
+        return items;
+    }
+
+    private static EtsyCachedRawItem? ToCachedReceiptItem(JsonElement el, long fallbackUnix)
+    {
+        var receiptId = LongValue(el, "receipt_id", "id");
+        if (receiptId <= 0) return null;
+
+        var createdUnix = ExtractUnixTimestamp(el, fallbackUnix, "created_timestamp", "create_timestamp", "created");
+        var updatedUnix = ExtractUnixTimestamp(el, createdUnix, "updated_timestamp", "update_timestamp", "last_modified_timestamp");
+        return new EtsyCachedRawItem(receiptId.ToString(CultureInfo.InvariantCulture), createdUnix, updatedUnix, el.GetRawText());
+    }
+
+    private static IReadOnlyList<JsonElement> DeserializeJsonElements(IReadOnlyList<string> rawJsonList)
+    {
+        var list = new List<JsonElement>(rawJsonList.Count);
+        foreach (var json in rawJsonList)
+        {
+            if (string.IsNullOrWhiteSpace(json)) continue;
+            using var doc = JsonDocument.Parse(json);
+            list.Add(doc.RootElement.Clone());
+        }
+        return list;
+    }
+
+    private static long ExtractUnixTimestamp(JsonElement element, long fallbackUnix, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!element.TryGetProperty(name, out var value)) continue;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var unix)) return unix;
+            if (value.ValueKind == JsonValueKind.String &&
+                DateTimeOffset.TryParse(value.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
+            {
+                return parsed.ToUnixTimeSeconds();
+            }
+        }
+        return fallbackUnix;
     }
 
     private async Task<IReadOnlyList<JsonElement>> FetchSingleRangeElementsAsync(

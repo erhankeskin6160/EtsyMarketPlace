@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 
 namespace EtsyMarketPlace.Infrastructure.EtsyIntegration;
 
-public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrationRepository, IEtsyReportingService, IUserRepository, IShopSettingsRepository, IAsyncDisposable
+public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrationRepository, IEtsyReportingService, IUserRepository, IShopSettingsRepository, IEtsyRawDataCacheStore, IAsyncDisposable
 {
     private readonly string _connectionString;
     private readonly IDataProtector _protector;
@@ -1379,6 +1379,311 @@ public sealed class SqliteEtsyIntegrationStore : IEtsyTokenStore, IEtsyIntegrati
         command.Parameters.AddWithValue("$json", snapshotJson);
         command.Parameters.AddWithValue("$updated_at", DateTimeOffset.UtcNow.ToString("O"));
         await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<EtsySyncWatermark?> GetWatermarkAsync(string shopId, string datasetKey, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId) || string.IsNullOrWhiteSpace(datasetKey))
+            return null;
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT min_synced_unix, max_synced_unix, last_delta_sync_unix
+            FROM etsy_sync_watermarks
+            WHERE shop_id = $shopId AND dataset_key = $datasetKey
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$datasetKey", datasetKey);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        return new EtsySyncWatermark(
+            shopId,
+            datasetKey,
+            reader.GetInt64(0),
+            reader.GetInt64(1),
+            reader.GetInt64(2));
+    }
+
+    public async Task SaveWatermarkAsync(EtsySyncWatermark watermark, CancellationToken cancellationToken = default)
+    {
+        if (watermark is null || string.IsNullOrWhiteSpace(watermark.ShopId) || string.IsNullOrWhiteSpace(watermark.DatasetKey))
+            return;
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            INSERT INTO etsy_sync_watermarks(shop_id, dataset_key, min_synced_unix, max_synced_unix, last_delta_sync_unix, updated_at)
+            VALUES($shopId, $datasetKey, $minUnix, $maxUnix, $lastSyncUnix, $updatedAt)
+            ON CONFLICT(shop_id, dataset_key) DO UPDATE SET
+                min_synced_unix = MIN(etsy_sync_watermarks.min_synced_unix, excluded.min_synced_unix),
+                max_synced_unix = MAX(etsy_sync_watermarks.max_synced_unix, excluded.max_synced_unix),
+                last_delta_sync_unix = excluded.last_delta_sync_unix,
+                updated_at = excluded.updated_at;
+            """;
+        command.Parameters.AddWithValue("$shopId", watermark.ShopId);
+        command.Parameters.AddWithValue("$datasetKey", watermark.DatasetKey);
+        command.Parameters.AddWithValue("$minUnix", watermark.MinSyncedUnix);
+        command.Parameters.AddWithValue("$maxUnix", watermark.MaxSyncedUnix);
+        command.Parameters.AddWithValue("$lastSyncUnix", watermark.LastDeltaSyncUnix);
+        command.Parameters.AddWithValue("$updatedAt", DateTimeOffset.UtcNow.ToString("O"));
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<string>> GetRawLedgerJsonByRangeAsync(
+        string shopId,
+        long minCreatedUnix,
+        long maxCreatedUnix,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId))
+            return Array.Empty<string>();
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT raw_json
+            FROM etsy_ledger_entries_cache
+            WHERE shop_id = $shopId AND created_unix >= $minUnix AND created_unix <= $maxUnix
+            ORDER BY created_unix DESC, entry_id DESC;
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$minUnix", minCreatedUnix);
+        command.Parameters.AddWithValue("$maxUnix", maxCreatedUnix);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var items = new List<string>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(reader.GetString(0));
+        }
+        return items;
+    }
+
+    public async Task UpsertRawLedgerItemsAsync(
+        string shopId,
+        IReadOnlyCollection<EtsyCachedRawItem> items,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId) || items is null || items.Count == 0)
+            return;
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var updatedAt = DateTimeOffset.UtcNow.ToString("O");
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.ItemId) || string.IsNullOrWhiteSpace(item.RawJson))
+                continue;
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = (SqliteTransaction)transaction;
+            command.CommandText = """
+                INSERT INTO etsy_ledger_entries_cache(shop_id, entry_id, created_unix, raw_json, updated_at)
+                VALUES($shopId, $entryId, $createdUnix, $rawJson, $updatedAt)
+                ON CONFLICT(shop_id, entry_id) DO UPDATE SET
+                    created_unix = excluded.created_unix,
+                    raw_json = excluded.raw_json,
+                    updated_at = excluded.updated_at;
+                """;
+            command.Parameters.AddWithValue("$shopId", shopId);
+            command.Parameters.AddWithValue("$entryId", item.ItemId);
+            command.Parameters.AddWithValue("$createdUnix", item.CreatedUnix);
+            command.Parameters.AddWithValue("$rawJson", item.RawJson);
+            command.Parameters.AddWithValue("$updatedAt", updatedAt);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<string>> GetRawReceiptsJsonByRangeAsync(
+        string shopId,
+        long minCreatedUnix,
+        long maxCreatedUnix,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId))
+            return Array.Empty<string>();
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT raw_json
+            FROM etsy_receipts_cache
+            WHERE shop_id = $shopId AND created_unix >= $minUnix AND created_unix <= $maxUnix
+            ORDER BY created_unix DESC, receipt_id DESC;
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$minUnix", minCreatedUnix);
+        command.Parameters.AddWithValue("$maxUnix", maxCreatedUnix);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var items = new List<string>();
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            items.Add(reader.GetString(0));
+        }
+        return items;
+    }
+
+    public async Task<string?> GetRawReceiptJsonByIdAsync(
+        string shopId,
+        long receiptId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId) || receiptId <= 0)
+            return null;
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT raw_json
+            FROM etsy_receipts_cache
+            WHERE shop_id = $shopId AND receipt_id = $receiptId
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("$shopId", shopId);
+        command.Parameters.AddWithValue("$receiptId", receiptId);
+        var result = await command.ExecuteScalarAsync(cancellationToken);
+        return result?.ToString();
+    }
+
+    public async Task UpsertRawReceiptsAsync(
+        string shopId,
+        IReadOnlyCollection<EtsyCachedRawItem> items,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId) || items is null || items.Count == 0)
+            return;
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var updatedAt = DateTimeOffset.UtcNow.ToString("O");
+
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.RawJson) ||
+                !long.TryParse(item.ItemId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var receiptId) ||
+                receiptId <= 0)
+                continue;
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = (SqliteTransaction)transaction;
+            command.CommandText = """
+                INSERT INTO etsy_receipts_cache(shop_id, receipt_id, created_unix, updated_unix, raw_json, updated_at)
+                VALUES($shopId, $receiptId, $createdUnix, $updatedUnix, $rawJson, $updatedAt)
+                ON CONFLICT(shop_id, receipt_id) DO UPDATE SET
+                    created_unix = excluded.created_unix,
+                    updated_unix = excluded.updated_unix,
+                    raw_json = excluded.raw_json,
+                    updated_at = excluded.updated_at;
+                """;
+            command.Parameters.AddWithValue("$shopId", shopId);
+            command.Parameters.AddWithValue("$receiptId", receiptId);
+            command.Parameters.AddWithValue("$createdUnix", item.CreatedUnix);
+            command.Parameters.AddWithValue("$updatedUnix", item.UpdatedUnix);
+            command.Parameters.AddWithValue("$rawJson", item.RawJson);
+            command.Parameters.AddWithValue("$updatedAt", updatedAt);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyDictionary<long, long>> GetLedgerReceiptMappingsAsync(
+        string shopId,
+        IReadOnlyCollection<long> ledgerEntryIds,
+        CancellationToken cancellationToken = default)
+    {
+        var result = new Dictionary<long, long>();
+        if (string.IsNullOrWhiteSpace(shopId) || ledgerEntryIds is null || ledgerEntryIds.Count == 0)
+            return result;
+
+        var validIds = ledgerEntryIds.Where(id => id > 0).Distinct().ToList();
+        if (validIds.Count == 0)
+            return result;
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+
+        foreach (var chunk in validIds.Chunk(200))
+        {
+            await using var command = connection.CreateCommand();
+            var paramNames = new List<string>(chunk.Length);
+            for (var i = 0; i < chunk.Length; i++)
+            {
+                var pName = $"$id{i}";
+                paramNames.Add(pName);
+                command.Parameters.AddWithValue(pName, chunk[i]);
+            }
+
+            command.CommandText = $"""
+                SELECT ledger_entry_id, receipt_id
+                FROM etsy_ledger_receipt_map
+                WHERE shop_id = $shopId AND ledger_entry_id IN ({string.Join(",", paramNames)});
+                """;
+            command.Parameters.AddWithValue("$shopId", shopId);
+
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var entryId = reader.GetInt64(0);
+                var receiptId = reader.GetInt64(1);
+                if (entryId > 0 && receiptId > 0)
+                {
+                    result[entryId] = receiptId;
+                }
+            }
+        }
+
+        return result;
+    }
+
+    public async Task UpsertLedgerReceiptMappingsAsync(
+        string shopId,
+        IReadOnlyDictionary<long, long> mappings,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId) || mappings is null || mappings.Count == 0)
+            return;
+
+        await EnsureInitializedAsync(cancellationToken);
+        await using var connection = await OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var updatedAt = DateTimeOffset.UtcNow.ToString("O");
+
+        foreach (var (ledgerEntryId, receiptId) in mappings)
+        {
+            if (ledgerEntryId <= 0 || receiptId <= 0)
+                continue;
+
+            await using var command = connection.CreateCommand();
+            command.Transaction = (SqliteTransaction)transaction;
+            command.CommandText = """
+                INSERT INTO etsy_ledger_receipt_map(shop_id, ledger_entry_id, receipt_id, updated_at)
+                VALUES($shopId, $entryId, $receiptId, $updatedAt)
+                ON CONFLICT(shop_id, ledger_entry_id) DO UPDATE SET
+                    receipt_id = excluded.receipt_id,
+                    updated_at = excluded.updated_at;
+                """;
+            command.Parameters.AddWithValue("$shopId", shopId);
+            command.Parameters.AddWithValue("$entryId", ledgerEntryId);
+            command.Parameters.AddWithValue("$receiptId", receiptId);
+            command.Parameters.AddWithValue("$updatedAt", updatedAt);
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public ValueTask DisposeAsync()

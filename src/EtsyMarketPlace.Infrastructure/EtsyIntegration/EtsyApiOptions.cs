@@ -10,4 +10,6 @@ public sealed class EtsyApiOptions
     public string ApiBaseUrl { get; set; } = "https://api.etsy.com/v3/";
     public string AuthorizationBaseUrl { get; set; } = "https://www.etsy.com/oauth/connect";
     public string TokenUrl { get; set; } = "https://api.etsy.com/v3/public/oauth/token";
+    public int DeltaSyncIntervalMinutes { get; set; } = 30;
+    public int ForceRefreshCooldownSeconds { get; set; } = 120;
 }

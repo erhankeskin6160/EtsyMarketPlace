@@ -90,6 +90,7 @@ public class EtsyFinancialsController : BaseApiController
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"fin-ledger:{resolvedShopId}:{period}:{startDate:yyyyMMdd}:{endDate:yyyyMMdd}";
         object? uncachedDegradedData = null;
+        using var syncScope = refresh ? EtsySyncContext.BeginForceRefresh() : null;
 
         var response = await DashboardResponseCache.GetOrAddAsync(
             cacheKey,
@@ -167,6 +168,7 @@ public class EtsyFinancialsController : BaseApiController
         if (start > end) return BadRequest(new { error = "startDate endDate değerinden sonra olamaz." });
 
         var cacheKey = $"fin-analysis:{resolvedShopId}:{start:yyyyMMdd}:{end:yyyyMMdd}";
+        using var syncScope = refresh ? EtsySyncContext.BeginForceRefresh() : null;
         var result = await DashboardResponseCache.GetOrAddAsync(
             cacheKey,
             TimeSpan.FromMinutes(3),
@@ -219,6 +221,7 @@ public class EtsyFinancialsController : BaseApiController
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"daily-brief:{resolvedShopId}:{date:yyyyMMdd}";
+        using var syncScope = refresh ? EtsySyncContext.BeginForceRefresh() : null;
         var result = await DashboardResponseCache.GetOrAddAsync(
             cacheKey,
             TimeSpan.FromMinutes(2),
@@ -241,6 +244,7 @@ public class EtsyFinancialsController : BaseApiController
         var clampedDays = Math.Clamp(days, 1, 90);
         var clampedLimit = Math.Clamp(limit, 1, 50);
         var cacheKey = $"recent-orders:{resolvedShopId}:{clampedDays}:{clampedLimit}";
+        using var syncScope = refresh ? EtsySyncContext.BeginForceRefresh() : null;
 
         try
         {
@@ -270,6 +274,7 @@ public class EtsyFinancialsController : BaseApiController
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"fin-orders:{resolvedShopId}:{period}:{startDate:yyyyMMdd}:{endDate:yyyyMMdd}";
+        using var syncScope = refresh ? EtsySyncContext.BeginForceRefresh() : null;
 
         try
         {
@@ -323,6 +328,7 @@ public class EtsyFinancialsController : BaseApiController
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var cacheKey = $"daily-series:{resolvedShopId}:{month ?? "current"}";
+        using var syncScope = refresh ? EtsySyncContext.BeginForceRefresh() : null;
 
         try
         {
