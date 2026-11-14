@@ -3,6 +3,7 @@ namespace EtsyMarketPlace.Api.Controllers;
 using Microsoft.AspNetCore.Mvc;
 using MediatR;
 using EtsyMarketPlace.Api.Models;
+using EtsyMarketPlace.Application.EtsyIntegration;
 using EtsyMarketPlace.Application.Features.OAuth;
 
 [ApiController]
@@ -12,13 +13,16 @@ public class EtsyOAuthController : BaseApiController
 {
     private readonly IConfiguration _config;
     private readonly IMediator _mediator;
+    private readonly IEtsyRateLimitStatusProvider? _rateLimitProvider;
 
     public EtsyOAuthController(
         IConfiguration config,
-        IMediator mediator)
+        IMediator mediator,
+        IEtsyRateLimitStatusProvider? rateLimitProvider = null)
     {
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _mediator = mediator ?? throw new ArgumentNullException(nameof(mediator));
+        _rateLimitProvider = rateLimitProvider;
     }
 
     [HttpPost("token")]
@@ -43,6 +47,16 @@ public class EtsyOAuthController : BaseApiController
         var resolvedShopId = ResolveShopId(shopId, _config);
         var response = await _mediator.Send(new GetEtsyTokenStatusQuery(resolvedShopId), cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet("rate-limit")]
+    [EndpointSummary("Etsy API Günlük & Saniyelik Kota Durumu")]
+    public IActionResult GetEtsyRateLimitStatus([FromQuery] string shopId = "53236321")
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var snapshot = _rateLimitProvider?.GetSnapshot(resolvedShopId)
+            ?? new EtsyRateLimitSnapshot(resolvedShopId, null, null, null, null, null, false, null, DateTimeOffset.UtcNow);
+        return Ok(snapshot);
     }
 
     [HttpPost("token/refresh")]

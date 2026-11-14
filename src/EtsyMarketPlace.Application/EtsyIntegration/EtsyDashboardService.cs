@@ -22,6 +22,7 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
     private static readonly ConcurrentDictionary<string, RecentOrdersDashboardResult> _recentOrdersStaleCache = new();
     private static readonly ConcurrentDictionary<string, OrderFinancialsDashboardResult> _orderFinancialsStaleCache = new();
     private static readonly ConcurrentDictionary<string, DailySeriesDashboardResult> _dailySeriesStaleCache = new();
+    private static readonly ConcurrentDictionary<string, LiveFinancialPerformanceResult> _performanceStaleCache = new();
 
     public EtsyDashboardService(
         IEtsyReportingService reporting,
@@ -257,7 +258,7 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
                 }
             }
 
-            return new LiveFinancialPerformanceResult(
+            var liveResult = new LiveFinancialPerformanceResult(
                 GrossSales: p.GrossSales,
                 PlatformFees: p.PlatformFees,
                 InternalAdsCost: p.InternalAdsCost,
@@ -286,6 +287,24 @@ public sealed class EtsyDashboardService : IEtsyDashboardService
                 InternalAdsCostTRY: p.InternalAdsCostTRY,
                 ExternalAdsCostTRY: p.ExternalAdsCostTRY,
                 RefundsTRY: p.RefundsTRY);
+
+            var perfStaleKey = $"{shopId}:{period}:{startDate?.ToUnixTimeSeconds()}:{endDate?.ToUnixTimeSeconds()}";
+            if (string.IsNullOrWhiteSpace(live.Warning) || liveResult.GrossSales > 0m)
+            {
+                _performanceStaleCache[perfStaleKey] = liveResult;
+            }
+
+            return liveResult;
+        }
+
+        var fallbackKey = $"{shopId}:{period}:{startDate?.ToUnixTimeSeconds()}:{endDate?.ToUnixTimeSeconds()}";
+        if (_performanceStaleCache.TryGetValue(fallbackKey, out var stalePerf))
+        {
+            return stalePerf with
+            {
+                LedgerOk = false,
+                LedgerWarning = $"{live.Warning ?? "Canlı Etsy API yanıt vermedi"}; son başarılı önbellek gösteriliyor."
+            };
         }
 
         var legacy = await _reporting.GetFinancialPerformanceAsync(shopId, start, end, cancellationToken);

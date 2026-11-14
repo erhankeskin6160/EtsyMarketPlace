@@ -664,6 +664,11 @@ export class EtsyApiService {
       `${this.API_BASE}/api/etsy/financial/performance?shopId=${this.activeShopId()}&period=${period}`);
   }
 
+  getEtsyRateLimitStatus(): Observable<EtsyRateLimitSnapshot> {
+    return this.http.get<EtsyRateLimitSnapshot>(
+      `${this.API_BASE}/api/etsy/rate-limit?shopId=${this.activeShopId()}`);
+  }
+
   getFinancialPerformanceByDateRange(startDate: Date, endDate: Date, refresh: boolean = false): Observable<FinancialPerformanceDto> {
     const params = new URLSearchParams({
       shopId: this.activeShopId(),
@@ -1287,6 +1292,18 @@ export interface RecentOrderRow {
   totalUsd: number;
   netProfitUsd: number;
   hasCost: boolean;
+}
+
+export interface EtsyRateLimitSnapshot {
+  shopId: string;
+  dailyLimit: number | null;
+  remainingToday: number | null;
+  perSecondLimit: number | null;
+  remainingThisSecond: number | null;
+  retryAfterSeconds: number | null;
+  isDailyLimitExceeded: boolean;
+  lastErrorMessage: string | null;
+  updatedAt: string;
 }
 
 export interface RecentOrdersResponse {

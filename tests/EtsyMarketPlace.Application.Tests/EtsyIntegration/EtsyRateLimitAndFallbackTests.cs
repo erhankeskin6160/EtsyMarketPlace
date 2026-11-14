@@ -217,6 +217,77 @@ public sealed class EtsyRateLimitAndFallbackTests
         Assert.Contains("ödenmiş sipariş fişlerinden", result.Warning);
     }
 
+    [Fact]
+    public async Task EtsyRateLimitStatusProvider_CapturesDailyLimitHeadersAndExceededState()
+    {
+        var shopId = $"shop-telemetry-{Guid.NewGuid():N}";
+        var tokenStore = new InMemoryTokenStore(new EtsyOAuthToken(
+            "valid-token",
+            "refresh-1",
+            DateTimeOffset.UtcNow.AddHours(1)));
+
+        var innerHandler = new StubHttpMessageHandler(_ =>
+        {
+            var resp = new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+            {
+                Content = new StringContent("{\"error\":\"Exceeded daily rate limit\"}")
+            };
+            resp.Headers.Add("x-limit-per-day", "5000");
+            resp.Headers.Add("x-remaining-today", "0");
+            resp.Headers.Add("x-limit-per-second", "5");
+            resp.Headers.Add("x-remaining-this-second", "4");
+            resp.Headers.Add("retry-after", "16043");
+            return resp;
+        });
+
+        var handler = new EtsyAccessTokenHandler(tokenStore, new CountingOAuthService())
+        {
+            InnerHandler = innerHandler
+        };
+
+        using var invoker = new HttpMessageInvoker(handler);
+        using var req = new HttpRequestMessage(HttpMethod.Get, "https://openapi.etsy.com/v3/test");
+        req.Headers.Add("X-Etsy-Shop-Id", shopId);
+        using var res = await invoker.SendAsync(req, CancellationToken.None);
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, res.StatusCode);
+
+        var provider = new EtsyRateLimitStatusProvider();
+        var snap = provider.GetSnapshot(shopId);
+
+        Assert.NotNull(snap);
+        Assert.Equal(5000, snap.DailyLimit);
+        Assert.Equal(0, snap.RemainingToday);
+        Assert.Equal(5, snap.PerSecondLimit);
+        Assert.Equal(4, snap.RemainingThisSecond);
+        Assert.Equal(16043L, snap.RetryAfterSeconds);
+        Assert.True(snap.IsDailyLimitExceeded);
+    }
+
+    [Fact]
+    public async Task EtsyDashboardService_GetFinancialPerformance_FallsBackToStaleLiveSnapshotOn429()
+    {
+        var shopId = $"shop-perf-stale-{Guid.NewGuid():N}";
+        var ledgerReport = new ToggleableLedgerReportService();
+        var service = new EtsyDashboardService(
+            new StubReportingService(),
+            ledgerReport,
+            new FailingOrSeededEtsyDataClient(),
+            new StubIntegrationRepository(),
+            new StubBankDepositService());
+
+        ledgerReport.IsLiveOk = true;
+        var warm = await service.GetFinancialPerformanceAsync(shopId, "this_month", null, null);
+        Assert.True(warm.LedgerOk);
+        Assert.Equal(320m, warm.GrossSales);
+
+        ledgerReport.IsLiveOk = false;
+        var stale = await service.GetFinancialPerformanceAsync(shopId, "this_month", null, null);
+        Assert.False(stale.LedgerOk);
+        Assert.Equal(320m, stale.GrossSales);
+        Assert.Contains("son başarılı önbellek", stale.LedgerWarning);
+    }
+
     private sealed class InMemoryTokenStore(EtsyOAuthToken initial) : IEtsyTokenStore
     {
         private EtsyOAuthToken _token = initial;
@@ -359,5 +430,34 @@ public sealed class EtsyRateLimitAndFallbackTests
     {
         public MonthlyDepositSummary CalculateMonthlyDeposits(IEnumerable<RawDepositEntryInput> rawEntries, DateTimeOffset periodStart, DateTimeOffset periodEnd, Func<DateTime, decimal>? exchangeRateResolver = null, decimal defaultExchangeRate = 48.25m) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class ToggleableLedgerReportService : IEtsyLedgerReportService
+    {
+        public bool IsLiveOk { get; set; }
+
+        public Task<EtsyLedgerLiveResult> GetLiveReportAsync(string shopId, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken cancellationToken = default)
+        {
+            if (IsLiveOk)
+            {
+                return Task.FromResult(new EtsyLedgerLiveResult(
+                    LedgerOk: true,
+                    Warning: null,
+                    Source: "etsy-ledger-live",
+                    GeneratedAt: DateTimeOffset.UtcNow,
+                    Performance: new FinancialPerformance(startDate, endDate, "USD", 320m, 40m, 10m, 0m, 60m, 0m, 0m, 210m, 65.6m, 16000m, 10500m),
+                    Daily: Array.Empty<EtsyLedgerDailySummary>(),
+                    ReceiptCount: 5));
+            }
+
+            return Task.FromResult(new EtsyLedgerLiveResult(
+                LedgerOk: false,
+                Warning: "Etsy API 429 (TooManyRequests)",
+                Source: "etsy-unavailable",
+                GeneratedAt: DateTimeOffset.UtcNow,
+                Performance: new FinancialPerformance(startDate, endDate, "USD", 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m, 0m),
+                Daily: Array.Empty<EtsyLedgerDailySummary>(),
+                ReceiptCount: 0));
+        }
     }
 }

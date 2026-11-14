@@ -2,8 +2,7 @@ import { Component, OnInit, OnDestroy, ElementRef, ViewChild, inject, DestroyRef
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
-import { EtsyApiService } from '../../core/services/etsy-api.service';
-import { FinancialPerformanceDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyRateLimitSnapshot, FinancialPerformanceDto } from '../../core/services/etsy-api.service';
 import { DailyBrief } from '../../core/models/etsy.models';
 import { Chart, registerables } from 'chart.js';
 
@@ -15,6 +14,16 @@ Chart.register(...registerables);
   imports: [CommonModule, RouterModule],
   template: `
     <div class="dashboard-root">
+      <div *ngIf="rateLimitStatus && (rateLimitStatus.isDailyLimitExceeded || rateLimitStatus.dailyLimit)" style="margin-bottom: 12px; padding: 10px 14px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 0.85rem;" [style.background]="rateLimitStatus.isDailyLimitExceeded ? 'rgba(239, 68, 68, 0.14)' : 'rgba(16, 185, 129, 0.10)'" [style.border]="rateLimitStatus.isDailyLimitExceeded ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid rgba(16, 185, 129, 0.25)'">
+        <span [ngClass]="rateLimitStatus.isDailyLimitExceeded ? 'text-danger' : 'text-emerald'">
+          <ng-container *ngIf="rateLimitStatus.isDailyLimitExceeded">
+            ⛔ Etsy Günlük API Kotası Doldu ({{ rateLimitStatus.remainingToday ?? 0 }} / {{ rateLimitStatus.dailyLimit ?? 5000 }}) — {{ formatRetryAfter(rateLimitStatus.retryAfterSeconds) }}. Ekranda yedek özet gösteriliyor.
+          </ng-container>
+          <ng-container *ngIf="!rateLimitStatus.isDailyLimitExceeded">
+            ✓ Etsy API Günlük Kota: {{ rateLimitStatus.remainingToday ?? '—' }} / {{ rateLimitStatus.dailyLimit ?? '—' }} kalan (Saniye limiti: {{ rateLimitStatus.perSecondLimit ?? '—' }}/sn)
+          </ng-container>
+        </span>
+      </div>
       <!-- HERO KPI STRIP (MATCHING WINFORMS DESKTOP) -->
       <section class="kpi-grid" [class.has-popover-open]="isExpensesPopoverOpen">
         <ng-template #noFinanceValue>—</ng-template>
@@ -27,7 +36,7 @@ Chart.register(...registerables);
           <div class="kpi-value text-emerald">
             <ng-container *ngIf="financialPerformance; else noFinanceValue">&#36;{{ grossSalesUsd | number:'1.2-2' }} <span class="kpi-sub-try">(₺{{ grossSalesUsd * apiService.exchangeRate() | number:'1.0-0' }})</span></ng-container>
           </div>
-          <div class="kpi-sub">Etsy Mağaza Satış Geliri</div>
+          <div class="kpi-sub">{{ financialPerformance?.ledgerWarning ? financialPerformance?.ledgerWarning : 'Etsy Mağaza Satış Geliri' }}</div>
         </div>
 
         <div class="glass-card kpi-card">
@@ -856,6 +865,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   topProductRevenueUsd = 0;
   recentOrdersWarning: string | null = null;
   seriesWarning: string | null = null;
+  rateLimitStatus: EtsyRateLimitSnapshot | null = null;
   private trendLabels: string[] = [];
   private trendGross: number[] = [];
   private trendNet: number[] = [];
@@ -885,6 +895,21 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadLiveKpis();
     this.loadRecentOrders();
     this.loadDailySeries();
+    this.loadRateLimitStatus();
+  }
+
+  loadRateLimitStatus(): void {
+    this.apiService.getEtsyRateLimitStatus().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (status) => { this.rateLimitStatus = status; },
+      error: () => {}
+    });
+  }
+
+  formatRetryAfter(seconds: number | null): string {
+    if (!seconds || seconds <= 0) return 'Sıfırlanma bekleniyor';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return hrs > 0 ? `Sıfırlanmaya ~${hrs} sa ${mins} dk` : `Sıfırlanmaya ~${mins} dk`;
   }
 
   loadRecentOrders(): void {
@@ -943,8 +968,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.etsyDeductionsUsd = this.etsyFeesUsd + this.adsTotalUsd;
         this.buildExpensesBreakdown(perf);
         this.tryInitChart();
+        this.loadRateLimitStatus();
       },
       error: () => {
+        this.loadRateLimitStatus();
         this.financialPerformance = null;
         this.grossSalesUsd = 0;
         this.netProfitUsd = 0;
