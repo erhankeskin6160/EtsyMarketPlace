@@ -1,3 +1,4 @@
+using EtsyMarketPlace.Application.Common.Models;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -32,15 +33,11 @@ public sealed class ValidationFilter : IAsyncActionFilter
 
                 if (!validationResult.IsValid)
                 {
-                    var errors = validationResult.Errors.Select(e => e.ErrorMessage).ToList();
-                    var firstError = errors.FirstOrDefault() ?? "Doğrulama hatası.";
+                    var errors = validationResult.Errors
+                        .GroupBy(e => string.IsNullOrWhiteSpace(e.PropertyName) ? "General" : e.PropertyName, e => e.ErrorMessage)
+                        .ToDictionary(g => g.Key, g => g.Distinct().ToArray());
 
-                    context.Result = new BadRequestObjectResult(new
-                    {
-                        success = false,
-                        message = firstError,
-                        errors
-                    });
+                    context.Result = new BadRequestObjectResult(new ValidationErrorResponse(errors));
                     return;
                 }
             }
