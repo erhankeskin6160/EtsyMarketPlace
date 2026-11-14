@@ -131,30 +131,160 @@ public sealed class NavlungoShippingTests
             WeightKg = 0.4,
             LengthCm = 20,
             WidthCm = 15,
-            HeightCm = 10
+            HeightCm = 10,
+            DeclaredValueUsd = 1m
         };
 
         var fallbackQuotes = NavlungoApiClient.GenerateRealisticFallbackQuotes(req);
 
         Assert.NotNull(fallbackQuotes);
-        Assert.True(fallbackQuotes.Count >= 4);
-        var widect = fallbackQuotes.FirstOrDefault(q => q.Carrier == "Widect");
-        Assert.NotNull(widect);
-        Assert.Equal(15.03m, widect.Price);
+        Assert.Equal(4, fallbackQuotes.Count);
 
-        var fedex = fallbackQuotes.FirstOrDefault(q => q.Carrier == "FedEx");
-        Assert.NotNull(fedex);
-        Assert.Equal(20.75m, fedex.Price);
+        var widect = Assert.Single(fallbackQuotes, q => q.Carrier == "Widect");
+        Assert.Equal(16.03m, widect.Price);
+        Assert.Equal(14.03m, widect.BaseSystemOfferUsd);
+        Assert.Equal(2.00m, widect.PeakSeasonSurchargeUsd);
+        Assert.Equal(0.67m, widect.DdpFeeUsd);
+        Assert.Equal(16.70m, widect.DdpIncludedTotalUsd);
 
-        var upsExpress = fallbackQuotes.FirstOrDefault(q => q.Carrier == "UPS" && q.ServiceType == "Express");
-        Assert.NotNull(upsExpress);
-        Assert.Equal(34.00m, upsExpress.Price);
+        var fedex = Assert.Single(fallbackQuotes, q => q.Carrier == "FedEx");
+        Assert.Equal(21.25m, fedex.Price);
+        Assert.Equal(20.25m, fedex.BaseSystemOfferUsd);
+        Assert.Equal(1.00m, fedex.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.68m, fedex.DdpFeeUsd);
+        Assert.Equal(25.93m, fedex.DdpIncludedTotalUsd);
 
-        var upsSaver = fallbackQuotes.FirstOrDefault(q => q.Carrier == "UPS" && q.ServiceType == "Express Saver");
-        Assert.NotNull(upsSaver);
-        Assert.Equal(38.85m, upsSaver.Price);
+        var upsExpress = Assert.Single(fallbackQuotes, q => q.Carrier == "UPS" && q.ServiceType == "Express");
+        Assert.Equal(34.84m, upsExpress.Price);
+        Assert.Equal(22.04m, upsExpress.BaseSystemOfferUsd);
+        Assert.Equal(11.80m, upsExpress.FuelSurchargeUsd);
+        Assert.Equal(1.00m, upsExpress.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.68m, upsExpress.DdpFeeUsd);
+        Assert.Equal(39.52m, upsExpress.DdpIncludedTotalUsd);
+
+        var upsSaver = Assert.Single(fallbackQuotes, q => q.Carrier == "UPS" && q.ServiceType == "Express Saver");
+        Assert.Equal(39.73m, upsSaver.Price);
+        Assert.Equal(25.25m, upsSaver.BaseSystemOfferUsd);
+        Assert.Equal(13.48m, upsSaver.FuelSurchargeUsd);
+        Assert.Equal(1.00m, upsSaver.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.68m, upsSaver.DdpFeeUsd);
+        Assert.Equal(44.41m, upsSaver.DdpIncludedTotalUsd);
 
         Assert.All(fallbackQuotes, q => Assert.True(q.Price > 0));
+    }
+
+    [Fact]
+    public void GenerateRealisticFallbackQuotes_MatchesMemberPortalAt160DesiWithDdp()
+    {
+        var req = new NavlungoQuoteRequest
+        {
+            WeightKg = 1.0,
+            LengthCm = 25,
+            WidthCm = 16,
+            HeightCm = 20,
+            PostalCode = "78654",
+            DeclaredValueUsd = 1m
+        };
+
+        var quotes = NavlungoApiClient.GenerateRealisticFallbackQuotes(req);
+
+        Assert.Equal(4, quotes.Count);
+
+        var widect = Assert.Single(quotes, q => q.Carrier == "Widect");
+        Assert.Equal(23.20m, widect.Price);
+        Assert.Equal(21.20m, widect.BaseSystemOfferUsd);
+        Assert.Equal(2.00m, widect.PeakSeasonSurchargeUsd);
+        Assert.Equal(1.68m, widect.DdpFeeUsd);
+        Assert.Equal(24.88m, widect.DdpIncludedTotalUsd);
+
+        var fedex = Assert.Single(quotes, q => q.Carrier == "FedEx");
+        Assert.Equal(25.64m, fedex.Price);
+        Assert.Equal(24.64m, fedex.BaseSystemOfferUsd);
+        Assert.Equal(1.00m, fedex.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.68m, fedex.DdpFeeUsd);
+        Assert.Equal(30.32m, fedex.DdpIncludedTotalUsd);
+
+        var upsExpress = Assert.Single(quotes, q => q.Carrier == "UPS" && q.ServiceType == "Express");
+        Assert.Equal(44.46m, upsExpress.Price);
+        Assert.Equal(28.53m, upsExpress.BaseSystemOfferUsd);
+        Assert.Equal(14.93m, upsExpress.FuelSurchargeUsd);
+        Assert.Equal(1.00m, upsExpress.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.68m, upsExpress.DdpFeeUsd);
+        Assert.Equal(49.14m, upsExpress.DdpIncludedTotalUsd);
+
+        var upsSaver = Assert.Single(quotes, q => q.Carrier == "UPS" && q.ServiceType == "Express Saver");
+        Assert.Equal(48.48m, upsSaver.Price);
+        Assert.Equal(31.16m, upsSaver.BaseSystemOfferUsd);
+        Assert.Equal(16.32m, upsSaver.FuelSurchargeUsd);
+        Assert.Equal(1.00m, upsSaver.PeakSeasonSurchargeUsd);
+        Assert.Equal(4.68m, upsSaver.DdpFeeUsd);
+        Assert.Equal(53.16m, upsSaver.DdpIncludedTotalUsd);
+    }
+
+    [Fact]
+    public async Task FetchLiveQuotesAsync_UsesPortalShipmentQuotesApi_WhenSessionTokenPresent()
+    {
+        string officialJson = @"{
+  ""quotes"": [
+    {
+      ""shipmentId"": ""0eed4cc2-47c9-4d63-bcd0-90adc8ac86f7"",
+      ""serviceType"": ""economy"",
+      ""lastMile"": ""thy"",
+      ""customerName"": ""THY Widect Amazon Shipping"",
+      ""minimumTransitTime"": 3,
+      ""maximumTransitTime"": 7,
+      ""quotePrice"": { ""amount"": 16.03, ""currency"": { ""value"": ""USD"" } },
+      ""priceLines"": [{ ""code"": ""system-offer"", ""price"": { ""amount"": 14.03, ""currency"": { ""value"": ""USD"" } } }],
+      ""surcharges"": [{ ""code"": ""peak-season-surcharge"", ""price"": { ""amount"": 2, ""currency"": { ""value"": ""USD"" } } }],
+      ""valueAddedServices"": [{ ""code"": ""ddp"", ""price"": { ""amount"": 0.67, ""currency"": { ""value"": ""USD"" } } }],
+      ""isDDPRequired"": true
+    }
+  ]
+}";
+
+        string? capturedAuth = null;
+        string? capturedOrigin = null;
+        string? capturedQuotesUrl = null;
+
+        using var httpClient = new HttpClient(new StubHttpMessageHandler(req =>
+        {
+            if (req.Method == HttpMethod.Post && req.RequestUri!.AbsoluteUri == "https://api.navlungo.com/api/shipments")
+            {
+                capturedAuth = req.Headers.Authorization?.ToString();
+                capturedOrigin = req.Headers.TryGetValues("Origin", out var origs) ? origs.FirstOrDefault() : null;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("\"0eed4cc2-47c9-4d63-bcd0-90adc8ac86f7\"")
+                };
+            }
+
+            if (req.Method == HttpMethod.Get && req.RequestUri!.AbsoluteUri.EndsWith("/quotes"))
+            {
+                capturedQuotesUrl = req.RequestUri.AbsoluteUri;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(officialJson)
+                };
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }));
+
+        var client = new NavlungoApiClient(httpClient);
+        var settings = new NavlungoSettings { IdToken = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjMifQ.sig" };
+        var req = new NavlungoQuoteRequest { WeightKg = 0.4, LengthCm = 20, WidthCm = 15, HeightCm = 10, PostalCode = "78654" };
+
+        var offers = await client.FetchLiveQuotesAsync(req, settings);
+
+        Assert.Equal("Bearer eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxMjMifQ.sig", capturedAuth);
+        Assert.Equal("https://ship.navlungo.com", capturedOrigin);
+        Assert.Equal("https://api.navlungo.com/api/shipments/0eed4cc2-47c9-4d63-bcd0-90adc8ac86f7/quotes", capturedQuotesUrl);
+        var widect = Assert.Single(offers);
+        Assert.Equal(16.03m, widect.Price);
+        Assert.Equal(0.67m, widect.DdpFeeUsd);
+        Assert.Equal(16.70m, widect.DdpIncludedTotalUsd);
+        Assert.Contains("Üye", widect.Note);
+        Assert.Contains("Canlı", widect.Note);
     }
 
     [Fact]

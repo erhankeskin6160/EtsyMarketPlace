@@ -16,6 +16,9 @@ public sealed class NavlungoQuoteRequest
     public double HeightCm { get; set; } = 10;
     public string Source { get; set; } = "user";
     public string PostalCode { get; set; } = string.Empty;
+    public string City { get; set; } = string.Empty;
+    public string State { get; set; } = string.Empty;
+    public string ShipmentId { get; set; } = string.Empty;
     public decimal DeclaredValueUsd { get; set; } = 1m;
 
     public double VolumetricDesi => (LengthCm * WidthCm * HeightCm) / 5000.0;
@@ -89,24 +92,35 @@ public static class NavlungoFallbackPricing
             _ => 1.00m
         };
 
-        // Navlungo Portal Üye Fiyatlarına Tam Kalibre Edilmiş Oranlar:
-        // Referans (US 0.60 desi) -> Widect $15.03, FedEx $20.75, UPS Express $34.00, UPS Saver $38.85
+        // ship.navlungo.com Üye Portalı (api.navlungo.com) Canlı Fiyatlarına Kalibre Edilmiş Tarife:
+        // 0.60 desi (0.4kg 20x15x10): Widect $16.03 (+$0.67 DDP = $16.70), FedEx $21.25 (+$4.68 = $25.93),
+        //                             UPS Express $34.84 ($11.80 yakıt, +$4.68 = $39.52), UPS Expedited $39.73 ($13.48 yakıt, +$4.68 = $44.41)
+        // 1.60 desi (1.0kg 25x16x20): Widect $23.20 (+$1.68 DDP = $24.88), FedEx $25.64 (+$4.68 = $30.32),
+        //                             UPS Express $44.46 ($14.93 yakıt, +$4.68 = $49.14), UPS Expedited $48.48 ($16.32 yakıt, +$4.68 = $53.16)
         decimal b = (decimal)billable;
-        decimal widectPrice = Math.Round((10.50m + (b * 7.55m)) * countryMult, 2, MidpointRounding.AwayFromZero);
-        decimal fedexPrice = Math.Round((14.50m + (b * 10.41666666666666666666666667m)) * countryMult, 2, MidpointRounding.AwayFromZero);
-        decimal upsExpressPrice = Math.Round((24.00m + (b * 16.66666666666666666666666667m)) * countryMult, 2, MidpointRounding.AwayFromZero);
-        decimal upsSaverPrice = Math.Round((27.50m + (b * 18.91666666666666666666666667m)) * countryMult, 2, MidpointRounding.AwayFromZero);
+        decimal widectPrice = Math.Round((11.728m + (b * 7.17m)) * countryMult, 2, MidpointRounding.AwayFromZero);
+        decimal fedexPrice = Math.Round((18.616m + (b * 4.39m)) * countryMult, 2, MidpointRounding.AwayFromZero);
+        decimal upsExpressPrice = Math.Round((29.068m + (b * 9.62m)) * countryMult, 2, MidpointRounding.AwayFromZero);
+        decimal upsSaverPrice = Math.Round((34.48m + (b * 8.75m)) * countryMult, 2, MidpointRounding.AwayFromZero);
 
         decimal declared = request.DeclaredValueUsd > 0m ? request.DeclaredValueUsd : 1m;
-        decimal taxRate = country == "US" ? 0.178m : 0m;
-        decimal taxPortion = Math.Round(declared * taxRate, 2, MidpointRounding.AwayFromZero);
+        decimal taxPortion = country == "US"
+            ? Math.Round(declared * 0.053m, 2, MidpointRounding.AwayFromZero) +
+              Math.Round(declared * 0.125m, 2, MidpointRounding.AwayFromZero)
+            : 0m;
+        decimal widectDdpService = b < 1.0m ? 0.49m : 1.50m;
+        decimal expressDdpService = 4.50m;
 
         decimal widectPeak = 2.00m;
         decimal fedexPeak = 1.00m;
         decimal upsExpressPeak = 1.00m;
-        decimal upsExpressFuel = Math.Round(Math.Max(0m, upsExpressPrice - upsExpressPeak) * 0.3435m, 2, MidpointRounding.AwayFromZero);
+        decimal upsExpressFuel = Math.Min(
+            Math.Max(0m, upsExpressPrice - upsExpressPeak),
+            Math.Round((9.922m + (b * 3.13m)) * countryMult, 2, MidpointRounding.AwayFromZero));
         decimal upsSaverPeak = 1.00m;
-        decimal upsSaverFuel = Math.Round(Math.Max(0m, upsSaverPrice - upsSaverPeak) * 0.3437m, 2, MidpointRounding.AwayFromZero);
+        decimal upsSaverFuel = Math.Min(
+            Math.Max(0m, upsSaverPrice - upsSaverPeak),
+            Math.Round((11.776m + (b * 2.84m)) * countryMult, 2, MidpointRounding.AwayFromZero));
 
         return new List<NavlungoQuoteOffer>
         {
@@ -125,7 +139,7 @@ public static class NavlungoFallbackPricing
                 BaseSystemOfferUsd = Math.Max(0m, Math.Round(widectPrice - widectPeak, 2, MidpointRounding.AwayFromZero)),
                 FuelSurchargeUsd = 0m,
                 PeakSeasonSurchargeUsd = widectPeak,
-                DdpFeeUsd = Math.Round(1.55m + taxPortion, 2, MidpointRounding.AwayFromZero),
+                DdpFeeUsd = Math.Round(widectDdpService + taxPortion, 2, MidpointRounding.AwayFromZero),
                 InsuranceFeeUsd = 3.00m,
                 EarlyTrackingEnabled = true,
                 IsDdpRequired = true,
@@ -146,7 +160,7 @@ public static class NavlungoFallbackPricing
                 BaseSystemOfferUsd = Math.Max(0m, Math.Round(fedexPrice - fedexPeak, 2, MidpointRounding.AwayFromZero)),
                 FuelSurchargeUsd = 0m,
                 PeakSeasonSurchargeUsd = fedexPeak,
-                DdpFeeUsd = Math.Round(4.55m + taxPortion, 2, MidpointRounding.AwayFromZero),
+                DdpFeeUsd = Math.Round(expressDdpService + taxPortion, 2, MidpointRounding.AwayFromZero),
                 PremiumTrackingFeeUsd = 5.00m,
                 SignatureRequiredFeeUsd = 5.00m,
                 EarlyTrackingEnabled = true,
@@ -167,7 +181,7 @@ public static class NavlungoFallbackPricing
                 BaseSystemOfferUsd = Math.Max(0m, Math.Round(upsExpressPrice - upsExpressPeak - upsExpressFuel, 2, MidpointRounding.AwayFromZero)),
                 FuelSurchargeUsd = upsExpressFuel,
                 PeakSeasonSurchargeUsd = upsExpressPeak,
-                DdpFeeUsd = Math.Round(4.55m + taxPortion, 2, MidpointRounding.AwayFromZero),
+                DdpFeeUsd = Math.Round(expressDdpService + taxPortion, 2, MidpointRounding.AwayFromZero),
                 PremiumTrackingFeeUsd = 5.00m,
                 SignatureRequiredFeeUsd = 5.00m,
                 EarlyTrackingEnabled = true,
@@ -188,7 +202,7 @@ public static class NavlungoFallbackPricing
                 BaseSystemOfferUsd = Math.Max(0m, Math.Round(upsSaverPrice - upsSaverPeak - upsSaverFuel, 2, MidpointRounding.AwayFromZero)),
                 FuelSurchargeUsd = upsSaverFuel,
                 PeakSeasonSurchargeUsd = upsSaverPeak,
-                DdpFeeUsd = Math.Round(4.55m + taxPortion, 2, MidpointRounding.AwayFromZero),
+                DdpFeeUsd = Math.Round(expressDdpService + taxPortion, 2, MidpointRounding.AwayFromZero),
                 PremiumTrackingFeeUsd = 5.00m,
                 SignatureRequiredFeeUsd = 5.00m,
                 EarlyTrackingEnabled = true,

@@ -607,4 +607,76 @@ public sealed class ShipmentOrchestratorServiceTests
 
         Assert.Equal(expectedIncoterm, request.IncotermCode);
     }
+
+    [Fact]
+    public async Task GetCarrierQuotesAsync_ReplacesAnonymousWalkInNavlungoWithCalibratedMemberTariff()
+    {
+        var manager = new ShipmentCreationManager();
+        var fakeLogisticsApi = new FakeEtsyLogisticsApiClient();
+        var fakeNavlungo = new FakeNavlungoApiClient
+        {
+            OffersToReturn = new List<NavlungoQuoteOffer>
+            {
+                new()
+                {
+                    Carrier = "Widect",
+                    ServiceType = "Ekonomi",
+                    Price = 30.07m,
+                    DdpFeeUsd = 0m,
+                    Note = "Navlungo Canlı Teklif"
+                },
+                new()
+                {
+                    Carrier = "FedEx",
+                    ServiceType = "Express",
+                    Price = 37.03m,
+                    DdpFeeUsd = 0m,
+                    Note = "Navlungo Canlı Teklif"
+                }
+            }
+        };
+
+        var orchestrator = new ShipmentOrchestratorService(
+            manager,
+            fakeLogisticsApi,
+            navlungoApiClient: fakeNavlungo);
+
+        var res = await orchestrator.GetCarrierQuotesAsync(new CarrierQuotesQuery
+        {
+            CountryCode = "US",
+            PostalCode = "78654",
+            WeightKg = 1.0,
+            WidthCm = 16,
+            LengthCm = 25,
+            HeightCm = 20, // 1.60 desi
+            HsCode = "3926400000",
+            Quantity = 1,
+            DeclaredValueUsd = new decimalUsdValueOrDefault(1.00m),
+            UsdTryRate = 51.91m
+        });
+
+        var navWidect = Assert.Single(res.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-widect");
+        Assert.Equal(23.20m, navWidect.PriceUsd);
+        Assert.Equal(21.20m, navWidect.BaseCargoPriceUsd);
+        Assert.Equal(2.00m, navWidect.AdditionalFeeUsd);
+        Assert.Equal(1.68m, navWidect.FastCustomsPaymentUsd);
+        Assert.Equal(24.88m, navWidect.GrandTotalUsd);
+
+        var navFedEx = Assert.Single(res.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-fedex");
+        Assert.Equal(25.64m, navFedEx.PriceUsd);
+        Assert.Equal(4.68m, navFedEx.FastCustomsPaymentUsd);
+        Assert.Equal(30.32m, navFedEx.GrandTotalUsd);
+
+        var navUpsExp = Assert.Single(res.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-ups-express");
+        Assert.Equal(44.46m, navUpsExp.PriceUsd);
+        Assert.Equal(14.93m, navUpsExp.FuelCostUsd);
+        Assert.Equal(4.68m, navUpsExp.FastCustomsPaymentUsd);
+        Assert.Equal(49.14m, navUpsExp.GrandTotalUsd);
+
+        var navUpsSaver = Assert.Single(res.Quotes, q => q.CarrierKey == "navlungo" && q.ServiceCode == "nav-ups-saver");
+        Assert.Equal(48.48m, navUpsSaver.PriceUsd);
+        Assert.Equal(16.32m, navUpsSaver.FuelCostUsd);
+        Assert.Equal(4.68m, navUpsSaver.FastCustomsPaymentUsd);
+        Assert.Equal(53.16m, navUpsSaver.GrandTotalUsd);
+    }
 }

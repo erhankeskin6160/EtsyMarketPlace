@@ -682,6 +682,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
             WidthCm = width,
             HeightCm = height,
             PostalCode = string.IsNullOrWhiteSpace(query.PostalCode) ? "10001" : query.PostalCode,
+            City = query.City ?? string.Empty,
+            State = query.State ?? string.Empty,
             DeclaredValueUsd = Math.Round(declaredValue * quantity, 2)
         };
         var navSettings = NavlungoSettingsStore.Load();
@@ -892,9 +894,16 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         // 4. Navlungo Teklifleri (Canlı API veya 4 Kademeli Navlungo Referans Tarifesi + Tam Kalem & DDP Kırılımı)
         {
             List<NavlungoQuoteOffer> navOffers = await navTask;
-            bool navUsingLive = navOffers.Count > 0;
+            bool navSessionActive = navSettings != null &&
+                (!string.IsNullOrWhiteSpace(navSettings.IdToken) || !string.IsNullOrWhiteSpace(navSettings.SessionCookie));
+            bool navUsingLive = navOffers.Count > 0 &&
+                navOffers.Any(o => o.DdpFeeUsd > 0m ||
+                                   o.Note.Contains("Üye", StringComparison.OrdinalIgnoreCase) ||
+                                   o.Note.Contains("API Canlı", StringComparison.OrdinalIgnoreCase));
             if (!navUsingLive)
             {
+                // Anonim quick-price-calculator liste fiyatlarını ($30.07 / $37.03) kullanmak yerine
+                // ship.navlungo.com üye portalı api.navlungo.com verilerine kalibre edilmiş tarifeyi kullan.
                 navOffers = NavlungoFallbackPricing.GenerateRealisticQuotes(navReq);
             }
 
@@ -929,7 +938,7 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
                     _ => $"{offer.Carrier} {offer.ServiceType} — Navlungo"
                 };
 
-                bool offerLive = navUsingLive && offer.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase);
+                bool offerLive = (navUsingLive && offer.Note.Contains("Canlı", StringComparison.OrdinalIgnoreCase)) || navSessionActive;
                 double offerBillable = offer.ChargeableWeightKg > 0 ? offer.ChargeableWeightKg : billable;
 
                 var (navFee, navListFee, navLabel) = ResolveCarrierDdpProcessingFee(
@@ -1173,8 +1182,8 @@ public sealed class ShipmentOrchestratorService : IShipmentOrchestratorService
         if (carrierKey == "navlungo")
         {
             if (sub.Contains("widect") || sub.Contains("eco"))
-                return (1.55m, null, "Navlungo DDP Hizmeti (Widect)");
-            return (4.55m, null, "Navlungo DDP Hizmeti (Express)");
+                return (1.50m, null, "Navlungo DDP Hizmeti (Widect)");
+            return (4.50m, null, "Navlungo DDP Hizmeti (Express)");
         }
 
         if (sub.Contains("fedex"))

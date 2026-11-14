@@ -1363,22 +1363,25 @@ export class OrdersService {
     }, rate, cleanCountry, hsCode, declaredValueUsd, 0.30, 1.05, 0.50, 'Yoğun sezon ek ücreti'));
 
     // ==========================================
-    // 3. NAVLUNGO (4 TEKLİF — TAM KIRILIM + DDP ÜCRETİ)
+    // 3. NAVLUNGO (4 TEKLİF — ÜYE PORTALI KALİBRASYONLU KIRILIM + DDP ÜCRETİ)
     // ==========================================
     const isNavlungoLive = this.isCarrierSessionLive('navlungo');
     const b = billable;
-    const navWidect = Number((10.50 + (b * 7.55)).toFixed(2));
-    const navFedEx = Number((14.50 + (b * 10.42)).toFixed(2));
-    const navUpsExpress = Number((24.00 + (b * 16.67)).toFixed(2));
-    const navUpsSaver = Number((27.50 + (b * 18.92)).toFixed(2));
+    const navCountryMult = cleanCountry === 'CA' ? 1.08 : (isEu ? 0.92 : 1.00);
+    const navWidect = Number(((11.728 + (b * 7.17)) * navCountryMult).toFixed(2));
+    const navFedEx = Number(((18.616 + (b * 4.39)) * navCountryMult).toFixed(2));
+    const navUpsExpress = Number(((29.068 + (b * 9.62)) * navCountryMult).toFixed(2));
+    const navUpsSaver = Number(((34.48 + (b * 8.75)) * navCountryMult).toFixed(2));
     const navWidectPeak = 2.00;
     const navExpPeak = 1.00;
     const navWidectBase = Number(Math.max(0, navWidect - navWidectPeak).toFixed(2));
     const navFedExBase = Number(Math.max(0, navFedEx - navExpPeak).toFixed(2));
-    const navUpsExpressFuel = Number((Math.max(0, navUpsExpress - navExpPeak) * 0.3435).toFixed(2));
+    const navUpsExpressFuel = Number(Math.min(Math.max(0, navUpsExpress - navExpPeak), (9.922 + (b * 3.13)) * navCountryMult).toFixed(2));
     const navUpsExpressBase = Number(Math.max(0, navUpsExpress - navExpPeak - navUpsExpressFuel).toFixed(2));
-    const navUpsSaverFuel = Number((Math.max(0, navUpsSaver - navExpPeak) * 0.3437).toFixed(2));
+    const navUpsSaverFuel = Number(Math.min(Math.max(0, navUpsSaver - navExpPeak), (11.776 + (b * 2.84)) * navCountryMult).toFixed(2));
     const navUpsSaverBase = Number(Math.max(0, navUpsSaver - navExpPeak - navUpsSaverFuel).toFixed(2));
+    const navWidectDdpFee = b < 1.0 ? 0.49 : 1.50;
+    const navExpressDdpFee = 4.50;
     const navDdpBadge = 'Navlungo valueAddedServices (DDP)';
     const navReturnNote = 'DDP/DDU Seçilebilir · ABD & AB gönderilerinde gümrük peşin ödenebilir';
 
@@ -1406,7 +1409,7 @@ export class OrdersService {
       pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
       insuranceNote: 'Opsiyonel Sigorta: $3.00',
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 1.55, 'Navlungo DDP Hizmeti (Widect)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navWidectDdpFee, 'Navlungo DDP Hizmeti (Widect)', undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-fedex',
@@ -1432,7 +1435,7 @@ export class OrdersService {
       pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
       insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 4.55, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-ups-express',
@@ -1458,7 +1461,7 @@ export class OrdersService {
       pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
       insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 4.55, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
 
     quotes.push(this.withCustomsOnlyBreakdown({
       quoteId: 'nav-ups-saver',
@@ -1484,7 +1487,7 @@ export class OrdersService {
       pricingTemplate: 'Erken Takip No Aktif (Navlungo)',
       insuranceNote: 'Premium Takip: $5.00 · İmzalı Teslimat: $5.00',
       returnPolicyNote: navReturnNote
-    }, rate, cleanCountry, hsCode, declaredValueUsd, 4.55, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
+    }, rate, cleanCountry, hsCode, declaredValueUsd, navExpressDdpFee, 'Navlungo DDP Hizmeti (Express)', undefined, navDdpBadge));
 
     // ==========================================
     // 4. SHIPTOMORE (2 TEKLİF: 1 CANLI, 1 TAHMİNİ)

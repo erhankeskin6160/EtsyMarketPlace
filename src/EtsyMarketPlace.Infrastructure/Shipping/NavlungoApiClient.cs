@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -39,6 +40,8 @@ public sealed class NavlungoApiClient : INavlungoApiClient
 {
     private readonly HttpClient _httpClient;
     private const string BaseEndpoint = "https://quick-price-calculator.navlungo.com/tr?source=user";
+    private const string PortalApiBase = "https://api.navlungo.com";
+    private const string PortalOrigin = "https://ship.navlungo.com";
 
     public const string AnonymousActionId = "406fad5769e32876f9c8eeccd5dab4d086b9068ca5";
     public const string AuthenticatedActionId = "40198494a378e36987abc2fe2dd302fceb194b28c4";
@@ -129,7 +132,17 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         CancellationToken cancellationToken = default)
     {
         bool hasSession = settings != null && (!string.IsNullOrWhiteSpace(settings.IdToken) || !string.IsNullOrWhiteSpace(settings.SessionCookie));
-        
+
+        // 0. Üye oturumu varsa öncelikle resmi ship.navlungo.com / api.navlungo.com portal teklif uç noktasını dene
+        if (hasSession && settings != null)
+        {
+            var portalOffers = await TryFetchPortalShipmentQuotesAsync(request, settings, cancellationToken).ConfigureAwait(false);
+            if (portalOffers.Count > 0)
+            {
+                return portalOffers;
+            }
+        }
+
         // 1. Güncel veya önbellekteki Action ID'yi al
         var (anonId, authId) = await ResolveActionIdsAsync(_httpClient, forceRefresh: false, cancellationToken);
 
@@ -234,6 +247,177 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         catch (Exception caught) { AppLog.Swallowed(caught); }
     }
 
+    private static string BuildCookieHeader(NavlungoSettings? settings)
+    {
+        if (settings == null) return string.Empty;
+
+        var cookieBuilder = new StringBuilder();
+        if (!string.IsNullOrWhiteSpace(settings.SessionCookie))
+        {
+            string sanitized = NavlungoCookieSanitizer.Sanitize(settings.SessionCookie);
+            cookieBuilder.Append(sanitized);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.IdToken))
+        {
+            string idTok = NavlungoCookieSanitizer.Sanitize(settings.IdToken);
+            if (!cookieBuilder.ToString().Contains("id_token=", StringComparison.OrdinalIgnoreCase))
+            {
+                if (cookieBuilder.Length > 0 && !cookieBuilder.ToString().TrimEnd().EndsWith(";"))
+                    cookieBuilder.Append("; ");
+                if (idTok.Contains('='))
+                    cookieBuilder.Append(idTok);
+                else
+                    cookieBuilder.Append($"id_token={idTok}");
+            }
+        }
+
+        return cookieBuilder.ToString();
+    }
+
+    private static void ApplyPortalAuthHeaders(HttpRequestMessage req, NavlungoSettings settings)
+    {
+        req.Headers.TryAddWithoutValidation("Accept", "application/json, text/plain, */*");
+        req.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36");
+        req.Headers.TryAddWithoutValidation("Origin", PortalOrigin);
+        req.Headers.TryAddWithoutValidation("Referer", PortalOrigin + "/");
+
+        string cookieHeader = BuildCookieHeader(settings);
+        if (!string.IsNullOrWhiteSpace(cookieHeader))
+        {
+            req.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
+        }
+
+        string rawToken = (settings.IdToken ?? string.Empty).Trim();
+        if (rawToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            req.Headers.TryAddWithoutValidation("Authorization", rawToken);
+        }
+        else if (rawToken.Count(c => c == '.') == 2)
+        {
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {rawToken}");
+        }
+    }
+
+    private static string TryExtractShipmentId(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return string.Empty;
+
+        string trimmed = body.Trim();
+        try
+        {
+            using var doc = JsonDocument.Parse(trimmed);
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.String)
+            {
+                return (root.GetString() ?? string.Empty).Trim();
+            }
+
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                if (root.TryGetProperty("shipmentId", out var sProp) && sProp.ValueKind == JsonValueKind.String)
+                    return (sProp.GetString() ?? string.Empty).Trim();
+                if (root.TryGetProperty("id", out var idProp) && idProp.ValueKind == JsonValueKind.String)
+                    return (idProp.GetString() ?? string.Empty).Trim();
+            }
+        }
+        catch
+        {
+            // Ham UUID veya metin yanıtı olabilir
+        }
+
+        string unquoted = trimmed.Trim('"');
+        return Guid.TryParse(unquoted, out _) ? unquoted : string.Empty;
+    }
+
+    /// <summary>
+    /// Aktif ship.navlungo.com üye oturumu (Cookie / Bearer JWT) mevcutsa doğrudan resmi
+    /// api.navlungo.com/api/shipments/{id}/quotes uç noktasından canlı üye fiyatlarını ve DDP kırılımını çeker.
+    /// </summary>
+    public async Task<List<NavlungoQuoteOffer>> TryFetchPortalShipmentQuotesAsync(
+        NavlungoQuoteRequest request,
+        NavlungoSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            string shipmentId = (request.ShipmentId ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(shipmentId))
+            {
+                var createPayload = new
+                {
+                    fromCountryCode = string.IsNullOrWhiteSpace(request.FromCountry) ? "TR" : request.FromCountry.ToUpperInvariant(),
+                    destinationCountryCode = string.IsNullOrWhiteSpace(request.ToCountry) ? "US" : request.ToCountry.ToUpperInvariant(),
+                    destinationPostalCode = string.IsNullOrWhiteSpace(request.PostalCode) ? "10001" : request.PostalCode.Trim(),
+                    destinationCity = string.IsNullOrWhiteSpace(request.City) ? "Austin" : request.City.Trim(),
+                    destinationState = string.IsNullOrWhiteSpace(request.State) ? "TX" : request.State.Trim(),
+                    packages = new[]
+                    {
+                        new
+                        {
+                            packageType = "parcel",
+                            weight = Math.Round(request.WeightKg, 2),
+                            length = Math.Round(request.LengthCm, 1),
+                            width = Math.Round(request.WidthCm, 1),
+                            height = Math.Round(request.HeightCm, 1),
+                            quantity = 1
+                        }
+                    },
+                    proformaCurrency = "USD",
+                    totalProformaPrice = request.DeclaredValueUsd > 0m ? Math.Round(request.DeclaredValueUsd, 2) : 1.00m
+                };
+
+                using var postReq = new HttpRequestMessage(HttpMethod.Post, $"{PortalApiBase}/api/shipments");
+                ApplyPortalAuthHeaders(postReq, settings);
+                postReq.Content = new StringContent(JsonSerializer.Serialize(createPayload), Encoding.UTF8, "application/json");
+
+                using var postRes = await _httpClient.SendAsync(postReq, cancellationToken).ConfigureAwait(false);
+                if (!postRes.IsSuccessStatusCode)
+                {
+                    return new List<NavlungoQuoteOffer>();
+                }
+
+                string postBody = await postRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                shipmentId = TryExtractShipmentId(postBody);
+                if (string.IsNullOrWhiteSpace(shipmentId))
+                {
+                    return new List<NavlungoQuoteOffer>();
+                }
+            }
+
+            using var getReq = new HttpRequestMessage(HttpMethod.Get, $"{PortalApiBase}/api/shipments/{Uri.EscapeDataString(shipmentId)}/quotes");
+            ApplyPortalAuthHeaders(getReq, settings);
+
+            using var getRes = await _httpClient.SendAsync(getReq, cancellationToken).ConfigureAwait(false);
+            if (!getRes.IsSuccessStatusCode)
+            {
+                return new List<NavlungoQuoteOffer>();
+            }
+
+            string quotesJson = await getRes.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            var offers = ParseNavlungoResponse(quotesJson, request);
+            if (offers.Count > 0)
+            {
+                foreach (var o in offers)
+                {
+                    o.Note = "Navlungo Üye Portalı (Canlı)";
+                }
+                SaveLastDebugResponse(quotesJson);
+            }
+
+            return offers;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception caught)
+        {
+            AppLog.Swallowed(caught);
+            return new List<NavlungoQuoteOffer>();
+        }
+    }
+
     private async Task<(bool success, string content, HttpStatusCode statusCode, string? reasonPhrase)> ExecutePostRequestRawAsync(
         NavlungoQuoteRequest request,
         NavlungoSettings? settings,
@@ -249,32 +433,10 @@ public sealed class NavlungoApiClient : INavlungoApiClient
         httpRequest.Headers.TryAddWithoutValidation("Origin", "https://quick-price-calculator.navlungo.com");
         httpRequest.Headers.TryAddWithoutValidation("Referer", "https://quick-price-calculator.navlungo.com/tr?source=user");
 
-        var cookieBuilder = new StringBuilder();
-        if (settings != null)
+        string cookieHeader = BuildCookieHeader(settings);
+        if (!string.IsNullOrWhiteSpace(cookieHeader))
         {
-            if (!string.IsNullOrWhiteSpace(settings.SessionCookie))
-            {
-                string sanitized = NavlungoCookieSanitizer.Sanitize(settings.SessionCookie);
-                cookieBuilder.Append(sanitized);
-            }
-            if (!string.IsNullOrWhiteSpace(settings.IdToken))
-            {
-                string idTok = NavlungoCookieSanitizer.Sanitize(settings.IdToken);
-                if (!cookieBuilder.ToString().Contains("id_token="))
-                {
-                    if (cookieBuilder.Length > 0 && !cookieBuilder.ToString().TrimEnd().EndsWith(";"))
-                        cookieBuilder.Append("; ");
-                    if (idTok.Contains("="))
-                        cookieBuilder.Append(idTok);
-                    else
-                        cookieBuilder.Append($"id_token={idTok}");
-                }
-            }
-        }
-
-        if (cookieBuilder.Length > 0)
-        {
-            httpRequest.Headers.TryAddWithoutValidation("Cookie", cookieBuilder.ToString());
+            httpRequest.Headers.TryAddWithoutValidation("Cookie", cookieHeader);
         }
 
         var payload = new[]
