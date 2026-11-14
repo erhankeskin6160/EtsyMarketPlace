@@ -21,6 +21,7 @@ internal sealed class FastListingDraftModel
     
     public long? SelectedShippingProfileId { get; set; }
     public long? SelectedReadinessStateId { get; set; }
+    public long? SelectedReturnPolicyId { get; set; }
     
     public List<string> GalleryImagePaths { get; set; } = new();
     

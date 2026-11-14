@@ -307,8 +307,8 @@
               <div class="field-wrap half">
                 <div class="field-label-row">
                   <label>🚚 Kargo Profili:</label>
-                  <button type="button" class="btn-refresh-logistics" (click)="refreshLogistics()" [disabled]="isLoadingShippingProfiles || isLoadingReadinessStates" title="Kargo ve Hazırlık Durumlarını Yenile">
-                    <span [class.spin-disc-inline]="isLoadingShippingProfiles || isLoadingReadinessStates">🔄</span> Yenile
+                  <button type="button" class="btn-refresh-logistics" (click)="refreshLogistics()" [disabled]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies" title="Kargo, Hazırlık Durumu ve İade Politikalarını Yenile">
+                    <span [class.spin-disc-inline]="isLoadingShippingProfiles || isLoadingReadinessStates || isLoadingReturnPolicies">🔄</span> Yenile
                   </button>
                 </div>
                 <select class="std-select" [(ngModel)]="selectedShippingProfileId">
@@ -327,6 +327,30 @@
                   <option *ngIf="!isLoadingReadinessStates && readinessStatesList.length === 0" [ngValue]="null">⚠️ Hazırlık durumu bulunamadı</option>
                   <option *ngFor="let rState of readinessStatesList" [ngValue]="rState.id">
                     ⏱️ {{ rState.title }}
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <!-- İade Politikası (Return Policy) Seçimi & Yeni Oluşturma -->
+            <div class="logistics-row return-policy-row" *ngIf="listingType === 'physical'">
+              <div class="field-wrap full">
+                <div class="field-label-row">
+                  <label>↩️ İade Politikası (Return Policy):</label>
+                  <div class="logistics-btn-group">
+                    <button type="button" class="btn-refresh-logistics" (click)="loadReturnPolicies()" [disabled]="isLoadingReturnPolicies" title="İade Politikalarını Yenile">
+                      <span [class.spin-disc-inline]="isLoadingReturnPolicies">🔄</span>
+                    </button>
+                    <button type="button" class="btn-new-return-policy" (click)="openReturnPolicyModal()" title="Etsy Mağazasında Yeni İade Politikası Oluştur">
+                      + Yeni İade Politikası Oluştur
+                    </button>
+                  </div>
+                </div>
+                <select class="std-select" [(ngModel)]="selectedReturnPolicyId" (ngModelChange)="saveDraftToStorage()">
+                  <option *ngIf="isLoadingReturnPolicies" [ngValue]="null">⏳ Etsy iade politikaları yükleniyor...</option>
+                  <option *ngIf="!isLoadingReturnPolicies && returnPoliciesList.length === 0" [ngValue]="null">⚠️ İade politikası bulunamadı (+ Yeni Oluştur ile ekleyebilirsiniz)</option>
+                  <option *ngFor="let rp of returnPoliciesList" [ngValue]="rp.returnPolicyId">
+                    ↩️ {{ rp.title }} (ID: {{ rp.returnPolicyId }})
                   </option>
                 </select>
               </div>
@@ -734,6 +758,10 @@
                 <span class="icon">{{ isReadinessReady ? '✅' : '⚪' }}</span>
                 <span>{{ listingType === 'digital' ? 'Dijital (Hazırlık durumu gerekmez)' : 'Hazırlık durumu seçildi' }}</span>
               </div>
+              <div class="check-item" [class.done]="isReturnPolicyReady">
+                <span class="icon">{{ isReturnPolicyReady ? '✅' : '⚪' }}</span>
+                <span>{{ listingType === 'digital' ? 'Dijital (İade politikası gerekmez)' : 'İade politikası seçildi' }}</span>
+              </div>
               <div class="check-item" [class.done]="isDescReady">
                 <span class="icon">{{ isDescReady ? '✅' : '⚪' }}</span>
                 <span>Açıklama dolduruldu</span>
@@ -927,4 +955,61 @@
     </div>
   </div>
 
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 4: YENİ İADE POLİTİKASI OLUŞTUR      -->
+<!-- ========================================== -->
+<div class="modal-backdrop-creator" *ngIf="isReturnPolicyModalOpen" (click)="closeReturnPolicyModal()">
+  <div class="modal-dialog-return-policy" (click)="$event.stopPropagation()">
+    <div class="modal-head">
+      <h3>↩️ Yeni Etsy İade Politikası Oluştur</h3>
+      <button type="button" class="btn-close-dlg" (click)="closeReturnPolicyModal()" [disabled]="isCreatingReturnPolicy">✕</button>
+    </div>
+
+    <div class="return-policy-modal-body">
+      <div class="rp-hint-box">
+        Etsy Open API v3 üzerinden mağazanız için yeni bir iade politikası oluşturur. Aynı kural kombinasyonu mağazada zaten varsa mevcut politikayı otomatik seçer.
+      </div>
+
+      <div class="rp-toggle-card">
+        <label class="rp-check-row">
+          <input type="checkbox" [(ngModel)]="newPolicyAcceptsReturns" [disabled]="isCreatingReturnPolicy" />
+          <span>✅ İade Kabul Edilir (Accepts Returns)</span>
+        </label>
+
+        <label class="rp-check-row">
+          <input type="checkbox" [(ngModel)]="newPolicyAcceptsExchanges" [disabled]="isCreatingReturnPolicy" />
+          <span>🔄 Değişim Kabul Edilir (Accepts Exchanges)</span>
+        </label>
+      </div>
+
+      <div class="field-wrap full" *ngIf="newPolicyAcceptsReturns || newPolicyAcceptsExchanges">
+        <label>📅 İade / Değişim Süresi (Return Deadline):</label>
+        <select class="std-select" [(ngModel)]="newPolicyDeadline" [disabled]="isCreatingReturnPolicy">
+          <option *ngFor="let days of returnPolicyDeadlineOptions" [ngValue]="days">
+            {{ days }} Gün
+          </option>
+        </select>
+      </div>
+
+      <div class="rp-preview-badge">
+        <span>Önizleme Başlığı:</span>
+        <strong>{{ newPolicyPreviewTitle }}</strong>
+      </div>
+
+      <div class="rp-error-banner" *ngIf="returnPolicyModalError">
+        ⚠️ {{ returnPolicyModalError }}
+      </div>
+    </div>
+
+    <div class="rp-modal-footer">
+      <button type="button" class="btn-rp-cancel" (click)="closeReturnPolicyModal()" [disabled]="isCreatingReturnPolicy">
+        İptal
+      </button>
+      <button type="button" class="btn-rp-submit" (click)="submitCreateReturnPolicy()" [disabled]="isCreatingReturnPolicy">
+        {{ isCreatingReturnPolicy ? '⏳ Oluşturuluyor...' : '💾 Oluştur ve Seç' }}
+      </button>
+    </div>
+  </div>
 </div>

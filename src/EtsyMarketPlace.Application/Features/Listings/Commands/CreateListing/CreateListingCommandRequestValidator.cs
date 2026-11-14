@@ -36,6 +36,14 @@ public sealed class CreateListingCommandRequestValidator : AbstractValidator<Cre
                     await HasValidShippingProfileAsync(req.Command, shippingProfileId, apiClient, cancellationToken))
                 .OverridePropertyName("ShippingProfileId")
                 .WithMessage(MissingShippingProfileMessage);
+
+            When(x => !x.Command.IsDigital && x.Command.ReturnPolicyId.HasValue, () =>
+            {
+                RuleFor(x => x.Command.ReturnPolicyId!.Value)
+                    .GreaterThan(0)
+                    .OverridePropertyName("ReturnPolicyId")
+                    .WithMessage("Geçersiz iade politikası ID'si (ReturnPolicyId 0'dan büyük olmalıdır).");
+            });
         });
     }
 

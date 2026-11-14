@@ -944,6 +944,144 @@ internal sealed class EtsyApiClient
         return options;
     }
 
+    public async Task<List<EtsyReturnPolicyOption>> GetOwnShopReturnPoliciesAsync(
+        EtsyApiSettings settings,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        var options = new List<EtsyReturnPolicyOption>();
+
+        // 1. Try official GET /shops/{shop_id}/policies/return endpoint
+        try
+        {
+            using var rpRequest = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/policies/return", useAccessToken: true);
+            using var rpResponse = await _httpClient.SendAsync(rpRequest, cancellationToken);
+            if (rpResponse.IsSuccessStatusCode)
+            {
+                var rpBody = await rpResponse.Content.ReadAsStringAsync(cancellationToken);
+                using var rpDoc = JsonDocument.Parse(rpBody);
+                if (rpDoc.RootElement.TryGetProperty("results", out var rpResults) && rpResults.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in rpResults.EnumerateArray())
+                    {
+                        var option = ParseReturnPolicyOption(item);
+                        if (option != null && !options.Any(o => o.ReturnPolicyId == option.ReturnPolicyId))
+                        {
+                            options.Add(option);
+                        }
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to active listings scan
+        }
+
+        if (options.Count > 0)
+        {
+            return options.OrderByDescending(o => o.AcceptsReturns).ThenBy(o => o.ReturnPolicyId).ToList();
+        }
+
+        // 2. Fallback: Query active listings to find used return_policy_id values
+        try
+        {
+            using var request = CreateRequest(settings, HttpMethod.Get, $"{BaseUrl}/shops/{shopId}/listings/active?limit=100", useAccessToken: true);
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                using var document = JsonDocument.Parse(body);
+                if (document.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+                {
+                    return results
+                        .EnumerateArray()
+                        .Select(item => GetLong(item, "return_policy_id"))
+                        .Where(id => id > 0)
+                        .Distinct()
+                        .OrderBy(id => id)
+                        .Select(id => new EtsyReturnPolicyOption(id, $"Mevcut İade Politikası (#{id})", true, true, 30))
+                        .ToList();
+                }
+            }
+        }
+        catch
+        {
+            // Ignore
+        }
+
+        return options;
+    }
+
+    public async Task<EtsyReturnPolicyOption> CreateOwnShopReturnPolicyAsync(
+        EtsyApiSettings settings,
+        bool acceptsReturns,
+        bool acceptsExchanges,
+        int? returnDeadline,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureApiCredentials(settings);
+        await EnsureAccessTokenAsync(settings, cancellationToken);
+
+        var (shopId, _) = await GetOwnShopIdentityAsync(settings, cancellationToken);
+        var form = new List<KeyValuePair<string, string>>
+        {
+            new("accepts_returns", acceptsReturns ? "true" : "false"),
+            new("accepts_exchanges", acceptsExchanges ? "true" : "false")
+        };
+
+        if ((acceptsReturns || acceptsExchanges) && returnDeadline.HasValue && returnDeadline.Value > 0)
+        {
+            form.Add(new("return_deadline", returnDeadline.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        using var request = CreateRequest(settings, HttpMethod.Post, $"{BaseUrl}/shops/{shopId}/policies/return", useAccessToken: true);
+        request.Content = new FormUrlEncodedContent(form);
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"İade politikası oluşturulamadı. HTTP {(int)response.StatusCode}: {body}");
+        }
+
+        using var doc = JsonDocument.Parse(body);
+        var parsed = ParseReturnPolicyOption(doc.RootElement);
+        if (parsed == null &&
+            doc.RootElement.TryGetProperty("results", out var results) &&
+            results.ValueKind == JsonValueKind.Array &&
+            results.GetArrayLength() > 0)
+        {
+            parsed = ParseReturnPolicyOption(results[0]);
+        }
+
+        return parsed ?? throw new InvalidOperationException("İade politikası oluşturuldu ancak Etsy API yanıtı ayrıştırılamadı.");
+    }
+
+    private static EtsyReturnPolicyOption? ParseReturnPolicyOption(JsonElement item)
+    {
+        var id = GetLong(item, "return_policy_id");
+        if (id <= 0) return null;
+
+        var acceptsReturns = GetBool(item, "accepts_returns");
+        var acceptsExchanges = GetBool(item, "accepts_exchanges");
+        int? deadline = item.TryGetProperty("return_deadline", out var rdProp) &&
+                        rdProp.ValueKind == JsonValueKind.Number &&
+                        rdProp.TryGetInt32(out var rdVal)
+            ? rdVal
+            : null;
+
+        var title = EtsyMarketPlace.Application.Shipping.EtsyLogisticsService.FormatReturnPolicyTitle(
+            acceptsReturns,
+            acceptsExchanges,
+            deadline);
+
+        return new EtsyReturnPolicyOption(id, title, acceptsReturns, acceptsExchanges, deadline);
+    }
+
     public async Task<CreatedDraftListing> CreateOwnShopDraftListingAsync(
         EtsyApiSettings settings,
         DraftListingCreateRequest draft,
@@ -976,6 +1114,10 @@ internal sealed class EtsyApiClient
             if (draft.ReadinessStateId > 0)
             {
                 form.Add(new("readiness_state_id", draft.ReadinessStateId.ToString(CultureInfo.InvariantCulture)));
+            }
+            if (draft.ReturnPolicyId > 0)
+            {
+                form.Add(new("return_policy_id", draft.ReturnPolicyId.ToString(CultureInfo.InvariantCulture)));
             }
         }
 
@@ -2186,7 +2328,8 @@ internal sealed record DraftListingCreateRequest(
     IReadOnlyList<string> Materials,
     long ReadinessStateId = 0,
     string WhoMade = "i_did",
-    string WhenMade = "made_to_order");
+    string WhenMade = "made_to_order",
+    long ReturnPolicyId = 0);
 
 internal sealed record CreatedDraftListing(long ListingId, string Url);
 
@@ -2216,4 +2359,14 @@ internal sealed record EtsyShippingProfileOption(long ShippingProfileId, string 
 internal sealed record EtsyReadinessStateOption(long ReadinessStateId, string Title)
 {
     public string DisplayName => $"{Title} ({ReadinessStateId})";
+}
+
+internal sealed record EtsyReturnPolicyOption(
+    long ReturnPolicyId,
+    string Title,
+    bool AcceptsReturns = false,
+    bool AcceptsExchanges = false,
+    int? ReturnDeadline = null)
+{
+    public string DisplayName => $"{Title} ({ReturnPolicyId})";
 }

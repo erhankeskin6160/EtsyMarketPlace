@@ -87,6 +87,13 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
             formDict.Add(new("readiness_state_id", raw.ReadinessStateId.Value.ToString(CultureInfo.InvariantCulture)));
         }
 
+        if (!string.Equals(raw.Type, "download", StringComparison.OrdinalIgnoreCase) &&
+            raw.ReturnPolicyId.HasValue &&
+            raw.ReturnPolicyId.Value > 0)
+        {
+            formDict.Add(new("return_policy_id", raw.ReturnPolicyId.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+
         foreach (var tag in raw.Tags)
         {
             formDict.Add(new("tags[]", tag));
@@ -423,6 +430,69 @@ public sealed class EtsyListingApiClient : IEtsyListingApiClient
                         if (al.TryGetProperty("readiness_state_id", out var rsProp) && rsProp.GetInt64() > 0)
                         {
                             return rsProp.GetInt64();
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    public async Task<long?> GetDefaultReturnPolicyIdAsync(string shopId, CancellationToken ct)
+    {
+        try
+        {
+            var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);
+
+            // 1. Resmi iade politikaları uç noktasından dene
+            var policiesUrl = $"https://api.etsy.com/v3/application/shops/{shopId}/policies/return";
+            using var req = new HttpRequestMessage(HttpMethod.Get, policiesUrl);
+            req.Headers.Add("x-api-key", apiKeyHeader);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var res = await _httpClient.SendAsync(req, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                var body = await res.Content.ReadAsStringAsync(ct);
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("results", out var rpArray) && rpArray.GetArrayLength() > 0)
+                {
+                    foreach (var rp in rpArray.EnumerateArray())
+                    {
+                        if (rp.TryGetProperty("return_policy_id", out var rpIdProp) &&
+                            rpIdProp.ValueKind == JsonValueKind.Number &&
+                            rpIdProp.TryGetInt64(out var id) &&
+                            id > 0)
+                        {
+                            return id;
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback: Aktif ilanlardan kullanılan return_policy_id değerini oku
+            var activeListingsUrl = $"https://api.etsy.com/v3/application/shops/{shopId}/listings/active?limit=30";
+            using var actReq = new HttpRequestMessage(HttpMethod.Get, activeListingsUrl);
+            actReq.Headers.Add("x-api-key", apiKeyHeader);
+            actReq.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+
+            using var actRes = await _httpClient.SendAsync(actReq, ct);
+            if (actRes.IsSuccessStatusCode)
+            {
+                var actBody = await actRes.Content.ReadAsStringAsync(ct);
+                using var actDoc = JsonDocument.Parse(actBody);
+                if (actDoc.RootElement.TryGetProperty("results", out var aListings) && aListings.GetArrayLength() > 0)
+                {
+                    foreach (var al in aListings.EnumerateArray())
+                    {
+                        if (al.TryGetProperty("return_policy_id", out var rpProp) &&
+                            rpProp.ValueKind == JsonValueKind.Number &&
+                            rpProp.TryGetInt64(out var id) &&
+                            id > 0)
+                        {
+                            return id;
                         }
                     }
                 }

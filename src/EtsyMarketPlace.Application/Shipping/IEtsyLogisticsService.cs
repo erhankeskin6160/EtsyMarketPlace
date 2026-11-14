@@ -23,4 +23,14 @@ public interface IEtsyLogisticsService
         string query,
         int limit = 100,
         CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<EtsyReturnPolicyDto>> GetReturnPoliciesAsync(
+        string shopId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<EtsyReturnPolicyDto>>([]);
+
+    Task<(bool Success, EtsyReturnPolicyDto? Policy, string? ErrorMessage)> CreateReturnPolicyAsync(
+        CreateEtsyReturnPolicyCommand command,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<(bool, EtsyReturnPolicyDto?, string?)>((false, null, "Not implemented"));
 }

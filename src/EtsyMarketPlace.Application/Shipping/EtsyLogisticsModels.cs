@@ -24,3 +24,18 @@ public sealed record EtsyTaxonomyNodeItemDto(
     string Name,
     string Path
 );
+
+public sealed record EtsyReturnPolicyDto(
+    long ReturnPolicyId,
+    bool AcceptsReturns,
+    bool AcceptsExchanges,
+    int? ReturnDeadline,
+    string Title
+);
+
+public sealed record CreateEtsyReturnPolicyCommand(
+    string? ShopId,
+    bool AcceptsReturns,
+    bool AcceptsExchanges,
+    int? ReturnDeadline
+);

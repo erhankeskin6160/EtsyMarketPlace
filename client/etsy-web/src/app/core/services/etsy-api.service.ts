@@ -139,6 +139,21 @@ export interface EtsyTaxonomyItemDto {
   path: string;
 }
 
+export interface EtsyReturnPolicyDto {
+  returnPolicyId: number;
+  acceptsReturns: boolean;
+  acceptsExchanges: boolean;
+  returnDeadline?: number | null;
+  title: string;
+}
+
+export interface CreateReturnPolicyPayload {
+  shopId?: string | null;
+  acceptsReturns: boolean;
+  acceptsExchanges: boolean;
+  returnDeadline?: number | null;
+}
+
 export interface CreateListingPayload {
   shopId?: string;
   title: string;
@@ -148,6 +163,7 @@ export interface CreateListingPayload {
   taxonomyId: number;
   shippingProfileId?: number | null;
   readinessStateId?: number | null;
+  returnPolicyId?: number | null;
   isDigital?: boolean;
   tags?: string[];
   materials?: string[];
@@ -512,6 +528,21 @@ export class EtsyApiService {
   getReadinessStates(shopId?: string): Observable<any> {
     const id = shopId || this.activeShopId();
     return this.http.get<any>(`${this.API_BASE}/api/etsy/readiness-states?shopId=${encodeURIComponent(id)}`);
+  }
+
+  getReturnPolicies(shopId?: string): Observable<{ count: number; results: EtsyReturnPolicyDto[] }> {
+    const id = shopId || this.activeShopId();
+    return this.http.get<{ count: number; results: EtsyReturnPolicyDto[] }>(
+      `${this.API_BASE}/api/etsy/return-policies?shopId=${encodeURIComponent(id)}`
+    );
+  }
+
+  createReturnPolicy(payload: CreateReturnPolicyPayload): Observable<EtsyReturnPolicyDto> {
+    const shopId = payload.shopId || this.activeShopId();
+    return this.http.post<EtsyReturnPolicyDto>(`${this.API_BASE}/api/etsy/return-policies`, {
+      ...payload,
+      shopId
+    });
   }
 
   getSellerTaxonomy(shopId?: string): Observable<{ count: number; results: EtsyTaxonomyItemDto[] }> {

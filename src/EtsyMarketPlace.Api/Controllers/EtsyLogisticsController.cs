@@ -9,9 +9,11 @@ using MediatR;
 using EtsyMarketPlace.Application.Shipping;
 using EtsyMarketPlace.Application.Features.Logistics.Commands.ConnectCarrier;
 using EtsyMarketPlace.Application.Features.Logistics.Commands.CreateCarrierShipment;
+using EtsyMarketPlace.Application.Features.Logistics.Commands.CreateReturnPolicy;
 using EtsyMarketPlace.Application.Features.Logistics.Queries.GetCarrierQuotes;
 using EtsyMarketPlace.Application.Features.Logistics.Queries.GetCarrierSessions;
 using EtsyMarketPlace.Application.Features.Logistics.Queries.GetReadinessStates;
+using EtsyMarketPlace.Application.Features.Logistics.Queries.GetReturnPolicies;
 using EtsyMarketPlace.Application.Features.Logistics.Queries.GetSellerTaxonomyNodes;
 using EtsyMarketPlace.Application.Features.Logistics.Queries.GetShippingProfiles;
 using EtsyMarketPlace.Application.Features.Logistics.Queries.SearchHsCodes;
@@ -53,6 +55,38 @@ public class EtsyLogisticsController : BaseApiController
     {
         var resolvedShopId = ResolveShopId(shopId, _config);
         var request = new GetReadinessStatesRequest { ShopId = resolvedShopId };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpGet("return-policies")]
+    [EndpointSummary("Mağazanın Etsy İade Politikalarını (policies/return) Canlı Getir")]
+    public async Task<IActionResult> GetEtsyReturnPolicies(
+        [FromQuery] string shopId = "53236321",
+        CancellationToken cancellationToken = default)
+    {
+        var resolvedShopId = ResolveShopId(shopId, _config);
+        var request = new GetReturnPoliciesRequest { ShopId = resolvedShopId };
+        var response = await _mediator.Send(request, cancellationToken);
+        return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
+    }
+
+    [HttpPost("return-policies")]
+    [EndpointSummary("Mağazada Yeni Etsy İade Politikası Oluştur veya Mevcut Olanı Getir")]
+    public async Task<IActionResult> CreateEtsyReturnPolicy(
+        [FromBody] CreateEtsyReturnPolicyCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        if (command == null)
+        {
+            return BadRequest(new { success = false, message = "Geçersiz iade politikası oluşturma isteği." });
+        }
+
+        var resolvedShopId = ResolveShopId(command.ShopId, _config);
+        var request = new CreateReturnPolicyRequest
+        {
+            Command = command with { ShopId = resolvedShopId }
+        };
         var response = await _mediator.Send(request, cancellationToken);
         return response.Success ? Ok(response.Data) : StatusCode(response.StatusCode, response);
     }

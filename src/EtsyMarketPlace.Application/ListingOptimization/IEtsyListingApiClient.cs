@@ -65,6 +65,11 @@ public interface IEtsyListingApiClient
         string shopId,
         CancellationToken cancellationToken = default);
 
+    Task<long?> GetDefaultReturnPolicyIdAsync(
+        string shopId,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<long?>(null);
+
     Task<string> GetShopListingsRawJsonAsync(
         string shopId,
         int limit,

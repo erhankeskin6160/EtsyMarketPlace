@@ -177,4 +177,28 @@ public sealed class CreateListingValidationTests
         Assert.True(validationResponse.Errors.ContainsKey("Quantity"));
         Assert.DoesNotContain(validationResponse.Errors.Keys, k => k.StartsWith("Command."));
     }
+
+    [Fact]
+    public async Task PhysicalListing_WithNonPositiveReturnPolicyId_ReturnsValidationErrorResponse()
+    {
+        var validator = new CreateListingCommandRequestValidator(
+            new FastListingPublishCommandValidator(),
+            new StubEtsyListingApiClient(defaultShippingProfileId: 98765));
+
+        var behaviour = new ValidationBehaviour<CreateListingCommandRequest, ServiceResponse>(
+            new IValidator<CreateListingCommandRequest>[] { validator });
+
+        var request = new CreateListingCommandRequest
+        {
+            Command = CreateCommand(isDigital: false, shippingProfileId: 98765) with { ReturnPolicyId = 0 }
+        };
+
+        var response = await behaviour.Handle(
+            request,
+            () => Task.FromResult(ServiceResponse.CreateSuccess()),
+            CancellationToken.None);
+
+        var validationResponse = Assert.IsType<ValidationErrorResponse>(response);
+        Assert.True(validationResponse.Errors.ContainsKey("ReturnPolicyId"));
+    }
 }

@@ -17,9 +17,13 @@ public sealed class FastListingPublishServiceTests
         public bool UpdateInventorySuccess { get; set; } = true;
         public string? UpdateInventoryError { get; set; } = null;
         public EtsyInventoryPayload? LastInventoryPayload { get; private set; }
+        public CreateDraftListingRawRequest? LastDraftRequest { get; private set; }
 
-        public Task<(long ListingId, string Url)> CreateDraftListingAsync(string shopId, CreateDraftListingRawRequest raw, CancellationToken ct) =>
-            Task.FromResult((CreatedListingId, CreatedUrl));
+        public Task<(long ListingId, string Url)> CreateDraftListingAsync(string shopId, CreateDraftListingRawRequest raw, CancellationToken ct)
+        {
+            LastDraftRequest = raw;
+            return Task.FromResult((CreatedListingId, CreatedUrl));
+        }
 
         public List<EtsyVariationImageItem> LastVariationImages { get; private set; } = new();
 
@@ -54,8 +58,13 @@ public sealed class FastListingPublishServiceTests
         public Task<long?> GetDefaultShippingProfileIdAsync(string shopId, CancellationToken ct) =>
             Task.FromResult<long?>(123456);
 
+        public long? DefaultReturnPolicyId { get; set; } = 654321;
+
         public Task<long?> GetDefaultReadinessStateIdAsync(string shopId, CancellationToken ct) =>
             Task.FromResult<long?>(789);
+
+        public Task<long?> GetDefaultReturnPolicyIdAsync(string shopId, CancellationToken ct) =>
+            Task.FromResult(DefaultReturnPolicyId);
 
         public Task<string> GetShopListingsRawJsonAsync(string shopId, int limit, CancellationToken ct) =>
             Task.FromResult("{\"results\":[]}");
@@ -256,5 +265,94 @@ public sealed class FastListingPublishServiceTests
         Assert.Equal(101L, fakeClient.LastVariationImages[0].ValueId);
         Assert.Equal(500002L, fakeClient.LastVariationImages[1].ImageId);
         Assert.Equal(102L, fakeClient.LastVariationImages[1].ValueId);
+    }
+
+    [Fact]
+    public async Task PublishListingAsync_WhenReturnPolicyProvided_ForwardsToRawRequest()
+    {
+        var fakeClient = new FakeEtsyListingApiClient();
+        using var httpClient = new HttpClient();
+        var service = new FastListingPublishService(fakeClient, httpClient);
+
+        var command = new FastListingPublishCommand(
+            ShopId: "53236321",
+            Title: "Custom Wooden Lamp",
+            Description: "Artisan handcrafted lamp.",
+            Price: 45m,
+            Quantity: 10,
+            TaxonomyId: 1042,
+            ShippingProfileId: 123456,
+            ReadinessStateId: 789,
+            IsDigital: false,
+            Tags: ["wood lamp"],
+            Materials: ["Wood"],
+            State: "draft",
+            ReturnPolicyId: 445566
+        );
+
+        var result = await service.PublishListingAsync(command);
+
+        Assert.True(result.Success);
+        Assert.NotNull(fakeClient.LastDraftRequest);
+        Assert.Equal(445566L, fakeClient.LastDraftRequest!.ReturnPolicyId);
+    }
+
+    [Fact]
+    public async Task PublishListingAsync_WhenReturnPolicyOmittedForPhysical_ResolvesDefaultFromShop()
+    {
+        var fakeClient = new FakeEtsyListingApiClient { DefaultReturnPolicyId = 778899 };
+        using var httpClient = new HttpClient();
+        var service = new FastListingPublishService(fakeClient, httpClient);
+
+        var command = new FastListingPublishCommand(
+            ShopId: "53236321",
+            Title: "Ceramic Vase Handmade",
+            Description: "Artisan ceramic vase.",
+            Price: 55m,
+            Quantity: 5,
+            TaxonomyId: 1042,
+            ShippingProfileId: 123456,
+            ReadinessStateId: 789,
+            IsDigital: false,
+            Tags: ["vase"],
+            Materials: ["Ceramic"],
+            State: "draft"
+        );
+
+        var result = await service.PublishListingAsync(command);
+
+        Assert.True(result.Success);
+        Assert.NotNull(fakeClient.LastDraftRequest);
+        Assert.Equal(778899L, fakeClient.LastDraftRequest!.ReturnPolicyId);
+    }
+
+    [Fact]
+    public async Task PublishListingAsync_WhenDigital_ClearsReturnPolicyId()
+    {
+        var fakeClient = new FakeEtsyListingApiClient { DefaultReturnPolicyId = 778899 };
+        using var httpClient = new HttpClient();
+        var service = new FastListingPublishService(fakeClient, httpClient);
+
+        var command = new FastListingPublishCommand(
+            ShopId: "53236321",
+            Title: "Digital Printable Poster",
+            Description: "High resolution PNG file.",
+            Price: 9.90m,
+            Quantity: 99,
+            TaxonomyId: 1042,
+            ShippingProfileId: null,
+            ReadinessStateId: null,
+            IsDigital: true,
+            Tags: ["printable art"],
+            Materials: [],
+            State: "draft",
+            ReturnPolicyId: 445566
+        );
+
+        var result = await service.PublishListingAsync(command);
+
+        Assert.True(result.Success);
+        Assert.NotNull(fakeClient.LastDraftRequest);
+        Assert.Null(fakeClient.LastDraftRequest!.ReturnPolicyId);
     }
 }

@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, HostListener, inject, ViewChild, ElementR
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, ActivatedRoute } from '@angular/router';
-import { EtsyApiService, EtsyTaxonomyItemDto } from '../../core/services/etsy-api.service';
+import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
 import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDescriptionContext, DescriptionVariantsResult } from '../../core/services/etsy-listing-ai.service';
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
@@ -44,6 +44,7 @@ export interface FastCreatorDraft {
   selectedShippingProfileId: number | null;
   readinessState: string;
   selectedReadinessStateId: number | null;
+  selectedReturnPolicyId?: number | null;
   tags: string[];
   description: string;
   materials: string;
@@ -117,6 +118,16 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   selectedReadinessStateId: number | null = null;
   isLoadingReadinessStates = false;
   readinessState = '';
+  returnPoliciesList: EtsyReturnPolicyDto[] = [];
+  selectedReturnPolicyId: number | null = null;
+  isLoadingReturnPolicies = false;
+  isReturnPolicyModalOpen = false;
+  newPolicyAcceptsReturns = true;
+  newPolicyAcceptsExchanges = true;
+  newPolicyDeadline: number | null = 30;
+  readonly returnPolicyDeadlineOptions: number[] = [7, 14, 21, 30, 45, 60, 90];
+  isCreatingReturnPolicy = false;
+  returnPolicyModalError = '';
   tags: string[] = [];
   newTagInput = '';
   description = '';
@@ -271,6 +282,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   loadLogisticsData(): void {
     this.loadShippingProfiles();
     this.loadReadinessStates();
+    this.loadReturnPolicies();
     this.loadCategories();
   }
 
@@ -320,6 +332,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         selectedShippingProfileId: this.selectedShippingProfileId,
         readinessState: this.readinessState,
         selectedReadinessStateId: this.selectedReadinessStateId,
+        selectedReturnPolicyId: this.selectedReturnPolicyId,
         tags: this.tags,
         description: this.description,
         materials: this.materials,
@@ -389,6 +402,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.selectedShippingProfileId = draft.selectedShippingProfileId ?? null;
       this.readinessState = draft.readinessState || '';
       this.selectedReadinessStateId = draft.selectedReadinessStateId ?? null;
+      this.selectedReturnPolicyId = draft.selectedReturnPolicyId ?? null;
       this.tags = Array.isArray(draft.tags) ? [...draft.tags] : [];
       this.description = draft.description || '';
       this.materials = draft.materials || '';
@@ -704,6 +718,106 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.isLoadingReadinessStates = false;
+      }
+    });
+  }
+
+  loadReturnPolicies(): void {
+    this.isLoadingReturnPolicies = true;
+    this.etsyApi.getReturnPolicies().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (res) => {
+        this.isLoadingReturnPolicies = false;
+        const results = res?.results || (Array.isArray(res) ? res : []);
+        this.returnPoliciesList = results
+          .map((p: any) => ({
+            returnPolicyId: Number(p.returnPolicyId ?? p.return_policy_id ?? 0),
+            acceptsReturns: !!(p.acceptsReturns ?? p.accepts_returns),
+            acceptsExchanges: !!(p.acceptsExchanges ?? p.accepts_exchanges),
+            returnDeadline: p.returnDeadline ?? p.return_deadline ?? null,
+            title: p.title || `İade Politikası #${p.returnPolicyId ?? p.return_policy_id}`
+          }))
+          .filter(p => p.returnPolicyId > 0);
+
+        if (this.returnPoliciesList.length > 0 &&
+            (!this.selectedReturnPolicyId || !this.returnPoliciesList.some(p => p.returnPolicyId === this.selectedReturnPolicyId))) {
+          this.selectedReturnPolicyId = this.returnPoliciesList[0].returnPolicyId;
+        }
+      },
+      error: () => {
+        this.isLoadingReturnPolicies = false;
+      }
+    });
+  }
+
+  openReturnPolicyModal(): void {
+    this.newPolicyAcceptsReturns = true;
+    this.newPolicyAcceptsExchanges = true;
+    this.newPolicyDeadline = 30;
+    this.returnPolicyModalError = '';
+    this.isCreatingReturnPolicy = false;
+    this.isReturnPolicyModalOpen = true;
+  }
+
+  closeReturnPolicyModal(): void {
+    if (this.isCreatingReturnPolicy) return;
+    this.isReturnPolicyModalOpen = false;
+  }
+
+  get newPolicyPreviewTitle(): string {
+    const days = (this.newPolicyAcceptsReturns || this.newPolicyAcceptsExchanges) && this.newPolicyDeadline
+      ? ` (${this.newPolicyDeadline} Gün)`
+      : '';
+    if (this.newPolicyAcceptsReturns && this.newPolicyAcceptsExchanges) return `İade ve Değişim Kabul Edilir${days}`;
+    if (this.newPolicyAcceptsReturns) return `Yalnızca İade Kabul Edilir${days}`;
+    if (this.newPolicyAcceptsExchanges) return `Yalnızca Değişim Kabul Edilir${days}`;
+    return 'İade ve Değişim Kabul Edilmez';
+  }
+
+  submitCreateReturnPolicy(): void {
+    const requiresDeadline = this.newPolicyAcceptsReturns || this.newPolicyAcceptsExchanges;
+    if (requiresDeadline && (!this.newPolicyDeadline || this.newPolicyDeadline <= 0)) {
+      this.returnPolicyModalError = 'Lütfen geçerli bir iade/değişim süresi seçin.';
+      return;
+    }
+
+    this.isCreatingReturnPolicy = true;
+    this.returnPolicyModalError = '';
+
+    this.etsyApi.createReturnPolicy({
+      acceptsReturns: this.newPolicyAcceptsReturns,
+      acceptsExchanges: this.newPolicyAcceptsExchanges,
+      returnDeadline: requiresDeadline ? Number(this.newPolicyDeadline) : null
+    }).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (created) => {
+        this.isCreatingReturnPolicy = false;
+        const createdId = Number((created as any)?.returnPolicyId ?? (created as any)?.return_policy_id ?? 0);
+        if (created && createdId > 0) {
+          const normalized: EtsyReturnPolicyDto = {
+            returnPolicyId: createdId,
+            acceptsReturns: !!(created as any).acceptsReturns,
+            acceptsExchanges: !!(created as any).acceptsExchanges,
+            returnDeadline: (created as any).returnDeadline ?? null,
+            title: created.title || this.newPolicyPreviewTitle
+          };
+          const existingIdx = this.returnPoliciesList.findIndex(p => p.returnPolicyId === createdId);
+          if (existingIdx >= 0) {
+            this.returnPoliciesList[existingIdx] = normalized;
+          } else {
+            this.returnPoliciesList = [normalized, ...this.returnPoliciesList];
+          }
+          this.selectedReturnPolicyId = createdId;
+          this.saveDraftToStorage();
+          this.isReturnPolicyModalOpen = false;
+          this.showToast(`✅ İade politikası hazır: ${normalized.title} (#${createdId})`);
+        } else {
+          this.isReturnPolicyModalOpen = false;
+          this.loadReturnPolicies();
+        }
+      },
+      error: (err) => {
+        this.isCreatingReturnPolicy = false;
+        const parsed = extractClientValidationErrors(err, 'Etsy iade politikası oluşturulamadı.');
+        this.returnPolicyModalError = parsed.summary;
       }
     });
   }
@@ -1502,6 +1616,9 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
   get isReadinessReady(): boolean {
     return this.listingType === 'digital' || !!this.selectedReadinessStateId || this.readinessStatesList.length > 0;
   }
+  get isReturnPolicyReady(): boolean {
+    return this.listingType === 'digital' || !!this.selectedReturnPolicyId || this.returnPoliciesList.length > 0;
+  }
   get isDescReady(): boolean {
     return this.description.trim().length > 20;
   }
@@ -1610,6 +1727,12 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       readinessStateId = this.readinessStatesList[0].id;
     }
 
+    // Return policy ID parsing
+    let returnPolicyId: number | null = this.listingType === 'digital' ? null : this.selectedReturnPolicyId;
+    if (this.listingType !== 'digital' && !returnPolicyId && this.returnPoliciesList.length > 0) {
+      returnPolicyId = this.returnPoliciesList[0].returnPolicyId;
+    }
+
     // Prepare variation groups
     const variationGroupsPayload = this.enableVariations && this.variationRows.length > 0
       ? [
@@ -1635,6 +1758,7 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       taxonomyId: this.selectedTaxonomyId > 0 ? this.selectedTaxonomyId : 1042,
       shippingProfileId,
       readinessStateId,
+      returnPolicyId,
       isDigital: this.listingType === 'digital',
       tags: validTags,
       materials: this.sanitizeMaterialsForPayload(this.materials),

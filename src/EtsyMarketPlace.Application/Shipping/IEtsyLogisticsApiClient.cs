@@ -11,6 +11,17 @@ public interface IEtsyLogisticsApiClient
     Task<string?> GetRawActiveListingsJsonAsync(string shopId, CancellationToken cancellationToken = default);
     Task<string> GetRawSellerTaxonomyNodesJsonAsync(string shopId, CancellationToken cancellationToken = default);
 
+    Task<string?> GetRawReturnPoliciesJsonAsync(string shopId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<string?>(null);
+
+    Task<(bool Success, string? ResponseJson, string? ErrorMessage)> CreateReturnPolicyRawAsync(
+        string shopId,
+        bool acceptsReturns,
+        bool acceptsExchanges,
+        int? returnDeadline,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult<(bool, string?, string?)>((false, null, "Not implemented"));
+
     /// <summary>
     /// Sipariş kuyruğu için son <paramref name="lookbackDays"/> günün Etsy siparişlerini ve tam alıcı adreslerini çeker.
     /// </summary>

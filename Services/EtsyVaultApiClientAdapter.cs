@@ -114,7 +114,8 @@ internal sealed class EtsyVaultApiClientAdapter : IEtsyVaultApiClient
             Materials: listing.Materials,
             ReadinessStateId: 0,
             WhoMade: listing.WhoMade,
-            WhenMade: listing.WhenMade
+            WhenMade: listing.WhenMade,
+            ReturnPolicyId: listing.ReturnPolicyId ?? 0
         );
 
         var created = await _client.CreateOwnShopDraftListingAsync(settings, draft, cancellationToken);

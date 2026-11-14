@@ -111,11 +111,16 @@ internal sealed class FastListingCreatorForm : Form
     private readonly Label _chkItemImage = new() { AutoSize = true };
     private readonly Label _chkItemShipping = new() { AutoSize = true };
     private readonly Label _chkItemReadiness = new() { AutoSize = true };
+    private readonly Label _chkItemReturnPolicy = new() { AutoSize = true };
     private readonly Label _chkItemDesc = new() { AutoSize = true };
     private readonly Label _chkItemTags = new() { AutoSize = true };
 
+    private readonly ModernComboBox _cboReturnPolicy = new();
+    private readonly Button _btnNewReturnPolicy = new();
+
     private static List<EtsyShippingProfileOption>? _cachedShippingProfiles;
     private static List<EtsyReadinessStateOption>? _cachedReadinessStates;
+    private static List<EtsyReturnPolicyOption>? _cachedReturnPolicies;
     private bool _isUpdatingChecklist;
 
 
@@ -696,6 +701,37 @@ internal sealed class FastListingCreatorForm : Form
         _cboReadinessState.DisplayMember = nameof(EtsyReadinessStateOption.DisplayName);
         _cboReadinessState.Margin = new Padding(0, 2, 0, 4);
         logisticsStack.Controls.Add(CreateLabeledControl("⏱️ Hazırlık Durumu:", _cboReadinessState));
+
+        _cboReturnPolicy.Dock = DockStyle.Fill;
+        _cboReturnPolicy.Font = new Font("Segoe UI", 8.8F);
+        _cboReturnPolicy.DisplayMember = nameof(EtsyReturnPolicyOption.DisplayName);
+        _cboReturnPolicy.ValueMember = nameof(EtsyReturnPolicyOption.ReturnPolicyId);
+
+        _btnNewReturnPolicy.Text = "+ Yeni";
+        _btnNewReturnPolicy.Font = new Font("Segoe UI Semibold", 8.2F, FontStyle.Bold);
+        _btnNewReturnPolicy.BackColor = UiStyle.SuccessColor;
+        _btnNewReturnPolicy.ForeColor = Color.White;
+        _btnNewReturnPolicy.FlatStyle = FlatStyle.Flat;
+        _btnNewReturnPolicy.FlatAppearance.BorderSize = 0;
+        _btnNewReturnPolicy.Cursor = Cursors.Hand;
+        _btnNewReturnPolicy.Dock = DockStyle.Fill;
+        _btnNewReturnPolicy.Margin = new Padding(6, 0, 0, 0);
+        _btnNewReturnPolicy.Click += async (_, _) => await CreateReturnPolicyFromDialogAsync();
+        _galleryToolTip.SetToolTip(_btnNewReturnPolicy, "Etsy mağazasında yeni iade politikası oluşturur.");
+
+        var rpContainer = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            RowCount = 1,
+            ColumnCount = 2,
+            Margin = Padding.Empty
+        };
+        rpContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
+        rpContainer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 68));
+        rpContainer.Controls.Add(_cboReturnPolicy, 0, 0);
+        rpContainer.Controls.Add(_btnNewReturnPolicy, 1, 0);
+
+        logisticsStack.Controls.Add(CreateLabeledControl("↩️ İade Politikası:", rpContainer));
         stack.Controls.Add(logisticsStack);
 
         // --- SECTION 4: Arama Etiketleri (Tags - Maks 13) ---
@@ -1448,6 +1484,7 @@ internal sealed class FastListingCreatorForm : Form
         InitChecklistLabel(_chkItemImage, "En az 1 görsel eklendi");
         InitChecklistLabel(_chkItemShipping, "Kargo profili seçildi");
         InitChecklistLabel(_chkItemReadiness, "Hazırlık durumu seçildi");
+        InitChecklistLabel(_chkItemReturnPolicy, "İade politikası seçildi");
         InitChecklistLabel(_chkItemDesc, "Açıklama dolduruldu");
         InitChecklistLabel(_chkItemTags, "Etiketler (0/13)");
 
@@ -1456,6 +1493,7 @@ internal sealed class FastListingCreatorForm : Form
         pubTable.Controls.Add(_chkItemImage);
         pubTable.Controls.Add(_chkItemShipping);
         pubTable.Controls.Add(_chkItemReadiness);
+        pubTable.Controls.Add(_chkItemReturnPolicy);
         pubTable.Controls.Add(_chkItemDesc);
         pubTable.Controls.Add(_chkItemTags);
 
@@ -1896,11 +1934,14 @@ internal sealed class FastListingCreatorForm : Form
         _numQuantity.ValueChanged += (_, _) => UpdateChecklist();
         _cboShippingProfile.SelectedIndexChanged += (_, _) => UpdateChecklist();
         _cboReadinessState.SelectedIndexChanged += (_, _) => UpdateChecklist();
+        _cboReturnPolicy.SelectedIndexChanged += (_, _) => UpdateChecklist();
         _cboListingType.SelectedIndexChanged += (_, _) =>
         {
             bool isDig = _cboListingType.SelectedIndex == 1;
             _cboShippingProfile.Enabled = !isDig;
             _cboReadinessState.Enabled = !isDig;
+            _cboReturnPolicy.Enabled = !isDig;
+            _btnNewReturnPolicy.Enabled = !isDig;
             UpdateChecklist();
         };
 
@@ -2060,13 +2101,16 @@ internal sealed class FastListingCreatorForm : Form
             bool imageOk = _galleryImagePaths.Count > 0;
             SetChecklistItem(_chkItemImage, $"Görseller: {_galleryImagePaths.Count}/10 adet", imageOk);
 
-            // 4. Shipping Profile & Readiness State
+            // 4. Shipping Profile, Readiness State & Return Policy
             bool isDigital = _cboListingType.SelectedIndex == 1;
             bool shippingOk = isDigital || _cboShippingProfile.SelectedItem != null;
             SetChecklistItem(_chkItemShipping, isDigital ? "Dijital Ürün (Kargo gerekmez)" : "Kargo profili seçildi", shippingOk);
 
             bool readinessOk = isDigital || SelectedReadinessStateId() > 0;
             SetChecklistItem(_chkItemReadiness, isDigital ? "Dijital (Hazırlık durumu gerekmez)" : "Hazırlık durumu seçildi", readinessOk);
+
+            bool returnPolicyOk = isDigital || SelectedReturnPolicyId() > 0;
+            SetChecklistItem(_chkItemReturnPolicy, isDigital ? "Dijital (İade politikası gerekmez)" : "İade politikası seçildi", returnPolicyOk);
 
             // 5. Description
             bool descOk = !string.IsNullOrWhiteSpace(_txtDescription.Text);
@@ -2464,6 +2508,8 @@ internal sealed class FastListingCreatorForm : Form
         return dict;
     }
 
+    private long? _pendingDraftReturnPolicyId;
+
     private long SelectedReadinessStateId()
     {
         if (_cboReadinessState.SelectedValue is long val && val > 0)
@@ -2482,6 +2528,284 @@ internal sealed class FastListingCreatorForm : Form
         return 0;
     }
 
+    private long SelectedReturnPolicyId()
+    {
+        if (_cboReturnPolicy.SelectedValue is long val && val > 0)
+        {
+            return val;
+        }
+        if (_cboReturnPolicy.SelectedItem is EtsyReturnPolicyOption opt && opt.ReturnPolicyId > 0)
+        {
+            return opt.ReturnPolicyId;
+        }
+        var text = _cboReturnPolicy.Text.Trim();
+        if (long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var typedVal) && typedVal > 0)
+        {
+            return typedVal;
+        }
+        return 0;
+    }
+
+    private bool ApplyReturnPolicySelection(long? returnPolicyId)
+    {
+        if (!returnPolicyId.HasValue || returnPolicyId.Value <= 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < _cboReturnPolicy.Items.Count; i++)
+        {
+            if (_cboReturnPolicy.Items[i] is EtsyReturnPolicyOption rp && rp.ReturnPolicyId == returnPolicyId.Value)
+            {
+                _cboReturnPolicy.SelectedIndex = i;
+                _pendingDraftReturnPolicyId = null;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private Task CreateReturnPolicyFromDialogAsync()
+    {
+        var settings = EtsyApiSettingsStore.Load();
+        if (!settings.HasApiCredentials)
+        {
+            MessageBox.Show(
+                this,
+                "Etsy API ayarları tanımlı değil. İade politikası oluşturmak için önce Ayarlar menüsünden mağaza bağlantısını tamamlayın.",
+                "Etsy Bağlantısı Gerekli",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return Task.CompletedTask;
+        }
+
+        var created = ShowCreateReturnPolicyDialog(settings);
+        if (created == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var list = (_cachedReturnPolicies ?? new List<EtsyReturnPolicyOption>())
+            .Where(p => p.ReturnPolicyId != created.ReturnPolicyId)
+            .ToList();
+        list.Insert(0, created);
+        _cachedReturnPolicies = list;
+
+        _cboReturnPolicy.DataSource = list.ToList();
+        ApplyReturnPolicySelection(created.ReturnPolicyId);
+        _statusLabel.Text = $"Yeni iade politikası oluşturuldu: {created.Title}";
+        UpdateChecklist();
+        return Task.CompletedTask;
+    }
+
+    private EtsyReturnPolicyOption? ShowCreateReturnPolicyDialog(EtsyApiSettings settings)
+    {
+        EtsyReturnPolicyOption? createdPolicy = null;
+        var allowedDeadlines = new[] { 7, 14, 21, 30, 45, 60, 90 };
+
+        using var dlg = new Form
+        {
+            Text = "Yeni Etsy İade Politikası Oluştur",
+            Size = new Size(460, 340),
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            StartPosition = FormStartPosition.CenterParent,
+            MaximizeBox = false,
+            MinimizeBox = false,
+            BackColor = UiStyle.CardBackground,
+            Font = new Font("Segoe UI", 9.5f)
+        };
+
+        var root = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 6,
+            Padding = new Padding(18, 14, 18, 14)
+        };
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        var chkReturns = new CheckBox
+        {
+            Text = "İade kabul edilir (Accepts Returns)",
+            Checked = true,
+            AutoSize = true,
+            ForeColor = UiStyle.TextDark,
+            Margin = new Padding(0, 2, 0, 6)
+        };
+
+        var chkExchanges = new CheckBox
+        {
+            Text = "Değişim kabul edilir (Accepts Exchanges)",
+            Checked = true,
+            AutoSize = true,
+            ForeColor = UiStyle.TextDark,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+
+        var deadlineRow = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            WrapContents = false,
+            Margin = new Padding(0, 0, 0, 10)
+        };
+        var lblDeadline = new Label
+        {
+            Text = "İade Süresi (Gün):",
+            AutoSize = true,
+            ForeColor = UiStyle.TextDark,
+            Margin = new Padding(0, 5, 10, 0)
+        };
+        var cboDeadline = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 120
+        };
+        foreach (var days in allowedDeadlines)
+        {
+            cboDeadline.Items.Add(days);
+        }
+        cboDeadline.SelectedItem = 30;
+        deadlineRow.Controls.Add(lblDeadline);
+        deadlineRow.Controls.Add(cboDeadline);
+
+        var lblPreview = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(410, 0),
+            ForeColor = UiStyle.SuccessColor,
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Margin = new Padding(0, 4, 0, 8)
+        };
+
+        var lblError = new Label
+        {
+            AutoSize = true,
+            MaximumSize = new Size(410, 0),
+            ForeColor = Color.Firebrick,
+            Visible = false,
+            Margin = new Padding(0, 0, 0, 6)
+        };
+
+        void RefreshPreview()
+        {
+            bool needsDeadline = chkReturns.Checked || chkExchanges.Checked;
+            cboDeadline.Enabled = needsDeadline;
+            int? deadline = needsDeadline && cboDeadline.SelectedItem is int d ? d : null;
+            var title = EtsyMarketPlace.Application.Shipping.EtsyLogisticsService.FormatReturnPolicyTitle(
+                chkReturns.Checked,
+                chkExchanges.Checked,
+                deadline);
+            lblPreview.Text = $"Önizleme: {title}";
+            lblPreview.ForeColor = needsDeadline ? UiStyle.SuccessColor : UiStyle.TextMuted;
+        }
+
+        chkReturns.CheckedChanged += (_, _) => RefreshPreview();
+        chkExchanges.CheckedChanged += (_, _) => RefreshPreview();
+        cboDeadline.SelectedIndexChanged += (_, _) => RefreshPreview();
+        RefreshPreview();
+
+        var buttonBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+            AutoSize = true
+        };
+
+        var btnSave = new Button
+        {
+            Text = "Oluştur",
+            Width = 110,
+            Height = 32,
+            BackColor = UiStyle.PrimaryColor,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand
+        };
+        btnSave.FlatAppearance.BorderSize = 0;
+
+        var btnCancel = new Button
+        {
+            Text = "İptal",
+            Width = 90,
+            Height = 32,
+            BackColor = UiStyle.SecondaryColor,
+            ForeColor = Color.White,
+            FlatStyle = FlatStyle.Flat,
+            Cursor = Cursors.Hand,
+            DialogResult = DialogResult.Cancel
+        };
+        btnCancel.FlatAppearance.BorderSize = 0;
+
+        bool isSaving = false;
+        dlg.FormClosing += (_, e) =>
+        {
+            if (isSaving) e.Cancel = true;
+        };
+
+        btnSave.Click += async (_, _) =>
+        {
+            if (isSaving) return;
+            bool needsDeadline = chkReturns.Checked || chkExchanges.Checked;
+            int? deadline = needsDeadline && cboDeadline.SelectedItem is int d ? d : null;
+
+            isSaving = true;
+            btnSave.Enabled = false;
+            btnCancel.Enabled = false;
+            chkReturns.Enabled = false;
+            chkExchanges.Enabled = false;
+            cboDeadline.Enabled = false;
+            btnSave.Text = "Kaydediliyor...";
+            lblError.Visible = false;
+
+            try
+            {
+                createdPolicy = await _apiClient.CreateOwnShopReturnPolicyAsync(
+                    settings,
+                    chkReturns.Checked,
+                    chkExchanges.Checked,
+                    deadline);
+                EtsyApiSettingsStore.Save(settings);
+
+                isSaving = false;
+                dlg.DialogResult = DialogResult.OK;
+                dlg.Close();
+            }
+            catch (Exception ex)
+            {
+                isSaving = false;
+                lblError.Text = $"İade politikası oluşturulamadı: {ex.Message}";
+                lblError.Visible = true;
+                btnSave.Text = "Oluştur";
+                btnSave.Enabled = true;
+                btnCancel.Enabled = true;
+                chkReturns.Enabled = true;
+                chkExchanges.Enabled = true;
+                cboDeadline.Enabled = chkReturns.Checked || chkExchanges.Checked;
+            }
+        };
+
+        buttonBar.Controls.Add(btnSave);
+        buttonBar.Controls.Add(btnCancel);
+
+        root.Controls.Add(chkReturns, 0, 0);
+        root.Controls.Add(chkExchanges, 0, 1);
+        root.Controls.Add(deadlineRow, 0, 2);
+        root.Controls.Add(lblPreview, 0, 3);
+        root.Controls.Add(lblError, 0, 4);
+        root.Controls.Add(buttonBar, 0, 5);
+        dlg.Controls.Add(root);
+        dlg.CancelButton = btnCancel;
+        dlg.ShowDialog(this);
+        return createdPolicy;
+    }
+
     private void ApplyCachedShopProfilesIfAvailable()
     {
         if (_cachedShippingProfiles != null && _cachedShippingProfiles.Count > 0)
@@ -2496,9 +2820,19 @@ internal sealed class FastListingCreatorForm : Form
             if (_cboReadinessState.Items.Count > 0) _cboReadinessState.SelectedIndex = 0;
         }
 
+        if (_cachedReturnPolicies != null && _cachedReturnPolicies.Count > 0)
+        {
+            _cboReturnPolicy.DataSource = _cachedReturnPolicies.ToList();
+            if (!ApplyReturnPolicySelection(_pendingDraftReturnPolicyId) && _cboReturnPolicy.Items.Count > 0)
+            {
+                _cboReturnPolicy.SelectedIndex = 0;
+            }
+        }
+
         if (_cachedShippingProfiles != null && _cachedReadinessStates != null)
         {
-            _statusLabel.Text = $"{_cachedShippingProfiles.Count} kargo profili, {_cachedReadinessStates.Count} hazırlık durumu yüklendi.";
+            int rpCount = _cachedReturnPolicies?.Count ?? 0;
+            _statusLabel.Text = $"{_cachedShippingProfiles.Count} kargo profili, {_cachedReadinessStates.Count} hazırlık durumu, {rpCount} iade politikası yüklendi.";
         }
     }
 
@@ -2507,7 +2841,7 @@ internal sealed class FastListingCreatorForm : Form
         bool hasCached = _cachedShippingProfiles != null && _cachedShippingProfiles.Count > 0;
         if (!hasCached)
         {
-            _statusLabel.Text = "Etsy mağaza kargo profilleri ve hazırlık durumları alınıyor...";
+            _statusLabel.Text = "Etsy mağaza kargo profilleri, hazırlık durumları ve iade politikaları alınıyor...";
         }
 
         try
@@ -2524,15 +2858,18 @@ internal sealed class FastListingCreatorForm : Form
 
             var profilesTask = _apiClient.GetOwnShopShippingProfilesAsync(settings);
             var readinessTask = _apiClient.GetOwnShopReadinessStateOptionsAsync(settings);
+            var returnPoliciesTask = _apiClient.GetOwnShopReturnPoliciesAsync(settings);
 
-            await Task.WhenAll(profilesTask, readinessTask);
+            await Task.WhenAll(profilesTask, readinessTask, returnPoliciesTask);
             EtsyApiSettingsStore.Save(settings);
 
             var profiles = await profilesTask;
             var readinessStates = await readinessTask;
+            var returnPolicies = await returnPoliciesTask;
 
             _cachedShippingProfiles = profiles;
             _cachedReadinessStates = readinessStates;
+            _cachedReturnPolicies = returnPolicies;
 
             if (!IsDisposed && IsHandleCreated)
             {
@@ -2551,7 +2888,15 @@ internal sealed class FastListingCreatorForm : Form
                         _cboReadinessState.SelectedIndex = 0;
                     }
 
-                    _statusLabel.Text = $"{profiles.Count} kargo profili, {readinessStates.Count} hazırlık durumu yüklendi.";
+                    var selectedBeforeBind = SelectedReturnPolicyId();
+                    _cboReturnPolicy.DataSource = returnPolicies.ToList();
+                    var targetPolicyId = _pendingDraftReturnPolicyId ?? (selectedBeforeBind > 0 ? selectedBeforeBind : (long?)null);
+                    if (!ApplyReturnPolicySelection(targetPolicyId) && returnPolicies.Count > 0 && _cboReturnPolicy.SelectedIndex < 0)
+                    {
+                        _cboReturnPolicy.SelectedIndex = 0;
+                    }
+
+                    _statusLabel.Text = $"{profiles.Count} kargo profili, {readinessStates.Count} hazırlık durumu, {returnPolicies.Count} iade politikası yüklendi.";
                     UpdateChecklist();
                 });
             }
@@ -3212,6 +3557,7 @@ internal sealed class FastListingCreatorForm : Form
         bool isDigital = _cboListingType.SelectedIndex == 1;
         long shippingProfileId = 0;
         long readinessStateId = 0;
+        long returnPolicyId = 0;
         if (!isDigital)
         {
             if (_cboShippingProfile.SelectedItem is EtsyShippingProfileOption prof)
@@ -3228,6 +3574,13 @@ internal sealed class FastListingCreatorForm : Form
             if (readinessStateId <= 0)
             {
                 MessageBox.Show(this, "Fiziksel ürünler için Etsy geçerli bir Hazırlık Durumu (readiness_state_id) gerektirir. Lütfen Hazırlık Durumu alanından bir seçenek seçiniz.", "Doğrulama", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            returnPolicyId = SelectedReturnPolicyId();
+            if (returnPolicyId <= 0)
+            {
+                MessageBox.Show(this, "Fiziksel ürünler için Etsy geçerli bir İade Politikası (return_policy_id) gerektirir. Lütfen İade Politikası alanından seçim yapın veya '+ Yeni' butonuyla oluşturun.", "Doğrulama", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
         }
@@ -3289,7 +3642,8 @@ internal sealed class FastListingCreatorForm : Form
                 SplitTags(_txtMaterials.Text),
                 readinessStateId,
                 "i_did",
-                "made_to_order");
+                "made_to_order",
+                returnPolicyId);
 
             // A. Create Listing
             var created = await _apiClient.CreateOwnShopDraftListingAsync(settings, draftReq);
@@ -3747,6 +4101,7 @@ internal sealed class FastListingCreatorForm : Form
                 SelectedTaxonomyText = _cboTaxonomy.SelectedItem?.ToString(),
                 SelectedShippingProfileId = (_cboShippingProfile.SelectedItem as EtsyShippingProfileOption)?.ShippingProfileId,
                 SelectedReadinessStateId = (_cboReadinessState.SelectedItem as EtsyReadinessStateOption)?.ReadinessStateId,
+                SelectedReturnPolicyId = SelectedReturnPolicyId() > 0 ? SelectedReturnPolicyId() : null,
                 GalleryImagePaths = new List<string>(_galleryImagePaths),
                 HasVariations = _chkEnableVariations.Checked,
                 VariationType = _cboVarType1.SelectedItem?.ToString() ?? "Boyut / Size",
@@ -3822,6 +4177,9 @@ internal sealed class FastListingCreatorForm : Form
                     }
                 }
             }
+
+            _pendingDraftReturnPolicyId = draft.SelectedReturnPolicyId;
+            ApplyReturnPolicySelection(draft.SelectedReturnPolicyId);
 
             if (draft.GalleryImagePaths != null && draft.GalleryImagePaths.Count > 0)
             {

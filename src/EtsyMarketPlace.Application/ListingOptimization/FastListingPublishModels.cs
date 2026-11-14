@@ -50,7 +50,8 @@ public sealed record FastListingPublishCommand(
     string WhenMade = "made_to_order",
     IReadOnlyList<ListingImageInput>? Images = null,
     IReadOnlyList<ListingVariationInput>? Variations = null,
-    IReadOnlyList<ListingVariationGroupInput>? VariationGroups = null
+    IReadOnlyList<ListingVariationGroupInput>? VariationGroups = null,
+    long? ReturnPolicyId = null
 );
 
 public sealed record FastListingPublishResult(
@@ -78,7 +79,8 @@ public sealed record CreateDraftListingRawRequest(
     long? ShippingProfileId,
     long? ReadinessStateId,
     IReadOnlyList<string> Tags,
-    IReadOnlyList<string> Materials
+    IReadOnlyList<string> Materials,
+    long? ReturnPolicyId = null
 );
 
 public sealed class EtsyInventoryPayload

@@ -65,6 +65,42 @@ public sealed class EtsyLogisticsServiceTests
         }
         """;
 
+        public string? ReturnPoliciesJson { get; set; } = """
+        {
+            "count": 2,
+            "results": [
+                {
+                    "return_policy_id": 771122,
+                    "shop_id": 53236321,
+                    "accepts_returns": true,
+                    "accepts_exchanges": true,
+                    "return_deadline": 30
+                },
+                {
+                    "return_policy_id": 771133,
+                    "shop_id": 53236321,
+                    "accepts_returns": false,
+                    "accepts_exchanges": false,
+                    "return_deadline": null
+                }
+            ]
+        }
+        """;
+
+        public (bool Success, string? ResponseJson, string? ErrorMessage) CreateReturnPolicyResult { get; set; } = (
+            true,
+            """
+            {
+                "return_policy_id": 889900,
+                "shop_id": 53236321,
+                "accepts_returns": true,
+                "accepts_exchanges": false,
+                "return_deadline": 14
+            }
+            """,
+            null
+        );
+
         public System.Collections.Generic.IReadOnlyList<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt> FulfillmentReceipts { get; set; } = new System.Collections.Generic.List<EtsyMarketPlace.Application.Orders.EtsyFulfillmentReceipt>();
         public bool SubmitTrackingResult { get; set; } = true;
 
@@ -88,6 +124,17 @@ public sealed class EtsyLogisticsServiceTests
 
         public Task<string> GetRawSellerTaxonomyNodesJsonAsync(string shopId, CancellationToken ct) =>
             Task.FromResult(TaxonomyJson);
+
+        public Task<string?> GetRawReturnPoliciesJsonAsync(string shopId, CancellationToken ct = default) =>
+            Task.FromResult(ReturnPoliciesJson);
+
+        public Task<(bool Success, string? ResponseJson, string? ErrorMessage)> CreateReturnPolicyRawAsync(
+            string shopId,
+            bool acceptsReturns,
+            bool acceptsExchanges,
+            int? returnDeadline,
+            CancellationToken ct = default) =>
+            Task.FromResult(CreateReturnPolicyResult);
     }
 
     [Fact]
@@ -129,5 +176,71 @@ public sealed class EtsyLogisticsServiceTests
         Assert.Equal(2, result.Count);
         Assert.Equal("Art & Collectibles", result[0].Path);
         Assert.Equal("Art & Collectibles > Sculptures", result[1].Path);
+    }
+
+    [Fact]
+    public async Task GetReturnPoliciesAsync_ParsesReturnsAndNoReturnPoliciesCorrectly()
+    {
+        var fakeClient = new FakeEtsyLogisticsApiClient();
+        var service = new EtsyLogisticsService(fakeClient);
+
+        var result = await service.GetReturnPoliciesAsync("53236321-rp-parse");
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(771122, result[0].ReturnPolicyId);
+        Assert.True(result[0].AcceptsReturns);
+        Assert.True(result[0].AcceptsExchanges);
+        Assert.Equal(30, result[0].ReturnDeadline);
+        Assert.Equal("İade ve Değişim Kabul Edilir (30 Gün)", result[0].Title);
+
+        Assert.Equal(771133, result[1].ReturnPolicyId);
+        Assert.False(result[1].AcceptsReturns);
+        Assert.False(result[1].AcceptsExchanges);
+        Assert.Null(result[1].ReturnDeadline);
+        Assert.Equal("İade ve Değişim Kabul Edilmez", result[1].Title);
+    }
+
+    [Fact]
+    public async Task GetReturnPoliciesAsync_WhenOfficialEndpointEmpty_FallsBackToActiveListings()
+    {
+        var fakeClient = new FakeEtsyLogisticsApiClient
+        {
+            ReturnPoliciesJson = null,
+            ActiveListingsJson = """
+            {
+                "count": 2,
+                "results": [
+                    { "listing_id": 1, "return_policy_id": 554433 },
+                    { "listing_id": 2, "return_policy_id": 554433 }
+                ]
+            }
+            """
+        };
+        var service = new EtsyLogisticsService(fakeClient);
+
+        var result = await service.GetReturnPoliciesAsync("53236321-rp-fallback");
+
+        Assert.Single(result);
+        Assert.Equal(554433, result[0].ReturnPolicyId);
+        Assert.Contains("#554433", result[0].Title);
+    }
+
+    [Fact]
+    public async Task CreateReturnPolicyAsync_CreatesAndParsesPolicyAndValidatesDeadline()
+    {
+        var fakeClient = new FakeEtsyLogisticsApiClient();
+        var service = new EtsyLogisticsService(fakeClient);
+
+        var invalidResult = await service.CreateReturnPolicyAsync(
+            new CreateEtsyReturnPolicyCommand("53236321-rp-create", true, false, null));
+        Assert.False(invalidResult.Success);
+        Assert.NotNull(invalidResult.ErrorMessage);
+
+        var validResult = await service.CreateReturnPolicyAsync(
+            new CreateEtsyReturnPolicyCommand("53236321-rp-create", true, false, 14));
+        Assert.True(validResult.Success);
+        Assert.NotNull(validResult.Policy);
+        Assert.Equal(889900, validResult.Policy!.ReturnPolicyId);
+        Assert.Equal("Yalnızca İade Kabul Edilir (14 Gün)", validResult.Policy.Title);
     }
 }

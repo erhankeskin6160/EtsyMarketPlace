@@ -51,7 +51,8 @@ public sealed record CreateListingApiRequest(
     string State = "draft",
     IReadOnlyList<ListingImageDto>? Images = null,
     IReadOnlyList<ListingVariationDto>? Variations = null,
-    IReadOnlyList<ListingVariationGroupDto>? VariationGroups = null);
+    IReadOnlyList<ListingVariationGroupDto>? VariationGroups = null,
+    long? ReturnPolicyId = null);
 
 public sealed record ListingImageDto(
     string? DataUrl,

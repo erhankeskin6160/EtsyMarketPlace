@@ -16,6 +16,7 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
     private readonly IEtsyTaxonomyRepository? _taxonomyRepository;
     private static readonly ConcurrentDictionary<string, List<EtsyTaxonomyNodeItemDto>> TaxonomyCache = new();
     private static readonly ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, IReadOnlyList<EtsyShippingProfileDto> Profiles)> ShippingProfileCache = new();
+    private static readonly ConcurrentDictionary<string, (DateTimeOffset ExpiresAt, IReadOnlyList<EtsyReturnPolicyDto> Policies)> ReturnPolicyCache = new();
 
     public EtsyLogisticsService(
         IEtsyLogisticsApiClient apiClient,
@@ -161,6 +162,197 @@ public sealed class EtsyLogisticsService : IEtsyLogisticsService
         }
 
         return list;
+    }
+
+    public async Task<IReadOnlyList<EtsyReturnPolicyDto>> GetReturnPoliciesAsync(
+        string shopId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(shopId)) return [];
+        var normalizedShopId = shopId.Trim();
+
+        if (ReturnPolicyCache.TryGetValue(normalizedShopId, out var cached) && cached.ExpiresAt > DateTimeOffset.UtcNow)
+        {
+            return cached.Policies;
+        }
+
+        var list = new List<EtsyReturnPolicyDto>();
+
+        // 1. Resmi API: GET /v3/application/shops/{shop_id}/policies/return
+        try
+        {
+            var json = await _apiClient.GetRawReturnPoliciesJsonAsync(normalizedShopId, cancellationToken);
+            if (!string.IsNullOrWhiteSpace(json))
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("results", out var rArray) && rArray.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in rArray.EnumerateArray())
+                    {
+                        if (TryParseReturnPolicyElement(item, out var policy) && policy != null)
+                        {
+                            list.Add(policy);
+                        }
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch { }
+
+        // 2. Fallback: Aktif ilanlardan kullanılan return_policy_id değerlerini tara
+        if (list.Count == 0)
+        {
+            list.AddRange(await ExtractReturnPoliciesFromActiveListingsAsync(normalizedShopId, cancellationToken));
+        }
+
+        if (list.Count > 0)
+        {
+            var ordered = list
+                .OrderByDescending(p => p.AcceptsReturns)
+                .ThenBy(p => p.ReturnPolicyId)
+                .ToList();
+            ReturnPolicyCache[normalizedShopId] = (DateTimeOffset.UtcNow.AddMinutes(10), ordered);
+            return ordered;
+        }
+
+        return cached.Policies ?? [];
+    }
+
+    public async Task<(bool Success, EtsyReturnPolicyDto? Policy, string? ErrorMessage)> CreateReturnPolicyAsync(
+        CreateEtsyReturnPolicyCommand command,
+        CancellationToken cancellationToken = default)
+    {
+        if (command == null || string.IsNullOrWhiteSpace(command.ShopId))
+        {
+            return (false, null, "Mağaza kimliği (Shop ID) belirtilmelidir.");
+        }
+
+        var requiresDeadline = command.AcceptsReturns || command.AcceptsExchanges;
+        if (requiresDeadline && (!command.ReturnDeadline.HasValue || command.ReturnDeadline.Value <= 0))
+        {
+            return (false, null, "İade veya değişim kabul edildiğinde geçerli bir iade süresi (ör. 14, 30 gün) seçilmelidir.");
+        }
+
+        var normalizedShopId = command.ShopId.Trim();
+        int? effectiveDeadline = requiresDeadline ? command.ReturnDeadline : null;
+
+        var (success, responseJson, errorMessage) = await _apiClient.CreateReturnPolicyRawAsync(
+            normalizedShopId,
+            command.AcceptsReturns,
+            command.AcceptsExchanges,
+            effectiveDeadline,
+            cancellationToken);
+
+        if (!success)
+        {
+            return (false, null, errorMessage ?? "Etsy iade politikası oluşturulamadı.");
+        }
+
+        EtsyReturnPolicyDto? createdPolicy = null;
+        if (!string.IsNullOrWhiteSpace(responseJson))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(responseJson);
+                if (!TryParseReturnPolicyElement(doc.RootElement, out createdPolicy) &&
+                    doc.RootElement.TryGetProperty("results", out var rArray) &&
+                    rArray.ValueKind == JsonValueKind.Array &&
+                    rArray.GetArrayLength() > 0)
+                {
+                    TryParseReturnPolicyElement(rArray[0], out createdPolicy);
+                }
+            }
+            catch
+            {
+                createdPolicy = null;
+            }
+        }
+
+        if (createdPolicy == null)
+        {
+            return (false, null, "Etsy iade politikası oluşturuldu ancak yanıt ayrıştırılamadı.");
+        }
+
+        ReturnPolicyCache.TryRemove(normalizedShopId, out _);
+        return (true, createdPolicy, null);
+    }
+
+    public static string FormatReturnPolicyTitle(bool acceptsReturns, bool acceptsExchanges, int? returnDeadline)
+    {
+        var daysText = returnDeadline.HasValue && returnDeadline.Value > 0 ? $" ({returnDeadline.Value} Gün)" : string.Empty;
+        if (acceptsReturns && acceptsExchanges) return $"İade ve Değişim Kabul Edilir{daysText}";
+        if (acceptsReturns) return $"Yalnızca İade Kabul Edilir{daysText}";
+        if (acceptsExchanges) return $"Yalnızca Değişim Kabul Edilir{daysText}";
+        return "İade ve Değişim Kabul Edilmez";
+    }
+
+    private async Task<List<EtsyReturnPolicyDto>> ExtractReturnPoliciesFromActiveListingsAsync(
+        string shopId,
+        CancellationToken cancellationToken)
+    {
+        var fallbackList = new List<EtsyReturnPolicyDto>();
+        try
+        {
+            var actJson = await _apiClient.GetRawActiveListingsJsonAsync(shopId, cancellationToken);
+            if (string.IsNullOrWhiteSpace(actJson)) return fallbackList;
+
+            using var actDoc = JsonDocument.Parse(actJson);
+            if (!actDoc.RootElement.TryGetProperty("results", out var aListings) || aListings.ValueKind != JsonValueKind.Array)
+                return fallbackList;
+
+            var seenIds = new HashSet<long>();
+            foreach (var al in aListings.EnumerateArray())
+            {
+                if (al.TryGetProperty("return_policy_id", out var rpProp) &&
+                    rpProp.ValueKind == JsonValueKind.Number &&
+                    rpProp.TryGetInt64(out var id) &&
+                    id > 0 &&
+                    seenIds.Add(id))
+                {
+                    fallbackList.Add(new EtsyReturnPolicyDto(
+                        ReturnPolicyId: id,
+                        AcceptsReturns: true,
+                        AcceptsExchanges: true,
+                        ReturnDeadline: 30,
+                        Title: $"Mevcut İade Politikası (#{id})"
+                    ));
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch { }
+
+        return fallbackList;
+    }
+
+    private static bool TryParseReturnPolicyElement(JsonElement item, out EtsyReturnPolicyDto? policy)
+    {
+        policy = null;
+        if (item.ValueKind != JsonValueKind.Object) return false;
+        if (!item.TryGetProperty("return_policy_id", out var idProp) ||
+            idProp.ValueKind != JsonValueKind.Number ||
+            !idProp.TryGetInt64(out var id) ||
+            id <= 0)
+        {
+            return false;
+        }
+
+        var acceptsReturns = item.TryGetProperty("accepts_returns", out var arProp) && arProp.ValueKind == JsonValueKind.True;
+        var acceptsExchanges = item.TryGetProperty("accepts_exchanges", out var aeProp) && aeProp.ValueKind == JsonValueKind.True;
+        int? deadline = item.TryGetProperty("return_deadline", out var rdProp) && rdProp.ValueKind == JsonValueKind.Number && rdProp.TryGetInt32(out var rdVal)
+            ? rdVal
+            : null;
+
+        var title = FormatReturnPolicyTitle(acceptsReturns, acceptsExchanges, deadline);
+        policy = new EtsyReturnPolicyDto(id, acceptsReturns, acceptsExchanges, deadline, title);
+        return true;
     }
 
     public async Task<IReadOnlyList<EtsyTaxonomyNodeItemDto>> GetSellerTaxonomyNodesAsync(

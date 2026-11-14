@@ -86,6 +86,64 @@ public sealed class EtsyLogisticsApiClient : IEtsyLogisticsApiClient
         return await res.Content.ReadAsStringAsync(ct);
     }
 
+    public async Task<string?> GetRawReturnPoliciesJsonAsync(string shopId, CancellationToken ct = default)
+    {
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);
+        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/policies/return";
+
+        using var res = await EtsyOutboundGate.SendAsync(shopId, tokenCt =>
+        {
+            var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.Add("x-api-key", apiKeyHeader);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            return _httpClient.SendAsync(req, tokenCt);
+        }, ct);
+
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadAsStringAsync(ct);
+    }
+
+    public async Task<(bool Success, string? ResponseJson, string? ErrorMessage)> CreateReturnPolicyRawAsync(
+        string shopId,
+        bool acceptsReturns,
+        bool acceptsExchanges,
+        int? returnDeadline,
+        CancellationToken ct = default)
+    {
+        var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);
+        var url = $"https://api.etsy.com/v3/application/shops/{shopId}/policies/return";
+
+        var formFields = new List<KeyValuePair<string, string>>
+        {
+            new("accepts_returns", acceptsReturns ? "true" : "false"),
+            new("accepts_exchanges", acceptsExchanges ? "true" : "false")
+        };
+
+        if ((acceptsReturns || acceptsExchanges) && returnDeadline.HasValue && returnDeadline.Value > 0)
+        {
+            formFields.Add(new("return_deadline", returnDeadline.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+
+        using var res = await EtsyOutboundGate.SendAsync(shopId, tokenCt =>
+        {
+            var req = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new FormUrlEncodedContent(formFields)
+            };
+            req.Headers.Add("x-api-key", apiKeyHeader);
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            return _httpClient.SendAsync(req, tokenCt);
+        }, ct);
+
+        var body = await res.Content.ReadAsStringAsync(ct);
+        if (!res.IsSuccessStatusCode)
+        {
+            return (false, body, $"Etsy iade politikası oluşturulamadı (HTTP {(int)res.StatusCode}): {body}");
+        }
+
+        return (true, body, null);
+    }
+
     public async Task<string?> GetRawActiveListingsJsonAsync(string shopId, CancellationToken ct)
     {
         var (accessToken, apiKeyHeader) = await PrepareAuthAsync(shopId, ct);

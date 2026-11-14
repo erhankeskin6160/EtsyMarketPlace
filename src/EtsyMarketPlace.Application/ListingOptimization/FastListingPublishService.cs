@@ -42,9 +42,10 @@ public sealed class FastListingPublishService : IFastListingPublishService
 
         var shopId = command.ShopId.Trim();
 
-        // 1. Kargo Profili & Hazırlık Durumu Çözümleme
+        // 1. Kargo Profili, Hazırlık Durumu & İade Politikası Çözümleme
         long? effectiveShippingProfileId = command.ShippingProfileId;
         long? effectiveReadinessStateId = command.ReadinessStateId;
+        long? effectiveReturnPolicyId = command.IsDigital ? null : command.ReturnPolicyId;
 
         if (!command.IsDigital)
         {
@@ -61,6 +62,11 @@ public sealed class FastListingPublishService : IFastListingPublishService
             if (!effectiveReadinessStateId.HasValue || effectiveReadinessStateId.Value <= 0)
             {
                 effectiveReadinessStateId = await _apiClient.GetDefaultReadinessStateIdAsync(shopId, cancellationToken);
+            }
+
+            if (!effectiveReturnPolicyId.HasValue || effectiveReturnPolicyId.Value <= 0)
+            {
+                effectiveReturnPolicyId = await _apiClient.GetDefaultReturnPolicyIdAsync(shopId, cancellationToken);
             }
         }
 
@@ -105,7 +111,8 @@ public sealed class FastListingPublishService : IFastListingPublishService
             ShippingProfileId: effectiveShippingProfileId,
             ReadinessStateId: effectiveReadinessStateId,
             Tags: sanitizedTags,
-            Materials: sanitizedMaterials
+            Materials: sanitizedMaterials,
+            ReturnPolicyId: effectiveReturnPolicyId
         );
 
         long createdListingId;
