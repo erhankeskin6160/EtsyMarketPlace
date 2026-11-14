@@ -604,7 +604,7 @@
                 ⚠️ {{ variationImportWarning }}
               </div>
               <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px; line-height: 1.4;">
-                <strong>Eklentisiz 1 Saniyede Aktarım:</strong> Etsy ürün sayfasında <code>Ctrl+A</code> → <code>Ctrl+C</code> yapıp aşağıya yapıştırın (veya yer imini çubuğa sürükleyip Etsy'de tıklayın).
+                <strong>1 Saniyede Aktarım:</strong> Mor <strong>🔖 Kopyalayıcıyı</strong> yer imlerine sürükleyip Etsy sayfasında tıklayın <em>(veya Etsy'de <code>Ctrl+U</code> → <code>Ctrl+A</code> → <code>Ctrl+C</code> yapıp aşağıya yapıştırın)</em>.
               </div>
               <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
                 <a *ngIf="clonedSourceListingUrl" [href]="clonedSourceListingUrl" target="_blank" rel="noopener" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; text-decoration: none;">
@@ -619,7 +619,7 @@
                 class="std-input"
                 [(ngModel)]="variationPasteInput"
                 (paste)="onVariationPaste($event)"
-                placeholder="Etsy sayfasından kopyaladığınız metni (Ctrl+A -> Ctrl+C), HTML'i veya yer imi çıktısını buraya Ctrl+V ile yapıştırın..."
+                placeholder="Yer imi çıktısını veya Etsy sayfa kaynağını (Ctrl+U -> Ctrl+A -> Ctrl+C) buraya Ctrl+V ile yapıştırın..."
                 style="width: 100%; font-size: 11px; resize: vertical; margin-bottom: 6px;"
               ></textarea>
               <div style="display: flex; justify-content: flex-end; gap: 6px;">
