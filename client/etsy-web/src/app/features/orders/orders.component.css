@@ -2632,6 +2632,10 @@
 
     /* GÜMRÜK BEYAN & DETAYLI KIRILIM PANELİ */
     .customs-decl-bar { margin-top: 8px; padding: 8px; background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .customs-decl-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; font-size: 0.72rem; color: #cbd5e1; user-select: none; padding: 2px 0; }
+    .customs-decl-header:hover { color: #f8fafc; }
+    .customs-decl-summary { display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .customs-toggle-btn { flex-shrink: 0; background: rgba(30, 41, 59, 0.9); border: 1px solid rgba(56, 189, 248, 0.35); color: #7dd3fc; border-radius: 5px; padding: 2px 7px; font-size: 0.66rem; font-weight: 700; cursor: pointer; }
     .customs-inputs-grid { display: grid; grid-template-columns: 118px 62px 1fr; gap: 8px; align-items: end; }
     .customs-presets-col { display: flex; flex-direction: column; gap: 3px; }
     .customs-presets-col label { font-size: 0.68rem; color: #94a3b8; font-weight: 600; }
@@ -2659,7 +2663,12 @@
     .mini-pill.info { color: #86efac; background: rgba(34, 197, 94, 0.12); border-color: rgba(34, 197, 94, 0.28); }
     .mini-pill.toggle-btn { margin-left: auto; color: #e2e8f0; background: rgba(51, 65, 85, 0.85); cursor: pointer; }
 
+    .quote-card.compact-tile.expanded { border-color: rgba(56, 189, 248, 0.45); background: rgba(15, 23, 42, 0.85); }
     .quote-receipt-panel { margin-top: 7px; padding: 8px; background: #090e1a; border: 1px solid rgba(56, 189, 248, 0.22); border-radius: 7px; display: flex; flex-direction: column; gap: 7px; cursor: default; }
+    .receipt-top-close-row { display: flex; align-items: center; justify-content: space-between; padding-bottom: 4px; border-bottom: 1px solid rgba(148, 163, 184, 0.14); }
+    .receipt-top-label { font-size: 0.65rem; font-weight: 800; color: #7dd3fc; }
+    .btn-receipt-close { background: rgba(51, 65, 85, 0.85); border: 1px solid rgba(148, 163, 184, 0.3); color: #e2e8f0; border-radius: 5px; padding: 2px 7px; font-size: 0.64rem; font-weight: 700; cursor: pointer; }
+    .btn-receipt-close:hover { background: #475569; color: #fff; }
     .receipt-section { display: flex; flex-direction: column; gap: 3px; padding-bottom: 5px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); }
     .receipt-section.grand { border-bottom: none; padding-bottom: 0; }
     .receipt-sec-title { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.03em; color: #94a3b8; margin-bottom: 1px; }

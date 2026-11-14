@@ -425,8 +425,21 @@
               </div>
 
               <!-- GÜMRÜK BEYAN DEĞERİ & ADET (HIZLI GÜMRÜK ÖDEMESİ DDP) -->
-              <div class="customs-decl-bar">
-                <div class="customs-inputs-grid">
+              <div class="customs-decl-bar" [class.collapsed]="!isCustomsCardExpanded">
+                <div class="customs-decl-header" (click)="toggleCustomsCard($event)">
+                  <div class="customs-decl-summary">
+                    <span>🛡️</span>
+                    <span>
+                      <strong>Gümrük Beyan:</strong> &#36;{{ customsDeclaredValueUsd | number:'1.2-2' }} × {{ customsQuantity }} Adet
+                      <ng-container *ngIf="!isCustomsCardExpanded"> · {{ selectedTaxRateSummary }}</ng-container>
+                    </span>
+                  </div>
+                  <button type="button" class="customs-toggle-btn" (click)="toggleCustomsCard($event)">
+                    {{ isCustomsCardExpanded ? '▲ Kapat' : '▼ Aç' }}
+                  </button>
+                </div>
+
+                <div class="customs-inputs-grid" *ngIf="isCustomsCardExpanded">
                   <div class="dim-input-col">
                     <label>Gümrük Beyan Değeri (&#36; USD)</label>
                     <input
@@ -459,7 +472,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="tax-rate-info-band">
+                <div class="tax-rate-info-band" *ngIf="isCustomsCardExpanded">
                   <span>🛡️</span>
                   <span>GTİP <code>{{ getActiveHsCode() }}</code> ({{ selectedOrder.countryCode || 'US' }}) → {{ selectedTaxRateSummary }}</span>
                 </div>
@@ -596,7 +609,7 @@
                 </button>
               </div>
               <button type="button" class="btn-toggle-all-details" (click)="toggleAllQuoteDetails()">
-                {{ showAllQuoteDetails ? '▲ Detay Gizle' : '▼ Detay Aç' }}
+                {{ showAllQuoteDetails ? '▲ Tümünü Kapat' : '▼ Tümünü Aç' }}
               </button>
             </div>
 
@@ -625,7 +638,8 @@
               [class.selected-carrier]="selectedOrder.selectedCarrier === quote.carrierKey && selectedOrder.carrierServiceName === quote.serviceType"
               [class.recommended]="quote.isRecommended"
               [class.lowest-price]="quote.isLowestPrice"
-              (click)="applyCarrierQuote(quote)">
+              [class.expanded]="isQuoteExpanded(quote)"
+              (click)="onQuoteCardClick(quote, $event)">
               
               <div class="tile-main-row">
                 <div class="tile-left">
@@ -674,12 +688,16 @@
                 <span class="mini-pill info" *ngIf="quote.returnPolicyNote">↩️ {{ quote.returnPolicyNote }}</span>
                 <span class="mini-pill info" *ngIf="quote.insuranceNote">🛡️ {{ quote.insuranceNote }}</span>
                 <button type="button" class="mini-pill toggle-btn" (click)="toggleQuoteDetails(quote, $event)">
-                  {{ isQuoteExpanded(quote) ? '▲ Kırılım' : '▼ Detay' }}
+                  {{ isQuoteExpanded(quote) ? '▲ Kırılımı Kapat' : '▼ Detay Aç' }}
                 </button>
               </div>
 
               <!-- Genişletilmiş Fatura / Makbuz Tipi Navlun + Hızlı Gümrük Kırılımı -->
               <div class="quote-receipt-panel" *ngIf="isQuoteExpanded(quote)" (click)="$event.stopPropagation()">
+                <div class="receipt-top-close-row">
+                  <span class="receipt-top-label">📋 {{ quote.serviceType }} — Ücret &amp; Gümrük Dökümü</span>
+                  <button type="button" class="btn-receipt-close" (click)="toggleQuoteDetails(quote, $event)">✕ Kapat</button>
+                </div>
                 <div class="receipt-section">
                   <div class="receipt-sec-title">1. NAVLUN (KARGO ÜCRETİ) KIRILIMI</div>
                   <div class="receipt-row">

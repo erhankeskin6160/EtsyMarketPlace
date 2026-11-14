@@ -47,7 +47,8 @@ export class OrdersComponent implements OnInit, OnDestroy {
   customsDeclaredValueUsd: number = 1.00;
   customsQuantity: number = 1;
   quoteDisplayMode: 'freight_only' | 'all_in_ddp' = 'all_in_ddp';
-  showAllQuoteDetails: boolean = true;
+  isCustomsCardExpanded: boolean = true;
+  showAllQuoteDetails: boolean = false;
   expandedQuoteKeys: Record<string, boolean> = {};
   private customsDebounceTimer: any = null;
 
@@ -409,7 +410,17 @@ export class OrdersComponent implements OnInit, OnDestroy {
   }
 
   getQuoteKey(quote: CarrierQuote): string {
-    return quote.quoteId || quote.serviceCode || `${quote.carrierKey}-${quote.serviceType}`;
+    return `${quote.carrierKey}::${(quote.serviceType || quote.serviceCode || '').trim().toLowerCase()}`;
+  }
+
+  toggleCustomsCard(event?: Event): void {
+    event?.stopPropagation();
+    this.isCustomsCardExpanded = !this.isCustomsCardExpanded;
+  }
+
+  onQuoteCardClick(quote: CarrierQuote, event?: Event): void {
+    this.applyCarrierQuote(quote);
+    this.toggleQuoteDetails(quote, event);
   }
 
   isQuoteExpanded(quote: CarrierQuote): boolean {
