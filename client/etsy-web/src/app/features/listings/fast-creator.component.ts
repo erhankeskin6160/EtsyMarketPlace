@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, HostListener, inject, ViewChild, ElementRef, DestroyRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { DomSanitizer, SafeUrl } from '@angular/platform-browser';
 import { Router, ActivatedRoute } from '@angular/router';
 import { EtsyApiService, EtsyTaxonomyItemDto, EtsyReturnPolicyDto } from '../../core/services/etsy-api.service';
 import { AiSettingsService, ClonedMarketListing } from '../../core/services/ai-settings.service';
@@ -8,6 +9,7 @@ import { EtsyListingAiService, CategoryAiSuggestion, TaxonomyCandidateItem, AiDe
 import { AiLogoComponent } from '../../core/components/ai-logo.component';
 import { buildTaxonomyShortlist, taxonomyLeafName } from '../../core/utils/taxonomy-shortlist';
 import { extractClientValidationErrors, FieldValidationError } from '../../core/utils/validation-error.util';
+import { buildEtsyVariationBookmarkletUrl, parseEtsyVariationsFromClipboard } from '../../core/utils/etsy-variation-parser';
 import { Observable, of } from 'rxjs';
 import { catchError, map, switchMap, tap } from 'rxjs/operators';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -154,6 +156,12 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
 
   // --- COLUMN 3: VARYASYONLAR & KONTROL ---
   enableVariations = false;
+  showVariationImportBox = false;
+  variationPasteInput = '';
+  clonedSourceListingUrl = '';
+  variationImportWarning = '';
+  private readonly sanitizer = inject(DomSanitizer);
+  readonly bookmarkletSafeUrl: SafeUrl = this.sanitizer.bypassSecurityTrustUrl(buildEtsyVariationBookmarkletUrl());
   varType1 = 'Boyut / Size';
   varValues1 = 'Small, Medium, Large';
   enableVar2 = false;
@@ -208,6 +216,10 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         }));
       }
 
+      if (cloned.sourceListingUrl) {
+        this.clonedSourceListingUrl = cloned.sourceListingUrl;
+      }
+
       if (cloned.hasVariations) {
         this.enableVariations = true;
         if (cloned.varType1) this.varType1 = cloned.varType1;
@@ -238,6 +250,9 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
         } else {
           this.rebuildVariationGrid();
         }
+      } else if (cloned.variationWarning) {
+        this.variationImportWarning = cloned.variationWarning;
+        this.showVariationImportBox = true;
       }
 
       const varCount = (this.variationRows && this.variationRows.length > 0) ? ` & ${this.variationRows.length} Varyasyon` : '';
@@ -1481,6 +1496,40 @@ export class FastCreatorComponent implements OnInit, OnDestroy {
       this.varType2 = typeName;
     }
     this.rebuildVariationGrid();
+  }
+
+  onVariationPaste(event: ClipboardEvent): void {
+    const pasted = event.clipboardData?.getData('text') || '';
+    if (pasted.trim()) {
+      setTimeout(() => this.applyPastedVariations(pasted, true), 0);
+    }
+  }
+
+  applyPastedVariations(rawInput?: string, silentOnMiss = false): void {
+    const input = rawInput ?? this.variationPasteInput;
+    const parsed = parseEtsyVariationsFromClipboard(input, this.priceUsd || 0);
+    if (!parsed.hasVariations) {
+      if (!silentOnMiss) {
+        this.showToast('⚠️ Yapıştırılan metinde Etsy varyasyon grubu tespit edilemedi. Etsy sayfasında Ctrl+A -> Ctrl+C yapıp yapıştırın.');
+      }
+      return;
+    }
+
+    this.enableVariations = true;
+    this.varType1 = parsed.varType1;
+    this.varValues1 = parsed.varValues1;
+    this.enableVar2 = parsed.enableVar2;
+    this.varType2 = parsed.varType2;
+    this.varValues2 = parsed.varValues2;
+    this.variationRows = parsed.variationRows.map(r => ({ ...r }));
+    this.customVariationPricing = true;
+    this.variationImportWarning = '';
+    this.showVariationImportBox = false;
+    this.variationPasteInput = '';
+
+    this.onVariationRowChange();
+    this.saveDraftToStorage();
+    this.showToast(`✅ ${parsed.variationRows.length} varyasyon kombinasyonu (${parsed.sourceFormat.toUpperCase()}) başarıyla aktarıldı!`);
   }
 
   rebuildVariationGrid(): void {

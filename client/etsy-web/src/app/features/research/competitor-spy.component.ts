@@ -2629,17 +2629,22 @@ export class CompetitorSpyComponent implements OnInit {
       shopName: this.analysisResult?.shop?.shopName || '',
       seoScore: item.lqsScore,
       marketScore: item.lqsScore,
-      taxonomyId: item.taxonomyId
+      taxonomyId: item.taxonomyId,
+      sourceListingUrl: item.listingUrl || `https://www.etsy.com/listing/${item.listingId}`
     };
 
     this.etsyApi.getCompetitorListingInventory(item.listingId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (inv) => {
         this.cloningListingId = null;
         this.applyInventoryToCloned(cloned, inv);
+        if (!cloned.hasVariations) {
+          cloned.variationWarning = inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor. Etsy sayfasından kopyalayıp aşağıya yapıştırarak 1 saniyede aktarabilirsiniz.';
+        }
         this.finishCloning(cloned, item, imgs.length, inv?.warningMessage);
       },
       error: () => {
         this.cloningListingId = null;
+        cloned.variationWarning = 'Varyasyon servisine ulaşılamadı; Etsy sayfasından kopyalayıp yapıştırarak aktarabilirsiniz.';
         this.finishCloning(cloned, item, imgs.length, 'Varyasyon servisine ulaşılamadı, ilan varyasyonsuz aktarıldı.');
       }
     });

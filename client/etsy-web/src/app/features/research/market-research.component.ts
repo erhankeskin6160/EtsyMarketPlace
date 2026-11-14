@@ -682,7 +682,8 @@ export class MarketResearchComponent implements OnInit {
       shopName: item.shopName,
       seoScore: item.seoScore,
       marketScore: item.marketScore,
-      taxonomyId: item.taxonomyId
+      taxonomyId: item.taxonomyId,
+      sourceListingUrl: `https://www.etsy.com/listing/${item.id}`
     };
 
     this.etsyApi.getCompetitorListingInventory(item.id).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
@@ -702,10 +703,13 @@ export class MarketResearchComponent implements OnInit {
               active: o.active
             }));
           }
+        } else {
+          cloned.variationWarning = inv?.warningMessage || 'Etsy API v3 rakip ilanın varyasyonlarına izin vermiyor. Etsy sayfasından kopyalayıp yapıştırarak aktarabilirsiniz.';
         }
         this.finalizeMarketClone(cloned, item.id);
       },
       error: () => {
+        cloned.variationWarning = 'Varyasyon servisine ulaşılamadı; Etsy sayfasından kopyalayıp yapıştırarak aktarabilirsiniz.';
         this.finalizeMarketClone(cloned, item.id);
       }
     });

@@ -69,6 +69,8 @@ export interface ClonedMarketListing {
   varType2?: string;
   varValues2?: string;
   variationRows?: ClonedVariationRow[];
+  variationWarning?: string;
+  sourceListingUrl?: string;
 }
 
 const STORAGE_KEY = 'etsy_ai_optimization_settings';

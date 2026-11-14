@@ -582,15 +582,54 @@
         <div class="col-scrollable-body control-body">
           <!-- 1. Varyasyonlar (Seçenekler) -->
           <div class="form-block">
-            <div class="var-header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div class="var-header-actions" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 6px; flex-wrap: wrap;">
               <label class="checkbox-label var-main-toggle" style="margin-bottom: 0;">
                 <input type="checkbox" [(ngModel)]="enableVariations" (change)="onVariationsToggled()" />
                 <span>🎨 Bu ürüne varyasyon ekle (Boyut, Renk vb.)</span>
               </label>
-              <button type="button" class="btn-ai-mini" (click)="suggestAiVariations()" [disabled]="isGeneratingVariations" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); color: #818cf8; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
-                <span *ngIf="!isGeneratingVariations">✨ AI Varyasyon Öner</span>
-                <span *ngIf="isGeneratingVariations">⏳ Üretiliyor...</span>
-              </button>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <button type="button" (click)="showVariationImportBox = !showVariationImportBox" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                  📋 Etsy'den Aktar
+                </button>
+                <button type="button" class="btn-ai-mini" (click)="suggestAiVariations()" [disabled]="isGeneratingVariations" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(99, 102, 241, 0.15); border: 1px solid rgba(99, 102, 241, 0.4); color: #818cf8; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                  <span *ngIf="!isGeneratingVariations">✨ AI Varyasyon Öner</span>
+                  <span *ngIf="isGeneratingVariations">⏳ Üretiliyor...</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Eklentisiz Etsy Sayfasından Varyasyon Aktarma Paneli -->
+            <div *ngIf="showVariationImportBox" style="margin-bottom: 10px; padding: 10px; border-radius: 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.35);">
+              <div *ngIf="variationImportWarning" style="font-size: 11px; color: #fbbf24; margin-bottom: 6px; line-height: 1.4;">
+                ⚠️ {{ variationImportWarning }}
+              </div>
+              <div style="font-size: 11px; color: #cbd5e1; margin-bottom: 8px; line-height: 1.4;">
+                <strong>Eklentisiz 1 Saniyede Aktarım:</strong> Etsy ürün sayfasında <code>Ctrl+A</code> → <code>Ctrl+C</code> yapıp aşağıya yapıştırın (veya yer imini çubuğa sürükleyip Etsy'de tıklayın).
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px;">
+                <a *ngIf="clonedSourceListingUrl" [href]="clonedSourceListingUrl" target="_blank" rel="noopener" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(56, 189, 248, 0.18); border: 1px solid rgba(56, 189, 248, 0.45); color: #38bdf8; text-decoration: none;">
+                  🌐 Etsy İlanını Aç ↗
+                </a>
+                <a [href]="bookmarkletSafeUrl" title="Bu butonu tarayıcınızın yer imleri çubuğuna sürükleyin. Etsy ilan sayfasında tıkladığınızda tüm varyasyonları kopyalar." style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: rgba(168, 85, 247, 0.18); border: 1px dashed rgba(168, 85, 247, 0.55); color: #c084fc; text-decoration: none; cursor: grab;">
+                  🔖 Etsy Varyasyon Kopyalayıcı (Yer İmine Sürükle)
+                </a>
+              </div>
+              <textarea
+                rows="3"
+                class="std-input"
+                [(ngModel)]="variationPasteInput"
+                (paste)="onVariationPaste($event)"
+                placeholder="Etsy sayfasından kopyaladığınız metni (Ctrl+A -> Ctrl+C), HTML'i veya yer imi çıktısını buraya Ctrl+V ile yapıştırın..."
+                style="width: 100%; font-size: 11px; resize: vertical; margin-bottom: 6px;"
+              ></textarea>
+              <div style="display: flex; justify-content: flex-end; gap: 6px;">
+                <button type="button" (click)="showVariationImportBox = false" style="font-size: 11px; padding: 4px 8px; border-radius: 6px; background: transparent; border: 1px solid rgba(148, 163, 184, 0.35); color: #94a3b8; cursor: pointer;">
+                  Kapat
+                </button>
+                <button type="button" (click)="applyPastedVariations()" style="font-size: 11px; padding: 4px 10px; border-radius: 6px; background: #10b981; border: none; color: #022c22; font-weight: 600; cursor: pointer;">
+                  ⚡ Çözümle & Aktar
+                </button>
+              </div>
             </div>
 
             <div *ngIf="enableVariations" class="var-options-box">
